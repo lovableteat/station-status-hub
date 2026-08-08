@@ -202,6 +202,42 @@ test("replaces the loading shell with one native three-area PCB workbench", asyn
   assert.doesNotMatch(combined, /gradient|shadow-(?:xl|2xl)/i);
 });
 
+test("wires BOM import previews with typed summaries and caps visible errors at 100", async () => {
+  const dialogsSource = await read(
+    "src/components/pcb-designer/PcbDialogs.tsx",
+  );
+
+  assert.match(
+    dialogsSource,
+    /kind:\s*["']import-preview["'][\s\S]*importKind:\s*["']library["']\s*\|\s*["']bom["']/,
+  );
+  assert.match(dialogsSource, /totalCount:\s*number/);
+  assert.match(dialogsSource, /placementCount\?:\s*number/);
+  assert.match(dialogsSource, /dialog\.errors\.slice\(0,\s*100\)/);
+  assert.match(dialogsSource, /dialog\.errors\.length\s*-\s*100/);
+  assert.match(dialogsSource, /待放置清單/);
+  assert.match(dialogsSource, /不會直接放到畫布/);
+  assert.match(dialogsSource, /dialog\.importKind === ["']library["'][\s\S]*匯入元件庫/);
+  assert.match(dialogsSource, /dialog\.importKind === ["']bom["'][\s\S]*建立待放置項目/);
+});
+
+test("passes BOM preview metadata from the workspace without changing commit behavior", () => {
+  assert.match(
+    workspaceSource,
+    /previewImport\(\s*["']元件庫匯入預覽["'],\s*["']library["'],\s*result\.valid\.length,\s*result\.valid\.length\s*\+\s*result\.errors\.length,\s*result\.errors,\s*undefined,\s*\(\)\s*=>\s*\{/,
+  );
+  assert.match(
+    workspaceSource,
+    /previewImport\(\s*["']BOM 匯入預覽["'],\s*["']bom["'],\s*result\.valid\.length,\s*result\.valid\.length\s*\+\s*result\.errors\.length,\s*result\.errors,\s*result\.placementCount,\s*\(\)\s*=>\s*\{/,
+  );
+  assert.match(
+    workspaceSource,
+    /kind:\s*["']import-preview["'][\s\S]*importKind[\s\S]*totalCount[\s\S]*placementCount[\s\S]*onCommit/,
+  );
+  assert.match(workspaceSource, /workspace\.importBom\(result\.valid\)/);
+  assert.match(workspaceSource, /workspace\.uploadLibraryComponents\(result\.valid\)/);
+});
+
 test("keeps visible-layer filtering and grouped selection in sync across the PCB workspace", async () => {
   const toolbarSource = await read(
     "src/components/pcb-designer/PcbToolbar.tsx",

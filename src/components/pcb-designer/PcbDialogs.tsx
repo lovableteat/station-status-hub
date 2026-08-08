@@ -34,8 +34,11 @@ export type PcbDialogState =
   | {
     kind: "import-preview";
     title: string;
+    importKind: "library" | "bom";
     validCount: number;
+    totalCount: number;
     errors: TabularImportError[];
+    placementCount?: number;
     onCommit: () => void;
   };
 
@@ -132,7 +135,7 @@ export function PcbDialogs({
       const width = positiveNumber(values.width);
       const height = positiveNumber(values.height);
       if (!width || !height || width < 20 || width > 1000 || height < 20 || height > 1000) {
-        setError("板寬與板高需介於 20 至 1000 mm。");
+        setError("板框尺寸必須介於 20 到 1000 mm。");
         return;
       }
       onCreateProject({
@@ -146,7 +149,7 @@ export function PcbDialogs({
       const width = positiveNumber(values.width);
       const height = positiveNumber(values.height);
       if (!width || !height || width < 20 || width > 1000 || height < 20 || height > 1000) {
-        setError("板寬與板高需介於 20 至 1000 mm。");
+        setError("板框尺寸必須介於 20 到 1000 mm。");
         return;
       }
       onUpdateProject({
@@ -174,7 +177,7 @@ export function PcbDialogs({
       const height = positiveNumber(values.height);
       const maxHeight = positiveNumber(values.maxHeight);
       if (!width || !height || !maxHeight) {
-        setError("尺寸與最大高度必須是大於 0 的有限數。");
+        setError("尺寸與最大高度必須是大於 0 的數值。");
         return;
       }
       onSaveComponent({
@@ -234,32 +237,47 @@ export function PcbDialogs({
             <DialogHeader>
               <DialogTitle>{dialog.title}</DialogTitle>
               <DialogDescription className="text-slate-300">
-                解析完成後才會寫入；取消不會改動目前資料。
+                {dialog.importKind === "bom"
+                  ? "BOM 匯入會建立左側待放置清單，不會直接放到畫布。"
+                  : "請先確認有效資料與錯誤摘要，確認後才會匯入元件庫。"}
               </DialogDescription>
             </DialogHeader>
-            <div className="my-4 flex gap-3 text-sm">
+            <div className="my-4 flex flex-wrap gap-3 text-sm">
+              <span className="rounded-md bg-slate-400/10 px-2 py-1 text-slate-200">
+                總列數 {dialog.totalCount} 筆
+              </span>
               <span className="rounded-md bg-emerald-400/10 px-2 py-1 text-emerald-200">
                 有效 {dialog.validCount} 筆
               </span>
               <span className="rounded-md bg-rose-400/10 px-2 py-1 text-rose-200">
-                無效 {dialog.errors.length} 筆
+                錯誤 {dialog.errors.length} 筆
               </span>
+              {dialog.importKind === "bom" && (
+                <span className="rounded-md bg-sky-400/10 px-2 py-1 text-sky-200">
+                  待放置 {dialog.placementCount ?? 0} 筆
+                </span>
+              )}
             </div>
             {dialog.errors.length > 0 && (
               <div className="max-h-52 overflow-auto rounded-lg border border-rose-300/25 bg-rose-950/20 p-3">
                 <ul className="space-y-1 font-mono text-xs text-rose-100">
-                  {dialog.errors.map((item, index) => (
+                  {dialog.errors.slice(0, 100).map((item, index) => (
                     <li key={`${item.row}-${index}`}>
                       第 {item.row} 列：{item.message}
                     </li>
                   ))}
                 </ul>
+                {dialog.errors.length > 100 && (
+                  <p className="mt-3 text-xs text-rose-200">
+                    尚有 {dialog.errors.length - 100} 筆錯誤未顯示。
+                  </p>
+                )}
               </div>
             )}
             <DialogFooter className="mt-4">
               <Button type="button" variant="outline" onClick={onClose}>取消</Button>
               <Button type="button" disabled={dialog.validCount === 0} onClick={confirm}>
-                匯入有效資料
+                {dialog.importKind === "library" ? "匯入元件庫" : "建立待放置項目"}
               </Button>
             </DialogFooter>
           </div>
@@ -276,7 +294,7 @@ export function PcbDialogs({
                 {dialog.kind === "component" && (dialog.component ? "編輯自訂元件" : "新增自訂元件")}
               </DialogTitle>
               <DialogDescription className="text-slate-300">
-                儲存前會檢查必要欄位與數值範圍。
+                請填寫必要欄位後再儲存變更。
               </DialogDescription>
             </DialogHeader>
 
@@ -302,8 +320,8 @@ export function PcbDialogs({
                     />
                   </label>
                   <div className="grid grid-cols-2 gap-3">
-                    <NumberField label="板寬 (mm)" value={values.width} onChange={(value) => update("width", value)} />
-                    <NumberField label="板高 (mm)" value={values.height} onChange={(value) => update("height", value)} />
+                    <NumberField label="寬度 (mm)" value={values.width} onChange={(value) => update("width", value)} />
+                    <NumberField label="高度 (mm)" value={values.height} onChange={(value) => update("height", value)} />
                   </div>
                   {dialog.kind === "project-settings" && (
                     <label className="block text-xs text-slate-300">
