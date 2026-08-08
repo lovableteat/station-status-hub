@@ -7,6 +7,11 @@ import { Focus, MousePointer2 } from "lucide-react";
 
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 import { getDefaultPcbModelAssetStore, isPcbModelAsset } from "./core/modelAssets.ts";
+import {
+  getPcb3DComponentTransform,
+  getPcbSelectionIds,
+  isPcbLayerVisible,
+} from "./core/viewSync.ts";
 import type { PcbModelAsset, PcbModelAssetPart, PcbVisibleLayer } from "./types.ts";
 
 function safeColor(value: string, fallback: string) {
@@ -157,10 +162,10 @@ function Scene({
       active = false;
     };
   }, [modelAssetKey]);
-  const selectedIds = useMemo(() => new Set([
-    ...selectedObjects,
-    ...(workspace.selection ? [workspace.selection.id] : []),
-  ]), [selectedObjects, workspace.selection]);
+  const selectedIds = useMemo(
+    () => new Set(getPcbSelectionIds(workspace.selection, selectedObjects)),
+    [selectedObjects, workspace.selection],
+  );
   const boardThickness = 1.6;
   const sceneBounds = useMemo(() => {
     const height = Math.max(
@@ -249,25 +254,27 @@ function Scene({
       })}
 
       {project.components
-        .filter((component) => visibleLayer === "all" || component.layer === visibleLayer)
+        .filter((component) => isPcbLayerVisible(visibleLayer, component.layer))
         .map((component) => {
         const selected = selectedIds.has(component.instanceId);
+        const transform = getPcb3DComponentTransform(component, project.board);
         const yDirection = component.layer === "top" ? 1 : -1;
-        const yPosition = yDirection * (boardThickness / 2 + component.maxHeight / 2);
+        const yOffset = yDirection * (boardThickness / 2 + component.maxHeight / 2);
         const modelAsset = component.modelAssetId ? modelAssets[component.modelAssetId] : null;
         const useProceduralFallback = !modelAsset;
         const proceduralFallback = useProceduralFallback;
         return (
           <group
             key={component.instanceId}
-            position={[
-              component.x + component.width / 2 - project.board.width / 2,
-              yPosition,
-              project.board.height / 2 - component.y - component.height / 2,
-            ]}
-            rotation={[0, -(component.rotation * Math.PI) / 180, component.layer === "top" ? 0 : Math.PI]}
+            position={transform.position}
+            rotation={transform.rotation}
+            data-pcb-coordinate={`${component.x + component.width / 2},${component.y + component.height / 2}`}
+            data-pcb-rotation={String(component.rotation)}
+            data-pcb-layer={component.layer}
+            data-pcb-selected={selected ? "true" : "false"}
           >
             <group
+              position={[0, yOffset, 0]}
               onClick={(event) => {
                 event.stopPropagation();
                 selectObject(
