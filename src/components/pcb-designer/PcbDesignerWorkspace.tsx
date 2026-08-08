@@ -175,16 +175,38 @@ export function PcbDesignerWorkspace({
 
   const previewImport = (
     title: string,
-    validCount: number,
-    errors: TabularImportError[],
-    onCommit: () => void,
-  ) => setDialog({
-    kind: "import-preview",
-    title,
-    validCount,
-    errors,
-    onCommit,
-  });
+    validCountOrKind: number | "library" | "bom",
+    errorsOrValidCount: TabularImportError[] | number,
+    onCommitOrTotalCount: (() => void) | number,
+    importKindOrErrors?: "library" | "bom" | TabularImportError[],
+    totalCountOrPlacementCount?: number,
+    placementCountOrCommit?: number | (() => void),
+  ) => {
+    const nextDialog = typeof validCountOrKind === "string"
+      ? {
+        kind: "import-preview" as const,
+        title,
+        importKind: validCountOrKind,
+        validCount: errorsOrValidCount as number,
+        totalCount: onCommitOrTotalCount as number,
+        errors: importKindOrErrors as TabularImportError[],
+        placementCount: typeof totalCountOrPlacementCount === "number" ? totalCountOrPlacementCount : undefined,
+        onCommit: placementCountOrCommit as () => void,
+      }
+      : {
+        kind: "import-preview" as const,
+        title,
+        importKind: (importKindOrErrors as "library" | "bom" | undefined) ?? "library",
+        validCount: validCountOrKind,
+        totalCount: typeof totalCountOrPlacementCount === "number"
+          ? totalCountOrPlacementCount
+          : validCountOrKind + (errorsOrValidCount as TabularImportError[]).length,
+        errors: errorsOrValidCount as TabularImportError[],
+        placementCount: typeof placementCountOrCommit === "number" ? placementCountOrCommit : undefined,
+        onCommit: onCommitOrTotalCount as () => void,
+      };
+    setDialog(nextDialog);
+  };
 
   const handleProjectFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -239,6 +261,68 @@ export function PcbDesignerWorkspace({
         row: 1,
         message: error instanceof Error ? error.message : "無法解析 BOM 檔案。",
       }], () => undefined);
+    }
+  };
+
+  const handleLibraryPreviewFile = async (file: File) => {
+    try {
+      const result = parseComponentRows(await readTabularFile(file));
+      previewImport(
+        "元件庫匯入預覽",
+        "library",
+        result.valid.length,
+        result.valid.length + result.errors.length,
+        result.errors,
+        undefined,
+        () => {
+          workspace.uploadLibraryComponents(result.valid);
+          toast({ title: "元件庫已更新", description: `寫入 ${result.valid.length} 筆有效元件。` });
+        },
+      );
+    } catch (error) {
+      previewImport(
+        "元件庫匯入預覽",
+        "library",
+        0,
+        0,
+        [{
+          row: 1,
+          message: error instanceof Error ? error.message : "無法解析元件庫檔案。",
+        }],
+        undefined,
+        () => undefined,
+      );
+    }
+  };
+
+  const handleBomPreviewFile = async (file: File) => {
+    try {
+      const result = parseBomRows(await readTabularFile(file));
+      previewImport(
+        "BOM 匯入預覽",
+        "bom",
+        result.valid.length,
+        result.valid.length + result.errors.length,
+        result.errors,
+        result.placementCount,
+        () => {
+          workspace.importBom(result.valid);
+          toast({ title: "BOM 已匯入", description: `建立 ${result.placementCount} 筆待放置項目。` });
+        },
+      );
+    } catch (error) {
+      previewImport(
+        "BOM 匯入預覽",
+        "bom",
+        0,
+        0,
+        [{
+          row: 1,
+          message: error instanceof Error ? error.message : "無法解析 BOM 檔案。",
+        }],
+        0,
+        () => undefined,
+      );
     }
   };
 
@@ -504,8 +588,8 @@ export function PcbDesignerWorkspace({
             onDeleteProject={requestDeleteProject}
             onDeleteTemplate={requestDeleteTemplate}
             onDeleteComponent={requestDeleteComponent}
-            onLibraryFile={(file) => void handleLibraryFile(file)}
-            onBomFile={(file) => void handleBomFile(file)}
+            onLibraryFile={(file) => void handleLibraryPreviewFile(file)}
+            onBomFile={(file) => void handleBomPreviewFile(file)}
           />
         </div>
 

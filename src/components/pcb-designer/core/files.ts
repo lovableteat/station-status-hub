@@ -7,7 +7,7 @@ export const LIBRARY_FILE_ACCEPT =
   ".json,.csv,.xlsx,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 export const BOM_FILE_ACCEPT =
   ".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-export const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
+export const MAX_IMPORT_FILE_BYTES = 50 * 1024 * 1024;
 
 export type ImportFileKind = "json" | "csv" | "xlsx";
 
@@ -50,10 +50,10 @@ async function workbookRows(data: ArrayBuffer): Promise<TabularRow[]> {
 
 export async function readTabularFile(file: File): Promise<TabularRow[]> {
   if (file.size > MAX_IMPORT_FILE_BYTES) {
-    throw new Error("檔案大小超過 5 MB 上限。");
+    throw new Error("檔案大小超過 50 MB 上限。");
   }
   const kind = classifyImportFile(file.name);
-  if (!kind) throw new Error("不支援此檔案格式。");
+  if (!kind) throw new Error("不支援的匯入檔案格式。");
   if (kind === "csv") return rowsFromCsv(await file.text());
   if (kind === "xlsx") return workbookRows(await file.arrayBuffer());
   const parsed = JSON.parse(await file.text()) as unknown;
@@ -62,7 +62,7 @@ export async function readTabularFile(file: File): Promise<TabularRow[]> {
     : typeof parsed === "object" && parsed !== null
       ? (parsed as { components?: unknown }).components
       : null;
-  if (!Array.isArray(rows)) throw new Error("JSON 必須是元件陣列或包含 components 陣列。");
+  if (!Array.isArray(rows)) throw new Error("JSON 檔案必須提供 components 陣列。");
   return rows as TabularRow[];
 }
 

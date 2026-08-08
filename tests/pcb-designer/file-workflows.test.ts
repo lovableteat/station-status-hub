@@ -45,15 +45,43 @@ test("XLSX is loaded dynamically only from XLSX branches", async () => {
   assert.doesNotMatch(source, /^import\s+.*from\s+["']xlsx["']/m);
 });
 
-test("rejects oversized imports before reading their contents", async () => {
+test("tabular imports allow files up to exactly 50 MiB", async () => {
+  const { MAX_IMPORT_FILE_BYTES, readTabularFile } = await loadFilesModule();
+  const file = new File(["name,width,height,max height\nPart,10,10,1"], "parts.csv", {
+    type: "text/csv",
+  });
+  let textReadCount = 0;
+  Object.defineProperty(file, "size", { value: MAX_IMPORT_FILE_BYTES });
+  Object.defineProperty(file, "text", {
+    value: async () => {
+      textReadCount += 1;
+      return "name,width,height,max height\nPart,10,10,1";
+    },
+  });
+
+  assert.equal(MAX_IMPORT_FILE_BYTES, 50 * 1024 * 1024);
+  const rows = await readTabularFile(file);
+  assert.equal(rows.length, 1);
+  assert.equal(textReadCount, 1);
+});
+
+test("rejects imports larger than 50 MB before reading their contents", async () => {
   const { MAX_IMPORT_FILE_BYTES, readTabularFile } = await loadFilesModule();
   const file = new File(["x"], "parts.csv", { type: "text/csv" });
+  let textReadCount = 0;
   Object.defineProperty(file, "size", { value: MAX_IMPORT_FILE_BYTES + 1 });
+  Object.defineProperty(file, "text", {
+    value: async () => {
+      textReadCount += 1;
+      return "name,width,height,max height\nPart,10,10,1";
+    },
+  });
 
   await assert.rejects(
     readTabularFile(file),
-    /檔案大小超過/,
+    /50 MB/i,
   );
+  assert.equal(textReadCount, 0);
 });
 
 test("accepts STP and STEP files but rejects unrelated extensions", async () => {
