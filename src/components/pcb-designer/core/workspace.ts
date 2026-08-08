@@ -12,6 +12,10 @@ import {
 } from "./history.ts";
 import { runDrc } from "./drc.ts";
 import {
+  duplicateKeepout,
+  placeLibraryComponent,
+} from "./editor.ts";
+import {
   MAX_BOM_QUANTITY_PER_ROW,
   MAX_BOM_TOTAL_PLACEMENTS,
 } from "./tabular.ts";
@@ -27,6 +31,7 @@ import {
 import type {
   PcbWorkspaceAction,
   PcbWorkspaceState,
+  SelectionSnapshot,
 } from "./workspaceTypes.ts";
 export type {
   NewProjectInput,
@@ -55,8 +60,15 @@ function materialize(
   const pendingPlacements = data.pendingPlacementsByProject?.[activeProject.id] ?? [];
   const pendingHistory = state.pendingHistoryByProject[activeProject.id]
     ?? createHistoryState(pendingPlacements);
+  const selectionHistory = state.selectionHistoryByProject[activeProject.id]
+    ?? createHistoryState({
+      selection: state.selection ? clone(state.selection) : null,
+      selectedObjects: clone(Array.isArray(state.selectedObjects) ? state.selectedObjects : []),
+    });
   const visibleLayer = isPcbVisibleLayer(state.visibleLayer) ? state.visibleLayer : "all";
-  const selectedObjects = Array.isArray(state.selectedObjects) ? state.selectedObjects : [];
+  const selectedObjects = Array.isArray(selectionHistory.current.selectedObjects)
+    ? selectionHistory.current.selectedObjects
+    : [];
   return {
     ...state,
     data,
@@ -69,12 +81,54 @@ function materialize(
       ...state.pendingHistoryByProject,
       [activeProject.id]: pendingHistory,
     },
+    selectionHistoryByProject: {
+      ...state.selectionHistoryByProject,
+      [activeProject.id]: selectionHistory,
+    },
     drcIssues: runDrc(activeProject),
     pendingPlacements: clone(pendingPlacements),
     visibleLayer,
     selectedObjects: clone(selectedObjects),
+    selection: selectionHistory.current.selection
+      ? clone(selectionHistory.current.selection)
+      : null,
     canUndo: history.undo.length > 0,
     canRedo: history.redo.length > 0,
+  };
+}
+
+function emptySelectionSnapshot(): SelectionSnapshot {
+  return { selection: null, selectedObjects: [] };
+}
+
+function currentSelectionSnapshot(state: Pick<PcbWorkspaceState, "selection" | "selectedObjects">): SelectionSnapshot {
+  return {
+    selection: state.selection ? clone(state.selection) : null,
+    selectedObjects: clone(state.selectedObjects),
+  };
+}
+
+function replaceSelectionSnapshot(
+  state: PcbWorkspaceState,
+  snapshot: SelectionSnapshot,
+  rightTab = state.rightTab,
+): PcbWorkspaceState {
+  const projectId = state.activeProject.id;
+  const selectionHistory = state.selectionHistoryByProject[projectId]
+    ?? createHistoryState(currentSelectionSnapshot(state));
+  return {
+    ...state,
+    selection: snapshot.selection ? clone(snapshot.selection) : null,
+    selectedObjects: clone(snapshot.selectedObjects),
+    rightTab,
+    selectionHistoryByProject: {
+      ...state.selectionHistoryByProject,
+      [projectId]: {
+        current: clone(snapshot),
+        undo: selectionHistory.undo.map(clone),
+        redo: selectionHistory.redo.map(clone),
+      },
+    },
   };
 }
 
@@ -98,6 +152,9 @@ export function createWorkspaceState(
         safeData.pendingPlacementsByProject[project.id] ?? [],
       ),
     },
+    selectionHistoryByProject: {
+      [project.id]: createHistoryState(emptySelectionSnapshot()),
+    },
     pendingPlacements: [],
     canEdit,
     documentLocked: false,
@@ -120,6 +177,7 @@ function replaceProject(
   project: PcbProject,
   push = true,
   pendingPlacements = state.pendingPlacements,
+  selectionSnapshot = currentSelectionSnapshot(state),
 ): PcbWorkspaceState {
   const update = { ...clone(project), updatedAt: timestamp() };
   const previousHistory = state.historyByProject[update.id]
@@ -132,8 +190,15 @@ function replaceProject(
   const pendingHistory = push
     ? pushHistory(previousPendingHistory, pendingPlacements)
     : createHistoryState(pendingPlacements);
+  const previousSelectionHistory = state.selectionHistoryByProject[update.id]
+    ?? createHistoryState(currentSelectionSnapshot(state));
+  const selectionHistory = push
+    ? pushHistory(previousSelectionHistory, selectionSnapshot)
+    : createHistoryState(selectionSnapshot);
   return materialize({
     ...state,
+    selection: selectionSnapshot.selection ? clone(selectionSnapshot.selection) : null,
+    selectedObjects: clone(selectionSnapshot.selectedObjects),
     data: {
       ...state.data,
       projects: state.data.projects.map((item) =>
@@ -152,6 +217,10 @@ function replaceProject(
     pendingHistoryByProject: {
       ...state.pendingHistoryByProject,
       [update.id]: pendingHistory,
+    },
+    selectionHistoryByProject: {
+      ...state.selectionHistoryByProject,
+      [update.id]: selectionHistory,
     },
   });
 }
@@ -219,6 +288,10 @@ export function reduceWorkspaceState(
         data: { ...state.data, activeProjectId: action.projectId },
         selection: null,
         selectedObjects: [],
+        selectionHistoryByProject: {
+          ...state.selectionHistoryByProject,
+          [action.projectId]: createHistoryState(emptySelectionSnapshot()),
+        },
         viewCenter: {
           x: state.data.projects.find((project) => project.id === action.projectId)!.board.width / 2,
           y: state.data.projects.find((project) => project.id === action.projectId)!.board.height / 2,
@@ -284,6 +357,8 @@ export function reduceWorkspaceState(
       const nextActive = projects.find((project) => project.id === activeProjectId) ?? projects[0];
       const historyByProject = { ...state.historyByProject };
       delete historyByProject[action.projectId];
+      const selectionHistoryByProject = { ...state.selectionHistoryByProject };
+      delete selectionHistoryByProject[action.projectId];
       const pendingPlacementsByProject = {
         ...(state.data.pendingPlacementsByProject ?? {}),
       };
@@ -312,6 +387,12 @@ export function reduceWorkspaceState(
           updatedAt: timestamp(),
         },
         historyByProject,
+        selectionHistoryByProject: deletedActiveProject
+          ? {
+            ...selectionHistoryByProject,
+            [nextActive.id]: createHistoryState(emptySelectionSnapshot()),
+          }
+          : selectionHistoryByProject,
       });
     }
     case "project/import": {
@@ -347,6 +428,7 @@ export function reduceWorkspaceState(
       return materialize({
         ...state,
         selection: null,
+        selectedObjects: [],
         zoom: 100,
         viewCenter: { x: project.board.width / 2, y: project.board.height / 2 },
         data: {
@@ -537,6 +619,8 @@ export function reduceWorkspaceState(
         ?? createHistoryState(state.pendingPlacements);
       const projectHistory = state.historyByProject[state.activeProject.id]
         ?? createHistoryState(state.activeProject);
+      const selectionHistory = state.selectionHistoryByProject[state.activeProject.id]
+        ?? createHistoryState(currentSelectionSnapshot(state));
       return materialize({
         ...state,
         data: {
@@ -560,6 +644,14 @@ export function reduceWorkspaceState(
             redo: [],
           },
         },
+        selectionHistoryByProject: {
+          ...state.selectionHistoryByProject,
+          [state.activeProject.id]: {
+            current: clone(currentSelectionSnapshot(state)),
+            undo: selectionHistory.undo.map(clone),
+            redo: [],
+          },
+        },
       });
     }
     case "bom/remove": {
@@ -570,6 +662,8 @@ export function reduceWorkspaceState(
         ?? createHistoryState(state.pendingPlacements);
       const projectHistory = state.historyByProject[state.activeProject.id]
         ?? createHistoryState(state.activeProject);
+      const selectionHistory = state.selectionHistoryByProject[state.activeProject.id]
+        ?? createHistoryState(currentSelectionSnapshot(state));
       return materialize({
         ...state,
         data: {
@@ -592,6 +686,14 @@ export function reduceWorkspaceState(
             redo: [],
           },
         },
+        selectionHistoryByProject: {
+          ...state.selectionHistoryByProject,
+          [state.activeProject.id]: {
+            current: clone(currentSelectionSnapshot(state)),
+            undo: selectionHistory.undo.map(clone),
+            redo: [],
+          },
+        },
       });
     }
     case "history/undo":
@@ -606,6 +708,11 @@ export function reduceWorkspaceState(
       const nextPendingHistory = action.type === "history/undo"
         ? undoHistory(pendingHistory)
         : redoHistory(pendingHistory);
+      const selectionHistory = state.selectionHistoryByProject[state.activeProject.id]
+        ?? createHistoryState(currentSelectionSnapshot(state));
+      const nextSelectionHistory = action.type === "history/undo"
+        ? undoHistory(selectionHistory)
+        : redoHistory(selectionHistory);
       const project = clone(nextHistory.current);
       const pendingPlacements = clone(nextPendingHistory.current);
       return materialize({
@@ -629,6 +736,10 @@ export function reduceWorkspaceState(
           ...state.pendingHistoryByProject,
           [state.activeProject.id]: nextPendingHistory,
         },
+        selectionHistoryByProject: {
+          ...state.selectionHistoryByProject,
+          [state.activeProject.id]: nextSelectionHistory,
+        },
       });
     }
     case "document/toggle-lock":
@@ -651,19 +762,94 @@ export function reduceWorkspaceState(
         },
       };
     case "selection/set":
-      return {
-        ...state,
-        selection: action.selection ? clone(action.selection) : null,
-        rightTab: action.selection ? "selection" : state.rightTab,
-      };
+      return replaceSelectionSnapshot(
+        state,
+        {
+          selection: action.selection ? clone(action.selection) : null,
+          selectedObjects: clone(state.selectedObjects),
+        },
+        action.selection ? "selection" : state.rightTab,
+      );
     case "selection/toggle": {
       const selectedObjects = state.selectedObjects.includes(action.objectId)
         ? state.selectedObjects.filter((item) => item !== action.objectId)
         : [...state.selectedObjects, action.objectId];
-      return { ...state, selectedObjects };
+      return replaceSelectionSnapshot(state, {
+        selection: state.selection ? clone(state.selection) : null,
+        selectedObjects,
+      });
+    }
+    case "selection/duplicate": {
+      const gridOffset = state.activeProject.board.gridSize > 0
+        ? state.activeProject.board.gridSize
+        : 1;
+      if (state.selection?.kind === "keepout") {
+        const duplicated = duplicateKeepout(
+          state.activeProject,
+          state.selection.id,
+          { x: gridOffset, y: gridOffset },
+        );
+        if (!duplicated.ok) return state;
+        return replaceProject(
+          state,
+          duplicated.project,
+          true,
+          state.pendingPlacements,
+          {
+            selection: { kind: "keepout", id: duplicated.keepout.id },
+            selectedObjects: [duplicated.keepout.id],
+          },
+        );
+      }
+
+      const componentIds = state.selectedObjects.filter((objectId) =>
+        state.activeProject.components.some((component) => component.instanceId === objectId));
+      const sourceIds = componentIds.length
+        ? componentIds
+        : state.selection?.kind === "component"
+          ? [state.selection.id]
+          : [];
+      if (!sourceIds.length) return state;
+
+      const sources = sourceIds.map((instanceId) =>
+        state.activeProject.components.find((component) => component.instanceId === instanceId));
+      if (sources.some((component) => !component)) return state;
+
+      let project = state.activeProject;
+      const duplicatedIds: string[] = [];
+      for (const source of sources) {
+        const result = placeLibraryComponent(
+          project,
+          source!,
+          { x: source!.x + gridOffset, y: source!.y + gridOffset },
+          undefined,
+          { layer: source!.layer, rotation: source!.rotation },
+        );
+        if (!result.ok) return state;
+        project = result.project;
+        duplicatedIds.push(result.component.instanceId);
+      }
+
+      const primarySourceId = state.selection?.kind === "component"
+        ? state.selection.id
+        : sourceIds[0];
+      const primaryIndex = Math.max(0, sourceIds.indexOf(primarySourceId));
+      return replaceProject(
+        state,
+        project,
+        true,
+        state.pendingPlacements,
+        {
+          selection: { kind: "component", id: duplicatedIds[primaryIndex] ?? duplicatedIds[0] },
+          selectedObjects: duplicatedIds,
+        },
+      );
     }
     case "selection/clear-group":
-      return { ...state, selectedObjects: [] };
+      return replaceSelectionSnapshot(state, {
+        selection: state.selection ? clone(state.selection) : null,
+        selectedObjects: [],
+      });
     case "panel/right":
       return { ...state, rightTab: action.tab };
     case "permission/set":
