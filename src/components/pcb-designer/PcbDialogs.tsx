@@ -25,6 +25,13 @@ export type PcbDialogState =
   | { kind: "rename-template"; template: PcbTemplate }
   | { kind: "component"; component?: PcbLibraryComponent }
   | {
+    kind: "project-import-preview";
+    title: string;
+    validCount: number;
+    errors: TabularImportError[];
+    onCommit: () => void;
+  }
+  | {
     kind: "confirm";
     title: string;
     description: string;
@@ -135,7 +142,7 @@ export function PcbDialogs({
       const width = positiveNumber(values.width);
       const height = positiveNumber(values.height);
       if (!width || !height || width < 20 || width > 1000 || height < 20 || height > 1000) {
-        setError("板框尺寸必須介於 20 到 1000 mm。");
+        setError("板寬與板高需介於 20 至 1000 mm。");
         return;
       }
       onCreateProject({
@@ -149,7 +156,7 @@ export function PcbDialogs({
       const width = positiveNumber(values.width);
       const height = positiveNumber(values.height);
       if (!width || !height || width < 20 || width > 1000 || height < 20 || height > 1000) {
-        setError("板框尺寸必須介於 20 到 1000 mm。");
+        setError("板寬與板高需介於 20 至 1000 mm。");
         return;
       }
       onUpdateProject({
@@ -177,7 +184,7 @@ export function PcbDialogs({
       const height = positiveNumber(values.height);
       const maxHeight = positiveNumber(values.maxHeight);
       if (!width || !height || !maxHeight) {
-        setError("尺寸與最大高度必須是大於 0 的數值。");
+        setError("尺寸與最大高度必須是大於 0 的有限數。");
         return;
       }
       onSaveComponent({
@@ -195,8 +202,9 @@ export function PcbDialogs({
   };
 
   const confirm = () => {
-    if (!dialog || (dialog.kind !== "confirm" && dialog.kind !== "import-preview")) return;
+    if (!dialog || (dialog.kind !== "confirm" && dialog.kind !== "import-preview" && dialog.kind !== "project-import-preview")) return;
     if (dialog.kind === "confirm") dialog.onConfirm();
+    else if (dialog.kind === "project-import-preview") dialog.onCommit();
     else dialog.onCommit();
     onClose();
   };
@@ -230,6 +238,42 @@ export function PcbDialogs({
               </Button>
             </DialogFooter>
           </>
+        )}
+
+        {dialog?.kind === "project-import-preview" && (
+          <div data-testid="project-import-preview">
+            <DialogHeader>
+              <DialogTitle>{dialog.title}</DialogTitle>
+              <DialogDescription className="text-slate-300">
+                解析完成後才會寫入；取消不會改動目前資料。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="my-4 flex gap-3 text-sm">
+              <span className="rounded-md bg-emerald-400/10 px-2 py-1 text-emerald-200">
+                有效 {dialog.validCount} 筆
+              </span>
+              <span className="rounded-md bg-rose-400/10 px-2 py-1 text-rose-200">
+                無效 {dialog.errors.length} 筆
+              </span>
+            </div>
+            {dialog.errors.length > 0 && (
+              <div className="max-h-52 overflow-auto rounded-lg border border-rose-300/25 bg-rose-950/20 p-3">
+                <ul className="space-y-1 font-mono text-xs text-rose-100">
+                  {dialog.errors.map((item, index) => (
+                    <li key={`${item.row}-${index}`}>
+                      第 {item.row} 列：{item.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={onClose}>取消</Button>
+              <Button type="button" disabled={dialog.validCount === 0} onClick={confirm}>
+                匯入專案
+              </Button>
+            </DialogFooter>
+          </div>
         )}
 
         {dialog?.kind === "import-preview" && (
@@ -294,7 +338,7 @@ export function PcbDialogs({
                 {dialog.kind === "component" && (dialog.component ? "編輯自訂元件" : "新增自訂元件")}
               </DialogTitle>
               <DialogDescription className="text-slate-300">
-                請填寫必要欄位後再儲存變更。
+                儲存前會檢查必要欄位與數值範圍。
               </DialogDescription>
             </DialogHeader>
 
@@ -320,8 +364,8 @@ export function PcbDialogs({
                     />
                   </label>
                   <div className="grid grid-cols-2 gap-3">
-                    <NumberField label="寬度 (mm)" value={values.width} onChange={(value) => update("width", value)} />
-                    <NumberField label="高度 (mm)" value={values.height} onChange={(value) => update("height", value)} />
+                    <NumberField label="板寬 (mm)" value={values.width} onChange={(value) => update("width", value)} />
+                    <NumberField label="板高 (mm)" value={values.height} onChange={(value) => update("height", value)} />
                   </div>
                   {dialog.kind === "project-settings" && (
                     <label className="block text-xs text-slate-300">
@@ -360,8 +404,8 @@ export function PcbDialogs({
                     <TextField label="顏色" value={values.color} onChange={(value) => update("color", value)} />
                     <TextField label="製造商" value={values.manufacturer} onChange={(value) => update("manufacturer", value)} />
                     <TextField label="料號" value={values.partNumber} onChange={(value) => update("partNumber", value)} />
-                    <NumberField label="寬度 (mm)" value={values.width} onChange={(value) => update("width", value)} />
-                    <NumberField label="高度 (mm)" value={values.height} onChange={(value) => update("height", value)} />
+                    <NumberField label="板寬 (mm)" value={values.width} onChange={(value) => update("width", value)} />
+                    <NumberField label="板高 (mm)" value={values.height} onChange={(value) => update("height", value)} />
                     <NumberField label="最大高度 (mm)" value={values.maxHeight} onChange={(value) => update("maxHeight", value)} />
                   </div>
                 </>

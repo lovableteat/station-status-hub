@@ -221,21 +221,40 @@ test("wires BOM import previews with typed summaries and caps visible errors at 
   assert.match(dialogsSource, /dialog\.importKind === ["']bom["'][\s\S]*建立待放置項目/);
 });
 
-test("passes BOM preview metadata from the workspace without changing commit behavior", () => {
+test("passes BOM preview metadata from the workspace through a typed object API", () => {
   assert.match(
     workspaceSource,
-    /previewImport\(\s*["']元件庫匯入預覽["'],\s*["']library["'],\s*result\.valid\.length,\s*result\.valid\.length\s*\+\s*result\.errors\.length,\s*result\.errors,\s*undefined,\s*\(\)\s*=>\s*\{/,
+    /type ImportPreviewInput = \{[\s\S]*title: string;[\s\S]*importKind: ["']library["'] \| ["']bom["'];[\s\S]*validCount: number;[\s\S]*totalCount: number;[\s\S]*errors: TabularImportError\[];[\s\S]*placementCount\?: number;[\s\S]*onCommit: \(\) => void;[\s\S]*\}/,
   );
   assert.match(
     workspaceSource,
-    /previewImport\(\s*["']BOM 匯入預覽["'],\s*["']bom["'],\s*result\.valid\.length,\s*result\.valid\.length\s*\+\s*result\.errors\.length,\s*result\.errors,\s*result\.placementCount,\s*\(\)\s*=>\s*\{/,
+    /const previewImport = \(input: ImportPreviewInput\) => setDialog\(\{[\s\S]*kind: ["']import-preview["'][\s\S]*\.\.\.input[\s\S]*\}\);/,
   );
   assert.match(
     workspaceSource,
-    /kind:\s*["']import-preview["'][\s\S]*importKind[\s\S]*totalCount[\s\S]*placementCount[\s\S]*onCommit/,
+    /previewImport\(\s*\{[\s\S]*title:\s*["']元件庫匯入預覽["'][\s\S]*importKind:\s*["']library["'][\s\S]*validCount:\s*result\.valid\.length[\s\S]*totalCount:\s*result\.valid\.length \+ result\.errors\.length[\s\S]*errors:\s*result\.errors[\s\S]*onCommit:\s*\(\)\s*=>\s*\{/,
   );
+  assert.match(
+    workspaceSource,
+    /previewImport\(\s*\{[\s\S]*title:\s*["']BOM 匯入預覽["'][\s\S]*importKind:\s*["']bom["'][\s\S]*validCount:\s*result\.valid\.length[\s\S]*totalCount:\s*result\.valid\.length \+ result\.errors\.length[\s\S]*errors:\s*result\.errors[\s\S]*placementCount:\s*result\.placementCount[\s\S]*onCommit:\s*\(\)\s*=>\s*\{/,
+  );
+  assert.doesNotMatch(workspaceSource, /validCountOrKind|errorsOrValidCount|onCommitOrTotalCount|importKindOrErrors|placementCountOrCommit/);
+  assert.doesNotMatch(workspaceSource, /\sas\s+TabularImportError\[]/);
+  assert.doesNotMatch(workspaceSource, /\sas\s+\(\)\s*=>\s*void/);
   assert.match(workspaceSource, /workspace\.importBom\(result\.valid\)/);
   assert.match(workspaceSource, /workspace\.uploadLibraryComponents\(result\.valid\)/);
+});
+
+test("preserves the pre-task project and component form copy while extending import preview", async () => {
+  const dialogsSource = await read(
+    "src/components/pcb-designer/PcbDialogs.tsx",
+  );
+
+  assert.match(dialogsSource, /板寬與板高需介於 20 至 1000 mm。/);
+  assert.match(dialogsSource, /尺寸與最大高度必須是大於 0 的有限數。/);
+  assert.match(dialogsSource, /儲存前會檢查必要欄位與數值範圍。/);
+  assert.match(dialogsSource, /NumberField label=["']板寬 \(mm\)["']/);
+  assert.match(dialogsSource, /NumberField label=["']板高 \(mm\)["']/);
 });
 
 test("keeps visible-layer filtering and grouped selection in sync across the PCB workspace", async () => {
