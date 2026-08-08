@@ -84,6 +84,292 @@
   overflow: hidden;
 }
 
+.test-plan-overview {
+  display: grid;
+  min-height: 176px;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(0, 1.25fr) minmax(220px, 0.85fr) minmax(280px, 1fr);
+  gap: 12px;
+}
+
+.test-plan-overview-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid #2a526f;
+  border-radius: 12px;
+  padding: 14px;
+  background: #071522;
+}
+
+.test-plan-overview-summary {
+  background:
+    radial-gradient(circle at 100% 0%, rgb(34 211 238 / 10%), transparent 40%),
+    #071522;
+}
+
+.test-plan-overview-card-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  color: #67e8f9;
+}
+
+.test-plan-overview-card-heading > div {
+  min-width: 0;
+}
+
+.test-plan-overview-card h2 {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: #eff8fc;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.test-plan-overview-description {
+  min-height: 2.5em;
+  margin: 0;
+  overflow: hidden;
+  color: #a5bdcc;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  text-overflow: ellipsis;
+}
+
+.test-plan-overview-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: auto 0 0;
+}
+
+.test-plan-overview-stats > div {
+  min-width: 0;
+  border-left: 2px solid rgb(103 232 249 / 40%);
+  padding-left: 8px;
+}
+
+.test-plan-overview-stats dt {
+  overflow: hidden;
+  color: #7695a9;
+  font-size: 0.65rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.test-plan-overview-stats dd {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: #f3f8fc;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.98rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.test-plan-overview-location {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid rgb(42 82 111 / 58%);
+  padding-top: 9px;
+  color: #7596aa;
+  font-size: 0.68rem;
+}
+
+.test-plan-overview-location strong {
+  overflow: hidden;
+  color: #cffafe;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.test-plan-overview-prompt {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+  color: #8fb1c3;
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.test-plan-overview-prompt svg {
+  flex: 0 0 auto;
+  color: #67e8f9;
+}
+
+.test-plan-overview-muted {
+  display: flex;
+  min-height: 96px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: #7898ad;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.test-plan-category-list {
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.test-plan-category-row {
+  display: grid;
+  gap: 5px;
+}
+
+.test-plan-category-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #9ab5c5;
+  font-size: 0.68rem;
+}
+
+.test-plan-category-label strong {
+  color: #edf7fc;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.7rem;
+}
+
+.test-plan-category-track {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(148 163 184 / 12%);
+}
+
+.test-plan-category-track > span {
+  display: block;
+  width: var(--category-width, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: #67e8f9;
+  transition: width 180ms ease;
+}
+
+.test-plan-category-row.is-3d .test-plan-category-track > span {
+  background: #c4b5fd;
+}
+
+.test-plan-category-row.is-pcb .test-plan-category-track > span {
+  background: #67e8f9;
+}
+
+.test-plan-category-row.is-spreadsheet .test-plan-category-track > span {
+  background: #6ee7b7;
+}
+
+.test-plan-category-row.is-document .test-plan-category-track > span {
+  background: #93c5fd;
+}
+
+.test-plan-category-row.is-presentation .test-plan-category-track > span {
+  background: #fdba74;
+}
+
+.test-plan-category-row.is-image .test-plan-category-track > span {
+  background: #f9a8d4;
+}
+
+.test-plan-category-row.is-archive .test-plan-category-track > span {
+  background: #fcd34d;
+}
+
+.test-plan-recent-file-list {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.test-plan-recent-file {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 7px 6px;
+  color: #87a7b9;
+  text-align: left;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.test-plan-recent-file:hover,
+.test-plan-recent-file:focus-visible {
+  outline: none;
+  border-color: rgb(103 232 249 / 38%);
+  color: #e4f9ff;
+  background: rgb(34 211 238 / 7%);
+}
+
+.test-plan-recent-file-icon {
+  display: grid;
+  height: 28px;
+  width: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 7px;
+  color: #67e8f9;
+  background: rgb(34 211 238 / 10%);
+}
+
+.test-plan-recent-file-icon.is-3d {
+  color: #c4b5fd;
+  background: rgb(139 92 246 / 11%);
+}
+
+.test-plan-recent-file-icon.is-spreadsheet {
+  color: #6ee7b7;
+  background: rgb(16 185 129 / 10%);
+}
+
+.test-plan-recent-file-icon.is-presentation {
+  color: #fdba74;
+  background: rgb(249 115 22 / 10%);
+}
+
+.test-plan-recent-file-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 2px;
+}
+
+.test-plan-recent-file-copy strong,
+.test-plan-recent-file-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.test-plan-recent-file-copy strong {
+  color: #eaf6fb;
+  font-size: 0.72rem;
+}
+
+.test-plan-recent-file-copy small {
+  color: #708fa3;
+  font-size: 0.65rem;
+}
+
 .test-plan-space-rail {
   display: flex;
   min-height: 0;
@@ -796,6 +1082,10 @@
     overflow: visible;
   }
 
+  .test-plan-overview {
+    grid-template-columns: 1fr;
+  }
+
   .test-plan-mobile-controls {
     display: flex;
     justify-content: flex-start;
@@ -923,6 +1213,8 @@
 @media (prefers-reduced-motion: reduce) {
   .test-plan-space-rail,
   .test-plan-entry-card,
+  .test-plan-recent-file,
+  .test-plan-category-track > span,
   .test-plan-upload-progress > div > span {
     transition: none;
   }
