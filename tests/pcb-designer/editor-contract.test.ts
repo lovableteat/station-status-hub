@@ -70,6 +70,14 @@ test("makes library cards draggable and routes click and drop through one placem
   assert.match(canvasSource, /exact:\s*true/);
 });
 
+test("keeps the left rail sections on one horizontal alignment rail", () => {
+  assert.match(editorCssSource, /\.pcb-left-rail\s*\{[\s\S]{0,180}--pcb-rail-gutter:\s*10px/);
+  assert.match(editorCssSource, /\.pcb-rail-tabs,\s*\.pcb-inspector-tabs[\s\S]{0,260}padding:\s*6px\s+var\(--pcb-rail-gutter,\s*6px\)/);
+  assert.match(editorCssSource, /\.pcb-rail-filter[\s\S]{0,220}padding:\s*10px\s+var\(--pcb-rail-gutter\)/);
+  assert.match(editorCssSource, /\.pcb-rail-actions[\s\S]{0,220}padding:\s*8px\s+var\(--pcb-rail-gutter\)/);
+  assert.match(editorCssSource, /\.pcb-rail-list[\s\S]{0,220}padding:\s*6px\s+var\(--pcb-rail-gutter\)/);
+});
+
 test("placement actions reject document-locked mutations before reporting success", () => {
   assert.match(
     combinedHookSource,

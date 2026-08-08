@@ -39,6 +39,16 @@
 - 新增契約測試 `contains 3D runtime failures inside the PCB view`。
 - 本次修正驗證：`npm run test:pcb` 158/158、`tests/bootRecoveryPolicy.test.mjs` 2/2、定向 ESLint 通過、`npm run build` 成功。
 
+## 追加修正：PCB 左側資源欄對齊
+
+截圖中的偏移來自左側分區使用不同水平內距：分頁與清單為 6px，搜尋／篩選與操作列為 10px，導致專案卡片與上方控制項不在同一條左右基準線。
+
+- 在 `.pcb-left-rail` 建立 `--pcb-rail-gutter: 10px`。
+- 分頁、搜尋／篩選、操作列、清單統一使用這個水平 gutter；檢查器分頁保留 6px fallback，不影響右側欄。
+- 新增契約測試 `keeps the left rail sections on one horizontal alignment rail`。
+- 版面判讀與 detector 都確認頁面 grid 本身正常，問題只在巢狀 wrapper padding；detector 結果為零項。
+- 本次驗證：`npm run test:pcb` 159/159、定向 ESLint 0 errors、`npm run build` 成功；瀏覽器可載入登入頁，但未繞過登入驗證進入 PCB 畫面。
+
 ## 推送
 
 本報告與上述程式碼會從 `codex/pcb-collaboration-fixes` 以 fast-forward refspec 推送到 `origin/main`。

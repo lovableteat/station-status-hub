@@ -1247,6 +1247,7 @@
 .pcb-left-rail {
   display: flex;
   flex-direction: column;
+  --pcb-rail-gutter: 10px;
 }
 
 .pcb-rail-tabs,
@@ -1256,7 +1257,7 @@
   gap: 4px;
   border-bottom: 1px solid var(--pcb-border);
   background: rgb(7 14 27 / 32%);
-  padding: 6px;
+  padding: 6px var(--pcb-rail-gutter, 6px);
 }
 
 .pcb-rail-tabs {
@@ -1304,7 +1305,7 @@
   flex: none;
   border-bottom: 1px solid var(--pcb-border);
   background: rgb(7 14 27 / 14%);
-  padding: 10px;
+  padding: 10px var(--pcb-rail-gutter);
 }
 
 .pcb-search-input {
@@ -1317,7 +1318,7 @@
   flex: none;
   gap: 6px;
   border-bottom: 1px solid var(--pcb-border);
-  padding: 8px 10px;
+  padding: 8px var(--pcb-rail-gutter);
 }
 
 .pcb-primary-action,
@@ -1365,7 +1366,7 @@
   min-height: 0;
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 6px;
+  padding: 6px var(--pcb-rail-gutter);
 }
 
 .pcb-rail-item {
