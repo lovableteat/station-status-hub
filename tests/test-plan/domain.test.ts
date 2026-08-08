@@ -10,6 +10,9 @@ const treeModule = await import(
 const previewModule = await import(
   new URL("../../src/components/test-plan/core/preview.ts", import.meta.url).href,
 ).catch(() => ({}));
+const overviewModule = await import(
+  new URL("../../src/components/test-plan/core/overview.ts", import.meta.url).href,
+).catch(() => ({}));
 
 test("classifies browser-previewable engineering files without pretending CAD and Office are native previews", () => {
   const createFile = (originalName: string, mimeType: string | null = null) => ({
@@ -251,4 +254,33 @@ test("filters both names, keeps folders during category filters, and sorts stabl
     sort: "newest",
   });
   assert.deepEqual(searched.map((entry: { id: string }) => entry.id), ["file-a"]);
+});
+
+test("derives complete category distribution for the active Test Plan space", () => {
+  const files = [
+    { category: "3d", originalName: "assembly.step", updatedAt: "2026-08-02T00:00:00.000Z" },
+    { category: "document", originalName: "notes.pdf", updatedAt: "2026-08-01T00:00:00.000Z" },
+  ];
+
+  const summary = overviewModule.getTestPlanCategorySummary(files);
+
+  assert.equal(summary.find((item: { category: string }) => item.category === "3d")?.count, 1);
+  assert.equal(summary.find((item: { category: string }) => item.category === "image")?.count, 0);
+  assert.equal(summary.reduce((total: number, item: { percentage: number }) => total + item.percentage, 0), 100);
+  assert.ok(summary.every((item: { percentage: number }) => item.percentage >= 0 && item.percentage <= 100));
+  assert.deepEqual(overviewModule.getTestPlanCategorySummary([]).every((item: { percentage: number }) => item.percentage === 0), true);
+});
+
+test("sorts recent Test Plan files deterministically and handles empty spaces", () => {
+  const files = [
+    { originalName: "zeta.pdf", updatedAt: "2026-08-01T00:00:00.000Z" },
+    { originalName: "alpha.pdf", updatedAt: "2026-08-01T00:00:00.000Z" },
+    { originalName: "newer.step", updatedAt: "2026-08-02T00:00:00.000Z" },
+  ];
+
+  assert.deepEqual(
+    overviewModule.getRecentTestPlanFiles(files, 3).map((file: { originalName: string }) => file.originalName),
+    ["newer.step", "alpha.pdf", "zeta.pdf"],
+  );
+  assert.deepEqual(overviewModule.getRecentTestPlanFiles([], 4), []);
 });
