@@ -11,6 +11,11 @@ test("blank project and built-in components satisfy domain invariants", () => {
 
   assert.equal(project.schemaVersion, 1);
   assert.ok(project.board.width >= 20);
+  assert.equal(typeof project.board.layerColors?.top, "string");
+  assert.equal(typeof project.board.layerColors?.bottom, "string");
+  assert.notEqual(project.board.layerColors?.top, "");
+  assert.notEqual(project.board.layerColors?.bottom, "");
+  assert.notEqual(project.board.layerColors?.top, project.board.layerColors?.bottom);
   assert.equal(
     new Set(BUILT_IN_COMPONENTS.map((item) => item.id)).size,
     BUILT_IN_COMPONENTS.length,

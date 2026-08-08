@@ -7,6 +7,10 @@ import type {
 
 let idSequence = 0;
 
+export const DEFAULT_PCB_BOARD_BACKGROUND = "#0f766e";
+export const DEFAULT_PCB_TOP_LAYER_COLOR = "#1aa39a";
+export const DEFAULT_PCB_BOTTOM_LAYER_COLOR = "#3157d5";
+
 export function createId(prefix = "pcb"): string {
   idSequence += 1;
   return `${prefix}-${Date.now().toString(36)}-${idSequence.toString(36)}`;
@@ -31,7 +35,11 @@ export function createBlankProject(name = "未命名 PCB 專案"): PcbProject {
       gridSize: 1,
       showGrid: true,
       snapToGrid: true,
-      background: "#0f766e",
+      background: DEFAULT_PCB_BOARD_BACKGROUND,
+      layerColors: {
+        top: DEFAULT_PCB_TOP_LAYER_COLOR,
+        bottom: DEFAULT_PCB_BOTTOM_LAYER_COLOR,
+      },
     },
     components: [],
     keepouts: [],

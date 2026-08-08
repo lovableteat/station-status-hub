@@ -141,6 +141,34 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
         <InspectorField label="板色">
           <input type="color" value={board.background} disabled={disabled} onChange={(event) => workspace.updateBoard({ background: event.target.value })} />
         </InspectorField>
+        <InspectorField label="Top 色">
+          <input
+            type="color"
+            value={board.layerColors.top}
+            disabled={disabled}
+            onChange={(event) =>
+              workspace.updateBoard({
+                layerColors: {
+                  top: event.target.value,
+                  bottom: board.layerColors.bottom,
+                },
+              })}
+          />
+        </InspectorField>
+        <InspectorField label="Bottom 色">
+          <input
+            type="color"
+            value={board.layerColors.bottom}
+            disabled={disabled}
+            onChange={(event) =>
+              workspace.updateBoard({
+                layerColors: {
+                  top: board.layerColors.top,
+                  bottom: event.target.value,
+                },
+              })}
+          />
+        </InspectorField>
       </div>
       <label className="pcb-inspector-check">
         <input type="checkbox" checked={board.showGrid} disabled={disabled} onChange={(event) => workspace.updateBoard({ showGrid: event.target.checked })} />

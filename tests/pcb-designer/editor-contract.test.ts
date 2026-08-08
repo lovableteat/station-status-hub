@@ -209,10 +209,33 @@ test("shares 2D and 3D synchronization helpers and inspection attributes", () =>
   assert.match(canvasSource, /data-pcb-rotation/);
   assert.match(canvasSource, /data-pcb-layer/);
   assert.match(canvasSource, /data-pcb-selected/);
+  assert.match(canvasSource, /data-pcb-board-color/);
+  assert.match(canvasSource, /data-pcb-top-color/);
+  assert.match(canvasSource, /data-pcb-bottom-color/);
   assert.match(canvas3dSource, /data-pcb-coordinate/);
   assert.match(canvas3dSource, /data-pcb-rotation/);
   assert.match(canvas3dSource, /data-pcb-layer/);
   assert.match(canvas3dSource, /data-pcb-selected/);
+  assert.match(canvas3dSource, /data-pcb-board-color/);
+  assert.match(canvas3dSource, /data-pcb-top-color/);
+  assert.match(canvas3dSource, /data-pcb-bottom-color/);
+});
+
+test("lets the board inspector edit top and bottom colors separately", () => {
+  assert.match(inspectorSource, /label=["']Top 色["']/);
+  assert.match(inspectorSource, /label=["']Bottom 色["']/);
+  assert.match(inspectorSource, /type="color"[\s\S]{0,400}layerColors/);
+  assert.match(inspectorSource, /workspace\.updateBoard\(\{[\s\S]{0,160}layerColors:\s*\{[\s\S]{0,200}top:/);
+  assert.match(inspectorSource, /workspace\.updateBoard\(\{[\s\S]{0,160}layerColors:\s*\{[\s\S]{0,200}bottom:/);
+});
+
+test("uses board background for all-layers and per-layer colors for filtered 2D and 3D board surfaces", () => {
+  assert.match(canvasSource, /visibleLayer === ["']all["'][\s\S]{0,200}project\.board\.background/);
+  assert.match(canvasSource, /visibleLayer === ["']top["'][\s\S]{0,200}project\.board\.layerColors\.top/);
+  assert.match(canvasSource, /visibleLayer === ["']bottom["'][\s\S]{0,200}project\.board\.layerColors\.bottom/);
+  assert.match(canvas3dSource, /visibleLayer === ["']all["'][\s\S]{0,200}project\.board\.background/);
+  assert.match(canvas3dSource, /visibleLayer === ["']top["'][\s\S]{0,200}project\.board\.layerColors\.top/);
+  assert.match(canvas3dSource, /visibleLayer === ["']bottom["'][\s\S]{0,200}project\.board\.layerColors\.bottom/);
 });
 
 test("supports Ctrl or Cmd multi-selection, shared layer filters, and group drag on the 2D canvas", () => {

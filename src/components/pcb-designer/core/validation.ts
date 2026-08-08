@@ -1,9 +1,15 @@
 import type {
   PcbModelAssetMetadata,
+  PcbBoard,
+  PcbBoardLayerColors,
   PcbProject,
   PcbSaveState,
   PcbVisibleLayer,
 } from "../types.ts";
+import {
+  DEFAULT_PCB_BOTTOM_LAYER_COLOR,
+  DEFAULT_PCB_TOP_LAYER_COLOR,
+} from "../defaults.ts";
 
 export type ParseResult<T> =
   | { ok: true; value: T }
@@ -84,12 +90,39 @@ function isModelAssetsIndex(value: unknown): value is Record<string, PcbModelAss
 
 export function isValidBoard(value: unknown): boolean {
   if (!isRecord(value)) return false;
+  const layerColors = value.layerColors;
+  const hasValidLayerColors = layerColors === undefined || (
+    isRecord(layerColors)
+    && isNonEmptyString(layerColors.top)
+    && isNonEmptyString(layerColors.bottom)
+  );
   return isFiniteNumber(value.width) && value.width >= 20 && value.width <= 1000
     && isFiniteNumber(value.height) && value.height >= 20 && value.height <= 1000
     && isFiniteNumber(value.gridSize) && value.gridSize >= 0.1 && value.gridSize <= 50
     && typeof value.showGrid === "boolean"
     && typeof value.snapToGrid === "boolean"
-    && isNonEmptyString(value.background);
+    && isNonEmptyString(value.background)
+    && hasValidLayerColors;
+}
+
+function normalizeBoardLayerColors(layerColors: unknown): PcbBoardLayerColors {
+  const record = isRecord(layerColors) ? layerColors : {};
+  return {
+    top: isNonEmptyString(record.top) ? record.top : DEFAULT_PCB_TOP_LAYER_COLOR,
+    bottom: isNonEmptyString(record.bottom) ? record.bottom : DEFAULT_PCB_BOTTOM_LAYER_COLOR,
+  };
+}
+
+function normalizeBoard(board: PcbBoard | RecordValue): PcbBoard {
+  return {
+    width: Number(board.width),
+    height: Number(board.height),
+    gridSize: Number(board.gridSize),
+    showGrid: Boolean(board.showGrid),
+    snapToGrid: Boolean(board.snapToGrid),
+    background: isNonEmptyString(board.background) ? board.background : "#0f766e",
+    layerColors: normalizeBoardLayerColors(board.layerColors),
+  };
 }
 
 export function normalizePcbSaveState(state: PcbSaveState): PcbSaveState {
@@ -99,15 +132,24 @@ export function normalizePcbSaveState(state: PcbSaveState): PcbSaveState {
   ) as PcbSaveState["modelAssets"];
   const projects = cloned.projects.map((project) => ({
     ...project,
+    board: normalizeBoard(project.board),
     components: project.components.map((component) => {
       if (!component.modelAssetId || modelAssets?.[component.modelAssetId]) return component;
       const { modelAssetId: _removed, ...withoutAsset } = component;
       return withoutAsset;
     }),
   }));
+  const templates = cloned.templates.map((template) => ({
+    ...template,
+    project: {
+      ...template.project,
+      board: normalizeBoard(template.project.board),
+    },
+  }));
   return {
     ...cloned,
     projects,
+    templates,
     modelAssets: structuredClone(modelAssets ?? {}),
     pendingPlacementsByProject: structuredClone(cloned.pendingPlacementsByProject ?? {}),
     remoteDeletions: structuredClone(cloned.remoteDeletions ?? {
@@ -174,5 +216,11 @@ export function parseProjectJson(input: unknown): ParseResult<PcbProject> {
   if (!value.keepouts.every(validateKeepout) || !uniqueIds(value.keepouts, "id")) return { ok: false, error: "Keepouts are invalid." };
   if (!value.measurements.every(validateMeasurement) || !uniqueIds(value.measurements, "id")) return { ok: false, error: "Measurements are invalid." };
 
-  return { ok: true, value: structuredClone(value) as unknown as PcbProject };
+  return {
+    ok: true,
+    value: structuredClone({
+      ...value,
+      board: normalizeBoard(value.board),
+    }) as unknown as PcbProject,
+  };
 }
