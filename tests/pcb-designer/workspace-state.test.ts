@@ -53,6 +53,33 @@ function seedStateWithSelectedComponent(): PcbSaveState {
   return state;
 }
 
+function seedStateWithLayeredComponents(): PcbSaveState {
+  const state = seedState();
+  state.projects[0].components = [
+    {
+      ...structuredClone(BUILT_IN_COMPONENTS[3]),
+      instanceId: "top-component",
+      reference: "R1",
+      x: 10,
+      y: 10,
+      rotation: 0,
+      layer: "top",
+      locked: false,
+    },
+    {
+      ...structuredClone(BUILT_IN_COMPONENTS[4]),
+      instanceId: "bottom-component",
+      reference: "C1",
+      x: 30,
+      y: 30,
+      rotation: 0,
+      layer: "bottom",
+      locked: false,
+    },
+  ];
+  return state;
+}
+
 test("project CRUD keeps an active project and duplicates with fresh identity", async () => {
   const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
   const initial = createWorkspaceState(seedState(), true);
@@ -300,11 +327,7 @@ test("selection duplicate creates a copy and undo restores both selection state 
     type: "selection/set",
     selection: { kind: "component", id: "component-a" },
   });
-  const grouped = reduceWorkspaceState(selected, {
-    type: "selection/toggle",
-    objectId: "component-a",
-  });
-  const duplicated = reduceWorkspaceState(grouped, {
+  const duplicated = reduceWorkspaceState(selected, {
     type: "selection/duplicate",
   } as never);
 
@@ -318,7 +341,50 @@ test("selection duplicate creates a copy and undo restores both selection state 
 
   assert.equal(undone.activeProject.components.length, 1);
   assert.deepEqual(undone.selection, { kind: "component", id: "component-a" });
-  assert.deepEqual(undone.selectedObjects, ["component-a"]);
+  assert.deepEqual(undone.selectedObjects, []);
+});
+
+test("Ctrl/Cmd selection accumulates objects and removes the toggled primary", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedStateWithLayeredComponents(), true);
+  const first = reduceWorkspaceState(initial, {
+    type: "selection/set",
+    selection: { kind: "component", id: "top-component" },
+  });
+  const grouped = reduceWorkspaceState(first, {
+    type: "selection/toggle",
+    objectId: "bottom-component",
+  });
+
+  assert.deepEqual(grouped.selectedObjects, ["top-component", "bottom-component"]);
+  assert.deepEqual(grouped.selection, { kind: "component", id: "bottom-component" });
+
+  const removed = reduceWorkspaceState(grouped, {
+    type: "selection/toggle",
+    objectId: "bottom-component",
+  });
+  assert.deepEqual(removed.selectedObjects, ["top-component"]);
+  assert.deepEqual(removed.selection, { kind: "component", id: "top-component" });
+});
+
+test("visible-layer changes prune hidden component selections", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedStateWithLayeredComponents(), true);
+  const first = reduceWorkspaceState(initial, {
+    type: "selection/set",
+    selection: { kind: "component", id: "top-component" },
+  });
+  const grouped = reduceWorkspaceState(first, {
+    type: "selection/toggle",
+    objectId: "bottom-component",
+  });
+  const bottomOnly = reduceWorkspaceState(grouped, {
+    type: "view/layer",
+    layer: "bottom",
+  });
+
+  assert.deepEqual(bottomOnly.selectedObjects, ["bottom-component"]);
+  assert.deepEqual(bottomOnly.selection, { kind: "component", id: "bottom-component" });
 });
 
 test("one BOM placement transaction restores both the component and queue through undo and redo", async () => {

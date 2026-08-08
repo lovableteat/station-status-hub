@@ -2,6 +2,7 @@ import { createBlankProject, createId } from "../defaults.ts";
 import type {
   PcbProject,
   PcbSaveState,
+  PcbSelection,
   PcbTemplate,
 } from "../types.ts";
 import {
@@ -130,6 +131,30 @@ function replaceSelectionSnapshot(
       },
     },
   };
+}
+
+function selectionForObject(state: PcbWorkspaceState, objectId: string): PcbSelection | null {
+  if (state.activeProject.components.some((component) => component.instanceId === objectId)) {
+    return { kind: "component", id: objectId };
+  }
+  if (state.activeProject.keepouts.some((keepout) => keepout.id === objectId)) {
+    return { kind: "keepout", id: objectId };
+  }
+  if (state.activeProject.measurements.some((measurement) => measurement.id === objectId)) {
+    return { kind: "measurement", id: objectId };
+  }
+  return null;
+}
+
+function isSelectionVisible(
+  state: PcbWorkspaceState,
+  selection: PcbSelection,
+  layer: PcbWorkspaceState["visibleLayer"],
+) {
+  if (layer === "all" || selection.kind !== "component") return true;
+  return state.activeProject.components.some(
+    (component) => component.instanceId === selection.id && component.layer === layer,
+  );
 }
 
 export function createWorkspaceState(
@@ -771,11 +796,20 @@ export function reduceWorkspaceState(
         action.selection ? "selection" : state.rightTab,
       );
     case "selection/toggle": {
-      const selectedObjects = state.selectedObjects.includes(action.objectId)
-        ? state.selectedObjects.filter((item) => item !== action.objectId)
-        : [...state.selectedObjects, action.objectId];
+      const currentIds = new Set([
+        ...state.selectedObjects,
+        ...(state.selection ? [state.selection.id] : []),
+      ]);
+      if (currentIds.has(action.objectId)) currentIds.delete(action.objectId);
+      else currentIds.add(action.objectId);
+      const selectedObjects = [...currentIds];
+      const preferredId = currentIds.has(action.objectId)
+        ? action.objectId
+        : state.selection && currentIds.has(state.selection.id)
+          ? state.selection.id
+          : selectedObjects[0];
       return replaceSelectionSnapshot(state, {
-        selection: state.selection ? clone(state.selection) : null,
+        selection: preferredId ? selectionForObject(state, preferredId) : null,
         selectedObjects,
       });
     }
@@ -861,8 +895,19 @@ export function reduceWorkspaceState(
         ...state,
         data: { ...state.data, updatedAt: timestamp() },
       });
-    case "view/layer":
-      return { ...state, visibleLayer: action.layer };
+    case "view/layer": {
+      const nextState = { ...state, visibleLayer: action.layer };
+      const selectedObjects = state.selectedObjects.filter((objectId) => {
+        const selection = selectionForObject(state, objectId);
+        return selection ? isSelectionVisible(nextState, selection, action.layer) : false;
+      });
+      const selection = state.selection && isSelectionVisible(nextState, state.selection, action.layer)
+        ? state.selection
+        : selectedObjects[0]
+          ? selectionForObject(nextState, selectedObjects[0])
+          : null;
+      return replaceSelectionSnapshot(nextState, { selection, selectedObjects });
+    }
     case "drc/run":
       return { ...state, drcIssues: runDrc(state.activeProject), rightTab: "drc" };
   }
