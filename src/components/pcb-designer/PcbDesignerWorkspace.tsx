@@ -496,7 +496,6 @@ export function PcbDesignerWorkspace({
         viewMode={viewMode}
         exportPngAvailable={viewMode === "2d"}
         exportIncludesGrid={exportIncludesGrid}
-        onNew={() => setDialog({ kind: "new-project" })}
         onSave={handleSave}
         onViewModeChange={changeViewMode}
         onExportProject={() => downloadProject(workspace.activeProject)}

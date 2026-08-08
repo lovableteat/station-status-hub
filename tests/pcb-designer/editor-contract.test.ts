@@ -103,6 +103,9 @@ test("keeps all four tools mutually exclusive and accessible", () => {
 });
 
 test("adds separate visible-layer filters without replacing placement-layer controls", () => {
+  assert.doesNotMatch(toolbarSource, /onNew:\s*\(\)\s*=>\s*void/);
+  assert.doesNotMatch(toolbarSource, /label=["']新增專案["']/);
+  assert.doesNotMatch(toolbarSource, /icon=\{Plus\}/);
   assert.match(toolbarSource, /visibleLayer:\s*PcbVisibleLayer/);
   assert.match(toolbarSource, /onVisibleLayerChange:\s*\(layer:\s*PcbVisibleLayer\)\s*=>\s*void/);
   assert.match(toolbarSource, /pcb-visible-layer-switch/);
@@ -311,9 +314,21 @@ test("keeps dense toolbar labels readable and stable across active and disabled 
     editorCssSource,
     /\.pcb-layer-switch button,[\s\S]{0,120}\.pcb-visible-layer-switch button\s*\{[\s\S]{0,320}font-family:\s*inherit[\s\S]{0,120}font-size:\s*12px[\s\S]{0,120}line-height:\s*1/,
   );
+  assert.match(
+    editorCssSource,
+    /\.pcb-layer-switch,\s*[\r\n]+\s*\.pcb-visible-layer-switch\s*\{[\s\S]{0,400}flex:\s*0 0 auto[\s\S]{0,200}white-space:\s*nowrap/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-layer-switch button,\s*[\r\n]+\s*\.pcb-visible-layer-switch button\s*\{[\s\S]{0,400}flex:\s*0 0 auto[\s\S]{0,200}min-width:\s*64px[\s\S]{0,200}white-space:\s*nowrap/,
+  );
   assert.doesNotMatch(
     editorCssSource,
     /\.pcb-layer-switch button:disabled,[\s\S]{0,120}\.pcb-visible-layer-switch button:disabled[\s\S]{0,120}opacity:/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-layer-switch button\.is-active,\s*[\r\n]+\s*\.pcb-visible-layer-switch button\.is-active\s*\{[\s\S]{0,320}border-color:[\s\S]{0,200}box-shadow:/,
   );
   assert.match(
     editorCssSource,

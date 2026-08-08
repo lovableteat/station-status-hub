@@ -182,10 +182,16 @@ test("replaces the loading shell with one native three-area PCB workbench", asyn
   assert.match(leftRailSource, /projects[\s\S]*templates[\s\S]*library[\s\S]*bom/i);
   assert.match(leftRailSource, /statusFilter[\s\S]*sourceFilter/);
   assert.match(toolbarSource, /undo[\s\S]*redo[\s\S]*exportPng/i);
+  assert.doesNotMatch(toolbarSource, /onNew:\s*\(\)\s*=>\s*void/);
+  assert.doesNotMatch(toolbarSource, /label=["']新增專案["']/);
+  assert.doesNotMatch(workspaceSource, /onNew=\{\(\) => setDialog\(\{ kind: ["']new-project["'] \}\)\}/);
+  assert.match(workspaceSource, /onNewProject=\{\(\) => setDialog\(\{ kind: ["']new-project["'] \}\)\}/);
   assert.match(dialogsSource, /import-preview/i);
   assert.match(stylesSource, /#06111f/i);
   assert.match(stylesSource, /@media \(max-width: 1279px\)[\s\S]*pcb-left-drawer[\s\S]*position:\s*absolute/i);
   assert.match(stylesSource, /@media \(max-width: 767px\)[\s\S]*pcb-mobile-advisory/i);
+  assert.match(stylesSource, /\.pcb-toolbar\s*\{[\s\S]{0,220}overflow-x:\s*auto/);
+  assert.match(stylesSource, /\.pcb-layer-switch,[\s\S]{0,80}\.pcb-visible-layer-switch\s*\{[\s\S]{0,240}flex:\s*0 0 auto/);
   assert.match(workspaceSource, /建議使用桌面進行精細佈局/);
 
   const combined = [
