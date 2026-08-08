@@ -202,6 +202,32 @@ test("replaces the loading shell with one native three-area PCB workbench", asyn
   assert.doesNotMatch(combined, /gradient|shadow-(?:xl|2xl)/i);
 });
 
+test("keeps visible-layer filtering and grouped selection in sync across the PCB workspace", async () => {
+  const toolbarSource = await read(
+    "src/components/pcb-designer/PcbToolbar.tsx",
+  );
+  const canvasSource = await read(
+    "src/components/pcb-designer/PcbCanvas.tsx",
+  );
+  const canvas3dSource = await read(
+    "src/components/pcb-designer/Pcb3DCanvas.tsx",
+  );
+  const inspectorSource = await read(
+    "src/components/pcb-designer/PcbInspector.tsx",
+  );
+
+  assert.match(workspaceSource, /visibleLayer=\{workspace\.visibleLayer\}/);
+  assert.match(workspaceSource, /selectedObjects=\{workspace\.selectedObjects\}/);
+  assert.match(workspaceSource, /onVisibleLayerChange=\{workspace\.setVisibleLayer\}/);
+  assert.match(toolbarSource, /pcb-visible-layer-switch/);
+  assert.match(canvasSource, /workspace\.visibleLayer/);
+  assert.match(canvasSource, /workspace\.moveComponents/);
+  assert.match(canvasSource, /workspace\.toggleObjectSelection/);
+  assert.match(canvas3dSource, /visibleLayer/);
+  assert.match(canvas3dSource, /workspace\.selectedObjects/);
+  assert.match(inspectorSource, /workspace\.duplicateSelected/);
+});
+
 test("persists PCB permissions through the database enum and workspace validator", () => {
   assert.match(
     permissionMigrationSource,

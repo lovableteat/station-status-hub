@@ -16,6 +16,7 @@ import type {
   PcbSaveState,
   PcbTemplate,
   PcbTool,
+  PcbVisibleLayer,
 } from "../types.ts";
 import { usePcbEditorActions } from "./usePcbEditorActions.ts";
 import {
@@ -233,6 +234,10 @@ export function usePcbWorkspace({
     (layer: "top" | "bottom") => dispatch({ type: "layer/set", layer }),
     [],
   );
+  const setVisibleLayer = useCallback(
+    (layer: PcbVisibleLayer) => dispatch({ type: "view/layer", layer }),
+    [],
+  );
   const setZoom = useCallback(
     (zoom: number) => dispatch({ type: "zoom/set", zoom }),
     [],
@@ -243,11 +248,21 @@ export function usePcbWorkspace({
     [],
   );
   const runDrc = useCallback(() => dispatch({ type: "drc/run" }), []);
+  const toggleObjectSelection = useCallback(
+    (objectId: string) => dispatch({ type: "selection/toggle", objectId }),
+    [],
+  );
+  const clearObjectSelection = useCallback(
+    () => dispatch({ type: "selection/clear-group" }),
+    [],
+  );
   const saveNow = persistence.saveNow;
 
   return {
     ...state,
     ...editor,
+    visibleLayer: state.visibleLayer,
+    selectedObjects: state.selectedObjects,
     persistenceStatus: persistence.status,
     hasUnsavedChanges: persistence.hasUnsavedChanges,
     createProject,
@@ -275,9 +290,12 @@ export function usePcbWorkspace({
     toggleDocumentLock,
     setTool,
     setActiveLayer,
+    setVisibleLayer,
     setZoom,
     setRightTab,
     runDrc,
+    toggleObjectSelection,
+    clearObjectSelection,
     saveNow,
   };
 }
