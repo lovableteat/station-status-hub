@@ -220,6 +220,7 @@ test("connects the repository to private Supabase storage through one guarded ho
   assert.match(adapter, /\.from\(["']test_plan_folders["']\)/);
   assert.match(adapter, /\.from\(["']test_plan_files["']\)/);
   assert.match(adapter, /\.from\(TEST_PLAN_STORAGE_BUCKET\)[\s\S]{0,120}\.upload\(/);
+  assert.match(adapter, /\.from\(TEST_PLAN_STORAGE_BUCKET\)[\s\S]{0,160}\.update\(/);
   assert.match(adapter, /\.from\(TEST_PLAN_STORAGE_BUCKET\)[\s\S]{0,120}\.download\(/);
   assert.match(adapter, /\.from\(TEST_PLAN_STORAGE_BUCKET\)[\s\S]{0,120}\.remove\(/);
   assert.match(adapter, /upload\/resumable/);
@@ -246,4 +247,5 @@ test("connects the repository to private Supabase storage through one guarded ho
   assert.match(hook, /activeSpaceIdRef\.current\s*!==\s*expectedSpaceId/);
   assert.match(hook, /requestIdRef/);
   assert.match(hook, /uploadProgress/);
+  assert.match(hook, /replaceFileContents/);
 });

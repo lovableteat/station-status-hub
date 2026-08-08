@@ -244,11 +244,13 @@ test("the provider shares one topic while guarding per-tab identities", () => {
   assert.doesNotMatch(providerSource, /Keep the signed-in\s+user visible immediately/);
 });
 
-test("collaboration roster groups account sessions and shows the connection count", () => {
+test("collaboration roster combines account directory data with live session counts", () => {
   assert.match(collaborationSource, /onlineAccounts/);
   assert.match(collaborationSource, /sessionCount/);
   assert.match(collaborationSource, /同帳號.*個連線/);
   assert.match(collaborationSource, /totalOnlineSessions/);
+  assert.match(collaborationSource, /list_active_collaboration_members/);
+  assert.match(collaborationSource, /目前離線/);
 });
 
 test("authentication is isolated per browser tab while surviving a refresh", () => {
