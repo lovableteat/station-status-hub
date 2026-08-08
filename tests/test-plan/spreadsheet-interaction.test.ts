@@ -29,6 +29,20 @@ test("places row and column insertions after the normalized selection and past m
   assert.equal(getSpreadsheetInsertionIndex(selection, "row", [{ startRow: 9, endRow: 11, startColumn: 1, endColumn: 3 }]), 12);
 });
 
+test("skips merges outside the selected cross-axis range for full-axis insertion", () => {
+  const selection = {
+    anchor: { row: 8, column: 5 },
+    focus: { row: 4, column: 2 },
+  };
+
+  assert.equal(getSpreadsheetInsertionIndex(selection, "row", [
+    { startRow: 9, endRow: 11, startColumn: 20, endColumn: 22 },
+  ]), 12);
+  assert.equal(getSpreadsheetInsertionIndex(selection, "column", [
+    { startRow: 20, endRow: 22, startColumn: 6, endColumn: 8 },
+  ]), 9);
+});
+
 test("encodes, decodes, and normalizes spreadsheet selections", () => {
   assert.deepEqual(decodeSpreadsheetAddress("$AA$27"), { row: 27, column: 27 });
   const selection = {
