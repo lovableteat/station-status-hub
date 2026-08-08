@@ -20,6 +20,7 @@ const presenceSource = await read("src/components/pcb-designer/hooks/usePcbProje
 const collaboratorsSource = await read("src/components/pcb-designer/PcbCollaborators.tsx");
 const canvas3dSource = await read("src/components/pcb-designer/Pcb3DCanvas.tsx");
 const runtimeBoundarySource = await read("src/components/common/AppRuntimeBoundary.tsx");
+const modelAssetsSource = await read("src/components/pcb-designer/core/modelAssets.ts");
 
 test("surfaces shared visible-layer controls and selection utilities through the workspace shell", () => {
   assert.match(hookSource, /const setVisibleLayer = useCallback/);
@@ -315,4 +316,17 @@ test("provides complete board, selection, DRC, and PNG workflows", () => {
   assert.match(workspaceSource, /手動儲存模式（Ctrl\+S）/);
   assert.doesNotMatch(workspaceSource, /toLocaleTimeString/);
   assert.match(workspaceSource, /onRunDrc=\{\(\) => \{[\s\S]{0,120}runDrc\(\)[\s\S]{0,120}setOpenDrawer\(["']right["']\)/);
+});
+
+test("keeps STEP model metadata serializable and assignment scoped to the selected component", () => {
+  assert.match(modelAssetsSource, /PCB_MODEL_FILE_ACCEPT/);
+  assert.match(modelAssetsSource, /toPcbModelAssetMetadata/);
+  assert.match(modelAssetsSource, /IndexedDbModelAssetStore/);
+  assert.match(modelAssetsSource, /indexedDB/);
+  assert.match(modelAssetsSource, /number\[\]/);
+  assert.match(workspaceSource, /importStepModel/);
+  assert.match(inspectorSource, /modelAssetId/);
+  assert.match(inspectorSource, /workspace\.updateComponent/);
+  assert.match(canvas3dSource, /modelAssetId/);
+  assert.match(canvas3dSource, /procedural/);
 });
