@@ -90,6 +90,8 @@ import {
 import { useTestPlanWorkspace } from "./hooks/useTestPlanWorkspace";
 import { TestPlanInspector } from "./TestPlanInspector";
 import { TestPlanOverview } from "./TestPlanOverview";
+import { isEditableSpreadsheet } from "./core/spreadsheet";
+import { TestPlanSpreadsheetEditor } from "./TestPlanSpreadsheetEditor";
 import {
   TestPlanSpaceDialog,
   type TestPlanSpaceInput,
@@ -165,15 +167,21 @@ function FileCategoryIcon({
 
 function FolderBranch({
   folders,
+  files,
   parentId,
   activeFolderId,
+  expandedFolderIds,
   onOpen,
+  onToggle,
   level = 0,
 }: {
   folders: readonly TestPlanFolder[];
+  files: readonly TestPlanFileRecord[];
   parentId: string | null;
   activeFolderId: string | null;
+  expandedFolderIds: ReadonlySet<string>;
   onOpen: (folderId: string) => void;
+  onToggle: (folderId: string) => void;
   level?: number;
 }) {
   const children = folders
@@ -183,29 +191,78 @@ function FolderBranch({
 
   return (
     <>
-      {children.map((folder) => (
-        <div key={folder.id}>
-          <button
-            type="button"
-            className={cn(
-              "test-plan-folder-tree-item",
-              activeFolderId === folder.id && "is-active",
+      {children.map((folder) => {
+        const childFolderCount = folders.filter(
+          (candidate) => candidate.parentId === folder.id,
+        ).length;
+        const directFileCount = files.filter(
+          (file) => file.folderId === folder.id,
+        ).length;
+        const hasChildren = childFolderCount > 0;
+        const isExpanded = expandedFolderIds.has(folder.id);
+        const isActive = activeFolderId === folder.id;
+
+        return (
+          <div className="test-plan-folder-tree-node" key={folder.id}>
+            <div
+              className={cn(
+                "test-plan-folder-tree-row",
+                isActive && "is-active",
+              )}
+              style={{ paddingLeft: `${level * 14}px` }}
+            >
+              {hasChildren ? (
+                <button
+                  type="button"
+                  className={cn(
+                    "test-plan-folder-tree-toggle",
+                    isExpanded && "is-expanded",
+                  )}
+                  aria-label={isExpanded ? `收合 ${folder.name}` : `展開 ${folder.name}`}
+                  aria-expanded={isExpanded}
+                  onClick={() => onToggle(folder.id)}
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <span className="test-plan-folder-tree-toggle-spacer" />
+              )}
+              <button
+                type="button"
+                className="test-plan-folder-tree-item"
+                onClick={() => onOpen(folder.id)}
+              >
+                {isActive ? (
+                  <FolderOpen className="h-4 w-4" />
+                ) : (
+                  <Folder className="h-4 w-4" />
+                )}
+                <span className="test-plan-folder-tree-label">
+                  <strong>{folder.name}</strong>
+                  <small>
+                    {childFolderCount > 0 && `${childFolderCount} 個子資料夾`}
+                    {childFolderCount > 0 && directFileCount > 0 && " · "}
+                    {directFileCount > 0 && `${directFileCount} 個檔案`}
+                    {childFolderCount === 0 && directFileCount === 0 && "空資料夾"}
+                  </small>
+                </span>
+              </button>
+            </div>
+            {hasChildren && isExpanded && (
+              <FolderBranch
+                folders={folders}
+                files={files}
+                parentId={folder.id}
+                activeFolderId={activeFolderId}
+                expandedFolderIds={expandedFolderIds}
+                onOpen={onOpen}
+                onToggle={onToggle}
+                level={level + 1}
+              />
             )}
-            style={{ paddingLeft: `${12 + level * 14}px` }}
-            onClick={() => onOpen(folder.id)}
-          >
-            <Folder className="h-4 w-4" />
-            <span>{folder.name}</span>
-          </button>
-          <FolderBranch
-            folders={folders}
-            parentId={folder.id}
-            activeFolderId={activeFolderId}
-            onOpen={onOpen}
-            level={level + 1}
-          />
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </>
   );
 }
@@ -354,6 +411,7 @@ function MoveDialog({
 function EntryActions({
   entry,
   canEdit,
+  onEditSpreadsheet,
   onRename,
   onMove,
   onDescribe,
@@ -362,6 +420,7 @@ function EntryActions({
 }: {
   entry: TestPlanEntry;
   canEdit: boolean;
+  onEditSpreadsheet: () => void;
   onRename: () => void;
   onMove: () => void;
   onDescribe: () => void;
@@ -383,6 +442,12 @@ function EntryActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {entry.kind === "file" && isEditableSpreadsheet(entry) && (
+          <DropdownMenuItem disabled={!canEdit} onSelect={onEditSpreadsheet}>
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            直接編輯 Excel
+          </DropdownMenuItem>
+        )}
         {entry.kind === "file" && (
           <DropdownMenuItem onSelect={onDownload}>
             <Download className="mr-2 h-4 w-4" />
@@ -446,6 +511,7 @@ export function TestPlanWorkspace() {
     updateFileDescription,
     downloadFile,
     deleteFile,
+    replaceFileContents,
   } = workspace;
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -462,12 +528,38 @@ export function TestPlanWorkspace() {
   const [moveAction, setMoveAction] = useState<MoveAction | null>(null);
   const [deleteAction, setDeleteAction] = useState<DeleteAction | null>(null);
   const [selectedEntryKey, setSelectedEntryKey] = useState<string | null>(null);
+  const [spreadsheetFile, setSpreadsheetFile] = useState<TestPlanFileRecord | null>(null);
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(
+    new Set(),
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setActiveFolderId(null);
     setSelectedEntryKey(null);
+    setSpreadsheetFile(null);
+    setExpandedFolderIds(new Set());
   }, [activeSpaceId]);
+
+  useEffect(() => {
+    if (!activeFolderId) return;
+    const parentById = new Map(
+      folders.map((folder) => [folder.id, folder.parentId] as const),
+    );
+    setExpandedFolderIds((current) => {
+      const next = new Set(current);
+      let cursor: string | null = activeFolderId;
+      let changed = false;
+      while (cursor) {
+        if (!next.has(cursor)) {
+          next.add(cursor);
+          changed = true;
+        }
+        cursor = parentById.get(cursor) ?? null;
+      }
+      return changed ? next : current;
+    });
+  }, [activeFolderId, folders]);
 
   useEffect(() => {
     if (spaceDialog) setSpaceDialogError(null);
@@ -646,6 +738,7 @@ export function TestPlanWorkspace() {
       setSelectedEntryKey(null);
     } else {
       setSelectedEntryKey(`file:${entry.id}`);
+      if (isEditableSpreadsheet(entry)) setSpreadsheetFile(entry);
     }
   };
 
@@ -657,6 +750,11 @@ export function TestPlanWorkspace() {
     <EntryActions
       entry={entry}
       canEdit={canEdit}
+      onEditSpreadsheet={() => {
+        if (entry.kind === "file" && isEditableSpreadsheet(entry)) {
+          setSpreadsheetFile(entry);
+        }
+      }}
       onRename={() =>
         setTextAction(
           entry.kind === "folder"
@@ -880,6 +978,7 @@ export function TestPlanWorkspace() {
                 type="button"
                 className={cn(
                   "test-plan-folder-tree-item",
+                  "test-plan-folder-tree-root",
                   activeFolderId === null && "is-active",
                 )}
                 onClick={() => {
@@ -893,13 +992,22 @@ export function TestPlanWorkspace() {
               </button>
               <FolderBranch
                 folders={folders}
+                files={files}
                 parentId={null}
                 activeFolderId={activeFolderId}
+                expandedFolderIds={expandedFolderIds}
                 onOpen={(folderId) => {
                   setActiveFolderId(folderId);
                   setSelectedEntryKey(null);
                   setIsSpaceDrawerOpen(false);
                 }}
+                onToggle={(folderId) =>
+                  setExpandedFolderIds((current) => {
+                    const next = new Set(current);
+                    if (next.has(folderId)) next.delete(folderId);
+                    else next.add(folderId);
+                    return next;
+                  })}
               />
             </div>
           )}
@@ -1261,6 +1369,7 @@ export function TestPlanWorkspace() {
             canEdit={canEdit}
             busy={busy}
             downloadFile={downloadFile}
+            onEditSpreadsheet={(file) => setSpreadsheetFile(file)}
             onDownload={(file) => void handleDownload(file)}
             onRename={(entry) =>
               setTextAction(
@@ -1328,6 +1437,20 @@ export function TestPlanWorkspace() {
           </div>
         </div>
       )}
+
+      <TestPlanSpreadsheetEditor
+        open={Boolean(spreadsheetFile)}
+        file={spreadsheetFile}
+        canEdit={canEdit}
+        downloadFile={downloadFile}
+        onOpenChange={(open) => {
+          if (!open) setSpreadsheetFile(null);
+        }}
+        onSave={async (file, contents) => {
+          await replaceFileContents(file, contents);
+          toast.success("Excel 已儲存回原檔");
+        }}
+      />
 
       <TestPlanSpaceDialog
         open={Boolean(spaceDialog)}

@@ -38,6 +38,57 @@ test("provides spaces, nested folders, breadcrumbs, search, filters, and both vi
   assert.match(workspace, /sort/);
   assert.match(workspace, /"grid"/);
   assert.match(workspace, /"list"/);
+  assert.match(workspace, /expandedFolderIds/);
+  assert.match(workspace, /aria-expanded=\{isExpanded\}/);
+  assert.match(workspace, /收合 \$\{folder\.name\}/);
+  assert.match(workspace, /個子資料夾/);
+});
+
+test("edits uploaded spreadsheets in place without forcing a download workflow", async () => {
+  const [workspace, editor, inspector, styles] = await Promise.all([
+    source("src/components/test-plan/TestPlanWorkspace.tsx"),
+    source("src/components/test-plan/TestPlanSpreadsheetEditor.tsx"),
+    source("src/components/test-plan/TestPlanInspector.tsx"),
+    source("src/components/test-plan/test-plan.css"),
+  ]);
+
+  assert.match(workspace, /TestPlanSpreadsheetEditor/);
+  assert.match(workspace, /replaceFileContents/);
+  assert.match(workspace, /直接編輯 Excel/);
+  assert.match(editor, /import\("xlsx"\)/);
+  assert.match(editor, /import\("exceljs"\)/);
+  assert.match(editor, /formattedWorksheet\.model\.merges/);
+  assert.match(editor, /getFormattedCellStyle/);
+  assert.match(editor, /getWorkbookThemeColors/);
+  assert.match(editor, /INDEXED_COLORS/);
+  assert.match(editor, /getPatternBackground/);
+  assert.match(editor, /data-spreadsheet-cell="true"/);
+  assert.match(editor, /readFormattedCellValue/);
+  assert.match(editor, /cell\.value\.result/);
+  assert.match(editor, /getColumnWidth/);
+  assert.match(editor, /getRowHeight/);
+  assert.match(editor, /原始格式/);
+  assert.match(editor, /儲存回原檔/);
+  assert.match(editor, /這份 Excel 還沒有儲存/);
+  assert.match(editor, /ROW_PAGE_SIZE = 100/);
+  assert.match(editor, /aria-label="全選工作表"/);
+  assert.match(editor, /aria-label={`選取 \$\{encodeColumn\(column\)\} 欄`}/);
+  assert.match(editor, /aria-label={`選取第 \$\{row\} 列`}/);
+  assert.match(editor, /onCopy={handleGridCopy}/);
+  assert.match(editor, /onCut={handleGridCut}/);
+  assert.match(editor, /onPaste={handleGridPaste}/);
+  assert.match(editor, /const undo = \(\) =>/);
+  assert.match(editor, /const redo = \(\) =>/);
+  assert.match(editor, /moveSpreadsheetSelection/);
+  assert.match(inspector, /onEditSpreadsheet/);
+  assert.match(styles, /\.test-plan-sheet-grid-wrap/);
+  assert.match(styles, /\.test-plan-sheet-grid-wrap\.is-formatted/);
+  assert.match(styles, /\.test-plan-sheet-grid td\.is-range-selected/);
+  assert.match(styles, /\.test-plan-sheet-grid td\.is-active/);
+  assert.match(styles, /\.test-plan-sheet-corner button::after/);
+  assert.match(styles, /background: transparent !important/);
+  assert.match(styles, /box-shadow: none !important/);
+  assert.match(styles, /\.test-plan-folder-tree-toggle\.is-expanded/);
 });
 
 test("supports drag-and-drop batch upload with all engineering formats", async () => {
