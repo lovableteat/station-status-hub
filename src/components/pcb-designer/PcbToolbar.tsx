@@ -9,7 +9,6 @@ import {
   LockOpen,
   Maximize2,
   MousePointer2,
-  Plus,
   Redo2,
   Ruler,
   Save,
@@ -102,7 +101,6 @@ export interface PcbToolbarProps {
   viewMode: PcbViewMode;
   exportPngAvailable: boolean;
   exportIncludesGrid: boolean;
-  onNew: () => void;
   onSave: () => void | Promise<void>;
   onViewModeChange: (mode: PcbViewMode) => void;
   onExportProject: () => void;
@@ -135,7 +133,6 @@ export function PcbToolbar({
   viewMode,
   exportPngAvailable,
   exportIncludesGrid,
-  onNew,
   onSave,
   onViewModeChange,
   onExportProject,
@@ -161,7 +158,6 @@ export function PcbToolbar({
         aria-label="PCB 工具列"
         role="toolbar"
       >
-        <ToolButton label="新增專案" icon={Plus} disabled={!canMutate} onClick={onNew} />
         <ToolButton
           label={isSaving ? "正在同步" : "儲存並同步"}
           shortcut="Ctrl+S"
