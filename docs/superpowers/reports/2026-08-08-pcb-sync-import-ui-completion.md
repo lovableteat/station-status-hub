@@ -30,6 +30,15 @@
 - 專案全域 `npm run lint`：仍有既有非本次範圍的 `no-explicit-any`、React Hook dependency 等錯誤，集中在其他工作區檔案；本次 PCB 變更檔案未引入新的 lint error。
 - 本機瀏覽器 smoke check：本機頁面可啟動，但未登入時停在帳號登入頁；未繞過驗證，因此尚未在登入後實際點擊 PCB Designer。靜態契約、單元測試與 production build 已覆蓋本次變更。
 
+## 追加修正：2D 切換 3D 時的頁面錯誤
+
+問題根因是 3D 視圖採用 lazy chunk，且 Three.js/WebGL 建立失敗會一路冒泡到全域錯誤邊界，所以畫面只剩「頁面載入遇到問題」。
+
+- `AppRuntimeBoundary` 現在會記錄並檢查 chunk fingerprint；同一個失敗資產不會被重複嘗試，重載仍由使用者按鈕控制，避免編輯中的資料被自動刷新打斷。
+- `Pcb3DCanvas` 新增區域錯誤邊界與 Canvas fallback；WebGL 失敗時只在 3D 區塊顯示「3D 檢視無法啟用」，2D 版面、選取與編輯狀態仍保留。
+- 新增契約測試 `contains 3D runtime failures inside the PCB view`。
+- 本次修正驗證：`npm run test:pcb` 158/158、`tests/bootRecoveryPolicy.test.mjs` 2/2、定向 ESLint 通過、`npm run build` 成功。
+
 ## 推送
 
 本報告與上述程式碼會從 `codex/pcb-collaboration-fixes` 以 fast-forward refspec 推送到 `origin/main`。

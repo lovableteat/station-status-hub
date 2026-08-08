@@ -198,6 +198,12 @@ test("provides a lazy interactive 3D PCB view without replacing the 2D editor", 
   assert.match(canvas3dSource, /重設視角/);
 });
 
+test("contains 3D runtime failures inside the PCB view", () => {
+  assert.match(canvas3dSource, /class Pcb3DErrorBoundary/);
+  assert.match(canvas3dSource, /fallback=\{/);
+  assert.match(canvas3dSource, /WebGL|3D/);
+});
+
 test("shares 2D and 3D synchronization helpers and inspection attributes", () => {
   assert.match(viewSyncSource, /export function getPcbSelectionIds/);
   assert.match(viewSyncSource, /export function isPcbLayerVisible/);

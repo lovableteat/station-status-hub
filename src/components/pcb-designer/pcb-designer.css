@@ -258,6 +258,26 @@
   font-size: 12px;
 }
 
+.pcb-3d-error {
+  display: grid;
+  min-height: 100%;
+  place-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: #d5e6f1;
+  text-align: center;
+}
+
+.pcb-3d-error strong {
+  color: #fcd34d;
+  font-size: 14px;
+}
+
+.pcb-3d-error span {
+  color: #9ec9d8;
+  font-size: 12px;
+}
+
 .pcb-3d-host canvas {
   outline: none;
 }
