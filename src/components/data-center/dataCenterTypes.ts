@@ -26,6 +26,14 @@ export type FacilityAisleOrientation = "horizontal" | "vertical";
 
 export type ModelUpAxis = "x" | "y" | "z";
 
+/** PCB STEP files usually describe a thin board-mounted body; use its thinnest span as up. */
+export function inferPcbUpAxis(spans: [number, number, number]): ModelUpAxis {
+  const smallest = Math.min(...spans);
+  if (spans[0] === smallest) return "x";
+  if (spans[1] === smallest) return "y";
+  return "z";
+}
+
 export type DataCenterAssetKind = "rack" | "l10";
 
 export type RackEquipmentCategory =

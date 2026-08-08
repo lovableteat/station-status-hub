@@ -6,18 +6,12 @@ import type {
   ImportedStepDimensions,
   ImportedStepModel,
   ImportedStepPart,
+  inferPcbUpAxis,
   ModelUpAxis,
 } from "./dataCenterTypes";
 
 function roundMm(value: number) {
   return Math.max(0, Math.round(value * 10) / 10);
-}
-
-function detectUpAxis(spans: [number, number, number]): ModelUpAxis {
-  const largest = Math.max(...spans);
-  if (spans[0] === largest) return "x";
-  if (spans[1] === largest) return "y";
-  return "z";
 }
 
 function getCanonicalDimensions(
@@ -124,7 +118,7 @@ export async function importStepModel(file: File): Promise<ImportedStepModel> {
     bounds.max[1] - bounds.min[1],
     bounds.max[2] - bounds.min[2],
   ];
-  const upAxis = detectUpAxis(spans);
+  const upAxis = inferPcbUpAxis(spans);
   const dimensions = getCanonicalDimensions(bounds, upAxis);
 
   if (!dimensions.widthMm || !dimensions.depthMm || !dimensions.heightMm) {
