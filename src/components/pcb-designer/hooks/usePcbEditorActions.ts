@@ -2,12 +2,16 @@ import { useCallback, useEffect, useRef, type Dispatch } from "react";
 import {
   createKeepout as createKeepoutRecord,
   createMeasurement as createMeasurementRecord,
+  duplicateKeepout as duplicateKeepoutRecord,
   editSelectedObject,
   moveComponent as moveComponentRecord,
+  moveComponents as moveComponentsRecord,
   moveKeepout as moveKeepoutRecord,
   normalizeRotation,
   placeLibraryComponent as placeComponentRecord,
   selectionCenter,
+  type GroupMoveResult,
+  type KeepoutDuplicateResult,
   type MoveResult,
   type KeepoutMoveResult,
   type PlacementResult,
@@ -203,6 +207,23 @@ export function usePcbEditorActions(
     },
     [dispatch, state.activeProject, state.canEdit, state.documentLocked],
   );
+  const moveComponents = useCallback(
+    (
+      instanceIds: readonly string[],
+      delta: PcbPoint,
+      bypassSnap = false,
+    ): GroupMoveResult => {
+      if (!state.canEdit || state.documentLocked) {
+        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法群組移動元件。" };
+      }
+      const result = moveComponentsRecord(state.activeProject, instanceIds, delta, bypassSnap);
+      if (result.ok && result.changed) {
+        dispatch({ type: "project/commit", update: result.project });
+      }
+      return result;
+    },
+    [dispatch, state.activeProject, state.canEdit, state.documentLocked],
+  );
   const moveKeepout = useCallback(
     (id: string, point: PcbPoint, bypassSnap = false): KeepoutMoveResult => {
       if (!state.canEdit || state.documentLocked) {
@@ -210,6 +231,20 @@ export function usePcbEditorActions(
       }
       const result = moveKeepoutRecord(state.activeProject, id, point, bypassSnap);
       if (result.ok && result.changed) dispatch({ type: "project/commit", update: result.project });
+      return result;
+    },
+    [dispatch, state.activeProject, state.canEdit, state.documentLocked],
+  );
+  const duplicateKeepout = useCallback(
+    (id: string, offset: PcbPoint): KeepoutDuplicateResult => {
+      if (!state.canEdit || state.documentLocked) {
+        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法複製禁制區。" };
+      }
+      const result = duplicateKeepoutRecord(state.activeProject, id, offset);
+      if (result.ok) {
+        dispatch({ type: "project/commit", update: result.project });
+        dispatch({ type: "selection/set", selection: { kind: "keepout", id: result.keepout.id } });
+      }
       return result;
     },
     [dispatch, state.activeProject, state.canEdit, state.documentLocked],
@@ -328,6 +363,33 @@ export function usePcbEditorActions(
     (dx: number, dy: number) => applySelectionEdit({ type: "nudge", dx, dy }),
     [applySelectionEdit],
   );
+  const duplicateSelected = useCallback(() => {
+    if (!state.canEdit || state.documentLocked) return false;
+    if (state.selection?.kind === "keepout") {
+      const gridOffset = state.activeProject.board.gridSize > 0 ? state.activeProject.board.gridSize : 1;
+      const result = duplicateKeepoutRecord(
+        state.activeProject,
+        state.selection.id,
+        { x: gridOffset, y: gridOffset },
+      );
+      if (!result.ok) return false;
+    } else if (
+      state.selection?.kind !== "component"
+      && !state.selectedObjects.some((objectId) =>
+        state.activeProject.components.some((component) => component.instanceId === objectId))
+    ) {
+      return false;
+    }
+    dispatch({ type: "selection/duplicate" });
+    return true;
+  }, [
+    dispatch,
+    state.activeProject,
+    state.canEdit,
+    state.documentLocked,
+    state.selectedObjects,
+    state.selection,
+  ]);
   const centerDrcIssue = useCallback((issueId: string) => {
     const issue = state.drcIssues.find((item) => item.id === issueId);
     if (!issue) return;
@@ -503,13 +565,16 @@ export function usePcbEditorActions(
     setViewCenter,
     resetView,
     moveComponent,
+    moveComponents,
     moveKeepout,
+    duplicateKeepout,
     updateBoard,
     updateComponent,
     updateKeepout,
     updateMeasurement,
     createKeepout,
     createMeasurement,
+    duplicateSelected,
     deleteSelected,
     rotateSelected,
     toggleSelectedLock,

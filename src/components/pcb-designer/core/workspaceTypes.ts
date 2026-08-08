@@ -28,11 +28,17 @@ export interface TemplateInput {
   description: string;
 }
 
+export interface SelectionSnapshot {
+  selection: PcbSelection | null;
+  selectedObjects: string[];
+}
+
 export interface PcbWorkspaceState {
   data: PcbSaveState;
   activeProject: PcbProject;
   historyByProject: Record<string, HistoryState<PcbProject>>;
   pendingHistoryByProject: Record<string, HistoryState<PendingPlacement[]>>;
+  selectionHistoryByProject: Record<string, HistoryState<SelectionSnapshot>>;
   drcIssues: PcbDrcIssue[];
   pendingPlacements: PendingPlacement[];
   canEdit: boolean;
@@ -81,6 +87,7 @@ export type PcbWorkspaceAction =
   | { type: "view/reset" }
   | { type: "selection/set"; selection: PcbSelection | null }
   | { type: "selection/toggle"; objectId: string }
+  | { type: "selection/duplicate" }
   | { type: "selection/clear-group" }
   | { type: "panel/right"; tab: PcbWorkspaceState["rightTab"] }
   | { type: "permission/set"; canEdit: boolean }
