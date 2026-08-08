@@ -49,6 +49,13 @@
 - 版面判讀與 detector 都確認頁面 grid 本身正常，問題只在巢狀 wrapper padding；detector 結果為零項。
 - 本次驗證：`npm run test:pcb` 159/159、定向 ESLint 0 errors、`npm run build` 成功；瀏覽器可載入登入頁，但未繞過登入驗證進入 PCB 畫面。
 
+## 追加修正：搜尋與狀態文字對齊
+
+- 專案狀態選單加入與搜尋列同尺寸、同位置的 `Filter` 圖示。
+- `.pcb-search-input` 與 `.pcb-status-filter` 共用 `padding-left: 32px`，讓「搜尋專案」與「全部狀態」從完全相同的水平位置開始。
+- 新增契約測試 `aligns project search and status filter text`。
+- 本次驗證：`npm run test:pcb` 160/160、定向 ESLint 通過、`npm run build` 成功。
+
 ## 推送
 
 本報告與上述程式碼會從 `codex/pcb-collaboration-fixes` 以 fast-forward refspec 推送到 `origin/main`。
