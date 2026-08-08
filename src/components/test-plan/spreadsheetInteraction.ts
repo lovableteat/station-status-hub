@@ -99,12 +99,8 @@ export function getSpreadsheetInsertionIndex(
       const crossesInsertion = axis === "row"
         ? insertionIndex >= merge.startRow
           && insertionIndex <= merge.endRow
-          && normalized.startColumn <= merge.endColumn
-          && normalized.endColumn >= merge.startColumn
         : insertionIndex >= merge.startColumn
-          && insertionIndex <= merge.endColumn
-          && normalized.startRow <= merge.endRow
-          && normalized.endRow >= merge.startRow;
+          && insertionIndex <= merge.endColumn;
       if (!crossesInsertion) continue;
       insertionIndex = axis === "row" ? merge.endRow + 1 : merge.endColumn + 1;
       advanced = true;
