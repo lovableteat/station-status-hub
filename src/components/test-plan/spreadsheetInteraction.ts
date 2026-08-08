@@ -15,6 +15,29 @@ export interface NormalizedSpreadsheetSelection {
   endColumn: number;
 }
 
+export interface SpreadsheetMergeRange {
+  startRow: number;
+  endRow: number;
+  startColumn: number;
+  endColumn: number;
+}
+
+export type SpreadsheetNumberFormatter = (format: string, value: number) => string;
+
+export function formatSpreadsheetNumber(
+  value: number,
+  numberFormat = "General",
+  formatter?: SpreadsheetNumberFormatter,
+): string {
+  try {
+    const formatted = formatter?.(numberFormat || "General", value);
+    if (formatted !== undefined && formatted !== "") return formatted;
+  } catch {
+    // Fall through to a safe General representation.
+  }
+  return String(Number(value.toPrecision(15)));
+}
+
 export function encodeSpreadsheetColumn(column: number): string {
   let value = Math.max(1, Math.trunc(column));
   let result = "";
@@ -57,6 +80,38 @@ export function normalizeSpreadsheetSelection(
     startColumn: Math.min(selection.anchor.column, selection.focus.column),
     endColumn: Math.max(selection.anchor.column, selection.focus.column),
   };
+}
+
+export function getSpreadsheetInsertionIndex(
+  selection: SpreadsheetSelection,
+  axis: "row" | "column",
+  merges: SpreadsheetMergeRange[],
+): number {
+  const normalized = normalizeSpreadsheetSelection(selection);
+  let insertionIndex = axis === "row"
+    ? normalized.endRow + 1
+    : normalized.endColumn + 1;
+
+  let advanced = true;
+  while (advanced) {
+    advanced = false;
+    for (const merge of merges) {
+      const crossesInsertion = axis === "row"
+        ? insertionIndex >= merge.startRow
+          && insertionIndex <= merge.endRow
+          && normalized.startColumn <= merge.endColumn
+          && normalized.endColumn >= merge.startColumn
+        : insertionIndex >= merge.startColumn
+          && insertionIndex <= merge.endColumn
+          && normalized.startRow <= merge.endRow
+          && normalized.endRow >= merge.startRow;
+      if (!crossesInsertion) continue;
+      insertionIndex = axis === "row" ? merge.endRow + 1 : merge.endColumn + 1;
+      advanced = true;
+    }
+  }
+
+  return insertionIndex;
 }
 
 export function isPositionSelected(

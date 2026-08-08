@@ -4,12 +4,30 @@ import test from "node:test";
 import {
   createSpreadsheetSelection,
   decodeSpreadsheetAddress,
+  formatSpreadsheetNumber,
+  getSpreadsheetInsertionIndex,
   getSpreadsheetSelectionLabel,
   moveSpreadsheetSelection,
   normalizeSpreadsheetSelection,
   parseSpreadsheetClipboard,
   serializeSpreadsheetClipboard,
 } from "../../src/components/test-plan/spreadsheetInteraction.ts";
+
+test("formats spreadsheet numbers with General precision and custom formats", () => {
+  assert.equal(formatSpreadsheetNumber(50.400000000000006, "General"), "50.4");
+  assert.equal(formatSpreadsheetNumber(0.125, "0.0%", (format, value) => `${format}:${value}`), "0.0%:0.125");
+});
+
+test("places row and column insertions after the normalized selection and past merges", () => {
+  const selection = {
+    anchor: { row: 8, column: 5 },
+    focus: { row: 4, column: 2 },
+  };
+
+  assert.equal(getSpreadsheetInsertionIndex(selection, "row", []), 9);
+  assert.equal(getSpreadsheetInsertionIndex(selection, "column", []), 6);
+  assert.equal(getSpreadsheetInsertionIndex(selection, "row", [{ startRow: 9, endRow: 11, startColumn: 1, endColumn: 3 }]), 12);
+});
 
 test("encodes, decodes, and normalizes spreadsheet selections", () => {
   assert.deepEqual(decodeSpreadsheetAddress("$AA$27"), { row: 27, column: 27 });
