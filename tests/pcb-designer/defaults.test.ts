@@ -18,7 +18,7 @@ test("blank project and built-in components satisfy domain invariants", () => {
   assert.ok(
     BUILT_IN_COMPONENTS.every((item) => item.width > 0 && item.height > 0),
   );
-  assert.equal(BUILT_IN_TEMPLATES.length, 4);
+  assert.equal(BUILT_IN_TEMPLATES.length, 5);
   assert.equal(
     new Set(BUILT_IN_TEMPLATES.map((item) => item.id)).size,
     BUILT_IN_TEMPLATES.length,
@@ -44,4 +44,12 @@ test("built-in starter templates provide distinct, usable layouts", () => {
       template.project.components.length,
     );
   }
+});
+
+test("ships an isolated built-in L10 design template", () => {
+  const template = BUILT_IN_TEMPLATES.find((item) => item.name === "L10 Design");
+
+  assert.ok(template);
+  assert.equal(template?.isBuiltIn, true);
+  assert.notEqual(template?.project.name, createBlankProject().name);
 });

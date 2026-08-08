@@ -28,6 +28,14 @@ function seedState(): PcbSaveState {
   };
 }
 
+function seedLegacyStateWithoutTask1Fields(): PcbSaveState {
+  const state = seedState();
+  delete (state as Partial<PcbSaveState> & Record<string, unknown>).visibleLayer;
+  delete (state as Partial<PcbSaveState> & Record<string, unknown>).selectedObjects;
+  delete (state as Partial<PcbSaveState> & Record<string, unknown>).modelAssets;
+  return state;
+}
+
 test("project CRUD keeps an active project and duplicates with fresh identity", async () => {
   const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
   const initial = createWorkspaceState(seedState(), true);
@@ -238,6 +246,15 @@ test("selection and canvas view actions remain available while the document is l
     x: initial.activeProject.board.width / 2,
     y: initial.activeProject.board.height / 2,
   });
+});
+
+test("hydrates legacy PCB state with all-layer view and empty model metadata", async () => {
+  const { createWorkspaceState } = await loadWorkspaceModule();
+  const state = createWorkspaceState(seedLegacyStateWithoutTask1Fields(), true);
+
+  assert.equal(state.visibleLayer, "all");
+  assert.deepEqual(state.selectedObjects, []);
+  assert.deepEqual(state.data.modelAssets, {});
 });
 
 test("active placement layer and remote hydration are real workspace state", async () => {
