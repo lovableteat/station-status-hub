@@ -21,6 +21,20 @@ export interface PcbLibraryComponent {
   createdAt: string;
 }
 
+export type PcbVisibleLayer = "all" | "top" | "bottom";
+
+export interface PcbModelAssetMetadata {
+  id: string;
+  fileName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PcbModelAsset {
+  metadata: PcbModelAssetMetadata;
+  data: number[];
+}
+
 export interface PcbPlacedComponent extends PcbLibraryComponent {
   instanceId: string;
   reference: string;
@@ -115,6 +129,7 @@ export interface PcbSaveState {
   templates: PcbTemplate[];
   library: PcbLibraryComponent[];
   activeProjectId: string | null;
+  modelAssets?: Record<string, PcbModelAssetMetadata>;
   pendingPlacementsByProject?: Record<string, PcbPendingPlacement[]>;
   remoteDeletions?: {
     projects: string[];

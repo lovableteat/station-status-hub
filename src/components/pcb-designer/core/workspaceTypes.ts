@@ -5,6 +5,7 @@ import type {
   PcbProject,
   PcbSaveState,
   PcbSelection,
+  PcbVisibleLayer,
   PcbTool,
 } from "../types.ts";
 import type { HistoryState } from "./history.ts";
@@ -38,6 +39,8 @@ export interface PcbWorkspaceState {
   documentLocked: boolean;
   tool: PcbTool;
   activeLayer: "top" | "bottom";
+  visibleLayer: PcbVisibleLayer;
+  selectedObjects: string[];
   zoom: number;
   viewCenter: PcbPoint;
   selection: PcbSelection | null;
@@ -72,10 +75,13 @@ export type PcbWorkspaceAction =
   | { type: "document/toggle-lock" }
   | { type: "tool/set"; tool: PcbTool }
   | { type: "layer/set"; layer: "top" | "bottom" }
+  | { type: "view/layer"; layer: PcbVisibleLayer }
   | { type: "zoom/set"; zoom: number }
   | { type: "view/center"; center: PcbPoint }
   | { type: "view/reset" }
   | { type: "selection/set"; selection: PcbSelection | null }
+  | { type: "selection/toggle"; objectId: string }
+  | { type: "selection/clear-group" }
   | { type: "panel/right"; tab: PcbWorkspaceState["rightTab"] }
   | { type: "permission/set"; canEdit: boolean }
   | { type: "persistence/hydrate"; data: PcbSaveState }

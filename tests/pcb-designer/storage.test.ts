@@ -21,10 +21,31 @@ test("seeds a blank project, built-in templates, and library when storage is emp
 
   assert.equal(state.projects.length, 1);
   assert.equal(state.projects[0].components.length, 0);
-  assert.equal(state.templates.length, 4);
+  assert.equal(state.templates.length, 5);
   assert.deepEqual(state.templates, BUILT_IN_TEMPLATES);
   assert.deepEqual(state.library, BUILT_IN_COMPONENTS);
   assert.equal(state.activeProjectId, state.projects[0].id);
+  assert.deepEqual(state.modelAssets, {});
+});
+
+test("hydrates legacy save payloads with empty model metadata", () => {
+  const storage = new MemoryStorage();
+  const repository = new PcbLocalRepository(storage);
+  const state = repository.load();
+
+  storage.setItem(PCB_STORAGE_KEY, JSON.stringify({
+    version: 1,
+    state: {
+      ...state,
+      projects: state.projects.map((project) => structuredClone(project)),
+      templates: state.templates.map((template) => structuredClone(template)),
+      library: state.library.map((component) => structuredClone(component)),
+    },
+  }));
+
+  const loaded = new PcbLocalRepository(storage).load();
+
+  assert.deepEqual(loaded.modelAssets, {});
 });
 
 test("round-trips a versioned save payload through the configured storage key", () => {
@@ -69,7 +90,7 @@ test("quarantines versioned payloads containing malformed records or an unknown 
     const recovered = new PcbLocalRepository(storage).load();
     assert.equal(recovered.projects.length, 1);
     assert.equal(recovered.projects[0].components.length, 0);
-    assert.equal(recovered.templates.length, 4);
+    assert.equal(recovered.templates.length, 5);
     assert.equal(recovered.library.length, BUILT_IN_COMPONENTS.length);
     assert.equal(recovered.activeProjectId, recovered.projects[0].id);
   }

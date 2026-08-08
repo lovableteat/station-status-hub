@@ -1,4 +1,9 @@
-import type { PcbProject } from "../types.ts";
+import type {
+  PcbModelAssetMetadata,
+  PcbProject,
+  PcbSaveState,
+  PcbVisibleLayer,
+} from "../types.ts";
 
 export type ParseResult<T> =
   | { ok: true; value: T }
@@ -30,9 +35,26 @@ function isPositiveFiniteNumber(value: unknown): boolean {
   return isFiniteNumber(value) && value > 0;
 }
 
+export function isPcbVisibleLayer(value: unknown): value is PcbVisibleLayer {
+  return value === "all" || value === "top" || value === "bottom";
+}
+
+function isModelAssetMetadata(value: unknown): value is PcbModelAssetMetadata {
+  if (!isRecord(value)) return false;
+  return isNonEmptyString(value.id)
+    && isNonEmptyString(value.fileName)
+    && isNonEmptyString(value.createdAt)
+    && isNonEmptyString(value.updatedAt);
+}
+
 function uniqueIds(items: RecordValue[], key: string): boolean {
   const ids = items.map((item) => item[key]);
   return ids.every(isNonEmptyString) && new Set(ids).size === ids.length;
+}
+
+function isModelAssetsIndex(value: unknown): value is Record<string, PcbModelAssetMetadata> {
+  if (!isRecord(value)) return false;
+  return Object.values(value).every(isModelAssetMetadata);
 }
 
 export function isValidBoard(value: unknown): boolean {
@@ -43,6 +65,19 @@ export function isValidBoard(value: unknown): boolean {
     && typeof value.showGrid === "boolean"
     && typeof value.snapToGrid === "boolean"
     && isNonEmptyString(value.background);
+}
+
+export function normalizePcbSaveState(state: PcbSaveState): PcbSaveState {
+  return {
+    ...structuredClone(state),
+    modelAssets: structuredClone(state.modelAssets ?? {}),
+    pendingPlacementsByProject: structuredClone(state.pendingPlacementsByProject ?? {}),
+    remoteDeletions: structuredClone(state.remoteDeletions ?? {
+      projects: [],
+      templates: [],
+      library: [],
+    }),
+  };
 }
 
 function validateComponent(value: unknown): value is RecordValue {
