@@ -41,22 +41,31 @@
 - 工作簿插入：先建立 UI 合約與執行期失敗測試；審查發現合併樣式可能在 unmerge/remerge 遺失，以及 legacy 插入格未保留樣式後，以 `73f2625` 修正並加入真實 ExcelJS／SheetJS 測試。
 - 底部分頁：UI 合約先呈現 1 項預期失敗，再完成版面與顏色；獨立審查沒有 Critical／Important 問題。
 - 最終審查修正：以獨立 RED／GREEN 切片加入純公式翻譯、兩引擎列欄插入及寫入／讀回、列欄中繼資料、autoFilter、真實 SSF 日期格式與強制失敗 rollback 測試；自我審查另發現 `LOG10`／A1 外觀 table 名稱邊界並以失敗測試修正。
+- 最終複審修正：Unicode 工作表限定詞、外部工作簿／3D 參照邊界、整列／整欄 A1 範圍與跨工作表 rollback 均先加入可重現失敗測試，再完成最小修正。
 
 ## 最終審查發現與修正
 
 1. **公式位移：** ExcelJS `spliceRows`／`spliceColumns` 不會翻譯公式。新增純 A1 參照翻譯器，絕對／混合參照也依結構位移，略過字串與 structured refs，並依目標工作表限定未限定／限定工作表參照。ExcelJS 與 SheetJS 都會更新工作簿內所有工作表，保留公式結果與 shared formula 主從參照。
 2. **中繼資料：** ExcelJS 插入前快照並還原位移列的 `hidden`、`outlineLevel`、列高，以及位移欄的寬度／隱藏／大綱層級；新插入列欄只複製既定相鄰尺寸，不繼承隱藏或大綱狀態。兩引擎的 autoFilter 範圍會隨插入位置位移。
 3. **日期 numFmt：** `Date` 與公式的 Date 結果和數值相同，交由動態載入 SheetJS 的真實 `SSF.format` 處理；日期、小數與百分比均使用真實 SSF 測試。
-4. **原子性與錯誤處理：** ExcelJS 失敗時先解除目前合併範圍，將快照 `merges` 映射至 `mergeCells` 後還原 model，再重播合併儲存格樣式；SheetJS 失敗時清除目前 sheet keys 並由快照重建。編輯器捕捉錯誤、顯示可讀訊息，且失敗路徑不標記 dirty。
+4. **原子性與錯誤處理：** ExcelJS 失敗時會還原所有可能被公式翻譯修改的工作表：逐表解除目前合併範圍，將各快照 `merges` 映射至 `mergeCells` 後還原 model，再重播各表合併儲存格樣式。SheetJS 在提供 workbook 時同樣逐表清除目前 sheet keys 並由快照重建。編輯器捕捉錯誤、顯示可讀訊息，且失敗路徑不標記 dirty。
 5. **範圍控制：** 沒有修改 CSS、工作表底部分頁位置、tables、validations 或 conditional formatting；`xlsx` 維持動態載入，ExcelJS 與 SheetJS 仍以 `Promise.all` 平行載入，既有儲存流程不變。
+
+## 最終複審發現與修正
+
+1. **Unicode 工作表限定詞：** 公式 parser 改以 Unicode letter／mark／number token 捕捉未加引號的工作表名稱，避免把 `工作表2!A3` 尾端誤當成目前工作表的未限定 `A3`；加引號與未加引號的 Unicode 目標／非目標工作表皆有測試。
+2. **外部與 3D 邊界：** parser 會先完整捕捉 `[Other.xlsx]工作表1!A3`、`'[Other.xlsx]工作表 1'!A3`、`Sheet1:Sheet3!A3` 與 quoted 3D 形式，再將整段原樣略過，不會從尾端重新匹配。
+3. **整列／整欄範圍：** 新增 `3:5`、`C:E` 及 `$3:$5`、`$C:$E` 的結構位移；跨過插入點的範圍只移動受影響端點，並沿用目標工作表、字串與 structured reference 規則。
+4. **跨表原子 rollback：** 強制失敗測試會先確認至少一個非目標工作表公式已被翻譯，再觸發後續工作表錯誤；ExcelJS 與 SheetJS 都必須逐表精確還原，ExcelJS 另驗證非目標合併儲存格的獨立樣式。
+5. **合併公式單次翻譯：** 複審自我檢查確認 ExcelJS merge proxy 會重複暴露 master 公式；翻譯迴圈現在略過非 master 的合併儲存格，避免同一公式位移兩次。
 
 ## 2026-08-09 最終驗證
 
 ```text
 node --test tests/test-plan/*.test.ts
-75 passed, 0 failed
+82 passed, 0 failed
 
-npx.cmd eslint src/components/test-plan/TestPlanSpreadsheetEditor.tsx src/components/test-plan/spreadsheetInteraction.ts src/components/test-plan/spreadsheetWorkbook.ts tests/test-plan/spreadsheet-interaction.test.ts tests/test-plan/spreadsheet-workbook.test.ts tests/test-plan/ui-contract.test.ts
+npx.cmd eslint src/components/test-plan/spreadsheetWorkbook.ts tests/test-plan/spreadsheet-workbook.test.ts
 exit 0
 
 npm.cmd run build
@@ -78,7 +87,8 @@ b1b3180 docs: plan spreadsheet fidelity implementation
 093697c feat: improve Test Plan spreadsheet editing
 73f2625 fix: preserve spreadsheet insertion formatting
 7cc0ec3 feat: render Excel sheet tabs below grid
-本次提交 fix: preserve spreadsheet formulas and metadata
+f474108 fix: preserve spreadsheet formulas and metadata
+本次提交 fix: handle spreadsheet formula reference boundaries
 ```
 
 ## GitHub 交付程序
@@ -93,4 +103,4 @@ b1b3180 docs: plan spreadsheet fidelity implementation
 
 ## 已知驗證限制
 
-本機沒有可重用的已登入 Test Plan 瀏覽器工作階段，因此沒有以真實私有工作簿做人工 UI 點擊驗收。功能由真實 ExcelJS／SheetJS 執行期與寫入／讀回測試、75 項 Test Plan 測試、Lint、正式建置與最終差異自我審查覆蓋。
+本機沒有可重用的已登入 Test Plan 瀏覽器工作階段，因此沒有以真實私有工作簿做人工 UI 點擊驗收。功能由真實 ExcelJS／SheetJS 執行期與寫入／讀回測試、82 項 Test Plan 測試、Lint、正式建置與最終差異自我審查覆蓋。

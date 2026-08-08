@@ -21,7 +21,18 @@ export interface SpreadsheetDimensions {
   rows: number;
 }
 
-const FORMULA_REFERENCE_PATTERN = /(?:('(?:[^']|'')+'|[A-Za-z_\\][A-Za-z0-9_.]*)!)?(\$?[A-Za-z]{1,3}\$?\d+)(?::(\$?[A-Za-z]{1,3}\$?\d+))?/g;
+const QUOTED_SHEET_TOKEN = "'(?:[^']|'')+'";
+const UNQUOTED_SHEET_TOKEN = "[\\p{L}\\p{M}\\p{N}_.\\\\]+";
+const SHEET_TOKEN = "(?:\\[[^\\]]+\\])?(?:" + QUOTED_SHEET_TOKEN + "|" + UNQUOTED_SHEET_TOKEN + ")";
+const CELL_REFERENCE = "\\$?[A-Za-z]{1,3}\\$?\\d+";
+const WHOLE_ROW_RANGE = "\\$?\\d+:\\$?\\d+";
+const WHOLE_COLUMN_RANGE = "\\$?[A-Za-z]{1,3}:\\$?[A-Za-z]{1,3}";
+const FORMULA_REFERENCE_PATTERN = new RegExp(
+  "(?:(" + SHEET_TOKEN + "(?::" + SHEET_TOKEN + ")?)!)?("
+    + CELL_REFERENCE + "(?::" + CELL_REFERENCE + ")?|"
+    + WHOLE_ROW_RANGE + "|" + WHOLE_COLUMN_RANGE + ")",
+  "gu",
+);
 
 interface FormattedMergeStyle {
   address: string;
@@ -91,6 +102,14 @@ function normalizeSheetQualifier(qualifier: string): string {
     : qualifier;
 }
 
+function isUnsupportedSheetQualifier(qualifier: string): boolean {
+  return qualifier.includes("[") || qualifier.includes("]") || qualifier.includes(":");
+}
+
+function isFormulaIdentifierCharacter(character: string | undefined): boolean {
+  return Boolean(character && /[\p{L}\p{M}\p{N}_.]/u.test(character));
+}
+
 function shiftFormulaCellReference(
   reference: string,
   axis: SpreadsheetInsertionAxis,
@@ -108,6 +127,43 @@ function shiftFormulaCellReference(
   return `${columnAbsolute}${shifted[1]}${rowAbsolute}${shifted[2]}`;
 }
 
+function shiftFormulaReference(
+  reference: string,
+  axis: SpreadsheetInsertionAxis,
+  insertionIndex: number,
+): string {
+  const rowRange = reference.match(/^(\$?)(\d+):(\$?)(\d+)$/);
+  if (rowRange) {
+    if (axis !== "row") return reference;
+    const [, startAbsolute, startDigits, endAbsolute, endDigits] = rowRange;
+    const start = Number(startDigits);
+    const end = Number(endDigits);
+    return startAbsolute
+      + (start >= insertionIndex ? start + 1 : start)
+      + ":"
+      + endAbsolute
+      + (end >= insertionIndex ? end + 1 : end);
+  }
+
+  const columnRange = reference.match(/^(\$?)([A-Za-z]{1,3}):(\$?)([A-Za-z]{1,3})$/);
+  if (columnRange) {
+    if (axis !== "column") return reference;
+    const [, startAbsolute, startLetters, endAbsolute, endLetters] = columnRange;
+    const start = decodeSpreadsheetAddress(startLetters + "1").column;
+    const end = decodeSpreadsheetAddress(endLetters + "1").column;
+    const shiftedStart = encodeSpreadsheetAddress(1, start >= insertionIndex ? start + 1 : start)
+      .replace(/\d+$/, "");
+    const shiftedEnd = encodeSpreadsheetAddress(1, end >= insertionIndex ? end + 1 : end)
+      .replace(/\d+$/, "");
+    return startAbsolute + shiftedStart + ":" + endAbsolute + shiftedEnd;
+  }
+
+  return reference
+    .split(":")
+    .map((cellReference) => shiftFormulaCellReference(cellReference, axis, insertionIndex))
+    .join(":");
+}
+
 export function translateSpreadsheetFormula(
   formula: string,
   axis: SpreadsheetInsertionAxis,
@@ -120,22 +176,21 @@ export function translateSpreadsheetFormula(
 
   return formula.replace(
     FORMULA_REFERENCE_PATTERN,
-    (match, qualifier: string | undefined, start: string, end: string | undefined, offset: number) => {
+    (match, qualifier: string | undefined, reference: string, offset: number) => {
       if (protectedCharacters[offset]) return match;
       const before = formula[offset - 1];
       const after = formula[offset + match.length];
-      if (before && /[A-Za-z0-9_.]/.test(before)) return match;
-      if (after && /[A-Za-z0-9_.]/.test(after)) return match;
+      if (isFormulaIdentifierCharacter(before) || isFormulaIdentifierCharacter(after)) return match;
       if (after === "(" || after === "[") return match;
+      if (qualifier && isUnsupportedSheetQualifier(qualifier)) return match;
+      if (!qualifier && before === "!") return match;
 
       const referencedSheet = qualifier
         ? normalizeSheetQualifier(qualifier).toLocaleLowerCase()
         : formulaSheetName.toLocaleLowerCase();
       if (referencedSheet !== normalizedTarget) return match;
 
-      const shiftedStart = shiftFormulaCellReference(start, axis, insertionIndex);
-      const shiftedEnd = end ? shiftFormulaCellReference(end, axis, insertionIndex) : undefined;
-      return `${qualifier ? `${qualifier}!` : ""}${shiftedStart}${shiftedEnd ? `:${shiftedEnd}` : ""}`;
+      return `${qualifier ? `${qualifier}!` : ""}${shiftFormulaReference(reference, axis, insertionIndex)}`;
     },
   );
 }
@@ -156,6 +211,7 @@ function translateFormattedWorkbookFormulas(
   worksheet.workbook.worksheets.forEach((formulaWorksheet) => {
     formulaWorksheet.eachRow({ includeEmpty: false }, (row) => {
       row.eachCell({ includeEmpty: false }, (cell) => {
+        if (cell.isMerged && cell.master.address !== cell.address) return;
         if (!cell.value || typeof cell.value !== "object" || cell.value instanceof Date) return;
         const value = cell.value as FormulaValueShape;
         const nextValue: FormulaValueShape = { ...value };
@@ -442,12 +498,17 @@ export function insertFormattedWorksheet(
   axis: SpreadsheetInsertionAxis,
   dimensions: SpreadsheetDimensions,
 ): SpreadsheetSelection {
-  const snapshot = cloneStyle(worksheet.model);
-  const mergeStyles = getFormattedMergeStyles(worksheet, worksheet.model.merges ?? []);
+  const snapshots = worksheet.workbook.worksheets.map((workbookWorksheet) => ({
+    mergeStyles: getFormattedMergeStyles(workbookWorksheet, workbookWorksheet.model.merges ?? []),
+    model: cloneStyle(workbookWorksheet.model),
+    worksheet: workbookWorksheet,
+  }));
   try {
     return mutateFormattedWorksheet(worksheet, selection, axis, dimensions);
   } catch (error) {
-    restoreFormattedWorksheet(worksheet, snapshot, mergeStyles);
+    snapshots.forEach((snapshot) => {
+      restoreFormattedWorksheet(snapshot.worksheet, snapshot.model, snapshot.mergeStyles);
+    });
     throw error;
   }
 }
@@ -566,7 +627,14 @@ export function insertLegacyWorksheet(
   workbook?: LegacyWorkbook,
   targetSheetName = "",
 ): SpreadsheetSelection {
-  const snapshot = cloneStyle(worksheet);
+  const workbookWorksheets = workbook
+    ? workbook.SheetNames.map((name) => workbook.Sheets[name])
+    : [worksheet];
+  if (!workbookWorksheets.includes(worksheet)) workbookWorksheets.push(worksheet);
+  const snapshots = workbookWorksheets.map((workbookWorksheet) => ({
+    snapshot: cloneStyle(workbookWorksheet),
+    worksheet: workbookWorksheet,
+  }));
   try {
     return mutateLegacyWorksheet(
       spreadsheet,
@@ -578,8 +646,10 @@ export function insertLegacyWorksheet(
       targetSheetName,
     );
   } catch (error) {
-    Object.keys(worksheet).forEach((key) => delete worksheet[key]);
-    Object.assign(worksheet, cloneStyle(snapshot));
+    snapshots.forEach(({ snapshot, worksheet: workbookWorksheet }) => {
+      Object.keys(workbookWorksheet).forEach((key) => delete workbookWorksheet[key]);
+      Object.assign(workbookWorksheet, cloneStyle(snapshot));
+    });
     throw error;
   }
 }
