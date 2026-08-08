@@ -1,6 +1,6 @@
 import { BUILT_IN_COMPONENTS, BUILT_IN_TEMPLATES, createBlankProject } from "../defaults.ts";
 import type { PcbProject, PcbSaveState } from "../types.ts";
-import { parseProjectJson } from "./validation.ts";
+import { normalizePcbSaveState, parseProjectJson } from "./validation.ts";
 
 export const PCB_STORAGE_KEY = "work-platform:pcb-designer:v1";
 const PAYLOAD_VERSION = 1;
@@ -30,6 +30,7 @@ function createSeedState(): PcbSaveState {
     templates: clone(BUILT_IN_TEMPLATES),
     library: clone(BUILT_IN_COMPONENTS),
     activeProjectId: project.id,
+    modelAssets: {},
     pendingPlacementsByProject: {},
     remoteDeletions: { projects: [], templates: [], library: [] },
     updatedAt: timestamp(),
@@ -46,6 +47,15 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isPositiveFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function isModelAssetMetadata(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return ["id", "fileName", "createdAt", "updatedAt"].every((field) => isNonEmptyString(value[field]));
+}
+
+function isModelAssetsIndex(value: unknown): boolean {
+  return isRecord(value) && Object.values(value).every(isModelAssetMetadata);
 }
 
 function hasUniqueIds(values: Record<string, unknown>[]): boolean {
@@ -92,7 +102,7 @@ function isPendingPlacement(value: unknown): boolean {
 
 export function isPcbSaveState(value: unknown): value is PcbSaveState {
   if (!isRecord(value)) return false;
-  const { projects, templates, library, activeProjectId, updatedAt } = value;
+  const { projects, templates, library, activeProjectId, updatedAt, modelAssets } = value;
   if (!Array.isArray(projects) || !Array.isArray(templates) || !Array.isArray(library) || !isNonEmptyString(updatedAt)) {
     return false;
   }
@@ -117,11 +127,13 @@ export function isPcbSaveState(value: unknown): value is PcbSaveState {
       Array.isArray(deletions[key])
       && (deletions[key] as unknown[]).every(isNonEmptyString))
   );
+  const modelAssetsAreValid = modelAssets === undefined || isModelAssetsIndex(modelAssets);
   return hasUniqueIds(projectRecords)
     && hasUniqueIds(templateRecords)
     && hasUniqueIds(libraryRecords)
     && pendingIsValid
     && deletionsAreValid
+    && modelAssetsAreValid
     && (activeProjectId === null || (isNonEmptyString(activeProjectId) && projectRecords.some((project) => project.id === activeProjectId)));
 }
 
@@ -158,13 +170,13 @@ export class PcbLocalRepository {
       if (!raw) return this.seed();
       const payload = JSON.parse(raw) as Partial<PersistedPayload>;
       if (payload.version === PAYLOAD_VERSION && isPcbSaveState(payload.state)) {
-        return refreshBuiltInCatalog({
+        return normalizePcbSaveState(refreshBuiltInCatalog({
           ...clone(payload.state),
           pendingPlacementsByProject: clone(payload.state.pendingPlacementsByProject ?? {}),
           remoteDeletions: clone(payload.state.remoteDeletions ?? {
             projects: [], templates: [], library: [],
           }),
-        });
+        }));
       }
     } catch {
       // A broken browser draft must never prevent the editor from rendering.
@@ -173,7 +185,7 @@ export class PcbLocalRepository {
   }
 
   save(state: PcbSaveState): PcbSaveState {
-    const next = { ...clone(state), updatedAt: timestamp() };
+    const next = normalizePcbSaveState({ ...clone(state), updatedAt: timestamp() });
     try {
       this.storage.setItem(PCB_STORAGE_KEY, JSON.stringify({ version: PAYLOAD_VERSION, state: next }));
     } catch {

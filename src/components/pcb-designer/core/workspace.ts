@@ -15,6 +15,7 @@ import {
   MAX_BOM_QUANTITY_PER_ROW,
   MAX_BOM_TOTAL_PLACEMENTS,
 } from "./tabular.ts";
+import { isPcbVisibleLayer, normalizePcbSaveState } from "./validation.ts";
 import {
   clone,
   newestProject,
@@ -54,6 +55,8 @@ function materialize(
   const pendingPlacements = data.pendingPlacementsByProject?.[activeProject.id] ?? [];
   const pendingHistory = state.pendingHistoryByProject[activeProject.id]
     ?? createHistoryState(pendingPlacements);
+  const visibleLayer = isPcbVisibleLayer(state.visibleLayer) ? state.visibleLayer : "all";
+  const selectedObjects = Array.isArray(state.selectedObjects) ? state.selectedObjects : [];
   return {
     ...state,
     data,
@@ -68,6 +71,8 @@ function materialize(
     },
     drcIssues: runDrc(activeProject),
     pendingPlacements: clone(pendingPlacements),
+    visibleLayer,
+    selectedObjects: clone(selectedObjects),
     canUndo: history.undo.length > 0,
     canRedo: history.redo.length > 0,
   };
@@ -77,9 +82,7 @@ export function createWorkspaceState(
   data: PcbSaveState,
   canEdit: boolean,
 ): PcbWorkspaceState {
-  const safeData = clone(data);
-  safeData.pendingPlacementsByProject ??= {};
-  safeData.remoteDeletions ??= { projects: [], templates: [], library: [] };
+  const safeData = normalizePcbSaveState(clone(data));
   const project = safeData.projects.find(
     (item) => item.id === safeData.activeProjectId,
   ) ?? newestProject(safeData.projects) ?? createBlankProject();
@@ -100,6 +103,8 @@ export function createWorkspaceState(
     documentLocked: false,
     tool: "select",
     activeLayer: "top",
+    visibleLayer: "all",
+    selectedObjects: [],
     zoom: 100,
     viewCenter: {
       x: project.board.width / 2,
@@ -156,10 +161,13 @@ function isMutation(action: PcbWorkspaceAction): boolean {
     "project/open",
     "tool/set",
     "layer/set",
+    "view/layer",
     "zoom/set",
     "view/center",
     "view/reset",
     "selection/set",
+    "selection/toggle",
+    "selection/clear-group",
     "panel/right",
     "permission/set",
     "persistence/hydrate",
@@ -186,6 +194,7 @@ export function reduceWorkspaceState(
       return materialize({
         ...state,
         selection: null,
+        selectedObjects: [],
         zoom: 100,
         viewCenter: { x: project.board.width / 2, y: project.board.height / 2 },
         data: {
@@ -209,6 +218,7 @@ export function reduceWorkspaceState(
         zoom: 100,
         data: { ...state.data, activeProjectId: action.projectId },
         selection: null,
+        selectedObjects: [],
         viewCenter: {
           x: state.data.projects.find((project) => project.id === action.projectId)!.board.width / 2,
           y: state.data.projects.find((project) => project.id === action.projectId)!.board.height / 2,
@@ -242,6 +252,7 @@ export function reduceWorkspaceState(
       return materialize({
         ...state,
         selection: null,
+        selectedObjects: [],
         zoom: 100,
         viewCenter: { x: copy.board.width / 2, y: copy.board.height / 2 },
         data: {
@@ -280,6 +291,7 @@ export function reduceWorkspaceState(
       return materialize({
         ...state,
         selection: deletedActiveProject ? null : state.selection,
+        selectedObjects: deletedActiveProject ? [] : state.selectedObjects,
         zoom: deletedActiveProject ? 100 : state.zoom,
         viewCenter: deletedActiveProject
           ? { x: nextActive.board.width / 2, y: nextActive.board.height / 2 }
@@ -307,6 +319,7 @@ export function reduceWorkspaceState(
       return materialize({
         ...state,
         selection: null,
+        selectedObjects: [],
         zoom: 100,
         viewCenter: { x: project.board.width / 2, y: project.board.height / 2 },
         data: {
@@ -643,6 +656,14 @@ export function reduceWorkspaceState(
         selection: action.selection ? clone(action.selection) : null,
         rightTab: action.selection ? "selection" : state.rightTab,
       };
+    case "selection/toggle": {
+      const selectedObjects = state.selectedObjects.includes(action.objectId)
+        ? state.selectedObjects.filter((item) => item !== action.objectId)
+        : [...state.selectedObjects, action.objectId];
+      return { ...state, selectedObjects };
+    }
+    case "selection/clear-group":
+      return { ...state, selectedObjects: [] };
     case "panel/right":
       return { ...state, rightTab: action.tab };
     case "permission/set":
@@ -654,6 +675,8 @@ export function reduceWorkspaceState(
         ...state,
         data: { ...state.data, updatedAt: timestamp() },
       });
+    case "view/layer":
+      return { ...state, visibleLayer: action.layer };
     case "drc/run":
       return { ...state, drcIssues: runDrc(state.activeProject), rightTab: "drc" };
   }
