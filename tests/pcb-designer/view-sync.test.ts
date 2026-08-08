@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  getPcbComponentViewState,
   getPcb3DComponentTransform,
   getPcbComponentCenter,
   getPcbSelectionIds,
@@ -52,6 +53,41 @@ test("returns unique selection ids including the primary selection", () => {
       ],
     ),
     ["U1", "R1", "K1"],
+  );
+});
+
+test("derives one shared component view state for 2D and 3D consumers", () => {
+  const component = {
+    instanceId: "U1",
+    x: 20,
+    y: 30,
+    width: 10,
+    height: 6,
+    rotation: 90,
+    layer: "top" as const,
+  };
+  const selectionIds = ["U1", "K1"];
+
+  assert.deepEqual(
+    getPcbComponentViewState(component, "top", selectionIds),
+    {
+      coordinate: { x: 25, y: 33 },
+      rotation: 90,
+      layer: "top",
+      visible: true,
+      selected: true,
+    },
+  );
+
+  assert.deepEqual(
+    getPcbComponentViewState(component, "bottom", selectionIds),
+    {
+      coordinate: { x: 25, y: 33 },
+      rotation: 90,
+      layer: "top",
+      visible: false,
+      selected: true,
+    },
   );
 });
 
