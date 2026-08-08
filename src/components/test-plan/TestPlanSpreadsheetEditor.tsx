@@ -934,6 +934,20 @@ export function TestPlanSpreadsheetEditor({
   const sheetNames = mode === "formatted"
     ? excelJsWorkbookRef.current?.worksheets.map((sheet) => sheet.name) ?? []
     : legacyWorkbookRef.current?.SheetNames ?? [];
+  const sheetTabs = sheetNames.map((name) => {
+    const worksheet = mode === "formatted"
+      ? excelJsWorkbookRef.current?.getWorksheet(name)
+      : undefined;
+    return {
+      name,
+      tabColor: worksheet
+        ? resolveColor(
+          worksheet.properties.tabColor,
+          workbookThemeColorsRef.current,
+        ) ?? "#64748b"
+        : "#64748b",
+    };
+  });
   const selectedValue = readCellInputValue(selectedCell);
   const selectionLabel = getSpreadsheetSelectionLabel(selection);
   const selectionSize = getSpreadsheetSelectionSize(normalizedSelection);
@@ -989,26 +1003,6 @@ export function TestPlanSpreadsheetEditor({
         ) : (
           <div className="test-plan-sheet-workspace">
             <div className="test-plan-sheet-toolbar">
-              <div className="test-plan-sheet-tabs" role="tablist" aria-label="工作表">
-                {sheetNames.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    role="tab"
-                    aria-selected={sheetName === name}
-                    className={sheetName === name ? "is-active" : undefined}
-                    onClick={() => {
-                      setSheetName(name);
-                      setSelection(createSpreadsheetSelection());
-                      setEditingCell(null);
-                      setRowPage(0);
-                      setColumnPage(0);
-                    }}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
               <div className="test-plan-sheet-edit-tools" role="toolbar" aria-label="試算表編輯工具">
                 <Button type="button" size="icon" variant="outline" disabled={!canEdit || undoStackRef.current.length === 0} onClick={undo} title="復原 (Ctrl+Z)" aria-label="復原">
                   <Undo2 className="h-4 w-4" />
@@ -1249,6 +1243,30 @@ export function TestPlanSpreadsheetEditor({
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className="test-plan-sheet-footer">
+              <div className="test-plan-sheet-tabs" role="tablist" aria-label="工作表">
+                {sheetTabs.map(({ name, tabColor }) => (
+                  <button
+                    key={name}
+                    type="button"
+                    role="tab"
+                    aria-selected={sheetName === name}
+                    className={sheetName === name ? "is-active" : undefined}
+                    style={{ "--test-plan-sheet-tab-color": tabColor } as CSSProperties}
+                    onClick={() => {
+                      setSheetName(name);
+                      setSelection(createSpreadsheetSelection());
+                      setEditingCell(null);
+                      setRowPage(0);
+                      setColumnPage(0);
+                    }}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="test-plan-sheet-pagination">

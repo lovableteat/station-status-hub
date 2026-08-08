@@ -101,6 +101,22 @@ test("edits uploaded spreadsheets in place without forcing a download workflow",
   assert.match(styles, /\.test-plan-folder-tree-toggle\.is-expanded/);
 });
 
+test("renders Excel-colored worksheet tabs below the spreadsheet grid", async () => {
+  const [editor, styles] = await Promise.all([
+    source("src/components/test-plan/TestPlanSpreadsheetEditor.tsx"),
+    source("src/components/test-plan/test-plan.css"),
+  ]);
+
+  assert.match(editor, /worksheet\.properties\.tabColor/);
+  assert.match(editor, /--test-plan-sheet-tab-color/);
+  assert.match(styles, /\.test-plan-sheet-footer/);
+  assert.match(styles, /overflow-x:\s*auto/);
+
+  const gridPosition = editor.indexOf('className={`test-plan-sheet-grid-wrap is-${mode}`}');
+  const footerPosition = editor.indexOf('className="test-plan-sheet-footer"');
+  assert.ok(gridPosition >= 0 && footerPosition > gridPosition);
+});
+
 test("supports drag-and-drop batch upload with all engineering formats", async () => {
   const workspace = await source(
     "src/components/test-plan/TestPlanWorkspace.tsx",
