@@ -37,6 +37,14 @@ export type KeepoutMoveResult =
   | { ok: true; project: PcbProject; keepout: PcbKeepout; changed: boolean }
   | { ok: false; reason: string };
 
+export type GroupMoveResult =
+  | { ok: true; project: PcbProject; components: PcbPlacedComponent[]; changed: boolean }
+  | { ok: false; reason: string };
+
+export type KeepoutDuplicateResult =
+  | { ok: true; project: PcbProject; keepout: PcbKeepout }
+  | { ok: false; reason: string };
+
 export type SelectionEdit =
   | { type: "delete" }
   | { type: "rotate" }
@@ -188,6 +196,63 @@ export function moveComponent(
   return { ok: true, project: next, component: candidate, changed: true };
 }
 
+export function moveComponents(
+  project: PcbProject,
+  instanceIds: readonly string[],
+  delta: PcbPoint,
+  bypassSnap: boolean,
+): GroupMoveResult {
+  const uniqueIds = [...new Set(instanceIds)];
+  if (!uniqueIds.length) return { ok: false, reason: "請先選取元件。" };
+  if (![delta.x, delta.y].every(Number.isFinite)) {
+    return { ok: false, reason: "群組移動位移必須為有效數值。" };
+  }
+  const sources = uniqueIds.map((instanceId) =>
+    project.components.find((component) => component.instanceId === instanceId));
+  if (sources.some((component) => !component)) {
+    return { ok: false, reason: "找不到要移動的元件。" };
+  }
+  if (sources.some((component) => component!.locked)) {
+    return { ok: false, reason: "已鎖定元件不可群組移動。" };
+  }
+  const appliedDelta = project.board.snapToGrid && !bypassSnap
+    ? {
+      x: snapValue(delta.x, project.board.gridSize),
+      y: snapValue(delta.y, project.board.gridSize),
+    }
+    : { ...delta };
+  if (appliedDelta.x === 0 && appliedDelta.y === 0) {
+    return { ok: true, project, components: sources as PcbPlacedComponent[], changed: false };
+  }
+
+  const movedIds = new Set(uniqueIds);
+  const candidates = new Map<string, PcbPlacedComponent>();
+  for (const source of sources as PcbPlacedComponent[]) {
+    candidates.set(source.instanceId, {
+      ...source,
+      x: source.x + appliedDelta.x,
+      y: source.y + appliedDelta.y,
+    });
+  }
+
+  const next = clone(project);
+  next.components = next.components.map((component) =>
+    movedIds.has(component.instanceId)
+      ? candidates.get(component.instanceId) ?? component
+      : component);
+  for (const candidate of candidates.values()) {
+    if (!canPlaceComponent(next, candidate)) {
+      return { ok: false, reason: "群組移動後超出板框或與既有物件衝突。" };
+    }
+  }
+  return {
+    ok: true,
+    project: next,
+    components: next.components.filter((component) => movedIds.has(component.instanceId)),
+    changed: true,
+  };
+}
+
 export function moveKeepout(
   project: PcbProject,
   id: string,
@@ -216,6 +281,45 @@ export function moveKeepout(
   const next = clone(project);
   next.keepouts = next.keepouts.map((item) => item.id === id ? keepout : item);
   return { ok: true, project: next, keepout, changed: true };
+}
+
+export function duplicateKeepout(
+  project: PcbProject,
+  id: string,
+  offset: PcbPoint,
+): KeepoutDuplicateResult {
+  const source = project.keepouts.find((keepout) => keepout.id === id);
+  if (!source) return { ok: false, reason: "找不到要複製的禁佈區。" };
+  if (![offset.x, offset.y].every(Number.isFinite)) {
+    return { ok: false, reason: "禁佈區複製位移必須為有效數值。" };
+  }
+  const snappedOffset = project.board.snapToGrid
+    ? {
+      x: snapValue(offset.x, project.board.gridSize),
+      y: snapValue(offset.y, project.board.gridSize),
+    }
+    : { ...offset };
+  const minimumX = 0;
+  const minimumY = 0;
+  const maximumX = Math.max(0, project.board.width - source.width);
+  const maximumY = Math.max(0, project.board.height - source.height);
+  const unclampedX = source.x + snappedOffset.x;
+  const unclampedY = source.y + snappedOffset.y;
+  const x = clamp(unclampedX, minimumX, maximumX);
+  const y = clamp(unclampedY, minimumY, maximumY);
+  if ((snappedOffset.x !== 0 || snappedOffset.y !== 0) && x === source.x && y === source.y) {
+    return { ok: false, reason: "找不到合法的禁佈區複製位置。" };
+  }
+  const keepout: PcbKeepout = {
+    ...clone(source),
+    id: createId("keepout"),
+    name: `${source.name} 副本`,
+    x,
+    y,
+  };
+  const next = clone(project);
+  next.keepouts.push(keepout);
+  return { ok: true, project: next, keepout };
 }
 
 export function editSelectedObject(
