@@ -40,7 +40,6 @@ import {
   encodeSpreadsheetAddress as encodeAddress,
   encodeSpreadsheetColumn as encodeColumn,
   formatSpreadsheetNumber,
-  getSpreadsheetInsertionIndex,
   getSpreadsheetSelectionLabel,
   getSpreadsheetSelectionSize,
   moveSpreadsheetSelection,
@@ -50,6 +49,10 @@ import {
   type SpreadsheetCellPosition as CellPosition,
   type SpreadsheetSelection,
 } from "./spreadsheetInteraction";
+import {
+  insertFormattedWorksheet,
+  insertLegacyWorksheet,
+} from "./spreadsheetWorkbook";
 import type { TestPlanFileRecord } from "./types";
 
 type ExcelJsWorkbook = import("exceljs").Workbook;
@@ -364,27 +367,6 @@ function getRowHeight(worksheet: ExcelJsWorksheet, row: number): number {
   const source = worksheet.getRow(row);
   if (source.hidden) return 0;
   return clamp(Math.round((source.height ?? worksheet.properties.defaultRowHeight ?? 15) * 1.333), 20, 640);
-}
-
-function shiftFormattedMergeRange(
-  range: string,
-  axis: "row" | "column",
-  insertionIndex: number,
-): string {
-  const merge = decodeMergeRange(range);
-  const shift = axis === "row"
-    ? merge.start.row >= insertionIndex
-    : merge.start.column >= insertionIndex;
-  if (!shift) return range;
-  const start = {
-    row: merge.start.row + (axis === "row" ? 1 : 0),
-    column: merge.start.column + (axis === "column" ? 1 : 0),
-  };
-  const end = {
-    row: merge.end.row + (axis === "row" ? 1 : 0),
-    column: merge.end.column + (axis === "column" ? 1 : 0),
-  };
-  return `${encodeAddress(start.row, start.column)}:${encodeAddress(end.row, end.column)}`;
 }
 
 function getOutputFormat(extension: string) {
@@ -895,118 +877,12 @@ export function TestPlanSpreadsheetEditor({
 
   const extendSheet = (axis: "row" | "column") => {
     if (!canEdit) return;
-    const insertionIndex = getSpreadsheetInsertionIndex(
-      selection,
-      axis,
-      formattedWorksheet
-        ? merges.map((merge) => ({
-          startRow: merge.start.row,
-          endRow: merge.end.row,
-          startColumn: merge.start.column,
-          endColumn: merge.end.column,
-        }))
-        : (legacyWorksheet?.["!merges"] ?? []).map((merge) => ({
-          startRow: merge.s.r + 1,
-          endRow: merge.e.r + 1,
-          startColumn: merge.s.c + 1,
-          endColumn: merge.e.c + 1,
-        })),
-    );
-    const insertedSelection = axis === "row"
-      ? createSpreadsheetSelection(insertionIndex, normalizedSelection.startColumn)
-      : createSpreadsheetSelection(normalizedSelection.startRow, insertionIndex);
-    if (formattedWorksheet) {
-      const mergeRanges = [...(formattedWorksheet.model.merges ?? [])];
-      const sourceIndex = Math.max(1, insertionIndex - 1);
-      if (axis === "row") {
-        const sourceRow = formattedWorksheet.getRow(sourceIndex);
-        const sourceHeight = sourceRow.height;
-        const sourceStyles = Array.from({ length: bounds.columns }, (_, index) => (
-          { ...formattedWorksheet.getCell(sourceIndex, index + 1).style }
-        ));
-        mergeRanges.forEach((range) => formattedWorksheet.unMergeCells(range));
-        formattedWorksheet.spliceRows(insertionIndex, 0, []);
-        const insertedRow = formattedWorksheet.getRow(insertionIndex);
-        insertedRow.height = sourceHeight ?? formattedWorksheet.properties.defaultRowHeight ?? 15;
-        sourceStyles.forEach((style, index) => {
-          const cell = formattedWorksheet.getCell(insertionIndex, index + 1);
-          cell.style = style;
-          cell.value = null;
-        });
-      } else {
-        const sourceColumn = formattedWorksheet.getColumn(sourceIndex);
-        const sourceWidth = sourceColumn.width;
-        const sourceStyles = Array.from({ length: bounds.rows }, (_, index) => (
-          { ...formattedWorksheet.getCell(index + 1, sourceIndex).style }
-        ));
-        mergeRanges.forEach((range) => formattedWorksheet.unMergeCells(range));
-        formattedWorksheet.spliceColumns(insertionIndex, 0, []);
-        const insertedColumn = formattedWorksheet.getColumn(insertionIndex);
-        insertedColumn.width = sourceWidth ?? 10;
-        sourceStyles.forEach((style, index) => {
-          const cell = formattedWorksheet.getCell(index + 1, insertionIndex);
-          cell.style = style;
-          cell.value = null;
-        });
-      }
-      mergeRanges
-        .map((range) => shiftFormattedMergeRange(range, axis, insertionIndex))
-        .forEach((range) => formattedWorksheet.mergeCells(range));
-    } else if (legacyWorksheet && legacyModuleRef.current) {
-      const insertionOffset = insertionIndex - 1;
-      const sourceIndex = Math.max(0, insertionOffset - 1);
-      const affectedCells = Object.entries(legacyWorksheet)
-        .filter(([address]) => !address.startsWith("!"))
-        .map(([address, cell]) => ({ address, cell, position: legacyModuleRef.current!.utils.decode_cell(address) }))
-        .filter(({ position }) => axis === "row"
-          ? position.r >= insertionOffset
-          : position.c >= insertionOffset)
-        .sort((left, right) => axis === "row"
-          ? right.position.r - left.position.r || right.position.c - left.position.c
-          : right.position.c - left.position.c || right.position.r - left.position.r);
-      affectedCells.forEach(({ address, cell, position }) => {
-        const nextPosition = axis === "row"
-          ? { ...position, r: position.r + 1 }
-          : { ...position, c: position.c + 1 };
-        legacyWorksheet[legacyModuleRef.current!.utils.encode_cell(nextPosition)] = cell;
-        delete legacyWorksheet[address];
-      });
-      const range = legacyModuleRef.current.utils.decode_range(legacyWorksheet["!ref"] ?? "A1");
-      if (axis === "row") range.e.r = Math.max(range.e.r + 1, insertionOffset);
-      else range.e.c = Math.max(range.e.c + 1, insertionOffset);
-      legacyWorksheet["!ref"] = legacyModuleRef.current.utils.encode_range(range);
-      if (axis === "row") {
-        const rows = [...(legacyWorksheet["!rows"] ?? [])];
-        const sourceRow = rows[sourceIndex];
-        rows.splice(insertionOffset, 0, sourceRow ? { hpt: sourceRow.hpt, hpx: sourceRow.hpx } : undefined);
-        legacyWorksheet["!rows"] = rows;
-      } else {
-        const columns = [...(legacyWorksheet["!cols"] ?? [])];
-        const sourceColumn = columns[sourceIndex];
-        columns.splice(insertionOffset, 0, sourceColumn ? {
-          width: sourceColumn.width,
-          wpx: sourceColumn.wpx,
-          wch: sourceColumn.wch,
-        } : undefined);
-        legacyWorksheet["!cols"] = columns;
-      }
-      legacyWorksheet["!merges"] = (legacyWorksheet["!merges"] ?? []).map((merge) => {
-        const shift = axis === "row" ? merge.s.r >= insertionOffset : merge.s.c >= insertionOffset;
-        if (!shift) return merge;
-        return {
-          s: {
-            r: merge.s.r + (axis === "row" ? 1 : 0),
-            c: merge.s.c + (axis === "column" ? 1 : 0),
-          },
-          e: {
-            r: merge.e.r + (axis === "row" ? 1 : 0),
-            c: merge.e.c + (axis === "column" ? 1 : 0),
-          },
-        };
-      });
-    } else {
-      return;
-    }
+    const insertedSelection = formattedWorksheet
+      ? insertFormattedWorksheet(formattedWorksheet, selection, axis, bounds)
+      : legacyWorksheet && legacyModuleRef.current
+        ? insertLegacyWorksheet(legacyModuleRef.current, legacyWorksheet, selection, axis, bounds)
+        : null;
+    if (!insertedSelection) return;
     structureDirtyRef.current = true;
     setDirty(true);
     setRevision((current) => current + 1);
