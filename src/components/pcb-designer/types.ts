@@ -23,16 +23,50 @@ export interface PcbLibraryComponent {
 
 export type PcbVisibleLayer = "all" | "top" | "bottom";
 
+export interface PcbModelAssetDimensions {
+  widthMm: number;
+  depthMm: number;
+  heightMm: number;
+}
+
+export type PcbModelUpAxis = "x" | "y" | "z";
+
+export interface PcbModelAssetBounds {
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
+export interface PcbModelAssetPartMetadata {
+  id: string;
+  name: string;
+  color?: [number, number, number];
+  vertexCount: number;
+  indexCount: number;
+}
+
+export interface PcbModelAssetPart {
+  id: string;
+  position: number[];
+  normal?: number[];
+  index: number[];
+}
+
 export interface PcbModelAssetMetadata {
+  schemaVersion: 1;
   id: string;
   fileName: string;
   createdAt: string;
   updatedAt: string;
+  dimensions: PcbModelAssetDimensions;
+  calibratedDimensions: PcbModelAssetDimensions;
+  upAxis: PcbModelUpAxis;
+  bounds: PcbModelAssetBounds;
+  parts: PcbModelAssetPartMetadata[];
 }
 
 export interface PcbModelAsset {
   metadata: PcbModelAssetMetadata;
-  data: number[];
+  parts: PcbModelAssetPart[];
 }
 
 export interface PcbPlacedComponent extends PcbLibraryComponent {
@@ -43,6 +77,7 @@ export interface PcbPlacedComponent extends PcbLibraryComponent {
   rotation: number;
   layer: "top" | "bottom";
   locked: boolean;
+  modelAssetId?: string;
 }
 
 export interface PcbKeepout {

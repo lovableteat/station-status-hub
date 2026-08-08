@@ -41,10 +41,35 @@ export function isPcbVisibleLayer(value: unknown): value is PcbVisibleLayer {
 
 function isModelAssetMetadata(value: unknown): value is PcbModelAssetMetadata {
   if (!isRecord(value)) return false;
-  return isNonEmptyString(value.id)
+  const legacy = isNonEmptyString(value.id)
     && isNonEmptyString(value.fileName)
     && isNonEmptyString(value.createdAt)
     && isNonEmptyString(value.updatedAt);
+  if (!legacy) return false;
+  if (value.schemaVersion === undefined) return true;
+  return value.schemaVersion === 1
+    && isRecord(value.dimensions)
+    && hasFiniteNumbers(value.dimensions, ["widthMm", "depthMm", "heightMm"])
+    && isRecord(value.calibratedDimensions)
+    && hasFiniteNumbers(value.calibratedDimensions, ["widthMm", "depthMm", "heightMm"])
+    && (value.upAxis === "x" || value.upAxis === "y" || value.upAxis === "z")
+    && isRecord(value.bounds)
+    && Array.isArray(value.bounds.min)
+    && value.bounds.min.length === 3
+    && value.bounds.min.every(isFiniteNumber)
+    && Array.isArray(value.bounds.max)
+    && value.bounds.max.length === 3
+    && value.bounds.max.every(isFiniteNumber)
+    && Array.isArray(value.parts)
+    && value.parts.every((part) => {
+      if (!isRecord(part)) return false;
+      return isNonEmptyString(part.id)
+        && isNonEmptyString(part.name)
+        && Number.isInteger(part.vertexCount)
+        && part.vertexCount >= 0
+        && Number.isInteger(part.indexCount)
+        && part.indexCount >= 0;
+    });
 }
 
 function uniqueIds(items: RecordValue[], key: string): boolean {
@@ -68,11 +93,24 @@ export function isValidBoard(value: unknown): boolean {
 }
 
 export function normalizePcbSaveState(state: PcbSaveState): PcbSaveState {
+  const cloned = structuredClone(state);
+  const modelAssets = Object.fromEntries(
+    Object.entries(cloned.modelAssets ?? {}).filter(([, asset]) => isModelAssetMetadata(asset)),
+  ) as PcbSaveState["modelAssets"];
+  const projects = cloned.projects.map((project) => ({
+    ...project,
+    components: project.components.map((component) => {
+      if (!component.modelAssetId || modelAssets?.[component.modelAssetId]) return component;
+      const { modelAssetId: _removed, ...withoutAsset } = component;
+      return withoutAsset;
+    }),
+  }));
   return {
-    ...structuredClone(state),
-    modelAssets: structuredClone(state.modelAssets ?? {}),
-    pendingPlacementsByProject: structuredClone(state.pendingPlacementsByProject ?? {}),
-    remoteDeletions: structuredClone(state.remoteDeletions ?? {
+    ...cloned,
+    projects,
+    modelAssets: structuredClone(modelAssets ?? {}),
+    pendingPlacementsByProject: structuredClone(cloned.pendingPlacementsByProject ?? {}),
+    remoteDeletions: structuredClone(cloned.remoteDeletions ?? {
       projects: [],
       templates: [],
       library: [],
@@ -91,7 +129,8 @@ function validateComponent(value: unknown): value is RecordValue {
     && value.rotation >= 0 && value.rotation < 360
     && (value.source === "built-in" || value.source === "custom" || value.source === "bom")
     && (value.layer === "top" || value.layer === "bottom")
-    && typeof value.locked === "boolean";
+    && typeof value.locked === "boolean"
+    && (value.modelAssetId === undefined || isNonEmptyString(value.modelAssetId));
 }
 
 function validateKeepout(value: unknown): value is RecordValue {

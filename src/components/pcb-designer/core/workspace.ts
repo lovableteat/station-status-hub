@@ -443,6 +443,28 @@ export function reduceWorkspaceState(
     case "project/commit":
       if (action.update.id !== state.activeProject.id) return state;
       return replaceProject(state, action.update);
+    case "model/assign": {
+      const component = state.activeProject.components.find((item) => item.instanceId === action.componentId);
+      if (!component || component.locked) return state;
+      const updated = replaceProject(state, {
+        ...state.activeProject,
+        components: state.activeProject.components.map((item) =>
+          item.instanceId === action.componentId
+            ? { ...item, modelAssetId: action.metadata.id }
+            : item,
+        ),
+      });
+      return materialize({
+        ...updated,
+        data: {
+          ...updated.data,
+          modelAssets: {
+            ...(updated.data.modelAssets ?? {}),
+            [action.metadata.id]: clone(action.metadata),
+          },
+        },
+      });
+    }
     case "project/commit-with-bom":
       if (action.update.id !== state.activeProject.id) return state;
       return replaceProject(state, action.update, true, action.pendingPlacements);

@@ -3,6 +3,7 @@ import type {
   PcbLibraryComponent,
   PcbPoint,
   PcbProject,
+  PcbModelAssetMetadata,
   PcbSaveState,
   PcbSelection,
   PcbVisibleLayer,
@@ -63,6 +64,7 @@ export type PcbWorkspaceAction =
   | { type: "project/delete"; projectId: string }
   | { type: "project/import"; project: PcbProject }
   | { type: "project/commit"; update: PcbProject }
+  | { type: "model/assign"; componentId: string; metadata: PcbModelAssetMetadata }
   | { type: "project/commit-with-bom"; update: PcbProject; pendingPlacements: PendingPlacement[] }
   | { type: "template/apply"; templateId: string }
   | { type: "template/save"; input: TemplateInput }

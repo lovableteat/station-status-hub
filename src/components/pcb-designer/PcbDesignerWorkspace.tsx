@@ -20,6 +20,13 @@ import {
   type TabularImportError,
 } from "./core/tabular.ts";
 import { parseProjectJson } from "./core/validation.ts";
+import { importStepModel } from "../data-center/stepImport.ts";
+import {
+  PCB_MODEL_FILE_ACCEPT,
+  getDefaultPcbModelAssetStore,
+  isStepModelFile,
+  toPcbModelAsset,
+} from "./core/modelAssets.ts";
 import { PcbDialogs, type PcbDialogState } from "./PcbDialogs.tsx";
 import { PcbLeftRail } from "./PcbLeftRail.tsx";
 import { PcbToolbar } from "./PcbToolbar.tsx";
@@ -99,6 +106,7 @@ export function PcbDesignerWorkspace({
   const [viewMode, setViewMode] = useState<PcbViewMode>("2d");
   const [placementComponentId, setPlacementComponentId] = useState<string | null>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
+  const modelAssetStoreRef = useRef(getDefaultPcbModelAssetStore());
   const presence = usePcbProjectPresence({
     dirty: workspace.hasUnsavedChanges,
     projectId: workspace.activeProject.id,
@@ -232,6 +240,19 @@ export function PcbDesignerWorkspace({
       }], () => undefined);
     }
   };
+
+  const handleModelFile = useCallback(async (file: File, componentId: string) => {
+    if (!isStepModelFile(file)) throw new Error(`只接受 STP 或 STEP 模型檔案（${PCB_MODEL_FILE_ACCEPT}）。`);
+    const component = workspace.activeProject.components.find((item) => item.instanceId === componentId);
+    if (!component || component.locked || !workspace.canMutate) {
+      throw new Error("請先選取可編輯的元件。");
+    }
+    const model = await importStepModel(file);
+    const asset = toPcbModelAsset(model);
+    await modelAssetStoreRef.current.put(asset);
+    workspace.assignModelAsset(componentId, asset.metadata);
+    return asset.metadata;
+  }, [workspace]);
 
   const requestDeleteProject = (project: PcbProject) => setDialog({
     kind: "confirm",
@@ -499,7 +520,7 @@ export function PcbDesignerWorkspace({
           </Suspense>
         )}
         <div className={cn("pcb-right-drawer", openDrawer === "right" && "is-open")}>
-          <PcbInspector workspace={workspace} />
+          <PcbInspector workspace={workspace} onImportModel={handleModelFile} />
         </div>
       </div>
 
