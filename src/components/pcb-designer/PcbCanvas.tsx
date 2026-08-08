@@ -293,8 +293,8 @@ export function PcbCanvas({
     selection: Parameters<typeof workspace.selectObject>[0],
     additive = false,
   ) => {
-    workspace.selectObject(selection);
     if (!selection) {
+      workspace.selectObject(null);
       workspace.clearObjectSelection();
       return;
     }
@@ -302,6 +302,7 @@ export function PcbCanvas({
       workspace.toggleObjectSelection(selection.id);
       return;
     }
+    workspace.selectObject(selection);
     workspace.clearObjectSelection();
   }, [workspace]);
 
