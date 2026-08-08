@@ -209,7 +209,7 @@ test("round-trips model metadata and an assigned component asset id", () => {
     dimensions: { widthMm: 10, depthMm: 20, heightMm: 30 },
     upAxis: "z" as const,
     bounds: { min: [0, 0, 0] as [number, number, number], max: [10, 20, 30] as [number, number, number] },
-    parts: [{ id: "part-1", name: "Housing", vertexCount: 3, indexCount: 3 }],
+    parts: [{ id: "part-1", name: "Housing", vertexCount: 1, indexCount: 3 }],
   };
   const component = {
     ...state.library[0],
@@ -232,7 +232,7 @@ test("round-trips model metadata and an assigned component asset id", () => {
       : project),
   });
 
-  assert.equal(saved.modelAssets?.[asset.id].parts[0].vertexCount, 3);
+  assert.equal(saved.modelAssets?.[asset.id].parts[0].vertexCount, 1);
   assert.equal(saved.projects[0].components[0].modelAssetId, asset.id);
   assert.equal(loaded.load().projects[0].components[0].modelAssetId, asset.id);
 });
