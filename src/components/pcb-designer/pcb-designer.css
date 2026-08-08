@@ -68,24 +68,31 @@
 .pcb-view-switch {
   display: inline-flex;
   height: 30px;
+  flex: 0 0 auto;
   align-items: center;
   gap: 2px;
   border: 1px solid #2c4d68;
   border-radius: 9px;
   background: #0a1828;
   padding: 2px;
+  white-space: nowrap;
 }
 
 .pcb-view-switch button {
   display: inline-flex;
   height: 24px;
+  flex: 0 0 auto;
   align-items: center;
   gap: 5px;
+  min-width: 54px;
+  border: 1px solid transparent;
   border-radius: 6px;
   padding: 0 9px;
   color: #8fa8be;
   font-size: 12px;
   font-weight: 760;
+  line-height: 1;
+  white-space: nowrap;
   transition: background 140ms ease, color 140ms ease;
 }
 
@@ -95,8 +102,10 @@
 }
 
 .pcb-view-switch button.is-active {
+  border-color: rgb(104 206 233 / 62%);
   background: #58c5e3;
   color: #06111f;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 10%);
 }
 
 .pcb-collaborator-trigger {
@@ -1104,7 +1113,7 @@
 .pcb-visible-layer-switch {
   display: inline-flex;
   height: 34px;
-  flex: none;
+  flex: 0 0 auto;
   align-items: center;
   gap: 2px;
   border: 1px solid rgb(43 63 96 / 86%);
@@ -1112,12 +1121,15 @@
   background: #0c1728;
   padding: 3px 4px 3px 8px;
   color: #7f95b1;
+  white-space: nowrap;
 }
 
 .pcb-layer-switch button,
 .pcb-visible-layer-switch button {
   height: 26px;
-  min-width: 58px;
+  flex: 0 0 auto;
+  min-width: 64px;
+  border: 1px solid transparent;
   border-radius: 7px;
   padding: 0 8px;
   color: #91a5bd;
@@ -1125,6 +1137,7 @@
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
+  white-space: nowrap;
   transition: background 130ms ease, color 130ms ease;
 }
 
@@ -1136,8 +1149,10 @@
 
 .pcb-layer-switch button.is-active,
 .pcb-visible-layer-switch button.is-active {
+  border-color: rgb(104 206 233 / 54%);
   background: #29466c;
   color: #bdefff;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 8%);
 }
 
 .pcb-layer-switch button:disabled,
