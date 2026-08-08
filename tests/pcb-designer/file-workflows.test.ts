@@ -55,3 +55,101 @@ test("rejects oversized imports before reading their contents", async () => {
     /檔案大小超過/,
   );
 });
+
+test("accepts STP and STEP files but rejects unrelated extensions", async () => {
+  const { isStepModelFile, PCB_MODEL_FILE_ACCEPT } = await import(
+    "../../src/components/pcb-designer/core/modelAssets.ts"
+  );
+
+  assert.equal(isStepModelFile(new File([], "board.stp")), true);
+  assert.equal(isStepModelFile(new File([], "board.step")), true);
+  assert.equal(isStepModelFile(new File([], "board.glb")), false);
+  assert.match(PCB_MODEL_FILE_ACCEPT, /\.stp/);
+  assert.match(PCB_MODEL_FILE_ACCEPT, /\.step/);
+});
+
+test("serializes STEP parts into JSON-safe PCB model metadata", async () => {
+  const { toPcbModelAssetMetadata } = await import(
+    "../../src/components/pcb-designer/core/modelAssets.ts"
+  );
+  const metadata = toPcbModelAssetMetadata({
+    id: "step-1",
+    fileName: "housing.STEP",
+    importedAt: "2026-08-08T00:00:00.000Z",
+    sourceUnit: "millimeter",
+    upAxis: "z",
+    bounds: { min: [0, 0, 0], max: [10, 20, 30] },
+    dimensions: { widthMm: 10, depthMm: 20, heightMm: 30 },
+    calibratedDimensions: { widthMm: 10, depthMm: 20, heightMm: 30 },
+    parts: [{
+      id: "part-1",
+      name: "Housing",
+      color: [0.1, 0.2, 0.3],
+      position: Float32Array.from([0, 1, 2]),
+      normal: Float32Array.from([0, 0, 1]),
+      index: Uint32Array.from([0, 1, 2]),
+    }],
+  });
+
+  assert.equal(metadata.id, "step-1");
+  assert.deepEqual(metadata.dimensions, { widthMm: 10, depthMm: 20, heightMm: 30 });
+  assert.equal(metadata.upAxis, "z");
+  assert.equal(metadata.parts.length, 1);
+  assert.deepEqual(metadata.parts[0], {
+    id: "part-1",
+    name: "Housing",
+    color: [0.1, 0.2, 0.3],
+    vertexCount: 1,
+    indexCount: 3,
+  });
+  assert.doesNotThrow(() => JSON.stringify(metadata));
+});
+
+test("exposes PCB STP import assignment and a procedural 3D fallback", async () => {
+  const workspace = await readFile(
+    new URL("../../src/components/pcb-designer/PcbDesignerWorkspace.tsx", import.meta.url),
+    "utf8",
+  );
+  const inspector = await readFile(
+    new URL("../../src/components/pcb-designer/PcbInspector.tsx", import.meta.url),
+    "utf8",
+  );
+  const canvas = await readFile(
+    new URL("../../src/components/pcb-designer/Pcb3DCanvas.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(workspace, /importStepModel/);
+  assert.match(workspace, /PCB_MODEL_FILE_ACCEPT/);
+  assert.match(inspector, /modelAssetId/);
+  assert.match(inspector, /type=["']file["']/);
+  assert.match(inspector, /loading|error|success/i);
+  assert.match(canvas, /modelAssetId/);
+  assert.match(canvas, /BufferGeometry/);
+  assert.match(canvas, /procedural|fallback/i);
+});
+
+test("stores model payloads through the in-memory asset fallback", async () => {
+  const { IndexedDbModelAssetStore } = await import(
+    "../../src/components/pcb-designer/core/modelAssets.ts"
+  );
+  const store = new IndexedDbModelAssetStore({ indexedDB: undefined });
+  const asset = {
+    metadata: {
+      id: "step-asset",
+      fileName: "board.stp",
+      createdAt: "2026-08-08T00:00:00.000Z",
+      updatedAt: "2026-08-08T00:00:00.000Z",
+      dimensions: { widthMm: 1, depthMm: 2, heightMm: 3 },
+      upAxis: "z" as const,
+      bounds: { min: [0, 0, 0] as [number, number, number], max: [1, 2, 3] as [number, number, number] },
+      parts: [{ id: "part-1", name: "Part 1", vertexCount: 3, indexCount: 3 }],
+    },
+    parts: [{ id: "part-1", position: [0, 1, 2], normal: [0, 0, 1], index: [0, 1, 2] }],
+  };
+
+  await store.put(asset);
+  assert.deepEqual(await store.get("step-asset"), asset);
+  await store.delete("step-asset");
+  assert.equal(await store.get("step-asset"), null);
+});

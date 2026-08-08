@@ -197,6 +197,68 @@ test("round-trips no-part-number library, pending, and placed BOM records", () =
   assert.deepEqual(loaded.pendingPlacementsByProject?.[projectId], [pending]);
 });
 
+test("round-trips model metadata and an assigned component asset id", () => {
+  const repository = new PcbLocalRepository(new MemoryStorage());
+  const state = repository.load();
+  const projectId = state.activeProjectId!;
+  const asset = {
+    id: "step-asset",
+    fileName: "housing.step",
+    createdAt: "2026-08-08T00:00:00.000Z",
+    updatedAt: "2026-08-08T00:00:00.000Z",
+    dimensions: { widthMm: 10, depthMm: 20, heightMm: 30 },
+    upAxis: "z" as const,
+    bounds: { min: [0, 0, 0] as [number, number, number], max: [10, 20, 30] as [number, number, number] },
+    parts: [{ id: "part-1", name: "Housing", vertexCount: 3, indexCount: 3 }],
+  };
+  const component = {
+    ...state.library[0],
+    instanceId: "U1",
+    reference: "U1",
+    x: 10,
+    y: 10,
+    rotation: 0,
+    layer: "top" as const,
+    locked: false,
+    modelAssetId: asset.id,
+  };
+
+  const loaded = new PcbLocalRepository(new MemoryStorage());
+  const saved = loaded.save({
+    ...state,
+    modelAssets: { [asset.id]: asset },
+    projects: state.projects.map((project) => project.id === projectId
+      ? { ...project, components: [component] }
+      : project),
+  });
+
+  assert.equal(saved.modelAssets?.[asset.id].parts[0].vertexCount, 3);
+  assert.equal(saved.projects[0].components[0].modelAssetId, asset.id);
+  assert.equal(loaded.load().projects[0].components[0].modelAssetId, asset.id);
+});
+
+test("drops an invalid or missing model asset reference without rejecting the project", () => {
+  const repository = new PcbLocalRepository(new MemoryStorage());
+  const state = repository.load();
+  const project = {
+    ...state.projects[0],
+    components: [{
+      ...state.library[0],
+      instanceId: "U1",
+      reference: "U1",
+      x: 10,
+      y: 10,
+      rotation: 0,
+      layer: "top" as const,
+      locked: false,
+      modelAssetId: "deleted-asset",
+    }],
+  };
+
+  const saved = repository.save({ ...state, projects: [project], modelAssets: {} });
+  assert.equal(saved.projects[0].components[0].modelAssetId, undefined);
+});
+
 test("refreshes stale built-in templates while preserving custom catalog records", () => {
   const storage = new MemoryStorage();
   const repository = new PcbLocalRepository(storage);
