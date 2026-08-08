@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from "react";
-import { Copy, Crosshair, Lock, LockOpen, RotateCw, ScanSearch, Trash2 } from "lucide-react";
+import { Copy, Crosshair, FileUp, Lock, LockOpen, RotateCw, ScanSearch, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { PcbKeepout, PcbMeasurement, PcbPlacedComponent } from "./types.ts";
+import type { PcbKeepout, PcbMeasurement, PcbModelAssetMetadata, PcbPlacedComponent } from "./types.ts";
+import { PCB_MODEL_FILE_ACCEPT } from "./core/modelAssets.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 
 function InspectorField({
@@ -157,12 +158,34 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
 function ComponentInspector({
   workspace,
   component,
+  onImportModel,
 }: {
   workspace: PcbWorkspaceApi;
   component: PcbPlacedComponent;
+  onImportModel?: (file: File, componentId: string) => Promise<PcbModelAssetMetadata>;
 }) {
   const disabled = !workspace.canMutate;
   const componentDisabled = disabled || component.locked;
+  const [modelImportState, setModelImportState] = useState<{
+    status: "idle" | "loading" | "success" | "error";
+    metadata?: PcbModelAssetMetadata;
+    error?: string;
+  }>({ status: "idle" });
+
+  const handleModelFile = async (file: File) => {
+    if (!onImportModel) return;
+    setModelImportState({ status: "loading" });
+    try {
+      const metadata = await onImportModel(file, component.instanceId);
+      setModelImportState({ status: "success", metadata });
+    } catch (error) {
+      setModelImportState({
+        status: "error",
+        error: error instanceof Error ? error.message : "模型匯入失敗。",
+      });
+    }
+  };
+
   return (
     <div className="pcb-inspector-form" data-selection-kind="component">
       <h2>{component.reference} · {component.name}</h2>
@@ -196,6 +219,34 @@ function ComponentInspector({
           <option value="bottom">Bottom</option>
         </select>
       </InspectorField>
+      <div className="pcb-model-import" data-model-import-status={modelImportState.status}>
+        <div className="pcb-model-import-heading">
+          <span>3D 模型</span>
+          {component.modelAssetId && <small>已綁定模型</small>}
+        </div>
+        <label className={cn("pcb-upload-action", componentDisabled && "pointer-events-none opacity-50")}>
+          <FileUp className="mr-1.5 h-3.5 w-3.5" />
+          匯入 STP/STEP
+          <input
+            type="file"
+            accept={PCB_MODEL_FILE_ACCEPT}
+            className="sr-only"
+            disabled={componentDisabled || !onImportModel}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) void handleModelFile(file);
+            }}
+          />
+        </label>
+        {modelImportState.status === "loading" && <p className="pcb-model-status">載入 STEP 模型中…</p>}
+        {modelImportState.status === "error" && <p className="pcb-model-status is-error">{modelImportState.error}</p>}
+        {modelImportState.status === "success" && modelImportState.metadata && (
+          <p className="pcb-model-status is-success">
+            已載入 {modelImportState.metadata.parts.length} 個零件，尺寸 {modelImportState.metadata.dimensions.widthMm} × {modelImportState.metadata.dimensions.depthMm} × {modelImportState.metadata.dimensions.heightMm} mm
+          </p>
+        )}
+      </div>
       <SelectionActions workspace={workspace} />
     </div>
   );
@@ -258,7 +309,13 @@ function MeasurementInspector({
   );
 }
 
-export function PcbInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
+export function PcbInspector({
+  workspace,
+  onImportModel,
+}: {
+  workspace: PcbWorkspaceApi;
+  onImportModel?: (file: File, componentId: string) => Promise<PcbModelAssetMetadata>;
+}) {
   const [severity, setSeverity] = useState<"all" | "error" | "warning">("all");
   const issues = workspace.drcIssues.filter((issue) => severity === "all" || issue.severity === severity);
   const selected = workspace.selection && workspace.selectedObject;
@@ -290,7 +347,11 @@ export function PcbInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
               尚未選取物件。可在畫布選取元件、禁制區或測量線。
             </div>
           ) : workspace.selection?.kind === "component" ? (
-            <ComponentInspector workspace={workspace} component={workspace.selectedObject as PcbPlacedComponent} />
+            <ComponentInspector
+              workspace={workspace}
+              component={workspace.selectedObject as PcbPlacedComponent}
+              onImportModel={onImportModel}
+            />
           ) : workspace.selection?.kind === "keepout" ? (
             <KeepoutInspector workspace={workspace} keepout={workspace.selectedObject as PcbKeepout} />
           ) : (
