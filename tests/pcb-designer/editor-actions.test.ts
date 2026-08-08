@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { BUILT_IN_COMPONENTS, createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
 
@@ -8,6 +9,10 @@ const editorModule = await import(
 const recordsModule = await import(
   new URL("../../src/components/pcb-designer/core/workspaceRecords.ts", import.meta.url).href,
 ).catch(() => ({}));
+const editorHookSource = await readFile(
+  new URL("../../src/components/pcb-designer/hooks/usePcbEditorActions.ts", import.meta.url),
+  "utf8",
+).catch(() => "");
 
 test("placeLibraryComponent adds one legal center-nearest instance without mutating inputs", () => {
   assert.equal(typeof editorModule.placeLibraryComponent, "function");
@@ -148,6 +153,55 @@ test("moveComponent snaps normally, bypasses snap with Alt, and refuses locked o
   );
 });
 
+test("moves multiple unlocked components as one snapped transaction", () => {
+  assert.equal(typeof editorModule.moveComponents, "function");
+  const project = createBlankProject("Group move");
+  const componentA = {
+    ...structuredClone(BUILT_IN_COMPONENTS[3]),
+    instanceId: "component-a",
+    reference: "R1",
+    x: 5,
+    y: 10,
+    rotation: 0,
+    layer: "top" as const,
+    locked: false,
+  };
+  const componentB = {
+    ...structuredClone(BUILT_IN_COMPONENTS[4]),
+    instanceId: "component-b",
+    reference: "C1",
+    x: 15,
+    y: 20,
+    rotation: 0,
+    layer: "top" as const,
+    locked: false,
+  };
+  project.components = [componentA, componentB];
+
+  const result = editorModule.moveComponents(
+    project,
+    ["component-a", "component-b"],
+    { x: 7.2, y: 4.1 },
+    false,
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    result.project.components.map(({ x, y }: { x: number; y: number }) => ({ x, y })),
+    [
+      { x: 12, y: 14 },
+      { x: 22, y: 24 },
+    ],
+  );
+  assert.deepEqual(
+    project.components.map(({ x, y }: { x: number; y: number }) => ({ x, y })),
+    [
+      { x: 5, y: 10 },
+      { x: 15, y: 20 },
+    ],
+  );
+});
+
 test("releasing a component without moving it is a successful no-op", () => {
   const project = createBlankProject("No-op move");
   const placed = editorModule.placeLibraryComponent(project, BUILT_IN_COMPONENTS[3]);
@@ -180,6 +234,36 @@ test("component moves may keep an intentional DRC violation for later review", (
   assert.equal(result.ok, true);
   assert.equal(result.changed, true);
   assert.equal(result.project.components[0].x, -3);
+});
+
+test("duplicates a keepout with a new identity and legal offset", () => {
+  assert.equal(typeof editorModule.duplicateKeepout, "function");
+  const project = createBlankProject("Keepout duplicate");
+  const created = editorModule.createKeepout(project, { x: 12, y: 12 }, { x: 22, y: 22 });
+  assert.ok(created);
+
+  const result = editorModule.duplicateKeepout(created.project, created.keepout.id, { x: 1, y: 1 });
+
+  assert.equal(result.ok, true);
+  assert.notEqual(result.keepout.id, created.keepout.id);
+  assert.equal(result.project.keepouts.length, 2);
+  assert.deepEqual(
+    result.project.keepouts.map(({ id, x, y }: { id: string; x: number; y: number }) => ({ id, x, y })),
+    [
+      { id: created.keepout.id, x: 12, y: 12 },
+      { id: result.keepout.id, x: 13, y: 13 },
+    ],
+  );
+});
+
+test("editor hook exposes group move and duplication actions for later UI wiring", () => {
+  assert.match(editorHookSource, /const moveComponents = useCallback/);
+  assert.match(editorHookSource, /moveComponentsRecord/);
+  assert.match(editorHookSource, /const duplicateKeepout = useCallback/);
+  assert.match(editorHookSource, /duplicateKeepoutRecord/);
+  assert.match(editorHookSource, /const duplicateSelected = useCallback/);
+  assert.match(editorHookSource, /dispatch\(\{ type: "selection\/duplicate" \}\)/);
+  assert.match(editorHookSource, /return \{[\s\S]*moveComponents,[\s\S]*duplicateKeepout,[\s\S]*duplicateSelected,/);
 });
 
 test("selection actions rotate, lock, delete, and nudge the selected component", () => {
