@@ -238,7 +238,7 @@ export function PcbToolbar({
         <div className="pcb-visible-layer-switch" role="group" aria-label="Visible layer">
           <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
           {([
-            { layer: "all", label: "All" },
+            { layer: "all", label: "全部" },
             { layer: "top", label: "Top" },
             { layer: "bottom", label: "Bottom" },
           ] as const).map(({ layer, label }) => (

@@ -85,10 +85,10 @@ function Scene({
       workspace.clearObjectSelection();
       return;
     }
-    workspace.selectObject(selection);
     if (additive) {
       workspace.toggleObjectSelection(selection.id);
     } else {
+      workspace.selectObject(selection);
       workspace.clearObjectSelection();
     }
   }, [workspace]);

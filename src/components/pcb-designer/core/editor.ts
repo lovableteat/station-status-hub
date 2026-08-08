@@ -212,9 +212,10 @@ export function moveComponents(
   if (sources.some((component) => !component)) {
     return { ok: false, reason: "找不到要移動的元件。" };
   }
-  if (sources.some((component) => component!.locked)) {
+  if ((sources as PcbPlacedComponent[]).every((component) => component.locked)) {
     return { ok: false, reason: "已鎖定元件不可群組移動。" };
   }
+  const movableSources = (sources as PcbPlacedComponent[]).filter((component) => !component.locked);
   const appliedDelta = project.board.snapToGrid && !bypassSnap
     ? {
       x: snapValue(delta.x, project.board.gridSize),
@@ -222,12 +223,12 @@ export function moveComponents(
     }
     : { ...delta };
   if (appliedDelta.x === 0 && appliedDelta.y === 0) {
-    return { ok: true, project, components: sources as PcbPlacedComponent[], changed: false };
+    return { ok: true, project, components: movableSources, changed: false };
   }
 
-  const movedIds = new Set(uniqueIds);
+  const movedIds = new Set(movableSources.map((component) => component.instanceId));
   const candidates = new Map<string, PcbPlacedComponent>();
-  for (const source of sources as PcbPlacedComponent[]) {
+  for (const source of movableSources) {
     candidates.set(source.instanceId, {
       ...source,
       x: source.x + appliedDelta.x,
