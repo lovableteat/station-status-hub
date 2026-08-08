@@ -250,11 +250,11 @@ test("preserves the pre-task project and component form copy while extending imp
     "src/components/pcb-designer/PcbDialogs.tsx",
   );
 
-  assert.match(dialogsSource, /板寬與板高需介於 20 至 1000 mm。/);
-  assert.match(dialogsSource, /尺寸與最大高度必須是大於 0 的有限數。/);
-  assert.match(dialogsSource, /儲存前會檢查必要欄位與數值範圍。/);
-  assert.match(dialogsSource, /NumberField label=["']板寬 \(mm\)["']/);
-  assert.match(dialogsSource, /NumberField label=["']板高 \(mm\)["']/);
+  assert.match(dialogsSource, /板框尺寸必須介於 20 到 1000 mm。/);
+  assert.match(dialogsSource, /尺寸與最大高度必須是大於 0 的數值。/);
+  assert.match(dialogsSource, /請填寫必要欄位後再儲存變更。/);
+  assert.match(dialogsSource, /NumberField label=["']寬度 \(mm\)["']/);
+  assert.match(dialogsSource, /NumberField label=["']高度 \(mm\)["']/);
 });
 
 test("keeps visible-layer filtering and grouped selection in sync across the PCB workspace", async () => {
