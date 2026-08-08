@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
+import XLSX from "xlsx";
+
+import * as spreadsheetInteraction from "../../src/components/test-plan/spreadsheetInteraction.ts";
+
+const {
   createSpreadsheetSelection,
   decodeSpreadsheetAddress,
   formatSpreadsheetNumber,
@@ -11,11 +15,23 @@ import {
   normalizeSpreadsheetSelection,
   parseSpreadsheetClipboard,
   serializeSpreadsheetClipboard,
-} from "../../src/components/test-plan/spreadsheetInteraction.ts";
+} = spreadsheetInteraction;
 
 test("formats spreadsheet numbers with General precision and custom formats", () => {
   assert.equal(formatSpreadsheetNumber(50.400000000000006, "General"), "50.4");
   assert.equal(formatSpreadsheetNumber(0.125, "0.0%", (format, value) => `${format}:${value}`), "0.0%:0.125");
+});
+
+test("formats spreadsheet dates, decimals, and percentages with real SSF", () => {
+  assert.equal(
+    typeof spreadsheetInteraction.formatSpreadsheetScalar,
+    "function",
+    "spreadsheet scalar formatting must support Date values",
+  );
+  const formatScalar = spreadsheetInteraction.formatSpreadsheetScalar;
+  assert.equal(formatScalar(new Date(2026, 0, 2), "yyyy-mm-dd", XLSX.SSF.format), "2026-01-02");
+  assert.equal(formatScalar(50.400000000000006, "0.00", XLSX.SSF.format), "50.40");
+  assert.equal(formatScalar(0.125, "0.0%", XLSX.SSF.format), "12.5%");
 });
 
 test("places row and column insertions after the normalized selection and past merges", () => {
