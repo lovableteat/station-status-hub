@@ -34,7 +34,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { PcbTool } from "./types.ts";
+import type { PcbTool, PcbVisibleLayer } from "./types.ts";
 import type { PcbViewMode } from "./hooks/usePcbProjectPresence.ts";
 
 interface ToolButtonProps {
@@ -94,6 +94,7 @@ export interface PcbToolbarProps {
   documentLocked: boolean;
   tool: PcbTool;
   activeLayer: "top" | "bottom";
+  visibleLayer: PcbVisibleLayer;
   zoom: number;
   canUndo: boolean;
   canRedo: boolean;
@@ -113,6 +114,7 @@ export interface PcbToolbarProps {
   onRedo: () => void;
   onToolChange: (tool: PcbTool) => void;
   onActiveLayerChange: (layer: "top" | "bottom") => void;
+  onVisibleLayerChange: (layer: PcbVisibleLayer) => void;
   onToggleLock: () => void;
   onZoomChange: (zoom: number) => void;
   onResetView: () => void;
@@ -125,6 +127,7 @@ export function PcbToolbar({
   documentLocked,
   tool,
   activeLayer,
+  visibleLayer,
   zoom,
   canUndo,
   canRedo,
@@ -144,6 +147,7 @@ export function PcbToolbar({
   onRedo,
   onToolChange,
   onActiveLayerChange,
+  onVisibleLayerChange,
   onToggleLock,
   onZoomChange,
   onResetView,
@@ -230,6 +234,25 @@ export function PcbToolbar({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <div className="pcb-visible-layer-switch" role="group" aria-label="Visible layer">
+          <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
+          {([
+            { layer: "all", label: "All" },
+            { layer: "top", label: "Top" },
+            { layer: "bottom", label: "Bottom" },
+          ] as const).map(({ layer, label }) => (
+            <button
+              key={layer}
+              type="button"
+              className={cn(visibleLayer === layer && "is-active")}
+              aria-pressed={visibleLayer === layer}
+              onClick={() => onVisibleLayerChange(layer)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         <span className="pcb-tool-separator" aria-hidden="true" />
         <ToolButton label="復原" shortcut="Ctrl+Z" icon={Undo2} disabled={!canMutate || !canUndo} onClick={onUndo} />

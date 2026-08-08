@@ -416,6 +416,7 @@ export function usePcbEditorActions(
     canEdit: state.canEdit,
     deleteSelected,
     dispatch,
+    duplicateSelected,
     documentLocked: state.documentLocked,
     nudgeSelected,
     rotateSelected,
@@ -427,6 +428,7 @@ export function usePcbEditorActions(
     canEdit: state.canEdit,
     deleteSelected,
     dispatch,
+    duplicateSelected,
     documentLocked: state.documentLocked,
     nudgeSelected,
     rotateSelected,
@@ -448,6 +450,10 @@ export function usePcbEditorActions(
         } else if (key === "y") {
           event.preventDefault();
           shortcuts.dispatch({ type: "history/redo" });
+          return;
+        } else if (key === "d") {
+          event.preventDefault();
+          shortcuts.duplicateSelected();
           return;
         }
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;

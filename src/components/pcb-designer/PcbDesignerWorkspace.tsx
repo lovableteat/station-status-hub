@@ -395,6 +395,7 @@ export function PcbDesignerWorkspace({
         documentLocked={workspace.documentLocked}
         tool={workspace.tool}
         activeLayer={workspace.activeLayer}
+        visibleLayer={workspace.visibleLayer}
         zoom={workspace.zoom}
         canUndo={workspace.canUndo}
         canRedo={workspace.canRedo}
@@ -436,6 +437,7 @@ export function PcbDesignerWorkspace({
         onRedo={workspace.redo}
         onToolChange={workspace.setTool}
         onActiveLayerChange={workspace.setActiveLayer}
+        onVisibleLayerChange={workspace.setVisibleLayer}
         onToggleLock={workspace.toggleDocumentLock}
         onZoomChange={workspace.setZoom}
         onResetView={workspace.resetView}
@@ -481,13 +483,19 @@ export function PcbDesignerWorkspace({
         {viewMode === "2d" ? (
           <PcbCanvas
             workspace={workspace}
+            visibleLayer={workspace.visibleLayer}
+            selectedObjects={workspace.selectedObjects}
             placementComponentId={placementComponentId}
             onPlacementComplete={completePlacement}
             onPlacementCancel={cancelPlacement}
           />
         ) : (
           <Suspense fallback={<div className="pcb-3d-loading">正在建立 3D 板件與元件...</div>}>
-            <Pcb3DCanvas workspace={workspace} />
+            <Pcb3DCanvas
+              workspace={workspace}
+              visibleLayer={workspace.visibleLayer}
+              selectedObjects={workspace.selectedObjects}
+            />
           </Suspense>
         )}
         <div className={cn("pcb-right-drawer", openDrawer === "right" && "is-open")}>
