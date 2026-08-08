@@ -67,6 +67,74 @@ test("translates column references including quoted target sheet names", () => {
   );
 });
 
+test("classifies quoted and unquoted Unicode sheet qualifiers", () => {
+  assert.ok(workbookModule?.translateSpreadsheetFormula, "formula translation must be available");
+
+  assert.equal(
+    workbookModule.translateSpreadsheetFormula("工作表2!A3", "row", 3, "工作表1", "工作表1"),
+    "工作表2!A3",
+  );
+  assert.equal(
+    workbookModule.translateSpreadsheetFormula("工作表1!A3", "row", 3, "工作表2", "工作表1"),
+    "工作表1!A4",
+  );
+  assert.equal(
+    workbookModule.translateSpreadsheetFormula("'工作表 2'!A3", "row", 3, "工作表 1", "工作表 1"),
+    "'工作表 2'!A3",
+  );
+  assert.equal(
+    workbookModule.translateSpreadsheetFormula("'工作表 1'!A3", "row", 3, "工作表 2", "工作表 1"),
+    "'工作表 1'!A4",
+  );
+});
+
+test("leaves external-workbook and 3D references byte-for-byte unchanged", () => {
+  assert.ok(workbookModule?.translateSpreadsheetFormula, "formula translation must be available");
+
+  const references = [
+    { formula: "[Other.xlsx]工作表1!A3", target: "工作表1" },
+    { formula: "'[Other.xlsx]工作表 1'!A3", target: "工作表 1" },
+    { formula: "Sheet1:Sheet3!A3", target: "Sheet3" },
+    { formula: "'Sheet 1':'Sheet 3'!A3", target: "Sheet 3" },
+  ];
+  references.forEach(({ formula, target }) => {
+    assert.equal(
+      workbookModule.translateSpreadsheetFormula(formula, "row", 3, target, target),
+      formula,
+    );
+  });
+});
+
+test("translates whole-row ranges for the target sheet only", () => {
+  assert.ok(workbookModule?.translateSpreadsheetFormula, "formula translation must be available");
+
+  assert.equal(
+    workbookModule.translateSpreadsheetFormula(
+      'SUM(3:5,2:5,$3:$5,"3:5",Table1[3:5],工作表2!3:5,工作表1!3:5)',
+      "row",
+      3,
+      "工作表1",
+      "工作表1",
+    ),
+    'SUM(4:6,2:6,$4:$6,"3:5",Table1[3:5],工作表2!3:5,工作表1!4:6)',
+  );
+});
+
+test("translates whole-column ranges for the target sheet only", () => {
+  assert.ok(workbookModule?.translateSpreadsheetFormula, "formula translation must be available");
+
+  assert.equal(
+    workbookModule.translateSpreadsheetFormula(
+      'SUM(C:E,B:E,$C:$E,"C:E",Table1[C:E],工作表2!C:E,工作表1!C:E)',
+      "column",
+      3,
+      "工作表1",
+      "工作表1",
+    ),
+    'SUM(D:F,B:F,$D:$F,"C:E",Table1[C:E],工作表2!C:E,工作表1!D:F)',
+  );
+});
+
 test("formatted row insertion translates workbook formulas and shared masters through write/read", async () => {
   assert.ok(workbookModule, "spreadsheet workbook mutations must be available");
 
@@ -169,6 +237,25 @@ test("formatted column insertion translates stationary, moved, and cross-sheet f
     "D3",
   );
   assert.equal(reloaded.getWorksheet("Calc")?.getCell("A1").formula, "'O''Brien'!D1");
+});
+
+test("formatted insertion translates a merged master formula exactly once", () => {
+  assert.ok(workbookModule, "spreadsheet workbook mutations must be available");
+
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Merged Formula");
+  worksheet.getCell("A1").value = { formula: "SUM(A3:A3)", result: 3 };
+  worksheet.mergeCells("A1:B1");
+  worksheet.getCell("A3").value = 3;
+
+  workbookModule.insertFormattedWorksheet(
+    worksheet,
+    { anchor: { row: 1, column: 1 }, focus: { row: 1, column: 1 } },
+    "row",
+    { rows: 4, columns: 2 },
+  );
+
+  assert.deepEqual(worksheet.getCell("A1").value, { formula: "SUM(A4:A4)", result: 3 });
 });
 
 test("legacy row insertion translates all workbook formulas through write/read", () => {
@@ -479,6 +566,97 @@ test("legacy insertion restores every original sheet key after a partial mutatio
   );
 
   assert.deepEqual(worksheet, before);
+});
+
+test("formatted insertion rolls back every worksheet after cross-sheet formula translation fails", () => {
+  assert.ok(workbookModule, "spreadsheet workbook mutations must be available");
+
+  const workbook = new ExcelJS.Workbook();
+  const target = workbook.addWorksheet("Target");
+  const calc = workbook.addWorksheet("Calc");
+  const failing = workbook.addWorksheet("Failing");
+  target.getCell("A1").value = "above";
+  target.getCell("A3").value = 3;
+  calc.getCell("A1").value = { formula: "'Target'!A3", result: 3 };
+  calc.getCell("C1").value = "merged";
+  calc.mergeCells("C1:D1");
+  calc.getCell("D1").border = { bottom: { style: "thick", color: { argb: "FF0000FF" } } };
+  const failingCell = failing.getCell("A1");
+  const failingValue = { formula: "'Target'!A3", result: 3 };
+  failingCell.value = failingValue;
+  Object.defineProperty(failingCell, "value", {
+    configurable: true,
+    get: () => failingValue,
+    set: () => {
+      assert.equal(calc.getCell("A1").formula, "'Target'!A4");
+      throw new Error("forced cross-sheet formatted failure");
+    },
+  });
+  const before = new Map(workbook.worksheets.map((worksheet) => (
+    [worksheet.name, JSON.parse(JSON.stringify(worksheet.model))]
+  )));
+
+  assert.throws(
+    () => workbookModule.insertFormattedWorksheet(
+      target,
+      { anchor: { row: 1, column: 1 }, focus: { row: 1, column: 1 } },
+      "row",
+      { rows: 4, columns: 2 },
+    ),
+    /forced cross-sheet formatted failure/,
+  );
+
+  workbook.worksheets.forEach((worksheet) => {
+    assert.deepEqual(JSON.parse(JSON.stringify(worksheet.model)), before.get(worksheet.name));
+  });
+  assert.equal(calc.getCell("A1").formula, "'Target'!A3");
+  assert.equal(calc.getCell("D1").border.bottom?.style, "thick");
+});
+
+test("legacy insertion rolls back every provided workbook sheet after formula translation fails", () => {
+  assert.ok(workbookModule, "spreadsheet workbook mutations must be available");
+
+  const target = XLSX.utils.aoa_to_sheet([["above"], ["middle"], [3]]);
+  const calc = XLSX.utils.aoa_to_sheet([[null]]);
+  calc.A1 = { t: "n", f: "'Target'!A3", v: 3 };
+  calc["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
+  const failing = XLSX.utils.aoa_to_sheet([[null]]);
+  const failingCell = { t: "n", f: "'Target'!A3", v: 3 };
+  failing.A1 = failingCell;
+  Object.defineProperty(failingCell, "f", {
+    configurable: true,
+    enumerable: true,
+    get: () => "'Target'!A3",
+    set: () => {
+      assert.equal(calc.A1.f, "'Target'!A4");
+      throw new Error("forced cross-sheet legacy failure");
+    },
+  });
+  const workbook = {
+    SheetNames: ["Target", "Calc", "Failing"],
+    Sheets: { Target: target, Calc: calc, Failing: failing },
+  };
+  const before = Object.fromEntries(workbook.SheetNames.map((name) => (
+    [name, structuredClone(workbook.Sheets[name as keyof typeof workbook.Sheets])]
+  )));
+
+  assert.throws(
+    () => workbookModule.insertLegacyWorksheet(
+      XLSX,
+      target,
+      { anchor: { row: 1, column: 1 }, focus: { row: 1, column: 1 } },
+      "row",
+      { rows: 4, columns: 2 },
+      workbook,
+      "Target",
+    ),
+    /forced cross-sheet legacy failure/,
+  );
+
+  workbook.SheetNames.forEach((name) => {
+    assert.deepEqual(workbook.Sheets[name as keyof typeof workbook.Sheets], before[name]);
+  });
+  assert.equal(calc.A1.f, "'Target'!A3");
 });
 
 test("formatted insertion shifts styled merges while copying only adjacent styles into blank cells", () => {
