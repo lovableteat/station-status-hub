@@ -132,3 +132,84 @@ cmd /c npm run test:pcb
 
 - `npm run test:pcb` 未全綠；但失敗集中在本 Task 範圍外的既有測試。
 - `getPcb3DComponentTransform()` 目前將共享 transform 定義在 board plane，元件高度 offset 仍留在 `Pcb3DCanvas.tsx` 內層 group。這樣可保留現有 3D 外觀，同時滿足 2D/3D 投影同步；若後續 brief 想把高度 offset 也納入共享函式，介面需要額外接受 `maxHeight` 或厚度資訊。
+
+## Reviewer follow-up（追加修正）
+
+### 補充修改
+
+- 新增 `getPcbComponentViewState()`，由單一 component、`visibleLayer`、`selectionIds` 產生：
+  - `coordinate`
+  - `rotation`
+  - `layer`
+  - `visible`
+  - `selected`
+- `PcbCanvas.tsx` 與 `Pcb3DCanvas.tsx` 都改用同一份 shared component view state，不再各自維護第二份 component inspection state。
+- `getPcbSelectionIds()` 的正式 API 已收斂為：
+
+```ts
+getPcbSelectionIds(
+  primarySelection: PcbSelection | null,
+  selectedObjects: readonly PcbSelection[],
+): string[]
+```
+
+- 因現有 canvas props 的 `selectedObjects` 仍是 `string[]`，兩個 canvas 內部先依目前 project 內容還原成 `PcbSelection[]` 再餵給 shared helper；未擴大修改 brief 外檔案。
+
+### 追加 TDD
+
+#### RED
+
+命令：
+
+```bash
+node --test tests/pcb-designer/view-sync.test.ts
+```
+
+關鍵輸出：
+
+```text
+SyntaxError: ... viewSync.ts does not provide an export named 'getPcbComponentViewState'
+ℹ pass 0
+ℹ fail 1
+```
+
+判定：符合預期，因為 reviewer 要求的新 shared state helper 尚未導出。
+
+#### GREEN
+
+命令：
+
+```bash
+node --test tests/pcb-designer/view-sync.test.ts
+```
+
+關鍵輸出：
+
+```text
+✔ derives one shared component view state for 2D and 3D consumers
+ℹ pass 6
+ℹ fail 0
+```
+
+### Reviewer 指定 focused tests
+
+命令：
+
+```bash
+node --test tests/pcb-designer/view-sync.test.ts
+node --test tests/pcb-designer/editor-contract.test.ts
+```
+
+結果：
+
+```text
+view-sync.test.ts: pass 6, fail 0
+editor-contract.test.ts: pass 25, fail 0
+```
+
+### 非本任務既有 failures 說明
+
+- 依 reviewer 指示，未修改 `account-remote-sync` 與 `workspace-integration` 對應來源檔。
+- `npm run test:pcb` 的 3 個既有 failure 仍以前一輪結果為準，保留為已知非本任務範圍問題：
+  - `tests/pcb-designer/account-remote-sync.test.ts`
+  - `tests/pcb-designer/workspace-integration.test.ts`（2 項）
