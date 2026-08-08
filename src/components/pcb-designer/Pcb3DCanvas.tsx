@@ -200,6 +200,13 @@ function Scene({
     [selectionIds],
   );
   const boardThickness = 1.6;
+  const boardSurfaceColor = visibleLayer === "all"
+    ? project.board.background
+    : visibleLayer === "top"
+      ? project.board.layerColors.top
+      : visibleLayer === "bottom"
+        ? project.board.layerColors.bottom
+        : project.board.background;
   const sceneBounds = useMemo(() => {
     const height = Math.max(
       12,
@@ -257,7 +264,7 @@ function Scene({
         }}
       >
         <boxGeometry args={[project.board.width, boardThickness, project.board.height]} />
-        <meshStandardMaterial color={safeColor(project.board.background, "#247c67")} roughness={0.58} metalness={0.08} />
+        <meshStandardMaterial color={safeColor(boardSurfaceColor, "#247c67")} roughness={0.58} metalness={0.08} />
         <Edges color="#7de7e8" threshold={20} />
       </mesh>
 
@@ -359,7 +366,13 @@ export function Pcb3DCanvas({
 }) {
   const size = Math.max(workspace.activeProject.board.width, workspace.activeProject.board.height, 40);
   return (
-    <div className="pcb-3d-host" data-testid="pcb-3d-canvas-host">
+    <div
+      className="pcb-3d-host"
+      data-testid="pcb-3d-canvas-host"
+      data-pcb-board-color={workspace.activeProject.board.background}
+      data-pcb-top-color={workspace.activeProject.board.layerColors.top}
+      data-pcb-bottom-color={workspace.activeProject.board.layerColors.bottom}
+    >
       <Canvas
         frameloop="demand"
         dpr={[1, 1.5]}
