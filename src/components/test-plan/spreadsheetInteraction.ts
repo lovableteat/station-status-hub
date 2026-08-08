@@ -23,19 +23,31 @@ export interface SpreadsheetMergeRange {
 }
 
 export type SpreadsheetNumberFormatter = (format: string, value: number) => string;
+export type SpreadsheetScalar = number | Date;
+export type SpreadsheetScalarFormatter = (format: string, value: SpreadsheetScalar) => string;
+
+export function formatSpreadsheetScalar(
+  value: SpreadsheetScalar,
+  numberFormat = "General",
+  formatter?: SpreadsheetScalarFormatter,
+): string {
+  try {
+    const formatted = formatter?.(numberFormat || "General", value);
+    if (formatted !== undefined && formatted !== "") return formatted;
+  } catch {
+    // Fall through to a safe scalar representation.
+  }
+  return value instanceof Date
+    ? value.toLocaleString("zh-TW")
+    : String(Number(value.toPrecision(15)));
+}
 
 export function formatSpreadsheetNumber(
   value: number,
   numberFormat = "General",
   formatter?: SpreadsheetNumberFormatter,
 ): string {
-  try {
-    const formatted = formatter?.(numberFormat || "General", value);
-    if (formatted !== undefined && formatted !== "") return formatted;
-  } catch {
-    // Fall through to a safe General representation.
-  }
-  return String(Number(value.toPrecision(15)));
+  return formatSpreadsheetScalar(value, numberFormat, formatter);
 }
 
 export function encodeSpreadsheetColumn(column: number): string {

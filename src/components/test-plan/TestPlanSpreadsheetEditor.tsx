@@ -40,6 +40,7 @@ import {
   encodeSpreadsheetAddress as encodeAddress,
   encodeSpreadsheetColumn as encodeColumn,
   formatSpreadsheetNumber,
+  formatSpreadsheetScalar,
   getSpreadsheetSelectionLabel,
   getSpreadsheetSelectionSize,
   moveSpreadsheetSelection,
@@ -158,10 +159,11 @@ function valueToText(value: unknown): string {
 
 function readFormattedCellValue(
   cell: ExcelJsCell | undefined,
-  formatter?: (format: string, value: number) => string,
+  formatter?: (format: string, value: number | Date) => string,
 ): string {
   if (!cell) return "";
   const value = isFormulaValue(cell.value) ? cell.value.result : cell.value;
+  if (value instanceof Date) return formatSpreadsheetScalar(value, cell.numFmt, formatter);
   if (typeof value === "number") return formatSpreadsheetNumber(value, cell.numFmt, formatter);
   return cell.text || valueToText(value);
 }
@@ -423,7 +425,7 @@ export function TestPlanSpreadsheetEditor({
 }: TestPlanSpreadsheetEditorProps) {
   const excelJsWorkbookRef = useRef<ExcelJsWorkbook | null>(null);
   const workbookThemeColorsRef = useRef<string[]>(DEFAULT_THEME_COLORS);
-  const spreadsheetNumberFormatterRef = useRef<((format: string, value: number) => string) | undefined>(undefined);
+  const spreadsheetNumberFormatterRef = useRef<((format: string, value: number | Date) => string) | undefined>(undefined);
   const legacyWorkbookRef = useRef<LegacyWorkbook | null>(null);
   const legacyModuleRef = useRef<LegacySpreadsheetModule | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -877,16 +879,31 @@ export function TestPlanSpreadsheetEditor({
 
   const extendSheet = (axis: "row" | "column") => {
     if (!canEdit) return;
-    const insertedSelection = formattedWorksheet
-      ? insertFormattedWorksheet(formattedWorksheet, selection, axis, bounds)
-      : legacyWorksheet && legacyModuleRef.current
-        ? insertLegacyWorksheet(legacyModuleRef.current, legacyWorksheet, selection, axis, bounds)
-        : null;
-    if (!insertedSelection) return;
-    structureDirtyRef.current = true;
-    setDirty(true);
-    setRevision((current) => current + 1);
-    revealSelection({ anchor: insertedSelection, focus: insertedSelection });
+    try {
+      const insertedSelection = formattedWorksheet
+        ? insertFormattedWorksheet(formattedWorksheet, selection, axis, bounds)
+        : legacyWorksheet && legacyModuleRef.current
+          ? insertLegacyWorksheet(
+            legacyModuleRef.current,
+            legacyWorksheet,
+            selection,
+            axis,
+            bounds,
+            legacyWorkbookRef.current ?? undefined,
+            sheetName,
+          )
+          : null;
+      if (!insertedSelection) return;
+      structureDirtyRef.current = true;
+      setDirty(true);
+      setRevision((current) => current + 1);
+      revealSelection({ anchor: insertedSelection, focus: insertedSelection });
+      setError("");
+    } catch (caught) {
+      const operation = axis === "row" ? "列" : "欄";
+      const detail = caught instanceof Error ? caught.message : "工作表已還原。";
+      setError(`無法插入${operation}：${detail}`);
+    }
   };
 
   const requestClose = () => {

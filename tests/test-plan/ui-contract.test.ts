@@ -84,8 +84,11 @@ test("edits uploaded spreadsheets in place without forcing a download workflow",
   assert.match(editor, /const \[ExcelJS, spreadsheet\] = await Promise\.all\(\[/);
   assert.match(editor, /spreadsheet\.SSF\.format/);
   assert.match(editor, /formatSpreadsheetNumber/);
+  assert.match(editor, /formatSpreadsheetScalar/);
+  assert.match(editor, /value instanceof Date/);
   assert.match(editor, /insertFormattedWorksheet/);
   assert.match(editor, /insertLegacyWorksheet/);
+  assert.match(editor, /legacyWorkbookRef\.current \?\? undefined,\s*sheetName/);
   assert.match(workbook, /getSpreadsheetInsertionIndex/);
   assert.match(editor, /向下插入列/);
   assert.match(editor, /向右插入欄/);
@@ -99,6 +102,21 @@ test("edits uploaded spreadsheets in place without forcing a download workflow",
   assert.match(styles, /background: transparent !important/);
   assert.match(styles, /box-shadow: none !important/);
   assert.match(styles, /\.test-plan-folder-tree-toggle\.is-expanded/);
+});
+
+test("surfaces insertion failures without marking the workbook dirty", async () => {
+  const editor = await source("src/components/test-plan/TestPlanSpreadsheetEditor.tsx");
+  const extendSheet = editor.slice(
+    editor.indexOf('const extendSheet = (axis: "row" | "column") =>'),
+    editor.indexOf("const requestClose = () =>"),
+  );
+
+  assert.match(extendSheet, /try\s*\{/);
+  assert.match(extendSheet, /catch \(caught\)/);
+  assert.match(extendSheet, /setError\(`/);
+  const catchIndex = extendSheet.indexOf("catch (caught)");
+  assert.ok(extendSheet.indexOf("setDirty(true)") < catchIndex);
+  assert.doesNotMatch(extendSheet.slice(catchIndex), /setDirty\(true\)|structureDirtyRef\.current = true/);
 });
 
 test("renders Excel-colored worksheet tabs below the spreadsheet grid", async () => {
