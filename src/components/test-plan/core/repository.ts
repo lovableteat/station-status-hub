@@ -44,6 +44,7 @@ export interface TestPlanDataAdapter {
     file: File,
     onProgress?: (uploadedBytes: number, totalBytes: number) => void,
   ): Promise<void>;
+  replaceObject(path: string, file: File): Promise<void>;
   createFile(input: {
     spaceId: string;
     folderId: string | null;
@@ -60,7 +61,13 @@ export interface TestPlanDataAdapter {
     patch: Partial<
       Pick<
         TestPlanFileRecord,
-        "originalName" | "folderId" | "description" | "extension" | "category"
+        | "originalName"
+        | "folderId"
+        | "description"
+        | "extension"
+        | "category"
+        | "mimeType"
+        | "fileSize"
       >
     >,
   ): Promise<TestPlanFileRecord>;
@@ -273,6 +280,18 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
     },
     downloadFile(file: TestPlanFileRecord) {
       return adapter.downloadObject(file.storagePath);
+    },
+    async replaceFileContents(file: TestPlanFileRecord, contents: Blob) {
+      const mimeType = contents.type || file.mimeType || "application/octet-stream";
+      const replacement = new File([contents], file.originalName, {
+        type: mimeType,
+        lastModified: Date.now(),
+      });
+      await adapter.replaceObject(file.storagePath, replacement);
+      return adapter.updateFile(file.id, {
+        mimeType,
+        fileSize: replacement.size,
+      });
     },
     async deleteFile(ownerId: string, file: TestPlanFileRecord) {
       await adapter.deleteFile(file.id);
