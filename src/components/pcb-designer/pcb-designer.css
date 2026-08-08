@@ -1308,7 +1308,8 @@
   padding: 10px var(--pcb-rail-gutter);
 }
 
-.pcb-search-input {
+.pcb-search-input,
+.pcb-status-filter {
   width: 100%;
   padding-left: 32px;
 }

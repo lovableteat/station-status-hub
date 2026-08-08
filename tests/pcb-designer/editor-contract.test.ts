@@ -78,6 +78,12 @@ test("keeps the left rail sections on one horizontal alignment rail", () => {
   assert.match(editorCssSource, /\.pcb-rail-list[\s\S]{0,220}padding:\s*6px\s+var\(--pcb-rail-gutter\)/);
 });
 
+test("aligns project search and status filter text", () => {
+  assert.match(railSource, /<Filter className="pointer-events-none absolute left-2\.5 top-2\.5/);
+  assert.match(railSource, /className="pcb-control pcb-status-filter w-full"/);
+  assert.match(editorCssSource, /\.pcb-search-input,\s*\.pcb-status-filter\s*\{[\s\S]{0,120}padding-left:\s*32px/);
+});
+
 test("placement actions reject document-locked mutations before reporting success", () => {
   assert.match(
     combinedHookSource,
