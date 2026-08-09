@@ -95,9 +95,9 @@ test("admin desktop layout follows its content without leaving forced empty regi
     read("../src/components/admin/admin-panel.css"),
   ]);
 
-  assert.match(styles, /\.admin-shell\s*\{[^}]*min-height:\s*0;[^}]*align-items:\s*flex-start;/s);
-  assert.match(styles, /\.admin-sidebar\s*\{[^}]*height:\s*auto;[^}]*max-height:/s);
-  assert.match(styles, /\.admin-sidebar nav\s*\{[^}]*flex:\s*0 1 auto;/s);
+  assert.match(styles, /\.admin-shell\s*\{[^}]*min-height:\s*calc\(100dvh - 110px\);[^}]*align-items:\s*stretch;/s);
+  assert.match(styles, /\.admin-sidebar\s*\{[^}]*min-height:\s*calc\(100dvh - 110px\);[^}]*max-height:\s*none;/s);
+  assert.match(styles, /\.admin-sidebar nav\s*\{[^}]*flex:\s*1 1 auto;/s);
   assert.match(styles, /@media \(max-width: 900px\)[\s\S]*\.admin-sidebar nav\s*\{[^}]*flex:\s*1;/);
 
   assert.match(panel, /className="flex flex-col gap-3"/);
