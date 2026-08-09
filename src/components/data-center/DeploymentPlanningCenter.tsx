@@ -704,9 +704,9 @@ function SceneNavigator({
 
   return (
     <div data-testid="data-center-control-panel" className="flex h-full min-h-0 flex-col bg-[#081c2d]">
-      <div className="flex min-h-[82px] shrink-0 items-center justify-between border-b border-[#163653] px-4 py-4">
+      <div className="flex min-h-[62px] shrink-0 items-center justify-between border-b border-[#163653] px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-blue-300/30 bg-blue-400/15 text-blue-100">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-400/15 text-blue-100">
             <Layers3 className="h-5 w-5" />
           </div>
           <div className="min-w-0">
@@ -724,10 +724,10 @@ function SceneNavigator({
         ) : null}
       </div>
 
-      <div className="shrink-0 space-y-3 border-b border-[#163653] px-4 py-4">
+      <div data-testid="data-center-control-strip" className="shrink-0 space-y-2 border-b border-[#163653] px-3 py-2">
         <section
           data-testid="data-center-scene-summary"
-          className="overflow-hidden rounded-[20px] border border-sky-300/20 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.20),transparent_44%),linear-gradient(135deg,rgba(14,165,233,0.12),rgba(15,23,42,0.68))] p-3.5 shadow-[0_18px_42px_-34px_rgba(56,189,248,0.95)]"
+          className="overflow-hidden rounded-xl border border-[#214669] bg-[#10283d] p-2.5"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -744,33 +744,33 @@ function SceneNavigator({
             </Badge>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-            <div className="rounded-xl border border-white/10 bg-[#071421]/70 p-2">
+          <div className="mt-2 grid grid-cols-4 gap-1.5 text-[10px]">
+            <div className="min-w-0 rounded-lg border border-white/10 bg-[#071421]/70 p-1.5">
               <div className="text-slate-400">目前視圖</div>
-              <div className="mt-1 flex items-center gap-1.5 font-black text-sky-100">
+              <div className="mt-0.5 flex min-w-0 items-center gap-1 font-black text-sky-100">
                 <ActiveLayerIcon className="h-3.5 w-3.5" />
                 {activeLayerOption.label}
               </div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-[#071421]/70 p-2">
+            <div className="min-w-0 rounded-lg border border-white/10 bg-[#071421]/70 p-1.5">
               <div className="text-slate-400">機櫃狀態</div>
-              <div className="mt-1 font-black text-emerald-100">
+              <div className="mt-0.5 truncate font-black text-emerald-100">
                 {healthyRackCount}/{racks.length} 正常
               </div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-[#071421]/70 p-2">
+            <div className="min-w-0 rounded-lg border border-white/10 bg-[#071421]/70 p-1.5">
               <div className="text-slate-400">專案站點</div>
-              <div className="mt-1 font-black text-white">{projectStats?.siteCount ?? sites.length}</div>
+              <div className="mt-0.5 font-black text-white">{projectStats?.siteCount ?? sites.length}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-[#071421]/70 p-2">
+            <div className="min-w-0 rounded-lg border border-white/10 bg-[#071421]/70 p-1.5">
               <div className="text-slate-400">電源饋線</div>
-              <div className="mt-1 font-black text-amber-100">{projectStats?.powerFeedCount ?? 0}</div>
+              <div className="mt-0.5 font-black text-amber-100">{projectStats?.powerFeedCount ?? 0}</div>
             </div>
           </div>
         </section>
 
-        <div data-section-tone="project-category" className="workspace-dialog-section workspace-dialog-section--violet rounded-[18px] p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
+        <div data-section-tone="project-category" className="rounded-xl border border-[#214669] bg-[#0c2235] p-2.5">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
             <div>
               <div className="text-[11px] font-black tracking-[0.08em] text-cyan-100/75">專案與分類</div>
               <div className="mt-0.5 flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
@@ -784,13 +784,13 @@ function SceneNavigator({
               size="sm"
               onClick={onManageProjects}
               title={canEditProjects ? "管理專案分類與共享設定" : "查看專案分類"}
-              className="h-8 border-cyan-300/20 bg-cyan-400/8 px-2.5 text-[11px] font-bold text-cyan-50 hover:bg-cyan-400/15"
+              className="h-7 border-cyan-300/20 bg-cyan-400/8 px-2 text-[10px] font-bold text-cyan-50 hover:bg-cyan-400/15"
             >
               <Settings2 className="mr-1.5 h-3.5 w-3.5" /> 專案與分類
             </Button>
           </div>
           <Select value={selectedProjectId} onValueChange={onProjectChange} disabled={projects.length === 0}>
-            <SelectTrigger className="h-11 rounded-xl border-[#214669] bg-[#081c2d] px-3 text-sm font-semibold text-slate-100">
+            <SelectTrigger className="h-9 rounded-lg border-[#214669] bg-[#081c2d] px-2.5 text-xs font-semibold text-slate-100">
               <SelectValue placeholder="選擇 Data Center 專案" />
             </SelectTrigger>
             <SelectContent className="border-[#214669] bg-[#081c2d] text-slate-100">
@@ -803,10 +803,10 @@ function SceneNavigator({
           </Select>
         </div>
 
-        <label data-section-tone="site-selector" className="workspace-dialog-section workspace-dialog-section--success block rounded-[18px] p-3">
+        <label data-section-tone="site-selector" className="block rounded-xl border border-emerald-300/20 bg-emerald-400/[0.04] p-2.5">
           <span className="mb-2 block text-[11px] font-black tracking-[0.08em] text-blue-200/70">目前站點</span>
           <Select value={selectedSiteId} onValueChange={onSiteChange}>
-            <SelectTrigger className="h-11 rounded-xl border-emerald-300/25 bg-emerald-400/[0.07] px-3 text-sm font-semibold text-slate-100">
+          <SelectTrigger className="h-9 rounded-lg border-emerald-300/25 bg-emerald-400/[0.07] px-2.5 text-xs font-semibold text-slate-100">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="border-[#214669] bg-[#081c2d] text-slate-100">
@@ -819,8 +819,8 @@ function SceneNavigator({
           </Select>
         </label>
 
-        <section data-testid="data-center-layer-control" data-section-tone="view-layers" className="workspace-dialog-section workspace-dialog-section--info rounded-[18px] p-3">
-          <div className="mb-2 flex items-center justify-between">
+        <section data-testid="data-center-layer-control" data-section-tone="view-layers" className="rounded-xl border border-[#214669] bg-[#0c2235] p-2.5">
+          <div className="mb-1.5 flex items-center justify-between">
             <div>
               <div className="text-[11px] font-black tracking-[0.08em] text-blue-100/75">視圖模式</div>
               <p className="mt-0.5 text-[10px] text-slate-400">在同一處切換狀態、電力、網路與冷卻圖層。</p>
@@ -829,7 +829,7 @@ function SceneNavigator({
               {activeLayerOption.description}
             </Badge>
           </div>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
             {LAYER_OPTIONS.map((layer) => {
               const LayerIcon = layer.icon;
               const active = activeLayer === layer.id;
@@ -839,7 +839,7 @@ function SceneNavigator({
                   type="button"
                   onClick={() => onLayerChange(layer.id)}
                   className={cn(
-                    "group flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-all duration-200",
+                    "group flex min-w-max shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left transition-all duration-200",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/65",
                     active
                       ? "border-sky-300/45 bg-sky-400/16 text-white shadow-[0_12px_32px_-26px_rgba(56,189,248,0.95)]"
@@ -848,7 +848,7 @@ function SceneNavigator({
                   style={active ? { borderColor: `${layer.color}88`, backgroundColor: `${layer.color}1f` } : undefined}
                 >
                   <span
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border"
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-md border"
                     style={{
                       borderColor: active ? `${layer.color}66` : "rgba(255,255,255,0.10)",
                       backgroundColor: active ? `${layer.color}22` : "rgba(255,255,255,0.04)",
@@ -858,8 +858,8 @@ function SceneNavigator({
                     <LayerIcon className="h-3.5 w-3.5" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-[11px] font-black">{layer.label}</span>
-                    <span className="block truncate text-[9px] text-slate-400">{layer.description}</span>
+                    <span className="block truncate text-[10px] font-black">{layer.label}</span>
+                    <span className="hidden truncate text-[9px] text-slate-400">{layer.description}</span>
                   </span>
                 </button>
               );
@@ -867,22 +867,22 @@ function SceneNavigator({
           </div>
         </section>
 
-        <label className="relative block">
+        <label data-testid="data-center-rack-search" className="relative block">
           <span className="sr-only">搜尋機櫃</span>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200/50" />
           <Input
             value={searchTerm}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="搜尋機櫃或廠牌"
-            className="h-11 rounded-xl border-[#214669] bg-[#10283d] pl-10 text-sm text-white placeholder:text-slate-400"
+            className="h-9 rounded-lg border-[#214669] bg-[#10283d] pl-9 text-xs text-white placeholder:text-slate-400"
           />
         </label>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-4 px-4 py-4">
-          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
-            <div className="mb-3 flex items-center justify-between px-1">
+        <div className="space-y-2 px-3 py-2">
+          <section className="rounded-xl border border-[#1d4262] bg-[#0c2235] p-2.5">
+            <div className="mb-2 flex items-center justify-between px-1">
               <span className="text-xs font-black text-white">機櫃清單</span>
               <Badge className="border-0 bg-blue-400/10 text-[10px] font-bold text-blue-200 shadow-none">
                 {filteredRacks.length} / {racks.length}
@@ -899,7 +899,7 @@ function SceneNavigator({
                     type="button"
                     onClick={() => onRackSelect(rack.id)}
                     className={cn(
-                      "w-full cursor-pointer rounded-xl border px-3 py-3 text-left transition-all duration-200",
+                      "w-full cursor-pointer rounded-lg border px-2.5 py-2 text-left transition-all duration-200",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
                       selected
                         ? "border-blue-300/45 bg-blue-500/18 shadow-[0_14px_34px_-24px_rgba(59,130,246,0.95)]"
@@ -907,12 +907,12 @@ function SceneNavigator({
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[15px] font-bold text-slate-50">{rack.cabinet}</span>
-                      <span className={cn("rounded-full border px-2 py-1 text-[10px] font-bold", getHealthTone(health))}>
+                      <span className="text-[13px] font-bold text-slate-50">{rack.cabinet}</span>
+                      <span className={cn("rounded-full border px-1.5 py-0.5 text-[9px] font-bold", getHealthTone(health))}>
                         {HEALTH_LABELS[health]}
                       </span>
                     </div>
-                    <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-300">
+                    <div className="mt-1 flex items-center gap-1.5 text-[10px] text-slate-300">
                       <span>{rack.row} Row</span>
                       <span className="h-1 w-1 rounded-full bg-slate-600" />
                       <span>{rack.l10Count}× L10</span>
@@ -4292,7 +4292,7 @@ export function DeploymentPlanningCenter() {
         )}
 
         <Dialog open={mobileLeftOpen} onOpenChange={setMobileLeftOpen}>
-          <DialogContent className="h-[min(88dvh,780px)] w-[min(94vw,720px)] max-w-none gap-0 overflow-hidden border border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[720px]">
+          <DialogContent className="h-[min(76dvh,640px)] w-[min(92vw,680px)] max-w-none gap-0 overflow-hidden border border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[680px]">
             <DialogHeader className="sr-only">
               <DialogTitle>場景總覽</DialogTitle>
               <DialogDescription>在同一個控制台選擇專案分類、廠區、圖層與機櫃。</DialogDescription>
