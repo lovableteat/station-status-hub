@@ -11,12 +11,15 @@ const workspaceSource = await readFile(
   "utf8",
 );
 
-test("facility wiring planning uses an embedded visual preview", () => {
-  assert.match(plannerSource, /embedded\?: boolean/);
-  assert.match(plannerSource, /data-testid=\{embedded \? "facility-wiring-preview"/);
-  assert.match(plannerSource, /拖曳通道調整位置/);
-  assert.match(workspaceSource, /data-testid="facility-wiring-preview-shell"/);
-  assert.match(workspaceSource, /embedded/);
+test("facility settings delegates visual placement to the main 2D planner", () => {
+  assert.doesNotMatch(plannerSource, /embedded\?: boolean/);
+  assert.doesNotMatch(workspaceSource, /data-testid="facility-wiring-preview-shell"/);
+  assert.match(workspaceSource, /廠房與佈線設定/);
+  assert.match(workspaceSource, /前往 2D 規劃/);
+  assert.match(
+    workspaceSource,
+    /setFacilityPlannerOpen\(false\)[\s\S]*setWorkspaceMode\("2d"\)/,
+  );
 });
 
 test("the facility dialog keeps semantic controls while hiding raw aisle coordinates", () => {
@@ -24,6 +27,6 @@ test("the facility dialog keeps semantic controls while hiding raw aisle coordin
   assert.match(plannerSource, /距上方/);
   assert.match(plannerSource, /通道長度/);
   assert.match(plannerSource, /通道寬度/);
-  assert.match(workspaceSource, /在左側預覽拖曳饋線位置/);
+  assert.match(workspaceSource, /位置請到 2D 規劃直接拖曳/);
   assert.match(plannerSource, /進階座標/);
 });

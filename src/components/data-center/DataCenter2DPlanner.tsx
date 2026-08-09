@@ -87,7 +87,6 @@ interface DataCenter2DPlannerProps {
   onOpenModels: () => void;
   onOpenFacilitySettings: () => void;
   onView3D: () => void;
-  embedded?: boolean;
 }
 
 const VIEW_WIDTH = 1200;
@@ -172,7 +171,6 @@ export function DataCenter2DPlanner({
   onOpenModels,
   onOpenFacilitySettings,
   onView3D,
-  embedded = false,
 }: DataCenter2DPlannerProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
@@ -355,7 +353,6 @@ export function DataCenter2DPlanner({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#07111c]">
-      {embedded ? null : (
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-cyan-300/15 bg-[#0a1a29] px-3 py-3 sm:px-5">
         <div className="mr-auto min-w-0">
           <div className="flex items-center gap-2 text-sm font-black text-white">
@@ -389,17 +386,15 @@ export function DataCenter2DPlanner({
           <Eye className="mr-2 h-4 w-4" /> 查看 3D
         </Button>
       </div>
-      )}
 
       <div
-        data-testid={embedded ? "facility-wiring-preview" : undefined}
         className="relative min-h-0 flex-1 overflow-hidden bg-[radial-gradient(circle_at_center,#0c2334_0%,#050c14_68%)] p-2 sm:p-4"
       >
         <svg
           ref={svgRef}
           data-testid="data-center-2d-plan"
           role="application"
-          aria-label={embedded ? "廠房與佈線可視化配置" : "Data Center 2D 廠房配置圖"}
+          aria-label="Data Center 2D 廠房配置圖"
           viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
           className={cn("h-full w-full select-none", canEdit ? "cursor-default" : "cursor-not-allowed")}
           style={{ touchAction: "none" }}
@@ -715,12 +710,6 @@ export function DataCenter2DPlanner({
           </g>
         </svg>
 
-        {embedded ? (
-          <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-lg border border-cyan-300/20 bg-[#071522]/92 px-3 py-2 text-[11px] font-bold text-cyan-100 shadow-lg">
-            拖曳通道調整位置・拖曳端點調整尺寸・點選項目查看設定
-          </div>
-        ) : null}
-
         <div className="absolute right-4 top-4 z-20 flex items-center gap-1 rounded-xl border border-cyan-300/20 bg-[#071522]/94 p-1.5 shadow-2xl backdrop-blur-xl">
           <button
             type="button"
@@ -751,7 +740,7 @@ export function DataCenter2DPlanner({
           </button>
         </div>
 
-        {!embedded && overflowKeys.size > 0 ? (
+        {overflowKeys.size > 0 ? (
           <button
             type="button"
             onClick={onOpenFacilitySettings}

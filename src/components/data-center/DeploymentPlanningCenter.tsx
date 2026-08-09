@@ -4574,49 +4574,35 @@ export function DeploymentPlanningCenter() {
         </Dialog>
 
         <Dialog open={facilityPlannerOpen} onOpenChange={setFacilityPlannerOpen}>
-          <DialogContent data-dialog-tone="facility-planner" className="flex h-[min(90dvh,880px)] w-[min(96vw,980px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/25 p-0 text-slate-100 sm:max-w-[980px]">
+          <DialogContent data-dialog-tone="facility-planner" className="flex h-[min(88dvh,800px)] w-[min(94vw,760px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/25 p-0 text-slate-100 sm:max-w-[760px]">
             <DialogHeader className="shrink-0 border-b border-white/10 px-5 py-4 pr-14 text-left">
-              <DialogTitle className="flex items-center gap-2 text-white">
-                <PencilRuler className="h-5 w-5 text-cyan-300" />
-                廠房與佈線規劃
-              </DialogTitle>
-              <DialogDescription className="text-slate-400">
-                設定廠房邊界、冷熱通道與 PDU 饋線，變更會自動保存在目前廠區。
-              </DialogDescription>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <DialogTitle className="flex items-center gap-2 text-white">
+                    <PencilRuler className="h-5 w-5 text-cyan-300" />
+                    廠房與佈線設定
+                  </DialogTitle>
+                  <DialogDescription className="mt-1.5 max-w-[52ch] text-slate-400">
+                    管理廠房尺寸、冷熱通道與 PDU；位置拖曳統一在 2D 規劃操作。
+                  </DialogDescription>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    setFacilityPlannerOpen(false);
+                    setWorkspaceMode("2d");
+                  }}
+                  className="h-9 shrink-0 bg-cyan-300 px-3 text-xs font-black text-[#04131f] hover:bg-cyan-200"
+                >
+                  <Map className="mr-1.5 h-4 w-4" />
+                  前往 2D 規劃
+                </Button>
+              </div>
             </DialogHeader>
 
-            <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-              <div data-testid="facility-wiring-preview-shell" className="min-h-[320px] border-b border-white/10 lg:min-h-0 lg:border-b-0 lg:border-r">
-                <DataCenter2DPlanner
-                  embedded
-                  racks={selectedSite.racks}
-                  models={models}
-                  selectedRackId={selectedRackId}
-                  facility={selectedFacility}
-                  overflowKeys={overflowKeys}
-                  canEdit={canEdit}
-                  onSelectRack={handleRackSelect}
-                  onMoveRack={placeRackOnPlan}
-                  onRotateRack={rotateRackOnPlan}
-                  onMoveAisle={(aisleId, x, z) => updateAisle(aisleId, (aisle) => ({ ...aisle, x, z }))}
-                  onDeleteAisle={removeAisle}
-                  onUpdateAisle={(aisleId, patch) => updateAisle(aisleId, (aisle) => ({ ...aisle, ...patch }))}
-                  onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
-                  onAddRack={addRackFromCurrentModel}
-                  onDeleteRack={removeRackFromPlan}
-                  onOpenAisleCreation={openAisleCreation}
-                  onAddPowerFeed={addPowerFeed}
-                  onOpenModels={() => openModelLibrary("rack")}
-                  onOpenFacilitySettings={() => undefined}
-                  onView3D={() => {
-                    setFacilityPlannerOpen(false);
-                    setWorkspaceMode("3d");
-                  }}
-                />
-              </div>
-
-              <ScrollArea className="min-h-0">
-              <div className="space-y-4 px-4 py-4 sm:px-5">
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="mx-auto max-w-[720px] space-y-4 px-4 py-4 sm:px-5">
                 <section data-section-tone="facility-size" className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
@@ -4810,7 +4796,7 @@ export function DeploymentPlanningCenter() {
                     </Button>
                   </div>
                   <div className="mb-3 rounded-xl border border-dashed border-violet-200/20 bg-black/15 px-3 py-2.5 text-[11px] leading-5 text-slate-300">
-                    先在左側預覽點選通道，再拖曳通道本體或端點調整；右下角會顯示距離、長度與寬度。
+                    在這裡管理通道名稱與方向；位置和尺寸請到 2D 規劃直接拖曳調整。
                   </div>
                   <div className="space-y-2">
                     {selectedFacility.aisles.map((aisle) => {
@@ -4859,7 +4845,7 @@ export function DeploymentPlanningCenter() {
                             <span>寬 {aisle.depth.toFixed(2)} m</span>
                             <span className="text-slate-400">距左 {friendlyPosition.left.toFixed(2)} m · 距上 {friendlyPosition.top.toFixed(2)} m</span>
                           </div>
-                          <div className="mt-2 text-[10px] text-slate-500">請在左側預覽點選此通道進行精細調整</div>
+                          <div className="mt-2 text-[10px] text-slate-500">位置與尺寸請到 2D 規劃直接拖曳調整</div>
                         </div>
                       );
                     })}
@@ -4900,15 +4886,14 @@ export function DeploymentPlanningCenter() {
                           </div>
                         </div>
                         <div className="rounded-lg border border-dashed border-amber-200/15 bg-amber-400/[0.05] px-2.5 py-2 text-[10px] text-slate-400">
-                          在左側預覽拖曳饋線位置，啟用後會連到所有機櫃。
+                          位置請到 2D 規劃直接拖曳；啟用後會連到所有機櫃。
                         </div>
                       </div>
                     ))}
                   </div>
                 </section>
               </div>
-              </ScrollArea>
-            </div>
+            </ScrollArea>
           </DialogContent>
         </Dialog>
 
