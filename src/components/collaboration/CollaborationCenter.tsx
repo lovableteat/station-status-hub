@@ -647,7 +647,7 @@ export function CollaborationCenter() {
               </div>
             </section>
           ) : (
-            <Button type="button" aria-label="開啟浮動訊息" onClick={() => setMessageFloatOpen(true)} className="h-12 rounded-full border border-cyan-200/25 bg-cyan-300 px-5 font-bold text-[#06111f] shadow-[0_18px_45px_-18px_rgba(34,211,238,0.9)] hover:bg-cyan-200">
+            <Button type="button" aria-label="開啟浮動訊息" onClick={() => setMessageFloatOpen(true)} className="h-10 rounded-lg border border-cyan-200/25 bg-cyan-300 px-4 font-bold text-[#06111f] shadow-[0_18px_45px_-18px_rgba(34,211,238,0.9)] hover:bg-cyan-200">
               <MessageSquareText className="mr-2 h-5 w-5" />訊息
             </Button>
           )}
