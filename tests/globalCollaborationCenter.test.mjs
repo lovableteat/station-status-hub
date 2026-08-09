@@ -24,7 +24,17 @@ test("the workspace uses one collaboration center for notifications, presence, a
   assert.match(centerSource, /<DirectMessagesPanel/);
   assert.match(centerSource, /data-floating-direct-messages/);
   assert.match(centerSource, /開啟浮動訊息/);
-  assert.match(centerSource, /h-10 rounded-lg border border-cyan-200\/25 bg-cyan-300/);
+  assert.match(centerSource, /function DirectMessageLauncher/);
+  assert.match(centerSource, /useDirectMessageThreads/);
+  assert.match(centerSource, /h-16 w-\[min\(320px,calc\(100vw-2rem\)\)\]/);
+  assert.match(centerSource, /latestThread\?\.lastMessageBody/);
+  assert.match(centerSource, /尚無訊息，點擊開始對話/);
+  assert.match(centerSource, /訊息服務目前無法連線/);
+  assert.match(centerSource, /unreadCount > 0/);
+  assert.match(centerSource, /共 \$\{unreadCount\} 則未讀/);
+  assert.match(centerSource, /aria-live="polite"/);
+  assert.match(centerSource, /<DirectMessageLauncher onOpen=/);
+  assert.match(centerSource, /open && activeTab === "messages"/);
   assert.doesNotMatch(centerSource, /開啟浮動訊息[\s\S]{0,260}rounded-full/);
   assert.match(centerSource, /open-global-collaboration/);
   assert.match(centerSource, /data-collaboration-content-frame="true"/);
