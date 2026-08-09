@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useUser } from "@/components/auth/UserContext";
+import { useDirectMessageThreads } from "@/hooks/useDirectMessages";
 import { useUserPresence, type OnlineUser } from "@/hooks/useUserPresence";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -95,6 +96,50 @@ function formatTime(value: string) {
   if (minutes < 60) return `${minutes} 分鐘前`;
   if (minutes < 1_440) return `${Math.floor(minutes / 60)} 小時前`;
   return date.toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function DirectMessageLauncher({ onOpen }: { onOpen: () => void }) {
+  const { threads, unreadCount, loading, error } = useDirectMessageThreads();
+  const latestThread = threads[0] ?? null;
+  const preview = loading
+    ? "正在載入最新訊息…"
+    : error
+      ? "訊息服務目前無法連線"
+    : latestThread?.lastMessageBody || "尚無訊息，點擊開始對話";
+  const accessibleLabel = latestThread
+    ? `開啟與 ${latestThread.otherDisplayName} 的訊息。${preview}${unreadCount > 0 ? `，共 ${unreadCount} 則未讀` : ""}`
+    : `開啟浮動訊息。${preview}${unreadCount > 0 ? `，共 ${unreadCount} 則未讀` : ""}`;
+
+  return (
+    <button
+      type="button"
+      aria-label={accessibleLabel}
+      onClick={onOpen}
+      className="group flex h-16 w-[min(320px,calc(100vw-2rem))] items-center gap-3 rounded-xl border border-cyan-200/25 bg-[#0b1b2d] px-3 text-left shadow-[0_18px_45px_-18px_rgba(34,211,238,0.75)] transition-colors hover:border-cyan-200/45 hover:bg-[#10243a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan-300 text-[#06111f] transition-colors group-hover:bg-cyan-200">
+        <MessageSquareText className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="shrink-0 text-xs font-black text-slate-50">訊息</span>
+          {latestThread ? (
+            <span className="truncate text-xs font-semibold text-cyan-100/80">
+              {latestThread.otherDisplayName}
+            </span>
+          ) : null}
+        </span>
+        <span aria-live="polite" className={cn("mt-1 block truncate text-xs font-medium", error ? "text-rose-200" : "text-slate-300")} title={preview}>
+          {preview}
+        </span>
+      </span>
+      {unreadCount > 0 ? (
+        <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md bg-cyan-300 px-1.5 text-[11px] font-black text-[#06111f]">
+          {unreadCount > 99 ? "99+" : unreadCount}
+        </span>
+      ) : null}
+    </button>
+  );
 }
 
 function MemberCard({
@@ -631,7 +676,7 @@ export function CollaborationCenter() {
         </>
       )}
 
-      {isRealtimeAuthenticated ? (
+      {isRealtimeAuthenticated && (messageFloatOpen || !(open && activeTab === "messages")) ? (
         <div className="fixed bottom-4 right-4 z-[84] flex flex-col items-end gap-3">
           {messageFloatOpen ? (
             <section aria-label="浮動訊息" data-floating-direct-messages="true" className="flex h-[min(620px,calc(100dvh-5rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-cyan-200/25 bg-[#06111f] shadow-[0_24px_70px_-24px_rgba(34,211,238,0.6)]">
@@ -647,9 +692,7 @@ export function CollaborationCenter() {
               </div>
             </section>
           ) : (
-            <Button type="button" aria-label="開啟浮動訊息" onClick={() => setMessageFloatOpen(true)} className="h-10 rounded-lg border border-cyan-200/25 bg-cyan-300 px-4 font-bold text-[#06111f] shadow-[0_18px_45px_-18px_rgba(34,211,238,0.9)] hover:bg-cyan-200">
-              <MessageSquareText className="mr-2 h-5 w-5" />訊息
-            </Button>
+            <DirectMessageLauncher onOpen={() => setMessageFloatOpen(true)} />
           )}
         </div>
       ) : null}
