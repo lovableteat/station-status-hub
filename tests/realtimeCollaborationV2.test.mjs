@@ -319,6 +319,106 @@ test("direct-message state replacement purges cleared sent rows and tracks concu
   assert.deepEqual([...pending], ["thread-b"]);
 });
 
+test("direct chat media storage is private, member-scoped, and created atomically", async () => {
+  const migration = await readSource(
+    "supabase/migrations/20260809170000_direct_chat_media.sql",
+  ).catch(() => "");
+
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.chat_message_attachments/i);
+  assert.match(migration, /media_kind text NOT NULL CHECK \(media_kind IN \('image', 'video'\)\)/i);
+  assert.match(migration, /ALTER TABLE public\.chat_message_attachments ENABLE ROW LEVEL SECURITY/i);
+  assert.match(migration, /INSERT INTO storage\.buckets[\s\S]*'chat-media'[\s\S]*false[\s\S]*52428800/i);
+  for (const mimeType of [
+    "image/jpeg", "image/png", "image/webp", "image/gif",
+    "video/mp4", "video/webm", "video/quicktime",
+  ]) {
+    assert.match(migration, new RegExp(mimeType.replace("/", "\\/"), "i"));
+  }
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.can_read_chat_media_object\(p_name text\)/i);
+  assert.match(migration, /messages\.created_at > coalesce\([\s\S]*clears\.cleared_at/i);
+  assert.match(migration, /CREATE POLICY "Chat members can read visible media"[\s\S]*ON storage\.objects FOR SELECT/i);
+  assert.match(migration, /CREATE POLICY "Chat members can upload media"[\s\S]*ON storage\.objects FOR INSERT/i);
+  assert.match(migration, /CREATE POLICY "Senders and admins can delete media"[\s\S]*ON storage\.objects FOR DELETE/i);
+  assert.match(migration, /send_direct_chat_message\([\s\S]*p_attachments jsonb/i);
+  assert.match(migration, /jsonb_array_length\(v_attachments\) > 4/i);
+  assert.match(migration, /char_length\(v_body\) = 0 AND jsonb_array_length\(v_attachments\) = 0/i);
+  assert.match(migration, /FROM storage\.objects[\s\S]*bucket_id = 'chat-media'/i);
+  assert.match(migration, /ON CONFLICT \(sender_id, client_id\)/i);
+  assert.match(migration, /REVOKE INSERT ON public\.chat_messages FROM authenticated/i);
+  assert.match(migration, /DROP FUNCTION IF EXISTS public\.delete_direct_chat_message\(uuid\)/i);
+  assert.match(migration, /jsonb_build_object\([\s\S]*'storage_paths'/i);
+  assert.match(migration, /傳送了照片|傳送了影片|個附件/);
+});
+
+test("direct chat media helpers validate limits, create safe paths, and label previews", async () => {
+  const media = await import("../src/components/collaboration/directMessageMedia.mjs").catch(() => ({}));
+  assert.equal(typeof media.validateDirectMessageFiles, "function");
+  assert.equal(typeof media.createDirectMessageMediaPath, "function");
+  assert.equal(typeof media.getDirectMessagePreviewLabel, "function");
+
+  const image = { name: "board photo.PNG", size: 1024, type: "image/png" };
+  const video = { name: "rack.mov", size: 2048, type: "video/quicktime" };
+  assert.deepEqual(media.validateDirectMessageFiles([image, video]), {
+    error: null,
+    files: [image, video],
+  });
+  assert.match(
+    media.createDirectMessageMediaPath("thread", "user", "client", image, 0),
+    /^thread\/user\/client\/0\.png$/,
+  );
+  assert.equal(media.getDirectMessagePreviewLabel("", [{ mediaKind: "image" }]), "傳送了照片");
+  assert.equal(media.getDirectMessagePreviewLabel("", [{ mediaKind: "video" }]), "傳送了影片");
+  assert.equal(
+    media.getDirectMessagePreviewLabel("", [{ mediaKind: "image" }, { mediaKind: "image" }]),
+    "傳送了 2 個附件",
+  );
+  assert.equal(media.getDirectMessagePreviewLabel("說明", [{ mediaKind: "image" }]), "說明");
+
+  assert.match(media.validateDirectMessageFiles(new Array(5).fill(image)).error, /最多只能選擇 4 個/);
+  assert.match(media.validateDirectMessageFiles([
+    { name: "bad.pdf", size: 10, type: "application/pdf" },
+  ]).error, /只支援照片與影片/);
+  assert.match(media.validateDirectMessageFiles([
+    { ...image, size: 12 * 1024 * 1024 + 1 },
+  ]).error, /照片.*12 MB/);
+  assert.match(media.validateDirectMessageFiles([
+    { ...video, size: 50 * 1024 * 1024 + 1 },
+  ]).error, /影片.*50 MB/);
+});
+
+test("direct message hook uploads private media and resolves signed attachment URLs", async () => {
+  const [hook, panel] = await Promise.all([
+    readSource("src/hooks/useDirectMessages.ts"),
+    readSource("src/components/collaboration/DirectMessagesPanel.tsx"),
+  ]);
+
+  assert.match(hook, /interface DirectMessageAttachment/);
+  assert.match(hook, /attachments: DirectMessageAttachment\[\]/);
+  assert.match(hook, /CHAT_MEDIA_BUCKET = "chat-media"/);
+  assert.match(hook, /chat_message_attachments\s*\(/);
+  assert.match(hook, /createSignedUrls\(/);
+  assert.match(hook, /sendMessage = useCallback\([\s\S]*files: File\[\] = \[\]/);
+  assert.match(hook, /\.storage\.from\(CHAT_MEDIA_BUCKET\)\.upload\(/);
+  assert.match(hook, /database\.rpc\("send_direct_chat_message"/);
+  assert.match(hook, /p_attachments:/);
+  assert.match(hook, /remove\(uploadedPaths\)/);
+  assert.match(hook, /storage_paths/);
+
+  assert.match(panel, /type="file"/);
+  assert.match(panel, /accept=\{CHAT_MEDIA_ACCEPT\}/);
+  assert.match(panel, /multiple/);
+  assert.match(panel, /aria-label="選擇照片或影片"/);
+  assert.match(panel, /ImagePlus/);
+  assert.match(panel, /selectedMediaFiles/);
+  assert.match(panel, /URL\.createObjectURL/);
+  assert.match(panel, /URL\.revokeObjectURL/);
+  assert.match(panel, /上傳並傳送中/);
+  assert.match(panel, /await sendMessage\(body, selectedMediaFiles\.map/);
+  assert.match(panel, /<img[\s\S]*attachment\.url/);
+  assert.match(panel, /<video[\s\S]*controls[\s\S]*preload="metadata"/);
+  assert.match(panel, /message\.body \? [\s\S]*message\.body/);
+});
+
 test("collaboration changes never replace the current page", async () => {
   const sources = await Promise.all([
     readSource("src/components/auth/UserContext.tsx"),

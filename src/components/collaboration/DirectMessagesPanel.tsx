@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Film,
+  ImagePlus,
   LoaderCircle,
   MessageCircle,
   RefreshCw,
@@ -8,9 +10,16 @@ import {
   Send,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 
 import { useUser } from "@/components/auth/UserContext";
+import {
+  CHAT_MEDIA_ACCEPT,
+  formatDirectMessageFileSize,
+  getDirectMessageMediaKind,
+  validateDirectMessageFiles,
+} from "@/components/collaboration/directMessageMedia.mjs";
 import { setPendingDirectThread } from "@/components/collaboration/directMessageState.mjs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -98,6 +107,12 @@ function ThreadRow({
   );
 }
 
+interface SelectedMediaFile {
+  file: File;
+  previewUrl: string;
+  mediaKind: "image" | "video";
+}
+
 export function DirectMessagesPanel({
   onlineUsers,
   requestedUserId,
@@ -108,16 +123,22 @@ export function DirectMessagesPanel({
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedMediaFiles, setSelectedMediaFiles] = useState<SelectedMediaFile[]>([]);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [isSendingMedia, setIsSendingMedia] = useState(false);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const [deletingThreadIds, setDeletingThreadIds] = useState<Set<string>>(() => new Set());
   const deletingThreadIdsRef = useRef(new Set<string>());
   const requestedUserRef = useRef<string | null>(null);
+  const mediaInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedMediaFilesRef = useRef<SelectedMediaFile[]>([]);
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.threadId === selectedThreadId) ?? null,
     [selectedThreadId, threads],
   );
   const {
     messages,
+    error: messageError,
     loading: messagesLoading,
     loadingMore,
     hasMore,
@@ -134,6 +155,14 @@ export function DirectMessagesPanel({
     () => new Set(onlineUsers.map((onlineUser) => onlineUser.userId)),
     [onlineUsers],
   );
+
+  useEffect(() => {
+    selectedMediaFilesRef.current = selectedMediaFiles;
+  }, [selectedMediaFiles]);
+
+  useEffect(() => () => {
+    selectedMediaFilesRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+  }, []);
 
   useEffect(() => {
     if (!requestedUserId || requestedUserRef.current === requestedUserId) return;
@@ -154,13 +183,60 @@ export function DirectMessagesPanel({
     messageEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length, selectedThreadId]);
 
-  const submitMessage = (event: React.FormEvent) => {
+  useEffect(() => {
+    setSelectedMediaFiles((current) => {
+      current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      return [];
+    });
+    setMediaError(null);
+  }, [selectedThreadId]);
+
+  const selectMediaFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const combined = [...selectedMediaFiles.map((item) => item.file), ...Array.from(files)];
+    const validation = validateDirectMessageFiles(combined);
+    if (validation.error) {
+      setMediaError(validation.error);
+      if (mediaInputRef.current) mediaInputRef.current.value = "";
+      return;
+    }
+    const additions = Array.from(files).map((file) => ({
+      file,
+      previewUrl: URL.createObjectURL(file),
+      mediaKind: (getDirectMessageMediaKind(file) ?? "image") as "image" | "video",
+    }));
+    setSelectedMediaFiles((current) => [...current, ...additions]);
+    setMediaError(null);
+    if (mediaInputRef.current) mediaInputRef.current.value = "";
+  };
+
+  const removeMediaFile = (index: number) => {
+    setSelectedMediaFiles((current) => {
+      const target = current[index];
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
+    setMediaError(null);
+  };
+
+  const submitMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     const body = draft.trim();
-    if (!body) return;
-    setDraft("");
+    if ((!body && selectedMediaFiles.length === 0) || isSendingMedia) return;
+    setIsSendingMedia(true);
     sendTyping(false);
-    void sendMessage(body);
+    try {
+      const sent = await sendMessage(body, selectedMediaFiles.map((item) => item.file));
+      if (!sent) return;
+      setDraft("");
+      setSelectedMediaFiles((current) => {
+        current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+        return [];
+      });
+      setMediaError(null);
+    } finally {
+      setIsSendingMedia(false);
+    }
   };
 
   const handleClearThread = async (thread: DirectThread) => {
@@ -269,7 +345,56 @@ export function DirectMessagesPanel({
                           message.delivery === "failed" && "border border-rose-300 bg-rose-400/15 text-rose-50",
                         )}
                       >
-                        <p className="whitespace-pre-wrap break-words">{message.body}</p>
+                        {message.attachments.length > 0 ? (
+                          <div className={cn(
+                            "grid gap-1.5",
+                            message.attachments.length > 1 && "grid-cols-2",
+                            message.body && "mb-2",
+                          )}>
+                            {message.attachments.map((attachment) => (
+                              <div
+                                key={attachment.id}
+                                className="min-w-0 overflow-hidden rounded-xl bg-[#071522]/90"
+                              >
+                                {attachment.url && attachment.mediaKind === "image" ? (
+                                  <a
+                                    href={attachment.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title={`開啟 ${attachment.fileName}`}
+                                  >
+                                    <img
+                                      src={attachment.url}
+                                      alt={attachment.fileName}
+                                      loading="lazy"
+                                      className="max-h-72 w-full object-cover transition-opacity hover:opacity-90"
+                                    />
+                                  </a>
+                                ) : attachment.url && attachment.mediaKind === "video" ? (
+                                  <video
+                                    src={attachment.url}
+                                    controls
+                                    preload="metadata"
+                                    playsInline
+                                    className="max-h-72 w-full bg-black object-contain"
+                                  >
+                                    您的瀏覽器無法播放此影片。
+                                  </video>
+                                ) : (
+                                  <div className="flex min-h-24 items-center justify-center gap-2 px-3 text-xs text-slate-300">
+                                    {attachment.mediaKind === "video"
+                                      ? <Film className="h-5 w-5" />
+                                      : <ImagePlus className="h-5 w-5" />}
+                                    <span className="truncate">{attachment.fileName}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        {message.body ? (
+                          <p className="whitespace-pre-wrap break-words">{message.body}</p>
+                        ) : null}
                       </div>
                       {message.delivery === "sent" && !message.deletedAt &&
                       (own || user?.role === "admin" || user?.role === "super_admin") ? (
@@ -313,26 +438,88 @@ export function DirectMessagesPanel({
           )}
         </ScrollArea>
 
-        <form onSubmit={submitMessage} className="flex gap-2 border-t border-cyan-200/10 p-3">
-          <Input
-            value={draft}
-            maxLength={5_000}
-            placeholder="輸入訊息"
-            className="h-11 flex-1 border-slate-700 bg-[#0b1b2d] text-slate-100"
-            onChange={(event) => {
-              setDraft(event.target.value);
-              sendTyping(Boolean(event.target.value));
-            }}
-            onBlur={() => sendTyping(false)}
-          />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={!draft.trim()}
-            className="h-11 w-11 rounded-xl bg-cyan-300 text-[#06111f] hover:bg-cyan-200"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+        <form onSubmit={submitMessage} className="border-t border-cyan-200/10 p-3">
+          {selectedMediaFiles.length > 0 ? (
+            <div className="mb-2 flex gap-2 overflow-x-auto pb-1" aria-label="已選取的照片與影片">
+              {selectedMediaFiles.map((item, index) => (
+                <div
+                  key={`${item.file.name}-${item.file.lastModified}-${index}`}
+                  className="relative h-20 w-24 shrink-0 overflow-hidden rounded-xl border border-cyan-200/20 bg-[#071522]"
+                >
+                  {item.mediaKind === "image" ? (
+                    <img src={item.previewUrl} alt={item.file.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-1 px-2 text-slate-300">
+                      <Film className="h-5 w-5 text-cyan-200" />
+                      <span className="w-full truncate text-center text-[10px]">{item.file.name}</span>
+                    </div>
+                  )}
+                  <span className="absolute bottom-1 left-1 rounded bg-[#06111f]/85 px-1 text-[9px] text-slate-200">
+                    {formatDirectMessageFileSize(item.file.size)}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`移除 ${item.file.name}`}
+                    disabled={isSendingMedia}
+                    onClick={() => removeMediaFile(index)}
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#06111f]/85 text-slate-200 hover:bg-rose-500 hover:text-white disabled:opacity-50"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {(mediaError || messageError) ? (
+            <p className="mb-2 text-xs text-rose-200" role="alert">{mediaError || messageError}</p>
+          ) : null}
+          <div className="flex gap-2">
+            <input
+              ref={mediaInputRef}
+              type="file"
+              accept={CHAT_MEDIA_ACCEPT}
+              multiple
+              disabled={isSendingMedia || selectedMediaFiles.length >= 4}
+              onChange={(event) => selectMediaFiles(event.target.files)}
+              className="sr-only"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="選擇照片或影片"
+              title="新增照片或影片"
+              disabled={isSendingMedia || selectedMediaFiles.length >= 4}
+              onClick={() => mediaInputRef.current?.click()}
+              className="h-11 w-11 shrink-0 rounded-xl border-cyan-200/20 bg-[#0b1b2d] text-cyan-200 hover:bg-cyan-300/10"
+            >
+              <ImagePlus className="h-4.5 w-4.5" />
+            </Button>
+            <Input
+              value={draft}
+              maxLength={5_000}
+              disabled={isSendingMedia}
+              placeholder={selectedMediaFiles.length > 0 ? "加入說明（選填）" : "輸入訊息"}
+              className="h-11 flex-1 border-slate-700 bg-[#0b1b2d] text-slate-100"
+              onChange={(event) => {
+                setDraft(event.target.value);
+                sendTyping(Boolean(event.target.value));
+              }}
+              onBlur={() => sendTyping(false)}
+            />
+            <Button
+              type="submit"
+              size="icon"
+              aria-label={isSendingMedia ? "上傳並傳送中" : "傳送訊息"}
+              disabled={isSendingMedia || (!draft.trim() && selectedMediaFiles.length === 0)}
+              className="h-11 w-11 shrink-0 rounded-xl bg-cyan-300 text-[#06111f] hover:bg-cyan-200"
+            >
+              {isSendingMedia
+                ? <LoaderCircle className="h-4 w-4 animate-spin" />
+                : <Send className="h-4 w-4" />}
+              <span className="sr-only">{isSendingMedia ? "上傳並傳送中" : "傳送"}</span>
+            </Button>
+          </div>
         </form>
       </div>
     );
