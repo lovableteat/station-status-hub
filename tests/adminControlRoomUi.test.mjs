@@ -1,8 +1,28 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { formatAdminUserTimestamp } from "../src/components/admin/adminUserTime.mjs";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+
+test("admin user timestamps format in Taipei time and fall back when unavailable", () => {
+  assert.equal(
+    formatAdminUserTimestamp("2025-01-02T03:04:05.000Z", "尚未登入"),
+    "2025/01/02 11:04",
+  );
+  assert.equal(formatAdminUserTimestamp(null, "尚未登入"), "尚未登入");
+  assert.equal(formatAdminUserTimestamp("not-a-timestamp", "尚未登入"), "尚未登入");
+});
+
+test("admin account cards show last login while preserving creator information", async () => {
+  const source = await read("../src/components/admin/AdminPanel.tsx");
+
+  assert.match(source, /last_seen_at\??:\s*string\s*\|\s*null/);
+  assert.match(source, /最後登入/);
+  assert.match(source, /formatAdminUserTimestamp\(systemUser\.last_seen_at,\s*"尚未登入"\)/);
+  assert.match(source, /建立者/);
+  assert.match(source, /systemUser\.created_by/);
+});
 
 test("admin workspace exposes clear visual zones without changing user actions", async () => {
   const [source, sidebar] = await Promise.all([
