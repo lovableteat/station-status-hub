@@ -5,6 +5,11 @@ import {
   mergeDirectMessages as mergeMessages,
   replaceVisibleDirectMessages,
 } from "@/components/collaboration/directMessageState.mjs";
+import {
+  createDirectMessageMediaPath,
+  getDirectMessageMediaKind,
+  validateDirectMessageFiles,
+} from "@/components/collaboration/directMessageMedia.mjs";
 import { supabase } from "@/integrations/supabase/client";
 import { authorizePrivateRealtime } from "@/lib/authorizePrivateRealtime";
 
@@ -12,6 +17,13 @@ const MESSAGE_PAGE_SIZE = 40;
 const TYPING_THROTTLE_MS = 500;
 const TYPING_EXPIRY_MS = 2_500;
 const DIRECT_CHAT_CLEARED_EVENT = "station-direct-chat-cleared";
+const CHAT_MEDIA_BUCKET = "chat-media";
+const MESSAGE_SELECT = `
+  id,thread_id,sender_id,client_id,body,created_at,edited_at,deleted_at,
+  chat_message_attachments (
+    id,storage_path,file_name,mime_type,file_size,media_kind,position
+  )
+`;
 const database = supabase as any;
 
 export interface DirectThread {
@@ -36,6 +48,18 @@ export interface DirectMessage {
   editedAt: string | null;
   deletedAt: string | null;
   delivery: "sending" | "sent" | "failed";
+  attachments: DirectMessageAttachment[];
+}
+
+export interface DirectMessageAttachment {
+  id: string;
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  mediaKind: "image" | "video";
+  position: number;
+  url: string | null;
 }
 
 function createClientId() {
@@ -70,7 +94,44 @@ function mapMessage(row: any): DirectMessage {
     editedAt: row.edited_at ?? null,
     deletedAt: row.deleted_at ?? null,
     delivery: "sent",
+    attachments: (row.chat_message_attachments ?? [])
+      .map((attachment: any) => ({
+        id: attachment.id,
+        storagePath: attachment.storage_path,
+        fileName: attachment.file_name,
+        mimeType: attachment.mime_type,
+        fileSize: Number(attachment.file_size ?? 0),
+        mediaKind: attachment.media_kind,
+        position: Number(attachment.position ?? 0),
+        url: null,
+      }))
+      .sort((a: DirectMessageAttachment, b: DirectMessageAttachment) => a.position - b.position),
   };
+}
+
+async function resolveSignedAttachmentUrls(messages: DirectMessage[]) {
+  const paths = messages.flatMap((message) =>
+    message.attachments.map((attachment) => attachment.storagePath),
+  );
+  if (paths.length === 0) return messages;
+
+  const { data, error } = await supabase.storage
+    .from(CHAT_MEDIA_BUCKET)
+    .createSignedUrls(paths, 60 * 60);
+  if (error || !data) return messages;
+
+  const urls = new Map<string, string>();
+  data.forEach((item: any, index: number) => {
+    const path = item.path ?? paths[index];
+    if (path && item.signedUrl) urls.set(path, item.signedUrl);
+  });
+  return messages.map((message) => ({
+    ...message,
+    attachments: message.attachments.map((attachment) => ({
+      ...attachment,
+      url: urls.get(attachment.storagePath) ?? null,
+    })),
+  }));
 }
 
 function extractBroadcastReference(payload: any) {
@@ -260,7 +321,7 @@ export function useDirectMessages(threadId: string | null) {
     const [messageResult, clearResult] = await Promise.all([
       database
         .from("chat_messages")
-        .select("id,thread_id,sender_id,client_id,body,created_at,edited_at,deleted_at")
+        .select(MESSAGE_SELECT)
         .eq("thread_id", threadId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
@@ -275,7 +336,7 @@ export function useDirectMessages(threadId: string | null) {
     if (queryError) {
       setError("訊息載入失敗，已保留目前畫面與未送出內容。");
     } else {
-      const latest = (data ?? []).map(mapMessage).reverse();
+      const latest = await resolveSignedAttachmentUrls((data ?? []).map(mapMessage).reverse());
       setMessages((current) => replaceVisibleDirectMessages(
         current,
         latest,
@@ -294,7 +355,7 @@ export function useDirectMessages(threadId: string | null) {
     if (!threadId || !recordId || !isRealtimeAuthenticated) return null;
     const { data, error: queryError } = await database
       .from("chat_messages")
-      .select("id,thread_id,sender_id,client_id,body,created_at,edited_at,deleted_at")
+      .select(MESSAGE_SELECT)
       .eq("thread_id", threadId)
       .eq("id", recordId)
       .is("deleted_at", null)
@@ -309,7 +370,7 @@ export function useDirectMessages(threadId: string | null) {
       return null;
     }
 
-    const message = mapMessage(data);
+    const [message] = await resolveSignedAttachmentUrls([mapMessage(data)]);
     setMessages((current) => mergeMessages(current, [message]));
     return message;
   }, [isRealtimeAuthenticated, loadLatest, threadId]);
@@ -320,51 +381,110 @@ export function useDirectMessages(threadId: string | null) {
     setLoadingMore(true);
     const { data, error: queryError } = await database
       .from("chat_messages")
-      .select("id,thread_id,sender_id,client_id,body,created_at,edited_at,deleted_at")
+      .select(MESSAGE_SELECT)
       .eq("thread_id", threadId)
       .is("deleted_at", null)
       .lt("created_at", oldest.createdAt)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE);
     if (!queryError) {
-      setMessages((current) => mergeMessages(current, (data ?? []).map(mapMessage).reverse()));
+      const older = await resolveSignedAttachmentUrls((data ?? []).map(mapMessage).reverse());
+      setMessages((current) => mergeMessages(current, older));
       setHasMore((data?.length ?? 0) === MESSAGE_PAGE_SIZE);
     }
     setLoadingMore(false);
   }, [hasMore, loadingMore, messages, threadId]);
 
   const persistMessage = useCallback(
-    async (clientId: string, body: string) => {
+    async (clientId: string, body: string, files: File[] = []) => {
       if (!threadId || !user?.userId || !isRealtimeAuthenticated) return null;
-      const { data, error: insertError } = await database
-        .from("chat_messages")
-        .insert({
-          thread_id: threadId,
-          sender_id: user.userId,
-          client_id: clientId,
-          body,
-        })
-        .select("id,thread_id,sender_id,client_id,body,created_at,edited_at,deleted_at")
-        .single();
-      if (!insertError && data) return mapMessage(data);
+      const uploadedPaths: string[] = [];
+      const attachments: Array<Record<string, string | number>> = [];
+
+      for (const [index, file] of files.entries()) {
+        const storagePath = createDirectMessageMediaPath(
+          threadId,
+          user.userId,
+          clientId,
+          file,
+          index,
+        );
+        const mediaKind = getDirectMessageMediaKind(file);
+        if (!mediaKind) return null;
+
+        const { error: uploadError } = await supabase.storage.from(CHAT_MEDIA_BUCKET).upload(
+          storagePath,
+          file,
+          { contentType: file.type, cacheControl: "3600", upsert: false },
+        );
+        if (uploadError) {
+          if (uploadedPaths.length > 0) {
+            await supabase.storage.from(CHAT_MEDIA_BUCKET).remove(uploadedPaths);
+          }
+          return null;
+        }
+        uploadedPaths.push(storagePath);
+        attachments.push({
+          storage_path: storagePath,
+          file_name: file.name.slice(0, 255),
+          mime_type: file.type,
+          file_size: file.size,
+          media_kind: mediaKind,
+        });
+      }
+
+      const { data: messageId, error: insertError } = await database.rpc("send_direct_chat_message", {
+        p_thread_id: threadId,
+        p_client_id: clientId,
+        p_body: body,
+        p_attachments: attachments,
+      });
+
+      let savedRow: any = null;
+      if (!insertError && typeof messageId === "string") {
+        const { data } = await database
+          .from("chat_messages")
+          .select(MESSAGE_SELECT)
+          .eq("id", messageId)
+          .maybeSingle();
+        savedRow = data;
+      }
 
       // A network failure may happen after the database committed. The stable
       // client ID makes retry idempotent and prevents duplicate messages.
-      const { data: existing } = await database
-        .from("chat_messages")
-        .select("id,thread_id,sender_id,client_id,body,created_at,edited_at")
-        .eq("sender_id", user.userId)
-        .eq("client_id", clientId)
-        .maybeSingle();
-      return existing ? mapMessage(existing) : null;
+      if (!savedRow) {
+        const { data: existing } = await database
+          .from("chat_messages")
+          .select(MESSAGE_SELECT)
+          .eq("sender_id", user.userId)
+          .eq("client_id", clientId)
+          .maybeSingle();
+        savedRow = existing;
+      }
+
+      if (savedRow) {
+        const [saved] = await resolveSignedAttachmentUrls([mapMessage(savedRow)]);
+        return saved;
+      }
+      if (uploadedPaths.length > 0) {
+        await supabase.storage.from(CHAT_MEDIA_BUCKET).remove(uploadedPaths);
+      }
+      return null;
     },
     [isRealtimeAuthenticated, threadId, user?.userId],
   );
 
   const sendMessage = useCallback(
-    async (rawBody: string) => {
+    async (rawBody: string, files: File[] = []) => {
       const body = rawBody.trim();
-      if (!threadId || !user?.userId || !body || body.length > 5_000) return false;
+      const validation = validateDirectMessageFiles(files);
+      if (validation.error) {
+        setError(validation.error);
+        return false;
+      }
+      if (!threadId || !user?.userId || (!body && files.length === 0) || body.length > 5_000) {
+        return false;
+      }
       const clientId = createClientId();
       const optimistic: DirectMessage = {
         id: `optimistic:${clientId}`,
@@ -376,20 +496,35 @@ export function useDirectMessages(threadId: string | null) {
         editedAt: null,
         deletedAt: null,
         delivery: "sending",
+        attachments: files.map((file, index) => ({
+          id: `optimistic-attachment:${clientId}:${index}`,
+          storagePath: "",
+          fileName: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+          mediaKind: getDirectMessageMediaKind(file) ?? "image",
+          position: index,
+          url: URL.createObjectURL(file),
+        })),
       };
       setMessages((current) => mergeMessages(current, [optimistic]));
 
-      const saved = await persistMessage(clientId, body);
+      const saved = await persistMessage(clientId, body, files);
+      optimistic.attachments.forEach((attachment) => {
+        if (attachment.url?.startsWith("blob:")) URL.revokeObjectURL(attachment.url);
+      });
       if (saved) {
         setMessages((current) => mergeMessages(current, [saved]));
+        setError(null);
         return true;
       }
 
-      setMessages((current) =>
-        current.map((message) =>
+      setError(files.length > 0 ? "照片或影片上傳失敗，已保留選取內容，請再試一次。" : null);
+      setMessages((current) => files.length > 0
+        ? current.filter((message) => message.clientId !== clientId)
+        : current.map((message) =>
           message.clientId === clientId ? { ...message, delivery: "failed" } : message,
-        ),
-      );
+        ));
       return false;
     },
     [persistMessage, threadId, user?.userId],
@@ -427,15 +562,25 @@ export function useDirectMessages(threadId: string | null) {
       const { data, error: deleteError } = await database.rpc("delete_direct_chat_message", {
         p_message_id: messageId,
       });
-      if (deleteError || data !== true) {
+      if (deleteError || data?.deleted !== true) {
         setError("訊息刪除失敗，請確認權限或稍後再試。");
         return false;
       }
+      const storagePaths = Array.isArray(data.storage_paths) ? data.storage_paths : [];
+      if (storagePaths.length > 0) {
+        await supabase.storage.from(CHAT_MEDIA_BUCKET).remove(storagePaths);
+      }
       setMessages((current) => current.map((message) => (
         message.id === messageId
-          ? { ...message, body: "此訊息已刪除", deletedAt: new Date().toISOString() }
+          ? {
+            ...message,
+            body: "此訊息已刪除",
+            attachments: [],
+            deletedAt: new Date().toISOString(),
+          }
           : message
       )));
+      setError(null);
       return true;
     },
     [isRealtimeAuthenticated, threadId],
