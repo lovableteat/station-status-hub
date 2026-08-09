@@ -29,6 +29,18 @@ test("every mounted L10 module has a direct hit target and selected highlight", 
   assert.match(plannerSource, /event\.stopPropagation\(\)/);
 });
 
+test("the selected L10 makes its exact rack unit unmistakable", () => {
+  assert.match(plannerSource, /name=\{`\$\{selection\.id\}-selected-u-layer`\}/);
+  assert.match(plannerSource, /<Edges/);
+  assert.match(plannerSource, /lineWidth=\{3\}/);
+  assert.match(plannerSource, /depthTest=\{false\}/);
+  assert.match(plannerSource, /renderOrder=\{90\}/);
+  assert.match(plannerSource, /data-selected-rack-unit-label="true"/);
+  assert.match(plannerSource, /distanceFactor=\{9\}/);
+  assert.match(plannerSource, /U\{position\.rackUnit\}/);
+  assert.match(plannerSource, /已選取/);
+});
+
 test("L10 inspector shows telemetry and can update per-slot health", () => {
   assert.match(typesSource, /l10ModuleHealth\?: Record<string, RackDeviceHealth>/);
   assert.match(plannerSource, /equipment\.kind === "l10"/);
