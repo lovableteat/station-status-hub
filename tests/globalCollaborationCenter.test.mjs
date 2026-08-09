@@ -52,15 +52,12 @@ test("unread admin announcements open once and require explicit acknowledgement"
   assert.doesNotMatch(source, /setActiveAnnouncement\([^)]*\)[\s\S]{0,160}markAsRead/);
 });
 
-test("the collaboration icon visibly pulses while notifications remain unread", async () => {
+test("the header keeps one collaboration entry point through online presence", async () => {
   const source = await readSource("src/components/layout/MainWorkspaceHeader.tsx");
 
-  assert.match(source, /notificationUnreadCount > 0/);
-  assert.match(source, /motion-safe:animate-pulse/);
-  assert.match(source, /BellRing/);
-  assert.match(source, /bg-\[#ff264d\]/);
-  assert.match(source, /aria-live="polite"/);
-  assert.match(source, /協作中心有未讀通知/);
+  assert.match(source, /<OnlineUsersIndicator\s*\/>/);
+  assert.doesNotMatch(source, /BellRing/);
+  assert.doesNotMatch(source, /notificationUnreadCount/);
 });
 
 test("presence exposes all users, other users and connection state", async () => {
