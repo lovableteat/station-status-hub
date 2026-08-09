@@ -16,6 +16,7 @@ import { RACK_UNIT_HEIGHT_METERS } from "./rackMount.mjs";
 export interface Gb300EquipmentSelection {
   id: string;
   kind:
+    | "l10"
     | "power-shelf"
     | "switch-tray"
     | "cdu"
@@ -29,6 +30,9 @@ export interface Gb300EquipmentSelection {
   model: string;
   role: string;
   assetTag: string;
+  powerKw?: number;
+  temperatureC?: number;
+  utilizationPercent?: number;
 }
 
 interface EquipmentPartProps {

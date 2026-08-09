@@ -9,7 +9,7 @@ import {
 } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Html, Line, OrbitControls, useGLTF, useProgress } from "@react-three/drei";
-import { Activity, Cable, Network, Power, X } from "lucide-react";
+import { Activity, Cable, Cpu, Network, Power, X } from "lucide-react";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 
@@ -28,6 +28,7 @@ import { getUniformModelFit } from "./modelFit.mjs";
 import { isL10CompatibleWithRack } from "./modelCatalog.mjs";
 import { getRackUnitMountLayout } from "./rackMount.mjs";
 import { getModelAxisRotation } from "./modelOrientation.mjs";
+import { createL10EquipmentSelection } from "./l10EquipmentSelection.mjs";
 import {
   getRackOverviewFrame,
   getSafeOrbitDistance,
@@ -57,6 +58,11 @@ interface DataCenter3DPlannerProps {
   onUpdateRackDeviceHealth?: (
     rackId: string,
     deviceId: string,
+    health: RackDeviceHealth,
+  ) => void;
+  onUpdateL10ModuleHealth?: (
+    rackId: string,
+    rackUnit: number,
     health: RackDeviceHealth,
   ) => void;
 }
@@ -496,10 +502,12 @@ function InstancedL10PartMesh({
   part,
   layout,
   detailed,
+  onSelectRackUnit,
 }: {
   part: InstancedL10Part;
   layout: L10MountLayout;
   detailed: boolean;
+  onSelectRackUnit?: (rackUnit: number) => void;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const { invalidate } = useThree();
@@ -533,6 +541,17 @@ function InstancedL10PartMesh({
     invalidate();
   }, [invalidate, layout.fitScale, layout.positions, part.matrix]);
 
+  const handleSelect = onSelectRackUnit
+    ? (event: ThreeEvent<MouseEvent>) => {
+        const position = event.instanceId === undefined
+          ? undefined
+          : layout.positions[event.instanceId];
+        if (!position) return;
+        event.stopPropagation();
+        onSelectRackUnit(position.rackUnit);
+      }
+    : undefined;
+
   return (
     <instancedMesh
       ref={meshRef}
@@ -541,6 +560,16 @@ function InstancedL10PartMesh({
       receiveShadow={detailed}
       frustumCulled={false}
       name={part.name}
+      onClick={handleSelect}
+      onPointerDown={handleSelect}
+      onPointerOver={onSelectRackUnit ? (event) => {
+        event.stopPropagation();
+        document.body.style.cursor = "pointer";
+      } : undefined}
+      onPointerOut={onSelectRackUnit ? (event) => {
+        event.stopPropagation();
+        document.body.style.cursor = "default";
+      } : undefined}
     />
   );
 }
@@ -551,12 +580,14 @@ function InstancedDetailedL10Model({
   layout,
   name,
   detailed,
+  onSelectRackUnit,
 }: {
   definition: RackModelDefinition;
   assetUrl: string;
   layout: L10MountLayout;
   name: string;
   detailed: boolean;
+  onSelectRackUnit?: (rackUnit: number) => void;
 }) {
   const gltf = useGLTF(assetUrl) as { scene: THREE.Group };
   const prepared = useMemo(() => {
@@ -615,6 +646,7 @@ function InstancedDetailedL10Model({
           part={part}
           layout={layout}
           detailed={detailed}
+          onSelectRackUnit={onSelectRackUnit}
         />
       ))}
     </group>
@@ -625,10 +657,12 @@ function ProceduralL10Instances({
   layout,
   name,
   detailed,
+  onSelectRackUnit,
 }: {
   layout: L10MountLayout;
   name: string;
   detailed: boolean;
+  onSelectRackUnit?: (rackUnit: number) => void;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const { invalidate } = useThree();
@@ -648,6 +682,17 @@ function ProceduralL10Instances({
     invalidate();
   }, [invalidate, layout]);
 
+  const handleSelect = onSelectRackUnit
+    ? (event: ThreeEvent<MouseEvent>) => {
+        const position = event.instanceId === undefined
+          ? undefined
+          : layout.positions[event.instanceId];
+        if (!position) return;
+        event.stopPropagation();
+        onSelectRackUnit(position.rackUnit);
+      }
+    : undefined;
+
   return (
     <instancedMesh
       ref={meshRef}
@@ -656,6 +701,16 @@ function ProceduralL10Instances({
       receiveShadow={detailed}
       frustumCulled={false}
       name={name}
+      onClick={handleSelect}
+      onPointerDown={handleSelect}
+      onPointerOver={onSelectRackUnit ? (event) => {
+        event.stopPropagation();
+        document.body.style.cursor = "pointer";
+      } : undefined}
+      onPointerOut={onSelectRackUnit ? (event) => {
+        event.stopPropagation();
+        document.body.style.cursor = "default";
+      } : undefined}
     >
       <boxGeometry args={[1, 1, 1]} />
       <meshStandardMaterial
@@ -668,18 +723,118 @@ function ProceduralL10Instances({
   );
 }
 
+function L10ModuleHitTargets({
+  rack,
+  definition,
+  layout,
+  rackDepth,
+  selectedEquipmentId,
+  onSelect,
+}: {
+  rack: RackPlan;
+  definition: RackModelDefinition;
+  layout: L10MountLayout;
+  rackDepth: number;
+  selectedEquipmentId: string | null;
+  onSelect: (selection: Gb300EquipmentSelection) => void;
+}) {
+  return (
+    <group name={`${rack.id}-l10-interaction-layer`}>
+      {layout.positions.map((position) => {
+        const selection = createL10EquipmentSelection({
+          rack,
+          definition,
+          rackUnit: position.rackUnit,
+        }) as Gb300EquipmentSelection;
+        const selected = selectedEquipmentId === selection.id;
+        const handleSelect = (event: ThreeEvent<MouseEvent>) => {
+          event.stopPropagation();
+          onSelect(selection);
+        };
+
+        return (
+          <group
+            key={selection.id}
+            position={[
+              0,
+              position.y + layout.fittedHeight / 2,
+              rackDepth / 2 + 0.11,
+            ]}
+          >
+            <mesh
+              name={`${selection.id}-hit-target`}
+              onClick={handleSelect}
+              onPointerDown={handleSelect}
+              onPointerOver={(event) => {
+                event.stopPropagation();
+                document.body.style.cursor = "pointer";
+              }}
+              onPointerOut={(event) => {
+                event.stopPropagation();
+                document.body.style.cursor = "default";
+              }}
+            >
+              <boxGeometry
+                args={[
+                  layout.fittedWidth + 0.025,
+                  layout.fittedHeight + 0.006,
+                  0.02,
+                ]}
+              />
+              <meshBasicMaterial
+                color="#22d3ee"
+                transparent
+                opacity={selected ? 0.18 : 0}
+                depthWrite={false}
+              />
+            </mesh>
+            {selected ? (
+              <mesh
+                position={[0, 0, position.z - (rackDepth / 2 + 0.11)]}
+                scale={[1.035, 1.12, 1.035]}
+              >
+                <boxGeometry
+                  args={[
+                    layout.fittedWidth + 0.025,
+                    layout.fittedHeight + 0.006,
+                    layout.fittedDepth + 0.025,
+                  ]}
+                />
+                <meshBasicMaterial
+                  color="#a5f3fc"
+                  transparent
+                  opacity={0.72}
+                  wireframe
+                  depthWrite={false}
+                />
+              </mesh>
+            ) : null}
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 function RackL10Modules({
   rack,
   rackDefinition,
   l10Definition,
   detailed,
   lowDetail,
+  selectedEquipmentId,
+  onSelectEquipment,
 }: {
   rack: RackPlan;
   rackDefinition: RackModelDefinition;
   l10Definition: RackModelDefinition;
   detailed: boolean;
   lowDetail: boolean;
+  selectedEquipmentId: string | null;
+  onSelectEquipment: (
+    rackId: string,
+    equipment: Gb300EquipmentSelection,
+  ) => void;
 }) {
   const layout = useMemo(
     () => {
@@ -719,33 +874,52 @@ function RackL10Modules({
     lowDetail && l10Definition.mobileAssetUrl
       ? l10Definition.mobileAssetUrl
       : l10Definition.assetUrl;
-  if (!sceneAssetUrl) {
-    return (
-      <ProceduralL10Instances
-        layout={layout}
-        name={`${rack.id}-l10-preview`}
-        detailed={detailed}
-      />
-    );
-  }
 
   const optimizedLayout = {
     ...layout,
     visibleCount: layout.positions.length,
     positions: layout.positions,
   };
+  const selectRackUnit = (rackUnit: number) => {
+    onSelectEquipment(
+      rack.id,
+      createL10EquipmentSelection({
+        rack,
+        definition: l10Definition,
+        rackUnit,
+      }) as Gb300EquipmentSelection,
+    );
+  };
 
   return (
     <group name={`${rack.id}-l10-complete`}>
-      <Suspense fallback={null}>
-        <InstancedDetailedL10Model
-          definition={l10Definition}
-          assetUrl={sceneAssetUrl}
-          layout={optimizedLayout}
-          name={`${rack.id}-l10-scene-cad`}
+      {sceneAssetUrl ? (
+        <Suspense fallback={null}>
+          <InstancedDetailedL10Model
+            definition={l10Definition}
+            assetUrl={sceneAssetUrl}
+            layout={optimizedLayout}
+            name={`${rack.id}-l10-scene-cad`}
+            detailed={detailed}
+            onSelectRackUnit={selectRackUnit}
+          />
+        </Suspense>
+      ) : (
+        <ProceduralL10Instances
+          layout={layout}
+          name={`${rack.id}-l10-preview`}
           detailed={detailed}
+          onSelectRackUnit={selectRackUnit}
         />
-      </Suspense>
+      )}
+      <L10ModuleHitTargets
+        rack={rack}
+        definition={l10Definition}
+        layout={layout}
+        rackDepth={rackDefinition.dimensions.depthMm / 1000}
+        selectedEquipmentId={selectedEquipmentId}
+        onSelect={(selection) => onSelectEquipment(rack.id, selection)}
+      />
     </group>
   );
 }
@@ -937,6 +1111,11 @@ function RackVisual({
         l10Definition={l10Definition}
         detailed={selected}
         lowDetail={lowDetail}
+        selectedEquipmentId={selectedEquipmentId}
+        onSelectEquipment={(rackId, equipment) => {
+          onSelect(rackId);
+          onSelectEquipment(rackId, equipment);
+        }}
       />
 
       <RackCatalogEquipmentModels
@@ -1481,28 +1660,45 @@ function EquipmentLedSummary({
 }: {
   equipment: Gb300EquipmentSelection;
 }) {
-  const leds = getGb300LedState(equipment.kind, equipment.health);
-  const indicators = [
-    { label: "PWR", colors: [leds.pwr] },
-    ...(equipment.kind === "power-shelf"
-      ? [
-          { label: "PMC", colors: [leds.pmc] },
-          { label: "PSU", colors: leds.psu },
-        ]
-      : equipment.kind === "switch-tray"
-        ? [
-            { label: "NVL", colors: leds.nvl },
-            { label: "RJ45", colors: [leds.rj45Link, leds.rj45Activity] },
-          ]
-        : equipment.kind === "tor-switch"
-          ? [
-              { label: "SYSTEM", colors: [leds.pwr, leds.fault] },
-              { label: "RJ45", colors: [leds.rj45Link, leds.rj45Activity] },
-            ]
-          : equipment.kind === "cable-management"
-            ? [{ label: "TOR LINK", colors: [leds.pwr] }]
-        : [{ label: "CTRL", colors: [leds.pmc] }]),
-  ];
+  const indicators = equipment.kind === "l10"
+    ? (() => {
+        const stateColor: Record<RackDeviceHealth, string> = {
+          healthy: "#34d399",
+          warning: "#f59e0b",
+          critical: "#ef4444",
+          offline: "#64748b",
+        };
+        const color = stateColor[equipment.health];
+        return [
+          { label: "PWR", colors: [color] },
+          { label: "BMC", colors: [color] },
+          { label: "FABRIC", colors: [color, equipment.health === "healthy" ? "#22d3ee" : color] },
+        ];
+      })()
+    : (() => {
+        const leds = getGb300LedState(equipment.kind, equipment.health);
+        return [
+          { label: "PWR", colors: [leds.pwr] },
+          ...(equipment.kind === "power-shelf"
+            ? [
+                { label: "PMC", colors: [leds.pmc] },
+                { label: "PSU", colors: leds.psu },
+              ]
+            : equipment.kind === "switch-tray"
+              ? [
+                  { label: "NVL", colors: leds.nvl },
+                  { label: "RJ45", colors: [leds.rj45Link, leds.rj45Activity] },
+                ]
+              : equipment.kind === "tor-switch"
+                ? [
+                    { label: "SYSTEM", colors: [leds.pwr, leds.fault] },
+                    { label: "RJ45", colors: [leds.rj45Link, leds.rj45Activity] },
+                  ]
+                : equipment.kind === "cable-management"
+                  ? [{ label: "TOR LINK", colors: [leds.pwr] }]
+                  : [{ label: "CTRL", colors: [leds.pmc] }]),
+        ];
+      })();
 
   return (
     <div className="mt-3 grid gap-1.5">
@@ -1549,7 +1745,9 @@ function Gb300EquipmentInspector({
   onHealthChange: (health: RackDeviceHealth) => void;
 }) {
   const Icon =
-    equipment.kind === "power-shelf"
+    equipment.kind === "l10"
+      ? Cpu
+      : equipment.kind === "power-shelf"
       ? Power
       : equipment.kind === "switch-tray" || equipment.kind === "tor-switch"
         ? Network
@@ -1594,12 +1792,38 @@ function Gb300EquipmentInspector({
           <dd className="truncate font-mono text-cyan-100/80">{equipment.assetTag}</dd>
         </dl>
 
+        {equipment.kind === "l10" ? (
+          <dl
+            data-testid="l10-equipment-telemetry"
+            className="mt-3 grid grid-cols-3 divide-x divide-white/10 rounded-xl border border-white/10 bg-black/20 py-2.5 text-center"
+          >
+            <div className="px-2">
+              <dt className="text-[10px] font-semibold text-slate-400">功率</dt>
+              <dd className="mt-1 text-xs font-black tabular-nums text-white">
+                {equipment.powerKw?.toFixed(1)} kW
+              </dd>
+            </div>
+            <div className="px-2">
+              <dt className="text-[10px] font-semibold text-slate-400">溫度</dt>
+              <dd className="mt-1 text-xs font-black tabular-nums text-white">
+                {equipment.temperatureC?.toFixed(1)}°C
+              </dd>
+            </div>
+            <div className="px-2">
+              <dt className="text-[10px] font-semibold text-slate-400">負載</dt>
+              <dd className="mt-1 text-xs font-black tabular-nums text-white">
+                {equipment.utilizationPercent?.toFixed(0)}%
+              </dd>
+            </div>
+          </dl>
+        ) : null}
+
         <EquipmentLedSummary equipment={equipment} />
 
         <div className="mt-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-[10px] font-black tracking-[0.12em] text-slate-400">
-              DEVICE STATUS
+              {equipment.kind === "l10" ? "L10 狀態" : "DEVICE STATUS"}
             </span>
             {!canEdit ? (
               <span className="text-[10px] font-semibold text-slate-500">唯讀</span>
@@ -1613,7 +1837,10 @@ function Gb300EquipmentInspector({
                   key={option.id}
                   type="button"
                   aria-pressed={active}
-                  disabled={!canEdit || !equipment.sourceDeviceId}
+                  disabled={
+                    !canEdit
+                    || (!equipment.sourceDeviceId && equipment.kind !== "l10")
+                  }
                   onClick={() => onHealthChange(option.id)}
                   className="flex min-h-10 flex-col items-center justify-center gap-1 rounded-lg border px-1 text-[10px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
                   style={{
@@ -1646,14 +1873,25 @@ export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
   const [selectedEquipment, setSelectedEquipment] = useState<{
     rackId: string;
     equipmentId: string;
+    rackUnit?: number;
   } | null>(null);
   const selectedRack = props.racks.find(
     (rack) => rack.id === selectedEquipment?.rackId,
   );
   const selectedEquipmentData = selectedRack
-    ? (resolveGb300RackEquipment(selectedRack.devices) as Gb300EquipmentSelection[]).find(
-        (equipment) => equipment.id === selectedEquipment?.equipmentId,
-      )
+    ? selectedEquipment?.rackUnit
+      ? createL10EquipmentSelection({
+          rack: selectedRack,
+          definition: resolveL10Definition(
+            props.models,
+            selectedRack.l10ModelId,
+            selectedRack.modelId,
+          ),
+          rackUnit: selectedEquipment.rackUnit,
+        }) as Gb300EquipmentSelection
+      : (resolveGb300RackEquipment(selectedRack.devices) as Gb300EquipmentSelection[]).find(
+          (equipment) => equipment.id === selectedEquipment?.equipmentId,
+        )
     : undefined;
 
   useEffect(() => {
@@ -1665,7 +1903,11 @@ export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
   const handleSelectEquipment = useCallback(
     (rackId: string, equipment: Gb300EquipmentSelection) => {
       onSelectRack(rackId);
-      setSelectedEquipment({ rackId, equipmentId: equipment.id });
+      setSelectedEquipment({
+        rackId,
+        equipmentId: equipment.id,
+        rackUnit: equipment.kind === "l10" ? equipment.rackUnitStart : undefined,
+      });
     },
     [onSelectRack],
   );
@@ -1680,6 +1922,14 @@ export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
           canEdit={Boolean(props.canEdit)}
           onClose={() => setSelectedEquipment(null)}
           onHealthChange={(health) => {
+            if (selectedEquipmentData.kind === "l10") {
+              props.onUpdateL10ModuleHealth?.(
+                selectedRack.id,
+                selectedEquipmentData.rackUnitStart,
+                health,
+              );
+              return;
+            }
             if (!selectedEquipmentData.sourceDeviceId) return;
             props.onUpdateRackDeviceHealth?.(
               selectedRack.id,
@@ -1690,7 +1940,7 @@ export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
         />
       ) : null}
       <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-white/12 bg-black/70 px-4 py-2 text-[11px] font-medium text-slate-300 shadow-xl backdrop-blur-xl sm:block">
-        左鍵旋轉 · 右鍵平移 · 滾輪縮放 · 點選機櫃查看資料
+        左鍵旋轉 · 右鍵平移 · 滾輪縮放 · 點選設備或 L10 查看狀態
       </div>
       <Canvas
         shadows={!isMobile}
