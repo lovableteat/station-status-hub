@@ -2,6 +2,7 @@ import { useState } from "react";
 import { KeyRound, UserRoundPlus } from "lucide-react";
 
 import { useUser } from "@/components/auth/UserContext";
+import { PlatformLogoMark } from "@/components/brand/PlatformLogoMark";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -114,7 +115,7 @@ export function LoginPage() {
 
       <Card className="relative w-full max-w-[460px] overflow-hidden border-cyan-200/15 bg-[#101c2f]/95 text-slate-100 shadow-[0_35px_100px_-45px_rgba(56,189,248,0.5)] backdrop-blur-xl">
         <CardHeader className="space-y-4 border-b border-white/8 pb-5 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-200/25 bg-cyan-300/10 text-xl font-black text-cyan-100">S</div>
+          <PlatformLogoMark className="mx-auto text-cyan-100" size="lg" />
           <div className="space-y-2">
             <CardTitle className="text-2xl font-black tracking-[-0.03em]">工作整合平台</CardTitle>
             <CardDescription className="text-sm leading-6 text-slate-400">

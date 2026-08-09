@@ -1,5 +1,6 @@
 import { ChevronDown, LogOut } from "lucide-react";
 
+import { PlatformLogoMark } from "@/components/brand/PlatformLogoMark";
 import { Button } from "@/components/ui/button";
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
 import {
@@ -47,9 +48,7 @@ export function MainWorkspaceHeader({
 }: MainWorkspaceHeaderProps) {
   const brand = (
     <>
-      <div className="interactive-lift flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary shadow-[0_16px_34px_-24px_hsl(var(--primary)/0.65)] sm:h-11 sm:w-11 sm:rounded-[1.15rem]">
-        <span className="text-base font-black tracking-[0.08em] sm:text-lg">S</span>
-      </div>
+      <PlatformLogoMark className="interactive-lift text-primary" />
       <div className="min-w-0 text-left">
         <div className="truncate text-lg font-semibold tracking-[-0.03em] text-foreground sm:text-[1.35rem] 2xl:text-[1.5rem]">
           工作整合平台
