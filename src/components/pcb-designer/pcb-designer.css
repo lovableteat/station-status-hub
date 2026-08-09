@@ -278,6 +278,24 @@
   font-size: 12px;
 }
 
+.pcb-3d-fallback-button {
+  justify-self: center;
+  min-height: 32px;
+  margin-top: 4px;
+  padding: 0 14px;
+  border: 1px solid #58c5e3;
+  border-radius: 8px;
+  background: #12304a;
+  color: #dffaff;
+  font-size: 12px;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.pcb-3d-fallback-button:hover {
+  background: #1b4b69;
+}
+
 .pcb-3d-host canvas {
   outline: none;
 }

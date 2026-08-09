@@ -51,7 +51,7 @@ import { usePcbProjectPresence, type PcbViewMode } from "./hooks/usePcbProjectPr
 import "./pcb-designer.css";
 
 const Pcb3DCanvas = lazy(() => import("./Pcb3DCanvas.tsx").then((module) => ({
-  default: module.Pcb3DCanvas,
+  default: module.Pcb3DCanvasSafe,
 })));
 
 export interface PcbPngExportOptions {
@@ -587,6 +587,7 @@ export function PcbDesignerWorkspace({
               workspace={workspace}
               visibleLayer={workspace.visibleLayer}
               selectedObjects={workspace.selectedObjects}
+              onFallbackTo2D={() => setViewMode("2d")}
             />
           </Suspense>
         )}

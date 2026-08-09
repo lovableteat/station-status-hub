@@ -6,6 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three/examples/jsm/cont
 import { Focus, MousePointer2 } from "lucide-react";
 
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
+import { detectWebglSupport } from "./core/webgl.ts";
 import { getDefaultPcbModelAssetStore, isPcbModelAsset } from "./core/modelAssets.ts";
 import {
   getPcbComponentViewState,
@@ -20,6 +21,75 @@ function safeColor(value: string, fallback: string) {
   } catch {
     return new Color(fallback);
   }
+}
+
+export function Pcb3DCanvasSafe({
+  workspace,
+  visibleLayer = workspace.visibleLayer,
+  selectedObjects = workspace.selectedObjects,
+  onFallbackTo2D,
+}: {
+  workspace: PcbWorkspaceApi;
+  visibleLayer?: PcbVisibleLayer;
+  selectedObjects?: readonly string[];
+  onFallbackTo2D?: () => void;
+}) {
+  const size = Math.max(workspace.activeProject.board.width, workspace.activeProject.board.height, 40);
+  const [webglState, setWebglState] = useState<"checking" | "available" | "unavailable">("checking");
+
+  useEffect(() => {
+    setWebglState(detectWebglSupport() ? "available" : "unavailable");
+  }, []);
+
+  const webglFallback = (
+    <div className="pcb-3d-error" role="alert">
+      <strong>3D 檢視無法啟用</strong>
+      <span>此瀏覽器目前無法建立 WebGL 畫面，PCB 資料沒有遺失。</span>
+      {onFallbackTo2D && (
+        <button type="button" className="pcb-3d-fallback-button" onClick={onFallbackTo2D}>
+          切換回 2D 編輯
+        </button>
+      )}
+    </div>
+  );
+
+  return (
+    <div
+      className="pcb-3d-host"
+      data-testid="pcb-3d-canvas-host"
+      data-pcb-board-color={workspace.activeProject.board.background}
+      data-pcb-top-color={workspace.activeProject.board.layerColors.top}
+      data-pcb-bottom-color={workspace.activeProject.board.layerColors.bottom}
+    >
+      {webglState === "checking" ? (
+        <div className="pcb-3d-loading">正在檢查 3D 圖形加速…</div>
+      ) : webglState === "unavailable" ? webglFallback : (
+        <Pcb3DErrorBoundary>
+          <Canvas
+            fallback={webglFallback}
+            frameloop="demand"
+            dpr={[1, 1.25]}
+            camera={{ position: [size * 0.82, size * 0.72, size * 0.92], fov: 42, near: 0.1, far: size * 25 }}
+            gl={{ antialias: false, powerPreference: "default", failIfMajorPerformanceCaveat: false }}
+            onPointerMissed={() => {
+              workspace.selectObject(null);
+              workspace.clearObjectSelection();
+            }}
+          >
+            <Scene
+              workspace={workspace}
+              visibleLayer={visibleLayer}
+              selectedObjects={selectedObjects}
+            />
+          </Canvas>
+          <div className="pcb-3d-help">
+            <MousePointer2 aria-hidden="true" />
+            左鍵選取・右鍵平移・滾輪縮放・點選元件查看屬性
+          </div>
+        </Pcb3DErrorBoundary>
+      )}
+    </div>
+  );
 }
 
 function CameraControls({ boardWidth, boardHeight }: { boardWidth: number; boardHeight: number }) {
