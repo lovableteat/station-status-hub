@@ -22,6 +22,8 @@ test("the workspace uses one collaboration center for notifications, presence, a
   assert.match(centerSource, /value="online"/);
   assert.match(centerSource, /value="messages"/);
   assert.match(centerSource, /<DirectMessagesPanel/);
+  assert.match(centerSource, /data-floating-direct-messages/);
+  assert.match(centerSource, /開啟浮動訊息/);
   assert.match(centerSource, /open-global-collaboration/);
   assert.match(centerSource, /data-collaboration-content-frame="true"/);
   assert.match(centerSource, /absolute inset-0 mt-0 min-h-0 overflow-hidden data-\[state=active\]:flex/);

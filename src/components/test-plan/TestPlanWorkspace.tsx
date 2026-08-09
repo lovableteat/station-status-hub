@@ -794,7 +794,7 @@ export function TestPlanWorkspace() {
     <section className="test-plan-workspace">
       <header className="test-plan-header">
         <MaintenancePageHeader
-          title="Test_Plan"
+          title="資料儲存"
           description="集中管理電路板與工程資料：測試計畫、機構圖、PCB、韌體、程式碼、量測紀錄與 Office 檔案"
           icon={FolderKanban}
           actions={(
@@ -877,7 +877,7 @@ export function TestPlanWorkspace() {
             "test-plan-space-rail",
             isSpaceDrawerOpen && "is-mobile-open",
           )}
-          aria-label="Test_Plan 空間與資料夾"
+          aria-label="資料儲存空間與資料夾"
         >
           <div className="test-plan-rail-heading">
             <div>
@@ -1228,7 +1228,7 @@ export function TestPlanWorkspace() {
                 {loading ? (
                   <div className="test-plan-loading">
                     <RefreshCw className="h-5 w-5 animate-spin" />
-                    正在載入 Test_Plan…
+                    正在載入資料儲存…
                   </div>
                 ) : visibleEntries.length === 0 ? (
                   <div className="test-plan-empty is-compact">

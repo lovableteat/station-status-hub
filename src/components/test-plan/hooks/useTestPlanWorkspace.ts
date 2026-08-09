@@ -37,7 +37,7 @@ interface UseTestPlanWorkspaceOptions {
 }
 
 const AUTHENTICATED_SESSION_REQUIRED =
-  "Test_Plan 需要安全登入工作階段，請登出後重新登入。";
+  "資料儲存需要安全登入工作階段，請登出後重新登入。";
 
 export function useTestPlanWorkspace(
   options: UseTestPlanWorkspaceOptions = {},
@@ -75,7 +75,7 @@ export function useTestPlanWorkspace(
       throw new Error(AUTHENTICATED_SESSION_REQUIRED);
     }
     if (!canEdit) {
-      throw new Error("目前為唯讀模式，無法修改 Test_Plan。");
+      throw new Error("目前為唯讀模式，無法修改資料儲存。");
     }
   }, [canEdit, isAuthenticated]);
 
@@ -114,7 +114,7 @@ export function useTestPlanWorkspace(
         if (requestId === requestIdRef.current) applyWorkspace(workspace);
       } catch (caught) {
         if (requestId === requestIdRef.current) {
-          setError(getTestPlanErrorMessage(caught, "Test_Plan 載入失敗。"));
+          setError(getTestPlanErrorMessage(caught, "資料儲存載入失敗。"));
         }
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
@@ -157,7 +157,7 @@ export function useTestPlanWorkspace(
     async <T,>(operation: () => Promise<T>): Promise<T> => {
       requireEdit();
       if (mutationInFlightRef.current) {
-        throw new Error("已有 Test_Plan 操作進行中，請稍候再試。");
+        throw new Error("已有資料儲存操作進行中，請稍候再試。");
       }
       mutationInFlightRef.current = true;
       setBusy(true);

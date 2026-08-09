@@ -24,6 +24,18 @@ test("remote BOM rows are split into parallel-safe 1000-row ranges", async () =>
     { from: 3000, to: 3999 },
   ]);
   assert.deepEqual(performance.createBomRecordFetchRanges(0), []);
+  assert.deepEqual(performance.createBomRecordPageRange(3377, 1, 50), {
+    from: 0,
+    to: 49,
+  });
+  assert.deepEqual(performance.createBomRecordPageRange(3377, 3, 100), {
+    from: 200,
+    to: 299,
+  });
+  assert.deepEqual(performance.createBomRecordPageRange(3377, 0, 0), {
+    from: 0,
+    to: 0,
+  });
   assert.deepEqual(
     performance.chunkBomRecordFetchRanges(
       performance.createBomRecordFetchRanges(6000),

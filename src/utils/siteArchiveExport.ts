@@ -45,7 +45,7 @@ interface CapturedSnapshotState {
 }
 
 const SNAPSHOT_MODULES: SnapshotModule[] = [
-  { id: "test-plan", label: "Test_Plan" },
+  { id: "test-plan", label: "資料儲存" },
   { id: "dashboard", label: "系統儀表板" },
   { id: "test-tracker", label: "L10 測試追蹤" },
   { id: "flow-info", label: "L10 測試流程設定" },

@@ -504,10 +504,10 @@ export function UserPermissionsDialog({
                     <Shield className="mt-0.5 h-5 w-5 text-cyan-200" />
                     <div>
                       <h4 className="font-semibold text-foreground">
-                        Test_Plan 隨機台維修紀錄中心啟用
+                        資料儲存隨機台維修紀錄中心啟用
                       </h4>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        維修中心「檢視」可查看 Test_Plan；「管理」可建立空間、資料夾與上傳檔案，不需要另外勾選。
+                        維修中心「檢視」可查看資料儲存；「管理」可建立空間、資料夾與上傳檔案，不需要另外勾選。
                       </p>
                     </div>
                   </div>

@@ -4252,6 +4252,7 @@ export function MaterialRequestPage() {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportSnapshotRequested, setExportSnapshotRequested] = useState(false);
   const [exportSnapshot, setExportSnapshot] = useState<MaterialReportSnapshot | null>(null);
   const [exportProgress, setExportProgress] = useState<MaterialExportProgress | null>(null);
   const [activeExportFormat, setActiveExportFormat] = useState<"excel" | "html" | "zip" | null>(null);
@@ -4261,6 +4262,7 @@ export function MaterialRequestPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceSyncRequestRef = useRef(0);
   const activeBomIdRef = useRef(activeBomId);
+  const loadedRecordRangeRef = useRef("");
   const recentLocalRecordIdsRef = useRef(new Map<string, number>());
   const loadedViewStateKeyRef = useRef("");
   const deferredQuery = useDeferredValue(query);
@@ -4368,7 +4370,7 @@ export function MaterialRequestPage() {
 
   const reloadBomWorkspaces = useCallback(async (
     preferredBomId?: string,
-    options: { forceRefresh?: boolean } = {},
+    options: { forceRefresh?: boolean; recordPage?: number; recordPageSize?: number; loadAllRecords?: boolean } = {},
   ) => {
     const requestId = ++workspaceSyncRequestRef.current;
     try {
@@ -4379,6 +4381,16 @@ export function MaterialRequestPage() {
 
       setCollaborationStatus(result.mode);
       applyLoadedWorkspaces(result.workspaces, preferredBomId);
+      if (preferredBomId) {
+        const loadedWorkspace = result.workspaces.find((workspace) => workspace.id === preferredBomId);
+        const hasAllRecords = loadedWorkspace
+          && loadedWorkspace.payload.records.length >= loadedWorkspace.payload.recordCount;
+        loadedRecordRangeRef.current = hasAllRecords || options.loadAllRecords
+          ? `${preferredBomId}:full`
+          : options.recordPage && options.recordPageSize
+            ? `${preferredBomId}:${options.recordPage}:${options.recordPageSize}`
+            : "";
+      }
       return result.workspaces;
     } catch (error) {
       if (requestId === workspaceSyncRequestRef.current) {
@@ -4409,11 +4421,20 @@ export function MaterialRequestPage() {
       }
 
       try {
-        const result = await loadBomWorkspacesDetailed(preferredWorkspaceId, { cachedResult });
+        const result = await loadBomWorkspacesDetailed(preferredWorkspaceId, {
+          cachedResult,
+          recordPage: 1,
+          recordPageSize: pageSize,
+        });
         remoteSettled = true;
         if (!active || requestId !== workspaceSyncRequestRef.current) return;
         setCollaborationStatus(result.mode);
         applyLoadedWorkspaces(result.workspaces, preferredWorkspaceId);
+        const loadedWorkspace = result.workspaces.find((workspace) => workspace.id === preferredWorkspaceId);
+        loadedRecordRangeRef.current = loadedWorkspace
+          && loadedWorkspace.payload.records.length >= loadedWorkspace.payload.recordCount
+          ? `${preferredWorkspaceId}:full`
+          : `${preferredWorkspaceId}:1:${pageSize}`;
       } catch {
         remoteSettled = true;
         if (!active || requestId !== workspaceSyncRequestRef.current) return;
@@ -4445,7 +4466,7 @@ export function MaterialRequestPage() {
       active = false;
       unsubscribe();
     };
-  }, [applyLoadedWorkspaces]);
+  }, [applyLoadedWorkspaces, pageSize]);
 
   useEffect(() => {
     activeBomIdRef.current = activeBomId;
@@ -4578,6 +4599,36 @@ export function MaterialRequestPage() {
   );
 
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
+  const requiresFullBomLoad = searchTokens.length > 0
+    || availability !== "all"
+    || showMarkedOnly
+    || sortMode !== "reference"
+    || Object.values(columnFilters).some((values) => Boolean(values?.length));
+
+  useEffect(() => {
+    if (isInitialLoading || collaborationStatus !== "remote" || !activeWorkspace) return;
+
+    const requestKey = requiresFullBomLoad
+      ? `${activeBomId}:full`
+      : `${activeBomId}:${page}:${pageSize}`;
+    if (loadedRecordRangeRef.current === requestKey) return;
+
+    let active = true;
+    setIsWorkspaceLoading(true);
+    void reloadBomWorkspaces(activeBomId, {
+      forceRefresh: true,
+      recordPage: requiresFullBomLoad ? undefined : page,
+      recordPageSize: requiresFullBomLoad ? undefined : pageSize,
+      loadAllRecords: requiresFullBomLoad,
+    }).catch(() => undefined).finally(() => {
+      if (active) setIsWorkspaceLoading(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [activeBomId, activeWorkspace, availability, columnFilters, collaborationStatus, isInitialLoading, page, pageSize, reloadBomWorkspaces, requiresFullBomLoad, showMarkedOnly, sortMode]);
+
   const groupRuntimeIndex = useMemo(() => {
     const searchableTextByGroup = new Map<string, string>();
     const refTokensByGroup = new Map<string, string[]>();
@@ -4793,7 +4844,10 @@ export function MaterialRequestPage() {
     return chips;
   }, [availability, columnFilters, query, showMarkedOnly]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / pageSize));
+  const isFullDatasetLoaded = loadedRecordRangeRef.current === `${activeBomId}:full`;
+  const totalPages = requiresFullBomLoad && isFullDatasetLoaded
+    ? Math.max(1, Math.ceil(filteredGroups.length / pageSize))
+    : Math.max(1, Math.ceil(activeWorkspace.payload.recordCount / pageSize));
   const noAlternativeCount = useMemo(
     () => dataset.groups.filter(hasNoAlternative).length,
     [dataset.groups]
@@ -4815,9 +4869,10 @@ export function MaterialRequestPage() {
     [dataset.groups]
   );
   const visibleGroups = useMemo(() => {
+    if (!requiresFullBomLoad || !isFullDatasetLoaded) return filteredGroups;
     const start = (page - 1) * pageSize;
     return filteredGroups.slice(start, start + pageSize);
-  }, [filteredGroups, page, pageSize]);
+  }, [filteredGroups, isFullDatasetLoaded, page, pageSize, requiresFullBomLoad]);
 
   const visibleGroupRows = useMemo(
     () => visibleGroups.map((group) => {
@@ -5310,6 +5365,30 @@ export function MaterialRequestPage() {
     return snapshot;
   };
 
+  const prepareExportSnapshot = async () => {
+    if (isFullDatasetLoaded) {
+      createExportSnapshot();
+      return;
+    }
+
+    setExportSnapshotRequested(true);
+    setIsWorkspaceLoading(true);
+    await reloadBomWorkspaces(activeBomId, {
+      forceRefresh: true,
+      loadAllRecords: true,
+    }).catch(() => undefined);
+    setIsWorkspaceLoading(false);
+  };
+
+  const createExportSnapshotRef = useRef(createExportSnapshot);
+  createExportSnapshotRef.current = createExportSnapshot;
+
+  useEffect(() => {
+    if (!exportSnapshotRequested || !isFullDatasetLoaded || isWorkspaceLoading) return;
+    setExportSnapshotRequested(false);
+    createExportSnapshotRef.current();
+  }, [exportSnapshotRequested, isFullDatasetLoaded, isWorkspaceLoading]);
+
   const runExport = async (format: "excel" | "html" | "zip") => {
     if (!exportSnapshot || activeExportFormat) return;
     setActiveExportFormat(format);
@@ -5543,7 +5622,7 @@ export function MaterialRequestPage() {
             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:text-slate-500">
               <Upload className="mr-2 h-4 w-4" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
-            <Button type="button" variant="outline" onClick={createExportSnapshot} className="h-9 border-emerald-300/25 bg-emerald-400/10 px-3 text-sm font-bold text-emerald-100 hover:bg-emerald-400/18 hover:text-white">
+            <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-emerald-300/25 bg-emerald-400/10 px-3 text-sm font-bold text-emerald-100 hover:bg-emerald-400/18 hover:text-white disabled:cursor-wait disabled:opacity-60">
               <Download className="mr-2 h-4 w-4" />匯出主管報表
             </Button>
           </div>

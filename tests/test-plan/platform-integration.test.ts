@@ -16,7 +16,7 @@ test("registers Test_Plan in the maintenance navigation and lazy station route",
   assert.match(index, /import\("@\/components\/test-plan\/TestPlanWorkspace"\)/);
   assert.match(index, /\|\s*"test-plan"/);
   assert.match(index, /case "test-plan":[\s\S]{0,220}<PermissionGuard module="test-plan">/);
-  assert.match(sidebar, /\{\s*id:\s*"test-plan",\s*label:\s*"Test_Plan"/);
+  assert.match(sidebar, /\{\s*id:\s*"test-plan",\s*label:\s*"資料儲存"/);
 });
 
 test("adds view and edit permission contracts everywhere platform permissions are declared", async () => {
@@ -32,7 +32,7 @@ test("adds view and edit permission contracts everywhere platform permissions ar
   }
   assert.match(permissions, /"test-plan":\s*"station-status"/);
   assert.match(permissions, /"test-plan":\s*"test_plan"/);
-  assert.match(permissions, /test_plan:\s*\{[\s\S]{0,260}Test_Plan/);
+  assert.match(permissions, /test_plan:\s*\{[\s\S]{0,260}資料儲存/);
 });
 
 test("creates owner-scoped metadata, hierarchy guards, and a private 500 MiB bucket", async () => {
@@ -139,7 +139,7 @@ test("admin permission editor explains inherited Test_Plan access instead of exp
     "src/components/admin/UserPermissionsDialog.tsx",
   );
 
-  assert.match(dialog, /Test_Plan 隨機台維修紀錄中心啟用/);
+  assert.match(dialog, /資料儲存隨機台維修紀錄中心啟用/);
   assert.match(dialog, /\.filter\(\(\[groupKey\]\)\s*=>\s*groupKey\s*!==\s*"test_plan"\)/);
 });
 
@@ -168,9 +168,9 @@ test("publishes Test_Plan labels to collaboration and offline export catalogs", 
   );
   const siteExport = await source("src/utils/siteArchiveExport.ts");
 
-  assert.match(collaboration, /"test-plan":\s*"Test_Plan"/);
-  assert.match(adminCollaboration, /"test-plan":\s*"Test_Plan"/);
-  assert.match(siteExport, /\{\s*id:\s*"test-plan",\s*label:\s*"Test_Plan"\s*\}/);
+  assert.match(collaboration, /"test-plan":\s*"資料儲存"/);
+  assert.match(adminCollaboration, /"test-plan":\s*"資料儲存"/);
+  assert.match(siteExport, /\{\s*id:\s*"test-plan",\s*label:\s*"資料儲存"\s*\}/);
 });
 
 test("queues durable file cleanup before an administrator deletes an account", async () => {
@@ -242,7 +242,7 @@ test("connects the repository to private Supabase storage through one guarded ho
   );
   assert.match(hook, /if \(!canEdit\)[\s\S]{0,120}唯讀/);
   assert.match(hook, /sessionMode === "authenticated"/);
-  assert.match(hook, /Test_Plan 需要安全登入工作階段/);
+  assert.match(hook, /資料儲存需要安全登入工作階段/);
   assert.match(hook, /mutationInFlightRef/);
   assert.match(hook, /activeSpaceIdRef\.current\s*!==\s*expectedSpaceId/);
   assert.match(hook, /requestIdRef/);

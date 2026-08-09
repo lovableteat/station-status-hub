@@ -77,7 +77,7 @@ export function getTestPlanErrorMessage(
     || searchable.includes("could not find the table")
     || searchable.includes("does not exist")
   ) {
-    return "Test_Plan 資料庫尚未完成部署，請聯絡管理員後再試。";
+    return "資料儲存資料庫尚未完成部署，請聯絡管理員後再試。";
   }
 
   if (
@@ -85,7 +85,7 @@ export function getTestPlanErrorMessage(
     || searchable.includes("row-level security")
     || searchable.includes("permission denied")
   ) {
-    return "目前登入帳號沒有建立或修改 Test_Plan 空間的權限，請確認後台權限後再試。";
+    return "目前登入帳號沒有建立或修改資料儲存空間的權限，請確認後台權限後再試。";
   }
 
   if (
