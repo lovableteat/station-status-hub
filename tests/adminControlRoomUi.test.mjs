@@ -5,29 +5,41 @@ import { formatAdminUserTimestamp } from "../src/components/admin/adminUserTime.
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("admin user timestamps format in Taipei time and fall back when unavailable", () => {
+test("admin user timestamps format timezone-qualified timestamptz values and fall back otherwise", () => {
   assert.equal(
     formatAdminUserTimestamp("2025-01-02T03:04:05.000Z", "尚未登入"),
+    "2025/01/02 11:04",
+  );
+  assert.equal(
+    formatAdminUserTimestamp("2025-01-02 03:04:05+00:00", "尚未登入"),
     "2025/01/02 11:04",
   );
   assert.equal(formatAdminUserTimestamp(null, "尚未登入"), "尚未登入");
   assert.equal(formatAdminUserTimestamp("not-a-timestamp", "尚未登入"), "尚未登入");
   assert.equal(formatAdminUserTimestamp("2025-02-30T00:00:00.000Z", "尚未登入"), "尚未登入");
+  assert.equal(formatAdminUserTimestamp("2025-01-02T03:04:05", "尚未登入"), "尚未登入");
 });
 
-test("admin account cards show last login while preserving creator information", async () => {
+test("admin account cards distinguish last login from creation time and keep permission summaries truncatable", async () => {
   const source = await read("../src/components/admin/AdminPanel.tsx");
 
-  assert.match(source, /last_seen_at\??:\s*string\s*\|\s*null/);
+  assert.match(source, /last_seen_at:\s*string\s*\|\s*null/);
   assert.match(source, /最後登入/);
-  assert.match(source, /formatAdminUserTimestamp\(systemUser\.last_seen_at,\s*"尚未登入"\)/);
-  assert.match(source, /建立者/);
-  assert.match(source, /systemUser\.created_by/);
-  assert.match(source, /const creatorLabel = systemUser\.created_by === "self-registration"/);
-  assert.match(source, /className="flex min-w-0 items-center gap-2"/);
-  assert.match(source, /className="min-w-0 max-w-48 truncate text-xs text-slate-500"/);
-  assert.match(source, /title=\{creatorLabel\}/);
-  assert.match(source, /建立者：\{creatorLabel\}/);
+  assert.match(source, /const lastLoginLabel = formatAdminUserTimestamp\(systemUser\.last_seen_at, "尚未登入"\)/);
+  assert.match(source, /lastLoginLabel === "尚未登入" \? "text-slate-500" : "text-slate-200"/);
+  assert.match(source, /<Clock3 className="h-3 w-3" aria-hidden="true"\s*\/?>\s*最後登入/s);
+  assert.match(source, /建立時間/);
+  assert.doesNotMatch(source, /建立時間<\/div>\s*<div[^>]*>\s*<Clock3/s);
+
+  assert.match(source, /const permissionsSummary = `網站與工作區權限 · 建立者：\$\{creatorLabel\}`/);
+  assert.match(source, /<Lock className="h-3\.5 w-3\.5 shrink-0 text-cyan-200\/75" aria-hidden="true" \/>/);
+  assert.match(source, /className="min-w-0 truncate text-xs font-semibold text-slate-400"/);
+  assert.match(source, /title=\{permissionsSummary\}/);
+  assert.match(source, /aria-label=\{permissionsSummary\}/);
+  assert.match(source, />\s*\{permissionsSummary\}\s*<\/span>/);
+  assert.match(source, /className="flex flex-wrap justify-end gap-1\.5 sm:shrink-0"/);
+  assert.match(source, /workspaceBadges\.length > 0 \? `\$\{workspaceBadges\.length\} 個工作區` : "未配置"/);
+  assert.match(source, /className="flex flex-col gap-3[^\"]*sm:flex-row[^\"]*sm:justify-between"/);
 });
 
 test("admin workspace exposes clear visual zones without changing user actions", async () => {
