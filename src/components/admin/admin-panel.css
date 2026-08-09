@@ -19,8 +19,8 @@
 
 .admin-shell {
   display: flex;
-  min-height: 0;
-  align-items: flex-start;
+  min-height: calc(100dvh - 110px);
+  align-items: stretch;
   gap: 12px;
 }
 
@@ -31,9 +31,10 @@
   display: flex;
   width: 220px;
   height: auto;
-  max-height: calc(100dvh - 110px);
+  min-height: calc(100dvh - 110px);
+  max-height: none;
   flex: 0 0 auto;
-  align-self: flex-start;
+  align-self: stretch;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #2a526f;
@@ -95,7 +96,7 @@
 
 .admin-sidebar nav {
   display: flex;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 5px;
   overflow-y: auto;
