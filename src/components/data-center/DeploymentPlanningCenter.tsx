@@ -3827,7 +3827,7 @@ export function DeploymentPlanningCenter() {
           onChange={handleImportFile}
         />
 
-        <header className="relative z-20 flex shrink-0 items-center gap-2 border-b border-cyan-300/14 bg-[linear-gradient(90deg,#071420,#081928_48%,#07131e)] px-3 py-2 sm:flex-wrap sm:gap-3 sm:px-5 sm:py-3 lg:h-[82px] lg:flex-nowrap lg:px-6 lg:py-0">
+        <header className="relative z-20 flex shrink-0 items-center gap-2 border-b border-cyan-300/14 bg-[linear-gradient(90deg,#071420,#081928_48%,#07131e)] px-3 py-2 sm:flex-wrap sm:gap-3 sm:px-5 sm:py-3 lg:h-[68px] lg:flex-nowrap lg:px-6 lg:py-0">
           <div className="flex min-w-0 items-center gap-3">
             <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-300/15 text-cyan-100 sm:h-11 sm:w-11">
               <Boxes className="h-5 w-5" />
@@ -3842,7 +3842,8 @@ export function DeploymentPlanningCenter() {
             </div>
           </div>
 
-          <div className="ml-auto hidden items-center gap-2 xl:flex">
+          <div data-testid="data-center-metric-toolbar" className="ml-auto flex min-w-0 max-w-full items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="hidden shrink-0 items-center gap-1.5 xl:flex">
             {[
               { label: "機櫃", value: selectedSite.racks.length, icon: Server, color: "text-cyan-200" },
               { label: "主運算設備", value: totalL10, icon: Cpu, color: "text-cyan-200" },
@@ -3851,27 +3852,27 @@ export function DeploymentPlanningCenter() {
             ].map((metric) => {
               const Icon = metric.icon;
               return (
-                <div key={metric.label} className="flex h-11 min-w-[100px] items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3">
-                  <Icon className={cn("h-4 w-4", metric.color)} />
+                <div key={metric.label} className="flex h-10 min-w-[78px] shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-black/20 px-2.5">
+                  <Icon className={cn("h-3.5 w-3.5", metric.color)} />
                   <div>
-                    <div className="text-[10px] font-bold text-slate-400">{metric.label}</div>
-                    <div className="mt-0.5 text-sm font-bold tabular-nums text-white">{metric.value}</div>
+                    <div className="whitespace-nowrap text-[9px] font-bold leading-none text-slate-400">{metric.label}</div>
+                    <div className="mt-1 whitespace-nowrap text-xs font-bold leading-none tabular-nums text-white">{metric.value}</div>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          <div className="hidden items-center gap-2 sm:flex">
+            <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
             <Button
               type="button"
               variant="outline"
               onClick={() => {
                 openModelLibrary("rack");
               }}
-              className="h-11 rounded-xl border-cyan-300/22 bg-cyan-400/8 px-4 text-sm font-bold text-cyan-50 hover:bg-cyan-400/15"
+              className="h-10 rounded-lg border-cyan-300/22 bg-cyan-400/8 px-3 text-xs font-bold text-cyan-50 hover:bg-cyan-400/15"
             >
-              <Box className="mr-2 h-4 w-4" />
+              <Box className="mr-1.5 h-3.5 w-3.5" />
               <span className="hidden sm:inline">模型與設備</span>
               <span className="sm:hidden">設備</span>
             </Button>
@@ -3882,16 +3883,17 @@ export function DeploymentPlanningCenter() {
                   setWorkspaceMode("2d");
                 }}
                 className={cn(
-                  "h-11 rounded-xl px-4 text-sm font-bold",
+                  "h-10 rounded-lg px-3 text-xs font-bold",
                   workspaceMode === "2d"
                     ? "bg-amber-300 text-amber-950 hover:bg-amber-200"
                     : "bg-cyan-400 text-cyan-950 hover:bg-cyan-300"
                 )}
               >
-                <Map className="mr-2 h-4 w-4" />
+                <Map className="mr-1.5 h-3.5 w-3.5" />
                 {workspaceMode === "2d" ? "2D 規劃中" : "2D 規劃"}
               </Button>
             ) : null}
+            </div>
           </div>
         </header>
 
