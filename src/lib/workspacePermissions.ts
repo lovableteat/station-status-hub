@@ -162,10 +162,10 @@ export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
     ],
   },
   test_plan: {
-    name: "Test_Plan",
+    name: "資料儲存",
     permissions: [
-      { key: "test_plan_view", label: "檢視 Test_Plan" },
-      { key: "test_plan_edit", label: "管理 Test_Plan" },
+      { key: "test_plan_view", label: "檢視 資料儲存" },
+      { key: "test_plan_edit", label: "管理 資料儲存" },
     ],
   },
   api_management: {

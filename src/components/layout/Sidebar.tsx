@@ -39,7 +39,7 @@ const navigationItems = [
   { id: "monitor", label: "生產監控牆", icon: Factory },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle },
   { id: "tools", label: "工具與資產", icon: Wrench },
-  { id: "test-plan", label: "Test_Plan", icon: FolderKanban },
+  { id: "test-plan", label: "資料儲存", icon: FolderKanban },
 ];
 
 export function Sidebar({

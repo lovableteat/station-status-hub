@@ -193,8 +193,9 @@ test("admin account lifecycle updates system and Auth identities as one operatio
 });
 
 test("direct messages are member-only, incremental, retryable, and idempotent", async () => {
-  const [migration, hook] = await Promise.all([
+  const [migration, deletionMigration, hook] = await Promise.all([
     readSource("supabase/migrations/20260729120000_realtime_collaboration_v2.sql"),
+    readSource("supabase/migrations/20260809120000_direct_chat_message_deletion.sql"),
     readSource("src/hooks/useDirectMessages.ts"),
   ]);
 
@@ -204,6 +205,10 @@ test("direct messages are member-only, incremental, retryable, and idempotent", 
   assert.match(migration, /UNIQUE \(sender_id, client_id\)/i);
   assert.match(migration, /realtime\.broadcast_changes/i);
   assert.match(migration, /chat-inbox:/i);
+  assert.match(deletionMigration, /delete_direct_chat_message/i);
+  assert.match(deletionMigration, /v_role NOT IN \('admin', 'super_admin'\)/i);
+  assert.match(hook, /deleteMessage/);
+  assert.match(hook, /deleted_at/);
   assert.match(hook, /channel\(`chat-inbox:/);
   assert.match(hook, /delivery: "sending"/);
   assert.match(hook, /delivery: "failed"/);

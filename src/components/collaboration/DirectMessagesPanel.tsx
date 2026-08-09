@@ -6,6 +6,7 @@ import {
   RefreshCw,
   Search,
   Send,
+  Trash2,
   Users,
 } from "lucide-react";
 
@@ -79,6 +80,7 @@ export function DirectMessagesPanel({
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const requestedUserRef = useRef<string | null>(null);
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.threadId === selectedThreadId) ?? null,
@@ -94,6 +96,7 @@ export function DirectMessagesPanel({
     loadMore,
     sendMessage,
     retryMessage,
+    deleteMessage,
     sendTyping,
   } = useDirectMessages(selectedThreadId);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
@@ -200,11 +203,13 @@ export function DirectMessagesPanel({
                   Date.parse(readByOtherAt) >= Date.parse(message.createdAt);
                 return (
                   <div key={message.id} className={cn("flex", own ? "justify-end" : "justify-start")}>
-                    <div className="max-w-[82%]">
+                    <div className="group relative max-w-[82%]">
                       <div
                         className={cn(
                           "rounded-2xl px-3.5 py-2.5 text-sm leading-6",
-                          own
+                          message.deletedAt
+                            ? "border border-slate-700 bg-slate-800/70 text-slate-500 italic"
+                            : own
                             ? "rounded-br-md bg-cyan-300 text-[#06111f]"
                             : "rounded-bl-md border border-slate-700 bg-[#102036] text-slate-100",
                           message.delivery === "failed" && "border border-rose-300 bg-rose-400/15 text-rose-50",
@@ -212,6 +217,26 @@ export function DirectMessagesPanel({
                       >
                         <p className="whitespace-pre-wrap break-words">{message.body}</p>
                       </div>
+                      {message.delivery === "sent" && !message.deletedAt &&
+                      (own || user?.role === "admin" || user?.role === "super_admin") ? (
+                        <button
+                          type="button"
+                          aria-label="刪除訊息"
+                          title="刪除訊息"
+                          disabled={deletingMessageId === message.id}
+                          onClick={() => {
+                            if (!window.confirm("確定要刪除這則訊息嗎？")) return;
+                            setDeletingMessageId(message.id);
+                            void deleteMessage(message.id).finally(() => setDeletingMessageId(null));
+                          }}
+                          className={cn(
+                              "absolute -top-3 flex h-7 w-7 items-center justify-center rounded-full border border-slate-600 bg-[#071522] text-slate-400 shadow-lg transition sm:opacity-0 sm:group-hover:opacity-100 hover:border-rose-300/60 hover:text-rose-200",
+                            own ? "-left-9" : "-right-9",
+                          )}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
                       <div className={cn("mt-1 text-[11px] text-slate-500", own && "text-right")}>
                         {message.delivery === "sending" ? "傳送中" : null}
                         {message.delivery === "sent" ? (read ? "已讀" : "已送出") : null}

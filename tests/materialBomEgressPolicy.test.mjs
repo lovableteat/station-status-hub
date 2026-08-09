@@ -80,16 +80,10 @@ test("reuses a complete BOM cache only when its remote version and record count 
   }), false);
 });
 
-test("BOM search does not force a full workspace reload", async () => {
+test("BOM search promotes a partial workspace to a full workspace load", async () => {
   const pageSource = await readFile(pageUrl, "utf8");
-  const applySearch = readFunctionBlock(
-    pageSource,
-    "const applySearch = async () => {",
-    "const clearFilters = () => {",
-  );
-
-  assert.ok(applySearch, "applySearch implementation should be present");
-  assert.doesNotMatch(applySearch, /reloadBomWorkspaces/);
+  assert.match(pageSource, /const requiresFullBomLoad = searchTokens\.length > 0/);
+  assert.match(pageSource, /loadAllRecords:\s*requiresFullBomLoad/);
 });
 
 test("manual latest-data action still forces a remote refresh", async () => {
@@ -113,7 +107,7 @@ test("workspace switches use cache-aware refreshes by default", async () => {
   );
 
   assert.ok(reloadWorkspace, "reloadBomWorkspaces implementation should be present");
-  assert.match(reloadWorkspace, /options:\s*\{\s*forceRefresh\?: boolean\s*\}\s*=\s*\{\}/);
+  assert.match(reloadWorkspace, /options:\s*\{[\s\S]*forceRefresh\?: boolean[\s\S]*recordPage\?: number[\s\S]*\}\s*=\s*\{\}/);
 });
 
 test("single-record saves persist the database record version into the cache", async () => {

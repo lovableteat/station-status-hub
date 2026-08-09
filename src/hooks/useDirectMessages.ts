@@ -29,6 +29,7 @@ export interface DirectMessage {
   body: string;
   createdAt: string;
   editedAt: string | null;
+  deletedAt: string | null;
   delivery: "sending" | "sent" | "failed";
 }
 
@@ -62,6 +63,7 @@ function mapMessage(row: any): DirectMessage {
     body: row.body,
     createdAt: row.created_at,
     editedAt: row.edited_at ?? null,
+    deletedAt: row.deleted_at ?? null,
     delivery: "sent",
   };
 }
@@ -236,7 +238,7 @@ export function useDirectMessages(threadId: string | null) {
     setLoading(true);
     const { data, error: queryError } = await database
       .from("chat_messages")
-      .select("id,thread_id,sender_id,client_id,body,created_at,edited_at")
+      .select("id,thread_id,sender_id,client_id,body,created_at,edited_at,deleted_at")
       .eq("thread_id", threadId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
@@ -261,7 +263,7 @@ export function useDirectMessages(threadId: string | null) {
     setLoadingMore(true);
     const { data, error: queryError } = await database
       .from("chat_messages")
-      .select("id,thread_id,sender_id,client_id,body,created_at,edited_at")
+      .select("id,thread_id,sender_id,client_id,body,created_at,edited_at,deleted_at")
       .eq("thread_id", threadId)
       .is("deleted_at", null)
       .lt("created_at", oldest.createdAt)
@@ -285,7 +287,7 @@ export function useDirectMessages(threadId: string | null) {
           client_id: clientId,
           body,
         })
-        .select("id,thread_id,sender_id,client_id,body,created_at,edited_at")
+        .select("id,thread_id,sender_id,client_id,body,created_at,edited_at,deleted_at")
         .single();
       if (!insertError && data) return mapMessage(data);
 
@@ -315,6 +317,7 @@ export function useDirectMessages(threadId: string | null) {
         body,
         createdAt: new Date().toISOString(),
         editedAt: null,
+        deletedAt: null,
         delivery: "sending",
       };
       setMessages((current) => mergeMessages(current, [optimistic]));
@@ -359,6 +362,26 @@ export function useDirectMessages(threadId: string | null) {
       return false;
     },
     [messages, persistMessage],
+  );
+
+  const deleteMessage = useCallback(
+    async (messageId: string) => {
+      if (!threadId || !isRealtimeAuthenticated || !messageId) return false;
+      const { data, error: deleteError } = await database.rpc("delete_direct_chat_message", {
+        p_message_id: messageId,
+      });
+      if (deleteError || data !== true) {
+        setError("訊息刪除失敗，請確認權限或稍後再試。");
+        return false;
+      }
+      setMessages((current) => current.map((message) => (
+        message.id === messageId
+          ? { ...message, body: "此訊息已刪除", deletedAt: new Date().toISOString() }
+          : message
+      )));
+      return true;
+    },
+    [isRealtimeAuthenticated, threadId],
   );
 
   const sendTyping = useCallback(
@@ -458,6 +481,7 @@ export function useDirectMessages(threadId: string | null) {
     loadMore,
     sendMessage,
     retryMessage,
+    deleteMessage,
     markRead,
     sendTyping,
   };

@@ -70,7 +70,7 @@ const moduleLabels: Record<string, string> = {
   monitor: "生產監控牆",
   issues: "問題追蹤",
   tools: "工具與資產",
-  "test-plan": "Test_Plan",
+  "test-plan": "資料儲存",
   users: "後台管理",
   "api-management": "API 管理",
   "material-requests": "料號申請",
@@ -181,6 +181,7 @@ export function CollaborationCenter() {
   const [activeAnnouncement, setActiveAnnouncement] = useState<NotificationRow | null>(null);
   const [acknowledgingAnnouncement, setAcknowledgingAnnouncement] = useState(false);
   const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
+  const [messageFloatOpen, setMessageFloatOpen] = useState(false);
   const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
   const [memberQuery, setMemberQuery] = useState("");
   const [directoryMembers, setDirectoryMembers] = useState<CollaborationDirectoryMember[]>([]);
@@ -612,7 +613,7 @@ export function CollaborationCenter() {
               ) : filteredMembers.length === 0 ? (
                 <div className="flex h-44 flex-col items-center justify-center text-center text-slate-500"><Search className="mb-3 h-8 w-8 opacity-45" /><p className="font-semibold text-slate-300">找不到符合的帳號</p><p className="mt-1 text-sm">可改用姓名、帳號、角色、頁面或離線狀態搜尋。</p></div>
               ) : (
-                <div className="space-y-2.5 pb-3">{filteredMembers.map((member) => <MemberCard key={member.userId} member={member} currentUserId={user?.userId} onMessage={member.userId === user?.userId ? undefined : () => { setMessageRecipientId(member.userId); setActiveTab("messages"); }} />)}</div>
+                <div className="space-y-2.5 pb-3">{filteredMembers.map((member) => <MemberCard key={member.userId} member={member} currentUserId={user?.userId} onMessage={member.userId === user?.userId ? undefined : () => { setMessageRecipientId(member.userId); setMessageFloatOpen(true); }} />)}</div>
               )}
             </ScrollArea>
           </TabsContent>
@@ -629,6 +630,29 @@ export function CollaborationCenter() {
           </aside>
         </>
       )}
+
+      {isRealtimeAuthenticated ? (
+        <div className="fixed bottom-4 right-4 z-[84] flex flex-col items-end gap-3">
+          {messageFloatOpen ? (
+            <section aria-label="浮動訊息" data-floating-direct-messages="true" className="flex h-[min(620px,calc(100dvh-5rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-cyan-200/25 bg-[#06111f] shadow-[0_24px_70px_-24px_rgba(34,211,238,0.6)]">
+              <header className="flex items-center justify-between gap-3 border-b border-cyan-200/15 bg-[linear-gradient(120deg,#10263a,#0b1b2d)] px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <MessageSquareText className="h-4 w-4 shrink-0 text-cyan-300" />
+                  <div className="min-w-0"><p className="truncate text-sm font-bold text-slate-50">訊息</p><p className="text-[11px] text-slate-400">即時私訊</p></div>
+                </div>
+                <Button type="button" variant="ghost" size="icon" aria-label="收合浮動訊息" onClick={() => setMessageFloatOpen(false)} className="h-8 w-8 rounded-lg text-slate-300 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></Button>
+              </header>
+              <div className="min-h-0 flex-1">
+                <DirectMessagesPanel onlineUsers={onlineUsers} requestedUserId={messageRecipientId} onRequestHandled={() => setMessageRecipientId(null)} />
+              </div>
+            </section>
+          ) : (
+            <Button type="button" aria-label="開啟浮動訊息" onClick={() => setMessageFloatOpen(true)} className="h-12 rounded-full border border-cyan-200/25 bg-cyan-300 px-5 font-bold text-[#06111f] shadow-[0_18px_45px_-18px_rgba(34,211,238,0.9)] hover:bg-cyan-200">
+              <MessageSquareText className="mr-2 h-5 w-5" />訊息
+            </Button>
+          )}
+        </div>
+      ) : null}
     </>
   );
 }
