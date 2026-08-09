@@ -19,6 +19,7 @@ import { AdminCollaborationPanel } from "@/components/collaboration/AdminCollabo
 import { MaintenanceMetricStrip } from "@/components/maintenance/MaintenanceMetricStrip";
 import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
 import { AdminSidebar } from "./AdminSidebar";
+import { formatAdminUserTimestamp } from "./adminUserTime.mjs";
 import { UserEditDialog } from "./UserEditDialog";
 import { EngineerEditDialog } from "./EngineerEditDialog";
 import { UserPermissionsDialog } from "./UserPermissionsDialog";
@@ -53,6 +54,7 @@ interface SystemUser {
   auth_migrated_at?: string | null;
   registration_requested_at?: string | null;
   approved_at?: string | null;
+  last_seen_at?: string | null;
 }
 
 type AdminTab = "users" | "collaboration" | "api-management";
@@ -870,9 +872,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                           <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">{systemUser.username}</div>
                         </div>
                         <div className="min-w-0 border-white/[0.07] sm:border-r sm:px-4">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">建立者</div>
+                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">最後登入</div>
                           <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">
-                            {systemUser.created_by === "self-registration" ? "使用者自行註冊" : systemUser.created_by || "系統"}
+                            {formatAdminUserTimestamp(systemUser.last_seen_at, "尚未登入")}
                           </div>
                         </div>
                         <div className="min-w-0 sm:pl-4">
@@ -887,11 +889,14 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                       </div>
 
                       <div className="flex flex-col gap-3 rounded-xl border border-[#2a526f] bg-[#071522] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                           <Lock className="h-3.5 w-3.5 text-cyan-200/75" />
                           <span className="text-xs font-semibold text-slate-400">網站與工作區權限</span>
                           <span className="rounded-full border border-white/[0.07] bg-white/[0.035] px-2 py-0.5 text-[10px] text-slate-500">
                             {workspaceBadges.length > 0 ? `${workspaceBadges.length} 個工作區` : "未配置"}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            建立者：{systemUser.created_by === "self-registration" ? "使用者自行註冊" : systemUser.created_by || "系統"}
                           </span>
                         </div>
 

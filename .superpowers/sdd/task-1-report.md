@@ -1,215 +1,42 @@
-# Task 1 Report — 統一 2D／3D 同步投影與選取規則
+# Task 1 report: Last-login metadata
 
-## 修改內容
+## RED
 
-- 新增共享同步模組 `viewSync.ts`，集中處理：
-  - primary selection 與 grouped selection 去重後的 ID 集合
-  - `all/top/bottom` 圖層可見規則
-  - 2D 元件中心點計算
-  - 3D board-centered transform 計算，並保留 bottom layer 翻面規則
-- `PcbCanvas.tsx` 改用共享圖層可見與選取 ID 邏輯，避免 2D 自行維護一套規則。
-- `PcbCanvas.tsx` 元件 render root 新增：
-  - `data-pcb-coordinate`
-  - `data-pcb-rotation`
-  - `data-pcb-layer`
-  - `data-pcb-selected`
-- `Pcb3DCanvas.tsx` 改用共享圖層可見、選取 ID、3D transform 邏輯。
-- `Pcb3DCanvas.tsx` 將 board-plane transform 與元件高度 offset 分離：
-  - 共享函式只負責 2D/3D 同步的 board-plane 對位
-  - 既有 `maxHeight` 高度抬升仍在內層 group 保留
-- 新增 pure-function 測試與 contract 測試，驗證共享模組與 inspectable attributes。
+Command:
 
-## 修改檔案
-
-- `src/components/pcb-designer/core/viewSync.ts`
-- `src/components/pcb-designer/PcbCanvas.tsx`
-- `src/components/pcb-designer/Pcb3DCanvas.tsx`
-- `tests/pcb-designer/view-sync.test.ts`
-- `tests/pcb-designer/editor-contract.test.ts`
-
-## TDD RED / GREEN
-
-### RED
-
-命令：
-
-```bash
-node --test tests/pcb-designer/view-sync.test.ts
+```powershell
+node --test tests/adminControlRoomUi.test.mjs
 ```
 
-關鍵輸出：
+Result: exited 1 as expected. Node reported `ERR_MODULE_NOT_FOUND` for `src/components/admin/adminUserTime.mjs`, because the test imported the required utility before it existed.
 
-```text
-Error [ERR_MODULE_NOT_FOUND]: Cannot find module '.../src/components/pcb-designer/core/viewSync.ts'
-✖ tests\pcb-designer\view-sync.test.ts
-ℹ pass 0
-ℹ fail 1
+## GREEN
+
+Command:
+
+```powershell
+node --test tests/adminControlRoomUi.test.mjs tests/realtimeCollaborationV2.test.mjs
+npx.cmd eslint src/components/admin/AdminPanel.tsx tests/adminControlRoomUi.test.mjs
+npm.cmd run build
 ```
 
-判定：符合預期，因為共享模組尚未建立。
+Result: all commands exited 0. Node tests: 14 passed, 0 failed. Targeted ESLint completed with no output or errors. Vite production build completed successfully.
 
-### GREEN
+## Modified files
 
-命令：
+- `tests/adminControlRoomUi.test.mjs`: added test-first coverage for Taipei formatting, null/invalid fallbacks, and account-card source requirements.
+- `src/components/admin/adminUserTime.mjs`: added `formatAdminUserTimestamp(value, fallback)` using `Intl.DateTimeFormat(...).formatToParts()` with `Asia/Taipei`.
+- `src/components/admin/AdminPanel.tsx`: added `SystemUser.last_seen_at`, rendered `最後登入`, and moved preserved creator information into the permissions strip.
+- `.superpowers/sdd/task-1-report.md`: this implementation report.
 
-```bash
-node --test tests/pcb-designer/view-sync.test.ts
-```
+## Self-review
 
-關鍵輸出：
+- Confirmed the RED failure was due specifically to the missing utility module.
+- Confirmed valid UTC input is rendered as `2025/01/02 11:04` in Taipei time; null and invalid input use `尚未登入`.
+- Confirmed the account card references `last_seen_at`, renders `最後登入`, and retains `systemUser.created_by` with its self-registration fallback.
+- Confirmed `git diff --check` found no whitespace errors.
+- Reviewed the scoped diff; no task-unrelated source files were changed.
 
-```text
-✔ returns the 2D center from board coordinates
-✔ maps top-layer board coordinates into a deterministic 3D transform
-✔ adds the bottom-layer flip to the shared 3D transform
-✔ returns unique selection ids including the primary selection
-✔ shares visible-layer rules across all, top, and bottom filters
-ℹ pass 5
-ℹ fail 0
-```
+## Concerns
 
-## Focused tests
-
-命令：
-
-```bash
-node --test tests/pcb-designer/view-sync.test.ts
-node --test tests/pcb-designer/editor-contract.test.ts
-```
-
-關鍵輸出：
-
-```text
-view-sync.test.ts: pass 5, fail 0
-editor-contract.test.ts: pass 25, fail 0
-```
-
-## `npm run test:pcb`
-
-命令：
-
-```bash
-cmd /c npm run test:pcb
-```
-
-結果：
-
-```text
-ℹ tests 147
-ℹ pass 144
-ℹ fail 3
-```
-
-失敗項目：
-
-1. `tests/pcb-designer/account-remote-sync.test.ts`
-   - `loads a dedicated account workspace and refreshes built-in catalogs`
-   - 關鍵差異：`5 !== 4`
-2. `tests/pcb-designer/workspace-integration.test.ts`
-   - `replaces the loading shell with one native three-area PCB workbench`
-   - 關鍵差異：命中 `gradient|shadow-(?:xl|2xl)` 相關既有來源內容
-3. `tests/pcb-designer/workspace-integration.test.ts`
-   - `ships a complete custom-login PCB workspace migration and legacy permission fallback`
-
-判讀：
-
-- 這 3 個失敗都不在本次 brief 允許修改的檔案範圍內。
-- 本次新增/修改的 focused tests 已全數通過。
-- 因使用者要求「只修改 brief 列出的檔案」，本輪未延伸處理這 3 個既有失敗。
-
-## 自我檢查
-
-- 已確認修改集中在 brief 列出的 5 個功能檔案，另補指定報告檔。
-- 未處理 `layerColors`、`import preview`、`toolbar`。
-- 2D 與 3D 都改成從同一個共享模組取得：
-  - visible layer 規則
-  - selected IDs 規則
-  - 共同座標映射基準
-- 3D 保留既有元件高度呈現方式，避免因同步邏輯抽取而改變模型/程序 fallback 的立體高度。
-- 已執行 `git diff --check`，無 whitespace error；僅有既有 CRLF/LF warning。
-
-## 疑慮
-
-- `npm run test:pcb` 未全綠；但失敗集中在本 Task 範圍外的既有測試。
-- `getPcb3DComponentTransform()` 目前將共享 transform 定義在 board plane，元件高度 offset 仍留在 `Pcb3DCanvas.tsx` 內層 group。這樣可保留現有 3D 外觀，同時滿足 2D/3D 投影同步；若後續 brief 想把高度 offset 也納入共享函式，介面需要額外接受 `maxHeight` 或厚度資訊。
-
-## Reviewer follow-up（追加修正）
-
-### 補充修改
-
-- 新增 `getPcbComponentViewState()`，由單一 component、`visibleLayer`、`selectionIds` 產生：
-  - `coordinate`
-  - `rotation`
-  - `layer`
-  - `visible`
-  - `selected`
-- `PcbCanvas.tsx` 與 `Pcb3DCanvas.tsx` 都改用同一份 shared component view state，不再各自維護第二份 component inspection state。
-- `getPcbSelectionIds()` 的正式 API 已收斂為：
-
-```ts
-getPcbSelectionIds(
-  primarySelection: PcbSelection | null,
-  selectedObjects: readonly PcbSelection[],
-): string[]
-```
-
-- 因現有 canvas props 的 `selectedObjects` 仍是 `string[]`，兩個 canvas 內部先依目前 project 內容還原成 `PcbSelection[]` 再餵給 shared helper；未擴大修改 brief 外檔案。
-
-### 追加 TDD
-
-#### RED
-
-命令：
-
-```bash
-node --test tests/pcb-designer/view-sync.test.ts
-```
-
-關鍵輸出：
-
-```text
-SyntaxError: ... viewSync.ts does not provide an export named 'getPcbComponentViewState'
-ℹ pass 0
-ℹ fail 1
-```
-
-判定：符合預期，因為 reviewer 要求的新 shared state helper 尚未導出。
-
-#### GREEN
-
-命令：
-
-```bash
-node --test tests/pcb-designer/view-sync.test.ts
-```
-
-關鍵輸出：
-
-```text
-✔ derives one shared component view state for 2D and 3D consumers
-ℹ pass 6
-ℹ fail 0
-```
-
-### Reviewer 指定 focused tests
-
-命令：
-
-```bash
-node --test tests/pcb-designer/view-sync.test.ts
-node --test tests/pcb-designer/editor-contract.test.ts
-```
-
-結果：
-
-```text
-view-sync.test.ts: pass 6, fail 0
-editor-contract.test.ts: pass 25, fail 0
-```
-
-### 非本任務既有 failures 說明
-
-- 依 reviewer 指示，未修改 `account-remote-sync` 與 `workspace-integration` 對應來源檔。
-- `npm run test:pcb` 的 3 個既有 failure 仍以前一輪結果為準，保留為已知非本任務範圍問題：
-  - `tests/pcb-designer/account-remote-sync.test.ts`
-  - `tests/pcb-designer/workspace-integration.test.ts`（2 項）
+- The successful production build emitted existing non-blocking warnings about stale Browserslist data, browser-externalized imports from OCCT dependencies, and chunks over 500 kB. No warnings were introduced by this change.
