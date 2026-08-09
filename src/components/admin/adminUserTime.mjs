@@ -1,5 +1,21 @@
 export function formatAdminUserTimestamp(value, fallback) {
-  if (!value) return fallback;
+  if (typeof value !== "string" || !value) return fallback;
+
+  const isoDate = /^(\d{4})-(\d{2})-(\d{2})(?:T|\s)/.exec(value);
+  if (!isoDate) return fallback;
+
+  const [, yearText, monthText, dayText] = isoDate;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const calendarDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    calendarDate.getUTCFullYear() !== year ||
+    calendarDate.getUTCMonth() !== month - 1 ||
+    calendarDate.getUTCDate() !== day
+  ) {
+    return fallback;
+  }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return fallback;

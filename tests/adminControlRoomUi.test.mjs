@@ -12,6 +12,7 @@ test("admin user timestamps format in Taipei time and fall back when unavailable
   );
   assert.equal(formatAdminUserTimestamp(null, "尚未登入"), "尚未登入");
   assert.equal(formatAdminUserTimestamp("not-a-timestamp", "尚未登入"), "尚未登入");
+  assert.equal(formatAdminUserTimestamp("2025-02-30T00:00:00.000Z", "尚未登入"), "尚未登入");
 });
 
 test("admin account cards show last login while preserving creator information", async () => {
@@ -22,6 +23,11 @@ test("admin account cards show last login while preserving creator information",
   assert.match(source, /formatAdminUserTimestamp\(systemUser\.last_seen_at,\s*"尚未登入"\)/);
   assert.match(source, /建立者/);
   assert.match(source, /systemUser\.created_by/);
+  assert.match(source, /const creatorLabel = systemUser\.created_by === "self-registration"/);
+  assert.match(source, /className="flex min-w-0 items-center gap-2"/);
+  assert.match(source, /className="min-w-0 max-w-48 truncate text-xs text-slate-500"/);
+  assert.match(source, /title=\{creatorLabel\}/);
+  assert.match(source, /建立者：\{creatorLabel\}/);
 });
 
 test("admin workspace exposes clear visual zones without changing user actions", async () => {

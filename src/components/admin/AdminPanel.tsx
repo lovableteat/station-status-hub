@@ -743,6 +743,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 {filteredSystemUsers.map((systemUser) => {
                   const workspaceBadges = getWorkspaceBadges(systemUser.permissions);
                   const isProtected = isProtectedSystemUser(systemUser);
+                  const creatorLabel = systemUser.created_by === "self-registration"
+                    ? "使用者自行註冊"
+                    : systemUser.created_by || "系統";
 
                   return (
                     <article
@@ -889,14 +892,17 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                       </div>
 
                       <div className="flex flex-col gap-3 rounded-xl border border-[#2a526f] bg-[#071522] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <div className="flex min-w-0 items-center gap-2">
                           <Lock className="h-3.5 w-3.5 text-cyan-200/75" />
-                          <span className="text-xs font-semibold text-slate-400">網站與工作區權限</span>
-                          <span className="rounded-full border border-white/[0.07] bg-white/[0.035] px-2 py-0.5 text-[10px] text-slate-500">
+                          <span className="shrink-0 text-xs font-semibold text-slate-400">網站與工作區權限</span>
+                          <span className="shrink-0 rounded-full border border-white/[0.07] bg-white/[0.035] px-2 py-0.5 text-[10px] text-slate-500">
                             {workspaceBadges.length > 0 ? `${workspaceBadges.length} 個工作區` : "未配置"}
                           </span>
-                          <span className="text-xs text-slate-500">
-                            建立者：{systemUser.created_by === "self-registration" ? "使用者自行註冊" : systemUser.created_by || "系統"}
+                          <span
+                            className="min-w-0 max-w-48 truncate text-xs text-slate-500"
+                            title={creatorLabel}
+                          >
+                            建立者：{creatorLabel}
                           </span>
                         </div>
 
