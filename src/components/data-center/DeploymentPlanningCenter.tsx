@@ -1071,9 +1071,9 @@ function RackInspector({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#081c2d]">
-      <div className="flex min-h-[82px] shrink-0 items-center justify-between border-b border-[#163653] px-4 py-4">
+      <div className="flex min-h-[62px] shrink-0 items-center justify-between border-b border-[#163653] px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-blue-300/30 bg-blue-400/15 text-blue-100">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-400/15 text-blue-100">
             <Server className="h-5 w-5" />
           </div>
           <div className="min-w-0">
@@ -1092,8 +1092,8 @@ function RackInspector({
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-4 p-4">
-          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-4">
+        <div className="space-y-2 p-3">
+          <section className="rounded-xl border border-[#1d4262] bg-[#0c2235] p-3">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-xl font-black tracking-[-0.03em] text-white">{rack.cabinet}</div>
@@ -1104,7 +1104,7 @@ function RackInspector({
               </span>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
               {[
                 { label: "POWER", value: `${rack.powerKw} kW`, icon: Zap },
                 { label: "TEMP", value: `${rack.temperatureC}°C`, icon: Thermometer },
@@ -1112,7 +1112,7 @@ function RackInspector({
               ].map((metric) => {
                 const Icon = metric.icon;
                 return (
-                  <div key={metric.label} className="rounded-xl border border-[#163653] bg-[#081c2d] p-2.5">
+                  <div key={metric.label} className="rounded-lg border border-[#163653] bg-[#081c2d] p-2">
                     <div className="flex items-center gap-1 text-[10px] font-bold text-blue-200/80">
                       <Icon className="h-3 w-3" />
                       {metric.label}
@@ -1124,7 +1124,7 @@ function RackInspector({
             </div>
           </section>
 
-          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
+          <section className="rounded-xl border border-[#1d4262] bg-[#0c2235] p-2.5">
             <div className="mb-3 flex items-center justify-between px-1">
               <span className="text-xs font-bold text-slate-200">L11 機櫃外型</span>
               {model.isCalibrated ? (
@@ -1161,17 +1161,17 @@ function RackInspector({
             </button>
           </section>
 
-          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-4">
+          <section className="rounded-xl border border-[#1d4262] bg-[#0c2235] p-3">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 text-sm font-bold text-white">
                   <Cpu className="h-4 w-4 text-blue-300" />
                   主運算設備
                 </div>
-                <p className="mt-1 text-xs leading-5 text-slate-300">
+                <p className="mt-1 hidden text-xs leading-5 text-slate-300 sm:block">
                   {l10Model.name} · 19 吋軌道 · 每台佔 {l10RackUnits}U
                 </p>
-                <p className="mt-1 text-[10px] leading-4 text-cyan-100/65">
+                <p className="mt-1 hidden text-[10px] leading-4 text-cyan-100/65 sm:block">
                   主場景使用保留上蓋的輕量模型；開啟 L10 細節時才載入完整原始 CAD，兼顧外觀與操作流暢度。
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1208,7 +1208,8 @@ function RackInspector({
               </div>
             </div>
 
-            <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-[#163653] bg-[#081c2d] px-3 py-3">
+            <div data-testid="data-center-l10-step" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#163653] bg-[#081c2d] px-2.5 py-2.5">
+              <span className="text-[10px] font-semibold text-slate-400">選擇 U 位可移動設備</span>
               <div>
                 <div className="text-[11px] font-semibold text-slate-300">目前數量</div>
                 <div className="mt-0.5 text-2xl font-black tabular-nums text-white">
@@ -1247,7 +1248,7 @@ function RackInspector({
                   <div className="flex items-center gap-2 text-xs font-bold text-cyan-50">
                     <Layers3 className="h-4 w-4 text-cyan-300" /> 選擇安裝層位
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-300">
+                  <p className="mt-1 hidden text-[11px] text-slate-300 sm:block">
                     點選任意可用 U 位；可分開安裝，不必連續排列
                   </p>
                 </div>
@@ -1291,7 +1292,7 @@ function RackInspector({
                     可用 {l10Capacity} 層
                   </span>
                 </div>
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div data-testid="data-center-l10-auto-place" className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
                     disabled={!canEdit}
@@ -1386,7 +1387,7 @@ function RackInspector({
                   );
                 })}
               </div>
-              <p className="mt-2 text-[10px] leading-4 text-slate-400">
+              <p className="mt-2 hidden text-[10px] leading-4 text-slate-400 sm:block">
                 底部保留 {L10_RESERVED_BOTTOM_U}U、頂部保留 {L10_RESERVED_TOP_U}U 維修空間；亮色層位會立即同步到 3D 機櫃。
               </p>
             </div>
@@ -1395,12 +1396,12 @@ function RackInspector({
                 目前使用 1U 暫代外型；收到正式 L10 STEP／GLB 後，在型錄匯入即可替換櫃內機台。
               </p>
             ) : null}
-            <p className="mt-2 text-[11px] leading-5 text-cyan-100/80">
+            <p className="mt-2 hidden text-[11px] leading-5 text-cyan-100/80 sm:block">
               L10 只會安裝在目前的 L11 機櫃內，不會取代或獨立變成機櫃。
             </p>
           </section>
 
-          <section className="rounded-[20px] border border-[#1d4262] bg-[#0c2235] p-3.5">
+          <section className="rounded-xl border border-[#1d4262] bg-[#0c2235] p-2.5">
             <div className="mb-3 flex items-center justify-between px-1">
               <div>
                 <span className="text-xs font-bold text-slate-200">
@@ -1416,15 +1417,18 @@ function RackInspector({
             </div>
 
             <button
+              data-testid="data-center-device-step"
               type="button"
               onClick={onOpenL10Models}
-              className="mb-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-blue-300/25 bg-blue-400/10 text-xs font-black text-blue-50 transition-colors hover:border-blue-300/45 hover:bg-blue-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+              className="mb-2 flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-blue-300/25 bg-blue-400/10 text-xs font-black text-blue-50 transition-colors hover:border-blue-300/45 hover:bg-blue-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
             >
               <Boxes className="h-4 w-4" /> 從設備目錄新增
             </button>
 
+            <p className="mb-2 text-[10px] text-slate-400">先新增設備，再用每列的 U 位選單調整位置；垃圾桶可移除設備。</p>
+
             {catalogDevices.length > 0 ? (
-              <div className="mb-3 space-y-2">
+              <div data-testid="data-center-device-list" className="mb-2 space-y-1.5">
                 {catalogDevices.map((device) => {
                   const definition = models[device.catalogModelId!];
                   const category = getEquipmentCategory(definition) as RackEquipmentCategory;
@@ -1440,9 +1444,9 @@ function RackInspector({
                     reservedTopU: L10_RESERVED_TOP_U,
                   });
                   return (
-                    <div key={device.id} className="rounded-xl border border-blue-300/15 bg-[#081c2d] p-3">
+                    <div key={device.id} className="rounded-lg border border-blue-300/15 bg-[#081c2d] p-2">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-300/20 bg-blue-400/10 text-blue-200">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-blue-300/20 bg-blue-400/10 text-blue-200">
                           <Icon className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -1453,7 +1457,7 @@ function RackInspector({
                         </div>
                         <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[9px] font-black text-emerald-200">已安裝</span>
                       </div>
-                      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_38px] gap-2">
+                      <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_34px] gap-1.5">
                         <Select
                           value={String(device.slotStart)}
                           onValueChange={(value) => onRackDeviceMove(device.id, Number(value))}
@@ -1586,10 +1590,10 @@ function RackInspector({
                     return (
                       <div
                         key={device.id}
-                        className="rounded-xl border border-[#163653] bg-[#081c2d] p-2.5"
+                        className="rounded-lg border border-[#163653] bg-[#081c2d] p-2"
                       >
                         <div className="flex items-center gap-2">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#10283d] text-blue-100/75">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#10283d] text-blue-100/75">
                             <Icon className="h-4 w-4" />
                           </div>
                           <div className="min-w-0 flex-1">
@@ -1614,7 +1618,7 @@ function RackInspector({
                             )}
                           />
                         </div>
-                        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_38px] gap-2">
+                        <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_34px] gap-1.5">
                           <Select
                             value={String(device.slotStart)}
                             onValueChange={(value) =>
