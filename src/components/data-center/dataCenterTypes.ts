@@ -94,6 +94,8 @@ export interface RackPlan {
   l10StartU: number;
   /** Exact one-based rack units selected for L10 modules. Older data derives these from start/count. */
   l10Slots?: number[];
+  /** Health reported for each installed L10 module, keyed by its one-based starting U. */
+  l10ModuleHealth?: Record<string, RackDeviceHealth>;
   powerKw: number;
   coolingKw: number;
   temperatureC: number;

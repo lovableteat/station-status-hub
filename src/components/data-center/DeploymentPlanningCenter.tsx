@@ -2876,6 +2876,34 @@ export function DeploymentPlanningCenter() {
     );
   };
 
+  const handleL10ModuleHealthChange = (
+    rackId: string,
+    rackUnit: number,
+    health: RackDeviceHealth,
+  ) => {
+    if (!canEdit) return;
+    setSites((currentSites) =>
+      currentSites.map((site) =>
+        site.id === selectedSiteId
+          ? {
+              ...site,
+              racks: site.racks.map((rack) =>
+                rack.id === rackId
+                  ? {
+                      ...rack,
+                      l10ModuleHealth: {
+                        ...rack.l10ModuleHealth,
+                        [String(rackUnit)]: health,
+                      },
+                    }
+                  : rack,
+              ),
+            }
+          : site,
+      ),
+    );
+  };
+
   const getRackEquipmentLayoutError = (
     rack: RackPlan,
     devices: RackDevice[],
@@ -3995,6 +4023,7 @@ export function DeploymentPlanningCenter() {
                 onSelectRack={handleRackSelect}
                 canEdit={canEdit}
                 onUpdateRackDeviceHealth={handleRackDeviceHealthChange}
+                onUpdateL10ModuleHealth={handleL10ModuleHealthChange}
               />
             ) : (
               <DataCenter2DPlanner
@@ -4223,6 +4252,7 @@ export function DeploymentPlanningCenter() {
               onSelectRack={handleRackSelect}
               canEdit={canEdit}
               onUpdateRackDeviceHealth={handleRackDeviceHealthChange}
+              onUpdateL10ModuleHealth={handleL10ModuleHealthChange}
             />
           ) : (
             <DataCenter2DPlanner
