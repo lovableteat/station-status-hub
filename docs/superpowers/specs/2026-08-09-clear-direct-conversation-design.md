@@ -15,17 +15,19 @@ Allow a signed-in user to remove every visible message with one person from thei
 
 ## Data model and security
 
-Add nullable `cleared_at timestamptz` to `chat_members`. This stores an independent history cutoff for each participant.
+Add `chat_history_clears(thread_id, user_id, cleared_at)` with a composite primary key. Each participant owns a separate cutoff row, and RLS allows a user to read only their own clear records, so the other participant cannot observe when a conversation was cleared.
 
-Add `clear_direct_chat_history(p_thread_id uuid)` as a `SECURITY DEFINER` RPC. It must require an authenticated active system user, verify that the target is a direct chat and that the caller is a member, then update only the caller's membership row.
+Add `clear_direct_chat_history(p_thread_id uuid)` as a `SECURITY DEFINER` RPC. It must require an authenticated active system user, verify that the target is a direct chat and that the caller is a member, then upsert only the caller's cutoff row.
 
 Replace the message-read policy so authenticated users can read only messages created after their own `cleared_at` cutoff. Update `list_direct_chat_threads()` so previews and unread counts use the same cutoff, and hide a cleared thread until a newer message exists. Existing insert and per-message deletion permissions remain unchanged.
 
 ## Client flow
 
-`useDirectMessageThreads()` exposes `clearDirectChat(threadId)`. It calls the RPC, reports a user-facing error on failure, and removes the cleared thread from local state on success.
+`useDirectMessageThreads()` exposes `clearDirectChat(threadId)`. It calls the RPC, reports a user-facing error on failure, removes the cleared thread from local state on success, and emits a local clear event so every open panel purges stale history.
 
-`DirectMessagesPanel` keeps the row's primary open action separate from the destructive icon button to avoid nested interactive elements. The control has an accessible name, visible hover/focus state, confirmation copy, and a per-thread loading state.
+Realtime message broadcasts contain opaque table, thread, and record identifiers only. Clients fetch the referenced row again through RLS before displaying it. Authoritative reloads replace visible sent rows while retaining legitimate optimistic sends, preventing cached or broadcast payloads from bypassing the personal cutoff.
+
+`DirectMessagesPanel` keeps the row's primary open action separate from the destructive icon button to avoid nested interactive elements. The control has an accessible name, visible hover/focus state, confirmation copy, and a `Set`-backed per-thread loading state that safely handles concurrent requests.
 
 ## Error handling
 
@@ -35,6 +37,6 @@ Replace the message-read policy so authenticated users can read only messages cr
 
 ## Verification
 
-- Source tests cover the cutoff column, membership-only RPC, caller-scoped update, RLS cutoff, list filtering, hook API, accessible delete control, confirmation copy, and loading state.
+- Tests cover the private cutoff table, membership-only RPC, caller-scoped upsert, RLS cutoff, list filtering, opaque realtime invalidation, cache replacement behavior, hook API, accessible delete control, confirmation copy, and concurrent loading state.
 - Run the collaboration test suite, targeted ESLint, production build, and migration checks.
 - Push `main`, wait for GitHub Pages, apply the Supabase migration, and verify the production conversation list in a signed-in browser.

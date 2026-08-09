@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { useUser } from "@/components/auth/UserContext";
+import { setPendingDirectThread } from "@/components/collaboration/directMessageState.mjs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,7 +109,8 @@ export function DirectMessagesPanel({
   const [draft, setDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
-  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
+  const [deletingThreadIds, setDeletingThreadIds] = useState<Set<string>>(() => new Set());
+  const deletingThreadIdsRef = useRef(new Set<string>());
   const requestedUserRef = useRef<string | null>(null);
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.threadId === selectedThreadId) ?? null,
@@ -162,15 +164,26 @@ export function DirectMessagesPanel({
   };
 
   const handleClearThread = async (thread: DirectThread) => {
+    if (deletingThreadIdsRef.current.has(thread.threadId)) return;
     const confirmed = window.confirm(
       `確定刪除與「${thread.otherDisplayName}」的所有訊息嗎？\n\n只會清除你帳號看到的紀錄，對方仍會保留，且無法復原。`,
     );
     if (!confirmed) return;
-    setDeletingThreadId(thread.threadId);
+    deletingThreadIdsRef.current = setPendingDirectThread(
+      deletingThreadIdsRef.current,
+      thread.threadId,
+      true,
+    );
+    setDeletingThreadIds(deletingThreadIdsRef.current);
     try {
       await clearDirectChat(thread.threadId);
     } finally {
-      setDeletingThreadId(null);
+      deletingThreadIdsRef.current = setPendingDirectThread(
+        deletingThreadIdsRef.current,
+        thread.threadId,
+        false,
+      );
+      setDeletingThreadIds(deletingThreadIdsRef.current);
     }
   };
 
@@ -407,7 +420,7 @@ export function DirectMessagesPanel({
                 key={thread.threadId}
                 thread={thread}
                 online={onlineUserIds.has(thread.otherUserId)}
-                deleting={deletingThreadId === thread.threadId}
+                deleting={deletingThreadIds.has(thread.threadId)}
                 onOpen={() => setSelectedThreadId(thread.threadId)}
                 onDelete={() => void handleClearThread(thread)}
               />
