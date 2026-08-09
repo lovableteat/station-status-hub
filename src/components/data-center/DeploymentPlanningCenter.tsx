@@ -611,6 +611,7 @@ interface SceneNavigatorProps {
   onSearchChange: (value: string) => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  scrollMode?: "contained" | "page";
 }
 
 function getDataCenterProjectStats(project: DataCenterProjectSummary) {
@@ -647,6 +648,7 @@ function SceneNavigator({
   onSearchChange,
   collapsed = false,
   onToggleCollapse,
+  scrollMode = "contained",
 }: SceneNavigatorProps) {
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
   const selectedSite = sites.find((site) => site.id === selectedSiteId) ?? sites[0] ?? null;
@@ -702,7 +704,13 @@ function SceneNavigator({
   }
 
   return (
-    <div data-testid="data-center-control-panel" className="flex h-full min-h-0 flex-col bg-[#081c2d]">
+    <div
+      data-testid="data-center-control-panel"
+      className={cn(
+        "flex min-h-0 flex-col bg-[#081c2d]",
+        scrollMode === "page" ? "h-auto" : "h-full",
+      )}
+    >
       <div className="flex min-h-[62px] shrink-0 items-center justify-between border-b border-[#163653] px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-400/15 text-blue-100">
@@ -1090,7 +1098,12 @@ function RackInspector({
         ) : null}
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea
+        className={cn(
+          "min-h-0 flex-1",
+          scrollMode === "page" && "flex-none overflow-visible",
+        )}
+      >
         <div className="space-y-2 p-3">
           <section className="rounded-xl border border-[#1d4262] bg-[#0c2235] p-3">
             <div className="flex items-start justify-between gap-3">
@@ -4297,12 +4310,17 @@ export function DeploymentPlanningCenter() {
         )}
 
         <Dialog open={mobileLeftOpen} onOpenChange={setMobileLeftOpen}>
-          <DialogContent className="h-[min(76dvh,640px)] w-[min(92vw,680px)] max-w-none gap-0 overflow-hidden border border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[680px]">
+          <DialogContent className="flex max-h-[min(90dvh,760px)] w-[min(92vw,680px)] max-w-none flex-col gap-0 overflow-hidden border border-[#163653] bg-[#081c2d] p-0 text-slate-100 sm:max-w-[680px]">
             <DialogHeader className="sr-only">
               <DialogTitle>場景總覽</DialogTitle>
               <DialogDescription>在同一個控制台選擇專案分類、廠區、圖層與機櫃。</DialogDescription>
             </DialogHeader>
-            <SceneNavigator {...navigatorProps} />
+            <div
+              data-testid="mobile-scene-scroll-region"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+            >
+              <SceneNavigator {...navigatorProps} scrollMode="page" />
+            </div>
           </DialogContent>
         </Dialog>
 
