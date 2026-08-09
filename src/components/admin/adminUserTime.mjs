@@ -1,10 +1,19 @@
+const TIMESTAMPTZ_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:T|\s)(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3])(?::?[0-5]\d)?)$/;
+
+/**
+ * Formats a complete ISO or PostgreSQL timestamptz value for the admin roster.
+ *
+ * @param {string | null} value Timestamp with an explicit UTC designator or offset.
+ * @param {string} fallback Display text used when the timestamp is absent or invalid.
+ * @returns {string} A compact Asia/Taipei timestamp, or the supplied fallback.
+ */
 export function formatAdminUserTimestamp(value, fallback) {
   if (typeof value !== "string" || !value) return fallback;
 
-  const isoDate = /^(\d{4})-(\d{2})-(\d{2})(?:T|\s)/.exec(value);
-  if (!isoDate) return fallback;
+  const timestampMatch = TIMESTAMPTZ_PATTERN.exec(value);
+  if (!timestampMatch) return fallback;
 
-  const [, yearText, monthText, dayText] = isoDate;
+  const [, yearText, monthText, dayText] = timestampMatch;
   const year = Number(yearText);
   const month = Number(monthText);
   const day = Number(dayText);

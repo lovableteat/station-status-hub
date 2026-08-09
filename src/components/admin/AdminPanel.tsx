@@ -54,7 +54,7 @@ interface SystemUser {
   auth_migrated_at?: string | null;
   registration_requested_at?: string | null;
   approved_at?: string | null;
-  last_seen_at?: string | null;
+  last_seen_at: string | null;
 }
 
 type AdminTab = "users" | "collaboration" | "api-management";
@@ -746,6 +746,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   const creatorLabel = systemUser.created_by === "self-registration"
                     ? "使用者自行註冊"
                     : systemUser.created_by || "系統";
+                  const lastLoginLabel = formatAdminUserTimestamp(systemUser.last_seen_at, "尚未登入");
+                  const permissionsSummary = `網站與工作區權限 · 建立者：${creatorLabel}`;
 
                   return (
                     <article
@@ -875,16 +877,16 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                           <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">{systemUser.username}</div>
                         </div>
                         <div className="min-w-0 border-white/[0.07] sm:border-r sm:px-4">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">最後登入</div>
-                          <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">
-                            {formatAdminUserTimestamp(systemUser.last_seen_at, "尚未登入")}
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                            <Clock3 className="h-3 w-3" aria-hidden="true" />
+                            最後登入
+                          </div>
+                          <div className={`mt-1.5 truncate text-sm font-semibold ${lastLoginLabel === "尚未登入" ? "text-slate-500" : "text-slate-200"}`}>
+                            {lastLoginLabel}
                           </div>
                         </div>
                         <div className="min-w-0 sm:pl-4">
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                            <Clock3 className="h-3 w-3" />
-                            建立時間
-                          </div>
+                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">建立時間</div>
                           <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">
                             {formatCreatedAt(systemUser.created_at)}
                           </div>
@@ -893,20 +895,23 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
                       <div className="flex flex-col gap-3 rounded-xl border border-[#2a526f] bg-[#071522] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex min-w-0 items-center gap-2">
-                          <Lock className="h-3.5 w-3.5 text-cyan-200/75" />
-                          <span className="shrink-0 text-xs font-semibold text-slate-400">網站與工作區權限</span>
-                          <span className="shrink-0 rounded-full border border-white/[0.07] bg-white/[0.035] px-2 py-0.5 text-[10px] text-slate-500">
-                            {workspaceBadges.length > 0 ? `${workspaceBadges.length} 個工作區` : "未配置"}
-                          </span>
+                          <Lock className="h-3.5 w-3.5 shrink-0 text-cyan-200/75" aria-hidden="true" />
                           <span
-                            className="min-w-0 max-w-48 truncate text-xs text-slate-500"
-                            title={creatorLabel}
+                            className="min-w-0 truncate text-xs font-semibold text-slate-400"
+                            title={permissionsSummary}
+                            aria-label={permissionsSummary}
                           >
-                            建立者：{creatorLabel}
+                            {permissionsSummary}
                           </span>
                         </div>
 
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap justify-end gap-1.5 sm:shrink-0">
+                          <Badge
+                            variant="outline"
+                            className="border-white/[0.07] bg-white/[0.035] text-[10px] text-slate-500"
+                          >
+                            {workspaceBadges.length > 0 ? `${workspaceBadges.length} 個工作區` : "未配置"}
+                          </Badge>
                           {workspaceBadges.length > 0 ? (
                             workspaceBadges.map((workspace) => (
                               <Badge
