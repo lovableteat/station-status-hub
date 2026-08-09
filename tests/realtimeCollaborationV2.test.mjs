@@ -238,7 +238,34 @@ test("direct conversation clearing is private to the current member and enforced
   assert.match(migration, /latest_messages\.created_at > own_member\.cleared_at/i);
   assert.match(migration, /unread\.created_at > own_member\.cleared_at/i);
   assert.match(migration, /own_member\.cleared_at IS NULL OR latest\.id IS NOT NULL/i);
+  assert.match(
+    migration,
+    /CREATE TRIGGER chat_members_inbox_broadcast[\s\S]*AFTER INSERT OR UPDATE ON public\.chat_members/i,
+    "clearing must refresh every local thread-list consumer through the existing inbox channel",
+  );
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.clear_direct_chat_history\(uuid\) TO authenticated/i);
+});
+
+test("conversation rows can clear all locally visible messages without affecting the other member", async () => {
+  const [hook, panel] = await Promise.all([
+    readSource("src/hooks/useDirectMessages.ts"),
+    readSource("src/components/collaboration/DirectMessagesPanel.tsx"),
+  ]);
+
+  assert.match(hook, /const clearDirectChat = useCallback/);
+  assert.match(hook, /database\.rpc\("clear_direct_chat_history"/);
+  assert.match(hook, /p_thread_id: threadId/);
+  assert.match(hook, /setThreads\(\(current\) => current\.filter\(\(thread\) => thread\.threadId !== threadId\)\)/);
+  assert.match(hook, /對話刪除失敗，請稍後再試。/);
+  assert.match(hook, /return \{ threads, unreadCount, loading, error, reload, startDirectChat, clearDirectChat \}/);
+
+  assert.match(panel, /const \[deletingThreadId, setDeletingThreadId\] = useState<string \| null>\(null\)/);
+  assert.match(panel, /aria-label=\{`刪除與 \$\{thread\.otherDisplayName\} 的所有訊息`\}/);
+  assert.match(panel, /只會清除你帳號看到的紀錄，對方仍會保留，且無法復原。/);
+  assert.match(panel, /await clearDirectChat\(thread\.threadId\)/);
+  assert.match(panel, /deletingThreadId === thread\.threadId/);
+  assert.match(panel, /deleting \? <LoaderCircle[^>]*animate-spin[^>]*\/> : <Trash2/s);
+  assert.match(panel, /<div[^>]*data-direct-thread-row="true"[^>]*>[\s\S]*?<button[\s\S]*?<\/button>[\s\S]*?<button/s);
 });
 
 test("collaboration changes never replace the current page", async () => {

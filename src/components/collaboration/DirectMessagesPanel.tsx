@@ -39,34 +39,61 @@ function shortTime(value: string | null) {
   });
 }
 
-function ThreadRow({ thread, online, onOpen }: { thread: DirectThread; online: boolean; onOpen: () => void }) {
+function ThreadRow({
+  thread,
+  online,
+  deleting,
+  onOpen,
+  onDelete,
+}: {
+  thread: DirectThread;
+  online: boolean;
+  deleting: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex w-full items-center gap-3 rounded-2xl border border-sky-300/15 bg-[#0b1b2d] p-3.5 text-left transition-colors hover:border-cyan-200/35 hover:bg-[#10243a]"
+    <div
+      data-direct-thread-row="true"
+      className="group flex w-full overflow-hidden rounded-2xl border border-sky-300/15 bg-[#0b1b2d] transition-colors hover:border-cyan-200/35"
     >
-      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 font-bold text-cyan-100">
-        {(thread.otherDisplayName || thread.otherUsername).slice(0, 2).toUpperCase()}
-        <span className={cn("absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#0b1b2d]", online ? "bg-emerald-400" : "bg-slate-600")} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center justify-between gap-2">
-          <span className="truncate font-semibold text-slate-50">{thread.otherDisplayName}</span>
-          <span className="shrink-0 text-[11px] text-slate-500">{shortTime(thread.lastMessageAt)}</span>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-center gap-3 p-3.5 text-left transition-colors hover:bg-[#10243a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300/60"
+      >
+        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 font-bold text-cyan-100">
+          {(thread.otherDisplayName || thread.otherUsername).slice(0, 2).toUpperCase()}
+          <span className={cn("absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#0b1b2d]", online ? "bg-emerald-400" : "bg-slate-600")} />
         </span>
-        <span className="mt-1 flex items-center justify-between gap-2">
-          <span className="truncate text-sm text-slate-400">
-            {thread.lastMessageBody || "開始一段新對話"}
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center justify-between gap-2">
+            <span className="truncate font-semibold text-slate-50">{thread.otherDisplayName}</span>
+            <span className="shrink-0 text-[11px] text-slate-500">{shortTime(thread.lastMessageAt)}</span>
           </span>
-          {thread.unreadCount > 0 ? (
-            <Badge className="h-5 min-w-5 shrink-0 justify-center bg-cyan-300 px-1.5 text-[#06111f]">
-              {thread.unreadCount > 99 ? "99+" : thread.unreadCount}
-            </Badge>
-          ) : null}
+          <span className="mt-1 flex items-center justify-between gap-2">
+            <span className="truncate text-sm text-slate-400">
+              {thread.lastMessageBody || "開始一段新對話"}
+            </span>
+            {thread.unreadCount > 0 ? (
+              <Badge className="h-5 min-w-5 shrink-0 justify-center bg-cyan-300 px-1.5 text-[#06111f]">
+                {thread.unreadCount > 99 ? "99+" : thread.unreadCount}
+              </Badge>
+            ) : null}
+          </span>
         </span>
-      </span>
-    </button>
+      </button>
+      <button
+        type="button"
+        aria-label={`刪除與 ${thread.otherDisplayName} 的所有訊息`}
+        title={`刪除與 ${thread.otherDisplayName} 的所有訊息`}
+        disabled={deleting}
+        onClick={onDelete}
+        className="flex w-11 shrink-0 items-center justify-center border-l border-sky-300/10 text-slate-500 transition-colors hover:bg-rose-300/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rose-300/70 disabled:cursor-wait disabled:opacity-60"
+      >
+        {deleting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+      </button>
+    </div>
   );
 }
 
@@ -76,11 +103,12 @@ export function DirectMessagesPanel({
   onRequestHandled,
 }: DirectMessagesPanelProps) {
   const { user, isRealtimeAuthenticated } = useUser();
-  const { threads, loading, error, reload, startDirectChat } = useDirectMessageThreads();
+  const { threads, loading, error, reload, startDirectChat, clearDirectChat } = useDirectMessageThreads();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
   const requestedUserRef = useRef<string | null>(null);
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.threadId === selectedThreadId) ?? null,
@@ -131,6 +159,19 @@ export function DirectMessagesPanel({
     setDraft("");
     sendTyping(false);
     void sendMessage(body);
+  };
+
+  const handleClearThread = async (thread: DirectThread) => {
+    const confirmed = window.confirm(
+      `確定刪除與「${thread.otherDisplayName}」的所有訊息嗎？\n\n只會清除你帳號看到的紀錄，對方仍會保留，且無法復原。`,
+    );
+    if (!confirmed) return;
+    setDeletingThreadId(thread.threadId);
+    try {
+      await clearDirectChat(thread.threadId);
+    } finally {
+      setDeletingThreadId(null);
+    }
   };
 
   if (!isRealtimeAuthenticated) {
@@ -366,7 +407,9 @@ export function DirectMessagesPanel({
                 key={thread.threadId}
                 thread={thread}
                 online={onlineUserIds.has(thread.otherUserId)}
+                deleting={deletingThreadId === thread.threadId}
                 onOpen={() => setSelectedThreadId(thread.threadId)}
+                onDelete={() => void handleClearThread(thread)}
               />
             ))}
           </div>
