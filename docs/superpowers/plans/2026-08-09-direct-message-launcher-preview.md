@@ -39,12 +39,12 @@ Expected: FAIL because the compact button has no preview component or thread dat
 
 - [x] **Step 3: Implement the launcher**
 
-Import `useDirectMessageThreads`, derive the newest thread from the returned ordered summaries, and render:
+Import `useDirectMessageThreads`, derive the newest thread with message content from the returned ordered summaries, and fall back to the newest empty thread only when every conversation is empty:
 
 ```tsx
 function DirectMessageLauncher({ onOpen }: { onOpen: () => void }) {
   const { threads, unreadCount, loading } = useDirectMessageThreads();
-  const latestThread = threads[0] ?? null;
+  const latestThread = threads.find((thread) => thread.lastMessageBody) ?? threads[0] ?? null;
   return (
     <button type="button" onClick={onOpen} className="h-16 w-[min(320px,calc(100vw-2rem))] rounded-xl">
       {/* icon, conversation name, lastMessageBody or empty state, unread badge */}

@@ -27,6 +27,7 @@ test("the workspace uses one collaboration center for notifications, presence, a
   assert.match(centerSource, /function DirectMessageLauncher/);
   assert.match(centerSource, /useDirectMessageThreads/);
   assert.match(centerSource, /h-16 w-\[min\(320px,calc\(100vw-2rem\)\)\]/);
+  assert.match(centerSource, /threads\.find\(\(thread\) => thread\.lastMessageBody\) \?\? threads\[0\]/);
   assert.match(centerSource, /latestThread\?\.lastMessageBody/);
   assert.match(centerSource, /尚無訊息，點擊開始對話/);
   assert.match(centerSource, /訊息服務目前無法連線/);
