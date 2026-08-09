@@ -274,9 +274,9 @@ export function ProjectScopeBar() {
   return (
     <div
       data-ui="project-command-bar"
-      className="maintenance-project-bar sticky top-[72px] z-30 flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2"
+      className="maintenance-project-bar sticky top-[72px] z-30 flex h-14 items-center gap-3 rounded-lg border px-3 py-2 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)]"
     >
-      <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/10 text-cyan-100 sm:flex">
+      <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary sm:flex">
         <FolderKanban className="h-4 w-4" />
       </div>
 
@@ -285,7 +285,7 @@ export function ProjectScopeBar() {
         value={activeProjectId ?? ""}
         onValueChange={setActiveProjectId}
       >
-        <SelectTrigger className="h-10 min-w-0 flex-1 border-0 bg-transparent px-1 shadow-none sm:max-w-[310px]">
+        <SelectTrigger className="h-10 min-w-0 flex-1 rounded-lg border border-primary/15 bg-background/20 px-3 shadow-none sm:max-w-[310px]">
           <div className="min-w-0 text-left">
             <div className="truncate text-sm font-semibold text-[#f3f8fc]">
               {activeProject?.name || "選擇專案"}
@@ -335,7 +335,7 @@ export function ProjectScopeBar() {
 
       <div
         data-ui="project-actions"
-        className="ml-auto flex shrink-0 items-center gap-2 rounded-xl border border-[#294861]/80 bg-[#071827]/65 p-1"
+          className="ml-auto flex shrink-0 items-center gap-2"
       >
         {activeProject && canCreateSystems && (
           <SystemManager

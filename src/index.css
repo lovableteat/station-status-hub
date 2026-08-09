@@ -685,8 +685,8 @@ All colors MUST be HSL for proper theming support.
   }
 
   .maintenance-project-bar {
-    background: #0b1b2d;
-    border-color: #2a526f;
+    background: linear-gradient(90deg, #071522 0%, #0b1b2d 52%, #071522 100%);
+    border-color: rgb(100 196 255 / 24%);
   }
 
   .maintenance-panel {
