@@ -8,7 +8,7 @@ Replace the compact floating message button with a rectangular launcher that exp
 
 - Keep the launcher fixed at the lower-right corner and preserve the existing click action.
 - Use a 320px-wide, 64px-tall rectangular card with modest corner rounding.
-- Show the newest conversation name and latest message body in one truncated preview line.
+- Show the newest conversation with actual message content and its latest message body in one truncated preview line; a newer empty thread must not hide an older real message.
 - Show the aggregate unread count when it is greater than zero.
 - When there are no conversations, show a clear empty-state prompt instead of a blank preview.
 - Opening the launcher swaps it for the existing full direct-message panel, avoiding duplicate controls.

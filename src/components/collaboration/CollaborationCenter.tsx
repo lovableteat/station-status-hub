@@ -100,7 +100,7 @@ function formatTime(value: string) {
 
 function DirectMessageLauncher({ onOpen }: { onOpen: () => void }) {
   const { threads, unreadCount, loading, error } = useDirectMessageThreads();
-  const latestThread = threads[0] ?? null;
+  const latestThread = threads.find((thread) => thread.lastMessageBody) ?? threads[0] ?? null;
   const preview = loading
     ? "正在載入最新訊息…"
     : error
