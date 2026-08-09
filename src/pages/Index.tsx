@@ -483,12 +483,6 @@ const Index = () => {
     }
   };
 
-  const handleAdminNavigation = (module: AdminModuleId) => {
-    pushWorkspaceLocation("user-management", module);
-    setActiveWorkspace("user-management");
-    setActiveAdminModule(module);
-  };
-
   const renderStationContent = () => {
     switch (activeStationModule) {
       case "dashboard":
@@ -649,31 +643,6 @@ const Index = () => {
         userName={user?.displayName || user?.username}
         userRoleLabel={getRoleLabel(user?.role)}
         showOnlineUsers={!isDemoMode}
-        userMenuItems={[
-          ...(canViewModule("users")
-            ? [
-                {
-                  id: "users",
-                  label: "後台管理",
-                  onSelect: () => handleAdminNavigation("users"),
-                },
-                {
-                  id: "collaboration",
-                  label: "通知與在線",
-                  onSelect: () => handleAdminNavigation("collaboration"),
-                },
-              ]
-            : []),
-          ...(canViewModule("api-management")
-            ? [
-                {
-                  id: "api-management",
-                  label: "API 管理",
-                  onSelect: () => handleAdminNavigation("api-management"),
-                },
-              ]
-            : []),
-        ]}
       />
 
       <main
