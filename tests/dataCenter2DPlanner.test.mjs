@@ -112,7 +112,7 @@ test("aisles are created visually and resized directly on the plan", () => {
   assert.match(plannerSource, /data-aisle-resize-handle=/);
   assert.doesNotMatch(plannerSource, /onPointerLeave=/);
   assert.match(plannerSource, /beginAisleResize/);
-  assert.match(plannerSource, /左側距離/);
-  assert.match(plannerSource, /上方距離/);
+  assert.match(plannerSource, /距左側/);
+  assert.match(plannerSource, /距上方/);
   assert.match(plannerSource, /進階座標/);
 });

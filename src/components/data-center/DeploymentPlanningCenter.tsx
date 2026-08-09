@@ -131,7 +131,6 @@ import {
   createAutomaticAisle,
   createFreeAisle,
   getFriendlyAislePosition,
-  updateAisleFromFriendlyPosition,
 } from "./facilityAisles.mjs";
 import {
   getAssignedModuleCount,
@@ -4558,7 +4557,7 @@ export function DeploymentPlanningCenter() {
 
         <Dialog open={facilityPlannerOpen} onOpenChange={setFacilityPlannerOpen}>
           <DialogContent data-dialog-tone="facility-planner" className="flex h-[min(90dvh,880px)] w-[min(96vw,980px)] max-w-none flex-col gap-0 overflow-hidden border border-cyan-300/25 p-0 text-slate-100 sm:max-w-[980px]">
-            <DialogHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14 text-left">
+            <DialogHeader className="shrink-0 border-b border-white/10 px-5 py-4 pr-14 text-left">
               <DialogTitle className="flex items-center gap-2 text-white">
                 <PencilRuler className="h-5 w-5 text-cyan-300" />
                 廠房與佈線規劃
@@ -4568,8 +4567,38 @@ export function DeploymentPlanningCenter() {
               </DialogDescription>
             </DialogHeader>
 
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="space-y-5 px-6 py-5">
+            <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+              <div data-testid="facility-wiring-preview-shell" className="min-h-[320px] border-b border-white/10 lg:min-h-0 lg:border-b-0 lg:border-r">
+                <DataCenter2DPlanner
+                  embedded
+                  racks={selectedSite.racks}
+                  models={models}
+                  selectedRackId={selectedRackId}
+                  facility={selectedFacility}
+                  overflowKeys={overflowKeys}
+                  canEdit={canEdit}
+                  onSelectRack={handleRackSelect}
+                  onMoveRack={placeRackOnPlan}
+                  onRotateRack={rotateRackOnPlan}
+                  onMoveAisle={(aisleId, x, z) => updateAisle(aisleId, (aisle) => ({ ...aisle, x, z }))}
+                  onDeleteAisle={removeAisle}
+                  onUpdateAisle={(aisleId, patch) => updateAisle(aisleId, (aisle) => ({ ...aisle, ...patch }))}
+                  onMovePowerFeed={(feedId, x, z) => updatePowerFeed(feedId, (feed) => ({ ...feed, x, z }))}
+                  onAddRack={addRackFromCurrentModel}
+                  onDeleteRack={removeRackFromPlan}
+                  onOpenAisleCreation={openAisleCreation}
+                  onAddPowerFeed={addPowerFeed}
+                  onOpenModels={() => openModelLibrary("rack")}
+                  onOpenFacilitySettings={() => undefined}
+                  onView3D={() => {
+                    setFacilityPlannerOpen(false);
+                    setWorkspaceMode("3d");
+                  }}
+                />
+              </div>
+
+              <ScrollArea className="min-h-0">
+              <div className="space-y-4 px-4 py-4 sm:px-5">
                 <section data-section-tone="facility-size" className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
@@ -4762,12 +4791,13 @@ export function DeploymentPlanningCenter() {
                       新增通道
                     </Button>
                   </div>
+                  <div className="mb-3 rounded-xl border border-dashed border-violet-200/20 bg-black/15 px-3 py-2.5 text-[11px] leading-5 text-slate-300">
+                    先在左側預覽點選通道，再拖曳通道本體或端點調整；右下角會顯示距離、長度與寬度。
+                  </div>
                   <div className="space-y-2">
                     {selectedFacility.aisles.map((aisle) => {
-                      const friendlyPosition = getFriendlyAislePosition(
-                        aisle,
-                        selectedFacility
-                      );
+                      const friendlyPosition = getFriendlyAislePosition(aisle, selectedFacility);
+                      const vertical = Math.abs(aisle.rotation % 180) === 90;
                       return (
                         <div
                           key={aisle.id}
@@ -4779,120 +4809,39 @@ export function DeploymentPlanningCenter() {
                               : "border-orange-300/25 bg-orange-400/[0.075]"
                           )}
                         >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className={cn("h-2.5 w-2.5 rounded-full", aisle.kind === "cold" ? "bg-sky-400" : "bg-orange-400")} />
-                            <Input
-                              value={aisle.label}
-                              disabled={!canEdit}
-                              onChange={(event) => updateAisle(aisle.id, (current) => ({ ...current, label: event.target.value }))}
-                              className="h-8 w-32 border-white/10 bg-black/20 px-2 text-xs font-bold text-white"
-                            />
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              disabled={!canEdit}
-                              onClick={() =>
-                                updateAisle(aisle.id, (current) => ({
-                                  ...current,
-                                  rotation: (current.rotation + 90) % 360,
-                                }))
-                              }
-                              className="h-8 px-2 text-xs text-slate-300 hover:bg-white/8 hover:text-white"
-                            >
-                              <RotateCw className="mr-1 h-3.5 w-3.5" />
-                              旋轉
-                            </Button>
-                            <Button type="button" size="sm" variant="ghost" disabled={!canEdit} onClick={() => removeAisle(aisle.id)} className="h-8 px-2 text-xs text-rose-200 hover:bg-rose-400/10 hover:text-rose-100">
-                              移除
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                          {([
-                            ["left", "左側距離"],
-                            ["top", "上方距離"],
-                            ["width", "通道長度"],
-                            ["depth", "通道寬度"],
-                          ] as const).map(([field, label]) => (
-                            <label key={field} className="space-y-1">
-                              <span className="block text-[10px] font-bold text-slate-400">{label}</span>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", aisle.kind === "cold" ? "bg-sky-400" : "bg-orange-400")} />
                               <Input
-                                type="number"
-                                min={field === "width" || field === "depth" ? 0.5 : undefined}
-                                step="0.25"
-                                value={
-                                  field === "left" || field === "top"
-                                    ? friendlyPosition[field]
-                                    : aisle[field]
-                                }
+                                value={aisle.label}
                                 disabled={!canEdit}
-                                onChange={(event) => {
-                                  const value = Number(event.target.value);
-                                  if (!Number.isFinite(value)) return;
-                                  if (field === "left" || field === "top") {
-                                    const nextPosition =
-                                      updateAisleFromFriendlyPosition(
-                                        aisle,
-                                        selectedFacility,
-                                        {
-                                          ...friendlyPosition,
-                                          [field]: value,
-                                        }
-                                      );
-                                    updateAisle(aisle.id, (current) => ({
-                                      ...current,
-                                      ...nextPosition,
-                                    }));
-                                    return;
-                                  }
-                                  updateAisle(aisle.id, (current) => ({
-                                    ...current,
-                                    [field]: Math.max(0.5, value),
-                                  }));
-                                }}
-                                className="h-8 border-white/10 bg-black/20 px-2 text-[11px] font-bold text-white"
+                                onChange={(event) => updateAisle(aisle.id, (current) => ({ ...current, label: event.target.value }))}
+                                className="h-8 min-w-0 border-white/10 bg-black/20 px-2 text-xs font-bold text-white"
                               />
-                            </label>
-                          ))}
-                        </div>
-                        <details className="mt-2">
-                          <summary className="cursor-pointer text-[10px] font-bold text-slate-500 hover:text-slate-300">
-                            進階座標
-                          </summary>
-                          <div className="mt-2 grid grid-cols-3 gap-2">
-                            {([
-                              ["x", "中心 X"],
-                              ["z", "中心 Z"],
-                              ["rotation", "角度"],
-                            ] as const).map(([field, label]) => (
-                              <label key={field} className="space-y-1">
-                                <span className="block text-[10px] font-bold text-slate-500">
-                                  {label}
-                                </span>
-                                <Input
-                                  type="number"
-                                  step={field === "rotation" ? 90 : 0.25}
-                                  value={aisle[field]}
-                                  disabled={!canEdit}
-                                  onChange={(event) => {
-                                    const value = Number(event.target.value);
-                                    if (Number.isFinite(value)) {
-                                      updateAisle(aisle.id, (current) => ({
-                                        ...current,
-                                        [field]: value,
-                                      }));
-                                    }
-                                  }}
-                                  className="h-8 border-white/10 bg-black/20 px-2 text-[11px] text-white"
-                                />
-                              </label>
-                            ))}
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                disabled={!canEdit}
+                                onClick={() => updateAisle(aisle.id, (current) => ({ ...current, rotation: (current.rotation + 90) % 360 }))}
+                                className="h-8 px-2 text-xs text-slate-300 hover:bg-white/8 hover:text-white"
+                              >
+                                <RotateCw className="mr-1 h-3.5 w-3.5" />旋轉
+                              </Button>
+                              <Button type="button" size="sm" variant="ghost" disabled={!canEdit} onClick={() => removeAisle(aisle.id)} className="h-8 px-2 text-xs text-rose-200 hover:bg-rose-400/10 hover:text-rose-100">
+                                移除
+                              </Button>
+                            </div>
                           </div>
-                        </details>
+                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold text-slate-300">
+                            <span>{vertical ? "垂直" : "水平"}</span>
+                            <span>長 {aisle.width.toFixed(2)} m</span>
+                            <span>寬 {aisle.depth.toFixed(2)} m</span>
+                            <span className="text-slate-400">距左 {friendlyPosition.left.toFixed(2)} m · 距上 {friendlyPosition.top.toFixed(2)} m</span>
+                          </div>
+                          <div className="mt-2 text-[10px] text-slate-500">請在左側預覽點選此通道進行精細調整</div>
                         </div>
                       );
                     })}
@@ -4932,20 +4881,16 @@ export function DeploymentPlanningCenter() {
                             </Button>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {(["x", "z"] as const).map((field) => (
-                            <label key={field} className="space-y-1">
-                              <span className="block text-[10px] font-bold text-slate-500">位置 {field.toUpperCase()}</span>
-                              <Input type="number" step="0.1" value={feed[field]} disabled={!canEdit} onChange={(event) => updatePowerFeed(feed.id, (current) => ({ ...current, [field]: Number(event.target.value) }))} className="h-8 border-white/10 bg-black/20 px-2 text-[11px] text-white" />
-                            </label>
-                          ))}
+                        <div className="rounded-lg border border-dashed border-amber-200/15 bg-amber-400/[0.05] px-2.5 py-2 text-[10px] text-slate-400">
+                          在左側預覽拖曳饋線位置，啟用後會連到所有機櫃。
                         </div>
                       </div>
                     ))}
                   </div>
                 </section>
               </div>
-            </ScrollArea>
+              </ScrollArea>
+            </div>
           </DialogContent>
         </Dialog>
 
