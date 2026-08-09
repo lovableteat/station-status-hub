@@ -3855,25 +3855,36 @@ export function DeploymentPlanningCenter() {
           </div>
 
           <div data-testid="data-center-metric-toolbar" className="ml-auto flex min-w-0 max-w-full items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="hidden shrink-0 items-center gap-1.5 xl:flex">
-            {[
-              { label: "機櫃", value: selectedSite.racks.length, icon: Server, color: "text-cyan-200" },
-              { label: "主運算設備", value: totalL10, icon: Cpu, color: "text-cyan-200" },
-              { label: "ALERTS", value: alertCount, icon: AlertTriangle, color: alertCount ? "text-amber-200" : "text-emerald-200" },
-              { label: "POWER", value: `${totalPower.toFixed(1)} kW`, icon: Zap, color: "text-amber-200" },
-            ].map((metric) => {
-              const Icon = metric.icon;
-              return (
-                <div key={metric.label} className="flex h-10 min-w-[78px] shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-black/20 px-2.5">
-                  <Icon className={cn("h-3.5 w-3.5", metric.color)} />
-                  <div>
-                    <div className="whitespace-nowrap text-[9px] font-bold leading-none text-slate-400">{metric.label}</div>
-                    <div className="mt-1 whitespace-nowrap text-xs font-bold leading-none tabular-nums text-white">{metric.value}</div>
+            <div
+              data-testid="data-center-metric-summary"
+              className="hidden h-10 shrink-0 items-stretch divide-x divide-white/10 rounded-xl border border-white/10 bg-black/15 xl:flex"
+            >
+              {[
+                { label: "機櫃", value: selectedSite.racks.length, icon: Server, iconColor: "text-cyan-200" },
+                { label: "設備", value: totalL10, icon: Cpu, iconColor: "text-cyan-200" },
+                {
+                  label: "告警",
+                  value: alertCount,
+                  icon: AlertTriangle,
+                  iconColor: alertCount ? "text-amber-200" : "text-slate-400",
+                  valueColor: alertCount ? "text-amber-100" : "text-white",
+                },
+                { label: "總功率", value: `${totalPower.toFixed(1)} kW`, icon: Zap, iconColor: "text-cyan-200" },
+              ].map((metric) => {
+                const Icon = metric.icon;
+                return (
+                  <div key={metric.label} className="flex min-w-0 items-center gap-2 px-3 first:pl-2.5 last:pr-2.5">
+                    <Icon className={cn("h-3.5 w-3.5 shrink-0", metric.iconColor)} />
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="whitespace-nowrap text-[10px] font-semibold text-slate-400">{metric.label}</span>
+                      <strong className={cn("whitespace-nowrap text-sm font-black tabular-nums", metric.valueColor ?? "text-white")}>
+                        {metric.value}
+                      </strong>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
 
             <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
             <Button
