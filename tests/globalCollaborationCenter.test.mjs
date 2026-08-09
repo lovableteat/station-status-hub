@@ -5,7 +5,7 @@ import test from "node:test";
 const readSource = (path) =>
   readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("the workspace uses one collaboration center for notifications, presence, and messages", async () => {
+test("the workspace keeps direct messages exclusively in the bottom-right floating panel", async () => {
   const [indexSource, headerSource, centerSource, indicatorSource] = await Promise.all([
     readSource("src/pages/Index.tsx"),
     readSource("src/components/layout/MainWorkspaceHeader.tsx"),
@@ -20,8 +20,8 @@ test("the workspace uses one collaboration center for notifications, presence, a
   assert.doesNotMatch(indicatorSource, /<Popover/);
   assert.match(centerSource, /value="notifications"/);
   assert.match(centerSource, /value="online"/);
-  assert.match(centerSource, /value="messages"/);
-  assert.match(centerSource, /<DirectMessagesPanel/);
+  assert.doesNotMatch(centerSource, /value="messages"/);
+  assert.equal(centerSource.match(/<DirectMessagesPanel/g)?.length, 1);
   assert.match(centerSource, /data-floating-direct-messages/);
   assert.match(centerSource, /開啟浮動訊息/);
   assert.match(centerSource, /function DirectMessageLauncher/);
@@ -35,7 +35,8 @@ test("the workspace uses one collaboration center for notifications, presence, a
   assert.match(centerSource, /共 \$\{unreadCount\} 則未讀/);
   assert.match(centerSource, /aria-live="polite"/);
   assert.match(centerSource, /<DirectMessageLauncher onOpen=/);
-  assert.match(centerSource, /open && activeTab === "messages"/);
+  assert.match(centerSource, /setMessageFloatOpen\(true\);\s*setOpen\(false\)/);
+  assert.doesNotMatch(centerSource, /open && activeTab === "messages"/);
   assert.doesNotMatch(centerSource, /開啟浮動訊息[\s\S]{0,260}rounded-full/);
   assert.match(centerSource, /open-global-collaboration/);
   assert.match(centerSource, /data-collaboration-content-frame="true"/);
