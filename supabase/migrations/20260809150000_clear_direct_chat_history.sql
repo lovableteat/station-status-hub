@@ -49,6 +49,7 @@ REVOKE ALL ON FUNCTION public.clear_direct_chat_history(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.clear_direct_chat_history(uuid) TO authenticated, service_role;
 
 DROP POLICY IF EXISTS "Chat members can read messages" ON public.chat_messages;
+DROP POLICY IF EXISTS "Chat members can read visible messages" ON public.chat_messages;
 CREATE POLICY "Chat members can read visible messages"
   ON public.chat_messages FOR SELECT TO authenticated
   USING (
@@ -141,3 +142,10 @@ $$;
 
 REVOKE ALL ON FUNCTION public.list_direct_chat_threads() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.list_direct_chat_threads() TO authenticated, service_role;
+
+-- The collaboration center and floating launcher each own a thread-list hook.
+-- Broadcasting membership updates keeps both views in sync after a clear.
+DROP TRIGGER IF EXISTS chat_members_inbox_broadcast ON public.chat_members;
+CREATE TRIGGER chat_members_inbox_broadcast
+AFTER INSERT OR UPDATE ON public.chat_members
+FOR EACH ROW EXECUTE FUNCTION public.broadcast_chat_inbox_change();

@@ -185,12 +185,29 @@ export function useDirectMessageThreads() {
     [isRealtimeAuthenticated, reload],
   );
 
+  const clearDirectChat = useCallback(
+    async (threadId: string) => {
+      if (!isRealtimeAuthenticated || !threadId) return false;
+      const { data, error: clearError } = await database.rpc("clear_direct_chat_history", {
+        p_thread_id: threadId,
+      });
+      if (clearError || data !== true) {
+        setError("對話刪除失敗，請稍後再試。");
+        return false;
+      }
+      setThreads((current) => current.filter((thread) => thread.threadId !== threadId));
+      setError(null);
+      return true;
+    },
+    [isRealtimeAuthenticated],
+  );
+
   const unreadCount = useMemo(
     () => threads.reduce((total, thread) => total + thread.unreadCount, 0),
     [threads],
   );
 
-  return { threads, unreadCount, loading, error, reload, startDirectChat };
+  return { threads, unreadCount, loading, error, reload, startDirectChat, clearDirectChat };
 }
 
 export function useDirectMessages(threadId: string | null) {
