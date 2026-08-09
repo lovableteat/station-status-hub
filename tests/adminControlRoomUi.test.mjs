@@ -37,7 +37,8 @@ test("admin account cards distinguish last login from creation time and keep per
   assert.match(source, /title=\{permissionsSummary\}/);
   assert.match(source, /aria-label=\{permissionsSummary\}/);
   assert.match(source, />\s*\{permissionsSummary\}\s*<\/span>/);
-  assert.match(source, /className="flex flex-wrap justify-end gap-1\.5 sm:shrink-0"/);
+  assert.match(source, /className="flex min-w-0 flex-wrap justify-end gap-1\.5"/);
+  assert.doesNotMatch(source, /className="[^"]*sm:shrink-0[^"]*"/);
   assert.match(source, /workspaceBadges\.length > 0 \? `\$\{workspaceBadges\.length\} 個工作區` : "未配置"/);
   assert.match(source, /className="flex flex-col gap-3[^\"]*sm:flex-row[^\"]*sm:justify-between"/);
 });

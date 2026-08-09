@@ -905,7 +905,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                           </span>
                         </div>
 
-                        <div className="flex flex-wrap justify-end gap-1.5 sm:shrink-0">
+                        <div className="flex min-w-0 flex-wrap justify-end gap-1.5">
                           <Badge
                             variant="outline"
                             className="border-white/[0.07] bg-white/[0.035] text-[10px] text-slate-500"
