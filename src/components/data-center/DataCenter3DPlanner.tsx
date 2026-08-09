@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Html, Line, OrbitControls, useGLTF, useProgress } from "@react-three/drei";
+import { Edges, Html, Line, OrbitControls, useGLTF, useProgress } from "@react-three/drei";
 import { Activity, Cable, Cpu, Network, Power, X } from "lucide-react";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
@@ -784,30 +784,77 @@ function L10ModuleHitTargets({
               <meshBasicMaterial
                 color="#22d3ee"
                 transparent
-                opacity={selected ? 0.18 : 0}
+                opacity={selected ? 0.34 : 0}
                 depthWrite={false}
               />
             </mesh>
             {selected ? (
-              <mesh
-                position={[0, 0, position.z - (rackDepth / 2 + 0.11)]}
-                scale={[1.035, 1.12, 1.035]}
-              >
-                <boxGeometry
-                  args={[
-                    layout.fittedWidth + 0.025,
-                    layout.fittedHeight + 0.006,
-                    layout.fittedDepth + 0.025,
-                  ]}
-                />
-                <meshBasicMaterial
-                  color="#a5f3fc"
-                  transparent
-                  opacity={0.72}
-                  wireframe
-                  depthWrite={false}
-                />
-              </mesh>
+              <group name={`${selection.id}-selected-u-layer`}>
+                <mesh
+                  position={[0, 0, position.z - (rackDepth / 2 + 0.11)]}
+                  renderOrder={90}
+                >
+                  <boxGeometry
+                    args={[
+                      layout.fittedWidth + 0.08,
+                      Math.max(layout.fittedHeight + 0.025, 0.065),
+                      rackDepth + 0.08,
+                    ]}
+                  />
+                  <meshBasicMaterial
+                    color="#22d3ee"
+                    transparent
+                    opacity={0.16}
+                    blending={THREE.AdditiveBlending}
+                    depthTest={false}
+                    depthWrite={false}
+                    toneMapped={false}
+                  />
+                  <Edges
+                    color="#ecfeff"
+                    lineWidth={3}
+                    threshold={1}
+                    depthTest={false}
+                    renderOrder={91}
+                  />
+                </mesh>
+
+                <mesh position={[0, 0, 0.015]} renderOrder={92}>
+                  <boxGeometry
+                    args={[
+                      layout.fittedWidth + 0.05,
+                      Math.max(layout.fittedHeight * 0.58, 0.032),
+                      0.018,
+                    ]}
+                  />
+                  <meshBasicMaterial
+                    color="#67e8f9"
+                    transparent
+                    opacity={0.9}
+                    depthTest={false}
+                    depthWrite={false}
+                    toneMapped={false}
+                  />
+                </mesh>
+
+                <Html
+                  position={[layout.fittedWidth / 2 + 0.13, 0, 0.035]}
+                  center
+                  distanceFactor={9}
+                  zIndexRange={[45, 0]}
+                  style={{ pointerEvents: "none" }}
+                >
+                  <div
+                    data-selected-rack-unit-label="true"
+                    className="flex min-w-max items-center gap-1.5 rounded-md border border-cyan-100 bg-[#03101b] px-2 py-1 font-mono text-[11px] font-black text-cyan-50 shadow-[0_0_10px_rgba(34,211,238,0.8)]"
+                  >
+                    <span className="rounded bg-cyan-300 px-1.5 py-0.5 text-[#03101b]">
+                      U{position.rackUnit}
+                    </span>
+                    <span>已選取</span>
+                  </div>
+                </Html>
+              </group>
             ) : null}
           </group>
         );
