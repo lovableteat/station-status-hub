@@ -4,7 +4,7 @@
 
 **Goal:** Add a secure Messenger-style action that clears one direct conversation from the current user's inbox while preserving the other participant's history.
 
-**Architecture:** A per-member `cleared_at` cutoff controls visibility at the PostgreSQL RLS and thread-list levels. The React thread hook invokes a membership-checked RPC and optimistically removes the cleared thread; the conversation list exposes a separate accessible destructive action with confirmation and loading feedback.
+**Architecture:** A caller-owned `chat_history_clears` row controls visibility at the PostgreSQL RLS and thread-list levels. The React thread hook invokes a membership-checked RPC and removes the cleared thread; opaque realtime invalidations are re-fetched through RLS, and every open panel purges stale cached history. The conversation list exposes a separate accessible destructive action with confirmation and loading feedback.
 
 **Tech Stack:** PostgreSQL/Supabase migrations and RPCs, React 18, TypeScript, shadcn UI, Node test runner.
 
@@ -18,20 +18,20 @@
 
 ---
 
-### Task 1: Add the member-scoped history cutoff
+### Task 1: Add the private member-scoped history cutoff
 
 **Files:**
 - Create: `supabase/migrations/20260809150000_clear_direct_chat_history.sql`
 - Modify: `tests/realtimeCollaborationV2.test.mjs`
 
 **Interfaces:**
-- Produces: `public.chat_members.cleared_at timestamptz`
+- Produces: `public.chat_history_clears(thread_id, user_id, cleared_at)`
 - Produces: `public.clear_direct_chat_history(p_thread_id uuid) RETURNS boolean`
 - Preserves: `public.list_direct_chat_threads()` return columns
 
 - [ ] **Step 1: Write the failing migration contract test**
 
-Add source assertions that require the new migration to define `cleared_at`, validate active membership and direct-chat kind, update only `user_id = public.current_system_user_id()`, replace the chat-message SELECT policy with the cutoff, apply the cutoff to latest/unread queries, and hide cleared threads with no newer message.
+Add source assertions that require the new migration to define a user-owned cutoff table, validate active membership and direct-chat kind, upsert only the caller's row, replace the chat-message SELECT policy with the cutoff, apply the cutoff to latest/unread queries, and hide cleared threads with no newer message.
 
 - [ ] **Step 2: Run the test and verify RED**
 
@@ -41,16 +41,16 @@ Expected: FAIL because `20260809150000_clear_direct_chat_history.sql` does not e
 
 - [ ] **Step 3: Implement the migration**
 
-Create the column and index, then implement an idempotent security-definer function:
+Create the RLS-protected cutoff table, then implement an idempotent security-definer function:
 
 ```sql
-UPDATE public.chat_members
-SET cleared_at = clock_timestamp()
-WHERE thread_id = p_thread_id
-  AND user_id = v_user_id;
+INSERT INTO public.chat_history_clears (thread_id, user_id, cleared_at)
+VALUES (p_thread_id, v_user_id, clock_timestamp())
+ON CONFLICT (thread_id, user_id) DO UPDATE
+SET cleared_at = excluded.cleared_at;
 ```
 
-Replace the message SELECT policy with a membership `EXISTS` condition that also requires `messages.created_at > members.cleared_at` when a cutoff exists. Replace `list_direct_chat_threads()` so both lateral latest-message and unread-count subqueries use `own_member.cleared_at`, and add `AND (own_member.cleared_at IS NULL OR latest.id IS NOT NULL)`.
+Replace the message SELECT policy so a member can read only rows newer than their own cutoff. Replace `list_direct_chat_threads()` so both lateral latest-message and unread-count subqueries use `own_clear.cleared_at`, and hide cleared threads with no newer message. Replace full-row message broadcasts with opaque identifiers that clients must re-fetch through RLS.
 
 - [ ] **Step 4: Run the migration contract test and verify GREEN**
 
@@ -79,7 +79,7 @@ git commit -m "feat: add member-scoped chat history clearing"
 
 - [ ] **Step 1: Write the failing hook and UI contract tests**
 
-Require the hook to call `clear_direct_chat_history`, expose `clearDirectChat`, retain the row on failure, remove it on success, and expose a clear error. Require the UI to use separate sibling buttons, an accessible destructive label, explicit current-account-only confirmation copy, a per-thread loading state, and `Trash2`/`LoaderCircle` feedback.
+Require the hook to call `clear_direct_chat_history`, expose `clearDirectChat`, retain the row on failure, remove it on success, purge open panels, and expose a clear error. Require the UI to use separate sibling buttons, an accessible destructive label, explicit current-account-only confirmation copy, a concurrent-safe per-thread loading state, and `Trash2`/`LoaderCircle` feedback.
 
 - [ ] **Step 2: Run the test and verify RED**
 
@@ -89,11 +89,11 @@ Expected: FAIL because the hook and row action are missing.
 
 - [ ] **Step 3: Implement the hook**
 
-Add a stable callback that validates authentication/thread ID, calls the RPC, sets `對話刪除失敗，請稍後再試。` on failure, and filters the successful thread from `threads`.
+Add a stable callback that validates authentication/thread ID, calls the RPC, sets `對話刪除失敗，請稍後再試。` on failure, filters the successful thread from `threads`, and notifies any mounted conversation panel to clear its cache.
 
 - [ ] **Step 4: Implement the row action**
 
-Refactor `ThreadRow` to a non-interactive row container with sibling open and delete buttons. Add `deletingThreadId`, confirm with the participant display name and current-account-only warning, disable the action while pending, and call `clearDirectChat`.
+Refactor `ThreadRow` to a non-interactive row container with sibling open and delete buttons. Track pending IDs in a `Set`, confirm with the participant display name and current-account-only warning, disable the matching action while pending, and call `clearDirectChat`.
 
 - [ ] **Step 5: Run focused tests and verify GREEN**
 

@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useUser } from "@/components/auth/UserContext";
+import {
+  mergeDirectMessages as mergeMessages,
+  replaceVisibleDirectMessages,
+} from "@/components/collaboration/directMessageState.mjs";
 import { supabase } from "@/integrations/supabase/client";
 import { authorizePrivateRealtime } from "@/lib/authorizePrivateRealtime";
 
 const MESSAGE_PAGE_SIZE = 40;
 const TYPING_THROTTLE_MS = 500;
 const TYPING_EXPIRY_MS = 2_500;
+const DIRECT_CHAT_CLEARED_EVENT = "station-direct-chat-cleared";
 const database = supabase as any;
 
 export interface DirectThread {
@@ -68,29 +73,19 @@ function mapMessage(row: any): DirectMessage {
   };
 }
 
-function mergeMessages(current: DirectMessage[], incoming: DirectMessage[]) {
-  const byId = new Map(current.map((message) => [message.id, message]));
-  const optimisticByClientId = new Map(
-    current.filter((message) => message.delivery !== "sent").map((message) => [message.clientId, message.id]),
-  );
-
-  incoming.forEach((message) => {
-    const optimisticId = optimisticByClientId.get(message.clientId);
-    if (optimisticId) byId.delete(optimisticId);
-    byId.set(message.id, message);
-  });
-
-  return [...byId.values()].sort((left, right) => {
-    const timeDifference = Date.parse(left.createdAt) - Date.parse(right.createdAt);
-    return timeDifference || left.id.localeCompare(right.id);
-  });
-}
-
-function extractBroadcastRecord(payload: any) {
+function extractBroadcastReference(payload: any) {
   const envelope = payload?.payload ?? payload;
   const table = envelope?.table ?? envelope?.table_name;
   const record = envelope?.record ?? envelope?.new ?? payload?.new;
-  return { table, record };
+  const threadId = envelope?.thread_id ?? record?.thread_id;
+  const recordId = envelope?.record_id ?? record?.id;
+  return { table, threadId, recordId };
+}
+
+function notifyDirectChatCleared(threadId: string) {
+  window.dispatchEvent(new CustomEvent(DIRECT_CHAT_CLEARED_EVENT, {
+    detail: { threadId },
+  }));
 }
 
 export function useDirectMessageThreads() {
@@ -123,6 +118,14 @@ export function useDirectMessageThreads() {
     reloadTimerRef.current = window.setTimeout(() => void reload(), 120);
   }, [reload]);
 
+  const handleInboxChange = useCallback((payload: any) => {
+    const { table, threadId } = extractBroadcastReference(payload);
+    if (table === "chat_history_clears" && threadId) {
+      notifyDirectChatCleared(threadId);
+    }
+    scheduleReload();
+  }, [scheduleReload]);
+
   useEffect(() => {
     void reload();
     return () => {
@@ -138,15 +141,15 @@ export function useDirectMessageThreads() {
       if (!active || !authorized) return;
       inbox = supabase
         .channel(`chat-inbox:${user.userId}`, { config: { private: true } })
-        .on("broadcast", { event: "INSERT" }, scheduleReload)
-        .on("broadcast", { event: "UPDATE" }, scheduleReload)
+        .on("broadcast", { event: "INSERT" }, handleInboxChange)
+        .on("broadcast", { event: "UPDATE" }, handleInboxChange)
         .subscribe();
     });
     return () => {
       active = false;
       if (inbox) void supabase.removeChannel(inbox);
     };
-  }, [isRealtimeAuthenticated, scheduleReload, user?.userId]);
+  }, [handleInboxChange, isRealtimeAuthenticated, user?.userId]);
 
   const threadSignature = threads.map((thread) => thread.threadId).sort().join(":");
   useEffect(() => {
@@ -196,6 +199,7 @@ export function useDirectMessageThreads() {
         return false;
       }
       setThreads((current) => current.filter((thread) => thread.threadId !== threadId));
+      notifyDirectChatCleared(threadId);
       setError(null);
       return true;
     },
@@ -253,18 +257,30 @@ export function useDirectMessages(threadId: string | null) {
     }
 
     setLoading(true);
-    const { data, error: queryError } = await database
-      .from("chat_messages")
-      .select("id,thread_id,sender_id,client_id,body,created_at,edited_at,deleted_at")
-      .eq("thread_id", threadId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(MESSAGE_PAGE_SIZE);
+    const [messageResult, clearResult] = await Promise.all([
+      database
+        .from("chat_messages")
+        .select("id,thread_id,sender_id,client_id,body,created_at,edited_at,deleted_at")
+        .eq("thread_id", threadId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(MESSAGE_PAGE_SIZE),
+      database
+        .from("chat_history_clears")
+        .select("cleared_at")
+        .eq("thread_id", threadId)
+        .maybeSingle(),
+    ]);
+    const { data, error: queryError } = messageResult;
     if (queryError) {
       setError("訊息載入失敗，已保留目前畫面與未送出內容。");
     } else {
       const latest = (data ?? []).map(mapMessage).reverse();
-      setMessages((current) => mergeMessages(current, latest));
+      setMessages((current) => replaceVisibleDirectMessages(
+        current,
+        latest,
+        clearResult.data?.cleared_at ?? null,
+      ));
       setHasMore((data?.length ?? 0) === MESSAGE_PAGE_SIZE);
       setError(null);
       const lastMessage = latest.at(-1);
@@ -273,6 +289,30 @@ export function useDirectMessages(threadId: string | null) {
     setLoading(false);
     void loadReadReceipts();
   }, [isRealtimeAuthenticated, loadReadReceipts, markRead, threadId]);
+
+  const loadVisibleMessage = useCallback(async (recordId: string) => {
+    if (!threadId || !recordId || !isRealtimeAuthenticated) return null;
+    const { data, error: queryError } = await database
+      .from("chat_messages")
+      .select("id,thread_id,sender_id,client_id,body,created_at,edited_at,deleted_at")
+      .eq("thread_id", threadId)
+      .eq("id", recordId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (queryError) {
+      void loadLatest();
+      return null;
+    }
+    if (!data) {
+      setMessages((current) => current.filter((message) => message.id !== recordId));
+      return null;
+    }
+
+    const message = mapMessage(data);
+    setMessages((current) => mergeMessages(current, [message]));
+    return message;
+  }, [isRealtimeAuthenticated, loadLatest, threadId]);
 
   const loadMore = useCallback(async () => {
     const oldest = messages.find((message) => message.delivery === "sent");
@@ -417,6 +457,20 @@ export function useDirectMessages(threadId: string | null) {
   );
 
   useEffect(() => {
+    if (!threadId) return;
+    const handleCleared = (event: Event) => {
+      const clearedThreadId = (event as CustomEvent<{ threadId?: string }>).detail?.threadId;
+      if (clearedThreadId !== threadId) return;
+      setMessages([]);
+      setHasMore(false);
+      setReadByOtherAt(null);
+      setTypingUsers([]);
+    };
+    window.addEventListener(DIRECT_CHAT_CLEARED_EVENT, handleCleared);
+    return () => window.removeEventListener(DIRECT_CHAT_CLEARED_EVENT, handleCleared);
+  }, [threadId]);
+
+  useEffect(() => {
     setMessages([]);
     setTypingUsers([]);
     setReadByOtherAt(null);
@@ -431,20 +485,26 @@ export function useDirectMessages(threadId: string | null) {
       channel
         .on("broadcast", { event: "INSERT" }, (payload) => {
           if (!active) return;
-          const { table, record } = extractBroadcastRecord(payload);
+          const { table, threadId: changedThreadId, recordId } = extractBroadcastReference(payload);
           if (table === "chat_read_receipts") {
             void loadReadReceipts();
-          } else if (record?.thread_id === threadId && record?.id) {
-            const message = mapMessage(record);
-            setMessages((current) => mergeMessages(current, [message]));
-            if (message.senderId !== user.userId) void markRead(message.id);
+          } else if (table === "chat_messages" && changedThreadId === threadId && recordId) {
+            void loadVisibleMessage(recordId).then((message) => {
+              if (message && message.senderId !== user.userId) void markRead(message.id);
+            });
           }
         })
         .on("broadcast", { event: "UPDATE" }, (payload) => {
-          const { table, record } = extractBroadcastRecord(payload);
+          const { table, threadId: changedThreadId, recordId } = extractBroadcastReference(payload);
           if (table === "chat_read_receipts") void loadReadReceipts();
-          else if (record?.thread_id === threadId && record?.id) {
-            setMessages((current) => mergeMessages(current, [mapMessage(record)]));
+          else if (table === "chat_messages" && changedThreadId === threadId && recordId) {
+            void loadVisibleMessage(recordId);
+          }
+        })
+        .on("broadcast", { event: "DELETE" }, (payload) => {
+          const { table, threadId: changedThreadId, recordId } = extractBroadcastReference(payload);
+          if (table === "chat_messages" && changedThreadId === threadId && recordId) {
+            setMessages((current) => current.filter((message) => message.id !== recordId));
           }
         })
         .on("broadcast", { event: "typing" }, ({ payload }) => {
@@ -482,6 +542,7 @@ export function useDirectMessages(threadId: string | null) {
     isRealtimeAuthenticated,
     loadLatest,
     loadReadReceipts,
+    loadVisibleMessage,
     markRead,
     threadId,
     user?.userId,

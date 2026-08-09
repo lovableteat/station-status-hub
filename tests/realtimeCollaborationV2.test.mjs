@@ -222,26 +222,37 @@ test("direct conversation clearing is private to the current member and enforced
     "supabase/migrations/20260809150000_clear_direct_chat_history.sql",
   ).catch(() => "");
 
-  assert.match(migration, /ADD COLUMN IF NOT EXISTS cleared_at timestamptz/i);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.chat_history_clears/i);
+  assert.match(migration, /cleared_at timestamptz NOT NULL/i);
+  assert.doesNotMatch(migration, /ALTER TABLE public\.chat_members[\s\S]*ADD COLUMN IF NOT EXISTS cleared_at/i);
   assert.match(migration, /clear_direct_chat_history\s*\(p_thread_id uuid\)/i);
   assert.match(migration, /threads\.kind = 'direct'/i);
   assert.match(migration, /members\.user_id = v_user_id/i);
   assert.match(
     migration,
-    /UPDATE public\.chat_members[\s\S]*SET cleared_at = clock_timestamp\(\)[\s\S]*user_id = v_user_id/i,
+    /INSERT INTO public\.chat_history_clears[\s\S]*ON CONFLICT \(thread_id, user_id\)[\s\S]*cleared_at = excluded\.cleared_at/i,
   );
   assert.match(
     migration,
-    /chat_messages\.created_at > members\.cleared_at/i,
+    /chat_messages\.created_at > coalesce\([\s\S]*clears\.cleared_at[\s\S]*'-infinity'::timestamptz\)/i,
     "message RLS must prevent cleared history from being queried directly",
   );
-  assert.match(migration, /latest_messages\.created_at > own_member\.cleared_at/i);
-  assert.match(migration, /unread\.created_at > own_member\.cleared_at/i);
-  assert.match(migration, /own_member\.cleared_at IS NULL OR latest\.id IS NOT NULL/i);
+  assert.match(migration, /LEFT JOIN public\.chat_history_clears AS own_clear/i);
+  assert.match(migration, /latest_messages\.created_at > own_clear\.cleared_at/i);
+  assert.match(migration, /unread\.created_at > own_clear\.cleared_at/i);
+  assert.match(migration, /own_clear\.cleared_at IS NULL OR latest\.id IS NOT NULL/i);
   assert.match(
     migration,
-    /CREATE TRIGGER chat_members_inbox_broadcast[\s\S]*AFTER INSERT OR UPDATE ON public\.chat_members/i,
-    "clearing must refresh every local thread-list consumer through the existing inbox channel",
+    /'chat-inbox:' \|\| NEW\.user_id::text[\s\S]*AFTER INSERT OR UPDATE ON public\.chat_history_clears/i,
+    "clearing must notify only the clearing member's inbox",
+  );
+  assert.match(migration, /CREATE POLICY "Users can read their own chat history clears"/i);
+  assert.match(migration, /user_id = public\.current_system_user_id\(\)/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.broadcast_chat_message_change\(\)[\s\S]*realtime\.send\(/i);
+  assert.doesNotMatch(
+    migration,
+    /CREATE OR REPLACE FUNCTION public\.broadcast_chat_message_change\(\)[\s\S]*realtime\.broadcast_changes\(/i,
+    "message broadcasts must not expose full database rows",
   );
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.clear_direct_chat_history\(uuid\) TO authenticated/i);
 });
@@ -257,15 +268,55 @@ test("conversation rows can clear all locally visible messages without affecting
   assert.match(hook, /p_thread_id: threadId/);
   assert.match(hook, /setThreads\(\(current\) => current\.filter\(\(thread\) => thread\.threadId !== threadId\)\)/);
   assert.match(hook, /對話刪除失敗，請稍後再試。/);
+  assert.match(hook, /station-direct-chat-cleared/);
+  assert.match(hook, /loadVisibleMessage\(recordId\)/);
+  assert.match(hook, /replaceVisibleDirectMessages/);
+  assert.doesNotMatch(hook, /mergeMessages\(current, \[mapMessage\(record\)\]\)/);
   assert.match(hook, /return \{ threads, unreadCount, loading, error, reload, startDirectChat, clearDirectChat \}/);
 
-  assert.match(panel, /const \[deletingThreadId, setDeletingThreadId\] = useState<string \| null>\(null\)/);
+  assert.match(panel, /const \[deletingThreadIds, setDeletingThreadIds\] = useState<Set<string>>/);
   assert.match(panel, /aria-label=\{`刪除與 \$\{thread\.otherDisplayName\} 的所有訊息`\}/);
   assert.match(panel, /只會清除你帳號看到的紀錄，對方仍會保留，且無法復原。/);
   assert.match(panel, /await clearDirectChat\(thread\.threadId\)/);
-  assert.match(panel, /deletingThreadId === thread\.threadId/);
+  assert.match(panel, /deletingThreadIds\.has\(thread\.threadId\)/);
+  assert.match(panel, /setPendingDirectThread/);
   assert.match(panel, /deleting \? <LoaderCircle[^>]*animate-spin[^>]*\/> : <Trash2/s);
   assert.match(panel, /<div[^>]*data-direct-thread-row="true"[^>]*>[\s\S]*?<button[\s\S]*?<\/button>[\s\S]*?<button/s);
+});
+
+test("direct-message state replacement purges cleared sent rows and tracks concurrent clears", async () => {
+  const state = await import("../src/components/collaboration/directMessageState.mjs").catch(() => ({}));
+  assert.equal(typeof state.replaceVisibleDirectMessages, "function");
+  assert.equal(typeof state.setPendingDirectThread, "function");
+
+  const current = [
+    { id: "old-sent", clientId: "old", createdAt: "2026-08-01T00:00:00Z", delivery: "sent" },
+    { id: "optimistic", clientId: "new", createdAt: "2026-08-09T00:00:00Z", delivery: "sending" },
+  ];
+  assert.deepEqual(
+    state.replaceVisibleDirectMessages(current, []),
+    [current[1]],
+    "an authoritative empty RLS result must purge previously sent history while preserving an optimistic send",
+  );
+  assert.deepEqual(
+    state.replaceVisibleDirectMessages(current, [
+      { id: "latest", clientId: "latest", createdAt: "2026-08-08T00:00:00Z", delivery: "sent" },
+    ]).map((message) => message.id),
+    ["old-sent", "latest", "optimistic"],
+    "a normal latest-page refresh must preserve older pages and optimistic sends",
+  );
+  assert.deepEqual(
+    state.replaceVisibleDirectMessages(current, [
+      { id: "latest", clientId: "latest", createdAt: "2026-08-08T00:00:00Z", delivery: "sent" },
+    ], "2026-08-07T00:00:00Z").map((message) => message.id),
+    ["latest", "optimistic"],
+    "a personal clear cutoff must purge only sent rows at or before the cutoff",
+  );
+
+  let pending = state.setPendingDirectThread(new Set(), "thread-a", true);
+  pending = state.setPendingDirectThread(pending, "thread-b", true);
+  pending = state.setPendingDirectThread(pending, "thread-a", false);
+  assert.deepEqual([...pending], ["thread-b"]);
 });
 
 test("collaboration changes never replace the current page", async () => {
