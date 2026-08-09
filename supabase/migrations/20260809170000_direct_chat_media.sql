@@ -251,13 +251,19 @@ BEGIN
 
   INSERT INTO public.chat_messages (thread_id, sender_id, client_id, body)
   VALUES (p_thread_id, v_user_id, p_client_id, v_body)
-  ON CONFLICT (sender_id, client_id) DO UPDATE
-  SET body = excluded.body
-  WHERE chat_messages.thread_id = excluded.thread_id
+  ON CONFLICT (sender_id, client_id) DO NOTHING
   RETURNING id INTO v_message_id;
 
   IF v_message_id IS NULL THEN
-    RAISE EXCEPTION 'Message client identifier belongs to another thread';
+    SELECT messages.id INTO v_message_id
+    FROM public.chat_messages AS messages
+    WHERE messages.sender_id = v_user_id
+      AND messages.client_id = p_client_id
+      AND messages.thread_id = p_thread_id;
+
+    IF v_message_id IS NULL THEN
+      RAISE EXCEPTION 'Message client identifier belongs to another thread';
+    END IF;
   END IF;
 
   FOR v_attachment, v_position IN
@@ -280,10 +286,6 @@ BEGIN
     )
     ON CONFLICT (storage_path) DO NOTHING;
   END LOOP;
-
-  UPDATE public.chat_threads
-  SET last_message_at = now(), updated_at = now()
-  WHERE id = p_thread_id;
 
   RETURN v_message_id;
 END;
