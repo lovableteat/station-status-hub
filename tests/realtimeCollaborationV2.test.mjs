@@ -343,7 +343,8 @@ test("direct chat media storage is private, member-scoped, and created atomicall
   assert.match(migration, /jsonb_array_length\(v_attachments\) > 4/i);
   assert.match(migration, /char_length\(v_body\) = 0 AND jsonb_array_length\(v_attachments\) = 0/i);
   assert.match(migration, /FROM storage\.objects[\s\S]*bucket_id = 'chat-media'/i);
-  assert.match(migration, /ON CONFLICT \(sender_id, client_id\)/i);
+  assert.match(migration, /ON CONFLICT \(sender_id, client_id\) DO NOTHING/i);
+  assert.doesNotMatch(migration, /SET body = excluded\.body/i);
   assert.match(migration, /REVOKE INSERT ON public\.chat_messages FROM authenticated/i);
   assert.match(migration, /DROP FUNCTION IF EXISTS public\.delete_direct_chat_message\(uuid\)/i);
   assert.match(migration, /jsonb_build_object\([\s\S]*'storage_paths'/i);
