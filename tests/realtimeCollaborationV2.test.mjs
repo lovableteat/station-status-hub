@@ -217,6 +217,30 @@ test("direct messages are member-only, incremental, retryable, and idempotent", 
   assert.doesNotMatch(hook, /location\.reload|window\.location\.assign|setInterval/);
 });
 
+test("direct conversation clearing is private to the current member and enforced by RLS", async () => {
+  const migration = await readSource(
+    "supabase/migrations/20260809150000_clear_direct_chat_history.sql",
+  ).catch(() => "");
+
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS cleared_at timestamptz/i);
+  assert.match(migration, /clear_direct_chat_history\s*\(p_thread_id uuid\)/i);
+  assert.match(migration, /threads\.kind = 'direct'/i);
+  assert.match(migration, /members\.user_id = v_user_id/i);
+  assert.match(
+    migration,
+    /UPDATE public\.chat_members[\s\S]*SET cleared_at = clock_timestamp\(\)[\s\S]*user_id = v_user_id/i,
+  );
+  assert.match(
+    migration,
+    /chat_messages\.created_at > members\.cleared_at/i,
+    "message RLS must prevent cleared history from being queried directly",
+  );
+  assert.match(migration, /latest_messages\.created_at > own_member\.cleared_at/i);
+  assert.match(migration, /unread\.created_at > own_member\.cleared_at/i);
+  assert.match(migration, /own_member\.cleared_at IS NULL OR latest\.id IS NOT NULL/i);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.clear_direct_chat_history\(uuid\) TO authenticated/i);
+});
+
 test("collaboration changes never replace the current page", async () => {
   const sources = await Promise.all([
     readSource("src/components/auth/UserContext.tsx"),
