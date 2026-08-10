@@ -561,6 +561,11 @@ export function PcbDesignerWorkspace({
               workspace.openProject(project.id);
               setDialog({ kind: "project-settings", project });
             }}
+            onPreviewProject={(project) => setDialog({
+              kind: "project-preview",
+              project,
+              onOpen: () => workspace.openProject(project.id),
+            })}
             onSaveTemplate={() => setDialog({ kind: "save-template" })}
             onRenameTemplate={(template) => setDialog({ kind: "rename-template", template })}
             onEditComponent={(component) => setDialog({ kind: "component", component })}
