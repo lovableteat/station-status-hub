@@ -132,7 +132,7 @@ import {
 type AvailabilityFilter = "all" | "usable" | "required" | "pending" | "risk" | "single";
 type SortMode = "reference" | "alternatives" | "approved" | "pending" | "single-source";
 type EditorMode = "create" | "edit" | "view";
-type CollaborationStatus = BomStorageMode | "checking" | "error";
+type CollaborationStatus = BomStorageMode | "checking" | "reconnecting" | "error";
 
 const SORT_MODE_LABELS: Record<SortMode, string> = {
   reference: "Ref 由小到大",
@@ -1313,14 +1313,23 @@ function getCollaborationStatusMeta(status: CollaborationStatus) {
         bannerClassName: "border-amber-400/30 bg-amber-400/10 text-amber-100",
         bannerText: "目前是唯讀恢復模式，還不是多人同步。請先把 Supabase migration `20260702094500_4a79e28e-90e1-48d2-9487-f78e49b0d90a.sql` 套到正式資料庫。",
       };
+    case "reconnecting":
+      return {
+        label: "重新連線中",
+        description: "正在背景重新連接共用雲端 BOM，畫面不會重新整理。",
+        badgeClassName: "border-sky-400/30 bg-sky-400/10 text-sky-100",
+        dotClassName: "bg-sky-300",
+        bannerClassName: "border-sky-400/30 bg-sky-500/10 text-sky-100",
+        bannerText: "正在重新讀取共用 BOM；目前畫面與已載入資料會保留，不會重新整理整頁。",
+      };
     case "error":
       return {
-        label: "雲端同步異常",
-        description: "最近一次共用 BOM 同步失敗，畫面可能停留在上次載入的資料。",
+        label: "雲端同步暫時中斷",
+        description: "共用 BOM 暫時無法連線；已載入資料會保留，系統會背景重試。",
         badgeClassName: "border-rose-400/30 bg-rose-400/10 text-rose-100",
         dotClassName: "bg-rose-300",
         bannerClassName: "border-rose-400/30 bg-rose-400/10 text-rose-100",
-        bannerText: "共用雲端 BOM 目前連線異常，畫面可能停留在上次載入的資料。請重新整理，或稍後再試一次。",
+        bannerText: "目前已載入的 BOM 仍會保留；系統會在背景重試，也可按「重新連線」，不需要重新整理頁面。",
       };
     default:
       return {
@@ -4261,6 +4270,8 @@ export function MaterialRequestPage() {
   const [isSearchPending, startSearchTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceSyncRequestRef = useRef(0);
+  const bomSyncRetryAttemptRef = useRef(0);
+  const bomSyncRetryTimerRef = useRef<number | null>(null);
   const activeBomIdRef = useRef(activeBomId);
   const loadedRecordRangeRef = useRef("");
   const recentLocalRecordIdsRef = useRef(new Map<string, number>());
@@ -4279,7 +4290,7 @@ export function MaterialRequestPage() {
     presenceEditingRecordId,
   );
   const isCollaborativeReady = collaborationStatus === "remote";
-  const canManageBomPageTracker = collaborationStatus !== "checking" && collaborationStatus !== "error";
+  const canManageBomPageTracker = !["checking", "reconnecting", "error"].includes(collaborationStatus);
   const collaborationStatusMeta = useMemo(
     () => getCollaborationStatusMeta(collaborationStatus),
     [collaborationStatus],
@@ -4379,6 +4390,7 @@ export function MaterialRequestPage() {
         return result.workspaces;
       }
 
+      bomSyncRetryAttemptRef.current = 0;
       setCollaborationStatus(result.mode);
       applyLoadedWorkspaces(result.workspaces, preferredBomId);
       if (preferredBomId) {
@@ -4399,6 +4411,31 @@ export function MaterialRequestPage() {
       throw error;
     }
   }, [applyLoadedWorkspaces]);
+
+  const retryBomSync = useCallback(async (showFeedback = false) => {
+    setCollaborationStatus("reconnecting");
+    try {
+      await reloadBomWorkspaces(activeBomIdRef.current, {
+        forceRefresh: true,
+        recordPage: page,
+        recordPageSize: pageSize,
+      });
+      if (showFeedback) {
+        toast({
+          title: "雲端同步已恢復",
+          description: "已重新連接共用 BOM，畫面與資料皆已更新。",
+        });
+      }
+    } catch {
+      if (showFeedback) {
+        toast({
+          variant: "destructive",
+          title: "重新連線失敗",
+          description: "系統會繼續在背景重試，目前畫面不會重新整理。",
+        });
+      }
+    }
+  }, [page, pageSize, reloadBomWorkspaces, toast]);
 
   useEffect(() => {
     let active = true;
@@ -4428,6 +4465,7 @@ export function MaterialRequestPage() {
         });
         remoteSettled = true;
         if (!active || requestId !== workspaceSyncRequestRef.current) return;
+        bomSyncRetryAttemptRef.current = 0;
         setCollaborationStatus(result.mode);
         applyLoadedWorkspaces(result.workspaces, preferredWorkspaceId);
         const loadedWorkspace = result.workspaces.find((workspace) => workspace.id === preferredWorkspaceId);
@@ -4467,6 +4505,32 @@ export function MaterialRequestPage() {
       unsubscribe();
     };
   }, [applyLoadedWorkspaces, pageSize]);
+
+  useEffect(() => {
+    if (collaborationStatus !== "error") {
+      if (bomSyncRetryTimerRef.current !== null) {
+        window.clearTimeout(bomSyncRetryTimerRef.current);
+        bomSyncRetryTimerRef.current = null;
+      }
+      return;
+    }
+
+    const retryDelaysMs = [2000, 5000, 15000, 30000] as const;
+    const retryAttempt = bomSyncRetryAttemptRef.current;
+    const retryDelayMs = retryDelaysMs[Math.min(retryAttempt, retryDelaysMs.length - 1)];
+    bomSyncRetryAttemptRef.current = retryAttempt + 1;
+    bomSyncRetryTimerRef.current = window.setTimeout(() => {
+      bomSyncRetryTimerRef.current = null;
+      void retryBomSync(false);
+    }, retryDelayMs);
+
+    return () => {
+      if (bomSyncRetryTimerRef.current !== null) {
+        window.clearTimeout(bomSyncRetryTimerRef.current);
+        bomSyncRetryTimerRef.current = null;
+      }
+    };
+  }, [collaborationStatus, retryBomSync]);
 
   useEffect(() => {
     activeBomIdRef.current = activeBomId;
@@ -5630,12 +5694,29 @@ export function MaterialRequestPage() {
 
         {collaborationStatus !== "remote" && (
           <div className={cn("mt-3 rounded-lg border px-3 py-2 text-sm", collaborationStatusMeta.bannerClassName)}>
-            <div className="flex items-start gap-2">
-              <TriangleAlert className="mt-0.5 h-4 w-4 flex-none" />
-              <div>
-                <p className="font-bold">{collaborationStatusMeta.label}</p>
-                <p className="mt-0.5">{collaborationStatusMeta.bannerText}</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2">
+                {collaborationStatus === "checking" || collaborationStatus === "reconnecting" ? (
+                  <RotateCcw className="mt-0.5 h-4 w-4 flex-none animate-spin" />
+                ) : (
+                  <TriangleAlert className="mt-0.5 h-4 w-4 flex-none" />
+                )}
+                <div>
+                  <p className="font-bold">{collaborationStatusMeta.label}</p>
+                  <p className="mt-0.5">{collaborationStatusMeta.bannerText}</p>
+                </div>
               </div>
+              {collaborationStatus === "error" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void retryBomSync(true)}
+                  className="h-8 shrink-0 border-rose-300/35 bg-rose-400/10 text-rose-50 hover:bg-rose-400/20 hover:text-white"
+                >
+                  <RotateCcw className="mr-2 h-3.5 w-3.5" />重新連線
+                </Button>
+              )}
             </div>
           </div>
         )}

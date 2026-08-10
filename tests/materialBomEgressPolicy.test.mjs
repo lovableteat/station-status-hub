@@ -80,6 +80,46 @@ test("reuses a complete BOM cache only when its remote version and record count 
   }), false);
 });
 
+test("transient BOM read failures retry without reloading the page", async () => {
+  const { runBomReadWithRetry } = await loadPolicy();
+  const delays = [];
+  let attempts = 0;
+
+  const result = await runBomReadWithRetry(async () => {
+    attempts += 1;
+    if (attempts < 3) throw new TypeError("Failed to fetch");
+    return "connected";
+  }, {
+    retries: 3,
+    delaysMs: [5, 10],
+    sleep: async (delayMs) => delays.push(delayMs),
+  });
+
+  assert.equal(result, "connected");
+  assert.equal(attempts, 3);
+  assert.deepEqual(delays, [5, 10]);
+});
+
+test("permanent BOM permission and schema errors do not loop", async () => {
+  const { isRetryableBomReadError, runBomReadWithRetry } = await loadPolicy();
+  let attempts = 0;
+
+  assert.equal(isRetryableBomReadError({ status: 503 }), true);
+  assert.equal(isRetryableBomReadError({ status: 401 }), false);
+  assert.equal(isRetryableBomReadError({ code: "42P01" }), false);
+  assert.equal(isRetryableBomReadError({ code: "42501" }), false);
+
+  await assert.rejects(runBomReadWithRetry(async () => {
+    attempts += 1;
+    throw { code: "42501", message: "permission denied" };
+  }, {
+    retries: 3,
+    sleep: async () => {},
+  }));
+
+  assert.equal(attempts, 1);
+});
+
 test("BOM search promotes a partial workspace to a full workspace load", async () => {
   const pageSource = await readFile(pageUrl, "utf8");
   assert.match(pageSource, /const requiresFullBomLoad = searchTokens\.length > 0/);

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 import type { MaterialWorkbookPayload, MaterialWorkbookRecord } from "./materialRequestUtils";
 import { chunkBomRecordFetchRanges, createBomRecordFetchRanges, createBomRecordPageRange } from "./materialBomPerformance";
-import { canReuseBomWorkspaceCache } from "./materialBomSyncPolicy";
+import { canReuseBomWorkspaceCache, runBomReadWithRetry } from "./materialBomSyncPolicy";
 
 export type BomPageTrackerStatus = "done" | "pending" | "done_missing";
 
@@ -547,12 +547,15 @@ function buildWorkspaceFromCache(
 }
 
 async function loadPageTrackerMap() {
-  const { data, error } = await supabaseClient
-    .from(PREFERENCE_TABLE)
-    .select("table_key, column_order, updated_at")
-    .like("table_key", `${PAGE_TRACKER_KEY_PREFIX}%`);
+  const data = await runBomReadWithRetry(async () => {
+    const { data: preferenceRows, error } = await supabaseClient
+      .from(PREFERENCE_TABLE)
+      .select("table_key, column_order, updated_at")
+      .like("table_key", `${PAGE_TRACKER_KEY_PREFIX}%`);
 
-  if (error) throw error;
+    if (error) throw error;
+    return preferenceRows;
+  });
 
   const pageTrackerByWorkspace = new Map<string, BomPageTracker>();
   for (const row of (data ?? []) as BomPreferenceRow[]) {
@@ -575,7 +578,7 @@ async function loadRemoteRecordRowsForWorkspace(
 ) {
   const rows: BomRecordRow[] = [];
 
-  const fetchRange = async (from: number, to: number) => {
+  const fetchRange = async (from: number, to: number) => runBomReadWithRetry(async () => {
     const { data, error } = await supabaseClient
       .from(RECORD_TABLE)
       .select("workspace_id, record_id, order_index, data, updated_at")
@@ -585,7 +588,7 @@ async function loadRemoteRecordRowsForWorkspace(
 
     if (error) throw error;
     return (data ?? []) as BomRecordRow[];
-  };
+  });
 
   const pageRange = options.loadAllRecords === true || options.recordPage === undefined
     ? null
@@ -620,12 +623,15 @@ async function loadRemoteRecordRowsForWorkspace(
 }
 
 async function loadTableColorThemeMap() {
-  const { data, error } = await supabaseClient
-    .from(PREFERENCE_TABLE)
-    .select("table_key, column_order, updated_at")
-    .like("table_key", `${TABLE_COLOR_THEME_KEY_PREFIX}%`);
+  const data = await runBomReadWithRetry(async () => {
+    const { data: preferenceRows, error } = await supabaseClient
+      .from(PREFERENCE_TABLE)
+      .select("table_key, column_order, updated_at")
+      .like("table_key", `${TABLE_COLOR_THEME_KEY_PREFIX}%`);
 
-  if (error) throw error;
+    if (error) throw error;
+    return preferenceRows;
+  });
 
   const themeByWorkspace = new Map<string, BomTableColorTheme>();
   for (const row of (data ?? []) as BomPreferenceRow[]) {
@@ -645,18 +651,19 @@ async function loadRemoteBomWorkspaces(
   preferredWorkspaceId?: string,
   options: BomWorkspaceLoadOptions = {},
 ) {
-  const [workspaceResponse, pageTrackerByWorkspace, tableColorThemeByWorkspace] = await Promise.all([
-    supabaseClient
+  const [workspaceRows, pageTrackerByWorkspace, tableColorThemeByWorkspace] = await Promise.all([
+    runBomReadWithRetry(async () => {
+      const { data, error } = await supabaseClient
       .from(WORKSPACE_TABLE)
       .select("id, name, source_file, sheet_name, generated_at, record_count, updated_at")
-      .order("updated_at", { ascending: false }),
-    loadPageTrackerMap(),
-    loadTableColorThemeMap(),
+      .order("updated_at", { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as BomWorkspaceRow[];
+    }),
+    loadPageTrackerMap().catch(() => new Map<string, BomPageTracker>()),
+    loadTableColorThemeMap().catch(() => new Map<string, BomTableColorTheme>()),
   ]);
-
-  if (workspaceResponse.error) throw workspaceResponse.error;
-
-  const workspaceRows = (workspaceResponse.data ?? []) as BomWorkspaceRow[];
   const activeWorkspaceId = preferredWorkspaceId && workspaceRows.some((row) => row.id === preferredWorkspaceId)
     ? preferredWorkspaceId
     : workspaceRows[0]?.id;
