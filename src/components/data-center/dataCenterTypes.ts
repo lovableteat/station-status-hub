@@ -135,6 +135,13 @@ export interface FacilityAislePlan {
   width: number;
   depth: number;
   rotation: number;
+  /** Optional centerline used by aisles with one or more turns. */
+  path?: FacilityAislePoint[];
+}
+
+export interface FacilityAislePoint {
+  x: number;
+  z: number;
 }
 
 export interface PowerFeedPlan {

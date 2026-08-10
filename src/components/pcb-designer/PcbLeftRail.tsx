@@ -1,6 +1,7 @@
 import { useMemo, useState, type ChangeEvent } from "react";
 import {
   Copy,
+  Eye,
   FileUp,
   FolderOpen,
   Pencil,
@@ -33,6 +34,7 @@ interface PcbLeftRailProps {
   onStartPlacement: (componentId: string) => void;
   onNewProject: () => void;
   onEditProject: (project: PcbProject) => void;
+  onPreviewProject: (project: PcbProject) => void;
   onSaveTemplate: () => void;
   onRenameTemplate: (template: PcbTemplate) => void;
   onEditComponent: (component?: PcbLibraryComponent) => void;
@@ -88,6 +90,7 @@ export function PcbLeftRail({
   onStartPlacement,
   onNewProject,
   onEditProject,
+  onPreviewProject,
   onSaveTemplate,
   onRenameTemplate,
   onEditComponent,
@@ -305,6 +308,7 @@ export function PcbLeftRail({
             </button>
             <div className="mt-1 flex justify-end">
               <RowAction label={`開啟 ${project.name}`} icon={FolderOpen} onClick={() => workspace.openProject(project.id)} />
+              <RowAction label={`預覽 ${project.name}`} icon={Eye} onClick={() => onPreviewProject(project)} />
               <RowAction label={`編輯 ${project.name}`} icon={Pencil} disabled={!workspace.canMutate} onClick={() => onEditProject(project)} />
               <RowAction label={`複製 ${project.name}`} icon={Copy} disabled={!workspace.canMutate} onClick={() => workspace.duplicateProject(project.id)} />
               <RowAction label={`刪除 ${project.name}`} icon={Trash2} danger disabled={!workspace.canMutate} onClick={() => onDeleteProject(project)} />

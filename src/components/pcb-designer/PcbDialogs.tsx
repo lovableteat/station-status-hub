@@ -21,6 +21,7 @@ import type {
 export type PcbDialogState =
   | { kind: "new-project" }
   | { kind: "project-settings"; project: PcbProject }
+  | { kind: "project-preview"; project: PcbProject; onOpen: () => void }
   | { kind: "save-template" }
   | { kind: "rename-template"; template: PcbTemplate }
   | { kind: "component"; component?: PcbLibraryComponent }
@@ -260,6 +261,84 @@ export function PcbDialogs({
               <Button type="button" variant="outline" onClick={onClose}>取消</Button>
               <Button type="button" disabled={dialog.validCount === 0} onClick={confirm}>
                 匯入有效資料
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+
+        {dialog?.kind === "project-preview" && (
+          <div data-testid="pcb-project-preview">
+            <DialogHeader>
+              <DialogTitle>{dialog.project.name}</DialogTitle>
+              <DialogDescription className="text-slate-300">
+                {dialog.project.description || "尚未填寫專案說明。"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {[
+                ["元件", dialog.project.components.length],
+                ["禁制區", dialog.project.keepouts.length],
+                ["量測", dialog.project.measurements.length],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl border border-cyan-300/15 bg-[#10263a] p-3 text-center">
+                  <div className="text-[11px] font-bold text-slate-400">{label}</div>
+                  <div className="mt-1 text-xl font-black tabular-nums text-white">{value}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 overflow-hidden rounded-2xl border border-cyan-300/20 bg-[#071522] p-4">
+              <svg
+                viewBox={`0 0 ${dialog.project.board.width} ${dialog.project.board.height}`}
+                className="aspect-[5/3] w-full rounded-xl bg-[#255e58]"
+                role="img"
+                aria-label={`${dialog.project.name} 板面預覽`}
+              >
+                {dialog.project.keepouts.map((keepout) => (
+                  <rect
+                    key={keepout.id}
+                    x={keepout.x}
+                    y={keepout.y}
+                    width={keepout.width}
+                    height={keepout.height}
+                    fill="#fb718533"
+                    stroke="#fb7185"
+                    strokeWidth="0.6"
+                    strokeDasharray="2 1"
+                  />
+                ))}
+                {dialog.project.components.map((component) => (
+                  <g key={component.instanceId} transform={`translate(${component.x} ${component.y}) rotate(${component.rotation})`}>
+                    <rect
+                      x={-component.width / 2}
+                      y={-component.height / 2}
+                      width={component.width}
+                      height={component.height}
+                      rx="1"
+                      fill={component.color}
+                      stroke="#f8fafc"
+                      strokeWidth="0.45"
+                    />
+                    <text y="1" textAnchor="middle" fill="#071522" fontSize="3" fontWeight="800">
+                      {component.reference}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+              <span>{dialog.project.board.width} × {dialog.project.board.height} mm</span>
+              <span>更新 {new Date(dialog.project.updatedAt).toLocaleString("zh-TW")}</span>
+            </div>
+            <DialogFooter className="mt-5">
+              <Button type="button" variant="outline" onClick={onClose}>關閉</Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  dialog.onOpen();
+                  onClose();
+                }}
+              >
+                開啟專案
               </Button>
             </DialogFooter>
           </div>
