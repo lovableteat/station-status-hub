@@ -37,6 +37,7 @@ interface DirectMessagesPanelProps {
   onlineUsers: OnlineUser[];
   requestedUserId: string | null;
   onRequestHandled: () => void;
+  onUnreadCountChange?: (count: number) => void;
 }
 
 function shortTime(value: string | null) {
@@ -117,9 +118,10 @@ export function DirectMessagesPanel({
   onlineUsers,
   requestedUserId,
   onRequestHandled,
+  onUnreadCountChange,
 }: DirectMessagesPanelProps) {
   const { user, isRealtimeAuthenticated } = useUser();
-  const { threads, loading, error, reload, startDirectChat, clearDirectChat } = useDirectMessageThreads();
+  const { threads, unreadCount, loading, error, reload, startDirectChat, clearDirectChat } = useDirectMessageThreads();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -159,6 +161,10 @@ export function DirectMessagesPanel({
   useEffect(() => {
     selectedMediaFilesRef.current = selectedMediaFiles;
   }, [selectedMediaFiles]);
+
+  useEffect(() => {
+    onUnreadCountChange?.(unreadCount);
+  }, [onUnreadCountChange, unreadCount]);
 
   useEffect(() => () => {
     selectedMediaFilesRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
