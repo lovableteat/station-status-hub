@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { MessageCircle, Minus, X } from "lucide-react";
+import { ChevronUp, MessageCircle, Minus } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { cn } from "@/lib/utils";
 import { DirectMessagesPanel } from "./DirectMessagesPanel";
@@ -9,6 +8,8 @@ import { DirectMessagesPanel } from "./DirectMessagesPanel";
 type OpenDirectMessagesDetail = {
   recipientId?: string;
 };
+
+const PANEL_ID = "direct-messages-panel";
 
 export function DirectMessagesDock() {
   const { onlineUsers } = useUserPresence();
@@ -36,49 +37,34 @@ export function DirectMessagesDock() {
   }, []);
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3 sm:bottom-5 sm:right-5">
+    <div className="fixed bottom-0 right-3 z-50 w-[min(340px,calc(100vw-1.5rem))] sm:right-5">
       <section
+        id={PANEL_ID}
         aria-hidden={!isOpen}
-        aria-label="私訊"
+        aria-label="聊天室"
         className={cn(
-          "flex h-[min(640px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[28px] border border-cyan-200/25 bg-[#06111f] shadow-[0_30px_100px_-30px_rgba(34,211,238,0.45)] transition-all duration-200",
+          "absolute bottom-11 right-0 flex h-[min(620px,calc(100dvh-5rem))] w-full flex-col overflow-hidden rounded-t-2xl border border-b-0 border-slate-500/40 bg-[#071421] shadow-[0_24px_70px_-24px_rgba(0,0,0,0.9)] transition-[opacity,transform,visibility] duration-200",
           isOpen
             ? "visible translate-y-0 opacity-100"
-            : "invisible pointer-events-none translate-y-3 opacity-0",
+            : "invisible pointer-events-none translate-y-2 opacity-0",
         )}
       >
-        <header className="flex items-center justify-between gap-3 border-b border-cyan-200/15 bg-[linear-gradient(120deg,#10263a,#0b1b2d)] px-4 py-3">
+        <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-500/30 bg-[#18304a] px-3.5 text-slate-50">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-200/20 bg-cyan-300/10 text-cyan-200">
-              <MessageCircle className="h-4 w-4" />
-            </span>
+            <MessageCircle className="h-4 w-4 shrink-0 text-cyan-200" />
             <div className="min-w-0">
-              <div className="font-semibold text-slate-50">訊息</div>
-              <p className="truncate text-xs text-slate-400">私訊保留在這裡，不打斷目前工作。</p>
+              <div className="text-sm font-semibold">聊天室</div>
+              <p className="truncate text-[11px] text-slate-300">選擇聯絡人開始私訊</p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsOpen(false)}
-              className="h-8 w-8 rounded-lg text-slate-300 hover:bg-white/10 hover:text-white"
-              aria-label="最小化私訊"
-            >
-              <Minus className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsOpen(false)}
-              className="h-8 w-8 rounded-lg text-slate-300 hover:bg-white/10 hover:text-white"
-              aria-label="關閉私訊"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label="最小化聊天室"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
         </header>
 
         <DirectMessagesPanel
@@ -92,18 +78,30 @@ export function DirectMessagesDock() {
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        aria-label={`私訊${unreadCount > 0 ? `，${unreadCount} 則未讀` : ""}`}
-        className="interactive-lift relative flex h-12 items-center gap-2 rounded-2xl border border-cyan-200/30 bg-[#10263a] px-4 text-cyan-50 shadow-[0_18px_36px_-20px_rgba(34,211,238,0.7)] transition-colors hover:border-cyan-200/55 hover:bg-[#153149]"
+        aria-label={`聊天室${unreadCount > 0 ? `，${unreadCount} 則未讀` : ""}`}
+        aria-expanded={isOpen}
+        aria-controls={PANEL_ID}
+        className={cn(
+          "flex h-11 w-full items-center justify-between rounded-t-xl border border-b-0 border-slate-500/45 bg-[#1a3552] px-3.5 text-slate-50 shadow-[0_-8px_28px_-16px_rgba(0,0,0,0.85)] transition-colors hover:bg-[#214463]",
+          isOpen && "border-cyan-200/35 bg-[#214463]",
+        )}
       >
-        <span className="relative">
-          <MessageCircle className="h-5 w-5 text-cyan-200" />
+        <span className="flex items-center gap-2.5 text-sm font-semibold">
+          <MessageCircle className="h-4 w-4 text-cyan-200" />
+          聊天室
+        </span>
+        <span className="flex items-center gap-2">
           {unreadCount > 0 ? (
-            <span className="absolute -right-3 -top-3 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#10263a] bg-rose-500 px-1 text-[10px] font-bold leading-5 text-white shadow-[0_0_16px_rgba(244,63,94,0.7)]">
+            <span className="flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold leading-5 text-white shadow-[0_0_14px_rgba(244,63,94,0.65)]">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           ) : null}
+          {isOpen ? (
+            <Minus className="h-4 w-4 text-slate-300" />
+          ) : (
+            <ChevronUp className="h-4 w-4 text-slate-300" />
+          )}
         </span>
-        <span className="text-sm font-semibold">訊息</span>
       </button>
     </div>
   );
