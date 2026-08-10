@@ -94,6 +94,7 @@ import {
   type BomPageTrackerStatus,
   type BomStorageMode,
   type BomWorkspace,
+  type BomWorkspaceLoadResult,
   BomRecordConflictError,
   loadCachedBomWorkspacesDetailed,
   loadBomWorkspacesDetailed,
@@ -105,12 +106,9 @@ import {
 } from "./materialBomStorage";
 import type { BomTableColorTheme } from "./materialBomStorage";
 import { saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
-import {
-  type MaterialExportProgress,
-  type MaterialReportSnapshot,
-  exportMaterialReportExcel,
-  exportMaterialReportHtml,
-  exportMaterialReportHtmlZip,
+import type {
+  MaterialExportProgress,
+  MaterialReportSnapshot,
 } from "./materialRequestExport";
 import {
   createClipboardImageName,
@@ -990,6 +988,16 @@ function loadActiveBomId() {
   return window.localStorage.getItem(ACTIVE_BOM_KEY) || DEFAULT_BOM_ID;
 }
 
+function getBomWorkspaceRecordRangeKey(workspaces: BomWorkspace[], workspaceId: string) {
+  const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
+  if (!workspace) return "";
+
+  const hasAllRecords = workspace.isLoaded !== false
+    && workspace.payload.records.length >= workspace.payload.recordCount;
+  if (hasAllRecords) return `${workspaceId}:full`;
+  return workspace.payload.records.length > 0 ? `${workspaceId}:preview` : "";
+}
+
 function loadMarkedGroups(bomId: string) {
   if (typeof window === "undefined") return [] as string[];
 
@@ -1643,18 +1651,21 @@ function normalizeColumnFilterSelection(selectedValues: ColumnFilterSelection) {
 }
 
 function ExcelFilterPopover({
+  filterKey,
+  getOptions,
   label,
-  options,
   selectedValues,
   onSelectedValuesChange,
 }: {
+  filterKey: ColumnFilterKey;
+  getOptions: (key: ColumnFilterKey) => ExcelFilterOption[];
   label: string;
-  options: ExcelFilterOption[];
   selectedValues: ColumnFilterSelection;
   onSelectedValuesChange: (values: ColumnFilterSelection) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [isPanelReady, setIsPanelReady] = useState(false);
+  const [options, setOptions] = useState<ExcelFilterOption[]>([]);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [mergeSearchSelection, setMergeSearchSelection] = useState(true);
   const [draftSelectedValues, setDraftSelectedValues] = useState<ColumnFilterSelection>(
@@ -1696,15 +1707,17 @@ function ExcelFilterPopover({
   useEffect(() => {
     if (!open) {
       setIsPanelReady(false);
+      setOptions([]);
       return undefined;
     }
 
     const frameId = window.requestAnimationFrame(() => {
+      setOptions(getOptions(filterKey));
       setIsPanelReady(true);
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [open]);
+  }, [filterKey, getOptions, open]);
 
   const effectiveSelected = useMemo(
     () => draftSelectedValues === null
@@ -4272,6 +4285,7 @@ export function MaterialRequestPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceSyncRequestRef = useRef(0);
   const workspaceLoadingRequestRef = useRef(0);
+  const progressiveWorkspaceLoadsRef = useRef(new Set<string>());
   const bomSyncRetryAttemptRef = useRef(0);
   const bomSyncRetryTimerRef = useRef<number | null>(null);
   const activeBomIdRef = useRef(activeBomId);
@@ -4310,6 +4324,9 @@ export function MaterialRequestPage() {
   }, []);
 
   const activeWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId) ?? bomWorkspaces[0];
+  const isFullDatasetLoaded = activeWorkspace.isLoaded !== false
+    && activeWorkspace.payload.records.length >= activeWorkspace.payload.recordCount;
+  const isPreviewDataset = !isFullDatasetLoaded && activeWorkspace.payload.records.length > 0;
   const activeTableColorTheme = useMemo(
     () => normalizeBomTableColorTheme(activeWorkspace.tableColorTheme),
     [activeWorkspace.tableColorTheme],
@@ -4399,15 +4416,42 @@ export function MaterialRequestPage() {
       recordPage?: number;
       recordPageSize?: number;
       loadAllRecords?: boolean;
+      cachedResult?: BomWorkspaceLoadResult | null;
+      onPreviewReady?: () => void;
+      progressive?: boolean;
       requestId?: number;
     } = {},
   ) => {
-    const requestId = options.requestId ?? (workspaceSyncRequestRef.current + 1);
+    const {
+      onPreviewReady,
+      progressive = false,
+      requestId: requestedRequestId,
+      ...loadOptions
+    } = options;
+    const requestId = requestedRequestId ?? (workspaceSyncRequestRef.current + 1);
+    const workspaceId = preferredBomId ?? activeBomIdRef.current;
     workspaceSyncRequestRef.current = requestId;
+    if (progressive) progressiveWorkspaceLoadsRef.current.add(workspaceId);
+    let previewApplied = false;
+
     try {
       const result = await loadBomWorkspacesDetailed(preferredBomId, {
-        ...options,
-        loadAllRecords: options.loadAllRecords ?? true,
+        ...loadOptions,
+        loadAllRecords: loadOptions.loadAllRecords ?? true,
+        onPreview: progressive
+          ? (previewResult) => {
+              if (!isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) return;
+              previewApplied = true;
+              bomSyncRetryAttemptRef.current = 0;
+              setCollaborationStatus(previewResult.mode);
+              loadedRecordRangeRef.current = getBomWorkspaceRecordRangeKey(
+                previewResult.workspaces,
+                workspaceId,
+              );
+              applyLoadedWorkspaces(previewResult.workspaces, workspaceId);
+              onPreviewReady?.();
+            }
+          : undefined,
       });
       if (!isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) {
         return result.workspaces;
@@ -4415,23 +4459,18 @@ export function MaterialRequestPage() {
 
       bomSyncRetryAttemptRef.current = 0;
       setCollaborationStatus(result.mode);
-      applyLoadedWorkspaces(result.workspaces, preferredBomId);
-      if (preferredBomId) {
-        const loadedWorkspace = result.workspaces.find((workspace) => workspace.id === preferredBomId);
-        const hasAllRecords = loadedWorkspace
-          && loadedWorkspace.payload.records.length >= loadedWorkspace.payload.recordCount;
-        loadedRecordRangeRef.current = hasAllRecords || options.loadAllRecords
-          ? `${preferredBomId}:full`
-          : options.recordPage && options.recordPageSize
-            ? `${preferredBomId}:${options.recordPage}:${options.recordPageSize}`
-            : "";
-      }
+      loadedRecordRangeRef.current = getBomWorkspaceRecordRangeKey(result.workspaces, workspaceId);
+      const applyResult = () => applyLoadedWorkspaces(result.workspaces, preferredBomId);
+      if (previewApplied) startTransition(applyResult);
+      else applyResult();
       return result.workspaces;
     } catch (error) {
       if (isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) {
         setCollaborationStatus("error");
       }
       throw error;
+    } finally {
+      if (progressive) progressiveWorkspaceLoadsRef.current.delete(workspaceId);
     }
   }, [applyLoadedWorkspaces]);
 
@@ -4441,6 +4480,7 @@ export function MaterialRequestPage() {
       await reloadBomWorkspaces(activeBomIdRef.current, {
         forceRefresh: true,
         loadAllRecords: true,
+        progressive: true,
       });
       if (showFeedback) {
         toast({
@@ -4464,40 +4504,38 @@ export function MaterialRequestPage() {
     const syncWorkspaces = async (preferredBomId?: string) => {
       const requestId = ++workspaceSyncRequestRef.current;
       const preferredWorkspaceId = preferredBomId ?? loadActiveBomId();
-      let remoteSettled = false;
       const cachedResult = await loadCachedBomWorkspacesDetailed();
+      let cachedRangeKey = "";
       if (
         shouldApplyBomWorkspaceCache({
           active,
           currentRequest: requestId === workspaceSyncRequestRef.current,
           preferredWorkspaceId,
-          remoteSettled,
+          remoteSettled: false,
           result: cachedResult,
         })
       ) {
         applyLoadedWorkspaces(cachedResult!.workspaces, preferredWorkspaceId);
-        setIsInitialLoading(false);
+        cachedRangeKey = getBomWorkspaceRecordRangeKey(cachedResult!.workspaces, preferredWorkspaceId);
+        loadedRecordRangeRef.current = cachedRangeKey;
       }
 
+      if (!active || !isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) return;
+
       try {
-        const result = await loadBomWorkspacesDetailed(preferredWorkspaceId, {
+        const remoteLoad = reloadBomWorkspaces(preferredWorkspaceId, {
           cachedResult,
           loadAllRecords: true,
+          onPreviewReady: () => {
+            if (active) setIsInitialLoading(false);
+          },
+          progressive: cachedRangeKey !== `${preferredWorkspaceId}:full`,
+          requestId,
         });
-        remoteSettled = true;
-        if (!active || !isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) return;
-        bomSyncRetryAttemptRef.current = 0;
-        setCollaborationStatus(result.mode);
-        applyLoadedWorkspaces(result.workspaces, preferredWorkspaceId);
-        const loadedWorkspace = result.workspaces.find((workspace) => workspace.id === preferredWorkspaceId);
-        loadedRecordRangeRef.current = loadedWorkspace
-          && loadedWorkspace.payload.records.length >= loadedWorkspace.payload.recordCount
-          ? `${preferredWorkspaceId}:full`
-          : "";
+        setIsInitialLoading(false);
+        await remoteLoad;
       } catch {
-        remoteSettled = true;
         if (!active || !isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) return;
-        setCollaborationStatus("error");
         // Keep the current local state when collaborative sync is temporarily unavailable.
       } finally {
         if (active) setIsInitialLoading(false);
@@ -4525,7 +4563,7 @@ export function MaterialRequestPage() {
       active = false;
       unsubscribe();
     };
-  }, [applyLoadedWorkspaces, pageSize]);
+  }, [applyLoadedWorkspaces, reloadBomWorkspaces]);
 
   useEffect(() => {
     if (collaborationStatus !== "error") {
@@ -4560,10 +4598,18 @@ export function MaterialRequestPage() {
   useEffect(() => {
     const selectedWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId);
     if (!selectedWorkspace || selectedWorkspace.isLoaded !== false) return;
+    if (progressiveWorkspaceLoadsRef.current.has(activeBomId)) return;
 
     let active = true;
     const requestId = startWorkspaceLoad();
-    void reloadBomWorkspaces(activeBomId, { requestId, loadAllRecords: true })
+    void reloadBomWorkspaces(activeBomId, {
+      requestId,
+      loadAllRecords: true,
+      progressive: true,
+      onPreviewReady: () => {
+        if (active) finishWorkspaceLoad(requestId);
+      },
+    })
       .catch(() => undefined)
       .finally(() => {
         if (active) finishWorkspaceLoad(requestId);
@@ -4639,11 +4685,12 @@ export function MaterialRequestPage() {
   }, [activeBomId]);
 
   useEffect(() => {
+    if (!isFullDatasetLoaded) return;
     setMarkedGroupKeys((current) => {
       const normalized = current.filter((key) => validGroupKeys.has(key));
       return normalized.length === current.length ? current : normalized;
     });
-  }, [validGroupKeys]);
+  }, [isFullDatasetLoaded, validGroupKeys]);
 
   useEffect(() => {
     saveMarkedGroups(activeBomId, markedGroupKeys);
@@ -4684,30 +4731,7 @@ export function MaterialRequestPage() {
   );
 
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
-  const requiresFullBomLoad = searchTokens.length > 0
-    || availability !== "all"
-    || showMarkedOnly
-    || sortMode !== "reference"
-    || Object.values(columnFilters).some((values) => Boolean(values?.length));
-
-  useEffect(() => {
-    if (isInitialLoading || collaborationStatus !== "remote" || !activeWorkspace) return;
-    if (loadedRecordRangeRef.current === `${activeBomId}:full`) return;
-
-    let active = true;
-    const requestId = startWorkspaceLoad();
-    void reloadBomWorkspaces(activeBomId, {
-      forceRefresh: true,
-      loadAllRecords: true,
-      requestId,
-    }).catch(() => undefined).finally(() => {
-      if (active) finishWorkspaceLoad(requestId);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [activeBomId, activeWorkspace, collaborationStatus, finishWorkspaceLoad, isInitialLoading, reloadBomWorkspaces, startWorkspaceLoad]);
+  const hasActiveColumnFilters = Object.values(columnFilters).some((values) => Boolean(values?.length));
 
   const groupRuntimeIndex = useMemo(() => {
     const searchableTextByGroup = new Map<string, string>();
@@ -4720,33 +4744,38 @@ export function MaterialRequestPage() {
     dataset.groups.forEach((group) => {
       const sortedRecords = getSortedAlternatives(group);
       const uniqueMpnCount = getUniqueMpnCountForRecords(group.records);
-      const mustApply = requiresApplication(group);
-      const noAlternative = uniqueMpnCount <= 1;
-      const alternativeSearchText = noAlternative
-        ? "單一料 無替代料 單一來源 single source no alternative"
-        : "有替代料 multiple source alternative";
-      const applicationSearchText = mustApply
-        ? "完全無料 主料與替代都無料 待申請料 必須申請 must apply no usable material"
-        : "至少一顆可用料 有可用替代 remark ok 尾數 00 或 zz 或 zy usable material";
-
-      searchableTextByGroup.set(group.key, `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`);
-      const refTokens = Array.from(new Set(
-        [
-          group.displayRef,
-          ...group.records.flatMap((record) => [record.refDes, record.refGroup]),
-        ]
-          .flatMap((value) => splitRefDesignators(value))
-          .map(normalizeMaterialSearchText)
-          .filter(Boolean),
-      ));
-      refTokensByGroup.set(group.key, refTokens);
-      refTokens.forEach((refToken) => {
-        for (let prefixLength = 1; prefixLength <= refToken.length; prefixLength += 1) {
-          refPrefixes.add(refToken.slice(0, prefixLength));
-        }
-      });
       sortedRecordsByGroup.set(group.key, sortedRecords);
       uniqueMpnCountByGroup.set(group.key, uniqueMpnCount);
+
+      if (searchTokens.length > 0) {
+        const mustApply = requiresApplication(group);
+        const noAlternative = uniqueMpnCount <= 1;
+        const alternativeSearchText = noAlternative
+          ? "單一料 無替代料 單一來源 single source no alternative"
+          : "有替代料 multiple source alternative";
+        const applicationSearchText = mustApply
+          ? "完全無料 主料與替代都無料 待申請料 必須申請 must apply no usable material"
+          : "至少一顆可用料 有可用替代 remark ok 尾數 00 或 zz 或 zy usable material";
+
+        searchableTextByGroup.set(group.key, `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`);
+        const refTokens = Array.from(new Set(
+          [
+            group.displayRef,
+            ...group.records.flatMap((record) => [record.refDes, record.refGroup]),
+          ]
+            .flatMap((value) => splitRefDesignators(value))
+            .map(normalizeMaterialSearchText)
+            .filter(Boolean),
+        ));
+        refTokensByGroup.set(group.key, refTokens);
+        refTokens.forEach((refToken) => {
+          for (let prefixLength = 1; prefixLength <= refToken.length; prefixLength += 1) {
+            refPrefixes.add(refToken.slice(0, prefixLength));
+          }
+        });
+      }
+
+      if (!hasActiveColumnFilters) return;
 
       group.records.forEach((record) => {
         const latestTrackingEntry = getLatestTrackingEntry(record);
@@ -4795,7 +4824,7 @@ export function MaterialRequestPage() {
       sortedRecordsByGroup,
       uniqueMpnCountByGroup,
     };
-  }, [dataset.groups]);
+  }, [dataset.groups, hasActiveColumnFilters, searchTokens.length]);
 
   const columnFilterSets = useMemo(
     () => FILTER_KEYS.reduce((result, key) => {
@@ -4807,6 +4836,7 @@ export function MaterialRequestPage() {
   );
 
   const matchesSearch = useCallback((group: MaterialGroup) => {
+    if (searchTokens.length === 0) return true;
     const searchableText = groupRuntimeIndex.searchableTextByGroup.get(group.key) ?? group.searchText;
     const refTokens = groupRuntimeIndex.refTokensByGroup.get(group.key) ?? [];
 
@@ -4842,6 +4872,7 @@ export function MaterialRequestPage() {
 
   const getMatchingRecords = useCallback((group: MaterialGroup, ignoredKey?: ColumnFilterKey) => {
     const sortedRecords = groupRuntimeIndex.sortedRecordsByGroup.get(group.key) ?? getSortedAlternatives(group);
+    if (!hasActiveColumnFilters) return sortedRecords;
 
     return sortedRecords.filter((record) =>
       FILTER_KEYS.every((key) => {
@@ -4858,23 +4889,20 @@ export function MaterialRequestPage() {
         return true;
       })
     );
-  }, [columnFilterSets, groupRuntimeIndex]);
+  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters]);
 
   const searchAvailabilityGroups = useMemo(
     () => dataset.groups.filter((group) => matchesMarkedState(group) && matchesSearch(group) && matchesAvailability(group)),
     [dataset.groups, matchesAvailability, matchesMarkedState, matchesSearch],
   );
 
-  const columnFilterOptions = useMemo(() => {
-    return FILTER_KEYS.reduce((result, key) => {
-      const valueGroups = searchAvailabilityGroups
-        .flatMap((group) => getMatchingRecords(group, key).map((record) => getRecordColumnValues(record, group, key)));
+  const getColumnFilterOptions = useCallback((key: ColumnFilterKey) => {
+    const valueGroups = searchAvailabilityGroups
+      .flatMap((group) => getMatchingRecords(group, key).map((record) => getRecordColumnValues(record, group, key)));
 
-      result[key] = key === "trackingStatus"
-        ? buildTrackingStatusFilterOptions(valueGroups)
-        : buildExcelFilterOptions(valueGroups);
-      return result;
-    }, {} as Record<ColumnFilterKey, ExcelFilterOption[]>);
+    return key === "trackingStatus"
+      ? buildTrackingStatusFilterOptions(valueGroups)
+      : buildExcelFilterOptions(valueGroups);
   }, [getMatchingRecords, searchAvailabilityGroups]);
 
   const filteredGroups = useMemo(() => {
@@ -4924,10 +4952,9 @@ export function MaterialRequestPage() {
     return chips;
   }, [availability, columnFilters, query, showMarkedOnly]);
 
-  const isFullDatasetLoaded = loadedRecordRangeRef.current === `${activeBomId}:full`;
-  const totalPages = requiresFullBomLoad && isFullDatasetLoaded
+  const totalPages = isFullDatasetLoaded
     ? Math.max(1, Math.ceil(filteredGroups.length / pageSize))
-    : Math.max(1, Math.ceil(activeWorkspace.payload.recordCount / pageSize));
+    : 1;
   const noAlternativeCount = useMemo(
     () => dataset.groups.filter(hasNoAlternative).length,
     [dataset.groups]
@@ -4949,10 +4976,9 @@ export function MaterialRequestPage() {
     [dataset.groups]
   );
   const visibleGroups = useMemo(() => {
-    if (!requiresFullBomLoad || !isFullDatasetLoaded) return filteredGroups;
-    const start = (page - 1) * pageSize;
+    const start = isFullDatasetLoaded ? (page - 1) * pageSize : 0;
     return filteredGroups.slice(start, start + pageSize);
-  }, [filteredGroups, isFullDatasetLoaded, page, pageSize, requiresFullBomLoad]);
+  }, [filteredGroups, isFullDatasetLoaded, page, pageSize]);
 
   const visibleGroupRows = useMemo(
     () => visibleGroups.map((group) => {
@@ -5027,12 +5053,24 @@ export function MaterialRequestPage() {
     });
   };
 
+  const showDatasetSyncingToast = () => {
+    toast({
+      title: "完整資料仍在背景同步",
+      description: "目前已可先查看料號；完整資料到齊後會自動開放新增、修改與上傳。",
+    });
+  };
+
   const handleWorkbookImport = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     if (files.length === 0) return;
     if (!isCollaborativeReady) {
       event.target.value = "";
       showCollaborativeUnavailableToast();
+      return;
+    }
+    if (!isFullDatasetLoaded) {
+      event.target.value = "";
+      showDatasetSyncingToast();
       return;
     }
 
@@ -5090,6 +5128,10 @@ export function MaterialRequestPage() {
       showCollaborativeUnavailableToast();
       return;
     }
+    if (!isFullDatasetLoaded) {
+      showDatasetSyncingToast();
+      return;
+    }
     setEditorRecord(createRecordTemplate(group));
     setEditorMode("create");
     setEditorOpen(true);
@@ -5098,6 +5140,10 @@ export function MaterialRequestPage() {
   const openRecord = (record: MaterialRecord, mode: EditorMode) => {
     if (mode !== "view" && !isCollaborativeReady) {
       showCollaborativeUnavailableToast();
+      return;
+    }
+    if (mode !== "view" && !isFullDatasetLoaded) {
+      showDatasetSyncingToast();
       return;
     }
     setEditorRecord(toWorkbookRecord(record));
@@ -5123,6 +5169,10 @@ export function MaterialRequestPage() {
   const saveRecordToActiveBom = (record: MaterialWorkbookRecord) => {
     if (!isCollaborativeReady) {
       return Promise.reject(new Error("Collaborative BOM storage unavailable"));
+    }
+    if (!isFullDatasetLoaded) {
+      showDatasetSyncingToast();
+      return Promise.reject(new Error("Full BOM dataset is still loading"));
     }
 
     const exists = basePayload.records.some((item) => item.id === record.id);
@@ -5197,6 +5247,10 @@ export function MaterialRequestPage() {
       showCollaborativeUnavailableToast();
       return;
     }
+    if (!isFullDatasetLoaded) {
+      showDatasetSyncingToast();
+      return;
+    }
     void saveRecordToActiveBom({ ...toWorkbookRecord(record), virtualAlternative: value }).catch(() => {
       toast({
         title: "資料更新失敗",
@@ -5209,6 +5263,10 @@ export function MaterialRequestPage() {
   const saveTrackingHistory = (record: MaterialRecord, entry: MaterialTrackingHistoryEntry) => {
     if (!isCollaborativeReady) {
       showCollaborativeUnavailableToast();
+      return;
+    }
+    if (!isFullDatasetLoaded) {
+      showDatasetSyncingToast();
       return;
     }
     const currentHistory = record.trackingHistory ?? [];
@@ -5477,6 +5535,11 @@ export function MaterialRequestPage() {
     setExportProgress({ phase: "snapshot" });
 
     try {
+      const {
+        exportMaterialReportExcel,
+        exportMaterialReportHtml,
+        exportMaterialReportHtmlZip,
+      } = await import("./materialRequestExport");
       const fileName = format === "excel"
         ? await exportMaterialReportExcel(exportSnapshot, setExportProgress)
         : format === "html"
@@ -5676,6 +5739,14 @@ export function MaterialRequestPage() {
                 <span className="rounded-full border border-emerald-300/20 bg-emerald-400/[0.08] px-2.5 py-1 text-xs font-bold text-emerald-100">
                   {onlineUserCount} 人在線
                 </span>
+                {isPreviewDataset && (
+                  <span
+                    data-testid="material-progressive-status"
+                    className="rounded-full border border-cyan-300/24 bg-cyan-400/10 px-2.5 py-1 text-xs font-bold text-cyan-100"
+                  >
+                    已先顯示 {activeWorkspace.payload.records.length.toLocaleString()} 筆，完整資料同步中
+                  </span>
+                )}
                 <span className="text-xs text-slate-400">{collaborationStatusMeta.description}</span>
               </div>
             </div>
@@ -5702,10 +5773,10 @@ export function MaterialRequestPage() {
             <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white">
               <CircleHelp className="mr-2 h-4 w-4" />上傳說明
             </Button>
-            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady} className="h-9 border border-cyan-300/30 bg-cyan-500 px-3 text-sm font-bold text-white shadow-[0_14px_34px_rgba(14,165,233,0.28)] hover:bg-cyan-400 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-600 disabled:text-slate-300">
+            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border border-cyan-300/30 bg-cyan-500 px-3 text-sm font-bold text-white shadow-[0_14px_34px_rgba(14,165,233,0.28)] hover:bg-cyan-400 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-600 disabled:text-slate-300">
               <Plus className="mr-2 h-4 w-4" />新增料件
             </Button>
-            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:text-slate-500">
+            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:text-slate-500">
               <Upload className="mr-2 h-4 w-4" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
             <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-emerald-300/25 bg-emerald-400/10 px-3 text-sm font-bold text-emerald-100 hover:bg-emerald-400/18 hover:text-white disabled:cursor-wait disabled:opacity-60">
@@ -6081,7 +6152,9 @@ export function MaterialRequestPage() {
           )}
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-400">
-          <p>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料。</p>
+          <p>{isPreviewDataset
+            ? <>目前先顯示 <strong className="text-cyan-200">{visibleGroupRows.length.toLocaleString()}</strong> 個主料，完整清單會在背景同步完成後自動補齊。</>
+            : <>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料。</>}</p>
           <p>{showMarkedOnly ? `目前只顯示我的標記 · ${markedGroupCount.toLocaleString()} 筆` : `${dataset.meta.sourceFile} · ${dataset.meta.sheetName} · ${formatTimestamp(dataset.meta.generatedAt)}`}</p>
         </div>
         </div>
@@ -6134,18 +6207,18 @@ export function MaterialRequestPage() {
                     {markedGroupCount} 筆
                   </div>
                 </th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="料件" options={columnFilterOptions.material} selectedValues={columnFilters.material} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, material: values }))} /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="REF DES" options={columnFilterOptions.refDes} selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="MPN" options={columnFilterOptions.mpn} selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="內部料號" options={columnFilterOptions.internal} selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="TX" options={columnFilterOptions.virtualAlternative} selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover filterKey="material" getOptions={getColumnFilterOptions} label="料件" selectedValues={columnFilters.material} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, material: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover filterKey="refDes" getOptions={getColumnFilterOptions} label="REF DES" selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover filterKey="mpn" getOptions={getColumnFilterOptions} label="MPN" selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover filterKey="internal" getOptions={getColumnFilterOptions} label="內部料號" selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover filterKey="virtualAlternative" getOptions={getColumnFilterOptions} label="TX" selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} /></th>
                 <th className="border-r border-blue-300/20 p-2">
                   <div className="flex h-8 items-center justify-center rounded border border-blue-300/20 bg-[#07182d] px-2 text-xs font-bold text-slate-400">
                     狀態摘要
                   </div>
                 </th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="規格" options={columnFilterOptions.specification} selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} /></th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover label="狀態追蹤" options={columnFilterOptions.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover filterKey="specification" getOptions={getColumnFilterOptions} label="規格" selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} /></th>
+                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover filterKey="trackingStatus" getOptions={getColumnFilterOptions} label="狀態追蹤" selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} /></th>
                 <th className={MATERIAL_STICKY_COLUMN_CLASSES.filter}><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
             </thead>

@@ -3,6 +3,11 @@ export interface BomRecordFetchRange {
   to: number;
 }
 
+export interface ProgressiveBomRecordFetchPlan {
+  initial: BomRecordFetchRange | null;
+  remaining: BomRecordFetchRange[];
+}
+
 export function createBomRecordPageRange(
   recordCount: number,
   page: number,
@@ -52,6 +57,14 @@ export function createBomRecordFetchRanges(
       to: ((index + 1) * safeBatchSize) - 1,
     }),
   );
+}
+
+export function createProgressiveBomRecordFetchPlan(
+  recordCount: number,
+  batchSize = 1000,
+): ProgressiveBomRecordFetchPlan {
+  const [initial = null, ...remaining] = createBomRecordFetchRanges(recordCount, batchSize);
+  return { initial, remaining };
 }
 
 export function chunkBomRecordFetchRanges(
