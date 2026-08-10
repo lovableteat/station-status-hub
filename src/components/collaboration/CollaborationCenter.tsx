@@ -661,7 +661,7 @@ export function CollaborationCenter() {
       )}
 
       {isRealtimeAuthenticated ? (
-        <div className="fixed bottom-0 right-3 z-[84] w-[min(360px,calc(100vw-1.5rem))] sm:right-5">
+        <div className="fixed bottom-0 right-0 z-[84] w-[min(360px,100vw)] max-w-full">
           <section
             id="direct-messages-panel"
             aria-hidden={!messageFloatOpen}

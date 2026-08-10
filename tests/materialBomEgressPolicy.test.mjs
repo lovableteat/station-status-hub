@@ -123,7 +123,7 @@ test("permanent BOM permission and schema errors do not loop", async () => {
 test("BOM search promotes a partial workspace to a full workspace load", async () => {
   const pageSource = await readFile(pageUrl, "utf8");
   assert.match(pageSource, /const requiresFullBomLoad = searchTokens\.length > 0/);
-  assert.match(pageSource, /loadAllRecords:\s*requiresFullBomLoad/);
+  assert.match(pageSource, /loadAllRecords:\s*true/);
 });
 
 test("manual latest-data action still forces a remote refresh", async () => {
@@ -136,6 +136,7 @@ test("manual latest-data action still forces a remote refresh", async () => {
 
   assert.ok(loadLatest, "loadLatestBomData implementation should be present");
   assert.match(loadLatest, /forceRefresh:\s*true/);
+  assert.match(loadLatest, /loadAllRecords:\s*true/);
 });
 
 test("workspace switches use cache-aware refreshes by default", async () => {
@@ -148,6 +149,24 @@ test("workspace switches use cache-aware refreshes by default", async () => {
 
   assert.ok(reloadWorkspace, "reloadBomWorkspaces implementation should be present");
   assert.match(reloadWorkspace, /options:\s*\{[\s\S]*forceRefresh\?: boolean[\s\S]*recordPage\?: number[\s\S]*\}\s*=\s*\{\}/);
+  assert.match(reloadWorkspace, /loadAllRecords:\s*options\.loadAllRecords \?\? true/);
+});
+
+test("only the latest workspace load may clear the busy state", async () => {
+  const pageSource = await readFile(pageUrl, "utf8");
+
+  assert.match(pageSource, /import \{ isLatestBomWorkspaceLoad \} from "\.\/materialBomSyncPolicy"/);
+  assert.match(pageSource, /const workspaceLoadingRequestRef = useRef\(0\)/);
+  assert.match(pageSource, /const startWorkspaceLoad = useCallback\(\(\) =>/);
+  assert.match(pageSource, /const finishWorkspaceLoad = useCallback\(\(requestId: number\) =>/);
+  assert.match(pageSource, /if \(isLatestBomWorkspaceLoad\(requestId, workspaceLoadingRequestRef\.current\)\) \{\s*setIsWorkspaceLoading\(false\);/);
+});
+
+test("initial and retry workspace syncs request the full remote BOM", async () => {
+  const pageSource = await readFile(pageUrl, "utf8");
+
+  assert.match(pageSource, /await reloadBomWorkspaces\(activeBomIdRef\.current, \{\s*forceRefresh:\s*true,\s*loadAllRecords:\s*true,/);
+  assert.match(pageSource, /const result = await loadBomWorkspacesDetailed\(preferredWorkspaceId, \{\s*cachedResult,\s*loadAllRecords:\s*true,/);
 });
 
 test("single-record saves persist the database record version into the cache", async () => {
@@ -160,4 +179,12 @@ test("single-record saves persist the database record version into the cache", a
 
   assert.ok(saveRecord, "saveBomWorkspaceRecord implementation should be present");
   assert.match(saveRecord, /recordMeta:\s*\{\s*\.\.\.workspace\.recordMeta,\s*\[record\.id\]:\s*recordMeta/);
+});
+
+test("partial record fetches never mark a remote workspace as fully loaded", async () => {
+  const storageSource = await readFile(storageUrl, "utf8");
+
+  assert.match(storageSource, /const activeWorkspaceHasAllRecords = Boolean\(activeWorkspaceRow\)/);
+  assert.match(storageSource, /activeRecordRows\.length >= \(activeWorkspaceRow\?\.record_count \?\? 0\)/);
+  assert.match(storageSource, /shouldLoadAllRecords && activeWorkspaceHasAllRecords/);
 });
