@@ -3,10 +3,12 @@ import {
   AlertCircle,
   Bell,
   CheckCheck,
+  ChevronUp,
   Inbox,
   LoaderCircle,
   Megaphone,
   MessageSquareText,
+  Minus,
   Radio,
   RefreshCw,
   Search,
@@ -28,7 +30,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useUser } from "@/components/auth/UserContext";
-import { useDirectMessageThreads } from "@/hooks/useDirectMessages";
 import { useUserPresence, type OnlineUser } from "@/hooks/useUserPresence";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -98,46 +99,39 @@ function formatTime(value: string) {
   return date.toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function DirectMessageLauncher({ onOpen }: { onOpen: () => void }) {
-  const { threads, unreadCount, loading, error } = useDirectMessageThreads();
-  const latestThread = threads.find((thread) => thread.lastMessageBody) ?? threads[0] ?? null;
-  const preview = loading
-    ? "正在載入最新訊息…"
-    : error
-      ? "訊息服務目前無法連線"
-    : latestThread?.lastMessageBody || "尚無訊息，點擊開始對話";
-  const accessibleLabel = latestThread
-    ? `開啟與 ${latestThread.otherDisplayName} 的訊息。${preview}${unreadCount > 0 ? `，共 ${unreadCount} 則未讀` : ""}`
-    : `開啟浮動訊息。${preview}${unreadCount > 0 ? `，共 ${unreadCount} 則未讀` : ""}`;
-
+function DirectMessageLauncher({
+  open,
+  unreadCount,
+  onToggle,
+}: {
+  open: boolean;
+  unreadCount: number;
+  onToggle: () => void;
+}) {
   return (
     <button
       type="button"
-      aria-label={accessibleLabel}
-      onClick={onOpen}
-      className="group flex h-16 w-[min(320px,calc(100vw-2rem))] items-center gap-3 rounded-xl border border-cyan-200/25 bg-[#0b1b2d] px-3 text-left shadow-[0_18px_45px_-18px_rgba(34,211,238,0.75)] transition-colors hover:border-cyan-200/45 hover:bg-[#10243a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+      aria-label={`聊天室${unreadCount > 0 ? `，${unreadCount} 則未讀` : ""}`}
+      aria-expanded={open}
+      aria-controls="direct-messages-panel"
+      onClick={onToggle}
+      className={cn(
+        "flex h-11 w-full items-center justify-between rounded-t-xl border border-b-0 border-slate-500/45 bg-[#1a3552] px-3.5 text-slate-50 shadow-[0_-8px_28px_-16px_rgba(0,0,0,0.85)] transition-colors hover:bg-[#214463] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300",
+        open && "border-cyan-200/35 bg-[#214463]",
+      )}
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-cyan-300 text-[#06111f] transition-colors group-hover:bg-cyan-200">
-        <MessageSquareText className="h-5 w-5" />
+      <span className="flex items-center gap-2.5 text-sm font-semibold">
+        <MessageSquareText className="h-4 w-4 text-cyan-200" />
+        聊天室
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <span className="shrink-0 text-xs font-black text-slate-50">訊息</span>
-          {latestThread ? (
-            <span className="truncate text-xs font-semibold text-cyan-100/80">
-              {latestThread.otherDisplayName}
-            </span>
-          ) : null}
-        </span>
-        <span aria-live="polite" className={cn("mt-1 block truncate text-xs font-medium", error ? "text-rose-200" : "text-slate-300")} title={preview}>
-          {preview}
-        </span>
+      <span className="flex items-center gap-2">
+        {unreadCount > 0 ? (
+          <span className="flex min-h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold leading-5 text-white shadow-[0_0_14px_rgba(244,63,94,0.65)]">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        ) : null}
+        {open ? <Minus className="h-4 w-4 text-slate-300" /> : <ChevronUp className="h-4 w-4 text-slate-300" />}
       </span>
-      {unreadCount > 0 ? (
-        <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md bg-cyan-300 px-1.5 text-[11px] font-black text-[#06111f]">
-          {unreadCount > 99 ? "99+" : unreadCount}
-        </span>
-      ) : null}
     </button>
   );
 }
@@ -227,6 +221,7 @@ export function CollaborationCenter() {
   const [acknowledgingAnnouncement, setAcknowledgingAnnouncement] = useState(false);
   const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
   const [messageFloatOpen, setMessageFloatOpen] = useState(false);
+  const [directMessageUnreadCount, setDirectMessageUnreadCount] = useState(0);
   const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
   const [memberQuery, setMemberQuery] = useState("");
   const [directoryMembers, setDirectoryMembers] = useState<CollaborationDirectoryMember[]>([]);
@@ -666,23 +661,48 @@ export function CollaborationCenter() {
       )}
 
       {isRealtimeAuthenticated ? (
-        <div className="fixed bottom-4 right-4 z-[84] flex flex-col items-end gap-3">
-          {messageFloatOpen ? (
-            <section aria-label="浮動訊息" data-floating-direct-messages="true" className="flex h-[min(620px,calc(100dvh-5rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-cyan-200/25 bg-[#06111f] shadow-[0_24px_70px_-24px_rgba(34,211,238,0.6)]">
-              <header className="flex items-center justify-between gap-3 border-b border-cyan-200/15 bg-[linear-gradient(120deg,#10263a,#0b1b2d)] px-4 py-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <MessageSquareText className="h-4 w-4 shrink-0 text-cyan-300" />
-                  <div className="min-w-0"><p className="truncate text-sm font-bold text-slate-50">訊息</p><p className="text-[11px] text-slate-400">即時私訊</p></div>
+        <div className="fixed bottom-0 right-3 z-[84] w-[min(360px,calc(100vw-1.5rem))] sm:right-5">
+          <section
+            id="direct-messages-panel"
+            aria-hidden={!messageFloatOpen}
+            aria-label="聊天室"
+            data-floating-direct-messages="true"
+            className={cn(
+              "absolute bottom-11 right-0 flex h-[min(620px,calc(100dvh-5rem))] w-full flex-col overflow-hidden rounded-t-2xl border border-b-0 border-slate-500/40 bg-[#071421] shadow-[0_24px_70px_-24px_rgba(0,0,0,0.9)] transition-[opacity,transform,visibility] duration-200",
+              messageFloatOpen
+                ? "visible translate-y-0 opacity-100"
+                : "invisible pointer-events-none translate-y-2 opacity-0",
+            )}
+          >
+            <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-500/30 bg-[#18304a] px-3.5 text-slate-50">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <MessageSquareText className="h-4 w-4 shrink-0 text-cyan-200" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">聊天室</div>
+                  <p className="truncate text-[11px] text-slate-300">選擇聯絡人開始私訊</p>
                 </div>
-                <Button type="button" variant="ghost" size="icon" aria-label="收合浮動訊息" onClick={() => setMessageFloatOpen(false)} className="h-8 w-8 rounded-lg text-slate-300 hover:bg-white/10 hover:text-white"><X className="h-4 w-4" /></Button>
-              </header>
-              <div className="min-h-0 flex-1">
-                <DirectMessagesPanel onlineUsers={onlineUsers} requestedUserId={messageRecipientId} onRequestHandled={() => setMessageRecipientId(null)} />
               </div>
-            </section>
-          ) : (
-            <DirectMessageLauncher onOpen={() => setMessageFloatOpen(true)} />
-          )}
+              <button
+                type="button"
+                onClick={() => setMessageFloatOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label="最小化聊天室"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+            </header>
+            <DirectMessagesPanel
+              onlineUsers={onlineUsers}
+              requestedUserId={messageRecipientId}
+              onRequestHandled={() => setMessageRecipientId(null)}
+              onUnreadCountChange={setDirectMessageUnreadCount}
+            />
+          </section>
+          <DirectMessageLauncher
+            open={messageFloatOpen}
+            unreadCount={directMessageUnreadCount}
+            onToggle={() => setMessageFloatOpen((current) => !current)}
+          />
         </div>
       ) : null}
     </>
