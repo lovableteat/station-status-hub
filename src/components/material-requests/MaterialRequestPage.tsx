@@ -123,6 +123,7 @@ import {
 } from "./materialRequestPresentation";
 import { useMaterialBomPresence } from "./useMaterialBomPresence";
 import { canReuseBomPayloadReference } from "./materialBomPerformance";
+import { isLatestBomWorkspaceLoad } from "./materialBomSyncPolicy";
 import {
   logMaterialRecordChange,
   logMaterialReportExport,
@@ -4270,6 +4271,7 @@ export function MaterialRequestPage() {
   const [isSearchPending, startSearchTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceSyncRequestRef = useRef(0);
+  const workspaceLoadingRequestRef = useRef(0);
   const bomSyncRetryAttemptRef = useRef(0);
   const bomSyncRetryTimerRef = useRef<number | null>(null);
   const activeBomIdRef = useRef(activeBomId);
@@ -4295,6 +4297,17 @@ export function MaterialRequestPage() {
     () => getCollaborationStatusMeta(collaborationStatus),
     [collaborationStatus],
   );
+  const startWorkspaceLoad = useCallback(() => {
+    const requestId = workspaceLoadingRequestRef.current + 1;
+    workspaceLoadingRequestRef.current = requestId;
+    setIsWorkspaceLoading(true);
+    return requestId;
+  }, []);
+  const finishWorkspaceLoad = useCallback((requestId: number) => {
+    if (isLatestBomWorkspaceLoad(requestId, workspaceLoadingRequestRef.current)) {
+      setIsWorkspaceLoading(false);
+    }
+  }, []);
 
   const activeWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId) ?? bomWorkspaces[0];
   const activeTableColorTheme = useMemo(
@@ -4381,12 +4394,22 @@ export function MaterialRequestPage() {
 
   const reloadBomWorkspaces = useCallback(async (
     preferredBomId?: string,
-    options: { forceRefresh?: boolean; recordPage?: number; recordPageSize?: number; loadAllRecords?: boolean } = {},
+    options: {
+      forceRefresh?: boolean;
+      recordPage?: number;
+      recordPageSize?: number;
+      loadAllRecords?: boolean;
+      requestId?: number;
+    } = {},
   ) => {
-    const requestId = ++workspaceSyncRequestRef.current;
+    const requestId = options.requestId ?? (workspaceSyncRequestRef.current + 1);
+    workspaceSyncRequestRef.current = requestId;
     try {
-      const result = await loadBomWorkspacesDetailed(preferredBomId, options);
-      if (requestId !== workspaceSyncRequestRef.current) {
+      const result = await loadBomWorkspacesDetailed(preferredBomId, {
+        ...options,
+        loadAllRecords: options.loadAllRecords ?? true,
+      });
+      if (!isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) {
         return result.workspaces;
       }
 
@@ -4405,7 +4428,7 @@ export function MaterialRequestPage() {
       }
       return result.workspaces;
     } catch (error) {
-      if (requestId === workspaceSyncRequestRef.current) {
+      if (isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) {
         setCollaborationStatus("error");
       }
       throw error;
@@ -4417,8 +4440,7 @@ export function MaterialRequestPage() {
     try {
       await reloadBomWorkspaces(activeBomIdRef.current, {
         forceRefresh: true,
-        recordPage: page,
-        recordPageSize: pageSize,
+        loadAllRecords: true,
       });
       if (showFeedback) {
         toast({
@@ -4435,7 +4457,7 @@ export function MaterialRequestPage() {
         });
       }
     }
-  }, [page, pageSize, reloadBomWorkspaces, toast]);
+  }, [reloadBomWorkspaces, toast]);
 
   useEffect(() => {
     let active = true;
@@ -4460,11 +4482,10 @@ export function MaterialRequestPage() {
       try {
         const result = await loadBomWorkspacesDetailed(preferredWorkspaceId, {
           cachedResult,
-          recordPage: 1,
-          recordPageSize: pageSize,
+          loadAllRecords: true,
         });
         remoteSettled = true;
-        if (!active || requestId !== workspaceSyncRequestRef.current) return;
+        if (!active || !isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) return;
         bomSyncRetryAttemptRef.current = 0;
         setCollaborationStatus(result.mode);
         applyLoadedWorkspaces(result.workspaces, preferredWorkspaceId);
@@ -4472,10 +4493,10 @@ export function MaterialRequestPage() {
         loadedRecordRangeRef.current = loadedWorkspace
           && loadedWorkspace.payload.records.length >= loadedWorkspace.payload.recordCount
           ? `${preferredWorkspaceId}:full`
-          : `${preferredWorkspaceId}:1:${pageSize}`;
+          : "";
       } catch {
         remoteSettled = true;
-        if (!active || requestId !== workspaceSyncRequestRef.current) return;
+        if (!active || !isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) return;
         setCollaborationStatus("error");
         // Keep the current local state when collaborative sync is temporarily unavailable.
       } finally {
@@ -4541,17 +4562,17 @@ export function MaterialRequestPage() {
     if (!selectedWorkspace || selectedWorkspace.isLoaded !== false) return;
 
     let active = true;
-    setIsWorkspaceLoading(true);
-    void reloadBomWorkspaces(activeBomId)
+    const requestId = startWorkspaceLoad();
+    void reloadBomWorkspaces(activeBomId, { requestId, loadAllRecords: true })
       .catch(() => undefined)
       .finally(() => {
-        if (active) setIsWorkspaceLoading(false);
+        if (active) finishWorkspaceLoad(requestId);
       });
 
     return () => {
       active = false;
     };
-  }, [activeBomId, bomWorkspaces, reloadBomWorkspaces]);
+  }, [activeBomId, bomWorkspaces, finishWorkspaceLoad, reloadBomWorkspaces, startWorkspaceLoad]);
 
   useEffect(() => {
     window.localStorage.setItem(ACTIVE_BOM_KEY, activeBomId);
@@ -4671,27 +4692,22 @@ export function MaterialRequestPage() {
 
   useEffect(() => {
     if (isInitialLoading || collaborationStatus !== "remote" || !activeWorkspace) return;
-
-    const requestKey = requiresFullBomLoad
-      ? `${activeBomId}:full`
-      : `${activeBomId}:${page}:${pageSize}`;
-    if (loadedRecordRangeRef.current === requestKey) return;
+    if (loadedRecordRangeRef.current === `${activeBomId}:full`) return;
 
     let active = true;
-    setIsWorkspaceLoading(true);
+    const requestId = startWorkspaceLoad();
     void reloadBomWorkspaces(activeBomId, {
       forceRefresh: true,
-      recordPage: requiresFullBomLoad ? undefined : page,
-      recordPageSize: requiresFullBomLoad ? undefined : pageSize,
-      loadAllRecords: requiresFullBomLoad,
+      loadAllRecords: true,
+      requestId,
     }).catch(() => undefined).finally(() => {
-      if (active) setIsWorkspaceLoading(false);
+      if (active) finishWorkspaceLoad(requestId);
     });
 
     return () => {
       active = false;
     };
-  }, [activeBomId, activeWorkspace, availability, columnFilters, collaborationStatus, isInitialLoading, page, pageSize, reloadBomWorkspaces, requiresFullBomLoad, showMarkedOnly, sortMode]);
+  }, [activeBomId, activeWorkspace, collaborationStatus, finishWorkspaceLoad, isInitialLoading, reloadBomWorkspaces, startWorkspaceLoad]);
 
   const groupRuntimeIndex = useMemo(() => {
     const searchableTextByGroup = new Map<string, string>();
@@ -5436,12 +5452,14 @@ export function MaterialRequestPage() {
     }
 
     setExportSnapshotRequested(true);
-    setIsWorkspaceLoading(true);
+    const requestId = startWorkspaceLoad();
     await reloadBomWorkspaces(activeBomId, {
       forceRefresh: true,
       loadAllRecords: true,
-    }).catch(() => undefined);
-    setIsWorkspaceLoading(false);
+      requestId,
+    }).catch(() => undefined).finally(() => {
+      finishWorkspaceLoad(requestId);
+    });
   };
 
   const createExportSnapshotRef = useRef(createExportSnapshot);
@@ -5527,16 +5545,20 @@ export function MaterialRequestPage() {
   };
 
   const loadLatestBomData = async () => {
-    setIsWorkspaceLoading(true);
+    const requestId = startWorkspaceLoad();
     try {
-      await reloadBomWorkspaces(activeBomId, { forceRefresh: true });
+      await reloadBomWorkspaces(activeBomId, {
+        forceRefresh: true,
+        loadAllRecords: true,
+        requestId,
+      });
       setPendingRemoteRecordIds([]);
       setHasPendingWorkspaceUpdate(false);
       toast({ title: "已載入最新資料", description: "搜尋、篩選與分頁條件皆已保留。" });
     } catch {
       toast({ title: "載入最新資料失敗", description: "目前仍保留畫面中的資料與輸入內容。", variant: "destructive" });
     } finally {
-      setIsWorkspaceLoading(false);
+      finishWorkspaceLoad(requestId);
     }
   };
 

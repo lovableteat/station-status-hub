@@ -28,7 +28,8 @@ test("the workspace keeps direct messages exclusively in the bottom-right floati
   assert.match(centerSource, /h-11 w-full/);
   assert.match(centerSource, /aria-expanded=\{open\}/);
   assert.match(centerSource, /aria-controls="direct-messages-panel"/);
-  assert.match(centerSource, /bottom-0 right-3/);
+  assert.match(centerSource, /bottom-0 right-0/);
+  assert.doesNotMatch(centerSource, /right-3|right-5/);
   assert.match(centerSource, /invisible pointer-events-none translate-y-2 opacity-0/);
   assert.match(centerSource, /選擇聯絡人開始私訊/);
   assert.doesNotMatch(centerSource, /latestThread/);

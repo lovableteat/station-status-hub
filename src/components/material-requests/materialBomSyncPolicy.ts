@@ -86,3 +86,7 @@ export function canReuseBomWorkspaceCache({
     && remoteTimestamp !== null
     && cachedTimestamp === remoteTimestamp;
 }
+
+export function isLatestBomWorkspaceLoad(completedRequestId: number, latestRequestId: number) {
+  return completedRequestId === latestRequestId;
+}

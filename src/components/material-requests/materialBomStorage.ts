@@ -491,10 +491,9 @@ function buildWorkspaceFromRows(
       recordRows.map((row) => [row.record_id, { updatedAt: row.updated_at } satisfies BomRecordSyncMeta]),
     ),
     tableColorTheme,
-    // `isLoaded` means the workspace has renderable rows. Cache reuse still
-    // checks the loaded row count against the remote metadata count, so a
-    // partial page can never masquerade as a complete cache.
-    isLoaded: isComplete || records.length > 0 || workspaceRow.record_count === 0,
+    // Only a complete remote record set is safe for client-side grouping,
+    // filtering, and pagination. Partial pages remain summary workspaces.
+    isLoaded: isComplete || workspaceRow.record_count === 0,
     updatedAt: workspaceRow.updated_at,
   };
 }
@@ -690,6 +689,8 @@ async function loadRemoteBomWorkspaces(
   const activeRecordRows = activeWorkspaceId && !canReuseCache
     ? await loadRemoteRecordRowsForWorkspace(activeWorkspaceId, activeWorkspaceRow?.record_count ?? 0, options)
     : [];
+  const activeWorkspaceHasAllRecords = Boolean(activeWorkspaceRow)
+    && activeRecordRows.length >= (activeWorkspaceRow?.record_count ?? 0);
 
   return sortWorkspaces(
     workspaceRows.map((workspaceRow) => workspaceRow.id === activeWorkspaceId
@@ -701,14 +702,11 @@ async function loadRemoteBomWorkspaces(
             tableColorThemeByWorkspace.get(workspaceRow.id),
           )
         : buildWorkspaceFromRows(
-          {
-            ...workspaceRow,
-            record_count: activeRecordRows.length,
-          },
+          workspaceRow,
           activeRecordRows,
           pageTrackerByWorkspace.get(workspaceRow.id),
           tableColorThemeByWorkspace.get(workspaceRow.id),
-          shouldLoadAllRecords,
+          shouldLoadAllRecords && activeWorkspaceHasAllRecords,
         )
       : buildWorkspaceSummary(
           workspaceRow,
