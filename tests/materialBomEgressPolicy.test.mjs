@@ -120,10 +120,11 @@ test("permanent BOM permission and schema errors do not loop", async () => {
   assert.equal(attempts, 1);
 });
 
-test("BOM search promotes a partial workspace to a full workspace load", async () => {
+test("partial BOM previews remain read-only until the full workspace arrives", async () => {
   const pageSource = await readFile(pageUrl, "utf8");
-  assert.match(pageSource, /const requiresFullBomLoad = searchTokens\.length > 0/);
-  assert.match(pageSource, /loadAllRecords:\s*true/);
+  assert.match(pageSource, /const isPreviewDataset = !isFullDatasetLoaded/);
+  assert.match(pageSource, /disabled=\{!isCollaborativeReady \|\| !isFullDatasetLoaded\}/);
+  assert.match(pageSource, /if \(!isFullDatasetLoaded\) \{\s*showDatasetSyncingToast\(\);/);
 });
 
 test("manual latest-data action still forces a remote refresh", async () => {
@@ -149,7 +150,7 @@ test("workspace switches use cache-aware refreshes by default", async () => {
 
   assert.ok(reloadWorkspace, "reloadBomWorkspaces implementation should be present");
   assert.match(reloadWorkspace, /options:\s*\{[\s\S]*forceRefresh\?: boolean[\s\S]*recordPage\?: number[\s\S]*\}\s*=\s*\{\}/);
-  assert.match(reloadWorkspace, /loadAllRecords:\s*options\.loadAllRecords \?\? true/);
+  assert.match(reloadWorkspace, /loadAllRecords:\s*loadOptions\.loadAllRecords \?\? true/);
 });
 
 test("only the latest workspace load may clear the busy state", async () => {
@@ -162,11 +163,12 @@ test("only the latest workspace load may clear the busy state", async () => {
   assert.match(pageSource, /if \(isLatestBomWorkspaceLoad\(requestId, workspaceLoadingRequestRef\.current\)\) \{\s*setIsWorkspaceLoading\(false\);/);
 });
 
-test("initial and retry workspace syncs request the full remote BOM", async () => {
+test("initial and retry workspace syncs progressively request the full remote BOM", async () => {
   const pageSource = await readFile(pageUrl, "utf8");
 
-  assert.match(pageSource, /await reloadBomWorkspaces\(activeBomIdRef\.current, \{\s*forceRefresh:\s*true,\s*loadAllRecords:\s*true,/);
-  assert.match(pageSource, /const result = await loadBomWorkspacesDetailed\(preferredWorkspaceId, \{\s*cachedResult,\s*loadAllRecords:\s*true,/);
+  assert.match(pageSource, /await reloadBomWorkspaces\(activeBomIdRef\.current, \{[\s\S]*forceRefresh:\s*true,[\s\S]*loadAllRecords:\s*true,[\s\S]*progressive:\s*true,/);
+  assert.match(pageSource, /const remoteLoad = reloadBomWorkspaces\(preferredWorkspaceId, \{[\s\S]*loadAllRecords:\s*true,[\s\S]*progressive:\s*cachedRangeKey !==/);
+  assert.match(pageSource, /setIsInitialLoading\(false\);\s*await remoteLoad;/);
 });
 
 test("single-record saves persist the database record version into the cache", async () => {
@@ -187,4 +189,13 @@ test("partial record fetches never mark a remote workspace as fully loaded", asy
   assert.match(storageSource, /const activeWorkspaceHasAllRecords = Boolean\(activeWorkspaceRow\)/);
   assert.match(storageSource, /activeRecordRows\.length >= \(activeWorkspaceRow\?\.record_count \?\? 0\)/);
   assert.match(storageSource, /shouldLoadAllRecords && activeWorkspaceHasAllRecords/);
+});
+
+test("full remote loads publish the first bounded batch before fetching the remainder", async () => {
+  const storageSource = await readFile(storageUrl, "utf8");
+
+  assert.match(storageSource, /createProgressiveBomRecordFetchPlan/);
+  assert.match(storageSource, /const initialBatch = await fetchRange\(plan\.initial\.from, plan\.initial\.to\)/);
+  assert.match(storageSource, /options\.onPreviewRows\?\.\(\[\.\.\.rows\]\)/);
+  assert.match(storageSource, /chunkBomRecordFetchRanges\(plan\.remaining, REMOTE_RECORD_FETCH_CONCURRENCY\)/);
 });

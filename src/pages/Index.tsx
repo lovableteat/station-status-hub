@@ -51,8 +51,9 @@ const IssueTracker = React.lazy(() =>
     default: module.IssueTracker,
   }))
 );
+const loadMaterialRequestPage = () => import("@/components/material-requests/MaterialRequestPage");
 const MaterialRequestPage = React.lazy(() =>
-  import("@/components/material-requests/MaterialRequestPage").then((module) => ({
+  loadMaterialRequestPage().then((module) => ({
     default: module.MaterialRequestPage,
   }))
 );
@@ -266,6 +267,16 @@ const Index = () => {
     import.meta.env.DEV &&
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("demo") === "admin";
+
+  useEffect(() => {
+    if (activeWorkspace === "material-requests" || !canViewModule("material-requests")) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void loadMaterialRequestPage();
+    }, 800);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeWorkspace, canViewModule]);
 
   const workspaceCatalog = useMemo(
     () => [

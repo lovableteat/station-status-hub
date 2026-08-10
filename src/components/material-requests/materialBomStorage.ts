@@ -3,7 +3,11 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 import type { MaterialWorkbookPayload, MaterialWorkbookRecord } from "./materialRequestUtils";
-import { chunkBomRecordFetchRanges, createBomRecordFetchRanges, createBomRecordPageRange } from "./materialBomPerformance";
+import {
+  chunkBomRecordFetchRanges,
+  createBomRecordPageRange,
+  createProgressiveBomRecordFetchPlan,
+} from "./materialBomPerformance";
 import { canReuseBomWorkspaceCache, runBomReadWithRetry } from "./materialBomSyncPolicy";
 
 export type BomPageTrackerStatus = "done" | "pending" | "done_missing";
@@ -63,6 +67,7 @@ export interface BomWorkspaceLoadOptions {
   recordPage?: number;
   recordPageSize?: number;
   loadAllRecords?: boolean;
+  onPreview?: (result: BomWorkspaceLoadResult) => void;
 }
 
 export interface BomWorkspaceChange {
@@ -113,6 +118,7 @@ const PAGE_TRACKER_KEY_PREFIX = "material-bom-page-tracker:";
 const TABLE_COLOR_THEME_KEY_PREFIX = "material-bom-table-color-theme:";
 const RECORD_BATCH_SIZE = 200;
 const REMOTE_RECORD_FETCH_BATCH_SIZE = 1000;
+const REMOTE_RECORD_FETCH_CONCURRENCY = 8;
 let renderCacheDatabasePromise: Promise<IDBDatabase | null> | null = null;
 
 // Collaborative BOM tables predate the generated Supabase schema types.
@@ -450,7 +456,7 @@ function toWorkspaceRow(workspace: BomWorkspace): BomWorkspaceRow {
     source_file: workspace.payload.sourceFile,
     sheet_name: workspace.payload.sheetName,
     generated_at: workspace.payload.generatedAt,
-    record_count: workspace.payload.records.length,
+    record_count: workspace.payload.recordCount,
     updated_at: workspace.updatedAt,
   };
 }
@@ -573,7 +579,9 @@ async function loadPageTrackerMap() {
 async function loadRemoteRecordRowsForWorkspace(
   workspaceId: string,
   expectedRecordCount: number,
-  options: Pick<BomWorkspaceLoadOptions, "recordPage" | "recordPageSize" | "loadAllRecords"> = {},
+  options: Pick<BomWorkspaceLoadOptions, "recordPage" | "recordPageSize" | "loadAllRecords"> & {
+    onPreviewRows?: (rows: BomRecordRow[]) => void;
+  } = {},
 ) {
   const rows: BomRecordRow[] = [];
 
@@ -592,26 +600,34 @@ async function loadRemoteRecordRowsForWorkspace(
   const pageRange = options.loadAllRecords === true || options.recordPage === undefined
     ? null
     : createBomRecordPageRange(expectedRecordCount, options.recordPage, options.recordPageSize ?? 50);
-  const ranges = pageRange
-    ? pageRange.from <= pageRange.to && pageRange.from < expectedRecordCount
-      ? [{ from: pageRange.from, to: pageRange.to }]
-      : []
-    : createBomRecordFetchRanges(expectedRecordCount, REMOTE_RECORD_FETCH_BATCH_SIZE);
-  if (ranges.length === 0) return rows;
+  if (pageRange) {
+    if (pageRange.from > pageRange.to || pageRange.from >= expectedRecordCount) return rows;
+    return fetchRange(pageRange.from, pageRange.to);
+  }
 
-  // Supabase limits each response to 1,000 rows. Fetch independent ranges in
-  // parallel for full loads; a page request remains a single bounded range.
-  const batches: BomRecordRow[][] = [];
-  for (const wave of chunkBomRecordFetchRanges(ranges)) {
+  const plan = createProgressiveBomRecordFetchPlan(
+    expectedRecordCount,
+    REMOTE_RECORD_FETCH_BATCH_SIZE,
+  );
+  if (!plan.initial) return rows;
+
+  // Resolve one bounded batch first so the page can paint while the remaining
+  // independent Supabase ranges continue in parallel.
+  const initialBatch = await fetchRange(plan.initial.from, plan.initial.to);
+  rows.push(...initialBatch);
+  if (rows.length < expectedRecordCount) {
+    options.onPreviewRows?.([...rows]);
+  }
+
+  const batches: BomRecordRow[][] = [initialBatch];
+  for (const wave of chunkBomRecordFetchRanges(plan.remaining, REMOTE_RECORD_FETCH_CONCURRENCY)) {
     const waveBatches = await Promise.all(wave.map(({ from, to }) => fetchRange(from, to)));
     batches.push(...waveBatches);
     waveBatches.forEach((batch) => rows.push(...batch));
   }
 
-  if (pageRange) return rows;
-
   let lastBatch = batches.at(-1) ?? [];
-  let nextStart = ranges.at(-1)!.to + 1;
+  let nextStart = (plan.remaining.at(-1) ?? plan.initial).to + 1;
   while (lastBatch.length === REMOTE_RECORD_FETCH_BATCH_SIZE) {
     lastBatch = await fetchRange(nextStart, nextStart + REMOTE_RECORD_FETCH_BATCH_SIZE - 1);
     rows.push(...lastBatch);
@@ -686,13 +702,7 @@ async function loadRemoteBomWorkspaces(
       },
     });
   const shouldLoadAllRecords = options.loadAllRecords === true || options.recordPage === undefined;
-  const activeRecordRows = activeWorkspaceId && !canReuseCache
-    ? await loadRemoteRecordRowsForWorkspace(activeWorkspaceId, activeWorkspaceRow?.record_count ?? 0, options)
-    : [];
-  const activeWorkspaceHasAllRecords = Boolean(activeWorkspaceRow)
-    && activeRecordRows.length >= (activeWorkspaceRow?.record_count ?? 0);
-
-  return sortWorkspaces(
+  const buildWorkspaces = (recordRows: BomRecordRow[], isComplete: boolean) => sortWorkspaces(
     workspaceRows.map((workspaceRow) => workspaceRow.id === activeWorkspaceId
       ? canReuseCache && cachedWorkspace
         ? buildWorkspaceFromCache(
@@ -703,16 +713,36 @@ async function loadRemoteBomWorkspaces(
           )
         : buildWorkspaceFromRows(
           workspaceRow,
-          activeRecordRows,
+          recordRows,
           pageTrackerByWorkspace.get(workspaceRow.id),
           tableColorThemeByWorkspace.get(workspaceRow.id),
-          shouldLoadAllRecords && activeWorkspaceHasAllRecords,
+          isComplete,
         )
       : buildWorkspaceSummary(
           workspaceRow,
           pageTrackerByWorkspace.get(workspaceRow.id),
           tableColorThemeByWorkspace.get(workspaceRow.id),
-        ))
+        )),
+  );
+  const activeRecordRows = activeWorkspaceId && !canReuseCache
+    ? await loadRemoteRecordRowsForWorkspace(activeWorkspaceId, activeWorkspaceRow?.record_count ?? 0, {
+        ...options,
+        onPreviewRows: options.onPreview
+          ? (previewRows) => {
+              options.onPreview?.({
+                mode: "remote",
+                workspaces: buildWorkspaces(previewRows, false),
+              });
+            }
+          : undefined,
+      })
+    : [];
+  const activeWorkspaceHasAllRecords = Boolean(activeWorkspaceRow)
+    && activeRecordRows.length >= (activeWorkspaceRow?.record_count ?? 0);
+
+  return buildWorkspaces(
+    activeRecordRows,
+    shouldLoadAllRecords && activeWorkspaceHasAllRecords,
   );
 }
 
