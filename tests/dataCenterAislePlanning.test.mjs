@@ -2,12 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  addAisleTurn,
   createAutomaticAisle,
   createFreeAisle,
+  getAislePath,
   getAisleResizeHandles,
+  getAisleSegments,
   getFriendlyAislePosition,
+  moveAislePath,
   resizeAisleFromHandle,
+  rotateAislePath,
+  straightenAisle,
   updateAisleFromFriendlyPosition,
+  updateAislePathPoint,
 } from "../src/components/data-center/facilityAisles.mjs";
 
 const facility = {
@@ -182,4 +189,75 @@ test("resize handles rotate with vertical aisles", () => {
     { id: "near", x: 1, z: 0 },
     { id: "far", x: -1, z: 0 },
   ]);
+});
+
+test("legacy straight aisles expose a two point path without changing saved data", () => {
+  const aisle = {
+    id: "aisle-a",
+    x: 0,
+    z: 0,
+    width: 4,
+    depth: 2,
+    rotation: 0,
+  };
+
+  assert.deepEqual(getAislePath(aisle), [
+    { x: -2, z: 0 },
+    { x: 2, z: 0 },
+  ]);
+  assert.equal(aisle.path, undefined);
+});
+
+test("adding a turn creates editable perpendicular aisle segments", () => {
+  const aisle = addAisleTurn({
+    id: "aisle-a",
+    x: 0,
+    z: 0,
+    width: 4,
+    depth: 2,
+    rotation: 0,
+  });
+
+  assert.deepEqual(aisle.path, [
+    { x: -2, z: 0 },
+    { x: 0, z: 0 },
+    { x: 0, z: 3 },
+  ]);
+  assert.equal(aisle.width, 5);
+  assert.deepEqual(
+    getAisleSegments(aisle).map((segment) => segment.rotation),
+    [0, 90],
+  );
+});
+
+test("turned aisles can move, reshape, rotate, and return to a straight aisle", () => {
+  const turned = addAisleTurn({
+    id: "aisle-a",
+    x: 0,
+    z: 0,
+    width: 4,
+    depth: 2,
+    rotation: 0,
+  });
+  const reshaped = updateAislePathPoint(turned, 2, { x: 1.23, z: 2.26 });
+
+  assert.deepEqual(reshaped.path[2], { x: 1.25, z: 2.25 });
+
+  const moved = moveAislePath(reshaped, 2, -1);
+  const movement = {
+    x: moved.path[0].x - reshaped.path[0].x,
+    z: moved.path[0].z - reshaped.path[0].z,
+  };
+  moved.path.forEach((point, index) => {
+    assert.equal(point.x - reshaped.path[index].x, movement.x);
+    assert.equal(point.z - reshaped.path[index].z, movement.z);
+  });
+
+  const rotated = rotateAislePath(moved, 90);
+  assert.equal(rotated.path.length, moved.path.length);
+  assert.equal(getAisleSegments(rotated).length, 2);
+
+  const straight = straightenAisle(rotated);
+  assert.equal(straight.path, undefined);
+  assert.equal(getAisleSegments(straight).length, 1);
 });

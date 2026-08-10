@@ -43,6 +43,7 @@ import {
   getGb300LedState,
   resolveGb300RackEquipment,
 } from "./gb300RackEquipment.mjs";
+import { getAislePath, getAisleSegments } from "./facilityAisles.mjs";
 
 interface DataCenter3DPlannerProps {
   racks: RackPlan[];
@@ -1288,29 +1289,51 @@ function ThermalAisles({ aisles, active }: { aisles: FacilityPlan["aisles"]; act
         const isCold = aisle.kind === "cold";
         const color = isCold ? "#0ea5e9" : "#c2410c";
         const emissive = isCold ? "#38bdf8" : "#fb923c";
+        const segments = getAisleSegments(aisle);
+        const path = getAislePath(aisle);
         return (
-          <group key={aisle.id} position={[aisle.x, 0, aisle.z]} rotation={[0, (aisle.rotation * Math.PI) / 180, 0]}>
-            <mesh position={[0, 0.026, 0]} receiveShadow>
-              <boxGeometry args={[aisle.width, 0.025, aisle.depth]} />
-              <meshStandardMaterial
-                color={color}
-                emissive={emissive}
-                emissiveIntensity={active ? 0.34 : 0.08}
-                transparent
-                opacity={active ? 0.48 : 0.16}
-                roughness={0.78}
-              />
-            </mesh>
-            {[-0.38, -0.13, 0.13, 0.38].map((offset, index) => (
-              <mesh
-                key={offset}
-                position={[aisle.width * offset, 0.052, 0]}
-                rotation={[-Math.PI / 2, 0, !isCold ? Math.PI : 0]}
+          <group key={aisle.id}>
+            {segments.map((segment) => (
+              <group
+                key={segment.id}
+                position={[segment.x, 0, segment.z]}
+                rotation={[0, (-segment.rotation * Math.PI) / 180, 0]}
               >
-                <coneGeometry args={[0.09, 0.28, 3]} />
-                <meshBasicMaterial color={emissive} transparent opacity={active ? 0.9 : index % 2 ? 0.28 : 0.45} />
-              </mesh>
+                <mesh position={[0, 0.026, 0]} receiveShadow>
+                  <boxGeometry args={[segment.width, 0.025, segment.depth]} />
+                  <meshStandardMaterial
+                    color={color}
+                    emissive={emissive}
+                    emissiveIntensity={active ? 0.34 : 0.08}
+                    transparent
+                    opacity={active ? 0.48 : 0.16}
+                    roughness={0.78}
+                  />
+                </mesh>
+                {[-0.34, 0, 0.34].map((offset, index) => (
+                  <mesh
+                    key={offset}
+                    position={[segment.width * offset, 0.052, 0]}
+                    rotation={[-Math.PI / 2, 0, !isCold ? Math.PI : 0]}
+                  >
+                    <coneGeometry args={[0.09, 0.28, 3]} />
+                    <meshBasicMaterial color={emissive} transparent opacity={active ? 0.9 : index % 2 ? 0.28 : 0.45} />
+                  </mesh>
+                ))}
+              </group>
             ))}
+            {aisle.path?.length ? path.slice(1, -1).map((point, index) => (
+              <mesh key={`${aisle.id}-joint-${index}`} position={[point.x, 0.027, point.z]}>
+                <cylinderGeometry args={[aisle.depth / 2, aisle.depth / 2, 0.028, 24]} />
+                <meshStandardMaterial
+                  color={color}
+                  emissive={emissive}
+                  emissiveIntensity={active ? 0.34 : 0.08}
+                  transparent
+                  opacity={active ? 0.48 : 0.16}
+                />
+              </mesh>
+            )) : null}
           </group>
         );
       })}

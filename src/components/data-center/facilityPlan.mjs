@@ -84,6 +84,21 @@ export function getFacilityOverflowItems({ facility, racks = [], models = {} }) 
   }
 
   for (const aisle of facility?.aisles ?? []) {
+    if (Array.isArray(aisle.path) && aisle.path.length >= 2) {
+      const halfDepth = Number(aisle.depth) / 2;
+      const pathOutside = aisle.path.some((point) => (
+        isOutsideAxis(Number(point.x), width / 2, halfDepth)
+        || isOutsideAxis(Number(point.z), depth / 2, halfDepth)
+      ));
+      if (pathOutside) {
+        overflow.push({
+          kind: "aisle",
+          id: aisle.id,
+          label: aisle.label || aisle.id,
+        });
+      }
+      continue;
+    }
     const rotated = Math.abs(Number(aisle.rotation) % 180) === 90;
     const aisleWidth = rotated ? Number(aisle.depth) : Number(aisle.width);
     const aisleDepth = rotated ? Number(aisle.width) : Number(aisle.depth);

@@ -36,10 +36,15 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import {
+  addAisleTurn,
   getAisleResizeHandles,
   getFriendlyAislePosition,
+  moveAislePath,
   resizeAisleFromHandle,
+  rotateAislePath,
+  straightenAisle,
   updateAisleFromFriendlyPosition,
+  updateAislePathPoint,
 } from "./facilityAisles.mjs";
 import type {
   FacilityPlan,
@@ -61,6 +66,11 @@ type AisleResizeHandle = "start" | "end" | "near" | "far";
 interface AisleResizeState {
   id: string;
   handle: AisleResizeHandle;
+}
+
+interface AislePathPointDragState {
+  id: string;
+  pointIndex: number;
 }
 
 interface DataCenter2DPlannerProps {
@@ -177,6 +187,8 @@ export function DataCenter2DPlanner({
   const [resizingAisle, setResizingAisle] = useState<AisleResizeState | null>(
     null
   );
+  const [draggingAislePoint, setDraggingAislePoint] =
+    useState<AislePathPointDragState | null>(null);
   const [selectedAisleId, setSelectedAisleId] = useState<string | null>(null);
   const [viewport, setViewport] = useState({ zoom: 1, x: 0, y: 0 });
 
@@ -287,10 +299,42 @@ export function DataCenter2DPlanner({
     setResizingAisle({ id: aisleId, handle });
   };
 
+  const beginAislePathPointDrag = (
+    event: ReactPointerEvent<SVGElement>,
+    aisleId: string,
+    pointIndex: number,
+  ) => {
+    if (!canEdit) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDragging(null);
+    setResizingAisle(null);
+    setSelectedAisleId(aisleId);
+    setDraggingAislePoint({ id: aisleId, pointIndex });
+  };
+
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if ((!dragging && !resizingAisle) || !canEdit) return;
+    if ((!dragging && !resizingAisle && !draggingAislePoint) || !canEdit) return;
     const point = toWorld(event.clientX, event.clientY);
     if (!point) return;
+
+    if (draggingAislePoint) {
+      const aisle = facility.aisles.find(
+        (item) => item.id === draggingAislePoint.id
+      );
+      if (!aisle) return;
+      const nextAisle = updateAislePathPoint(
+        aisle,
+        draggingAislePoint.pointIndex,
+        {
+          x: clamp(point.x, -facility.width / 2, facility.width / 2),
+          z: clamp(point.z, -facility.depth / 2, facility.depth / 2),
+        }
+      );
+      onUpdateAisle(aisle.id, nextAisle);
+      return;
+    }
 
     if (resizingAisle) {
       const aisle = facility.aisles.find(
@@ -328,6 +372,17 @@ export function DataCenter2DPlanner({
     if (dragging.kind === "aisle") {
       const aisle = facility.aisles.find((item) => item.id === dragging.id);
       if (!aisle) return;
+      if (aisle.path?.length) {
+        onUpdateAisle(
+          aisle.id,
+          moveAislePath(
+            aisle,
+            snapToGrid(requestedX),
+            snapToGrid(requestedZ)
+          )
+        );
+        return;
+      }
       const rotated = Math.abs(aisle.rotation % 180) === 90;
       const width = rotated ? aisle.depth : aisle.width;
       const depth = rotated ? aisle.width : aisle.depth;
@@ -402,10 +457,12 @@ export function DataCenter2DPlanner({
           onPointerUp={() => {
             setDragging(null);
             setResizingAisle(null);
+            setDraggingAislePoint(null);
           }}
           onPointerCancel={() => {
             setDragging(null);
             setResizingAisle(null);
+            setDraggingAislePoint(null);
           }}
         >
           <defs>
@@ -466,11 +523,60 @@ export function DataCenter2DPlanner({
             const center = toScreen(aisle.x, aisle.z);
             const width = aisle.width * geometry.scale;
             const height = aisle.depth * geometry.scale;
+            const pathPoints = aisle.path?.length && aisle.path.length >= 2
+              ? aisle.path.map((point) => toScreen(point.x, point.z))
+              : null;
             const cold = aisle.kind === "cold";
             const aisleOverflow = overflowKeys.has(`aisle:${aisle.id}`);
             const selected = selectedAisleId === aisle.id;
             return (
               <g key={aisle.id}>
+              {pathPoints ? (
+                <g
+                  data-plan-item={`aisle-${aisle.id}`}
+                  data-overflow={aisleOverflow || undefined}
+                  className={canEdit ? "cursor-grab active:cursor-grabbing" : undefined}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedAisleId(aisle.id);
+                  }}
+                  onPointerDown={(event) => {
+                    setSelectedAisleId(aisle.id);
+                    beginDrag(event, "aisle", aisle.id, aisle.x, aisle.z);
+                  }}
+                >
+                  {aisleOverflow ? <title>{`${aisle.label} 超出廠房範圍`}</title> : null}
+                  <polyline
+                    points={pathPoints.map((point) => `${point.x},${point.y}`).join(" ")}
+                    fill="none"
+                    stroke={aisleOverflow ? "#fda4af" : cold ? "#38bdf8" : "#fb923c"}
+                    strokeWidth={aisle.depth * geometry.scale + (aisleOverflow ? 8 : 4)}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity="0.9"
+                  />
+                  <polyline
+                    points={pathPoints.map((point) => `${point.x},${point.y}`).join(" ")}
+                    fill="none"
+                    stroke={cold ? "#0ea5e955" : "#f9731650"}
+                    strokeWidth={aisle.depth * geometry.scale}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="8 6"
+                  />
+                  <text
+                    x={pathPoints[Math.floor(pathPoints.length / 2)].x}
+                    y={pathPoints[Math.floor(pathPoints.length / 2)].y + 5}
+                    textAnchor="middle"
+                    fill={cold ? "#e0f2fe" : "#ffedd5"}
+                    fontSize="15"
+                    fontWeight="800"
+                    pointerEvents="none"
+                  >
+                    {aisle.label}
+                  </text>
+                </g>
+              ) : (
               <g
                 data-plan-item={`aisle-${aisle.id}`}
                 data-overflow={aisleOverflow || undefined}
@@ -521,9 +627,34 @@ export function DataCenter2DPlanner({
                   </g>
                 ) : null}
               </g>
+              )}
               {selected && canEdit ? (
                 <g data-aisle-handles={aisle.id}>
-                  {getAisleResizeHandles(aisle).map((handle) => {
+                  {pathPoints ? pathPoints.map((handlePoint, pointIndex) => (
+                    <g key={`path-point-${pointIndex}`}>
+                      <circle
+                        data-aisle-path-point={`${aisle.id}-${pointIndex}`}
+                        aria-label={`調整${aisle.label}路徑節點 ${pointIndex + 1}`}
+                        cx={handlePoint.x}
+                        cy={handlePoint.y}
+                        r="22"
+                        fill="transparent"
+                        className="cursor-move"
+                        onPointerDown={(event) =>
+                          beginAislePathPointDrag(event, aisle.id, pointIndex)
+                        }
+                      />
+                      <circle
+                        cx={handlePoint.x}
+                        cy={handlePoint.y}
+                        r="9"
+                        fill={cold ? "#e0f2fe" : "#ffedd5"}
+                        stroke={cold ? "#0284c7" : "#ea580c"}
+                        strokeWidth="3"
+                        pointerEvents="none"
+                      />
+                    </g>
+                  )) : getAisleResizeHandles(aisle).map((handle) => {
                     const handlePoint = toScreen(handle.x, handle.z);
                     const lengthHandle =
                       handle.id === "start" || handle.id === "end";
@@ -771,11 +902,29 @@ export function DataCenter2DPlanner({
               size="sm"
               variant="outline"
               disabled={!canEdit}
-              onClick={() =>
-                onUpdateAisle(selectedAisle.id, {
-                  rotation: (selectedAisle.rotation + 90) % 360,
-                })
-              }
+              onClick={() => onUpdateAisle(selectedAisle.id, addAisleTurn(selectedAisle))}
+              className="h-9 border-sky-300/25 bg-sky-400/10 px-3 text-sky-50 hover:bg-sky-400/18"
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> 加入轉角
+            </Button>
+            {selectedAisle.path?.length ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!canEdit}
+                onClick={() => onUpdateAisle(selectedAisle.id, straightenAisle(selectedAisle))}
+                className="h-9 border-white/15 bg-white/[0.04] px-3 text-slate-100 hover:bg-white/[0.08]"
+              >
+                拉直
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!canEdit}
+              onClick={() => onUpdateAisle(selectedAisle.id, rotateAislePath(selectedAisle))}
               className="h-9 border-cyan-300/20 bg-cyan-400/8 px-3 text-cyan-50 hover:bg-cyan-400/15"
             >
               <RotateCw className="mr-1.5 h-3.5 w-3.5" /> 旋轉
@@ -848,7 +997,7 @@ export function DataCenter2DPlanner({
                 </label>
               ))}
               {([
-                ["width", "通道長度", Math.max(facility.width, facility.depth)],
+                ["width", selectedAisle.path?.length ? "路徑總長" : "通道長度", Math.max(facility.width, facility.depth)],
                 ["depth", "通道寬度", Math.min(facility.width, facility.depth)],
               ] as const).map(([field, label, max]) => (
                 <label key={field} className="rounded-xl border border-white/10 bg-[#10263a] p-3">
@@ -859,11 +1008,11 @@ export function DataCenter2DPlanner({
                       min="0.25"
                       max={max}
                       step="0.05"
-                      disabled={!canEdit}
+                      disabled={!canEdit || (field === "width" && Boolean(selectedAisle.path?.length))}
                       value={selectedAisle[field]}
                       onChange={(event) => {
                         const value = Number(event.target.value);
-                        if (Number.isFinite(value)) {
+                        if (Number.isFinite(value) && !(field === "width" && selectedAisle.path?.length)) {
                           onUpdateAisle(selectedAisle.id, { [field]: clamp(value, 0.25, max) });
                         }
                       }}
@@ -879,7 +1028,7 @@ export function DataCenter2DPlanner({
                 type="button"
                 variant="outline"
                 disabled={!canEdit}
-                onClick={() => onUpdateAisle(selectedAisle.id, { rotation: (selectedAisle.rotation + 90) % 360 })}
+                onClick={() => onUpdateAisle(selectedAisle.id, rotateAislePath(selectedAisle))}
                 className="h-9 border-cyan-300/20 bg-cyan-400/8 text-cyan-50 hover:bg-cyan-400/15"
               >
                 <RotateCw className="mr-2 h-4 w-4" /> 旋轉通道 90°
