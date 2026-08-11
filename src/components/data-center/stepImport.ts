@@ -1,12 +1,12 @@
 import occtimportjs from "occt-import-js";
 import occtWasmUrl from "occt-import-js/dist/occt-import-js.wasm?url";
+import { inferPcbUpAxis } from "./dataCenterTypes";
 
 import type {
   ImportedStepBounds,
   ImportedStepDimensions,
   ImportedStepModel,
   ImportedStepPart,
-  inferPcbUpAxis,
   ModelUpAxis,
 } from "./dataCenterTypes";
 
