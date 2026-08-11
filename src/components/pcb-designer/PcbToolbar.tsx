@@ -3,6 +3,7 @@ import {
   Ban,
   Box,
   Download,
+  Eye,
   Hand,
   Layers3,
   Lock,
@@ -231,8 +232,9 @@ export function PcbToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <div className="pcb-visible-layer-switch" role="group" aria-label="Visible layer">
-          <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
+        <div className="pcb-visible-layer-switch" role="group" aria-label="顯示層">
+          <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="pcb-layer-switch-label">顯示層</span>
           {([
             { layer: "all", label: "全部" },
             { layer: "top", label: "Top" },
@@ -278,6 +280,7 @@ export function PcbToolbar({
 
         <div className="pcb-layer-switch" role="group" aria-label="新元件放置層">
           <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="pcb-layer-switch-label">放置層</span>
           {(["top", "bottom"] as const).map((layer) => (
             <button
               key={layer}

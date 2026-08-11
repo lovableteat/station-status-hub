@@ -124,6 +124,8 @@ test("adds separate visible-layer filters without replacing placement-layer cont
   assert.match(toolbarSource, /visibleLayer:\s*PcbVisibleLayer/);
   assert.match(toolbarSource, /onVisibleLayerChange:\s*\(layer:\s*PcbVisibleLayer\)\s*=>\s*void/);
   assert.match(toolbarSource, /pcb-visible-layer-switch/);
+  assert.match(toolbarSource, /pcb-layer-switch-label["']>顯示層</);
+  assert.match(toolbarSource, /pcb-layer-switch-label["']>放置層</);
   assert.match(toolbarSource, /aria-pressed=\{visibleLayer === layer\}/);
   assert.match(toolbarSource, /onClick=\{\(\) => onVisibleLayerChange\(layer\)\}/);
   assert.match(toolbarSource, /onClick=\{\(\) => onActiveLayerChange\(layer\)\}/);
@@ -259,13 +261,17 @@ test("lets the board inspector edit top and bottom colors separately", () => {
   assert.match(inspectorSource, /workspace\.updateBoard\(\{[\s\S]{0,160}layerColors:\s*\{[\s\S]{0,200}bottom:/);
 });
 
-test("uses board background for all-layers and per-layer colors for filtered 2D and 3D board surfaces", () => {
+test("uses filtered colors in 2D and keeps physical PCB faces distinct in both 3D renderers", () => {
   assert.match(canvasSource, /visibleLayer === ["']all["'][\s\S]{0,200}project\.board\.background/);
   assert.match(canvasSource, /visibleLayer === ["']top["'][\s\S]{0,200}project\.board\.layerColors\.top/);
   assert.match(canvasSource, /visibleLayer === ["']bottom["'][\s\S]{0,200}project\.board\.layerColors\.bottom/);
-  assert.match(canvas3dSource, /visibleLayer === ["']all["'][\s\S]{0,200}project\.board\.background/);
-  assert.match(canvas3dSource, /visibleLayer === ["']top["'][\s\S]{0,200}project\.board\.layerColors\.top/);
-  assert.match(canvas3dSource, /visibleLayer === ["']bottom["'][\s\S]{0,200}project\.board\.layerColors\.bottom/);
+  assert.match(canvas3dSource, /boardTopColor = safeColor\(project\.board\.layerColors\.top/);
+  assert.match(canvas3dSource, /boardBottomColor = safeColor\(project\.board\.layerColors\.bottom/);
+  assert.match(canvas3dSource, /attach=["']material-2["'] color=\{boardTopColor\}/);
+  assert.match(canvas3dSource, /attach=["']material-3["'] color=\{boardBottomColor\}/);
+  assert.match(softwareCanvas3dSource, /const boardFaceColors = \[[\s\S]{0,120}project\.board\.layerColors\.top,[\s\S]{0,80}project\.board\.layerColors\.bottom/);
+  assert.match(softwareCanvas3dSource, /shadeColor\(boardFaceColors\[faceIndex\]/);
+  assert.match(softwareCanvas3dSource, /view\.pitch >= 0 \? ["']Top 面["'] : ["']Bottom 面["']/);
 });
 
 test("supports Ctrl or Cmd multi-selection, shared layer filters, and group drag on the 2D canvas", () => {
@@ -355,7 +361,15 @@ test("keeps dense toolbar labels readable and stable across active and disabled 
   );
   assert.match(
     editorCssSource,
-    /\.pcb-layer-switch button\.is-active,\s*[\r\n]+\s*\.pcb-visible-layer-switch button\.is-active\s*\{[\s\S]{0,320}border-color:[\s\S]{0,200}box-shadow:/,
+    /\.pcb-visible-layer-switch button\.is-active\s*\{[\s\S]{0,320}border-color:[\s\S]{0,200}box-shadow:/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-layer-switch button\.is-active\s*\{[\s\S]{0,320}border-color:[\s\S]{0,200}box-shadow:/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-layer-switch-label\s*\{[\s\S]{0,240}font-size:\s*10px[\s\S]{0,120}font-weight:\s*800/,
   );
   assert.match(
     editorCssSource,
