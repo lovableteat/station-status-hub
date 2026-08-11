@@ -31,6 +31,7 @@ export interface DirectThread {
   otherUserId: string;
   otherUsername: string;
   otherDisplayName: string;
+  otherAvatarPath: string | null;
   lastMessageId: string | null;
   lastMessageBody: string | null;
   lastMessageSenderId: string | null;
@@ -75,6 +76,7 @@ function mapThread(row: any): DirectThread {
     otherUserId: row.other_user_id,
     otherUsername: row.other_username,
     otherDisplayName: row.other_display_name || row.other_username,
+    otherAvatarPath: row.other_avatar_path ?? null,
     lastMessageId: row.last_message_id ?? null,
     lastMessageBody: row.last_message_body ?? null,
     lastMessageSenderId: row.last_message_sender_id ?? null,

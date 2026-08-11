@@ -10,6 +10,11 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 
+import {
+  createUserAvatarPath,
+  USER_AVATAR_BUCKET,
+  validateUserAvatarFile,
+} from "@/components/account/userAvatarUtils.mjs";
 import { supabase } from "@/integrations/supabase/client";
 import { REALTIME_COLLABORATION_V2_ENABLED } from "@/lib/realtimeCollaborationConfig";
 import {
@@ -22,6 +27,7 @@ export interface User {
   username: string;
   role: string;
   displayName: string;
+  avatarPath: string | null;
 }
 
 export type SessionMode = "authenticated" | "legacy" | "demo" | "signed-out";
@@ -36,6 +42,11 @@ export interface RegistrationResult {
   code: string;
 }
 
+export interface AvatarMutationResult {
+  success: boolean;
+  error?: string;
+}
+
 interface UserContextType {
   user: User | null;
   login: (userId: string, username: string, role: string, displayName: string) => void;
@@ -45,6 +56,7 @@ interface UserContextType {
     username: string,
     password: string,
   ) => Promise<RegistrationResult>;
+  updateAvatar: (file: File | null) => Promise<AvatarMutationResult>;
   logout: () => void;
   isLoggedIn: boolean;
   isInitializing: boolean;
@@ -64,6 +76,7 @@ interface AccountLoginPayload {
     username?: string;
     role?: string;
     display_name?: string;
+    avatar_path?: string | null;
   };
 }
 
@@ -102,7 +115,13 @@ function readStoredUser(): User | null {
       return null;
     }
 
-    return parsed as User;
+    return {
+      userId: parsed.userId,
+      username: parsed.username,
+      role: parsed.role,
+      displayName: parsed.displayName,
+      avatarPath: typeof parsed.avatarPath === "string" ? parsed.avatarPath : null,
+    };
   } catch {
     try {
       window.sessionStorage.removeItem("user");
@@ -152,6 +171,7 @@ function getDevDemoUser(): User | null {
     username: "operator7",
     role: "admin",
     displayName: "Operator 7",
+    avatarPath: null,
   };
 }
 
@@ -168,6 +188,7 @@ function userFromMetadata(metadata: Session["user"]["app_metadata"]): User | nul
     username,
     role,
     displayName: typeof metadata.display_name === "string" ? metadata.display_name : username,
+    avatarPath: typeof metadata.avatar_path === "string" ? metadata.avatar_path : null,
   };
 }
 
@@ -189,6 +210,7 @@ async function userFromSession(session: Session): Promise<User | null> {
       role: profile.role,
       displayName:
         typeof profile.display_name === "string" ? profile.display_name : profile.username,
+      avatarPath: typeof profile.avatar_path === "string" ? profile.avatar_path : null,
     };
   }
 
@@ -244,7 +266,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     (userId: string, username: string, role: string, displayName: string) => {
-      applyUser({ userId, username, role, displayName }, "legacy");
+      applyUser({ userId, username, role, displayName, avatarPath: null }, "legacy");
     },
     [applyUser],
   );
@@ -392,6 +414,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
                 username: profile.username,
                 role: profile.role,
                 displayName: profile.display_name || profile.username,
+                avatarPath: profile.avatar_path || null,
               };
               applyUser(authenticatedUser, "authenticated");
               return { user: authenticatedUser, mode: "authenticated" };
@@ -430,6 +453,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         username: legacyUser.username,
         role: legacyUser.role,
         displayName: legacyUser.display_name || legacyUser.username,
+        avatarPath: null,
       };
       applyUser(compatibleUser, "legacy");
       return { user: compatibleUser, mode: "legacy" };
@@ -454,6 +478,61 @@ export function UserProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const updateAvatar = useCallback(async (file: File | null): Promise<AvatarMutationResult> => {
+    if (!user?.userId || sessionMode !== "authenticated") {
+      return { success: false, error: "請重新登入後再編輯頭像。" };
+    }
+
+    const previousPath = user.avatarPath;
+    let uploadedPath: string | null = null;
+
+    if (file) {
+      const validationError = validateUserAvatarFile(file);
+      if (validationError) return { success: false, error: validationError };
+
+      uploadedPath = createUserAvatarPath(user.userId, file);
+      if (!uploadedPath) return { success: false, error: "無法建立頭像檔案，請重新選擇圖片。" };
+
+      const { error: uploadError } = await supabase.storage
+        .from(USER_AVATAR_BUCKET)
+        .upload(uploadedPath, file, {
+          cacheControl: "31536000",
+          contentType: file.type,
+          upsert: false,
+        });
+      if (uploadError) {
+        return { success: false, error: "頭像上傳失敗，請稍後再試。" };
+      }
+    }
+
+    const { data, error } = await supabase.rpc("set_own_avatar_path", {
+      p_avatar_path: uploadedPath,
+    });
+    if (error) {
+      if (uploadedPath) {
+        await supabase.storage.from(USER_AVATAR_BUCKET).remove([uploadedPath]);
+      }
+      return { success: false, error: "頭像資料儲存失敗，原頭像未變更。" };
+    }
+
+    const avatarPath = typeof data === "string" ? data : null;
+    setUser((current) => {
+      if (!current || current.userId !== user.userId) return current;
+      const nextUser = { ...current, avatarPath };
+      storeUser(nextUser);
+      return nextUser;
+    });
+
+    if (previousPath && previousPath !== avatarPath) {
+      await supabase.storage.from(USER_AVATAR_BUCKET).remove([previousPath]);
+    }
+
+    window.dispatchEvent(new CustomEvent("station-user-avatar-updated", {
+      detail: { userId: user.userId, avatarPath },
+    }));
+    return { success: true };
+  }, [sessionMode, user]);
+
   const logout = useCallback(() => {
     setUser(null);
     setSessionMode("signed-out");
@@ -476,8 +555,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
           filter: `id=eq.${user.userId}`,
         },
         (payload) => {
-          const updated = payload.new as { status?: string };
+          const updated = payload.new as { status?: string; avatar_path?: string | null };
           if (updated.status && updated.status !== "active") logout();
+          if ("avatar_path" in updated) {
+            setUser((current) => {
+              if (!current || current.userId !== user.userId) return current;
+              const nextUser = { ...current, avatarPath: updated.avatar_path ?? null };
+              storeUser(nextUser);
+              return nextUser;
+            });
+          }
         },
       )
       .subscribe();
@@ -497,6 +584,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         login,
         authenticate,
         registerAccount,
+        updateAvatar,
         logout,
         isLoggedIn: user !== null,
         isInitializing,
@@ -506,7 +594,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         reauthRequired,
       };
     },
-    [authenticate, isInitializing, login, logout, reauthRequired, registerAccount, sessionMode, user],
+    [authenticate, isInitializing, login, logout, reauthRequired, registerAccount, sessionMode, updateAvatar, user],
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

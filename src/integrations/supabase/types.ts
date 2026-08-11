@@ -1808,6 +1808,7 @@ export type Database = {
           approved_by: string | null
           auth_migrated_at: string | null
           auth_user_id: string | null
+          avatar_path: string | null
           created_at: string
           created_by: string | null
           display_name: string | null
@@ -1826,6 +1827,7 @@ export type Database = {
           approved_by?: string | null
           auth_migrated_at?: string | null
           auth_user_id?: string | null
+          avatar_path?: string | null
           created_at?: string
           created_by?: string | null
           display_name?: string | null
@@ -1844,6 +1846,7 @@ export type Database = {
           approved_by?: string | null
           auth_migrated_at?: string | null
           auth_user_id?: string | null
+          avatar_path?: string | null
           created_at?: string
           created_by?: string | null
           display_name?: string | null
@@ -3625,11 +3628,42 @@ export type Database = {
       list_active_collaboration_members: {
         Args: never
         Returns: {
+          avatar_path: string | null
           display_name: string
           role: string
           user_id: string
           username: string
         }[]
+      }
+      get_current_system_user: {
+        Args: never
+        Returns: {
+          avatar_path: string | null
+          display_name: string
+          role: string
+          status: string
+          user_id: string
+          username: string
+        }[]
+      }
+      list_direct_chat_threads: {
+        Args: never
+        Returns: {
+          last_message_at: string | null
+          last_message_body: string | null
+          last_message_id: string | null
+          last_message_sender_id: string | null
+          other_avatar_path: string | null
+          other_display_name: string
+          other_user_id: string
+          other_username: string
+          thread_id: string
+          unread_count: number
+        }[]
+      }
+      set_own_avatar_path: {
+        Args: { p_avatar_path: string | null }
+        Returns: string | null
       }
       save_pcb_designer_workspace: {
         Args: { p_payload: Json; p_user_id: string }
