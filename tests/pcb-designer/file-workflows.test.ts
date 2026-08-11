@@ -238,3 +238,15 @@ test("uses the smallest PCB model span as the default up axis", async () => {
   assert.equal(inferPcbUpAxis([10, 20, 2]), "z");
   assert.equal(inferPcbUpAxis([2, 20, 10]), "x");
 });
+
+test("keeps PCB up-axis inference available to the STEP parser at runtime", async () => {
+  const source = await readFile(
+    new URL("../../src/components/data-center/stepImport.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /import\s*\{\s*inferPcbUpAxis\s*\}\s*from\s*["']\.\/dataCenterTypes["']/,
+  );
+});
