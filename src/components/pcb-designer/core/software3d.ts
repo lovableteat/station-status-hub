@@ -47,6 +47,19 @@ export const DEFAULT_SOFTWARE_VIEW: SoftwareViewState = {
 
 export const MAX_SOFTWARE_MODEL_TRIANGLES = 8_000;
 
+export const SOFTWARE_RENDER_ORDER = {
+  board: 0,
+  grid: 1,
+  object: 2,
+} as const;
+
+export function compareSoftwareRenderDepth(
+  left: { depth: number; renderOrder: number },
+  right: { depth: number; renderOrder: number },
+): number {
+  return left.renderOrder - right.renderOrder || right.depth - left.depth;
+}
+
 function subtract(a: SoftwarePoint3, b: SoftwarePoint3): SoftwarePoint3 {
   return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
 }
