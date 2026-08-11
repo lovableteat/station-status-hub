@@ -255,13 +255,9 @@ function Scene({
     [selectionIds],
   );
   const boardThickness = 1.6;
-  const boardSurfaceColor = visibleLayer === "all"
-    ? project.board.background
-    : visibleLayer === "top"
-      ? project.board.layerColors.top
-      : visibleLayer === "bottom"
-        ? project.board.layerColors.bottom
-        : project.board.background;
+  const boardSideColor = safeColor(project.board.background, "#247c67");
+  const boardTopColor = safeColor(project.board.layerColors.top, "#58a99e");
+  const boardBottomColor = safeColor(project.board.layerColors.bottom, "#4259ce");
   const sceneBounds = useMemo(() => {
     const height = Math.max(
       12,
@@ -319,7 +315,12 @@ function Scene({
         }}
       >
         <boxGeometry args={[project.board.width, boardThickness, project.board.height]} />
-        <meshStandardMaterial color={safeColor(boardSurfaceColor, "#247c67")} roughness={0.58} metalness={0.08} />
+        <meshStandardMaterial attach="material-0" color={boardSideColor} roughness={0.58} metalness={0.08} />
+        <meshStandardMaterial attach="material-1" color={boardSideColor} roughness={0.58} metalness={0.08} />
+        <meshStandardMaterial attach="material-2" color={boardTopColor} roughness={0.58} metalness={0.08} />
+        <meshStandardMaterial attach="material-3" color={boardBottomColor} roughness={0.58} metalness={0.08} />
+        <meshStandardMaterial attach="material-4" color={boardSideColor} roughness={0.58} metalness={0.08} />
+        <meshStandardMaterial attach="material-5" color={boardSideColor} roughness={0.58} metalness={0.08} />
         <Edges color="#7de7e8" threshold={20} />
       </mesh>
 

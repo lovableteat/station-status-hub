@@ -1236,6 +1236,32 @@
   white-space: nowrap;
 }
 
+.pcb-visible-layer-switch {
+  border-color: rgb(104 206 233 / 38%);
+  background: linear-gradient(180deg, rgb(21 47 66 / 96%), #0c1728);
+}
+
+.pcb-layer-switch {
+  border-color: rgb(244 190 92 / 34%);
+  background: linear-gradient(180deg, rgb(53 43 27 / 92%), #0c1728);
+}
+
+.pcb-visible-layer-switch > svg {
+  color: #78ddec;
+}
+
+.pcb-layer-switch > svg {
+  color: #edc46f;
+}
+
+.pcb-layer-switch-label {
+  padding: 0 5px 0 2px;
+  color: #a8bdd1;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .pcb-layer-switch button,
 .pcb-visible-layer-switch button {
   height: 26px;
@@ -1259,11 +1285,17 @@
   color: #eaf5ff;
 }
 
-.pcb-layer-switch button.is-active,
 .pcb-visible-layer-switch button.is-active {
   border-color: rgb(104 206 233 / 54%);
   background: #29466c;
   color: #bdefff;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 8%);
+}
+
+.pcb-layer-switch button.is-active {
+  border-color: rgb(244 190 92 / 52%);
+  background: #4a3b25;
+  color: #ffe5aa;
   box-shadow: 0 0 0 1px rgb(255 255 255 / 8%);
 }
 
