@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Boxes,
+  Camera,
   CircuitBoard,
   ClipboardList,
   Factory,
@@ -660,7 +661,9 @@ const Index = () => {
         userMenuItems={isDemoMode ? [] : [
           {
             id: "personal-profile",
-            label: "個人設定",
+            label: "編輯大頭貼",
+            icon: <Camera className="h-4 w-4" />,
+            emphasized: true,
             onSelect: () => setProfileDialogOpen(true),
           },
         ]}
