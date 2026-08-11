@@ -10,10 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Search, Plus, UserPlus, Shield, LogOut, Users, Clock3, Lock, Menu, CircleHelp, UserCheck, Hourglass } from "lucide-react";
+import { Search, Plus, UserPlus, Shield, LogOut, Users, Clock3, Lock, Menu, CircleHelp, UserCheck, Hourglass, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUser } from "@/components/auth/UserContext";
+import { PersonalProfileDialog } from "@/components/account/PersonalProfileDialog";
+import { UserAvatar } from "@/components/account/UserAvatar";
 import { ApiManagementPage } from "@/components/api-management/ApiManagementPage";
 import { AdminCollaborationPanel } from "@/components/collaboration/AdminCollaborationPanel";
 import { MaintenanceMetricStrip } from "@/components/maintenance/MaintenanceMetricStrip";
@@ -55,6 +57,7 @@ interface SystemUser {
   registration_requested_at?: string | null;
   approved_at?: string | null;
   last_seen_at: string | null;
+  avatar_path?: string | null;
 }
 
 type AdminTab = "users" | "collaboration" | "api-management";
@@ -78,6 +81,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedUsername, setSelectedUsername] = useState<string>("");
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [isAdminSidebarOpen, setIsAdminSidebarOpen] = useState(false);
   const { toast } = useToast();
   const { isRealtimeAuthenticated, logout, user } = useUser();
@@ -518,6 +522,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       data-admin-surface="control-room"
       className="maintenance-workspace admin-workspace"
     >
+      <PersonalProfileDialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen} />
       <div className="admin-shell">
         <AdminSidebar
           activeTab={activeTab}
@@ -743,6 +748,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 {filteredSystemUsers.map((systemUser) => {
                   const workspaceBadges = getWorkspaceBadges(systemUser.permissions);
                   const isProtected = isProtectedSystemUser(systemUser);
+                  const isCurrentUser = systemUser.id === user?.userId;
                   const creatorLabel = systemUser.created_by === "self-registration"
                     ? "使用者自行註冊"
                     : systemUser.created_by || "系統";
@@ -756,8 +762,13 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                     >
                       <div className="flex flex-col gap-4 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-sky-300/15 bg-sky-400/10">
-                            <Shield className="h-4.5 w-4.5 text-sky-200" />
+                          <div className="shrink-0">
+                            <UserAvatar
+                              avatarPath={isCurrentUser ? user?.avatarPath : systemUser.avatar_path}
+                              displayName={systemUser.display_name || systemUser.username}
+                              className="h-11 w-11 rounded-xl border border-sky-300/20 bg-sky-400/10"
+                              fallbackClassName="rounded-xl bg-sky-400/10 text-sm text-sky-100"
+                            />
                           </div>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
@@ -809,6 +820,18 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
+                          {isCurrentUser ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-9 rounded-xl border-cyan-300/20 bg-cyan-400/[0.07] text-cyan-100 hover:border-cyan-300/40 hover:bg-cyan-400/15"
+                              onClick={() => setProfileDialogOpen(true)}
+                            >
+                              <Camera className="mr-1.5 h-3.5 w-3.5" />
+                              編輯大頭貼
+                            </Button>
+                          ) : null}
                           {systemUser.status === "pending" ? (
                             <Button
                               size="sm"
