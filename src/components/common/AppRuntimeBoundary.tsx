@@ -2,9 +2,27 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw, RotateCcw } from "lucide-react";
 
 const CHUNK_RETRY_KEY = "station-status-hub:chunk-retry";
+const CHUNK_RETRY_WINDOW_MS = 30_000;
+
+interface ChunkRetryRecord {
+  fingerprint: string;
+  attemptedAt: number;
+}
+
+function hasRecentChunkRetry(value: string | null, fingerprint: string, now: number) {
+  if (!value) return false;
+  try {
+    const record = JSON.parse(value) as Partial<ChunkRetryRecord>;
+    return record.fingerprint === fingerprint
+      && typeof record.attemptedAt === "number"
+      && now - record.attemptedAt < CHUNK_RETRY_WINDOW_MS;
+  } catch {
+    return false;
+  }
+}
 
 function isChunkLoadError(error: Error) {
-  return /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError/i.test(
+  return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Loading (?:CSS )?chunk|ChunkLoadError|Unable to preload CSS|Failed to load module script/i.test(
     error.message
   );
 }
@@ -44,11 +62,16 @@ export class AppRuntimeBoundary extends Component<
 
     try {
       const fingerprint = error.message || error.name;
-      if (window.sessionStorage.getItem(CHUNK_RETRY_KEY) === fingerprint) return;
-      window.sessionStorage.setItem(CHUNK_RETRY_KEY, fingerprint);
+      const now = Date.now();
+      if (hasRecentChunkRetry(window.sessionStorage.getItem(CHUNK_RETRY_KEY), fingerprint, now)) return;
+      window.sessionStorage.setItem(CHUNK_RETRY_KEY, JSON.stringify({ fingerprint, attemptedAt: now }));
     } catch {
       // The recovery screen remains available when storage is unavailable.
+      return;
     }
+
+    this.setState({ retrying: true });
+    replaceWithCacheBuster();
   }
 
   private handleReload = () => {
