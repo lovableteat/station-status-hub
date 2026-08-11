@@ -196,9 +196,11 @@ const DEFAULT_QUERY_SYSTEM_PROMPT = [
   "當使用者在查資料或要你比對欄位時，請優先整理結果、重點與依據；若資訊不足，直接說缺少哪些資料，不要自行亂猜。",
   "整理型回答請使用 Markdown：適合比較的資料使用表格，段落之間可用分隔線，程式碼與指令必須放在標示語言的程式碼區塊。",
   "不要主動岔題，也不要塞入無關建議；除非使用者要求，否則保持回答簡潔實用。",
+  "模式規則：只有附帶的機台維修資料才能作為專案事實依據；未提供來源時不得杜撰。若使用者問的是一般問題、工作討論或附件內容，請直接回答，不要強行改成專案查詢。",
 ].join(" ");
 const DEFAULT_IMAGE_OCR_PROMPT =
   "請擷取我上傳圖片中的所有文字，保留欄位、換行、表格關係與關鍵代碼，不要加入無關建議，最後用繁體中文整理重點。";
+const MAX_PROVIDER_HISTORY_MESSAGES = 32;
 const MAX_UPLOAD_ATTACHMENT_COUNT = 8;
 const MAX_UPLOAD_FILE_BYTES = 100 * 1024 * 1024;
 const RETRYABLE_GEMINI_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
@@ -925,7 +927,7 @@ export function ApiChatConsole({
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const [conversationCloudState, setConversationCloudState] = useState<ConversationCloudState>("loading");
-  const [maintenanceSourceEnabled, setMaintenanceSourceEnabled] = useState(mode === "chat-only");
+  const [maintenanceSourceEnabled, setMaintenanceSourceEnabled] = useState(false);
   const [maintenanceScope, setMaintenanceScope] = useState<MaintenanceScopeState>(() =>
     createMaintenanceScope(currentMaintenanceProjectId, maintenanceProjects),
   );
@@ -1369,7 +1371,8 @@ export function ApiChatConsole({
   ) => {
     const targetPreset = resolveAiProviderPreset(targetProvider);
     const providerMessages: ProviderChatMessage[] = [];
-    const unsupportedDocuments = history.flatMap((message) =>
+    const providerHistory = history.slice(-MAX_PROVIDER_HISTORY_MESSAGES);
+    const unsupportedDocuments = providerHistory.flatMap((message) =>
       (message.attachments ?? [])
         .filter((attachment) => attachment.kind === "file")
         .map((attachment) => attachment.name),
@@ -1389,7 +1392,7 @@ export function ApiChatConsole({
       providerMessages.push({ role: "system", text: ephemeralSystemContext.trim() });
     }
 
-    history.forEach((message) => {
+    providerHistory.forEach((message) => {
       const attachments = message.role === "user" ? message.attachments ?? [] : [];
       const supportedAttachments =
         targetPreset.protocol === "gemini"
@@ -1636,18 +1639,13 @@ export function ApiChatConsole({
         setMaintenanceResultCount(citations.length);
         retrievingMaintenance = false;
 
-        if (!citations.length) {
-          setMessages((current) => [
-            ...current,
-            createMessage(
-              "assistant",
-              "查無符合的機台維修資料。請調整關鍵字、機台代碼或專案範圍後再試。",
-            ),
-          ]);
-          toast.info("查無符合的機台維修資料");
-          return;
-        }
-        ephemeralSystemContext = buildMaintenanceContext(citations);
+        ephemeralSystemContext = citations.length
+          ? buildMaintenanceContext(citations)
+          : [
+              "本次已啟用機台維修資料來源，但在選定專案內沒有找到相符紀錄。",
+              "不得捏造任何機台、專案、測試或維修數據。",
+              "若使用者問的是一般知識、工作討論或附件內容，仍要正常回答；若問題要求專案事實，請明確說明目前沒有可引用來源。",
+            ].join(" ");
       }
 
       const reply = await runProviderRequest(
