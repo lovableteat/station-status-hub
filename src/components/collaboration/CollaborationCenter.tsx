@@ -130,12 +130,7 @@ function DirectMessageLauncher({
         <span className="absolute -right-1.5 -top-1.5 flex min-h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#071421] bg-rose-500 px-1 text-[10px] font-bold leading-5 text-white shadow-[0_0_14px_rgba(244,63,94,0.65)]">
           {unreadCount > 99 ? "99+" : unreadCount}
         </span>
-      ) : (
-        <span
-          aria-hidden="true"
-          className="absolute bottom-1.5 right-1.5 h-3 w-3 rounded-full border-2 border-[#a8e9ef] bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]"
-        />
-      )}
+      ) : null}
     </button>
   );
 }
