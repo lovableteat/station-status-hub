@@ -24,6 +24,7 @@ import {
   createSoftwareBoxVertices,
   createSoftwareCamera,
   getSoftwareFaceNormal,
+  getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
   projectSoftwarePoint,
   sampleTriangleOffsets,
@@ -276,9 +277,9 @@ export function PcbSoftware3DCanvas({
       worldPoints: SoftwarePoint3[],
       fill: string,
       stroke: string,
+      renderOrder: number,
       alpha = 1,
       lineWidth = 0.7,
-      renderOrder = SOFTWARE_RENDER_ORDER.object,
     ) => {
       const points = worldPoints.map((point) => projectSoftwarePoint(point, camera));
       if (points.some((point) => !point.visible) || projectedArea(points) < 0.08) return;
@@ -298,14 +299,14 @@ export function PcbSoftware3DCanvas({
       worldVertices: SoftwarePoint3[],
       color: string,
       stroke: string,
+      renderOrder: number,
       alpha = 1,
       lineWidth = 0.7,
-      renderOrder = SOFTWARE_RENDER_ORDER.object,
     ) => {
       BOX_FACES.forEach((face) => {
         const worldPoints = face.map((index) => worldVertices[index]);
         const normal = getSoftwareFaceNormal(worldPoints[0], worldPoints[1], worldPoints[2]);
-        addPolygon(worldPoints, shadeColor(color, getSoftwareLightLevel(normal)), stroke, alpha, lineWidth, renderOrder);
+        addPolygon(worldPoints, shadeColor(color, getSoftwareLightLevel(normal)), stroke, renderOrder, alpha, lineWidth);
       });
     };
 
@@ -318,36 +319,44 @@ export function PcbSoftware3DCanvas({
       createSoftwareBoxVertices(project.board.width, BOARD_THICKNESS, project.board.height),
       boardSurfaceColor,
       "#7de7e8",
+      SOFTWARE_RENDER_ORDER.board,
       1,
       1.05,
-      SOFTWARE_RENDER_ORDER.board,
     );
 
     if (project.board.showGrid) {
       const gridStep = Math.max(project.board.gridSize, Math.ceil(Math.max(project.board.width, project.board.height) / 80));
-      const gridY = BOARD_THICKNESS / 2 + 0.015;
-      for (let x = -project.board.width / 2; x <= project.board.width / 2 + 0.001; x += gridStep) {
-        const points = [
-          projectSoftwarePoint({ x, y: gridY, z: -project.board.height / 2 }, camera),
-          projectSoftwarePoint({ x, y: gridY, z: project.board.height / 2 }, camera),
-        ] as [SoftwareProjectedPoint, SoftwareProjectedPoint];
-        if (points.every((point) => point.visible)) {
-          shapes.push({ kind: "line", points, depth: (points[0].depth + points[1].depth) / 2, renderOrder: SOFTWARE_RENDER_ORDER.grid, stroke: "#70b9c7", alpha: 0.17, lineWidth: 0.55 });
+      const gridLayers: Array<"top" | "bottom"> = visibleLayer === "all"
+        ? ["top", "bottom"]
+        : [visibleLayer];
+      gridLayers.forEach((gridLayer) => {
+        const gridY = (BOARD_THICKNESS / 2 + 0.015) * (gridLayer === "top" ? 1 : -1);
+        const gridRenderOrder = getSoftwareLayerRenderOrder(gridLayer, camera.eye.y, "surface");
+        for (let x = -project.board.width / 2; x <= project.board.width / 2 + 0.001; x += gridStep) {
+          const points = [
+            projectSoftwarePoint({ x, y: gridY, z: -project.board.height / 2 }, camera),
+            projectSoftwarePoint({ x, y: gridY, z: project.board.height / 2 }, camera),
+          ] as [SoftwareProjectedPoint, SoftwareProjectedPoint];
+          if (points.every((point) => point.visible)) {
+            shapes.push({ kind: "line", points, depth: (points[0].depth + points[1].depth) / 2, renderOrder: gridRenderOrder, stroke: "#70b9c7", alpha: 0.17, lineWidth: 0.55 });
+          }
         }
-      }
-      for (let z = -project.board.height / 2; z <= project.board.height / 2 + 0.001; z += gridStep) {
-        const points = [
-          projectSoftwarePoint({ x: -project.board.width / 2, y: gridY, z }, camera),
-          projectSoftwarePoint({ x: project.board.width / 2, y: gridY, z }, camera),
-        ] as [SoftwareProjectedPoint, SoftwareProjectedPoint];
-        if (points.every((point) => point.visible)) {
-          shapes.push({ kind: "line", points, depth: (points[0].depth + points[1].depth) / 2, renderOrder: SOFTWARE_RENDER_ORDER.grid, stroke: "#70b9c7", alpha: 0.17, lineWidth: 0.55 });
+        for (let z = -project.board.height / 2; z <= project.board.height / 2 + 0.001; z += gridStep) {
+          const points = [
+            projectSoftwarePoint({ x: -project.board.width / 2, y: gridY, z }, camera),
+            projectSoftwarePoint({ x: project.board.width / 2, y: gridY, z }, camera),
+          ] as [SoftwareProjectedPoint, SoftwareProjectedPoint];
+          if (points.every((point) => point.visible)) {
+            shapes.push({ kind: "line", points, depth: (points[0].depth + points[1].depth) / 2, renderOrder: gridRenderOrder, stroke: "#70b9c7", alpha: 0.17, lineWidth: 0.55 });
+          }
         }
-      }
+      });
     }
 
     project.keepouts.forEach((keepout) => {
       const selected = selectedIds.has(keepout.id);
+      const renderOrder = getSoftwareLayerRenderOrder("top", camera.eye.y);
+      const isNearSide = renderOrder > SOFTWARE_RENDER_ORDER.board;
       const centerX = keepout.x + keepout.width / 2 - project.board.width / 2;
       const centerZ = project.board.height / 2 - keepout.y - keepout.height / 2;
       const worldVertices = createSoftwareBoxVertices(keepout.width, 0.36, keepout.height).map((point) => ({
@@ -355,9 +364,9 @@ export function PcbSoftware3DCanvas({
         y: BOARD_THICKNESS / 2 + 0.2 + point.y,
         z: centerZ + point.z,
       }));
-      addBox(worldVertices, keepout.color || "#ef8354", selected ? "#fff3bf" : "#f2a56d", selected ? 0.7 : 0.38, selected ? 1.5 : 0.7);
+      addBox(worldVertices, keepout.color || "#ef8354", selected ? "#fff3bf" : "#f2a56d", renderOrder, selected ? 0.7 : 0.38, selected ? 1.5 : 0.7);
       const bounds = getProjectedBounds(worldVertices.map((point) => projectSoftwarePoint(point, camera)));
-      if (bounds) hits.push({ kind: "keepout", id: keepout.id, ...bounds, selected });
+      if (bounds && isNearSide) hits.push({ kind: "keepout", id: keepout.id, ...bounds, selected });
     });
 
     const visibleComponents = project.components
@@ -371,10 +380,12 @@ export function PcbSoftware3DCanvas({
 
     visibleComponents.forEach(({ component, viewState }) => {
       const selected = viewState.selected;
+      const renderOrder = getSoftwareLayerRenderOrder(component.layer, camera.eye.y);
+      const isNearSide = renderOrder > SOFTWARE_RENDER_ORDER.board;
       const localBounds = createSoftwareBoxVertices(component.width, component.maxHeight, component.height);
       const worldBounds = localBounds.map((point) => transformPcbComponentPoint(point, component, project.board, BOARD_THICKNESS));
       const projectedBounds = getProjectedBounds(worldBounds.map((point) => projectSoftwarePoint(point, camera)));
-      if (projectedBounds) {
+      if (projectedBounds && isNearSide) {
         hits.push({
           kind: "component",
           id: component.instanceId,
@@ -387,7 +398,7 @@ export function PcbSoftware3DCanvas({
       const asset = component.modelAssetId ? modelAssets[component.modelAssetId] : null;
       const cachedParts = mappedModelParts[component.instanceId];
       if (!asset || !cachedParts) {
-        addBox(worldBounds, component.color, selected ? "#f8fafc" : "#214b60", 1, selected ? 1.5 : 0.7);
+        addBox(worldBounds, component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
       } else {
         const totalTriangles = Math.max(1, cachedParts.reduce((total, { part }) => total + Math.floor(part.index.length / 3), 0));
         cachedParts.forEach(({ part, positions }) => {
@@ -408,6 +419,7 @@ export function PcbSoftware3DCanvas({
               worldPoints,
               shadeColor(color, getSoftwareLightLevel(normal)),
               selected ? "#f8fafc" : shadeColor(color, 0.58),
+              renderOrder,
               1,
               selected ? 0.95 : 0.2,
             );
@@ -415,7 +427,7 @@ export function PcbSoftware3DCanvas({
         });
       }
 
-      if (selected && projectedBounds) {
+      if (selected && projectedBounds && isNearSide) {
         labels.push({
           x: (projectedBounds.left + projectedBounds.right) / 2,
           y: projectedBounds.top - 10,
