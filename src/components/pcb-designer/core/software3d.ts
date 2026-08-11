@@ -48,10 +48,26 @@ export const DEFAULT_SOFTWARE_VIEW: SoftwareViewState = {
 export const MAX_SOFTWARE_MODEL_TRIANGLES = 8_000;
 
 export const SOFTWARE_RENDER_ORDER = {
-  board: 0,
-  grid: 1,
-  object: 2,
+  farObject: 0,
+  farSurface: 1,
+  board: 2,
+  nearSurface: 3,
+  nearObject: 4,
 } as const;
+
+export function getSoftwareLayerRenderOrder(
+  layer: PcbPlacedComponent["layer"],
+  cameraY: number,
+  kind: "object" | "surface" = "object",
+): number {
+  const nearLayer = cameraY >= 0 ? "top" : "bottom";
+  const isNearSide = layer === nearLayer;
+
+  if (kind === "surface") {
+    return isNearSide ? SOFTWARE_RENDER_ORDER.nearSurface : SOFTWARE_RENDER_ORDER.farSurface;
+  }
+  return isNearSide ? SOFTWARE_RENDER_ORDER.nearObject : SOFTWARE_RENDER_ORDER.farObject;
+}
 
 export function compareSoftwareRenderDepth(
   left: { depth: number; renderOrder: number },

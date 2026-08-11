@@ -7,6 +7,7 @@ import {
   compareSoftwareRenderDepth,
   createSoftwareBoxVertices,
   createSoftwareCamera,
+  getSoftwareLayerRenderOrder,
   projectSoftwarePoint,
   sampleTriangleOffsets,
   transformPcbComponentPoint,
@@ -55,18 +56,38 @@ test("creates complete boxes and bounds sampled model triangles", () => {
   assert.deepEqual(sampleTriangleOffsets(0, 80), []);
 });
 
-test("draws the board and grid before components regardless of camera depth", () => {
+test("draws the PCB between far and near layers when viewing from above", () => {
   const shapes = [
-    { id: "near-board", depth: 10, renderOrder: SOFTWARE_RENDER_ORDER.board },
-    { id: "far-component", depth: 200, renderOrder: SOFTWARE_RENDER_ORDER.object },
-    { id: "grid", depth: 150, renderOrder: SOFTWARE_RENDER_ORDER.grid },
-    { id: "near-component", depth: 20, renderOrder: SOFTWARE_RENDER_ORDER.object },
+    { id: "top-component", depth: 200, renderOrder: getSoftwareLayerRenderOrder("top", 50) },
+    { id: "bottom-component", depth: 10, renderOrder: getSoftwareLayerRenderOrder("bottom", 50) },
+    { id: "top-grid", depth: 150, renderOrder: getSoftwareLayerRenderOrder("top", 50, "surface") },
+    { id: "bottom-grid", depth: 20, renderOrder: getSoftwareLayerRenderOrder("bottom", 50, "surface") },
+    { id: "board", depth: 100, renderOrder: SOFTWARE_RENDER_ORDER.board },
   ].sort(compareSoftwareRenderDepth);
 
   assert.deepEqual(shapes.map((shape) => shape.id), [
-    "near-board",
-    "grid",
-    "far-component",
-    "near-component",
+    "bottom-component",
+    "bottom-grid",
+    "board",
+    "top-grid",
+    "top-component",
+  ]);
+});
+
+test("flips PCB occlusion order when the camera moves below the board", () => {
+  const shapes = [
+    { id: "top-component", depth: 10, renderOrder: getSoftwareLayerRenderOrder("top", -50) },
+    { id: "bottom-component", depth: 200, renderOrder: getSoftwareLayerRenderOrder("bottom", -50) },
+    { id: "top-grid", depth: 20, renderOrder: getSoftwareLayerRenderOrder("top", -50, "surface") },
+    { id: "bottom-grid", depth: 150, renderOrder: getSoftwareLayerRenderOrder("bottom", -50, "surface") },
+    { id: "board", depth: 100, renderOrder: SOFTWARE_RENDER_ORDER.board },
+  ].sort(compareSoftwareRenderDepth);
+
+  assert.deepEqual(shapes.map((shape) => shape.id), [
+    "top-component",
+    "top-grid",
+    "board",
+    "bottom-grid",
+    "bottom-component",
   ]);
 });
