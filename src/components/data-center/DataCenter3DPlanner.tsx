@@ -791,21 +791,18 @@ function L10ModuleHitTargets({
             </mesh>
             {selected ? (
               <group name={`${selection.id}-selected-u-layer`}>
-                <mesh
-                  position={[0, 0, position.z - (rackDepth / 2 + 0.11)]}
-                  renderOrder={90}
-                >
+                <mesh position={[0, 0, 0.015]} renderOrder={90}>
                   <boxGeometry
                     args={[
-                      layout.fittedWidth + 0.08,
-                      Math.max(layout.fittedHeight + 0.025, 0.065),
-                      rackDepth + 0.08,
+                      layout.fittedWidth + 0.045,
+                      Math.max(layout.fittedHeight + 0.018, 0.055),
+                      0.014,
                     ]}
                   />
                   <meshBasicMaterial
-                    color="#22d3ee"
+                    color="#67e8f9"
                     transparent
-                    opacity={0.16}
+                    opacity={0.3}
                     blending={THREE.AdditiveBlending}
                     depthTest={false}
                     depthWrite={false}
@@ -813,48 +810,12 @@ function L10ModuleHitTargets({
                   />
                   <Edges
                     color="#ecfeff"
-                    lineWidth={3}
+                    lineWidth={2}
                     threshold={1}
                     depthTest={false}
                     renderOrder={91}
                   />
                 </mesh>
-
-                <mesh position={[0, 0, 0.015]} renderOrder={92}>
-                  <boxGeometry
-                    args={[
-                      layout.fittedWidth + 0.05,
-                      Math.max(layout.fittedHeight * 0.58, 0.032),
-                      0.018,
-                    ]}
-                  />
-                  <meshBasicMaterial
-                    color="#67e8f9"
-                    transparent
-                    opacity={0.9}
-                    depthTest={false}
-                    depthWrite={false}
-                    toneMapped={false}
-                  />
-                </mesh>
-
-                <Html
-                  position={[layout.fittedWidth / 2 + 0.13, 0, 0.035]}
-                  center
-                  distanceFactor={9}
-                  zIndexRange={[45, 0]}
-                  style={{ pointerEvents: "none" }}
-                >
-                  <div
-                    data-selected-rack-unit-label="true"
-                    className="flex min-w-max items-center gap-1.5 rounded-md border border-cyan-100 bg-[#03101b] px-2 py-1 font-mono text-[11px] font-black text-cyan-50 shadow-[0_0_10px_rgba(34,211,238,0.8)]"
-                  >
-                    <span className="rounded bg-cyan-300 px-1.5 py-0.5 text-[#03101b]">
-                      U{position.rackUnit}
-                    </span>
-                    <span>已選取</span>
-                  </div>
-                </Html>
               </group>
             ) : null}
           </group>

@@ -29,16 +29,20 @@ test("every mounted L10 module has a direct hit target and selected highlight", 
   assert.match(plannerSource, /event\.stopPropagation\(\)/);
 });
 
-test("the selected L10 makes its exact rack unit unmistakable", () => {
+test("the selected L10 lights only its rack-unit face and leaves details to the inspector", () => {
   assert.match(plannerSource, /name=\{`\$\{selection\.id\}-selected-u-layer`\}/);
+  assert.match(plannerSource, /position=\{\[0, 0, 0\.015\]\}/);
+  assert.match(plannerSource, /layout\.fittedWidth \+ 0\.045/);
+  assert.match(plannerSource, /layout\.fittedHeight \+ 0\.018/);
+  assert.match(plannerSource, /0\.014,/);
   assert.match(plannerSource, /<Edges/);
-  assert.match(plannerSource, /lineWidth=\{3\}/);
+  assert.match(plannerSource, /lineWidth=\{2\}/);
   assert.match(plannerSource, /depthTest=\{false\}/);
   assert.match(plannerSource, /renderOrder=\{90\}/);
-  assert.match(plannerSource, /data-selected-rack-unit-label="true"/);
-  assert.match(plannerSource, /distanceFactor=\{9\}/);
-  assert.match(plannerSource, /U\{position\.rackUnit\}/);
-  assert.match(plannerSource, /已選取/);
+  assert.doesNotMatch(plannerSource, /data-selected-rack-unit-label="true"/);
+  assert.doesNotMatch(plannerSource, /<span>已選取<\/span>/);
+  assert.match(plannerSource, /function Gb300EquipmentInspector/);
+  assert.match(plannerSource, /\{rack\.cabinet\} · U\{equipment\.rackUnitStart\}/);
 });
 
 test("L10 inspector shows telemetry and can update per-slot health", () => {
