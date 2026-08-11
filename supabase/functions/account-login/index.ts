@@ -54,7 +54,7 @@ serve(async (request) => {
 
     const { data: systemUser, error: profileError } = await admin
       .from("system_users")
-      .select("id,username,role,display_name,status,auth_user_id")
+      .select("id,username,role,display_name,status,auth_user_id,avatar_path")
       .eq("id", verified.user_id)
       .eq("status", "active")
       .single();
@@ -68,6 +68,7 @@ serve(async (request) => {
       username: systemUser.username,
       role: systemUser.role,
       display_name: systemUser.display_name ?? systemUser.username,
+      avatar_path: systemUser.avatar_path,
     };
 
     let authUserId = systemUser.auth_user_id as string | null;
@@ -144,6 +145,7 @@ serve(async (request) => {
         username: systemUser.username,
         role: systemUser.role,
         display_name: systemUser.display_name ?? systemUser.username,
+        avatar_path: systemUser.avatar_path,
       },
     });
   } catch (error) {

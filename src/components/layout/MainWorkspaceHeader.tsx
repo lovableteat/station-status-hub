@@ -1,5 +1,6 @@
 import { ChevronDown, LogOut } from "lucide-react";
 
+import { UserAvatar } from "@/components/account/UserAvatar";
 import { PlatformLogoMark } from "@/components/brand/PlatformLogoMark";
 import { Button } from "@/components/ui/button";
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
@@ -25,6 +26,7 @@ interface MainWorkspaceHeaderProps {
   onBrandClick?: () => void;
   onOpenWorkspaceHome?: () => void;
   userName?: string;
+  userAvatarPath?: string | null;
   userRoleLabel?: string;
   showOnlineUsers?: boolean;
   userMenuItems?: Array<{
@@ -42,6 +44,7 @@ export function MainWorkspaceHeader({
   onBrandClick,
   onOpenWorkspaceHome,
   userName,
+  userAvatarPath,
   userRoleLabel,
   showOnlineUsers = true,
   userMenuItems = [],
@@ -106,9 +109,12 @@ export function MainWorkspaceHeader({
                 type="button"
                 className="interactive-lift flex h-12 w-[140px] shrink-0 items-center gap-2 rounded-2xl border border-primary/15 bg-background/20 px-3 text-left transition-colors hover:bg-primary/10 hover:shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.55)] max-sm:w-12 max-sm:justify-center max-sm:px-0 sm:gap-3"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/15 text-xs font-bold text-primary shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] sm:text-sm">
-                  {(userName ?? "OP").slice(0, 2).toUpperCase()}
-                </div>
+                <UserAvatar
+                  avatarPath={userAvatarPath}
+                  displayName={userName ?? "Operator"}
+                  className="h-8 w-8 border border-primary/20 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)]"
+                  fallbackClassName="bg-primary/15 text-xs text-primary sm:text-sm"
+                />
                 <div className="hidden min-w-0 sm:block">
                   <div className="truncate text-sm font-semibold text-foreground">
                     {userName ?? "Operator"}

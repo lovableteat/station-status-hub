@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 
+import { UserAvatar } from "@/components/account/UserAvatar";
 import { useUser } from "@/components/auth/UserContext";
 import {
   CHAT_MEDIA_ACCEPT,
@@ -57,19 +58,21 @@ function shortTime(value: string | null) {
 
 function ThreadRow({
   thread,
-  online,
+  onlineUser,
   deleting,
   onOpen,
   onDelete,
 }: {
   thread: DirectThread;
-  online: boolean;
+  onlineUser?: OnlineUser;
   deleting: boolean;
   onOpen: () => void;
   onDelete: () => void;
 }) {
   const displayName = thread.otherDisplayName || thread.otherUsername;
   const previewText = thread.lastMessageBody || "開始一段新對話";
+  const online = Boolean(onlineUser);
+  const avatarPath = onlineUser?.avatarPath ?? thread.otherAvatarPath;
 
   return (
     <div
@@ -82,8 +85,13 @@ function ThreadRow({
         onClick={onOpen}
         className="flex h-full w-full min-w-0 items-center gap-2.5 px-3 pr-11 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300/60"
       >
-        <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-200/15 bg-cyan-300/10 text-xs font-black tracking-[0.04em] text-cyan-50">
-          {displayName.slice(0, 2).toUpperCase()}
+        <span className="relative shrink-0">
+          <UserAvatar
+            avatarPath={avatarPath}
+            displayName={displayName}
+            className="h-8 w-8 rounded-lg border border-cyan-200/15"
+            fallbackClassName="rounded-lg text-xs font-black tracking-[0.04em]"
+          />
           <span
             className={cn(
               "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0d1b2c]",
@@ -164,10 +172,13 @@ export function DirectMessagesPanel({
     sendTyping,
   } = useDirectMessages(selectedThreadId);
   const messageEndRef = useRef<HTMLDivElement | null>(null);
-  const onlineUserIds = useMemo(
-    () => new Set(onlineUsers.map((onlineUser) => onlineUser.userId)),
+  const onlineUserById = useMemo(
+    () => new Map(onlineUsers.map((onlineUser) => [onlineUser.userId, onlineUser])),
     [onlineUsers],
   );
+  const selectedOnlineUser = selectedThread
+    ? onlineUserById.get(selectedThread.otherUserId)
+    : undefined;
 
   useEffect(() => {
     selectedMediaFilesRef.current = selectedMediaFiles;
@@ -305,6 +316,23 @@ export function DirectMessagesPanel({
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
+          {selectedThread ? (
+            <span className="relative shrink-0">
+              <UserAvatar
+                avatarPath={selectedOnlineUser?.avatarPath ?? selectedThread.otherAvatarPath}
+                displayName={selectedThread.otherDisplayName || selectedThread.otherUsername}
+                className="h-10 w-10 border border-cyan-200/20"
+                fallbackClassName="text-sm font-black"
+              />
+              <span
+                aria-label={selectedOnlineUser ? "在線" : "離線"}
+                className={cn(
+                  "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0b1826]",
+                  selectedOnlineUser ? "bg-emerald-400" : "bg-slate-500",
+                )}
+              />
+            </span>
+          ) : null}
           <div className="min-w-0 flex-1">
             <div className="truncate text-[15px] font-black tracking-[0.01em] text-white">
               {selectedThread?.otherDisplayName || "未命名對話"}
@@ -606,9 +634,12 @@ export function DirectMessagesPanel({
                   className="h-9 min-w-[108px] rounded-lg border border-white/8 bg-[#0d1b2c] px-2 text-left transition-colors hover:border-cyan-200/24 hover:bg-[#102238]"
                 >
                   <span className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-cyan-300/10 text-[10px] font-black text-cyan-50">
-                      {(onlineUser.displayName || onlineUser.username || "?").slice(0, 2).toUpperCase()}
-                    </span>
+                    <UserAvatar
+                      avatarPath={onlineUser.avatarPath}
+                      displayName={onlineUser.displayName || onlineUser.username}
+                      className="h-6 w-6 shrink-0 rounded-md"
+                      fallbackClassName="rounded-md text-[10px] font-black"
+                    />
                     <span className="min-w-0 flex-1 truncate text-xs font-bold text-white">
                       {onlineUser.displayName || onlineUser.username}
                     </span>
@@ -656,7 +687,7 @@ export function DirectMessagesPanel({
                 <ThreadRow
                   key={thread.threadId}
                   thread={thread}
-                  online={onlineUserIds.has(thread.otherUserId)}
+                  onlineUser={onlineUserById.get(thread.otherUserId)}
                   deleting={deletingThreadIds.has(thread.threadId)}
                   onOpen={() => setSelectedThreadId(thread.threadId)}
                   onDelete={() => void handleClearThread(thread)}

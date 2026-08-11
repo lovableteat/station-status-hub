@@ -16,6 +16,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { UserAvatar } from "@/components/account/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,7 @@ type CollaborationDirectoryMember = {
   username: string;
   display_name: string;
   role: string;
+  avatar_path: string | null;
 };
 
 type CollaborationMember = {
@@ -62,6 +64,7 @@ type CollaborationMember = {
   username: string;
   displayName: string;
   role: string;
+  avatarPath: string | null;
   onlineUser?: OnlineUser;
 };
 
@@ -145,11 +148,17 @@ function MemberCard({
   const isOnline = Boolean(onlineUser);
   const sessionCount = Math.max(1, onlineUser?.sessionCount || 1);
   const memberName = member.displayName || member.username;
+  const avatarPath = onlineUser?.avatarPath ?? member.avatarPath;
   return (
     <div className="rounded-2xl border border-sky-300/15 bg-[#0b1b2d] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="flex items-start gap-3">
-        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 font-bold text-cyan-100">
-          {memberName.slice(0, 2).toUpperCase()}
+        <div className="relative shrink-0">
+          <UserAvatar
+            avatarPath={avatarPath}
+            displayName={memberName}
+            className="h-10 w-10 rounded-xl border border-cyan-300/20"
+            fallbackClassName="rounded-xl text-sm font-bold"
+          />
           <span className={cn(
             "absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#0b1b2d]",
             isOnline ? "bg-emerald-400" : "bg-slate-500",
@@ -326,6 +335,7 @@ export function CollaborationCenter() {
         username: member.username,
         displayName: member.display_name || member.username,
         role: member.role,
+        avatarPath: member.avatar_path,
         onlineUser: onlineById.get(member.user_id),
       }))
       .sort((left, right) => {

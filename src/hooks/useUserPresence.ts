@@ -27,6 +27,7 @@ export interface OnlineUser {
   username: string;
   displayName: string;
   role: string;
+  avatarPath?: string | null;
   lastSeen: string;
   currentModule?: string;
   sessionId?: string;
@@ -78,7 +79,7 @@ interface ActivePresenceSession {
   generation: number;
   identity: Pick<
     OnlineUser,
-    "userId" | "username" | "displayName" | "role" | "sessionId"
+    "userId" | "username" | "displayName" | "role" | "avatarPath" | "sessionId"
   >;
   trackConfirmed: boolean;
   firstRosterSynced: boolean;
@@ -111,6 +112,7 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
   const username = user?.username ?? "";
   const displayName = user?.displayName ?? "";
   const role = user?.role ?? "";
+  const avatarPath = user?.avatarPath ?? null;
   const [allOnlineUsers, setAllOnlineUsers] = useState<OnlineUser[]>([]);
   const [connectionState, setConnectionState] =
     useState<PresenceConnectionState>("offline");
@@ -281,6 +283,7 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
           username,
           displayName,
           role,
+          avatarPath,
           sessionId: sessionIdRef.current,
         },
         channel: supabase.channel(
@@ -337,6 +340,7 @@ export function UserPresenceProvider({ children }: { children: ReactNode }) {
       });
     };
   }, [
+    avatarPath,
     displayName,
     isCurrentActiveSession,
     isRealtimeAuthenticated,

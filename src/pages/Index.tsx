@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { useUser } from "@/components/auth/UserContext";
+import { PersonalProfileDialog } from "@/components/account/PersonalProfileDialog";
 import { CollaborationCenter } from "@/components/collaboration/CollaborationCenter";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
 import { MainWorkspaceHeader } from "@/components/layout/MainWorkspaceHeader";
@@ -255,6 +256,7 @@ const Index = () => {
     getInitialAdminModule
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const stationMainRef = useRef<HTMLElement | null>(null);
 
   const { logout, user } = useUser();
@@ -640,6 +642,9 @@ const Index = () => {
     >
       <UpdateIndicator isUpdating={isUpdating} />
       {!isDemoMode && <CollaborationCenter />}
+      {!isDemoMode ? (
+        <PersonalProfileDialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen} />
+      ) : null}
 
       <MainWorkspaceHeader
         items={workspaceItems}
@@ -649,8 +654,16 @@ const Index = () => {
         onBrandClick={() => handleWorkspaceChange("workspace-home")}
         onOpenWorkspaceHome={() => handleWorkspaceChange("workspace-home")}
         userName={user?.displayName || user?.username}
+        userAvatarPath={user?.avatarPath}
         userRoleLabel={getRoleLabel(user?.role)}
         showOnlineUsers={!isDemoMode}
+        userMenuItems={isDemoMode ? [] : [
+          {
+            id: "personal-profile",
+            label: "個人設定",
+            onSelect: () => setProfileDialogOpen(true),
+          },
+        ]}
       />
 
       <main
