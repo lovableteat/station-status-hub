@@ -275,13 +275,18 @@ test("conversation rows can clear all locally visible messages without affecting
   assert.match(hook, /return \{ threads, unreadCount, loading, error, reload, startDirectChat, clearDirectChat \}/);
 
   assert.match(panel, /const \[deletingThreadIds, setDeletingThreadIds\] = useState<Set<string>>/);
-  assert.match(panel, /aria-label=\{`刪除與 \$\{thread\.otherDisplayName\} 的所有訊息`\}/);
-  assert.match(panel, /只會清除你帳號看到的紀錄，對方仍會保留，且無法復原。/);
+  assert.match(panel, /aria-label=\{`刪除與 \$\{displayName\} 的對話`\}/);
+  assert.match(panel, /這只會清除目前聊天列表中的顯示內容，刪除後無法復原。/);
   assert.match(panel, /await clearDirectChat\(thread\.threadId\)/);
   assert.match(panel, /deletingThreadIds\.has\(thread\.threadId\)/);
   assert.match(panel, /setPendingDirectThread/);
   assert.match(panel, /deleting \? <LoaderCircle[^>]*animate-spin[^>]*\/> : <Trash2/s);
   assert.match(panel, /<div[^>]*data-direct-thread-row="true"[^>]*>[\s\S]*?<button[\s\S]*?<\/button>[\s\S]*?<button/s);
+  assert.match(panel, /data-density="compact"/);
+  assert.match(panel, /h-\[52px\]/);
+  assert.match(panel, /\[content-visibility:auto\]/);
+  assert.match(panel, /data-direct-messages-toolbar="compact"/);
+  assert.doesNotMatch(panel, /rounded-\[26px\]|line-clamp-2/);
 });
 
 test("direct-message state replacement purges cleared sent rows and tracks concurrent clears", async () => {
@@ -408,12 +413,12 @@ test("direct message hook uploads private media and resolves signed attachment U
   assert.match(panel, /type="file"/);
   assert.match(panel, /accept=\{CHAT_MEDIA_ACCEPT\}/);
   assert.match(panel, /multiple/);
-  assert.match(panel, /aria-label="選擇照片或影片"/);
+  assert.match(panel, /aria-label="加入圖片或影片"/);
   assert.match(panel, /ImagePlus/);
   assert.match(panel, /selectedMediaFiles/);
   assert.match(panel, /URL\.createObjectURL/);
   assert.match(panel, /URL\.revokeObjectURL/);
-  assert.match(panel, /上傳並傳送中/);
+  assert.match(panel, /訊息傳送中/);
   assert.match(panel, /await sendMessage\(body, selectedMediaFiles\.map/);
   assert.match(panel, /<img[\s\S]*attachment\.url/);
   assert.match(panel, /<video[\s\S]*controls[\s\S]*preload="metadata"/);

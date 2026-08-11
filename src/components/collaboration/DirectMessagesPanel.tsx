@@ -74,53 +74,39 @@ function ThreadRow({
   return (
     <div
       data-direct-thread-row="true"
-      className="group relative overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(18,32,51,0.96),rgba(12,23,38,0.98))] shadow-[0_18px_40px_-28px_rgba(0,0,0,0.88)] transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200/28 hover:shadow-[0_28px_56px_-28px_rgba(34,211,238,0.28)]"
+      data-density="compact"
+      className="group relative h-[52px] overflow-hidden rounded-xl border border-white/8 bg-[#0d1b2c] transition-colors [contain-intrinsic-size:52px] [content-visibility:auto] hover:border-cyan-200/25 hover:bg-[#102238]"
     >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-y-4 left-0 w-px bg-gradient-to-b from-transparent via-cyan-200/35 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-      />
       <button
         type="button"
         onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300/60"
+        className="flex h-full w-full min-w-0 items-center gap-2.5 px-3 pr-11 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300/60"
       >
-        <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-cyan-200/18 bg-[linear-gradient(135deg,rgba(34,211,238,0.18),rgba(59,130,246,0.12))] text-lg font-black tracking-[0.04em] text-cyan-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+        <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-200/15 bg-cyan-300/10 text-xs font-black tracking-[0.04em] text-cyan-50">
           {displayName.slice(0, 2).toUpperCase()}
           <span
             className={cn(
-              "absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#132235] shadow-[0_0_0_2px_rgba(7,20,33,0.9)]",
+              "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0d1b2c]",
               online ? "bg-emerald-400" : "bg-slate-500",
             )}
           />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="flex items-start justify-between gap-3">
-            <span className="min-w-0">
-              <span className="block truncate text-[15px] font-black tracking-[0.01em] text-white">
-                {displayName}
-              </span>
-              <span className="mt-1 flex items-center gap-2 text-[11px] font-semibold text-slate-400">
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full px-2 py-0.5",
-                    online ? "bg-emerald-400/10 text-emerald-200" : "bg-slate-500/10 text-slate-400",
-                  )}
-                >
-                  {online ? "在線上" : "離線"}
-                </span>
-                {thread.unreadCount > 0 ? (
-                  <span className="inline-flex items-center rounded-full bg-cyan-300/12 px-2 py-0.5 text-cyan-100">
-                    {thread.unreadCount > 99 ? "99+" : thread.unreadCount} 則未讀
-                  </span>
-                ) : null}
-              </span>
+          <span className="flex min-w-0 items-center gap-2 leading-none">
+            <span className="min-w-0 flex-1 truncate text-sm font-bold text-white">
+              {displayName}
             </span>
-            <span className="shrink-0 rounded-full bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-slate-400">
-              {shortTime(thread.lastMessageAt)}
+            <span className={cn("shrink-0 text-[10px] font-semibold", online ? "text-emerald-300" : "text-slate-500")}>
+              {online ? "在線" : "離線"}
             </span>
+            {thread.unreadCount > 0 ? (
+              <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-cyan-300 px-1.5 py-0.5 text-[10px] font-black text-[#06111f]">
+                {thread.unreadCount > 99 ? "99+" : thread.unreadCount}
+              </span>
+            ) : null}
+            <span className="shrink-0 text-[10px] text-slate-500">{shortTime(thread.lastMessageAt)}</span>
           </span>
-          <span className="mt-3 block line-clamp-2 pr-2 text-sm leading-6 text-slate-300/92">
+          <span className="mt-1 block truncate text-xs leading-none text-slate-400">
             {previewText}
           </span>
         </span>
@@ -131,7 +117,7 @@ function ThreadRow({
         title={`刪除與 ${displayName} 的對話`}
         disabled={deleting}
         onClick={onDelete}
-        className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.03] text-slate-500 opacity-0 transition-all duration-200 hover:border-rose-300/30 hover:bg-rose-300/10 hover:text-rose-200 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rose-300/70 disabled:cursor-wait disabled:opacity-60 group-hover:opacity-100"
+        className="absolute right-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-600 opacity-60 transition-colors hover:bg-rose-300/10 hover:text-rose-200 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rose-300/70 disabled:cursor-wait disabled:opacity-40 group-hover:opacity-100"
       >
         {deleting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
       </button>
@@ -578,38 +564,36 @@ export function DirectMessagesPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_35%)]">
-      <div className="border-b border-white/8 bg-[linear-gradient(180deg,rgba(11,24,38,0.98),rgba(9,19,31,0.94))] px-4 py-4">
-        <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4 shadow-[0_24px_50px_-30px_rgba(0,0,0,0.75)]">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[15px] font-black tracking-[0.01em] text-white">快速開始私訊</p>
-              <p className="mt-1 text-xs leading-5 text-slate-400">
-                {unreadCount > 0 ? `目前有 ${unreadCount} 則未讀訊息` : "先找同事，或從最近對話直接接著聊"}
-              </p>
-            </div>
-            <div className="rounded-full border border-cyan-200/12 bg-cyan-300/8 px-2.5 py-1 text-[11px] font-semibold text-cyan-100">
-              {threads.length} 個對話
-            </div>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-200/55" />
+      <div
+        data-direct-messages-toolbar="compact"
+        className="border-b border-white/8 bg-[linear-gradient(180deg,rgba(11,24,38,0.98),rgba(9,19,31,0.94))] px-3 py-2.5"
+      >
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-cyan-200/55" />
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="搜尋同事或訊息內容"
-              className="h-11 rounded-2xl border-white/10 bg-[#0b1625] pl-10 text-slate-100 placeholder:text-slate-500"
+              className="h-9 rounded-xl border-white/10 bg-[#0b1625] pl-9 text-sm text-slate-100 placeholder:text-slate-500"
             />
+          </div>
+          <div
+            className="flex h-9 shrink-0 items-center rounded-xl border border-cyan-200/12 bg-cyan-300/8 px-2.5 text-[11px] font-semibold text-cyan-100"
+            title={unreadCount > 0 ? `${unreadCount} 則未讀訊息` : `${threads.length} 個對話`}
+          >
+            {unreadCount > 0 ? `${unreadCount} 未讀` : `${threads.length} 對話`}
           </div>
         </div>
       </div>
-      <ScrollArea className="min-h-0 flex-1 px-4 py-4">
+      <ScrollArea className="min-h-0 flex-1 px-3 py-2.5">
         {availableOnlineUsers.length > 0 ? (
-          <section className="mb-6">
-            <div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-cyan-200/75">
+          <section className="mb-3">
+            <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-200/75">
               <Users className="h-3.5 w-3.5" />
               線上同事
             </div>
-            <div className="flex gap-2.5 overflow-x-auto pb-1">
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
               {availableOnlineUsers.map((onlineUser) => (
                 <button
                   key={onlineUser.userId}
@@ -619,21 +603,16 @@ export function DirectMessagesPanel({
                     if (existing) setSelectedThreadId(existing.threadId);
                     else void startDirectChat(onlineUser.userId).then(setSelectedThreadId);
                   }}
-                  className="min-w-[132px] rounded-[22px] border border-white/8 bg-[linear-gradient(180deg,rgba(18,32,51,0.92),rgba(12,23,38,0.96))] px-3.5 py-3 text-left shadow-[0_16px_36px_-28px_rgba(0,0,0,0.75)] transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200/24 hover:bg-cyan-300/[0.06]"
+                  className="h-9 min-w-[108px] rounded-lg border border-white/8 bg-[#0d1b2c] px-2 text-left transition-colors hover:border-cyan-200/24 hover:bg-[#102238]"
                 >
-                  <span className="flex items-center gap-2.5">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-cyan-200/16 bg-cyan-300/10 text-sm font-black text-cyan-50">
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-cyan-300/10 text-[10px] font-black text-cyan-50">
                       {(onlineUser.displayName || onlineUser.username || "?").slice(0, 2).toUpperCase()}
                     </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-black text-white">
-                        {onlineUser.displayName || onlineUser.username}
-                      </span>
-                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-400/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-200">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                        在線上
-                      </span>
+                    <span className="min-w-0 flex-1 truncate text-xs font-bold text-white">
+                      {onlineUser.displayName || onlineUser.username}
                     </span>
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" aria-label="在線上" />
                   </span>
                 </button>
               ))}
@@ -642,19 +621,17 @@ export function DirectMessagesPanel({
         ) : null}
 
         <section>
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">最近對話</span>
-              <p className="mt-1 text-xs text-slate-500">保留最後訊息與未讀狀態，方便直接回接</p>
-            </div>
+          <div className="mb-1.5 flex h-7 items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">最近對話</span>
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
+              aria-label="更新對話"
+              title="更新對話"
               onClick={() => void reload()}
-              className="h-9 rounded-2xl border border-white/8 bg-white/[0.03] px-3 text-slate-300 hover:bg-white/[0.06]"
+              className="h-7 w-7 rounded-lg text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
             >
-              <RefreshCw className={cn("mr-1 h-3 w-3", loading && "animate-spin")} />
-              更新
+              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             </Button>
           </div>
           {error ? (
@@ -674,7 +651,7 @@ export function DirectMessagesPanel({
               <p className="mt-1 text-sm">可以換個名字、帳號或訊息關鍵字再試一次。</p>
             </div>
           ) : (
-            <div className="space-y-3 pb-3">
+            <div className="space-y-1.5 pb-2">
               {filteredThreads.map((thread) => (
                 <ThreadRow
                   key={thread.threadId}
