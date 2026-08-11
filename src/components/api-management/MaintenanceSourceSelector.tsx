@@ -64,9 +64,18 @@ export function MaintenanceSourceSelector({
         <Switch
           checked={enabled}
           onCheckedChange={onEnabledChange}
+          aria-describedby="maintenance-source-help"
           aria-label="啟用機台維修紀錄來源"
         />
       </div>
+
+      <p
+        id="maintenance-source-help"
+        data-testid="maintenance-source-help"
+        className="mt-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-2.5 py-2 text-[11px] leading-5 text-amber-100/85"
+      >
+        開啟＝專案資料查詢；關閉＝一般 AI 對話／附件分析。若不是要查機台維修紀錄，請先關閉，避免一般問題被當成專案搜尋。
+      </p>
 
       {enabled ? (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-cyan-300/10 pt-3">
