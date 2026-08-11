@@ -98,9 +98,9 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
         <DialogHeader className="border-b border-primary/10 bg-primary/[0.04] px-6 py-5">
           <DialogTitle className="flex items-center gap-2 text-xl">
             <UserRound className="h-5 w-5 text-primary" />
-            個人設定
+            編輯大頭貼
           </DialogTitle>
-          <DialogDescription>編輯自己的頭像；儲存後會同步到導覽列與聊天室。</DialogDescription>
+          <DialogDescription>選擇照片並儲存後，導覽列與聊天室會立即同步。</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-5 px-6 py-5">
@@ -115,7 +115,7 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
               <div className="truncate font-semibold text-foreground">{displayName}</div>
               <div className="truncate text-sm text-muted-foreground">@{user?.username}</div>
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                JPG、PNG 或 WebP，檔案上限 2 MB；畫面會自動裁切為正方形。
+                JPG、PNG 或 WebP，檔案上限 5 MB；畫面會自動裁切為正方形。
               </p>
             </div>
           </div>
@@ -136,10 +136,10 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
               variant="outline"
               disabled={saving}
               onClick={() => fileInputRef.current?.click()}
-              className="rounded-xl"
+              className="rounded-xl border-primary/30 bg-primary/10 font-semibold text-primary hover:bg-primary/20 hover:text-primary"
             >
               <ImagePlus className="mr-2 h-4 w-4" />
-              {selectedFile ? "重新選擇" : "選擇圖片"}
+              {selectedFile ? "重新選擇大頭貼" : "選擇大頭貼圖片"}
             </Button>
             {user?.avatarPath ? (
               <Button
@@ -168,7 +168,7 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
           </Button>
           <Button type="button" disabled={!selectedFile || saving} onClick={() => void saveAvatar()}>
             {saving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-            儲存頭像
+            儲存大頭貼
           </Button>
         </DialogFooter>
       </DialogContent>

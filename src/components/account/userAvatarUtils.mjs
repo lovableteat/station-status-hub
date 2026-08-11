@@ -1,5 +1,5 @@
 export const USER_AVATAR_BUCKET = "user-avatars";
-export const USER_AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+export const USER_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 export const USER_AVATAR_ACCEPT = "image/jpeg,image/png,image/webp";
 
 const avatarExtensions = {
@@ -12,7 +12,7 @@ export function validateUserAvatarFile(file) {
   if (!file || typeof file !== "object") return "請選擇頭像圖片。";
   if (!avatarExtensions[file.type]) return "頭像只支援 JPG、PNG 或 WebP。";
   if (!Number.isFinite(file.size) || file.size <= 0) return "頭像檔案內容無效。";
-  if (file.size > USER_AVATAR_MAX_BYTES) return "頭像大小不可超過 2 MB。";
+  if (file.size > USER_AVATAR_MAX_BYTES) return "頭像大小不可超過 5 MB。";
   return null;
 }
 

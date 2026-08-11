@@ -1,4 +1,5 @@
-import { ChevronDown, LogOut } from "lucide-react";
+import type { ReactNode } from "react";
+import { Camera, ChevronDown, LogOut } from "lucide-react";
 
 import { UserAvatar } from "@/components/account/UserAvatar";
 import { PlatformLogoMark } from "@/components/brand/PlatformLogoMark";
@@ -32,6 +33,8 @@ interface MainWorkspaceHeaderProps {
   userMenuItems?: Array<{
     id: string;
     label: string;
+    icon?: ReactNode;
+    emphasized?: boolean;
     onSelect: () => void;
   }>;
 }
@@ -107,20 +110,34 @@ export function MainWorkspaceHeader({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
+                title={userMenuItems.length > 0 ? "開啟帳號選單，可編輯大頭貼" : "開啟帳號選單"}
                 className="interactive-lift flex h-12 w-[140px] shrink-0 items-center gap-2 rounded-2xl border border-primary/15 bg-background/20 px-3 text-left transition-colors hover:bg-primary/10 hover:shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.55)] max-sm:w-12 max-sm:justify-center max-sm:px-0 sm:gap-3"
               >
-                <UserAvatar
-                  avatarPath={userAvatarPath}
-                  displayName={userName ?? "Operator"}
-                  className="h-8 w-8 border border-primary/20 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)]"
-                  fallbackClassName="bg-primary/15 text-xs text-primary sm:text-sm"
-                />
+                <span className="relative shrink-0">
+                  <UserAvatar
+                    avatarPath={userAvatarPath}
+                    displayName={userName ?? "Operator"}
+                    className="h-8 w-8 border border-primary/20 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)]"
+                    fallbackClassName="bg-primary/15 text-xs text-primary sm:text-sm"
+                  />
+                  {userMenuItems.length > 0 ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-background bg-primary text-primary-foreground shadow-sm"
+                    >
+                      <Camera className="h-2.5 w-2.5" />
+                    </span>
+                  ) : null}
+                </span>
                 <div className="hidden min-w-0 sm:block">
                   <div className="truncate text-sm font-semibold text-foreground">
                     {userName ?? "Operator"}
                   </div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {userRoleLabel ?? "使用者"}
+                  <div className={cn(
+                    "truncate text-xs",
+                    userMenuItems.length > 0 ? "font-semibold text-primary" : "text-muted-foreground",
+                  )}>
+                    {userMenuItems.length > 0 ? "編輯大頭貼" : userRoleLabel ?? "使用者"}
                   </div>
                 </div>
                 <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground max-sm:hidden" />
@@ -151,8 +168,12 @@ export function MainWorkspaceHeader({
                 <DropdownMenuItem
                   key={item.id}
                   onClick={item.onSelect}
-                  className="rounded-xl px-3 py-2 text-sm text-foreground focus:bg-primary/10 focus:text-foreground"
+                  className={cn(
+                    "rounded-xl px-3 py-2 text-sm text-foreground focus:bg-primary/10 focus:text-foreground",
+                    item.emphasized && "my-1 bg-primary/10 font-semibold text-primary focus:bg-primary/20 focus:text-primary",
+                  )}
                 >
+                  {item.icon ? <span className="mr-2 shrink-0">{item.icon}</span> : null}
                   {item.label}
                 </DropdownMenuItem>
               ))}

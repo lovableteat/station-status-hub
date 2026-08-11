@@ -24,17 +24,19 @@ test("profile avatar files are small images stored under the current account", (
   assert.match(validateUserAvatarFile({ type: "image/gif", size: 1024 }), /JPG、PNG 或 WebP/);
   assert.match(
     validateUserAvatarFile({ type: "image/png", size: USER_AVATAR_MAX_BYTES + 1 }),
-    /2 MB/,
+    /5 MB/,
   );
 });
 
 test("avatar storage and profile mutation are owner-scoped", async () => {
-  const migration = await readSource(
-    "supabase/migrations/20260811043000_user_profile_avatars.sql",
-  );
+  const [migration, limitMigration] = await Promise.all([
+    readSource("supabase/migrations/20260811043000_user_profile_avatars.sql"),
+    readSource("supabase/migrations/20260811070000_increase_user_avatar_limit.sql"),
+  ]);
 
   assert.match(migration, /ADD COLUMN IF NOT EXISTS avatar_path text/i);
-  assert.match(migration, /'user-avatars'[\s\S]*true,[\s\S]*2097152/i);
+  assert.match(migration, /'user-avatars'[\s\S]*true/i);
+  assert.match(limitMigration, /UPDATE storage\.buckets[\s\S]*file_size_limit = 5242880[\s\S]*id = 'user-avatars'/i);
   assert.match(migration, /ARRAY\['image\/jpeg', 'image\/png', 'image\/webp'\]/i);
   assert.match(migration, /storage\.foldername\(name\)[\s\S]*current_system_user_id\(\)/i);
   assert.match(migration, /\[0-9\]\{10,\}-\[0-9a-f-\]\{8,\}/i);
@@ -62,10 +64,14 @@ test("users can manage their own avatar from personal settings", async () => {
   assert.match(dialog, /accept=\{USER_AVATAR_ACCEPT\}/);
   assert.match(dialog, /updateAvatar\(selectedFile\)/);
   assert.match(dialog, /updateAvatar\(null\)/);
-  assert.match(dialog, /檔案上限 2 MB/);
-  assert.match(index, /label: "個人設定"/);
+  assert.match(dialog, /檔案上限 5 MB/);
+  assert.match(dialog, /編輯大頭貼/);
+  assert.match(index, /label: "編輯大頭貼"/);
+  assert.match(index, /emphasized: true/);
   assert.match(index, /userAvatarPath=\{user\?\.avatarPath\}/);
   assert.match(header, /<UserAvatar[\s\S]*avatarPath=\{userAvatarPath\}/);
+  assert.match(header, /開啟帳號選單，可編輯大頭貼/);
+  assert.match(header, /<Camera className="h-2\.5 w-2\.5"/);
   assert.match(loginFunction, /avatar_path/);
 });
 
