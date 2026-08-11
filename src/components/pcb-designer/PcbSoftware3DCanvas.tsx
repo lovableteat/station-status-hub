@@ -19,6 +19,8 @@ import {
 import {
   DEFAULT_SOFTWARE_VIEW,
   MAX_SOFTWARE_MODEL_TRIANGLES,
+  SOFTWARE_RENDER_ORDER,
+  compareSoftwareRenderDepth,
   createSoftwareBoxVertices,
   createSoftwareCamera,
   getSoftwareFaceNormal,
@@ -50,6 +52,7 @@ interface ScenePolygon {
   kind: "polygon";
   points: SoftwareProjectedPoint[];
   depth: number;
+  renderOrder: number;
   fill: string;
   stroke: string;
   alpha: number;
@@ -60,6 +63,7 @@ interface SceneLine {
   kind: "line";
   points: [SoftwareProjectedPoint, SoftwareProjectedPoint];
   depth: number;
+  renderOrder: number;
   stroke: string;
   alpha: number;
   lineWidth: number;
@@ -274,6 +278,7 @@ export function PcbSoftware3DCanvas({
       stroke: string,
       alpha = 1,
       lineWidth = 0.7,
+      renderOrder = SOFTWARE_RENDER_ORDER.object,
     ) => {
       const points = worldPoints.map((point) => projectSoftwarePoint(point, camera));
       if (points.some((point) => !point.visible) || projectedArea(points) < 0.08) return;
@@ -281,6 +286,7 @@ export function PcbSoftware3DCanvas({
         kind: "polygon",
         points,
         depth: points.reduce((total, point) => total + point.depth, 0) / points.length,
+        renderOrder,
         fill,
         stroke,
         alpha,
@@ -294,11 +300,12 @@ export function PcbSoftware3DCanvas({
       stroke: string,
       alpha = 1,
       lineWidth = 0.7,
+      renderOrder = SOFTWARE_RENDER_ORDER.object,
     ) => {
       BOX_FACES.forEach((face) => {
         const worldPoints = face.map((index) => worldVertices[index]);
         const normal = getSoftwareFaceNormal(worldPoints[0], worldPoints[1], worldPoints[2]);
-        addPolygon(worldPoints, shadeColor(color, getSoftwareLightLevel(normal)), stroke, alpha, lineWidth);
+        addPolygon(worldPoints, shadeColor(color, getSoftwareLightLevel(normal)), stroke, alpha, lineWidth, renderOrder);
       });
     };
 
@@ -313,6 +320,7 @@ export function PcbSoftware3DCanvas({
       "#7de7e8",
       1,
       1.05,
+      SOFTWARE_RENDER_ORDER.board,
     );
 
     if (project.board.showGrid) {
@@ -324,7 +332,7 @@ export function PcbSoftware3DCanvas({
           projectSoftwarePoint({ x, y: gridY, z: project.board.height / 2 }, camera),
         ] as [SoftwareProjectedPoint, SoftwareProjectedPoint];
         if (points.every((point) => point.visible)) {
-          shapes.push({ kind: "line", points, depth: (points[0].depth + points[1].depth) / 2, stroke: "#70b9c7", alpha: 0.17, lineWidth: 0.55 });
+          shapes.push({ kind: "line", points, depth: (points[0].depth + points[1].depth) / 2, renderOrder: SOFTWARE_RENDER_ORDER.grid, stroke: "#70b9c7", alpha: 0.17, lineWidth: 0.55 });
         }
       }
       for (let z = -project.board.height / 2; z <= project.board.height / 2 + 0.001; z += gridStep) {
@@ -333,7 +341,7 @@ export function PcbSoftware3DCanvas({
           projectSoftwarePoint({ x: project.board.width / 2, y: gridY, z }, camera),
         ] as [SoftwareProjectedPoint, SoftwareProjectedPoint];
         if (points.every((point) => point.visible)) {
-          shapes.push({ kind: "line", points, depth: (points[0].depth + points[1].depth) / 2, stroke: "#70b9c7", alpha: 0.17, lineWidth: 0.55 });
+          shapes.push({ kind: "line", points, depth: (points[0].depth + points[1].depth) / 2, renderOrder: SOFTWARE_RENDER_ORDER.grid, stroke: "#70b9c7", alpha: 0.17, lineWidth: 0.55 });
         }
       }
     }
@@ -416,7 +424,7 @@ export function PcbSoftware3DCanvas({
       }
     });
 
-    shapes.sort((left, right) => right.depth - left.depth);
+    shapes.sort(compareSoftwareRenderDepth);
     shapes.forEach((shape) => {
       context.save();
       context.globalAlpha = shape.alpha;

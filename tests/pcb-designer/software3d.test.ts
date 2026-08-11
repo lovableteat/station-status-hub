@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   DEFAULT_SOFTWARE_VIEW,
+  SOFTWARE_RENDER_ORDER,
+  compareSoftwareRenderDepth,
   createSoftwareBoxVertices,
   createSoftwareCamera,
   projectSoftwarePoint,
@@ -51,4 +53,20 @@ test("creates complete boxes and bounds sampled model triangles", () => {
   assert.equal(sampleTriangleOffsets(30, 20).length, 10);
   assert.ok(sampleTriangleOffsets(30_000, 80).length <= 80);
   assert.deepEqual(sampleTriangleOffsets(0, 80), []);
+});
+
+test("draws the board and grid before components regardless of camera depth", () => {
+  const shapes = [
+    { id: "near-board", depth: 10, renderOrder: SOFTWARE_RENDER_ORDER.board },
+    { id: "far-component", depth: 200, renderOrder: SOFTWARE_RENDER_ORDER.object },
+    { id: "grid", depth: 150, renderOrder: SOFTWARE_RENDER_ORDER.grid },
+    { id: "near-component", depth: 20, renderOrder: SOFTWARE_RENDER_ORDER.object },
+  ].sort(compareSoftwareRenderDepth);
+
+  assert.deepEqual(shapes.map((shape) => shape.id), [
+    "near-board",
+    "grid",
+    "far-component",
+    "near-component",
+  ]);
 });
