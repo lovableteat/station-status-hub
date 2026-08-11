@@ -3,6 +3,7 @@ import type {
   PcbModelAsset,
   PcbModelAssetMetadata,
   PcbModelAssetPart,
+  PcbPlacedComponent,
 } from "../types.ts";
 
 export const PCB_MODEL_FILE_ACCEPT = ".stp,.step,model/step,application/step";
@@ -27,6 +28,43 @@ function clonePart(part: PcbModelAssetPart): PcbModelAssetPart {
 
 function toPlainNumberArray(values: ArrayLike<number>): number[] {
   return Array.from(values);
+}
+
+export function mapPcbModelPartToComponentSpace(
+  part: PcbModelAssetPart,
+  asset: PcbModelAsset,
+  component: Pick<PcbPlacedComponent, "width" | "height" | "maxHeight">,
+): number[] {
+  const { min, max } = asset.metadata.bounds;
+  const spans = [
+    Math.max(max[0] - min[0], 0.001),
+    Math.max(max[1] - min[1], 0.001),
+    Math.max(max[2] - min[2], 0.001),
+  ];
+  const center = [
+    (min[0] + max[0]) / 2,
+    (min[1] + max[1]) / 2,
+    (min[2] + max[2]) / 2,
+  ];
+  const widthAxis = asset.metadata.upAxis === "x" ? 1 : 0;
+  const heightAxis = asset.metadata.upAxis === "x" ? 0 : asset.metadata.upAxis === "y" ? 1 : 2;
+  const boardDepthAxis = asset.metadata.upAxis === "z" ? 1 : 2;
+  const positions: number[] = [];
+
+  for (let offset = 0; offset < part.position.length; offset += 3) {
+    const raw = [
+      part.position[offset] - center[0],
+      part.position[offset + 1] - center[1],
+      part.position[offset + 2] - center[2],
+    ];
+    positions.push(
+      (raw[widthAxis] / spans[widthAxis]) * component.width,
+      (raw[heightAxis] / spans[heightAxis]) * component.maxHeight,
+      (raw[boardDepthAxis] / spans[boardDepthAxis]) * component.height,
+    );
+  }
+
+  return positions;
 }
 
 function invalidModel(message: string): Error {

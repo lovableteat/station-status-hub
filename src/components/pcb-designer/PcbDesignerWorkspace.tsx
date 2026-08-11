@@ -592,7 +592,6 @@ export function PcbDesignerWorkspace({
               workspace={workspace}
               visibleLayer={workspace.visibleLayer}
               selectedObjects={workspace.selectedObjects}
-              onFallbackTo2D={() => setViewMode("2d")}
             />
           </Suspense>
         )}
