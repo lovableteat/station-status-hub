@@ -6,8 +6,13 @@ import type { OrbitControls as OrbitControlsImpl } from "three/examples/jsm/cont
 import { Focus, MousePointer2 } from "lucide-react";
 
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
+import { PcbSoftware3DCanvas } from "./PcbSoftware3DCanvas.tsx";
 import { detectWebglSupport } from "./core/webgl.ts";
-import { getDefaultPcbModelAssetStore, isPcbModelAsset } from "./core/modelAssets.ts";
+import {
+  getDefaultPcbModelAssetStore,
+  isPcbModelAsset,
+  mapPcbModelPartToComponentSpace,
+} from "./core/modelAssets.ts";
 import {
   getPcbComponentViewState,
   getPcb3DComponentTransform,
@@ -27,12 +32,10 @@ export function Pcb3DCanvasSafe({
   workspace,
   visibleLayer = workspace.visibleLayer,
   selectedObjects = workspace.selectedObjects,
-  onFallbackTo2D,
 }: {
   workspace: PcbWorkspaceApi;
   visibleLayer?: PcbVisibleLayer;
   selectedObjects?: readonly string[];
-  onFallbackTo2D?: () => void;
 }) {
   const size = Math.max(workspace.activeProject.board.width, workspace.activeProject.board.height, 40);
   const [webglState, setWebglState] = useState<"checking" | "available" | "unavailable">("checking");
@@ -41,16 +44,12 @@ export function Pcb3DCanvasSafe({
     setWebglState(detectWebglSupport() ? "available" : "unavailable");
   }, []);
 
-  const webglFallback = (
-    <div className="pcb-3d-error" role="alert">
-      <strong>3D 檢視無法啟用</strong>
-      <span>此瀏覽器目前無法建立 WebGL 畫面，PCB 資料沒有遺失。</span>
-      {onFallbackTo2D && (
-        <button type="button" className="pcb-3d-fallback-button" onClick={onFallbackTo2D}>
-          切換回 2D 編輯
-        </button>
-      )}
-    </div>
+  const softwareFallback = (
+    <PcbSoftware3DCanvas
+      workspace={workspace}
+      visibleLayer={visibleLayer}
+      selectedObjects={selectedObjects}
+    />
   );
 
   return (
@@ -63,10 +62,10 @@ export function Pcb3DCanvasSafe({
     >
       {webglState === "checking" ? (
         <div className="pcb-3d-loading">正在檢查 3D 圖形加速…</div>
-      ) : webglState === "unavailable" ? webglFallback : (
-        <Pcb3DErrorBoundary>
+      ) : webglState === "unavailable" ? softwareFallback : (
+        <Pcb3DErrorBoundary fallback={softwareFallback}>
           <Canvas
-            fallback={webglFallback}
+            fallback={softwareFallback}
             frameloop="demand"
             dpr={[1, 1.25]}
             camera={{ position: [size * 0.82, size * 0.72, size * 0.92], fov: 42, near: 0.1, far: size * 25 }}
@@ -130,7 +129,7 @@ interface Pcb3DErrorBoundaryState {
   error: Error | null;
 }
 
-class Pcb3DErrorBoundary extends Component<{ children: ReactNode }, Pcb3DErrorBoundaryState> {
+class Pcb3DErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, Pcb3DErrorBoundaryState> {
   state: Pcb3DErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): Pcb3DErrorBoundaryState {
@@ -142,14 +141,7 @@ class Pcb3DErrorBoundary extends Component<{ children: ReactNode }, Pcb3DErrorBo
   }
 
   render() {
-    if (this.state.error) {
-      return (
-        <div className="pcb-3d-error" role="alert">
-          <strong>3D 檢視無法啟用</strong>
-          <span>瀏覽器目前無法建立 WebGL 畫面；2D 版面資料仍保留。</span>
-        </div>
-      );
-    }
+    if (this.state.error) return this.props.fallback;
 
     return this.props.children;
   }
@@ -181,42 +173,6 @@ function ModelPartMesh({
   );
 }
 
-function mapModelPartToComponentSpace(
-  part: PcbModelAssetPart,
-  asset: PcbModelAsset,
-  component: PcbWorkspaceApi["activeProject"]["components"][number],
-): number[] {
-  const { min, max } = asset.metadata.bounds;
-  const spans = [
-    Math.max(max[0] - min[0], 0.001),
-    Math.max(max[1] - min[1], 0.001),
-    Math.max(max[2] - min[2], 0.001),
-  ];
-  const center = [
-    (min[0] + max[0]) / 2,
-    (min[1] + max[1]) / 2,
-    (min[2] + max[2]) / 2,
-  ];
-  const positions: number[] = [];
-  for (let offset = 0; offset < part.position.length; offset += 3) {
-    const raw = [
-      part.position[offset] - center[0],
-      part.position[offset + 1] - center[1],
-      part.position[offset + 2] - center[2],
-    ];
-    const widthAxis = asset.metadata.upAxis === "x" ? 1 : 0;
-    const depthAxis = 2;
-    const heightAxis = asset.metadata.upAxis === "x" ? 0 : asset.metadata.upAxis === "y" ? 1 : 2;
-    const boardDepthAxis = asset.metadata.upAxis === "z" ? 1 : depthAxis;
-    positions.push(
-      (raw[widthAxis] / spans[widthAxis]) * component.width,
-      (raw[heightAxis] / spans[heightAxis]) * component.maxHeight,
-      (raw[boardDepthAxis] / spans[boardDepthAxis]) * component.height,
-    );
-  }
-  return positions;
-}
-
 function StoredModelMeshes({ asset, component }: { asset: PcbModelAsset; component: PcbWorkspaceApi["activeProject"]["components"][number] }) {
   return (
     <group data-model-renderer="buffer-geometry">
@@ -224,7 +180,7 @@ function StoredModelMeshes({ asset, component }: { asset: PcbModelAsset; compone
         <ModelPartMesh
           key={part.id}
           part={part}
-          positions={mapModelPartToComponentSpace(part, asset, component)}
+          positions={mapPcbModelPartToComponentSpace(part, asset, component)}
           color={component.color}
         />
       ))}
@@ -397,8 +353,7 @@ function Scene({
         .map(({ component, viewState }) => {
         const selected = viewState.selected;
         const transform = getPcb3DComponentTransform(component, project.board);
-        const yDirection = component.layer === "top" ? 1 : -1;
-        const yOffset = yDirection * (boardThickness / 2 + component.maxHeight / 2);
+        const yOffset = boardThickness / 2 + component.maxHeight / 2;
         const modelAsset = component.modelAssetId ? modelAssets[component.modelAssetId] : null;
         const useProceduralFallback = !modelAsset;
         const proceduralFallback = useProceduralFallback;
@@ -464,6 +419,14 @@ export function Pcb3DCanvas({
   selectedObjects?: readonly string[];
 }) {
   const size = Math.max(workspace.activeProject.board.width, workspace.activeProject.board.height, 40);
+  const softwareFallback = (
+    <PcbSoftware3DCanvas
+      workspace={workspace}
+      visibleLayer={visibleLayer}
+      selectedObjects={selectedObjects}
+    />
+  );
+
   return (
     <div
       className="pcb-3d-host"
@@ -472,14 +435,9 @@ export function Pcb3DCanvas({
       data-pcb-top-color={workspace.activeProject.board.layerColors.top}
       data-pcb-bottom-color={workspace.activeProject.board.layerColors.bottom}
     >
-      <Pcb3DErrorBoundary>
+      <Pcb3DErrorBoundary fallback={softwareFallback}>
         <Canvas
-          fallback={(
-            <div className="pcb-3d-error" role="alert">
-              <strong>3D 檢視無法啟用</strong>
-              <span>瀏覽器目前無法建立 WebGL 畫面；2D 版面資料仍保留。</span>
-            </div>
-          )}
+          fallback={softwareFallback}
           frameloop="demand"
           dpr={[1, 1.5]}
           camera={{ position: [size * 0.82, size * 0.72, size * 0.92], fov: 42, near: 0.1, far: size * 25 }}

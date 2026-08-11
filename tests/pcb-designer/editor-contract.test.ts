@@ -19,6 +19,7 @@ const persistenceSource = await read("src/components/pcb-designer/hooks/usePcbPe
 const presenceSource = await read("src/components/pcb-designer/hooks/usePcbProjectPresence.ts");
 const collaboratorsSource = await read("src/components/pcb-designer/PcbCollaborators.tsx");
 const canvas3dSource = await read("src/components/pcb-designer/Pcb3DCanvas.tsx");
+const softwareCanvas3dSource = await read("src/components/pcb-designer/PcbSoftware3DCanvas.tsx");
 const runtimeBoundarySource = await read("src/components/common/AppRuntimeBoundary.tsx");
 const modelAssetsSource = await read("src/components/pcb-designer/core/modelAssets.ts");
 const viewSyncSource = await read("src/components/pcb-designer/core/viewSync.ts");
@@ -212,10 +213,16 @@ test("provides a lazy interactive 3D PCB view without replacing the 2D editor", 
   assert.match(canvas3dSource, /重設視角/);
 });
 
-test("contains 3D runtime failures inside the PCB view", () => {
+test("keeps 3D interactive through the software renderer when WebGL is unavailable", () => {
   assert.match(canvas3dSource, /class Pcb3DErrorBoundary/);
   assert.match(canvas3dSource, /fallback=\{/);
-  assert.match(canvas3dSource, /WebGL|3D/);
+  assert.match(canvas3dSource, /<PcbSoftware3DCanvas/);
+  assert.doesNotMatch(canvas3dSource, /3D 檢視無法啟用/);
+  assert.match(softwareCanvas3dSource, /data-renderer="software-canvas"/);
+  assert.match(softwareCanvas3dSource, /getDefaultPcbModelAssetStore/);
+  assert.match(softwareCanvas3dSource, /mapPcbModelPartToComponentSpace/);
+  assert.match(softwareCanvas3dSource, /onPointerDown=\{handlePointerDown\}/);
+  assert.match(softwareCanvas3dSource, /onWheel=\{handleWheel\}/);
 });
 
 test("shares 2D and 3D synchronization helpers and inspection attributes", () => {
