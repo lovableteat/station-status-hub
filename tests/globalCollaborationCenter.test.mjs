@@ -26,9 +26,10 @@ test("the workspace keeps direct messages exclusively in the bottom-right floati
   assert.match(centerSource, /aria-label="聊天室"/);
   assert.match(centerSource, /function DirectMessageLauncher/);
   assert.match(centerSource, /h-11 w-full/);
-  assert.match(centerSource, /aria-expanded=\{open\}/);
+  assert.match(centerSource, /aria-expanded=\{false\}/);
   assert.match(centerSource, /aria-controls="direct-messages-panel"/);
   assert.match(centerSource, /bottom-0 right-0/);
+  assert.doesNotMatch(centerSource, /absolute bottom-11 right-0/);
   assert.doesNotMatch(centerSource, /right-3|right-5/);
   assert.match(centerSource, /invisible pointer-events-none translate-y-2 opacity-0/);
   assert.match(centerSource, /選擇聯絡人開始私訊/);
@@ -38,6 +39,8 @@ test("the workspace keeps direct messages exclusively in the bottom-right floati
   assert.match(centerSource, /bg-rose-500/);
   assert.match(centerSource, /onUnreadCountChange=\{setDirectMessageUnreadCount\}/);
   assert.match(centerSource, /<DirectMessageLauncher/);
+  assert.match(centerSource, /\{!messageFloatOpen \? \(/);
+  assert.match(centerSource, /onOpen=\{\(\) => setMessageFloatOpen\(true\)\}/);
   assert.match(centerSource, /setMessageFloatOpen\(true\);\s*setOpen\(false\)/);
   assert.doesNotMatch(centerSource, /open && activeTab === "messages"/);
   assert.doesNotMatch(centerSource, /開啟浮動訊息[\s\S]{0,260}rounded-full/);

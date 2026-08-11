@@ -100,25 +100,20 @@ function formatTime(value: string) {
 }
 
 function DirectMessageLauncher({
-  open,
   unreadCount,
-  onToggle,
+  onOpen,
 }: {
-  open: boolean;
   unreadCount: number;
-  onToggle: () => void;
+  onOpen: () => void;
 }) {
   return (
     <button
       type="button"
       aria-label={`聊天室${unreadCount > 0 ? `，${unreadCount} 則未讀` : ""}`}
-      aria-expanded={open}
+      aria-expanded={false}
       aria-controls="direct-messages-panel"
-      onClick={onToggle}
-      className={cn(
-        "flex h-11 w-full items-center justify-between rounded-t-xl border border-b-0 border-slate-500/45 bg-[#1a3552] px-3.5 text-slate-50 shadow-[0_-8px_28px_-16px_rgba(0,0,0,0.85)] transition-colors hover:bg-[#214463] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300",
-        open && "border-cyan-200/35 bg-[#214463]",
-      )}
+      onClick={onOpen}
+      className="flex h-11 w-full items-center justify-between rounded-t-xl border border-b-0 border-slate-500/45 bg-[#1a3552] px-3.5 text-slate-50 shadow-[0_-8px_28px_-16px_rgba(0,0,0,0.85)] transition-colors hover:bg-[#214463] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
     >
       <span className="flex items-center gap-2.5 text-sm font-semibold">
         <MessageSquareText className="h-4 w-4 text-cyan-200" />
@@ -130,7 +125,7 @@ function DirectMessageLauncher({
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         ) : null}
-        {open ? <Minus className="h-4 w-4 text-slate-300" /> : <ChevronUp className="h-4 w-4 text-slate-300" />}
+        <ChevronUp className="h-4 w-4 text-slate-300" />
       </span>
     </button>
   );
@@ -668,7 +663,7 @@ export function CollaborationCenter() {
             aria-label="聊天室"
             data-floating-direct-messages="true"
             className={cn(
-              "absolute bottom-11 right-0 flex h-[min(620px,calc(100dvh-5rem))] w-full flex-col overflow-hidden rounded-t-2xl border border-b-0 border-slate-500/40 bg-[#071421] shadow-[0_24px_70px_-24px_rgba(0,0,0,0.9)] transition-[opacity,transform,visibility] duration-200",
+              "absolute bottom-0 right-0 flex h-[min(620px,calc(100dvh-5rem))] w-full flex-col overflow-hidden rounded-t-2xl border border-b-0 border-slate-500/40 bg-[#071421] shadow-[0_24px_70px_-24px_rgba(0,0,0,0.9)] transition-[opacity,transform,visibility] duration-200",
               messageFloatOpen
                 ? "visible translate-y-0 opacity-100"
                 : "invisible pointer-events-none translate-y-2 opacity-0",
@@ -698,11 +693,12 @@ export function CollaborationCenter() {
               onUnreadCountChange={setDirectMessageUnreadCount}
             />
           </section>
-          <DirectMessageLauncher
-            open={messageFloatOpen}
-            unreadCount={directMessageUnreadCount}
-            onToggle={() => setMessageFloatOpen((current) => !current)}
-          />
+          {!messageFloatOpen ? (
+            <DirectMessageLauncher
+              unreadCount={directMessageUnreadCount}
+              onOpen={() => setMessageFloatOpen(true)}
+            />
+          ) : null}
         </div>
       ) : null}
     </>
