@@ -24,7 +24,7 @@ import {
   usePcbPersistence,
   type PcbRemoteClient,
 } from "./usePcbPersistence.ts";
-import { loadPcbRemote } from "../core/remoteSync.ts";
+import { loadPcbRemote, mergePcbRemoteState } from "../core/remoteSync.ts";
 
 export interface UsePcbWorkspaceOptions {
   canEdit: boolean;
@@ -37,20 +37,6 @@ function browserStorage(): StorageLike {
     return { getItem: () => null, setItem: () => undefined };
   }
   return window.localStorage;
-}
-
-function isBlankSeedWorkspace(state: PcbSaveState): boolean {
-  const project = state.projects[0];
-  const pendingCount = Object.values(state.pendingPlacementsByProject ?? {})
-    .reduce((total, items) => total + items.length, 0);
-  return state.projects.length === 1
-    && project?.name === "未命名 PCB 專案"
-    && project.components.length === 0
-    && project.keepouts.length === 0
-    && project.measurements.length === 0
-    && state.templates.every((template) => template.isBuiltIn)
-    && state.library.every((component) => component.source === "built-in")
-    && pendingCount === 0;
 }
 
 export function usePcbWorkspace({
@@ -93,12 +79,11 @@ export function usePcbWorkspace({
     void loadPcbRemote(remoteClient).then((remoteState) => {
       if (!active) return;
       const localState = stateRef.current;
-      const remoteIsNewer = remoteState
-        && Date.parse(remoteState.updatedAt) > Date.parse(localState.updatedAt);
-      if (remoteState && (remoteIsNewer || isBlankSeedWorkspace(localState))) {
-        repository.save(remoteState);
-        hydratedCleanRevisionRef.current = remoteState.updatedAt;
-        dispatch({ type: "persistence/hydrate", data: remoteState });
+      if (remoteState) {
+        const mergedState = mergePcbRemoteState(localState, remoteState);
+        repository.save(mergedState);
+        hydratedCleanRevisionRef.current = mergedState.updatedAt;
+        dispatch({ type: "persistence/hydrate", data: mergedState });
       } else {
         markClean(localState.updatedAt);
       }

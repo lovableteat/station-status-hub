@@ -37,6 +37,9 @@ const accountRemoteSource = await read(
 const completeStorageMigrationSource = await read(
   "supabase/migrations/20260727123000_complete_pcb_designer_workspace.sql",
 );
+const sharedProjectsMigrationSource = await read(
+  "supabase/migrations/20260813123000_share_pcb_designer_projects.sql",
+);
 const supabaseTypesSource = await read("src/integrations/supabase/types.ts");
 const collaborationSource = await read(
   "src/components/collaboration/CollaborationCenter.tsx",
@@ -368,4 +371,19 @@ test("ships a complete custom-login PCB workspace migration and legacy permissio
   assert.match(dialogSource, /legacyWorkspaceIds\s*=\s*new Set\(\[/);
   assert.match(dialogSource, /legacyWorkspaceIds\.has\(workspaceId\)/);
   assert.match(dialogSource, /\.update\(\{[\s\S]*workspaceAccess/);
+});
+
+test("promotes PCB projects to a shared, conflict-safe team catalog", () => {
+  assert.match(
+    sharedProjectsMigrationSource,
+    /CREATE TABLE IF NOT EXISTS public\.pcb_designer_shared_projects/i,
+  );
+  assert.match(sharedProjectsMigrationSource, /jsonb_array_elements\([\s\S]*workspace\.payload -> 'projects'/i);
+  assert.match(sharedProjectsMigrationSource, /PARTITION BY project\.payload ->> 'id'/i);
+  assert.match(sharedProjectsMigrationSource, /jsonb_agg\(shared\.payload/i);
+  assert.match(sharedProjectsMigrationSource, /shared\.deleted_at IS NULL/i);
+  assert.match(sharedProjectsMigrationSource, /project_updated_at <= EXCLUDED\.project_updated_at/i);
+  assert.match(sharedProjectsMigrationSource, /jsonb_set\(p_payload, '\{projects\}', '\[\]'::jsonb/i);
+  assert.match(pcbWorkspaceHookSource, /mergePcbRemoteState\(localState, remoteState\)/);
+  assert.match(remoteSyncSource, /server tombstones always remove stale local project copies/i);
 });

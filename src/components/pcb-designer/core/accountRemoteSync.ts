@@ -47,9 +47,10 @@ function parseRemoteState(value: unknown): PcbSaveState | null {
 }
 
 /**
- * Uses the dedicated RPC when the migration is available. The permissions JSON
- * fallback keeps cross-device drafts working on installations that have not yet
- * applied the new table migration; permission updates preserve this extra key.
+ * Uses the dedicated RPC when the migration is available. The RPC combines the
+ * site-wide shared project catalog with this account's templates and library.
+ * The permissions JSON fallback remains for installations that have not yet
+ * applied the workspace migrations.
  */
 export function createPcbAccountRemoteClient(
   database: PcbAccountDatabase,
