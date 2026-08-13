@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   Ban,
   Box,
+  ChevronDown,
   Download,
   Eye,
   FileJson,
@@ -25,6 +26,8 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -154,6 +157,19 @@ export function PcbToolbar({
   onZoomChange,
   onResetView,
 }: PcbToolbarProps) {
+  const visibleLayerLabel = visibleLayer === "all"
+    ? "全部顯示"
+    : visibleLayer === "top"
+      ? "只顯示 Top"
+      : "只顯示 Bottom";
+
+  const changeActiveLayer = (layer: "top" | "bottom") => {
+    onActiveLayerChange(layer);
+    if (visibleLayer !== "all" && visibleLayer !== layer) {
+      onVisibleLayerChange(layer);
+    }
+  };
+
   return (
     <TooltipProvider delayDuration={250}>
       <div
@@ -246,24 +262,49 @@ export function PcbToolbar({
           </button>
         </div>
 
-        <div className="pcb-visible-layer-switch" role="group" aria-label="顯示層">
-          <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className="pcb-layer-switch-label">顯示層</span>
-          {([
-            { layer: "all", label: "全部" },
-            { layer: "top", label: "Top" },
-            { layer: "bottom", label: "Bottom" },
-          ] as const).map(({ layer, label }) => (
+        <div className="pcb-layer-control" role="group" aria-label="PCB 圖層控制">
+          <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="pcb-layer-switch-label">圖層</span>
+          {(["top", "bottom"] as const).map((layer) => (
             <button
               key={layer}
               type="button"
-              className={cn(visibleLayer === layer && "is-active")}
-              aria-pressed={visibleLayer === layer}
-              onClick={() => onVisibleLayerChange(layer)}
+              className={cn("pcb-active-layer-button", activeLayer === layer && "is-active")}
+              disabled={!canMutate}
+              aria-label={`放置層 ${layer === "top" ? "Top" : "Bottom"}`}
+              aria-pressed={activeLayer === layer}
+              onClick={() => changeActiveLayer(layer)}
             >
-              {label}
+              {layer === "top" ? "Top" : "Bottom"}
             </button>
           ))}
+
+          <span className="pcb-layer-control-divider" aria-hidden="true" />
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="pcb-layer-visibility-trigger"
+                aria-label={`顯示範圍：${visibleLayerLabel}`}
+                title={`顯示範圍：${visibleLayerLabel}`}
+              >
+                <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{visibleLayerLabel}</span>
+                <ChevronDown className="h-3 w-3" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="pcb-dropdown-menu pcb-layer-visibility-menu">
+              <DropdownMenuRadioGroup
+                value={visibleLayer}
+                onValueChange={(layer) => onVisibleLayerChange(layer as PcbVisibleLayer)}
+              >
+                <DropdownMenuRadioItem value="all">全部顯示</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="top">只顯示 Top</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="bottom">只顯示 Bottom</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <span className="pcb-tool-separator" aria-hidden="true" />
@@ -291,23 +332,6 @@ export function PcbToolbar({
           shortcut="L"
           onClick={onToggleLock}
         />
-
-        <div className="pcb-layer-switch" role="group" aria-label="新元件放置層">
-          <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
-          <span className="pcb-layer-switch-label">放置層</span>
-          {(["top", "bottom"] as const).map((layer) => (
-            <button
-              key={layer}
-              type="button"
-              className={cn(activeLayer === layer && "is-active")}
-              disabled={!canMutate}
-              aria-pressed={activeLayer === layer}
-              onClick={() => onActiveLayerChange(layer)}
-            >
-              {layer === "top" ? "Top" : "Bottom"}
-            </button>
-          ))}
-        </div>
 
         <span className="pcb-tool-separator" aria-hidden="true" />
         <ToolButton label="縮小" shortcut="-" icon={ZoomOut} disabled={viewMode === "3d" || zoom <= 25} onClick={() => onZoomChange(zoom - 25)} />
