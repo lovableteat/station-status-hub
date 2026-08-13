@@ -94,6 +94,7 @@ export function IssueEditDialog({
   const activeInlineUploadsRef = useRef(0);
   const acceptingInlineUploadsRef = useRef(true);
   const closeRequestedRef = useRef(false);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     title: issue.title,
     description: issue.description,
@@ -393,15 +394,13 @@ export function IssueEditDialog({
     setIsSubmitting(true);
     
     try {
-      // 先刪除相關附件
-      const { error: attachmentError } = await supabase
-        .from('issue_attachments')
-        .delete()
-        .eq('issue_id', issue.id);
+      if (!activeProjectId) throw new Error("No active project");
 
-      if (attachmentError) {
-        console.error('刪除附件錯誤:', attachmentError);
-      }
+      const { data: attachments, error: attachmentLookupError } = await supabase
+        .from('issue_attachments')
+        .select('file_path')
+        .eq('issue_id', issue.id);
+      if (attachmentLookupError) throw attachmentLookupError;
 
       // 刪除問題
       const { error } = await supabase
@@ -413,6 +412,14 @@ export function IssueEditDialog({
       if (error) {
         console.error('刪除問題錯誤:', error);
         throw error;
+      }
+
+      const storedPaths = (attachments || []).map((attachment) => attachment.file_path).filter(Boolean);
+      if (storedPaths.length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from('issue-attachments')
+          .remove(storedPaths);
+        if (storageError) console.warn('問題已刪除，但附件檔案清理失敗:', storageError);
       }
 
       await cleanupPendingInlineImages();
@@ -450,12 +457,14 @@ export function IssueEditDialog({
     setIsUploading(true);
     let successCount = 0;
     for (const [index, file] of files.entries()) {
+      let uploadedPath = "";
       try {
         const path = `${issue.id}/attachments/${Date.now()}-${index}-${file.name}`;
         const { error: storageError } = await supabase.storage
           .from("issue-attachments")
           .upload(path, file, { upsert: true });
         if (storageError) throw storageError;
+        uploadedPath = path;
 
         const { error: databaseError } = await supabase.from("issue_attachments").insert({
           issue_id: issue.id,
@@ -467,6 +476,9 @@ export function IssueEditDialog({
         if (databaseError) throw databaseError;
         successCount += 1;
       } catch (error) {
+        if (uploadedPath) {
+          await supabase.storage.from("issue-attachments").remove([uploadedPath]);
+        }
         console.error("附件上傳失敗:", error);
         toast({
           title: "附件上傳失敗",
@@ -545,8 +557,8 @@ export function IssueEditDialog({
       </header>
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <main className="min-h-0 space-y-4 overflow-y-auto p-5">
-          <section className="rounded-2xl border border-[#315b78] bg-[#0a1b2b] p-4 shadow-[0_14px_38px_rgba(0,0,0,0.14)]">
+        <main className="min-h-0 space-y-6 overflow-y-auto p-5 lg:p-6">
+          <section className="border-b border-[#294c66] pb-5">
             <div className="space-y-2">
               <Label htmlFor="title" className="text-sm font-semibold text-[#dce9f2]">問題標題 *</Label>
               <Input
@@ -570,9 +582,9 @@ export function IssueEditDialog({
           />
         </main>
 
-        <aside className="min-h-0 overflow-y-auto border-t border-[#2a526f] bg-[#091a2a] p-4 lg:border-l lg:border-t-0">
-          <div className="space-y-4">
-            <section className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3">
+        <aside className="min-h-0 overflow-y-auto border-t border-[#2a526f] bg-[#091a2a] px-5 lg:border-l lg:border-t-0">
+          <div className="divide-y divide-[#294c66]">
+            <section className="py-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><UserRound className="h-4 w-4 text-cyan-100" />處理狀態</div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -592,14 +604,14 @@ export function IssueEditDialog({
               </div>
               <div className="mt-3 space-y-1.5">
                 <Label htmlFor="assigned_to">負責人</Label>
-                <Select value={formData.assigned_to || "unassigned"} onValueChange={(value) => handleInputChange("assigned_to", value)} disabled={isSubmitting}>
+                <Select value={formData.assigned_to || "unassigned"} onValueChange={(value) => handleInputChange("assigned_to", value === "unassigned" ? "" : value)} disabled={isSubmitting}>
                   <SelectTrigger id="assigned_to"><SelectValue placeholder="選擇負責人" /></SelectTrigger>
                   <SelectContent><SelectItem value="unassigned">未指派</SelectItem>{engineers.map((engineer) => <SelectItem key={engineer.id} value={engineer.name}>{engineer.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </section>
 
-            <section className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3">
+            <section className="py-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Link2 className="h-4 w-4 text-cyan-100" />關聯範圍</div>
               <div className="space-y-3">
                 <div className="space-y-1.5"><Label htmlFor="system">相關機台</Label><Select value={formData.system_id || "none"} onValueChange={(value) => handleInputChange("system_id", value)} disabled={isSubmitting}><SelectTrigger id="system"><SelectValue placeholder="選擇機台" /></SelectTrigger><SelectContent><SelectItem value="none">無</SelectItem>{systems.map((system) => <SelectItem key={system.id} value={system.id}>{system.system_name}{system.serial_number ? ` (${system.serial_number})` : ""}</SelectItem>)}</SelectContent></Select></div>
@@ -615,7 +627,7 @@ export function IssueEditDialog({
               </div>
             </section>
 
-            <section className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3">
+            <section className="py-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Bell className="h-4 w-4 text-cyan-100" />通知協作者</div>
               <MentionInput
                 value={formData.mentionMessage}
@@ -626,10 +638,10 @@ export function IssueEditDialog({
               {mentionedUsers.length > 0 && <div className="mt-2 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.07] px-2.5 py-2 text-xs text-cyan-50">儲存後通知：{mentionedUsers.map((person) => person.displayName).join("、")}</div>}
             </section>
 
-            <section className="rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3">
-              <div className="mb-3 flex items-center justify-between gap-2"><div className="flex items-center gap-2 text-sm font-semibold"><Paperclip className="h-4 w-4 text-cyan-100" />附件與截圖</div><Label htmlFor={`issue-file-${issue.id}`} className="inline-flex h-8 cursor-pointer items-center rounded-lg border border-[#3c6380] bg-[#10263a] px-3 text-xs font-semibold hover:border-cyan-300/55 hover:bg-[#16324b]"><Upload className="mr-1.5 h-3.5 w-3.5" />{isUploading ? "上傳中" : "加入檔案"}</Label></div>
-              <Input id={`issue-file-${issue.id}`} type="file" multiple className="sr-only" disabled={isUploading || isSubmitting || isInlineUploading} accept="image/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.msg" onChange={handleAttachmentUpload} />
-              <div className="mb-3 flex items-start gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.06] p-3 text-xs leading-5 text-[#b9d4e4]">
+            <section className="py-5">
+              <div className="mb-3 flex items-center justify-between gap-2"><div className="flex items-center gap-2 text-sm font-semibold"><Paperclip className="h-4 w-4 text-cyan-100" />附件與截圖</div><Button type="button" variant="outline" size="sm" disabled={isUploading || isSubmitting || isInlineUploading} onClick={() => attachmentInputRef.current?.click()} className="h-8 border-[#3c6380] bg-[#10263a] px-3 text-xs font-semibold hover:border-cyan-300/55 hover:bg-[#16324b]"><Upload className="mr-1.5 h-3.5 w-3.5" />{isUploading ? "上傳中" : "加入檔案"}</Button></div>
+              <Input ref={attachmentInputRef} id={`issue-file-${issue.id}`} type="file" multiple className="sr-only" disabled={isUploading || isSubmitting || isInlineUploading} accept="image/*,application/pdf,text/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.msg" onChange={handleAttachmentUpload} />
+              <div className="mb-3 flex items-start gap-2 bg-cyan-300/[0.06] px-3 py-2.5 text-xs leading-5 text-[#b9d4e4]">
                 <ImagePlus className="mt-0.5 h-4 w-4 shrink-0 text-cyan-100" />
                 <span>在左側目前內容頁籤按 <strong className="text-cyan-50">Ctrl+V</strong>，截圖會直接插入內容並在儲存後同步到附件。</span>
               </div>

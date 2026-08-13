@@ -51,6 +51,14 @@ interface RichTextEditorProps {
   onImageUpload?: (file: File) => Promise<string>;
 }
 
+const TEXT_COLOR_OPTIONS = [
+  { label: '亮白', value: '#f8fafc' },
+  { label: '青色', value: '#67e8f9' },
+  { label: '薄荷綠', value: '#86efac' },
+  { label: '亮黃', value: '#fde047' },
+  { label: '珊瑚紅', value: '#fb7185' },
+];
+
 export function RichTextEditor({ content, onChange, placeholder = "開始編輯...", className, disableImageResize = false, disableImageUpload = false, onImageUpload }: RichTextEditorProps) {
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [isImageUrlModalOpen, setIsImageUrlModalOpen] = useState(false);
@@ -61,6 +69,7 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImage, setLightboxImage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const colorSelectionRef = useRef<{ from: number; to: number } | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -68,6 +77,7 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
         },
+        link: false,
       }),
       Table.configure({
         resizable: true,
@@ -122,6 +132,23 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
     }
   }, [editor]);
 
+  const rememberColorSelection = useCallback(() => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    colorSelectionRef.current = { from, to };
+  }, [editor]);
+
+  const applyTextColor = useCallback((color: string) => {
+    if (!editor) return;
+    setSelectedColor(color);
+
+    const selection = colorSelectionRef.current;
+    const chain = editor.chain().focus();
+    if (selection) chain.setTextSelection(selection);
+    chain.setColor(color).run();
+    colorSelectionRef.current = null;
+  }, [editor]);
+
   const replaceImageSource = useCallback((source: string, replacement?: string) => {
     if (!editor || editor.isDestroyed) return;
 
@@ -139,7 +166,8 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
   }, [editor]);
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const input = event.currentTarget;
+    const file = input.files?.[0];
     if (file && editor) {
       try {
         if (onImageUpload) {
@@ -159,6 +187,8 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         }
       } catch (err) {
         console.error('Image upload failed:', err);
+      } finally {
+        input.value = '';
       }
     }
   }, [editor, onImageUpload, insertImage]);
@@ -237,12 +267,13 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
   }
 
   return (
-    <div className="border rounded-lg">
+    <div className="overflow-hidden rounded-xl border border-[#315b78] bg-[#071522]">
       {/* Toolbar */}
-      <div className="border-b p-2 flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1 border-b border-[#294c66] bg-[#0d2032] p-2" role="toolbar" aria-label="內容格式工具列">
         {/* Headings */}
         <select
           className="px-2 py-1 border rounded text-sm bg-background"
+          aria-label="文字樣式"
           value={
             editor.isActive('heading', { level: 1 }) ? 'h1' :
             editor.isActive('heading', { level: 2 }) ? 'h2' :
@@ -269,25 +300,34 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
 
         {/* Text Formatting */}
         <Button
+          type="button"
           variant={editor.isActive('bold') ? 'default' : 'ghost'}
           size="sm"
           onClick={() => editor.chain().focus().toggleBold().run()}
+          title="粗體"
+          aria-label="粗體"
         >
           <Bold className="h-4 w-4" />
         </Button>
 
         <Button
+          type="button"
           variant={editor.isActive('italic') ? 'default' : 'ghost'}
           size="sm"
           onClick={() => editor.chain().focus().toggleItalic().run()}
+          title="斜體"
+          aria-label="斜體"
         >
           <Italic className="h-4 w-4" />
         </Button>
 
         <Button
+          type="button"
           variant={editor.isActive('underline') ? 'default' : 'ghost'}
           size="sm"
           onClick={() => editor.chain().focus().toggleUnderline().run()}
+          title="底線"
+          aria-label="底線"
         >
           <Underline className="h-4 w-4" />
         </Button>
@@ -296,17 +336,23 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
 
         {/* Lists */}
         <Button
+          type="button"
           variant={editor.isActive('bulletList') ? 'default' : 'ghost'}
           size="sm"
           onClick={() => editor.chain().focus().toggleBulletList().run()}
+          title="項目符號"
+          aria-label="項目符號"
         >
           <List className="h-4 w-4" />
         </Button>
 
         <Button
+          type="button"
           variant={editor.isActive('orderedList') ? 'default' : 'ghost'}
           size="sm"
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          title="編號清單"
+          aria-label="編號清單"
         >
           <ListOrdered className="h-4 w-4" />
         </Button>
@@ -315,10 +361,12 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
 
         {/* Table */}
         <Button
+          type="button"
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
           title="插入表格"
+          aria-label="插入表格"
         >
           <TableIcon className="h-4 w-4" />
         </Button>
@@ -326,58 +374,72 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         {editor.isActive('table') && (
           <>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => editor.chain().focus().addRowBefore().run()}
               title="在上方插入行"
+              aria-label="在上方插入行"
             >
               <Plus className="h-3 w-3" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => editor.chain().focus().addRowAfter().run()}
               title="在下方插入行"
+              aria-label="在下方插入行"
             >
               <Plus className="h-3 w-3" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => editor.chain().focus().deleteRow().run()}
               title="刪除行"
+              aria-label="刪除行"
             >
               <Minus className="h-3 w-3" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => editor.chain().focus().addColumnBefore().run()}
               title="在左側插入列"
+              aria-label="在左側插入列"
             >
               <Plus className="h-3 w-3" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => editor.chain().focus().addColumnAfter().run()}
               title="在右側插入列"
+              aria-label="在右側插入列"
             >
               <Plus className="h-3 w-3" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => editor.chain().focus().deleteColumn().run()}
               title="刪除列"
+              aria-label="刪除列"
             >
               <Minus className="h-3 w-3" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => editor.chain().focus().deleteTable().run()}
               title="刪除表格"
+              aria-label="刪除表格"
             >
               <TableIcon className="h-4 w-4" />
             </Button>
@@ -388,9 +450,12 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
 
         {/* Link */}
         <Button
+          type="button"
           variant="ghost"
           size="sm"
           onClick={() => setIsLinkModalOpen(true)}
+          title="插入連結"
+          aria-label="插入連結"
         >
           <Link2 className="h-4 w-4" />
         </Button>
@@ -406,18 +471,22 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
               onChange={handleFileUpload}
             />
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => fileInputRef.current?.click()}
               title="上傳圖片"
+              aria-label="上傳圖片"
             >
               <Upload className="h-4 w-4" />
             </Button>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => setIsImageUrlModalOpen(true)}
               title="插入圖片 URL"
+              aria-label="插入圖片 URL"
             >
               <ExternalLink className="h-4 w-4" />
             </Button>
@@ -427,46 +496,75 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         <div className="w-px h-6 bg-border mx-1" />
 
         {/* Text Color */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5" role="group" aria-label="文字顏色選擇">
+          {TEXT_COLOR_OPTIONS.map((color) => (
+            <button
+              key={color.value}
+              type="button"
+              title={`文字顏色：${color.label}`}
+              aria-label={`文字顏色：${color.label}`}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                rememberColorSelection();
+              }}
+              onClick={() => applyTextColor(color.value)}
+              className={cn(
+                'h-5 w-5 rounded-full border-2 border-slate-700 shadow-sm transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300',
+                selectedColor === color.value && 'ring-2 ring-cyan-300 ring-offset-1 ring-offset-slate-950',
+              )}
+              style={{ backgroundColor: color.value }}
+            />
+          ))}
           <input
             type="color"
             value={selectedColor}
-            onChange={(e) => {
-              setSelectedColor(e.target.value);
-              editor.chain().focus().setColor(e.target.value).run();
+            onPointerDown={rememberColorSelection}
+            onFocus={() => {
+              if (!colorSelectionRef.current) rememberColorSelection();
             }}
-            className="w-8 h-6 rounded border cursor-pointer"
-            title="文字顏色"
+            onChange={(event) => applyTextColor(event.target.value)}
+            className="h-6 w-7 cursor-pointer rounded border border-slate-600 bg-slate-900"
+            title="自訂文字顏色"
+            aria-label="自訂文字顏色"
           />
-          <Palette className="h-4 w-4 text-muted-foreground" />
+          <Palette className="h-4 w-4 text-cyan-200" aria-hidden="true" />
         </div>
 
         <div className="w-px h-6 bg-border mx-1" />
 
         {/* Undo/Redo */}
         <Button
+          type="button"
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editor.can().undo()}
+          title="復原"
+          aria-label="復原"
         >
           <Undo className="h-4 w-4" />
         </Button>
 
         <Button
+          type="button"
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!editor.can().redo()}
+          title="重做"
+          aria-label="重做"
         >
           <Redo className="h-4 w-4" />
         </Button>
 
         {/* Clear Formatting */}
         <Button
+          type="button"
           variant="ghost"
           size="sm"
           onClick={() => editor.chain().focus().unsetAllMarks().run()}
+          title="清除格式"
+          aria-label="清除格式"
         >
           <RemoveFormatting className="h-4 w-4" />
         </Button>
@@ -614,16 +712,18 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">連結文字</label>
+              <label htmlFor="rich-text-link-text" className="text-sm font-medium">連結文字</label>
               <Input
+                id="rich-text-link-text"
                 value={linkText}
                 onChange={(e) => setLinkText(e.target.value)}
                 placeholder="輸入連結文字"
               />
             </div>
             <div>
-              <label className="text-sm font-medium">連結網址</label>
+              <label htmlFor="rich-text-link-url" className="text-sm font-medium">連結網址</label>
               <Input
+                id="rich-text-link-url"
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
                 placeholder="https://example.com"
@@ -632,6 +732,7 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
           </div>
           <DialogFooter>
             <Button
+              type="button"
               variant="outline"
               onClick={() => {
                 setIsLinkModalOpen(false);
@@ -641,7 +742,7 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
             >
               取消
             </Button>
-            <Button onClick={handleLinkSubmit}>
+            <Button type="button" onClick={handleLinkSubmit} disabled={!linkUrl.trim() || !linkText.trim()}>
               插入
             </Button>
           </DialogFooter>
@@ -659,8 +760,9 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">圖片網址</label>
+              <label htmlFor="rich-text-image-url" className="text-sm font-medium">圖片網址</label>
               <Input
+                id="rich-text-image-url"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 placeholder="https://example.com/image.jpg"
@@ -669,6 +771,7 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
           </div>
           <DialogFooter>
             <Button
+              type="button"
               variant="outline"
               onClick={() => {
                 setIsImageUrlModalOpen(false);
@@ -677,7 +780,7 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
             >
               取消
             </Button>
-            <Button onClick={handleImageUrlSubmit}>
+            <Button type="button" onClick={handleImageUrlSubmit} disabled={!imageUrl.trim()}>
               插入
             </Button>
           </DialogFooter>
@@ -708,7 +811,9 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
       
       {/* Custom close button overlay */}
       {lightboxOpen && (
-        <div
+        <button
+          type="button"
+          aria-label="關閉圖片預覽"
           style={{
             position: 'fixed',
             top: '20px',
@@ -732,7 +837,7 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
           }}
         >
           ×
-        </div>
+        </button>
       )}
     </div>
   );
