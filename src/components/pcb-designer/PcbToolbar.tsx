@@ -4,6 +4,7 @@ import {
   Box,
   Download,
   Eye,
+  FileJson,
   Hand,
   Layers3,
   Lock,
@@ -13,7 +14,6 @@ import {
   Redo2,
   Ruler,
   Save,
-  ScanSearch,
   Square,
   Undo2,
   ZoomIn,
@@ -45,6 +45,7 @@ interface ToolButtonProps {
   disabled?: boolean;
   active?: boolean;
   onClick: () => void;
+  tone?: "save" | "import";
 }
 
 function ToolButton({
@@ -55,6 +56,7 @@ function ToolButton({
   disabled,
   active,
   onClick,
+  tone,
 }: ToolButtonProps) {
   return (
     <Tooltip>
@@ -68,6 +70,7 @@ function ToolButton({
               "pcb-tool-button",
               showLabel && "is-labeled",
               active && "is-active",
+              tone && `is-${tone}`,
             )}
             disabled={disabled}
             onClick={onClick}
@@ -103,6 +106,7 @@ export interface PcbToolbarProps {
   exportPngAvailable: boolean;
   exportIncludesGrid: boolean;
   onSave: () => void | Promise<void>;
+  onImportProject: () => void;
   onViewModeChange: (mode: PcbViewMode) => void;
   onExportProject: () => void;
   onExportBomCsv: () => void;
@@ -117,7 +121,6 @@ export interface PcbToolbarProps {
   onToggleLock: () => void;
   onZoomChange: (zoom: number) => void;
   onResetView: () => void;
-  onRunDrc: () => void;
 }
 
 export function PcbToolbar({
@@ -135,6 +138,7 @@ export function PcbToolbar({
   exportPngAvailable,
   exportIncludesGrid,
   onSave,
+  onImportProject,
   onViewModeChange,
   onExportProject,
   onExportBomCsv,
@@ -149,7 +153,6 @@ export function PcbToolbar({
   onToggleLock,
   onZoomChange,
   onResetView,
-  onRunDrc,
 }: PcbToolbarProps) {
   return (
     <TooltipProvider delayDuration={250}>
@@ -159,13 +162,68 @@ export function PcbToolbar({
         aria-label="PCB 工具列"
         role="toolbar"
       >
-        <ToolButton
-          label={isSaving ? "正在同步" : "儲存並同步"}
-          shortcut="Ctrl+S"
-          icon={Save}
-          disabled={!canSave || isSaving}
-          onClick={() => void onSave()}
-        />
+        <div className="pcb-file-actions" role="group" aria-label="檔案作業">
+          <ToolButton
+            label={isSaving ? "正在同步" : "儲存"}
+            shortcut="Ctrl+S"
+            showLabel
+            tone="save"
+            icon={Save}
+            disabled={!canSave || isSaving}
+            onClick={() => void onSave()}
+          />
+          <ToolButton
+            label="匯入 JSON"
+            showLabel
+            tone="import"
+            icon={FileJson}
+            disabled={!canMutate}
+            onClick={onImportProject}
+          />
+
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="pcb-tool-button is-labeled is-export"
+                    aria-label="匯出檔案"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>匯出</span>
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent className="text-xs">匯出 JSON、BOM 或 PNG</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="start" className="pcb-dropdown-menu">
+              <DropdownMenuItem onSelect={onExportProject}>專案 JSON</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onExportBomCsv}>BOM CSV</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void onExportBomXlsx()}>BOM XLSX</DropdownMenuItem>
+              <DropdownMenuCheckboxItem
+                checked={exportIncludesGrid}
+                onCheckedChange={onExportIncludesGridChange}
+                onSelect={(event) => event.preventDefault()}
+              >
+                PNG 包含網格
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuItem
+                disabled={!exportPngAvailable}
+                onSelect={onExportPng}
+                title={exportPngAvailable ? "匯出 PNG" : "畫布尚未連接，暫時無法匯出 PNG"}
+              >
+                PNG
+                {!exportPngAvailable && (
+                  <span className="ml-2 text-xs text-slate-400">畫布未連接</span>
+                )}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <span className="pcb-tool-separator" aria-hidden="true" />
 
         <div className="pcb-view-switch" role="group" aria-label="畫布檢視模式">
           <button
@@ -187,50 +245,6 @@ export function PcbToolbar({
             3D
           </button>
         </div>
-
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="pcb-tool-button"
-                  aria-label="匯出檔案"
-                >
-                  <Download className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent className="text-xs">匯出檔案</TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent
-            align="start"
-            className="pcb-dropdown-menu"
-          >
-            <DropdownMenuItem onSelect={onExportProject}>專案 JSON</DropdownMenuItem>
-            <DropdownMenuItem onSelect={onExportBomCsv}>BOM CSV</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => void onExportBomXlsx()}>BOM XLSX</DropdownMenuItem>
-            <DropdownMenuCheckboxItem
-              checked={exportIncludesGrid}
-              onCheckedChange={onExportIncludesGridChange}
-              onSelect={(event) => event.preventDefault()}
-            >
-              PNG 包含網格
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuItem
-              disabled={!exportPngAvailable}
-              onSelect={onExportPng}
-              title={exportPngAvailable ? "匯出 PNG" : "畫布尚未連接，暫時無法匯出 PNG"}
-            >
-              PNG
-              {!exportPngAvailable && (
-                <span className="ml-2 text-xs text-slate-400">畫布未連接</span>
-              )}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
 
         <div className="pcb-visible-layer-switch" role="group" aria-label="顯示層">
           <Eye className="h-3.5 w-3.5" aria-hidden="true" />
@@ -301,18 +315,6 @@ export function PcbToolbar({
         <ToolButton label="放大" shortcut="+" icon={ZoomIn} disabled={viewMode === "3d" || zoom >= 400} onClick={() => onZoomChange(zoom + 25)} />
         <ToolButton label="符合板框" shortcut="F" icon={Maximize2} disabled={viewMode === "3d"} onClick={onResetView} />
 
-        <div className="ml-auto">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="pcb-drc-button"
-            onClick={onRunDrc}
-          >
-            <ScanSearch className="mr-1.5 h-3.5 w-3.5" />
-            DRC
-          </Button>
-        </div>
       </div>
     </TooltipProvider>
   );

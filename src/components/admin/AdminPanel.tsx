@@ -568,9 +568,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="flex flex-col gap-3">
         {/* User Management Tab */}
         <TabsContent value="users" className="mt-0 flex flex-col gap-3">
-          <section className="admin-user-section flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <section className="admin-user-section admin-user-hero flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sky-300/15 bg-sky-400/10">
+              <div className="admin-section-icon admin-section-icon-users flex h-10 w-10 items-center justify-center rounded-2xl">
                 <Users className="h-4.5 w-4.5 text-sky-200" />
               </div>
               <div>
@@ -582,20 +582,21 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               </p> : null}
             </div>
 
-            <Dialog
-              open={canEditUsers && isUserDialogOpen}
-              onOpenChange={(open) => canEditUsers && setIsUserDialogOpen(open)}
+            <Button
+              disabled={!canEditUsers}
+              onClick={() => setIsUserDialogOpen(true)}
+              aria-expanded={isUserDialogOpen}
+              aria-controls="admin-create-user-dialog"
+              className="admin-primary-action h-10 rounded-xl px-4 font-black disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <DialogTrigger asChild>
-                <Button
-                  disabled={!canEditUsers}
-                  className="h-10 rounded-lg bg-cyan-300 px-4 font-bold text-[#06111f] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  新增用戶
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl border border-[#356985] bg-[#10263a] text-slate-100">
+              <Plus className="mr-2 h-4 w-4" />
+              新增用戶
+            </Button>
+            <Dialog
+              open={isUserDialogOpen}
+              onOpenChange={setIsUserDialogOpen}
+            >
+              <DialogContent id="admin-create-user-dialog" className="max-w-2xl border border-[#356985] bg-[#10263a] text-slate-100">
                 <DialogHeader>
                   <DialogTitle>新增系統用戶</DialogTitle>
                 </DialogHeader>
@@ -758,7 +759,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   return (
                     <article
                       key={systemUser.id}
-                      className="group relative overflow-hidden rounded-xl border border-[#2a526f] bg-[#0c2539] p-4 transition-colors duration-200 hover:border-cyan-300/55 hover:bg-[#102c43] sm:p-5"
+                      className="admin-account-card group relative overflow-hidden rounded-xl border p-4 transition-colors duration-200 sm:p-5"
                     >
                       <div className="flex flex-col gap-4 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
@@ -819,7 +820,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="admin-account-actions flex flex-wrap items-center gap-2">
                           {isCurrentUser ? (
                             <Button
                               type="button"
@@ -848,7 +849,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               variant="outline"
                               size="sm"
                               disabled={!canEditUsers}
-                              className="h-9 rounded-xl border-white/10 bg-slate-950/25 text-slate-300 hover:border-amber-300/20 hover:bg-amber-400/10 hover:text-amber-100"
+                              className="admin-account-action admin-account-action-status h-9 rounded-xl"
                               onClick={() => handleToggleUserStatus(systemUser.id, systemUser.status)}
                             >
                               {systemUser.status === "active"
@@ -867,7 +868,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                             variant="outline"
                             size="sm"
                             disabled={!canEditUsers}
-                            className="h-9 rounded-xl border-sky-300/15 bg-sky-400/[0.07] text-sky-100 hover:border-sky-300/30 hover:bg-sky-400/15"
+                            className="admin-account-action admin-account-action-permission h-9 rounded-xl"
                             onClick={() => {
                               setSelectedUserId(systemUser.id);
                               setSelectedUsername(systemUser.username);
@@ -879,7 +880,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                           </Button>
 
                           {canEditUsers ? (
-                            <div className="[&>button]:h-9 [&>button]:rounded-xl [&>button]:border-white/10 [&>button]:bg-slate-950/25 [&>button]:text-slate-300 [&>button]:hover:border-sky-300/20 [&>button]:hover:bg-sky-400/10 [&>button]:hover:text-sky-100">
+                            <div className="admin-account-edit [&>button]:h-9 [&>button]:rounded-xl">
                               <UserEditDialog
                                 userId={systemUser.id}
                                 username={systemUser.username}

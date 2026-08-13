@@ -138,6 +138,20 @@
     radial-gradient(circle at 100% 0%, rgb(64 217 199 / 34%), transparent 8rem);
 }
 
+.admin-sidebar nav .admin-sidebar-item:nth-child(2).is-active {
+  border-color: rgb(74 222 128 / 72%);
+  background:
+    linear-gradient(135deg, rgb(18 132 116 / 100%), rgb(48 187 132 / 96%)),
+    radial-gradient(circle at 100% 0%, rgb(251 191 36 / 30%), transparent 8rem);
+}
+
+.admin-sidebar nav .admin-sidebar-item:nth-child(3).is-active {
+  border-color: rgb(196 181 253 / 75%);
+  background:
+    linear-gradient(135deg, rgb(124 92 218 / 100%), rgb(213 91 151 / 94%)),
+    radial-gradient(circle at 100% 0%, rgb(251 191 36 / 24%), transparent 8rem);
+}
+
 .admin-sidebar-item > span {
   display: block;
   min-width: 0;
@@ -203,6 +217,125 @@
     radial-gradient(circle at 7% 0%, rgb(64 217 199 / 12%), transparent 20rem),
     radial-gradient(circle at 88% 12%, rgb(251 191 36 / 7%), transparent 18rem),
     #0a2032;
+}
+
+.admin-user-hero {
+  position: relative;
+  overflow: hidden;
+  border-color: rgb(96 205 255 / 46%);
+  background:
+    radial-gradient(circle at 6% 0%, rgb(56 189 248 / 24%), transparent 18rem),
+    radial-gradient(circle at 74% 0%, rgb(74 222 128 / 12%), transparent 18rem),
+    radial-gradient(circle at 100% 100%, rgb(251 191 36 / 12%), transparent 16rem),
+    #0a2032;
+}
+
+.admin-user-hero::after {
+  position: absolute;
+  right: -22px;
+  bottom: -38px;
+  width: 150px;
+  height: 92px;
+  border: 1px solid rgb(251 191 36 / 22%);
+  border-radius: 999px;
+  background: rgb(251 191 36 / 5%);
+  content: "";
+  pointer-events: none;
+  transform: rotate(-14deg);
+}
+
+.admin-section-icon {
+  border: 1px solid rgb(125 211 252 / 48%);
+  color: #dff7ff;
+  background: linear-gradient(145deg, rgb(14 165 233 / 55%), rgb(34 211 238 / 18%));
+  box-shadow: 0 10px 26px rgb(14 165 233 / 20%);
+}
+
+.admin-primary-action {
+  border: 1px solid rgb(165 243 252 / 70%);
+  color: #052335;
+  background: linear-gradient(135deg, #67e8f9, #5eead4 55%, #bef264);
+  box-shadow: 0 12px 28px rgb(34 211 238 / 22%);
+}
+
+.admin-primary-action:hover {
+  color: #041b28;
+  background: linear-gradient(135deg, #a5f3fc, #6ee7b7 55%, #d9f99d);
+}
+
+[data-admin-zone="status-overview"] > div > div {
+  position: relative;
+  overflow: hidden;
+  min-height: 76px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+[data-admin-zone="status-overview"] > div > div::after {
+  position: absolute;
+  right: -18px;
+  bottom: -22px;
+  width: 72px;
+  height: 52px;
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  content: "";
+  opacity: 0.12;
+}
+
+.admin-account-card {
+  border-color: rgb(71 120 151 / 72%);
+  background:
+    linear-gradient(90deg, rgb(56 189 248 / 85%) 0 3px, transparent 3px),
+    radial-gradient(circle at 96% 0%, rgb(167 139 250 / 10%), transparent 18rem),
+    #0c2539;
+}
+
+.admin-account-card:hover {
+  border-color: rgb(103 232 249 / 58%);
+  background:
+    linear-gradient(90deg, rgb(94 234 212 / 100%) 0 3px, transparent 3px),
+    radial-gradient(circle at 96% 0%, rgb(251 191 36 / 10%), transparent 18rem),
+    #102c43;
+}
+
+.admin-account-action {
+  border: 1px solid;
+  font-weight: 750;
+}
+
+.admin-account-action-status {
+  border-color: rgb(251 191 36 / 36%);
+  color: #fde68a;
+  background: rgb(245 158 11 / 11%);
+}
+
+.admin-account-action-status:hover {
+  border-color: rgb(253 224 71 / 65%);
+  color: #fff7c2;
+  background: rgb(245 158 11 / 21%);
+}
+
+.admin-account-action-permission {
+  border-color: rgb(103 232 249 / 36%);
+  color: #cffafe;
+  background: rgb(6 182 212 / 12%);
+}
+
+.admin-account-action-permission:hover {
+  border-color: rgb(165 243 252 / 66%);
+  color: #ffffff;
+  background: rgb(6 182 212 / 23%);
+}
+
+.admin-account-edit > button {
+  border-color: rgb(196 181 253 / 38%) !important;
+  color: #ede9fe !important;
+  background: rgb(139 92 246 / 12%) !important;
+}
+
+.admin-account-edit > button:hover {
+  border-color: rgb(216 180 254 / 68%) !important;
+  background: rgb(168 85 247 / 24%) !important;
 }
 
 .admin-api-workspace {
@@ -457,6 +590,24 @@
 
   .admin-mobile-menu {
     display: inline-flex;
+  }
+}
+
+@media (max-width: 639px) {
+  .admin-workspace {
+    padding: 8px;
+  }
+
+  .admin-account-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-account-actions > button,
+  .admin-account-actions > div,
+  .admin-account-edit > button {
+    width: 100%;
   }
 }
 

@@ -418,7 +418,7 @@ test("provides complete board, selection, DRC, and PNG workflows", () => {
   assert.match(editorCssSource, /max-width:\s*1279px[\s\S]*pcb-left-drawer,[\s\S]*visibility:\s*hidden[\s\S]*is-open[\s\S]*visibility:\s*visible/);
   assert.match(workspaceSource, /手動儲存模式（Ctrl\+S）/);
   assert.doesNotMatch(workspaceSource, /toLocaleTimeString/);
-  assert.match(workspaceSource, /onRunDrc=\{\(\) => \{[\s\S]{0,120}runDrc\(\)[\s\S]{0,120}setOpenDrawer\(["']right["']\)/);
+  assert.match(workspaceSource, /pcb-drc-header-action[\s\S]{0,180}workspace\.runDrc\(\)[\s\S]{0,120}setOpenDrawer\(["']right["']\)/);
 });
 
 test("keeps STEP model metadata serializable and assignment scoped to the selected component", () => {

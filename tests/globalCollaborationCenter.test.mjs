@@ -27,6 +27,8 @@ test("the workspace keeps direct messages exclusively in the bottom-right floati
   assert.match(centerSource, /function DirectMessageLauncher/);
   assert.match(centerSource, /data-chat-launcher="compact-button"/);
   assert.match(centerSource, /pointer-events-auto relative ml-auto flex h-14 w-14/);
+  assert.match(centerSource, /sm:min-w-\[132px\]/);
+  assert.match(centerSource, /聊天室/);
   assert.match(centerSource, /title="開啟聊天室"/);
   assert.doesNotMatch(centerSource, /w-\[min\(310px,100%\)\]/);
   assert.match(centerSource, /aria-expanded=\{false\}/);
@@ -37,7 +39,8 @@ test("the workspace keeps direct messages exclusively in the bottom-right floati
   assert.match(centerSource, /sm:bottom-5 sm:right-5/);
   assert.match(centerSource, /data-chat-surface="detached-card"/);
   assert.match(centerSource, /rounded-\[24px\]/);
-  assert.match(centerSource, /bg-\[linear-gradient\(145deg,#e4fcff/);
+  assert.match(centerSource, /bg-\[#071421\]/);
+  assert.match(centerSource, /bg-\[linear-gradient\(120deg,#17627a/);
   assert.doesNotMatch(centerSource, /absolute bottom-11 right-0/);
   assert.doesNotMatch(centerSource, /fixed bottom-0 right-0/);
   assert.match(centerSource, /visible pointer-events-auto translate-y-0 scale-100 opacity-100/);
