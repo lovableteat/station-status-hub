@@ -519,6 +519,24 @@
   outline: none !important;
 }
 
+.pcb-measurement-endpoint-control {
+  cursor: crosshair;
+}
+
+.pcb-measurement-resize-dot {
+  filter: drop-shadow(0 0 2px rgb(253 224 71 / 65%));
+  transition: fill 120ms ease, filter 120ms ease, transform 120ms ease;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.pcb-measurement-endpoint-control:hover .pcb-measurement-resize-dot,
+.pcb-measurement-endpoint-control:focus-visible .pcb-measurement-resize-dot {
+  fill: #67e8f9;
+  filter: drop-shadow(0 0 4px rgb(103 232 249 / 85%));
+  transform: scale(1.18);
+}
+
 .pcb-svg-label {
   fill: #f8fafc;
   paint-order: stroke;
