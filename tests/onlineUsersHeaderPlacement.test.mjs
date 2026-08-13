@@ -30,5 +30,8 @@ test("online users control stays aligned with the fixed header control height", 
 
   assert.doesNotMatch(indicatorSource, /fixed bottom-4 right-4/);
   assert.match(indicatorSource, /h-12 w-\[140px\]/);
-  assert.match(headerSource, /showOnlineUsers && <OnlineUsersIndicator\s*\/>/);
+  assert.match(
+    headerSource,
+    /showOnlineUsers && <div className="hidden sm:block"><OnlineUsersIndicator\s*\/><\/div>/,
+  );
 });

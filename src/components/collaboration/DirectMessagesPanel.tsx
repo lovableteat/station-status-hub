@@ -307,7 +307,7 @@ export function DirectMessagesPanel({
   if (selectedThreadId) {
     return (
       <div className="flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_36%)]">
-        <div className="flex items-center gap-3 border-b border-white/8 bg-[linear-gradient(180deg,rgba(11,24,38,0.98),rgba(9,19,31,0.94))] px-4 py-3">
+        <div className="flex min-h-16 items-center gap-3 border-b border-white/8 bg-[linear-gradient(180deg,rgba(11,24,38,0.98),rgba(9,19,31,0.94))] px-3 py-2.5 sm:px-4 sm:py-3">
           <Button
             variant="ghost"
             size="icon"
@@ -380,7 +380,7 @@ export function DirectMessagesPanel({
                   Date.parse(readByOtherAt) >= Date.parse(message.createdAt);
                 return (
                   <div key={message.id} className={cn("flex", own ? "justify-end" : "justify-start")}>
-                    <div className="group relative max-w-[82%]">
+                    <div className="group relative max-w-[88%] sm:max-w-[82%]">
                       <div
                         className={cn(
                           "rounded-[22px] px-4 py-3 text-sm leading-6 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.72)]",
@@ -488,7 +488,7 @@ export function DirectMessagesPanel({
           )}
         </ScrollArea>
 
-        <form onSubmit={submitMessage} className="border-t border-white/8 bg-[linear-gradient(180deg,rgba(8,18,29,0.95),rgba(8,18,29,1))] p-3">
+        <form onSubmit={submitMessage} className="border-t border-white/8 bg-[linear-gradient(180deg,rgba(8,18,29,0.95),rgba(8,18,29,1))] px-2.5 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 sm:p-3">
           {selectedMediaFiles.length > 0 ? (
             <div className="mb-2 flex gap-2 overflow-x-auto pb-1" aria-label="已選擇的媒體檔案">
               {selectedMediaFiles.map((item, index) => (

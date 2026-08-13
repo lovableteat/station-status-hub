@@ -31,15 +31,15 @@ export function MaintenancePageHeader({
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="truncate text-2xl font-semibold tracking-[-0.02em] text-[#f3f8fc]">
+          <h1 className="truncate text-xl font-semibold tracking-[-0.02em] text-[#f3f8fc] sm:text-2xl">
             {title}
           </h1>
           {description && (
-            <p className="mt-0.5 truncate text-sm text-[#a9c0d1]">{description}</p>
+            <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-[#a9c0d1] sm:truncate sm:text-sm">{description}</p>
           )}
         </div>
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-wrap">{actions}</div>}
     </header>
   );
 }

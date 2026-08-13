@@ -1,6 +1,21 @@
 import * as React from "react"
 
 const MOBILE_BREAKPOINT = 768
+const COMPACT_LAYOUT_BREAKPOINT = 1024
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = React.useState(false)
+
+  React.useEffect(() => {
+    const mediaQuery = window.matchMedia(query)
+    const onChange = () => setMatches(mediaQuery.matches)
+    mediaQuery.addEventListener("change", onChange)
+    onChange()
+    return () => mediaQuery.removeEventListener("change", onChange)
+  }, [query])
+
+  return matches
+}
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
@@ -16,4 +31,8 @@ export function useIsMobile() {
   }, [])
 
   return !!isMobile
+}
+
+export function useIsCompactLayout() {
+  return useMediaQuery(`(max-width: ${COMPACT_LAYOUT_BREAKPOINT - 1}px)`)
 }

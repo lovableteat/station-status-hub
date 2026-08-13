@@ -6086,7 +6086,10 @@ export function MaterialRequestPage() {
         <div className="flex flex-col gap-3 border-b border-[#2a526f] bg-[linear-gradient(90deg,rgba(34,211,238,0.10),rgba(167,139,250,0.07),rgba(251,191,36,0.06))] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
-            <p className="mt-0.5 text-sm text-slate-500">展開後才顯示替代料；拖曳表頭右邊緣可調整欄寬。</p>
+            <p className="mt-0.5 text-sm text-slate-400">
+              <span className="lg:hidden">手機以料件卡片呈現，點開即可查看替代料與追蹤紀錄。</span>
+              <span className="hidden lg:inline">展開後才顯示替代料；拖曳表頭右邊緣可調整欄寬。</span>
+            </p>
           </div>
           <div className="grid grid-cols-2 items-center gap-2 sm:flex">
             <Button
@@ -6097,17 +6100,17 @@ export function MaterialRequestPage() {
                 setTableColorDraft(activeTableColorTheme);
                 setTableColorDialogOpen(true);
               }}
-              className="border-violet-300/35 bg-violet-400/12 font-bold text-violet-100 hover:bg-violet-400/22"
+              className="hidden border-violet-300/35 bg-violet-400/12 font-bold text-violet-100 hover:bg-violet-400/22 lg:inline-flex"
             >
               自訂表格配色
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setColumnWidths([...DEFAULT_COLUMN_WIDTHS])} className="border-amber-300/30 bg-amber-400/10 font-bold text-amber-100 hover:bg-amber-400/20">重設欄寬</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setColumnWidths([...DEFAULT_COLUMN_WIDTHS])} className="hidden border-amber-300/30 bg-amber-400/10 font-bold text-amber-100 hover:bg-amber-400/20 lg:inline-flex">重設欄寬</Button>
             {expandedKey && <Button type="button" variant="outline" size="sm" onClick={() => setExpandedKey(null)} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">收合目前料件</Button>}
           </div>
         </div>
 
         <div data-testid="material-table-toolbar" className="bg-[#0c1f33] p-3">
-        <div className="grid gap-3 xl:grid-cols-[minmax(390px,1fr)_auto_220px_auto]">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-3 xl:grid-cols-[minmax(390px,1fr)_auto_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300" />
             <Input
@@ -6129,17 +6132,18 @@ export function MaterialRequestPage() {
                 }
               }}
               placeholder="搜尋料名、REF DES、MPN、內部料號、狀態追蹤；也可輸入『完全無料』"
-              className="h-10 border-[#356985] bg-[#071522] pl-12 text-[15px] text-slate-100 placeholder:text-[#a9c0d1] focus-visible:ring-cyan-400"
+              className="h-10 border-[#356985] bg-[#071522] pl-10 text-sm text-slate-100 placeholder:text-[#a9c0d1] focus-visible:ring-cyan-400 sm:pl-12 sm:text-[15px]"
             />
           </div>
 
           <Button
             type="button"
+            aria-label={isSearchPending ? "搜尋中" : "搜尋"}
             onClick={() => { void applySearch(); }}
             disabled={isSearchPending || isWorkspaceLoading}
             className="h-10 bg-cyan-500 px-5 font-bold text-slate-950 hover:bg-cyan-400 disabled:bg-slate-600 disabled:text-slate-300"
           >
-            <Search className="mr-2 h-4 w-4" />{isSearchPending ? "搜尋中" : "搜尋"}
+            <Search className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">{isSearchPending ? "搜尋中" : "搜尋"}</span>
           </Button>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
@@ -6189,7 +6193,79 @@ export function MaterialRequestPage() {
         </div>
         </div>
 
-        <div className="border-t border-[#2a526f]">
+        <div className="space-y-3 border-t border-[#2a526f] p-3 lg:hidden" data-testid="material-mobile-cards">
+          {visibleGroupRows.map(({ group, primaryAlternative, trackingRecord, secondaryAlternatives }, rowIndex) => {
+            const expanded = expandedKey === group.key;
+            const mainRecord = primaryAlternative ?? group.primaryRecord;
+            const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
+            const isMarked = markedGroupKeySet.has(group.key);
+            const mustApply = group.requiresApplication;
+            const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred).length;
+
+            return (
+              <article
+                key={group.key}
+                className={cn(
+                  "overflow-hidden rounded-2xl border bg-[linear-gradient(145deg,rgba(16,38,58,0.98),rgba(8,24,40,0.98))] shadow-[0_18px_40px_-30px_rgba(34,211,238,0.7)]",
+                  mustApply ? "border-amber-300/35" : "border-cyan-200/20",
+                )}
+              >
+                <div className="flex items-start gap-3 p-3.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleMarkedGroup(group.key)}
+                    aria-label={isMarked ? "移除我的標記" : "加入我的標記"}
+                    className={cn(
+                      "flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl border text-[10px] font-black",
+                      isMarked ? "border-amber-200/45 bg-amber-300 text-amber-950" : "border-slate-500/25 bg-slate-900/50 text-slate-400",
+                    )}
+                  >
+                    <Star className={cn("h-4 w-4", isMarked && "fill-current")} />
+                    {itemValue}
+                  </button>
+                  <button type="button" onClick={() => openRecord(mainRecord, "view")} className="min-w-0 flex-1 text-left">
+                    <p className="line-clamp-2 text-base font-black leading-6 text-white">{group.name || mainRecord.description || "未命名料件"}</p>
+                    <p className="mt-1 truncate text-xs font-semibold text-cyan-200">{getDisplayMpn(mainRecord) || "尚未填寫 MPN"}</p>
+                    <p className="mt-1 truncate text-xs text-slate-400">{mainRecord.manufacturer || "未指定廠商"}</p>
+                  </button>
+                  <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-500" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-px border-y border-white/5 bg-white/5 text-xs">
+                  <div className="bg-[#0b1b2d] px-3 py-2.5"><span className="block text-slate-500">REF DES</span><strong className="mt-1 block truncate text-slate-100">{mainRecord.refDes || mainRecord.refGroup || "-"}</strong></div>
+                  <div className="bg-[#0b1b2d] px-3 py-2.5"><span className="block text-slate-500">內部料號</span><strong className="mt-1 block truncate text-slate-100">{mainRecord.partNumber || "未建立"}</strong></div>
+                  <div className="bg-[#0b1b2d] px-3 py-2.5"><span className="block text-slate-500">替代料</span><strong className={cn("mt-1 block", availableAlternativeCount > 0 ? "text-emerald-200" : "text-amber-200")}>{availableAlternativeCount} 個可用 / {secondaryAlternatives.length} 個</strong></div>
+                  <div className="bg-[#0b1b2d] px-3 py-2.5"><span className="block text-slate-500">申請狀態</span><strong className={cn("mt-1 block truncate", mustApply ? "text-amber-200" : "text-emerald-200")}>{mustApply ? "需要申請" : mainRecord.sourcingStatus || "資料可用"}</strong></div>
+                </div>
+
+                {expanded && secondaryAlternatives.length > 0 ? (
+                  <div className="space-y-2 border-b border-cyan-200/10 bg-[#071522] p-3">
+                    {secondaryAlternatives.map((record) => (
+                      <button key={record.id} type="button" onClick={() => openRecord(record, "view")} className="flex w-full items-center gap-3 rounded-xl border border-violet-300/15 bg-violet-400/[0.07] px-3 py-2.5 text-left">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-300/15 text-xs font-black text-violet-100">ALT</span>
+                        <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{getDisplayMpn(record) || "未填 MPN"}</strong><span className="mt-0.5 block truncate text-xs text-slate-400">{record.manufacturer || "未指定廠商"}</span></span>
+                        <ChevronRight className="h-4 w-4 text-violet-200" />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="grid grid-cols-3 gap-2 p-3">
+                  <Button type="button" variant="outline" size="sm" disabled={secondaryAlternatives.length === 0} onClick={() => toggleExpanded(group.key)} className="h-10 rounded-xl border-violet-300/25 bg-violet-400/10 px-2 text-violet-100">
+                    {expanded ? <ChevronDown className="mr-1 h-4 w-4" /> : <ChevronRight className="mr-1 h-4 w-4" />}替代料
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" disabled={!trackingRecord} onClick={() => trackingRecord && openTrackingDialog(trackingRecord)} className="h-10 rounded-xl border-emerald-300/25 bg-emerald-400/10 px-2 text-emerald-100">追蹤</Button>
+                  <Button type="button" size="sm" onClick={() => openCreate(group)} className="h-10 rounded-xl bg-cyan-300 px-2 font-black text-[#062230] hover:bg-cyan-200"><Plus className="mr-1 h-4 w-4" />更新</Button>
+                </div>
+              </article>
+            );
+          })}
+          {visibleGroupRows.length === 0 ? (
+            <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center text-slate-400"><Search className="h-9 w-9" /><p className="mt-3 font-bold text-slate-200">找不到符合條件的料</p></div>
+          ) : null}
+        </div>
+
+        <div className="hidden border-t border-[#2a526f] lg:block">
         <div
           className="relative max-h-[70vh] overflow-auto"
           data-testid="material-table-scroll"

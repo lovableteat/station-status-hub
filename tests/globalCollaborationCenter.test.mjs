@@ -34,8 +34,9 @@ test("the workspace keeps direct messages exclusively in the bottom-right floati
   assert.match(centerSource, /aria-expanded=\{false\}/);
   assert.match(centerSource, /aria-controls="direct-messages-panel"/);
   assert.match(centerSource, /data-chat-dock="detached"/);
-  assert.match(centerSource, /pointer-events-none fixed bottom-3 right-3/);
-  assert.match(centerSource, /bottom-3 right-3/);
+  assert.match(centerSource, /pointer-events-none fixed bottom-\[calc\(5\.25rem\+env\(safe-area-inset-bottom\)\)\] right-2/);
+  assert.match(centerSource, /fixed inset-0 flex h-\[100dvh\] w-screen/);
+  assert.match(centerSource, /sm:absolute sm:inset-auto sm:bottom-0 sm:right-0/);
   assert.match(centerSource, /sm:bottom-5 sm:right-5/);
   assert.match(centerSource, /data-chat-surface="detached-card"/);
   assert.match(centerSource, /rounded-\[24px\]/);
