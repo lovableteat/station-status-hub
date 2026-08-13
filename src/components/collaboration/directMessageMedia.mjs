@@ -26,6 +26,26 @@ export function getDirectMessageMediaKind(file) {
   return MIME_CONFIG.get(file?.type)?.mediaKind ?? null;
 }
 
+export function getDirectMessageClipboardImageFiles(items) {
+  return Array.from(items ?? []).flatMap((item) => {
+    if (item?.kind !== "file" || !item.type?.startsWith("image/") || !item.getAsFile) return [];
+    const file = item.getAsFile();
+    return file ? [file] : [];
+  });
+}
+
+export function createDirectMessageClipboardFileName(file, index = 0, now = new Date()) {
+  const config = MIME_CONFIG.get(file?.type);
+  if (!config || config.mediaKind !== "image") return null;
+  const timestamp = new Date(now)
+    .toISOString()
+    .slice(0, 19)
+    .replaceAll("-", "")
+    .replace("T", "-")
+    .replaceAll(":", "");
+  return `clipboard-${timestamp}-${index + 1}.${config.extension}`;
+}
+
 export function validateDirectMessageFiles(files) {
   const normalized = Array.from(files ?? []);
   if (normalized.length > CHAT_MEDIA_MAX_FILES) {
