@@ -283,7 +283,8 @@ test("conversation rows can clear all locally visible messages without affecting
   assert.match(panel, /deleting \? <LoaderCircle[^>]*animate-spin[^>]*\/> : <Trash2/s);
   assert.match(panel, /<div[^>]*data-direct-thread-row="true"[^>]*>[\s\S]*?<button[\s\S]*?<\/button>[\s\S]*?<button/s);
   assert.match(panel, /data-density="compact"/);
-  assert.match(panel, /h-\[58px\]/);
+  assert.match(panel, /h-\[66px\]/);
+  assert.match(panel, /\[contain-intrinsic-size:66px\]/);
   assert.match(panel, /\[content-visibility:auto\]/);
   assert.match(panel, /data-direct-messages-toolbar="compact"/);
   assert.doesNotMatch(panel, /rounded-\[26px\]|line-clamp-2/);
@@ -442,7 +443,33 @@ test("direct message hook uploads private media and resolves signed attachment U
   assert.match(panel, /await sendMessage\(body, selectedMediaFiles\.map/);
   assert.match(panel, /<img[\s\S]*attachment\.url/);
   assert.match(panel, /<video[\s\S]*controls[\s\S]*preload="metadata"/);
-  assert.match(panel, /message\.body \? [\s\S]*message\.body/);
+  assert.match(panel, /parsed\.body \? [\s\S]*parsed\.body/);
+});
+
+test("direct chat exposes modern search, pinning, drafts, replies, emoji and media preview workflows", async () => {
+  const [panel, center, experience] = await Promise.all([
+    readSource("src/components/collaboration/DirectMessagesPanel.tsx"),
+    readSource("src/components/collaboration/CollaborationCenter.tsx"),
+    readSource("src/components/collaboration/directMessageExperience.mjs"),
+  ]);
+
+  assert.match(panel, /type ThreadFilter = "all" \| "unread" \| "pinned"/);
+  assert.match(panel, /station-chat-preferences/);
+  assert.match(panel, /草稿 ·/);
+  assert.match(panel, /搜尋此對話的文字或檔名/);
+  assert.match(panel, /sortDirectThreads\(searchedThreads, pinnedThreadIds\)/);
+  assert.match(panel, /formatDirectMessageReply\(messageBody, replyingTo\)/);
+  assert.match(panel, /aria-label="回覆訊息"/);
+  assert.match(panel, /aria-label="複製訊息"/);
+  assert.match(panel, /QUICK_EMOJI\.map/);
+  assert.match(panel, /Enter 送出 · Shift \+ Enter 換行/);
+  assert.match(panel, /setPreviewAttachment\(attachment\)/);
+  assert.match(panel, /aria-label="下載原始檔案"/);
+  assert.match(panel, /formatDirectMessageDay\(message\.createdAt\)/);
+  assert.match(center, /w-\[min\(430px,calc\(100vw-1rem\)\)\]/);
+  assert.match(experience, /export function parseDirectMessageBody/);
+  assert.match(experience, /export function directMessageMatchesQuery/);
+  assert.match(experience, /export function sortDirectThreads/);
 });
 
 test("collaboration changes never replace the current page", async () => {
