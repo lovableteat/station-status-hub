@@ -1,4 +1,5 @@
 import type { PcbBoard, PcbPlacedComponent } from "../types.ts";
+import { getPcb3DComponentTransform } from "./viewSync.ts";
 
 export interface SoftwarePoint3 {
   x: number;
@@ -173,7 +174,8 @@ export function transformPcbComponentPoint(
   board: Pick<PcbBoard, "width" | "height">,
   boardThickness = 1.6,
 ): SoftwarePoint3 {
-  const angle = -(component.rotation * Math.PI) / 180;
+  const transform = getPcb3DComponentTransform(component, board);
+  const angle = transform.rotation[1];
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   const raisedPoint = {
@@ -192,9 +194,9 @@ export function transformPcbComponentPoint(
   }
 
   return {
-    x: component.x + component.width / 2 - board.width / 2 + rotated.x,
+    x: transform.position[0] + rotated.x,
     y: rotated.y,
-    z: board.height / 2 - component.y - component.height / 2 + rotated.z,
+    z: transform.position[2] + rotated.z,
   };
 }
 

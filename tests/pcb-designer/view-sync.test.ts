@@ -9,10 +9,10 @@ import {
   isPcbLayerVisible,
 } from "../../src/components/pcb-designer/core/viewSync.ts";
 
-test("returns the 2D center from board coordinates", () => {
+test("uses the stored PCB coordinates as the 2D component center", () => {
   assert.deepEqual(
-    getPcbComponentCenter({ x: 20, y: 30, width: 10, height: 6 }),
-    { x: 25, y: 33 },
+    getPcbComponentCenter({ x: 20, y: 30 }),
+    { x: 20, y: 30 },
   );
 });
 
@@ -23,7 +23,7 @@ test("maps top-layer board coordinates into a deterministic 3D transform", () =>
       { width: 100, height: 80 },
     ),
     {
-      position: [-25, 0, 7],
+      position: [-30, 0, 10],
       rotation: [0, -Math.PI / 2, 0],
     },
   );
@@ -36,9 +36,25 @@ test("adds the bottom-layer flip to the shared 3D transform", () => {
       { width: 100, height: 80 },
     ),
     {
-      position: [-25, 0, 7],
+      position: [-30, 0, 10],
       rotation: [0, -Math.PI / 2, Math.PI],
     },
+  );
+});
+
+test("keeps the 3D center fixed when component dimensions change", () => {
+  const placement = { x: 72, y: 24, rotation: 0, layer: "top" as const };
+  const board = { width: 100, height: 80 };
+  const smallComponent = { ...placement, width: 4, height: 3 };
+  const largeComponent = { ...placement, width: 28, height: 16 };
+
+  assert.deepEqual(
+    getPcb3DComponentTransform(smallComponent, board).position,
+    getPcb3DComponentTransform(largeComponent, board).position,
+  );
+  assert.deepEqual(
+    getPcb3DComponentTransform(placement, board).position,
+    [22, 0, 16],
   );
 });
 
@@ -71,7 +87,7 @@ test("derives one shared component view state for 2D and 3D consumers", () => {
   assert.deepEqual(
     getPcbComponentViewState(component, "top", selectionIds),
     {
-      coordinate: { x: 25, y: 33 },
+      coordinate: { x: 20, y: 30 },
       rotation: 90,
       layer: "top",
       visible: true,
@@ -82,7 +98,7 @@ test("derives one shared component view state for 2D and 3D consumers", () => {
   assert.deepEqual(
     getPcbComponentViewState(component, "bottom", selectionIds),
     {
-      coordinate: { x: 25, y: 33 },
+      coordinate: { x: 20, y: 30 },
       rotation: 90,
       layer: "top",
       visible: false,

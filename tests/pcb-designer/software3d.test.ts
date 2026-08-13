@@ -49,6 +49,23 @@ test("places top and bottom components on opposite sides of the PCB", () => {
   assert.equal(Math.abs(top.y), Math.abs(bottom.y));
 });
 
+test("uses the same component center in software 3D as the 2D editor", () => {
+  const component = {
+    x: 72,
+    y: 24,
+    width: 28,
+    height: 16,
+    maxHeight: 5,
+    rotation: 90,
+    layer: "top" as const,
+  };
+
+  const center = transformPcbComponentPoint({ x: 0, y: 0, z: 0 }, component, board);
+
+  assert.equal(center.x, 22);
+  assert.equal(center.z, 16);
+});
+
 test("creates complete boxes and bounds sampled model triangles", () => {
   assert.equal(createSoftwareBoxVertices(10, 4, 8).length, 8);
   assert.equal(sampleTriangleOffsets(30, 20).length, 10);

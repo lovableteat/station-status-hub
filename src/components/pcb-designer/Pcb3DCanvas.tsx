@@ -363,10 +363,12 @@ function Scene({
             key={component.instanceId}
             position={transform.position}
             rotation={transform.rotation}
-            data-pcb-coordinate={`${viewState.coordinate.x},${viewState.coordinate.y}`}
-            data-pcb-rotation={String(viewState.rotation)}
-            data-pcb-layer={viewState.layer}
-            data-pcb-selected={viewState.selected ? "true" : "false"}
+            userData={{
+              pcbCoordinate: [viewState.coordinate.x, viewState.coordinate.y],
+              pcbRotation: viewState.rotation,
+              pcbLayer: viewState.layer,
+              pcbSelected: viewState.selected,
+            }}
           >
             <group
               position={[0, yOffset, 0]}

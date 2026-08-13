@@ -227,7 +227,7 @@ test("keeps 3D interactive through the software renderer when WebGL is unavailab
   assert.match(softwareCanvas3dSource, /onWheel=\{handleWheel\}/);
 });
 
-test("shares 2D and 3D synchronization helpers and inspection attributes", () => {
+test("shares 2D and 3D synchronization helpers and renderer-safe inspection metadata", () => {
   assert.match(viewSyncSource, /export function getPcbSelectionIds/);
   assert.match(viewSyncSource, /export function isPcbLayerVisible/);
   assert.match(viewSyncSource, /export function getPcbComponentCenter/);
@@ -244,10 +244,12 @@ test("shares 2D and 3D synchronization helpers and inspection attributes", () =>
   assert.match(canvasSource, /data-pcb-board-color/);
   assert.match(canvasSource, /data-pcb-top-color/);
   assert.match(canvasSource, /data-pcb-bottom-color/);
-  assert.match(canvas3dSource, /data-pcb-coordinate/);
-  assert.match(canvas3dSource, /data-pcb-rotation/);
-  assert.match(canvas3dSource, /data-pcb-layer/);
-  assert.match(canvas3dSource, /data-pcb-selected/);
+  assert.match(canvas3dSource, /userData=\{\{/);
+  assert.match(canvas3dSource, /pcbCoordinate:/);
+  assert.match(canvas3dSource, /pcbRotation:/);
+  assert.match(canvas3dSource, /pcbLayer:/);
+  assert.match(canvas3dSource, /pcbSelected:/);
+  assert.doesNotMatch(canvas3dSource, /<group[\s\S]{0,240}data-pcb-coordinate/);
   assert.match(canvas3dSource, /data-pcb-board-color/);
   assert.match(canvas3dSource, /data-pcb-top-color/);
   assert.match(canvas3dSource, /data-pcb-bottom-color/);
