@@ -80,6 +80,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
+import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
 
@@ -4306,6 +4307,7 @@ export function MaterialRequestPage() {
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
   const { user } = useUser();
+  const isCompactLayout = useIsCompactLayout();
   const presenceEditingRecordId = editorOpen && editorMode !== "view"
     ? editorRecord.id
     : trackingDialogOpen
@@ -4387,6 +4389,12 @@ export function MaterialRequestPage() {
     setPageTrackerQuickCurrentInput(String(activePageTrackerSummary.currentPage));
     setPageTrackerQuickSaving(false);
   }, [activeWorkspace.id, activeWorkspace.pageTracker?.updatedAt, activePageTrackerSummary.currentPage, activePageTrackerSummary.totalPages]);
+
+  useEffect(() => {
+    if (!isCompactLayout || pageSize <= 25) return;
+    setPageSize(25);
+    setPage(1);
+  }, [isCompactLayout, pageSize]);
 
   const applyLoadedWorkspaces = useCallback((storedWorkspaces: BomWorkspace[], preferredBomId?: string) => {
     if (storedWorkspaces.length === 0) {
@@ -5708,7 +5716,7 @@ export function MaterialRequestPage() {
   }
 
   return (
-    <div className="material-sheet-theme maintenance-workspace min-h-full w-full min-w-0 overflow-x-clip bg-[radial-gradient(circle_at_8%_0%,rgba(34,211,238,0.10),transparent_26rem),radial-gradient(circle_at_88%_2%,rgba(251,191,36,0.08),transparent_24rem),#06111f] p-3 text-slate-100 sm:p-4 lg:p-5 2xl:p-6">
+    <div className="material-sheet-theme maintenance-workspace min-h-full w-full min-w-0 overflow-x-clip bg-[radial-gradient(circle_at_8%_0%,rgba(34,211,238,0.10),transparent_26rem),radial-gradient(circle_at_88%_2%,rgba(251,191,36,0.08),transparent_24rem),#06111f] p-2 text-slate-100 sm:p-4 lg:p-5 2xl:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
@@ -5752,7 +5760,100 @@ export function MaterialRequestPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <header className="overflow-hidden rounded-[16px] border border-cyan-300/35 bg-[radial-gradient(circle_at_4%_0%,rgba(34,211,238,0.18),transparent_22rem),radial-gradient(circle_at_82%_0%,rgba(167,139,250,0.14),transparent_20rem),radial-gradient(circle_at_100%_100%,rgba(251,191,36,0.10),transparent_20rem),#10263a] p-4 shadow-[0_20px_50px_-34px_rgba(34,211,238,0.65)]">
+      <section
+        data-testid="material-mobile-command-center"
+        className="overflow-hidden rounded-2xl border border-cyan-200/25 bg-[radial-gradient(circle_at_0%_0%,rgba(34,211,238,0.16),transparent_16rem),radial-gradient(circle_at_100%_100%,rgba(251,191,36,0.09),transparent_14rem),#0d2033] shadow-[0_20px_46px_-32px_rgba(34,211,238,0.75)] lg:hidden"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-cyan-200/10 px-3 py-2.5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-black text-white">料號快查</h1>
+              <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-black", collaborationStatusMeta.badgeClassName)}>
+                <span className={cn("h-1.5 w-1.5 rounded-full", collaborationStatusMeta.dotClassName)} />
+                {collaborationStatusMeta.label}
+              </span>
+            </div>
+            <p className="mt-0.5 truncate text-xs text-slate-400">{activeWorkspace.name}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBomManagerOpen(true)}
+            className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-violet-300/30 bg-violet-400/12 px-3 text-xs font-black text-violet-100"
+          >
+            <Layers3 className="h-4 w-4" />{bomWorkspaces.length} BOM
+          </button>
+        </div>
+
+        <div className="space-y-2.5 p-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300" />
+              <Input
+                value={searchDraft}
+                onChange={(event) => {
+                  const nextSearchDraft = event.target.value;
+                  const normalizedQuery = nextSearchDraft.normalize("NFKC").replace(/\u3000/g, " ").trim();
+                  setSearchDraft(nextSearchDraft);
+                  startSearchTransition(() => {
+                    setQuery(normalizedQuery);
+                    setExpandedKey(null);
+                    setPage(1);
+                  });
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void applySearch();
+                  }
+                }}
+                enterKeyHint="search"
+                placeholder="掃料名、MPN、REF DES、內部料號"
+                aria-label="快速搜尋料號"
+                className="h-12 rounded-xl border-cyan-300/35 bg-[#071522] pl-11 pr-3 text-base text-white placeholder:text-slate-500 focus-visible:ring-cyan-300"
+              />
+            </div>
+            <Button
+              type="button"
+              onClick={() => void applySearch()}
+              aria-label={isSearchPending ? "搜尋中" : "搜尋"}
+              className="h-12 w-11 rounded-xl bg-cyan-300 p-0 text-[#062230] hover:bg-cyan-200"
+            >
+              {isSearchPending ? <RotateCcw className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <button type="button" onClick={clearFilters} className={cn("h-11 rounded-xl border px-2 text-xs font-black", availability === "all" && !showMarkedOnly ? "border-sky-200/50 bg-sky-300 text-sky-950" : "border-sky-300/20 bg-sky-400/10 text-sky-100")}>全部 {dataset.stats.totalGroups.toLocaleString()}</button>
+            <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("h-11 rounded-xl border px-2 text-xs font-black", availability === "required" ? "border-amber-200/60 bg-amber-300 text-amber-950" : "border-amber-300/25 bg-amber-400/10 text-amber-100")}>待申請 {requiredApplicationCount.toLocaleString()}</button>
+            <button type="button" onClick={() => setShowMarkedOnly((current) => !current)} className={cn("h-11 rounded-xl border px-2 text-xs font-black", showMarkedOnly ? "border-lime-200/60 bg-lime-300 text-lime-950" : "border-lime-300/20 bg-lime-400/10 text-lime-100")}><Star className={cn("mr-1 inline h-3.5 w-3.5", showMarkedOnly && "fill-current")} />標記 {markedGroupCount}</button>
+          </div>
+
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <Select value={sortMode} onValueChange={(value) => { setSortMode(value as SortMode); setPage(1); }}>
+              <SelectTrigger aria-label="料號排序" className="h-11 rounded-xl border-slate-600/70 bg-[#071522] text-sm text-slate-100"><SelectValue /></SelectTrigger>
+              <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">{Object.entries(SORT_MODE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady || !isFullDatasetLoaded} className="h-11 rounded-xl bg-[linear-gradient(135deg,#bef264,#67e8f9)] px-4 font-black text-[#062230] disabled:opacity-50"><Plus className="mr-1.5 h-4 w-4" />新增</Button>
+          </div>
+
+          <details className="group rounded-xl border border-slate-600/60 bg-slate-950/25 [&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-sm font-black text-slate-200">
+              <span className="flex min-w-0 items-center gap-2"><Layers3 className="h-4 w-4 text-violet-200" /><span className="truncate">BOM 與工具</span></span>
+              <span className="flex items-center gap-2 text-xs text-slate-400">完成 {activePageTrackerSummary.completedPages}/{activePageTrackerSummary.totalPages || "-"} 頁<ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></span>
+            </summary>
+            <div className="grid grid-cols-2 gap-2 border-t border-white/8 p-2.5">
+              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
+              <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
+              <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
+              <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
+              <Button type="button" variant="outline" onClick={() => setBomManagerOpen(true)} className="h-11 border-cyan-300/30 bg-cyan-400/10 text-cyan-100"><Layers3 className="mr-2 h-4 w-4" />切換 BOM</Button>
+              <Button type="button" variant="outline" onClick={() => setPendingDeleteBomId(activeBomId)} disabled={!isCollaborativeReady} className="h-11 border-rose-300/30 bg-rose-400/10 text-rose-100">刪除 BOM</Button>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <header className="hidden overflow-hidden rounded-[16px] border border-cyan-300/35 bg-[radial-gradient(circle_at_4%_0%,rgba(34,211,238,0.18),transparent_22rem),radial-gradient(circle_at_82%_0%,rgba(167,139,250,0.14),transparent_20rem),radial-gradient(circle_at_100%_100%,rgba(251,191,36,0.10),transparent_20rem),#10263a] p-4 shadow-[0_20px_50px_-34px_rgba(34,211,238,0.65)] lg:block">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-cyan-300/16 bg-cyan-400/12 text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.12)]">
@@ -6083,7 +6184,7 @@ export function MaterialRequestPage() {
         data-testid="material-table-card"
         className="overflow-hidden rounded-[14px] border border-[#2a526f] bg-[#0b1b2d]"
       >
-        <div className="flex flex-col gap-3 border-b border-[#2a526f] bg-[linear-gradient(90deg,rgba(34,211,238,0.10),rgba(167,139,250,0.07),rgba(251,191,36,0.06))] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="hidden flex-col gap-3 border-b border-[#2a526f] bg-[linear-gradient(90deg,rgba(34,211,238,0.10),rgba(167,139,250,0.07),rgba(251,191,36,0.06))] px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:flex">
           <div>
             <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
             <p className="mt-0.5 text-sm text-slate-400">
@@ -6109,7 +6210,7 @@ export function MaterialRequestPage() {
           </div>
         </div>
 
-        <div data-testid="material-table-toolbar" className="bg-[#0c1f33] p-3">
+        <div data-testid="material-table-toolbar" className="hidden bg-[#0c1f33] p-3 lg:block">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-3 xl:grid-cols-[minmax(390px,1fr)_auto_220px_auto]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300" />
@@ -6193,7 +6294,7 @@ export function MaterialRequestPage() {
         </div>
         </div>
 
-        <div className="space-y-3 border-t border-[#2a526f] p-3 lg:hidden" data-testid="material-mobile-cards">
+        <div className="space-y-2.5 p-2.5 lg:hidden" data-testid="material-mobile-cards">
           {visibleGroupRows.map(({ group, primaryAlternative, trackingRecord, secondaryAlternatives }, rowIndex) => {
             const expanded = expandedKey === group.key;
             const mainRecord = primaryAlternative ?? group.primaryRecord;
@@ -6231,11 +6332,13 @@ export function MaterialRequestPage() {
                   <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-500" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-px border-y border-white/5 bg-white/5 text-xs">
-                  <div className="bg-[#0b1b2d] px-3 py-2.5"><span className="block text-slate-500">REF DES</span><strong className="mt-1 block truncate text-slate-100">{mainRecord.refDes || mainRecord.refGroup || "-"}</strong></div>
-                  <div className="bg-[#0b1b2d] px-3 py-2.5"><span className="block text-slate-500">內部料號</span><strong className="mt-1 block truncate text-slate-100">{mainRecord.partNumber || "未建立"}</strong></div>
-                  <div className="bg-[#0b1b2d] px-3 py-2.5"><span className="block text-slate-500">替代料</span><strong className={cn("mt-1 block", availableAlternativeCount > 0 ? "text-emerald-200" : "text-amber-200")}>{availableAlternativeCount} 個可用 / {secondaryAlternatives.length} 個</strong></div>
-                  <div className="bg-[#0b1b2d] px-3 py-2.5"><span className="block text-slate-500">申請狀態</span><strong className={cn("mt-1 block truncate", mustApply ? "text-amber-200" : "text-emerald-200")}>{mustApply ? "需要申請" : mainRecord.sourcingStatus || "資料可用"}</strong></div>
+                <div className="space-y-2 border-y border-white/5 bg-[#091827]/85 px-3 py-2.5 text-xs">
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className={cn("rounded-full border px-2 py-1 font-black", mustApply ? "border-amber-300/35 bg-amber-400/12 text-amber-100" : "border-emerald-300/30 bg-emerald-400/10 text-emerald-100")}>{mustApply ? "需要申請" : mainRecord.sourcingStatus || "資料可用"}</span>
+                    <span className={cn("rounded-full border px-2 py-1 font-bold", availableAlternativeCount > 0 ? "border-emerald-300/25 bg-emerald-400/8 text-emerald-200" : "border-slate-500/25 bg-slate-800/40 text-slate-300")}>替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
+                  </div>
+                  <p className="truncate text-slate-400"><span className="mr-1.5 font-bold text-slate-500">REF</span><span className="text-slate-200">{mainRecord.refDes || mainRecord.refGroup || "-"}</span></p>
+                  <p className="truncate text-slate-400"><span className="mr-1.5 font-bold text-slate-500">內部料號</span><span className="text-slate-200">{mainRecord.partNumber || "未建立"}</span></p>
                 </div>
 
                 {expanded && secondaryAlternatives.length > 0 ? (
@@ -6250,12 +6353,12 @@ export function MaterialRequestPage() {
                   </div>
                 ) : null}
 
-                <div className="grid grid-cols-3 gap-2 p-3">
-                  <Button type="button" variant="outline" size="sm" disabled={secondaryAlternatives.length === 0} onClick={() => toggleExpanded(group.key)} className="h-10 rounded-xl border-violet-300/25 bg-violet-400/10 px-2 text-violet-100">
+                <div className="grid grid-cols-3 gap-2 p-2.5">
+                  <Button type="button" variant="outline" size="sm" disabled={secondaryAlternatives.length === 0} onClick={() => toggleExpanded(group.key)} className="h-11 rounded-xl border-violet-300/25 bg-violet-400/10 px-2 text-violet-100">
                     {expanded ? <ChevronDown className="mr-1 h-4 w-4" /> : <ChevronRight className="mr-1 h-4 w-4" />}替代料
                   </Button>
-                  <Button type="button" variant="outline" size="sm" disabled={!trackingRecord} onClick={() => trackingRecord && openTrackingDialog(trackingRecord)} className="h-10 rounded-xl border-emerald-300/25 bg-emerald-400/10 px-2 text-emerald-100">追蹤</Button>
-                  <Button type="button" size="sm" onClick={() => openCreate(group)} className="h-10 rounded-xl bg-cyan-300 px-2 font-black text-[#062230] hover:bg-cyan-200"><Plus className="mr-1 h-4 w-4" />更新</Button>
+                  <Button type="button" variant="outline" size="sm" disabled={!trackingRecord} onClick={() => trackingRecord && openTrackingDialog(trackingRecord)} className="h-11 rounded-xl border-emerald-300/25 bg-emerald-400/10 px-2 text-emerald-100">追蹤</Button>
+                  <Button type="button" size="sm" onClick={() => openCreate(group)} className="h-11 rounded-xl bg-cyan-300 px-2 font-black text-[#062230] hover:bg-cyan-200"><Plus className="mr-1 h-4 w-4" />更新</Button>
                 </div>
               </article>
             );

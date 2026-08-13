@@ -274,9 +274,9 @@ export function ProjectScopeBar() {
   return (
     <div
       data-ui="project-command-bar"
-      className="maintenance-project-bar sticky top-[72px] z-30 grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border p-2.5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] lg:flex lg:h-14 lg:gap-3 lg:rounded-lg lg:px-3 lg:py-2"
+      className="maintenance-project-bar relative z-10 grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border p-2 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] lg:sticky lg:top-[72px] lg:flex lg:h-14 lg:gap-3 lg:rounded-lg lg:px-3 lg:py-2"
     >
-      <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary sm:flex">
+      <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary lg:flex">
         <FolderKanban className="h-4 w-4" />
       </div>
 
@@ -285,7 +285,7 @@ export function ProjectScopeBar() {
         value={activeProjectId ?? ""}
         onValueChange={setActiveProjectId}
       >
-        <SelectTrigger className="h-11 min-w-0 flex-1 rounded-xl border border-cyan-200/20 bg-[#10263a] px-3 shadow-none lg:h-10 lg:max-w-[310px] lg:rounded-lg">
+        <SelectTrigger className="col-span-2 h-11 min-w-0 w-full flex-1 rounded-xl border border-cyan-200/20 bg-[#10263a] px-3 shadow-none lg:col-auto lg:h-10 lg:max-w-[310px] lg:rounded-lg">
           <div className="min-w-0 text-left">
             <div className="truncate text-sm font-semibold text-[#f3f8fc]">
               {activeProject?.name || "選擇專案"}
@@ -345,10 +345,10 @@ export function ProjectScopeBar() {
               <Button
                 type="button"
                 aria-label="新增機台"
-                className="h-10 w-full shrink-0 rounded-xl border border-cyan-300/45 bg-cyan-400/18 px-3 text-cyan-50 shadow-none hover:border-cyan-200/65 hover:bg-cyan-400/28 hover:text-white lg:h-9 lg:w-auto lg:rounded-lg"
+                className="h-11 w-full shrink-0 rounded-xl border border-cyan-300/45 bg-cyan-400/18 px-3 text-cyan-50 shadow-none hover:border-cyan-200/65 hover:bg-cyan-400/28 hover:text-white lg:h-9 lg:w-auto lg:rounded-lg"
               >
                 <Plus className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">新增機台</span>
+                <span className="ml-1.5 inline text-xs sm:text-sm">新增機台</span>
               </Button>
             }
           />
@@ -360,11 +360,11 @@ export function ProjectScopeBar() {
               <Button
                 type="button"
                 variant="ghost"
-                className="h-10 w-full shrink-0 rounded-xl border border-violet-300/30 bg-violet-400/12 px-3 text-violet-100 hover:border-violet-200/50 hover:bg-violet-400/20 hover:text-white lg:h-9 lg:w-auto lg:rounded-lg"
+                className="h-11 w-full shrink-0 rounded-xl border border-violet-300/30 bg-violet-400/12 px-3 text-violet-100 hover:border-violet-200/50 hover:bg-violet-400/20 hover:text-white lg:h-9 lg:w-auto lg:rounded-lg"
                 onClick={() => openEditForm(activeProject)}
               >
                 <Pencil className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">編輯專案</span>
+                <span className="ml-1.5 inline text-xs sm:text-sm">編輯專案</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent>直接編輯目前專案</TooltipContent>
@@ -383,11 +383,11 @@ export function ProjectScopeBar() {
       >
         <SheetTrigger asChild>
           <Button
-            className="h-10 w-full shrink-0 rounded-xl border-amber-300/30 bg-amber-400/12 px-3 text-amber-100 hover:border-amber-200/50 hover:bg-amber-400/20 hover:text-white lg:h-9 lg:w-auto lg:rounded-lg"
+            className="h-11 w-full shrink-0 rounded-xl border-amber-300/30 bg-amber-400/12 px-3 text-amber-100 hover:border-amber-200/50 hover:bg-amber-400/20 hover:text-white lg:h-9 lg:w-auto lg:rounded-lg"
             variant="outline"
           >
             <Layers3 className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">專案中心</span>
+            <span className="ml-1.5 inline text-xs sm:text-sm">專案中心</span>
           </Button>
         </SheetTrigger>
         <SheetContent className="maintenance-project-sheet w-full overflow-hidden border-[#2a526f] bg-[#071522] p-0 sm:max-w-[720px]">

@@ -535,7 +535,7 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
           <GripVertical className="h-3.5 w-3.5" />
           <span className="font-data">{issues.length} 筆</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden items-center gap-2 lg:flex">
             <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(Number(v))}>
               <SelectTrigger className="h-8 w-20"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -548,7 +548,108 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
             <span className="text-xs text-[#a9c0d1]">筆/頁</span>
         </div>
       </div>
-        <div className="max-h-[calc(100vh-350px)] overflow-auto">
+        <div
+          data-testid="issue-mobile-cards"
+          className="grid gap-2.5 bg-[#071522] p-2.5 lg:hidden"
+        >
+          {paginatedIssues.map((issue) => {
+            const summary = toPlainText(issue.description) || issue.title || "尚未填寫問題內容";
+            const attachmentCount = issue.attachments?.length ?? 0;
+
+            return (
+              <article
+                key={issue.id}
+                className="rounded-2xl border border-[#2a526f] bg-[linear-gradient(145deg,#10263a_0%,#0b1b2d_100%)] p-3 shadow-[0_12px_30px_-26px_hsl(var(--primary)/0.75)]"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <Badge
+                      variant="outline"
+                      className={cn("h-7 rounded-lg px-2 text-xs font-semibold", getPriorityColor(issue.effectivePriority))}
+                    >
+                      {PRIORITY_STYLES[issue.effectivePriority].rank} {getPriorityText(issue.effectivePriority)}
+                    </Badge>
+                    <Badge variant="outline" className={cn("h-7 rounded-lg px-2 text-xs", getStatusColor(issue.status))}>
+                      {getStatusText(issue.status)}
+                    </Badge>
+                  </div>
+                  <time className="shrink-0 pt-1 text-[11px] text-[#8fa8bb]">
+                    {new Date(issue.created_at).toLocaleDateString("zh-TW")}
+                  </time>
+                </div>
+
+                <h3 className="mt-2.5 line-clamp-2 text-[15px] font-semibold leading-6 text-[#f3f8fc]">
+                  {issue.title || summary}
+                </h3>
+                {issue.title && summary !== issue.title && (
+                  <p className="mt-1 line-clamp-2 text-sm leading-5 text-[#afc3d2]">{summary}</p>
+                )}
+
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-y border-[#28465f]/70 py-2.5 text-xs">
+                  <div className="min-w-0">
+                    <dt className="text-[#7893a8]">機台</dt>
+                    <dd className="mt-0.5 truncate text-[#dce8f1]">
+                      {issue.system_name
+                        ? issue.serial_number
+                          ? `${issue.system_name} (${issue.serial_number})`
+                          : issue.system_name
+                        : "未關聯"}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[#7893a8]">站點</dt>
+                    <dd className="mt-0.5 truncate text-[#dce8f1]">{issue.station_name || "未指定"}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[#7893a8]">分類</dt>
+                    <dd className="mt-0.5 truncate text-[#dce8f1]">{issue.category || "未分類"}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[#7893a8]">負責人</dt>
+                    <dd className="mt-0.5 truncate text-[#dce8f1]">{issue.assigned_to || "未分配"}</dd>
+                  </div>
+                </dl>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 rounded-xl border-cyan-300/35 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/20"
+                    onClick={() => handleView(issue)}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    查看
+                  </Button>
+                  <Button
+                    type="button"
+                    className="h-11 rounded-xl bg-blue-500 text-white hover:bg-blue-400"
+                    onClick={() => handleEdit(issue)}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    編輯
+                  </Button>
+                </div>
+
+                {attachmentCount > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="mt-1.5 h-11 w-full rounded-xl text-cyan-100 hover:bg-cyan-400/10"
+                    onClick={() => {
+                      setAttachmentPreview(issue.attachments || []);
+                      setAttachmentDialogOpen(true);
+                    }}
+                  >
+                    <ImageIcon className="mr-2 h-4 w-4" />
+                    查看附件 {attachmentCount}
+                  </Button>
+                )}
+              </article>
+            );
+          })}
+        </div>
+
+        <div className="hidden max-h-[calc(100vh-350px)] overflow-auto lg:block">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-[#10263a]">
               <TableRow>
@@ -616,9 +717,9 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
             顯示 {(currentPage - 1) * pageSize + 1} 到 {Math.min(currentPage * pageSize, issues.length)} 筆，共 {issues.length} 筆
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>上一頁</Button>
+            <Button variant="outline" size="sm" className="h-11 lg:h-9" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>上一頁</Button>
             <span className="text-sm">第 {currentPage} 頁，共 {totalPages || 1} 頁</span>
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages || totalPages === 0}>下一頁</Button>
+            <Button variant="outline" size="sm" className="h-11 lg:h-9" onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages || totalPages === 0}>下一頁</Button>
           </div>
         </div>
 

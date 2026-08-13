@@ -516,7 +516,7 @@ export function DirectMessagesPanel({
           <Button
             variant="ghost"
             size="icon"
-            className="h-10 w-10 rounded-2xl border border-white/8 bg-white/[0.03] text-slate-200 hover:bg-white/[0.08]"
+            className="h-11 w-11 rounded-2xl border border-white/8 bg-white/[0.03] text-slate-200 hover:bg-white/[0.08] sm:h-10 sm:w-10"
             onClick={() => setSelectedThreadId(null)}
           >
             <ArrowLeft className="h-4 w-4" />
@@ -555,7 +555,7 @@ export function DirectMessagesPanel({
               title={pinnedThreadIds.has(selectedThreadId) ? "取消置頂" : "置頂對話"}
               onClick={() => togglePinnedThread(selectedThreadId)}
               className={cn(
-                "h-9 w-9 rounded-xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.08]",
+                "h-11 w-11 rounded-xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.08] sm:h-9 sm:w-9",
                 pinnedThreadIds.has(selectedThreadId) ? "text-amber-200" : "text-slate-300",
               )}
             >
@@ -574,7 +574,7 @@ export function DirectMessagesPanel({
                 if (messageSearchOpen) setMessageSearchQuery("");
               }}
               className={cn(
-                "h-9 w-9 rounded-xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.08]",
+                "h-11 w-11 rounded-xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.08] sm:h-9 sm:w-9",
                 messageSearchOpen ? "border-cyan-200/35 text-cyan-200" : "text-slate-300",
               )}
             >
@@ -1037,11 +1037,11 @@ export function DirectMessagesPanel({
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="搜尋同事或訊息內容"
-              className="h-9 rounded-xl border-cyan-100/18 bg-[#0b1625] pl-9 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:border-cyan-200/50 focus-visible:ring-cyan-300/15"
+              className="h-11 rounded-xl border-cyan-100/18 bg-[#0b1625] pl-9 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:border-cyan-200/50 focus-visible:ring-cyan-300/15 sm:h-9"
             />
           </div>
           <div
-            className="flex h-9 shrink-0 items-center rounded-xl border border-amber-200/25 bg-amber-300/10 px-2.5 text-[11px] font-bold text-amber-100"
+            className="flex h-11 shrink-0 items-center rounded-xl border border-amber-200/25 bg-amber-300/10 px-2.5 text-[11px] font-bold text-amber-100 sm:h-9"
             title={unreadCount > 0 ? `${unreadCount} 則未讀訊息` : `${threads.length} 個對話`}
           >
             {unreadCount > 0 ? `${unreadCount} 未讀` : `${threads.length} 對話`}
@@ -1059,7 +1059,7 @@ export function DirectMessagesPanel({
               aria-pressed={threadFilter === filter.id}
               onClick={() => setThreadFilter(filter.id)}
               className={cn(
-                "flex h-7 items-center gap-1 rounded-lg border px-2.5 text-[10px] font-black transition-colors",
+                "flex h-11 items-center gap-1 rounded-lg border px-3 text-[11px] font-black transition-colors sm:h-7 sm:px-2.5 sm:text-[10px]",
                 threadFilter === filter.id
                   ? "border-cyan-200/35 bg-cyan-300/15 text-cyan-50"
                   : "border-white/8 bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-slate-200",
@@ -1089,7 +1089,7 @@ export function DirectMessagesPanel({
                     if (existing) setSelectedThreadId(existing.threadId);
                     else void startDirectChat(onlineUser.userId).then(setSelectedThreadId);
                   }}
-                  className="h-10 min-w-[112px] rounded-lg border border-emerald-300/18 bg-emerald-400/[0.08] px-2 text-left transition-colors hover:border-emerald-200/38 hover:bg-emerald-400/15"
+                  className="h-11 min-w-[112px] rounded-lg border border-emerald-300/18 bg-emerald-400/[0.08] px-2 text-left transition-colors hover:border-emerald-200/38 hover:bg-emerald-400/15 sm:h-10"
                 >
                   <span className="flex items-center gap-2">
                     <UserAvatar
@@ -1118,7 +1118,7 @@ export function DirectMessagesPanel({
               aria-label="更新對話"
               title="更新對話"
               onClick={() => void reload()}
-              className="h-7 w-7 rounded-lg border border-violet-300/15 bg-violet-400/[0.07] text-violet-200 hover:bg-violet-400/16 hover:text-white"
+              className="h-11 w-11 rounded-lg border border-violet-300/15 bg-violet-400/[0.07] text-violet-200 hover:bg-violet-400/16 hover:text-white sm:h-7 sm:w-7"
             >
               <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             </Button>

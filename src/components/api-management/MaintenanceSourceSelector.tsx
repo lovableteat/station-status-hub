@@ -45,9 +45,9 @@ export function MaintenanceSourceSelector({
     .map((project) => project.name);
 
   return (
-    <section className="rounded-xl border border-cyan-400/20 bg-[linear-gradient(135deg,rgba(8,47,73,0.5),rgba(15,23,42,0.82))] p-3 shadow-[0_12px_32px_rgba(2,132,199,0.08)]">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-400/10 text-cyan-200">
+    <section className="rounded-xl border border-cyan-400/20 bg-[linear-gradient(135deg,rgba(8,47,73,0.5),rgba(15,23,42,0.82))] p-2.5 shadow-[0_12px_32px_rgba(2,132,199,0.08)] sm:p-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-400/10 text-cyan-200 sm:h-9 sm:w-9">
           <Wrench className="h-4 w-4" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
@@ -57,7 +57,7 @@ export function MaintenanceSourceSelector({
               即時資料
             </Badge>
           </div>
-          <p className="mt-0.5 text-[11px] text-slate-400">
+          <p className="mt-0.5 hidden text-[11px] text-slate-400 sm:block">
             機台、站點、測項進度、問題與工具資產
           </p>
         </div>
@@ -72,19 +72,19 @@ export function MaintenanceSourceSelector({
       <p
         id="maintenance-source-help"
         data-testid="maintenance-source-help"
-        className="mt-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-2.5 py-2 text-[11px] leading-5 text-amber-100/85"
+        className="mt-2 hidden rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-2.5 py-2 text-[11px] leading-5 text-amber-100/85 sm:block"
       >
         開啟＝專案資料查詢；關閉＝一般 AI 對話／附件分析。若不是要查機台維修紀錄，請先關閉，避免一般問題被當成專案搜尋。
       </p>
 
       {enabled ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-cyan-300/10 pt-3">
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-cyan-300/10 pt-2 sm:mt-3 sm:pt-3">
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 type="button"
                 variant="outline"
-                className="h-9 min-w-[220px] flex-1 justify-between border-slate-600/70 bg-slate-950/45 px-3 text-xs text-slate-200 hover:bg-slate-800/80"
+                className="h-10 min-w-[190px] flex-1 justify-between border-slate-600/70 bg-slate-950/45 px-3 text-xs text-slate-200 hover:bg-slate-800/80"
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <Database className="h-3.5 w-3.5 shrink-0 text-cyan-300" />

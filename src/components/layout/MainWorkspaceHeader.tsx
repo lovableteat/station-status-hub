@@ -70,7 +70,7 @@ export function MainWorkspaceHeader({
 
   return (
     <header className="platform-color-field sticky top-0 z-50 shrink-0 border-b border-primary/15 shadow-[0_18px_48px_-42px_hsl(var(--primary)/0.55)] backdrop-blur-xl">
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 px-3 py-3 sm:px-4 xl:grid-cols-[minmax(180px,1fr)_auto_minmax(180px,1fr)] xl:gap-x-4 xl:px-5 2xl:px-6">
+      <div className="grid min-h-[60px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-3 px-3 py-2 sm:min-h-[72px] sm:gap-x-3 sm:px-4 sm:py-3 xl:grid-cols-[minmax(180px,1fr)_auto_minmax(180px,1fr)] xl:gap-x-4 xl:px-5 2xl:px-6">
         {onBrandClick ? (
           <button
             type="button"
@@ -105,7 +105,7 @@ export function MainWorkspaceHeader({
           })}
         </nav>
 
-        <div className="flex min-w-0 items-center justify-end gap-2 xl:gap-3">
+        <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2 xl:gap-3">
           {showOnlineUsers && <div className="hidden sm:block"><OnlineUsersIndicator /></div>}
 
           <WebsiteQrButton />
@@ -115,7 +115,7 @@ export function MainWorkspaceHeader({
               <button
                 type="button"
                 title={userMenuItems.length > 0 ? "開啟帳號選單，可編輯大頭貼" : "開啟帳號選單"}
-                className="interactive-lift flex h-12 w-[140px] shrink-0 items-center gap-2 rounded-2xl border border-primary/15 bg-background/20 px-3 text-left transition-colors hover:bg-primary/10 hover:shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.55)] max-sm:w-12 max-sm:justify-center max-sm:px-0 sm:gap-3"
+                className="interactive-lift flex h-11 w-[140px] shrink-0 items-center gap-2 rounded-xl border border-primary/15 bg-background/20 px-3 text-left transition-colors hover:bg-primary/10 hover:shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.55)] max-sm:w-11 max-sm:justify-center max-sm:px-0 sm:h-12 sm:rounded-2xl sm:gap-3"
               >
                 <span className="relative shrink-0">
                   <UserAvatar

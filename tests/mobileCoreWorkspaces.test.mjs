@@ -86,5 +86,18 @@ test("direct chat becomes full-screen on phones and respects the keyboard safe a
   assert.match(panel, /aria-label="加入圖片或影片"/);
   assert.match(panel, /accept=\{CHAT_MEDIA_ACCEPT\}/);
   assert.match(panel, /multiple/);
+  assert.match(panel, /h-11 w-11 rounded-2xl[^"]*sm:h-10 sm:w-10/);
+  assert.match(panel, /h-11 w-11 rounded-xl[^"]*sm:h-9 sm:w-9/);
   assert.match(panel, /aria-label=\{isSendingMedia \? "訊息傳送中" : "送出訊息"\}/);
+});
+
+test("issue tracking replaces the wide table with actionable cards on compact screens", async () => {
+  const source = await read("src/components/issues/IssueTableView.tsx");
+
+  assert.match(source, /data-testid="issue-mobile-cards"/);
+  assert.match(source, /className="grid gap-2\.5[^"]*lg:hidden"/);
+  assert.match(source, /hidden max-h-\[calc\(100vh-350px\)\] overflow-auto lg:block/);
+  assert.match(source, /onClick=\{\(\) => handleView\(issue\)\}/);
+  assert.match(source, /onClick=\{\(\) => handleEdit\(issue\)\}/);
+  assert.match(source, /setAttachmentPreview\(issue.attachments \|\| \[\]\)/);
 });

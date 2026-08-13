@@ -589,7 +589,7 @@ const Index = () => {
       default:
         return (
           <div className="maintenance-workspace relative min-h-0 lg:h-full lg:overflow-hidden">
-            <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-3 lg:h-full">
+            <div className="flex min-h-0 flex-1 flex-col gap-2 px-2 pb-2 pt-2 sm:px-3 sm:pb-3 sm:pt-3 lg:h-full lg:gap-3">
               <div className="shrink-0"><ProjectScopeBar /></div>
 
               <div className={cn("relative flex min-h-[560px] flex-1 gap-3 lg:min-h-0", isCompactLayout && "min-h-0 flex-col gap-2")}>
