@@ -327,7 +327,7 @@ test("labels PCB Designer presence consistently", () => {
   }
 });
 
-test("keeps legacy row storage owner-scoped while enabling account workspace sync", () => {
+test("keeps legacy row storage owner-scoped while sharing fallback projects across accounts", () => {
   assert.match(storageMigrationSource, /owner_id\s+uuid\s+not null\s+default auth\.uid\(\)/i);
   assert.match(storageMigrationSource, /primary key\s*\(owner_id,\s*id\)/i);
   assert.match(storageMigrationSource, /enable row level security/i);
@@ -352,6 +352,10 @@ test("keeps legacy row storage owner-scoped while enabling account workspace syn
   assert.match(accountRemoteSource, /save_pcb_designer_workspace/);
   assert.match(accountRemoteSource, /PCB_REMOTE_FALLBACK_KEY\s*=\s*["']pcbDesignerWorkspace["']/);
   assert.match(accountRemoteSource, /from\(["']system_users["']\)/);
+  assert.match(accountRemoteSource, /select\(["']id,permissions["']\)/);
+  assert.match(accountRemoteSource, /mergePcbFallbackWorkspaces/);
+  assert.match(pcbWorkspaceHookSource, /setInterval\([\s\S]{0,100}refreshRemote\(false\)[\s\S]{0,80}8_000/);
+  assert.match(pcbWorkspaceHookSource, /addEventListener\(["']focus["'],\s*refreshOnFocus\)/);
 });
 
 test("ships a complete custom-login PCB workspace migration and legacy permission fallback", () => {
