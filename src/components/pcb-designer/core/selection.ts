@@ -19,6 +19,7 @@ export interface DuplicatePcbSelectionResult {
   project: PcbProject;
   objectIds: string[];
   idMap: Map<string, string>;
+  usedOverlapFallback: boolean;
 }
 
 function normalizedBounds(start: PcbPoint, end: PcbPoint): Bounds {
@@ -168,7 +169,85 @@ function duplicateAtOffset(
   const copiedIds = objectIds
     .map((objectId) => idMap.get(objectId))
     .filter((objectId): objectId is string => Boolean(objectId));
-  return copiedIds.length ? { project: next, objectIds: copiedIds, idMap } : null;
+  return copiedIds.length
+    ? { project: next, objectIds: copiedIds, idMap, usedOverlapFallback: false }
+    : null;
+}
+
+function nextCopyReference(project: PcbProject, reference: string): string {
+  const normalized = reference.trim() || "X1";
+  const match = normalized.match(/^(.*?)(\d+)$/);
+  const prefix = match?.[1] || normalized.replace(/\d+$/, "") || "X";
+  const used = new Set(project.components.map((component) => component.reference.toLocaleUpperCase()));
+  let number = match ? Number(match[2]) + 1 : 1;
+  while (used.has(`${prefix}${number}`.toLocaleUpperCase())) number += 1;
+  return `${prefix}${number}`;
+}
+
+function fallbackOffset(project: PcbProject, objectIds: readonly string[]): PcbPoint {
+  const bounds = objectIds.flatMap((objectId) => {
+    const component = project.components.find((item) => item.instanceId === objectId);
+    if (component) return [componentBounds(component)];
+    const keepout = project.keepouts.find((item) => item.id === objectId);
+    return keepout ? [keepoutBounds(keepout)] : [];
+  });
+  if (!bounds.length) return { x: 0, y: 0 };
+  const selection = {
+    left: Math.min(...bounds.map((item) => item.left)),
+    top: Math.min(...bounds.map((item) => item.top)),
+    right: Math.max(...bounds.map((item) => item.right)),
+    bottom: Math.max(...bounds.map((item) => item.bottom)),
+  };
+  const grid = project.board.gridSize > 0 ? project.board.gridSize : 1;
+  const desired = Math.max(grid, 1) * 2;
+  return {
+    x: Math.max(-selection.left, Math.min(desired, project.board.width - selection.right)),
+    y: Math.max(-selection.top, Math.min(desired, project.board.height - selection.bottom)),
+  };
+}
+
+function duplicateWithOverlapFallback(
+  project: PcbProject,
+  objectIds: readonly string[],
+): DuplicatePcbSelectionResult | null {
+  const offset = fallbackOffset(project, objectIds);
+  const next = structuredClone(project);
+  const idMap = new Map<string, string>();
+
+  objectIds.forEach((objectId) => {
+    const component = project.components.find((item) => item.instanceId === objectId);
+    if (component) {
+      const copy = {
+        ...structuredClone(component),
+        instanceId: createId("instance"),
+        reference: nextCopyReference(next, component.reference),
+        x: component.x + offset.x,
+        y: component.y + offset.y,
+        locked: false,
+      };
+      next.components.push(copy);
+      idMap.set(component.instanceId, copy.instanceId);
+      return;
+    }
+    const keepout = project.keepouts.find((item) => item.id === objectId);
+    if (!keepout) return;
+    const copy = {
+      ...structuredClone(keepout),
+      id: createId("keepout"),
+      name: `${keepout.name} 副本`,
+      x: keepout.x + offset.x,
+      y: keepout.y + offset.y,
+    };
+    next.keepouts.push(copy);
+    idMap.set(keepout.id, copy.id);
+  });
+
+  const copiedIds = objectIds
+    .map((objectId) => idMap.get(objectId))
+    .filter((objectId): objectId is string => Boolean(objectId));
+  return copiedIds.length
+    ? { project: next, objectIds: copiedIds, idMap, usedOverlapFallback: true }
+    : null;
 }
 
 export function duplicatePcbSelection(
@@ -183,5 +262,5 @@ export function duplicatePcbSelection(
     const result = duplicateAtOffset(project, validIds, offset);
     if (result) return result;
   }
-  return null;
+  return duplicateWithOverlapFallback(project, validIds);
 }

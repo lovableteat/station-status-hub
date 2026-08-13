@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type Dispatch } from "react";
+import { toast } from "@/hooks/use-toast";
 import {
   createKeepout as createKeepoutRecord,
   createMeasurement as createMeasurementRecord,
@@ -485,11 +486,19 @@ export function usePcbEditorActions(
           return;
         } else if (key === "c") {
           event.preventDefault();
-          shortcuts.copySelected();
+          if (shortcuts.copySelected()) {
+            toast({ title: "已複製選取物件", description: "按 Ctrl+V 可貼上整組布局。" });
+          } else {
+            toast({ title: "沒有可複製的物件", description: "請先框選零件或禁制區。", variant: "destructive" });
+          }
           return;
         } else if (key === "v") {
           event.preventDefault();
-          shortcuts.pasteCopied();
+          if (shortcuts.pasteCopied()) {
+            toast({ title: "已貼上整組布局", description: "副本已保持選取，可繼續調整。" });
+          } else {
+            toast({ title: "目前沒有可貼上的內容", description: "請先按 Ctrl+C 複製零件或禁制區。", variant: "destructive" });
+          }
           return;
         }
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
