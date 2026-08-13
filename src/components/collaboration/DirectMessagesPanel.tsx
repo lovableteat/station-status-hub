@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent as ReactClipboardEvent,
+} from "react";
 import {
   ArrowLeft,
   Check,
@@ -24,7 +30,9 @@ import { UserAvatar } from "@/components/account/UserAvatar";
 import { useUser } from "@/components/auth/UserContext";
 import {
   CHAT_MEDIA_ACCEPT,
+  createDirectMessageClipboardFileName,
   formatDirectMessageFileSize,
+  getDirectMessageClipboardImageFiles,
   getDirectMessageMediaKind,
   validateDirectMessageFiles,
 } from "@/components/collaboration/directMessageMedia.mjs";
@@ -396,23 +404,40 @@ export function DirectMessagesPanel({
     setEmojiPickerOpen(false);
   };
 
-  const selectMediaFiles = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const combined = [...selectedMediaFiles.map((item) => item.file), ...Array.from(files)];
+  const appendMediaFiles = (files: File[]) => {
+    if (files.length === 0) return;
+    const combined = [...selectedMediaFiles.map((item) => item.file), ...files];
     const validation = validateDirectMessageFiles(combined);
     if (validation.error) {
       setMediaError(validation.error);
-      if (mediaInputRef.current) mediaInputRef.current.value = "";
       return;
     }
-    const additions = Array.from(files).map((file) => ({
+    const additions = files.map((file) => ({
       file,
       previewUrl: URL.createObjectURL(file),
       mediaKind: (getDirectMessageMediaKind(file) ?? "image") as "image" | "video",
     }));
     setSelectedMediaFiles((current) => [...current, ...additions]);
     setMediaError(null);
+  };
+
+  const selectMediaFiles = (files: FileList | null) => {
+    appendMediaFiles(Array.from(files ?? []));
     if (mediaInputRef.current) mediaInputRef.current.value = "";
+  };
+
+  const handleComposerPaste = (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
+    const clipboardImages = getDirectMessageClipboardImageFiles(event.clipboardData.items);
+    if (clipboardImages.length === 0) return;
+
+    if (!event.clipboardData.getData("text/plain")) event.preventDefault();
+    const pastedFiles = clipboardImages.map((file, index) => new File(
+      [file],
+      createDirectMessageClipboardFileName(file, index) ?? file.name,
+      { type: file.type, lastModified: file.lastModified },
+    ));
+    appendMediaFiles(pastedFiles);
+    setEmojiPickerOpen(false);
   };
 
   const removeMediaFile = (index: number) => {
@@ -911,6 +936,7 @@ export function DirectMessagesPanel({
                 updateDraft(event.target.value);
                 sendTyping(Boolean(event.target.value));
               }}
+              onPaste={handleComposerPaste}
               onKeyDown={(event) => {
                 if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
                 event.preventDefault();
@@ -932,7 +958,7 @@ export function DirectMessagesPanel({
             </Button>
           </div>
           <div className="mt-1.5 flex items-center justify-between px-1 text-[9px] font-medium text-slate-600">
-            <span>Enter 送出 · Shift + Enter 換行</span>
+            <span>Ctrl+V 貼上截圖 · Enter 送出 · Shift + Enter 換行</span>
             {draft.length > 4_400 ? <span>{draft.length} / 4800</span> : null}
           </div>
         </form>

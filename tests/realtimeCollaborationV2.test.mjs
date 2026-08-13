@@ -382,6 +382,8 @@ test("direct chat media helpers validate limits, create safe paths, and label pr
   assert.equal(typeof media.validateDirectMessageFiles, "function");
   assert.equal(typeof media.createDirectMessageMediaPath, "function");
   assert.equal(typeof media.getDirectMessagePreviewLabel, "function");
+  assert.equal(typeof media.getDirectMessageClipboardImageFiles, "function");
+  assert.equal(typeof media.createDirectMessageClipboardFileName, "function");
 
   const image = { name: "board photo.PNG", size: 1024, type: "image/png" };
   const video = { name: "rack.mov", size: 2048, type: "video/quicktime" };
@@ -400,6 +402,17 @@ test("direct chat media helpers validate limits, create safe paths, and label pr
     "傳送了 2 個附件",
   );
   assert.equal(media.getDirectMessagePreviewLabel("說明", [{ mediaKind: "image" }]), "說明");
+
+  const clipboardItems = [
+    { kind: "string", type: "text/plain", getAsFile: () => null },
+    { kind: "file", type: "image/png", getAsFile: () => image },
+    { kind: "file", type: "application/pdf", getAsFile: () => ({ name: "notes.pdf" }) },
+  ];
+  assert.deepEqual(media.getDirectMessageClipboardImageFiles(clipboardItems), [image]);
+  assert.equal(
+    media.createDirectMessageClipboardFileName(image, 0, new Date("2026-08-13T08:53:00Z")),
+    "clipboard-20260813-085300-1.png",
+  );
 
   assert.match(media.validateDirectMessageFiles(new Array(5).fill(image)).error, /最多只能選擇 4 個/);
   assert.match(media.validateDirectMessageFiles([
@@ -441,6 +454,9 @@ test("direct message hook uploads private media and resolves signed attachment U
   assert.match(panel, /URL\.revokeObjectURL/);
   assert.match(panel, /訊息傳送中/);
   assert.match(panel, /await sendMessage\(body, selectedMediaFiles\.map/);
+  assert.match(panel, /onPaste=\{handleComposerPaste\}/);
+  assert.match(panel, /getDirectMessageClipboardImageFiles\(event\.clipboardData\.items\)/);
+  assert.match(panel, /Ctrl\+V 貼上截圖/);
   assert.match(panel, /<img[\s\S]*attachment\.url/);
   assert.match(panel, /<video[\s\S]*controls[\s\S]*preload="metadata"/);
   assert.match(panel, /parsed\.body \? [\s\S]*parsed\.body/);
