@@ -49,8 +49,13 @@ export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: Attachm
       setAttachments(data || []);
     } catch (error) {
       console.error('載入附件失敗:', error);
+      toast({
+        title: "附件載入失敗",
+        description: "無法取得附件清單，請稍後重試。",
+        variant: "destructive",
+      });
     }
-  }, [issueId]);
+  }, [issueId, toast]);
 
   useEffect(() => {
     loadAttachments();
@@ -81,22 +86,18 @@ export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: Attachm
         }
       }
 
-      // 從資料庫刪除記錄
-      const { error: dbError } = await supabase
-        .from('issue_attachments')
-        .delete()
-        .eq('id', attachment.id);
-
-      if (dbError) throw dbError;
-
       // 從儲存體刪除檔案
       const { error: storageError } = await supabase.storage
         .from('issue-attachments')
         .remove([attachment.file_path]);
+      if (storageError) throw storageError;
 
-      if (storageError) {
-        console.warn('儲存體檔案刪除失敗:', storageError);
-      }
+      // 檔案移除後再清掉資料列，避免留下無法管理的孤兒檔。
+      const { error: dbError } = await supabase
+        .from('issue_attachments')
+        .delete()
+        .eq('id', attachment.id);
+      if (dbError) throw dbError;
 
       toast({
         title: "刪除成功",
@@ -196,7 +197,7 @@ export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: Attachm
       {attachments.map((attachment) => (
         <div
           key={attachment.id}
-          className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50"
+          className="flex items-center justify-between border-b border-[#294c66] px-1 py-3 last:border-b-0 hover:bg-cyan-300/[0.035]"
         >
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {getFileIcon(attachment.file_type, attachment.file_name)}
@@ -216,6 +217,7 @@ export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: Attachm
               size="sm"
               onClick={() => previewAttachment(attachment)}
               title="預覽"
+              aria-label={`預覽 ${attachment.file_name}`}
             >
               <Eye className="h-4 w-4" />
             </Button>
@@ -224,6 +226,7 @@ export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: Attachm
               size="sm"
               onClick={() => downloadAttachment(attachment)}
               title="下載"
+              aria-label={`下載 ${attachment.file_name}`}
             >
               <Download className="h-4 w-4" />
             </Button>
@@ -233,6 +236,7 @@ export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: Attachm
               onClick={() => setPendingDelete(attachment)}
               disabled={loading}
               title="刪除"
+              aria-label={`刪除 ${attachment.file_name}`}
               className="text-destructive hover:text-destructive"
             >
               <Trash2 className="h-4 w-4" />

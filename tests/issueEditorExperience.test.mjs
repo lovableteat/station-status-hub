@@ -59,3 +59,56 @@ test("all issue detail surfaces always show the shared process history", async (
   assert.match(tracker, /setSelectedIssue\(\(current\) =>/);
   assert.match(tracker, /normalizedIssues\.find\(\(issue\) => issue\.id === current\.id\)/);
 });
+
+test("issue editing stays flat and every destructive or upload action cleans up storage", async () => {
+  const editDialog = await read("../src/components/issues/IssueEditDialog.tsx");
+  const contentWorkspace = await read("../src/components/issues/IssueContentWorkspace.tsx");
+  const attachments = await read("../src/components/issues/AttachmentManager.tsx");
+  const table = await read("../src/components/issues/IssueTableView.tsx");
+
+  assert.match(contentWorkspace, /data-ui="issue-content-workspace"/);
+  assert.doesNotMatch(contentWorkspace, /rounded-2xl border border-\[#315b78\]/);
+  assert.match(contentWorkspace, /rounded-none border-b-2 border-transparent/);
+  assert.match(editDialog, /<div className="divide-y divide-\[#294c66\]">/);
+  assert.match(editDialog, /value === "unassigned" \? "" : value/);
+  assert.match(table, /newAssignee === 'unassigned' \? null : newAssignee/);
+  assert.match(table, /onAttachmentUpdate=\{\(\) => setHasAttachmentChanges\(true\)\}/);
+  assert.match(table, /if \(hasAttachmentChanges\)[\s\S]*?onUpdate\(\)/);
+  assert.match(editDialog, /\.select\('file_path'\)/);
+  assert.match(editDialog, /\.remove\(storedPaths\)/);
+  assert.match(editDialog, /if \(uploadedPath\)[\s\S]*?\.remove\(\[uploadedPath\]\)/);
+  assert.match(editDialog, /attachmentInputRef\.current\?\.click\(\)/);
+  assert.match(editDialog, /ref=\{attachmentInputRef\}/);
+  assert.match(attachments, /\.remove\(\[attachment\.file_path\]\)[\s\S]*?\.from\('issue_attachments'\)[\s\S]*?\.delete\(\)/);
+});
+
+test("rich text controls are named, non-submitting, and reusable", async () => {
+  const editor = await read("../src/components/ui/rich-text-editor.tsx");
+
+  assert.match(editor, /role="toolbar" aria-label="內容格式工具列"/);
+  for (const label of [
+    "粗體",
+    "斜體",
+    "底線",
+    "項目符號",
+    "編號清單",
+    "插入表格",
+    "插入連結",
+    "上傳圖片",
+    "插入圖片 URL",
+    "復原",
+    "重做",
+    "清除格式",
+  ]) {
+    assert.match(editor, new RegExp(`aria-label=["']${label}["']`));
+  }
+  assert.match(editor, /finally \{\s*input\.value = ''/);
+  assert.match(editor, /disabled=\{!linkUrl\.trim\(\) \|\| !linkText\.trim\(\)\}/);
+  assert.match(editor, /disabled=\{!imageUrl\.trim\(\)\}/);
+  assert.match(editor, /onPointerDown=\{rememberColorSelection\}/);
+  assert.match(editor, /setTextSelection\(selection\)[\s\S]*?setColor\(color\)/);
+  assert.match(editor, /TEXT_COLOR_OPTIONS\.map/);
+  assert.match(editor, /文字顏色：\$\{color\.label\}/);
+  assert.match(editor, /StarterKit\.configure\(\{[\s\S]*?link: false/);
+  assert.match(editor, /aria-label="關閉圖片預覽"/);
+});

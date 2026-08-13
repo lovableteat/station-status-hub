@@ -141,6 +141,7 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
   const [viewingIssue, setViewingIssue] = useState<Issue | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [hasAttachmentChanges, setHasAttachmentChanges] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Issue; direction: 'asc' | 'desc' } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -259,13 +260,23 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
   const totalPages = Math.ceil(issues.length / pageSize);
 
   const handleEdit = (issue: Issue) => {
+    setHasAttachmentChanges(false);
     setEditingIssue(issue);
     setIsEditDialogOpen(true);
   };
   const handleEditComplete = () => {
     setIsEditDialogOpen(false);
     setEditingIssue(null);
+    setHasAttachmentChanges(false);
     onUpdate();
+  };
+  const handleEditClose = () => {
+    setIsEditDialogOpen(false);
+    setEditingIssue(null);
+    if (hasAttachmentChanges) {
+      setHasAttachmentChanges(false);
+      onUpdate();
+    }
   };
   const handleView = (issue: Issue) => {
     if (onViewIssue) {
@@ -292,9 +303,10 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
         throw new Error("No active project");
       }
 
+      const assignedTo = newAssignee === 'unassigned' ? null : newAssignee;
       const { error } = await supabase
         .from('issues')
-        .update({ assigned_to: newAssignee })
+        .update({ assigned_to: assignedTo })
         .eq('project_id', activeProjectId)
         .eq('id', issueId);
       if (error) throw error;
@@ -453,7 +465,7 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
         );
       case "assigned_to":
         return inlineEditingAssignee === issue.id ? (
-          <Select defaultValue={issue.assigned_to} onValueChange={(v) => handleAssigneeChange(issue.id, v)}>
+          <Select defaultValue={issue.assigned_to || "unassigned"} onValueChange={(v) => handleAssigneeChange(issue.id, v)}>
             <SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="unassigned">未指派</SelectItem>
@@ -611,7 +623,7 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
         </div>
 
         {editingIssue && (
-          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <Dialog open={isEditDialogOpen} onOpenChange={(open) => { if (!open) handleEditClose(); }}>
             <DialogContent
               className="h-[min(90vh,820px)] max-w-[1280px] overflow-hidden border-[#2a526f] bg-[#071522] p-0"
               hideCloseButton
@@ -626,8 +638,8 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
                 issue={editingIssue}
                 onUpdate={handleEditComplete}
                 onDelete={handleEditComplete}
-                onClose={() => setIsEditDialogOpen(false)}
-                onAttachmentUpdate={onUpdate}
+                onClose={handleEditClose}
+                onAttachmentUpdate={() => setHasAttachmentChanges(true)}
               />
             </DialogContent>
           </Dialog>
