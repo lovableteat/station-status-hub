@@ -88,6 +88,8 @@ test("direct chat becomes full-screen on phones and respects the keyboard safe a
   assert.match(panel, /multiple/);
   assert.match(panel, /h-11 w-11 rounded-2xl[^"]*sm:h-10 sm:w-10/);
   assert.match(panel, /h-11 w-11 rounded-xl[^"]*sm:h-9 sm:w-9/);
+  assert.match(panel, /flex h-10 items-center gap-1\.5[^"]*sm:h-7/);
+  assert.match(panel, /flex h-10 w-10 items-center[^"]*sm:h-7 sm:w-7/);
   assert.match(panel, /aria-label=\{isSendingMedia \? "訊息傳送中" : "送出訊息"\}/);
 });
 
