@@ -117,18 +117,22 @@ test("keeps all four tools mutually exclusive and accessible", () => {
   assert.match(toolbarSource, /shortcut=["']K["']/);
 });
 
-test("adds separate visible-layer filters without replacing placement-layer controls", () => {
+test("combines placement and visibility into one layer control", () => {
   assert.doesNotMatch(toolbarSource, /onNew:\s*\(\)\s*=>\s*void/);
   assert.doesNotMatch(toolbarSource, /label=["']新增專案["']/);
   assert.doesNotMatch(toolbarSource, /icon=\{Plus\}/);
   assert.match(toolbarSource, /visibleLayer:\s*PcbVisibleLayer/);
   assert.match(toolbarSource, /onVisibleLayerChange:\s*\(layer:\s*PcbVisibleLayer\)\s*=>\s*void/);
-  assert.match(toolbarSource, /pcb-visible-layer-switch/);
-  assert.match(toolbarSource, /pcb-layer-switch-label["']>顯示層</);
-  assert.match(toolbarSource, /pcb-layer-switch-label["']>放置層</);
-  assert.match(toolbarSource, /aria-pressed=\{visibleLayer === layer\}/);
-  assert.match(toolbarSource, /onClick=\{\(\) => onVisibleLayerChange\(layer\)\}/);
-  assert.match(toolbarSource, /onClick=\{\(\) => onActiveLayerChange\(layer\)\}/);
+  assert.match(toolbarSource, /pcb-layer-control/);
+  assert.match(toolbarSource, /pcb-layer-switch-label["']>圖層</);
+  assert.match(toolbarSource, /DropdownMenuRadioItem value=["']all["']>全部顯示/);
+  assert.match(toolbarSource, /DropdownMenuRadioItem value=["']top["']>只顯示 Top/);
+  assert.match(toolbarSource, /DropdownMenuRadioItem value=["']bottom["']>只顯示 Bottom/);
+  assert.match(toolbarSource, /aria-pressed=\{activeLayer === layer\}/);
+  assert.match(toolbarSource, /onClick=\{\(\) => changeActiveLayer\(layer\)\}/);
+  assert.match(toolbarSource, /visibleLayer !== ["']all["'] && visibleLayer !== layer[\s\S]{0,120}onVisibleLayerChange\(layer\)/);
+  assert.doesNotMatch(toolbarSource, /pcb-visible-layer-switch/);
+  assert.doesNotMatch(toolbarSource, />放置層</);
 });
 
 test("provides a complete keepout workflow with visible creation, resize, and deletion controls", () => {
@@ -347,27 +351,27 @@ test("keeps dense toolbar labels readable and stable across active and disabled 
   );
   assert.match(
     editorCssSource,
-    /\.pcb-layer-switch button,[\s\S]{0,120}\.pcb-visible-layer-switch button\s*\{[\s\S]{0,320}font-family:\s*inherit[\s\S]{0,120}font-size:\s*12px[\s\S]{0,120}line-height:\s*1/,
+    /\.pcb-layer-control \.pcb-active-layer-button\s*\{[\s\S]{0,360}font-family:\s*inherit[\s\S]{0,120}font-size:\s*12px[\s\S]{0,120}line-height:\s*1/,
   );
   assert.match(
     editorCssSource,
-    /\.pcb-layer-switch,\s*[\r\n]+\s*\.pcb-visible-layer-switch\s*\{[\s\S]{0,400}flex:\s*0 0 auto[\s\S]{0,200}white-space:\s*nowrap/,
+    /\.pcb-layer-control\s*\{[\s\S]{0,400}flex:\s*0 0 auto[\s\S]{0,320}white-space:\s*nowrap/,
   );
   assert.match(
     editorCssSource,
-    /\.pcb-layer-switch button,\s*[\r\n]+\s*\.pcb-visible-layer-switch button\s*\{[\s\S]{0,400}flex:\s*0 0 auto[\s\S]{0,200}min-width:\s*64px[\s\S]{0,200}white-space:\s*nowrap/,
+    /\.pcb-layer-control \.pcb-active-layer-button\s*\{[\s\S]{0,400}flex:\s*0 0 auto[\s\S]{0,200}min-width:\s*64px[\s\S]{0,200}white-space:\s*nowrap/,
   );
   assert.doesNotMatch(
     editorCssSource,
-    /\.pcb-layer-switch button:disabled,[\s\S]{0,120}\.pcb-visible-layer-switch button:disabled[\s\S]{0,120}opacity:/,
+    /\.pcb-layer-control \.pcb-active-layer-button:disabled[\s\S]{0,160}opacity:/,
   );
   assert.match(
     editorCssSource,
-    /\.pcb-visible-layer-switch button\.is-active\s*\{[\s\S]{0,320}border-color:[\s\S]{0,200}box-shadow:/,
+    /\.pcb-layer-control \.pcb-active-layer-button\.is-active\s*\{[\s\S]{0,320}border-color:[\s\S]{0,200}box-shadow:/,
   );
   assert.match(
     editorCssSource,
-    /\.pcb-layer-switch button\.is-active\s*\{[\s\S]{0,320}border-color:[\s\S]{0,200}box-shadow:/,
+    /\.pcb-layer-control \.pcb-layer-visibility-trigger\s*\{[\s\S]{0,500}border:[\s\S]{0,240}color:/,
   );
   assert.match(
     editorCssSource,
