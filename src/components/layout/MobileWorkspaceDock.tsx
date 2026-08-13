@@ -26,7 +26,7 @@ export function MobileWorkspaceDock({ activeItem, onSelect }: MobileWorkspaceDoc
     <nav
       aria-label="手機主要工作區"
       data-mobile-workspace-dock="true"
-      className="fixed inset-x-2 bottom-[max(8px,env(safe-area-inset-bottom))] z-[72] grid h-16 grid-cols-4 gap-1 rounded-[22px] border border-cyan-100/20 bg-[#071421]/95 p-1.5 shadow-[0_24px_70px_-24px_rgba(0,0,0,0.95),0_10px_32px_-24px_rgba(34,211,238,0.8)] backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-2 bottom-[max(6px,env(safe-area-inset-bottom))] z-[72] grid h-[60px] grid-cols-4 gap-1 rounded-[20px] border border-cyan-100/20 bg-[#071421]/96 p-1 shadow-[0_24px_70px_-24px_rgba(0,0,0,0.95),0_10px_32px_-24px_rgba(34,211,238,0.8)] backdrop-blur-xl lg:hidden"
     >
       {MOBILE_WORKSPACES.map((item) => {
         const Icon = item.icon;
@@ -38,11 +38,11 @@ export function MobileWorkspaceDock({ activeItem, onSelect }: MobileWorkspaceDoc
             aria-current={active ? "page" : undefined}
             onClick={() => onSelect(item.id)}
             className={cn(
-              "flex min-w-0 flex-col items-center justify-center gap-1 rounded-[16px] border border-transparent text-[11px] font-black tracking-wide text-slate-400 transition-colors",
+              "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-[15px] border border-transparent text-[11px] font-black tracking-wide text-slate-400 transition-colors",
               active ? activeToneClasses[item.tone] : "hover:border-white/10 hover:bg-white/[0.05] hover:text-white",
             )}
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-[18px] w-[18px]" />
             <span>{item.label}</span>
           </button>
         );

@@ -528,7 +528,7 @@ export function CollaborationCenter() {
               </div>
               <p className="mt-1 text-sm text-slate-400">通知、公告與在線工作狀態集中在這裡。</p>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setOpen(false)} className="rounded-xl text-slate-300 hover:bg-white/10 hover:text-white">
+            <Button variant="ghost" size="icon" onClick={() => setOpen(false)} className="h-11 w-11 rounded-xl text-slate-300 hover:bg-white/10 hover:text-white sm:h-10 sm:w-10">
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -702,7 +702,7 @@ export function CollaborationCenter() {
               <button
                 type="button"
                 onClick={() => setMessageFloatOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-cyan-50 transition-colors hover:border-white/20 hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+                className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-cyan-50 transition-colors hover:border-white/20 hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 sm:h-8 sm:w-8"
                 aria-label="最小化聊天室"
               >
                 <Minus className="h-4 w-4" />

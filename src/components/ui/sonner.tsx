@@ -16,14 +16,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
         right: "1.25rem",
       }}
       mobileOffset={{
-        top: "calc(env(safe-area-inset-top) + 4.5rem)",
-        right: "0.75rem",
-        left: "0.75rem",
+        top: "max(6px, env(safe-area-inset-top))",
+        right: "0.5rem",
       }}
       toastOptions={{
         classNames: {
           toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+            "group toast max-sm:!min-h-[52px] max-sm:!w-[min(340px,calc(100vw-1rem))] max-sm:!rounded-xl max-sm:!px-3 max-sm:!py-2 group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
           description: "group-[.toast]:text-muted-foreground",
           actionButton:
             "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
@@ -36,4 +35,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
   )
 }
 
+// Sonner intentionally exposes its imperative toast helper beside the renderer.
+// eslint-disable-next-line react-refresh/only-export-components
 export { Toaster, toast }
