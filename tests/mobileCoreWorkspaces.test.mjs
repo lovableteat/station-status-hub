@@ -5,11 +5,13 @@ import test from "node:test";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("mobile header exposes a bundled website QR and a thumb-friendly workspace dock", async () => {
-  const [header, qr, dock, index] = await Promise.all([
+  const [header, qr, dock, index, toast, sonner] = await Promise.all([
     read("src/components/layout/MainWorkspaceHeader.tsx"),
     read("src/components/layout/WebsiteQrButton.tsx"),
     read("src/components/layout/MobileWorkspaceDock.tsx"),
     read("src/pages/Index.tsx"),
+    read("src/components/ui/toast.tsx"),
+    read("src/components/ui/sonner.tsx"),
   ]);
 
   assert.match(header, /<WebsiteQrButton \/>/);
@@ -26,7 +28,11 @@ test("mobile header exposes a bundled website QR and a thumb-friendly workspace 
   assert.match(dock, /material-requests/);
   assert.match(dock, /ai-chat/);
   assert.match(dock, /safe-area-inset-bottom/);
+  assert.match(dock, /z-40/);
   assert.match(index, /<MobileWorkspaceDock/);
+  assert.match(toast, /w-\[min\(250px,calc\(100%-7\.5rem\)\)\]/);
+  assert.match(toast, /sm:left-auto sm:right-0/);
+  assert.match(sonner, /max-sm:!w-\[min\(250px,calc\(100vw-7\.5rem\)\)\]/);
 });
 
 test("maintenance center switches compact layouts to a scrollable module toolbar", async () => {
@@ -45,18 +51,24 @@ test("maintenance center switches compact layouts to a scrollable module toolbar
   assert.match(hook, /useIsCompactLayout/);
 });
 
-test("AI query workspace uses a mobile history drawer and a compact fixed-height composer", async () => {
-  const [page, consoleSource] = await Promise.all([
+test("AI query workspace uses the available mobile height and keeps every composer action reachable", async () => {
+  const [page, consoleSource, index] = await Promise.all([
     read("src/components/api-management/ApiChatWorkspacePage.tsx"),
     read("src/components/api-management/ApiChatConsole.tsx"),
+    read("src/pages/Index.tsx"),
   ]);
 
-  assert.match(page, /h-\[calc\(100dvh-9\.75rem-env\(safe-area-inset-bottom\)\)\]/);
+  assert.match(page, /className="h-full min-h-0/);
+  assert.doesNotMatch(page, /100dvh-9\.75rem/);
+  assert.match(index, /activeWorkspace === "ai-chat" && "h-\[100dvh\] overflow-hidden"/);
   assert.match(consoleSource, /mobileSidebarOpen/);
   assert.match(consoleSource, /關閉資料查詢選單/);
   assert.match(consoleSource, /最近對話/);
   assert.match(consoleSource, /fixed inset-x-3[\s\S]*lg:static/);
-  assert.match(consoleSource, /min-h-\[52px\]/);
+  assert.match(consoleSource, /grid-cols-\[44px_minmax\(0,1fr\)_44px\]/);
+  assert.match(consoleSource, /min-h-11 max-h-28/);
+  assert.match(consoleSource, /輸入問題，或貼上圖片／文件/);
+  assert.match(consoleSource, /開啟共享提示詞庫/);
   assert.match(consoleSource, /aria-label="上傳 PDF、PPT、Excel、Word 或圖片"/);
 });
 

@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, Database, Loader2, Wrench } from "lucide-react";
+import { ChevronDown, Database, Wrench } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,52 +43,57 @@ export function MaintenanceSourceSelector({
   const selectedNames = activeProjects
     .filter((project) => selectedProjectIds.includes(project.id))
     .map((project) => project.name);
+  const sourceStatus = loading
+    ? "正在查詢正式資料"
+    : retrievalError
+      ? `檢索失敗：${retrievalError}`
+      : lastResultCount !== null
+        ? `找到 ${lastResultCount} 筆來源`
+        : `已選 ${selectedProjectIds.length} 個專案`;
 
   return (
-    <section className="rounded-xl border border-cyan-400/20 bg-[linear-gradient(135deg,rgba(8,47,73,0.5),rgba(15,23,42,0.82))] p-2.5 shadow-[0_12px_32px_rgba(2,132,199,0.08)] sm:p-3">
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-400/10 text-cyan-200 sm:h-9 sm:w-9">
+    <section
+      data-testid="maintenance-source-selector"
+      className="rounded-xl border border-cyan-300/20 bg-[linear-gradient(110deg,rgba(8,47,73,0.66),rgba(15,23,42,0.9))] px-2 py-1.5 shadow-[0_10px_28px_rgba(2,132,199,0.08)] sm:px-3 sm:py-2"
+    >
+      <div className="flex min-h-10 items-center gap-2">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/12 text-cyan-100 sm:h-9 sm:w-9">
           <Wrench className="h-4 w-4" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-slate-100">機台維修紀錄中心</p>
-            <Badge variant="outline" className="border-emerald-300/25 bg-emerald-400/10 text-[10px] text-emerald-200">
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-sm font-bold text-slate-100" title="機台維修紀錄中心">維修資料</p>
+            <Badge variant="outline" className="hidden border-emerald-300/25 bg-emerald-400/10 text-[10px] text-emerald-200 md:inline-flex">
               即時資料
             </Badge>
           </div>
-          <p className="mt-0.5 hidden text-[11px] text-slate-400 sm:block">
-            機台、站點、測項進度、問題與工具資產
+          <p
+            className={cn(
+              "truncate text-[10px] font-semibold sm:text-[11px]",
+              !enabled && "text-slate-400",
+              enabled && !loading && !retrievalError && "text-emerald-200/85",
+              loading && "text-cyan-200",
+              retrievalError && "text-rose-300",
+            )}
+            title={enabled ? sourceStatus : "關閉中，一般 AI 對話"}
+          >
+            {enabled ? sourceStatus : "關閉中 · 一般 AI 對話"}
           </p>
         </div>
-        <Switch
-          checked={enabled}
-          onCheckedChange={onEnabledChange}
-          aria-describedby="maintenance-source-help"
-          aria-label="啟用機台維修紀錄來源"
-        />
-      </div>
 
-      <p
-        id="maintenance-source-help"
-        data-testid="maintenance-source-help"
-        className="mt-2 hidden rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-2.5 py-2 text-[11px] leading-5 text-amber-100/85 sm:block"
-      >
-        開啟＝專案資料查詢；關閉＝一般 AI 對話／附件分析。若不是要查機台維修紀錄，請先關閉，避免一般問題被當成專案搜尋。
-      </p>
-
-      {enabled ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-cyan-300/10 pt-2 sm:mt-3 sm:pt-3">
+        {enabled ? (
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 type="button"
                 variant="outline"
-                className="h-10 min-w-[190px] flex-1 justify-between border-slate-600/70 bg-slate-950/45 px-3 text-xs text-slate-200 hover:bg-slate-800/80"
+                aria-label="選擇維修資料專案範圍"
+                className="h-9 w-[88px] shrink-0 justify-between border-cyan-300/25 bg-slate-950/45 px-2 text-[11px] font-bold text-slate-100 hover:bg-slate-800/80 sm:w-[190px] sm:px-3 sm:text-xs"
               >
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 items-center gap-1.5">
                   <Database className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
-                  <span className="truncate">
+                  <span className="truncate sm:hidden">{selectedProjectIds.length} 專案</span>
+                  <span className="hidden truncate sm:inline">
                     {selectedNames.length
                       ? selectedNames.length === 1
                         ? selectedNames[0]
@@ -100,8 +105,8 @@ export function MaintenanceSourceSelector({
               </Button>
             </PopoverTrigger>
             <PopoverContent
-              align="start"
-              className="w-[min(380px,calc(100vw-32px))] border-cyan-300/20 bg-slate-950/95 p-0 text-slate-100 shadow-2xl backdrop-blur-xl"
+              align="end"
+              className="w-[min(380px,calc(100vw-24px))] border-cyan-300/20 bg-slate-950/95 p-0 text-slate-100 shadow-2xl backdrop-blur-xl"
             >
               <div className="border-b border-slate-700/70 p-3">
                 <p className="text-sm font-semibold">查詢專案範圍</p>
@@ -111,7 +116,7 @@ export function MaintenanceSourceSelector({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-8 border-cyan-300/20 bg-cyan-400/5 text-[11px]"
+                    className="h-9 border-cyan-300/20 bg-cyan-400/5 px-2 text-[11px]"
                     onClick={() => onScopeChange(selectCurrentMaintenanceProject(scope, currentProjectId, projects))}
                   >
                     目前專案
@@ -120,7 +125,7 @@ export function MaintenanceSourceSelector({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-8 border-emerald-300/20 bg-emerald-400/5 text-[11px]"
+                    className="h-9 border-emerald-300/20 bg-emerald-400/5 px-2 text-[11px]"
                     onClick={() => onScopeChange(selectAllMaintenanceProjects(scope, projects))}
                   >
                     全部選取
@@ -129,7 +134,7 @@ export function MaintenanceSourceSelector({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-8 border-slate-600 bg-slate-900 text-[11px]"
+                    className="h-9 border-slate-600 bg-slate-900 px-2 text-[11px]"
                     onClick={() => onScopeChange(clearMaintenanceProjects(scope))}
                   >
                     清除
@@ -145,7 +150,7 @@ export function MaintenanceSourceSelector({
                     <label
                       key={project.id}
                       className={cn(
-                        "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
+                        "flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
                         checked
                           ? "border-cyan-300/30 bg-cyan-400/10"
                           : "border-transparent bg-slate-900/45 hover:border-slate-600",
@@ -172,26 +177,23 @@ export function MaintenanceSourceSelector({
               </div>
             </PopoverContent>
           </Popover>
+        ) : null}
 
-          <div className="ml-auto flex items-center gap-2 text-[11px]">
-            {loading ? (
-              <span className="flex items-center gap-1.5 text-cyan-200">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />正在找正式資料
-              </span>
-            ) : retrievalError ? (
-              <span className="max-w-[320px] truncate text-rose-300" title={retrievalError}>
-                檢索失敗：{retrievalError}
-              </span>
-            ) : lastResultCount !== null ? (
-              <span className="flex items-center gap-1.5 text-emerald-200">
-                <CheckCircle2 className="h-3.5 w-3.5" />找到 {lastResultCount} 筆來源
-              </span>
-            ) : (
-              <span className="text-slate-400">已選 {selectedProjectIds.length} 個專案</span>
-            )}
-          </div>
-        </div>
-      ) : null}
+        <Switch
+          checked={enabled}
+          onCheckedChange={onEnabledChange}
+          aria-describedby="maintenance-source-help"
+          aria-label="啟用機台維修紀錄來源"
+        />
+      </div>
+
+      <p
+        id="maintenance-source-help"
+        data-testid="maintenance-source-help"
+        className="sr-only"
+      >
+        開啟＝專案資料查詢；關閉＝一般 AI 對話／附件分析。若不是要查機台維修紀錄，請先關閉，避免一般問題被當成專案搜尋。
+      </p>
     </section>
   );
 }
