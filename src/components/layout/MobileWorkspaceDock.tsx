@@ -26,7 +26,7 @@ export function MobileWorkspaceDock({ activeItem, onSelect }: MobileWorkspaceDoc
     <nav
       aria-label="手機主要工作區"
       data-mobile-workspace-dock="true"
-      className="fixed inset-x-2 bottom-[max(6px,env(safe-area-inset-bottom))] z-[72] grid h-[60px] grid-cols-4 gap-1 rounded-[20px] border border-cyan-100/20 bg-[#071421]/96 p-1 shadow-[0_24px_70px_-24px_rgba(0,0,0,0.95),0_10px_32px_-24px_rgba(34,211,238,0.8)] backdrop-blur-xl lg:hidden"
+      className="fixed inset-x-2 bottom-[max(6px,env(safe-area-inset-bottom))] z-40 grid h-[60px] grid-cols-4 gap-1 rounded-[20px] border border-cyan-100/20 bg-[#071421]/96 p-1 shadow-[0_24px_70px_-24px_rgba(0,0,0,0.95),0_10px_32px_-24px_rgba(34,211,238,0.8)] backdrop-blur-xl lg:hidden"
     >
       {MOBILE_WORKSPACES.map((item) => {
         const Icon = item.icon;

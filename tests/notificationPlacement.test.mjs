@@ -5,7 +5,7 @@ import test from "node:test";
 const readSource = (path) =>
   readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("global notifications stay clear of the bottom-right chat dock", async () => {
+test("global notifications keep mobile header actions and the desktop chat dock reachable", async () => {
   const [sonnerSource, radixToastSource] = await Promise.all([
     readSource("src/components/ui/sonner.tsx"),
     readSource("src/components/ui/toast.tsx"),
@@ -14,8 +14,12 @@ test("global notifications stay clear of the bottom-right chat dock", async () =
   assert.match(sonnerSource, /position="top-right"/);
   assert.match(sonnerSource, /safe-area-inset-top/);
   assert.match(sonnerSource, /mobileOffset=/);
+  assert.match(sonnerSource, /max-sm:!left-2 max-sm:!right-auto/);
+  assert.match(sonnerSource, /max-sm:!w-\[min\(250px,calc\(100vw-7\.5rem\)\)\]/);
 
-  assert.match(radixToastSource, /top-\[calc\(env\(safe-area-inset-top\)\+4\.5rem\)\]/);
+  assert.match(radixToastSource, /left-2 right-auto top-\[max\(6px,env\(safe-area-inset-top\)\)\]/);
+  assert.match(radixToastSource, /w-\[min\(250px,calc\(100%-7\.5rem\)\)\]/);
+  assert.match(radixToastSource, /sm:left-auto sm:right-0/);
   assert.doesNotMatch(radixToastSource, /sm:bottom-0/);
   assert.doesNotMatch(radixToastSource, /sm:slide-in-from-bottom-full/);
 });

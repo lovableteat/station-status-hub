@@ -109,7 +109,7 @@ export function ApiChatWorkspacePage() {
   );
 
   return (
-    <div className="h-[calc(100dvh-9.75rem-env(safe-area-inset-bottom))] min-h-0 w-full min-w-0 px-2 py-2 sm:px-3 sm:py-3 lg:h-auto lg:min-h-full lg:px-5 lg:py-4">
+    <div className="h-full min-h-0 w-full min-w-0 px-2 py-1.5 sm:px-3 sm:py-3 lg:min-h-full lg:px-5 lg:py-4">
       <ApiChatConsole
         selectedApiKey={selectedApiKey}
         availableApiKeys={apiKeys}

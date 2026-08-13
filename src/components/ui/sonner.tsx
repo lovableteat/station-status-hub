@@ -9,7 +9,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      className="toaster group"
+      className="toaster group max-sm:!left-2 max-sm:!right-auto"
       position="top-right"
       offset={{
         top: "calc(env(safe-area-inset-top) + 5rem)",
@@ -22,8 +22,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast:
-            "group toast max-sm:!min-h-[52px] max-sm:!w-[min(340px,calc(100vw-1rem))] max-sm:!rounded-xl max-sm:!px-3 max-sm:!py-2 group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
-          description: "group-[.toast]:text-muted-foreground",
+            "group toast max-sm:!min-h-[52px] max-sm:!w-[min(250px,calc(100vw-7.5rem))] max-sm:!rounded-xl max-sm:!px-3 max-sm:!py-2 group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+          description: "max-sm:!line-clamp-2 max-sm:!text-xs group-[.toast]:text-muted-foreground",
           actionButton:
             "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
           cancelButton:

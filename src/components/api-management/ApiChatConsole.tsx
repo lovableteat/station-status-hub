@@ -2366,12 +2366,12 @@ export function ApiChatConsole({
         <Button
           type="button"
           variant="outline"
-          className="h-10 rounded-xl border-blue-300/35 bg-blue-400/12 px-3 text-sm font-black text-blue-50 shadow-none hover:border-blue-200/70 hover:bg-blue-400/22 hover:text-white"
+          className="relative h-12 w-12 shrink-0 rounded-xl border-blue-300/35 bg-blue-400/12 p-0 text-sm font-black text-blue-50 shadow-none hover:border-blue-200/70 hover:bg-blue-400/22 hover:text-white sm:w-auto sm:px-4"
           aria-label="開啟共享提示詞庫"
         >
-          <LibraryBig className="mr-2 h-4 w-4 text-cyan-200" />
-          提示詞庫
-          <span className="ml-2 rounded-full border border-blue-200/25 bg-slate-950/35 px-2 py-0.5 text-[11px] tabular-nums text-blue-100">
+          <LibraryBig className="h-5 w-5 text-cyan-200 sm:mr-2 sm:h-4 sm:w-4" />
+          <span className="hidden sm:inline">提示詞庫</span>
+          <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full border border-blue-200/25 bg-slate-950/80 px-1 text-[9px] leading-4 tabular-nums text-blue-100 sm:static sm:ml-2 sm:px-2 sm:py-0.5 sm:text-[11px] sm:leading-normal">
             {savedPrompts.length}
           </span>
         </Button>
@@ -2609,8 +2609,8 @@ export function ApiChatConsole({
     >
       <div
         className={cn(
-          "flex shrink-0 flex-col gap-4 border-b border-blue-300/20 lg:flex-row lg:items-center lg:justify-between",
-          isChatOnly ? "gap-2 bg-[#18263d] px-3 py-3 sm:px-5 sm:py-4 md:px-6" : "pb-5"
+          "shrink-0 flex-col gap-4 border-b border-blue-300/20 lg:flex-row lg:items-center lg:justify-between",
+          isChatOnly ? "hidden gap-2 bg-[#18263d] px-3 py-3 sm:px-5 sm:py-4 md:px-6 lg:flex" : "flex pb-5"
         )}
       >
         <div className="flex items-start gap-3 sm:gap-4">
@@ -2682,7 +2682,7 @@ export function ApiChatConsole({
       </div>
 
       {isChatOnly ? (
-        <div className="shrink-0 border-b border-blue-300/15 bg-[#111e31] px-4 py-3 md:px-6">
+        <div className="shrink-0 border-b border-blue-300/15 bg-[#111e31] px-2 py-1.5 sm:px-3 sm:py-2 lg:px-6 lg:py-3">
           <MaintenanceSourceSelector
             enabled={maintenanceSourceEnabled}
             onEnabledChange={(enabled) => {
@@ -2713,13 +2713,13 @@ export function ApiChatConsole({
         <div
           className={cn(
             "flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_50%_0%,rgba(16,185,129,0.08),transparent_28%),#030508]",
-            isChatOnly ? "px-3 py-3 sm:px-4 sm:py-5 md:px-6" : "rounded-[30px] border border-white/8 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
+            isChatOnly ? "px-2.5 py-2.5 sm:px-4 sm:py-4 md:px-6" : "rounded-[30px] border border-white/8 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
           )}
         >
           <div className={cn("space-y-4 overflow-y-auto", isChatOnly ? "pr-2" : "pr-1", chatHeightClass)}>
             {messages.length === 0 ? (
               isChatOnly ? (
-                <div className="flex min-h-[300px] flex-1 items-center justify-center px-1 py-5 md:px-6 2xl:py-0">
+                <div className="flex min-h-0 flex-1 items-center justify-center px-1 py-3 md:min-h-[300px] md:px-6 md:py-5 2xl:py-0">
                   <div className="w-full max-w-3xl text-center">
                     <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-emerald-400/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.16),rgba(5,8,10,0.12))] text-emerald-100 shadow-[0_18px_45px_-22px_rgba(16,185,129,0.45)] 2xl:h-10 2xl:w-10 2xl:rounded-xl">
                       <Search className="h-6 w-6 2xl:h-4.5 2xl:w-4.5" />
@@ -2776,9 +2776,8 @@ export function ApiChatConsole({
             }}
           />
 
-          <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="mb-2.5 hidden flex-wrap items-center justify-between gap-2 sm:flex">
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium text-slate-300">
-              {promptLibraryControl}
               <span className="hidden rounded-lg border border-cyan-300/18 bg-cyan-400/8 px-2.5 py-1.5 font-bold text-cyan-100 sm:inline">
                 輸入 <kbd className="mx-1 rounded border border-cyan-200/25 bg-slate-950/40 px-1.5 py-0.5 font-mono text-xs">/</kbd> 快速套用
               </span>
@@ -2862,7 +2861,8 @@ export function ApiChatConsole({
             )}
           >
             <div className="flex items-center gap-2 md:gap-3">
-              <div className="flex shrink-0 items-center self-stretch">
+              <div className="flex shrink-0 items-center gap-2 self-stretch">
+                {promptLibraryControl}
                 <Button
                   type="button"
                   variant="ghost"
@@ -2951,8 +2951,8 @@ export function ApiChatConsole({
                   onKeyDown={handleComposerKeyDown}
                   onPaste={handleComposerPaste}
                   aria-label="輸入查詢內容"
-                  placeholder=""
-                  className="min-h-[52px] border-0 bg-transparent px-0 py-0 text-base leading-6 text-white shadow-none placeholder:text-slate-200 focus-visible:ring-0 sm:min-h-[74px] sm:text-[17px] sm:leading-7"
+                  placeholder="輸入問題，或貼上圖片／文件"
+                  className="min-h-11 max-h-28 border-0 bg-transparent px-0 py-0 text-base leading-6 text-white shadow-none placeholder:text-slate-200 focus-visible:ring-0 sm:min-h-[74px] sm:text-[17px] sm:leading-7"
                 />
               </div>
 
@@ -3180,22 +3180,43 @@ export function ApiChatConsole({
           </aside>
 
           <div className="order-1 flex min-h-0 min-w-0 flex-col gap-2 lg:order-2">
-            <div className="grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_auto] gap-2 lg:hidden">
+            <div className="grid h-11 shrink-0 grid-cols-[44px_minmax(0,1fr)_44px] gap-2 lg:hidden">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setMobileSidebarOpen(true)}
-                className="h-12 min-w-0 justify-start rounded-2xl border-blue-300/25 bg-blue-400/10 px-3 text-blue-50 hover:bg-blue-400/18"
+                aria-label={`開啟最近對話，共 ${savedConversations.length} 筆`}
+                className="relative h-11 w-11 rounded-xl border-blue-300/25 bg-blue-400/10 p-0 text-blue-50 hover:bg-blue-400/18"
               >
-                <History className="mr-2 h-4 w-4 shrink-0" />
-                <span className="truncate font-black">最近對話</span>
-                <span className="ml-auto rounded-full bg-blue-300/15 px-2 py-0.5 text-xs tabular-nums text-blue-100">{savedConversations.length}</span>
+                <History className="h-4 w-4" />
+                <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-cyan-300 px-1 text-[9px] font-black leading-4 tabular-nums text-slate-950">{savedConversations.length}</span>
               </Button>
+              <Select
+                value={selectedApiKeyId ?? selectedApiKey?.id ?? ""}
+                onValueChange={(value) => onSelectApiKey?.(value)}
+              >
+                <SelectTrigger
+                  aria-label="選擇 API 金鑰與模型"
+                  className="h-11 min-w-0 rounded-xl border-blue-300/30 bg-[#13243b] px-3 text-left text-sm font-bold text-white shadow-none focus:ring-2 focus:ring-cyan-300/35 [&>span]:truncate"
+                >
+                  <SelectValue placeholder="選擇模型" />
+                </SelectTrigger>
+                <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
+                  {availableApiKeys.map((apiKey) => {
+                    const metadata = normalizeApiKeyPermissions(apiKey.permissions).metadata;
+                    return (
+                      <SelectItem key={apiKey.id} value={apiKey.id}>
+                        {apiKey.key_name} · {metadata.provider || "-"} / {metadata.model || "-"}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
               <Button
                 type="button"
                 onClick={requestResetConversation}
                 aria-label="建立新對話"
-                className="h-12 w-12 rounded-2xl bg-[linear-gradient(135deg,#bef264,#67e8f9)] p-0 text-[#082032] hover:brightness-110"
+                className="h-11 w-11 rounded-xl bg-[linear-gradient(135deg,#bef264,#67e8f9)] p-0 text-[#082032] shadow-[0_10px_24px_-14px_rgba(103,232,249,0.9)] hover:brightness-110"
               >
                 <Plus className="h-5 w-5" />
               </Button>
