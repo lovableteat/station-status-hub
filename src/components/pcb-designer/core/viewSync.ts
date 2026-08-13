@@ -31,11 +31,12 @@ export function isPcbLayerVisible(
 }
 
 export function getPcbComponentCenter(
-  component: Pick<PcbPlacedComponent, "x" | "y" | "width" | "height">,
+  component: Pick<PcbPlacedComponent, "x" | "y">,
 ): PcbPoint {
+  // Placement coordinates are centers in the editor, collision engine, and saved project data.
   return {
-    x: component.x + component.width / 2,
-    y: component.y + component.height / 2,
+    x: component.x,
+    y: component.y,
   };
 }
 
@@ -62,7 +63,7 @@ export function getPcbComponentViewState(
 }
 
 export function getPcb3DComponentTransform(
-  component: Pick<PcbPlacedComponent, "x" | "y" | "width" | "height" | "rotation" | "layer">,
+  component: Pick<PcbPlacedComponent, "x" | "y" | "rotation" | "layer">,
   board: Pick<PcbBoard, "width" | "height">,
 ): { position: [number, number, number]; rotation: [number, number, number] } {
   const center = getPcbComponentCenter(component);
