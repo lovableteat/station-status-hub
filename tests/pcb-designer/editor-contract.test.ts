@@ -160,6 +160,8 @@ test("wires keyboard editing while skipping editable controls", () => {
   assert.match(combinedHookSource, /history\/redo/);
   assert.match(combinedHookSource, /event\.ctrlKey \|\| event\.metaKey/);
   assert.match(editorHookSource, /key === ["']d["'][\s\S]{0,220}duplicateSelected/);
+  assert.match(editorHookSource, /key === ["']c["'][\s\S]{0,160}copySelected/);
+  assert.match(editorHookSource, /key === ["']v["'][\s\S]{0,160}pasteCopied/);
   assert.match(editorHookSource, /key === ["']v["'] \|\| key === ["']h["']/);
   assert.match(editorHookSource, /key === ["']m["'] \|\| key === ["']k["']/);
   assert.match(editorHookSource, /key === ["']r["'][\s\S]{0,120}rotateSelected/);
@@ -229,6 +231,16 @@ test("keeps 3D interactive through the software renderer when WebGL is unavailab
   assert.match(softwareCanvas3dSource, /mapPcbModelPartToComponentSpace/);
   assert.match(softwareCanvas3dSource, /onPointerDown=\{handlePointerDown\}/);
   assert.match(softwareCanvas3dSource, /onWheel=\{handleWheel\}/);
+});
+
+test("supports marquee selection and mixed component/keepout clipboard workflows", () => {
+  assert.match(canvasSource, /kind:\s*["']marquee["']/);
+  assert.match(canvasSource, /getMarqueeSelectionIds/);
+  assert.match(canvasSource, /workspace\.selectObjects/);
+  assert.match(canvasSource, /data-pcb-marquee/);
+  assert.match(canvasSource, /selectedKeepoutIds/);
+  assert.match(canvasSource, /Ctrl\+C 複製 · Ctrl\+V 貼上/);
+  assert.match(editorHookSource, /copiedObjectIdsRef/);
 });
 
 test("shares 2D and 3D synchronization helpers and renderer-safe inspection metadata", () => {

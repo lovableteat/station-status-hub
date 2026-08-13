@@ -303,7 +303,7 @@ test("editor hook exposes group move and duplication actions for later UI wiring
   assert.match(editorHookSource, /const duplicateKeepout = useCallback/);
   assert.match(editorHookSource, /duplicateKeepoutRecord/);
   assert.match(editorHookSource, /const duplicateSelected = useCallback/);
-  assert.match(editorHookSource, /dispatch\(\{ type: "selection\/duplicate" \}\)/);
+  assert.match(editorHookSource, /dispatch\(\{ type: "selection\/duplicate", objectIds: duplicableIds \}\)/);
   assert.match(editorHookSource, /return \{[\s\S]*moveComponents,[\s\S]*duplicateKeepout,[\s\S]*duplicateSelected,/);
 });
 

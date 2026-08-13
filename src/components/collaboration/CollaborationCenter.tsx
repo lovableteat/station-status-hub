@@ -710,6 +710,17 @@ export function CollaborationCenter() {
             </header>
             <DirectMessagesPanel
               onlineUsers={onlineUsers}
+              contacts={collaborationMembers
+                .filter((member) => member.userId !== user?.userId)
+                .map((member) => ({
+                  userId: member.userId,
+                  username: member.username,
+                  displayName: member.displayName,
+                  avatarPath: member.avatarPath,
+                  online: Boolean(member.onlineUser),
+                }))}
+              contactsLoading={directoryLoading}
+              contactsError={directoryError}
               requestedUserId={messageRecipientId}
               onRequestHandled={() => setMessageRecipientId(null)}
               onUnreadCountChange={setDirectMessageUnreadCount}

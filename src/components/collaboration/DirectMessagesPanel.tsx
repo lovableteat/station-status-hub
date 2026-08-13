@@ -61,9 +61,20 @@ import { cn } from "@/lib/utils";
 
 interface DirectMessagesPanelProps {
   onlineUsers: OnlineUser[];
+  contacts: DirectMessageContact[];
+  contactsLoading?: boolean;
+  contactsError?: string | null;
   requestedUserId: string | null;
   onRequestHandled: () => void;
   onUnreadCountChange?: (count: number) => void;
+}
+
+export interface DirectMessageContact {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarPath: string | null;
+  online: boolean;
 }
 
 interface SelectedMediaFile {
@@ -232,6 +243,9 @@ function ThreadRow({
 
 export function DirectMessagesPanel({
   onlineUsers,
+  contacts,
+  contactsLoading = false,
+  contactsError = null,
   requestedUserId,
   onRequestHandled,
   onUnreadCountChange,
@@ -1000,13 +1014,29 @@ export function DirectMessagesPanel({
   }
 
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase("zh-TW");
-  const availableOnlineUsers = onlineUsers.filter((onlineUser) => {
-    if (onlineUser.userId === user?.userId) return false;
+  const contactById = new Map(contacts.map((contact) => [contact.userId, contact]));
+  onlineUsers.forEach((onlineUser) => {
+    if (onlineUser.userId === user?.userId) return;
+    contactById.set(onlineUser.userId, {
+      userId: onlineUser.userId,
+      username: onlineUser.username,
+      displayName: onlineUser.displayName || onlineUser.username,
+      avatarPath: onlineUser.avatarPath,
+      online: true,
+    });
+  });
+  const availableContacts = [...contactById.values()].filter((contact) => {
+    if (contact.userId === user?.userId) return false;
     if (!normalizedSearch) return true;
-    return [onlineUser.displayName, onlineUser.username]
+    return [contact.displayName, contact.username]
       .filter(Boolean)
       .some((value) => String(value).toLocaleLowerCase("zh-TW").includes(normalizedSearch));
-  });
+  }).sort((left, right) => (
+    Number(right.online) - Number(left.online)
+    || left.displayName.localeCompare(right.displayName, "zh-TW")
+  ));
+  const onlineContactCount = [...contactById.values()].filter((contact) => contact.online).length;
+  const offlineContactCount = Math.max(0, contactById.size - onlineContactCount);
   const searchedThreads = threads.filter((thread) => {
     if (!normalizedSearch) return true;
     return [
@@ -1073,39 +1103,76 @@ export function DirectMessagesPanel({
         </div>
       </div>
       <ScrollArea className="min-h-0 flex-1 px-3 py-2.5">
-        {availableOnlineUsers.length > 0 ? (
+        {availableContacts.length > 0 || contactsLoading || contactsError ? (
           <section className="mb-3">
-            <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200/85">
-              <Users className="h-3.5 w-3.5" />
-              線上同事
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-100/85">
+                <Users className="h-3.5 w-3.5" />
+                聯絡人
+              </span>
+              <span className="text-[10px] font-semibold text-slate-500">
+                <span className="text-emerald-300">{onlineContactCount} 在線</span>
+                <span className="mx-1">·</span>
+                {offlineContactCount} 離線
+              </span>
             </div>
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
-              {availableOnlineUsers.map((onlineUser) => (
+            {contactsLoading && availableContacts.length === 0 ? (
+              <div className="flex h-11 items-center gap-2 rounded-lg border border-cyan-100/10 bg-white/[0.03] px-3 text-xs text-slate-400">
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin text-cyan-200" />
+                正在載入所有同事
+              </div>
+            ) : (
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {availableContacts.map((contact) => (
                 <button
-                  key={onlineUser.userId}
+                  key={contact.userId}
                   type="button"
                   onClick={() => {
-                    const existing = threads.find((thread) => thread.otherUserId === onlineUser.userId);
+                    const existing = threads.find((thread) => thread.otherUserId === contact.userId);
                     if (existing) setSelectedThreadId(existing.threadId);
-                    else void startDirectChat(onlineUser.userId).then(setSelectedThreadId);
+                    else void startDirectChat(contact.userId).then(setSelectedThreadId);
                   }}
-                  className="h-11 min-w-[112px] rounded-lg border border-emerald-300/18 bg-emerald-400/[0.08] px-2 text-left transition-colors hover:border-emerald-200/38 hover:bg-emerald-400/15 sm:h-10"
+                  className={cn(
+                    "h-11 min-w-[124px] rounded-lg border px-2 text-left transition-colors sm:h-10",
+                    contact.online
+                      ? "border-emerald-300/22 bg-emerald-400/[0.09] hover:border-emerald-200/45 hover:bg-emerald-400/16"
+                      : "border-slate-400/16 bg-slate-300/[0.045] hover:border-cyan-200/30 hover:bg-cyan-300/[0.08]",
+                  )}
+                  aria-label={`傳訊息給 ${contact.displayName || contact.username}，${contact.online ? "在線" : "離線"}`}
                 >
                   <span className="flex items-center gap-2">
                     <UserAvatar
-                      avatarPath={onlineUser.avatarPath}
-                      displayName={onlineUser.displayName || onlineUser.username}
+                      avatarPath={contact.avatarPath}
+                      displayName={contact.displayName || contact.username}
                       className="h-6 w-6 shrink-0 rounded-md"
                       fallbackClassName="rounded-md text-[10px] font-black"
                     />
-                    <span className="min-w-0 flex-1 truncate text-xs font-bold text-white">
-                      {onlineUser.displayName || onlineUser.username}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-bold text-white">
+                        {contact.displayName || contact.username}
+                      </span>
+                      <span className={cn(
+                        "block text-[9px] font-semibold",
+                        contact.online ? "text-emerald-300" : "text-slate-500",
+                      )}>
+                        {contact.online ? "在線" : "離線 · 可留言"}
+                      </span>
                     </span>
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" aria-label="在線上" />
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 shrink-0 rounded-full",
+                        contact.online ? "bg-emerald-400" : "bg-slate-600",
+                      )}
+                      aria-hidden="true"
+                    />
                   </span>
                 </button>
               ))}
             </div>
+            )}
+            {contactsError ? (
+              <p className="mt-1.5 text-[10px] font-medium text-amber-200/80">{contactsError}</p>
+            ) : null}
           </section>
         ) : null}
 
@@ -1131,7 +1198,7 @@ export function DirectMessagesPanel({
             <div className="flex h-44 flex-col items-center justify-center text-center text-slate-500">
               <MessageCircle className="mb-3 h-9 w-9 opacity-50" />
               <p className="font-semibold text-slate-300">還沒有任何對話</p>
-              <p className="mt-1 text-sm">點上面的線上同事，就能立即開始私訊。</p>
+              <p className="mt-1 text-sm">點上面的聯絡人，即使離線也能先留言。</p>
             </div>
           ) : filteredThreads.length === 0 ? (
             <div className="flex h-44 flex-col items-center justify-center text-center text-slate-500">

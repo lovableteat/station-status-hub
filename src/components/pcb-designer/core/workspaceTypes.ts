@@ -88,8 +88,9 @@ export type PcbWorkspaceAction =
   | { type: "view/center"; center: PcbPoint }
   | { type: "view/reset" }
   | { type: "selection/set"; selection: PcbSelection | null }
+  | { type: "selection/set-many"; objectIds: string[]; additive?: boolean }
   | { type: "selection/toggle"; objectId: string }
-  | { type: "selection/duplicate" }
+  | { type: "selection/duplicate"; objectIds?: string[] }
   | { type: "selection/clear-group" }
   | { type: "panel/right"; tab: PcbWorkspaceState["rightTab"] }
   | { type: "permission/set"; canEdit: boolean }

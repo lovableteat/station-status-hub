@@ -21,6 +21,7 @@ import {
   getPcbComponentViewState,
   getPcbSelectionIds,
 } from "./core/viewSync.ts";
+import { getMarqueeSelectionIds } from "./core/selection.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 import type {
   PcbKeepout,
@@ -104,6 +105,13 @@ type PointerInteraction =
     pointerId: number;
     start: PcbPoint;
     end: PcbPoint;
+  }
+  | {
+    kind: "marquee";
+    pointerId: number;
+    start: PcbPoint;
+    end: PcbPoint;
+    additive: boolean;
   };
 
 function pointForEvent(svg: SVGSVGElement, clientX: number, clientY: number): PcbPoint {
@@ -237,6 +245,13 @@ export function PcbCanvas({
         project.components.some((component) => component.instanceId === objectId)),
     ),
     [project.components, selectionIds],
+  );
+  const selectedKeepoutIds = useMemo(
+    () => new Set(
+      selectionIds.filter((objectId) =>
+        project.keepouts.some((keepout) => keepout.id === objectId)),
+    ),
+    [project.keepouts, selectionIds],
   );
   const placementLibraryComponent = placementComponentId
     ? workspace.data.library.find((component) => component.id === placementComponentId) ?? null
@@ -492,7 +507,16 @@ export function PcbCanvas({
       return;
     }
     if (workspace.tool === "select") {
-      selectObject(null);
+      event.preventDefault();
+      const start = pointForEvent(event.currentTarget, event.clientX, event.clientY);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setInteraction({
+        kind: "marquee",
+        pointerId: event.pointerId,
+        start,
+        end: start,
+        additive: event.ctrlKey || event.metaKey,
+      });
       return;
     }
     if (!workspace.canMutate) return;
@@ -717,6 +741,8 @@ export function PcbCanvas({
             : { x2: endpoint.x, y2: endpoint.y }),
         },
       });
+    } else if (interaction.kind === "marquee") {
+      setInteraction({ ...interaction, end: point });
     } else {
       setInteraction({
         ...interaction,
@@ -732,7 +758,24 @@ export function PcbCanvas({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (interaction.kind === "component") {
+    if (interaction.kind === "marquee") {
+      const minimumDrag = Math.max(
+        viewBox.width / Math.max(1, size.width),
+        viewBox.height / Math.max(1, size.height),
+      ) * 4;
+      const moved = Math.hypot(
+        interaction.end.x - interaction.start.x,
+        interaction.end.y - interaction.start.y,
+      );
+      if (moved < minimumDrag) {
+        if (!interaction.additive) selectObject(null);
+      } else {
+        workspace.selectObjects(
+          getMarqueeSelectionIds(project, interaction.start, interaction.end, visibleLayer),
+          interaction.additive,
+        );
+      }
+    } else if (interaction.kind === "component") {
       const result = interaction.instanceIds.length > 1
         ? workspace.moveComponents(
           interaction.instanceIds,
@@ -935,10 +978,11 @@ export function PcbCanvas({
                 width={preview.width}
                 height={preview.height}
                 fill={keepout.color}
-                fillOpacity="0.18"
-                stroke={keepout.color}
+                fillOpacity={selectedKeepoutIds.has(keepout.id) ? "0.3" : "0.18"}
+                stroke={selectedKeepoutIds.has(keepout.id) ? "#f8fafc" : keepout.color}
                 strokeWidth={strokeWidth}
                 strokeDasharray={`${strokeWidth * 4} ${strokeWidth * 2}`}
+                data-pcb-selected={selectedKeepoutIds.has(keepout.id) ? "true" : "false"}
                 role="button"
                 tabIndex={0}
                 onPointerDown={(event) => {
@@ -1228,6 +1272,21 @@ export function PcbCanvas({
         </g>
 
         <g data-layer="tool-draft" data-export-hidden pointerEvents="none">
+          {interaction?.kind === "marquee" && (
+            <rect
+              data-pcb-marquee
+              x={Math.min(interaction.start.x, interaction.end.x)}
+              y={Math.min(interaction.start.y, interaction.end.y)}
+              width={Math.abs(interaction.end.x - interaction.start.x)}
+              height={Math.abs(interaction.end.y - interaction.start.y)}
+              rx={strokeWidth * 2}
+              fill="#67e8f9"
+              fillOpacity="0.13"
+              stroke="#a5f3fc"
+              strokeWidth={strokeWidth * 1.4}
+              strokeDasharray={`${strokeWidth * 5} ${strokeWidth * 2.5}`}
+            />
+          )}
           {placementPreview && (
             <g
               className="pcb-placement-preview"
@@ -1343,6 +1402,7 @@ export function PcbCanvas({
       )}
       <div className="pcb-canvas-hud" data-export-hidden>
         <span>{placementLibraryComponent ? "放置元件" : workspace.tool === "select" ? "選取" : workspace.tool === "pan" ? "平移" : workspace.tool === "measure" ? "測量" : "禁制區"}</span>
+        {workspace.tool === "select" && <span>拖曳框選 · Ctrl+C 複製 · Ctrl+V 貼上</span>}
         {selectedKeepout && workspace.tool === "select" && <span>拖曳四角縮放 · Delete 刪除</span>}
         {selectedMeasurementVisual && workspace.tool === "select" && <span>拖曳亮色端點調整 · Alt 暫停吸附</span>}
         <span>Alt 暫停吸附</span>

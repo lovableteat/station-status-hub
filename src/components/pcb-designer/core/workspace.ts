@@ -12,10 +12,7 @@ import {
   undoHistory,
 } from "./history.ts";
 import { runDrc } from "./drc.ts";
-import {
-  duplicateKeepout,
-  placeLibraryComponent,
-} from "./editor.ts";
+import { duplicatePcbSelection } from "./selection.ts";
 import {
   MAX_BOM_QUANTITY_PER_ROW,
   MAX_BOM_TOTAL_PLACEMENTS,
@@ -260,6 +257,7 @@ function isMutation(action: PcbWorkspaceAction): boolean {
     "view/center",
     "view/reset",
     "selection/set",
+    "selection/set-many",
     "selection/toggle",
     "selection/clear-group",
     "panel/right",
@@ -817,6 +815,27 @@ export function reduceWorkspaceState(
         },
         action.selection ? "selection" : state.rightTab,
       );
+    case "selection/set-many": {
+      const requestedIds = [...new Set(action.objectIds)]
+        .filter((objectId) => selectionForObject(state, objectId));
+      const selectedObjects = action.additive
+        ? [...new Set([
+          ...state.selectedObjects,
+          ...(state.selection ? [state.selection.id] : []),
+          ...requestedIds,
+        ])]
+        : requestedIds;
+      const preferredId = requestedIds.at(-1)
+        ?? (state.selection && selectedObjects.includes(state.selection.id) ? state.selection.id : selectedObjects[0]);
+      return replaceSelectionSnapshot(
+        state,
+        {
+          selection: preferredId ? selectionForObject(state, preferredId) : null,
+          selectedObjects,
+        },
+        selectedObjects.length ? "selection" : state.rightTab,
+      );
+    }
     case "selection/toggle": {
       const currentIds = new Set([
         ...state.selectedObjects,
@@ -836,68 +855,30 @@ export function reduceWorkspaceState(
       });
     }
     case "selection/duplicate": {
-      const gridOffset = state.activeProject.board.gridSize > 0
-        ? state.activeProject.board.gridSize
-        : 1;
-      if (state.selection?.kind === "keepout") {
-        const duplicated = duplicateKeepout(
-          state.activeProject,
-          state.selection.id,
-          { x: gridOffset, y: gridOffset },
-        );
-        if (!duplicated.ok) return state;
-        return replaceProject(
-          state,
-          duplicated.project,
-          true,
-          state.pendingPlacements,
-          {
-            selection: { kind: "keepout", id: duplicated.keepout.id },
-            selectedObjects: [duplicated.keepout.id],
-          },
-        );
-      }
-
-      const componentIds = state.selectedObjects.filter((objectId) =>
-        state.activeProject.components.some((component) => component.instanceId === objectId));
-      const sourceIds = componentIds.length
-        ? componentIds
-        : state.selection?.kind === "component"
-          ? [state.selection.id]
-          : [];
+      const sourceIds = action.objectIds?.length
+        ? action.objectIds
+        : [...new Set([
+          ...state.selectedObjects,
+          ...(state.selection ? [state.selection.id] : []),
+        ])];
       if (!sourceIds.length) return state;
-
-      const sources = sourceIds.map((instanceId) =>
-        state.activeProject.components.find((component) => component.instanceId === instanceId));
-      if (sources.some((component) => !component)) return state;
-
-      let project = state.activeProject;
-      const duplicatedIds: string[] = [];
-      for (const source of sources) {
-        const result = placeLibraryComponent(
-          project,
-          source!,
-          { x: source!.x + gridOffset, y: source!.y + gridOffset },
-          undefined,
-          { layer: source!.layer, rotation: source!.rotation },
-        );
-        if (!result.ok) return state;
-        project = result.project;
-        duplicatedIds.push(result.component.instanceId);
-      }
-
-      const primarySourceId = state.selection?.kind === "component"
+      const duplicated = duplicatePcbSelection(state.activeProject, sourceIds);
+      if (!duplicated) return state;
+      const primarySourceId = state.selection && sourceIds.includes(state.selection.id)
         ? state.selection.id
         : sourceIds[0];
-      const primaryIndex = Math.max(0, sourceIds.indexOf(primarySourceId));
+      const primaryId = duplicated.idMap.get(primarySourceId) ?? duplicated.objectIds[0];
       return replaceProject(
         state,
-        project,
+        duplicated.project,
         true,
         state.pendingPlacements,
         {
-          selection: { kind: "component", id: duplicatedIds[primaryIndex] ?? duplicatedIds[0] },
-          selectedObjects: duplicatedIds,
+          selection: selectionForObject(
+            { ...state, activeProject: duplicated.project },
+            primaryId,
+          ),
+          selectedObjects: duplicated.objectIds,
         },
       );
     }
