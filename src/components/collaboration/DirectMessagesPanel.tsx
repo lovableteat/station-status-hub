@@ -754,7 +754,7 @@ export function DirectMessagesPanel({
                               onClick={() => startReply(message, own)}
                               aria-label="回覆訊息"
                               title="回覆"
-                              className="flex h-7 items-center gap-1 rounded-lg border border-cyan-100/10 bg-[#0b1a2a] px-2 text-[10px] font-bold text-cyan-100/80 hover:border-cyan-200/30 hover:text-cyan-50"
+                              className="flex h-10 items-center gap-1.5 rounded-xl border border-cyan-100/10 bg-[#0b1a2a] px-2.5 text-[11px] font-bold text-cyan-100/80 hover:border-cyan-200/30 hover:text-cyan-50 sm:h-7 sm:rounded-lg sm:px-2 sm:text-[10px]"
                             >
                               <CornerUpLeft className="h-3 w-3" />回覆
                             </button>
@@ -763,7 +763,7 @@ export function DirectMessagesPanel({
                               onClick={() => void copyMessage(message)}
                               aria-label="複製訊息"
                               title="複製"
-                              className="flex h-7 items-center gap-1 rounded-lg border border-violet-100/10 bg-[#0b1a2a] px-2 text-[10px] font-bold text-violet-100/80 hover:border-violet-200/30 hover:text-violet-50"
+                              className="flex h-10 items-center gap-1.5 rounded-xl border border-violet-100/10 bg-[#0b1a2a] px-2.5 text-[11px] font-bold text-violet-100/80 hover:border-violet-200/30 hover:text-violet-50 sm:h-7 sm:rounded-lg sm:px-2 sm:text-[10px]"
                             >
                               {copiedMessageId === message.id
                                 ? <Check className="h-3 w-3" />
@@ -782,7 +782,7 @@ export function DirectMessagesPanel({
                                   setDeletingMessageId(message.id);
                                   void deleteMessage(message.id).finally(() => setDeletingMessageId(null));
                                 }}
-                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200/10 bg-rose-400/[0.05] text-rose-200/70 hover:border-rose-200/30 hover:text-rose-100 disabled:opacity-40"
+                                className="flex h-10 w-10 items-center justify-center rounded-xl border border-rose-200/10 bg-rose-400/[0.05] text-rose-200/70 hover:border-rose-200/30 hover:text-rose-100 disabled:opacity-40 sm:h-7 sm:w-7 sm:rounded-lg"
                               >
                                 {deletingMessageId === message.id
                                   ? <LoaderCircle className="h-3 w-3 animate-spin" />
