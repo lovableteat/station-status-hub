@@ -44,3 +44,18 @@ test("issue content editors share one workspace and paste screenshots inline", a
   assert.match(editDialog, /activeInlineUploadsRef/);
   assert.match(editDialog, /persistInlineImageAttachments/);
 });
+
+test("all issue detail surfaces always show the shared process history", async () => {
+  const tracker = await read("../src/components/issues/IssueTracker.tsx");
+  const detailDialog = await read("../src/components/issues/IssueDetailDialog.tsx");
+  const processHistory = await read("../src/components/issues/IssueProcessHistory.tsx");
+
+  assert.match(tracker, /<IssueProcessHistory/);
+  assert.match(detailDialog, /<IssueProcessHistory/);
+  assert.match(processHistory, /data-ui="issue-process-history"/);
+  assert.match(processHistory, /目前尚未填寫處理紀錄/);
+  assert.match(processHistory, /DOMPurify\.sanitize\(processNotes/);
+  assert.match(processHistory, /最後更新/);
+  assert.match(tracker, /setSelectedIssue\(\(current\) =>/);
+  assert.match(tracker, /normalizedIssues\.find\(\(issue\) => issue\.id === current\.id\)/);
+});
