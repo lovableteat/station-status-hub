@@ -283,7 +283,7 @@ test("conversation rows can clear all locally visible messages without affecting
   assert.match(panel, /deleting \? <LoaderCircle[^>]*animate-spin[^>]*\/> : <Trash2/s);
   assert.match(panel, /<div[^>]*data-direct-thread-row="true"[^>]*>[\s\S]*?<button[\s\S]*?<\/button>[\s\S]*?<button/s);
   assert.match(panel, /data-density="compact"/);
-  assert.match(panel, /h-\[52px\]/);
+  assert.match(panel, /h-\[58px\]/);
   assert.match(panel, /\[content-visibility:auto\]/);
   assert.match(panel, /data-direct-messages-toolbar="compact"/);
   assert.doesNotMatch(panel, /rounded-\[26px\]|line-clamp-2/);
@@ -354,6 +354,26 @@ test("direct chat media storage is private, member-scoped, and created atomicall
   assert.match(migration, /DROP FUNCTION IF EXISTS public\.delete_direct_chat_message\(uuid\)/i);
   assert.match(migration, /jsonb_build_object\([\s\S]*'storage_paths'/i);
   assert.match(migration, /傳送了照片|傳送了影片|個附件/);
+});
+
+test("direct chat attachment paths avoid ambiguous boolean and integer operators", async () => {
+  const migration = await readSource(
+    "supabase/migrations/20260813060000_fix_direct_chat_media_path_validation.sql",
+  );
+
+  assert.match(
+    migration,
+    /left\(v_storage_path, char_length\(v_expected_prefix\)\) <> v_expected_prefix/i,
+  );
+  assert.match(migration, /strpos\(v_storage_path, '\.\.'\) > 0/i);
+  assert.doesNotMatch(
+    migration,
+    /NOT LIKE v_expected_prefix \|\| position\('\.\.' IN v_storage_path\) > 0/i,
+  );
+  assert.match(
+    migration,
+    /GRANT EXECUTE ON FUNCTION public\.send_direct_chat_message\(uuid, uuid, text, jsonb\)/i,
+  );
 });
 
 test("direct chat media helpers validate limits, create safe paths, and label previews", async () => {

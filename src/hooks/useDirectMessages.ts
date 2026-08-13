@@ -26,6 +26,19 @@ const MESSAGE_SELECT = `
 `;
 const database = supabase as any;
 
+function describeDirectMessageFailure(error: unknown, fallback: string) {
+  if (!error || typeof error !== "object") return fallback;
+  const candidate = error as { message?: unknown; error?: unknown; statusCode?: unknown };
+  const detail = [candidate.message, candidate.error]
+    .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+  if (!detail) return fallback;
+  if (/bucket.*not found|not found.*bucket/i.test(detail)) return "聊天室圖片空間尚未建立，請重新整理後再試。";
+  if (/row-level security|unauthorized|permission|policy/i.test(detail)) return "圖片上傳權限尚未同步，請重新登入後再試。";
+  if (/mime|content.?type/i.test(detail)) return "這個圖片格式未被聊天室接受，請改用 JPG、PNG、WebP 或 GIF。";
+  if (/payload|too large|maximum.*size|exceeded/i.test(detail)) return "圖片檔案超過聊天室上傳限制。";
+  return fallback;
+}
+
 export interface DirectThread {
   threadId: string;
   otherUserId: string;
@@ -289,6 +302,7 @@ export function useDirectMessages(threadId: string | null) {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastTypingSentRef = useRef(0);
   const typingTimersRef = useRef(new Map<string, number>());
+  const persistErrorRef = useRef<string | null>(null);
 
   const loadReadReceipts = useCallback(async () => {
     if (!threadId || !user?.userId || !isRealtimeAuthenticated) return;
@@ -400,6 +414,7 @@ export function useDirectMessages(threadId: string | null) {
   const persistMessage = useCallback(
     async (clientId: string, body: string, files: File[] = []) => {
       if (!threadId || !user?.userId || !isRealtimeAuthenticated) return null;
+      persistErrorRef.current = null;
       const uploadedPaths: string[] = [];
       const attachments: Array<Record<string, string | number>> = [];
 
@@ -420,6 +435,11 @@ export function useDirectMessages(threadId: string | null) {
           { contentType: file.type, cacheControl: "3600", upsert: false },
         );
         if (uploadError) {
+          console.error("Direct-message media upload failed", JSON.stringify(uploadError));
+          persistErrorRef.current = describeDirectMessageFailure(
+            uploadError,
+            "圖片無法寫入聊天室儲存空間，請稍後再試。",
+          );
           if (uploadedPaths.length > 0) {
             await supabase.storage.from(CHAT_MEDIA_BUCKET).remove(uploadedPaths);
           }
@@ -471,6 +491,13 @@ export function useDirectMessages(threadId: string | null) {
       if (uploadedPaths.length > 0) {
         await supabase.storage.from(CHAT_MEDIA_BUCKET).remove(uploadedPaths);
       }
+      if (insertError) {
+        console.error("Direct-message attachment record failed", JSON.stringify(insertError));
+        persistErrorRef.current = describeDirectMessageFailure(
+          insertError,
+          "圖片已上傳，但無法建立聊天室訊息，請稍後再試。",
+        );
+      }
       return null;
     },
     [isRealtimeAuthenticated, threadId, user?.userId],
@@ -521,7 +548,9 @@ export function useDirectMessages(threadId: string | null) {
         return true;
       }
 
-      setError(files.length > 0 ? "照片或影片上傳失敗，已保留選取內容，請再試一次。" : null);
+      setError(files.length > 0
+        ? persistErrorRef.current || "照片或影片上傳失敗，已保留選取內容，請再試一次。"
+        : null);
       setMessages((current) => files.length > 0
         ? current.filter((message) => message.clientId !== clientId)
         : current.map((message) =>
