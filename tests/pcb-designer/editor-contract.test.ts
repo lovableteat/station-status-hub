@@ -241,6 +241,8 @@ test("supports marquee selection and mixed component/keepout clipboard workflows
   assert.match(canvasSource, /selectedKeepoutIds/);
   assert.match(canvasSource, /Ctrl\+C 複製 · Ctrl\+V 貼上/);
   assert.match(editorHookSource, /copiedObjectIdsRef/);
+  assert.match(editorHookSource, /已貼上整組布局/);
+  assert.match(editorHookSource, /目前沒有可貼上的內容/);
 });
 
 test("shares 2D and 3D synchronization helpers and renderer-safe inspection metadata", () => {

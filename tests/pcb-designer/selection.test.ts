@@ -91,4 +91,28 @@ test("mixed component and keepout copies preserve their relative offset", () => 
   assert.ok(copiedKeepout);
   assert.equal(copiedComponent.x - 20, copiedKeepout.x - 12);
   assert.equal(copiedComponent.y - 20, copiedKeepout.y - 38);
+  assert.equal(result.usedOverlapFallback, false);
+});
+
+test("whole-board selections still paste when no collision-free offset exists", () => {
+  const board = project();
+  board.components = [component({
+    instanceId: "board-filling-component",
+    reference: "U1",
+    x: 50,
+    y: 40,
+    width: 100,
+    height: 80,
+  })];
+  board.keepouts = [];
+
+  const result = duplicatePcbSelection(board, ["board-filling-component"]);
+
+  assert.ok(result);
+  assert.equal(result.usedOverlapFallback, true);
+  assert.equal(result.project.components.length, 2);
+  assert.equal(result.project.components[1].x, 50);
+  assert.equal(result.project.components[1].y, 40);
+  assert.notEqual(result.project.components[1].instanceId, "board-filling-component");
+  assert.notEqual(result.project.components[1].reference, "U1");
 });
