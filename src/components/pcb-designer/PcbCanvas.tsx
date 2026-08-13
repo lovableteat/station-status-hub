@@ -44,6 +44,7 @@ interface PcbRect extends PcbPoint {
 }
 
 type KeepoutResizeHandle = "nw" | "ne" | "sw" | "se";
+type MeasurementEndpoint = "start" | "end";
 
 interface PcbCanvasProps {
   workspace: PcbWorkspaceApi;
@@ -88,6 +89,14 @@ type PointerInteraction =
     handle: KeepoutResizeHandle;
     anchor: PcbPoint;
     preview: PcbRect;
+    bypassSnap: boolean;
+  }
+  | {
+    kind: "measurement-resize";
+    pointerId: number;
+    id: string;
+    endpoint: MeasurementEndpoint;
+    preview: PcbMeasurement;
     bypassSnap: boolean;
   }
   | {
@@ -399,6 +408,10 @@ export function PcbCanvas({
   const selectedMeasurement = workspace.selection?.kind === "measurement"
     ? workspace.selectedObject as PcbMeasurement
     : null;
+  const selectedMeasurementVisual = interaction?.kind === "measurement-resize"
+    && selectedMeasurement?.id === interaction.id
+    ? interaction.preview
+    : selectedMeasurement;
   const gridSize = project.board.gridSize;
   const strokeWidth = Math.max(project.board.width, project.board.height) / 700;
   const boardSurfaceColor = visibleLayer === "all"
@@ -572,6 +585,55 @@ export function PcbCanvas({
     });
   };
 
+  const beginMeasurementResize = (
+    event: ReactPointerEvent<SVGGElement>,
+    measurement: PcbMeasurement,
+    endpoint: MeasurementEndpoint,
+  ) => {
+    if (event.button !== 0 || workspace.tool !== "select" || !workspace.canMutate) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const svg = svgRef.current;
+    if (!svg) return;
+    selectObject({ kind: "measurement", id: measurement.id });
+    svg.setPointerCapture(event.pointerId);
+    setInteraction({
+      kind: "measurement-resize",
+      pointerId: event.pointerId,
+      id: measurement.id,
+      endpoint,
+      preview: measurement,
+      bypassSnap: event.altKey,
+    });
+  };
+
+  const nudgeMeasurementEndpoint = (
+    event: ReactKeyboardEvent<SVGGElement>,
+    measurement: PcbMeasurement,
+    endpoint: MeasurementEndpoint,
+  ) => {
+    const direction = {
+      ArrowLeft: { x: -1, y: 0 },
+      ArrowRight: { x: 1, y: 0 },
+      ArrowUp: { x: 0, y: -1 },
+      ArrowDown: { x: 0, y: 1 },
+    }[event.key];
+    if (!direction || !workspace.canMutate) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const step = project.board.snapToGrid && !event.altKey ? gridSize : 0.1;
+    const current = endpoint === "start"
+      ? { x: measurement.x1, y: measurement.y1 }
+      : { x: measurement.x2, y: measurement.y2 };
+    const next = {
+      x: clamp(current.x + direction.x * step, 0, project.board.width),
+      y: clamp(current.y + direction.y * step, 0, project.board.height),
+    };
+    workspace.updateMeasurement(measurement.id, endpoint === "start"
+      ? { x1: next.x, y1: next.y }
+      : { x2: next.x, y2: next.y });
+  };
+
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     const point = pointForEvent(event.currentTarget, event.clientX, event.clientY);
     const nextPlacementPoint = placementLibraryComponent
@@ -636,6 +698,25 @@ export function PcbCanvas({
           project.board,
         ),
       });
+    } else if (interaction.kind === "measurement-resize") {
+      const bypassSnap = event.altKey;
+      const snappedPoint = project.board.snapToGrid
+        ? snapPoint(point, gridSize, bypassSnap)
+        : point;
+      const endpoint = {
+        x: clamp(snappedPoint.x, 0, project.board.width),
+        y: clamp(snappedPoint.y, 0, project.board.height),
+      };
+      setInteraction({
+        ...interaction,
+        bypassSnap,
+        preview: {
+          ...interaction.preview,
+          ...(interaction.endpoint === "start"
+            ? { x1: endpoint.x, y1: endpoint.y }
+            : { x2: endpoint.x, y2: endpoint.y }),
+        },
+      });
     } else {
       setInteraction({
         ...interaction,
@@ -681,6 +762,21 @@ export function PcbCanvas({
       );
       if (changed && !workspace.updateKeepout(interaction.id, interaction.preview)) {
         toast({ title: "無法調整禁制區", description: "請確認禁制區仍位於板框內，且寬高大於 0。", variant: "destructive" });
+      }
+    } else if (interaction.kind === "measurement-resize") {
+      const source = project.measurements.find((item) => item.id === interaction.id);
+      const changed = source && (
+        source.x1 !== interaction.preview.x1
+        || source.y1 !== interaction.preview.y1
+        || source.x2 !== interaction.preview.x2
+        || source.y2 !== interaction.preview.y2
+      );
+      if (changed && !workspace.updateMeasurement(interaction.id, interaction.preview)) {
+        toast({
+          title: "無法調整量測線",
+          description: "兩個端點必須位於板框內，且不可重疊。",
+          variant: "destructive",
+        });
       }
     } else if (interaction.kind === "keepout") {
       workspace.createKeepout(interaction.start, interaction.end);
@@ -878,8 +974,13 @@ export function PcbCanvas({
         </g>
 
         <g data-layer="measurements">
-          {project.measurements.map((measurement) => (
-            <g
+          {project.measurements.map((measurement) => {
+            const renderedMeasurement = interaction?.kind === "measurement-resize"
+              && interaction.id === measurement.id
+              ? interaction.preview
+              : measurement;
+            return (
+              <g
               key={measurement.id}
               className="pcb-measurement-object"
               role="button"
@@ -900,35 +1001,39 @@ export function PcbCanvas({
             >
               <line
                 className="pcb-measurement-hit-target"
-                x1={measurement.x1}
-                y1={measurement.y1}
-                x2={measurement.x2}
-                y2={measurement.y2}
+                x1={renderedMeasurement.x1}
+                y1={renderedMeasurement.y1}
+                x2={renderedMeasurement.x2}
+                y2={renderedMeasurement.y2}
                 stroke="transparent"
                 strokeWidth={Math.max(strokeWidth * 10, 1)}
                 pointerEvents="stroke"
               />
               <line
-                x1={measurement.x1}
-                y1={measurement.y1}
-                x2={measurement.x2}
-                y2={measurement.y2}
-                stroke={measurement.color}
+                x1={renderedMeasurement.x1}
+                y1={renderedMeasurement.y1}
+                x2={renderedMeasurement.x2}
+                y2={renderedMeasurement.y2}
+                stroke={renderedMeasurement.color}
                 strokeWidth={strokeWidth * 1.5}
               />
-              <circle cx={measurement.x1} cy={measurement.y1} r={strokeWidth * 2} fill={measurement.color} />
-              <circle cx={measurement.x2} cy={measurement.y2} r={strokeWidth * 2} fill={measurement.color} />
+              <circle cx={renderedMeasurement.x1} cy={renderedMeasurement.y1} r={strokeWidth * 2} fill={renderedMeasurement.color} />
+              <circle cx={renderedMeasurement.x2} cy={renderedMeasurement.y2} r={strokeWidth * 2} fill={renderedMeasurement.color} />
               <text
-                x={(measurement.x1 + measurement.x2) / 2}
-                y={(measurement.y1 + measurement.y2) / 2 - strokeWidth * 3}
+                x={(renderedMeasurement.x1 + renderedMeasurement.x2) / 2}
+                y={(renderedMeasurement.y1 + renderedMeasurement.y2) / 2 - strokeWidth * 3}
                 className="pcb-svg-label"
                 fontSize={strokeWidth * 7}
                 textAnchor="middle"
               >
-                {Math.hypot(measurement.x2 - measurement.x1, measurement.y2 - measurement.y1).toFixed(2)} mm
+                {Math.hypot(
+                  renderedMeasurement.x2 - renderedMeasurement.x1,
+                  renderedMeasurement.y2 - renderedMeasurement.y1,
+                ).toFixed(2)} mm
               </text>
             </g>
-          ))}
+            );
+          })}
         </g>
 
         <g data-layer="components">
@@ -1066,32 +1171,57 @@ export function PcbCanvas({
                 ))}
             </>
           )}
-          {selectedMeasurement && (
+          {selectedMeasurementVisual && (
             <>
               <line
-                x1={selectedMeasurement.x1}
-                y1={selectedMeasurement.y1}
-                x2={selectedMeasurement.x2}
-                y2={selectedMeasurement.y2}
+                x1={selectedMeasurementVisual.x1}
+                y1={selectedMeasurementVisual.y1}
+                x2={selectedMeasurementVisual.x2}
+                y2={selectedMeasurementVisual.y2}
                 stroke="#f8fafc"
                 strokeWidth={strokeWidth}
                 strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 2}`}
                 pointerEvents="none"
               />
               {[
-                [selectedMeasurement.x1, selectedMeasurement.y1],
-                [selectedMeasurement.x2, selectedMeasurement.y2],
-              ].map(([x, y], index) => (
-                <circle
-                  key={`${index}-${x}-${y}`}
-                  cx={x}
-                  cy={y}
-                  r={strokeWidth * 2.2}
-                  fill="#081827"
-                  stroke="#f8fafc"
-                  strokeWidth={strokeWidth}
-                  pointerEvents="none"
-                />
+                { endpoint: "start", x: selectedMeasurementVisual.x1, y: selectedMeasurementVisual.y1 },
+                { endpoint: "end", x: selectedMeasurementVisual.x2, y: selectedMeasurementVisual.y2 },
+              ].map(({ endpoint, x, y }) => (
+                <g
+                  key={endpoint}
+                  className="pcb-measurement-endpoint-control"
+                  role="button"
+                  tabIndex={0}
+                  onPointerDown={(event) => beginMeasurementResize(
+                    event,
+                    selectedMeasurementVisual,
+                    endpoint as MeasurementEndpoint,
+                  )}
+                  onKeyDown={(event) => nudgeMeasurementEndpoint(
+                    event,
+                    selectedMeasurementVisual,
+                    endpoint as MeasurementEndpoint,
+                  )}
+                  aria-label={`拖曳或使用方向鍵調整量測${endpoint === "start" ? "起點" : "終點"}`}
+                >
+                  <circle
+                    className="pcb-measurement-resize-handle"
+                    cx={x}
+                    cy={y}
+                    r={Math.max(strokeWidth * 7, 0.8)}
+                    fill="transparent"
+                  />
+                  <circle
+                    className="pcb-measurement-resize-dot"
+                    cx={x}
+                    cy={y}
+                    r={strokeWidth * 3.2}
+                    fill="#fde047"
+                    stroke="#f8fafc"
+                    strokeWidth={strokeWidth}
+                    pointerEvents="none"
+                  />
+                </g>
               ))}
             </>
           )}
@@ -1214,6 +1344,7 @@ export function PcbCanvas({
       <div className="pcb-canvas-hud" data-export-hidden>
         <span>{placementLibraryComponent ? "放置元件" : workspace.tool === "select" ? "選取" : workspace.tool === "pan" ? "平移" : workspace.tool === "measure" ? "測量" : "禁制區"}</span>
         {selectedKeepout && workspace.tool === "select" && <span>拖曳四角縮放 · Delete 刪除</span>}
+        {selectedMeasurementVisual && workspace.tool === "select" && <span>拖曳亮色端點調整 · Alt 暫停吸附</span>}
         <span>Alt 暫停吸附</span>
         <span className="font-mono">
           X {cursorPoint?.x.toFixed(2) ?? "—"} · Y {cursorPoint?.y.toFixed(2) ?? "—"}

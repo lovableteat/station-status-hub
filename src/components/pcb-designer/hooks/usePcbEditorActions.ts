@@ -316,6 +316,18 @@ export function usePcbEditorActions(
       const source = state.activeProject.measurements.find((item) => item.id === id);
       if (!source) return false;
       const measurement = { ...source, ...patch };
+      if (![measurement.x1, measurement.y1, measurement.x2, measurement.y2].every(Number.isFinite)) return false;
+      if (
+        measurement.x1 < 0
+        || measurement.y1 < 0
+        || measurement.x2 < 0
+        || measurement.y2 < 0
+        || measurement.x1 > state.activeProject.board.width
+        || measurement.x2 > state.activeProject.board.width
+        || measurement.y1 > state.activeProject.board.height
+        || measurement.y2 > state.activeProject.board.height
+      ) return false;
+      if (Math.hypot(measurement.x2 - measurement.x1, measurement.y2 - measurement.y1) < 0.01) return false;
       if (JSON.stringify(measurement) === JSON.stringify(source)) return false;
       dispatch({
         type: "project/commit",

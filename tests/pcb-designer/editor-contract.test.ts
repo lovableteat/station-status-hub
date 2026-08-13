@@ -308,6 +308,20 @@ test("keeps measurement selection compact without a native SVG focus ring", () =
   assert.match(editorCssSource, /pcb-measurement-object:focus[\s\S]{0,180}outline:\s*none\s*!important/);
 });
 
+test("lets users drag either measurement endpoint with snapping and safe persistence", () => {
+  assert.match(canvasSource, /kind:\s*["']measurement-resize["']/);
+  assert.match(canvasSource, /beginMeasurementResize/);
+  assert.match(canvasSource, /nudgeMeasurementEndpoint/);
+  assert.match(canvasSource, /ArrowLeft:[\s\S]{0,180}ArrowDown:/);
+  assert.match(canvasSource, /className=["']pcb-measurement-endpoint-control["']/);
+  assert.match(canvasSource, /className=["']pcb-measurement-resize-handle["']/);
+  assert.match(canvasSource, /interaction\.endpoint === ["']start["'][\s\S]{0,160}x1:/);
+  assert.match(canvasSource, /workspace\.updateMeasurement\(interaction\.id, interaction\.preview\)/);
+  assert.match(canvasSource, /拖曳亮色端點調整 · Alt 暫停吸附/);
+  assert.match(editorHookSource, /measurement\.x1 < 0[\s\S]{0,500}Math\.hypot/);
+  assert.match(editorCssSource, /pcb-measurement-endpoint-control:hover[\s\S]{0,180}#67e8f9/);
+});
+
 test("suppresses native SVG focus halos while retaining the custom selection bounds", () => {
   assert.match(canvasSource, /className=\{`pcb-component-object/);
   assert.match(editorCssSource, /\[role=["']button["']\]:focus,[\s\S]{0,180}outline:\s*none\s*!important/);
