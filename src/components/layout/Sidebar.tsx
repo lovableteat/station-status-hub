@@ -6,7 +6,6 @@ import {
   FolderKanban,
   Gauge,
   ListChecks,
-  Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Wrench,
@@ -68,34 +67,46 @@ export function Sidebar({
     else setCollapsed((value) => !value);
   };
 
+  if (isMobile) {
+    return (
+      <nav
+        aria-label="維修中心功能"
+        data-mobile-maintenance-nav="true"
+        className="sticky top-[76px] z-20 flex w-full shrink-0 gap-1.5 overflow-x-auto rounded-2xl border border-cyan-200/20 bg-[#071522]/95 p-1.5 shadow-[0_14px_34px_-28px_rgba(34,211,238,0.75)] backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {navigationItems.map((item) => {
+          if (!canViewModule(item.id)) return null;
+          const Icon = item.icon;
+          const isActive = activeModule === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              aria-current={isActive ? "page" : undefined}
+              onClick={() => onModuleChange(item.id)}
+              className={cn(
+                "flex h-12 min-w-fit items-center gap-2 rounded-xl border px-3 text-xs font-black transition-colors",
+                isActive
+                  ? "border-cyan-100/60 bg-[linear-gradient(135deg,#67e8f9,#60a5fa)] text-[#061927] shadow-[0_10px_24px_-16px_rgba(34,211,238,0.9)]"
+                  : "border-transparent bg-white/[0.025] text-slate-300 hover:border-cyan-200/20 hover:bg-cyan-300/10 hover:text-white",
+              )}
+            >
+              <Icon className="h-4.5 w-4.5" />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+    );
+  }
+
   return (
     <>
-      {isMobile && (
-        <div className="absolute left-0 right-0 top-0 z-20 flex h-12 items-center rounded-t-xl border border-[#2a526f] bg-[#071522] px-3 lg:hidden">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleToggle}
-            className="h-9 w-9 rounded-lg"
-          >
-            <Menu className="h-4 w-4" />
-            <span className="sr-only">開啟維修中心導覽</span>
-          </Button>
-          <span className="ml-2 text-sm font-semibold text-[#f3f8fc]">機台維修中心</span>
-        </div>
-      )}
-
       <aside
         aria-hidden={isMobile && !isOpen ? true : undefined}
         {...(isMobile && !isOpen ? ({ inert: "" } as Record<string, unknown>) : {})}
         className={cn(
           "maintenance-sidebar flex shrink-0 flex-col overflow-hidden border border-[#2a526f] bg-[#071522] transition-[width,transform] duration-200 ease-out",
-          isMobile && [
-            "absolute left-0 top-12 z-40 max-h-[calc(100dvh-64px)] w-[240px] rounded-b-xl lg:relative",
-            isOpen
-              ? "translate-x-0 pointer-events-auto"
-              : "-translate-x-[110%] pointer-events-none",
-          ],
           !isMobile && [
             "sticky self-start rounded-xl",
             desktopStickyClass,

@@ -712,6 +712,20 @@ All colors MUST be HSL for proper theming support.
     padding: 16px;
   }
 
+  @media (max-width: 1023px) {
+    .maintenance-page {
+      padding: 12px;
+    }
+
+    .maintenance-page :is(button, [role="button"], input, textarea, [role="combobox"]) {
+      min-height: 44px;
+    }
+
+    .maintenance-page :is(table, [role="table"]) {
+      font-size: 13px;
+    }
+  }
+
   .maintenance-workspace * {
     scrollbar-color: #2a526f #071522;
     scrollbar-width: thin;

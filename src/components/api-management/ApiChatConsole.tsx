@@ -924,6 +924,7 @@ export function ApiChatConsole({
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
   const [keyCooldowns, setKeyCooldowns] = useState<Record<string, number>>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const [conversationCloudState, setConversationCloudState] = useState<ConversationCloudState>("loading");
@@ -2602,29 +2603,29 @@ export function ApiChatConsole({
       className={cn(
         "flex flex-col overflow-hidden border border-blue-300/25 bg-[linear-gradient(180deg,#17243a_0%,#0e192a_100%)] shadow-[0_28px_80px_rgba(2,8,23,0.38)]",
         isChatOnly
-          ? "h-[calc(100dvh-285px)] min-h-[520px] rounded-[28px] md:h-[calc(100dvh-210px)] lg:h-full"
+          ? "h-full min-h-0 rounded-[22px] lg:rounded-[28px]"
           : "min-h-[720px] rounded-[34px] p-5"
       )}
     >
       <div
         className={cn(
           "flex shrink-0 flex-col gap-4 border-b border-blue-300/20 lg:flex-row lg:items-center lg:justify-between",
-          isChatOnly ? "bg-[#18263d] px-5 py-4 md:px-6" : "pb-5"
+          isChatOnly ? "gap-2 bg-[#18263d] px-3 py-3 sm:px-5 sm:py-4 md:px-6" : "pb-5"
         )}
       >
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[15px] border border-blue-300/35 bg-blue-400/15 text-blue-100 shadow-[0_12px_28px_-18px_rgba(96,165,250,0.8)]">
+        <div className="flex items-start gap-3 sm:gap-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-300/35 bg-blue-400/15 text-blue-100 shadow-[0_12px_28px_-18px_rgba(96,165,250,0.8)] sm:h-12 sm:w-12 sm:rounded-[15px]">
             <MessageSquareText className="h-5.5 w-5.5" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xl font-black tracking-[-0.02em] text-white">AI 資料助理</p>
+              <p className="text-base font-black tracking-[-0.02em] text-white sm:text-xl">AI 資料助理</p>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/35 bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-100">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 已就緒
               </span>
             </div>
-            <p className="mt-1 text-base leading-7 text-slate-300">
+            <p className="mt-1 hidden text-base leading-7 text-slate-300 sm:block">
               查詢、比對、摘要與圖片文字擷取，都會保留本次對話脈絡。
             </p>
           </div>
@@ -2639,7 +2640,7 @@ export function ApiChatConsole({
               >
                 <SelectTrigger
                   aria-label="選擇 API 金鑰與模型"
-                  className="h-12 w-full rounded-xl border-blue-300/30 bg-slate-950/45 px-4 text-left text-base font-semibold text-white shadow-none focus:ring-2 focus:ring-blue-400/40"
+                  className="h-10 w-full rounded-xl border-blue-300/30 bg-slate-950/45 px-3 text-left text-sm font-semibold text-white shadow-none focus:ring-2 focus:ring-blue-400/40 sm:h-12 sm:px-4 sm:text-base"
                 >
                   <SelectValue placeholder="選擇模型" />
                 </SelectTrigger>
@@ -2712,7 +2713,7 @@ export function ApiChatConsole({
         <div
           className={cn(
             "flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_50%_0%,rgba(16,185,129,0.08),transparent_28%),#030508]",
-            isChatOnly ? "px-4 py-5 md:px-6" : "rounded-[30px] border border-white/8 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
+            isChatOnly ? "px-3 py-3 sm:px-4 sm:py-5 md:px-6" : "rounded-[30px] border border-white/8 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
           )}
         >
           <div className={cn("space-y-4 overflow-y-auto", isChatOnly ? "pr-2" : "pr-1", chatHeightClass)}>
@@ -2759,7 +2760,7 @@ export function ApiChatConsole({
           className={cn(
             "border-cyan-300/12",
             isChatOnly
-              ? "shrink-0 border-t border-slate-700/60 bg-[#0d1625] px-4 py-4 md:px-6"
+              ? "shrink-0 border-t border-slate-700/60 bg-[#0d1625] px-2.5 py-2.5 sm:px-4 sm:py-4 md:px-6"
               : "rounded-[28px] border bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-3.5 shadow-[0_24px_52px_rgba(2,8,23,0.26),inset_0_1px_0_rgba(255,255,255,0.03)]"
           )}
         >
@@ -2778,7 +2779,7 @@ export function ApiChatConsole({
           <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium text-slate-300">
               {promptLibraryControl}
-              <span className="rounded-lg border border-cyan-300/18 bg-cyan-400/8 px-2.5 py-1.5 font-bold text-cyan-100">
+              <span className="hidden rounded-lg border border-cyan-300/18 bg-cyan-400/8 px-2.5 py-1.5 font-bold text-cyan-100 sm:inline">
                 輸入 <kbd className="mx-1 rounded border border-cyan-200/25 bg-slate-950/40 px-1.5 py-0.5 font-mono text-xs">/</kbd> 快速套用
               </span>
               <span className="hidden h-3 w-px bg-slate-700 md:block" />
@@ -2801,7 +2802,7 @@ export function ApiChatConsole({
               type="button"
               variant="outline"
               onClick={requestResetConversation}
-              className="h-10 rounded-xl border-slate-500/60 bg-slate-900/30 px-4 text-sm font-bold text-slate-200 transition-all duration-200 hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-100 active:scale-[0.99]"
+              className="hidden h-10 rounded-xl border-slate-500/60 bg-slate-900/30 px-4 text-sm font-bold text-slate-200 transition-all duration-200 hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-100 active:scale-[0.99] sm:inline-flex"
             >
               <Trash2 className="mr-2 h-4 w-4" />
               清空對話
@@ -2854,7 +2855,7 @@ export function ApiChatConsole({
             onDragLeave={handleComposerDragLeave}
             onDrop={handleComposerDrop}
             className={cn(
-              "rounded-[20px] border px-3 py-3 shadow-[0_18px_45px_-24px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 focus-within:ring-2",
+              "rounded-[18px] border px-2 py-2 shadow-[0_18px_45px_-24px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 focus-within:ring-2 sm:rounded-[20px] sm:px-3 sm:py-3",
               isDragOverComposer
                 ? "border-cyan-300/70 bg-[linear-gradient(180deg,#21466a_0%,#183450_100%)] ring-2 ring-cyan-300/25"
                 : "border-blue-300/35 bg-[linear-gradient(180deg,#1b2d49_0%,#14233a_100%)] focus-within:border-blue-300/70 focus-within:ring-blue-400/20"
@@ -2875,7 +2876,7 @@ export function ApiChatConsole({
                 </Button>
               </div>
 
-              <div className="relative min-w-0 flex-1 rounded-[16px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(30,41,59,0.72))] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="relative min-w-0 flex-1 rounded-[14px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(30,41,59,0.72))] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:rounded-[16px] sm:px-4 sm:py-3">
                 {slashMenuOpen ? (
                   <div
                     role="listbox"
@@ -2951,7 +2952,7 @@ export function ApiChatConsole({
                   onPaste={handleComposerPaste}
                   aria-label="輸入查詢內容"
                   placeholder=""
-                  className="min-h-[74px] border-0 bg-transparent px-0 py-0 text-[17px] leading-7 text-white shadow-none placeholder:text-slate-200 focus-visible:ring-0"
+                  className="min-h-[52px] border-0 bg-transparent px-0 py-0 text-base leading-6 text-white shadow-none placeholder:text-slate-200 focus-visible:ring-0 sm:min-h-[74px] sm:text-[17px] sm:leading-7"
                 />
               </div>
 
@@ -2989,15 +2990,25 @@ export function ApiChatConsole({
         {workspaceDialogs}
         <div
           className={cn(
-            "grid min-h-[calc(100dvh-164px)] w-full items-stretch gap-4 lg:h-[calc(100dvh-164px)]",
+            "grid h-full min-h-0 w-full items-stretch gap-2 lg:h-[calc(100dvh-164px)] lg:gap-4",
             sidebarCollapsed
               ? "lg:grid-cols-[88px_minmax(0,1fr)]"
               : "lg:grid-cols-[320px_minmax(0,1fr)]"
           )}
         >
+          {mobileSidebarOpen ? (
+            <button
+              type="button"
+              aria-label="關閉資料查詢選單"
+              onClick={() => setMobileSidebarOpen(false)}
+              className="fixed inset-0 z-[78] bg-slate-950/70 backdrop-blur-sm lg:hidden"
+            />
+          ) : null}
+
           <aside
             className={cn(
-              "order-2 h-full min-h-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081C2D] shadow-[0_24px_70px_rgba(2,8,23,0.42)] transition-all duration-300 lg:order-1",
+              "fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] top-[76px] z-[79] h-auto min-h-0 overflow-hidden rounded-[24px] border border-[#285273] bg-[#081C2D] shadow-[0_30px_90px_rgba(2,8,23,0.82)] transition-all duration-200 lg:static lg:order-1 lg:h-full lg:border-[#163653] lg:shadow-[0_24px_70px_rgba(2,8,23,0.42)]",
+              mobileSidebarOpen ? "visible translate-y-0 opacity-100" : "pointer-events-none invisible translate-y-3 opacity-0 lg:pointer-events-auto lg:visible lg:translate-y-0 lg:opacity-100",
               sidebarCollapsed ? "lg:w-[88px]" : "lg:w-[320px]"
             )}
           >
@@ -3019,13 +3030,24 @@ export function ApiChatConsole({
                     type="button"
                     variant="ghost"
                     size="icon"
+                    onClick={() => setMobileSidebarOpen(false)}
+                    aria-label="關閉資料查詢選單"
+                    className="h-10 w-10 shrink-0 rounded-xl border border-[#214669] bg-[#10283d] text-blue-100 hover:bg-[#16324b] lg:hidden"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setSidebarCollapsed((value) => !value)}
                     aria-label={sidebarCollapsed ? "展開資料查詢空間" : "收合資料查詢空間"}
                     className={cn(
                       "shrink-0 rounded-xl text-white hover:text-white",
                       sidebarCollapsed
                         ? "h-12 w-12 border border-emerald-300/30 bg-emerald-500 shadow-[0_12px_28px_-14px_rgba(16,185,129,0.9)] hover:bg-emerald-400"
-                        : "h-10 w-10 border border-[#214669] bg-[#10283d] text-blue-100 hover:bg-[#16324b]"
+                        : "h-10 w-10 border border-[#214669] bg-[#10283d] text-blue-100 hover:bg-[#16324b]",
+                      "hidden lg:inline-flex"
                     )}
                   >
                     {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -3034,7 +3056,10 @@ export function ApiChatConsole({
 
                 <Button
                   type="button"
-                  onClick={requestResetConversation}
+                  onClick={() => {
+                    requestResetConversation();
+                    setMobileSidebarOpen(false);
+                  }}
                   className={cn(
                     "mt-5 h-12 rounded-xl bg-blue-500 font-black text-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] hover:bg-blue-400",
                     sidebarCollapsed ? "w-full justify-center px-0" : "w-full justify-start px-4 text-base"
@@ -3089,7 +3114,10 @@ export function ApiChatConsole({
                         <div key={item.id} className="group flex items-center gap-1 rounded-xl border border-transparent hover:border-slate-700/70 hover:bg-slate-800/55">
                           <button
                             type="button"
-                            onClick={() => restoreConversation(item)}
+                            onClick={() => {
+                              restoreConversation(item);
+                              setMobileSidebarOpen(false);
+                            }}
                             className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
                           >
                             <p className="truncate text-base font-bold text-slate-100">{item.title}</p>
@@ -3151,7 +3179,29 @@ export function ApiChatConsole({
             </div>
           </aside>
 
-          <div className="order-1 min-h-0 min-w-0 lg:order-2">{conversationPanel}</div>
+          <div className="order-1 flex min-h-0 min-w-0 flex-col gap-2 lg:order-2">
+            <div className="grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_auto] gap-2 lg:hidden">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setMobileSidebarOpen(true)}
+                className="h-12 min-w-0 justify-start rounded-2xl border-blue-300/25 bg-blue-400/10 px-3 text-blue-50 hover:bg-blue-400/18"
+              >
+                <History className="mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate font-black">最近對話</span>
+                <span className="ml-auto rounded-full bg-blue-300/15 px-2 py-0.5 text-xs tabular-nums text-blue-100">{savedConversations.length}</span>
+              </Button>
+              <Button
+                type="button"
+                onClick={requestResetConversation}
+                aria-label="建立新對話"
+                className="h-12 w-12 rounded-2xl bg-[linear-gradient(135deg,#bef264,#67e8f9)] p-0 text-[#082032] hover:brightness-110"
+              >
+                <Plus className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1">{conversationPanel}</div>
+          </div>
         </div>
       </>
     );

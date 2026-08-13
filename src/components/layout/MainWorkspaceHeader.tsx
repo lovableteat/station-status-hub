@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
+import { WebsiteQrButton } from "./WebsiteQrButton";
+
 export interface WorkspaceNavItem {
   id: string;
   label: string;
@@ -81,7 +83,7 @@ export function MainWorkspaceHeader({
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">{brand}</div>
         )}
 
-        <nav className="glass-strip order-3 col-span-2 flex w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:thin] xl:order-none xl:col-span-1 xl:w-auto xl:max-w-[min(58vw,760px)]">
+        <nav className="glass-strip order-3 col-span-2 hidden w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:thin] lg:flex xl:order-none xl:col-span-1 xl:w-auto xl:max-w-[min(58vw,760px)]">
           {items.map((item) => {
             const isActive = item.id === activeItem;
 
@@ -104,7 +106,9 @@ export function MainWorkspaceHeader({
         </nav>
 
         <div className="flex min-w-0 items-center justify-end gap-2 xl:gap-3">
-          {showOnlineUsers && <OnlineUsersIndicator />}
+          {showOnlineUsers && <div className="hidden sm:block"><OnlineUsersIndicator /></div>}
+
+          <WebsiteQrButton />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

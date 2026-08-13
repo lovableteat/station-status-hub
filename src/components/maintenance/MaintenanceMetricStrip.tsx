@@ -19,14 +19,14 @@ const accentClasses = {
 
 export function MaintenanceMetricStrip({ metrics }: { metrics: MaintenanceMetric[] }) {
   return (
-    <div className="grid grid-cols-2 gap-2 pb-1 sm:flex sm:overflow-x-auto">
+    <div className="grid grid-cols-2 gap-2 pb-1 lg:flex lg:overflow-x-auto">
       {metrics.map((metric) => {
         const Icon = metric.icon;
         return (
           <div
             key={metric.label}
             className={cn(
-              "flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 sm:min-w-[150px]",
+              "flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 lg:min-w-[150px]",
               accentClasses[metric.accent || "blue"]
             )}
           >

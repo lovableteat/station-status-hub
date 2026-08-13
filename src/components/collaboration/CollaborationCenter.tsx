@@ -517,7 +517,7 @@ export function CollaborationCenter() {
           <aside
             aria-label="全站協作中心"
             data-collaboration-center="true"
-            className="fixed inset-x-2 bottom-2 top-20 z-[79] flex flex-col overflow-hidden rounded-[22px] border border-cyan-200/25 bg-[#06111f] shadow-[0_30px_100px_-30px_rgba(34,211,238,0.45)] sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-[76px] sm:h-[min(640px,calc(100dvh-92px))] sm:w-[500px]"
+            className="fixed inset-0 z-[79] flex flex-col overflow-hidden border-0 border-cyan-200/25 bg-[#06111f] pt-[env(safe-area-inset-top)] shadow-[0_30px_100px_-30px_rgba(34,211,238,0.45)] sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-[76px] sm:h-[min(640px,calc(100dvh-92px))] sm:w-[500px] sm:rounded-[22px] sm:border sm:pt-0"
           >
         <header className="border-b border-cyan-200/15 bg-[linear-gradient(120deg,#10263a,#0b1b2d)] px-5 py-4">
           <div className="flex items-start justify-between gap-3">
@@ -670,7 +670,7 @@ export function CollaborationCenter() {
       {isRealtimeAuthenticated ? (
         <div
           data-chat-dock="detached"
-          className="pointer-events-none fixed bottom-3 right-3 z-[84] w-[min(368px,calc(100vw-1.5rem))] sm:bottom-5 sm:right-5"
+          className="pointer-events-none fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-2 z-[84] w-[min(368px,calc(100vw-1rem))] sm:bottom-5 sm:right-5"
         >
           <section
             id="direct-messages-panel"
@@ -679,7 +679,7 @@ export function CollaborationCenter() {
             data-floating-direct-messages="true"
             data-chat-surface="detached-card"
             className={cn(
-              "absolute bottom-0 right-0 flex h-[min(560px,calc(100dvh-6rem))] w-full origin-bottom-right flex-col overflow-hidden rounded-[24px] border border-cyan-100/40 bg-[#071421] shadow-[0_30px_90px_-24px_rgba(0,0,0,0.92),0_12px_36px_-24px_rgba(45,212,191,0.72)] ring-1 ring-white/[0.06] transition-[opacity,transform,visibility] duration-200 ease-out",
+              "fixed inset-0 flex h-[100dvh] w-screen origin-bottom-right flex-col overflow-hidden border-0 border-cyan-100/40 bg-[#071421] pt-[env(safe-area-inset-top)] shadow-[0_30px_90px_-24px_rgba(0,0,0,0.92),0_12px_36px_-24px_rgba(45,212,191,0.72)] ring-1 ring-white/[0.06] transition-[opacity,transform,visibility] duration-200 ease-out sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[min(560px,calc(100dvh-6rem))] sm:w-full sm:rounded-[24px] sm:border sm:pt-0",
               messageFloatOpen
                 ? "visible pointer-events-auto translate-y-0 scale-100 opacity-100"
                 : "invisible pointer-events-none translate-y-3 scale-[0.98] opacity-0",

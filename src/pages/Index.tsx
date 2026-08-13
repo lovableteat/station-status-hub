@@ -20,13 +20,14 @@ import { PersonalProfileDialog } from "@/components/account/PersonalProfileDialo
 import { CollaborationCenter } from "@/components/collaboration/CollaborationCenter";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
 import { MainWorkspaceHeader } from "@/components/layout/MainWorkspaceHeader";
+import { MobileWorkspaceDock } from "@/components/layout/MobileWorkspaceDock";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { WorkspaceEntrance } from "@/components/layout/WorkspaceEntrance";
 import { MaintenanceLoading } from "@/components/maintenance/MaintenanceLoading";
 import { ProjectScopeBar } from "@/components/test-projects/ProjectScopeBar";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { useUserPresence } from "@/hooks/useUserPresence";
@@ -265,7 +266,7 @@ const Index = () => {
   const { activeProjectId, isSwitchingProject } = useTestProject();
   const { isUpdating } = useUnifiedData();
   const { canViewModule } = usePermissions();
-  const isMobile = useIsMobile();
+  const isCompactLayout = useIsCompactLayout();
   const isDemoMode =
     import.meta.env.DEV &&
     typeof window !== "undefined" &&
@@ -492,7 +493,7 @@ const Index = () => {
     pushWorkspaceLocation("station-status", module, params);
     setActiveWorkspace("station-status");
     setActiveStationModule(module as StationModuleId);
-    if (isMobile) {
+    if (isCompactLayout) {
       setSidebarOpen(false);
     }
   };
@@ -588,23 +589,16 @@ const Index = () => {
       default:
         return (
           <div className="maintenance-workspace relative min-h-0 lg:h-full lg:overflow-hidden">
-            {isMobile && sidebarOpen && (
-              <div
-                className="fixed inset-0 z-30 bg-black/50 lg:hidden"
-                onClick={() => setSidebarOpen(false)}
-              />
-            )}
-
             <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 pt-3 lg:h-full">
               <div className="shrink-0"><ProjectScopeBar /></div>
 
-              <div className="relative flex min-h-[560px] flex-1 gap-3 lg:min-h-0">
+              <div className={cn("relative flex min-h-[560px] flex-1 gap-3 lg:min-h-0", isCompactLayout && "min-h-0 flex-col gap-2")}>
                 <Sidebar
                   activeModule={activeStationModule}
                   onModuleChange={handleStationNavigation}
                   isOpen={sidebarOpen}
                   onToggle={() => setSidebarOpen((value) => !value)}
-                  isMobile={isMobile}
+                  isMobile={isCompactLayout}
                   desktopStickyClass="top-[140px] h-full"
                 />
 
@@ -612,7 +606,7 @@ const Index = () => {
                   ref={stationMainRef}
                   className={cn(
                     "min-w-0 flex-1 overflow-y-auto overscroll-contain rounded-xl bg-[#06111f]",
-                    isMobile && "pt-12"
+                    isCompactLayout && "rounded-2xl"
                   )}
                 >
                   {isSwitchingProject ? (
@@ -678,7 +672,8 @@ const Index = () => {
               ? "min-h-0 overflow-hidden"
             : activeWorkspace === "station-status"
               ? "min-h-0 lg:overflow-hidden"
-              : "min-h-0"
+              : "min-h-0",
+          activeWorkspace !== "data-center" && activeWorkspace !== "pcb-designer" && "max-lg:pb-[calc(5.25rem+env(safe-area-inset-bottom))]"
         )}
       >
         <React.Suspense
@@ -691,6 +686,10 @@ const Index = () => {
           {renderWorkspaceContent()}
         </React.Suspense>
       </main>
+      <MobileWorkspaceDock
+        activeItem={activeWorkspace ?? "workspace-home"}
+        onSelect={handleWorkspaceChange}
+      />
     </div>
   );
 };
