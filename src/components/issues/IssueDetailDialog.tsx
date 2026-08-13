@@ -4,6 +4,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Edit, Tag } from "lucide-react";
 import { NotificationConversationView } from "@/components/common/NotificationConversationView";
+import { IssueProcessHistory } from "./IssueProcessHistory";
 
 interface Issue {
   id: string;
@@ -177,20 +178,12 @@ export function IssueDetailDialog({ issue, isOpen, onClose, onEdit }: IssueDetai
           )}
 
           {/* 處理過程 */}
-          {issue.process_notes && (
-            <>
-              <Separator />
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">處理過程</label>
-                <div className="mt-2 p-3 bg-muted/50 rounded-md">
-                  <div 
-                    className="text-sm prose prose-sm max-w-none dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: issue.process_notes }}
-                  />
-                </div>
-              </div>
-            </>
-          )}
+          <Separator />
+          <IssueProcessHistory
+            processNotes={issue.process_notes}
+            status={issue.status}
+            updatedAt={issue.updated_at}
+          />
 
           {/* 解決方案 */}
           {issue.solution && (

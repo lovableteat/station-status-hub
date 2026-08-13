@@ -49,6 +49,7 @@ import { cn } from "@/lib/utils";
 import { IssueAnalyticsPanel } from "./IssueAnalyticsPanel";
 import { IssueCreateDialog } from "./IssueCreateDialog";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
+import { IssueProcessHistory } from "./IssueProcessHistory";
 import { type Issue, IssueTableView } from "./IssueTableView";
 
 type PriorityFilter = "all" | "low" | "medium" | "high" | "critical";
@@ -199,8 +200,7 @@ export function IssueTracker() {
       attachmentsByIssue.set(attachment.issue_id, list);
     });
 
-    setIssues(
-      (data ?? []).map((issue) => ({
+    const normalizedIssues = (data ?? []).map((issue) => ({
         ...issue,
         assigned_engineer: issue.test_systems?.assigned_engineer,
         assigned_to: issue.assigned_to || "",
@@ -213,8 +213,12 @@ export function IssueTracker() {
         system_name: issue.test_systems?.system_name,
         test_item_description: issue.test_flow_items?.description,
         test_item_name: issue.test_flow_items?.item_name,
-      }))
-    );
+      }));
+    setIssues(normalizedIssues);
+    setSelectedIssue((current) => {
+      if (!current) return null;
+      return normalizedIssues.find((issue) => issue.id === current.id) ?? current;
+    });
     setLoading(false);
   }, [activeProjectId, toast]);
 
@@ -434,9 +438,15 @@ export function IssueTracker() {
                 />
               </section>
 
+              <IssueProcessHistory
+                processNotes={selectedIssue.process_notes}
+                status={selectedIssue.status}
+                updatedAt={selectedIssue.updated_at}
+              />
+
               {selectedIssue.solution && (
                 <section>
-                  <h3 className="text-sm font-semibold text-[#f3f8fc]">處理方案</h3>
+                  <h3 className="text-sm font-semibold text-[#f3f8fc]">解決方案</h3>
                   <div
                     className="prose prose-invert mt-2 max-w-none rounded-lg border border-emerald-300/25 bg-emerald-300/[0.08] p-4 text-sm leading-6 text-emerald-50"
                     dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedIssue.solution) }}
