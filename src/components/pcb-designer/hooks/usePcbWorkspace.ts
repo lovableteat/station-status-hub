@@ -56,6 +56,7 @@ export function usePcbWorkspace({
   const stateRef = useRef(state.data);
   const [remoteReady, setRemoteReady] = useState(!remoteClient);
   const hydratedCleanRevisionRef = useRef<string | null>(null);
+  const hasUnsavedChangesRef = useRef(false);
   stateRef.current = state.data;
 
   const persistence = usePcbPersistence({
@@ -65,9 +66,11 @@ export function usePcbWorkspace({
     allowRemoteSync: canEdit && Boolean(remoteClient) && remoteReady,
   });
   const { markClean } = persistence;
+  hasUnsavedChangesRef.current = persistence.hasUnsavedChanges;
 
   useEffect(() => {
     let active = true;
+    let loading = false;
     if (!remoteClient) {
       setRemoteReady(true);
       return () => {
@@ -76,22 +79,36 @@ export function usePcbWorkspace({
     }
 
     setRemoteReady(false);
-    void loadPcbRemote(remoteClient).then((remoteState) => {
+    const refreshRemote = async (initial: boolean) => {
+      if (!active || loading || (!initial && hasUnsavedChangesRef.current)) return;
+      loading = true;
+      const remoteState = await loadPcbRemote(remoteClient);
+      loading = false;
       if (!active) return;
       const localState = stateRef.current;
       if (remoteState) {
         const mergedState = mergePcbRemoteState(localState, remoteState);
-        repository.save(mergedState);
-        hydratedCleanRevisionRef.current = mergedState.updatedAt;
-        dispatch({ type: "persistence/hydrate", data: mergedState });
-      } else {
+        if (JSON.stringify(mergedState) !== JSON.stringify(localState)) {
+          repository.save(mergedState);
+          hydratedCleanRevisionRef.current = mergedState.updatedAt;
+          dispatch({ type: "persistence/hydrate", data: mergedState });
+        } else if (initial) {
+          markClean(localState.updatedAt);
+        }
+      } else if (initial) {
         markClean(localState.updatedAt);
       }
-      setRemoteReady(true);
-    });
+      if (initial) setRemoteReady(true);
+    };
+    const refreshOnFocus = () => void refreshRemote(false);
+    void refreshRemote(true);
+    const refreshTimer = window.setInterval(() => void refreshRemote(false), 8_000);
+    window.addEventListener("focus", refreshOnFocus);
 
     return () => {
       active = false;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refreshOnFocus);
     };
   }, [markClean, remoteClient, repository]);
 
