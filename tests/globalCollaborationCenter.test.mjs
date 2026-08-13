@@ -86,6 +86,20 @@ test("unread admin announcements open once and require explicit acknowledgement"
   assert.doesNotMatch(source, /setActiveAnnouncement\([^)]*\)[\s\S]{0,160}markAsRead/);
 });
 
+test("floating chat exposes the full member directory including offline contacts", async () => {
+  const [center, panel] = await Promise.all([
+    readSource("src/components/collaboration/CollaborationCenter.tsx"),
+    readSource("src/components/collaboration/DirectMessagesPanel.tsx"),
+  ]);
+
+  assert.match(center, /contacts=\{collaborationMembers/);
+  assert.match(center, /contactsLoading=\{directoryLoading\}/);
+  assert.match(panel, /interface DirectMessageContact/);
+  assert.match(panel, /離線 · 可留言/);
+  assert.match(panel, /即使離線也能先留言/);
+  assert.match(panel, /startDirectChat\(contact\.userId\)/);
+});
+
 test("the header keeps one collaboration entry point through online presence", async () => {
   const source = await readSource("src/components/layout/MainWorkspaceHeader.tsx");
 

@@ -375,24 +375,20 @@ export function usePcbEditorActions(
     (dx: number, dy: number) => applySelectionEdit({ type: "nudge", dx, dy }),
     [applySelectionEdit],
   );
-  const duplicateSelected = useCallback(() => {
+  const duplicateSelected = useCallback((objectIds?: string[]) => {
     if (!state.canEdit || state.documentLocked) return false;
-    if (state.selection?.kind === "keepout") {
-      const gridOffset = state.activeProject.board.gridSize > 0 ? state.activeProject.board.gridSize : 1;
-      const result = duplicateKeepoutRecord(
-        state.activeProject,
-        state.selection.id,
-        { x: gridOffset, y: gridOffset },
-      );
-      if (!result.ok) return false;
-    } else if (
-      state.selection?.kind !== "component"
-      && !state.selectedObjects.some((objectId) =>
-        state.activeProject.components.some((component) => component.instanceId === objectId))
-    ) {
-      return false;
-    }
-    dispatch({ type: "selection/duplicate" });
+    const requestedIds = objectIds !== undefined
+      ? objectIds
+      : [...new Set([
+        ...state.selectedObjects,
+        ...(state.selection ? [state.selection.id] : []),
+      ])];
+    const duplicableIds = requestedIds.filter((objectId) => (
+      state.activeProject.components.some((component) => component.instanceId === objectId)
+      || state.activeProject.keepouts.some((keepout) => keepout.id === objectId)
+    ));
+    if (!duplicableIds.length) return false;
+    dispatch({ type: "selection/duplicate", objectIds: duplicableIds });
     return true;
   }, [
     dispatch,
@@ -402,6 +398,22 @@ export function usePcbEditorActions(
     state.selectedObjects,
     state.selection,
   ]);
+  const copiedObjectIdsRef = useRef<string[]>([]);
+  const copySelected = useCallback(() => {
+    const selectedIds = [...new Set([
+      ...state.selectedObjects,
+      ...(state.selection ? [state.selection.id] : []),
+    ])].filter((objectId) => (
+      state.activeProject.components.some((component) => component.instanceId === objectId)
+      || state.activeProject.keepouts.some((keepout) => keepout.id === objectId)
+    ));
+    copiedObjectIdsRef.current = selectedIds;
+    return selectedIds.length > 0;
+  }, [state.activeProject.components, state.activeProject.keepouts, state.selectedObjects, state.selection]);
+  const pasteCopied = useCallback(
+    () => duplicateSelected(copiedObjectIdsRef.current),
+    [duplicateSelected],
+  );
   const centerDrcIssue = useCallback((issueId: string) => {
     const issue = state.drcIssues.find((item) => item.id === issueId);
     if (!issue) return;
@@ -426,11 +438,13 @@ export function usePcbEditorActions(
   const shortcutRef = useRef({
     activeProject: state.activeProject,
     canEdit: state.canEdit,
+    copySelected,
     deleteSelected,
     dispatch,
     duplicateSelected,
     documentLocked: state.documentLocked,
     nudgeSelected,
+    pasteCopied,
     rotateSelected,
     tool: state.tool,
     zoom: state.zoom,
@@ -438,11 +452,13 @@ export function usePcbEditorActions(
   shortcutRef.current = {
     activeProject: state.activeProject,
     canEdit: state.canEdit,
+    copySelected,
     deleteSelected,
     dispatch,
     duplicateSelected,
     documentLocked: state.documentLocked,
     nudgeSelected,
+    pasteCopied,
     rotateSelected,
     tool: state.tool,
     zoom: state.zoom,
@@ -466,6 +482,14 @@ export function usePcbEditorActions(
         } else if (key === "d") {
           event.preventDefault();
           shortcuts.duplicateSelected();
+          return;
+        } else if (key === "c") {
+          event.preventDefault();
+          shortcuts.copySelected();
+          return;
+        } else if (key === "v") {
+          event.preventDefault();
+          shortcuts.pasteCopied();
           return;
         }
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
@@ -592,11 +616,13 @@ export function usePcbEditorActions(
     updateMeasurement,
     createKeepout,
     createMeasurement,
+    copySelected,
     duplicateSelected,
     deleteSelected,
     rotateSelected,
     toggleSelectedLock,
     nudgeSelected,
+    pasteCopied,
     centerDrcIssue,
   };
 }

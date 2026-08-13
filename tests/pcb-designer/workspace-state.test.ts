@@ -80,6 +80,20 @@ function seedStateWithLayeredComponents(): PcbSaveState {
   return state;
 }
 
+function seedStateWithMixedSelection(): PcbSaveState {
+  const state = seedStateWithSelectedComponent();
+  state.projects[0].keepouts = [{
+    id: "keepout-a",
+    name: "禁制區 A",
+    x: 30,
+    y: 30,
+    width: 8,
+    height: 6,
+    color: "#fb7185",
+  }];
+  return state;
+}
+
 test("project CRUD keeps an active project and duplicates with fresh identity", async () => {
   const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
   const initial = createWorkspaceState(seedState(), true);
@@ -365,6 +379,32 @@ test("Ctrl/Cmd selection accumulates objects and removes the toggled primary", a
   });
   assert.deepEqual(removed.selectedObjects, ["top-component"]);
   assert.deepEqual(removed.selection, { kind: "component", id: "top-component" });
+});
+
+test("marquee selection and clipboard duplication support mixed components and keepouts", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedStateWithMixedSelection(), true);
+  const selected = reduceWorkspaceState(initial, {
+    type: "selection/set-many",
+    objectIds: ["component-a", "keepout-a"],
+  });
+
+  assert.deepEqual(selected.selectedObjects, ["component-a", "keepout-a"]);
+  assert.deepEqual(selected.selection, { kind: "keepout", id: "keepout-a" });
+
+  const duplicated = reduceWorkspaceState(selected, {
+    type: "selection/duplicate",
+    objectIds: ["component-a", "keepout-a"],
+  });
+  assert.equal(duplicated.activeProject.components.length, 2);
+  assert.equal(duplicated.activeProject.keepouts.length, 2);
+  assert.equal(duplicated.selectedObjects.length, 2);
+  assert.ok(duplicated.selectedObjects.every((id) => !["component-a", "keepout-a"].includes(id)));
+
+  const undone = reduceWorkspaceState(duplicated, { type: "history/undo" });
+  assert.equal(undone.activeProject.components.length, 1);
+  assert.equal(undone.activeProject.keepouts.length, 1);
+  assert.deepEqual(undone.selectedObjects, ["component-a", "keepout-a"]);
 });
 
 test("visible-layer changes prune hidden component selections", async () => {

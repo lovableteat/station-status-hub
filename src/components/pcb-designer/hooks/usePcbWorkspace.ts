@@ -264,6 +264,11 @@ export function usePcbWorkspace({
     (objectId: string) => dispatch({ type: "selection/toggle", objectId }),
     [],
   );
+  const selectObjects = useCallback(
+    (objectIds: string[], additive = false) =>
+      dispatch({ type: "selection/set-many", objectIds, additive }),
+    [],
+  );
   const clearObjectSelection = useCallback(
     () => dispatch({ type: "selection/clear-group" }),
     [],
@@ -307,6 +312,7 @@ export function usePcbWorkspace({
     setZoom,
     setRightTab,
     runDrc,
+    selectObjects,
     toggleObjectSelection,
     clearObjectSelection,
     saveNow,
