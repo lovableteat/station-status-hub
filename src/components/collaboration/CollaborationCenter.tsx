@@ -117,15 +117,16 @@ function DirectMessageLauncher({
       onClick={onOpen}
       title="開啟聊天室"
       data-chat-launcher="compact-button"
-      className="group pointer-events-auto relative ml-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-cyan-100/80 bg-[linear-gradient(145deg,#e4fcff_0%,#8edce7_100%)] text-[#08283a] shadow-[0_16px_38px_-16px_rgba(34,211,238,0.95),0_8px_20px_-14px_rgba(0,0,0,0.85)] ring-1 ring-white/30 transition-[transform,filter,box-shadow] duration-200 hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_20px_44px_-16px_rgba(34,211,238,1),0_10px_22px_-14px_rgba(0,0,0,0.85)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#071421]"
+      className="group pointer-events-auto relative ml-auto flex h-14 w-14 items-center justify-center gap-2 rounded-[18px] border border-cyan-50/90 bg-[linear-gradient(135deg,#a5f3fc_0%,#5eead4_58%,#bef264_100%)] px-0 text-[#08283a] shadow-[0_16px_38px_-16px_rgba(45,212,191,0.95),0_8px_20px_-14px_rgba(0,0,0,0.85)] ring-1 ring-white/35 transition-[transform,filter,box-shadow] duration-200 hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_20px_44px_-16px_rgba(34,211,238,1),0_10px_22px_-14px_rgba(0,0,0,0.85)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#071421] sm:min-w-[132px] sm:px-3"
     >
       <span
         aria-hidden="true"
         className="absolute inset-1 rounded-[14px] border border-white/45 bg-white/10"
       />
-      <span className="relative flex h-9 w-9 items-center justify-center rounded-[13px] bg-[#0a2d45] text-cyan-100 shadow-[0_8px_18px_-10px_rgba(5,28,44,0.9)] transition-transform duration-200 group-hover:scale-105">
+      <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] bg-[#0a2d45] text-cyan-100 shadow-[0_8px_18px_-10px_rgba(5,28,44,0.9)] transition-transform duration-200 group-hover:scale-105">
         <MessageSquareText className="h-[18px] w-[18px]" />
       </span>
+      <span className="relative z-10 hidden text-sm font-black tracking-[0.02em] sm:inline">聊天室</span>
       {unreadCount > 0 ? (
         <span className="absolute -right-1.5 -top-1.5 flex min-h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#071421] bg-rose-500 px-1 text-[10px] font-bold leading-5 text-white shadow-[0_0_14px_rgba(244,63,94,0.65)]">
           {unreadCount > 99 ? "99+" : unreadCount}
@@ -669,7 +670,7 @@ export function CollaborationCenter() {
       {isRealtimeAuthenticated ? (
         <div
           data-chat-dock="detached"
-          className="pointer-events-none fixed bottom-3 right-3 z-[84] w-[min(360px,calc(100vw-1.5rem))] sm:bottom-5 sm:right-5"
+          className="pointer-events-none fixed bottom-3 right-3 z-[84] w-[min(368px,calc(100vw-1.5rem))] sm:bottom-5 sm:right-5"
         >
           <section
             id="direct-messages-panel"
@@ -678,15 +679,15 @@ export function CollaborationCenter() {
             data-floating-direct-messages="true"
             data-chat-surface="detached-card"
             className={cn(
-              "absolute bottom-0 right-0 flex h-[min(620px,calc(100dvh-6rem))] w-full origin-bottom-right flex-col overflow-hidden rounded-[24px] border border-cyan-100/30 bg-[#071421] shadow-[0_30px_90px_-24px_rgba(0,0,0,0.92),0_12px_36px_-24px_rgba(34,211,238,0.7)] ring-1 ring-white/[0.04] transition-[opacity,transform,visibility] duration-200 ease-out",
+              "absolute bottom-0 right-0 flex h-[min(560px,calc(100dvh-6rem))] w-full origin-bottom-right flex-col overflow-hidden rounded-[24px] border border-cyan-100/40 bg-[#071421] shadow-[0_30px_90px_-24px_rgba(0,0,0,0.92),0_12px_36px_-24px_rgba(45,212,191,0.72)] ring-1 ring-white/[0.06] transition-[opacity,transform,visibility] duration-200 ease-out",
               messageFloatOpen
                 ? "visible pointer-events-auto translate-y-0 scale-100 opacity-100"
                 : "invisible pointer-events-none translate-y-3 scale-[0.98] opacity-0",
             )}
           >
-            <header className="flex h-14 shrink-0 items-center justify-between border-b border-cyan-100/20 bg-[linear-gradient(120deg,#25516e_0%,#173b57_100%)] px-3.5 text-slate-50">
+            <header className="relative flex h-14 shrink-0 items-center justify-between overflow-hidden border-b border-cyan-100/25 bg-[linear-gradient(120deg,#17627a_0%,#166054_55%,#51427f_100%)] px-3.5 text-slate-50 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-[linear-gradient(90deg,#67e8f9,#bef264,#fbbf24,#c4b5fd)]">
               <div className="flex min-w-0 items-center gap-2.5">
-                <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-100 text-[#0a3047] shadow-[0_8px_20px_-12px_rgba(103,232,249,0.9)]">
+                <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#cffafe,#bef264)] text-[#0a3047] shadow-[0_8px_20px_-12px_rgba(103,232,249,0.9)]">
                   <MessageSquareText className="h-4 w-4" />
                   <span
                     aria-hidden="true"

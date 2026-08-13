@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { CircuitBoard, FileJson, PanelLeft, PanelRight, Settings2 } from "lucide-react";
+import { CircuitBoard, PanelLeft, PanelRight, ScanSearch, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "@/hooks/use-toast";
@@ -450,26 +450,30 @@ export function PcbDesignerWorkspace({
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="pcb-header-icon-button"
+            size="sm"
+            className="pcb-header-icon-button pcb-settings-action"
             disabled={!workspace.canMutate}
             onClick={() => setDialog({ kind: "project-settings", project: workspace.activeProject })}
             aria-label="專案設定"
             title="專案設定"
           >
             <Settings2 className="h-4 w-4" />
+            <span>專案設定</span>
           </Button>
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="pcb-header-icon-button"
-            disabled={!workspace.canMutate}
-            onClick={() => projectInputRef.current?.click()}
-            aria-label="匯入專案 JSON"
-            title="匯入專案 JSON"
+            size="sm"
+            className="pcb-header-icon-button pcb-drc-header-action"
+            onClick={() => {
+              workspace.runDrc();
+              setOpenDrawer("right");
+            }}
+            aria-label="執行 DRC"
+            title="執行設計規則檢查"
           >
-            <FileJson className="h-4 w-4" />
+            <ScanSearch className="h-4 w-4" />
+            <span>DRC</span>
           </Button>
           <input
             ref={projectInputRef}
@@ -497,6 +501,7 @@ export function PcbDesignerWorkspace({
         exportPngAvailable={viewMode === "2d"}
         exportIncludesGrid={exportIncludesGrid}
         onSave={handleSave}
+        onImportProject={() => projectInputRef.current?.click()}
         onViewModeChange={changeViewMode}
         onExportProject={() => downloadProject(workspace.activeProject)}
         onExportBomCsv={() => downloadBomCsv(workspace.activeProject)}
@@ -533,10 +538,6 @@ export function PcbDesignerWorkspace({
         onToggleLock={workspace.toggleDocumentLock}
         onZoomChange={workspace.setZoom}
         onResetView={workspace.resetView}
-        onRunDrc={() => {
-          workspace.runDrc();
-          setOpenDrawer("right");
-        }}
       />
       <p className="pcb-mobile-advisory">
         建議使用桌面進行精細佈局；手機仍可檢視、匯入匯出與查看 DRC。

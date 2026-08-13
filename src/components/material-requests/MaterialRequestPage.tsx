@@ -44,6 +44,16 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -4264,6 +4274,7 @@ export function MaterialRequestPage() {
   const [tableColorDraft, setTableColorDraft] = useState<BomTableColorTheme>(DEFAULT_BOM_TABLE_COLOR_THEME);
   const [isImporting, setIsImporting] = useState(false);
   const [bomManagerOpen, setBomManagerOpen] = useState(false);
+  const [pendingDeleteBomId, setPendingDeleteBomId] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("view");
@@ -5372,7 +5383,7 @@ export function MaterialRequestPage() {
       return;
     }
     const targetWorkspace = bomWorkspaces.find((workspace) => workspace.id === targetBomId);
-    if (!targetWorkspace || !window.confirm(`確定刪除 BOM「${targetWorkspace.name}」？`)) return;
+    if (!targetWorkspace) return;
 
     const remaining = bomWorkspaces.filter((workspace) => workspace.id !== targetBomId);
     const fallbackWorkspace = remaining.length > 0
@@ -5414,8 +5425,11 @@ export function MaterialRequestPage() {
     }
   };
 
-  const deleteActiveBom = async () => {
-    await deleteBomWorkspaceById(activeBomId);
+  const confirmDeleteBom = async () => {
+    if (!pendingDeleteBomId) return;
+    const targetBomId = pendingDeleteBomId;
+    setPendingDeleteBomId(null);
+    await deleteBomWorkspaceById(targetBomId);
   };
 
   const createExportSnapshot = () => {
@@ -5694,7 +5708,7 @@ export function MaterialRequestPage() {
   }
 
   return (
-    <div className="material-sheet-theme maintenance-workspace min-h-full w-full min-w-0 overflow-x-clip bg-[#06111f] p-3 text-slate-100 sm:p-4 lg:p-5 2xl:p-6">
+    <div className="material-sheet-theme maintenance-workspace min-h-full w-full min-w-0 overflow-x-clip bg-[radial-gradient(circle_at_8%_0%,rgba(34,211,238,0.10),transparent_26rem),radial-gradient(circle_at_88%_2%,rgba(251,191,36,0.08),transparent_24rem),#06111f] p-3 text-slate-100 sm:p-4 lg:p-5 2xl:p-6">
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
@@ -5710,7 +5724,7 @@ export function MaterialRequestPage() {
         }}
       />
       <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
-      <BomManagerDialog activeBomId={activeBomId} bomWorkspaces={orderedBomWorkspaces} open={bomManagerOpen} onDelete={(id) => void deleteBomWorkspaceById(id)} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
+      <BomManagerDialog activeBomId={activeBomId} bomWorkspaces={orderedBomWorkspaces} open={bomManagerOpen} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
       <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
       <TrackingHistoryDialog open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
       <MaterialExportDialog
@@ -5721,8 +5735,24 @@ export function MaterialRequestPage() {
         progress={exportProgress}
         snapshot={exportSnapshot}
       />
+      <AlertDialog open={Boolean(pendingDeleteBomId)} onOpenChange={(open) => !open && setPendingDeleteBomId(null)}>
+        <AlertDialogContent className="border-rose-300/35 bg-[radial-gradient(circle_at_100%_0%,rgba(244,63,94,0.18),transparent_18rem),#0b1b2d] text-slate-100 shadow-[0_30px_90px_-28px_rgba(244,63,94,0.55)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl text-rose-50">永久刪除這份 BOM？</AlertDialogTitle>
+            <AlertDialogDescription className="leading-6 text-slate-300">
+              「{bomWorkspaces.find((workspace) => workspace.id === pendingDeleteBomId)?.name || "目前 BOM"}」及其料件、頁數與追蹤資料會一併移除，這個動作無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-slate-400/25 bg-slate-900/40 text-slate-200 hover:bg-slate-800 hover:text-white">保留 BOM</AlertDialogCancel>
+            <AlertDialogAction className="bg-rose-600 font-bold text-white hover:bg-rose-500" onClick={() => void confirmDeleteBom()}>
+              確認永久刪除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      <header className="overflow-hidden rounded-[14px] border border-[#356985] bg-[#10263a] p-4">
+      <header className="overflow-hidden rounded-[16px] border border-cyan-300/35 bg-[radial-gradient(circle_at_4%_0%,rgba(34,211,238,0.18),transparent_22rem),radial-gradient(circle_at_82%_0%,rgba(167,139,250,0.14),transparent_20rem),radial-gradient(circle_at_100%_100%,rgba(251,191,36,0.10),transparent_20rem),#10263a] p-4 shadow-[0_20px_50px_-34px_rgba(34,211,238,0.65)]">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-cyan-300/16 bg-cyan-400/12 text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.12)]">
@@ -5752,13 +5782,13 @@ export function MaterialRequestPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 xl:flex xl:w-auto xl:flex-wrap">
             <Button
               type="button"
               variant="outline"
               onClick={() => setShowMarkedOnly((current) => !current)}
               className={cn(
-                "h-9 px-3 text-sm font-bold transition-colors",
+                "h-10 w-full px-3 text-sm font-bold transition-colors xl:w-auto",
                 showMarkedOnly
                   ? "border-amber-300/35 bg-amber-400/18 text-amber-50 hover:bg-amber-400/24"
                   : "border-slate-500/30 bg-slate-900/35 text-slate-200 hover:border-amber-300/25 hover:bg-amber-400/10 hover:text-amber-100",
@@ -5770,16 +5800,16 @@ export function MaterialRequestPage() {
                 {markedGroupCount}
               </span>
             </Button>
-            <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white">
+            <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-10 w-full border-violet-300/45 bg-violet-400/20 px-3 text-sm font-bold text-violet-50 shadow-[0_10px_24px_-18px_rgba(167,139,250,0.9)] hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white xl:w-auto">
               <CircleHelp className="mr-2 h-4 w-4" />上傳說明
             </Button>
-            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border border-cyan-300/30 bg-cyan-500 px-3 text-sm font-bold text-white shadow-[0_14px_34px_rgba(14,165,233,0.28)] hover:bg-cyan-400 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-600 disabled:text-slate-300">
+            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady || !isFullDatasetLoaded} className="h-10 w-full border border-cyan-100/60 bg-[linear-gradient(135deg,#22d3ee,#67e8f9)] px-3 text-sm font-black text-[#052536] shadow-[0_14px_34px_rgba(14,165,233,0.28)] hover:bg-cyan-300 disabled:cursor-not-allowed disabled:border-cyan-900/50 disabled:bg-cyan-950/35 disabled:text-cyan-100/60 xl:w-auto">
               <Plus className="mr-2 h-4 w-4" />新增料件
             </Button>
-            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border-slate-500/30 bg-slate-900/35 px-3 text-sm text-slate-200 hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:text-slate-500">
+            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-10 w-full border-emerald-300/45 bg-emerald-400/20 px-3 text-sm font-bold text-emerald-50 shadow-[0_10px_24px_-18px_rgba(52,211,153,0.9)] hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55 xl:w-auto">
               <Upload className="mr-2 h-4 w-4" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-emerald-300/25 bg-emerald-400/10 px-3 text-sm font-bold text-emerald-100 hover:bg-emerald-400/18 hover:text-white disabled:cursor-wait disabled:opacity-60">
+            <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="col-span-2 h-10 w-full border-amber-300/50 bg-amber-400/20 px-3 text-sm font-bold text-amber-50 shadow-[0_10px_24px_-18px_rgba(251,191,36,0.9)] hover:border-amber-200/75 hover:bg-amber-400/30 hover:text-white disabled:cursor-wait disabled:opacity-60 xl:col-span-1 xl:w-auto">
               <Download className="mr-2 h-4 w-4" />匯出主管報表
             </Button>
           </div>
@@ -5815,10 +5845,10 @@ export function MaterialRequestPage() {
         )}
 
         <div className="mt-3 flex flex-col gap-3 border-t border-cyan-400/10 pt-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-1 flex-wrap items-center gap-2.5">
-            <span className="inline-flex h-10 items-center text-sm font-bold text-slate-200">切換 BOM</span>
+          <div className="grid flex-1 grid-cols-2 items-center gap-2.5 sm:flex sm:flex-wrap">
+            <span className="col-span-2 inline-flex h-8 items-center text-sm font-bold uppercase tracking-[0.08em] text-cyan-100 sm:col-span-1 sm:h-10">BOM 工作區</span>
             <Select value={activeBomId} onValueChange={switchActiveBom}>
-              <SelectTrigger className="h-10 w-full max-w-[38rem] flex-1 items-center border-cyan-400/24 bg-[#08111d] px-4 py-0 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] sm:min-w-[24rem] sm:flex-[1_1_28rem]">
+              <SelectTrigger className="col-span-2 h-10 w-full max-w-[38rem] flex-1 items-center border-cyan-300/35 bg-[#08111d] px-4 py-0 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] sm:col-span-1 sm:min-w-[24rem] sm:flex-[1_1_28rem]">
                 <div className="flex min-w-0 items-center text-left">
                   <span className="block max-w-full truncate text-[14px] font-semibold leading-5 text-cyan-100">
                     {activeWorkspace.name}
@@ -5857,14 +5887,14 @@ export function MaterialRequestPage() {
             <Button type="button" variant="outline" size="sm" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-10 border-emerald-400/25 bg-emerald-400/10 px-3 text-sm font-bold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
               <CircleCheck className="mr-2 h-4 w-4" />逐頁勾選
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-10 border-slate-500/30 bg-slate-900/40 px-3 text-sm font-bold text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
+            <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-10 border-violet-300/45 bg-violet-400/20 px-3 text-sm font-bold text-violet-50 hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-violet-950/50 disabled:bg-violet-950/25 disabled:text-violet-100/50">
               <Layers3 className="mr-2 h-4 w-4" />BOM管理
             </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-slate-400">{activeWorkspace.payload.sheetName} · {formatTimestamp(activeWorkspace.updatedAt)}</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => void deleteActiveBom()} disabled={!isCollaborativeReady} className="h-10 border-rose-400/24 bg-rose-500/10 px-3 text-sm font-bold text-rose-100 hover:bg-rose-500/18 hover:text-white disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">刪除目前 BOM</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPendingDeleteBomId(activeBomId)} disabled={!isCollaborativeReady} className="h-10 border-rose-300/38 bg-rose-500/14 px-3 text-sm font-bold text-rose-100 hover:border-rose-200/65 hover:bg-rose-500/25 hover:text-white disabled:cursor-not-allowed disabled:border-rose-950/40 disabled:bg-rose-950/20 disabled:text-rose-100/45">刪除目前 BOM</Button>
           </div>
         </div>
 
@@ -6053,12 +6083,12 @@ export function MaterialRequestPage() {
         data-testid="material-table-card"
         className="overflow-hidden rounded-[14px] border border-[#2a526f] bg-[#0b1b2d]"
       >
-        <div className="flex items-center justify-between border-b border-[#2a526f] bg-[#10263a] px-4 py-3">
+        <div className="flex flex-col gap-3 border-b border-[#2a526f] bg-[linear-gradient(90deg,rgba(34,211,238,0.10),rgba(167,139,250,0.07),rgba(251,191,36,0.06))] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-100">料號總表</h2>
             <p className="mt-0.5 text-sm text-slate-500">展開後才顯示替代料；拖曳表頭右邊緣可調整欄寬。</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 items-center gap-2 sm:flex">
             <Button
               type="button"
               variant="outline"
@@ -6067,11 +6097,11 @@ export function MaterialRequestPage() {
                 setTableColorDraft(activeTableColorTheme);
                 setTableColorDialogOpen(true);
               }}
-              className="border-cyan-400/25 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/20"
+              className="border-violet-300/35 bg-violet-400/12 font-bold text-violet-100 hover:bg-violet-400/22"
             >
               自訂表格配色
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setColumnWidths([...DEFAULT_COLUMN_WIDTHS])} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">重設欄寬</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setColumnWidths([...DEFAULT_COLUMN_WIDTHS])} className="border-amber-300/30 bg-amber-400/10 font-bold text-amber-100 hover:bg-amber-400/20">重設欄寬</Button>
             {expandedKey && <Button type="button" variant="outline" size="sm" onClick={() => setExpandedKey(null)} className="border-blue-400/20 bg-blue-400/10 text-slate-300 hover:bg-blue-400/20">收合目前料件</Button>}
           </div>
         </div>

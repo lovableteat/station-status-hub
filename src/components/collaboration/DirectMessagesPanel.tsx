@@ -78,7 +78,7 @@ function ThreadRow({
     <div
       data-direct-thread-row="true"
       data-density="compact"
-      className="group relative h-[52px] overflow-hidden rounded-xl border border-white/8 bg-[#0d1b2c] transition-colors [contain-intrinsic-size:52px] [content-visibility:auto] hover:border-cyan-200/25 hover:bg-[#102238]"
+      className="group relative h-[58px] overflow-hidden rounded-xl border border-cyan-100/12 bg-[linear-gradient(100deg,rgba(34,211,238,0.09),rgba(13,27,44,0.98)_34%,rgba(167,139,250,0.06))] transition-colors [contain-intrinsic-size:58px] [content-visibility:auto] hover:border-cyan-200/38 hover:bg-[#102238]"
     >
       <button
         type="button"
@@ -125,7 +125,7 @@ function ThreadRow({
         title={`刪除與 ${displayName} 的對話`}
         disabled={deleting}
         onClick={onDelete}
-        className="absolute right-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-600 opacity-60 transition-colors hover:bg-rose-300/10 hover:text-rose-200 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rose-300/70 disabled:cursor-wait disabled:opacity-40 group-hover:opacity-100"
+        className="absolute right-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg border border-rose-300/10 bg-rose-400/[0.06] text-rose-200/55 opacity-80 transition-colors hover:border-rose-300/35 hover:bg-rose-400/16 hover:text-rose-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rose-300/70 disabled:cursor-wait disabled:opacity-40 group-hover:opacity-100"
       >
         {deleting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
       </button>
@@ -591,10 +591,10 @@ export function DirectMessagesPanel({
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.08),transparent_35%)]">
+    <div className="flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_8%_0%,rgba(34,211,238,0.13),transparent_34%),radial-gradient(circle_at_92%_12%,rgba(167,139,250,0.10),transparent_30%),#071421]">
       <div
         data-direct-messages-toolbar="compact"
-        className="border-b border-white/8 bg-[linear-gradient(180deg,rgba(11,24,38,0.98),rgba(9,19,31,0.94))] px-3 py-2.5"
+        className="border-b border-cyan-100/12 bg-[linear-gradient(90deg,rgba(6,182,212,0.13),rgba(9,19,31,0.96),rgba(139,92,246,0.10))] px-3 py-2.5"
       >
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
@@ -603,11 +603,11 @@ export function DirectMessagesPanel({
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="搜尋同事或訊息內容"
-              className="h-9 rounded-xl border-white/10 bg-[#0b1625] pl-9 text-sm text-slate-100 placeholder:text-slate-500"
+              className="h-9 rounded-xl border-cyan-100/18 bg-[#0b1625] pl-9 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:border-cyan-200/50 focus-visible:ring-cyan-300/15"
             />
           </div>
           <div
-            className="flex h-9 shrink-0 items-center rounded-xl border border-cyan-200/12 bg-cyan-300/8 px-2.5 text-[11px] font-semibold text-cyan-100"
+            className="flex h-9 shrink-0 items-center rounded-xl border border-amber-200/25 bg-amber-300/10 px-2.5 text-[11px] font-bold text-amber-100"
             title={unreadCount > 0 ? `${unreadCount} 則未讀訊息` : `${threads.length} 個對話`}
           >
             {unreadCount > 0 ? `${unreadCount} 未讀` : `${threads.length} 對話`}
@@ -617,7 +617,7 @@ export function DirectMessagesPanel({
       <ScrollArea className="min-h-0 flex-1 px-3 py-2.5">
         {availableOnlineUsers.length > 0 ? (
           <section className="mb-3">
-            <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-200/75">
+            <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200/85">
               <Users className="h-3.5 w-3.5" />
               線上同事
             </div>
@@ -631,7 +631,7 @@ export function DirectMessagesPanel({
                     if (existing) setSelectedThreadId(existing.threadId);
                     else void startDirectChat(onlineUser.userId).then(setSelectedThreadId);
                   }}
-                  className="h-9 min-w-[108px] rounded-lg border border-white/8 bg-[#0d1b2c] px-2 text-left transition-colors hover:border-cyan-200/24 hover:bg-[#102238]"
+                  className="h-10 min-w-[112px] rounded-lg border border-emerald-300/18 bg-emerald-400/[0.08] px-2 text-left transition-colors hover:border-emerald-200/38 hover:bg-emerald-400/15"
                 >
                   <span className="flex items-center gap-2">
                     <UserAvatar
@@ -660,7 +660,7 @@ export function DirectMessagesPanel({
               aria-label="更新對話"
               title="更新對話"
               onClick={() => void reload()}
-              className="h-7 w-7 rounded-lg text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
+              className="h-7 w-7 rounded-lg border border-violet-300/15 bg-violet-400/[0.07] text-violet-200 hover:bg-violet-400/16 hover:text-white"
             >
               <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             </Button>
