@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PcbRemoteSyncCoordinator, syncPcbRemote } from "../../src/components/pcb-designer/core/remoteSync.ts";
+import {
+  mergePcbRemoteState,
+  PcbRemoteSyncCoordinator,
+  syncPcbRemote,
+} from "../../src/components/pcb-designer/core/remoteSync.ts";
 import { createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
 import type { PcbSaveState } from "../../src/components/pcb-designer/types.ts";
 
@@ -146,4 +150,45 @@ test("remote sync deletes only explicit tombstones and preserves unrelated rows"
     onConflict: "owner_id,id",
     defaultToNull: false,
   })));
+});
+
+test("merges every teammate project even when the local account snapshot is newer", () => {
+  const local = state("Local project");
+  const remote = state("Shared teammate project");
+  local.updatedAt = "2026-08-13T12:00:00.000Z";
+  local.projects[0].updatedAt = local.updatedAt;
+  remote.updatedAt = "2026-08-13T11:00:00.000Z";
+  remote.projects[0].updatedAt = remote.updatedAt;
+
+  const merged = mergePcbRemoteState(local, remote);
+
+  assert.deepEqual(
+    merged.projects.map((project) => project.name).sort(),
+    ["Local project", "Shared teammate project"],
+  );
+  assert.equal(merged.activeProjectId, local.activeProjectId);
+});
+
+test("server project tombstones remove stale local copies", () => {
+  const local = state("Deleted elsewhere");
+  const remote = state("Still shared");
+  remote.remoteDeletions = {
+    projects: [local.projects[0].id],
+    templates: [],
+    library: [],
+  };
+
+  const merged = mergePcbRemoteState(local, remote);
+
+  assert.deepEqual(merged.projects.map((project) => project.name), ["Still shared"]);
+  assert.deepEqual(merged.remoteDeletions?.projects, [local.projects[0].id]);
+});
+
+test("does not publish a fresh local seed as an extra shared project", () => {
+  const blankLocal = state(createBlankProject().name);
+  const remote = state("Existing team project");
+
+  const merged = mergePcbRemoteState(blankLocal, remote);
+
+  assert.deepEqual(merged.projects.map((project) => project.name), ["Existing team project"]);
 });

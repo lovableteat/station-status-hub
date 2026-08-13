@@ -1,4 +1,5 @@
 import type { PcbSaveState } from "../types.ts";
+import { createBlankProject } from "../defaults.ts";
 
 export type PcbPersistenceStatus = "local" | "saving" | "synced" | "unsaved";
 type RemoteError = { code?: string; message?: string } | null;
@@ -16,6 +17,81 @@ export interface PcbRemoteClient {
   load?: () => Promise<PcbSaveState | null>;
   save?: (state: PcbSaveState) => Promise<boolean>;
   from?: (table: "pcb_designer_projects" | "pcb_designer_templates" | "pcb_designer_library") => RemoteTable;
+}
+
+function revision(value: string | undefined): number {
+  const parsed = Date.parse(value ?? "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function isBlankSeedWorkspace(state: PcbSaveState): boolean {
+  const project = state.projects[0];
+  const defaultProjectName = createBlankProject().name;
+  const pendingCount = Object.values(state.pendingPlacementsByProject ?? {})
+    .reduce((total, items) => total + items.length, 0);
+
+  return state.projects.length === 1
+    && project?.name === defaultProjectName
+    && project.components.length === 0
+    && project.keepouts.length === 0
+    && project.measurements.length === 0
+    && state.templates.every((template) => template.isBuiltIn)
+    && state.library.every((component) => component.source === "built-in")
+    && pendingCount === 0;
+}
+
+/**
+ * Shared projects are merged per project revision. Account-specific templates,
+ * library items and active selection continue to follow the newest account
+ * snapshot, while server tombstones always remove stale local project copies.
+ */
+export function mergePcbRemoteState(
+  localState: PcbSaveState,
+  remoteState: PcbSaveState,
+): PcbSaveState {
+  const localIsSeed = isBlankSeedWorkspace(localState);
+  const remoteDeleted = new Set(remoteState.remoteDeletions?.projects ?? []);
+  const localDeleted = new Set(localState.remoteDeletions?.projects ?? []);
+  const deletedProjects = new Set([...remoteDeleted, ...localDeleted]);
+  const projects = new Map(
+    remoteState.projects
+      .filter((project) => !deletedProjects.has(project.id))
+      .map((project) => [project.id, structuredClone(project)]),
+  );
+
+  if (!localIsSeed || remoteState.projects.length === 0) {
+    for (const project of localState.projects) {
+      if (deletedProjects.has(project.id)) continue;
+      const remoteProject = projects.get(project.id);
+      if (!remoteProject || revision(project.updatedAt) > revision(remoteProject.updatedAt)) {
+        projects.set(project.id, structuredClone(project));
+      }
+    }
+  }
+
+  const preferRemoteAccountState = localIsSeed
+    || revision(remoteState.updatedAt) >= revision(localState.updatedAt);
+  const accountState = preferRemoteAccountState ? remoteState : localState;
+  const mergedProjects = [...projects.values()];
+  const preferredActiveProjectId = accountState.activeProjectId;
+  const activeProjectId = preferredActiveProjectId
+    && projects.has(preferredActiveProjectId)
+    ? preferredActiveProjectId
+    : mergedProjects[0]?.id ?? null;
+
+  return {
+    ...structuredClone(accountState),
+    projects: mergedProjects,
+    activeProjectId,
+    remoteDeletions: {
+      projects: [...deletedProjects],
+      templates: [...new Set(accountState.remoteDeletions?.templates ?? [])],
+      library: [...new Set(accountState.remoteDeletions?.library ?? [])],
+    },
+    updatedAt: revision(remoteState.updatedAt) >= revision(localState.updatedAt)
+      ? remoteState.updatedAt
+      : localState.updatedAt,
+  };
 }
 
 async function reconcileTable(
