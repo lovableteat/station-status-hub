@@ -95,6 +95,10 @@ All colors MUST be HSL for proper theming support.
     --sidebar-border: 221 24% 24%;
 
     --sidebar-ring: 214 95% 70%;
+    --mobile-header-height: 52px;
+    --mobile-dock-height: 56px;
+    --mobile-shell-bottom: calc(var(--mobile-dock-height) + env(safe-area-inset-bottom));
+    --mobile-page-gutter: 8px;
   }
 
   .dark {
@@ -891,5 +895,45 @@ All colors MUST be HSL for proper theming support.
   .material-record-dialog :is(input, textarea):disabled {
     cursor: default;
     opacity: 0.82;
+  }
+}
+
+.app-shell {
+  min-height: 100svh;
+  min-height: 100dvh;
+}
+
+@media (max-width: 1023px) {
+  [data-mobile-workspace-main="true"] {
+    box-sizing: border-box;
+    padding-bottom: var(--mobile-shell-bottom);
+  }
+}
+
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    min-width: 320px;
+    min-height: 100%;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  [data-mobile-app-header="true"] {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  :is(input, textarea, select, [role="combobox"]) {
+    font-size: 16px;
+  }
+
+  @media (pointer: coarse) {
+    :is(button, [role="button"], a, input, textarea, select, [role="combobox"]) {
+      min-height: 44px;
+    }
   }
 }

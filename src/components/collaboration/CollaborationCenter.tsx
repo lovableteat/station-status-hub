@@ -116,17 +116,17 @@ function DirectMessageLauncher({
       aria-controls="direct-messages-panel"
       onClick={onOpen}
       title="開啟聊天室"
-      data-chat-launcher="compact-button"
-      className="group pointer-events-auto relative ml-auto flex h-14 w-14 items-center justify-center gap-2 rounded-[18px] border border-cyan-50/90 bg-[linear-gradient(135deg,#a5f3fc_0%,#5eead4_58%,#bef264_100%)] px-0 text-[#08283a] shadow-[0_16px_38px_-16px_rgba(45,212,191,0.95),0_8px_20px_-14px_rgba(0,0,0,0.85)] ring-1 ring-white/35 transition-[transform,filter,box-shadow] duration-200 hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_20px_44px_-16px_rgba(34,211,238,1),0_10px_22px_-14px_rgba(0,0,0,0.85)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#071421] sm:min-w-[132px] sm:px-3"
+      data-chat-launcher="compact-rectangle"
+      className="group pointer-events-auto relative ml-auto flex h-11 min-w-[92px] items-center justify-center gap-1.5 rounded-xl border border-cyan-50/80 bg-[linear-gradient(135deg,#a5f3fc_0%,#5eead4_58%,#bef264_100%)] px-2.5 text-[#08283a] shadow-[0_12px_28px_-16px_rgba(45,212,191,0.95),0_6px_16px_-14px_rgba(0,0,0,0.85)] ring-1 ring-white/30 transition-[transform,filter,box-shadow] duration-200 hover:-translate-y-0.5 hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#071421] sm:h-12 sm:min-w-[118px] sm:px-3"
     >
       <span
         aria-hidden="true"
-        className="absolute inset-1 rounded-[14px] border border-white/45 bg-white/10"
+        className="absolute inset-1 rounded-lg border border-white/40 bg-white/10"
       />
-      <span className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] bg-[#0a2d45] text-cyan-100 shadow-[0_8px_18px_-10px_rgba(5,28,44,0.9)] transition-transform duration-200 group-hover:scale-105">
+      <span className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#0a2d45] text-cyan-100 shadow-[0_8px_18px_-10px_rgba(5,28,44,0.9)] transition-transform duration-200 group-hover:scale-105 sm:h-8 sm:w-8">
         <MessageSquareText className="h-[18px] w-[18px]" />
       </span>
-      <span className="relative z-10 hidden text-sm font-black tracking-[0.02em] sm:inline">聊天室</span>
+      <span className="relative z-10 text-xs font-black tracking-[0.02em] sm:text-sm">訊息</span>
       {unreadCount > 0 ? (
         <span className="absolute -right-1.5 -top-1.5 flex min-h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#071421] bg-rose-500 px-1 text-[10px] font-bold leading-5 text-white shadow-[0_0_14px_rgba(244,63,94,0.65)]">
           {unreadCount > 99 ? "99+" : unreadCount}
@@ -670,7 +670,7 @@ export function CollaborationCenter() {
       {isRealtimeAuthenticated ? (
         <div
           data-chat-dock="detached"
-          className="pointer-events-none fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-2 z-[84] w-[min(430px,calc(100vw-1rem))] lg:bottom-5 lg:right-5"
+          className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-[84] w-auto sm:w-[min(430px,calc(100vw-1rem))] lg:bottom-5 lg:right-5"
         >
           <section
             id="direct-messages-panel"

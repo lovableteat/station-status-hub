@@ -89,14 +89,14 @@ function ExecutiveKpi({
   value: string | number;
 }) {
   return (
-    <div className={cn("flex min-w-0 items-center gap-3 rounded-xl border px-4 py-3", KPI_TONES[tone])}>
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black/20">
-        <Icon className="h-5 w-5" aria-hidden="true" />
+    <div className={cn("flex min-w-[142px] snap-start items-center gap-2 rounded-xl border px-3 py-2 lg:min-w-0 lg:gap-3 lg:px-4 lg:py-3", KPI_TONES[tone])}>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/20 lg:h-10 lg:w-10 lg:rounded-xl">
+        <Icon className="h-4 w-4 lg:h-5 lg:w-5" aria-hidden="true" />
       </div>
       <div className="min-w-0">
         <div className="truncate text-xs text-[#a9c0d1]">{label}</div>
-        <div className="font-data mt-0.5 text-2xl font-semibold text-[#f3f8fc]">{value}</div>
-        <div className="truncate text-[11px] text-[#8fb0c5]">{detail}</div>
+        <div className="font-data mt-0.5 text-xl font-semibold text-[#f3f8fc] lg:text-2xl">{value}</div>
+        <div className="hidden truncate text-[11px] text-[#8fb0c5] sm:block">{detail}</div>
       </div>
     </div>
   );
@@ -264,7 +264,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   className="h-9 rounded-lg border-cyan-300/30 bg-cyan-300/[0.07] text-cyan-100 hover:bg-cyan-300/[0.12]"
                   data-testid="dashboard-metric-help"
                 >
-                  <CircleHelp className="mr-2 h-4 w-4" />計算口徑
+                  <CircleHelp className="h-4 w-4 sm:mr-2" /><span className="max-sm:sr-only">計算口徑</span>
                 </Button>
               </HoverCardTrigger>
               <HoverCardContent
@@ -288,7 +288,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-9 rounded-lg">
-                  <Download className="mr-2 h-4 w-4" />匯出管理報表
+                  <Download className="h-4 w-4 sm:mr-2" /><span className="max-sm:sr-only">匯出管理報表</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -305,7 +305,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         }
       />
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      <div data-mobile-dashboard-kpis="true" className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:grid lg:grid-cols-4 lg:overflow-visible lg:pb-0">
         <ExecutiveKpi icon={Server} label="專案機台" value={includedSystems.length} detail="納入管理報表" tone="blue" />
         <ExecutiveKpi icon={Gauge} label="平均測試進度" value={`${portfolioProgress}%`} detail={`${statusCounts.active} 台進行中`} tone="cyan" />
         <ExecutiveKpi icon={CheckCircle2} label="已完成" value={statusCounts.completed} detail={`交付完成率 ${completionRate}%`} tone="emerald" />

@@ -19,24 +19,24 @@ const accentClasses = {
 
 export function MaintenanceMetricStrip({ metrics }: { metrics: MaintenanceMetric[] }) {
   return (
-    <div className="grid grid-cols-2 gap-2 pb-1 lg:flex lg:overflow-x-auto">
+    <div data-mobile-metric-strip="true" className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:overflow-visible">
       {metrics.map((metric) => {
         const Icon = metric.icon;
         return (
           <div
             key={metric.label}
             className={cn(
-              "flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 lg:min-w-[150px]",
+              "flex min-w-[132px] flex-1 snap-start items-center justify-between gap-2 rounded-xl border px-3 py-2 lg:min-w-[150px] lg:gap-3 lg:py-2.5",
               accentClasses[metric.accent || "blue"]
             )}
           >
             <div className="min-w-0">
               <div className="truncate text-xs opacity-75">{metric.label}</div>
-              <div className="font-data mt-0.5 text-xl font-semibold text-[#f3f8fc]">
+              <div className="font-data mt-0.5 text-lg font-semibold text-[#f3f8fc] lg:text-xl">
                 {metric.value}
               </div>
             </div>
-            {Icon && <Icon className="h-5 w-5 shrink-0 opacity-80" />}
+            {Icon && <Icon className="h-4 w-4 shrink-0 opacity-80 lg:h-5 lg:w-5" />}
           </div>
         );
       })}

@@ -1,6 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { CircuitBoard, PanelLeft, PanelRight, ScanSearch, Settings2 } from "lucide-react";
+import { CircuitBoard, MoreHorizontal, PanelLeft, PanelRight, ScanSearch, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -370,6 +378,7 @@ export function PcbDesignerWorkspace({
       <header
         className="pcb-project-bar"
         data-testid="pcb-project-bar"
+        data-mobile-pcb-command-bar="true"
       >
         <div className="pcb-project-identity">
           <Button
@@ -401,10 +410,75 @@ export function PcbDesignerWorkspace({
             ))}
           </select>
           <span className="pcb-status-chip">{statusLabel(workspace.activeProject.status)}</span>
-          <span className="pcb-save-state" data-status={workspace.persistenceStatus}>
+          <span className="pcb-save-state" data-status={workspace.persistenceStatus} title={persistenceLabel(workspace.persistenceStatus)}>
             {persistenceLabel(workspace.persistenceStatus)}
           </span>
           {!workspace.canEdit && <span className="pcb-read-only">唯讀</span>}
+
+          <div className="pcb-mobile-project-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="pcb-panel-toggle h-10 w-10 rounded-lg"
+              onClick={() => setOpenDrawer((current) => current === "right" ? null : "right")}
+              aria-label="開啟屬性與 DRC 面板"
+              title="屬性與 DRC"
+            >
+              <PanelRight className="h-4 w-4" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="pcb-panel-toggle h-10 w-10 rounded-lg"
+                  aria-label="開啟 PCB 專案操作"
+                  title="專案操作"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="pcb-dropdown-menu w-64">
+                <DropdownMenuLabel>專案操作</DropdownMenuLabel>
+                <div className="px-2 pb-2">
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(event) => setSelectedTemplateId(event.target.value)}
+                    className="pcb-control h-11 w-full"
+                    aria-label="選擇 PCB 模板"
+                    disabled={!workspace.canMutate}
+                  >
+                    {workspace.data.templates.map((template) => (
+                      <option key={template.id} value={template.id}>{template.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <DropdownMenuItem
+                  disabled={!workspace.canMutate || !selectedTemplateId}
+                  onSelect={() => workspace.applyTemplate(selectedTemplateId)}
+                >
+                  套用目前模板
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={!workspace.canMutate}
+                  onSelect={() => setDialog({ kind: "project-settings", project: workspace.activeProject })}
+                >
+                  <Settings2 className="mr-2 h-4 w-4" />專案設定
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    workspace.runDrc();
+                    setOpenDrawer("right");
+                  }}
+                >
+                  <ScanSearch className="mr-2 h-4 w-4" />執行 DRC
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         <div className="pcb-project-actions">
@@ -539,10 +613,6 @@ export function PcbDesignerWorkspace({
         onZoomChange={workspace.setZoom}
         onResetView={workspace.resetView}
       />
-      <p className="pcb-mobile-advisory">
-        建議使用桌面進行精細佈局；手機仍可檢視、匯入匯出與查看 DRC。
-      </p>
-
       <div className="pcb-editor-grid">
         {openDrawer && (
           <button

@@ -39,7 +39,8 @@ test("mobile Data-center uses low-poly assets and disables expensive rendering",
 test("mobile Data-center fills the dynamic viewport and exposes primary controls", () => {
   assert.match(indexSource, /activeWorkspace === "data-center"[\s\S]*?h-\[100dvh\]/);
   assert.match(plannerSource, /relative h-full w-full min-h-0 min-w-0 flex-1/);
-  assert.match(workspaceSource, /data-testid="data-center-mobile-dock"/);
+  assert.match(workspaceSource, /data-mobile-data-center-controls="true"/);
+  assert.doesNotMatch(workspaceSource, /data-testid="data-center-mobile-dock"/);
   assert.match(workspaceSource, /id:\s*"scene"/);
   assert.match(workspaceSource, /id:\s*"details"/);
   assert.match(workspaceSource, /id:\s*"models"/);

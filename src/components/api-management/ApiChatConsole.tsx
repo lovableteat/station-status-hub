@@ -2366,7 +2366,7 @@ export function ApiChatConsole({
         <Button
           type="button"
           variant="outline"
-          className="relative h-12 w-12 shrink-0 rounded-xl border-blue-300/35 bg-blue-400/12 p-0 text-sm font-black text-blue-50 shadow-none hover:border-blue-200/70 hover:bg-blue-400/22 hover:text-white sm:w-auto sm:px-4"
+          className="relative h-11 w-11 shrink-0 rounded-xl border-blue-300/35 bg-blue-400/12 p-0 text-sm font-black text-blue-50 shadow-none hover:border-blue-200/70 hover:bg-blue-400/22 hover:text-white sm:h-12 sm:w-auto sm:px-4"
           aria-label="開啟共享提示詞庫"
         >
           <LibraryBig className="h-5 w-5 text-cyan-200 sm:mr-2 sm:h-4 sm:w-4" />
@@ -2603,7 +2603,7 @@ export function ApiChatConsole({
       className={cn(
         "flex flex-col overflow-hidden border border-blue-300/25 bg-[linear-gradient(180deg,#17243a_0%,#0e192a_100%)] shadow-[0_28px_80px_rgba(2,8,23,0.38)]",
         isChatOnly
-          ? "h-full min-h-0 rounded-[22px] lg:rounded-[28px]"
+          ? "h-full min-h-0 rounded-2xl lg:rounded-[28px]"
           : "min-h-[720px] rounded-[34px] p-5"
       )}
     >
@@ -2682,7 +2682,7 @@ export function ApiChatConsole({
       </div>
 
       {isChatOnly ? (
-        <div className="shrink-0 border-b border-blue-300/15 bg-[#111e31] px-2 py-1.5 sm:px-3 sm:py-2 lg:px-6 lg:py-3">
+        <div className="shrink-0 border-b border-blue-300/15 bg-[#111e31] px-1.5 py-1 sm:px-3 sm:py-2 lg:px-6 lg:py-3">
           <MaintenanceSourceSelector
             enabled={maintenanceSourceEnabled}
             onEnabledChange={(enabled) => {
@@ -2713,23 +2713,21 @@ export function ApiChatConsole({
         <div
           className={cn(
             "flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_50%_0%,rgba(16,185,129,0.08),transparent_28%),#030508]",
-            isChatOnly ? "px-2.5 py-2.5 sm:px-4 sm:py-4 md:px-6" : "rounded-[30px] border border-white/8 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
+            isChatOnly ? "px-2 py-2 sm:px-4 sm:py-4 md:px-6" : "rounded-[30px] border border-white/8 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
           )}
         >
           <div className={cn("space-y-4 overflow-y-auto", isChatOnly ? "pr-2" : "pr-1", chatHeightClass)}>
             {messages.length === 0 ? (
               isChatOnly ? (
-                <div className="flex min-h-0 flex-1 items-center justify-center px-1 py-3 md:min-h-[300px] md:px-6 md:py-5 2xl:py-0">
-                  <div className="w-full max-w-3xl text-center">
-                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-emerald-400/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.16),rgba(5,8,10,0.12))] text-emerald-100 shadow-[0_18px_45px_-22px_rgba(16,185,129,0.45)] 2xl:h-10 2xl:w-10 2xl:rounded-xl">
-                      <Search className="h-6 w-6 2xl:h-4.5 2xl:w-4.5" />
+                <div data-mobile-ai-empty-state="true" className="flex min-h-0 flex-1 items-start justify-center px-1 pt-5 md:min-h-[300px] md:items-center md:px-6 md:py-5 2xl:py-0">
+                  <div className="flex w-full max-w-xl items-center gap-3 rounded-2xl border border-emerald-300/15 bg-emerald-400/[0.04] p-3 text-left md:block md:max-w-3xl md:border-0 md:bg-transparent md:p-0 md:text-center">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-400/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.16),rgba(5,8,10,0.12))] text-emerald-100 shadow-[0_18px_45px_-22px_rgba(16,185,129,0.45)] md:mx-auto md:h-14 md:w-14 md:rounded-[18px] 2xl:h-10 2xl:w-10 2xl:rounded-xl">
+                      <Search className="h-5 w-5 md:h-6 md:w-6 2xl:h-4.5 2xl:w-4.5" />
                     </div>
-                    <p className="mt-5 text-3xl font-black tracking-[-0.035em] text-white md:text-4xl 2xl:mt-1">
-                      今天想查什麼？
-                    </p>
-                    <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-slate-300 2xl:mt-1">
-                      直接描述你的問題，也可以貼上截圖與文件一起分析。
-                    </p>
+                    <div className="min-w-0">
+                      <p className="text-lg font-black tracking-[-0.025em] text-white md:mt-5 md:text-4xl md:tracking-[-0.035em] 2xl:mt-1">今天想查什麼？</p>
+                      <p className="mt-0.5 text-xs leading-5 text-slate-300 md:mx-auto md:mt-3 md:max-w-2xl md:text-base md:leading-7 2xl:mt-1">輸入問題，也可以附上截圖或文件一起分析。</p>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -2760,7 +2758,7 @@ export function ApiChatConsole({
           className={cn(
             "border-cyan-300/12",
             isChatOnly
-              ? "shrink-0 border-t border-slate-700/60 bg-[#0d1625] px-2.5 py-2.5 sm:px-4 sm:py-4 md:px-6"
+              ? "shrink-0 border-t border-slate-700/60 bg-[#0d1625] px-1.5 py-1.5 sm:px-4 sm:py-4 md:px-6"
               : "rounded-[28px] border bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-3.5 shadow-[0_24px_52px_rgba(2,8,23,0.26),inset_0_1px_0_rgba(255,255,255,0.03)]"
           )}
         >
@@ -2849,12 +2847,13 @@ export function ApiChatConsole({
           ) : null}
 
           <div
+            data-mobile-ai-composer="true"
             onDragEnter={handleComposerDragEnter}
             onDragOver={handleComposerDragOver}
             onDragLeave={handleComposerDragLeave}
             onDrop={handleComposerDrop}
             className={cn(
-              "rounded-[18px] border px-2 py-2 shadow-[0_18px_45px_-24px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 focus-within:ring-2 sm:rounded-[20px] sm:px-3 sm:py-3",
+              "rounded-xl border px-1.5 py-1.5 shadow-[0_18px_45px_-24px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 focus-within:ring-2 sm:rounded-[20px] sm:px-3 sm:py-3",
               isDragOverComposer
                 ? "border-cyan-300/70 bg-[linear-gradient(180deg,#21466a_0%,#183450_100%)] ring-2 ring-cyan-300/25"
                 : "border-blue-300/35 bg-[linear-gradient(180deg,#1b2d49_0%,#14233a_100%)] focus-within:border-blue-300/70 focus-within:ring-blue-400/20"
@@ -2869,14 +2868,14 @@ export function ApiChatConsole({
                   onClick={() => imageInputRef.current?.click()}
                   disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
                   aria-label="上傳 PDF、PPT、Excel、Word 或圖片"
-                  className="h-12 min-w-12 rounded-xl border border-blue-300/35 bg-blue-400/15 px-3 text-blue-100 shadow-none hover:border-blue-300/70 hover:bg-blue-400/25 disabled:opacity-50 sm:px-4"
+                  className="h-11 min-w-11 rounded-xl border border-blue-300/35 bg-blue-400/15 px-3 text-blue-100 shadow-none hover:border-blue-300/70 hover:bg-blue-400/25 disabled:opacity-50 sm:h-12 sm:px-4"
                 >
                   <Paperclip className="h-5 w-5 shrink-0" />
                   <span className="ml-2 hidden text-sm font-bold sm:inline">上傳檔案</span>
                 </Button>
               </div>
 
-              <div className="relative min-w-0 flex-1 rounded-[14px] border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(30,41,59,0.72))] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:rounded-[16px] sm:px-4 sm:py-3">
+              <div className="relative min-w-0 flex-1 rounded-xl border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(30,41,59,0.72))] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:rounded-[16px] sm:px-4 sm:py-3">
                 {slashMenuOpen ? (
                   <div
                     role="listbox"
@@ -2952,7 +2951,7 @@ export function ApiChatConsole({
                   onPaste={handleComposerPaste}
                   aria-label="輸入查詢內容"
                   placeholder="輸入問題，或貼上圖片／文件"
-                  className="min-h-11 max-h-28 border-0 bg-transparent px-0 py-0 text-base leading-6 text-white shadow-none placeholder:text-slate-200 focus-visible:ring-0 sm:min-h-[74px] sm:text-[17px] sm:leading-7"
+                  className="min-h-10 max-h-24 border-0 bg-transparent px-0 py-0 text-base leading-6 text-white shadow-none placeholder:text-slate-300 focus-visible:ring-0 sm:min-h-[74px] sm:max-h-28 sm:text-[17px] sm:leading-7"
                 />
               </div>
 
@@ -2965,7 +2964,7 @@ export function ApiChatConsole({
                   onClick={() => void handleSend()}
                   disabled={!canSend}
                   aria-label="送出查詢"
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-500 p-0 font-bold text-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] transition-all duration-200 hover:bg-blue-400 active:scale-[0.98] disabled:border-slate-700 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-500 p-0 font-bold text-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] transition-all duration-200 hover:bg-blue-400 active:scale-[0.98] disabled:border-slate-700 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none sm:h-12 sm:w-12"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
@@ -3180,7 +3179,7 @@ export function ApiChatConsole({
           </aside>
 
           <div className="order-1 flex min-h-0 min-w-0 flex-col gap-2 lg:order-2">
-            <div className="grid h-11 shrink-0 grid-cols-[44px_minmax(0,1fr)_44px] gap-2 lg:hidden">
+            <div data-mobile-ai-command-bar="true" className="grid h-11 shrink-0 grid-cols-[44px_minmax(0,1fr)_44px] gap-1.5 lg:hidden">
               <Button
                 type="button"
                 variant="outline"

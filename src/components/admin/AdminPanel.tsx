@@ -549,12 +549,12 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   className="admin-mobile-menu"
                   onClick={() => setIsAdminSidebarOpen(true)}
                 >
-                  <Menu className="mr-2 h-4 w-4" />
-                  管理選單
+                  <Menu className="h-4 w-4 sm:mr-2" />
+                  <span className="max-sm:sr-only">管理選單</span>
                 </Button>
                 <Button
                   variant="outline"
-                  className="border-[#2a526f] bg-[#0a2033] text-slate-200 hover:bg-[#10263a] hover:text-white"
+                  className="admin-command-logout border-[#2a526f] bg-[#0a2033] text-slate-200 hover:bg-[#10263a] hover:text-white"
                   onClick={logout}
                 >
                   <LogOut className="mr-2 h-4 w-4" />
@@ -575,7 +575,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               </div>
               <div>
                 <h2 className="text-lg font-bold tracking-tight text-slate-100">系統用戶管理</h2>
-                <p className="mt-0.5 text-sm text-slate-400">管理帳號狀態、角色與各工作區存取權限</p>
+                <p className="admin-user-hero-copy mt-0.5 text-sm text-slate-400">管理帳號狀態、角色與各工作區存取權限</p>
               </div>
               {SHOW_EXTENDED_ADMIN_COPY ? <p className="max-w-3xl text-sm text-muted-foreground">
                 這裡集中管理整站帳號、角色、工作區權限與細部頁面權限。密碼只會以雜湊方式保存，超級帳號可直接發起重設，但不能回看任何人的明文密碼。
@@ -589,8 +589,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               aria-controls="admin-create-user-dialog"
               className="admin-primary-action h-10 rounded-xl px-4 font-black disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <Plus className="mr-2 h-4 w-4" />
-              新增用戶
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="admin-primary-action-label">新增用戶</span>
             </Button>
             <Dialog
               open={isUserDialogOpen}
@@ -694,8 +694,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
           <Card data-admin-zone="filters" className="admin-user-section shadow-none">
             <CardContent className="space-y-3 p-4 sm:p-5">
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_190px_190px]">
-                <div className="relative">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_190px_190px]">
+                <div className="relative col-span-2 lg:col-span-1">
                   <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-sky-200/60" />
                   <Input
                     className="h-11 rounded-xl border-sky-200/20 bg-[#091d2e] pl-10 text-slate-100 shadow-none focus-visible:border-sky-300/55 focus-visible:ring-sky-300/20"
@@ -761,7 +761,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                       key={systemUser.id}
                       className="admin-account-card group relative overflow-hidden rounded-xl border p-4 transition-colors duration-200 sm:p-5"
                     >
-                      <div className="flex flex-col gap-4 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div data-mobile-user-summary="true" className="admin-account-summary flex flex-col gap-4 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex min-w-0 items-center gap-3">
                           <div className="shrink-0">
                             <UserAvatar
@@ -817,6 +817,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               ) : null}
                             </div>
                             <p className="mt-1 truncate text-xs text-slate-500">@{systemUser.username}</p>
+                            <p data-mobile-user-last-login="true" className="mt-1.5 hidden items-center gap-1.5 text-xs text-slate-300 max-sm:flex">
+                              <Clock3 className="h-3.5 w-3.5 text-cyan-200/70" aria-hidden="true" />
+                              最後登入：{lastLoginLabel}
+                            </p>
                           </div>
                         </div>
 
@@ -895,7 +899,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         </div>
                       </div>
 
-                      <div className="grid gap-3 py-4 sm:grid-cols-3">
+                      <div className="admin-account-metadata grid gap-3 py-4 sm:grid-cols-3">
                         <div className="min-w-0 border-white/[0.07] sm:border-r sm:pr-4">
                           <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">登入帳號</div>
                           <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">{systemUser.username}</div>
@@ -917,7 +921,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-3 rounded-xl border border-[#2a526f] bg-[#071522] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="admin-account-permissions flex flex-col gap-3 rounded-xl border border-[#2a526f] bg-[#071522] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex min-w-0 items-center gap-2">
                           <Lock className="h-3.5 w-3.5 shrink-0 text-cyan-200/75" aria-hidden="true" />
                           <span

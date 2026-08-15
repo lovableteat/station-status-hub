@@ -665,8 +665,9 @@ const Index = () => {
       />
 
       <main
+        data-mobile-workspace-main="true"
         className={cn(
-          "flex w-full min-w-0 flex-1 flex-col",
+          "mobile-workspace-main flex w-full min-w-0 flex-1 flex-col",
           activeWorkspace === "data-center"
             ? "min-h-0 overflow-hidden"
             : activeWorkspace === "pcb-designer"
@@ -675,8 +676,7 @@ const Index = () => {
               ? "min-h-0 overflow-hidden"
             : activeWorkspace === "station-status"
               ? "min-h-0 lg:overflow-hidden"
-              : "min-h-0",
-          activeWorkspace !== "data-center" && activeWorkspace !== "pcb-designer" && "max-lg:pb-[calc(5.25rem+env(safe-area-inset-bottom))]"
+              : "min-h-0"
         )}
       >
         <React.Suspense
@@ -691,6 +691,7 @@ const Index = () => {
       </main>
       <MobileWorkspaceDock
         activeItem={activeWorkspace ?? "workspace-home"}
+        availableItems={workspaceItems}
         onSelect={handleWorkspaceChange}
       />
     </div>
