@@ -1,11 +1,88 @@
-# Codex 工作交接與效能整理（2026-08-09）
+# Codex 工作交接（2026-08-16 最新狀態；沿用原檔名）
+
+> 新分頁啟動方式：先完整讀取本檔，再從目前遠端 `main` 繼續。不要重做本檔標示為已完成的功能，也不要要求使用者重新敘述已記錄的歷史。
+
+## 2026-08-16 最新基準
+
+- 本機專案：`C:\Users\銘三\Desktop\機台管理系統`
+- GitHub：`lovableteat/station-status-hub`
+- 正式分支：`main`
+- 手機版功能基準提交：`fd384fa028755548f3e7f4699ae4a533f7f0df67`（`feat: rebuild core mobile workspaces`）
+- 手機版規格提交：`db249e9`（`docs: specify mobile-first workspace redesign`）
+- 整理前本機、`origin/main` 與 GitHub Pages 部署 SHA 均為 `fd384fa028755548f3e7f4699ae4a533f7f0df67`。
+- GitHub Pages：<https://lovableteat.github.io/station-status-hub/>
+- 對應 Pages 部署：<https://github.com/lovableteat/station-status-hub/actions/runs/31876600046>（success）
+- 此次 handoff 更新前工作樹乾淨，沒有待接手的未提交程式碼。
+
+## 使用者已明確決定的工作方式
+
+1. 對安全且在需求範圍內的 UI／實作細節直接判斷並完成，不要反覆要求使用者選方案。
+2. 每次完成修改都必須 commit、push 到遠端 `main`，再核對遠端 SHA 與 GitHub Pages；只有本機修改不算交付。
+3. 保留既有功能、資料、權限、ID、Supabase migration 與其他使用者修改；不得用 reset、revert 或整批覆寫清掉無關內容。
+4. UI 優先簡潔、少佔位、避免重複入口與大片空白；手機版必須同時適應 iOS、Android、直向與橫向寬度。
+5. 訊息入口維持右下角、長方形且能看見「訊息」文字；頁面不可同時出現兩個訊息面板或重複 launcher。
+6. 回覆先給結果，再列改動、測試、commit、push 與部署狀態。
+
+## 最新完成：全站手機優先改版
+
+- 共用手機殼層改為 52px safe-area header 與 56px 固定底部 dock。
+- 底部導覽固定為「首頁、維修、料號、查詢、更多」；Data Center、PCB Designer、後台管理放在依權限顯示的「更多」抽屜。
+- 支援 320、360、390、412、430 CSS px 直向尺寸，並將 compact／手機橫向行為延伸到 1023px（含 844 × 390）。
+- 已套用 `100svh`／`100dvh`、`viewport-fit=cover`、`interactive-widget=resizes-content`、上下 safe area、16px 手機輸入與 44px 觸控目標。
+- PCB Designer 改為 canvas-first：單列專案操作、精簡工具列、抽屜式次要操作與緊湊狀態列。
+- Data Center 移除重複手機 dock，場景、詳情、模型與 2D 操作改為畫布上的緊湊控制。
+- 後台使用者卡片優先顯示身分、狀態、帳號與最後登入，手機隱藏冗長 metadata。
+- 維修頁的專案操作、模組導覽、標題與 KPI 改為緊湊列／水平 snap strip。
+- BOM 手機頁保留搜尋與快速篩選，排序、匯入匯出及分頁工具收進次要 disclosure；料號卡改為摘要優先。
+- AI 查詢縮短來源選擇器、空狀態與 composer，避免輸入區佔滿畫面。
+- 完成報告：`docs/superpowers/reports/2026-08-15-mobile-first-workspaces-completion.md`
+- 設計與實作計畫：
+  - `docs/superpowers/specs/2026-08-15-mobile-first-workspaces-design.md`
+  - `docs/superpowers/plans/2026-08-15-mobile-first-workspaces.md`
+
+### 手機版驗證基準
+
+- 相關測試：220 passed、0 failed。
+- 修改過的 TypeScript／TSX ESLint：通過。
+- Production Vite build：通過。
+- GitHub Pages deployment：success；線上首頁與 Admin、Data Center、PCB、BOM、AI chunks 皆為 HTTP 200，且本次手機版標記存在。
+- 完整舊測試集當時為 673 passed、3 failed；下列三項位於未修改區域，接手時不要誤判為此次手機版回歸：
+  - `tests/bootRecoveryPolicy.test.mjs`
+  - `tests/dynamicSystemMetadataMigration.test.mjs`
+  - `tests/supabaseOutageResilience.test.mjs`
+- 前一工作階段的 Codex 內建瀏覽器沒有可用 instance，因此沒有逐尺寸互動截圖；當時以契約測試、build、本機 HTTP preview 與正式 bundle 標記驗證。新分頁若瀏覽器可用，應優先補做 320／390／430 直向與 844 × 390 橫向實機視覺檢查。
+
+## 已完成：BOM 按每頁列數載入
+
+- 主要完成提交：`2c960e1`（`feat: complete BOM pagination and collaboration chat updates`）。
+- 初始與翻頁會依目前頁碼／每頁列數要求對應 Supabase range，穩定排序為 `order_index ASC`。
+- partial workspace 保留遠端 `record_count`，不會把局部頁面誤標成完整快取。
+- 搜尋、篩選、排序、匯出及其他跨頁功能會升級為 full-load，維持完整結果。
+- 寫入、衝突與 Realtime 行為維持原規則。
+- 實作計畫已全部勾選完成：`docs/superpowers/plans/2026-08-09-bom-page-loading.md`。
+- 相關實作集中在：
+  - `src/components/material-requests/MaterialRequestPage.tsx`
+  - `src/components/material-requests/materialBomStorage.ts`
+  - `src/components/material-requests/materialBomPerformance.ts`
+
+## 新分頁開始工作的固定檢查
+
+1. 先執行 `git status --short --branch`、`git fetch origin main`、`git rev-parse HEAD` 與 `git rev-parse origin/main`。
+2. 若工作樹有修改，先判斷是否為使用者既有內容；不得直接清除。
+3. 先讀與新需求直接相關的 spec、plan、completion report 及測試，再動程式碼。
+4. 先跑精準測試，再跑相關測試與 production build；不要為了三個已知舊失敗擴張無關任務。
+5. 完成後只 stage 本次檔案，commit、push `main`，核對遠端 SHA，等待 Pages success，再驗證正式網址。
+
+---
+
+## 2026-08-09 歷史背景（若與上方衝突，以上方最新基準為準）
 
 ## 專案與正式環境
 
 - 本機專案：`C:\Users\銘三\Desktop\機台管理系統`
 - GitHub：`lovableteat/station-status-hub`
 - 正式分支：`main`
-- 整理時本機與遠端 HEAD：`495ff1efd29dc1f479d11d703f70e1807048f193`
+- 2026-08-09 當時本機與遠端 HEAD：`495ff1efd29dc1f479d11d703f70e1807048f193`
 - GitHub Pages：<https://lovableteat.github.io/station-status-hub/>
 - Pages 部署紀錄：<https://github.com/lovableteat/station-status-hub/actions/runs/31269423295>
 - GitHub Pages 網域必須使用 repository owner `lovableteat`；`liu52417.github.io/station-status-hub` 會回傳 404。
@@ -60,9 +137,9 @@
 - Git 工作區整理時只有一個 worktree，`main` 與 `origin/main` 相同，沒有未提交修改。
 - Git repository 本身約 50 MB，不是 Codex 回應延遲主因。
 
-## 尚未完成：料號總表按頁載入
+## 已完成：料號總表按頁載入（原 2026-08-09 待辦）
 
-使用者最新要求：開啟／展開料號總表時，先依「每頁列數」只抓當頁資料，以提高開啟速度；翻頁時才抓下一頁。
+此段是 2026-08-09 的定位紀錄；功能後續已由 `2c960e1` 完成。最新狀態以上方「已完成：BOM 按每頁列數載入」為準。
 
 目前已定位：
 
@@ -72,7 +149,7 @@
 - IndexedDB 快取能減少未變更 BOM 的重複下載，但首次開啟、快取過期或手動重新載入仍會整批下載。
 - 既有搜尋、欄位篩選、統計、匯出、替代料展開與即時協作依賴完整資料；改成伺服器分頁時必須明確處理這些跨頁功能，不能只把畫面 `slice` 改小。
 
-建議下一個任務先確認的設計：
+後續已落地的設計方向：
 
 1. 初始只抓 workspace metadata、總筆數與目前頁所需 records。
 2. 頁碼或每頁列數改變時，以穩定排序欄位取得對應範圍，並快取已讀頁。
