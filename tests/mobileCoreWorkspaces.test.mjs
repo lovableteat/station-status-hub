@@ -46,7 +46,7 @@ test("maintenance center switches compact layouts to a scrollable module toolbar
   assert.match(sidebar, /overflow-x-auto/);
   assert.match(sidebar, /aria-current=\{isActive \? "page"/);
   assert.match(scopeBar, /grid-cols-\[minmax\(0,1fr\)_auto\]/);
-  assert.match(scopeBar, /grid-cols-3/);
+  assert.match(scopeBar, /data-mobile-project-primary-actions="true"/);
   assert.match(hook, /COMPACT_LAYOUT_BREAKPOINT = 1024/);
   assert.match(hook, /useIsCompactLayout/);
 });
@@ -66,7 +66,9 @@ test("AI query workspace uses the available mobile height and keeps every compos
   assert.match(consoleSource, /最近對話/);
   assert.match(consoleSource, /fixed inset-x-3[\s\S]*lg:static/);
   assert.match(consoleSource, /grid-cols-\[44px_minmax\(0,1fr\)_44px\]/);
-  assert.match(consoleSource, /min-h-11 max-h-28/);
+  assert.match(consoleSource, /data-mobile-ai-command-bar="true"/);
+  assert.match(consoleSource, /data-mobile-ai-composer="true"/);
+  assert.match(consoleSource, /min-h-10 max-h-24/);
   assert.match(consoleSource, /輸入問題，或貼上圖片／文件/);
   assert.match(consoleSource, /開啟共享提示詞庫/);
   assert.match(consoleSource, /aria-label="上傳 PDF、PPT、Excel、Word 或圖片"/);
@@ -93,7 +95,7 @@ test("direct chat becomes full-screen on phones and respects the keyboard safe a
   ]);
 
   assert.match(center, /fixed inset-0 flex h-\[100dvh\] w-screen/);
-  assert.match(center, /bottom-\[calc\(5\.25rem\+env\(safe-area-inset-bottom\)\)\]/);
+  assert.match(center, /bottom-\[calc\(var\(--mobile-shell-bottom\)\+0\.5rem\)\]/);
   assert.match(panel, /env\(safe-area-inset-bottom\)/);
   assert.match(panel, /aria-label="加入圖片或影片"/);
   assert.match(panel, /accept=\{CHAT_MEDIA_ACCEPT\}/);

@@ -1940,23 +1940,23 @@ function ModelLibrary({
     >
       <DialogContent
         data-model-catalog="bright-catalog"
-        className="flex h-[min(90dvh,860px)] w-[min(96vw,1120px)] max-w-none flex-col gap-0 overflow-hidden rounded-[28px] border border-slate-600/75 bg-[#08131f] p-0 text-slate-100 shadow-[0_38px_120px_-38px_rgba(2,8,23,0.95)] sm:max-w-[1120px]"
+        className="flex h-[min(76dvh,640px)] w-[min(96vw,1120px)] max-w-none flex-col gap-0 overflow-hidden rounded-2xl border border-slate-600/75 bg-[#08131f] p-0 text-slate-100 shadow-[0_38px_120px_-38px_rgba(2,8,23,0.95)] sm:h-[min(90dvh,860px)] sm:max-w-[1120px] sm:rounded-[28px]"
       >
-        <DialogHeader className="shrink-0 border-b border-slate-700/80 bg-[linear-gradient(135deg,#12283d,#0b1827)] px-6 py-5 pr-14 text-left">
+        <DialogHeader className="shrink-0 border-b border-slate-700/80 bg-[linear-gradient(135deg,#12283d,#0b1827)] px-3 py-3 pr-12 text-left sm:px-6 sm:py-5 sm:pr-14">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[14px] border border-amber-300/35 bg-amber-300/12 text-amber-200 shadow-[0_12px_30px_-18px_rgba(251,191,36,0.75)]">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-amber-300/35 bg-amber-300/12 text-amber-200 shadow-[0_12px_30px_-18px_rgba(251,191,36,0.75)] sm:h-11 sm:w-11 sm:rounded-[14px]">
               <Boxes className="h-5 w-5" />
             </div>
             <div>
-              <DialogTitle className="text-xl font-black tracking-[-0.025em] text-white">模型目錄</DialogTitle>
-              <DialogDescription className="mt-1 text-sm leading-5 text-slate-300">
+              <DialogTitle className="text-base font-black tracking-[-0.025em] text-white sm:text-xl">模型目錄</DialogTitle>
+              <DialogDescription className="mt-0.5 hidden text-sm leading-5 text-slate-300 sm:block">
                 管理機櫃外框與櫃內設備，並安裝到 {selectedRack.cabinet} 的指定 U 位。
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="flex shrink-0 gap-2 border-b border-slate-700/70 bg-[#0a1624] px-6 py-3" role="tablist" aria-label="模型目錄工作模式">
+        <div className="flex shrink-0 gap-2 border-b border-slate-700/70 bg-[#0a1624] px-3 py-2 sm:px-6 sm:py-3" role="tablist" aria-label="模型目錄工作模式">
           {([
             ["browse", "瀏覽與套用"],
             ["import", "匯入新模型"],
@@ -3867,15 +3867,15 @@ export function DeploymentPlanningCenter() {
           onChange={handleImportFile}
         />
 
-        <header className="relative z-20 flex shrink-0 items-center gap-2 border-b border-cyan-300/14 bg-[linear-gradient(90deg,#071420,#081928_48%,#07131e)] px-3 py-2 sm:flex-wrap sm:gap-3 sm:px-5 sm:py-3 lg:h-[68px] lg:flex-nowrap lg:px-6 lg:py-0">
+        <header data-mobile-data-center-header="true" className="relative z-20 flex min-h-12 shrink-0 items-center gap-2 border-b border-cyan-300/14 bg-[linear-gradient(90deg,#071420,#081928_48%,#07131e)] px-2 py-1.5 sm:flex-wrap sm:gap-3 sm:px-5 sm:py-3 lg:h-[68px] lg:flex-nowrap lg:px-6 lg:py-0">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-300/15 text-cyan-100 sm:h-11 sm:w-11">
+            <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-300/15 text-cyan-100 sm:h-11 sm:w-11 sm:rounded-xl">
               <Boxes className="h-5 w-5" />
               <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#071420] bg-emerald-400" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-base font-black tracking-[-0.025em] text-white sm:text-[22px]">Data Center Digital Twin</h1>
+                <h1 className="truncate text-sm font-black tracking-[-0.025em] text-white sm:text-[22px]">Data Center Digital Twin</h1>
                 <Badge className="hidden border-emerald-300/20 bg-emerald-400/10 text-[10px] font-bold text-emerald-100 shadow-none sm:inline-flex">LIVE</Badge>
               </div>
               <p className="mt-1 hidden truncate text-[11px] font-semibold text-cyan-100/70 sm:block">Physical rack operations · millimeter calibrated</p>
@@ -4289,16 +4289,15 @@ export function DeploymentPlanningCenter() {
           <div
             data-testid="data-center-touch-help"
             className={cn("pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full border border-cyan-200/20 bg-[#06111d]/88 px-3 py-1.5 text-[11px] font-semibold text-cyan-50 shadow-xl backdrop-blur-xl", workspaceMode !== "3d" && "hidden")}
-            style={{ bottom: "calc(max(0.75rem, env(safe-area-inset-bottom)) + 4.5rem)" }}
+            style={{ bottom: "0.75rem" }}
           >
             單指旋轉 · 雙指縮放／平移
           </div>
 
           <nav
-            data-testid="data-center-mobile-dock"
+            data-mobile-data-center-controls="true"
             aria-label="Data-center 手機操作"
-            className={cn("absolute inset-x-3 z-30 flex items-stretch gap-1 rounded-2xl border border-cyan-200/20 bg-[#06111d]/94 p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl", workspaceMode !== "3d" && "hidden")}
-            style={{ bottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+            className={cn("absolute right-2 top-2 z-30 flex items-center gap-1 rounded-xl border border-cyan-200/20 bg-[#06111d]/94 p-1 shadow-[0_14px_36px_rgba(0,0,0,0.58)] backdrop-blur-xl", workspaceMode !== "3d" && "hidden")}
           >
             {[
               {
@@ -4337,12 +4336,12 @@ export function DeploymentPlanningCenter() {
                   aria-label={action.label}
                   onClick={action.onClick}
                   className={cn(
-                    "flex min-h-12 min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-bold text-cyan-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200",
+                    "flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg text-cyan-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200",
                     "hover:bg-cyan-300/12 active:bg-cyan-300/20"
                   )}
                 >
                   <ActionIcon className="h-[18px] w-[18px]" />
-                  <span>{action.label}</span>
+                  <span className="sr-only">{action.label}</span>
                 </button>
               );
             })}

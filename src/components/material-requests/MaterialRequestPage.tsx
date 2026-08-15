@@ -5764,30 +5764,41 @@ export function MaterialRequestPage() {
         data-testid="material-mobile-command-center"
         className="overflow-hidden rounded-2xl border border-cyan-200/25 bg-[radial-gradient(circle_at_0%_0%,rgba(34,211,238,0.16),transparent_16rem),radial-gradient(circle_at_100%_100%,rgba(251,191,36,0.09),transparent_14rem),#0d2033] shadow-[0_20px_46px_-32px_rgba(34,211,238,0.75)] lg:hidden"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-cyan-200/10 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2 border-b border-cyan-200/10 px-2.5 py-2">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black text-white">料號快查</h1>
-              <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-black", collaborationStatusMeta.badgeClassName)}>
+              <h1 className="text-base font-black text-white">料號快查</h1>
+              <span className={cn("inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-black", collaborationStatusMeta.badgeClassName)}>
                 <span className={cn("h-1.5 w-1.5 rounded-full", collaborationStatusMeta.dotClassName)} />
                 {collaborationStatusMeta.label}
               </span>
             </div>
-            <p className="mt-0.5 truncate text-xs text-slate-400">{activeWorkspace.name}</p>
+            <p className="max-w-[48vw] truncate text-[11px] text-slate-400">{activeWorkspace.name}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setBomManagerOpen(true)}
-            className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-violet-300/30 bg-violet-400/12 px-3 text-xs font-black text-violet-100"
-          >
-            <Layers3 className="h-4 w-4" />{bomWorkspaces.length} BOM
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setBomManagerOpen(true)}
+              className="flex h-11 items-center gap-1.5 rounded-xl border border-violet-300/30 bg-violet-400/12 px-2.5 text-[11px] font-black text-violet-100"
+            >
+              <Layers3 className="h-4 w-4" />{bomWorkspaces.length} BOM
+            </button>
+            <Button
+              type="button"
+              onClick={() => openCreate()}
+              disabled={!isCollaborativeReady || !isFullDatasetLoaded}
+              aria-label="新增料號"
+              className="h-11 w-11 rounded-xl bg-[linear-gradient(135deg,#bef264,#67e8f9)] p-0 text-[#062230] disabled:opacity-50"
+            >
+              <Plus className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
 
-        <div className="space-y-2.5 p-3">
+        <div data-mobile-material-primary-controls="true" className="space-y-2 p-2.5">
           <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-cyan-300" />
               <Input
                 value={searchDraft}
                 onChange={(event) => {
@@ -5809,39 +5820,35 @@ export function MaterialRequestPage() {
                 enterKeyHint="search"
                 placeholder="掃料名、MPN、REF DES、內部料號"
                 aria-label="快速搜尋料號"
-                className="h-12 rounded-xl border-cyan-300/35 bg-[#071522] pl-11 pr-3 text-base text-white placeholder:text-slate-500 focus-visible:ring-cyan-300"
+                className="h-11 rounded-xl border-cyan-300/35 bg-[#071522] pl-10 pr-3 text-base text-white placeholder:text-slate-500 focus-visible:ring-cyan-300"
               />
             </div>
             <Button
               type="button"
               onClick={() => void applySearch()}
               aria-label={isSearchPending ? "搜尋中" : "搜尋"}
-              className="h-12 w-11 rounded-xl bg-cyan-300 p-0 text-[#062230] hover:bg-cyan-200"
+              className="h-11 w-11 rounded-xl bg-cyan-300 p-0 text-[#062230] hover:bg-cyan-200"
             >
               {isSearchPending ? <RotateCcw className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
             </Button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <button type="button" onClick={clearFilters} className={cn("h-11 rounded-xl border px-2 text-xs font-black", availability === "all" && !showMarkedOnly ? "border-sky-200/50 bg-sky-300 text-sky-950" : "border-sky-300/20 bg-sky-400/10 text-sky-100")}>全部 {dataset.stats.totalGroups.toLocaleString()}</button>
-            <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("h-11 rounded-xl border px-2 text-xs font-black", availability === "required" ? "border-amber-200/60 bg-amber-300 text-amber-950" : "border-amber-300/25 bg-amber-400/10 text-amber-100")}>待申請 {requiredApplicationCount.toLocaleString()}</button>
-            <button type="button" onClick={() => setShowMarkedOnly((current) => !current)} className={cn("h-11 rounded-xl border px-2 text-xs font-black", showMarkedOnly ? "border-lime-200/60 bg-lime-300 text-lime-950" : "border-lime-300/20 bg-lime-400/10 text-lime-100")}><Star className={cn("mr-1 inline h-3.5 w-3.5", showMarkedOnly && "fill-current")} />標記 {markedGroupCount}</button>
+          <div className="flex snap-x gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button type="button" onClick={clearFilters} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", availability === "all" && !showMarkedOnly ? "border-sky-200/50 bg-sky-300 text-sky-950" : "border-sky-300/20 bg-sky-400/10 text-sky-100")}>全部 {dataset.stats.totalGroups.toLocaleString()}</button>
+            <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", availability === "required" ? "border-amber-200/60 bg-amber-300 text-amber-950" : "border-amber-300/25 bg-amber-400/10 text-amber-100")}>待申請 {requiredApplicationCount.toLocaleString()}</button>
+            <button type="button" onClick={() => setShowMarkedOnly((current) => !current)} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", showMarkedOnly ? "border-lime-200/60 bg-lime-300 text-lime-950" : "border-lime-300/20 bg-lime-400/10 text-lime-100")}><Star className={cn("mr-1 inline h-3.5 w-3.5", showMarkedOnly && "fill-current")} />標記 {markedGroupCount}</button>
           </div>
 
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-            <Select value={sortMode} onValueChange={(value) => { setSortMode(value as SortMode); setPage(1); }}>
-              <SelectTrigger aria-label="料號排序" className="h-11 rounded-xl border-slate-600/70 bg-[#071522] text-sm text-slate-100"><SelectValue /></SelectTrigger>
-              <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">{Object.entries(SORT_MODE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
-            </Select>
-            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady || !isFullDatasetLoaded} className="h-11 rounded-xl bg-[linear-gradient(135deg,#bef264,#67e8f9)] px-4 font-black text-[#062230] disabled:opacity-50"><Plus className="mr-1.5 h-4 w-4" />新增</Button>
-          </div>
-
-          <details className="group rounded-xl border border-slate-600/60 bg-slate-950/25 [&_summary::-webkit-details-marker]:hidden">
+          <details data-mobile-material-tools="true" className="group rounded-xl border border-slate-600/60 bg-slate-950/25 [&_summary::-webkit-details-marker]:hidden">
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-sm font-black text-slate-200">
-              <span className="flex min-w-0 items-center gap-2"><Layers3 className="h-4 w-4 text-violet-200" /><span className="truncate">BOM 與工具</span></span>
-              <span className="flex items-center gap-2 text-xs text-slate-400">完成 {activePageTrackerSummary.completedPages}/{activePageTrackerSummary.totalPages || "-"} 頁<ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></span>
+              <span className="flex min-w-0 items-center gap-2"><Layers3 className="h-4 w-4 text-violet-200" /><span className="truncate">排序與工具</span></span>
+              <span className="flex items-center gap-2 text-[11px] text-slate-400">{SORT_MODE_LABELS[sortMode]}<ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></span>
             </summary>
             <div className="grid grid-cols-2 gap-2 border-t border-white/8 p-2.5">
+              <Select value={sortMode} onValueChange={(value) => { setSortMode(value as SortMode); setPage(1); }}>
+                <SelectTrigger aria-label="料號排序" className="col-span-2 h-11 rounded-xl border-slate-600/70 bg-[#071522] text-sm text-slate-100"><SelectValue /></SelectTrigger>
+                <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">{Object.entries(SORT_MODE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+              </Select>
               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
               <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
               <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
@@ -6294,7 +6301,7 @@ export function MaterialRequestPage() {
         </div>
         </div>
 
-        <div className="space-y-2.5 p-2.5 lg:hidden" data-testid="material-mobile-cards">
+        <div className="space-y-2 p-2 lg:hidden" data-testid="material-mobile-cards">
           {visibleGroupRows.map(({ group, primaryAlternative, trackingRecord, secondaryAlternatives }, rowIndex) => {
             const expanded = expandedKey === group.key;
             const mainRecord = primaryAlternative ?? group.primaryRecord;
@@ -6307,11 +6314,11 @@ export function MaterialRequestPage() {
               <article
                 key={group.key}
                 className={cn(
-                  "overflow-hidden rounded-2xl border bg-[linear-gradient(145deg,rgba(16,38,58,0.98),rgba(8,24,40,0.98))] shadow-[0_18px_40px_-30px_rgba(34,211,238,0.7)]",
+                  "overflow-hidden rounded-xl border bg-[linear-gradient(145deg,rgba(16,38,58,0.98),rgba(8,24,40,0.98))] shadow-[0_18px_40px_-30px_rgba(34,211,238,0.7)]",
                   mustApply ? "border-amber-300/35" : "border-cyan-200/20",
                 )}
               >
-                <div className="flex items-start gap-3 p-3.5">
+                <div className="flex items-start gap-2.5 p-2.5">
                   <button
                     type="button"
                     onClick={() => toggleMarkedGroup(group.key)}
@@ -6325,40 +6332,40 @@ export function MaterialRequestPage() {
                     {itemValue}
                   </button>
                   <button type="button" onClick={() => openRecord(mainRecord, "view")} className="min-w-0 flex-1 text-left">
-                    <p className="line-clamp-2 text-base font-black leading-6 text-white">{group.name || mainRecord.description || "未命名料件"}</p>
-                    <p className="mt-1 truncate text-xs font-semibold text-cyan-200">{getDisplayMpn(mainRecord) || "尚未填寫 MPN"}</p>
-                    <p className="mt-1 truncate text-xs text-slate-400">{mainRecord.manufacturer || "未指定廠商"}</p>
+                    <p className="line-clamp-2 text-sm font-black leading-5 text-white">{group.name || mainRecord.description || "未命名料件"}</p>
+                    <p className="mt-0.5 truncate text-xs font-semibold text-cyan-200">{getDisplayMpn(mainRecord) || "尚未填寫 MPN"}</p>
+                    <p className="truncate text-[11px] text-slate-400">{mainRecord.manufacturer || "未指定廠商"}</p>
                   </button>
                   <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-500" />
                 </div>
 
-                <div className="space-y-2 border-y border-white/5 bg-[#091827]/85 px-3 py-2.5 text-xs">
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className={cn("rounded-full border px-2 py-1 font-black", mustApply ? "border-amber-300/35 bg-amber-400/12 text-amber-100" : "border-emerald-300/30 bg-emerald-400/10 text-emerald-100")}>{mustApply ? "需要申請" : mainRecord.sourcingStatus || "資料可用"}</span>
-                    <span className={cn("rounded-full border px-2 py-1 font-bold", availableAlternativeCount > 0 ? "border-emerald-300/25 bg-emerald-400/8 text-emerald-200" : "border-slate-500/25 bg-slate-800/40 text-slate-300")}>替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
-                  </div>
-                  <p className="truncate text-slate-400"><span className="mr-1.5 font-bold text-slate-500">REF</span><span className="text-slate-200">{mainRecord.refDes || mainRecord.refGroup || "-"}</span></p>
-                  <p className="truncate text-slate-400"><span className="mr-1.5 font-bold text-slate-500">內部料號</span><span className="text-slate-200">{mainRecord.partNumber || "未建立"}</span></p>
+                <div className="flex items-center gap-1.5 overflow-x-auto border-y border-white/5 bg-[#091827]/85 px-2.5 py-2 text-[11px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <span className={cn("shrink-0 rounded-full border px-2 py-1 font-black", mustApply ? "border-amber-300/35 bg-amber-400/12 text-amber-100" : "border-emerald-300/30 bg-emerald-400/10 text-emerald-100")}>{mustApply ? "需要申請" : mainRecord.sourcingStatus || "資料可用"}</span>
+                  <span className="max-w-[11rem] shrink-0 truncate rounded-full border border-slate-500/20 bg-slate-800/35 px-2 py-1 text-slate-200">REF {mainRecord.refDes || mainRecord.refGroup || "-"}</span>
+                  <span className={cn("shrink-0 rounded-full border px-2 py-1 font-bold", availableAlternativeCount > 0 ? "border-emerald-300/25 bg-emerald-400/8 text-emerald-200" : "border-slate-500/25 bg-slate-800/40 text-slate-300")}>替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
                 </div>
 
-                {expanded && secondaryAlternatives.length > 0 ? (
+                {expanded ? (
                   <div className="space-y-2 border-b border-cyan-200/10 bg-[#071522] p-3">
-                    {secondaryAlternatives.map((record) => (
+                    {secondaryAlternatives.length ? secondaryAlternatives.map((record) => (
                       <button key={record.id} type="button" onClick={() => openRecord(record, "view")} className="flex w-full items-center gap-3 rounded-xl border border-violet-300/15 bg-violet-400/[0.07] px-3 py-2.5 text-left">
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-300/15 text-xs font-black text-violet-100">ALT</span>
                         <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{getDisplayMpn(record) || "未填 MPN"}</strong><span className="mt-0.5 block truncate text-xs text-slate-400">{record.manufacturer || "未指定廠商"}</span></span>
                         <ChevronRight className="h-4 w-4 text-violet-200" />
                       </button>
-                    ))}
+                    )) : <p className="rounded-lg border border-dashed border-slate-600/50 px-3 py-2 text-xs text-slate-400">目前沒有替代料</p>}
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button type="button" variant="outline" size="sm" disabled={!trackingRecord} onClick={() => trackingRecord && openTrackingDialog(trackingRecord)} className="h-11 rounded-xl border-emerald-300/25 bg-emerald-400/10 px-2 text-emerald-100">狀態追蹤</Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => openRecord(mainRecord, "view")} className="h-11 rounded-xl border-slate-400/25 bg-slate-400/10 px-2 text-slate-100">完整資料</Button>
+                    </div>
                   </div>
                 ) : null}
 
-                <div className="grid grid-cols-3 gap-2 p-2.5">
-                  <Button type="button" variant="outline" size="sm" disabled={secondaryAlternatives.length === 0} onClick={() => toggleExpanded(group.key)} className="h-11 rounded-xl border-violet-300/25 bg-violet-400/10 px-2 text-violet-100">
-                    {expanded ? <ChevronDown className="mr-1 h-4 w-4" /> : <ChevronRight className="mr-1 h-4 w-4" />}替代料
+                <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-2 p-2">
+                  <Button type="button" size="sm" onClick={() => openCreate(group)} className="h-11 rounded-xl bg-cyan-300 px-3 font-black text-[#062230] hover:bg-cyan-200"><Plus className="mr-1 h-4 w-4" />更新料號</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => toggleExpanded(group.key)} aria-expanded={expanded} className="h-11 rounded-xl border-violet-300/25 bg-violet-400/10 px-2 text-violet-100">
+                    {expanded ? <ChevronDown className="mr-1 h-4 w-4" /> : <ChevronRight className="mr-1 h-4 w-4" />}更多
                   </Button>
-                  <Button type="button" variant="outline" size="sm" disabled={!trackingRecord} onClick={() => trackingRecord && openTrackingDialog(trackingRecord)} className="h-11 rounded-xl border-emerald-300/25 bg-emerald-400/10 px-2 text-emerald-100">追蹤</Button>
-                  <Button type="button" size="sm" onClick={() => openCreate(group)} className="h-11 rounded-xl bg-cyan-300 px-2 font-black text-[#062230] hover:bg-cyan-200"><Plus className="mr-1 h-4 w-4" />更新</Button>
                 </div>
               </article>
             );

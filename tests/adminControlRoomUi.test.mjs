@@ -40,7 +40,8 @@ test("admin account cards distinguish last login from creation time and keep per
   assert.match(source, /className="flex min-w-0 flex-wrap justify-end gap-1\.5"/);
   assert.doesNotMatch(source, /className="[^"]*sm:shrink-0[^"]*"/);
   assert.match(source, /workspaceBadges\.length > 0 \? `\$\{workspaceBadges\.length\} 個工作區` : "未配置"/);
-  assert.match(source, /className="flex flex-col gap-3[^\"]*sm:flex-row[^\"]*sm:justify-between"/);
+  assert.match(source, /data-mobile-user-summary="true"/);
+  assert.match(source, /className="admin-account-summary flex flex-col gap-4[^\"]*lg:flex-row[^\"]*lg:justify-between"/);
 });
 
 test("admin workspace exposes clear visual zones without changing user actions", async () => {

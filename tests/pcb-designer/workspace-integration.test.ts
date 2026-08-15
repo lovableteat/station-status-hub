@@ -192,10 +192,11 @@ test("replaces the loading shell with one native three-area PCB workbench", asyn
   assert.match(dialogsSource, /import-preview/i);
   assert.match(stylesSource, /#06111f/i);
   assert.match(stylesSource, /@media \(max-width: 1279px\)[\s\S]*pcb-left-drawer[\s\S]*position:\s*absolute/i);
-  assert.match(stylesSource, /@media \(max-width: 767px\)[\s\S]*pcb-mobile-advisory/i);
+  assert.match(stylesSource, /@media \(max-width: 1023px\)[\s\S]*--mobile-shell-bottom/i);
   assert.match(stylesSource, /\.pcb-toolbar\s*\{[\s\S]{0,220}overflow-x:\s*auto/);
   assert.match(stylesSource, /\.pcb-layer-control\s*\{[\s\S]{0,240}flex:\s*0 0 auto/);
-  assert.match(workspaceSource, /建議使用桌面進行精細佈局/);
+  assert.match(workspaceSource, /data-mobile-pcb-command-bar="true"/);
+  assert.doesNotMatch(workspaceSource, /建議使用桌面進行精細佈局/);
 
   const combined = [
     workspaceSource,

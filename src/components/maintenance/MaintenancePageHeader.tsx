@@ -20,26 +20,26 @@ export function MaintenancePageHeader({
   return (
     <header
       className={cn(
-        "flex min-h-12 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
+        "flex min-h-11 items-center justify-between gap-2 sm:min-h-12 sm:gap-3",
         className
       )}
     >
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         {Icon && (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cyan-300/30 bg-cyan-300/10 text-cyan-100">
-            <Icon className="h-5 w-5" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-cyan-300/30 bg-cyan-300/10 text-cyan-100 sm:h-10 sm:w-10">
+            <Icon className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="truncate text-xl font-semibold tracking-[-0.02em] text-[#f3f8fc] sm:text-2xl">
+          <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-[#f3f8fc] sm:text-2xl">
             {title}
           </h1>
           {description && (
-            <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-[#a9c0d1] sm:truncate sm:text-sm">{description}</p>
+            <p className="mt-0.5 hidden truncate text-sm text-[#a9c0d1] sm:block">{description}</p>
           )}
         </div>
       </div>
-      {actions && <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-wrap">{actions}</div>}
+      {actions && <div data-maintenance-page-actions="true" className="flex max-w-[52%] shrink-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:w-auto sm:max-w-none sm:flex-wrap sm:gap-2">{actions}</div>}
     </header>
   );
 }
