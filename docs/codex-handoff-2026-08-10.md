@@ -167,3 +167,28 @@ For each completed task:
 5. Confirm the remote `main` SHA matches the local commit.
 6. Wait for GitHub Pages deployment and verify the production page.
 7. Report the commit SHA, remote push result, tests, build, and deployed behavior.
+
+## Latest delivery - 2026-08-20
+
+The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 fix: rebuild core mobile workflows` is pushed to `origin/main`, and GitHub Pages deployment `#522` completed successfully.
+
+### Mobile experience completed
+
+- AI 查詢頁改成手機優先的訊息區：對話內容先呈現，模型、歷史、新對話、資料來源、專案範圍與附件入口集中成可觸控工具列，輸入列固定在可用空間底部。
+- AI 查詢頁在 360、390、430、768px 寬度完成畫面檢查，對話區約為 419、463、551px（依視窗高度變化），沒有水平溢出或被底部聊天室遮住的情況。
+- 機台維修紀錄中心的資料來源改為單列精簡工具列，專案範圍保留在彈出面板內，手機與平板按鈕維持至少 44px 觸控尺寸。
+- 料號申請頁、聊天室與詳情／編輯對話框完成手機尺寸檢查；對話框層級高於手機底部工作列，平板聊天室與底部工作列保留安全間距。
+- 通知改放在手機左側窄版提示區，保留右上角 QR、個人帳號與主要操作的可用空間。
+
+### Verification
+
+- 相關 focused tests：41/41 通過。
+- 手機／協作／通知相關測試：16/16 通過。
+- `pnpm build` 通過，修改檔案的 ESLint 通過。
+- 全量測試為 402/405 通過；剩餘 3 個是未涉及本次修改的既有失敗：Data Center compact navigator、dynamic system metadata migration、Supabase quota error wording。
+- 部署網址 `https://lovableteat.github.io/station-status-hub/` 回傳最新 JavaScript／CSS 資產；390px 寬度實際載入檢查沒有水平溢出。未登入部署環境時會正確停在登入殼層，需登入後才能驗證權限工作區內頁。
+
+### Repository state
+
+- `main` 與 `origin/main` 同步於 `98b6c14`。
+- 既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案仍未追蹤，刻意保留且未加入提交。
