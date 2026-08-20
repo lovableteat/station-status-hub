@@ -1,75 +1,76 @@
-# Welcome to your Lovable project
+# 工作整合平台
 
-## Project info
+工作整合平台（Station Status Hub）是給測試站與硬體團隊使用的整合工作區，集中管理機台維修紀錄、測試流程、料號與 BOM、Data Center、PCB Designer、後台管理、AI 資料查詢和即時協作。
 
-**URL**: https://lovable.dev/projects/d725c24b-7221-4682-9ef6-c81ab16d320a
+## 從哪裡開始
 
-## How can I edit this code?
+- 架構與開發交接：[`docs/architecture.md`](./docs/architecture.md)
+- 最新交接紀錄：[`docs/codex-handoff-2026-08-10.md`](./docs/codex-handoff-2026-08-10.md)
+- 線上版本：[`GitHub Pages`](https://lovableteat.github.io/station-status-hub/)
 
-There are several ways of editing your application.
+第一次接手時，先看架構文件的「目錄地圖」、「Workspace 與 module」、「Provider 與資料流」和「新功能開發流程」，再進入對應功能目錄。不要從單一畫面元件直接猜資料來源或權限規則。
 
-**Use Lovable**
+## 本機開發
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/d725c24b-7221-4682-9ef6-c81ab16d320a) and start prompting.
+需求：Node.js 20 以上與 npm。
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Vite 預設在 `http://localhost:8080/station-status-hub/` 啟動。若本機已經有其他服務使用 8080，再依 Vite 顯示的實際網址開啟。
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 功能入口
 
-**Use GitHub Codespaces**
+| 工作區 | 內容 |
+| --- | --- |
+| 機台維修紀錄中心 | 儀表板、測試流程、問題追蹤、監控與工具 |
+| 料號申請 | BOM、料號、替代料、供應商明細、匯入匯出與 audit |
+| Data Center | 機櫃、設備、部署規劃與 2D / 3D 檢視 |
+| PCB Designer | PCB 專案、2D 編輯、3D 檢視、元件、禁制區與 BOM |
+| 後台管理 | 使用者、協作公告、API 金鑰、API 測試與權限 |
+| 資料查詢空間 | AI 對話、附件、知識搜尋與引用來源 |
+| 全站聊天室 | 跨工作區即時協作與私訊 |
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+主 workspace 使用 URL query 維持狀態，例如 `workspace=pcb-designer&module=pcb-designer`。真正的路由、權限和頁面分派請看 [`src/pages/Index.tsx`](./src/pages/Index.tsx) 與 [`src/lib/workspacePermissions.ts`](./src/lib/workspacePermissions.ts)。
 
-## What technologies are used for this project?
+## 技術組成
 
-This project is built with:
+- React 18、TypeScript、Vite、Tailwind CSS、shadcn/ui。
+- React Query：伺服器資料快取與 mutation 狀態。
+- Supabase：Auth、Postgres、RLS、Realtime、Storage 與 Edge Functions。
+- Three.js / React Three Fiber / WebGL：Data Center 與 PCB 3D 視圖。
+- ExcelJS / XLSX：BOM 與試算表匯入匯出。
+- TipTap：維修與問題內容編輯器。
+- GitHub Actions + GitHub Pages：`main` push 後自動建置部署。
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+完整資料流、目錄邊界、RWD 規則、PCB core、模型轉換、Supabase migration 和排錯方式都集中在 [`docs/architecture.md`](./docs/architecture.md)。
 
-## How can I deploy this project?
+## 常用檢查
 
-Simply open [Lovable](https://lovable.dev/projects/d725c24b-7221-4682-9ef6-c81ab16d320a) and click on Share -> Publish.
+```bash
+npm run lint
+pnpm exec tsc --noEmit
+npm run build
+pnpm test:pcb
+```
 
-## Can I connect a custom domain to my Lovable project?
+修改工作區後，至少要測試桌面、手機直向、手機橫向與平板；並實際操作上傳、下載、刪除、編輯、搜尋、返回、聊天室、2D / 3D 切換和重新載入。只確認 TypeScript 通過，不代表操作流程完成。
 
-Yes, you can!
+## 資料庫與環境變數
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+資料庫變更放在 [`supabase/migrations`](./supabase/migrations)，依時間戳順序管理 schema、RLS、RPC 與 realtime。正式環境不要 reset 或重播歷史 migration。
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+前端只使用 Supabase publishable anon key。請透過本機 `.env` 或 GitHub Actions secrets 提供設定，絕不提交 service role key、API provider secret、使用者密碼或未遮罩的金鑰。
 
-000
+## 提交流程
+
+1. 先確認 workspace、module、權限與資料來源，再開始改元件。
+2. 複雜資料轉換先放在可測試的 `core` 或 `lib`，不要塞進 JSX。
+3. 補上 loading、empty、error、success、disabled 和手機操作狀態。
+4. 執行 lint、typecheck、build 和相關測試。
+5. 用 `git diff --check`、`git status` 確認沒有把 `tmp/`、`.preview-current`、`supabase/.temp` 或模型轉換暫存檔提交。
+6. 推送 `main` 後等待 GitHub Actions，確認 GitHub Pages 建置與線上入口可用。
+
+更多協作與安全規則請直接閱讀 [`docs/architecture.md`](./docs/architecture.md)。
