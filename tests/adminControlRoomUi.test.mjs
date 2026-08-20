@@ -83,11 +83,15 @@ test("admin dialogs and API console use the restrained maintenance color system"
   assert.match(apiPage, /className="admin-api-workspace"/);
   assert.match(apiPage, /className="admin-api-hero"/);
   assert.match(apiPage, /admin-api-context-grid/);
-  assert.match(apiPage, /admin-api-feature-grid/);
+  assert.match(apiPage, /admin-api-hero-title/);
+  assert.match(apiPage, /admin-api-security-status/);
+  assert.doesNotMatch(apiPage, /admin-api-feature-grid|summaryCards/);
   assert.match(styles, /\.admin-api-workspace/);
   assert.match(styles, /\.admin-api-card/);
   assert.match(styles, /\.admin-api-primary-action/);
   assert.match(styles, /\.admin-api-table-scroll/);
+  assert.match(styles, /\.admin-api-hero-main\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*space-between;/s);
+  assert.match(styles, /\.admin-api-hero-copy p\s*\{[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/s);
   assert.match(styles, /\.admin-permissions-dialog\s*\{[^}]*width:\s*min\(1160px, calc\(100vw - 24px\)\);[^}]*max-height:\s*min\(780px, calc\(100dvh - 24px\)\);/s);
   assert.match(styles, /\.admin-permissions-layout/);
   assert.match(styles, /@container \(min-width: 900px\)/);
