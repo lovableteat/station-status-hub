@@ -170,7 +170,7 @@ For each completed task:
 
 ## Latest delivery - 2026-08-20
 
-The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 fix: rebuild core mobile workflows` is pushed to `origin/main`, and GitHub Pages deployment `#522` completed successfully.
+The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 fix: rebuild core mobile workflows` and the later mobile workspace integration commits (`db249e9`, `fd384fa`, `f936736`) are present on the current delivery line. GitHub Pages deployment `#522` for the core rebuild completed successfully.
 
 ### Mobile experience completed
 
@@ -182,10 +182,10 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 
 ### Verification
 
-- 相關 focused tests：41/41 通過。
-- 手機／協作／通知相關測試：16/16 通過。
-- `pnpm build` 通過，修改檔案的 ESLint 通過。
-- 全量測試為 402/405 通過；剩餘 3 個是未涉及本次修改的既有失敗：Data Center compact navigator、dynamic system metadata migration、Supabase quota error wording。
+- 整合後手機／工作區／協作／通知 focused tests：36/36 通過。
+- `pnpm build` 通過（3490 modules transformed）。
+- 本次涉及頁面的 scoped ESLint 通過；全域 ESLint 現況為 109 errors、29 warnings，主要是專案既有的 `any` 與規則技術債，並非本次交接文件造成。
+- 全量測試為 407/410 通過；剩餘 3 個是未涉及本次修改的既有失敗：automatic recovery lock expiry、dynamic system metadata migration、Supabase quota error wording。
 - 部署網址 `https://lovableteat.github.io/station-status-hub/` 回傳最新 JavaScript／CSS 資產；390px 寬度實際載入檢查沒有水平溢出。未登入部署環境時會正確停在登入殼層，需登入後才能驗證權限工作區內頁。
 
 ### Repository state
