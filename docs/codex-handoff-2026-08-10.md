@@ -326,3 +326,15 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 
 - 本輪只應提交 PCB Designer core、renderer、Inspector、共享元件 migration、PCB tests 與本文件／架構指南。
 - 既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤，不可一併加入。
+
+### Latest delivery - 2026-08-20 PCB type-safety audit
+
+完成 PCB Designer 的專屬 TypeScript 稽核，處理先前全專案 typecheck 顯示的六個 PCB 錯誤：模型 metadata 數值縮窄、專案板框正規化、旋轉放置選項、圓形元件 pointer event，以及選取複製按鈕的事件簽名。這些修改只修正型別邊界，不改動既有專案、元件或模型資料。
+
+### PCB type-safety verification
+
+- PCB scoped TypeScript error filter：`0` 個錯誤。
+- PCB focused tests：`191/191` 通過。
+- 本輪四個修改檔案的 scoped ESLint 通過。
+- 本機瀏覽器實際操作：圓形 screw hole 可用 `R` 旋轉 90° 後放置、選取、複製，右側屬性顯示正確，切換 3D 後元件仍存在。
+- 全專案 typecheck 仍有 PCB 以外的既有 Supabase／後台／共用 hooks 型別技術債；PCB Designer 已不再出現在錯誤輸出。
