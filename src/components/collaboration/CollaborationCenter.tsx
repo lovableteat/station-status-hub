@@ -81,6 +81,7 @@ const moduleLabels: Record<string, string> = {
   "data-center": "Data-center",
   "pcb-designer": "PCB Designer",
   "ai-chat": "資料查詢空間",
+  performance: "績效考核系統",
 };
 
 const roleLabels: Record<string, string> = {

@@ -22,7 +22,9 @@ export type Permission =
   | "pcb_designer_view"
   | "pcb_designer_edit"
   | "test_plan_view"
-  | "test_plan_edit";
+  | "test_plan_edit"
+  | "performance_view"
+  | "performance_edit";
 
 export type WorkspaceId =
   | "station-status"
@@ -30,7 +32,8 @@ export type WorkspaceId =
   | "data-center"
   | "pcb-designer"
   | "user-management"
-  | "ai-chat";
+  | "ai-chat"
+  | "performance";
 
 export type WorkspaceAccessLevel = "none" | "view" | "edit";
 
@@ -41,6 +44,7 @@ export interface WorkspaceAccessMap {
   "pcb-designer": WorkspaceAccessLevel;
   "user-management": WorkspaceAccessLevel;
   "ai-chat": WorkspaceAccessLevel;
+  performance: WorkspaceAccessLevel;
 }
 
 export interface UserPermissionSettings {
@@ -55,6 +59,7 @@ export const DEFAULT_WORKSPACE_ACCESS: WorkspaceAccessMap = {
   "pcb-designer": "none",
   "user-management": "none",
   "ai-chat": "none",
+  performance: "none",
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceId, string> = {
@@ -64,6 +69,7 @@ export const WORKSPACE_LABELS: Record<WorkspaceId, string> = {
   "pcb-designer": "PCB Designer",
   "user-management": "後台管理",
   "ai-chat": "資料查詢空間",
+  performance: "績效考核系統",
 };
 
 export const WORKSPACE_IDS = Object.keys(WORKSPACE_LABELS) as WorkspaceId[];
@@ -84,6 +90,7 @@ export const MODULE_WORKSPACE_MAP: Partial<Record<string, WorkspaceId>> = {
   collaboration: "user-management",
   "api-management": "user-management",
   "ai-chat": "ai-chat",
+  performance: "performance",
 };
 
 export const MODULE_PERMISSION_PREFIX: Record<string, string> = {
@@ -103,6 +110,7 @@ export const MODULE_PERMISSION_PREFIX: Record<string, string> = {
   "data-center": "data_center",
   "pcb-designer": "pcb_designer",
   "test-plan": "test_plan",
+  performance: "performance",
 };
 
 export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
@@ -168,6 +176,13 @@ export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
       { key: "test_plan_edit", label: "管理 資料儲存" },
     ],
   },
+  performance: {
+    name: "績效考核系統",
+    permissions: [
+      { key: "performance_view", label: "檢視績效考核" },
+      { key: "performance_edit", label: "管理績效考核" },
+    ],
+  },
   api_management: {
     name: "API 管理",
     permissions: [
@@ -218,6 +233,7 @@ export function normalizeWorkspaceAccess(
     "pcb-designer": pcbAccess,
     "user-management": value?.["user-management"] ?? "none",
     "ai-chat": value?.["ai-chat"] ?? "none",
+    performance: value?.performance ?? "none",
   };
 }
 
@@ -278,6 +294,9 @@ export function readWorkspaceAccess(
     "ai-chat": hasOwn("ai-chat")
       ? normalized["ai-chat"]
       : getLegacyAccessLevel(permissions, ["comparison", "api_management"]),
+    performance: hasOwn("performance")
+      ? normalized.performance
+      : getLegacyAccessLevel(permissions, ["performance"]),
   };
 }
 

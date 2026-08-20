@@ -12,6 +12,7 @@ import {
   MessageSquareText,
   ServerCog,
   ShieldCheck,
+  Target,
   Wrench,
 } from "lucide-react";
 
@@ -65,6 +66,11 @@ const PcbDesignerWorkspace = React.lazy(() =>
     default: module.PcbDesignerWorkspace,
   }))
 );
+const PerformanceAppraisalPage = React.lazy(() =>
+  import("@/components/performance/PerformanceAppraisalPage").then((module) => ({
+    default: module.PerformanceAppraisalPage,
+  }))
+);
 const ProductionMonitor = React.lazy(() =>
   import("@/components/production/ProductionMonitor").then((module) => ({
     default: module.ProductionMonitor,
@@ -95,7 +101,8 @@ type WorkspaceId =
   | "data-center"
   | "pcb-designer"
   | "user-management"
-  | "ai-chat";
+  | "ai-chat"
+  | "performance";
 
 type StationModuleId =
   | "dashboard"
@@ -138,6 +145,7 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
   "data-center": "data-center",
   "pcb-designer": "pcb-designer",
   "ai-chat": "ai-chat",
+  performance: "performance",
 };
 
 const MODULE_QUERY_KEYS = [
@@ -205,7 +213,8 @@ function getInitialWorkspace(): WorkspaceId | null {
     workspace === "data-center" ||
     workspace === "pcb-designer" ||
     workspace === "user-management" ||
-    workspace === "ai-chat"
+    workspace === "ai-chat" ||
+    workspace === "performance"
   ) {
     return workspace;
   }
@@ -328,6 +337,13 @@ const Index = () => {
         description: "上傳或貼上 PDF、Office、圖片與長文字，透過多家 AI 模型查詢、比較和整理，並用共享提示詞快速執行常用任務。",
         icon: MessageSquareText,
         visible: canViewModule("ai-chat"),
+      },
+      {
+        id: "performance" as const,
+        label: "績效考核系統",
+        description: "以考核週期管理目標、進度、主管回饋與評分，讓團隊清楚掌握本期工作與下一步。",
+        icon: Target,
+        visible: canViewModule("performance"),
       },
     ],
     [canViewModule]
@@ -583,6 +599,12 @@ const Index = () => {
         return (
           <PermissionGuard module="ai-chat">
             <ApiChatWorkspacePage />
+          </PermissionGuard>
+        );
+      case "performance":
+        return (
+          <PermissionGuard module="performance">
+            <PerformanceAppraisalPage />
           </PermissionGuard>
         );
       case "station-status":

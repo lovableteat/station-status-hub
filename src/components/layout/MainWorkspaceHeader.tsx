@@ -70,7 +70,7 @@ export function MainWorkspaceHeader({
 
   return (
     <header data-mobile-app-header="true" className="platform-color-field sticky top-0 z-50 shrink-0 border-b border-primary/15 shadow-[0_18px_48px_-42px_hsl(var(--primary)/0.55)] backdrop-blur-xl">
-      <div className="grid min-h-[var(--mobile-header-height)] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-3 px-2.5 py-1.5 sm:min-h-[72px] sm:gap-x-3 sm:px-4 sm:py-3 xl:grid-cols-[minmax(180px,1fr)_auto_minmax(180px,1fr)] xl:gap-x-4 xl:px-5 2xl:px-6">
+      <div className="grid min-h-[var(--mobile-header-height)] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-3 px-2.5 py-1.5 sm:min-h-[72px] sm:gap-x-3 sm:px-4 sm:py-3 xl:grid-cols-[minmax(180px,0.9fr)_minmax(0,2.3fr)_auto] xl:gap-x-4 xl:px-5 2xl:px-6">
         {onBrandClick ? (
           <button
             type="button"
@@ -83,7 +83,7 @@ export function MainWorkspaceHeader({
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">{brand}</div>
         )}
 
-        <nav className="glass-strip order-3 col-span-2 hidden w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:thin] lg:flex xl:order-none xl:col-span-1 xl:w-auto xl:max-w-[min(58vw,760px)]">
+        <nav aria-label="工作區導覽" className="glass-strip order-3 col-span-2 hidden w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex xl:order-none xl:col-span-1 xl:w-auto xl:max-w-none">
           {items.map((item) => {
             const isActive = item.id === activeItem;
 
@@ -93,7 +93,7 @@ export function MainWorkspaceHeader({
                 type="button"
                 onClick={() => onSelect(item.id)}
                 className={cn(
-                  "interactive-lift min-w-fit rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 2xl:px-4",
+                  "interactive-lift min-w-fit shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 xl:px-1.5 xl:text-xs 2xl:px-4 2xl:text-sm",
                   isActive
                     ? "bg-primary text-primary-foreground shadow-[0_18px_34px_-24px_hsl(var(--primary)/0.85)]"
                     : "text-foreground/80 hover:bg-primary/10 hover:text-foreground"

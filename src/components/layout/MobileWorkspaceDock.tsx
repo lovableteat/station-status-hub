@@ -8,6 +8,7 @@ import {
   Search,
   ServerCog,
   ShieldCheck,
+  Target,
 } from "lucide-react";
 
 import {
@@ -36,6 +37,7 @@ const SECONDARY_WORKSPACES = [
   { id: "data-center", label: "Data Center", icon: ServerCog, description: "機櫃、設備與 2D／3D 場景" },
   { id: "pcb-designer", label: "PCB Designer", icon: CircuitBoard, description: "PCB 佈局、BOM 與 DRC" },
   { id: "user-management", label: "後台管理", icon: ShieldCheck, description: "帳號、權限與 API" },
+  { id: "performance", label: "績效考核", icon: Target, description: "考核週期、目標與主管回饋" },
 ] as const;
 
 const activeToneClasses = {

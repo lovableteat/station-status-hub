@@ -4,7 +4,7 @@
 
 ## 1. 專案定位
 
-工作整合平台把測試站維修、料號與 BOM、Data Center、PCB Designer、後台管理、AI 資料查詢和即時協作集中在同一個工作區。平台同時支援桌面、平板與手機，功能頁以 workspace 為單位切換，資料與權限由 Supabase 和前端 provider 統一管理。
+工作整合平台把測試站維修、料號與 BOM、Data Center、PCB Designer、後台管理、AI 資料查詢、績效考核和即時協作集中在同一個工作區。平台同時支援桌面、平板與手機，功能頁以 workspace 為單位切換，資料與權限由 Supabase 和前端 provider 統一管理。
 
 主要設計原則：
 
@@ -77,6 +77,7 @@ station-status-hub/
 | PCB Designer | `pcb-designer` | `src/components/pcb-designer`、`src/components/pcb-designer/core` |
 | 後台管理 | `user-management` | `src/components/admin`、`src/components/api-management` |
 | 資料查詢空間 | `ai-chat` | `src/components/api-management/ApiChatWorkspacePage.tsx`、`ApiChatConsole.tsx` |
+| 績效考核系統 | `performance` | `src/components/performance`、`supabase/migrations/*performance*` |
 | 全站聊天室 | 全域 overlay | `src/components/collaboration/CollaborationCenter.tsx`、`DirectMessagesPanel.tsx` |
 
 ## 4. 啟動流程與頁面分派
@@ -115,8 +116,9 @@ main.tsx
 | `pcb-designer` | `pcb-designer` | PCB 專案、2D 編輯、3D 檢視、元件與 BOM |
 | `user-management` | `users`、`collaboration`、`api-management` | 使用者、公告、API 金鑰與權限 |
 | `ai-chat` | `ai-chat` | AI 資料查詢、附件、知識檢索與對話 |
+| `performance` | `performance` | 考核週期、目標進度、主管回饋、評分與報表 |
 
-切換工作區時，`pushWorkspaceLocation()` 會更新 query string、保留可分享的頁面狀態，並透過 workspace navigation event 通知 shell；不應使用整頁 reload 來完成一般切換。新增工作區或 module 時，要同步更新 `moduleWorkspaceMap`、權限規則、可見入口與回歸測試。
+切換工作區時，`pushWorkspaceLocation()` 會更新 query string、保留可分享的頁面狀態，並透過 workspace navigation event 通知 shell；不應使用整頁 reload 來完成一般切換。新增工作區或 module 時，要同步更新 `moduleWorkspaceMap`、權限規則、可見入口與回歸測試。績效頁沒有額外 module，直接以 `workspace=performance` 開啟。
 
 ## 5. Provider 與資料流
 
@@ -148,6 +150,7 @@ main.tsx
 - AI 私有 conversation、maintenance knowledge search、引用來源與附件。
 - 使用者 profile、頭像、presence、私訊與訊息媒體。
 - 後台 API 金鑰 metadata。金鑰內容需遵守既有遮罩和 server-side 使用邊界。
+- 績效考核資料、考核週期、目標 JSON、主管與員工回饋；前端在 migration 尚未部署時會先以 localStorage 維持可用，雲端表啟用後以 `performance_reviews` 為準。
 
 ### 5.4 Migration 工作規則
 
@@ -206,6 +209,17 @@ AI 工作區負責模型選擇、提示詞、知識來源、附件、對話與�
 
 訊息列表的 auto-scroll anchor 必須是零高度的獨立元素，不能放進帶 `space-y` 的訊息容器；固定 dock 要避開手機安全區，但桌面版要貼齊視窗底邊，不可覆蓋主要操作區。
 
+### 6.7 績效考核系統
+
+績效頁由 `PerformanceAppraisalPage` 組成，資料與純邏輯拆在 `src/components/performance`：
+
+- `performanceData.mjs`：考核週期、狀態、種子資料、資料正規化、統計與 CSV 匯出。
+- `performance.css`：沿用深色平台底色，使用青綠、琥珀和紫色做資訊層級，不把所有狀態做成同一種藍色。
+- `PerformanceAppraisalPage.tsx`：總覽、我的考核、團隊考核、搜尋／狀態篩選、詳情、建立／編輯、完成與匯出。
+- `supabase/migrations/*performance*`：`performance_reviews` 表、索引、RLS、realtime 和 `performance_view`／`performance_edit` 權限。
+
+頁面先載入本機快取以保持快速可用，再嘗試讀取雲端；雲端成功後會覆蓋本機快取。新增或編輯考核先即時更新畫面，再嘗試同步，失敗會明確提示「已保存在本機瀏覽器」，避免使用者以為資料消失。新增工作區權限時，要同時檢查 `workspacePermissions.ts`、`UserPermissionsDialog`、桌面首頁入口與 `MobileWorkspaceDock`。
+
 ## 7. RWD 與操作設計規則
 
 RWD 的目標是「工作現場拿起手機就能完成工作」，不是只讓桌面欄位換行。
@@ -215,6 +229,7 @@ RWD 的目標是「工作現場拿起手機就能完成工作」，不是只讓�
 - 桌面側欄在手機應改成 bottom dock、drawer 或分段導覽；不可把 280px 側欄直接壓縮到內容上。
 - 資料表在手機要改成可橫向滑動的欄列、卡片或優先欄位，不可讓所有欄位縮成無法閱讀的文字。
 - AI 訊息區、聊天室輸入區和主要預覽區必須保留可見高度；任何空狀態不能把輸入框推出畫面。
+- 績效清單在桌面使用可讀表格，在手機改成卡片；建立／編輯視窗需可在窄螢幕內捲動，不能被底部 dock 截住。
 - 主要觸控目標至少維持約 44px，拖曳、縮放、關閉、上傳、下載和刪除都要有明顯 disabled / loading / success / error 狀態。
 - Toast、通知與聊天室不可使用會改變主內容流高度的普通 block；固定提示要有獨立 stacking context。
 - 在 320px 寬度、375px 寬度、768px 平板、橫向平板和桌面寬度都檢查，不只看單一瀏覽器尺寸。
@@ -261,7 +276,7 @@ RWD 的目標是「工作現場拿起手機就能完成工作」，不是只讓�
 
 ### 視覺與操作
 
-- 首頁、維修中心、料號申請、Data Center、PCB Designer、後台、AI 查詢和全域聊天室。
+- 首頁、維修中心、料號申請、Data Center、PCB Designer、後台、AI 查詢、績效考核和全域聊天室。
 - 桌面寬度、手機直向、手機橫向、平板直向和窄螢幕。
 - 主要按鈕、上傳、下載、刪除、編輯、返回、關閉、搜尋、篩選、分頁和拖曳。
 - 2D / 3D 切換、縮放、旋轉、選取、層面、同步與重載。

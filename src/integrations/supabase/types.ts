@@ -1379,6 +1379,60 @@ export type Database = {
         }
         Relationships: []
       }
+      performance_reviews: {
+        Row: {
+          created_at: string
+          cycle_id: string
+          department: string
+          due_date: string | null
+          employee_id: string | null
+          employee_name: string
+          goals: Json
+          id: string
+          manager_feedback: string
+          reviewer_name: string
+          role: string
+          score: number | null
+          self_feedback: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          cycle_id?: string
+          department?: string
+          due_date?: string | null
+          employee_id?: string | null
+          employee_name: string
+          goals?: Json
+          id?: string
+          manager_feedback?: string
+          reviewer_name?: string
+          role?: string
+          score?: number | null
+          self_feedback?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          cycle_id?: string
+          department?: string
+          due_date?: string | null
+          employee_id?: string | null
+          employee_name?: string
+          goals?: Json
+          id?: string
+          manager_feedback?: string
+          reviewer_name?: string
+          role?: string
+          score?: number | null
+          self_feedback?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       project_tasks: {
         Row: {
           assigned_to: string | null
@@ -3870,6 +3924,8 @@ export type Database = {
         | "pcb_designer_edit"
         | "test_plan_view"
         | "test_plan_edit"
+        | "performance_view"
+        | "performance_edit"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4026,6 +4082,8 @@ export const Constants = {
         "pcb_designer_edit",
         "test_plan_view",
         "test_plan_edit",
+        "performance_view",
+        "performance_edit",
       ],
     },
   },

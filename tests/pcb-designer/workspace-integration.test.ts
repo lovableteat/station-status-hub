@@ -48,7 +48,7 @@ const adminCollaborationSource = await read(
   "src/components/collaboration/AdminCollaborationPanel.tsx",
 );
 
-test("registers PCB Designer as the sixth workspace and page-permission module", () => {
+test("registers PCB Designer alongside the seven-workspace page-permission model", () => {
   assert.match(permissionsSource, /"pcb_designer_view"/);
   assert.match(permissionsSource, /"pcb_designer_edit"/);
   assert.match(permissionsSource, /["']pcb-designer["']/);
