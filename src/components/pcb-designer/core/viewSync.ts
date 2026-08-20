@@ -77,7 +77,7 @@ export function getPcb3DComponentTransform(
     rotation: [
       0,
       -(component.rotation * Math.PI) / 180,
-      component.layer === "top" ? 0 : Math.PI,
+      0,
     ],
   };
 }

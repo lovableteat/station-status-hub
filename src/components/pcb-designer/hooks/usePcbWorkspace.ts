@@ -54,10 +54,12 @@ export function usePcbWorkspace({
     () => createWorkspaceState(repository.load(), canEdit),
   );
   const stateRef = useRef(state.data);
+  const viewStateRef = useRef(state);
   const [remoteReady, setRemoteReady] = useState(!remoteClient);
   const hydratedCleanRevisionRef = useRef<string | null>(null);
   const hasUnsavedChangesRef = useRef(false);
   stateRef.current = state.data;
+  viewStateRef.current = state;
 
   const persistence = usePcbPersistence({
     state: state.data,
@@ -86,12 +88,24 @@ export function usePcbWorkspace({
       loading = false;
       if (!active) return;
       const localState = stateRef.current;
+      const localView = viewStateRef.current;
       if (remoteState) {
         const mergedState = mergePcbRemoteState(localState, remoteState);
         if (JSON.stringify(mergedState) !== JSON.stringify(localState)) {
           repository.save(mergedState);
           hydratedCleanRevisionRef.current = mergedState.updatedAt;
-          dispatch({ type: "persistence/hydrate", data: mergedState });
+          dispatch({
+            type: "persistence/hydrate",
+            data: mergedState,
+            preserveView: {
+              activeProjectId: localState.activeProjectId,
+              zoom: localView.zoom,
+              viewCenter: localView.viewCenter,
+              activeLayer: localView.activeLayer,
+              visibleLayer: localView.visibleLayer,
+              rightTab: localView.rightTab,
+            },
+          });
         } else if (initial) {
           markClean(localState.updatedAt);
         }

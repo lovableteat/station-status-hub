@@ -334,6 +334,7 @@ function Scene({
               boardThickness / 2 + 0.22,
               project.board.height / 2 - keepout.y - keepout.height / 2,
             ]}
+            rotation={[0, -((keepout.rotation ?? 0) * Math.PI) / 180, 0]}
             onClick={(event) => {
               event.stopPropagation();
               selectObject(
@@ -354,7 +355,8 @@ function Scene({
         .map(({ component, viewState }) => {
         const selected = viewState.selected;
         const transform = getPcb3DComponentTransform(component, project.board);
-        const yOffset = boardThickness / 2 + component.maxHeight / 2;
+        const yOffset = (boardThickness / 2 + component.maxHeight / 2)
+          * (component.layer === "top" ? 1 : -1);
         const modelAsset = component.modelAssetId ? modelAssets[component.modelAssetId] : null;
         const useProceduralFallback = !modelAsset;
         const proceduralFallback = useProceduralFallback;
@@ -382,7 +384,11 @@ function Scene({
             >
               {proceduralFallback ? (
                 <mesh>
-                  <boxGeometry args={[component.width, component.maxHeight, component.height]} />
+                  {component.shape === "circle" ? (
+                    <cylinderGeometry args={[Math.min(component.width, component.height) / 2, Math.min(component.width, component.height) / 2, component.maxHeight, 32]} />
+                  ) : (
+                    <boxGeometry args={[component.width, component.maxHeight, component.height]} />
+                  )}
                   <meshStandardMaterial
                     color={safeColor(component.color, "#6bc7d9")}
                     roughness={0.48}

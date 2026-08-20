@@ -192,3 +192,26 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 
 - `main` 與 `origin/main` 已同步，包含核心手機修正、後續 workspace 整合與本次交接文件更新。
 - 既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案仍未追蹤，刻意保留且未加入提交。
+
+### Latest delivery - 2026-08-20 PCB Designer reliability
+
+本次完成 PCB Designer 七項修正：
+
+- STEP／STP 匯入改為共用並可重試的 OCCT WebAssembly 載入流程，補上副檔名、空檔案與解析失敗提示，避免重複初始化造成匯入失敗。
+- 自訂元件與板設定改用可視化原生色彩選擇器，不再要求使用者猜十六進位色碼。
+- 元件庫新增圓形 `Screw Hole / 螺絲孔`，並讓 Screw／Scew／Hole／螺絲／孔等匯入名稱自動辨識為圓形元件；2D、3D 與軟體 3D fallback 均以圓形呈現。
+- 修正 2D 到 3D 的底層座標映射，底層元件只位於板下，不再對 X／Z footprint 做鏡射。
+- 背景遠端同步不再覆蓋使用者目前選取的專案、縮放、中心點、圖層與右側分頁，避免專案跳回與 2D 縮放自動還原。
+- 禁制區支援右側旋轉欄位與 90 度旋轉按鈕，2D、3D、預覽及 DRC 均採用旋轉後幾何。
+
+### PCB verification
+
+- `pnpm exec tsc --noEmit` 通過。
+- PCB Designer tests：`188/188` 通過。
+- 本次涉及檔案 scoped ESLint 通過。
+- `pnpm build` 通過，3490 modules transformed；STEP／OCCT WASM 資產已輸出。
+- 已在本機瀏覽器實際操作元件庫、圓形 Screw Hole 放置、自訂顏色選擇、禁制區拖曳與旋轉，並檢查 3D 畫面沒有鏡射。
+
+### PCB repository state
+
+- 只提交本次 PCB Designer、STEP 匯入、回歸測試與本交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。

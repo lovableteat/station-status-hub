@@ -134,10 +134,18 @@ export function normalizePcbSaveState(state: PcbSaveState): PcbSaveState {
     ...project,
     board: normalizeBoard(project.board),
     components: project.components.map((component) => {
-      if (!component.modelAssetId || modelAssets?.[component.modelAssetId]) return component;
-      const { modelAssetId: _removed, ...withoutAsset } = component;
+      const normalized = {
+        ...component,
+        shape: component.shape === "circle" ? "circle" as const : "rectangle" as const,
+      };
+      if (!component.modelAssetId || modelAssets?.[component.modelAssetId]) return normalized;
+      const { modelAssetId: _removed, ...withoutAsset } = normalized;
       return withoutAsset;
     }),
+    keepouts: project.keepouts.map((keepout) => ({
+      ...keepout,
+      rotation: Number.isFinite(keepout.rotation) ? ((keepout.rotation! % 360) + 360) % 360 : 0,
+    })),
   }));
   const templates = cloned.templates.map((template) => ({
     ...template,
@@ -170,6 +178,7 @@ function validateComponent(value: unknown): value is RecordValue {
     && isPositiveFiniteNumber(value.width) && isPositiveFiniteNumber(value.height) && isPositiveFiniteNumber(value.maxHeight)
     && value.rotation >= 0 && value.rotation < 360
     && (value.source === "built-in" || value.source === "custom" || value.source === "bom")
+    && (value.shape === undefined || value.shape === "rectangle" || value.shape === "circle")
     && (value.layer === "top" || value.layer === "bottom")
     && typeof value.locked === "boolean"
     && (value.modelAssetId === undefined || isNonEmptyString(value.modelAssetId));
@@ -179,7 +188,8 @@ function validateKeepout(value: unknown): value is RecordValue {
   if (!isRecord(value)) return false;
   return hasStrings(value, ["id", "name", "color"])
     && hasFiniteNumbers(value, ["x", "y", "width", "height"])
-    && isPositiveFiniteNumber(value.width) && isPositiveFiniteNumber(value.height);
+    && isPositiveFiniteNumber(value.width) && isPositiveFiniteNumber(value.height)
+    && (value.rotation === undefined || (isFiniteNumber(value.rotation) && value.rotation >= 0 && value.rotation < 360));
 }
 
 function validateMeasurement(value: unknown): value is RecordValue {

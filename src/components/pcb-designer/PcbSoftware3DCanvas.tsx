@@ -368,10 +368,13 @@ export function PcbSoftware3DCanvas({
       const isNearSide = renderOrder > SOFTWARE_RENDER_ORDER.board;
       const centerX = keepout.x + keepout.width / 2 - project.board.width / 2;
       const centerZ = project.board.height / 2 - keepout.y - keepout.height / 2;
+      const angle = -((keepout.rotation ?? 0) * Math.PI) / 180;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
       const worldVertices = createSoftwareBoxVertices(keepout.width, 0.36, keepout.height).map((point) => ({
-        x: centerX + point.x,
+        x: centerX + point.x * cos + point.z * sin,
         y: BOARD_THICKNESS / 2 + 0.2 + point.y,
-        z: centerZ + point.z,
+        z: centerZ - point.x * sin + point.z * cos,
       }));
       addBox(worldVertices, keepout.color || "#ef8354", selected ? "#fff3bf" : "#f2a56d", renderOrder, selected ? 0.7 : 0.38, selected ? 1.5 : 0.7);
       const bounds = getProjectedBounds(worldVertices.map((point) => projectSoftwarePoint(point, camera)));
@@ -407,7 +410,34 @@ export function PcbSoftware3DCanvas({
       const asset = component.modelAssetId ? modelAssets[component.modelAssetId] : null;
       const cachedParts = mappedModelParts[component.instanceId];
       if (!asset || !cachedParts) {
-        addBox(worldBounds, component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
+        if (component.shape === "circle") {
+          const segments = 32;
+          const radius = Math.min(component.width, component.height) / 2;
+          const top = Array.from({ length: segments }, (_, index) => {
+            const angle = (index / segments) * Math.PI * 2;
+            return transformPcbComponentPoint({
+              x: Math.cos(angle) * radius,
+              y: component.maxHeight / 2,
+              z: Math.sin(angle) * radius,
+            }, component, project.board, BOARD_THICKNESS);
+          });
+          const bottom = Array.from({ length: segments }, (_, index) => {
+            const angle = (index / segments) * Math.PI * 2;
+            return transformPcbComponentPoint({
+              x: Math.cos(angle) * radius,
+              y: -component.maxHeight / 2,
+              z: Math.sin(angle) * radius,
+            }, component, project.board, BOARD_THICKNESS);
+          });
+          addPolygon(top, component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
+          addPolygon([...bottom].reverse(), shadeColor(component.color, 0.72), selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
+          for (let index = 0; index < segments; index += 1) {
+            const next = (index + 1) % segments;
+            addPolygon([top[index], top[next], bottom[next], bottom[index]], component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
+          }
+        } else {
+          addBox(worldBounds, component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
+        }
       } else {
         const totalTriangles = Math.max(1, cachedParts.reduce((total, { part }) => total + Math.floor(part.index.length / 3), 0));
         cachedParts.forEach(({ part, positions }) => {

@@ -215,7 +215,7 @@ function keepoutRectangle(keepout: PcbKeepout): Rectangle {
     y: keepout.y + keepout.height / 2,
     width: keepout.width,
     height: keepout.height,
-    rotation: 0,
+    rotation: keepout.rotation ?? 0,
   };
 }
 

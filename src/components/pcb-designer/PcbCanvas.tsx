@@ -982,6 +982,7 @@ export function PcbCanvas({
                 stroke={selectedKeepoutIds.has(keepout.id) ? "#f8fafc" : keepout.color}
                 strokeWidth={strokeWidth}
                 strokeDasharray={`${strokeWidth * 4} ${strokeWidth * 2}`}
+                transform={`rotate(${preview.rotation ?? 0} ${preview.x + preview.width / 2} ${preview.y + preview.height / 2})`}
                 data-pcb-selected={selectedKeepoutIds.has(keepout.id) ? "true" : "false"}
                 role="button"
                 tabIndex={0}
@@ -1110,20 +1111,29 @@ export function PcbCanvas({
                   selectWithKeyboard(event, { kind: "component", id: component.instanceId })}
                 aria-label={`元件 ${component.reference} ${component.name}`}
               >
-                <rect
-                  x={-component.width / 2}
-                  y={-component.height / 2}
-                  width={component.width}
-                  height={component.height}
-                  rx={Math.min(0.8, component.width / 6, component.height / 6)}
-                  fill={component.color}
-                  fillOpacity={component.layer === "bottom" ? 0.48 : 0.9}
-                  stroke={selectedComponentIds.has(component.instanceId)
-                    ? "#f8fafc"
-                    : "#07111d"}
-                  strokeWidth={strokeWidth}
-                  onPointerDown={(event) => beginComponentDrag(event, component)}
-                />
+                {component.shape === "circle" ? (
+                  <circle
+                    r={Math.min(component.width, component.height) / 2}
+                    fill={component.color}
+                    fillOpacity={component.layer === "bottom" ? 0.48 : 0.9}
+                    stroke={selectedComponentIds.has(component.instanceId) ? "#f8fafc" : "#07111d"}
+                    strokeWidth={strokeWidth}
+                    onPointerDown={(event) => beginComponentDrag(event, component)}
+                  />
+                ) : (
+                  <rect
+                    x={-component.width / 2}
+                    y={-component.height / 2}
+                    width={component.width}
+                    height={component.height}
+                    rx={Math.min(0.8, component.width / 6, component.height / 6)}
+                    fill={component.color}
+                    fillOpacity={component.layer === "bottom" ? 0.48 : 0.9}
+                    stroke={selectedComponentIds.has(component.instanceId) ? "#f8fafc" : "#07111d"}
+                    strokeWidth={strokeWidth}
+                    onPointerDown={(event) => beginComponentDrag(event, component)}
+                  />
+                )}
                 <text
                   className="pcb-svg-label pcb-component-reference"
                   fontSize={Math.max(1.5, Math.min(component.width, component.height) * 0.34)}
@@ -1293,18 +1303,29 @@ export function PcbCanvas({
               data-placement-valid={placementPreview.valid ? "true" : "false"}
               transform={`translate(${placementPreview.component.x} ${placementPreview.component.y}) rotate(${placementPreview.component.rotation})`}
             >
-              <rect
-                x={-placementPreview.component.width / 2}
-                y={-placementPreview.component.height / 2}
-                width={placementPreview.component.width}
-                height={placementPreview.component.height}
-                rx={Math.min(0.8, placementPreview.component.width / 6, placementPreview.component.height / 6)}
-                fill={placementPreview.valid ? placementPreview.component.color : "#fb7185"}
-                fillOpacity="0.58"
-                stroke={placementPreview.valid ? "#8df3e2" : "#fecdd3"}
-                strokeWidth={strokeWidth * 1.5}
-                strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 1.5}`}
-              />
+              {placementPreview.component.shape === "circle" ? (
+                <circle
+                  r={Math.min(placementPreview.component.width, placementPreview.component.height) / 2}
+                  fill={placementPreview.valid ? placementPreview.component.color : "#fb7185"}
+                  fillOpacity="0.58"
+                  stroke={placementPreview.valid ? "#8df3e2" : "#fecdd3"}
+                  strokeWidth={strokeWidth * 1.5}
+                  strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 1.5}`}
+                />
+              ) : (
+                <rect
+                  x={-placementPreview.component.width / 2}
+                  y={-placementPreview.component.height / 2}
+                  width={placementPreview.component.width}
+                  height={placementPreview.component.height}
+                  rx={Math.min(0.8, placementPreview.component.width / 6, placementPreview.component.height / 6)}
+                  fill={placementPreview.valid ? placementPreview.component.color : "#fb7185"}
+                  fillOpacity="0.58"
+                  stroke={placementPreview.valid ? "#8df3e2" : "#fecdd3"}
+                  strokeWidth={strokeWidth * 1.5}
+                  strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 1.5}`}
+                />
+              )}
               <text
                 className="pcb-svg-label pcb-component-reference"
                 fontSize={Math.max(1.5, Math.min(placementPreview.component.width, placementPreview.component.height) * 0.3)}

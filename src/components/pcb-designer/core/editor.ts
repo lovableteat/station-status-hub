@@ -359,6 +359,9 @@ export function editSelectedObject(
         }, true);
         return moved.ok ? moved.project : project;
       }
+    } else if (action.type === "rotate") {
+      const keepout = next.keepouts.find((item) => item.id === selection.id);
+      if (keepout) keepout.rotation = normalizeRotation((keepout.rotation ?? 0) + 90);
     }
   } else if (action.type === "delete") {
     next.measurements = next.measurements.filter((item) => item.id !== selection.id);
@@ -392,6 +395,7 @@ export function createKeepout(
     width,
     height,
     color: "#fb7185",
+    rotation: 0,
   };
   const next = clone(project);
   next.keepouts.push(keepout);

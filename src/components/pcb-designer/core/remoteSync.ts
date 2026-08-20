@@ -73,7 +73,13 @@ export function mergePcbRemoteState(
     || revision(remoteState.updatedAt) >= revision(localState.updatedAt);
   const accountState = preferRemoteAccountState ? remoteState : localState;
   const mergedProjects = [...projects.values()];
-  const preferredActiveProjectId = accountState.activeProjectId;
+  // A local project selection is a view preference, not shared document content.
+  // Keep it during background reconciliation so another tab/device cannot pull
+  // the editor back to an older project while the user is working.
+  const preferredActiveProjectId = !localIsSeed && localState.activeProjectId
+    && projects.has(localState.activeProjectId)
+    ? localState.activeProjectId
+    : accountState.activeProjectId;
   const activeProjectId = preferredActiveProjectId
     && projects.has(preferredActiveProjectId)
     ? preferredActiveProjectId

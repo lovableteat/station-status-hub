@@ -29,7 +29,7 @@ test("maps top-layer board coordinates into a deterministic 3D transform", () =>
   );
 });
 
-test("adds the bottom-layer flip to the shared 3D transform", () => {
+test("keeps bottom-layer footprint coordinates unmirrored in the shared 3D transform", () => {
   assert.deepEqual(
     getPcb3DComponentTransform(
       { x: 20, y: 30, width: 10, height: 6, rotation: 90, layer: "bottom" },
@@ -37,7 +37,7 @@ test("adds the bottom-layer flip to the shared 3D transform", () => {
     ),
     {
       position: [-30, 0, 10],
-      rotation: [0, -Math.PI / 2, Math.PI],
+      rotation: [0, -Math.PI / 2, 0],
     },
   );
 });

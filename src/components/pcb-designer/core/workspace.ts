@@ -891,8 +891,24 @@ export function reduceWorkspaceState(
       return { ...state, rightTab: action.tab };
     case "permission/set":
       return { ...state, canEdit: action.canEdit };
-    case "persistence/hydrate":
-      return createWorkspaceState(action.data, state.canEdit);
+    case "persistence/hydrate": {
+      const hydrated = createWorkspaceState(action.data, state.canEdit);
+      const preserve = action.preserveView;
+      if (!preserve) return hydrated;
+      const requestedProject = preserve.activeProjectId
+        ? hydrated.data.projects.find((project) => project.id === preserve.activeProjectId)
+        : undefined;
+      const activeProject = requestedProject ?? hydrated.activeProject;
+      return materialize({
+        ...hydrated,
+        data: { ...hydrated.data, activeProjectId: activeProject.id },
+        activeLayer: preserve.activeLayer,
+        visibleLayer: preserve.visibleLayer,
+        rightTab: preserve.rightTab,
+        zoom: preserve.zoom,
+        viewCenter: clone(preserve.viewCenter),
+      });
+    }
     case "persistence/touch":
       return materialize({
         ...state,

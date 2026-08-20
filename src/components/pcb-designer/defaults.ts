@@ -71,10 +71,26 @@ export const BUILT_IN_COMPONENTS: PcbLibraryComponent[] = componentDefinitions.m
     height,
     maxHeight,
     color,
+    shape: "rectangle",
     source: "built-in",
     createdAt: "2026-07-26T00:00:00.000Z",
   }),
 );
+
+BUILT_IN_COMPONENTS.push({
+  id: "builtin-screw-hole",
+  name: "Screw Hole / 螺絲孔",
+  type: "Screw Hole",
+  manufacturer: "",
+  partNumber: "",
+  width: 3.2,
+  height: 3.2,
+  maxHeight: 1.6,
+  color: "#f59e0b",
+  shape: "circle",
+  source: "built-in",
+  createdAt: "2026-07-26T00:00:00.000Z",
+});
 
 type TemplatePlacement = {
   componentName: string;
