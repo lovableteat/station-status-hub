@@ -348,105 +348,71 @@ export function UserPermissionsDialog({
         data-permission-model="live-workspace-matrix"
         className="admin-permissions-dialog overflow-hidden border border-cyan-200/35 bg-[#081a2a] p-0 text-slate-100 shadow-[0_28px_100px_-45px_rgba(34,211,238,0.8)]"
       >
-        <div className="admin-permissions-header border-b border-cyan-200/12 bg-[#0d2235] px-3 py-4 sm:px-6 sm:py-5">
-          <DialogHeader className="space-y-3">
+        <div className="admin-permissions-header border-b border-cyan-200/12 bg-[#0d2235] px-4 py-3 sm:px-5">
+          <DialogHeader className="space-y-1 pr-10">
             <DialogTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
               設定 {username} 的網站權限
             </DialogTitle>
             <DialogDescription className="admin-permissions-description">
-              權限依首頁七個實際工作區設定；維修中心與後台管理再依下方內頁權限逐項生效。
+              先設定工作區層級；只有維修中心與後台管理需要細分內頁權限。
             </DialogDescription>
           </DialogHeader>
 
-          <div className="admin-permissions-summary mt-4 grid gap-2 sm:mt-5 sm:gap-3">
-              <div className="rounded-2xl border border-primary/15 bg-primary/10 p-3 sm:p-4">
-              <div className="text-xs font-semibold tracking-[0.12em] text-muted-foreground">可見工作區</div>
-              <div className="mt-2 text-3xl font-semibold text-foreground">{enabledWorkspaceCount}</div>
-              <p className="mt-1 text-sm text-muted-foreground">目前可見工作區</p>
+          <div className="admin-permissions-toolbar mt-3">
+            <div className="admin-permissions-stats" aria-label="目前權限摘要">
+              <Badge variant="outline" className="border-sky-300/25 bg-sky-400/10 text-sky-100">
+                {enabledWorkspaceCount}/{workspaceSummary.length} 工作區
+              </Badge>
+              <Badge variant="outline" className="border-emerald-300/25 bg-emerald-400/10 text-emerald-100">
+                {editableWorkspaceCount} 可管理
+              </Badge>
+              <Badge variant="outline" className="border-cyan-300/25 bg-cyan-400/10 text-cyan-100">
+                {permissions.length} 細部權限
+              </Badge>
+              <span className="admin-permissions-preset-label">{permissionPresetLabel}</span>
             </div>
-            <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-3 sm:p-4">
-              <div className="text-xs font-semibold tracking-[0.12em] text-muted-foreground">可管理</div>
-              <div className="mt-2 text-3xl font-semibold text-foreground">{editableWorkspaceCount}</div>
-              <p className="mt-1 text-sm text-muted-foreground">可直接管理的工作區</p>
-            </div>
-            <div className="rounded-2xl border border-sky-400/15 bg-sky-500/10 p-3 sm:p-4">
-              <div className="text-xs font-semibold tracking-[0.12em] text-muted-foreground">細部權限</div>
-              <div className="mt-2 text-3xl font-semibold text-foreground">{permissions.length}</div>
-              <p className="mt-1 text-sm text-muted-foreground">已勾選的細部頁面權限</p>
-            </div>
-            <div className="rounded-2xl border border-border/80 bg-background/45 p-3 sm:p-4">
-              <div className="text-xs font-semibold tracking-[0.12em] text-muted-foreground">授權模式</div>
-              <div className="mt-2 text-xl font-semibold text-foreground">{permissionPresetLabel}</div>
-              <p className="mt-1 text-sm text-muted-foreground">目前整體授權模式</p>
+
+            <div className="admin-permissions-presets" aria-label="快速套用">
+              <span>快速套用</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => applyGlobalPreset("view")}>
+                全站檢視
+              </Button>
+              <Button type="button" size="sm" onClick={() => applyGlobalPreset("edit")}>
+                全站管理
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => applyGlobalPreset("none")}
+                className="text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
+              >
+                清空
+              </Button>
             </div>
           </div>
         </div>
 
-        <div className="admin-permissions-scroll min-h-0 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">
-          <div className="admin-permissions-layout grid gap-6">
-            <section className="space-y-6">
-              <div data-admin-zone="permission-presets" className="rounded-2xl border border-cyan-200/15 bg-[#0d2235] p-4 sm:p-5">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                  <div>
-                    <div className="text-base font-semibold text-foreground">快速套用</div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      先選一個基準，再到下面調整個別工作區，不需要逐格重設。
-                    </p>
-                  </div>
-
-                  <div className="grid w-full gap-2 sm:grid-cols-3 xl:w-auto">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => applyGlobalPreset("view")}
-                      className="h-10 border-sky-300/30 bg-sky-400/10 text-sky-100 hover:bg-sky-400/20"
-                    >
-                      全站檢視
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => applyGlobalPreset("edit")}
-                      className="h-10 bg-cyan-300 font-bold text-[#061522] hover:bg-cyan-200"
-                    >
-                      全站管理
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => applyGlobalPreset("none")}
-                      className="h-10 text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
-                    >
-                      清空授權
-                    </Button>
-                  </div>
+        <div className="admin-permissions-scroll min-h-0 overflow-y-auto p-3 sm:p-4">
+          <div className="admin-permissions-layout grid gap-3">
+            <section data-admin-zone="workspace-permissions" className="admin-permission-pane">
+              <div className="admin-permission-pane-header">
+                <div>
+                  <h3>工作區權限</h3>
+                  <p>七個入口直接設定為未授權、檢視或管理。</p>
                 </div>
               </div>
 
-              <div data-admin-zone="workspace-permissions" className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-semibold">工作區權限</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    與首頁七個入口一一對應；單頁工作區直接生效，維修中心與後台管理再套用右側內頁權限。
-                  </p>
-                </div>
-
-                <div className="admin-permission-workspace-grid grid gap-4">
+              <div className="admin-permission-workspace-list">
                   {workspaceSummary.map((workspace) => (
                     <div
                       key={workspace.id}
-                      className={`rounded-2xl border p-4 ${getWorkspaceCardTone(workspace.level)}`}
+                      className={`admin-permission-workspace-row ${getWorkspaceCardTone(workspace.level)}`}
                     >
-                      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <div className="text-lg font-semibold text-foreground">{workspace.label}</div>
-                          <div className="text-sm text-muted-foreground">
-                            目前狀態：{WORKSPACE_OPTIONS.find((item) => item.value === workspace.level)?.label}
-                          </div>
-                        </div>
-                        <Badge variant="outline">
-                          {WORKSPACE_OPTIONS.find((item) => item.value === workspace.level)?.label}
-                        </Badge>
+                      <div className="admin-permission-workspace-name">
+                        <strong>{workspace.label}</strong>
+                        <span>{WORKSPACE_OPTIONS.find((item) => item.value === workspace.level)?.label}</span>
                       </div>
 
                       <RadioGroup
@@ -457,192 +423,161 @@ export function UserPermissionsDialog({
                             value as WorkspaceAccessLevel
                           )
                         }
-                        className="admin-permission-level-grid grid grid-cols-1 gap-2 sm:grid-cols-3"
+                        className="admin-permission-level-grid"
                       >
                         {WORKSPACE_OPTIONS.map((option) => (
-                          <div
+                          <Label
                             key={`${workspace.id}-${option.value}`}
-                            className={`admin-permission-level min-w-0 rounded-2xl border p-3 transition-colors ${
+                            htmlFor={`${workspace.id}-${option.value}`}
+                            title={option.description}
+                            className={`admin-permission-level ${
                               workspace.level === option.value
-                                ? "border-primary/45 bg-primary/10"
-                                : "border-border/70 bg-background/50"
+                                ? "is-selected"
+                                : ""
                             }`}
                           >
-                            <div className="flex items-start gap-3">
-                              <RadioGroupItem
-                                value={option.value}
-                                id={`${workspace.id}-${option.value}`}
-                                className="mt-1"
-                              />
-                              <Label
-                                htmlFor={`${workspace.id}-${option.value}`}
-                                className="flex-1 cursor-pointer space-y-1"
-                              >
-                                <div className="font-medium text-foreground">
-                                  {option.label}
-                                </div>
-                                <div className="text-xs leading-5 text-muted-foreground">
-                                  {option.description}
-                                </div>
-                              </Label>
-                            </div>
-                          </div>
+                            <RadioGroupItem
+                              value={option.value}
+                              id={`${workspace.id}-${option.value}`}
+                              className="sr-only"
+                            />
+                            <span>{option.label}</span>
+                          </Label>
                         ))}
                       </RadioGroup>
                     </div>
                   ))}
-                </div>
               </div>
             </section>
 
-            <section className="space-y-6">
-              <div data-admin-zone="page-permissions" className="rounded-2xl border border-cyan-200/15 bg-[#0d2235] p-4 sm:p-5">
-                <h3 className="text-lg font-semibold">細部頁面權限</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  只有具有多個功能頁的工作區需要細分；其他四個工作區不再重複顯示舊權限。
-                </p>
+            <section data-admin-zone="page-permissions" className="admin-permission-pane">
+              <div className="admin-permission-pane-header">
+                <div>
+                  <h3>細部頁面權限</h3>
+                  <p>只列出維修中心與後台管理；工作區未授權時不展開。</p>
+                </div>
               </div>
 
-              <div className="grid gap-4">
-                <div className="rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-4">
-                  <div className="flex items-start gap-3">
-                    <Shield className="mt-0.5 h-5 w-5 text-cyan-200" />
-                    <div>
-                      <h4 className="font-semibold text-foreground">
-                        資料儲存隨機台維修紀錄中心啟用
-                      </h4>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        維修中心「檢視」可查看資料儲存；「管理」可建立空間、資料夾與上傳檔案，不需要另外勾選。
-                      </p>
-                    </div>
-                  </div>
-                </div>
+              <div className="admin-permission-storage-note">
+                <Shield className="h-4 w-4" />
+                <span>資料儲存權限會跟隨「機台維修紀錄中心」，不需重複設定。</span>
+              </div>
 
-                {DETAIL_PERMISSION_SECTIONS.map((section) => (
-                  <div
-                    key={section.workspaceId}
-                    className="rounded-2xl border border-cyan-300/15 bg-[#0d2235] p-4"
-                  >
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div>
-                        <h4 className="font-semibold text-foreground">{section.title}</h4>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                          {section.description}
-                        </p>
-                      </div>
-                      <Badge variant="outline">
-                        {WORKSPACE_OPTIONS.find(
-                          (item) => item.value === workspaceAccess[section.workspaceId],
-                        )?.label}
-                      </Badge>
-                    </div>
+              <div className="admin-permission-detail-list">
+                {DETAIL_PERMISSION_SECTIONS.map((section) => {
+                  const sectionLevel = workspaceAccess[section.workspaceId];
 
-                    <div className="grid gap-3">
-                      {section.groupKeys
-                        .map((groupKey) => [groupKey, LEGACY_PAGE_PERMISSION_GROUPS[groupKey]] as const)
-                        .filter(([groupKey]) => groupKey !== "test_plan")
-                        .map(([groupKey, group]) => {
-                        const groupPermissions = group.permissions.map(
-                          (permission) => permission.key,
-                        );
-                        const selectedCount = groupPermissions.filter((permission) =>
-                          permissions.includes(permission),
-                        ).length;
-
-                        return (
-                          <div
-                            key={groupKey}
-                            className="rounded-2xl border border-white/10 bg-[#102940] p-4"
-                          >
-                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  return (
+                    <div key={section.workspaceId} className="admin-permission-detail-section">
+                      <div className="admin-permission-detail-heading">
                         <div>
-                          <h4 className="font-semibold text-foreground">{group.name}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            已選 {selectedCount} / {group.permissions.length} 項
-                          </p>
+                          <h4>{section.title}</h4>
+                          <p>{section.description}</p>
                         </div>
-
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => applyPermissionGroupPreset(groupPermissions, "all")}
-                          >
-                            全選
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => applyPermissionGroupPreset(groupPermissions, "none")}
-                          >
-                            清空
-                          </Button>
-                        </div>
+                        <Badge variant="outline">
+                          {WORKSPACE_OPTIONS.find((item) => item.value === sectionLevel)?.label}
+                        </Badge>
                       </div>
 
-                      <div className="admin-page-permission-grid grid gap-3 md:grid-cols-2">
-                        {group.permissions.map((permission) => {
-                          const checked = permissions.includes(permission.key);
+                      {sectionLevel === "none" ? (
+                        <div className="admin-permission-detail-empty">
+                          先在左側將此工作區設為「檢視」或「管理」。
+                        </div>
+                      ) : (
+                        <div className="admin-permission-group-list">
+                          {section.groupKeys
+                            .map((groupKey) => [groupKey, LEGACY_PAGE_PERMISSION_GROUPS[groupKey]] as const)
+                            .filter(([groupKey]) => groupKey !== "test_plan")
+                            .map(([groupKey, group]) => {
+                              const groupPermissions = group.permissions.map(
+                                (permission) => permission.key,
+                              );
+                              const selectablePermissions = sectionLevel === "view"
+                                ? groupPermissions.filter((permission) => permission.endsWith("_view"))
+                                : groupPermissions;
+                              const selectedCount = groupPermissions.filter((permission) =>
+                                permissions.includes(permission),
+                              ).length;
 
-                          return (
-                            <Label
-                              key={permission.key}
-                              htmlFor={permission.key}
-                              className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors ${
-                                checked
-                                  ? "border-primary/45 bg-primary/10"
-                                  : "border-border/70 bg-background/50"
-                              }`}
-                            >
-                              <Checkbox
-                                id={permission.key}
-                                checked={checked}
-                                onCheckedChange={(checkedValue) =>
-                                  handlePermissionChange(
-                                    permission.key,
-                                    checkedValue as boolean
-                                  )
-                                }
-                                className="mt-1"
-                              />
-                              <div className="space-y-1">
-                                <div className="font-medium text-foreground">
-                                  {permission.label}
+                              return (
+                                <div key={groupKey} className="admin-permission-group-row">
+                                  <div className="admin-permission-group-name">
+                                    <strong>{group.name}</strong>
+                                    <span>{selectedCount}/{group.permissions.length}</span>
+                                  </div>
+
+                                  <div className="admin-permission-group-shortcuts">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => applyPermissionGroupPreset(selectablePermissions, "all")}
+                                    >
+                                      全選
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => applyPermissionGroupPreset(groupPermissions, "none")}
+                                    >
+                                      清除
+                                    </Button>
+                                  </div>
+
+                                  <div className="admin-permission-toggle-list">
+                                    {group.permissions.map((permission) => {
+                                      const checked = permissions.includes(permission.key);
+                                      const isEditPermission = permission.key.endsWith("_edit");
+                                      const disabled = isEditPermission && sectionLevel !== "edit";
+
+                                      return (
+                                        <Label
+                                          key={permission.key}
+                                          htmlFor={permission.key}
+                                          title={permission.label}
+                                          className={`admin-permission-toggle ${checked ? "is-selected" : ""} ${disabled ? "is-disabled" : ""}`}
+                                        >
+                                          <Checkbox
+                                            id={permission.key}
+                                            checked={checked}
+                                            disabled={disabled}
+                                            onCheckedChange={(checkedValue) =>
+                                              handlePermissionChange(
+                                                permission.key,
+                                                checkedValue as boolean,
+                                              )
+                                            }
+                                          />
+                                          <span>{isEditPermission ? "管理" : "檢視"}</span>
+                                        </Label>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {permission.key.endsWith("_edit")
-                                    ? "可編輯、更新或管理這個頁面的內容。"
-                                    : "可查看此頁內容，但不允許修改。"}
-                                </div>
-                              </div>
-                            </Label>
-                          );
-                        })}
-                      </div>
-                          </div>
-                        );
-                      })}
+                              );
+                            })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           </div>
         </div>
 
-        <div className="admin-permissions-footer flex flex-col gap-3 border-t border-border/70 bg-card/95 px-3 py-3 sm:px-6 sm:py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-muted-foreground">
-            儲存後會同時更新工作區入口權限與細部頁面授權。
+        <div className="admin-permissions-footer flex items-center justify-between gap-3 border-t border-border/70 bg-card/95 px-4 py-3 sm:px-5">
+          <div className="text-xs text-muted-foreground">
+            儲存後立即更新工作區入口與細部頁面權限。
           </div>
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose} disabled={isLoading}>
+          <div className="flex shrink-0 justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} disabled={isLoading}>
               <X className="mr-2 h-4 w-4" />
               取消
             </Button>
-            <Button onClick={handleSave} disabled={isLoading}>
+            <Button size="sm" onClick={handleSave} disabled={isLoading}>
               <Save className="mr-2 h-4 w-4" />
               {isLoading ? "儲存中..." : "儲存權限"}
             </Button>
