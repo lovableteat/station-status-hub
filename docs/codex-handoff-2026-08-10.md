@@ -170,7 +170,7 @@ For each completed task:
 
 ## Latest delivery - 2026-08-20
 
-The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 fix: rebuild core mobile workflows` and the later mobile workspace integration commits (`db249e9`, `fd384fa`, `f936736`) are present on the current delivery line. GitHub Pages deployment `#522` for the core rebuild completed successfully.
+The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 fix: rebuild core mobile workflows` and the later mobile workspace integration commits (`db249e9`, `fd384fa`, `f936736`) are present on the current delivery line. GitHub Pages deployment `#525` for the integrated delivery completed successfully; the earlier core rebuild deployment was `#522`.
 
 ### Mobile experience completed
 
@@ -190,5 +190,5 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 
 ### Repository state
 
-- `main` 與 `origin/main` 同步於 `98b6c14`。
+- `main` 與 `origin/main` 已同步，包含核心手機修正、後續 workspace 整合與本次交接文件更新。
 - 既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案仍未追蹤，刻意保留且未加入提交。
