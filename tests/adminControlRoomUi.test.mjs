@@ -76,7 +76,7 @@ test("admin dialogs and API console use the restrained maintenance color system"
 
   assert.match(permissions, /data-admin-dialog="permissions"/);
   assert.match(permissions, /data-permission-model="live-workspace-matrix"/);
-  assert.match(permissions, /首頁六個實際工作區/);
+  assert.match(permissions, /首頁七個實際工作區/);
   assert.match(permissions, /後台管理內頁/);
   assert.match(userEditor, /data-admin-dialog="user-editor"/);
   assert.match(apiPage, /data-admin-surface="api-control-room"/);

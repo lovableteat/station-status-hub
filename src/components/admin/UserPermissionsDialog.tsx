@@ -267,7 +267,9 @@ export function UserPermissionsDialog({
         // Save the compatible subset first, then merge the complete settings
         // without replacing account-scoped drafts or other preferences.
         const legacyPermissions = synchronizedPermissions.filter(
-          (permission) => !permission.startsWith("pcb_designer_"),
+          (permission) =>
+            !permission.startsWith("pcb_designer_") &&
+            !permission.startsWith("performance_"),
         );
         const legacyWorkspaceIds = new Set([
           "station-status",
@@ -353,7 +355,7 @@ export function UserPermissionsDialog({
               設定 {username} 的網站權限
             </DialogTitle>
             <DialogDescription>
-              權限依首頁六個實際工作區設定；維修中心與後台管理再依下方內頁權限逐項生效。
+              權限依首頁七個實際工作區設定；維修中心與後台管理再依下方內頁權限逐項生效。
             </DialogDescription>
           </DialogHeader>
 
@@ -425,7 +427,7 @@ export function UserPermissionsDialog({
                 <div>
                   <h3 className="text-lg font-semibold">工作區權限</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    與首頁六個入口一一對應；單頁工作區直接生效，維修中心與後台管理再套用右側內頁權限。
+                    與首頁七個入口一一對應；單頁工作區直接生效，維修中心與後台管理再套用右側內頁權限。
                   </p>
                 </div>
 

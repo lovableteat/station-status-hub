@@ -276,3 +276,30 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 ### Annotated UI repository state
 
 - 本輪只提交標記畫面相關的料號、後台協作、API 控制台、權限視窗、回歸測試與本交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。
+
+### Latest delivery - 2026-08-20 performance appraisal workspace
+
+新增第七個工作區「績效考核系統」，沿用既有 workspace shell、深色平台基底與權限矩陣，不另造一套登入或管理流程。頁面提供 2026 Q3／歷史週期、總覽／我的考核／團隊考核、搜尋、狀態篩選、目標進度、員工與主管回饋、評分、完成審核、CSV 匯出，以及桌面表格和手機卡片兩種閱讀方式。
+
+### Performance implementation
+
+- `src/components/performance/PerformanceAppraisalPage.tsx`：第七工作區主頁、詳情、建立／編輯、完成與匯出。
+- `src/components/performance/performanceData.mjs`：種子資料、正規化、統計與 CSV 純邏輯。
+- `src/components/performance/performance.css`：工作區色彩、狀態、進度與手機版版面。
+- `supabase/migrations/20260820123000_add_performance_workspace.sql`：`performance_reviews`、索引、RLS、realtime 與權限儲存 RPC 更新。
+- `src/lib/workspacePermissions.ts`、`src/pages/Index.tsx`、`UserPermissionsDialog`、`MobileWorkspaceDock`：新增 `performance_view`／`performance_edit` 與第七入口。
+
+資料流程採雲端優先、本機兜底：頁面先使用 localStorage 讓現場快速看到資料，再嘗試 Supabase；雲端同步失敗會保留本機資料並提示使用者，不會白屏或把剛輸入的內容清掉。migration 尚未部署的環境仍可檢視與本機保存；套用 migration 後會使用共用的 `performance_reviews` 表。
+
+### Performance verification
+
+- `tests/performanceAppraisal.test.mjs`：週期統計、snake_case 雲端資料正規化、進度邊界和 CSV 引號跳脫。
+- focused tests：39/39 通過，涵蓋績效資料、七工作區權限、手機殼層、後台與既有工作區回歸。
+- scoped ESLint 通過；production build 通過，`3493 modules transformed`。建置仍只出現既有 OCCT 外部化與大型 chunk 提示。
+- TypeScript 全專案仍有既有 Supabase generic 型別技術債；本次新增的績效頁與主要路由整合沒有新增型別錯誤。
+- 本機瀏覽器實看桌面 `1440x900` 與手機 `390x844`：桌面七項導覽完整、無水平溢出，手機切換五張考核卡片、底部操作列可用，無水平溢出，且不再有巢狀 `main`。
+
+### Performance repository state
+
+- 只應提交績效頁、權限整合、Supabase migration、Database type、回歸測試與本交接文件。
+- 既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤，不可一併加入。

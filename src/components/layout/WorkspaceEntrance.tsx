@@ -8,6 +8,7 @@ import {
   KeyRound,
   Server,
   ShieldCheck,
+  Target,
   Thermometer,
   UsersRound,
   Zap,
@@ -91,6 +92,15 @@ const workspaceToneMap: Record<
       "surface-accent surface-accent--rose bg-[linear-gradient(180deg,rgba(43,20,60,0.96),rgba(13,17,36,0.98))] hover:border-rose-300/34",
     description: "貼上或上傳文件、圖片與長文字，交由多家 AI 模型查詢、比較和整理。",
     features: ["100 MB 文件", "圖文貼上", "/ 共享提示詞"],
+  },
+  performance: {
+    badge: "人員發展",
+    iconWrap:
+      "border-amber-300/25 bg-amber-300/10 text-amber-100 shadow-[0_18px_38px_-28px_rgba(251,191,36,0.85)]",
+    panel:
+      "surface-accent surface-accent--amber bg-[linear-gradient(180deg,rgba(49,36,15,0.96),rgba(19,21,31,0.98))] hover:border-amber-300/35",
+    description: "用考核週期整理目標、進度、主管回饋與評分，讓每個人的下一步清楚可追蹤。",
+    features: ["考核週期", "目標進度", "回饋與評分"],
   },
 };
 

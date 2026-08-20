@@ -237,10 +237,10 @@ test("workspace preset synchronizes station page permissions", () => {
   );
 });
 
-test("permission settings expose the same six workspaces as the home page", () => {
+test("permission settings expose the same seven workspaces as the home page", () => {
   const access = readWorkspaceAccess(
     {},
-    ["dashboard_view", "data_center_edit", "pcb_designer_view", "admin_edit", "comparison_view"],
+    ["dashboard_view", "data_center_edit", "pcb_designer_view", "admin_edit", "comparison_view", "performance_view"],
   );
 
   assert.deepEqual(Object.keys(access), [
@@ -250,11 +250,13 @@ test("permission settings expose the same six workspaces as the home page", () =
     "pcb-designer",
     "user-management",
     "ai-chat",
+    "performance",
   ]);
   assert.equal(access["station-status"], "view");
   assert.equal(access["data-center"], "edit");
   assert.equal(access["user-management"], "edit");
   assert.equal(access["ai-chat"], "view");
+  assert.equal(access["performance"], "view");
 });
 
 test("backend workspace level still respects its detailed page permissions", () => {

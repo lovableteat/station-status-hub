@@ -1,0 +1,169 @@
+.performance-workspace {
+  --performance-ink: #f5f9ff;
+  --performance-muted: #9db2c7;
+  --performance-border: rgba(132, 189, 223, 0.18);
+  --performance-panel: rgba(9, 26, 42, 0.94);
+  min-height: 100%;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(42, 190, 193, 0.16), transparent 30%),
+    radial-gradient(circle at 92% 12%, rgba(242, 181, 73, 0.12), transparent 28%),
+    #061421;
+  color: var(--performance-ink);
+}
+
+.performance-hero {
+  border-bottom: 1px solid var(--performance-border);
+  background: linear-gradient(112deg, rgba(18, 55, 72, 0.96), rgba(13, 29, 47, 0.98) 58%, rgba(41, 38, 64, 0.96));
+}
+
+.performance-surface {
+  border: 1px solid var(--performance-border);
+  background: var(--performance-panel);
+  box-shadow: 0 20px 48px -38px rgba(49, 191, 205, 0.75);
+}
+
+.performance-stat {
+  min-height: 118px;
+  border: 1px solid var(--performance-border);
+  background: rgba(14, 37, 57, 0.9);
+}
+
+.performance-stat--mint {
+  border-color: rgba(103, 226, 178, 0.28);
+  background: linear-gradient(135deg, rgba(18, 73, 74, 0.76), rgba(9, 35, 51, 0.94));
+}
+
+.performance-stat--amber {
+  border-color: rgba(255, 205, 106, 0.28);
+  background: linear-gradient(135deg, rgba(75, 57, 31, 0.82), rgba(23, 35, 46, 0.94));
+}
+
+.performance-stat--violet {
+  border-color: rgba(188, 167, 255, 0.25);
+  background: linear-gradient(135deg, rgba(55, 42, 84, 0.8), rgba(19, 29, 49, 0.94));
+}
+
+.performance-stat--blue {
+  border-color: rgba(114, 187, 255, 0.28);
+  background: linear-gradient(135deg, rgba(24, 57, 94, 0.85), rgba(10, 31, 52, 0.94));
+}
+
+.performance-table th {
+  color: #a9c0d4;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.performance-table td {
+  border-top: 1px solid rgba(132, 189, 223, 0.12);
+  color: #e7f0f8;
+  vertical-align: middle;
+}
+
+.performance-table tbody tr {
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.performance-table tbody tr:hover {
+  background: rgba(71, 194, 210, 0.07);
+}
+
+.performance-input,
+.performance-select,
+.performance-textarea {
+  width: 100%;
+  border: 1px solid rgba(132, 189, 223, 0.22);
+  border-radius: 0.85rem;
+  background: rgba(5, 20, 33, 0.82);
+  color: #eff8ff;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.performance-input,
+.performance-select {
+  min-height: 2.75rem;
+  padding: 0.55rem 0.8rem;
+}
+
+.performance-textarea {
+  min-height: 6rem;
+  padding: 0.7rem 0.8rem;
+  resize: vertical;
+}
+
+.performance-input:focus,
+.performance-select:focus,
+.performance-textarea:focus {
+  border-color: rgba(103, 232, 249, 0.75);
+  box-shadow: 0 0 0 3px rgba(103, 232, 249, 0.12);
+}
+
+.performance-progress-track {
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(129, 159, 184, 0.16);
+}
+
+.performance-progress-value {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #67e8f9, #6ee7b7);
+  transition: width 220ms ease;
+}
+
+.performance-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.28rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.performance-status--slate {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(100, 116, 139, 0.15);
+  color: #cbd5e1;
+}
+
+.performance-status--amber {
+  border: 1px solid rgba(252, 211, 77, 0.35);
+  background: rgba(245, 158, 11, 0.14);
+  color: #fde68a;
+}
+
+.performance-status--sky {
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  background: rgba(14, 165, 233, 0.14);
+  color: #bae6fd;
+}
+
+.performance-status--emerald {
+  border: 1px solid rgba(110, 231, 183, 0.35);
+  background: rgba(16, 185, 129, 0.14);
+  color: #bbf7d0;
+}
+
+@media (max-width: 767px) {
+  .performance-workspace {
+    padding-bottom: var(--mobile-shell-bottom);
+  }
+
+  .performance-hero {
+    background: linear-gradient(155deg, rgba(18, 62, 77, 0.98), rgba(10, 28, 46, 0.98));
+  }
+
+  .performance-surface {
+    box-shadow: none;
+  }
+
+  .performance-table-scroll {
+    overflow-x: auto;
+  }
+}
