@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -52,4 +53,22 @@ test("performance CSV exports headers, status labels, and escaped values", () =>
   assert.match(csv, /"Ben ""B"""/);
   assert.match(csv, /"填寫中"/);
   assert.match(csv, /"50"/);
+});
+
+test("performance workspace keeps its navigation in a responsive sidebar", async () => {
+  const [pageSource, styleSource] = await Promise.all([
+    readFile(new URL("../src/components/performance/PerformanceAppraisalPage.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/performance/performance.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(pageSource, /data-testid="performance-sidebar"/);
+  assert.match(pageSource, /data-testid="performance-mobile-nav"/);
+  assert.match(pageSource, /data-performance-nav=\{item\.id\}/);
+  assert.match(pageSource, /績效總覽/);
+  assert.match(pageSource, /我的考核/);
+  assert.match(pageSource, /團隊考核/);
+  assert.match(styleSource, /\.performance-sidebar\.is-collapsed/);
+  assert.match(styleSource, /\.performance-sidebar\.is-mobile-open/);
+  assert.match(styleSource, /@media \(max-width: 1180px\)/);
+  assert.match(styleSource, /@media \(max-width: 480px\)/);
 });

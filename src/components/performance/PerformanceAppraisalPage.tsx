@@ -8,6 +8,9 @@ import {
   Clock3,
   Download,
   FileText,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   RefreshCw,
   Save,
@@ -56,6 +59,13 @@ const performanceStatusEntries = Object.entries(PERFORMANCE_STATUS) as Array<[
 
 type PerformanceTab = "overview" | "mine" | "team";
 type PerformanceStatus = "draft" | "in-progress" | "submitted" | "approved";
+
+const SIDEBAR_STORAGE_KEY = "station-status-hub:performance-sidebar-collapsed:v1";
+const PERFORMANCE_NAV_ITEMS = [
+  { id: "overview" as const, label: "績效總覽", description: "摘要與全部考核", icon: FileText },
+  { id: "mine" as const, label: "我的考核", description: "個人目標與回饋", icon: UserRound },
+  { id: "team" as const, label: "團隊考核", description: "主管評分與追蹤", icon: UsersRound },
+];
 
 interface PerformanceGoal {
   id: string;
@@ -211,6 +221,185 @@ function ProgressBar({ value }: { value: number }) {
   );
 }
 
+interface PerformanceSidebarProps {
+  activeTab: PerformanceTab;
+  canEdit: boolean;
+  collapsed: boolean;
+  currentCycle: { id: string; label: string; period: string };
+  dataSource: "cloud" | "local";
+  isLoading: boolean;
+  mineCount: number;
+  mobileOpen: boolean;
+  reviewCount: number;
+  selectedCycle: string;
+  onCollapseChange: (collapsed: boolean) => void;
+  onExport: () => void;
+  onMobileOpenChange: (open: boolean) => void;
+  onNewReview: () => void;
+  onRefresh: () => void;
+  onSelectCycle: (cycleId: string) => void;
+  onTabChange: (tab: PerformanceTab) => void;
+}
+
+function PerformanceSidebar({
+  activeTab,
+  canEdit,
+  collapsed,
+  currentCycle,
+  dataSource,
+  isLoading,
+  mineCount,
+  mobileOpen,
+  reviewCount,
+  selectedCycle,
+  onCollapseChange,
+  onExport,
+  onMobileOpenChange,
+  onNewReview,
+  onRefresh,
+  onSelectCycle,
+  onTabChange,
+}: PerformanceSidebarProps) {
+  const compact = collapsed && !mobileOpen;
+  const navCounts: Record<PerformanceTab, number | null> = {
+    overview: reviewCount,
+    mine: mineCount,
+    team: Math.max(0, reviewCount - mineCount),
+  };
+
+  const handleTabChange = (tab: PerformanceTab) => {
+    onTabChange(tab);
+    onMobileOpenChange(false);
+  };
+
+  return (
+    <>
+      {mobileOpen && (
+        <button
+          type="button"
+          className="performance-sidebar-backdrop"
+          aria-label="關閉績效工作區選單"
+          onClick={() => onMobileOpenChange(false)}
+        />
+      )}
+      <aside
+        className={cn(
+          "performance-sidebar",
+          compact && "is-collapsed",
+          mobileOpen && "is-mobile-open",
+        )}
+        data-testid="performance-sidebar"
+        aria-label="績效考核工作區"
+      >
+        <div className="performance-sidebar-heading">
+          <span className="performance-sidebar-mark" aria-hidden="true">
+            <Target className="h-5 w-5" />
+          </span>
+          {!compact && (
+            <div className="performance-sidebar-title">
+              <strong>績效工作區</strong>
+              <span>People Performance</span>
+            </div>
+          )}
+          <button
+            type="button"
+            className="performance-sidebar-collapse"
+            aria-label={compact ? "展開績效側邊欄" : "收合績效側邊欄"}
+            title={compact ? "展開側邊欄" : "收合側邊欄"}
+            onClick={() => onCollapseChange(!collapsed)}
+          >
+            {compact ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            className="performance-sidebar-mobile-close"
+            aria-label="關閉績效工作區選單"
+            onClick={() => onMobileOpenChange(false)}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <nav className="performance-sidebar-nav" aria-label="績效考核導覽">
+          {!compact && <p className="performance-sidebar-label">考核檢視</p>}
+          {PERFORMANCE_NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={cn("performance-sidebar-item", active && "is-active")}
+                data-performance-nav={item.id}
+                aria-current={active ? "page" : undefined}
+                title={compact ? item.label : undefined}
+                onClick={() => handleTabChange(item.id)}
+              >
+                <span className="performance-sidebar-item-icon"><Icon className="h-5 w-5" /></span>
+                {!compact && (
+                  <span className="performance-sidebar-item-copy">
+                    <strong>{item.label}</strong>
+                    <small>{item.description}</small>
+                  </span>
+                )}
+                {!compact && navCounts[item.id] !== null && (
+                  <span className="performance-sidebar-count">{navCounts[item.id]}</span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {!compact && (
+          <div className="performance-sidebar-cycle">
+            <div className="performance-sidebar-section-title">
+              <CalendarDays className="h-4 w-4" />
+              <span>考核週期</span>
+            </div>
+            <select
+              aria-label="選擇考核週期"
+              value={selectedCycle}
+              onChange={(event) => onSelectCycle(event.target.value)}
+              className="performance-select"
+            >
+              {PERFORMANCE_CYCLES.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.label}</option>)}
+            </select>
+            <p>{currentCycle.period}</p>
+          </div>
+        )}
+
+        <div className="performance-sidebar-actions" aria-label="績效考核常用操作">
+          {!compact && <p className="performance-sidebar-label">常用操作</p>}
+          {canEdit && (
+            <button type="button" className="performance-sidebar-action is-primary" onClick={onNewReview} title="新增考核">
+              <Plus className="h-4 w-4" />
+              {!compact && <span>新增考核</span>}
+            </button>
+          )}
+          <button type="button" className="performance-sidebar-action is-amber" onClick={onExport} title="匯出報表">
+            <Download className="h-4 w-4" />
+            {!compact && <span>匯出報表</span>}
+          </button>
+          <button type="button" className="performance-sidebar-action" onClick={onRefresh} disabled={isLoading} title="重新整理">
+            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            {!compact && <span>{isLoading ? "同步中" : "重新整理"}</span>}
+          </button>
+        </div>
+
+        <div className="performance-sidebar-footer">
+          <span className="performance-source-dot" />
+          {!compact && (
+            <span>
+              <strong>{dataSource === "cloud" ? "共用資料已同步" : "本機示範資料"}</strong>
+              <small>{canEdit ? "管理模式" : "檢視模式"}</small>
+            </span>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
 export function PerformanceAppraisalPage() {
   const { user } = useUser();
   const { canEditModule } = usePermissions();
@@ -224,6 +413,11 @@ export function PerformanceAppraisalPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | PerformanceStatus>("all");
   const [isLoading, setIsLoading] = useState(false);
   const [dataSource, setDataSource] = useState<"cloud" | "local">("local");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+  });
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [selectedReview, setSelectedReview] = useState<PerformanceReview | null>(null);
   const [formReview, setFormReview] = useState<PerformanceReview | null>(null);
   const [form, setForm] = useState<ReviewFormState>(() => getReviewForm(null, user?.displayName || "管理員"));
@@ -265,11 +459,25 @@ export function PerformanceAppraisalPage() {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileSidebarOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mobileSidebarOpen]);
+
   const reviewRows = useMemo(
     () => reviews.filter((review) => review.cycleId === selectedCycle),
     [reviews, selectedCycle],
   );
   const currentCycle = PERFORMANCE_CYCLES.find((cycle) => cycle.id === selectedCycle) || PERFORMANCE_CYCLES[0];
+  const activeNavigation = PERFORMANCE_NAV_ITEMS.find((item) => item.id === activeTab) || PERFORMANCE_NAV_ITEMS[0];
   const summary = useMemo(() => calculatePerformanceSummary(reviewRows), [reviewRows]);
   const mineCount = useMemo(
     () => reviewRows.filter((review) => getMine(review, user)).length,
@@ -431,63 +639,66 @@ export function PerformanceAppraisalPage() {
   };
 
   return (
-    <section className="performance-workspace min-h-full" data-workspace="performance">
-      <header className="performance-hero px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
-        <div className="mx-auto max-w-[1500px]">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-cyan-200/30 bg-cyan-300/15 text-cyan-100 shadow-[0_18px_36px_-25px_rgba(103,232,249,0.95)] sm:h-14 sm:w-14">
-                <Target className="h-6 w-6 sm:h-7 sm:w-7" />
-              </div>
-              <div className="min-w-0">
-                <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.24em] text-cyan-200/80">
-                  PEOPLE · PERFORMANCE
-                  <span className="rounded-full border border-emerald-200/25 bg-emerald-300/10 px-2 py-0.5 text-[10px] tracking-normal text-emerald-100">第七工作區</span>
-                </div>
-                <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">績效考核系統</h1>
-                <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-300 sm:text-base">以考核週期集中管理目標、進度、回饋與主管評分，讓每個人清楚知道本期工作重點與下一步。</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex h-9 items-center gap-2 rounded-full border border-emerald-200/25 bg-emerald-300/10 px-3 text-xs font-bold text-emerald-100">
-                <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.9)]" />
-                {dataSource === "cloud" ? "共用資料已同步" : "本機示範資料"}
-              </span>
-              <Button type="button" variant="outline" onClick={() => void loadData()} disabled={isLoading} className="h-9 rounded-xl border-cyan-200/20 bg-white/[0.04] text-slate-100 hover:bg-cyan-300/10">
-                <RefreshCw className={cn("mr-2 h-4 w-4", isLoading && "animate-spin")} />
-                重新整理
-              </Button>
-              <Button type="button" variant="outline" onClick={exportReport} className="h-9 rounded-xl border-amber-200/25 bg-amber-300/10 text-amber-100 hover:bg-amber-300/20">
-                <Download className="mr-2 h-4 w-4" />
-                匯出報表
-              </Button>
-              {canEdit && (
-                <Button type="button" onClick={openNewReview} className="h-9 rounded-xl bg-cyan-300 text-[#062030] hover:bg-cyan-200">
-                  <Plus className="mr-2 h-4 w-4" />
-                  新增考核
-                </Button>
-              )}
+    <section className="performance-workspace min-h-full" data-workspace="performance" data-performance-shell="true">
+      <PerformanceSidebar
+        activeTab={activeTab}
+        canEdit={canEdit}
+        collapsed={sidebarCollapsed}
+        currentCycle={currentCycle}
+        dataSource={dataSource}
+        isLoading={isLoading}
+        mineCount={mineCount}
+        mobileOpen={mobileSidebarOpen}
+        reviewCount={reviewRows.length}
+        selectedCycle={selectedCycle}
+        onCollapseChange={setSidebarCollapsed}
+        onExport={exportReport}
+        onMobileOpenChange={setMobileSidebarOpen}
+        onNewReview={openNewReview}
+        onRefresh={() => void loadData()}
+        onSelectCycle={setSelectedCycle}
+        onTabChange={setActiveTab}
+      />
+
+      <div className="performance-content">
+        <header className="performance-hero">
+          <div className="performance-hero-copy">
+            <button
+              type="button"
+              className="performance-mobile-menu"
+              data-testid="performance-mobile-nav"
+              aria-label="開啟績效工作區選單"
+              onClick={() => {
+                setSidebarCollapsed(false);
+                setMobileSidebarOpen(true);
+              }}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <span className="performance-hero-icon" aria-hidden="true"><Target className="h-6 w-6" /></span>
+            <div className="min-w-0">
+              <div className="performance-eyebrow">PEOPLE · PERFORMANCE <span>第七工作區</span></div>
+              <h1>績效考核系統</h1>
+              <p>集中管理目標、進度、回饋與主管評分。</p>
             </div>
           </div>
-
-          <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#061522]/45 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <CalendarDays className="h-5 w-5 shrink-0 text-amber-200" />
-              <div className="min-w-0">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">目前考核週期</p>
-                <p className="truncate text-sm font-bold text-white">{currentCycle.label}</p>
-              </div>
-              <span className="hidden h-5 w-px bg-white/15 sm:block" />
-              <span className="text-xs text-slate-400">{currentCycle.period}</span>
+          <div className="performance-hero-context" aria-label="目前考核檢視">
+            <div>
+              <span>目前檢視</span>
+              <strong>{activeNavigation.label}</strong>
             </div>
-            <select aria-label="選擇考核週期" value={selectedCycle} onChange={(event) => setSelectedCycle(event.target.value)} className="performance-select w-full sm:w-auto sm:min-w-[220px]">
-              {PERFORMANCE_CYCLES.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.label}</option>)}
-            </select>
+            <div>
+              <span>考核週期</span>
+              <strong>{currentCycle.label}</strong>
+            </div>
+            <span className="performance-hero-source">
+              <span className="performance-source-dot" />
+              {dataSource === "cloud" ? "已同步" : "本機資料"}
+            </span>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <div className="mx-auto max-w-[1500px] space-y-4 px-4 py-4 sm:space-y-5 sm:px-6 sm:py-6 lg:px-8" data-performance-main="true">
+        <div className="space-y-4 py-4 sm:space-y-5 sm:py-5" data-performance-main="true">
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="考核摘要">
           <div className="performance-stat rounded-2xl p-4 sm:p-5">
             <div className="flex items-start justify-between"><span className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">本期考核人數</span><UsersRound className="h-5 w-5 text-cyan-200" /></div>
@@ -513,16 +724,9 @@ export function PerformanceAppraisalPage() {
 
         <section className="performance-surface rounded-2xl p-3 sm:p-4" data-performance-zone="filters">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex min-w-0 flex-wrap gap-2" role="tablist" aria-label="考核檢視模式">
-              {([
-                ["overview", "總覽", FileText],
-                ["mine", `我的考核${mineCount ? ` · ${mineCount}` : ""}`, UserRound],
-                ["team", "團隊考核", UsersRound],
-              ] as const).map(([tab, label, Icon]) => (
-                <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={cn("inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-bold transition-colors", activeTab === tab ? "border-cyan-200/45 bg-cyan-300/15 text-cyan-50" : "border-transparent text-slate-400 hover:border-cyan-200/20 hover:bg-white/[0.04] hover:text-white")}>
-                  <Icon className="h-4 w-4" />{label}
-                </button>
-              ))}
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200/65">{activeNavigation.label}</p>
+              <p className="mt-1 text-sm text-slate-400">{activeNavigation.description} · 顯示 {filteredReviews.length} 筆</p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <label className="relative block min-w-0 sm:min-w-[260px]">
@@ -588,6 +792,7 @@ export function PerformanceAppraisalPage() {
             <section className="rounded-2xl border border-emerald-200/15 bg-emerald-300/[0.06] p-4"><div className="flex gap-3"><ArrowUpRight className="mt-0.5 h-5 w-5 shrink-0 text-emerald-200" /><div><strong className="block text-sm text-emerald-50">權限依工作區控管</strong><p className="mt-1 text-xs leading-5 text-emerald-100/65">目前為 {canEdit ? "管理模式，可新增、編輯與完成考核" : "檢視模式，只能查看與匯出報表"}。</p></div></div></section>
           </aside>
         </div>
+      </div>
       </div>
 
       <Dialog open={Boolean(selectedReview)} onOpenChange={(open) => !open && setSelectedReview(null)}>
