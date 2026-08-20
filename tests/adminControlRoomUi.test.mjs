@@ -76,8 +76,8 @@ test("admin dialogs and API console use the restrained maintenance color system"
 
   assert.match(permissions, /data-admin-dialog="permissions"/);
   assert.match(permissions, /data-permission-model="live-workspace-matrix"/);
-  assert.match(permissions, /首頁七個實際工作區/);
-  assert.match(permissions, /後台管理內頁/);
+  assert.match(permissions, /先設定工作區層級/);
+  assert.match(permissions, /只有維修中心與後台管理需要細分內頁權限/);
   assert.match(userEditor, /data-admin-dialog="user-editor"/);
   assert.match(apiPage, /data-admin-surface="api-control-room"/);
   assert.match(apiPage, /className="admin-api-workspace"/);
@@ -88,14 +88,18 @@ test("admin dialogs and API console use the restrained maintenance color system"
   assert.match(styles, /\.admin-api-card/);
   assert.match(styles, /\.admin-api-primary-action/);
   assert.match(styles, /\.admin-api-table-scroll/);
-  assert.match(styles, /\.admin-permissions-dialog\s*\{[^}]*width:\s*min\(1420px, calc\(100vw - 32px\)\);[^}]*height:\s*min\(960px, calc\(100dvh - 32px\)\);/s);
+  assert.match(styles, /\.admin-permissions-dialog\s*\{[^}]*width:\s*min\(1160px, calc\(100vw - 24px\)\);[^}]*max-height:\s*min\(780px, calc\(100dvh - 24px\)\);/s);
   assert.match(styles, /\.admin-permissions-layout/);
-  assert.match(styles, /@media \(min-width: 1280px\)/);
+  assert.match(styles, /@container \(min-width: 900px\)/);
   assert.match(apiKeys, /admin-api-table-scroll/);
   assert.match(apiKeys, /admin-api-mobile-table-hint/);
   assert.match(permissions, /admin-permissions-dialog/);
   assert.match(permissions, /admin-permissions-scroll/);
-  assert.match(permissions, /sm:grid-cols-3/);
+  assert.match(permissions, /admin-permissions-toolbar/);
+  assert.match(permissions, /admin-permission-workspace-row/);
+  assert.match(permissions, /admin-permission-toggle/);
+  assert.doesNotMatch(permissions, /admin-permissions-summary/);
+  assert.doesNotMatch(styles, /height:\s*min\(960px/);
   assert.match(apiKeys, /data-admin-zone="api-key-status"/);
   assert.match(apiKeys, /data-admin-zone="api-key-list"/);
   assert.doesNotMatch(
@@ -177,7 +181,9 @@ test("shared dialogs and admin content stay inside responsive viewport bounds", 
   assert.match(alertDialog, /w-\[calc\(100vw-1rem\)\]/);
   assert.match(mobileDialog, /max-h-\[min\(88dvh,760px\)\]/);
   assert.match(mobileDialog, /safe-area-inset-bottom/);
-  assert.match(permissions, /admin-permission-workspace-grid/);
+  assert.match(permissions, /admin-permission-workspace-row/);
   assert.match(permissions, /admin-permission-level-grid/);
-  assert.match(styles, /@media \(max-width: 639px\)[\s\S]*\.admin-permission-level-grid,[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) !important;/);
+  assert.match(permissions, /admin-permission-group-row/);
+  assert.match(styles, /@media \(max-width: 639px\)[\s\S]*\.admin-permission-workspace-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/);
+  assert.match(styles, /@media \(max-width: 639px\)[\s\S]*\.admin-permission-toggle-list\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/);
 });
