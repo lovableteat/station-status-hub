@@ -40,6 +40,7 @@ export function createBlankProject(name = "未命名 PCB 專案"): PcbProject {
         top: DEFAULT_PCB_TOP_LAYER_COLOR,
         bottom: DEFAULT_PCB_BOTTOM_LAYER_COLOR,
       },
+      cuts: [],
     },
     components: [],
     keepouts: [],

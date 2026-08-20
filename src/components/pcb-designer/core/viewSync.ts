@@ -72,7 +72,7 @@ export function getPcb3DComponentTransform(
     position: [
       center.x - board.width / 2,
       0,
-      board.height / 2 - center.y,
+      center.y - board.height / 2,
     ],
     rotation: [
       0,

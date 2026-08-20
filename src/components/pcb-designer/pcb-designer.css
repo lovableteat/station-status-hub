@@ -677,6 +677,23 @@
   line-height: 1.5;
 }
 
+.pcb-inspector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid rgba(255, 209, 102, 0.28);
+  border-radius: 10px;
+  background: rgba(255, 209, 102, 0.06);
+  padding: 10px;
+}
+
+.pcb-inspector-section h3 {
+  margin: 0;
+  color: #ffe5a1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .pcb-measurement-value {
   margin: 0;
   color: #fde047;

@@ -362,12 +362,36 @@ export function PcbSoftware3DCanvas({
       });
     }
 
+    project.board.cuts?.forEach((cut) => {
+      const isVertical = cut.orientation === "vertical";
+      const worldPoints = isVertical
+        ? [
+          projectSoftwarePoint({ x: cut.position - project.board.width / 2, y: BOARD_THICKNESS / 2 + 0.08, z: -project.board.height / 2 }, camera),
+          projectSoftwarePoint({ x: cut.position - project.board.width / 2, y: BOARD_THICKNESS / 2 + 0.08, z: project.board.height / 2 }, camera),
+        ] as [SoftwareProjectedPoint, SoftwareProjectedPoint]
+        : [
+          projectSoftwarePoint({ x: -project.board.width / 2, y: BOARD_THICKNESS / 2 + 0.08, z: cut.position - project.board.height / 2 }, camera),
+          projectSoftwarePoint({ x: project.board.width / 2, y: BOARD_THICKNESS / 2 + 0.08, z: cut.position - project.board.height / 2 }, camera),
+        ] as [SoftwareProjectedPoint, SoftwareProjectedPoint];
+      if (worldPoints.every((point) => point.visible)) {
+        shapes.push({
+          kind: "line",
+          points: worldPoints,
+          depth: (worldPoints[0].depth + worldPoints[1].depth) / 2,
+          renderOrder: getSoftwareLayerRenderOrder("top", camera.eye.y, "surface") + 0.2,
+          stroke: "#ffd166",
+          alpha: 0.92,
+          lineWidth: 1.8,
+        });
+      }
+    });
+
     project.keepouts.forEach((keepout) => {
       const selected = selectedIds.has(keepout.id);
       const renderOrder = getSoftwareLayerRenderOrder("top", camera.eye.y);
       const isNearSide = renderOrder > SOFTWARE_RENDER_ORDER.board;
       const centerX = keepout.x + keepout.width / 2 - project.board.width / 2;
-      const centerZ = project.board.height / 2 - keepout.y - keepout.height / 2;
+      const centerZ = keepout.y + keepout.height / 2 - project.board.height / 2;
       const angle = -((keepout.rotation ?? 0) * Math.PI) / 180;
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);

@@ -30,7 +30,11 @@ interface SystemUserTable {
 
 export interface PcbAccountDatabase {
   rpc: (
-    name: "load_pcb_designer_workspace" | "save_pcb_designer_workspace",
+    name:
+      | "load_pcb_designer_workspace_shared"
+      | "save_pcb_designer_workspace_shared"
+      | "load_pcb_designer_workspace"
+      | "save_pcb_designer_workspace",
     args: Record<string, unknown>,
   ) => DatabaseResult<unknown>;
   from: (table: "system_users") => SystemUserTable;
@@ -60,7 +64,9 @@ function stateFromPermissions(permissions: unknown): PcbSaveState | null {
 /**
  * Older deployments store one workspace snapshot in each account's permission
  * document. Treat those snapshots as replicas of one team project catalog,
- * while retaining the current account's templates, library and active project.
+ * while retaining the current account's templates and active project. Custom
+ * library records are merged here too for older installations without the
+ * shared-library RPC migration.
  */
 export function mergePcbFallbackWorkspaces(
   records: SystemUserRecord[],
@@ -84,6 +90,13 @@ export function mergePcbFallbackWorkspaces(
     snapshots.flatMap(({ state }) => state.remoteDeletions?.projects ?? []),
   );
   const projectMap = new Map<string, PcbSaveState["projects"][number]>();
+  const libraryMap = new Map<string, {
+    component: PcbSaveState["library"][number];
+    updatedAt: string;
+  }>();
+  const deletedLibrary = new Set(
+    snapshots.flatMap(({ state }) => state.remoteDeletions?.library ?? []),
+  );
 
   for (const { state } of snapshots) {
     for (const project of state.projects) {
@@ -91,6 +104,16 @@ export function mergePcbFallbackWorkspaces(
       const current = projectMap.get(project.id);
       if (!current || revision(project.updatedAt) > revision(current.updatedAt)) {
         projectMap.set(project.id, structuredClone(project));
+      }
+    }
+    for (const component of state.library) {
+      if (component.source === "built-in" || deletedLibrary.has(component.id)) continue;
+      const current = libraryMap.get(component.id);
+      if (!current || revision(state.updatedAt) >= revision(current.updatedAt)) {
+        libraryMap.set(component.id, {
+          component: structuredClone(component),
+          updatedAt: state.updatedAt,
+        });
       }
     }
   }
@@ -116,6 +139,9 @@ export function mergePcbFallbackWorkspaces(
   return refreshBuiltInCatalog({
     ...accountState,
     projects,
+    library: [...libraryMap.values()]
+      .map(({ component }) => component)
+      .sort((left, right) => left.name.localeCompare(right.name)),
     activeProjectId,
     pendingPlacementsByProject,
     remoteDeletions: {
@@ -140,7 +166,7 @@ export function createPcbAccountRemoteClient(
 ): PcbRemoteClient {
   return {
     load: async () => {
-      const primary = await database.rpc("load_pcb_designer_workspace", {
+      const primary = await database.rpc("load_pcb_designer_workspace_shared", {
         p_user_id: userId,
       });
       if (!primary.error) {
@@ -148,11 +174,34 @@ export function createPcbAccountRemoteClient(
         if (state) return state;
       }
 
+      const legacy = await database.rpc("load_pcb_designer_workspace", {
+        p_user_id: userId,
+      });
       const sharedFallback = await database
         .from("system_users")
         .select("id,permissions");
+      const fallbackState = !sharedFallback.error && sharedFallback.data
+        ? mergePcbFallbackWorkspaces(sharedFallback.data, userId)
+        : null;
+      if (!legacy.error) {
+        const state = parseRemoteState(legacy.data);
+        if (state) {
+          if (!fallbackState) return state;
+          return refreshBuiltInCatalog({
+            ...state,
+            library: fallbackState.library,
+            remoteDeletions: {
+              ...state.remoteDeletions,
+              library: [...new Set([
+                ...(state.remoteDeletions?.library ?? []),
+                ...(fallbackState.remoteDeletions?.library ?? []),
+              ])],
+            },
+          });
+        }
+      }
       if (!sharedFallback.error && sharedFallback.data) {
-        return mergePcbFallbackWorkspaces(sharedFallback.data, userId);
+        return fallbackState;
       }
 
       const ownFallback = await database
@@ -164,11 +213,17 @@ export function createPcbAccountRemoteClient(
       return stateFromPermissions(ownFallback.data.permissions);
     },
     save: async (state) => {
-      const primary = await database.rpc("save_pcb_designer_workspace", {
+      const primary = await database.rpc("save_pcb_designer_workspace_shared", {
         p_user_id: userId,
         p_payload: state,
       });
       if (!primary.error) return true;
+
+      const legacy = await database.rpc("save_pcb_designer_workspace", {
+        p_user_id: userId,
+        p_payload: state,
+      });
+      if (!legacy.error) return true;
 
       const table = database.from("system_users");
       const current = await table

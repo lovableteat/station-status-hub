@@ -23,7 +23,7 @@ test("maps top-layer board coordinates into a deterministic 3D transform", () =>
       { width: 100, height: 80 },
     ),
     {
-      position: [-30, 0, 10],
+      position: [-30, 0, -10],
       rotation: [0, -Math.PI / 2, 0],
     },
   );
@@ -36,7 +36,7 @@ test("keeps bottom-layer footprint coordinates unmirrored in the shared 3D trans
       { width: 100, height: 80 },
     ),
     {
-      position: [-30, 0, 10],
+      position: [-30, 0, -10],
       rotation: [0, -Math.PI / 2, 0],
     },
   );
@@ -54,7 +54,7 @@ test("keeps the 3D center fixed when component dimensions change", () => {
   );
   assert.deepEqual(
     getPcb3DComponentTransform(placement, board).position,
-    [22, 0, 16],
+    [22, 0, -16],
   );
 });
 

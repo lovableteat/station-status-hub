@@ -96,13 +96,27 @@ export function isValidBoard(value: unknown): boolean {
     && isNonEmptyString(layerColors.top)
     && isNonEmptyString(layerColors.bottom)
   );
+  const cuts = value.cuts;
+  const hasValidCuts = cuts === undefined || (
+    Array.isArray(cuts)
+    && cuts.length <= 39
+    && cuts.every((cut) => isRecord(cut)
+      && isNonEmptyString(cut.id)
+      && (cut.orientation === "vertical" || cut.orientation === "horizontal")
+      && isFiniteNumber(cut.position)
+      && cut.position > 0
+      && ((cut.orientation === "vertical" && cut.position < Number(value.width))
+        || (cut.orientation === "horizontal" && cut.position < Number(value.height))))
+    && new Set(cuts.map((cut) => cut.id)).size === cuts.length
+  );
   return isFiniteNumber(value.width) && value.width >= 20 && value.width <= 1000
     && isFiniteNumber(value.height) && value.height >= 20 && value.height <= 1000
     && isFiniteNumber(value.gridSize) && value.gridSize >= 0.1 && value.gridSize <= 50
     && typeof value.showGrid === "boolean"
     && typeof value.snapToGrid === "boolean"
     && isNonEmptyString(value.background)
-    && hasValidLayerColors;
+    && hasValidLayerColors
+    && hasValidCuts;
 }
 
 function normalizeBoardLayerColors(layerColors: unknown): PcbBoardLayerColors {
@@ -114,14 +128,29 @@ function normalizeBoardLayerColors(layerColors: unknown): PcbBoardLayerColors {
 }
 
 function normalizeBoard(board: PcbBoard | RecordValue): PcbBoard {
+  const width = Number(board.width);
+  const height = Number(board.height);
+  const cuts = Array.isArray(board.cuts)
+    ? board.cuts
+      .filter((cut): cut is RecordValue => isRecord(cut))
+      .map((cut, index) => ({
+        id: isNonEmptyString(cut.id) ? cut.id : `cut-${index + 1}`,
+        orientation: cut.orientation === "horizontal" ? "horizontal" as const : "vertical" as const,
+        position: Number(cut.position),
+      }))
+      .filter((cut) => Number.isFinite(cut.position)
+        && cut.position > 0
+        && (cut.orientation === "vertical" ? cut.position < width : cut.position < height))
+    : [];
   return {
-    width: Number(board.width),
-    height: Number(board.height),
+    width,
+    height,
     gridSize: Number(board.gridSize),
     showGrid: Boolean(board.showGrid),
     snapToGrid: Boolean(board.snapToGrid),
     background: isNonEmptyString(board.background) ? board.background : "#0f766e",
     layerColors: normalizeBoardLayerColors(board.layerColors),
+    ...(Array.isArray(board.cuts) ? { cuts } : {}),
   };
 }
 

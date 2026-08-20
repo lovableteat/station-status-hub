@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from "react";
-import { Copy, Crosshair, FileUp, Lock, LockOpen, RotateCw, ScanSearch, Trash2 } from "lucide-react";
+import { Copy, Crosshair, FileUp, Lock, LockOpen, RotateCw, ScanSearch, Scissors, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PcbKeepout, PcbMeasurement, PcbModelAssetMetadata, PcbPlacedComponent } from "./types.ts";
 import { PCB_MODEL_FILE_ACCEPT } from "./core/modelAssets.ts";
+import { createBoardGridCuts } from "./core/boardCuts.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 
 function InspectorField({
@@ -147,6 +148,15 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
 function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
   const board = workspace.activeProject.board;
   const disabled = !workspace.canMutate;
+  const [columns, setColumns] = useState("1");
+  const [rows, setRows] = useState("1");
+  const applyCuts = () => {
+    const nextColumns = Number(columns);
+    const nextRows = Number(rows);
+    if (!Number.isInteger(nextColumns) || !Number.isInteger(nextRows)
+      || nextColumns < 1 || nextColumns > 20 || nextRows < 1 || nextRows > 20) return;
+    workspace.updateBoard({ cuts: createBoardGridCuts(board, nextColumns, nextRows) });
+  };
   return (
     <div className="pcb-inspector-form">
       <h2>板設定</h2>
@@ -194,6 +204,30 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
         <input type="checkbox" checked={board.snapToGrid} disabled={disabled} onChange={(event) => workspace.updateBoard({ snapToGrid: event.target.checked })} />
         吸附網格
       </label>
+      <div className="pcb-inspector-section" data-testid="pcb-board-cuts">
+        <div className="flex items-center gap-2">
+          <Scissors className="h-4 w-4 text-amber-300" aria-hidden="true" />
+          <h3>切板</h3>
+          <span className="ml-auto text-xs text-slate-400">{board.cuts?.length ?? 0} 條分板線</span>
+        </div>
+        <p className="pcb-inspector-note">把板框切成等分面板；不會移除元件，2D 與 3D 會同步顯示切線。</p>
+        <div className="pcb-inspector-field-grid">
+          <InspectorField label="左右分板數">
+            <input type="number" min="1" max="20" step="1" value={columns} disabled={disabled} onChange={(event) => setColumns(event.target.value)} />
+          </InspectorField>
+          <InspectorField label="上下分板數">
+            <input type="number" min="1" max="20" step="1" value={rows} disabled={disabled} onChange={(event) => setRows(event.target.value)} />
+          </InspectorField>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" disabled={disabled} onClick={applyCuts}>
+            <Scissors className="mr-1.5 h-3.5 w-3.5" />套用切板
+          </Button>
+          <Button type="button" variant="outline" size="sm" disabled={disabled || !board.cuts?.length} onClick={() => workspace.updateBoard({ cuts: [] })}>
+            清除切板線
+          </Button>
+        </div>
+      </div>
       <p className="pcb-inspector-note">座標與所有尺寸皆以毫米為單位。Alt 拖曳可暫時略過吸附。</p>
     </div>
   );

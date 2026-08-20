@@ -39,8 +39,12 @@ export interface SoftwareProjectedPoint {
 }
 
 export const DEFAULT_SOFTWARE_VIEW: SoftwareViewState = {
-  yaw: -0.72,
-  pitch: 0.58,
+  // Keep the fallback camera on the same reading direction as the 2D canvas:
+  // X grows right and Y grows down when projected to the screen.
+  yaw: Math.PI,
+  // The fallback starts in the exact 2D-aligned top view. Dragging tilts it
+  // into a real perspective view without changing the stored board data.
+  pitch: 1.25,
   zoom: 1,
   panX: 0,
   panY: 0,
@@ -105,6 +109,19 @@ export function createSoftwareCamera(
 ): SoftwareCamera {
   const sceneSize = Math.max(board.width, board.height, 40);
   const distance = sceneSize * 1.9;
+  if (view.pitch >= 1.22) {
+    const focalLength = (Math.min(viewport.width, viewport.height) / 2) / Math.tan((40 * Math.PI / 180) / 2);
+    return {
+      eye: { x: 0, y: distance, z: 0 },
+      forward: { x: 0, y: -1, z: 0 },
+      right: { x: 1, y: 0, z: 0 },
+      up: { x: 0, y: 0, z: -1 },
+      focalLength: focalLength * view.zoom,
+      centerX: viewport.width / 2 + view.panX,
+      centerY: viewport.height / 2 + view.panY,
+      near: 0.1,
+    };
+  }
   const horizontalDistance = Math.cos(view.pitch) * distance;
   const eye = {
     x: Math.sin(view.yaw) * horizontalDistance,
