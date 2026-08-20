@@ -346,7 +346,7 @@ export function UserPermissionsDialog({
         data-permission-model="live-workspace-matrix"
         className="admin-permissions-dialog w-[min(96vw,1420px)] max-w-[1420px] overflow-hidden border border-cyan-200/35 bg-[#081a2a] p-0 text-slate-100 shadow-[0_28px_100px_-45px_rgba(34,211,238,0.8)]"
       >
-        <div className="border-b border-border/70 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_28%),linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)/0.94))] px-3 py-4 sm:px-6 sm:py-5">
+        <div className="border-b border-cyan-200/12 bg-[#0d2235] px-3 py-4 sm:px-6 sm:py-5">
           <DialogHeader className="space-y-3">
             <DialogTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
@@ -384,26 +384,28 @@ export function UserPermissionsDialog({
         <div className="admin-permissions-scroll max-h-[calc(100dvh-15rem)] overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">
           <div className="admin-permissions-layout grid gap-6">
             <section className="space-y-6">
-              <div className="rounded-[28px] border border-border/70 bg-card/70 p-5">
+              <div data-admin-zone="permission-presets" className="rounded-2xl border border-cyan-200/15 bg-[#0d2235] p-4 sm:p-5">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                   <div>
                     <div className="text-base font-semibold text-foreground">快速套用</div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      一鍵切換成全站檢視、全站管理，或整筆清空授權。
+                      先選一個基準，再到下面調整個別工作區，不需要逐格重設。
                     </p>
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid w-full gap-2 sm:grid-cols-3 xl:w-auto">
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() => applyGlobalPreset("view")}
+                      className="h-10 border-sky-300/30 bg-sky-400/10 text-sky-100 hover:bg-sky-400/20"
                     >
                       全站檢視
                     </Button>
                     <Button
                       type="button"
                       onClick={() => applyGlobalPreset("edit")}
+                      className="h-10 bg-cyan-300 font-bold text-[#061522] hover:bg-cyan-200"
                     >
                       全站管理
                     </Button>
@@ -411,6 +413,7 @@ export function UserPermissionsDialog({
                       type="button"
                       variant="ghost"
                       onClick={() => applyGlobalPreset("none")}
+                      className="h-10 text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
                     >
                       清空授權
                     </Button>
@@ -418,7 +421,7 @@ export function UserPermissionsDialog({
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div data-admin-zone="workspace-permissions" className="space-y-4">
                 <div>
                   <h3 className="text-lg font-semibold">工作區權限</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -430,7 +433,7 @@ export function UserPermissionsDialog({
                   {workspaceSummary.map((workspace) => (
                     <div
                       key={workspace.id}
-                      className={`rounded-[28px] border p-5 ${getWorkspaceCardTone(workspace.level)}`}
+                      className={`rounded-2xl border p-4 ${getWorkspaceCardTone(workspace.level)}`}
                     >
                       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                         <div>
@@ -491,7 +494,7 @@ export function UserPermissionsDialog({
             </section>
 
             <section className="space-y-6">
-              <div className="rounded-[28px] border border-border/70 bg-card/70 p-5">
+              <div data-admin-zone="page-permissions" className="rounded-2xl border border-cyan-200/15 bg-[#0d2235] p-4 sm:p-5">
                 <h3 className="text-lg font-semibold">細部頁面權限</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   只有具有多個功能頁的工作區需要細分；其他四個工作區不再重複顯示舊權限。
@@ -499,7 +502,7 @@ export function UserPermissionsDialog({
               </div>
 
               <div className="grid gap-4">
-                <div className="rounded-[28px] border border-cyan-300/25 bg-cyan-400/10 p-5">
+                <div className="rounded-2xl border border-cyan-300/25 bg-cyan-400/10 p-4">
                   <div className="flex items-start gap-3">
                     <Shield className="mt-0.5 h-5 w-5 text-cyan-200" />
                     <div>
@@ -516,7 +519,7 @@ export function UserPermissionsDialog({
                 {DETAIL_PERMISSION_SECTIONS.map((section) => (
                   <div
                     key={section.workspaceId}
-                    className="rounded-[28px] border border-cyan-300/15 bg-[#0d2235] p-4"
+                    className="rounded-2xl border border-cyan-300/15 bg-[#0d2235] p-4"
                   >
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div>

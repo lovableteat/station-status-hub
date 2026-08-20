@@ -89,7 +89,7 @@ test("admin dialogs and API console use the restrained maintenance color system"
   assert.match(styles, /\.admin-api-primary-action/);
   assert.match(styles, /\.admin-api-table-scroll/);
   assert.match(styles, /\.admin-permissions-layout/);
-  assert.match(styles, /@media \(min-width: 1800px\)/);
+  assert.match(styles, /@media \(min-width: 1100px\)/);
   assert.match(apiKeys, /admin-api-table-scroll/);
   assert.match(apiKeys, /admin-api-mobile-table-hint/);
   assert.match(permissions, /admin-permissions-dialog/);
@@ -145,13 +145,14 @@ test("admin desktop layout follows its content without leaving forced empty regi
     read("../src/components/admin/admin-panel.css"),
   ]);
 
-  assert.match(styles, /\.admin-shell\s*\{[^}]*min-height:\s*calc\(100dvh - 110px\);[^}]*align-items:\s*stretch;/s);
+  assert.match(styles, /\.admin-shell\s*\{[^}]*min-height:\s*0;[^}]*align-items:\s*flex-start;/s);
   assert.match(styles, /\.admin-sidebar\s*\{[^}]*min-height:\s*calc\(100dvh - 110px\);[^}]*max-height:\s*none;/s);
   assert.match(styles, /\.admin-sidebar nav\s*\{[^}]*flex:\s*1 1 auto;/s);
   assert.match(styles, /@media \(max-width: 900px\)[\s\S]*\.admin-sidebar nav\s*\{[^}]*flex:\s*1;/);
 
   assert.match(panel, /className="flex flex-col gap-3"/);
   assert.match(panel, /value="collaboration" className="mt-0"/);
-  assert.match(collaboration, /grid min-h-0 items-start gap-4/);
+  assert.match(collaboration, /grid min-h-0 items-stretch gap-4/);
+  assert.match(collaboration, /data-admin-zone="announcement-checklist"/);
   assert.match(collaboration, /grid min-h-0 content-start gap-4/);
 });

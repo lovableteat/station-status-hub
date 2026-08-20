@@ -5860,43 +5860,48 @@ export function MaterialRequestPage() {
         </div>
       </section>
 
-      <header className="hidden overflow-hidden rounded-[16px] border border-cyan-300/35 bg-[radial-gradient(circle_at_4%_0%,rgba(34,211,238,0.18),transparent_22rem),radial-gradient(circle_at_82%_0%,rgba(167,139,250,0.14),transparent_20rem),radial-gradient(circle_at_100%_100%,rgba(251,191,36,0.10),transparent_20rem),#10263a] p-4 shadow-[0_20px_50px_-34px_rgba(34,211,238,0.65)] lg:block">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-center gap-3">
+      <header data-material-zone="overview" className="hidden overflow-hidden rounded-2xl border border-cyan-300/30 bg-[#10263a] p-4 shadow-[0_18px_48px_-38px_rgba(34,211,238,0.7)] lg:block">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(430px,0.72fr)] xl:items-start">
+          <div className="min-w-0">
+            <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-cyan-300/16 bg-cyan-400/12 text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.12)]">
               <FileSpreadsheet className="h-5 w-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-bold text-slate-50">料號總表</h1>
               <p className="mt-0.5 text-sm text-slate-300">一行一個主料，點箭頭查看其他替代料。</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge className={cn("border px-2.5 py-1 text-xs font-bold", collaborationStatusMeta.badgeClassName)}>
-                  <span className={cn("mr-2 h-2 w-2 rounded-full", collaborationStatusMeta.dotClassName)} />
-                  {collaborationStatusMeta.label}
-                </Badge>
-                <span className="rounded-full border border-emerald-300/20 bg-emerald-400/[0.08] px-2.5 py-1 text-xs font-bold text-emerald-100">
-                  {onlineUserCount} 人在線
-                </span>
-                {isPreviewDataset && (
-                  <span
-                    data-testid="material-progressive-status"
-                    className="rounded-full border border-cyan-300/24 bg-cyan-400/10 px-2.5 py-1 text-xs font-bold text-cyan-100"
-                  >
-                    已先顯示 {activeWorkspace.payload.records.length.toLocaleString()} 筆，完整資料同步中
-                  </span>
-                )}
-                <span className="text-xs text-slate-400">{collaborationStatusMeta.description}</span>
-              </div>
             </div>
           </div>
 
-          <div className="grid w-full grid-cols-2 gap-2 xl:flex xl:w-auto xl:flex-wrap">
+            <div data-material-zone="collaboration" className="mt-4 flex flex-wrap items-center gap-2 border-t border-cyan-300/12 pt-3">
+              <Badge className={cn("border px-2.5 py-1 text-xs font-bold", collaborationStatusMeta.badgeClassName)}>
+                <span className={cn("mr-2 h-2 w-2 rounded-full", collaborationStatusMeta.dotClassName)} />
+                {collaborationStatusMeta.label}
+              </Badge>
+              <span className="rounded-full border border-emerald-300/20 bg-emerald-400/[0.08] px-2.5 py-1 text-xs font-bold text-emerald-100">
+                {onlineUserCount} 人在線
+              </span>
+              {isPreviewDataset && (
+                <span
+                  data-testid="material-progressive-status"
+                  className="rounded-full border border-cyan-300/24 bg-cyan-400/10 px-2.5 py-1 text-xs font-bold text-cyan-100"
+                >
+                  已先顯示 {activeWorkspace.payload.records.length.toLocaleString()} 筆，完整資料同步中
+                </span>
+              )}
+              <span className="basis-full text-xs leading-5 text-slate-400">{collaborationStatusMeta.description}</span>
+            </div>
+          </div>
+
+          <div data-material-zone="actions" className="min-w-0 rounded-xl border border-cyan-200/14 bg-[#0b1b2d] p-3">
+            <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-cyan-200/80">常用操作</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2">
             <Button
               type="button"
               variant="outline"
               onClick={() => setShowMarkedOnly((current) => !current)}
               className={cn(
-                "h-10 w-full px-3 text-sm font-bold transition-colors xl:w-auto",
+                "h-10 w-full px-3 text-sm font-bold transition-colors",
                 showMarkedOnly
                   ? "border-amber-300/35 bg-amber-400/18 text-amber-50 hover:bg-amber-400/24"
                   : "border-slate-500/30 bg-slate-900/35 text-slate-200 hover:border-amber-300/25 hover:bg-amber-400/10 hover:text-amber-100",
@@ -5908,18 +5913,19 @@ export function MaterialRequestPage() {
                 {markedGroupCount}
               </span>
             </Button>
-            <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-10 w-full border-violet-300/45 bg-violet-400/20 px-3 text-sm font-bold text-violet-50 shadow-[0_10px_24px_-18px_rgba(167,139,250,0.9)] hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white xl:w-auto">
+            <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-10 w-full border-violet-300/45 bg-violet-400/20 px-3 text-sm font-bold text-violet-50 hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white">
               <CircleHelp className="mr-2 h-4 w-4" />上傳說明
             </Button>
-            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady || !isFullDatasetLoaded} className="h-10 w-full border border-cyan-100/60 bg-[linear-gradient(135deg,#22d3ee,#67e8f9)] px-3 text-sm font-black text-[#052536] shadow-[0_14px_34px_rgba(14,165,233,0.28)] hover:bg-cyan-300 disabled:cursor-not-allowed disabled:border-cyan-900/50 disabled:bg-cyan-950/35 disabled:text-cyan-100/60 xl:w-auto">
+            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady || !isFullDatasetLoaded} className="h-10 w-full border border-cyan-100/60 bg-cyan-300 px-3 text-sm font-black text-[#052536] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:border-cyan-900/50 disabled:bg-cyan-950/35 disabled:text-cyan-100/60">
               <Plus className="mr-2 h-4 w-4" />新增料件
             </Button>
-            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-10 w-full border-emerald-300/45 bg-emerald-400/20 px-3 text-sm font-bold text-emerald-50 shadow-[0_10px_24px_-18px_rgba(52,211,153,0.9)] hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55 xl:w-auto">
+            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-10 w-full border-emerald-300/45 bg-emerald-400/20 px-3 text-sm font-bold text-emerald-50 hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">
               <Upload className="mr-2 h-4 w-4" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="col-span-2 h-10 w-full border-amber-300/50 bg-amber-400/20 px-3 text-sm font-bold text-amber-50 shadow-[0_10px_24px_-18px_rgba(251,191,36,0.9)] hover:border-amber-200/75 hover:bg-amber-400/30 hover:text-white disabled:cursor-wait disabled:opacity-60 xl:col-span-1 xl:w-auto">
+            <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="col-span-2 h-10 w-full border-amber-300/50 bg-amber-400/20 px-3 text-sm font-bold text-amber-50 hover:border-amber-200/75 hover:bg-amber-400/30 hover:text-white disabled:cursor-wait disabled:opacity-60 sm:col-span-1 xl:col-span-2">
               <Download className="mr-2 h-4 w-4" />匯出主管報表
             </Button>
+            </div>
           </div>
         </div>
 
@@ -5952,7 +5958,7 @@ export function MaterialRequestPage() {
           </div>
         )}
 
-        <div className="mt-3 flex flex-col gap-3 border-t border-cyan-400/10 pt-3 xl:flex-row xl:items-center xl:justify-between">
+        <div data-material-zone="bom-workspace" className="mt-4 flex flex-col gap-3 border-t border-cyan-300/15 pt-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="grid flex-1 grid-cols-2 items-center gap-2.5 sm:flex sm:flex-wrap">
             <span className="col-span-2 inline-flex h-8 items-center text-sm font-bold uppercase tracking-[0.08em] text-cyan-100 sm:col-span-1 sm:h-10">BOM 工作區</span>
             <Select value={activeBomId} onValueChange={switchActiveBom}>
@@ -6006,7 +6012,7 @@ export function MaterialRequestPage() {
           </div>
         </div>
 
-        <section className="mt-3 rounded-[14px] border border-[#2a526f] bg-[#0b1b2d] p-4">
+        <section data-material-zone="page-progress" className="mt-4 rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-4">
           <div className="flex flex-col gap-3 border-b border-cyan-400/10 pb-3 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               <p className="text-lg font-black text-slate-50">頁數設定與目前進度</p>
