@@ -42,12 +42,12 @@ const MobileDialogContent = React.forwardRef<
           "workspace-dialog-surface panel-surface-floating fixed z-50 grid w-full gap-4 text-foreground duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           // Mobile: Full screen bottom sheet
           isMobile ? [
-            "bottom-0 left-0 right-0 top-auto rounded-t-2xl p-6",
-            "max-h-[85vh] overflow-y-auto",
+            "bottom-0 left-0 right-0 top-auto rounded-t-[1.5rem] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-5",
+            "max-h-[min(88dvh,760px)] overflow-y-auto overscroll-contain",
             "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
           ] : [
             // Desktop: Centered dialog  
-            "left-[50%] top-[50%] max-w-lg translate-x-[-50%] translate-y-[-50%] p-6 rounded-lg",
+            "left-[50%] top-[50%] max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] overflow-y-auto overscroll-contain rounded-[1.5rem] p-6",
             "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]"
           ],
           className

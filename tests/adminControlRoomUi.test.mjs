@@ -88,8 +88,9 @@ test("admin dialogs and API console use the restrained maintenance color system"
   assert.match(styles, /\.admin-api-card/);
   assert.match(styles, /\.admin-api-primary-action/);
   assert.match(styles, /\.admin-api-table-scroll/);
+  assert.match(styles, /\.admin-permissions-dialog\s*\{[^}]*width:\s*min\(1420px, calc\(100vw - 32px\)\);[^}]*height:\s*min\(960px, calc\(100dvh - 32px\)\);/s);
   assert.match(styles, /\.admin-permissions-layout/);
-  assert.match(styles, /@media \(min-width: 1100px\)/);
+  assert.match(styles, /@media \(min-width: 1280px\)/);
   assert.match(apiKeys, /admin-api-table-scroll/);
   assert.match(apiKeys, /admin-api-mobile-table-hint/);
   assert.match(permissions, /admin-permissions-dialog/);
@@ -133,7 +134,7 @@ test("admin workspace uses the maintenance visual system and a responsive sideba
   assert.match(styles, /#071522/i);
   assert.match(styles, /#2a526f/i);
   assert.match(styles, /#4f8cff/i);
-  assert.match(styles, /@media \(max-width: 900px\)/);
+  assert.match(styles, /@media \(max-width: 1180px\)/);
   assert.match(header, /MaintenancePageHeader/);
   assert.match(metrics, /MaintenanceMetricStrip/);
 });
@@ -148,11 +149,35 @@ test("admin desktop layout follows its content without leaving forced empty regi
   assert.match(styles, /\.admin-shell\s*\{[^}]*min-height:\s*0;[^}]*align-items:\s*flex-start;/s);
   assert.match(styles, /\.admin-sidebar\s*\{[^}]*min-height:\s*calc\(100dvh - 110px\);[^}]*max-height:\s*none;/s);
   assert.match(styles, /\.admin-sidebar nav\s*\{[^}]*flex:\s*1 1 auto;/s);
-  assert.match(styles, /@media \(max-width: 900px\)[\s\S]*\.admin-sidebar nav\s*\{[^}]*flex:\s*1;/);
+  assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.admin-sidebar nav\s*\{[^}]*flex:\s*1;/);
 
   assert.match(panel, /className="flex flex-col gap-3"/);
   assert.match(panel, /value="collaboration" className="mt-0"/);
-  assert.match(collaboration, /grid min-h-0 items-stretch gap-4/);
+  assert.match(collaboration, /grid min-h-0 items-start gap-4/);
   assert.match(collaboration, /data-admin-zone="announcement-checklist"/);
   assert.match(collaboration, /grid min-h-0 content-start gap-4/);
+});
+
+test("shared dialogs and admin content stay inside responsive viewport bounds", async () => {
+  const [dialog, alertDialog, mobileDialog, header, styles, permissions] = await Promise.all([
+    read("../src/components/ui/dialog.tsx"),
+    read("../src/components/ui/alert-dialog.tsx"),
+    read("../src/components/ui/mobile-dialog.tsx"),
+    read("../src/components/layout/MainWorkspaceHeader.tsx"),
+    read("../src/components/admin/admin-panel.css"),
+    read("../src/components/admin/UserPermissionsDialog.tsx"),
+  ]);
+
+  assert.match(header, /max-w-\[1920px\]/);
+  assert.match(styles, /\.admin-shell\s*\{[^}]*max-width:\s*1920px;[^}]*margin-inline:\s*auto;/s);
+  assert.match(dialog, /max-h-\[calc\(100dvh-1rem\)\]/);
+  assert.match(dialog, /w-\[calc\(100vw-1rem\)\]/);
+  assert.match(dialog, /overflow-y-auto/);
+  assert.match(alertDialog, /max-h-\[calc\(100dvh-1rem\)\]/);
+  assert.match(alertDialog, /w-\[calc\(100vw-1rem\)\]/);
+  assert.match(mobileDialog, /max-h-\[min\(88dvh,760px\)\]/);
+  assert.match(mobileDialog, /safe-area-inset-bottom/);
+  assert.match(permissions, /admin-permission-workspace-grid/);
+  assert.match(permissions, /admin-permission-level-grid/);
+  assert.match(styles, /@media \(max-width: 639px\)[\s\S]*\.admin-permission-level-grid,[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) !important;/);
 });

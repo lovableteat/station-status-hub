@@ -346,44 +346,44 @@ export function UserPermissionsDialog({
       <DialogContent
         data-admin-dialog="permissions"
         data-permission-model="live-workspace-matrix"
-        className="admin-permissions-dialog w-[min(96vw,1420px)] max-w-[1420px] overflow-hidden border border-cyan-200/35 bg-[#081a2a] p-0 text-slate-100 shadow-[0_28px_100px_-45px_rgba(34,211,238,0.8)]"
+        className="admin-permissions-dialog overflow-hidden border border-cyan-200/35 bg-[#081a2a] p-0 text-slate-100 shadow-[0_28px_100px_-45px_rgba(34,211,238,0.8)]"
       >
-        <div className="border-b border-cyan-200/12 bg-[#0d2235] px-3 py-4 sm:px-6 sm:py-5">
+        <div className="admin-permissions-header border-b border-cyan-200/12 bg-[#0d2235] px-3 py-4 sm:px-6 sm:py-5">
           <DialogHeader className="space-y-3">
             <DialogTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
               設定 {username} 的網站權限
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="admin-permissions-description">
               權限依首頁七個實際工作區設定；維修中心與後台管理再依下方內頁權限逐項生效。
             </DialogDescription>
           </DialogHeader>
 
-          <div className="mt-4 grid gap-2 sm:mt-5 sm:gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="admin-permissions-summary mt-4 grid gap-2 sm:mt-5 sm:gap-3">
               <div className="rounded-2xl border border-primary/15 bg-primary/10 p-3 sm:p-4">
-              <div className="text-xs uppercase tracking-[0.26em] text-muted-foreground">Workspaces</div>
+              <div className="text-xs font-semibold tracking-[0.12em] text-muted-foreground">可見工作區</div>
               <div className="mt-2 text-3xl font-semibold text-foreground">{enabledWorkspaceCount}</div>
               <p className="mt-1 text-sm text-muted-foreground">目前可見工作區</p>
             </div>
             <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-3 sm:p-4">
-              <div className="text-xs uppercase tracking-[0.26em] text-muted-foreground">Editable</div>
+              <div className="text-xs font-semibold tracking-[0.12em] text-muted-foreground">可管理</div>
               <div className="mt-2 text-3xl font-semibold text-foreground">{editableWorkspaceCount}</div>
               <p className="mt-1 text-sm text-muted-foreground">可直接管理的工作區</p>
             </div>
             <div className="rounded-2xl border border-sky-400/15 bg-sky-500/10 p-3 sm:p-4">
-              <div className="text-xs uppercase tracking-[0.26em] text-muted-foreground">Page Permissions</div>
+              <div className="text-xs font-semibold tracking-[0.12em] text-muted-foreground">細部權限</div>
               <div className="mt-2 text-3xl font-semibold text-foreground">{permissions.length}</div>
               <p className="mt-1 text-sm text-muted-foreground">已勾選的細部頁面權限</p>
             </div>
             <div className="rounded-2xl border border-border/80 bg-background/45 p-3 sm:p-4">
-              <div className="text-xs uppercase tracking-[0.26em] text-muted-foreground">Preset</div>
+              <div className="text-xs font-semibold tracking-[0.12em] text-muted-foreground">授權模式</div>
               <div className="mt-2 text-xl font-semibold text-foreground">{permissionPresetLabel}</div>
               <p className="mt-1 text-sm text-muted-foreground">目前整體授權模式</p>
             </div>
           </div>
         </div>
 
-        <div className="admin-permissions-scroll max-h-[calc(100dvh-15rem)] overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">
+        <div className="admin-permissions-scroll min-h-0 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">
           <div className="admin-permissions-layout grid gap-6">
             <section className="space-y-6">
               <div data-admin-zone="permission-presets" className="rounded-2xl border border-cyan-200/15 bg-[#0d2235] p-4 sm:p-5">
@@ -431,7 +431,7 @@ export function UserPermissionsDialog({
                   </p>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="admin-permission-workspace-grid grid gap-4">
                   {workspaceSummary.map((workspace) => (
                     <div
                       key={workspace.id}
@@ -457,12 +457,12 @@ export function UserPermissionsDialog({
                             value as WorkspaceAccessLevel
                           )
                         }
-                        className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+                        className="admin-permission-level-grid grid grid-cols-1 gap-2 sm:grid-cols-3"
                       >
                         {WORKSPACE_OPTIONS.map((option) => (
                           <div
                             key={`${workspace.id}-${option.value}`}
-                            className={`min-w-0 rounded-2xl border p-3 transition-colors ${
+                            className={`admin-permission-level min-w-0 rounded-2xl border p-3 transition-colors ${
                               workspace.level === option.value
                                 ? "border-primary/45 bg-primary/10"
                                 : "border-border/70 bg-background/50"
@@ -582,7 +582,7 @@ export function UserPermissionsDialog({
                         </div>
                       </div>
 
-                      <div className="grid gap-3 md:grid-cols-2">
+                      <div className="admin-page-permission-grid grid gap-3 md:grid-cols-2">
                         {group.permissions.map((permission) => {
                           const checked = permissions.includes(permission.key);
 
@@ -632,7 +632,7 @@ export function UserPermissionsDialog({
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-border/70 bg-card/95 px-3 py-3 sm:px-6 sm:py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="admin-permissions-footer flex flex-col gap-3 border-t border-border/70 bg-card/95 px-3 py-3 sm:px-6 sm:py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-muted-foreground">
             儲存後會同時更新工作區入口權限與細部頁面授權。
           </div>

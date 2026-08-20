@@ -19,7 +19,10 @@
 
 .admin-shell {
   display: flex;
+  width: 100%;
+  max-width: 1920px;
   min-height: 0;
+  margin-inline: auto;
   align-items: flex-start;
   gap: 12px;
 }
@@ -187,6 +190,7 @@
 
 .admin-content {
   display: flex;
+  width: 100%;
   min-width: 0;
   flex: 1;
   flex-direction: column;
@@ -525,11 +529,52 @@
   line-height: 1.5;
 }
 
-.admin-permissions-layout {
+.admin-permissions-dialog {
+  display: grid;
+  width: min(1420px, calc(100vw - 32px));
+  max-width: 1420px;
+  height: min(960px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  container-type: inline-size;
+}
+
+.admin-permissions-header,
+.admin-permissions-footer {
+  min-width: 0;
+}
+
+.admin-permissions-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-permissions-summary > div {
+  min-width: 0;
+}
+
+.admin-permissions-layout,
+.admin-permission-workspace-grid {
   grid-template-columns: minmax(0, 1fr);
 }
 
-@media (min-width: 1100px) {
+.admin-permissions-scroll {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+@media (min-width: 900px) {
+  .admin-permissions-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1279px) {
+  .admin-permission-workspace-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
   .admin-permissions-layout {
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
     align-items: start;
@@ -540,7 +585,7 @@
   display: none;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1180px) {
   .admin-shell {
     min-height: 0;
   }
@@ -749,11 +794,88 @@
   }
 
   .admin-permissions-dialog {
-    max-height: calc(100dvh - 0.75rem);
+    width: calc(100vw - 8px);
+    height: calc(100dvh - 8px);
+    max-height: calc(100dvh - 8px);
+    border-radius: 18px;
+  }
+
+  .admin-permissions-header {
+    padding: 14px 54px 12px 14px;
+  }
+
+  .admin-permissions-header [role="heading"] {
+    font-size: 1rem;
+    line-height: 1.35;
+  }
+
+  .admin-permissions-description {
+    display: none;
+  }
+
+  .admin-permissions-summary {
+    margin-top: 12px;
+    gap: 6px;
+  }
+
+  .admin-permissions-summary > div {
+    border-radius: 12px;
+    padding: 8px 10px;
+  }
+
+  .admin-permissions-summary > div > div:first-child {
+    overflow: hidden;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-permissions-summary > div > div:nth-child(2) {
+    margin-top: 4px;
+    font-size: 1.25rem;
+  }
+
+  .admin-permissions-summary p {
+    display: none;
   }
 
   .admin-permissions-scroll {
-    max-height: calc(100dvh - 14rem);
+    padding: 12px;
+    scrollbar-gutter: auto;
+  }
+
+  .admin-permissions-layout,
+  .admin-permission-workspace-grid {
+    gap: 12px;
+  }
+
+  .admin-permission-level-grid,
+  .admin-page-permission-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .admin-permission-level {
+    border-radius: 12px;
+    padding: 10px;
+  }
+
+  .admin-permissions-footer {
+    padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+  }
+
+  .admin-permissions-footer > div:first-child {
+    display: none;
+  }
+
+  .admin-permissions-footer > div:last-child {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-permissions-footer button {
+    width: 100%;
   }
 }
 
