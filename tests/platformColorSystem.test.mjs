@@ -40,5 +40,9 @@ test("main platform surfaces opt into the shared color accents", async () => {
   assert.match(adminStyles, /--admin-accent-violet/);
   assert.match(adminStyles, /--admin-accent-rose/);
   assert.match(adminStyles, /\.admin-api-stat:nth-child\(2\)/);
-  assert.match(adminStyles, /\.admin-api-chip:nth-child\(3\)/);
+  assert.match(adminStyles, /\.admin-api-key-panel/);
+  assert.match(adminStyles, /--api-teal:\s*#5eead4/);
+  assert.match(adminStyles, /--api-amber:\s*#fbbf24/);
+  assert.match(adminStyles, /\.admin-api-badge-provider/);
+  assert.match(adminStyles, /\.admin-api-action-delete/);
 });

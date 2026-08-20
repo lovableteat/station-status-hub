@@ -369,3 +369,12 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 - 手機 `390x844` 實測：頂部約 `143px`，三步驟仍在同列、安全狀態獨立成一行，功能分頁全部可見且沒有水平跑版。
 - 既有 API 金鑰、遮罩、建立、編輯、測試、停用、刪除與文件功能均未改動。
 - 後台與手機 focused tests：`21/21` 通過；全專案 TypeScript、頁面 scoped ESLint 與 production build 通過（`3494 modules transformed`）。
+
+### Latest delivery - 2026-08-20 API key functional palette
+
+API 金鑰管理清單已由單一灰藍配色改為可直接辨識用途的功能色系，資料與操作流程不變：建立與啟用使用薄荷綠、遮罩金鑰使用琥珀、Provider 與讀取權限使用青藍、可編輯與停用使用橘色、刪除與過期使用珊瑚紅。表頭、資料列、金鑰值、狀態、模型、權限和四個操作按鈕都有獨立層次，不再混成同一片深藍。
+
+- `ApiKeyManagement.tsx` 只加入語意化視覺 class 與圖示按鈕的可讀標籤；建立、查看、複製、測試、編輯、啟停、刪除、權限判斷及 Supabase 資料流程均未修改。
+- 桌機 `1600x900` 實看：清單內容與八個欄位完整對齊，金鑰仍維持遮罩，操作風險可由顏色快速辨識。
+- 手機 `390x844` 實看：頁面無水平溢位，金鑰表格保留獨立橫向滑動，滑到最右側仍可操作測試、編輯、停用與刪除。
+- 後台配色、權限保護 focused tests：`15/15` 通過；全專案 TypeScript、元件 scoped ESLint 與 production build 通過（`3494 modules transformed`）。

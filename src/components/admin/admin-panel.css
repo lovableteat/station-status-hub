@@ -500,15 +500,16 @@
 }
 
 .admin-api-primary-action {
-  border: 1px solid rgb(116 167 255 / 55%);
-  color: #ffffff;
-  background: linear-gradient(135deg, var(--admin-accent-blue), #7c83ff);
-  box-shadow: none;
+  border: 1px solid #8ef5d7;
+  color: #03221d;
+  background: #6ee7c7;
+  box-shadow: 0 8px 22px rgb(45 212 191 / 16%);
 }
 
 .admin-api-primary-action:hover {
-  color: #ffffff;
-  background: #3f7df0;
+  border-color: #d5fff2;
+  color: #021b17;
+  background: #9bf5dc;
 }
 
 .admin-api-secondary-action {
@@ -528,6 +529,296 @@
   border-radius: 10px;
   color: #d8e7ff;
   background: #071522;
+}
+
+.admin-api-key-panel {
+  --api-cyan: #67e8f9;
+  --api-teal: #5eead4;
+  --api-mint: #86efac;
+  --api-sky: #7dd3fc;
+  --api-amber: #fbbf24;
+  --api-orange: #fb923c;
+  --api-coral: #fb7185;
+  border-color: rgb(94 234 212 / 40%);
+  background: #081b28;
+  box-shadow: 0 18px 42px rgb(1 10 18 / 24%);
+}
+
+.admin-api-key-header {
+  position: relative;
+  border-bottom: 1px solid rgb(94 234 212 / 28%);
+  background:
+    linear-gradient(90deg, rgb(13 54 64 / 94%) 0%, rgb(9 34 47 / 96%) 58%, rgb(10 29 42 / 98%) 100%);
+}
+
+.admin-api-key-header::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  content: "";
+  background: linear-gradient(90deg, var(--api-teal), var(--api-sky) 42%, transparent 82%);
+  opacity: 0.75;
+}
+
+.admin-api-key-title {
+  color: #f4fffc;
+  letter-spacing: -0.025em;
+}
+
+.admin-api-key-icon {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(103 232 249 / 48%);
+  border-radius: 11px;
+  color: var(--api-cyan);
+  background: rgb(8 47 59 / 68%);
+}
+
+.admin-api-key-description {
+  color: #b5d4dd;
+}
+
+.admin-api-key-empty {
+  border-color: rgb(94 234 212 / 36%);
+  color: var(--api-cyan);
+  background: #061720;
+}
+
+.admin-api-key-panel .admin-api-table-frame {
+  border-color: rgb(103 232 249 / 28%);
+  background: #061720;
+}
+
+.admin-api-table-header-row {
+  border-color: rgb(103 232 249 / 24%);
+  background: #102838;
+}
+
+.admin-api-table-header-row th {
+  color: #c9e9ef;
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.035em;
+}
+
+.admin-api-table-header-row th:nth-child(2) {
+  color: #fde68a;
+}
+
+.admin-api-table-header-row th:nth-child(3),
+.admin-api-table-header-row th:nth-child(6) {
+  color: #bbf7d0;
+}
+
+.admin-api-table-header-row th:nth-child(4),
+.admin-api-table-header-row th:nth-child(5) {
+  color: #bae6fd;
+}
+
+.admin-api-table-header-row th:last-child {
+  color: #fed7aa;
+}
+
+.admin-api-key-row {
+  border-color: rgb(46 87 105 / 70%);
+  color: #effbff;
+  background: #091923;
+  box-shadow: inset 3px 0 0 rgb(94 234 212 / 74%);
+}
+
+.admin-api-key-row:nth-child(even) {
+  background: #0b1d28;
+}
+
+.admin-api-key-row:hover {
+  background: #102b36;
+}
+
+.admin-api-key-name {
+  color: #f4fffc;
+}
+
+.admin-api-key-summary {
+  color: #9fb8c2;
+}
+
+.admin-api-badge,
+.admin-api-status {
+  border-width: 1px;
+  border-style: solid;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.admin-api-badge-provider {
+  border-color: rgb(103 232 249 / 48%);
+  color: #a5f3fc;
+  background: rgb(8 145 178 / 16%);
+}
+
+.admin-api-badge-editable {
+  border-color: rgb(251 146 60 / 46%);
+  color: #fed7aa;
+  background: rgb(234 88 12 / 15%);
+}
+
+.admin-api-status.is-active {
+  border-color: rgb(134 239 172 / 50%);
+  color: #bbf7d0;
+  background: rgb(34 197 94 / 17%);
+}
+
+.admin-api-status.is-disabled {
+  border-color: rgb(148 163 184 / 34%);
+  color: #cbd5e1;
+  background: rgb(71 85 105 / 22%);
+}
+
+.admin-api-status.is-expired {
+  border-color: rgb(251 113 133 / 48%);
+  color: #fecdd3;
+  background: rgb(225 29 72 / 17%);
+}
+
+.admin-api-badge-read {
+  border-color: rgb(125 211 252 / 46%);
+  color: #bae6fd;
+  background: rgb(14 165 233 / 15%);
+}
+
+.admin-api-badge-write {
+  border-color: rgb(251 191 36 / 48%);
+  color: #fde68a;
+  background: rgb(217 119 6 / 16%);
+}
+
+.admin-api-key-value {
+  border-color: rgb(251 191 36 / 42%);
+  color: #fde68a;
+  background: #231b09;
+  box-shadow: inset 0 0 0 1px rgb(251 191 36 / 6%);
+}
+
+.admin-api-key-tool {
+  color: #a5f3fc;
+  background: transparent;
+}
+
+.admin-api-key-tool:hover {
+  color: #ecfeff;
+  background: rgb(8 145 178 / 20%);
+}
+
+.admin-api-model {
+  width: fit-content;
+  border-bottom: 2px solid rgb(125 211 252 / 62%);
+  color: #d9f3ff;
+  padding-bottom: 2px;
+  font-weight: 700;
+}
+
+.admin-api-usage {
+  color: #bbf7d0;
+  font-weight: 900;
+}
+
+.admin-api-last-used {
+  color: #c8dde5;
+}
+
+.admin-api-last-used svg {
+  color: var(--api-cyan);
+}
+
+.admin-api-actions {
+  flex-wrap: nowrap;
+}
+
+.admin-api-action {
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font-weight: 800;
+}
+
+.admin-api-action-test {
+  border-color: rgb(94 234 212 / 32%);
+  color: #99f6e4;
+  background: rgb(13 148 136 / 13%);
+}
+
+.admin-api-action-test:hover {
+  color: #e6fffa;
+  background: rgb(13 148 136 / 27%);
+}
+
+.admin-api-action-edit {
+  border-color: rgb(251 191 36 / 30%);
+  color: #fde68a;
+  background: rgb(217 119 6 / 12%);
+}
+
+.admin-api-action-edit:hover {
+  color: #fff7cf;
+  background: rgb(217 119 6 / 25%);
+}
+
+.admin-api-action-toggle {
+  border-color: rgb(251 146 60 / 30%);
+  color: #fed7aa;
+  background: rgb(234 88 12 / 12%);
+}
+
+.admin-api-action-toggle:hover {
+  color: #fff1e6;
+  background: rgb(234 88 12 / 25%);
+}
+
+.admin-api-action-delete {
+  border-color: rgb(251 113 133 / 32%);
+  color: #fecdd3;
+  background: rgb(225 29 72 / 12%);
+}
+
+.admin-api-action-delete:hover {
+  color: #fff1f2;
+  background: rgb(225 29 72 / 26%);
+}
+
+.admin-api-action:disabled {
+  border-color: rgb(100 116 139 / 20%);
+  color: #64748b;
+  background: rgb(30 41 59 / 20%);
+}
+
+.admin-api-delete-dialog {
+  border-color: rgb(251 113 133 / 38%);
+  background: #111a25;
+  box-shadow: 0 28px 80px rgb(1 6 12 / 62%);
+}
+
+.admin-api-delete-cancel {
+  border-color: rgb(103 232 249 / 28%);
+  color: #c8eaf0;
+  background: #0a202c;
+}
+
+.admin-api-delete-cancel:hover {
+  color: #ecfeff;
+  background: #10323f;
+}
+
+.admin-api-delete-confirm {
+  color: #fff1f2;
+  background: #e11d48;
+}
+
+.admin-api-delete-confirm:hover {
+  background: #fb496c;
 }
 
 .admin-api-stat:nth-child(1) {

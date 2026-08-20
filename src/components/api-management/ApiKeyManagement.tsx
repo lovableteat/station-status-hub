@@ -180,14 +180,26 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
 
   const getStatusBadge = (record: ApiKeyRecord) => {
     if (!record.is_active) {
-      return <Badge variant="secondary">停用</Badge>;
+      return (
+        <Badge variant="outline" className="admin-api-status is-disabled">
+          停用
+        </Badge>
+      );
     }
 
     if (record.expires_at && new Date(record.expires_at) < new Date()) {
-      return <Badge variant="destructive">已過期</Badge>;
+      return (
+        <Badge variant="outline" className="admin-api-status is-expired">
+          已過期
+        </Badge>
+      );
     }
 
-    return <Badge className="border border-[#4f8cff]/30 bg-[#1a3354] text-[#d8e7ff] hover:bg-[#1f3c63]">啟用</Badge>;
+    return (
+      <Badge variant="outline" className="admin-api-status is-active">
+        啟用
+      </Badge>
+    );
   };
 
   return (
@@ -234,14 +246,16 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
         </Card>
       </div>
 
-      <Card data-admin-zone="api-key-list" className="admin-api-panel">
-        <CardHeader className="flex flex-col gap-4 border-b border-[#2a526f] pb-5 lg:flex-row lg:items-center lg:justify-between">
+      <Card data-admin-zone="api-key-list" className="admin-api-panel admin-api-key-panel">
+        <CardHeader className="admin-api-key-header flex flex-col gap-4 pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <CardTitle className="flex items-center gap-2 text-2xl font-black text-slate-50">
-              <ShieldCheck className="h-6 w-6 text-[#d8e7ff]" />
+            <CardTitle className="admin-api-key-title flex items-center gap-2 text-2xl font-black">
+              <span className="admin-api-key-icon" aria-hidden="true">
+                <ShieldCheck className="h-5 w-5" />
+              </span>
               API 金鑰管理
             </CardTitle>
-            <p className="mt-2 text-sm leading-6 text-slate-300">
+            <p className="admin-api-key-description mt-2 text-sm leading-6">
               在這裡可新增、編輯、停用與刪除 API 金鑰。需要測試時可直接從列表把金鑰帶去測試頁。
             </p>
           </div>
@@ -262,8 +276,8 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
           {loading ? (
             <div className="py-12 text-center text-sm text-slate-300">讀取中...</div>
           ) : apiKeys.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-[#2a526f] bg-[#071522] px-6 py-12 text-center">
-              <KeyRound className="mx-auto h-12 w-12 text-[#8fb1c9]" />
+            <div className="admin-api-key-empty rounded-xl border border-dashed px-6 py-12 text-center">
+              <KeyRound className="mx-auto h-12 w-12" />
               <p className="mt-4 text-lg font-bold text-slate-100">目前沒有 API 金鑰</p>
               <p className="mt-2 text-sm text-slate-300">
                 你可以先新增 API key，再補上 provider、model 和 base URL。
@@ -285,15 +299,15 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
               <div className="admin-api-table-scroll" tabIndex={0} aria-label="API 金鑰清單，可左右滑動">
                 <Table className="min-w-[1040px]">
                   <TableHeader>
-                    <TableRow className="border-[#2a526f] hover:bg-transparent">
-                      <TableHead className="text-slate-300">名稱 / 服務商</TableHead>
-                      <TableHead className="text-slate-300">金鑰</TableHead>
-                      <TableHead className="text-slate-300">狀態</TableHead>
-                      <TableHead className="text-slate-300">模型</TableHead>
-                      <TableHead className="text-slate-300">權限</TableHead>
-                      <TableHead className="text-slate-300">使用次數</TableHead>
-                      <TableHead className="text-slate-300">最後使用</TableHead>
-                      <TableHead className="text-right text-slate-300">操作</TableHead>
+                    <TableRow className="admin-api-table-header-row hover:bg-transparent">
+                      <TableHead>名稱 / 服務商</TableHead>
+                      <TableHead>金鑰</TableHead>
+                      <TableHead>狀態</TableHead>
+                      <TableHead>模型</TableHead>
+                      <TableHead>權限</TableHead>
+                      <TableHead>使用次數</TableHead>
+                      <TableHead>最後使用</TableHead>
+                      <TableHead className="text-right">操作</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -302,16 +316,16 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                     return (
                       <TableRow
                         key={apiKey.id}
-                        className="border-[#213f5a] text-slate-100 hover:bg-[#12253a]"
+                        className="admin-api-key-row"
                       >
                         <TableCell className="align-top">
                           <div>
-                            <p className="font-bold text-slate-100">{apiKey.key_name}</p>
+                            <p className="admin-api-key-name font-bold">{apiKey.key_name}</p>
                             <div className="mt-1 flex flex-wrap gap-1.5">
                               {permissions.metadata.provider ? (
                                 <Badge
                                   variant="outline"
-                                  className="border-[#4f8cff]/30 bg-[#142743] text-[#d8e7ff]"
+                                  className="admin-api-badge admin-api-badge-provider"
                                 >
                                   {permissions.metadata.provider}
                                 </Badge>
@@ -319,13 +333,13 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                               {permissions.metadata.editable ? (
                                 <Badge
                                   variant="outline"
-                                  className="border-[#4f8cff]/25 bg-[#102238] text-[#d8e7ff]"
+                                  className="admin-api-badge admin-api-badge-editable"
                                 >
                                   可編輯
                                 </Badge>
                               ) : null}
                             </div>
-                            <p className="mt-2 text-sm text-slate-300">
+                            <p className="admin-api-key-summary mt-2 text-sm">
                               {apiKey.description || "未填寫說明"}
                             </p>
                           </div>
@@ -333,7 +347,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
 
                         <TableCell className="align-top">
                           <div className="flex items-start gap-2">
-                            <code className="admin-api-code max-w-[26rem]">
+                            <code className="admin-api-code admin-api-key-value max-w-[26rem]">
                               {maskApiKey(apiKey.api_key, visibleKeys.has(apiKey.id))}
                             </code>
                             <div className="flex items-center gap-1">
@@ -342,7 +356,8 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => toggleKeyVisibility(apiKey.id)}
-                                className="h-8 w-8 text-slate-300 hover:bg-[#183250] hover:text-white"
+                                className="admin-api-key-tool h-8 w-8"
+                                aria-label={visibleKeys.has(apiKey.id) ? "隱藏金鑰" : "顯示金鑰"}
                               >
                                 {visibleKeys.has(apiKey.id) ? (
                                   <EyeOff className="h-4 w-4" />
@@ -355,7 +370,8 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => void copyToClipboard(apiKey.api_key)}
-                                className="h-8 w-8 text-slate-300 hover:bg-[#183250] hover:text-white"
+                                className="admin-api-key-tool h-8 w-8"
+                                aria-label="複製金鑰"
                               >
                                 <Copy className="h-4 w-4" />
                               </Button>
@@ -366,7 +382,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                         <TableCell className="align-top">{getStatusBadge(apiKey)}</TableCell>
 
                         <TableCell className="align-top">
-                          <div className="text-sm text-slate-200">
+                          <div className="admin-api-model text-sm">
                             {permissions.metadata.model || "-"}
                           </div>
                         </TableCell>
@@ -376,7 +392,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                             {permissions.read ? (
                               <Badge
                                 variant="outline"
-                                className="border-[#4f8cff]/30 bg-[#142743] text-[#d8e7ff]"
+                                className="admin-api-badge admin-api-badge-read"
                               >
                                 讀取
                               </Badge>
@@ -384,7 +400,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                             {permissions.write ? (
                               <Badge
                                 variant="outline"
-                                className="border-[#4f8cff]/25 bg-[#102238] text-[#d8e7ff]"
+                                className="admin-api-badge admin-api-badge-write"
                               >
                                 寫入
                               </Badge>
@@ -392,23 +408,25 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                           </div>
                         </TableCell>
 
-                        <TableCell className="align-top">{apiKey.usage_count ?? 0}</TableCell>
+                        <TableCell className="admin-api-usage align-top">
+                          {apiKey.usage_count ?? 0}
+                        </TableCell>
 
                         <TableCell className="align-top">
-                            <div className="inline-flex items-center gap-2 text-sm text-slate-200">
-                              <Clock3 className="h-3.5 w-3.5 text-[#8fb1c9]" />
+                            <div className="admin-api-last-used inline-flex items-center gap-2 text-sm">
+                              <Clock3 className="h-3.5 w-3.5" />
                             {formatDateTime(apiKey.last_used_at, "從未使用")}
                           </div>
                         </TableCell>
 
                         <TableCell className="align-top">
-                          <div className="flex justify-end gap-1.5">
+                          <div className="admin-api-actions flex justify-end gap-1.5">
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
                               onClick={() => onTestKey?.(apiKey)}
-                              className="text-[#d8e7ff] hover:bg-[#183250] hover:text-white"
+                              className="admin-api-action admin-api-action-test"
                             >
                               <Play className="mr-1.5 h-4 w-4" />
                               測試
@@ -420,7 +438,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                               size="sm"
                               disabled={!canEditApiManagement}
                               onClick={() => openEditDialog(apiKey)}
-                              className="text-slate-300 hover:bg-blue-400/10 hover:text-white"
+                              className="admin-api-action admin-api-action-edit"
                             >
                               <Pencil className="mr-1.5 h-4 w-4" />
                               編輯
@@ -432,7 +450,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                               size="sm"
                               disabled={!canEditApiManagement}
                               onClick={() => void toggleKeyStatus(apiKey.id, apiKey.is_active)}
-                              className="text-slate-300 hover:bg-blue-400/10 hover:text-white"
+                              className="admin-api-action admin-api-action-toggle"
                             >
                               <Power className="mr-1.5 h-4 w-4" />
                               {apiKey.is_active ? "停用" : "啟用"}
@@ -445,12 +463,13 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                   variant="ghost"
                                   size="sm"
                                   disabled={!canEditApiManagement}
-                                  className="text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
+                                  className="admin-api-action admin-api-action-delete"
+                                  aria-label={`刪除 ${apiKey.key_name}`}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </AlertDialogTrigger>
-                              <AlertDialogContent className="border-blue-400/20 bg-[#0f182b] text-slate-100">
+                              <AlertDialogContent className="admin-api-delete-dialog text-slate-100">
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>確認刪除 API 金鑰？</AlertDialogTitle>
                                   <AlertDialogDescription className="text-slate-300">
@@ -458,12 +477,12 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
-                                  <AlertDialogCancel className="border-blue-400/20 bg-transparent text-slate-300 hover:bg-blue-400/10 hover:text-white">
+                                  <AlertDialogCancel className="admin-api-delete-cancel">
                                     取消
                                   </AlertDialogCancel>
                                   <AlertDialogAction
                                     onClick={() => void deleteKey(apiKey.id)}
-                                    className="bg-rose-500 text-white hover:bg-rose-400"
+                                    className="admin-api-delete-confirm"
                                   >
                                     刪除
                                   </AlertDialogAction>
