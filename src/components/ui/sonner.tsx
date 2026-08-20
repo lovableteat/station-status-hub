@@ -9,7 +9,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      className="toaster group max-sm:!left-2 max-sm:!right-auto"
+      className="toaster group max-sm:!left-2 max-sm:!right-2 max-sm:!w-auto"
       position="top-right"
       offset={{
         top: "calc(env(safe-area-inset-top) + 5rem)",

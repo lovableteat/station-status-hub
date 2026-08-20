@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { CircuitBoard, MoreHorizontal, PanelLeft, PanelRight, ScanSearch, Settings2 } from "lucide-react";
+import { CircuitBoard, MoreHorizontal, PanelLeft, PanelRight, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -468,14 +468,6 @@ export function PcbDesignerWorkspace({
                 >
                   <Settings2 className="mr-2 h-4 w-4" />專案設定
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    workspace.runDrc();
-                    setOpenDrawer("right");
-                  }}
-                >
-                  <ScanSearch className="mr-2 h-4 w-4" />執行 DRC
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -533,21 +525,6 @@ export function PcbDesignerWorkspace({
           >
             <Settings2 className="h-4 w-4" />
             <span>專案設定</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="pcb-header-icon-button pcb-drc-header-action"
-            onClick={() => {
-              workspace.runDrc();
-              setOpenDrawer("right");
-            }}
-            aria-label="執行 DRC"
-            title="執行設計規則檢查"
-          >
-            <ScanSearch className="h-4 w-4" />
-            <span>DRC</span>
           </Button>
           <input
             ref={projectInputRef}

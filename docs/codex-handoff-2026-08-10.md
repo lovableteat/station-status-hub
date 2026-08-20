@@ -215,3 +215,27 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 ### PCB repository state
 
 - 只提交本次 PCB Designer、STEP 匯入、回歸測試與本交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。
+
+### Latest delivery - 2026-08-20 RWD and control-room visual audit
+
+本輪完成全站主要工作區的響應式檢查與指定畫面重排，重點不是單純縮小桌面版，而是讓手機、平板與桌面各自保留可理解、可觸控、可捲動的操作區：
+
+- PCB Designer 移除頂部重複的 DRC 操作；DRC 改由右側屬性／DRC 面板統一查看與重新計算，手機版也不再把 DRC 塞進工具列。
+- 料號申請保留手機優先的快查、篩選與卡片清單；共用 BOM、狀態與主要操作在窄版不互相擠壓。
+- 後台 API 控制台改用清楚的「驗證方式／使用範圍／狀態」中文資訊卡；API 金鑰資料未刪除，金鑰表在手機保留遮罩、查看、複製、測試、編輯、啟用／停用與刪除操作，完整欄位改由表格內層水平滑動查看。
+- 權限設定視窗改成窄版單欄、寬版雙欄；工作區卡片在手機單欄、平板以上雙欄，超寬桌面才分出左右明細區，避免左下大面積空白與三欄選項被壓縮。
+- 手機 Sonner 通知改為左右安全邊距，顯示提示時不再把聊天室或頁面內容往外推。
+
+### RWD verification
+
+- 已用本機瀏覽器實際查看 `390×844` 手機、`768×1024` 平板、`1280×720` 桌面與 `1610×905` 寬桌面。
+- 已檢查機台維修紀錄中心、料號申請、Data Center、PCB Designer、後台用戶管理、後台 API 控制台與權限設定視窗。
+- 已確認 API 金鑰表的手機內層表格實際為 `1147px` 欄位寬、由 `320px` 可視區水平滑動，不再被外層裁切；金鑰仍維持遮罩，未執行刪除。
+- 已確認 PCB 桌面版右側 `DRC 0` 面板可切換並顯示重新計算；手機版沒有頂部 DRC 按鈕。
+- PCB Designer tests、後台 UI tests：`194/194` 通過。
+- `pnpm exec tsc --noEmit` 通過；本輪修改檔案 scoped ESLint 通過。
+- `pnpm build` 通過，`3490 modules transformed`。
+
+### RWD repository state
+
+- 本輪只提交 RWD、後台版面、PCB DRC 入口與對應回歸測試／交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。

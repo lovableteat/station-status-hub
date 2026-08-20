@@ -281,20 +281,22 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
             </div>
           ) : (
             <div className="admin-api-table-frame">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-[#2a526f] hover:bg-transparent">
-                    <TableHead className="text-slate-300">名稱 / 服務商</TableHead>
-                    <TableHead className="text-slate-300">金鑰</TableHead>
-                    <TableHead className="text-slate-300">狀態</TableHead>
-                    <TableHead className="text-slate-300">模型</TableHead>
-                    <TableHead className="text-slate-300">權限</TableHead>
-                    <TableHead className="text-slate-300">使用次數</TableHead>
-                    <TableHead className="text-slate-300">最後使用</TableHead>
-                    <TableHead className="text-right text-slate-300">操作</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <p className="admin-api-mobile-table-hint">左右滑動檢視完整欄位；金鑰內容仍維持遮罩，可個別查看或複製。</p>
+              <div className="admin-api-table-scroll" tabIndex={0} aria-label="API 金鑰清單，可左右滑動">
+                <Table className="min-w-[1040px]">
+                  <TableHeader>
+                    <TableRow className="border-[#2a526f] hover:bg-transparent">
+                      <TableHead className="text-slate-300">名稱 / 服務商</TableHead>
+                      <TableHead className="text-slate-300">金鑰</TableHead>
+                      <TableHead className="text-slate-300">狀態</TableHead>
+                      <TableHead className="text-slate-300">模型</TableHead>
+                      <TableHead className="text-slate-300">權限</TableHead>
+                      <TableHead className="text-slate-300">使用次數</TableHead>
+                      <TableHead className="text-slate-300">最後使用</TableHead>
+                      <TableHead className="text-right text-slate-300">操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                   {apiKeys.map((apiKey) => {
                     const permissions = normalizeApiKeyPermissions(apiKey.permissions);
                     return (
@@ -473,8 +475,9 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                       </TableRow>
                     );
                   })}
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>
