@@ -178,9 +178,10 @@ export function transformPcbComponentPoint(
   const angle = transform.rotation[1];
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
+  const layerSign = component.layer === "top" ? 1 : -1;
   const raisedPoint = {
     x: localPoint.x,
-    y: localPoint.y + boardThickness / 2 + component.maxHeight / 2,
+    y: layerSign * (localPoint.y + boardThickness / 2 + component.maxHeight / 2),
     z: localPoint.z,
   };
   const rotated = {
@@ -188,11 +189,6 @@ export function transformPcbComponentPoint(
     y: raisedPoint.y,
     z: -raisedPoint.x * sin + raisedPoint.z * cos,
   };
-  if (component.layer === "bottom") {
-    rotated.x *= -1;
-    rotated.y *= -1;
-  }
-
   return {
     x: transform.position[0] + rotated.x,
     y: rotated.y,

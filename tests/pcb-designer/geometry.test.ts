@@ -4,6 +4,7 @@ import {
   findPlacement,
   getComponentCanvasGeometry,
   getRotatedRectangleCorners,
+  overlapsKeepout,
   rectanglesOverlap,
   searchPlacement,
   snapValue,
@@ -65,6 +66,21 @@ test("90-degree rotation returns corners around the component center", () => {
     { x: 9, y: 22 },
     { x: 9, y: 18 },
   ]);
+});
+
+test("DRC uses the rotated keepout geometry instead of its original axis-aligned box", () => {
+  const keepout = {
+    id: "keepout-1",
+    name: "Rotated keepout",
+    x: 10,
+    y: 10,
+    width: 10,
+    height: 2,
+    rotation: 90,
+    color: "#f00",
+  };
+
+  assert.equal(overlapsKeepout(component({ x: 15, y: 15, width: 2, height: 2 }), keepout), true);
 });
 
 test("component canvas geometry keeps the dragged body and selection frame on one transform", () => {

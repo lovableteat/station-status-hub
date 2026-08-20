@@ -9,6 +9,7 @@ export interface ImportedComponent {
   height: number;
   maxHeight: number;
   color: string;
+  shape?: "rectangle" | "circle";
 }
 
 export interface ImportedBomItem extends ImportedComponent {
@@ -95,6 +96,9 @@ function parseComponent(row: TabularRow): ImportedComponent | string {
   const maxHeight = positiveNumber(cell(row, "maxHeight"), "Max Height");
   if (typeof maxHeight === "string") return maxHeight;
 
+  const shape = /screw|scew|hole|螺絲|孔/i.test(`${name} ${text(cell(row, "type"))}`)
+    ? "circle" as const
+    : undefined;
   return {
     name,
     type: text(cell(row, "type"), "Other"),
@@ -104,6 +108,7 @@ function parseComponent(row: TabularRow): ImportedComponent | string {
     height,
     maxHeight,
     color: text(cell(row, "color"), "#64748b"),
+    ...(shape ? { shape } : {}),
   };
 }
 

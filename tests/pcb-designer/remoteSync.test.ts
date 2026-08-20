@@ -169,6 +169,25 @@ test("merges every teammate project even when the local account snapshot is newe
   assert.equal(merged.activeProjectId, local.activeProjectId);
 });
 
+test("preserves the locally selected project during background reconciliation", () => {
+  const local = state("Local project");
+  const selected = createBlankProject("Selected local project");
+  selected.id = "selected-local-project";
+  selected.updatedAt = "2026-08-13T12:00:00.000Z";
+  local.projects.push(selected);
+  local.activeProjectId = selected.id;
+  local.updatedAt = "2026-08-13T12:00:00.000Z";
+
+  const remote = state("Remote project");
+  remote.updatedAt = "2026-08-13T13:00:00.000Z";
+  remote.projects[0].updatedAt = remote.updatedAt;
+
+  const merged = mergePcbRemoteState(local, remote);
+
+  assert.equal(merged.activeProjectId, selected.id);
+  assert.ok(merged.projects.some((project) => project.id === selected.id));
+});
+
 test("server project tombstones remove stale local copies", () => {
   const local = state("Deleted elsewhere");
   const remote = state("Still shared");

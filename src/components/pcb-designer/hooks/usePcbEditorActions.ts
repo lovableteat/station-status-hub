@@ -291,8 +291,9 @@ export function usePcbEditorActions(
       const source = state.activeProject.keepouts.find((item) => item.id === id);
       if (!source) return false;
       const keepout = { ...source, ...patch };
-      if (![keepout.x, keepout.y, keepout.width, keepout.height].every(Number.isFinite)) return false;
+      if (![keepout.x, keepout.y, keepout.width, keepout.height, keepout.rotation ?? 0].every(Number.isFinite)) return false;
       if (keepout.width <= 0 || keepout.height <= 0) return false;
+      keepout.rotation = normalizeRotation(keepout.rotation ?? 0);
       if (
         keepout.x < 0
         || keepout.y < 0

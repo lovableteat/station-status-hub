@@ -111,6 +111,8 @@ test("normalizes legacy project boards with default top and bottom colors", () =
   assert.equal(typeof normalized.projects[0].board.layerColors.top, "string");
   assert.equal(typeof normalized.projects[0].board.layerColors.bottom, "string");
   assert.notEqual(normalized.projects[0].board.layerColors.top, normalized.projects[0].board.layerColors.bottom);
+  assert.equal(normalized.projects[0].components[0].shape, "rectangle");
+  assert.equal(normalized.projects[0].keepouts[0].rotation, 0);
 });
 
 test("normalizes legacy project JSON before it reaches the editor", () => {

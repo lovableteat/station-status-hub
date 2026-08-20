@@ -60,6 +60,9 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
   const component = workspace.selection?.kind === "component"
     ? workspace.selectedObject as PcbPlacedComponent
     : null;
+  const keepout = workspace.selection?.kind === "keepout"
+    ? workspace.selectedObject
+    : null;
   const selectionCount = new Set([
     ...workspace.selectedObjects,
     ...(workspace.selection ? [workspace.selection.id] : []),
@@ -100,6 +103,19 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
             {component.locked ? "解鎖" : "鎖定"}
           </Button>
         </>
+      )}
+      {keepout && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!workspace.canMutate}
+          onClick={workspace.rotateSelected}
+          aria-label="旋轉選取禁制區 90 度"
+          title="旋轉 90°"
+        >
+          <RotateCw className="mr-1.5 h-3.5 w-3.5" />旋轉
+        </Button>
       )}
       <Button
         type="button"
@@ -300,6 +316,7 @@ function KeepoutInspector({
         <NumberField label="Y (mm)" value={keepout.y} disabled={disabled} onCommit={(y) => workspace.updateKeepout(keepout.id, { y })} />
         <NumberField label="寬度 (mm)" value={keepout.width} disabled={disabled} onCommit={(width) => workspace.updateKeepout(keepout.id, { width })} />
         <NumberField label="高度 (mm)" value={keepout.height} disabled={disabled} onCommit={(height) => workspace.updateKeepout(keepout.id, { height })} />
+        <NumberField label="旋轉 (°)" value={keepout.rotation ?? 0} disabled={disabled} onCommit={(rotation) => workspace.updateKeepout(keepout.id, { rotation })} />
         <InspectorField label="顏色">
           <input type="color" value={keepout.color} disabled={disabled} onChange={(event) => workspace.updateKeepout(keepout.id, { color: event.target.value })} />
         </InspectorField>

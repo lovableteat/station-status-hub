@@ -34,6 +34,14 @@ test("normalizes Chinese and English component aliases and reports invalid row n
   assert.deepEqual(result.errors, [{ row: 3, message: "Width must be a finite positive number" }]);
 });
 
+test("recognizes screw-hole aliases as circular components during import", () => {
+  const result = parseComponentRows([
+    { Name: "Scew Hole M3", Type: "Mechanical", Width: 3.2, Height: 3.2, "Max Height": 1.6 },
+  ]);
+
+  assert.equal(result.valid[0]?.shape, "circle");
+});
+
 test("retains CSV source row numbers after blank source rows", () => {
   const result = parseComponentRows(rowsFromCsv("Name,Width,Height,Max Height\n\nBroken,0,2,1"));
 

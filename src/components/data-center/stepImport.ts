@@ -10,6 +10,28 @@ import type {
   ModelUpAxis,
 } from "./dataCenterTypes";
 
+type OcctModule = Awaited<ReturnType<typeof occtimportjs>>;
+let occtModulePromise: Promise<OcctModule> | null = null;
+
+function getOcctModule(): Promise<OcctModule> {
+  if (!occtModulePromise) {
+    occtModulePromise = occtimportjs({
+      locateFile: (path) => path.toLocaleLowerCase().includes(".wasm") ? occtWasmUrl : path,
+    }).catch((error) => {
+      occtModulePromise = null;
+      throw new Error(`STEP 轉檔器載入失敗：${error instanceof Error ? error.message : "WebAssembly 無法載入"}`);
+    });
+  }
+  return occtModulePromise;
+}
+
+function createStepId(): string {
+  const cryptoObject = globalThis.crypto as Crypto | undefined;
+  return cryptoObject?.randomUUID?.()
+    ? `step-${cryptoObject.randomUUID()}`
+    : `step-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
 function roundMm(value: number) {
   return Math.max(0, Math.round(value * 10) / 10);
 }
@@ -48,17 +70,25 @@ function getCanonicalDimensions(
 }
 
 export async function importStepModel(file: File): Promise<ImportedStepModel> {
-  const occt = await occtimportjs({
-    locateFile: (path) => (path.endsWith(".wasm") ? occtWasmUrl : path),
-  });
+  if (!file.name.toLocaleLowerCase().endsWith(".stp") && !file.name.toLocaleLowerCase().endsWith(".step")) {
+    throw new Error("請選擇 .stp 或 .step 檔案。 ");
+  }
+  if (file.size === 0) throw new Error("STEP 檔案是空的，無法匯入。 ");
+
+  const occt = await getOcctModule();
 
   const fileBuffer = new Uint8Array(await file.arrayBuffer());
-  const result = occt.ReadStepFile(fileBuffer, {
-    linearUnit: "millimeter",
-    linearDeflectionType: "bounding_box_ratio",
-    linearDeflection: 0.004,
-    angularDeflection: 0.4,
-  });
+  let result;
+  try {
+    result = occt.ReadStepFile(fileBuffer, {
+      linearUnit: "millimeter",
+      linearDeflectionType: "bounding_box_ratio",
+      linearDeflection: 0.004,
+      angularDeflection: 0.4,
+    });
+  } catch (error) {
+    throw new Error(`STEP 解析失敗：${error instanceof Error ? error.message : "檔案格式或內容無法解析"}`);
+  }
 
   if (!result.success || !result.meshes.length) {
     throw new Error("STEP 解析失敗，檔案沒有可顯示的 3D 組立資料。");
@@ -126,7 +156,7 @@ export async function importStepModel(file: File): Promise<ImportedStepModel> {
   }
 
   return {
-    id: `step-${crypto.randomUUID()}`,
+    id: createStepId(),
     fileName: file.name,
     importedAt: new Date().toISOString(),
     sourceUnit: "millimeter",

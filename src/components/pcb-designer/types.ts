@@ -13,6 +13,8 @@ export interface PcbBoard {
   layerColors: PcbBoardLayerColors;
 }
 
+export type PcbComponentShape = "rectangle" | "circle";
+
 export interface PcbLibraryComponent {
   id: string;
   name: string;
@@ -23,6 +25,7 @@ export interface PcbLibraryComponent {
   height: number;
   maxHeight: number;
   color: string;
+  shape?: PcbComponentShape;
   source: "built-in" | "custom" | "bom";
   createdAt: string;
 }
@@ -94,6 +97,7 @@ export interface PcbKeepout {
   width: number;
   height: number;
   color: string;
+  rotation?: number;
 }
 
 export interface PcbMeasurement {
@@ -149,6 +153,7 @@ export interface PcbPendingPlacement {
   height: number;
   maxHeight: number;
   color: string;
+  shape?: PcbComponentShape;
   quantity: number;
   reference: string;
 }

@@ -94,7 +94,12 @@ export type PcbWorkspaceAction =
   | { type: "selection/clear-group" }
   | { type: "panel/right"; tab: PcbWorkspaceState["rightTab"] }
   | { type: "permission/set"; canEdit: boolean }
-  | { type: "persistence/hydrate"; data: PcbSaveState }
+  | {
+    type: "persistence/hydrate";
+    data: PcbSaveState;
+    preserveView?: Pick<PcbWorkspaceState, "zoom" | "viewCenter" | "activeLayer" | "visibleLayer" | "rightTab">
+      & { activeProjectId?: string | null };
+  }
   | { type: "persistence/touch" }
   | { type: "drc/run" };
 

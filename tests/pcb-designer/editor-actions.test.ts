@@ -58,6 +58,31 @@ test("placement keeps a normalized preview rotation", () => {
   assert.equal(result.project.components[0].rotation, 90);
 });
 
+test("rotates a selected keepout without changing its position or size", () => {
+  const project = createBlankProject("Rotated keepout");
+  project.keepouts.push({
+    id: "keepout-1",
+    name: "禁制區 1",
+    x: 20,
+    y: 20,
+    width: 10,
+    height: 6,
+    color: "#fb7185",
+    rotation: 0,
+  });
+
+  const next = editorModule.editSelectedObject(
+    project,
+    { kind: "keepout", id: "keepout-1" },
+    { type: "rotate" },
+  );
+
+  assert.deepEqual(next.keepouts[0], {
+    ...project.keepouts[0],
+    rotation: 90,
+  });
+});
+
 test("exact placement keeps the requested location and rejects invalid clicks instead of relocating", () => {
   const project = createBlankProject("Exact placement");
   const first = editorModule.placeLibraryComponent(

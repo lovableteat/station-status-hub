@@ -85,7 +85,8 @@ function isLibraryComponent(value: unknown): boolean {
     && isPositiveFiniteNumber(value.width)
     && isPositiveFiniteNumber(value.height)
     && isPositiveFiniteNumber(value.maxHeight)
-    && (value.source === "built-in" || value.source === "custom" || value.source === "bom");
+    && (value.source === "built-in" || value.source === "custom" || value.source === "bom")
+    && (value.shape === undefined || value.shape === "rectangle" || value.shape === "circle");
 }
 
 function isPendingPlacement(value: unknown): boolean {

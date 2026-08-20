@@ -72,6 +72,7 @@ const emptyComponent: ImportedComponent = {
   height: 10,
   maxHeight: 1,
   color: "#39c6e8",
+  shape: "rectangle",
 };
 
 function positiveNumber(value: string): number | null {
@@ -122,6 +123,7 @@ export function PcbDialogs({
         height: String(component.height),
         maxHeight: String(component.maxHeight),
         color: component.color,
+        shape: component.shape === "circle" ? "circle" : "rectangle",
       });
     }
   }, [dialog]);
@@ -197,6 +199,7 @@ export function PcbDialogs({
         height,
         maxHeight,
         color: values.color || "#39c6e8",
+        shape: values.shape === "circle" ? "circle" : "rectangle",
       }, dialog.component?.id);
       onClose();
     }
@@ -362,6 +365,7 @@ export function PcbDialogs({
                     y={keepout.y}
                     width={keepout.width}
                     height={keepout.height}
+                    transform={`rotate(${keepout.rotation ?? 0} ${keepout.x + keepout.width / 2} ${keepout.y + keepout.height / 2})`}
                     fill="#fb718533"
                     stroke="#fb7185"
                     strokeWidth="0.6"
@@ -370,16 +374,25 @@ export function PcbDialogs({
                 ))}
                 {dialog.project.components.map((component) => (
                   <g key={component.instanceId} transform={`translate(${component.x} ${component.y}) rotate(${component.rotation})`}>
-                    <rect
-                      x={-component.width / 2}
-                      y={-component.height / 2}
-                      width={component.width}
-                      height={component.height}
-                      rx="1"
-                      fill={component.color}
-                      stroke="#f8fafc"
-                      strokeWidth="0.45"
-                    />
+                    {component.shape === "circle" ? (
+                      <circle
+                        r={Math.min(component.width, component.height) / 2}
+                        fill={component.color}
+                        stroke="#f8fafc"
+                        strokeWidth="0.45"
+                      />
+                    ) : (
+                      <rect
+                        x={-component.width / 2}
+                        y={-component.height / 2}
+                        width={component.width}
+                        height={component.height}
+                        rx="1"
+                        fill={component.color}
+                        stroke="#f8fafc"
+                        strokeWidth="0.45"
+                      />
+                    )}
                     <text y="1" textAnchor="middle" fill="#071522" fontSize="3" fontWeight="800">
                       {component.reference}
                     </text>
@@ -479,8 +492,46 @@ export function PcbDialogs({
               {dialog.kind === "component" && (
                 <>
                   <div className="grid grid-cols-2 gap-3">
-                    <TextField label="類型" value={values.type} onChange={(value) => update("type", value)} />
-                    <TextField label="顏色" value={values.color} onChange={(value) => update("color", value)} />
+                    <label className="block text-xs text-slate-300">
+                      類型
+                      <select
+                        value={values.type ?? "Other"}
+                        onChange={(event) => update("type", event.target.value)}
+                        className="mt-1 h-9 w-full rounded-md border border-[#356985] bg-[#10263a] px-3 text-sm"
+                      >
+                        <option>Other</option>
+                        <option>IC</option>
+                        <option>Connector</option>
+                        <option>Resistor</option>
+                        <option>Capacitor</option>
+                        <option>Screw Hole</option>
+                      </select>
+                    </label>
+                    <label className="block text-xs text-slate-300">
+                      元件形狀
+                      <select
+                        value={values.shape ?? "rectangle"}
+                        onChange={(event) => update("shape", event.target.value)}
+                        className="mt-1 h-9 w-full rounded-md border border-[#356985] bg-[#10263a] px-3 text-sm"
+                      >
+                        <option value="rectangle">矩形</option>
+                        <option value="circle">圓形（Screw Hole）</option>
+                      </select>
+                    </label>
+                    <label className="col-span-2 block text-xs text-slate-300">
+                      顏色
+                      <span className="mt-1 flex h-10 items-center gap-3 rounded-md border border-[#356985] bg-[#10263a] px-2">
+                        <input
+                          type="color"
+                          value={values.color || "#39c6e8"}
+                          onChange={(event) => update("color", event.target.value)}
+                          aria-label="選擇元件顏色"
+                          className="h-8 w-12 cursor-pointer rounded border-0 bg-transparent p-0"
+                        />
+                        <span className="h-6 flex-1 rounded" style={{ backgroundColor: values.color || "#39c6e8" }} />
+                        <span className="font-mono text-xs text-slate-300">已選顏色</span>
+                      </span>
+                    </label>
                     <TextField label="製造商" value={values.manufacturer} onChange={(value) => update("manufacturer", value)} />
                     <TextField label="料號" value={values.partNumber} onChange={(value) => update("partNumber", value)} />
                     <NumberField label="寬度 (mm)" value={values.width} onChange={(value) => update("width", value)} />
