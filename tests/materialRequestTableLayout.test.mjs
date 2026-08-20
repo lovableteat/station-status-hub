@@ -19,6 +19,14 @@ test("material search controls are contained by the material table card", () => 
   assert.ok(tableStart > toolbarStart, "search toolbar must appear above the material table");
 });
 
+test("material overview separates collaboration status, actions, and BOM workspace", async () => {
+  assert.match(source, /data-material-zone="overview"/);
+  assert.match(source, /data-material-zone="collaboration"/);
+  assert.match(source, /data-material-zone="actions"/);
+  assert.match(source, /data-material-zone="bom-workspace"/);
+  assert.match(source, /常用操作/);
+});
+
 test("compact hover previews stay on one line", () => {
   const compactHoverBlock = source.match(/function CompactHoverValue\([\s\S]*?\r?\n}\r?\n\r?\nfunction/)?.[0] ?? "";
 

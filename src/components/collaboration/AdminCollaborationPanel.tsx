@@ -248,8 +248,8 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
   }
 
   return (
-    <div className="grid min-h-0 items-start gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-      <section data-admin-zone="announcement-composer" className="surface-accent surface-accent--teal rounded-2xl border bg-[#0a2032] p-5 shadow-[0_18px_50px_-44px_rgba(103,232,249,0.8)]">
+    <div className="grid min-h-0 items-stretch gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+      <section data-admin-zone="announcement-composer" className="surface-accent surface-accent--teal flex min-h-full flex-col rounded-2xl border bg-[#0a2032] p-5 shadow-[0_18px_50px_-44px_rgba(103,232,249,0.8)]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-lg font-bold text-slate-50">
@@ -260,7 +260,7 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
           <Badge className="bg-cyan-300/15 text-cyan-100">{recipients.length} 個啟用帳號</Badge>
         </div>
 
-        <div className="mt-5 grid gap-4">
+        <div className="mt-5 flex flex-1 flex-col gap-4">
           <div className="grid gap-2 sm:grid-cols-2">
             <button
               type="button"
@@ -316,6 +316,18 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
             公告內容
             <Textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={4000} placeholder="請輸入影響範圍、時間與同仁需要採取的動作。" className="min-h-32 resize-y border-sky-200/25 bg-[#071522]" />
           </label>
+
+          <div data-admin-zone="announcement-checklist" className="mt-auto rounded-xl border border-cyan-200/12 bg-[#071522] p-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-cyan-100">
+              <CheckCircle2 className="h-4 w-4 text-emerald-300" />發布前檢查
+            </div>
+            <div className="mt-2 grid gap-2 text-xs text-slate-400 sm:grid-cols-3">
+              <span>1. 選擇通知對象</span>
+              <span>2. 填寫標題與內容</span>
+              <span>3. 發布後即時送達</span>
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-cyan-200/10 pt-4">
             <span className="text-sm text-slate-400">本次預計通知 <strong className="font-mono text-cyan-200">{targetCount}</strong> 人</span>
             <Button onClick={() => void sendAnnouncement()} disabled={!canSubmit || sending} className="h-11 rounded-xl bg-cyan-300 px-5 font-bold text-[#06111f] hover:bg-cyan-200">

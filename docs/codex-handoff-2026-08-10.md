@@ -254,3 +254,25 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 - 本次涉及檔案 scoped ESLint 通過。
 - `pnpm exec tsc --noEmit` 通過。
 - 本輪只提交聊天間距、浮動列定位、回歸測試與本交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。
+
+### Latest delivery - 2026-08-20 annotated UI review
+
+針對瀏覽器標記的六個畫面逐一完成修正：
+
+- PCB Designer 移除頂部「執行 DRC」入口，DRC 統一保留在右側檢查器，避免同一功能分散在兩處。
+- 料號申請將標題、共享狀態、常用操作與 BOM 工作區拆成獨立區塊，降低標題列與操作按鈕的擁擠。
+- 後台協作公告編輯區改為可伸展佈局，補上「發布前檢查」流程，避免左下出現無用途的大空白。
+- API 控制台改成「管理金鑰 → 直接測試 → 提供文件」三步驟導覽，保留既有 API 金鑰與所有操作，並以一致的管理工作區視覺呈現。
+- 使用者權限視窗改為快速套用、工作區權限、細部頁面權限的左右分區；一般桌面即採雙欄，減少不必要的巢狀框與壓縮。
+- 相關元件補上可讀的區域標記與回歸測試，後續調整可直接定位到對應畫面區塊。
+
+### Annotated UI verification
+
+- 本機瀏覽器實際查看料號申請、後台協作、API 控制台、網站權限視窗與 PCB Designer；確認料號區塊分明、後台空間有內容、API 金鑰仍存在、權限視窗可用雙欄、PCB 畫面沒有「執行 DRC」。
+- `pnpm exec tsc --noEmit` 通過。
+- 後台、料號與協作 focused tests：`25/25` 通過；PCB Designer tests：`188/188` 通過。
+- `pnpm build` 通過，`3490 modules transformed`；既有 OCCT 外部化與大型 chunk 警告仍屬既有建置提示。
+
+### Annotated UI repository state
+
+- 本輪只提交標記畫面相關的料號、後台協作、API 控制台、權限視窗、回歸測試與本交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。
