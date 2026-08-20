@@ -1165,18 +1165,6 @@
   background: rgb(168 85 247 / 24%);
 }
 
-.pcb-drc-header-action {
-  border-color: rgb(253 230 138 / 36%);
-  color: #fef3c7;
-  background: rgb(245 158 11 / 12%);
-}
-
-.pcb-drc-header-action:hover {
-  border-color: rgb(254 240 138 / 68%);
-  color: #ffffff;
-  background: rgb(245 158 11 / 24%);
-}
-
 .pcb-status-chip {
   min-height: 28px;
   border-color: rgb(104 206 233 / 24%);

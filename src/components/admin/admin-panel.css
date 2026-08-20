@@ -536,6 +536,41 @@
   overflow: hidden;
 }
 
+.admin-api-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-color: #2a526f #071522;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-api-table-scroll:focus-visible {
+  outline: 2px solid rgb(103 232 249 / 75%);
+  outline-offset: -2px;
+}
+
+.admin-api-mobile-table-hint {
+  display: none;
+  margin: 0;
+  border-bottom: 1px solid rgb(42 82 111 / 75%);
+  padding: 0 12px 10px;
+  color: #8fb1c9;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.admin-permissions-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1800px) {
+  .admin-permissions-layout {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    align-items: start;
+  }
+}
+
 .admin-sidebar-backdrop {
   display: none;
 }
@@ -695,6 +730,65 @@
   .admin-account-metadata,
   .admin-account-permissions {
     display: none;
+  }
+
+  .admin-api-workspace {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .admin-api-hero {
+    border-radius: 16px;
+  }
+
+  .admin-api-hero-content {
+    padding: 12px;
+  }
+
+  .admin-api-hero-main {
+    gap: 12px;
+  }
+
+  .admin-api-hero-main h1 {
+    font-size: 1.75rem;
+  }
+
+  .admin-api-context-grid {
+    gap: 8px;
+  }
+
+  .admin-api-chip {
+    padding: 10px 12px;
+  }
+
+  .admin-api-chip p:last-child {
+    margin-top: 6px;
+    font-size: 0.9rem;
+  }
+
+  .admin-api-feature-grid {
+    gap: 8px;
+  }
+
+  .admin-api-feature-grid .admin-api-card {
+    padding: 12px;
+  }
+
+  .admin-api-feature-grid .admin-api-card p {
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+
+  .admin-api-mobile-table-hint {
+    display: block;
+  }
+
+  .admin-permissions-dialog {
+    max-height: calc(100dvh - 0.75rem);
+  }
+
+  .admin-permissions-scroll {
+    max-height: calc(100dvh - 14rem);
   }
 }
 

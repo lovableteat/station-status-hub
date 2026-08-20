@@ -49,8 +49,8 @@ export function ApiManagementPage() {
       className="admin-api-workspace"
     >
       <section className="admin-api-hero">
-        <div className="space-y-6 p-6 lg:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="admin-api-hero-content space-y-5 p-4 sm:p-5 lg:p-6">
+          <div className="admin-api-hero-main flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl space-y-3">
               <div className="admin-api-icon h-12 w-12">
                 <ServerCog className="h-6 w-6" />
@@ -66,22 +66,22 @@ export function ApiManagementPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="admin-api-context-grid grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="admin-api-chip">
                 <p className="admin-api-chip-label">
-                  Auth
+                  驗證方式
                 </p>
                 <p className="mt-2 text-base font-bold text-slate-50">API Key / Provider Key</p>
               </div>
               <div className="admin-api-chip">
                 <p className="admin-api-chip-label">
-                  Scope
+                  使用範圍
                 </p>
                 <p className="mt-2 text-base font-bold text-slate-50">內部 API + 外部串接 API</p>
               </div>
               <div className="admin-api-chip">
                 <p className="admin-api-chip-label">
-                  Status
+                  狀態
                 </p>
                 <p className="mt-2 flex items-center gap-2 text-base font-bold text-slate-50">
                   <ShieldCheck className="h-4 w-4 text-[#d8e7ff]" />
@@ -91,7 +91,7 @@ export function ApiManagementPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="admin-api-feature-grid grid gap-3 lg:grid-cols-3">
             {summaryCards.map((card) => {
               const Icon = card.icon;
 
