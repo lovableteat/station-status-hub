@@ -23,6 +23,7 @@ test("the shared handset shell reserves safe chrome for every workspace", async 
   assert.match(index, /availableItems=\{workspaceItems\}/);
   assert.doesNotMatch(index, /activeWorkspace !== "data-center" && activeWorkspace !== "pcb-designer"/);
   assert.match(header, /data-mobile-app-header="true"/);
+  assert.match(header, /lg:w-fit lg:max-w-full lg:justify-self-center/);
   assert.match(dock, /data-mobile-more-sheet="true"/);
   assert.match(dock, /更多/);
   assert.match(dock, /grid-cols-5/);
