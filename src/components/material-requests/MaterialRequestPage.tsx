@@ -5860,88 +5860,85 @@ export function MaterialRequestPage() {
         </div>
       </section>
 
-      <header data-material-zone="overview" className="hidden overflow-hidden rounded-2xl border border-cyan-300/30 bg-[#10263a] p-4 shadow-[0_18px_48px_-38px_rgba(34,211,238,0.7)] lg:block">
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(430px,0.72fr)] xl:items-start">
-          <div className="min-w-0">
-            <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-cyan-300/16 bg-cyan-400/12 text-cyan-100 shadow-[0_12px_30px_rgba(34,211,238,0.12)]">
+      <header data-material-zone="overview" className="hidden overflow-hidden rounded-2xl border border-cyan-300/30 bg-[linear-gradient(120deg,rgba(21,54,77,0.96),rgba(13,34,53,0.98))] p-3 shadow-[0_18px_48px_-38px_rgba(34,211,238,0.7)] lg:block">
+        <div data-material-zone="command-center" className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(620px,1.1fr)] xl:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-cyan-300/24 bg-cyan-300/12 text-cyan-100">
               <FileSpreadsheet className="h-5 w-5" />
             </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold text-slate-50">料號總表</h1>
-              <p className="mt-0.5 text-sm text-slate-300">一行一個主料，點箭頭查看其他替代料。</p>
-            </div>
-          </div>
-
-            <div data-material-zone="collaboration" className="mt-4 flex flex-wrap items-center gap-2 border-t border-cyan-300/12 pt-3">
-              <Badge className={cn("border px-2.5 py-1 text-xs font-bold", collaborationStatusMeta.badgeClassName)}>
-                <span className={cn("mr-2 h-2 w-2 rounded-full", collaborationStatusMeta.dotClassName)} />
-                {collaborationStatusMeta.label}
-              </Badge>
-              <span className="rounded-full border border-emerald-300/20 bg-emerald-400/[0.08] px-2.5 py-1 text-xs font-bold text-emerald-100">
-                {onlineUserCount} 人在線
-              </span>
-              {isPreviewDataset && (
-                <span
-                  data-testid="material-progressive-status"
-                  className="rounded-full border border-cyan-300/24 bg-cyan-400/10 px-2.5 py-1 text-xs font-bold text-cyan-100"
-                >
-                  已先顯示 {activeWorkspace.payload.records.length.toLocaleString()} 筆，完整資料同步中
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="shrink-0 text-lg font-black text-white">料號總表</h1>
+                <span className="truncate text-xs text-slate-400">一行一個主料，展開查看替代料</span>
+              </div>
+              <div data-material-zone="collaboration" className="mt-1 flex min-w-0 items-center gap-1.5">
+                <Badge className={cn("h-6 shrink-0 border px-2 text-[11px] font-black", collaborationStatusMeta.badgeClassName)}>
+                  <span className={cn("mr-1.5 h-1.5 w-1.5 rounded-full", collaborationStatusMeta.dotClassName)} />
+                  {collaborationStatusMeta.label}
+                </Badge>
+                <span className="h-6 shrink-0 rounded-full border border-emerald-300/20 bg-emerald-400/[0.08] px-2 text-[11px] font-black leading-6 text-emerald-100">
+                  {onlineUserCount} 人在線
                 </span>
-              )}
-              <span className="basis-full text-xs leading-5 text-slate-400">{collaborationStatusMeta.description}</span>
+                {isPreviewDataset && (
+                  <span
+                    data-testid="material-progressive-status"
+                    className="h-6 shrink-0 rounded-full border border-cyan-300/24 bg-cyan-400/10 px-2 text-[11px] font-black leading-6 text-cyan-100"
+                  >
+                    已顯示 {activeWorkspace.payload.records.length.toLocaleString()} 筆，同步中
+                  </span>
+                )}
+                <span className="min-w-0 truncate text-[11px] text-slate-400" title={collaborationStatusMeta.description}>
+                  {collaborationStatusMeta.description}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div data-material-zone="actions" className="min-w-0 rounded-xl border border-cyan-200/14 bg-[#0b1b2d] p-3">
-            <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-cyan-200/80">常用操作</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2">
+          <div data-material-zone="actions" className="flex min-w-0 flex-wrap items-center justify-start gap-2 xl:justify-end">
             <Button
               type="button"
               variant="outline"
               onClick={() => setShowMarkedOnly((current) => !current)}
               className={cn(
-                "h-10 w-full px-3 text-sm font-bold transition-colors",
+                "h-9 min-w-[112px] px-3 text-xs font-black transition-colors",
                 showMarkedOnly
                   ? "border-amber-300/35 bg-amber-400/18 text-amber-50 hover:bg-amber-400/24"
                   : "border-slate-500/30 bg-slate-900/35 text-slate-200 hover:border-amber-300/25 hover:bg-amber-400/10 hover:text-amber-100",
               )}
             >
-              <Star className={cn("mr-2 h-4 w-4", showMarkedOnly && "fill-current")} />
+              <Star className={cn("mr-1.5 h-3.5 w-3.5", showMarkedOnly && "fill-current")} />
               我的標記
-              <span className="ml-2 rounded-full border border-current/20 px-2 py-0.5 text-[11px] leading-none">
+              <span className="ml-1.5 rounded-full border border-current/20 px-1.5 py-0.5 text-[10px] leading-none">
                 {markedGroupCount}
               </span>
             </Button>
-            <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-10 w-full border-violet-300/45 bg-violet-400/20 px-3 text-sm font-bold text-violet-50 hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white">
-              <CircleHelp className="mr-2 h-4 w-4" />上傳說明
+            <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-9 min-w-[108px] border-violet-300/45 bg-violet-400/20 px-3 text-xs font-black text-violet-50 hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white">
+              <CircleHelp className="mr-1.5 h-3.5 w-3.5" />上傳說明
             </Button>
-            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady || !isFullDatasetLoaded} className="h-10 w-full border border-cyan-100/60 bg-cyan-300 px-3 text-sm font-black text-[#052536] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:border-cyan-900/50 disabled:bg-cyan-950/35 disabled:text-cyan-100/60">
-              <Plus className="mr-2 h-4 w-4" />新增料件
+            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady || !isFullDatasetLoaded} className="h-9 min-w-[108px] border border-cyan-100/60 bg-cyan-300 px-3 text-xs font-black text-[#052536] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:border-cyan-900/50 disabled:bg-cyan-950/35 disabled:text-cyan-100/60">
+              <Plus className="mr-1.5 h-3.5 w-3.5" />新增料件
             </Button>
-            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-10 w-full border-emerald-300/45 bg-emerald-400/20 px-3 text-sm font-bold text-emerald-50 hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">
-              <Upload className="mr-2 h-4 w-4" />{isImporting ? "讀取中..." : "上傳 BOM"}
+            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 min-w-[108px] border-emerald-300/45 bg-emerald-400/20 px-3 text-xs font-black text-emerald-50 hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">
+              <Upload className="mr-1.5 h-3.5 w-3.5" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="col-span-2 h-10 w-full border-amber-300/50 bg-amber-400/20 px-3 text-sm font-bold text-amber-50 hover:border-amber-200/75 hover:bg-amber-400/30 hover:text-white disabled:cursor-wait disabled:opacity-60 sm:col-span-1 xl:col-span-2">
-              <Download className="mr-2 h-4 w-4" />匯出主管報表
+            <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 min-w-[132px] border-amber-300/50 bg-amber-400/20 px-3 text-xs font-black text-amber-50 hover:border-amber-200/75 hover:bg-amber-400/30 hover:text-white disabled:cursor-wait disabled:opacity-60">
+              <Download className="mr-1.5 h-3.5 w-3.5" />匯出主管報表
             </Button>
-            </div>
           </div>
         </div>
 
         {collaborationStatus !== "remote" && (
-          <div className={cn("mt-3 rounded-lg border px-3 py-2 text-sm", collaborationStatusMeta.bannerClassName)}>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-2">
+          <div className={cn("mt-2 rounded-lg border px-3 py-1.5 text-xs", collaborationStatusMeta.bannerClassName)}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
                 {collaborationStatus === "checking" || collaborationStatus === "reconnecting" ? (
-                  <RotateCcw className="mt-0.5 h-4 w-4 flex-none animate-spin" />
+                  <RotateCcw className="h-3.5 w-3.5 flex-none animate-spin" />
                 ) : (
-                  <TriangleAlert className="mt-0.5 h-4 w-4 flex-none" />
+                  <TriangleAlert className="h-3.5 w-3.5 flex-none" />
                 )}
-                <div>
-                  <p className="font-bold">{collaborationStatusMeta.label}</p>
-                  <p className="mt-0.5">{collaborationStatusMeta.bannerText}</p>
-                </div>
+                <p className="shrink-0 font-black">{collaborationStatusMeta.label}</p>
+                <span className="text-current/60">/</span>
+                <p className="min-w-0 truncate">{collaborationStatusMeta.bannerText}</p>
               </div>
               {collaborationStatus === "error" && (
                 <Button
@@ -5949,22 +5946,22 @@ export function MaterialRequestPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => void retryBomSync(true)}
-                  className="h-8 shrink-0 border-rose-300/35 bg-rose-400/10 text-rose-50 hover:bg-rose-400/20 hover:text-white"
+                  className="h-7 shrink-0 border-rose-300/35 bg-rose-400/10 px-2.5 text-xs text-rose-50 hover:bg-rose-400/20 hover:text-white"
                 >
-                  <RotateCcw className="mr-2 h-3.5 w-3.5" />重新連線
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />重新連線
                 </Button>
               )}
             </div>
           </div>
         )}
 
-        <div data-material-zone="bom-workspace" className="mt-4 flex flex-col gap-3 border-t border-cyan-300/15 pt-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="grid flex-1 grid-cols-2 items-center gap-2.5 sm:flex sm:flex-wrap">
-            <span className="col-span-2 inline-flex h-8 items-center text-sm font-bold uppercase tracking-[0.08em] text-cyan-100 sm:col-span-1 sm:h-10">BOM 工作區</span>
+        <div data-material-zone="bom-workspace" className="mt-2 flex flex-col gap-2 border-t border-cyan-300/15 pt-2 xl:flex-row xl:items-center xl:justify-between">
+          <div className="grid flex-1 grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
+            <span className="col-span-2 inline-flex h-9 items-center text-xs font-black uppercase tracking-[0.1em] text-cyan-100 sm:col-span-1">BOM</span>
             <Select value={activeBomId} onValueChange={switchActiveBom}>
-              <SelectTrigger className="col-span-2 h-10 w-full max-w-[38rem] flex-1 items-center border-cyan-300/35 bg-[#08111d] px-4 py-0 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] sm:col-span-1 sm:min-w-[24rem] sm:flex-[1_1_28rem]">
+              <SelectTrigger className="col-span-2 h-9 w-full max-w-[34rem] flex-1 items-center border-cyan-300/35 bg-[#08111d] px-3 py-0 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] sm:col-span-1 sm:min-w-[20rem] sm:flex-[1_1_24rem]">
                 <div className="flex min-w-0 items-center text-left">
-                  <span className="block max-w-full truncate text-[14px] font-semibold leading-5 text-cyan-100">
+                  <span className="block max-w-full truncate text-[13px] font-bold leading-5 text-cyan-100">
                     {activeWorkspace.name}
                   </span>
                 </div>
@@ -5996,64 +5993,75 @@ export function MaterialRequestPage() {
                 })}
               </SelectContent>
             </Select>
-            <span className="inline-flex h-10 items-center rounded-lg border border-sky-300/16 bg-sky-400/10 px-3 text-sm font-bold text-sky-100">{bomWorkspaces.length} 個 BOM</span>
-            <BomPageTrackerSummaryPill pageTracker={activeWorkspace.pageTracker} className="h-10" />
-            <Button type="button" variant="outline" size="sm" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-10 border-emerald-400/25 bg-emerald-400/10 px-3 text-sm font-bold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
-              <CircleCheck className="mr-2 h-4 w-4" />逐頁勾選
+            <span className="inline-flex h-9 items-center rounded-lg border border-sky-300/16 bg-sky-400/10 px-2.5 text-xs font-black text-sky-100">{bomWorkspaces.length} 個 BOM</span>
+            <BomPageTrackerSummaryPill pageTracker={activeWorkspace.pageTracker} className="h-9 text-xs" />
+            <Button type="button" variant="outline" size="sm" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-9 border-emerald-400/25 bg-emerald-400/10 px-2.5 text-xs font-black text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100 disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500">
+              <CircleCheck className="mr-1.5 h-3.5 w-3.5" />逐頁勾選
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-10 border-violet-300/45 bg-violet-400/20 px-3 text-sm font-bold text-violet-50 hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-violet-950/50 disabled:bg-violet-950/25 disabled:text-violet-100/50">
-              <Layers3 className="mr-2 h-4 w-4" />BOM管理
+            <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-9 border-violet-300/45 bg-violet-400/20 px-2.5 text-xs font-black text-violet-50 hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-violet-950/50 disabled:bg-violet-950/25 disabled:text-violet-100/50">
+              <Layers3 className="mr-1.5 h-3.5 w-3.5" />BOM 管理
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-400">{activeWorkspace.payload.sheetName} · {formatTimestamp(activeWorkspace.updatedAt)}</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => setPendingDeleteBomId(activeBomId)} disabled={!isCollaborativeReady} className="h-10 border-rose-300/38 bg-rose-500/14 px-3 text-sm font-bold text-rose-100 hover:border-rose-200/65 hover:bg-rose-500/25 hover:text-white disabled:cursor-not-allowed disabled:border-rose-950/40 disabled:bg-rose-950/20 disabled:text-rose-100/45">刪除目前 BOM</Button>
+          <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap">
+            <span className="min-w-0 truncate text-[11px] text-slate-400" title={`${activeWorkspace.payload.sheetName} · ${formatTimestamp(activeWorkspace.updatedAt)}`}>{activeWorkspace.payload.sheetName} · {formatTimestamp(activeWorkspace.updatedAt)}</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPendingDeleteBomId(activeBomId)} disabled={!isCollaborativeReady} className="h-9 shrink-0 border-rose-300/38 bg-rose-500/14 px-2.5 text-xs font-black text-rose-100 hover:border-rose-200/65 hover:bg-rose-500/25 hover:text-white disabled:cursor-not-allowed disabled:border-rose-950/40 disabled:bg-rose-950/20 disabled:text-rose-100/45">刪除 BOM</Button>
           </div>
         </div>
 
-        <section data-material-zone="page-progress" className="mt-4 rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-4">
-          <div className="flex flex-col gap-3 border-b border-cyan-400/10 pb-3 md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0">
-              <p className="text-lg font-black text-slate-50">頁數設定與目前進度</p>
-              <p className="mt-1 text-sm leading-6 text-slate-300">
-                直接設定總頁數、目前做到第幾頁；若要逐頁切狀態與備註，再展開細節。
-              </p>
-            </div>
+        <section
+          data-material-zone="page-progress"
+          className={cn(
+            "mt-2 border-t border-cyan-300/15 pt-2",
+            !pageTrackerPanelCollapsed && "rounded-xl border border-[#2a526f] bg-[#0b1b2d] p-3",
+          )}
+        >
+          <div className={cn("flex flex-wrap items-center gap-2", !pageTrackerPanelCollapsed && "border-b border-cyan-400/10 pb-3")}>
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => setPageTrackerPanelCollapsed((current) => !current)}
-              className="h-10 border-cyan-300/24 bg-cyan-300/14 px-4 text-sm font-bold text-cyan-50 hover:bg-cyan-300/22"
+              aria-expanded={!pageTrackerPanelCollapsed}
+              className="h-9 border-cyan-300/24 bg-cyan-300/14 px-3 text-xs font-black text-cyan-50 hover:bg-cyan-300/22"
             >
               {pageTrackerPanelCollapsed ? (
-                <ChevronDown className="mr-2 h-4 w-4" />
+                <ChevronDown className="mr-1.5 h-3.5 w-3.5" />
               ) : (
-                <ChevronUp className="mr-2 h-4 w-4" />
+                <ChevronUp className="mr-1.5 h-3.5 w-3.5" />
               )}
-              {pageTrackerPanelCollapsed ? "展開頁數區" : "收合頁數區"}
+              {pageTrackerPanelCollapsed ? "頁數進度" : "收合頁數設定"}
             </Button>
-          </div>
 
-          {pageTrackerPanelCollapsed && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-              <span className="rounded-lg border border-sky-300/20 bg-sky-400/[0.08] px-3 py-1.5 text-sky-100">
+            {pageTrackerPanelCollapsed ? (
+              <>
+              <span className="inline-flex h-9 items-center rounded-lg border border-sky-300/20 bg-sky-400/[0.08] px-2.5 text-xs text-sky-100">
                 總頁數 <strong className="ml-1 text-white">{activePageTrackerSummary.totalPages || "未設定"}</strong>
               </span>
-              <span className="rounded-lg border border-cyan-300/20 bg-cyan-400/[0.08] px-3 py-1.5 text-cyan-100">
+              <span className="inline-flex h-9 items-center rounded-lg border border-cyan-300/20 bg-cyan-400/[0.08] px-2.5 text-xs text-cyan-100">
                 目前 <strong className="ml-1 text-white">{activePageTrackerSummary.currentPage > 0 ? `第 ${activePageTrackerSummary.currentPage} 頁` : "未指定"}</strong>
               </span>
-              <span className="rounded-lg border border-emerald-300/20 bg-emerald-400/[0.08] px-3 py-1.5 text-emerald-100">
+              <span className="inline-flex h-9 items-center rounded-lg border border-emerald-300/20 bg-emerald-400/[0.08] px-2.5 text-xs text-emerald-100">
                 已完成 <strong className="ml-1 text-white">{activePageTrackerSummary.completedPages} 頁</strong>
               </span>
               {activePageTrackerSummary.missingPages > 0 && (
-                <span className="rounded-lg border border-violet-300/20 bg-violet-400/[0.08] px-3 py-1.5 text-violet-100">
+                <span className="inline-flex h-9 items-center rounded-lg border border-violet-300/20 bg-violet-400/[0.08] px-2.5 text-xs text-violet-100">
                   缺料 {activePageTrackerSummary.missingPages} 頁
                 </span>
               )}
+              </>
+            ) : (
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-black text-slate-50">設定總頁數與目前進度</p>
+                <p className="truncate text-xs text-slate-400">需要逐頁切換狀態或填寫備註時，可開啟逐頁勾選。</p>
+              </div>
+            )}
+            <div data-material-zone="summary-filters" className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+              <button type="button" onClick={clearFilters} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "all" ? "border-sky-300/34 bg-sky-400/18 text-sky-50 shadow-[0_10px_24px_rgba(56,189,248,0.12)]" : "border-slate-500/28 bg-slate-900/42 text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-sky-100")}>主料 <strong className="ml-1">{dataset.stats.totalGroups.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "required" ? "border-amber-300/50 bg-amber-400/20 text-amber-50 shadow-[0_10px_24px_rgba(251,191,36,0.10)]" : "border-amber-300/28 bg-amber-400/10 text-amber-100 hover:bg-amber-400/18 hover:text-amber-50")}>待申請 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
+              <span className="inline-flex h-9 items-center rounded-lg border border-emerald-300/24 bg-emerald-400/10 px-2.5 text-xs font-black text-emerald-100">廠商明細 <strong className="ml-1">{dataset.stats.totalRecords.toLocaleString()}</strong></span>
             </div>
-          )}
+          </div>
 
           {!pageTrackerPanelCollapsed && (
             <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.72fr)]">
@@ -6151,11 +6159,6 @@ export function MaterialRequestPage() {
           )}
         </section>
 
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-cyan-400/10 pt-3 text-sm">
-          <button type="button" onClick={clearFilters} className={cn("rounded-lg border px-3 py-1.5 font-bold transition-colors", availability === "all" ? "border-sky-300/34 bg-sky-400/18 text-sky-50 shadow-[0_10px_24px_rgba(56,189,248,0.12)]" : "border-slate-500/28 bg-slate-900/42 text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-sky-100")}>主料總數 <strong className="ml-1">{dataset.stats.totalGroups.toLocaleString()}</strong></button>
-          <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("rounded-lg border px-3 py-1.5 font-bold transition-colors", availability === "required" ? "border-amber-300/50 bg-amber-400/20 text-amber-50 shadow-[0_10px_24px_rgba(251,191,36,0.10)]" : "border-amber-300/28 bg-amber-400/10 text-amber-100 hover:bg-amber-400/18 hover:text-amber-50")}>主料與替代都無料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
-          <span className="rounded-lg border border-emerald-300/24 bg-emerald-400/10 px-3 py-1.5 font-bold text-emerald-100">廠商料明細 <strong className="ml-1">{dataset.stats.totalRecords.toLocaleString()}</strong></span>
-        </div>
       </header>
 
       {(pendingRemoteRecordIds.length > 0 || hasPendingWorkspaceUpdate) && (
