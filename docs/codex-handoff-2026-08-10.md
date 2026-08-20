@@ -338,3 +338,15 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 - 本輪四個修改檔案的 scoped ESLint 通過。
 - 本機瀏覽器實際操作：圓形 screw hole 可用 `R` 旋轉 90° 後放置、選取、複製，右側屬性顯示正確，切換 3D 後元件仍存在。
 - 全專案 typecheck 仍有 PCB 以外的既有 Supabase／後台／共用 hooks 型別技術債；PCB Designer 已不再出現在錯誤輸出。
+
+### Latest delivery - 2026-08-20 responsive administration and dialogs
+
+本輪針對實際桌機、筆電、平板與手機版面補齊 RWD，而不是單純縮小字體。平台頂部導覽與後台主要內容在超寬螢幕保留背景延展，但可閱讀內容限制於 1920px 並置中；1180px 以下的後台側欄改用抽屜，避免中等寬度仍硬塞三欄。公告編輯區不再被右側紀錄高度強制拉長，因此不會留下大片無用途空白。
+
+通用 `Dialog`、`AlertDialog` 與 `MobileDialog` 現在都有視窗安全邊距、`dvh` 高度限制、垂直捲動與手機安全區。網站權限視窗使用固定頁首／頁尾與獨立捲動內容，依寬度切換摘要、工作區與細部權限欄數；手機改為單欄操作，取消原本三個權限選項被壓成一字一行的情況。摘要名稱也改為中文，降低現場判讀成本。
+
+### Responsive verification
+
+- 本機瀏覽器實際查看後台「用戶管理」、「通知與在線」、「API 管理」、新增用戶、網站權限與新增 API 金鑰視窗；確認內容可讀、按鈕保留、彈窗不超出可視範圍且可捲動。
+- RWD、手機核心工作區、七工作區權限、後台與彈窗 focused tests：`51/51` 通過。
+- 本輪修改檔案 scoped ESLint、全專案 TypeScript 與 production build 通過（`3494 modules transformed`）；未刪除或改動既有帳號、API 金鑰、專案、模型與使用者資料。

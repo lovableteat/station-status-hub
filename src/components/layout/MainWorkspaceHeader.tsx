@@ -70,7 +70,7 @@ export function MainWorkspaceHeader({
 
   return (
     <header data-mobile-app-header="true" className="platform-color-field sticky top-0 z-50 shrink-0 border-b border-primary/15 shadow-[0_18px_48px_-42px_hsl(var(--primary)/0.55)] backdrop-blur-xl">
-      <div className="grid min-h-[var(--mobile-header-height)] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-3 px-2.5 py-1.5 sm:min-h-[72px] sm:gap-x-3 sm:px-4 sm:py-3 xl:grid-cols-[minmax(180px,0.9fr)_minmax(0,2.3fr)_auto] xl:gap-x-4 xl:px-5 2xl:px-6">
+      <div className="mx-auto grid min-h-[var(--mobile-header-height)] w-full max-w-[1920px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-3 px-2.5 py-1.5 sm:min-h-[72px] sm:gap-x-3 sm:px-4 sm:py-3 xl:grid-cols-[minmax(180px,0.9fr)_minmax(0,2.3fr)_auto] xl:gap-x-4 xl:px-5 2xl:px-6">
         {onBrandClick ? (
           <button
             type="button"

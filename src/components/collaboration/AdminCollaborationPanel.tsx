@@ -249,8 +249,8 @@ export function AdminCollaborationPanel({ canSend }: { canSend: boolean }) {
   }
 
   return (
-    <div className="grid min-h-0 items-stretch gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-      <section data-admin-zone="announcement-composer" className="surface-accent surface-accent--teal flex min-h-full flex-col rounded-2xl border bg-[#0a2032] p-5 shadow-[0_18px_50px_-44px_rgba(103,232,249,0.8)]">
+    <div className="grid min-h-0 items-start gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+      <section data-admin-zone="announcement-composer" className="surface-accent surface-accent--teal flex min-w-0 flex-col rounded-2xl border bg-[#0a2032] p-4 shadow-[0_18px_50px_-44px_rgba(103,232,249,0.8)] sm:p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-lg font-bold text-slate-50">
