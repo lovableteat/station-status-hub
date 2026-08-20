@@ -360,3 +360,12 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 - 手機 `390x844` 實測：視窗寬 `382px`、無頁面或視窗水平溢位，七個工作區完整保留，內容獨立垂直捲動，取消與儲存按鈕固定可見。
 - 桌機 `1366x768` 實測：視窗完整落在可視範圍，兩欄對齊且沒有固定高度造成的空白。
 - 後台、RWD、手機核心工作區與七工作區權限 focused tests：`51/51` 通過；全專案 TypeScript、本次元件 scoped ESLint 與 production build 通過（`3494 modules transformed`）。
+
+### Latest delivery - 2026-08-20 compact API control header
+
+後台 API 控制台頂部已移除三張狀態摘要與三張重複流程卡，改為單列資訊列：左側只保留頁名與一句管理範圍，右側以四個緊湊狀態顯示「金鑰管理 → 直接測試 → 串接文件」及金鑰遮罩狀態，下方立即接功能分頁。
+
+- 桌機 `1600x900` 實測：頂部區塊高度由原本數百像素縮為約 `64px`，說明維持單行，三個功能步驟同列，無水平溢位。
+- 手機 `390x844` 實測：頂部約 `143px`，三步驟仍在同列、安全狀態獨立成一行，功能分頁全部可見且沒有水平跑版。
+- 既有 API 金鑰、遮罩、建立、編輯、測試、停用、刪除與文件功能均未改動。
+- 後台與手機 focused tests：`21/21` 通過；全專案 TypeScript、頁面 scoped ESLint 與 production build 通過（`3494 modules transformed`）。
