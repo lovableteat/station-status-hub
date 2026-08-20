@@ -3,6 +3,12 @@ export interface PcbBoardLayerColors {
   bottom: string;
 }
 
+export interface PcbBoardCut {
+  id: string;
+  orientation: "vertical" | "horizontal";
+  position: number;
+}
+
 export interface PcbBoard {
   width: number;
   height: number;
@@ -11,6 +17,7 @@ export interface PcbBoard {
   snapToGrid: boolean;
   background: string;
   layerColors: PcbBoardLayerColors;
+  cuts?: PcbBoardCut[];
 }
 
 export type PcbComponentShape = "rectangle" | "circle";

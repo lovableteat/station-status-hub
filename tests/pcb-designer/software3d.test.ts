@@ -63,7 +63,7 @@ test("uses the same component center in software 3D as the 2D editor", () => {
   const center = transformPcbComponentPoint({ x: 0, y: 0, z: 0 }, component, board);
 
   assert.equal(center.x, 22);
-  assert.equal(center.z, 16);
+  assert.equal(center.z, -16);
 });
 
 test("creates complete boxes and bounds sampled model triangles", () => {

@@ -25,6 +25,7 @@ function createState(name: string): PcbSaveState {
 
 function mockDatabase(options: {
   rpcAvailable: boolean;
+  sharedRpcAvailable?: boolean;
   rpcState?: PcbSaveState | null;
   permissions?: Record<string, unknown>;
   records?: Array<{ id: string; permissions: Record<string, unknown> }>;
@@ -35,11 +36,14 @@ function mockDatabase(options: {
   const database = {
     async rpc(name, args) {
       calls.push({ name, args });
+      if (name.endsWith("_shared") && options.sharedRpcAvailable === false) {
+        return { data: null, error: { code: "PGRST202", message: "missing shared RPC" } };
+      }
       if (!options.rpcAvailable) {
         return { data: null, error: { code: "PGRST202", message: "missing RPC" } };
       }
       return {
-        data: name === "load_pcb_designer_workspace"
+        data: name === "load_pcb_designer_workspace" || name === "load_pcb_designer_workspace_shared"
           ? options.rpcState ?? null
           : null,
         error: null,
@@ -102,7 +106,7 @@ test("loads a dedicated account workspace and refreshes built-in catalogs", asyn
   assert.equal(loaded?.templates.length, BUILT_IN_TEMPLATES.length);
   assert.ok((loaded?.library.length ?? 0) > 0);
   assert.deepEqual(mock.calls.map((call) => call.name), [
-    "load_pcb_designer_workspace",
+    "load_pcb_designer_workspace_shared",
   ]);
 });
 
@@ -146,6 +150,40 @@ test("fallback load merges every account project while keeping personal catalogs
   );
   assert.equal(loaded?.activeProjectId, own.activeProjectId);
   assert.equal(loaded?.templates.length, BUILT_IN_TEMPLATES.length);
+});
+
+test("legacy shared project RPC still receives teammate library records", async () => {
+  const own = createState("Own project");
+  const teammate = createState("Teammate project");
+  teammate.library.push({
+    id: "shared-resistor",
+    name: "Shared resistor",
+    type: "Resistor",
+    manufacturer: "Acme",
+    partNumber: "R-10K",
+    width: 2,
+    height: 1,
+    maxHeight: 1,
+    color: "#ffd166",
+    source: "custom",
+    createdAt: "2026-08-20T08:00:00.000Z",
+  });
+  const userId = "22222222-2222-4222-8222-222222222222";
+  const mock = mockDatabase({
+    rpcAvailable: true,
+    sharedRpcAvailable: false,
+    rpcState: own,
+    records: [
+      { id: userId, permissions: { [PCB_REMOTE_FALLBACK_KEY]: own } },
+      { id: "99999999-9999-4999-8999-999999999999", permissions: { [PCB_REMOTE_FALLBACK_KEY]: teammate } },
+    ],
+  });
+  const client = createPcbAccountRemoteClient(mock.database, userId);
+
+  const loaded = await client.load?.();
+
+  assert.equal(loaded?.projects[0].name, "Own project");
+  assert.equal(loaded?.library.some((component) => component.id === "shared-resistor"), true);
 });
 
 test("fallback tombstones delete a project even when another account has a stale copy", () => {
@@ -217,7 +255,7 @@ test("uses dedicated save RPC when available", async () => {
   );
 
   assert.equal(await client.save?.(state), true);
-  assert.equal(mock.calls.at(-1)?.name, "save_pcb_designer_workspace");
+  assert.equal(mock.calls.at(-1)?.name, "save_pcb_designer_workspace_shared");
   assert.equal(
     (mock.calls.at(-1)?.args.p_payload as PcbSaveState).projects[0].name,
     "Saved remotely",

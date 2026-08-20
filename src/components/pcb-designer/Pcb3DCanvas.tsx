@@ -1,7 +1,7 @@
 import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Edges, Html, OrbitControls } from "@react-three/drei";
-import { Box3, BufferGeometry, Color, Float32BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
+import { Box3, BufferGeometry, Color, DoubleSide, Float32BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three/examples/jsm/controls/OrbitControls.js";
 import { Focus, MousePointer2 } from "lucide-react";
 
@@ -68,7 +68,7 @@ export function Pcb3DCanvasSafe({
             fallback={softwareFallback}
             frameloop="demand"
             dpr={[1, 1.25]}
-            camera={{ position: [size * 0.82, size * 0.72, size * 0.92], fov: 42, near: 0.1, far: size * 25 }}
+            camera={{ position: [0, size * 1.8, -0.001], up: [0, 0, -1], fov: 42, near: 0.1, far: size * 25 }}
             gl={{ antialias: false, powerPreference: "default", failIfMajorPerformanceCaveat: false }}
             onPointerMissed={() => {
               workspace.selectObject(null);
@@ -96,7 +96,8 @@ function CameraControls({ boardWidth, boardHeight }: { boardWidth: number; board
   const { camera, invalidate } = useThree();
   const reset = useCallback(() => {
     const size = Math.max(boardWidth, boardHeight, 40);
-    camera.position.set(size * 0.82, size * 0.72, size * 0.92);
+    camera.position.set(0, size * 1.8, -0.001);
+    camera.up.set(0, 0, -1);
     camera.near = 0.1;
     camera.far = size * 25;
     camera.updateProjectionMatrix();
@@ -324,6 +325,20 @@ function Scene({
         <Edges color="#7de7e8" threshold={20} />
       </mesh>
 
+      {project.board.cuts?.map((cut) => (
+        <mesh
+          key={cut.id}
+          renderOrder={20}
+          position={cut.orientation === "vertical"
+            ? [cut.position - project.board.width / 2, boardThickness / 2 + 0.09, 0]
+            : [0, boardThickness / 2 + 0.09, cut.position - project.board.height / 2]}
+          rotation={[Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={cut.orientation === "vertical" ? [0.24, project.board.height] : [project.board.width, 0.24]} />
+          <meshBasicMaterial color="#ffd166" side={DoubleSide} transparent opacity={0.94} depthTest={false} depthWrite={false} />
+        </mesh>
+      ))}
+
       {project.keepouts.map((keepout) => {
         const selected = selectedIds.has(keepout.id);
         return (
@@ -332,7 +347,7 @@ function Scene({
             position={[
               keepout.x + keepout.width / 2 - project.board.width / 2,
               boardThickness / 2 + 0.22,
-              project.board.height / 2 - keepout.y - keepout.height / 2,
+              keepout.y + keepout.height / 2 - project.board.height / 2,
             ]}
             rotation={[0, -((keepout.rotation ?? 0) * Math.PI) / 180, 0]}
             onClick={(event) => {

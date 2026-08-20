@@ -5,6 +5,7 @@ import {
   normalizePcbSaveState,
   parseProjectJson,
 } from "../../src/components/pcb-designer/core/validation.ts";
+import { createBoardGridCuts } from "../../src/components/pcb-designer/core/boardCuts.ts";
 import type { PcbProject } from "../../src/components/pcb-designer/types.ts";
 
 function validProject(): PcbProject {
@@ -113,6 +114,34 @@ test("normalizes legacy project boards with default top and bottom colors", () =
   assert.notEqual(normalized.projects[0].board.layerColors.top, normalized.projects[0].board.layerColors.bottom);
   assert.equal(normalized.projects[0].components[0].shape, "rectangle");
   assert.equal(normalized.projects[0].keepouts[0].rotation, 0);
+});
+
+test("creates deterministic panel cuts inside the board bounds", () => {
+  const cuts = createBoardGridCuts({ width: 100, height: 80 }, 3, 2);
+
+  assert.deepEqual(
+    cuts.map(({ orientation, position }) => ({ orientation, position })),
+    [
+      { orientation: "vertical", position: 100 / 3 },
+      { orientation: "vertical", position: 200 / 3 },
+      { orientation: "horizontal", position: 40 },
+    ],
+  );
+  assert.equal(new Set(cuts.map((cut) => cut.id)).size, cuts.length);
+  assert.equal(cuts.every((cut) =>
+    cut.position > 0 && (cut.orientation === "vertical" ? cut.position < 100 : cut.position < 80),
+  ), true);
+});
+
+test("validates and preserves optional board cuts", () => {
+  const project = validProject();
+  project.board.cuts = createBoardGridCuts(project.board, 2, 2);
+  const parsed = parseProjectJson(project);
+
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) assert.deepEqual(parsed.value.board.cuts, project.board.cuts);
+  assert.equal(isValidBoard({ ...project.board, cuts: [{ ...project.board.cuts[0], position: 0 }] }), false);
+  assert.equal(isValidBoard({ ...project.board, cuts: [{ ...project.board.cuts[0], id: project.board.cuts[0].id }, project.board.cuts[0]] }), false);
 });
 
 test("normalizes legacy project JSON before it reaches the editor", () => {

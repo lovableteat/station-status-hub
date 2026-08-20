@@ -962,6 +962,36 @@ export function PcbCanvas({
           <circle cx="0" cy="0" r={strokeWidth * 2.2} fill="#e2f9fb" aria-label="原點" />
         </g>
 
+        <g data-layer="board-cuts" aria-label="切板線">
+          {project.board.cuts?.map((cut) => (
+            cut.orientation === "vertical" ? (
+              <line
+                key={cut.id}
+                x1={cut.position}
+                y1="0"
+                x2={cut.position}
+                y2={project.board.height}
+                stroke="#ffd166"
+                strokeWidth={strokeWidth * 1.8}
+                strokeDasharray={`${strokeWidth * 5} ${strokeWidth * 3}`}
+                data-pcb-cut={cut.id}
+              />
+            ) : (
+              <line
+                key={cut.id}
+                x1="0"
+                y1={cut.position}
+                x2={project.board.width}
+                y2={cut.position}
+                stroke="#ffd166"
+                strokeWidth={strokeWidth * 1.8}
+                strokeDasharray={`${strokeWidth * 5} ${strokeWidth * 3}`}
+                data-pcb-cut={cut.id}
+              />
+            )
+          ))}
+        </g>
+
         <g data-layer="keepouts">
           {project.keepouts.map((keepout) => {
             const preview = interaction?.kind === "keepout-move" && interaction.id === keepout.id

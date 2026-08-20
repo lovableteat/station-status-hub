@@ -199,6 +199,14 @@ PCB 常見回歸檢查：
 - 左側選取的專案不會被非同步載入回寫成另一個專案。
 - 匯入、下載、刪除、複製與儲存後重載都使用目前 project id。
 
+#### PCB 2D / 3D 與多人共用規則
+
+- 專案資料的元件座標是中心點，採 `X 向右、Y 向下`；2D 直接使用這份座標，3D 對應為 `X 向右、Z 向下`，預設採正投影俯視，避免 3D 初始畫面看起來像鏡射或另一塊板。
+- 元件的 `rotation`、`layer`、`shape` 和 `modelAssetId` 都只存在 canonical project record；WebGL 和 software 3D 只做 renderer 轉換，不在畫布內另存一份位置。
+- `project.board.cuts` 保存切板線的方向與位置。右側「切板」可輸入左右／上下分板數，2D、WebGL 3D 與 software 3D 同時顯示相同的黃色切板線；清除切板線也會跟著保存到同一份專案資料。
+- 自訂元件與 BOM 元件透過 `load_pcb_designer_workspace_shared`／`save_pcb_designer_workspace_shared` 進入共用元件庫；migration 尚未套用時，fallback 會合併各帳號快照，並用工作區更新時間選出同一元件的最新版本。內建元件仍由前端 catalog 補回，不會被遠端資料覆蓋。
+- 新增或修改 PCB 資料時，至少要驗證 2D / 3D 位置、旋轉、Top / Bottom、切板、跨帳號可見性與保存後重載；不可只在單一瀏覽器的 localStorage 驗證。
+
 ### 6.5 後台管理
 
 後台由 users、collaboration 和 API management 組成。API 控制台的金鑰資料要保留既有遮罩、編輯、停用、測試和刪除語意；UI 可以重排，但不能把金鑰明文寫入 log、localStorage 或文件。使用者權限視窗應以工作區卡片和頁面權限分組，讓「檢視」與「管理」的差異清楚可見。

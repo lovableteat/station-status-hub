@@ -303,3 +303,26 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 
 - 只應提交績效頁、權限整合、Supabase migration、Database type、回歸測試與本交接文件。
 - 既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤，不可一併加入。
+
+### Latest delivery - 2026-08-20 PCB 2D/3D alignment, panel cuts and shared library
+
+本輪修正 PCB Designer 的三個核心問題：2D 與 3D 使用不同座標感受、板框與切板需求、以及自訂元件只出現在建立者瀏覽器。所有修正都保留既有專案資料格式，舊資料沒有 `cuts` 欄位時仍可正常載入。
+
+### PCB implementation
+
+- `src/components/pcb-designer/core/viewSync.ts` 統一 2D `X/Y` 與 3D `X/Z` 對應，`src/components/pcb-designer/core/software3d.ts` 與 `Pcb3DCanvas.tsx` 將預設視角改為可直接對照 2D 的正投影俯視；拖曳後仍可進入立體角度。
+- `PcbBoard.cuts` 與 `core/boardCuts.ts` 保存切板線；`PcbInspector.tsx` 提供左右／上下分板數、套用與清除，`PcbCanvas.tsx`、WebGL 3D 與 software 3D 使用相同資料畫出切板線。
+- `supabase/migrations/20260820140000_share_pcb_designer_library.sql` 新增共用自訂／BOM 元件庫與刪除 tombstone；`core/accountRemoteSync.ts` 優先使用 shared RPC，舊部署則合併所有帳號快照並選取最新版本。套用 migration 後，其他使用者可在元件庫看到同一份元件。
+- 不改動既有內建元件、STEP 匯入與模型資產；元件仍由 canonical project record 同步到 2D、WebGL 3D 與 software 3D。
+
+### PCB verification
+
+- 本機瀏覽器 `1440x900` 實看同一專案的 2D 與 3D：元件相對位置一致，3D 初始為對照用正投影，切換視角後仍可查看高度。
+- 2D 套用 `2 x 2` 切板後，畫面顯示一條垂直與一條水平切板線；切換到 3D 後同一個十字位置仍存在，右側顯示 `2 條分板線`。
+- PCB focused tests：`191/191` 通過（含切板範圍、重複 ID、2D/3D 座標與多人 fallback）。
+- production build 通過（`3494 modules transformed`）；建置仍只有既有 OCCT 外部化與大型 chunk 警告。全專案 `tsc --noEmit` 仍被既有 Supabase 泛型／相依版本錯誤擋住，錯誤集中在 `admin`、`hooks` 與 Supabase client，未指向本輪 PCB 檔案。
+
+### PCB repository state
+
+- 本輪只應提交 PCB Designer core、renderer、Inspector、共享元件 migration、PCB tests 與本文件／架構指南。
+- 既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤，不可一併加入。
