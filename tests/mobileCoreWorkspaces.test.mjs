@@ -60,7 +60,11 @@ test("AI query workspace uses the available mobile height and keeps every compos
 
   assert.match(page, /className="h-full min-h-0/);
   assert.doesNotMatch(page, /100dvh-9\.75rem/);
+  assert.match(page, /data-ai-chat-workspace="viewport-fit"/);
   assert.match(index, /activeWorkspace === "ai-chat" && "h-\[100dvh\] overflow-hidden"/);
+  assert.match(consoleSource, /data-ai-chat-shell="viewport-fit"/);
+  assert.match(consoleSource, /"grid h-full min-h-0 w-full items-stretch gap-2 lg:gap-4"/);
+  assert.doesNotMatch(consoleSource, /lg:h-\[calc\(100dvh-164px\)\]/);
   assert.match(consoleSource, /mobileSidebarOpen/);
   assert.match(consoleSource, /關閉資料查詢選單/);
   assert.match(consoleSource, /最近對話/);
