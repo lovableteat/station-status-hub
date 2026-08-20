@@ -2716,41 +2716,43 @@ export function ApiChatConsole({
             isChatOnly ? "px-2 py-2 sm:px-4 sm:py-4 md:px-6" : "rounded-[30px] border border-white/8 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
           )}
         >
-          <div className={cn("space-y-4 overflow-y-auto", isChatOnly ? "pr-2" : "pr-1", chatHeightClass)}>
-            {messages.length === 0 ? (
-              isChatOnly ? (
-                <div data-mobile-ai-empty-state="true" className="flex min-h-0 flex-1 items-start justify-center px-1 pt-5 md:min-h-[300px] md:items-center md:px-6 md:py-5 2xl:py-0">
-                  <div className="flex w-full max-w-xl items-center gap-3 rounded-2xl border border-emerald-300/15 bg-emerald-400/[0.04] p-3 text-left md:block md:max-w-3xl md:border-0 md:bg-transparent md:p-0 md:text-center">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-400/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.16),rgba(5,8,10,0.12))] text-emerald-100 shadow-[0_18px_45px_-22px_rgba(16,185,129,0.45)] md:mx-auto md:h-14 md:w-14 md:rounded-[18px] 2xl:h-10 2xl:w-10 2xl:rounded-xl">
-                      <Search className="h-5 w-5 md:h-6 md:w-6 2xl:h-4.5 2xl:w-4.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-lg font-black tracking-[-0.025em] text-white md:mt-5 md:text-4xl md:tracking-[-0.035em] 2xl:mt-1">今天想查什麼？</p>
-                      <p className="mt-0.5 text-xs leading-5 text-slate-300 md:mx-auto md:mt-3 md:max-w-2xl md:text-base md:leading-7 2xl:mt-1">輸入問題，也可以附上截圖或文件一起分析。</p>
+          <div className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto", isChatOnly ? "pr-2" : "pr-1", chatHeightClass)}>
+            <div className="space-y-4">
+              {messages.length === 0 ? (
+                isChatOnly ? (
+                  <div data-mobile-ai-empty-state="true" className="flex min-h-0 flex-1 items-start justify-center px-1 pt-5 md:min-h-[300px] md:items-center md:px-6 md:py-5 2xl:py-0">
+                    <div className="flex w-full max-w-xl items-center gap-3 rounded-2xl border border-emerald-300/15 bg-emerald-400/[0.04] p-3 text-left md:block md:max-w-3xl md:border-0 md:bg-transparent md:p-0 md:text-center">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-400/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.16),rgba(5,8,10,0.12))] text-emerald-100 shadow-[0_18px_45px_-22px_rgba(16,185,129,0.45)] md:mx-auto md:h-14 md:w-14 md:rounded-[18px] 2xl:h-10 2xl:w-10 2xl:rounded-xl">
+                        <Search className="h-5 w-5 md:h-6 md:w-6 2xl:h-4.5 2xl:w-4.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-lg font-black tracking-[-0.025em] text-white md:mt-5 md:text-4xl md:tracking-[-0.035em] 2xl:mt-1">今天想查什麼？</p>
+                        <p className="mt-0.5 text-xs leading-5 text-slate-300 md:mx-auto md:mt-3 md:max-w-2xl md:text-base md:leading-7 2xl:mt-1">輸入問題，也可以附上截圖或文件一起分析。</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex min-h-[340px] flex-1 items-center justify-center rounded-[26px] border border-dashed border-white/8 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.08),transparent_22%),#040608] px-8 text-center">
+                    <div className="max-w-xl space-y-5">
+                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/5 text-cyan-100">
+                        <MessageSquareText className="h-7 w-7" />
+                      </div>
+                      <div>
+                        <p className="text-xl font-black text-slate-50">開始新的資料查詢</p>
+                        <p className="mt-2 text-sm leading-7 text-slate-400">
+                          可以先按「測試連線」確認成功，再從下方開始查詢。這個區塊會保留你本次工作區的上下文。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )
               ) : (
-                <div className="flex min-h-[340px] flex-1 items-center justify-center rounded-[26px] border border-dashed border-white/8 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.08),transparent_22%),#040608] px-8 text-center">
-                  <div className="max-w-xl space-y-5">
-                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/5 text-cyan-100">
-                      <MessageSquareText className="h-7 w-7" />
-                    </div>
-                    <div>
-                      <p className="text-xl font-black text-slate-50">開始新的資料查詢</p>
-                      <p className="mt-2 text-sm leading-7 text-slate-400">
-                        可以先按「測試連線」確認成功，再從下方開始查詢。這個區塊會保留你本次工作區的上下文。
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )
-            ) : (
-              messages.map((message) => <MessageCard key={message.id} message={message} />)
-            )}
+                messages.map((message) => <MessageCard key={message.id} message={message} />)
+              )}
 
-            {loading ? <QueryLoadingCard /> : null}
-            <div ref={messagesEndRef} />
+              {loading ? <QueryLoadingCard /> : null}
+            </div>
+            <div ref={messagesEndRef} aria-hidden="true" className="h-0 shrink-0" />
           </div>
         </div>
 

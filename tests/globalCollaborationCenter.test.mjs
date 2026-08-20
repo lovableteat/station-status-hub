@@ -37,7 +37,8 @@ test("the workspace keeps direct messages exclusively in the bottom-right floati
   assert.match(centerSource, /pointer-events-none fixed bottom-\[calc\(var\(--mobile-shell-bottom\)\+0\.5rem\)\] right-2/);
   assert.match(centerSource, /fixed inset-0 flex h-\[100dvh\] w-screen/);
   assert.match(centerSource, /sm:absolute sm:inset-auto sm:bottom-0 sm:right-0/);
-  assert.match(centerSource, /lg:bottom-5 lg:right-5/);
+  assert.match(centerSource, /lg:bottom-0 lg:right-0/);
+  assert.doesNotMatch(centerSource, /lg:bottom-5 lg:right-5/);
   assert.doesNotMatch(centerSource, /sm:bottom-5 sm:right-5/);
   assert.match(centerSource, /data-chat-surface="detached-card"/);
   assert.match(centerSource, /rounded-\[24px\]/);
@@ -99,6 +100,22 @@ test("floating chat exposes the full member directory including offline contacts
   assert.match(panel, /離線 · 可留言/);
   assert.match(panel, /即使離線也能先留言/);
   assert.match(panel, /startDirectChat\(contact\.userId\)/);
+});
+
+test("chat scroll anchors do not create a trailing blank message row", async () => {
+  const [aiChat, directChat] = await Promise.all([
+    readSource("src/components/api-management/ApiChatConsole.tsx"),
+    readSource("src/components/collaboration/DirectMessagesPanel.tsx"),
+  ]);
+
+  assert.match(
+    aiChat,
+    /\{loading \? <QueryLoadingCard \/> : null\}\s*<\/div>\s*<div ref=\{messagesEndRef\} aria-hidden="true" className="h-0 shrink-0" \/>/,
+  );
+  assert.match(
+    directChat,
+    /<div className="space-y-3 pb-2">[\s\S]*<\/div>\s*<div ref=\{messageEndRef\} aria-hidden="true" className="h-0 shrink-0" \/>/,
+  );
 });
 
 test("the header keeps one collaboration entry point through online presence", async () => {
