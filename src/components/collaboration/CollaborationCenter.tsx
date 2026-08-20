@@ -670,7 +670,7 @@ export function CollaborationCenter() {
       {isRealtimeAuthenticated ? (
         <div
           data-chat-dock="detached"
-          className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-[84] w-auto sm:w-[min(430px,calc(100vw-1rem))] lg:bottom-5 lg:right-5"
+          className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-[84] w-auto sm:w-[min(430px,calc(100vw-1rem))] lg:bottom-0 lg:right-0"
         >
           <section
             id="direct-messages-panel"

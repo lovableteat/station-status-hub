@@ -656,8 +656,9 @@ export function DirectMessagesPanel({
               <p className="mt-1 text-sm">請更換關鍵字，或載入更早訊息後再搜尋。</p>
             </div>
           ) : (
-            <div className="space-y-3 pb-2">
-              {visibleMessages.map(({ message, parsed }, index) => {
+            <div>
+              <div className="space-y-3 pb-2">
+                {visibleMessages.map(({ message, parsed }, index) => {
                 const own = message.senderId === user?.userId;
                 const previousMessage = visibleMessages[index - 1]?.message;
                 const showDay = !previousMessage
@@ -825,8 +826,9 @@ export function DirectMessagesPanel({
                     </div>
                   </div>
                 );
-              })}
-              <div ref={messageEndRef} />
+                })}
+              </div>
+              <div ref={messageEndRef} aria-hidden="true" className="h-0 shrink-0" />
             </div>
           )}
         </ScrollArea>

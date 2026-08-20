@@ -239,3 +239,18 @@ The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 
 ### RWD repository state
 
 - 本輪只提交 RWD、後台版面、PCB DRC 入口與對應回歸測試／交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。
+
+### Latest delivery - 2026-08-20 chat trailing spacing
+
+本次修正訊息顯示後底部多出一行空白的原因：AI 資料查詢與右下角私訊都把自動捲動定位用的空元素放在 `space-y` 訊息清單內，CSS 會替該空元素套用額外的尾端間距。現在定位錨點移到訊息清單外，只保留清單本身需要的底部留白，因此不會再因訊息定位元素多出一整行。
+
+- AI 資料查詢的訊息清單與右下角聊天室共用相同的無尾端間距結構。
+- 桌面版右下角「訊息」浮動列貼齊瀏覽器右下角；手機版仍避讓底部工作列與安全區，避免遮住主要操作。
+- 未改動訊息內容、附件、回覆、刪除、未讀數或聊天同步流程。
+
+### Chat verification
+
+- focused collaboration、AI Markdown、手機核心工作區測試：`19/19` 通過。
+- 本次涉及檔案 scoped ESLint 通過。
+- `pnpm exec tsc --noEmit` 通過。
+- 本輪只提交聊天間距、浮動列定位、回歸測試與本交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。
