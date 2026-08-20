@@ -83,7 +83,7 @@ export function MainWorkspaceHeader({
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">{brand}</div>
         )}
 
-        <nav aria-label="工作區導覽" className="glass-strip order-3 col-span-2 hidden w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex xl:order-none xl:col-span-1 xl:w-auto xl:max-w-none">
+        <nav aria-label="工作區導覽" className="glass-strip order-3 col-span-2 hidden w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex lg:w-fit lg:max-w-full lg:justify-self-center xl:order-none xl:col-span-1">
           {items.map((item) => {
             const isActive = item.id === activeItem;
 
