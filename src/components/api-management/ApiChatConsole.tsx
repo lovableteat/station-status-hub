@@ -2990,8 +2990,9 @@ export function ApiChatConsole({
       <>
         {workspaceDialogs}
         <div
+          data-ai-chat-shell="viewport-fit"
           className={cn(
-            "grid h-full min-h-0 w-full items-stretch gap-2 lg:h-[calc(100dvh-164px)] lg:gap-4",
+            "grid h-full min-h-0 w-full items-stretch gap-2 lg:gap-4",
             sidebarCollapsed
               ? "lg:grid-cols-[88px_minmax(0,1fr)]"
               : "lg:grid-cols-[320px_minmax(0,1fr)]"
