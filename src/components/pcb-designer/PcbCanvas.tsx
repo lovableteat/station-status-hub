@@ -534,7 +534,7 @@ export function PcbCanvas({
   };
 
   const beginComponentDrag = (
-    event: ReactPointerEvent<SVGRectElement>,
+    event: ReactPointerEvent<SVGElement>,
     component: PcbPlacedComponent,
   ) => {
     if (workspace.tool === "pan" || event.button === 1) return;

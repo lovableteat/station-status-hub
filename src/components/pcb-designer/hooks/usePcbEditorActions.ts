@@ -15,6 +15,7 @@ import {
   type KeepoutDuplicateResult,
   type MoveResult,
   type KeepoutMoveResult,
+  type PcbPlacementOptions,
   type PlacementResult,
 } from "../core/editor.ts";
 import type {
@@ -45,7 +46,7 @@ export function usePcbEditorActions(
     (
       componentId: string,
       preferred?: PcbPoint,
-      options?: { exact?: boolean; bypassSnap?: boolean },
+      options?: Omit<PcbPlacementOptions, "layer">,
     ): PlacementResult => {
       if (!state.canEdit || state.documentLocked) {
         return { ok: false, reason: "文件已鎖定或目前為唯讀，無法放置元件。" };

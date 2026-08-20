@@ -71,8 +71,10 @@ function isModelAssetMetadata(value: unknown): value is PcbModelAssetMetadata {
       if (!isRecord(part)) return false;
       return isNonEmptyString(part.id)
         && isNonEmptyString(part.name)
+        && isFiniteNumber(part.vertexCount)
         && Number.isInteger(part.vertexCount)
         && part.vertexCount >= 0
+        && isFiniteNumber(part.indexCount)
         && Number.isInteger(part.indexCount)
         && part.indexCount >= 0;
     });
@@ -259,7 +261,7 @@ export function parseProjectJson(input: unknown): ParseResult<PcbProject> {
     ok: true,
     value: structuredClone({
       ...value,
-      board: normalizeBoard(value.board),
+      board: normalizeBoard(value.board as RecordValue),
     }) as unknown as PcbProject,
   };
 }

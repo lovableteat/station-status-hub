@@ -123,7 +123,7 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
         variant="outline"
         size="sm"
         disabled={!workspace.canMutate || !canDuplicate || Boolean(component?.locked)}
-        onClick={workspace.duplicateSelected}
+        onClick={() => workspace.duplicateSelected()}
         aria-label="複製選取項目"
         title="複製"
       >
