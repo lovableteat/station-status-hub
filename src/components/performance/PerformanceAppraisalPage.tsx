@@ -683,11 +683,13 @@ export function PerformanceAppraisalPage() {
       return <Button type="button" variant="ghost" onClick={() => setSelectedReview(review)} className="h-9 rounded-lg px-2.5 text-xs text-slate-300">查看</Button>;
     }
     return (
-      <div className="flex flex-wrap justify-end gap-1.5">
+      <div className="performance-row-actions">
+        {mine ? (
+          <Button type="button" onClick={() => openSelfReview(review)} className="h-9 rounded-lg bg-cyan-300 px-2.5 text-xs font-bold text-[#062030] hover:bg-cyan-200">填寫自評</Button>
+        ) : canEdit ? (
+          <Button type="button" onClick={() => openManagerReview(review)} className="h-9 rounded-lg bg-emerald-300/15 px-2.5 text-xs font-bold text-emerald-100 hover:bg-emerald-300/25">主管評分</Button>
+        ) : null}
         <Button type="button" variant="ghost" onClick={() => setSelectedReview(review)} className="h-9 rounded-lg px-2.5 text-xs text-slate-300 hover:bg-cyan-300/10 hover:text-cyan-100">查看</Button>
-        {mine && <Button type="button" onClick={() => openSelfReview(review)} className="h-9 rounded-lg bg-cyan-300 px-2.5 text-xs font-bold text-[#062030] hover:bg-cyan-200">填寫我的貢獻</Button>}
-        {canEdit && !mine && <Button type="button" onClick={() => openManagerReview(review)} className="h-9 rounded-lg bg-emerald-300/15 px-2.5 text-xs font-bold text-emerald-100 hover:bg-emerald-300/25">主管評分</Button>}
-        {canEdit && <Button type="button" variant="ghost" onClick={() => openEditReview(review)} className="h-9 rounded-lg px-2.5 text-xs text-cyan-200 hover:bg-cyan-300/10">編輯紀錄</Button>}
       </div>
     );
   };
@@ -737,17 +739,14 @@ export function PerformanceAppraisalPage() {
             <div className="min-w-0">
               <div className="performance-eyebrow">PEOPLE · PERFORMANCE <span>第七工作區</span></div>
               <h1>績效考核系統</h1>
-              <p>集中管理目標、進度、回饋與主管評分。</p>
+              <p>從三個入口開始：建立考核、填寫自評，或查看團隊進度。</p>
             </div>
           </div>
-          <div className="performance-hero-context" aria-label="目前考核檢視">
+          <div className="performance-hero-context performance-hero-context--compact" aria-label="考核週期與資料狀態">
             <div>
-              <span>目前檢視</span>
-              <strong>{activeNavigation.label}</strong>
-            </div>
-            <div>
-              <span>考核週期</span>
+              <span>本期週期</span>
               <strong>{currentCycle.label}</strong>
+              <small>{currentCycle.period}</small>
             </div>
             <span className="performance-hero-source">
               <span className="performance-source-dot" />
@@ -757,7 +756,32 @@ export function PerformanceAppraisalPage() {
         </header>
 
         <div className="space-y-4 py-4 sm:space-y-5 sm:py-5" data-performance-main="true">
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="考核摘要">
+        <section className="performance-next-step" data-performance-zone="quick-start" aria-labelledby="performance-quick-start-title">
+          <div className="performance-next-step-copy">
+            <span className="performance-kicker">先做這件事</span>
+            <h2 id="performance-quick-start-title">你現在要做什麼？</h2>
+            <p>選一個入口就能開始，不用同時看懂全部資料。</p>
+          </div>
+          <div className="performance-next-step-actions">
+            <button type="button" className="performance-next-step-action is-primary" onClick={canEdit ? openNewReview : () => setActiveTab("overview")}>
+              <span className="performance-next-step-number">1</span>
+              <span className="performance-next-step-label">{canEdit ? "新增考核" : "查看考核"}<small>{canEdit ? "建立員工與目標" : "查看本期清單"}</small></span>
+              <Plus className="h-4 w-4 shrink-0" />
+            </button>
+            <button type="button" className="performance-next-step-action" onClick={() => setActiveTab("mine")}>
+              <span className="performance-next-step-number">2</span>
+              <span className="performance-next-step-label">填寫我的考核<small>{mineCount ? `${mineCount} 筆待處理` : "查看個人目標"}</small></span>
+              <UserRound className="h-4 w-4 shrink-0" />
+            </button>
+            <button type="button" className="performance-next-step-action" onClick={() => setActiveTab("team")}>
+              <span className="performance-next-step-number">3</span>
+              <span className="performance-next-step-label">查看團隊進度<small>追蹤主管評分</small></span>
+              <UsersRound className="h-4 w-4 shrink-0" />
+            </button>
+          </div>
+        </section>
+
+        <section className="performance-summary-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="考核摘要">
           <div className="performance-stat rounded-2xl p-4 sm:p-5">
             <div className="flex items-start justify-between"><span className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">本期考核人數</span><UsersRound className="h-5 w-5 text-cyan-200" /></div>
             <div className="mt-3 text-3xl font-black text-white">{summary.total}</div>
@@ -780,11 +804,11 @@ export function PerformanceAppraisalPage() {
           </div>
         </section>
 
-        <section className="performance-surface rounded-2xl p-3 sm:p-4" data-performance-zone="filters">
+        <section className="performance-surface performance-filter-panel rounded-2xl p-3 sm:p-4" data-performance-zone="filters">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200/65">{activeNavigation.label}</p>
-              <p className="mt-1 text-sm text-slate-400">{activeNavigation.description} · 顯示 {filteredReviews.length} 筆</p>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200/65">快速找到考核</p>
+              <p className="mt-1 text-sm text-slate-400">先選分頁，再用關鍵字或狀態縮小清單。 · 顯示 {filteredReviews.length} 筆</p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <label className="relative block min-w-0 sm:min-w-[260px]">
@@ -800,12 +824,12 @@ export function PerformanceAppraisalPage() {
         </section>
 
         <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.65fr)]">
-          <section className="performance-surface min-w-0 rounded-2xl p-4 sm:p-5" data-performance-zone="review-list">
+          <section className="performance-surface performance-review-list min-w-0 rounded-2xl p-4 sm:p-5" data-performance-zone="review-list">
             <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200/70">REVIEW REGISTER</p>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200/70">目前考核</p>
                 <h2 className="mt-1 text-xl font-black text-white">考核清單</h2>
-                <p className="mt-1 text-sm text-slate-400">每筆考核包含目標、進度與評語，點選可查看完整內容。</p>
+                <p className="mt-1 text-sm text-slate-400">點選員工查看目標與回饋，右側只保留下一步。</p>
               </div>
               <span className="rounded-full border border-slate-600/70 bg-slate-900/40 px-3 py-1 text-xs font-bold text-slate-300">顯示 {filteredReviews.length} / {reviewRows.length} 筆</span>
             </div>
@@ -845,8 +869,7 @@ export function PerformanceAppraisalPage() {
           </section>
 
           <aside className="space-y-4" data-performance-zone="cycle-insights">
-            <section className="performance-surface rounded-2xl p-4 sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-amber-200/70">CYCLE CHECKPOINT</p><h2 className="mt-1 text-lg font-black text-white">本期進度</h2></div><span className="grid h-9 w-9 place-items-center rounded-xl bg-amber-300/10 text-amber-100"><CalendarDays className="h-4 w-4" /></span></div><div className="mt-5"><div className="flex items-center justify-between text-sm"><span className="text-slate-400">整體完成率</span><strong className="text-amber-100">{summary.total ? Math.round((summary.completed / summary.total) * 100) : 0}%</strong></div><div className="mt-2 performance-progress-track"><div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-emerald-300" style={{ width: `${summary.total ? (summary.completed / summary.total) * 100 : 0}%` }} /></div></div><div className="mt-5 grid grid-cols-2 gap-2"><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="block text-xs text-slate-500">待填寫</span><strong className="mt-1 block text-xl text-amber-100">{reviewRows.filter((review) => review.status === "draft" || review.status === "in-progress").length}</strong></div><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="block text-xs text-slate-500">待審核</span><strong className="mt-1 block text-xl text-sky-100">{reviewRows.filter((review) => review.status === "submitted").length}</strong></div></div></section>
-            <section className="performance-surface rounded-2xl p-4 sm:p-5"><div className="flex items-center gap-2"><FileText className="h-5 w-5 text-cyan-200" /><h2 className="text-lg font-black text-white">使用方式</h2></div><div className="mt-4 space-y-3">{[["01", "員工自評", "用 STAR 寫下 KPI／OKR／IDP 的實際貢獻，再送出給主管。"], ["02", "主管評分", "主管沿用同一筆目標，補上 0–100 分與具體回饋。"], ["03", "送出或退回", "主管可退回補充，確認後送出並完成本期考核。"]].map(([step, title, description]) => <div key={step} className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-300/10 text-xs font-black text-cyan-100">{step}</span><div><strong className="block text-sm text-slate-100">{title}</strong><p className="mt-0.5 text-xs leading-5 text-slate-500">{description}</p></div></div>)}</div></section>
+            <section className="performance-surface performance-help rounded-2xl p-4 sm:p-5"><details><summary><span className="flex min-w-0 items-center gap-2"><FileText className="h-5 w-5 shrink-0 text-cyan-200" /><span><strong>不確定怎麼用？</strong><small>看 3 步驟</small></span></span><span className="performance-help-toggle" aria-hidden="true">+</span></summary><div className="performance-help-body space-y-3">{[["01", "員工自評", "寫下成果，再送出給主管。"], ["02", "主管評分", "沿用同一筆目標補上評分與回饋。"], ["03", "完成考核", "確認後送出，完成本期考核。"]].map(([step, title, description]) => <div key={step} className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-300/10 text-xs font-black text-cyan-100">{step}</span><div><strong className="block text-sm text-slate-100">{title}</strong><p className="mt-0.5 text-xs leading-5 text-slate-500">{description}</p></div></div>)}</div></details></section>
             <section className="rounded-2xl border border-emerald-200/15 bg-emerald-300/[0.06] p-4"><div className="flex gap-3"><ArrowUpRight className="mt-0.5 h-5 w-5 shrink-0 text-emerald-200" /><div><strong className="block text-sm text-emerald-50">權限依工作區控管</strong><p className="mt-1 text-xs leading-5 text-emerald-100/65">目前為 {canEdit ? "管理模式，可新增、編輯與完成考核" : "檢視模式，只能查看與匯出報表"}。</p></div></div></section>
           </aside>
         </div>
