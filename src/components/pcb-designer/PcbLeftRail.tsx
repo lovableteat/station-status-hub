@@ -1,16 +1,20 @@
 import { useMemo, useState, type ChangeEvent } from "react";
 import {
+  CheckCircle2,
   Copy,
   Eye,
   FileUp,
   Filter,
   FolderOpen,
   Pencil,
+  PencilLine,
   Plus,
   Search,
   Trash2,
+  UserRound,
   Upload,
 } from "lucide-react";
+import { useUser } from "@/components/auth/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
@@ -51,6 +55,12 @@ const tabLabels: Record<LeftTab, string> = {
   templates: "模板",
   library: "元件庫",
   bom: "BOM",
+};
+
+const projectStatusLabels: Record<PcbProject["status"], string> = {
+  draft: "草稿",
+  review: "審核中",
+  approved: "已核准",
 };
 
 function RowAction({
@@ -101,12 +111,15 @@ export function PcbLeftRail({
   onLibraryFile,
   onBomFile,
 }: PcbLeftRailProps) {
+  const { user } = useUser();
   const [activeTab, setActiveTab] = useState<LeftTab>("projects");
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const normalized = query.trim().toLocaleLowerCase();
+  const editorName = user?.displayName?.trim() || user?.username || "尚未登入";
+  const editorState = workspace.hasUnsavedChanges ? "編輯中" : "已同步";
 
   const projects = useMemo(
     () => [...workspace.data.projects]
@@ -303,14 +316,40 @@ export function PcbLeftRail({
         )}
       </div>
 
+      {activeTab === "projects" && (
+        <div className="pcb-project-editor-strip" aria-label="目前內容編輯者">
+          <span className="pcb-project-editor-avatar" aria-hidden="true">
+            <UserRound className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <span className="pcb-project-editor-label">目前內容編輯者</span>
+            <div className="pcb-project-editor-line">
+              <strong className="truncate">{editorName}</strong>
+              <span className={cn("pcb-project-editor-state", workspace.hasUnsavedChanges && "is-editing")}>
+                {workspace.hasUnsavedChanges ? <PencilLine className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+                {editorState}
+              </span>
+            </div>
+            <span className="pcb-project-editor-project truncate">{workspace.activeProject.name}</span>
+          </div>
+        </div>
+      )}
+
       <div className="pcb-rail-list">
         {activeTab === "projects" && projects.map((project) => (
           <div key={project.id} className={cn("pcb-rail-item", project.id === workspace.activeProject.id && "is-active")}>
-            <button type="button" className="w-full text-left" onClick={() => workspace.openProject(project.id)}>
-              <span className="block truncate text-xs font-semibold text-slate-100">{project.name}</span>
-              <span className="mt-0.5 block font-mono text-[10px] text-slate-400">{project.status} · {project.board.width}×{project.board.height} mm</span>
+            <button type="button" className="pcb-project-card-main w-full text-left" onClick={() => workspace.openProject(project.id)}>
+              <span className="pcb-project-card-heading">
+                <span className="truncate text-xs font-semibold text-slate-100">{project.name}</span>
+                {project.id === workspace.activeProject.id && <span className="pcb-project-current-badge">目前</span>}
+              </span>
+              <span className="pcb-project-card-meta">
+                <span className={cn("pcb-project-status", `is-${project.status}`)}>{projectStatusLabels[project.status]}</span>
+                <span aria-hidden="true">·</span>
+                <span>{project.board.width}×{project.board.height} mm</span>
+              </span>
             </button>
-            <div className="mt-1 flex justify-end">
+            <div className="pcb-project-actions">
               <RowAction label={`開啟 ${project.name}`} icon={FolderOpen} onClick={() => workspace.openProject(project.id)} />
               <RowAction label={`預覽 ${project.name}`} icon={Eye} onClick={() => onPreviewProject(project)} />
               <RowAction label={`編輯 ${project.name}`} icon={Pencil} disabled={!workspace.canMutate} onClick={() => onEditProject(project)} />

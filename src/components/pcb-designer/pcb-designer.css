@@ -1630,6 +1630,78 @@
   font-weight: 750;
 }
 
+.pcb-project-editor-strip {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  margin: 8px var(--pcb-rail-gutter) 2px;
+  border: 1px solid rgb(103 207 222 / 34%);
+  border-radius: 11px;
+  background: linear-gradient(115deg, rgb(24 77 103 / 74%), rgb(24 48 79 / 78%));
+  padding: 8px 9px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+.pcb-project-editor-avatar {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(143 232 239 / 58%);
+  border-radius: 9px;
+  background: #163d56;
+  color: #a6f2ef;
+}
+
+.pcb-project-editor-label {
+  display: block;
+  color: #8adce4;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+}
+
+.pcb-project-editor-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  margin-top: 2px;
+  color: #f0f8ff;
+  font-size: 11px;
+}
+
+.pcb-project-editor-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid rgb(118 222 180 / 32%);
+  border-radius: 999px;
+  background: rgb(54 142 108 / 20%);
+  padding: 2px 6px;
+  color: #a5ebcc;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.pcb-project-editor-state.is-editing {
+  border-color: rgb(255 208 105 / 42%);
+  background: rgb(151 101 35 / 22%);
+  color: #ffe096;
+}
+
+.pcb-project-editor-project {
+  display: block;
+  margin-top: 2px;
+  color: #9db7d0;
+  font-size: 9px;
+}
+
 .pcb-primary-action {
   flex: 1 1 auto;
   border: 1px solid rgb(123 197 240 / 44%);
@@ -1684,6 +1756,73 @@
   border-color: rgb(95 143 247 / 60%);
   background: #1d3454;
   box-shadow: inset 3px 0 0 #6abfe8;
+}
+
+.pcb-project-card-main {
+  display: block;
+}
+
+.pcb-project-card-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.pcb-project-current-badge,
+.pcb-project-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.pcb-project-current-badge {
+  border: 1px solid rgb(124 220 236 / 40%);
+  background: rgb(75 181 207 / 18%);
+  padding: 4px 6px;
+  color: #a7eff2;
+}
+
+.pcb-project-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  color: #9fb3cb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+}
+
+.pcb-project-status {
+  padding: 3px 6px;
+  color: #bdd6eb;
+}
+
+.pcb-project-status.is-draft {
+  background: rgb(123 157 190 / 15%);
+  color: #bcd0e4;
+}
+
+.pcb-project-status.is-review {
+  background: rgb(255 204 102 / 16%);
+  color: #ffe19a;
+}
+
+.pcb-project-status.is-approved {
+  background: rgb(105 221 173 / 16%);
+  color: #a7efcf;
+}
+
+.pcb-project-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 3px;
+  margin-top: 7px;
 }
 
 .pcb-bom-row {
