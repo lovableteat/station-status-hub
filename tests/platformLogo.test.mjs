@@ -20,3 +20,14 @@ test("platform logo is a shared vector mark across authenticated and login surfa
   assert.doesNotMatch(header, />S<\/span>/);
   assert.doesNotMatch(login, />S<\/div>/);
 });
+
+test("workspace header pins the shared brand to the top-left without changing the nav contract", () => {
+  const header = read("src/components/layout/MainWorkspaceHeader.tsx");
+
+  assert.match(header, /data-platform-brand="top-left"/);
+  assert.match(header, /relative(?:\s+\S+)*\s+grid min-h-\[var\(--mobile-header-height\)\]/);
+  assert.match(header, /left-\[max\(0\.625rem,env\(safe-area-inset-left\)\)\]/);
+  assert.match(header, /top-1\/2[^\"]*-translate-y-1\/2/);
+  assert.match(header, /xl:col-start-2/);
+  assert.match(header, /xl:col-start-3/);
+});
