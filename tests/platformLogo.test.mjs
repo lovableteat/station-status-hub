@@ -28,8 +28,6 @@ test("workspace header pins the shared brand to the top-left without changing th
   assert.match(header, /relative(?:\s+\S+)*\s+grid min-h-\[var\(--mobile-header-height\)\]/);
   assert.match(header, /left-\[max\(0\.625rem,env\(safe-area-inset-left\)\)\]/);
   assert.match(header, /top-1\/2[^\"]*-translate-y-1\/2/);
-  assert.match(header, /xl:col-start-2/);
-  assert.match(header, /xl:col-start-3/);
 });
 
 test("brand positioning context stays viewport-wide when header content is max-width constrained", () => {
@@ -47,4 +45,12 @@ test("brand positioning context stays viewport-wide when header content is max-w
     header,
     /<div className="relative mx-auto grid min-h-\[var\(--mobile-header-height\)\]/
   );
+});
+
+test("absolute branding preserves the original automatic placement of nav and account controls", () => {
+  const header = read("src/components/layout/MainWorkspaceHeader.tsx");
+
+  assert.match(header, /data-platform-grid-placeholder="brand"/);
+  assert.doesNotMatch(header, /xl:col-start-2/);
+  assert.doesNotMatch(header, /xl:col-start-3/);
 });

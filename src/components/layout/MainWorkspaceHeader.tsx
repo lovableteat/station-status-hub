@@ -73,6 +73,8 @@ export function MainWorkspaceHeader({
   return (
     <header data-mobile-app-header="true" className="platform-color-field relative sticky top-0 z-50 shrink-0 border-b border-primary/15 shadow-[0_18px_48px_-42px_hsl(var(--primary)/0.55)] backdrop-blur-xl">
       <div className="mx-auto grid min-h-[var(--mobile-header-height)] w-full max-w-[1920px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-3 px-2.5 py-1.5 sm:min-h-[72px] sm:gap-x-3 sm:px-4 sm:py-3 xl:grid-cols-[minmax(180px,0.9fr)_minmax(0,2.3fr)_auto] xl:gap-x-4 xl:px-5 2xl:px-6">
+        <span aria-hidden="true" data-platform-grid-placeholder="brand" className="invisible h-9 min-w-0 sm:h-11" />
+
         {onBrandClick ? (
           <button
             type="button"
@@ -86,7 +88,7 @@ export function MainWorkspaceHeader({
           <div data-platform-brand="top-left" className={brandPositionClassName}>{brand}</div>
         )}
 
-        <nav aria-label="工作區導覽" className="glass-strip order-3 col-span-2 hidden w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex lg:w-fit lg:max-w-full lg:justify-self-center xl:order-none xl:col-span-1 xl:col-start-2">
+        <nav aria-label="工作區導覽" className="glass-strip order-3 col-span-2 hidden w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex lg:w-fit lg:max-w-full lg:justify-self-center xl:order-none xl:col-span-1">
           {items.map((item) => {
             const isActive = item.id === activeItem;
 
@@ -108,7 +110,7 @@ export function MainWorkspaceHeader({
           })}
         </nav>
 
-        <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2 xl:col-start-3 xl:gap-3">
+        <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2 xl:gap-3">
           {showOnlineUsers && <div className="hidden md:block"><OnlineUsersIndicator /></div>}
 
           <div className="hidden md:block"><WebsiteQrButton /></div>
