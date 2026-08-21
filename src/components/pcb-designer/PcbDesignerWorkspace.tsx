@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { CircuitBoard, MoreHorizontal, PanelLeft, PanelRight, Settings2 } from "lucide-react";
+import { CircuitBoard, LayoutTemplate, MoreHorizontal, PanelLeft, PanelRight, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -37,7 +37,7 @@ import {
   toPcbModelAsset,
 } from "./core/modelAssets.ts";
 import { PcbDialogs, type PcbDialogState } from "./PcbDialogs.tsx";
-import { PcbLeftRail } from "./PcbLeftRail.tsx";
+import { PcbLeftRail, type PcbLeftTab } from "./PcbLeftRail.tsx";
 import { PcbToolbar } from "./PcbToolbar.tsx";
 import { PcbCanvas } from "./PcbCanvas.tsx";
 import { PcbCollaborators } from "./PcbCollaborators.tsx";
@@ -91,9 +91,9 @@ type ProjectImportPreviewInput = {
 
 function statusLabel(status: PcbProject["status"]): string {
   return {
-    draft: "草稿",
-    review: "審核中",
-    approved: "已核准",
+    draft: "專案草稿",
+    review: "專案審核中",
+    approved: "專案已核准",
   }[status];
 }
 
@@ -125,10 +125,8 @@ export function PcbDesignerWorkspace({
   const { saveNow, setTool } = workspace;
   const [dialog, setDialog] = useState<PcbDialogState | null>(null);
   const [exportIncludesGrid, setExportIncludesGrid] = useState(true);
-  const [selectedTemplateId, setSelectedTemplateId] = useState(
-    workspace.data.templates[0]?.id ?? "",
-  );
   const [openDrawer, setOpenDrawer] = useState<"left" | "right" | null>(null);
+  const [leftRailTab, setLeftRailTab] = useState<PcbLeftTab>("projects");
   const [viewMode, setViewMode] = useState<PcbViewMode>("2d");
   const [placementComponentId, setPlacementComponentId] = useState<string | null>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +170,22 @@ export function PcbDesignerWorkspace({
   }, [setTool]);
   const cancelPlacement = useCallback(() => setPlacementComponentId(null), []);
   const completePlacement = useCallback(() => setPlacementComponentId(null), []);
+
+  const openTemplateCenter = useCallback(() => {
+    setLeftRailTab("templates");
+    setOpenDrawer("left");
+  }, []);
+
+  const createProjectFromTemplate = useCallback((templateId: string) => {
+    const template = workspace.data.templates.find((item) => item.id === templateId);
+    if (!template) return;
+    workspace.applyTemplate(templateId);
+    setLeftRailTab("projects");
+    toast({
+      title: `已從「${template.name}」建立新專案`,
+      description: "目前專案草稿未被覆蓋，新的專案已切換到專案清單。",
+    });
+  }, [workspace.applyTemplate, workspace.data.templates]);
 
   useEffect(() => {
     if (
@@ -442,24 +456,10 @@ export function PcbDesignerWorkspace({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="pcb-dropdown-menu w-64">
                 <DropdownMenuLabel>專案操作</DropdownMenuLabel>
-                <div className="px-2 pb-2">
-                  <select
-                    value={selectedTemplateId}
-                    onChange={(event) => setSelectedTemplateId(event.target.value)}
-                    className="pcb-control h-11 w-full"
-                    aria-label="選擇 PCB 模板"
-                    disabled={!workspace.canMutate}
-                  >
-                    {workspace.data.templates.map((template) => (
-                      <option key={template.id} value={template.id}>{template.name}</option>
-                    ))}
-                  </select>
-                </div>
                 <DropdownMenuItem
-                  disabled={!workspace.canMutate || !selectedTemplateId}
-                  onSelect={() => workspace.applyTemplate(selectedTemplateId)}
+                  onSelect={openTemplateCenter}
                 >
-                  套用目前模板
+                  <LayoutTemplate className="mr-2 h-4 w-4" />開啟模板中心
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -492,26 +492,17 @@ export function PcbDesignerWorkspace({
           >
             <PanelRight className="h-4 w-4" />
           </Button>
-          <select
-            value={selectedTemplateId}
-            onChange={(event) => setSelectedTemplateId(event.target.value)}
-            className="pcb-template-select"
-            aria-label="選擇 PCB 模板"
-            disabled={!workspace.canMutate}
-          >
-            {workspace.data.templates.map((template) => (
-              <option key={template.id} value={template.id}>{template.name}</option>
-            ))}
-          </select>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="pcb-template-apply"
-            disabled={!workspace.canMutate || !selectedTemplateId}
-            onClick={() => workspace.applyTemplate(selectedTemplateId)}
+            className="pcb-template-center-action"
+            onClick={openTemplateCenter}
+            aria-label="開啟模板中心"
+            title="模板只用來建立新專案，不會覆蓋目前草稿"
           >
-            套用模板
+            <LayoutTemplate className="h-4 w-4" />
+            <span>模板中心</span>
           </Button>
           <Button
             type="button"
@@ -602,6 +593,8 @@ export function PcbDesignerWorkspace({
         <div className={cn("pcb-left-drawer", openDrawer === "left" && "is-open")}>
           <PcbLeftRail
             workspace={workspace}
+            activeTab={leftRailTab}
+            onActiveTabChange={setLeftRailTab}
             placementComponentId={placementComponentId}
             onStartPlacement={startPlacement}
             onNewProject={() => setDialog({ kind: "new-project" })}
@@ -615,6 +608,7 @@ export function PcbDesignerWorkspace({
               onOpen: () => workspace.openProject(project.id),
             })}
             onSaveTemplate={() => setDialog({ kind: "save-template" })}
+            onApplyTemplate={createProjectFromTemplate}
             onRenameTemplate={(template) => setDialog({ kind: "rename-template", template })}
             onEditComponent={(component) => setDialog({ kind: "component", component })}
             onDeleteProject={requestDeleteProject}
