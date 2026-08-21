@@ -334,6 +334,37 @@ test("active placement layer and remote hydration are real workspace state", asy
   assert.equal(hydrated.canEdit, true);
 });
 
+test("remote hydration keeps an active component selection when the object still exists", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedStateWithSelectedComponent(), true);
+  const selected = reduceWorkspaceState(initial, {
+    type: "selection/set",
+    selection: { kind: "component", id: "component-a" },
+  });
+  const remote = structuredClone(selected.data);
+  remote.projects[0].name = "Remote project";
+
+  const hydrated = reduceWorkspaceState(selected, {
+    type: "persistence/hydrate",
+    data: remote,
+    preserveView: {
+      activeProjectId: selected.activeProject.id,
+      zoom: 150,
+      viewCenter: { x: 40, y: 35 },
+      activeLayer: "top",
+      visibleLayer: "all",
+      rightTab: "selection",
+      selection: selected.selection,
+      selectedObjects: selected.selectedObjects,
+    },
+  });
+
+  assert.deepEqual(hydrated.selection, { kind: "component", id: "component-a" });
+  assert.deepEqual(hydrated.selectedObjects, ["component-a"]);
+  assert.equal(hydrated.activeProject.name, "Remote project");
+  assert.equal(hydrated.zoom, 150);
+});
+
 test("selection duplicate creates a copy and undo restores both selection state and document state", async () => {
   const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
   const initial = createWorkspaceState(seedStateWithSelectedComponent(), true);

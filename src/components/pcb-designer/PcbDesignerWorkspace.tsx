@@ -422,8 +422,8 @@ export function PcbDesignerWorkspace({
               size="icon"
               className="pcb-panel-toggle h-10 w-10 rounded-lg"
               onClick={() => setOpenDrawer((current) => current === "right" ? null : "right")}
-              aria-label="開啟屬性與 DRC 面板"
-              title="屬性與 DRC"
+              aria-label="開啟屬性面板"
+              title="屬性面板"
             >
               <PanelRight className="h-4 w-4" />
             </Button>
@@ -487,8 +487,8 @@ export function PcbDesignerWorkspace({
             size="icon"
             className="pcb-panel-toggle h-8 w-8 rounded-lg"
             onClick={() => setOpenDrawer((current) => current === "right" ? null : "right")}
-            aria-label="開啟屬性與 DRC 面板"
-            title="屬性與 DRC"
+            aria-label="開啟屬性面板"
+            title="屬性面板"
           >
             <PanelRight className="h-4 w-4" />
           </Button>
@@ -655,7 +655,6 @@ export function PcbDesignerWorkspace({
         <span>放置層 {workspace.activeLayer === "top" ? "Top" : "Bottom"}</span>
         {viewMode === "2d" && <span className="font-mono">{workspace.zoom}%</span>}
         <span>網格 {workspace.activeProject.board.gridSize} mm</span>
-        <span>DRC {workspace.drcIssues.length}</span>
         <span className="ml-auto">
           {persistenceLabel(workspace.persistenceStatus)} · 手動儲存模式（Ctrl+S）
         </span>
