@@ -5,9 +5,12 @@
   --admin-accent-amber: #fbbf24;
   --admin-accent-violet: #a78bfa;
   --admin-accent-rose: #fb7185;
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
   width: 100%;
   min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
   padding: 12px;
   color: #e8f3fb;
   background:
@@ -18,28 +21,36 @@
 }
 
 .admin-shell {
-  display: flex;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
   width: 100%;
   max-width: 1920px;
+  height: 100%;
   min-height: 0;
+  min-width: 0;
   margin-inline: auto;
-  align-items: flex-start;
   gap: 12px;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.admin-shell:has(.admin-sidebar.is-collapsed) {
+  grid-template-columns: 64px minmax(0, 1fr);
 }
 
 .admin-sidebar {
-  position: sticky;
-  top: 12px;
+  position: relative;
   z-index: 20;
   display: flex;
   width: 220px;
-  height: auto;
-  min-height: calc(100dvh - 110px);
-  max-height: none;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
   flex: 0 0 auto;
   align-self: stretch;
   flex-direction: column;
   overflow: hidden;
+  box-sizing: border-box;
   border: 1px solid #2a526f;
   border-radius: 12px;
   background:
@@ -191,10 +202,16 @@
 .admin-content {
   display: flex;
   width: 100%;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
   flex: 1;
   flex-direction: column;
   gap: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .admin-command {
@@ -1188,7 +1205,12 @@
 
 @media (max-width: 1180px) {
   .admin-shell {
+    grid-template-columns: minmax(0, 1fr);
     min-height: 0;
+  }
+
+  .admin-shell:has(.admin-sidebar.is-collapsed) {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-sidebar {
