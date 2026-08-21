@@ -192,6 +192,8 @@ test("replaces the loading shell with one native three-area PCB workbench", asyn
   assert.match(dialogsSource, /import-preview/i);
   assert.match(stylesSource, /#06111f/i);
   assert.match(stylesSource, /@media \(max-width: 1279px\)[\s\S]*pcb-left-drawer[\s\S]*position:\s*absolute/i);
+  assert.match(stylesSource, /\.pcb-panel-toggle\s*\{\s*display:\s*none/i);
+  assert.match(stylesSource, /@media \(max-width: 1279px\)[\s\S]*\.pcb-panel-toggle\s*\{\s*display:\s*inline-flex/i);
   assert.match(stylesSource, /@media \(max-width: 1023px\)[\s\S]*--mobile-shell-bottom/i);
   assert.match(stylesSource, /\.pcb-toolbar\s*\{[\s\S]{0,220}overflow-x:\s*auto/);
   assert.match(stylesSource, /\.pcb-layer-control\s*\{[\s\S]{0,240}flex:\s*0 0 auto/);

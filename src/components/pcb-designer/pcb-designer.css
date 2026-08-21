@@ -1162,6 +1162,12 @@
   transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
 }
 
+/* Wide desktop keeps both side panels in the grid; drawer toggles are only
+ * meaningful once the responsive overlay layout is active. */
+.pcb-panel-toggle {
+  display: none;
+}
+
 .pcb-template-apply:hover,
 .pcb-header-icon-button:hover,
 .pcb-panel-toggle:hover {
