@@ -54,3 +54,14 @@ test("absolute branding preserves the original automatic placement of nav and ac
   assert.doesNotMatch(header, /xl:col-start-2/);
   assert.doesNotMatch(header, /xl:col-start-3/);
 });
+
+test("workspace header pins the control group to the viewport right edge", () => {
+  const header = read("src/components/layout/MainWorkspaceHeader.tsx");
+
+  assert.match(header, /data-platform-controls="top-right"/);
+  assert.match(header, /data-platform-grid-placeholder="controls"/);
+  assert.match(
+    header,
+    /absolute right-\[max\(0\.625rem,env\(safe-area-inset-right\)\)\] top-1\/2[^\"]*-translate-y-1\/2/
+  );
+});

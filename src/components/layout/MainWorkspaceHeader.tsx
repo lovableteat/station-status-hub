@@ -110,7 +110,16 @@ export function MainWorkspaceHeader({
           })}
         </nav>
 
-        <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2 xl:gap-3">
+        <span
+          aria-hidden="true"
+          data-platform-grid-placeholder="controls"
+          className="invisible h-9 min-w-[200px] sm:h-11 2xl:min-w-[520px]"
+        />
+
+        <div
+          data-platform-controls="top-right"
+          className="absolute right-[max(0.625rem,env(safe-area-inset-right))] top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center justify-end gap-1.5 sm:gap-2 xl:gap-3"
+        >
           {showOnlineUsers && <div className="hidden md:block"><OnlineUsersIndicator /></div>}
 
           <div className="hidden md:block"><WebsiteQrButton /></div>
