@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 import {
   calculatePerformanceSummary,
   DEFAULT_PERFORMANCE_REVIEWS,
+  getPerformanceStatusForAction,
   PERFORMANCE_CYCLES,
   PERFORMANCE_STATUS,
   normalizePerformanceReview,
@@ -59,6 +60,8 @@ const performanceStatusEntries = Object.entries(PERFORMANCE_STATUS) as Array<[
 
 type PerformanceTab = "overview" | "mine" | "team";
 type PerformanceStatus = "draft" | "in-progress" | "submitted" | "approved";
+type PerformanceFormMode = "admin" | "self" | "manager";
+type PerformanceSaveAction = "draft" | "submit" | "return";
 
 const SIDEBAR_STORAGE_KEY = "station-status-hub:performance-sidebar-collapsed:v1";
 const PERFORMANCE_NAV_ITEMS = [
@@ -69,6 +72,7 @@ const PERFORMANCE_NAV_ITEMS = [
 
 interface PerformanceGoal {
   id: string;
+  category: "KPI" | "OKR" | "IDP";
   title: string;
   progress: number;
   weight: number;
@@ -107,6 +111,7 @@ interface ReviewFormState {
   status: PerformanceStatus;
   score: string;
   dueDate: string;
+  goalCategory: "KPI" | "OKR" | "IDP";
   goalTitle: string;
   goalProgress: string;
   goalWeight: string;
@@ -123,6 +128,7 @@ const EMPTY_FORM: ReviewFormState = {
   status: "draft",
   score: "",
   dueDate: "2026-09-30",
+  goalCategory: "KPI",
   goalTitle: "",
   goalProgress: "0",
   goalWeight: "100",
@@ -192,6 +198,7 @@ const getReviewForm = (review?: PerformanceReview | null, reviewerName = "管理
     status: review.status,
     score: review.score == null ? "" : String(review.score),
     dueDate: review.dueDate,
+    goalCategory: goal?.category || "KPI",
     goalTitle: goal?.title || "",
     goalProgress: String(goal?.progress || 0),
     goalWeight: String(goal?.weight || 100),
@@ -420,6 +427,7 @@ export function PerformanceAppraisalPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [selectedReview, setSelectedReview] = useState<PerformanceReview | null>(null);
   const [formReview, setFormReview] = useState<PerformanceReview | null>(null);
+  const [formMode, setFormMode] = useState<PerformanceFormMode>("admin");
   const [form, setForm] = useState<ReviewFormState>(() => getReviewForm(null, user?.displayName || "管理員"));
   const [formOpen, setFormOpen] = useState(false);
 
@@ -513,14 +521,32 @@ export function PerformanceAppraisalPage() {
   }, [employees, reviews]);
 
   const openNewReview = () => {
+    setFormMode("admin");
     setFormReview(null);
     setForm(getReviewForm(null, user?.displayName || "管理員"));
     setFormOpen(true);
   };
 
   const openEditReview = (review: PerformanceReview) => {
+    setFormMode("admin");
     setFormReview(review);
     setForm(getReviewForm(review, user?.displayName || "管理員"));
+    setFormOpen(true);
+  };
+
+  const openSelfReview = (review: PerformanceReview) => {
+    setFormMode("self");
+    setFormReview(review);
+    setForm(getReviewForm(review, user?.displayName || "管理員"));
+    setSelectedReview(null);
+    setFormOpen(true);
+  };
+
+  const openManagerReview = (review: PerformanceReview) => {
+    setFormMode("manager");
+    setFormReview(review);
+    setForm(getReviewForm(review, user?.displayName || "管理員"));
+    setSelectedReview(null);
     setFormOpen(true);
   };
 
@@ -543,9 +569,24 @@ export function PerformanceAppraisalPage() {
     }));
   };
 
-  const saveReview = async () => {
+  const saveReview = async (action: PerformanceSaveAction = "draft") => {
     if (!form.employeeName.trim() || !form.goalTitle.trim()) {
       toast({ title: "資料尚未完成", description: "請先選擇員工並填寫至少一個考核目標。", variant: "destructive" });
+      return;
+    }
+
+    if (formMode === "self" && action === "submit" && !form.selfFeedback.trim()) {
+      toast({ title: "自評尚未完成", description: "請以 STAR 寫下本期實際貢獻，再送出給主管。", variant: "destructive" });
+      return;
+    }
+
+    const numericScore = form.score === "" ? null : Number(form.score);
+    if (formMode === "manager" && action === "submit" && (!Number.isFinite(numericScore) || numericScore < 0 || numericScore > 100)) {
+      toast({ title: "尚未完成主管評分", description: "請先輸入 0 到 100 的評分。", variant: "destructive" });
+      return;
+    }
+    if (formMode === "manager" && action === "submit" && !form.managerFeedback.trim()) {
+      toast({ title: "請補充主管回饋", description: "送出前請留下具體肯定、改善方向或下一步。", variant: "destructive" });
       return;
     }
 
@@ -559,15 +600,20 @@ export function PerformanceAppraisalPage() {
       department: form.department.trim() || "未指定部門",
       role: form.role.trim() || "工程師",
       reviewerName: form.reviewerName.trim() || user?.displayName || "管理員",
-      status: form.status,
-      score: form.score === "" ? null : Math.min(100, Math.max(0, Number(form.score))),
+      status: getPerformanceStatusForAction({ mode: formMode, action, currentStatus: form.status }),
+      score: formMode === "self"
+        ? formReview?.score ?? null
+        : numericScore == null || !Number.isFinite(numericScore)
+          ? null
+          : Math.min(100, Math.max(0, numericScore)),
       dueDate: form.dueDate,
-      selfFeedback: form.selfFeedback,
-      managerFeedback: form.managerFeedback,
+      selfFeedback: formMode === "manager" ? formReview?.selfFeedback || "" : form.selfFeedback,
+      managerFeedback: formMode === "self" ? formReview?.managerFeedback || "" : form.managerFeedback,
       updatedAt: new Date().toISOString(),
       goals: [
         {
           id: previous[0]?.id || `goal-${Date.now()}`,
+          category: form.goalCategory,
           title: form.goalTitle.trim(),
           progress: Math.min(100, Math.max(0, Number(form.goalProgress) || 0)),
           weight: Math.max(0, Number(form.goalWeight) || 100),
@@ -601,10 +647,20 @@ export function PerformanceAppraisalPage() {
       });
       if (error) throw error;
       setDataSource("cloud");
-      toast({ title: formReview ? "考核已更新" : "考核已建立", description: "資料已同步到共用工作區。" });
+      const actionLabel = formMode === "self"
+        ? action === "submit" ? "自評已送出" : "自評草稿已儲存"
+        : formMode === "manager"
+          ? action === "return" ? "已退回補充" : action === "submit" ? "主管評分已送出" : "主管評分已儲存"
+          : formReview ? "考核已更新" : "考核已建立";
+      toast({ title: actionLabel, description: "資料已同步到共用工作區。" });
     } catch {
       setDataSource("local");
-      toast({ title: formReview ? "考核已更新" : "考核已建立", description: "雲端資料表尚未啟用，已先保存在本機瀏覽器。" });
+      const actionLabel = formMode === "self"
+        ? action === "submit" ? "自評已送出" : "自評草稿已儲存"
+        : formMode === "manager"
+          ? action === "return" ? "已退回補充" : action === "submit" ? "主管評分已送出" : "主管評分已儲存"
+          : formReview ? "考核已更新" : "考核已建立";
+      toast({ title: actionLabel, description: "雲端資料表尚未啟用，已先保存在本機瀏覽器。" });
     }
 
     setFormOpen(false);
@@ -621,21 +677,19 @@ export function PerformanceAppraisalPage() {
     toast({ title: "報表已匯出", description: `已匯出 ${filteredReviews.length} 筆考核資料。` });
   };
 
-  const markApproved = async (review: PerformanceReview) => {
-    if (!canEdit) return;
-    const nextReview = { ...review, status: "approved" as const, updatedAt: new Date().toISOString() };
-    const nextReviews = reviews.map((item) => item.id === review.id ? nextReview : item);
-    setReviews(nextReviews);
-    persistLocalReviews(nextReviews);
-    try {
-      const { error } = await performanceSupabase.from("performance_reviews").update({ status: "approved", updated_at: nextReview.updatedAt }).eq("id", review.id);
-      if (error) throw error;
-      setDataSource("cloud");
-    } catch {
-      setDataSource("local");
+  const renderReviewActions = (review: PerformanceReview) => {
+    const mine = getMine(review, user);
+    if (review.status === "approved") {
+      return <Button type="button" variant="ghost" onClick={() => setSelectedReview(review)} className="h-9 rounded-lg px-2.5 text-xs text-slate-300">查看</Button>;
     }
-    setSelectedReview(nextReview);
-    toast({ title: "考核已完成", description: `${review.employeeName} 的本期考核已標記完成。` });
+    return (
+      <div className="flex flex-wrap justify-end gap-1.5">
+        <Button type="button" variant="ghost" onClick={() => setSelectedReview(review)} className="h-9 rounded-lg px-2.5 text-xs text-slate-300 hover:bg-cyan-300/10 hover:text-cyan-100">查看</Button>
+        {mine && <Button type="button" onClick={() => openSelfReview(review)} className="h-9 rounded-lg bg-cyan-300 px-2.5 text-xs font-bold text-[#062030] hover:bg-cyan-200">填寫我的貢獻</Button>}
+        {canEdit && !mine && <Button type="button" onClick={() => openManagerReview(review)} className="h-9 rounded-lg bg-emerald-300/15 px-2.5 text-xs font-bold text-emerald-100 hover:bg-emerald-300/25">主管評分</Button>}
+        {canEdit && <Button type="button" variant="ghost" onClick={() => openEditReview(review)} className="h-9 rounded-lg px-2.5 text-xs text-cyan-200 hover:bg-cyan-300/10">編輯紀錄</Button>}
+      </div>
+    );
   };
 
   return (
@@ -771,7 +825,7 @@ export function PerformanceAppraisalPage() {
                             <td className="py-4 pr-4"><ProgressBar value={progress} /><span className="mt-1 block text-[11px] text-slate-500">更新於 {formatUpdatedAt(review.updatedAt)}</span></td>
                             <td className="py-4 pr-4"><StatusPill status={review.status} /></td>
                             <td className="py-4 pr-4 text-lg font-black text-white">{review.score == null ? <span className="text-slate-500">--</span> : review.score}</td>
-                            <td className="py-4 text-right"><div className="flex justify-end gap-1.5"><Button type="button" variant="ghost" onClick={() => setSelectedReview(review)} className="h-9 rounded-lg px-2.5 text-xs text-slate-300 hover:bg-cyan-300/10 hover:text-cyan-100">查看</Button>{canEdit && <Button type="button" variant="ghost" onClick={() => openEditReview(review)} className="h-9 rounded-lg px-2.5 text-xs text-cyan-200 hover:bg-cyan-300/10">編輯</Button>}</div></td>
+                            <td className="py-4 text-right">{renderReviewActions(review)}</td>
                           </tr>
                         );
                       })}
@@ -781,7 +835,7 @@ export function PerformanceAppraisalPage() {
                 <div className="grid gap-3 md:hidden">
                   {filteredReviews.map((review) => {
                     const progress = getAverageGoalProgress(review);
-                    return <article key={review.id} className="rounded-2xl border border-cyan-100/10 bg-[#071b2d]/80 p-4"><div className="flex items-start justify-between gap-3"><button type="button" onClick={() => setSelectedReview(review)} className="flex min-w-0 items-center gap-3 text-left"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-300/10 text-sm font-black text-cyan-100">{review.employeeName.slice(0, 2).toUpperCase()}</span><span className="min-w-0"><strong className="block truncate text-sm text-white">{review.employeeName}</strong><span className="block truncate text-xs text-slate-500">{review.department}</span></span></button><StatusPill status={review.status} /></div><div className="mt-4 flex items-center justify-between text-xs text-slate-400"><span>目標平均進度</span><strong className="text-cyan-100">{progress}%</strong></div><div className="mt-2"><ProgressBar value={progress} /></div><div className="mt-4 flex items-center justify-between"><span className="text-sm text-slate-400">評分 <strong className="ml-1 text-white">{review.score ?? "--"}</strong></span><div className="flex gap-1"><Button type="button" variant="ghost" onClick={() => setSelectedReview(review)} className="h-9 rounded-lg px-2.5 text-xs text-slate-300">查看</Button>{canEdit && <Button type="button" variant="ghost" onClick={() => openEditReview(review)} className="h-9 rounded-lg px-2.5 text-xs text-cyan-200">編輯</Button>}</div></div></article>;
+                    return <article key={review.id} className="rounded-2xl border border-cyan-100/10 bg-[#071b2d]/80 p-4"><div className="flex items-start justify-between gap-3"><button type="button" onClick={() => setSelectedReview(review)} className="flex min-w-0 items-center gap-3 text-left"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-300/10 text-sm font-black text-cyan-100">{review.employeeName.slice(0, 2).toUpperCase()}</span><span className="min-w-0"><strong className="block truncate text-sm text-white">{review.employeeName}</strong><span className="block truncate text-xs text-slate-500">{review.department}</span></span></button><StatusPill status={review.status} /></div><div className="mt-4 flex items-center justify-between text-xs text-slate-400"><span>目標平均進度</span><strong className="text-cyan-100">{progress}%</strong></div><div className="mt-2"><ProgressBar value={progress} /></div><div className="mt-4 flex items-center justify-between gap-3"><span className="text-sm text-slate-400">評分 <strong className="ml-1 text-white">{review.score ?? "--"}</strong></span>{renderReviewActions(review)}</div></article>;
                   })}
                 </div>
               </>
@@ -792,7 +846,7 @@ export function PerformanceAppraisalPage() {
 
           <aside className="space-y-4" data-performance-zone="cycle-insights">
             <section className="performance-surface rounded-2xl p-4 sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-amber-200/70">CYCLE CHECKPOINT</p><h2 className="mt-1 text-lg font-black text-white">本期進度</h2></div><span className="grid h-9 w-9 place-items-center rounded-xl bg-amber-300/10 text-amber-100"><CalendarDays className="h-4 w-4" /></span></div><div className="mt-5"><div className="flex items-center justify-between text-sm"><span className="text-slate-400">整體完成率</span><strong className="text-amber-100">{summary.total ? Math.round((summary.completed / summary.total) * 100) : 0}%</strong></div><div className="mt-2 performance-progress-track"><div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-emerald-300" style={{ width: `${summary.total ? (summary.completed / summary.total) * 100 : 0}%` }} /></div></div><div className="mt-5 grid grid-cols-2 gap-2"><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="block text-xs text-slate-500">待填寫</span><strong className="mt-1 block text-xl text-amber-100">{reviewRows.filter((review) => review.status === "draft" || review.status === "in-progress").length}</strong></div><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="block text-xs text-slate-500">待審核</span><strong className="mt-1 block text-xl text-sky-100">{reviewRows.filter((review) => review.status === "submitted").length}</strong></div></div></section>
-            <section className="performance-surface rounded-2xl p-4 sm:p-5"><div className="flex items-center gap-2"><FileText className="h-5 w-5 text-cyan-200" /><h2 className="text-lg font-black text-white">使用方式</h2></div><div className="mt-4 space-y-3">{[["01", "建立考核", "選擇員工、設定截止日期與本期目標。"], ["02", "追蹤進度", "員工與主管可以在同一筆紀錄補充回饋。"], ["03", "完成審核", "主管確認評分後標記為已完成，供報表匯出。"]].map(([step, title, description]) => <div key={step} className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-300/10 text-xs font-black text-cyan-100">{step}</span><div><strong className="block text-sm text-slate-100">{title}</strong><p className="mt-0.5 text-xs leading-5 text-slate-500">{description}</p></div></div>)}</div></section>
+            <section className="performance-surface rounded-2xl p-4 sm:p-5"><div className="flex items-center gap-2"><FileText className="h-5 w-5 text-cyan-200" /><h2 className="text-lg font-black text-white">使用方式</h2></div><div className="mt-4 space-y-3">{[["01", "員工自評", "用 STAR 寫下 KPI／OKR／IDP 的實際貢獻，再送出給主管。"], ["02", "主管評分", "主管沿用同一筆目標，補上 0–100 分與具體回饋。"], ["03", "送出或退回", "主管可退回補充，確認後送出並完成本期考核。"]].map(([step, title, description]) => <div key={step} className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-300/10 text-xs font-black text-cyan-100">{step}</span><div><strong className="block text-sm text-slate-100">{title}</strong><p className="mt-0.5 text-xs leading-5 text-slate-500">{description}</p></div></div>)}</div></section>
             <section className="rounded-2xl border border-emerald-200/15 bg-emerald-300/[0.06] p-4"><div className="flex gap-3"><ArrowUpRight className="mt-0.5 h-5 w-5 shrink-0 text-emerald-200" /><div><strong className="block text-sm text-emerald-50">權限依工作區控管</strong><p className="mt-1 text-xs leading-5 text-emerald-100/65">目前為 {canEdit ? "管理模式，可新增、編輯與完成考核" : "檢視模式，只能查看與匯出報表"}。</p></div></div></section>
           </aside>
         </div>
@@ -801,26 +855,20 @@ export function PerformanceAppraisalPage() {
 
       <Dialog open={Boolean(selectedReview)} onOpenChange={(open) => !open && setSelectedReview(null)}>
         <DialogContent className="max-h-[90dvh] w-[min(94vw,720px)] overflow-y-auto border-cyan-200/25 bg-[#081a2a] p-0 text-slate-100">
-          {selectedReview && <><DialogHeader className="border-b border-cyan-100/10 bg-[#0d263a] px-5 py-5 sm:px-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200/70">{selectedReview.cycleId} · REVIEW DETAIL</p><DialogTitle className="mt-1 text-2xl font-black text-white">{selectedReview.employeeName}</DialogTitle><DialogDescription className="mt-1 text-slate-400">{selectedReview.department} · {selectedReview.role} · 考核人 {selectedReview.reviewerName}</DialogDescription></div><StatusPill status={selectedReview.status} /></div></DialogHeader><div className="space-y-5 p-5 sm:p-6"><div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="text-xs text-slate-500">目標進度</span><strong className="mt-1 block text-xl text-cyan-100">{getAverageGoalProgress(selectedReview)}%</strong></div><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="text-xs text-slate-500">評分</span><strong className="mt-1 block text-xl text-white">{selectedReview.score ?? "--"}</strong></div><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="text-xs text-slate-500">截止日期</span><strong className="mt-1 block text-sm text-white">{formatDueDate(selectedReview.dueDate)}</strong></div><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="text-xs text-slate-500">最近更新</span><strong className="mt-1 block text-sm text-white">{formatUpdatedAt(selectedReview.updatedAt)}</strong></div></div><section><h3 className="flex items-center gap-2 text-sm font-black text-white"><Target className="h-4 w-4 text-cyan-200" />本期目標</h3><div className="mt-3 space-y-3">{selectedReview.goals.map((goal) => <div key={goal.id} className="rounded-xl border border-white/10 bg-[#071b2d] p-3"><div className="flex items-center justify-between gap-3"><span className="text-sm font-bold text-slate-200">{goal.title}</span><span className="text-xs font-black text-cyan-100">{goal.progress}%</span></div><div className="mt-2"><ProgressBar value={goal.progress} /></div></div>)}</div></section><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-cyan-100/10 bg-[#071b2d] p-4"><h3 className="text-sm font-black text-cyan-100">員工回饋</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectedReview.selfFeedback || "尚未填寫"}</p></div><div className="rounded-xl border border-amber-100/10 bg-[#071b2d] p-4"><h3 className="text-sm font-black text-amber-100">主管回饋</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectedReview.managerFeedback || "尚未填寫"}</p></div></div></div><DialogFooter className="border-t border-cyan-100/10 bg-[#071522] px-5 py-4 sm:px-6"><Button type="button" variant="outline" onClick={() => setSelectedReview(null)} className="rounded-xl border-slate-600 text-slate-200">關閉</Button>{canEdit && selectedReview.status !== "approved" && <><Button type="button" variant="outline" onClick={() => { setSelectedReview(null); openEditReview(selectedReview); }} className="rounded-xl border-cyan-200/25 text-cyan-100">編輯</Button><Button type="button" onClick={() => void markApproved(selectedReview)} className="rounded-xl bg-emerald-300 text-[#05251d] hover:bg-emerald-200"><CheckCircle2 className="mr-2 h-4 w-4" />標記已完成</Button></>}</DialogFooter></>}
+          {selectedReview && <><DialogHeader className="border-b border-cyan-100/10 bg-[#0d263a] px-5 py-5 sm:px-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200/70">{selectedReview.cycleId} · REVIEW DETAIL</p><DialogTitle className="mt-1 text-2xl font-black text-white">{selectedReview.employeeName}</DialogTitle><DialogDescription className="mt-1 text-slate-400">{selectedReview.department} · {selectedReview.role} · 考核人 {selectedReview.reviewerName}</DialogDescription></div><StatusPill status={selectedReview.status} /></div></DialogHeader><div className="space-y-5 p-5 sm:p-6"><div className="grid grid-cols-3 gap-2 rounded-2xl border border-cyan-100/10 bg-cyan-300/[0.04] p-3 text-center text-xs"><div className="rounded-xl bg-cyan-300/10 p-2 font-bold text-cyan-100">1. 填寫貢獻</div><div className={cn("rounded-xl p-2 font-bold", selectedReview.status === "draft" || selectedReview.status === "in-progress" ? "bg-white/[0.04] text-slate-500" : "bg-sky-300/10 text-sky-100")}>2. 送出自評</div><div className={cn("rounded-xl p-2 font-bold", selectedReview.status === "approved" ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.04] text-slate-500")}>3. 主管完成</div></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="text-xs text-slate-500">目標進度</span><strong className="mt-1 block text-xl text-cyan-100">{getAverageGoalProgress(selectedReview)}%</strong></div><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="text-xs text-slate-500">評分</span><strong className="mt-1 block text-xl text-white">{selectedReview.score ?? "--"}</strong></div><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="text-xs text-slate-500">截止日期</span><strong className="mt-1 block text-sm text-white">{formatDueDate(selectedReview.dueDate)}</strong></div><div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><span className="text-xs text-slate-500">最近更新</span><strong className="mt-1 block text-sm text-white">{formatUpdatedAt(selectedReview.updatedAt)}</strong></div></div><section><h3 className="flex items-center gap-2 text-sm font-black text-white"><Target className="h-4 w-4 text-cyan-200" />本期目標</h3><div className="mt-3 space-y-3">{selectedReview.goals.map((goal) => <div key={goal.id} className="rounded-xl border border-white/10 bg-[#071b2d] p-3"><div className="flex items-center justify-between gap-3"><span className="text-sm font-bold text-slate-200">{goal.category || "KPI"} · {goal.title}</span><span className="text-xs font-black text-cyan-100">{goal.progress}%</span></div><div className="mt-2"><ProgressBar value={goal.progress} /></div></div>)}</div></section><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-cyan-100/10 bg-[#071b2d] p-4"><h3 className="text-sm font-black text-cyan-100">員工自評貢獻（STAR）</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectedReview.selfFeedback || "尚未填寫"}</p></div><div className="rounded-xl border border-amber-100/10 bg-[#071b2d] p-4"><h3 className="text-sm font-black text-amber-100">主管回饋</h3><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectedReview.managerFeedback || "尚未填寫"}</p></div></div></div><DialogFooter className="flex-wrap border-t border-cyan-100/10 bg-[#071522] px-5 py-4 sm:px-6"><Button type="button" variant="outline" onClick={() => setSelectedReview(null)} className="rounded-xl border-slate-600 text-slate-200">關閉</Button>{selectedReview.status !== "approved" && getMine(selectedReview, user) && <Button type="button" onClick={() => openSelfReview(selectedReview)} className="rounded-xl bg-cyan-300 text-[#062030] hover:bg-cyan-200">填寫我的貢獻</Button>}{canEdit && selectedReview.status !== "approved" && !getMine(selectedReview, user) && <Button type="button" onClick={() => openManagerReview(selectedReview)} className="rounded-xl bg-emerald-300 text-[#05251d] hover:bg-emerald-200"><ClipboardCheck className="mr-2 h-4 w-4" />主管評分</Button>}{canEdit && selectedReview.status !== "approved" && <Button type="button" variant="outline" onClick={() => { setSelectedReview(null); openEditReview(selectedReview); }} className="rounded-xl border-cyan-200/25 text-cyan-100">編輯紀錄</Button>}</DialogFooter></>}
         </DialogContent>
       </Dialog>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-h-[92dvh] w-[min(94vw,760px)] overflow-y-auto border-cyan-200/25 bg-[#081a2a] p-0 text-slate-100">
-          <DialogHeader className="border-b border-cyan-100/10 bg-[#0d263a] px-5 py-5 sm:px-6"><DialogTitle className="flex items-center gap-2 text-xl font-black"><ClipboardCheck className="h-5 w-5 text-cyan-200" />{formReview ? "編輯考核" : "新增考核"}</DialogTitle><DialogDescription className="text-slate-400">填寫必要欄位後儲存，後續可以在考核詳情中補充完整回饋。</DialogDescription></DialogHeader>
+          <DialogHeader className="border-b border-cyan-100/10 bg-[#0d263a] px-5 py-5 sm:px-6"><DialogTitle className="flex items-center gap-2 text-xl font-black"><ClipboardCheck className="h-5 w-5 text-cyan-200" />{formMode === "self" ? "填寫我的貢獻" : formMode === "manager" ? "主管評分" : formReview ? "編輯考核" : "新增考核"}</DialogTitle><DialogDescription className="text-slate-400">{formMode === "self" ? "用 STAR 寫下成果與貢獻，儲存草稿或送出給主管審核。" : formMode === "manager" ? "確認員工目標與自評內容，給予評分與具體回饋。" : "建立考核紀錄並設定本期目標，後續由員工與主管接續完成。"}</DialogDescription></DialogHeader>
           <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
-            <div className="sm:col-span-2"><Label htmlFor="performance-employee" className="text-slate-300">考核員工 *</Label><select id="performance-employee" value={form.employeeId} onChange={(event) => handleEmployeeChange(event.target.value)} className="performance-select mt-1.5"><option value="">選擇員工</option>{employeeOptions.map((employee) => <option key={employee.id} value={employee.id}>{employee.label}{employee.department ? ` · ${employee.department}` : ""}</option>)}</select><Input value={form.employeeName} onChange={(event) => updateForm("employeeName", event.target.value)} placeholder="也可以直接輸入員工姓名" className="performance-input mt-2" /></div>
-            <div><Label htmlFor="performance-department" className="text-slate-300">部門</Label><Input id="performance-department" value={form.department} onChange={(event) => updateForm("department", event.target.value)} className="performance-input mt-1.5" /></div>
-            <div><Label htmlFor="performance-role" className="text-slate-300">職稱</Label><Input id="performance-role" value={form.role} onChange={(event) => updateForm("role", event.target.value)} className="performance-input mt-1.5" /></div>
-            <div><Label htmlFor="performance-reviewer" className="text-slate-300">考核人</Label><Input id="performance-reviewer" value={form.reviewerName} onChange={(event) => updateForm("reviewerName", event.target.value)} className="performance-input mt-1.5" /></div>
-            <div><Label htmlFor="performance-due" className="text-slate-300">截止日期</Label><Input id="performance-due" type="date" value={form.dueDate} onChange={(event) => updateForm("dueDate", event.target.value)} className="performance-input mt-1.5" /></div>
-            <div><Label htmlFor="performance-status" className="text-slate-300">狀態</Label><select id="performance-status" value={form.status} onChange={(event) => updateForm("status", event.target.value as PerformanceStatus)} className="performance-select mt-1.5">{performanceStatusEntries.map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div>
-            <div><Label htmlFor="performance-score" className="text-slate-300">評分（0 - 100）</Label><Input id="performance-score" type="number" min="0" max="100" value={form.score} onChange={(event) => updateForm("score", event.target.value)} placeholder="尚未評分" className="performance-input mt-1.5" /></div>
-            <div className="sm:col-span-2 rounded-2xl border border-cyan-100/10 bg-[#071b2d] p-4"><div className="flex items-center gap-2"><Target className="h-4 w-4 text-cyan-200" /><h3 className="text-sm font-black text-white">本期主要目標</h3></div><div className="mt-3"><Label htmlFor="performance-goal" className="text-slate-300">目標內容 *</Label><Input id="performance-goal" value={form.goalTitle} onChange={(event) => updateForm("goalTitle", event.target.value)} placeholder="例如：完成跨部門問題追蹤流程" className="performance-input mt-1.5" /></div><div className="mt-3 grid gap-3 sm:grid-cols-2"><div><Label htmlFor="performance-progress" className="text-slate-300">目前進度（%）</Label><Input id="performance-progress" type="number" min="0" max="100" value={form.goalProgress} onChange={(event) => updateForm("goalProgress", event.target.value)} className="performance-input mt-1.5" /></div><div><Label htmlFor="performance-weight" className="text-slate-300">目標權重（%）</Label><Input id="performance-weight" type="number" min="0" max="100" value={form.goalWeight} onChange={(event) => updateForm("goalWeight", event.target.value)} className="performance-input mt-1.5" /></div></div></div>
-            <div><Label htmlFor="performance-self-feedback" className="text-slate-300">員工回饋</Label><textarea id="performance-self-feedback" value={form.selfFeedback} onChange={(event) => updateForm("selfFeedback", event.target.value)} className="performance-textarea mt-1.5" placeholder="記錄成果、困難或需要支援的事項。" /></div>
-            <div><Label htmlFor="performance-manager-feedback" className="text-slate-300">主管回饋</Label><textarea id="performance-manager-feedback" value={form.managerFeedback} onChange={(event) => updateForm("managerFeedback", event.target.value)} className="performance-textarea mt-1.5" placeholder="記錄肯定、改善方向與下一步。" /></div>
+            {formMode === "admin" ? <><div className="sm:col-span-2"><Label htmlFor="performance-employee" className="text-slate-300">考核員工 *</Label><select id="performance-employee" value={form.employeeId} onChange={(event) => handleEmployeeChange(event.target.value)} className="performance-select mt-1.5"><option value="">選擇員工</option>{employeeOptions.map((employee) => <option key={employee.id} value={employee.id}>{employee.label}{employee.department ? ` · ${employee.department}` : ""}</option>)}</select><Input value={form.employeeName} onChange={(event) => updateForm("employeeName", event.target.value)} placeholder="也可以直接輸入員工姓名" className="performance-input mt-2" /></div><div><Label htmlFor="performance-department" className="text-slate-300">部門</Label><Input id="performance-department" value={form.department} onChange={(event) => updateForm("department", event.target.value)} className="performance-input mt-1.5" /></div><div><Label htmlFor="performance-role" className="text-slate-300">職稱</Label><Input id="performance-role" value={form.role} onChange={(event) => updateForm("role", event.target.value)} className="performance-input mt-1.5" /></div><div><Label htmlFor="performance-reviewer" className="text-slate-300">考核人</Label><Input id="performance-reviewer" value={form.reviewerName} onChange={(event) => updateForm("reviewerName", event.target.value)} className="performance-input mt-1.5" /></div><div><Label htmlFor="performance-due" className="text-slate-300">截止日期</Label><Input id="performance-due" type="date" value={form.dueDate} onChange={(event) => updateForm("dueDate", event.target.value)} className="performance-input mt-1.5" /></div><div><Label htmlFor="performance-status" className="text-slate-300">狀態</Label><select id="performance-status" value={form.status} onChange={(event) => updateForm("status", event.target.value as PerformanceStatus)} className="performance-select mt-1.5">{performanceStatusEntries.map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></div><div><Label htmlFor="performance-score" className="text-slate-300">評分（0 - 100）</Label><Input id="performance-score" type="number" min="0" max="100" value={form.score} onChange={(event) => updateForm("score", event.target.value)} placeholder="尚未評分" className="performance-input mt-1.5" /></div></> : <div className="sm:col-span-2 grid gap-3 rounded-2xl border border-cyan-100/10 bg-cyan-300/[0.04] p-4 sm:grid-cols-3"><div><span className="text-xs text-slate-500">員工</span><strong className="mt-1 block text-sm text-white">{form.employeeName}</strong></div><div><span className="text-xs text-slate-500">部門／職稱</span><strong className="mt-1 block text-sm text-white">{form.department} · {form.role}</strong></div><div><span className="text-xs text-slate-500">截止日期</span><strong className="mt-1 block text-sm text-white">{formatDueDate(form.dueDate)}</strong></div></div>}
+            <div className="sm:col-span-2 rounded-2xl border border-cyan-100/10 bg-[#071b2d] p-4"><div className="flex items-center gap-2"><Target className="h-4 w-4 text-cyan-200" /><h3 className="text-sm font-black text-white">本期主要目標</h3><span className="ml-auto rounded-full bg-cyan-300/10 px-2 py-1 text-[10px] font-black text-cyan-100">{form.goalCategory}</span></div><div className="mt-3 grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)]"><div><Label htmlFor="performance-goal-category" className="text-slate-300">類型</Label><select id="performance-goal-category" value={form.goalCategory} onChange={(event) => updateForm("goalCategory", event.target.value as ReviewFormState["goalCategory"])} disabled={formMode === "manager"} className="performance-select mt-1.5"><option value="KPI">KPI</option><option value="OKR">OKR</option><option value="IDP">IDP</option></select></div><div><Label htmlFor="performance-goal" className="text-slate-300">目標內容 *</Label><Input id="performance-goal" value={form.goalTitle} onChange={(event) => updateForm("goalTitle", event.target.value)} readOnly={formMode === "manager"} placeholder="例如：完成跨部門問題追蹤流程" className="performance-input mt-1.5" /></div></div><div className="mt-3 grid gap-3 sm:grid-cols-2"><div><Label htmlFor="performance-progress" className="text-slate-300">目前進度（%）</Label><Input id="performance-progress" type="number" min="0" max="100" value={form.goalProgress} onChange={(event) => updateForm("goalProgress", event.target.value)} readOnly={formMode === "manager"} className="performance-input mt-1.5" /></div><div><Label htmlFor="performance-weight" className="text-slate-300">目標權重（%）</Label><Input id="performance-weight" type="number" min="0" max="100" value={form.goalWeight} onChange={(event) => updateForm("goalWeight", event.target.value)} readOnly={formMode === "manager"} className="performance-input mt-1.5" /></div></div></div>
+            {formMode === "self" ? <div className="sm:col-span-2 rounded-2xl border border-cyan-200/20 bg-cyan-300/[0.05] p-4"><div className="flex items-start justify-between gap-3"><div><Label htmlFor="performance-self-feedback" className="text-cyan-100">STAR 自評實績 *</Label><p className="mt-1 text-xs leading-5 text-slate-400">S 情境／T 任務／A 行動／R 結果，請盡量寫出可驗證的成果。</p></div><span className="rounded-full border border-cyan-200/20 px-2 py-1 text-[10px] font-black text-cyan-100">員工填寫</span></div><textarea id="performance-self-feedback" value={form.selfFeedback} onChange={(event) => updateForm("selfFeedback", event.target.value)} className="performance-textarea mt-3 min-h-40" placeholder="S：遇到什麼情境？\nT：你負責什麼？\nA：採取哪些行動？\nR：帶來什麼結果？" /></div> : <div className="sm:col-span-2 rounded-2xl border border-cyan-100/10 bg-[#071b2d] p-4"><Label htmlFor="performance-self-feedback" className="text-cyan-100">員工自評貢獻（STAR）</Label><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{form.selfFeedback || "員工尚未送出自評內容"}</p></div>}
+            {formMode !== "self" && <div className="sm:col-span-2 rounded-2xl border border-amber-100/15 bg-amber-300/[0.04] p-4"><div className="flex items-start justify-between gap-3"><div><Label htmlFor="performance-manager-feedback" className="text-amber-100">主管回饋{formMode === "manager" ? " *" : ""}</Label><p className="mt-1 text-xs text-slate-400">針對成果給予肯定、改善方向與下一步。</p></div>{formMode === "manager" && <span className="rounded-full border border-amber-200/20 px-2 py-1 text-[10px] font-black text-amber-100">主管填寫</span>}</div>{formMode === "admin" || formMode === "manager" ? <textarea id="performance-manager-feedback" value={form.managerFeedback} onChange={(event) => updateForm("managerFeedback", event.target.value)} className="performance-textarea mt-3 min-h-32" placeholder="請寫下具體觀察與下一步建議。" /> : <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{form.managerFeedback || "尚未填寫"}</p>}</div>}
           </div>
-          <DialogFooter className="border-t border-cyan-100/10 bg-[#071522] px-5 py-4 sm:px-6"><Button type="button" variant="outline" onClick={() => setFormOpen(false)} className="rounded-xl border-slate-600 text-slate-200"><X className="mr-2 h-4 w-4" />取消</Button><Button type="button" onClick={() => void saveReview()} className="rounded-xl bg-cyan-300 text-[#062030] hover:bg-cyan-200"><Save className="mr-2 h-4 w-4" />儲存考核</Button></DialogFooter>
+          <DialogFooter className="flex-wrap border-t border-cyan-100/10 bg-[#071522] px-5 py-4 sm:px-6"><Button type="button" variant="outline" onClick={() => setFormOpen(false)} className="rounded-xl border-slate-600 text-slate-200"><X className="mr-2 h-4 w-4" />取消</Button>{formMode === "self" ? <><Button type="button" variant="outline" onClick={() => void saveReview("draft")} className="rounded-xl border-cyan-200/25 text-cyan-100"><Save className="mr-2 h-4 w-4" />儲存草稿</Button><Button type="button" onClick={() => void saveReview("submit")} className="rounded-xl bg-cyan-300 text-[#062030] hover:bg-cyan-200">送出自評</Button></> : formMode === "manager" ? <><Button type="button" variant="outline" onClick={() => void saveReview("return")} className="rounded-xl border-amber-200/25 text-amber-100">退回補充</Button><Button type="button" variant="outline" onClick={() => void saveReview("draft")} className="rounded-xl border-cyan-200/25 text-cyan-100"><Save className="mr-2 h-4 w-4" />儲存評分</Button><Button type="button" onClick={() => void saveReview("submit")} className="rounded-xl bg-emerald-300 text-[#05251d] hover:bg-emerald-200"><CheckCircle2 className="mr-2 h-4 w-4" />送出評核結果</Button></> : <Button type="button" onClick={() => void saveReview()} className="rounded-xl bg-cyan-300 text-[#062030] hover:bg-cyan-200"><Save className="mr-2 h-4 w-4" />儲存考核</Button>}</DialogFooter>
         </DialogContent>
       </Dialog>
     </section>

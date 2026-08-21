@@ -10,6 +10,15 @@ export const PERFORMANCE_STATUS = {
   approved: { label: "已完成", tone: "emerald" },
 };
 
+export function getPerformanceStatusForAction({ mode, action, currentStatus = "draft" }) {
+  if (mode === "self") return action === "submit" ? "submitted" : "in-progress";
+  if (mode === "manager") {
+    if (action === "return") return "in-progress";
+    if (action === "submit") return "approved";
+  }
+  return currentStatus;
+}
+
 export const DEFAULT_PERFORMANCE_REVIEWS = [
   {
     id: "performance-operator-7",
@@ -26,9 +35,9 @@ export const DEFAULT_PERFORMANCE_REVIEWS = [
     selfFeedback: "已完成工作區權限與協作流程整理。",
     managerFeedback: "",
     goals: [
-      { id: "goal-operator-1", title: "完成工作區權限盤點", progress: 75, weight: 40 },
-      { id: "goal-operator-2", title: "降低跨頁操作等待時間", progress: 50, weight: 30 },
-      { id: "goal-operator-3", title: "建立新人上手文件", progress: 25, weight: 30 },
+      { id: "goal-operator-1", category: "KPI", title: "完成工作區權限盤點", progress: 75, weight: 40 },
+      { id: "goal-operator-2", category: "OKR", title: "降低跨頁操作等待時間", progress: 50, weight: 30 },
+      { id: "goal-operator-3", category: "IDP", title: "建立新人上手文件", progress: 25, weight: 30 },
     ],
   },
   {
@@ -136,6 +145,7 @@ export function normalizePerformanceReview(value) {
     managerFeedback: String(review.managerFeedback || review.manager_feedback || ""),
     goals: goals.map((goal, index) => ({
       id: String(goal?.id || `${review.id || "goal"}-${index + 1}`),
+      category: ["KPI", "OKR", "IDP"].includes(goal?.category) ? goal.category : "KPI",
       title: String(goal?.title || "未命名目標"),
       progress: Math.min(100, Math.max(0, Number(goal?.progress) || 0)),
       weight: Math.max(0, Number(goal?.weight) || 0),
