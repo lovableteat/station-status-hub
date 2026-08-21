@@ -56,9 +56,10 @@ test("performance CSV exports headers, status labels, and escaped values", () =>
 });
 
 test("performance workspace keeps its navigation in a responsive sidebar", async () => {
-  const [pageSource, styleSource] = await Promise.all([
+  const [pageSource, styleSource, shellSource] = await Promise.all([
     readFile(new URL("../src/components/performance/PerformanceAppraisalPage.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/performance/performance.css", import.meta.url), "utf8"),
+    readFile(new URL("../src/pages/Index.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(pageSource, /data-testid="performance-sidebar"/);
@@ -69,6 +70,12 @@ test("performance workspace keeps its navigation in a responsive sidebar", async
   assert.match(pageSource, /團隊考核/);
   assert.match(styleSource, /\.performance-sidebar\.is-collapsed/);
   assert.match(styleSource, /\.performance-sidebar\.is-mobile-open/);
+  assert.match(styleSource, /grid-template-columns: var\(--performance-sidebar-width\)/);
+  assert.match(styleSource, /\.performance-workspace\.is-sidebar-collapsed/);
+  assert.match(styleSource, /\.performance-content\s*\{[\s\S]*overflow-y: auto/);
+  assert.match(styleSource, /overscroll-behavior: contain/);
   assert.match(styleSource, /@media \(max-width: 1180px\)/);
   assert.match(styleSource, /@media \(max-width: 480px\)/);
+  assert.match(shellSource, /activeWorkspace === "performance" && "h-\[100dvh\] overflow-hidden"/);
+  assert.match(shellSource, /activeWorkspace === "performance"[\s\S]*?"min-h-0 overflow-hidden"/);
 });

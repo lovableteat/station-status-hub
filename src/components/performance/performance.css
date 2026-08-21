@@ -3,13 +3,17 @@
   --performance-muted: #9db2c7;
   --performance-border: rgba(132, 189, 223, 0.18);
   --performance-panel: rgba(9, 26, 42, 0.94);
-  display: flex;
+  --performance-sidebar-width: 236px;
+  display: grid;
+  grid-template-columns: var(--performance-sidebar-width) minmax(0, 1fr);
   width: 100%;
+  height: 100%;
   min-width: 0;
-  align-items: flex-start;
+  min-height: 0;
   gap: 12px;
+  box-sizing: border-box;
+  overflow: hidden;
   padding: 12px;
-  min-height: 100%;
   background:
     radial-gradient(circle at 12% 0%, rgba(42, 190, 193, 0.16), transparent 30%),
     radial-gradient(circle at 92% 12%, rgba(242, 181, 73, 0.12), transparent 28%),
@@ -18,19 +22,27 @@
 }
 
 .performance-content {
+  height: 100%;
+  min-height: 0;
   min-width: 0;
-  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.performance-workspace.is-sidebar-collapsed {
+  --performance-sidebar-width: 68px;
 }
 
 .performance-sidebar {
-  position: sticky;
-  top: 12px;
+  position: relative;
   z-index: 30;
   display: flex;
   width: 236px;
-  min-height: calc(100dvh - 104px);
-  max-height: calc(100dvh - 104px);
-  flex: 0 0 auto;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
   flex-direction: column;
   overflow: hidden auto;
   border: 1px solid rgba(103, 232, 249, 0.24);
@@ -630,7 +642,14 @@
 @media (max-width: 1180px) {
   .performance-workspace {
     display: block;
+    height: 100%;
+    min-height: 0;
     padding: 8px;
+  }
+
+  .performance-content {
+    height: 100%;
+    min-height: 0;
   }
 
   .performance-sidebar {
