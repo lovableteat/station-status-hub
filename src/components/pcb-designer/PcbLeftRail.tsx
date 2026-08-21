@@ -31,16 +31,19 @@ import type {
   PcbWorkspaceApi,
 } from "./hooks/usePcbWorkspace.ts";
 
-type LeftTab = "projects" | "templates" | "library" | "bom";
+export type PcbLeftTab = "projects" | "templates" | "library" | "bom";
 
 interface PcbLeftRailProps {
   workspace: PcbWorkspaceApi;
+  activeTab: PcbLeftTab;
+  onActiveTabChange: (tab: PcbLeftTab) => void;
   placementComponentId: string | null;
   onStartPlacement: (componentId: string) => void;
   onNewProject: () => void;
   onEditProject: (project: PcbProject) => void;
   onPreviewProject: (project: PcbProject) => void;
   onSaveTemplate: () => void;
+  onApplyTemplate: (templateId: string) => void;
   onRenameTemplate: (template: PcbTemplate) => void;
   onEditComponent: (component?: PcbLibraryComponent) => void;
   onDeleteProject: (project: PcbProject) => void;
@@ -50,9 +53,9 @@ interface PcbLeftRailProps {
   onBomFile: (file: File) => void;
 }
 
-const tabLabels: Record<LeftTab, string> = {
+const tabLabels: Record<PcbLeftTab, string> = {
   projects: "專案",
-  templates: "模板",
+  templates: "模板中心",
   library: "元件庫",
   bom: "BOM",
 };
@@ -97,12 +100,15 @@ function RowAction({
 
 export function PcbLeftRail({
   workspace,
+  activeTab,
+  onActiveTabChange,
   placementComponentId,
   onStartPlacement,
   onNewProject,
   onEditProject,
   onPreviewProject,
   onSaveTemplate,
+  onApplyTemplate,
   onRenameTemplate,
   onEditComponent,
   onDeleteProject,
@@ -112,11 +118,11 @@ export function PcbLeftRail({
   onBomFile,
 }: PcbLeftRailProps) {
   const { user } = useUser();
-  const [activeTab, setActiveTab] = useState<LeftTab>("projects");
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [templateSourceFilter, setTemplateSourceFilter] = useState("all");
   const normalized = query.trim().toLocaleLowerCase();
   const editorName = user?.displayName?.trim() || user?.username || "尚未登入";
   const editorState = workspace.hasUnsavedChanges ? "編輯中" : "已同步";
@@ -131,8 +137,12 @@ export function PcbLeftRail({
   );
   const templates = useMemo(
     () => workspace.data.templates.filter((item) =>
+      (templateSourceFilter === "all"
+        || (templateSourceFilter === "built-in" && item.isBuiltIn)
+        || (templateSourceFilter === "custom" && !item.isBuiltIn))
+      &&
       `${item.name} ${item.category} ${item.description}`.toLocaleLowerCase().includes(normalized)),
-    [normalized, workspace.data.templates],
+    [normalized, templateSourceFilter, workspace.data.templates],
   );
   const componentTypes = useMemo(
     () => [...new Set(workspace.data.library.map((item) => item.type))].sort(),
@@ -162,7 +172,7 @@ export function PcbLeftRail({
       aria-label="PCB 專案與資源"
     >
       <div className="pcb-rail-tabs" role="tablist" aria-label="PCB 資源分頁">
-        {(Object.keys(tabLabels) as LeftTab[]).map((tab) => (
+        {(Object.keys(tabLabels) as PcbLeftTab[]).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -174,7 +184,7 @@ export function PcbLeftRail({
             role="tab"
             aria-selected={activeTab === tab}
             onClick={() => {
-              setActiveTab(tab);
+              onActiveTabChange(tab);
               setQuery("");
             }}
           >
@@ -207,6 +217,20 @@ export function PcbLeftRail({
               <option value="draft">草稿</option>
               <option value="review">審核中</option>
               <option value="approved">已核准</option>
+            </select>
+          </label>
+        )}
+        {activeTab === "templates" && (
+          <label className="relative mt-2 block">
+            <select
+              value={templateSourceFilter}
+              onChange={(event) => setTemplateSourceFilter(event.target.value)}
+              aria-label="篩選模板來源"
+              className="pcb-control w-full"
+            >
+              <option value="all">全部模板</option>
+              <option value="built-in">內建模板</option>
+              <option value="custom">我的模板</option>
             </select>
           </label>
         )}
@@ -244,7 +268,7 @@ export function PcbLeftRail({
         )}
         {activeTab === "templates" && (
           <Button type="button" size="sm" className="pcb-primary-action" disabled={!workspace.canMutate} onClick={onSaveTemplate}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />儲存目前專案
+            <Plus className="mr-1.5 h-3.5 w-3.5" />另存為模板
           </Button>
         )}
         {activeTab === "library" && (
@@ -316,6 +340,20 @@ export function PcbLeftRail({
         )}
       </div>
 
+      <div className={cn("pcb-rail-context", activeTab === "templates" && "is-template-context")}>
+        <div className="pcb-rail-context-heading">
+          <strong>{activeTab === "templates" ? "模板中心" : activeTab === "projects" ? "專案檔案" : tabLabels[activeTab]}</strong>
+          <span>{activeTab === "templates" ? `${templates.length} 個可用模板` : activeTab === "projects" ? `${projects.length} 個專案` : "工作區資源"}</span>
+        </div>
+        <p>
+          {activeTab === "templates"
+            ? "模板只用來建立新專案，不會覆蓋目前草稿。"
+            : activeTab === "projects"
+              ? "專案是可編輯、可儲存的實際工作版本。"
+              : "管理目前工作區可使用的資源。"}
+        </p>
+      </div>
+
       {activeTab === "projects" && (
         <div className="pcb-project-editor-strip" aria-label="目前內容編輯者">
           <span className="pcb-project-editor-avatar" aria-hidden="true">
@@ -360,15 +398,20 @@ export function PcbLeftRail({
         ))}
 
         {activeTab === "templates" && templates.map((template) => (
-          <div key={template.id} className="pcb-rail-item">
-            <div className="flex items-start justify-between gap-2">
+          <div key={template.id} className="pcb-rail-item pcb-template-card">
+            <div className="pcb-template-card-header">
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-slate-100">{template.name}</p>
                 <p className="mt-0.5 text-[10px] text-slate-400">{template.category} · {template.isBuiltIn ? "內建" : "自訂"}</p>
               </div>
-              <Button type="button" variant="outline" size="sm" className="h-7 rounded-md border-[#356985] px-2 text-[10px]" disabled={!workspace.canMutate} onClick={() => workspace.applyTemplate(template.id)}>
-                套用
+              <Button type="button" variant="outline" size="sm" className="pcb-template-create-button" disabled={!workspace.canMutate} onClick={() => onApplyTemplate(template.id)}>
+                建立專案
               </Button>
+            </div>
+            <p className="pcb-template-description">{template.description}</p>
+            <div className="pcb-template-meta">
+              <span>{template.project.board.width}×{template.project.board.height} mm</span>
+              <span>{template.project.components.length} 個元件</span>
             </div>
             <div className="mt-1 flex justify-end">
               <RowAction label={`重新命名 ${template.name}`} icon={Pencil} disabled={!workspace.canMutate || template.isBuiltIn} onClick={() => onRenameTemplate(template)} />
