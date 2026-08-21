@@ -157,14 +157,18 @@ test("admin workspace uses the maintenance visual system and a responsive sideba
 });
 
 test("admin desktop layout follows its content without leaving forced empty regions", async () => {
-  const [panel, collaboration, styles] = await Promise.all([
+  const [index, panel, collaboration, styles] = await Promise.all([
+    read("../src/pages/Index.tsx"),
     read("../src/components/admin/AdminPanel.tsx"),
     read("../src/components/collaboration/AdminCollaborationPanel.tsx"),
     read("../src/components/admin/admin-panel.css"),
   ]);
 
-  assert.match(styles, /\.admin-shell\s*\{[^}]*min-height:\s*0;[^}]*align-items:\s*flex-start;/s);
-  assert.match(styles, /\.admin-sidebar\s*\{[^}]*min-height:\s*calc\(100dvh - 110px\);[^}]*max-height:\s*none;/s);
+  assert.match(index, /activeWorkspace === "user-management" && "h-\[100dvh\] overflow-hidden"/);
+  assert.match(index, /activeWorkspace === "user-management"\s*\n\s*\? "min-h-0 overflow-hidden"/);
+  assert.match(styles, /\.admin-shell\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*220px minmax\(0, 1fr\);[^}]*height:\s*100%;[^}]*min-height:\s*0;[^}]*align-items:\s*stretch;/s);
+  assert.match(styles, /\.admin-sidebar\s*\{[^}]*position:\s*relative;[^}]*height:\s*100%;[^}]*min-height:\s*0;[^}]*max-height:\s*100%;/s);
+  assert.match(styles, /\.admin-content\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
   assert.match(styles, /\.admin-sidebar nav\s*\{[^}]*flex:\s*1 1 auto;/s);
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.admin-sidebar nav\s*\{[^}]*flex:\s*1;/);
 
