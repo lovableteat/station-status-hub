@@ -97,7 +97,7 @@ export type PcbWorkspaceAction =
   | {
     type: "persistence/hydrate";
     data: PcbSaveState;
-    preserveView?: Pick<PcbWorkspaceState, "zoom" | "viewCenter" | "activeLayer" | "visibleLayer" | "rightTab">
+    preserveView?: Pick<PcbWorkspaceState, "zoom" | "viewCenter" | "activeLayer" | "visibleLayer" | "rightTab" | "selection" | "selectedObjects">
       & { activeProjectId?: string | null };
   }
   | { type: "persistence/touch" }

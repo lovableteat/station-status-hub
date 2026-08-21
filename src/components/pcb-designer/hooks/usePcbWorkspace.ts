@@ -104,6 +104,8 @@ export function usePcbWorkspace({
               activeLayer: localView.activeLayer,
               visibleLayer: localView.visibleLayer,
               rightTab: localView.rightTab,
+              selection: localView.selection,
+              selectedObjects: localView.selectedObjects,
             },
           });
         } else if (initial) {

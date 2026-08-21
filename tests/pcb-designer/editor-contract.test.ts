@@ -427,11 +427,10 @@ test("shows inspector duplication affordances for grouped selections and keepout
   assert.match(inspectorSource, /pcb-selection-count/);
 });
 
-test("provides complete board, selection, DRC, and PNG workflows", () => {
+test("provides complete board, selection, internal DRC, and PNG workflows", () => {
   assert.match(inspectorSource, /rotateSelected/);
   assert.match(inspectorSource, /deleteSelected/);
-  assert.match(inspectorSource, /centerDrcIssue/);
-  assert.match(inspectorSource, /runDrc/);
+  assert.doesNotMatch(inspectorSource, /centerDrcIssue|runDrc/);
   assert.match(inspectorSource, /component[\s\S]*keepout[\s\S]*measurement/i);
   assert.match(editorHookSource, /centerDrcIssue[\s\S]{0,1200}zoom\/set/);
   assert.match(workspaceSource, /exportPcbSvgAsPng/);
@@ -452,7 +451,8 @@ test("provides complete board, selection, DRC, and PNG workflows", () => {
   assert.doesNotMatch(workspaceSource, /toLocaleTimeString/);
   assert.doesNotMatch(workspaceSource, /pcb-drc-header-action/);
   assert.doesNotMatch(workspaceSource, /執行 DRC/);
-  assert.match(workspaceSource, /aria-label="開啟屬性與 DRC 面板"/);
+  assert.match(workspaceSource, /aria-label="開啟屬性面板"/);
+  assert.doesNotMatch(inspectorSource, /DRC \$\{workspace\.drcIssues\.length\}/);
 });
 
 test("keeps STEP model metadata serializable and assignment scoped to the selected component", () => {

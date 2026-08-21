@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Copy, Crosshair, FileUp, Lock, LockOpen, RotateCw, ScanSearch, Scissors, Trash2 } from "lucide-react";
+import { Copy, FileUp, Lock, LockOpen, RotateCw, Scissors, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PcbKeepout, PcbMeasurement, PcbModelAssetMetadata, PcbPlacedComponent } from "./types.ts";
@@ -284,13 +284,12 @@ function ComponentInspector({
         />
       </InspectorField>
       <div className="pcb-inspector-field-grid">
-        <NumberField label="X (mm)" value={component.x} disabled={componentDisabled} onCommit={(x) => workspace.updateComponent(component.instanceId, { x })} />
-        <NumberField label="Y (mm)" value={component.y} disabled={componentDisabled} onCommit={(y) => workspace.updateComponent(component.instanceId, { y })} />
-        <NumberField label="寬 (mm)" value={component.width} disabled={componentDisabled} onCommit={(width) => workspace.updateComponent(component.instanceId, { width })} />
-        <NumberField label="高 (mm)" value={component.height} disabled={componentDisabled} onCommit={(height) => workspace.updateComponent(component.instanceId, { height })} />
-        <NumberField label="最大高度" value={component.maxHeight} disabled={componentDisabled} onCommit={(maxHeight) => workspace.updateComponent(component.instanceId, { maxHeight })} />
+        <NumberField label="長 (mm)" value={component.width} disabled={componentDisabled} onCommit={(width) => workspace.updateComponent(component.instanceId, { width })} />
+        <NumberField label="寬 (mm)" value={component.height} disabled={componentDisabled} onCommit={(height) => workspace.updateComponent(component.instanceId, { height })} />
+        <NumberField label="高 (mm)" value={component.maxHeight} disabled={componentDisabled} onCommit={(maxHeight) => workspace.updateComponent(component.instanceId, { maxHeight })} />
         <NumberField label="旋轉 (°)" value={component.rotation} disabled={componentDisabled} step="90" onCommit={(rotation) => workspace.updateComponent(component.instanceId, { rotation })} />
       </div>
+      <p className="pcb-inspector-note">長、寬、高是元件實體尺寸；位置請直接在畫布拖曳調整。</p>
       <InspectorField label="層">
         <select value={component.layer} disabled={componentDisabled} onChange={(event) => workspace.updateComponent(component.instanceId, { layer: event.target.value as "top" | "bottom" })}>
           <option value="top">Top</option>
@@ -395,32 +394,31 @@ export function PcbInspector({
   workspace: PcbWorkspaceApi;
   onImportModel?: (file: File, componentId: string) => Promise<PcbModelAssetMetadata>;
 }) {
-  const [severity, setSeverity] = useState<"all" | "error" | "warning">("all");
-  const issues = workspace.drcIssues.filter((issue) => severity === "all" || issue.severity === severity);
   const selected = workspace.selection && workspace.selectedObject;
+  const activeTab = workspace.rightTab === "drc" ? "board" : workspace.rightTab;
 
   return (
-    <aside className="pcb-inspector" data-testid="pcb-inspector" aria-label="PCB 屬性與 DRC">
+    <aside className="pcb-inspector" data-testid="pcb-inspector" aria-label="PCB 屬性面板">
       <div className="pcb-inspector-tabs" role="tablist" aria-label="PCB 檢查器分頁">
-        {(["board", "selection", "drc"] as const).map((tab) => (
+        {(["board", "selection"] as const).map((tab) => (
           <button
             key={tab}
             type="button"
             role="tab"
             className={cn(
               "pcb-inspector-tab",
-              workspace.rightTab === tab && "is-active",
+              activeTab === tab && "is-active",
             )}
             onClick={() => workspace.setRightTab(tab)}
-            aria-selected={workspace.rightTab === tab}
+            aria-selected={activeTab === tab}
           >
-            {tab === "board" ? "板設定" : tab === "selection" ? "選取物" : `DRC ${workspace.drcIssues.length}`}
+            {tab === "board" ? "板設定" : "選取物"}
           </button>
         ))}
       </div>
       <div className="pcb-inspector-body">
-        {workspace.rightTab === "board" && <BoardInspector workspace={workspace} />}
-        {workspace.rightTab === "selection" && (
+        {activeTab === "board" && <BoardInspector workspace={workspace} />}
+        {activeTab === "selection" && (
           !selected ? (
             <div className="py-8 text-center text-xs leading-5 text-slate-400">
               尚未選取物件。可在畫布選取元件、禁制區或測量線。
@@ -436,44 +434,6 @@ export function PcbInspector({
           ) : (
             <MeasurementInspector workspace={workspace} measurement={workspace.selectedObject as PcbMeasurement} />
           )
-        )}
-        {workspace.rightTab === "drc" && (
-          <div className="pcb-drc-panel">
-            <div className="pcb-drc-controls">
-              <select value={severity} onChange={(event) => setSeverity(event.target.value as typeof severity)} aria-label="篩選 DRC 嚴重度">
-                <option value="all">全部嚴重度</option>
-                <option value="error">錯誤</option>
-                <option value="warning">警告</option>
-              </select>
-              <Button type="button" variant="outline" size="sm" onClick={workspace.runDrc}>
-                <ScanSearch className="mr-1.5 h-3.5 w-3.5" />重新計算
-              </Button>
-            </div>
-            {issues.length ? (
-              <ul className="pcb-drc-list">
-                {issues.map((issue) => (
-                  <li key={issue.id}>
-                    <button
-                      type="button"
-                      onClick={() => workspace.centerDrcIssue(issue.id)}
-                      aria-label={`選取並置中 ${issue.code}`}
-                    >
-                      <span className="pcb-drc-row-heading">
-                        <span>{issue.code}</span>
-                        <Crosshair className="h-3.5 w-3.5" aria-hidden="true" />
-                      </span>
-                      <span>{issue.message}</span>
-                      <small>{issue.objectIds.join(", ")}</small>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="py-8 text-center text-xs text-emerald-200">
-                {workspace.drcIssues.length ? "此篩選條件沒有問題。" : "目前沒有 DRC 問題。"}
-              </div>
-            )}
-          </div>
         )}
       </div>
     </aside>

@@ -899,6 +899,21 @@ export function reduceWorkspaceState(
         ? hydrated.data.projects.find((project) => project.id === preserve.activeProjectId)
         : undefined;
       const activeProject = requestedProject ?? hydrated.activeProject;
+      const hydratedSelectionState = { ...hydrated, activeProject };
+      const preservedObjectIds = [
+        ...(Array.isArray(preserve.selectedObjects) ? preserve.selectedObjects : []),
+        ...(preserve.selection ? [preserve.selection.id] : []),
+      ];
+      const selectedObjects = preservedObjectIds
+        .filter((objectId) => selectionForObject(hydratedSelectionState, objectId))
+        .filter((objectId, index, objectIds) => objectIds.indexOf(objectId) === index);
+      const preservedSelection = preserve.selection && selectionForObject(hydratedSelectionState, preserve.selection.id)
+        ? clone(preserve.selection)
+        : null;
+      const selection = preservedSelection
+        ?? (selectedObjects[0] ? selectionForObject(hydratedSelectionState, selectedObjects[0]) : null);
+      const selectionHistory = hydrated.selectionHistoryByProject[activeProject.id]
+        ?? createHistoryState(emptySelectionSnapshot());
       return materialize({
         ...hydrated,
         data: { ...hydrated.data, activeProjectId: activeProject.id },
@@ -907,6 +922,15 @@ export function reduceWorkspaceState(
         rightTab: preserve.rightTab,
         zoom: preserve.zoom,
         viewCenter: clone(preserve.viewCenter),
+        selection,
+        selectedObjects,
+        selectionHistoryByProject: {
+          ...hydrated.selectionHistoryByProject,
+          [activeProject.id]: {
+            ...selectionHistory,
+            current: { selection: selection ? clone(selection) : null, selectedObjects: clone(selectedObjects) },
+          },
+        },
       });
     }
     case "persistence/touch":
@@ -928,6 +952,10 @@ export function reduceWorkspaceState(
       return replaceSelectionSnapshot(nextState, { selection, selectedObjects });
     }
     case "drc/run":
-      return { ...state, drcIssues: runDrc(state.activeProject), rightTab: "drc" };
+      return {
+        ...state,
+        drcIssues: runDrc(state.activeProject),
+        rightTab: state.selection ? "selection" : "board",
+      };
   }
 }
