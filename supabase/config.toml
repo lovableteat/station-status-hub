@@ -1,5 +1,8 @@
 project_id = "rfppeuzuoxtqkpbwehbq"
 
+[api]
+schemas = ["public", "workspace"]
+
 [functions.api]
 verify_jwt = false
 

@@ -41,6 +41,7 @@ serve(async (request) => {
     }
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
+      db: { schema: "workspace" },
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: legacyResult, error: legacyError } = await admin.rpc("authenticate_user", {
@@ -118,6 +119,7 @@ serve(async (request) => {
     }
 
     const authClient = createClient(supabaseUrl, anonKey, {
+      db: { schema: "workspace" },
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: sessionData, error: signInError } = await authClient.auth.signInWithPassword({

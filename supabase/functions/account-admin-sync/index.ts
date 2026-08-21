@@ -253,6 +253,7 @@ serve(async (request) => {
     }
 
     const caller = createClient(supabaseUrl, anonKey, {
+      db: { schema: "workspace" },
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -289,6 +290,7 @@ serve(async (request) => {
     }
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
+      db: { schema: "workspace" },
       auth: { persistSession: false, autoRefreshToken: false },
     });
     await drainQueuedAccountCleanups(

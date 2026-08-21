@@ -86,7 +86,7 @@ Vite 預設入口：
 http://localhost:8080/station-status-hub/
 ```
 
-本機需要 Supabase 時，請在 `.env` 提供瀏覽器可公開的專案 URL 與 anon key：
+本機需要 Supabase 時，請複製 [`.env.example`](./.env.example) 為 `.env`，再填入瀏覽器可公開的專案 URL 與 anon key。`.env` 只存在本機，不得加入 Git：
 
 ```dotenv
 VITE_SUPABASE_URL=your-project-url
@@ -94,7 +94,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 VITE_REALTIME_COLLABORATION_V2=true
 ```
 
-不得將 `.env`、service role key、API provider secret、使用者密碼或未遮罩金鑰提交到 Git。
+不得將 `.env`、service role key、API provider secret、使用者密碼或未遮罩金鑰提交到 Git；`.env.example` 只保留變數名稱，不放任何值。
 
 ## 開發與驗證
 
@@ -118,12 +118,13 @@ npm run test:pcb
 - 前端由 `UserProvider`、`PermissionsProvider`、`TestProjectProvider`、`UnifiedDataProvider` 與 `UserPresenceProvider` 統一管理登入、權限、專案和協作狀態。
 - Supabase 是正式資料來源，涵蓋 Auth、Postgres、RLS、Realtime、Storage 與 Edge Functions；localStorage 只用於必要的快速顯示或離線兜底。
 - Migration 放在 [`supabase/migrations`](./supabase/migrations)，正式環境不可 reset、刪除 schema 或任意重播歷史 migration。
+- 應用資料表統一歸檔在 `workspace` schema；Supabase 管理的 `auth`、`storage`、`realtime` schema 不修改。Hosted Supabase 的 API Exposed schemas 必須加入 `workspace`，再套用對應 migration。
 - 權限新增或調整時，必須同步檢查入口顯示、workspace access、細部 module 權限、RLS/RPC 與手機導覽。
 - API 金鑰只顯示遮罩值；建立、測試、停用與刪除流程不得把明文寫入前端 log 或文件。
 
 ## 部署方式
 
-`main` 分支推送後，[GitHub Actions](./.github/workflows/main.yml) 會使用 Node.js 20 安裝依賴、建立 production bundle，並部署到 GitHub Pages。Supabase 連線資訊由 GitHub Actions secrets 提供，不存放在儲存庫。
+`main` 分支推送後，[GitHub Actions](./.github/workflows/main.yml) 會使用 Node.js 20 安裝依賴、建立 production bundle，並部署到 GitHub Pages。`VITE_SUPABASE_URL` 與 `VITE_SUPABASE_ANON_KEY` 由 GitHub Secrets 提供，`VITE_REALTIME_COLLABORATION_V2` 由 GitHub Variables 提供，不存放在儲存庫。
 
 提交前請確認 `git status`，只加入本次正式程式、測試、migration 與文件。`.preview-current/`、`tmp/`、`supabase/.temp/`、本機轉檔產物和未經審核的大型模型不可一併提交。
 
