@@ -31,3 +31,20 @@ test("workspace header pins the shared brand to the top-left without changing th
   assert.match(header, /xl:col-start-2/);
   assert.match(header, /xl:col-start-3/);
 });
+
+test("brand positioning context stays viewport-wide when header content is max-width constrained", () => {
+  const header = read("src/components/layout/MainWorkspaceHeader.tsx");
+
+  assert.match(
+    header,
+    /<header data-mobile-app-header="true" className="platform-color-field relative/
+  );
+  assert.match(
+    header,
+    /<div className="mx-auto grid min-h-\[var\(--mobile-header-height\)\]/
+  );
+  assert.doesNotMatch(
+    header,
+    /<div className="relative mx-auto grid min-h-\[var\(--mobile-header-height\)\]/
+  );
+});
