@@ -8,12 +8,21 @@ const read = async (path: string) =>
 const railSource = await read("src/components/pcb-designer/PcbLeftRail.tsx");
 const editorCssSource = await read("src/components/pcb-designer/pcb-designer.css");
 
-test("shows the current content editor above the project list", () => {
-  assert.match(railSource, /useUser\(\)/);
-  assert.match(railSource, /目前內容編輯者/);
-  assert.match(railSource, /editorName/);
+test("shows the persisted last editor above and on each project card", () => {
+  assert.doesNotMatch(railSource, /useUser\(\)/);
+  assert.match(railSource, /最後編輯者/);
+  assert.match(railSource, /lastEditedBy/);
+  assert.match(railSource, /lastSavedEditor/);
+  assert.match(railSource, /lastSavedProjectId/);
   assert.match(railSource, /workspace\.hasUnsavedChanges/);
   assert.match(railSource, /pcb-project-editor-strip/);
+  assert.match(railSource, /pcb-project-last-editor/);
+});
+
+test("stamps the active project with the account that explicitly saved it", () => {
+  assert.match(railSource, /最後編輯：/);
+  assert.match(railSource, /尚無紀錄/);
+  assert.match(editorCssSource, /\.pcb-project-last-editor\s*\{/);
 });
 
 test("keeps project cards structured with status and a dedicated action row", () => {

@@ -14,7 +14,6 @@ import {
   UserRound,
   Upload,
 } from "lucide-react";
-import { useUser } from "@/components/auth/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
@@ -117,15 +116,16 @@ export function PcbLeftRail({
   onLibraryFile,
   onBomFile,
 }: PcbLeftRailProps) {
-  const { user } = useUser();
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [templateSourceFilter, setTemplateSourceFilter] = useState("all");
   const normalized = query.trim().toLocaleLowerCase();
-  const editorName = user?.displayName?.trim() || user?.username || "尚未登入";
-  const editorState = workspace.hasUnsavedChanges ? "編輯中" : "已同步";
+  const activeEditorName = workspace.lastSavedProjectId === workspace.activeProject.id
+    ? workspace.lastSavedEditor ?? workspace.activeProject.lastEditedBy ?? "尚無紀錄"
+    : workspace.activeProject.lastEditedBy ?? "尚無紀錄";
+  const editorState = workspace.hasUnsavedChanges ? "尚未儲存" : "已同步";
 
   const projects = useMemo(
     () => [...workspace.data.projects]
@@ -355,14 +355,14 @@ export function PcbLeftRail({
       </div>
 
       {activeTab === "projects" && (
-        <div className="pcb-project-editor-strip" aria-label="目前內容編輯者">
+        <div className="pcb-project-editor-strip" aria-label="最後編輯者">
           <span className="pcb-project-editor-avatar" aria-hidden="true">
             <UserRound className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <span className="pcb-project-editor-label">目前內容編輯者</span>
+            <span className="pcb-project-editor-label">最後編輯者</span>
             <div className="pcb-project-editor-line">
-              <strong className="truncate">{editorName}</strong>
+              <strong className="truncate">{activeEditorName}</strong>
               <span className={cn("pcb-project-editor-state", workspace.hasUnsavedChanges && "is-editing")}>
                 {workspace.hasUnsavedChanges ? <PencilLine className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
                 {editorState}
@@ -385,6 +385,11 @@ export function PcbLeftRail({
                 <span className={cn("pcb-project-status", `is-${project.status}`)}>{projectStatusLabels[project.status]}</span>
                 <span aria-hidden="true">·</span>
                 <span>{project.board.width}×{project.board.height} mm</span>
+              </span>
+              <span className="pcb-project-last-editor">
+                最後編輯：{workspace.lastSavedProjectId === project.id
+                  ? workspace.lastSavedEditor ?? project.lastEditedBy ?? "尚無紀錄"
+                  : project.lastEditedBy ?? "尚無紀錄"}
               </span>
             </button>
             <div className="pcb-project-actions">

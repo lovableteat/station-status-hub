@@ -121,6 +121,13 @@ export function PcbDesignerWorkspace({
   const workspace = usePcbWorkspace({
     canEdit: canEditModule("pcb-designer"),
     remoteClient,
+    editor: user
+      ? {
+        userId: user.userId,
+        username: user.username,
+        displayName: user.displayName,
+      }
+      : null,
   });
   const { saveNow, setTool } = workspace;
   const [dialog, setDialog] = useState<PcbDialogState | null>(null);

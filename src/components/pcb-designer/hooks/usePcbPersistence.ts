@@ -9,11 +9,18 @@ import type { PcbSaveState } from "../types.ts";
 
 export type { PcbPersistenceStatus, PcbRemoteClient } from "../core/remoteSync.ts";
 
+export interface PcbEditorIdentity {
+  userId: string;
+  username: string;
+  displayName: string;
+}
+
 export interface UsePcbPersistenceOptions {
   state: PcbSaveState;
   storage?: StorageLike;
   remoteClient?: PcbRemoteClient | null;
   allowRemoteSync?: boolean;
+  editor?: PcbEditorIdentity | null;
 }
 
 export interface PcbPersistenceControl {
@@ -21,6 +28,8 @@ export interface PcbPersistenceControl {
   markClean: (revision?: string) => void;
   saveNow: () => Promise<boolean>;
   status: PcbPersistenceStatus;
+  lastSavedEditor: string | null;
+  lastSavedProjectId: string | null;
 }
 
 const localOnlyStorage: StorageLike = {
@@ -43,6 +52,7 @@ export function usePcbPersistence({
   storage,
   remoteClient,
   allowRemoteSync = false,
+  editor,
 }: UsePcbPersistenceOptions): PcbPersistenceControl {
   const repository = useMemo(() => new PcbLocalRepository(storage ?? browserStorage()), [storage]);
   const client = allowRemoteSync ? remoteClient ?? null : null;
@@ -53,6 +63,8 @@ export function usePcbPersistence({
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
   const [savedRevision, setSavedRevision] = useState(state.updatedAt);
   const [status, setStatus] = useState<PcbPersistenceStatus>(client ? "synced" : "local");
+  const [lastSavedEditor, setLastSavedEditor] = useState<string | null>(null);
+  const [lastSavedProjectId, setLastSavedProjectId] = useState<string | null>(null);
 
   stateRef.current = state;
   repositoryRef.current = repository;
@@ -87,6 +99,19 @@ export function usePcbPersistence({
 
   const saveNow = useCallback(async () => {
     const snapshot = structuredClone(stateRef.current);
+    const editorLabel = editor?.displayName?.trim() || editor?.username?.trim() || null;
+    const activeProjectId = snapshot.activeProjectId;
+    if (editorLabel && activeProjectId) {
+      snapshot.projects = snapshot.projects.map((project) => project.id === activeProjectId
+        ? {
+          ...project,
+          lastEditedBy: editorLabel,
+          lastEditedById: editor.userId,
+        }
+        : project);
+      setLastSavedEditor(editorLabel);
+      setLastSavedProjectId(activeProjectId);
+    }
     repositoryRef.current.save(snapshot);
     setSavedRevision(snapshot.updatedAt);
 
@@ -108,12 +133,14 @@ export function usePcbPersistence({
       setStatus(saved ? "synced" : "local");
     }
     return saved;
-  }, [client]);
+  }, [client, editor]);
 
   return {
     hasUnsavedChanges,
     markClean,
     saveNow,
     status: hasUnsavedChanges ? "unsaved" : status,
+    lastSavedEditor,
+    lastSavedProjectId,
   };
 }

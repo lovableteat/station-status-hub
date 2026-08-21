@@ -22,6 +22,7 @@ import type {
 import { usePcbEditorActions } from "./usePcbEditorActions.ts";
 import {
   usePcbPersistence,
+  type PcbEditorIdentity,
   type PcbRemoteClient,
 } from "./usePcbPersistence.ts";
 import { loadPcbRemote, mergePcbRemoteState } from "../core/remoteSync.ts";
@@ -30,6 +31,7 @@ export interface UsePcbWorkspaceOptions {
   canEdit: boolean;
   storage?: StorageLike;
   remoteClient?: PcbRemoteClient | null;
+  editor?: PcbEditorIdentity | null;
 }
 
 function browserStorage(): StorageLike {
@@ -43,6 +45,7 @@ export function usePcbWorkspace({
   canEdit,
   storage,
   remoteClient,
+  editor: editorIdentity,
 }: UsePcbWorkspaceOptions) {
   const repository = useMemo(
     () => new PcbLocalRepository(storage ?? browserStorage()),
@@ -66,6 +69,7 @@ export function usePcbWorkspace({
     storage,
     remoteClient,
     allowRemoteSync: canEdit && Boolean(remoteClient) && remoteReady,
+    editor: editorIdentity,
   });
   const { markClean } = persistence;
   hasUnsavedChangesRef.current = persistence.hasUnsavedChanges;
@@ -298,6 +302,8 @@ export function usePcbWorkspace({
     selectedObjects: state.selectedObjects,
     persistenceStatus: persistence.status,
     hasUnsavedChanges: persistence.hasUnsavedChanges,
+    lastSavedEditor: persistence.lastSavedEditor,
+    lastSavedProjectId: persistence.lastSavedProjectId,
     createProject,
     openProject,
     renameProject,
