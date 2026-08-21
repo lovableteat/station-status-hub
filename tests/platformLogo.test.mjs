@@ -65,3 +65,14 @@ test("workspace header pins the control group to the viewport right edge", () =>
     /absolute right-\[max\(0\.625rem,env\(safe-area-inset-right\)\)\] top-1\/2[^\"]*-translate-y-1\/2/
   );
 });
+
+test("header controls use distinct semantic color families", () => {
+  const header = read("src/components/layout/MainWorkspaceHeader.tsx");
+  const online = read("src/components/common/OnlineUsersIndicator.tsx");
+  const mobile = read("src/components/layout/WebsiteQrButton.tsx");
+
+  assert.match(online, /emerald-300\/10/);
+  assert.match(mobile, /cyan-300\/10/);
+  assert.match(header, /indigo-300\/10/);
+  assert.match(header, /rose-300\/10/);
+});

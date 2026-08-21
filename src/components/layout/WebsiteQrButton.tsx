@@ -80,7 +80,7 @@ export function WebsiteQrButton() {
           type="button"
           variant="outline"
           aria-label="顯示手機開啟二維碼"
-          className="interactive-lift h-11 w-11 shrink-0 rounded-xl border-cyan-200/25 bg-cyan-300/10 p-0 text-cyan-100 shadow-[0_16px_30px_-24px_rgba(34,211,238,0.8)] hover:border-cyan-200/50 hover:bg-cyan-300/18 hover:text-white sm:h-12 sm:w-12 sm:rounded-2xl 2xl:w-auto 2xl:px-4"
+          className="interactive-lift h-11 w-11 shrink-0 rounded-xl border-cyan-200/35 bg-cyan-300/10 p-0 text-cyan-50 shadow-[0_16px_30px_-24px_rgba(34,211,238,0.8)] hover:border-cyan-200/60 hover:bg-cyan-300/20 hover:text-white sm:h-12 sm:w-12 sm:rounded-2xl 2xl:w-auto 2xl:px-4"
         >
           <QrCode className="h-5 w-5 2xl:mr-2" />
           <span className="hidden text-sm font-bold 2xl:inline">手機開啟</span>

@@ -129,7 +129,7 @@ export function MainWorkspaceHeader({
               <button
                 type="button"
                 title={userMenuItems.length > 0 ? "開啟帳號選單，可編輯大頭貼" : "開啟帳號選單"}
-                className="interactive-lift flex h-10 w-[140px] shrink-0 items-center gap-2 rounded-xl border border-primary/15 bg-background/20 px-3 text-left transition-colors hover:bg-primary/10 hover:shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.55)] max-sm:w-10 max-sm:justify-center max-sm:px-0 sm:h-12 sm:rounded-2xl sm:gap-3"
+                className="interactive-lift flex h-10 w-[140px] shrink-0 items-center gap-2 rounded-xl border border-indigo-200/30 bg-indigo-300/10 px-3 text-left text-indigo-50 transition-colors hover:bg-indigo-300/18 hover:shadow-[0_16px_28px_-24px_rgba(99,102,241,0.6)] max-sm:w-10 max-sm:justify-center max-sm:px-0 sm:h-12 sm:rounded-2xl sm:gap-3"
               >
                 <span className="relative shrink-0">
                   <UserAvatar
@@ -212,7 +212,7 @@ export function MainWorkspaceHeader({
             variant="outline"
             size="sm"
             onClick={onLogout}
-            className="hidden h-12 rounded-2xl border-primary/20 bg-background/20 px-4 text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive 2xl:inline-flex"
+            className="hidden h-12 rounded-2xl border-rose-300/30 bg-rose-300/10 px-4 text-sm text-rose-100 hover:border-rose-200/50 hover:bg-rose-300/18 hover:text-rose-50 2xl:inline-flex"
           >
             <LogOut className="mr-2 h-4 w-4" />
             登出
