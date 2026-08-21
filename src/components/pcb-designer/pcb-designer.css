@@ -1697,6 +1697,17 @@
   line-height: 1.1;
 }
 
+.pcb-project-last-editor {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: #8faeca;
+  font-size: 9px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .pcb-project-editor-line {
   display: flex;
   min-width: 0;

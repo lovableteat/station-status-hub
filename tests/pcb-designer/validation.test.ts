@@ -167,6 +167,22 @@ test("normalizes legacy project JSON before it reaches the editor", () => {
   }
 });
 
+test("accepts optional last editor metadata without changing legacy projects", () => {
+  const project = validProject();
+  const parsed = parseProjectJson({
+    ...project,
+    lastEditedBy: "Vincent",
+    lastEditedById: "user-vincent",
+  });
+
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(parsed.value.lastEditedBy, "Vincent");
+    assert.equal(parsed.value.lastEditedById, "user-vincent");
+  }
+  assert.equal(parseProjectJson(project).ok, true);
+});
+
 test("rejects non-finite dimensions and positions", () => {
   const project = validProject();
   project.components[0].width = Number.NaN;

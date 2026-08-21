@@ -129,6 +129,10 @@ export interface PcbProject {
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
+  /** Display name captured when this project was explicitly saved. */
+  lastEditedBy?: string;
+  /** Stable account id captured with lastEditedBy for audit and future lookup. */
+  lastEditedById?: string;
 }
 
 export interface PcbDrcIssue {

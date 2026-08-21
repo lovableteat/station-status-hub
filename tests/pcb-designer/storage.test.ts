@@ -60,6 +60,23 @@ test("round-trips a versioned save payload through the configured storage key", 
   assert.equal(new PcbLocalRepository(storage).load().projects[0].name, "Saved PCB");
 });
 
+test("round-trips the project last editor metadata", () => {
+  const storage = new MemoryStorage();
+  const repository = new PcbLocalRepository(storage);
+  const state = repository.load();
+  const project = {
+    ...state.projects[0],
+    lastEditedBy: "Vincent",
+    lastEditedById: "user-vincent",
+  };
+
+  repository.save({ ...state, projects: [project], activeProjectId: project.id });
+
+  const loaded = new PcbLocalRepository(storage).load();
+  assert.equal(loaded.projects[0].lastEditedBy, "Vincent");
+  assert.equal(loaded.projects[0].lastEditedById, "user-vincent");
+});
+
 test("quarantines corrupted JSON and returns a safe seeded fallback", () => {
   const storage = new MemoryStorage();
   storage.setItem(PCB_STORAGE_KEY, "{not-json");

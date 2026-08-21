@@ -248,6 +248,8 @@ export function parseProjectJson(input: unknown): ParseResult<PcbProject> {
     return { ok: false, error: "Project contains required strings that are missing." };
   }
   if (value.createdBy !== undefined && !isNonEmptyString(value.createdBy)) return { ok: false, error: "createdBy must be a string." };
+  if (value.lastEditedBy !== undefined && !isNonEmptyString(value.lastEditedBy)) return { ok: false, error: "lastEditedBy must be a string." };
+  if (value.lastEditedById !== undefined && !isNonEmptyString(value.lastEditedById)) return { ok: false, error: "lastEditedById must be a string." };
   if (value.status !== "draft" && value.status !== "review" && value.status !== "approved") return { ok: false, error: "Project status is invalid." };
   if (!isValidBoard(value.board)) return { ok: false, error: "Board is invalid." };
   if (!Array.isArray(value.components) || !Array.isArray(value.keepouts) || !Array.isArray(value.measurements)) {

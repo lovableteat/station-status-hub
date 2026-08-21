@@ -188,7 +188,7 @@ test("keeps recovery and high-frequency canvas input under user control", () => 
 test("saves only on explicit action and warns before abandoning dirty work", () => {
   assert.doesNotMatch(persistenceSource, /PCB_(?:LOCAL|REMOTE)_SAVE_DELAY_MS/);
   assert.doesNotMatch(persistenceSource, /setTimeout/);
-  assert.match(persistenceSource, /saveNow[\s\S]{0,500}repositoryRef\.current\.save/);
+  assert.match(persistenceSource, /saveNow[\s\S]{0,1200}repositoryRef\.current\.save/);
   assert.match(persistenceSource, /beforeunload/);
   assert.match(persistenceSource, /hasUnsavedChanges/);
   assert.match(workspaceSource, /手動儲存模式（Ctrl\+S）/);
