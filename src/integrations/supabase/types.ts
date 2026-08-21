@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type Database = {
+type BaseDatabase = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
@@ -3931,6 +3931,10 @@ export type Database = {
       [_ in never]: never
     }
   }
+}
+
+export type Database = BaseDatabase & {
+  workspace: BaseDatabase["public"]
 }
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">

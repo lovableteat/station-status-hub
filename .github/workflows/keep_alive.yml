@@ -14,4 +14,5 @@ jobs:
           # 🌟 重點：加上 apikey 與查詢指令，去翻動剛才建好的 keep_alive_check 表
           curl -X GET "${{ secrets.VITE_SUPABASE_URL }}/rest/v1/keep_alive_check?select=*" \
           -H "apikey: ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.VITE_SUPABASE_ANON_KEY }}"
+          -H "Authorization: Bearer ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
+          -H "Accept-Profile: workspace"
