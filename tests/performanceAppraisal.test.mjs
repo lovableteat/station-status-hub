@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   calculatePerformanceSummary,
   DEFAULT_PERFORMANCE_REVIEWS,
+  getPerformanceStatusForAction,
   normalizePerformanceReview,
   toPerformanceCsv,
 } from "../src/components/performance/performanceData.mjs";
@@ -39,6 +40,14 @@ test("performance rows normalize cloud snake_case data and keep goal progress sa
   assert.equal(review.status, "draft");
   assert.equal(review.score, 88);
   assert.equal(review.goals[0].progress, 100);
+  assert.equal(review.goals[0].category, "KPI");
+});
+
+test("performance workflow maps employee and manager actions to the review status", () => {
+  assert.equal(getPerformanceStatusForAction({ mode: "self", action: "draft", currentStatus: "draft" }), "in-progress");
+  assert.equal(getPerformanceStatusForAction({ mode: "self", action: "submit", currentStatus: "in-progress" }), "submitted");
+  assert.equal(getPerformanceStatusForAction({ mode: "manager", action: "return", currentStatus: "submitted" }), "in-progress");
+  assert.equal(getPerformanceStatusForAction({ mode: "manager", action: "submit", currentStatus: "submitted" }), "approved");
 });
 
 test("performance CSV exports headers, status labels, and escaped values", () => {
