@@ -639,7 +639,11 @@ export function PerformanceAppraisalPage() {
   };
 
   return (
-    <section className="performance-workspace min-h-full" data-workspace="performance" data-performance-shell="true">
+    <section
+      className={cn("performance-workspace", sidebarCollapsed && "is-sidebar-collapsed")}
+      data-workspace="performance"
+      data-performance-shell="true"
+    >
       <PerformanceSidebar
         activeTab={activeTab}
         canEdit={canEdit}

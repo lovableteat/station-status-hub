@@ -655,6 +655,7 @@ const Index = () => {
         activeWorkspace === "data-center" && "h-[100dvh] overflow-hidden",
         activeWorkspace === "pcb-designer" && "h-[100dvh] overflow-hidden",
         activeWorkspace === "ai-chat" && "h-[100dvh] overflow-hidden",
+        activeWorkspace === "performance" && "h-[100dvh] overflow-hidden",
         activeWorkspace === "station-status" && "lg:h-[100dvh] lg:overflow-hidden"
       )}
     >
@@ -695,6 +696,8 @@ const Index = () => {
             : activeWorkspace === "pcb-designer"
               ? "min-h-0 overflow-hidden"
             : activeWorkspace === "ai-chat"
+              ? "min-h-0 overflow-hidden"
+            : activeWorkspace === "performance"
               ? "min-h-0 overflow-hidden"
             : activeWorkspace === "station-status"
               ? "min-h-0 lg:overflow-hidden"
