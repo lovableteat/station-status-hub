@@ -7,12 +7,14 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("browser Supabase client reads deployment environment and uses workspace schema", () => {
+test("browser Supabase client stays on public until the deployment schema is switched", () => {
   const source = read("src/integrations/supabase/client.ts");
 
   assert.match(source, /import\.meta\.env\.VITE_SUPABASE_URL/);
   assert.match(source, /import\.meta\.env\.VITE_SUPABASE_ANON_KEY/);
-  assert.match(source, /schema:\s*["']workspace["']/);
+  assert.match(source, /import\.meta\.env\.VITE_SUPABASE_SCHEMA/);
+  assert.match(source, /VITE_SUPABASE_SCHEMA\s*\?\?\s*["']public["']/);
+  assert.match(source, /schema:\s*SUPABASE_SCHEMA/);
   const jwtLikePrefix = ["eyJ", "hbGciOiJIUzI1NiIs"].join("");
   assert.doesNotMatch(source, new RegExp(jwtLikePrefix));
   assert.doesNotMatch(source, /https:\/\/[^"']+\.supabase\.co/);
@@ -35,6 +37,21 @@ test("workspace schema migration archives application tables and grants API role
   assert.match(migration, /grant select, insert, update, delete on all tables in schema workspace/i);
 });
 
+test("edge functions stay on public until the remote schema cutover is enabled", () => {
+  const functionFiles = [
+    "supabase/functions/api/index.ts",
+    "supabase/functions/account-login/index.ts",
+    "supabase/functions/account-admin-sync/index.ts",
+    "supabase/functions/daily-stats/index.ts",
+  ];
+
+  for (const functionFile of functionFiles) {
+    const source = read(functionFile);
+    assert.match(source, /Deno\.env\.get\(["']SUPABASE_DB_SCHEMA["']\)\s*\?\?\s*["']public["']/);
+    assert.match(source, /schema:\s*supabaseSchema/);
+  }
+});
+
 test("deployment workflows use Secrets, Variables, and the workspace profile", () => {
   const main = read(".github/workflows/main.yml");
   const keepAlive = read(".github/workflows/keep_alive.yml");
@@ -42,5 +59,6 @@ test("deployment workflows use Secrets, Variables, and the workspace profile", (
   assert.match(main, /VITE_SUPABASE_URL:\s*\$\{\{\s*secrets\.VITE_SUPABASE_URL\s*\}\}/);
   assert.match(main, /VITE_SUPABASE_ANON_KEY:\s*\$\{\{\s*secrets\.VITE_SUPABASE_ANON_KEY\s*\}\}/);
   assert.match(main, /VITE_REALTIME_COLLABORATION_V2:\s*\$\{\{\s*vars\.VITE_REALTIME_COLLABORATION_V2/);
-  assert.match(keepAlive, /Accept-Profile:\s*workspace/);
+  assert.match(main, /VITE_SUPABASE_SCHEMA:\s*\$\{\{\s*vars\.VITE_SUPABASE_SCHEMA\s*\|\|\s*["']public["']/);
+  assert.match(keepAlive, /Accept-Profile:\s*\$\{\{\s*vars\.SUPABASE_DB_SCHEMA\s*\|\|\s*["']public["']/);
 });

@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const supabaseSchema = Deno.env.get("SUPABASE_DB_SCHEMA") ?? "public";
+
 const respond = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -253,7 +255,7 @@ serve(async (request) => {
     }
 
     const caller = createClient(supabaseUrl, anonKey, {
-      db: { schema: "workspace" },
+      db: { schema: supabaseSchema },
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -290,7 +292,7 @@ serve(async (request) => {
     }
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
-      db: { schema: "workspace" },
+      db: { schema: supabaseSchema },
       auth: { persistSession: false, autoRefreshToken: false },
     });
     await drainQueuedAccountCleanups(
