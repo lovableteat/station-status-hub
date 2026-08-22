@@ -44,7 +44,7 @@ test("login explains quota restrictions instead of reporting a generic credentia
 
   assert.match(login, /isSupabaseServiceRestrictedError\(error\)/);
   assert.match(login, /SUPABASE_EGRESS_RESTRICTION_MESSAGE/);
-  assert.match(login, /系統服務暫時中斷/);
+  assert.match(SUPABASE_EGRESS_RESTRICTION_MESSAGE, /暫時停止回應/);
 });
 
 test("station data uses one shared provider and skips backend traffic while signed out", async () => {

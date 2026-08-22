@@ -98,8 +98,8 @@ test("metadata seed migration preserves user edits and the hardening hook seeds 
 test("generated database types expose both dynamic metadata tables", async () => {
   const source = await readFile(typesUrl, "utf8");
 
-  const fields = source.match(/test_project_system_fields: \{([\s\S]*?)\n      \}\n      test_project_tool_assignments:/i)?.[1];
-  const values = source.match(/test_system_field_values: \{([\s\S]*?)\n      \}\n      test_systems:/i)?.[1];
+  const fields = source.match(/test_project_system_fields: \{([\s\S]*?)\r?\n      \}\r?\n      test_project_tool_assignments:/i)?.[1];
+  const values = source.match(/test_system_field_values: \{([\s\S]*?)\r?\n      \}\r?\n      test_systems:/i)?.[1];
 
   assert.ok(fields, "expected a test_project_system_fields table definition");
   assert.ok(values, "expected a test_system_field_values table definition");

@@ -139,7 +139,7 @@ test("admin permission editor explains inherited Test_Plan access instead of exp
     "src/components/admin/UserPermissionsDialog.tsx",
   );
 
-  assert.match(dialog, /資料儲存隨機台維修紀錄中心啟用/);
+  assert.match(dialog, /資料儲存權限會跟隨「機台維修紀錄中心」/);
   assert.match(dialog, /\.filter\(\(\[groupKey\]\)\s*=>\s*groupKey\s*!==\s*"test_plan"\)/);
 });
 

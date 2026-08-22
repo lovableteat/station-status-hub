@@ -579,7 +579,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                         "h-full w-full min-w-0 rounded-xl border border-[#315d78]/75 bg-[#0a1c2e] p-4 text-left outline-none transition-colors hover:border-cyan-300/45 hover:bg-[#10283c] focus-visible:ring-2 focus-visible:ring-cyan-300/70",
                         isBottleneck && "border-amber-300/55 bg-amber-300/[0.08] hover:border-amber-200/70 hover:bg-amber-300/[0.11]"
                       )}
-                      onClick={() => onNavigate?.("test-tracker", { station: station.id })}
+                      onClick={() => onNavigate?.("test-tracker", { station: station.id, excludeStatus: "completed" })}
                     >
                       <div className="flex min-h-20 flex-col justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold tracking-wide">
@@ -789,9 +789,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               variant="outline"
               size="sm"
               className="h-8 shrink-0 border-cyan-300/30 bg-cyan-300/[0.07] text-cyan-100 hover:bg-cyan-300/[0.13]"
-              onClick={() => onNavigate?.("test-tracker")}
+              onClick={() => onNavigate?.("monitor", { attention: "1" })}
             >
-              開啟測試追蹤
+              開啟生產監控牆
             </Button>
           </div>
 
@@ -842,7 +842,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                     variant="ghost"
                     size="sm"
                     className="mt-3 h-8 w-full justify-between border border-[#315d78]/70 bg-[#10283b] px-3 text-xs text-cyan-100 hover:bg-[#17364d]"
-                    onClick={() => onNavigate?.("monitor", { system: system.system_name })}
+                    onClick={() => onNavigate?.("test-tracker", { system: system.id })}
                   >
                     查看機台
                     <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />

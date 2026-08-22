@@ -12,6 +12,7 @@ import {
   Server,
   TimerReset,
   UserRound,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -149,6 +150,10 @@ export function ProductionMonitor() {
   const [engineerFilter, setEngineerFilter] = useState("all");
   const [onlyErrors, setOnlyErrors] = useState(false);
   const [onlyOverdue, setOnlyOverdue] = useState(false);
+  const [attentionFilter, setAttentionFilter] = useState(() =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("attention") === "1"
+  );
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -163,6 +168,14 @@ export function ProductionMonitor() {
     document.addEventListener("fullscreenchange", syncFullscreenState);
     return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (attentionFilter) url.searchParams.set("attention", "1");
+    else url.searchParams.delete("attention");
+    window.history.replaceState({}, "", url);
+  }, [attentionFilter]);
 
   const sortedStations = useMemo(
     () => [...stations].sort((left, right) => left.station_order - right.station_order),
@@ -292,6 +305,19 @@ export function ProductionMonitor() {
     [systems]
   );
 
+  const attentionSystemIds = useMemo(() => new Set(
+    systemViews
+      .filter((view) => view.state !== "completed" && view.system.include_in_dashboard !== false)
+      .sort((left, right) =>
+        Number(right.state === "error") - Number(left.state === "error") ||
+        Number(right.overdue) - Number(left.overdue) ||
+        (left.system.overall_progress ?? 0) - (right.system.overall_progress ?? 0) ||
+        left.system.system_name.localeCompare(right.system.system_name, "zh-Hant")
+      )
+      .slice(0, 5)
+      .map((view) => view.system.id)
+  ), [systemViews]);
+
   const filteredViews = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
     return systemViews.filter((view) => {
@@ -310,11 +336,12 @@ export function ProductionMonitor() {
         matchesState &&
         matchesStation &&
         matchesEngineer &&
+        (!attentionFilter || attentionSystemIds.has(system.id)) &&
         (!onlyErrors || view.state === "error") &&
         (!onlyOverdue || view.overdue)
       );
     });
-  }, [engineerFilter, onlyErrors, onlyOverdue, searchTerm, stationFilter, statusFilter, systemViews]);
+  }, [attentionFilter, attentionSystemIds, engineerFilter, onlyErrors, onlyOverdue, searchTerm, stationFilter, statusFilter, systemViews]);
 
   const stateCounts = useMemo(
     () =>
@@ -510,6 +537,17 @@ export function ProductionMonitor() {
         >
           <Hourglass className="h-3.5 w-3.5" />只看超時
         </button>
+        {attentionFilter && (
+          <button
+            type="button"
+            className="flex h-9 items-center gap-2 rounded-lg border border-amber-300/45 bg-amber-300/12 px-3 text-xs font-semibold text-amber-100"
+            onClick={() => setAttentionFilter(false)}
+            aria-label="清除需關注機台篩選"
+          >
+            需關注機台
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        )}
         <Badge variant="outline" className="font-data ml-auto h-8 rounded-lg border-blue-300/35 bg-blue-300/10 px-3 text-blue-100">
           {filteredViews.length} 台
         </Badge>

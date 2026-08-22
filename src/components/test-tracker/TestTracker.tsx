@@ -15,6 +15,7 @@ import {
   List,
   Search,
   SlidersHorizontal,
+  X,
 } from "lucide-react";
 
 import { MaintenanceLoading } from "@/components/maintenance/MaintenanceLoading";
@@ -30,7 +31,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -52,6 +52,14 @@ import { SystemEditDialog } from "./SystemEditDialog";
 import { SystemManager } from "./SystemManager";
 import { SystemProgressSheet } from "./SystemProgressSheet";
 import { TestProgressTable } from "./TestProgressTable";
+import {
+  buildTrackerBoardLanes,
+  createStationIncompleteSystemIds,
+  filterAndSortTrackerSystems,
+  normalizeTrackerSystemStatus,
+  parseTrackerAutoFilters,
+} from "./testTrackerFilters";
+import type { TrackerSort } from "./testTrackerFilters";
 import {
   DEFAULT_TRACKER_PAGE_SIZE,
   TRACKER_PAGE_SIZE_OPTIONS,
@@ -161,29 +169,6 @@ function ProgressSparkline({ values }: { values: number[] }) {
   );
 }
 
-function normalizeSystemStatus(system: {
-  current_station?: string | null;
-  overall_progress?: number | null;
-  status?: string | null;
-}) {
-  if (
-    system.status === "Done" ||
-    system.status === "已完成" ||
-    system.current_station === "已完成" ||
-    system.overall_progress === 100
-  ) {
-    return "已完成";
-  }
-  if (
-    system.status === "On-going" ||
-    system.status === "進行中" ||
-    (system.overall_progress ?? 0) > 0
-  ) {
-    return "進行中";
-  }
-  return "未開始";
-}
-
 function updateTrackerViewQuery(view: TrackerView) {
   const url = new URL(window.location.href);
   url.searchParams.set("trackerView", view);
@@ -206,10 +191,43 @@ export function TestTracker() {
     activeVersion,
     selectedVersionId,
   } = useFlowVersions();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [engineerFilter, setEngineerFilter] = useState("all");
+  const [searchTerm, setSearchTerm] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : new URLSearchParams(window.location.search).get("trackerSearch") ?? ""
+  );
+  const [engineerFilter, setEngineerFilter] = useState(() =>
+    typeof window === "undefined"
+      ? "all"
+      : new URLSearchParams(window.location.search).get("engineer") ?? "all"
+  );
   const [stationFilter, setStationFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+    if (typeof window === "undefined") return "all";
+    const requested = new URLSearchParams(window.location.search).get("status");
+    return requested === "未開始" || requested === "進行中" || requested === "已完成"
+      ? requested
+      : "all";
+  });
+  const [sortOrder, setSortOrder] = useState<TrackerSort>(() => {
+    if (typeof window === "undefined") return "machine-asc";
+    const requested = new URLSearchParams(window.location.search).get("sort");
+    return requested === "machine-desc" ||
+      requested === "created-desc" ||
+      requested === "created-asc"
+      ? requested
+      : "machine-asc";
+  });
+  const [systemFilter, setSystemFilter] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : parseTrackerAutoFilters(new URLSearchParams(window.location.search)).system
+  );
+  const [excludeCompleted, setExcludeCompleted] = useState(() =>
+    typeof window !== "undefined" &&
+    parseTrackerAutoFilters(new URLSearchParams(window.location.search)).excludeCompleted
+  );
+  const [urlFiltersHydrated, setUrlFiltersHydrated] = useState(false);
   const [view, setView] = useState<TrackerView>(() => {
     if (typeof window === "undefined") return "table";
     return new URLSearchParams(window.location.search).get("trackerView") === "board"
@@ -230,34 +248,48 @@ export function TestTracker() {
   const [displayItems, setDisplayItems] = useState(items);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !systems.length) return;
+    if (typeof window === "undefined" || urlFiltersHydrated) return;
+    const parsed = parseTrackerAutoFilters(new URLSearchParams(window.location.search));
+    if (parsed.station && !displayStations.length) return;
 
-    const params = new URLSearchParams(window.location.search);
-    const requestedSystem = params.get("system");
-    if (!requestedSystem) return;
-
-    const matchedSystem = systems.find(
-      (system) => system.id === requestedSystem || system.system_name === requestedSystem
-    );
-    if (!matchedSystem) return;
-
-    const requestedStationValue = params.get("station");
-    const requestedStation = requestedStationValue
+    const matchedStation = parsed.station
       ? displayStations.find(
           (station) =>
-            station.id === requestedStationValue ||
-            station.station_name === requestedStationValue
-        )?.id ?? null
+            station.id === parsed.station || station.station_name === parsed.station
+        )
       : null;
+    setStationFilter(matchedStation?.station_name ?? "all");
+    setSystemFilter(parsed.system);
+    setExcludeCompleted(parsed.excludeCompleted);
+    setUrlFiltersHydrated(true);
+  }, [displayStations, urlFiltersHydrated]);
 
-    setLockedStationId(requestedStation);
-    setSelectedSystemId(matchedSystem.id);
-
+  useEffect(() => {
+    if (typeof window === "undefined" || !urlFiltersHydrated) return;
     const url = new URL(window.location.href);
-    url.searchParams.delete("system");
-    url.searchParams.delete("station");
+    const setQuery = (key: string, value: string) => {
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    };
+
+    setQuery("trackerSearch", searchTerm.trim());
+    setQuery("engineer", engineerFilter === "all" ? "" : engineerFilter);
+    setQuery("station", stationFilter === "all" ? "" : stationFilter);
+    setQuery("status", statusFilter === "all" ? "" : statusFilter);
+    setQuery("sort", sortOrder === "machine-asc" ? "" : sortOrder);
+    setQuery("system", systemFilter);
+    setQuery("excludeStatus", excludeCompleted ? "completed" : "");
     window.history.replaceState({}, "", url);
-  }, [displayStations, systems]);
+  }, [
+    engineerFilter,
+    excludeCompleted,
+    searchTerm,
+    sortOrder,
+    stationFilter,
+    statusFilter,
+    systemFilter,
+    urlFiltersHydrated,
+  ]);
 
   useEffect(() => {
     if (!selectedVersionId || selectedVersionId === activeVersion?.id) {
@@ -299,7 +331,7 @@ export function TestTracker() {
 
   useEffect(() => {
     setPage(1);
-  }, [engineerFilter, searchTerm, selectedVersionId, stationFilter, statusFilter, view]);
+  }, [engineerFilter, excludeCompleted, searchTerm, selectedVersionId, sortOrder, stationFilter, statusFilter, systemFilter, view]);
 
   const engineers = useMemo(
     () =>
@@ -311,34 +343,50 @@ export function TestTracker() {
     [systems]
   );
 
-  const baseFilteredSystems = useMemo(() => {
-    const keyword = searchTerm.trim().toLowerCase();
-    return systems.filter((system) => {
-      const status = normalizeSystemStatus(system);
-      const matchesKeyword =
-        !keyword ||
-        system.system_name?.toLowerCase().includes(keyword) ||
-        system.serial_number?.toLowerCase().includes(keyword) ||
-        system.assigned_engineer?.toLowerCase().includes(keyword) ||
-        system.current_station?.toLowerCase().includes(keyword);
-      const matchesEngineer =
-        engineerFilter === "all" || system.assigned_engineer === engineerFilter;
-      const matchesStation =
-        stationFilter === "all" || system.current_station === stationFilter;
-      const matchesVersion =
-        !selectedVersionId ||
-        !system.flow_version_id ||
-        system.flow_version_id === selectedVersionId;
+  const selectedStation = useMemo(
+    () => stationFilter === "all"
+      ? null
+      : displayStations.find(
+          (station) => station.id === stationFilter || station.station_name === stationFilter,
+        ) ?? null,
+    [displayStations, stationFilter],
+  );
+  const stationIncompleteSystemIds = useMemo(
+    () => selectedStation && excludeCompleted
+      ? createStationIncompleteSystemIds(
+          systems,
+          selectedStation.id,
+          displayItems,
+          progress,
+        )
+      : null,
+    [displayItems, excludeCompleted, progress, selectedStation, systems],
+  );
+  const stationScopedSystems = useMemo(
+    () => stationIncompleteSystemIds
+      ? systems.filter((system) => stationIncompleteSystemIds.has(system.id))
+      : systems,
+    [stationIncompleteSystemIds, systems],
+  );
 
-      return matchesKeyword && matchesEngineer && matchesStation && matchesVersion;
-    });
-  }, [engineerFilter, searchTerm, selectedVersionId, stationFilter, systems]);
+  const baseFilteredSystems = useMemo(
+    () => filterAndSortTrackerSystems(stationScopedSystems, {
+      engineer: engineerFilter,
+      excludeCompleted: !selectedStation && excludeCompleted,
+      flowVersionId: selectedVersionId,
+      search: searchTerm,
+      sort: sortOrder,
+      status: "all",
+      system: systemFilter,
+    }),
+    [engineerFilter, excludeCompleted, searchTerm, selectedStation, selectedVersionId, sortOrder, stationScopedSystems, systemFilter]
+  );
 
   const statusCounts = useMemo(
     () =>
       baseFilteredSystems.reduce(
         (counts, system) => {
-          counts[normalizeSystemStatus(system)] += 1;
+          counts[normalizeTrackerSystemStatus(system)] += 1;
           return counts;
         },
         { 已完成: 0, 未開始: 0, 進行中: 0 }
@@ -347,13 +395,15 @@ export function TestTracker() {
   );
 
   const filteredSystems = useMemo(
-    () =>
-      statusFilter === "all"
-        ? baseFilteredSystems
-        : baseFilteredSystems.filter(
-            (system) => normalizeSystemStatus(system) === statusFilter
-          ),
-    [baseFilteredSystems, statusFilter]
+    () => filterAndSortTrackerSystems(baseFilteredSystems, {
+      sort: sortOrder,
+      status: statusFilter,
+    }),
+    [baseFilteredSystems, sortOrder, statusFilter]
+  );
+  const boardLanes = useMemo(
+    () => buildTrackerBoardLanes(displayStations, filteredSystems),
+    [displayStations, filteredSystems]
   );
   const pageCount = Math.max(1, Math.ceil(filteredSystems.length / pageSize));
   const currentPage = Math.min(page, pageCount);
@@ -387,7 +437,7 @@ export function TestTracker() {
     () =>
       systems.reduce(
         (counts, system) => {
-          counts[normalizeSystemStatus(system)] += 1;
+          counts[normalizeTrackerSystemStatus(system)] += 1;
           return counts;
         },
         { 已完成: 0, 未開始: 0, 進行中: 0 }
@@ -426,6 +476,8 @@ export function TestTracker() {
     engineerFilter !== "all",
     stationFilter !== "all",
     statusFilter !== "all",
+    Boolean(systemFilter),
+    excludeCompleted,
   ].filter(Boolean).length;
 
   const clearTrackerFilters = () => {
@@ -433,50 +485,18 @@ export function TestTracker() {
     setEngineerFilter("all");
     setStationFilter("all");
     setStatusFilter("all");
+    setSystemFilter("");
+    setExcludeCompleted(false);
   };
 
-  const renderTrackerControls = (compact = false) => (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant={compact ? "ghost" : "outline"}
-          size={compact ? "icon" : "sm"}
-          className={cn(
-            "relative rounded-md border-[#315574] text-[#cfe0eb] hover:bg-[#15314b] hover:text-white",
-            compact ? "h-7 w-7 border border-[#315574]" : "h-8"
-          )}
-          aria-label="搜尋、篩選與專案操作"
-        >
-          <SlidersHorizontal className="h-3.5 w-3.5" />
-          {!compact && <span className="ml-2">篩選與操作</span>}
-          {activeFilterCount > 0 && (
-            <span className="font-data absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#438dff] px-1 text-[9px] text-white">
-              {activeFilterCount}
-            </span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="w-[min(620px,calc(100vw-24px))] space-y-3 border-[#315574] bg-[#0b1b2d] p-3"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-[#f3f8fc]">篩選與專案操作</div>
-            <div className="mt-0.5 text-xs text-[#8fabbe]">控制項收在這裡，資料矩陣保留最大空間。</div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
-            disabled={activeFilterCount === 0}
-            onClick={clearTrackerFilters}
-          >
-            清除篩選
-          </Button>
-        </div>
-
-        <div className="relative">
+  const trackerFilterToolbar = (
+    <section
+      data-testid="test-tracker-filter-toolbar"
+      className="maintenance-toolbar space-y-2 p-2"
+      aria-label="L10 測試追蹤篩選"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[230px] flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#91adc2]" />
           <Input
             value={searchTerm}
@@ -485,73 +505,86 @@ export function TestTracker() {
             placeholder="搜尋機台、序號或工程師"
           />
         </div>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Select value={engineerFilter} onValueChange={setEngineerFilter}>
-            <SelectTrigger className="h-9 w-full"><SelectValue placeholder="工程師" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部工程師</SelectItem>
-              {engineers.map((engineer) => <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>)}
-            </SelectContent>
-          </Select>
-
-          <Select value={stationFilter} onValueChange={setStationFilter}>
-            <SelectTrigger className="h-9 w-full"><SelectValue placeholder="站點" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部站點</SelectItem>
-              {displayStations.map((station) => <SelectItem key={station.id} value={station.station_name}>{station.station_name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1 rounded-lg border border-[#254866] bg-[#071522] p-1">
-          {(["未開始", "進行中", "已完成"] as const).map((status) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => setStatusFilter((current) => current === status ? "all" : status)}
-              className={cn(
-                "h-7 rounded-md px-2.5 text-xs font-medium transition-colors",
-                statusFilter === status
-                  ? "bg-[#438dff] text-white"
-                  : "text-[#a9c0d1] hover:bg-[#10263a] hover:text-[#f3f8fc]"
-              )}
-            >
-              {status} <span className="font-data ml-1">{statusCounts[status]}</span>
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setStatusFilter("all")}
-            className={cn(
-              "h-7 rounded-md px-2.5 text-xs font-medium",
-              statusFilter === "all" ? "bg-[#10263a] text-[#f3f8fc]" : "text-[#a9c0d1]"
-            )}
+        <Select value={stationFilter} onValueChange={setStationFilter}>
+          <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="站點" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部站點</SelectItem>
+            {displayStations.map((station) => <SelectItem key={station.id} value={station.station_name}>{station.station_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select
+          value={statusFilter}
+          onValueChange={(value) => {
+            const nextStatus = value as StatusFilter;
+            setStatusFilter(nextStatus);
+            if (nextStatus === "已完成") setExcludeCompleted(false);
+          }}
+        >
+          <SelectTrigger className="h-9 w-[135px]"><SelectValue placeholder="狀態" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部狀態</SelectItem>
+            <SelectItem value="未開始">未開始 {statusCounts.未開始}</SelectItem>
+            <SelectItem value="進行中">進行中 {statusCounts.進行中}</SelectItem>
+            <SelectItem value="已完成">已完成 {statusCounts.已完成}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={engineerFilter} onValueChange={setEngineerFilter}>
+          <SelectTrigger className="h-9 w-[145px]"><SelectValue placeholder="工程師" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部工程師</SelectItem>
+            {engineers.map((engineer) => <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as TrackerSort)}>
+          <SelectTrigger className="h-9 w-[175px]"><SelectValue placeholder="排序" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="machine-asc">機台 ID：小到大</SelectItem>
+            <SelectItem value="machine-desc">機台 ID：大到小</SelectItem>
+            <SelectItem value="created-desc">建立時間：新到舊</SelectItem>
+            <SelectItem value="created-asc">建立時間：舊到新</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex h-9 items-center gap-1 rounded-lg border border-[#315574] bg-[#06111f] p-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-7 w-8 rounded-md", view === "table" && "bg-[#183654] text-cyan-100")}
+            onClick={() => changeView("table")}
           >
-            全部 <span className="font-data ml-1">{baseFilteredSystems.length}</span>
-          </button>
+            <List className="h-4 w-4" /><span className="sr-only">表格檢視</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-7 w-8 rounded-md", view === "board" && "bg-[#183654] text-cyan-100")}
+            onClick={() => changeView("board")}
+          >
+            <LayoutGrid className="h-4 w-4" /><span className="sr-only">站點看板</span>
+          </Button>
+        </div>
+        <Badge variant="outline" className="font-data ml-auto h-8 rounded-lg border-blue-300/35 bg-blue-300/10 px-3 text-blue-100">
+          {filteredSystems.length} 台
+        </Badge>
+      </div>
 
-          <div className="ml-auto flex gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn("h-7 w-8 rounded-md", view === "table" && "bg-[#183654] text-cyan-100")}
-              onClick={() => changeView("table")}
-            >
-              <List className="h-4 w-4" /><span className="sr-only">表格檢視</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn("h-7 w-8 rounded-md", view === "board" && "bg-[#183654] text-cyan-100")}
-              onClick={() => changeView("board")}
-            >
-              <LayoutGrid className="h-4 w-4" /><span className="sr-only">站點看板</span>
-            </Button>
-          </div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-[#254866] pt-2">
+        <div data-testid="test-tracker-active-filters" className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          <span className="flex items-center gap-1 text-[11px] font-semibold text-[#8fabbe]">
+            <SlidersHorizontal className="h-3.5 w-3.5" />目前條件
+          </span>
+          {searchTerm.trim() && <button type="button" onClick={() => setSearchTerm("")} className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2 py-1 text-[11px] text-cyan-100">搜尋：{searchTerm.trim()} <X className="ml-1 inline h-3 w-3" /></button>}
+          {stationFilter !== "all" && <button type="button" onClick={() => setStationFilter("all")} className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2 py-1 text-[11px] text-cyan-100">站點：{stationFilter} <X className="ml-1 inline h-3 w-3" /></button>}
+          {statusFilter !== "all" && <button type="button" onClick={() => setStatusFilter("all")} className="rounded-full border border-blue-300/30 bg-blue-300/10 px-2 py-1 text-[11px] text-blue-100">狀態：{statusFilter} <X className="ml-1 inline h-3 w-3" /></button>}
+          {engineerFilter !== "all" && <button type="button" onClick={() => setEngineerFilter("all")} className="rounded-full border border-violet-300/30 bg-violet-300/10 px-2 py-1 text-[11px] text-violet-100">工程師：{engineerFilter} <X className="ml-1 inline h-3 w-3" /></button>}
+          {systemFilter && <button type="button" onClick={() => setSystemFilter("")} className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-[11px] text-emerald-100">機台：{systemFilter} <X className="ml-1 inline h-3 w-3" /></button>}
+          {excludeCompleted && <button type="button" onClick={() => setExcludeCompleted(false)} className="rounded-full border border-amber-300/35 bg-amber-300/10 px-2 py-1 text-[11px] text-amber-100">排除：已完成 <X className="ml-1 inline h-3 w-3" /></button>}
+          {activeFilterCount === 0 && <span className="text-[11px] text-[#7895aa]">顯示全部機台</span>}
+          <Button variant="ghost" size="sm" className="h-7 text-xs" disabled={activeFilterCount === 0} onClick={clearTrackerFilters}>
+            清除全部
+          </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-[#254866] pt-3">
+        <div className="flex flex-wrap items-center gap-2 border-l border-[#254866] pl-2">
           <SystemManager onSystemUpdate={loadData} showDeleteAll={false} />
           <BulkResetDialog onReset={loadData} />
           <ExportManager systems={filteredSystems} stations={displayStations} progress={progress} />
@@ -568,8 +601,8 @@ export function TestTracker() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </PopoverContent>
-    </Popover>
+      </div>
+    </section>
   );
 
   if (isLoading) {
@@ -605,7 +638,6 @@ export function TestTracker() {
           icon={ClipboardList}
           title="L10 測試追蹤"
           description={`${activeProject?.name || "目前專案"} · ${filteredSystems.length} 台符合條件`}
-          actions={renderTrackerControls(false)}
         />
       </div>
 
@@ -654,11 +686,12 @@ export function TestTracker() {
         />
       </div>
 
+      {trackerFilterToolbar}
+
       {view === "table" ? (
         <>
           <TestProgressTable
             columnStorageKey={`maintenance:test-tracker:columns:${activeProjectId}`}
-            headerControls={renderTrackerControls(true)}
             systems={pagedSystems}
             stations={displayStations}
             items={displayItems}
@@ -702,32 +735,29 @@ export function TestTracker() {
           </div>
         </>
       ) : (
-        <div className="space-y-2">
-          <div className="flex justify-end">{renderTrackerControls(false)}</div>
-          <div className="flex min-h-[430px] gap-3 overflow-x-auto pb-2">
-          {displayStations.map((station) => {
-            const stationSystems = filteredSystems.filter(
-              (system) => system.current_station === station.station_name
-            );
-            return (
-              <section key={station.id} className="maintenance-panel min-w-[250px] flex-1 overflow-hidden">
+        <div className="flex min-h-[430px] gap-3 overflow-x-auto pb-2">
+          {boardLanes.map((lane) => (
+              <section key={lane.id} className="maintenance-panel min-w-[250px] flex-1 overflow-hidden">
                 <div className="flex h-11 items-center justify-between border-b border-[#2a526f]/70 px-3">
-                  <h2 className="truncate text-sm font-semibold text-[#f3f8fc]">{station.station_name}</h2>
-                  <Badge variant="outline" className="font-data rounded-md">{stationSystems.length}</Badge>
+                  <h2 className="truncate text-sm font-semibold text-[#f3f8fc]">{lane.label}</h2>
+                  <Badge variant="outline" className="font-data rounded-md">{lane.systems.length}</Badge>
                 </div>
                 <div className="max-h-[calc(100vh-348px)] space-y-2 overflow-y-auto p-2">
-                  {stationSystems.map((system) => (
+                  {lane.systems.map((system) => (
                     <button
                       key={system.id}
                       type="button"
                       className="w-full rounded-lg border border-[#2a526f] bg-[#10263a] p-2.5 text-left hover:border-cyan-300/55"
-                      onClick={() => openStationProgress(system.id, station.id)}
+                      onClick={() => lane.stationId
+                        ? openStationProgress(system.id, lane.stationId)
+                        : openSystemProgress(system.id)}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-semibold text-[#f3f8fc]">{system.system_name}</span>
                         <span className="font-data text-xs text-cyan-100">{system.overall_progress ?? 0}%</span>
                       </div>
-                      <div className="mt-1 truncate text-xs text-[#a9c0d1]">{system.assigned_engineer || "未指定工程師"}</div>
+                      <div className="mt-1 truncate text-xs text-[#a9c0d1]">{system.serial_number || "無序號"} · {system.assigned_engineer || "未指定工程師"}</div>
+                      <div className="mt-1 text-[11px] text-[#8fabbe]">{normalizeTrackerSystemStatus(system)}</div>
                       <SegmentedProgress
                         value={system.overall_progress ?? 0}
                         className="mt-2"
@@ -735,12 +765,10 @@ export function TestTracker() {
                       />
                     </button>
                   ))}
-                  {!stationSystems.length && <div className="py-8 text-center text-xs text-[#a9c0d1]">目前沒有機台</div>}
+                  {!lane.systems.length && <div className="py-8 text-center text-xs text-[#a9c0d1]">目前沒有機台</div>}
                 </div>
               </section>
-            );
-          })}
-          </div>
+          ))}
         </div>
       )}
 

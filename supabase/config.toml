@@ -1,7 +1,24 @@
 project_id = "rfppeuzuoxtqkpbwehbq"
 
 [api]
-schemas = ["public", "workspace"]
+schemas = ["public", "graphql_public", "workspace"]
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://3df93595-b9ca-4743-ac23-64df167a0726.lovableproject.com/**", "https://46368f00-95cd-4452-9610-482e04e149e1.lovableproject.com/**", "https://763f8928-3c9c-498b-8626-381c3f1fafd6.lovableproject.com/**", "https://7f6cebc5-3696-45e6-bb4e-938f3c510ac0.lovableproject.com/**", "https://bd2c6099-5904-4171-8f17-fd93d5af6f63.lovableproject.com/**", "https://circuit-ai-architect-48.lovable.app/**", "https://d725c24b-7221-4682-9ef6-c81ab16d320a.lovableproject.com/**", "https://gb300-test-flow-board-24.lovable.app/**", "https://gb300-test-flow-board.lovable.app/**", "https://id-preview--3df93595-b9ca-4743-ac23-64df167a0726.lovable.app/**", "https://id-preview--46368f00-95cd-4452-9610-482e04e149e1.lovable.app/**", "https://id-preview--6521fd9c-4771-4dbd-8a12-bc4169fd102b.lovable.app/**", "https://id-preview--763f8928-3c9c-498b-8626-381c3f1fafd6.lovable.app/**", "https://id-preview--7f6cebc5-3696-45e6-bb4e-938f3c510ac0.lovable.app/**", "https://id-preview--bd2c6099-5904-4171-8f17-fd93d5af6f63.lovable.app/**", "https://id-preview--d725c24b-7221-4682-9ef6-c81ab16d320a.lovable.app/**", "https://id-preview--e468a2cf-5532-4617-a7bd-590779fd3a46.lovable.app/**", "https://preview--circuit-ai-architect-48.lovable.app/**", "https://preview--gb300-test-flow-board-24.lovable.app/**", "https://preview--gb300-test-flow-board.lovable.app/**", "https://preview--progress-pulse-excel.lovable.app/**", "https://preview--server-check-manager.lovable.app/**", "https://preview--station-status-hub-67.lovable.app/**", "https://preview--station-status-hub-76.lovable.app/**", "https://preview--station-status-hub.lovable.app/**", "https://progress-pulse-excel.lovable.app/**", "https://server-check-manager.lovable.app/**", "https://station-status-hub-67.lovable.app/**", "https://station-status-hub-76.lovable.app/**", "https://station-status-hub.lovable.app/**"]
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 6
+otp_expiry = 86400
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[storage]
+file_size_limit = "500MiB"
 
 [functions.api]
 verify_jwt = false

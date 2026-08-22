@@ -15,7 +15,7 @@ test("dashboard explains why machines need attention and what supervisors can do
     "卡關站點",
     "負責人",
     "最近更新",
-    "開啟測試追蹤",
+    "開啟生產監控牆",
     "查看機台",
   ];
 

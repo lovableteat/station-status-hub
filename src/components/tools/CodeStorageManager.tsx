@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,8 @@ interface CodeSnippet {
   description?: string;
   code_content: string;
   language: string;
+  owner_workspace: string | null;
+  scope: "global" | "workspace";
   category: string;
   tags: string[];
   sop_content?: string;
@@ -48,7 +51,10 @@ const EMPTY_FORM = {
   category: "utility",
   tags: "",
   sop_content: "",
+  is_global: false,
 };
+
+type AssetScopeFilter = "all" | "global" | "workspace";
 
 const LANGUAGE_OPTIONS = [
   ["javascript", "JavaScript"],
@@ -75,7 +81,7 @@ const CATEGORY_OPTIONS = [
   ["other", "其他"],
 ] as const;
 
-export function CodeStorageManager() {
+export function CodeStorageManager({ workspaceKey = "station-status" }: { workspaceKey?: string }) {
   const [codeSnippets, setCodeSnippets] = useState<CodeSnippet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -83,6 +89,7 @@ export function CodeStorageManager() {
   const [viewingSnippet, setViewingSnippet] = useState<CodeSnippet | null>(null);
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterLanguage, setFilterLanguage] = useState("all");
+  const [scopeFilter, setScopeFilter] = useState<AssetScopeFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [advancedSearch, setAdvancedSearch] = useState(false);
   const [formData, setFormData] = useState(EMPTY_FORM);
@@ -100,6 +107,7 @@ export function CodeStorageManager() {
       const { data, error } = await supabase
         .from("code_snippets")
         .select("*")
+        .or(`scope.eq.global,and(scope.eq.workspace,owner_workspace.eq.${workspaceKey})`)
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
@@ -110,6 +118,8 @@ export function CodeStorageManager() {
         description: item.description || undefined,
         code_content: item.code_content,
         language: item.language,
+        owner_workspace: item.owner_workspace,
+        scope: item.scope === "workspace" ? "workspace" : "global",
         category: item.category,
         tags: item.tags || [],
         sop_content: item.sop_content || undefined,
@@ -127,7 +137,7 @@ export function CodeStorageManager() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, workspaceKey]);
 
   useEffect(() => {
     void loadCodeSnippets();
@@ -149,6 +159,7 @@ export function CodeStorageManager() {
         category: snippet.category,
         tags: snippet.tags.join(", "),
         sop_content: snippet.sop_content || "",
+        is_global: snippet.scope === "global",
       });
     } else {
       resetForm();
@@ -167,6 +178,8 @@ export function CodeStorageManager() {
         category: formData.category,
         tags: formData.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
         sop_content: formData.sop_content || null,
+        owner_workspace: formData.is_global ? null : workspaceKey,
+        scope: formData.is_global ? "global" : "workspace",
       };
 
       if (editingSnippet) {
@@ -251,13 +264,14 @@ export function CodeStorageManager() {
   const filteredSnippets = codeSnippets.filter((snippet) => {
     const matchesCategory = filterCategory === "all" || snippet.category === filterCategory;
     const matchesLanguage = filterLanguage === "all" || snippet.language === filterLanguage;
+    const matchesScope = scopeFilter === "all" || snippet.scope === scopeFilter;
     const searchable = [
       snippet.title,
       snippet.description || "",
       snippet.tags.join(" "),
       advancedSearch ? snippet.code_content : "",
     ].join(" ").toLowerCase();
-    return matchesCategory && matchesLanguage && (!normalizedSearch || searchable.includes(normalizedSearch));
+    return matchesCategory && matchesLanguage && matchesScope && (!normalizedSearch || searchable.includes(normalizedSearch));
   });
 
   const categories = [...new Set(codeSnippets.map((snippet) => snippet.category))];
@@ -383,6 +397,16 @@ export function CodeStorageManager() {
                   <Label>SOP 操作說明</Label>
                   <RichTextEditor content={formData.sop_content} onChange={(sop_content) => setFormData((current) => ({ ...current, sop_content }))} placeholder="記錄安裝、執行與排錯步驟" className="min-h-[160px]" />
                 </div>
+                <div className="flex items-center justify-between rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3">
+                  <div>
+                    <div className="text-sm font-medium text-[#f3f8fc]">通用程式碼</div>
+                    <div className="text-xs text-[#a9c0d1]">開啟後可在每個 workspace 顯示、編輯與管理</div>
+                  </div>
+                  <Switch checked={formData.is_global} onCheckedChange={(is_global) => setFormData((current) => ({ ...current, is_global }))} />
+                </div>
+                {editingSnippet?.scope === "global" && (
+                  <div className="rounded-lg border border-amber-300/30 bg-amber-300/[0.08] px-3 py-2 text-sm text-amber-100">這是通用項目，修改後會影響所有 workspace。</div>
+                )}
               </div>
               <DialogFooter className="shrink-0 border-t border-[#2a526f] bg-[#091827] px-6 py-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>取消</Button>
@@ -409,6 +433,14 @@ export function CodeStorageManager() {
           <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="分類" /></SelectTrigger>
           <SelectContent><SelectItem value="all">所有分類</SelectItem>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent>
         </Select>
+        <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as AssetScopeFilter)}>
+          <SelectTrigger className="h-9 w-[170px]"><SelectValue placeholder="使用範圍" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部範圍</SelectItem>
+            <SelectItem value="global">通用</SelectItem>
+            <SelectItem value="workspace">目前 workspace</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div data-testid="code-library-workspace" className="grid min-h-[520px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522] lg:grid-cols-[minmax(280px,0.78fr)_minmax(0,1.55fr)]">
@@ -433,7 +465,10 @@ export function CodeStorageManager() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="truncate text-sm font-semibold text-[#eef8fc]">{snippet.title}</span>
-                  <Badge variant="outline" className="shrink-0 border-[#315975] bg-[#091725] text-[10px] text-[#a7d7e8]">{snippet.language}</Badge>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Badge variant="outline" className="border-[#315975] bg-[#091725] text-[10px] text-[#a7d7e8]">{snippet.language}</Badge>
+                    <Badge variant="outline" className={cn("text-[10px]", snippet.scope === "global" ? "border-emerald-300/30 text-emerald-100" : "border-indigo-300/30 text-indigo-100")}>{snippet.scope === "global" ? "通用" : "目前 workspace"}</Badge>
+                  </div>
                 </div>
                 <div className="mt-1 line-clamp-2 text-xs leading-5 text-[#8fa9b9]">{snippet.category} · {snippet.tags.join(" · ") || "無標籤"}</div>
               </button>
@@ -449,7 +484,7 @@ export function CodeStorageManager() {
                 <div className="min-w-0">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[#62d8f3]">程式碼預覽</div>
                   <h3 className="mt-1 truncate text-lg font-semibold text-[#f3f8fc]">{selectedSnippet.title}</h3>
-                  <div className="mt-2 flex flex-wrap gap-1.5"><Badge>{selectedSnippet.language}</Badge><Badge variant="outline">{selectedSnippet.category}</Badge>{selectedSnippet.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div>
+                  <div className="mt-2 flex flex-wrap gap-1.5"><Badge>{selectedSnippet.language}</Badge><Badge variant="outline">{selectedSnippet.category}</Badge><Badge variant="outline">{selectedSnippet.scope === "global" ? "通用" : "目前 workspace"}</Badge>{selectedSnippet.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => void handleCopy(selectedSnippet.code_content)}><Copy className="mr-2 h-4 w-4" />複製</Button>

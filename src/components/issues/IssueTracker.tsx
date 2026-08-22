@@ -236,7 +236,7 @@ export function IssueTracker() {
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
+          schema: "workspace",
           table: "issues",
           filter: `project_id=eq.${activeProjectId}`,
         },

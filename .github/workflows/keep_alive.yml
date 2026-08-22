@@ -15,4 +15,4 @@ jobs:
           curl -X GET "${{ secrets.VITE_SUPABASE_URL }}/rest/v1/keep_alive_check?select=*" \
           -H "apikey: ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
           -H "Authorization: Bearer ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
-          -H "Accept-Profile: ${{ vars.SUPABASE_DB_SCHEMA || 'public' }}"
+          -H "Accept-Profile: ${{ vars.SUPABASE_DB_SCHEMA || 'workspace' }}"

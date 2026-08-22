@@ -49,7 +49,7 @@ test("versioned module failures automatically load the newest deployment", () =>
 
 test("automatic recovery lock expires so later deployments can refresh again", () => {
   const functionMatch = indexSource.match(
-    /(function hasRecentRetry\(value, fingerprint, now\) \{[\s\S]*?\n        \})\n\n        function retryBoot/,
+    /(function hasRecentRetry\(value, fingerprint, now\) \{[\s\S]*?\r?\n        \})\r?\n\r?\n        function retryBoot/,
   );
   assert.ok(functionMatch, "inline retry policy must remain executable before the app bundle loads");
 

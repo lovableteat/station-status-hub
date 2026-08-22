@@ -108,6 +108,32 @@ export function createStationProgressLookup(
   return percentages;
 }
 
+export function createStationBlockedLookup(
+  items: TrackerItemLike[],
+  progress: TrackerProgressLike[],
+) {
+  const itemIdsByStation = new Map<string, Set<string>>();
+  items.forEach((item) => {
+    const stationItems = itemIdsByStation.get(item.station_id) ?? new Set<string>();
+    stationItems.add(item.id);
+    itemIdsByStation.set(item.station_id, stationItems);
+  });
+
+  const blockedItemsBySystemStation = new Map<string, Set<string>>();
+  progress.forEach((entry) => {
+    if (!["Error", "Blocked", "異常"].includes(entry.status ?? "")) return;
+    if (!itemIdsByStation.get(entry.station_id)?.has(entry.item_id)) return;
+    const key = getStationProgressKey(entry.system_id, entry.station_id);
+    const blockedItems = blockedItemsBySystemStation.get(key) ?? new Set<string>();
+    blockedItems.add(entry.item_id);
+    blockedItemsBySystemStation.set(key, blockedItems);
+  });
+
+  return new Map(
+    [...blockedItemsBySystemStation.entries()].map(([key, blockedItems]) => [key, blockedItems.size])
+  );
+}
+
 interface TrackerVirtualRangeOptions {
   headerHeight?: number;
   overscan?: number;

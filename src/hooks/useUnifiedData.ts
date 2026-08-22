@@ -451,27 +451,27 @@ function useUnifiedDataSource() {
       .channel(`unified_data_changes:${activeProjectId}`)
       .on(
         "postgres_changes",
-        { event: "*", filter: projectFilter, schema: "public", table: "test_systems" },
+        { event: "*", filter: projectFilter, schema: "workspace", table: "test_systems" },
         updateSystems
       )
       .on(
         "postgres_changes",
-        { event: "*", filter: projectFilter, schema: "public", table: "test_progress" },
+        { event: "*", filter: projectFilter, schema: "workspace", table: "test_progress" },
         updateProgressRecords
       )
       .on(
         "postgres_changes",
-        { event: "*", filter: projectFilter, schema: "public", table: "test_flow_stations" },
+        { event: "*", filter: projectFilter, schema: "workspace", table: "test_flow_stations" },
         updateStations
       )
       .on(
         "postgres_changes",
-        { event: "*", filter: projectFilter, schema: "public", table: "test_flow_items" },
+        { event: "*", filter: projectFilter, schema: "workspace", table: "test_flow_items" },
         updateTestItems
       )
       .on(
         "postgres_changes",
-        { event: "*", filter: projectFilter, schema: "public", table: "station_contents" },
+        { event: "*", filter: projectFilter, schema: "workspace", table: "station_contents" },
         updateStationContents
       )
       .subscribe();
