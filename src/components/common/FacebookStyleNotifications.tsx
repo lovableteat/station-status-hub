@@ -11,7 +11,7 @@ interface FacebookNotification {
   title: string;
   message: string;
   notification_type: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   is_read: boolean;
   created_at: string;
   sender_id: string;
@@ -61,7 +61,7 @@ export function FacebookStyleNotifications() {
         'postgres_changes',
         {
           event: 'INSERT',
-          schema: 'public',
+          schema: 'workspace',
           table: 'user_notifications',
           filter: `recipient_id=eq.${user.userId}`
         },

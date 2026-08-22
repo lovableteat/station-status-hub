@@ -98,7 +98,7 @@ export function TroubleshootingPage() {
 
     const channel = supabase
       .channel('troubleshooting_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'troubleshooting_records' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'workspace', table: 'troubleshooting_records' }, () => {
         loadRecords();
       })
       .subscribe();

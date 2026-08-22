@@ -39,7 +39,10 @@ interface UserNotification {
   notification_type: string;
   reference_type?: string;
   reference_id?: string;
-  metadata?: any;
+  metadata?: {
+    issue_title?: string;
+    [key: string]: unknown;
+  };
   is_read: boolean;
   created_at: string;
   sender_id: string;
@@ -92,7 +95,7 @@ export function NotificationCenter() {
         'postgres_changes',
         {
           event: 'INSERT',
-          schema: 'public',
+          schema: 'workspace',
           table: 'user_notifications',
           filter: `recipient_id=eq.${user.userId}`
         },

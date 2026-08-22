@@ -1153,16 +1153,16 @@ export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChan
 
   const channel = supabaseClient
     .channel("material_bom_workspace_changes")
-    .on("postgres_changes", { event: "*", schema: "public", table: WORKSPACE_TABLE }, (payload: RealtimeRowPayload) => {
+    .on("postgres_changes", { event: "*", schema: "workspace", table: WORKSPACE_TABLE }, (payload: RealtimeRowPayload) => {
       emitChange(payload?.new?.id ?? payload?.old?.id);
     })
-    .on("postgres_changes", { event: "*", schema: "public", table: RECORD_TABLE }, (payload: RealtimeRowPayload) => {
+    .on("postgres_changes", { event: "*", schema: "workspace", table: RECORD_TABLE }, (payload: RealtimeRowPayload) => {
       emitChange(
         payload?.new?.workspace_id ?? payload?.old?.workspace_id,
         payload?.new?.record_id ?? payload?.old?.record_id,
       );
     })
-    .on("postgres_changes", { event: "*", schema: "public", table: PREFERENCE_TABLE }, (payload: RealtimeRowPayload) => {
+    .on("postgres_changes", { event: "*", schema: "workspace", table: PREFERENCE_TABLE }, (payload: RealtimeRowPayload) => {
       const keys = [payload?.new?.table_key, payload?.old?.table_key].filter((value): value is string => typeof value === "string");
       if (keys.some((value) => value.startsWith(PREFERENCE_KEY_PREFIX) || value.startsWith(PAGE_TRACKER_KEY_PREFIX) || value.startsWith(TABLE_COLOR_THEME_KEY_PREFIX))) {
         const workspaceId = keys
