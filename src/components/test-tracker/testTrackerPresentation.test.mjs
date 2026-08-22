@@ -109,6 +109,20 @@ test("unresolved issues derive Blocked display without overwriting completed pro
   assert.equal(percentages.get("system-1\u0000station-1"), 100);
 });
 
+test("system blocked lookup deduplicates the same blocked item across progress and issues", () => {
+  const items = [{ id: "item-a", station_id: "station-1" }];
+  const progress = [
+    { item_id: "item-a", station_id: "station-1", status: "Error", system_id: "system-1" },
+  ];
+  const issues = [
+    { status: "open", station_id: "station-1", system_id: "system-1", test_item_id: "item-a" },
+  ];
+
+  const blocked = presentation.createSystemBlockedLookup(items, progress, issues);
+
+  assert.equal(blocked.get("system-1"), 1);
+});
+
 test("virtual tracker range keeps a small overscanned window for 1000 rows", () => {
   assert.equal(typeof presentation.getTrackerVirtualRange, "function");
   const range = presentation.getTrackerVirtualRange({

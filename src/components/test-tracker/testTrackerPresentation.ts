@@ -154,6 +154,40 @@ export function createStationBlockedLookup(
   );
 }
 
+export function createSystemBlockedLookup(
+  items: TrackerItemLike[],
+  progress: TrackerProgressLike[],
+  linkedIssues: TrackerLinkedIssue[] = [],
+) {
+  const stationLookup = createStationBlockedLookup(items, progress, linkedIssues);
+  const itemKeysBySystem = new Map<string, Set<string>>();
+
+  stationLookup.forEach((_count, key) => {
+    const [systemId, stationId] = key.split("\u0000");
+    const blockedItems = itemKeysBySystem.get(systemId) ?? new Set<string>();
+    const stationItemIds = new Set(
+      items.filter((item) => item.station_id === stationId).map((item) => item.id),
+    );
+
+    progress.forEach((entry) => {
+      if (entry.system_id !== systemId || entry.station_id !== stationId) return;
+      if (!["Error", "Blocked", "異常"].includes(entry.status ?? "")) return;
+      if (stationItemIds.has(entry.item_id)) blockedItems.add(`${stationId}\u0000${entry.item_id}`);
+    });
+    linkedIssues.forEach((issue) => {
+      if (issue.system_id !== systemId || issue.station_id !== stationId || !issue.test_item_id) return;
+      const status = (issue.status ?? "open").toLowerCase();
+      if (status === "resolved" || status === "closed") return;
+      if (stationItemIds.has(issue.test_item_id)) blockedItems.add(`${stationId}\u0000${issue.test_item_id}`);
+    });
+    itemKeysBySystem.set(systemId, blockedItems);
+  });
+
+  return new Map(
+    Array.from(itemKeysBySystem, ([systemId, itemKeys]) => [systemId, itemKeys.size]),
+  );
+}
+
 interface TrackerVirtualRangeOptions {
   headerHeight?: number;
   overscan?: number;

@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/components/auth/UserContext";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
+import { saveGuardedTestProgress, unresolvedIssueToast } from "./guardedTestProgress";
 
 interface ManualTimeTrackerProps {
   systemId: string;
@@ -137,11 +138,11 @@ export default function ManualTimeTracker({
       });
 
       onTimeUpdate();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('開始計時錯誤:', error);
       toast({
         title: "開始計時失敗",
-        description: error.message || "無法開始計時，請重試",
+        description: error instanceof Error ? error.message : "無法開始計時，請重試",
         variant: "destructive"
       });
     } finally {
@@ -176,26 +177,18 @@ export default function ManualTimeTracker({
         startTime: currentStartedAt
       });
       
-      // 直接更新完成狀態
-      const { data, error } = await supabase
-        .from('test_progress')
-        .update({
+      const data = await saveGuardedTestProgress({
+        itemId,
+        projectId: activeProjectId,
+        stationId,
+        status: "Done",
+        systemId,
+        updates: {
           completed_at: currentTime,
-          status: 'Done',
           progress_percent: 100,
-          actual_hours: actualHours
-        })
-        .eq('project_id', activeProjectId)
-        .eq('system_id', systemId)
-        .eq('station_id', stationId)
-        .eq('item_id', itemId)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('結束計時失敗:', error);
-        throw error;
-      }
+          actual_hours: actualHours,
+        },
+      });
 
       console.log('計時結束成功:', data);
 
@@ -228,12 +221,12 @@ export default function ManualTimeTracker({
       });
 
       onTimeUpdate();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('結束計時錯誤:', error);
-      toast({
+      toast(unresolvedIssueToast(error) ?? {
         title: "結束計時失敗",
-        description: error.message || "無法結束計時，請重試",
-        variant: "destructive"
+        description: error instanceof Error ? error.message : "無法結束計時，請重試",
+        variant: "destructive",
       });
     } finally {
       setIsUpdating(false);

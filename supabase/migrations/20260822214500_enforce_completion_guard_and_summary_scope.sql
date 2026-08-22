@@ -1,11 +1,98 @@
--- Preserve original test progress as the source of truth. Unresolved issues are
--- projected as Blocked by the application and only guard future Done writes.
+-- Keep persisted progress non-destructive while enforcing the completion rule at
+-- the table boundary. The issue-side lock serializes concurrent issue creation
+-- with guarded completion writes without changing progress data.
 
-drop trigger if exists sync_unresolved_issue_to_test_progress on workspace.issues;
-drop function if exists workspace.sync_unresolved_issue_to_test_progress();
+create or replace function workspace.lock_issue_test_progress_link()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.project_id is not null
+    and new.system_id is not null
+    and new.station_id is not null
+    and new.test_item_id is not null
+  then
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended(
+        new.project_id::pg_catalog.text || ':' ||
+        new.system_id::pg_catalog.text || ':' ||
+        new.station_id::pg_catalog.text || ':' ||
+        new.test_item_id::pg_catalog.text,
+        0
+      )
+    );
+  end if;
 
--- The legacy summary trigger looked at every station in the database. Scope it
--- to the affected system's project and flow version before restoring progress.
+  return new;
+end;
+$$;
+
+drop trigger if exists lock_issue_test_progress_link on workspace.issues;
+create trigger lock_issue_test_progress_link
+before insert or update of status, project_id, system_id, station_id, test_item_id
+on workspace.issues
+for each row
+execute function workspace.lock_issue_test_progress_link();
+
+create or replace function workspace.guard_test_progress_completion()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  should_guard boolean;
+begin
+  should_guard := new.status = 'Done';
+  if should_guard and tg_op = 'UPDATE' then
+    should_guard := old.status is distinct from new.status;
+  end if;
+
+  if should_guard then
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended(
+        new.project_id::pg_catalog.text || ':' ||
+        new.system_id::pg_catalog.text || ':' ||
+        new.station_id::pg_catalog.text || ':' ||
+        new.item_id::pg_catalog.text,
+        0
+      )
+    );
+
+    if exists (
+      select 1
+      from workspace.issues as issues
+      where issues.project_id = new.project_id
+        and issues.system_id = new.system_id
+        and issues.station_id = new.station_id
+        and issues.test_item_id = new.item_id
+        and issues.status in ('open', 'in_progress')
+    ) then
+      raise exception using
+        errcode = 'P0001',
+        message = '尚有問題未被解決';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_test_progress_completion on workspace.test_progress;
+create trigger guard_test_progress_completion
+before insert or update of status
+on workspace.test_progress
+for each row
+execute function workspace.guard_test_progress_completion();
+
+revoke all on function workspace.lock_issue_test_progress_link() from public;
+revoke all on function workspace.lock_issue_test_progress_link() from anon, authenticated, service_role;
+revoke all on function workspace.guard_test_progress_completion() from public;
+revoke all on function workspace.guard_test_progress_completion() from anon, authenticated, service_role;
+
+-- Limit the summary and its start-time fallback to the system's current flow.
 create or replace function public.update_system_completion_status()
 returns trigger
 language plpgsql
@@ -33,10 +120,7 @@ begin
   end if;
 
   with scoped_stations as (
-    select
-      stations.id,
-      stations.station_name,
-      stations.station_order
+    select stations.id, stations.station_name, stations.station_order
     from workspace.test_flow_stations as stations
     where stations.project_id = system_project_id
       and stations.flow_version_id is not distinct from system_flow_version_id
@@ -90,14 +174,9 @@ begin
   update workspace.test_systems as systems
   set
     overall_progress = summary.overall_progress,
-    current_station = coalesce(
-      summary.first_incomplete_station,
-      summary.final_station,
-      systems.current_station
-    ),
+    current_station = coalesce(summary.first_incomplete_station, summary.final_station, systems.current_station),
     status = case
-      when summary.station_count > 0
-        and summary.completed_stations = summary.station_count then 'Done'
+      when summary.station_count > 0 and summary.completed_stations = summary.station_count then 'Done'
       when summary.completed_stations > 0 then 'On-going'
       else 'Not Start'
     end,
@@ -113,6 +192,10 @@ begin
           (
             select pg_catalog.min(progress.started_at)
             from workspace.test_progress as progress
+            join workspace.test_flow_items as items
+              on progress.item_id = items.id
+              and items.project_id = system_project_id
+              and items.flow_version_id is not distinct from system_flow_version_id
             where progress.project_id = system_project_id
               and progress.system_id = affected_system_id
               and progress.started_at is not null
@@ -129,59 +212,5 @@ begin
   return new;
 end;
 $$;
-
--- Restore only rows whose current state and timestamp still exactly match the
--- anonymous Done -> Error audit record emitted by the destructive backfill.
-with backfill_changes as (
-  select distinct on (
-    audit.system_id,
-    audit.station_id,
-    audit.item_id
-  )
-    audit.system_id,
-    audit.station_id,
-    audit.item_id,
-    audit.old_values ->> 'status' as old_status,
-    (audit.old_values ->> 'started_at')::pg_catalog.timestamptz as old_started_at,
-    (audit.old_values ->> 'completed_at')::pg_catalog.timestamptz as old_completed_at,
-    (audit.old_values ->> 'actual_hours')::pg_catalog.numeric as old_actual_hours
-  from workspace.test_progress_audit as audit
-  join workspace.test_progress as progress
-    on progress.system_id = audit.system_id
-    and progress.station_id = audit.station_id
-    and progress.item_id = audit.item_id
-  where audit.change_type = 'update'
-    and audit.user_id is null
-    and audit.created_at = '2026-08-22 05:20:24.155319+00'::pg_catalog.timestamptz
-    and audit.old_values ->> 'status' = 'Done'
-    and audit.new_values ->> 'status' = 'Error'
-    and audit.old_values ->> 'completed_at' is not null
-    and progress.status = 'Error'
-    and progress.progress_percent = 0
-    and progress.completed_at is null
-    and progress.updated_at = audit.created_at
-    and exists (
-      select 1
-      from workspace.issues as issues
-      where issues.project_id = progress.project_id
-        and issues.system_id = progress.system_id
-        and issues.station_id = progress.station_id
-        and issues.test_item_id = progress.item_id
-        and issues.status in ('open', 'in_progress')
-    )
-  order by audit.system_id, audit.station_id, audit.item_id, audit.created_at desc
-)
-update workspace.test_progress as progress
-set
-  status = changes.old_status,
-  progress_percent = 100,
-  started_at = changes.old_started_at,
-  completed_at = changes.old_completed_at,
-  actual_hours = changes.old_actual_hours,
-  updated_at = pg_catalog.now()
-from backfill_changes as changes
-where progress.system_id = changes.system_id
-  and progress.station_id = changes.station_id
-  and progress.item_id = changes.item_id;
 
 notify pgrst, 'reload schema';
