@@ -21,6 +21,8 @@ The migration [`20260822120000_archive_workspace_schema.sql`](../supabase/migrat
 
 ## Hosted Supabase setup
 
-The migration grants `anon`, `authenticated`, and `service_role` access to the schema and its tables; RLS remains the data access boundary. The hosted project's API settings must also list `workspace` under **Exposed schemas**. The local Supabase CLI configuration includes this schema for local development.
+The migration grants `anon`, `authenticated`, and `service_role` access to the schema and its tables; RLS remains the data access boundary. On 2026-08-22, the migration was applied to hosted project `rfppeuzuoxtqkpbwehbq` and `workspace` was added under **Exposed schemas**. The local Supabase CLI configuration includes this schema for local development.
+
+Production schema selection is controlled by the GitHub variable `VITE_SUPABASE_SCHEMA`; Edge Functions use `SUPABASE_DB_SCHEMA`. Both are set to `workspace` after the hosted migration has been verified.
 
 Do not move or recreate `auth`, `storage`, or `realtime` objects. New application migrations must create or move tables into `workspace` and must keep their RLS, grants, realtime publication membership, and function search paths aligned with this document.
