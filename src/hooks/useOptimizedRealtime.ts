@@ -7,17 +7,17 @@ interface RealtimeConfig {
   table: string;
   events: ('INSERT' | 'UPDATE' | 'DELETE')[];
   filter?: string;
-  onInsert?: (payload: any) => void;
-  onUpdate?: (payload: any) => void;
-  onDelete?: (payload: any) => void;
+  onInsert?: (payload: unknown) => void;
+  onUpdate?: (payload: unknown) => void;
+  onDelete?: (payload: unknown) => void;
   debounceMs?: number;
 }
 
 export function useOptimizedRealtime(configs: RealtimeConfig[]) {
   const { toast } = useToast();
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
-  const channelRef = useRef<any>(null);
-  const debounceTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const debounceTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const retryCountRef = useRef(0);
   const maxRetries = 5;
 
@@ -37,8 +37,8 @@ export function useOptimizedRealtime(configs: RealtimeConfig[]) {
     }
   };
 
-  const createDebounceHandler = (handler: (payload: any) => void, key: string, debounceMs: number = 300) => {
-    return (payload: any) => {
+  const createDebounceHandler = (handler: (payload: unknown) => void, key: string, debounceMs: number = 300) => {
+    return (payload: unknown) => {
       // 清理現有定時器
       const existingTimer = debounceTimersRef.current.get(key);
       if (existingTimer) {
@@ -86,9 +86,14 @@ export function useOptimizedRealtime(configs: RealtimeConfig[]) {
               ? createDebounceHandler(handler, `${baseKey}_${event}`, config.debounceMs)
               : handler;
 
-            const listenConfig: any = {
+            const listenConfig: {
+              event: 'INSERT' | 'UPDATE' | 'DELETE';
+              schema: string;
+              table: string;
+              filter?: string;
+            } = {
               event,
-              schema: 'public',
+              schema: 'workspace',
               table: config.table
             };
 

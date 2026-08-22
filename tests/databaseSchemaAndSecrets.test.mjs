@@ -64,3 +64,25 @@ test("deployment workflows use Secrets, Variables, and the workspace profile", (
   assert.match(read(".env.example"), /VITE_SUPABASE_SCHEMA=workspace/);
   assert.match(read(".env.example"), /APP_DB_SCHEMA=workspace/);
 });
+
+test("realtime subscriptions use the archived workspace schema", () => {
+  const sourceRoot = path.join(root, "src");
+  const sourceFiles = [];
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolutePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(absolutePath);
+      else if (/\.(?:ts|tsx)$/.test(entry.name)) sourceFiles.push(absolutePath);
+    }
+  };
+  visit(sourceRoot);
+
+  const realtimeSources = sourceFiles
+    .map((absolutePath) => fs.readFileSync(absolutePath, "utf8"))
+    .filter((source) => source.includes('postgres_changes'));
+
+  assert.ok(realtimeSources.length > 0);
+  for (const source of realtimeSources) {
+    assert.doesNotMatch(source, /schema:\s*["']public["']/);
+  }
+});

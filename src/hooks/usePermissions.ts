@@ -139,7 +139,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
+          schema: "workspace",
           table: "user_page_permissions",
           filter: `user_id=eq.${userId}`,
         },
@@ -149,7 +149,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         "postgres_changes",
         {
           event: "UPDATE",
-          schema: "public",
+          schema: "workspace",
           table: "system_users",
           filter: `id=eq.${userId}`,
         },

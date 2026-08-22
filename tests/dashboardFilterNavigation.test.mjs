@@ -38,3 +38,11 @@ test("workspace navigation preserves all automatic filter query keys", () => {
     assert.match(index, new RegExp(`"${key}"`));
   }
 });
+
+test("deep links are not cleared before database permissions finish loading", () => {
+  assert.match(index, /loading:\s*permissionsLoading/);
+  assert.match(
+    index,
+    /if \(permissionsLoading\) return;[\s\S]{0,240}workspaceItems\.some/,
+  );
+});

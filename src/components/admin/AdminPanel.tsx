@@ -161,7 +161,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       .channel("admin-system-user-roster")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "system_users" },
+        { event: "*", schema: "workspace", table: "system_users" },
         () => void loadSystemUsers(),
       )
       .subscribe();

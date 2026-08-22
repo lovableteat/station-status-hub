@@ -74,7 +74,7 @@ export function ApiChatWorkspacePage() {
       .channel("api-chat-api-keys")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "api_keys" },
+        { event: "*", schema: "workspace", table: "api_keys" },
         () => {
           void loadApiKeys();
         }

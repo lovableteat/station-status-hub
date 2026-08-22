@@ -550,7 +550,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         "postgres_changes",
         {
           event: "UPDATE",
-          schema: "public",
+          schema: "workspace",
           table: "system_users",
           filter: `id=eq.${user.userId}`,
         },

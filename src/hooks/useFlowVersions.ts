@@ -95,7 +95,7 @@ export function useFlowVersions() {
         {
           event: "*",
           filter: `project_id=eq.${activeProjectId}`,
-          schema: "public",
+          schema: "workspace",
           table: "test_flow_versions",
         },
         refreshVersions

@@ -23,7 +23,11 @@ interface RealtimeNotification {
   message: string;
   timestamp: string;
   read: boolean;
-  metadata?: any;
+  metadata?: {
+    issueId?: string;
+    systemId?: string;
+    [key: string]: unknown;
+  };
 }
 
 interface UserNotification {
@@ -37,7 +41,7 @@ interface UserNotification {
   sender_id: string;
   reference_type?: string;
   reference_id?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   require_confirmation?: boolean;
   reply_id?: string;
   archived_at?: string;
@@ -131,7 +135,7 @@ export function RealtimeNotifications() {
       .channel(`notification_updates:${user.userId}:${activeProjectId || "none"}`)
       .on('postgres_changes', {
         event: 'INSERT',
-        schema: 'public',
+        schema: 'workspace',
         table: 'test_systems',
         filter: `project_id=eq.${activeProjectId}`
       }, (payload) => {
@@ -148,7 +152,7 @@ export function RealtimeNotifications() {
       })
       .on('postgres_changes', {
         event: 'UPDATE',
-        schema: 'public',
+        schema: 'workspace',
         table: 'test_systems',
         filter: `project_id=eq.${activeProjectId}`
       }, (payload) => {
@@ -167,7 +171,7 @@ export function RealtimeNotifications() {
       })
       .on('postgres_changes', {
         event: 'INSERT',
-        schema: 'public',
+        schema: 'workspace',
         table: 'issues',
         filter: `project_id=eq.${activeProjectId}`
       }, (payload) => {
@@ -184,7 +188,7 @@ export function RealtimeNotifications() {
       })
       .on('postgres_changes', {
         event: 'UPDATE',
-        schema: 'public',
+        schema: 'workspace',
         table: 'test_progress',
         filter: `project_id=eq.${activeProjectId}`
       }, (payload) => {
@@ -203,7 +207,7 @@ export function RealtimeNotifications() {
       })
       .on('postgres_changes', { 
         event: 'INSERT', 
-        schema: 'public', 
+        schema: 'workspace',
         table: 'user_notifications',
         filter: `recipient_id=eq.${user.userId}`
       }, (payload) => {
@@ -219,7 +223,7 @@ export function RealtimeNotifications() {
       })
       .on('postgres_changes', { 
         event: 'UPDATE', 
-        schema: 'public', 
+        schema: 'workspace',
         table: 'user_notifications',
         filter: `recipient_id=eq.${user.userId}`
       }, (payload) => {
@@ -246,7 +250,7 @@ export function RealtimeNotifications() {
       })
       .on('postgres_changes', { 
         event: 'DELETE', 
-        schema: 'public', 
+        schema: 'workspace',
         table: 'user_notifications',
         filter: `recipient_id=eq.${user.userId}`
       }, (payload) => {

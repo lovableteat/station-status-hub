@@ -280,7 +280,7 @@ const Index = () => {
   const { updateCurrentModule } = useUserPresence();
   const { activeProjectId, isSwitchingProject } = useTestProject();
   const { isUpdating } = useUnifiedData();
-  const { canViewModule } = usePermissions();
+  const { canViewModule, loading: permissionsLoading } = usePermissions();
   const isCompactLayout = useIsCompactLayout();
   const isDemoMode =
     import.meta.env.DEV &&
@@ -391,22 +391,25 @@ const Index = () => {
   );
 
   useEffect(() => {
+    if (permissionsLoading) return;
     if (activeWorkspace && !workspaceItems.some((item) => item.id === activeWorkspace)) {
       setActiveWorkspace(null);
     }
-  }, [activeWorkspace, workspaceItems]);
+  }, [activeWorkspace, permissionsLoading, workspaceItems]);
 
   useEffect(() => {
+    if (permissionsLoading) return;
     if (!availableStationModules.some((item) => item.id === activeStationModule)) {
       setActiveStationModule(availableStationModules[0]?.id ?? "dashboard");
     }
-  }, [activeStationModule, availableStationModules]);
+  }, [activeStationModule, availableStationModules, permissionsLoading]);
 
   useEffect(() => {
+    if (permissionsLoading) return;
     if (!availableAdminModules.includes(activeAdminModule)) {
       setActiveAdminModule(availableAdminModules[0] ?? "users");
     }
-  }, [activeAdminModule, availableAdminModules]);
+  }, [activeAdminModule, availableAdminModules, permissionsLoading]);
 
   useEffect(() => {
     const presenceModule =

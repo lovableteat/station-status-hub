@@ -287,7 +287,7 @@ export function CollaborationCenter() {
       .channel(`collaboration-notifications:${user.userId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "user_notifications", filter: `recipient_id=eq.${user.userId}` },
+        { event: "*", schema: "workspace", table: "user_notifications", filter: `recipient_id=eq.${user.userId}` },
         () => void loadNotifications(),
       )
       .subscribe();

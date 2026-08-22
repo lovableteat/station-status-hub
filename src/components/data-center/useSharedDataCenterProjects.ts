@@ -184,7 +184,7 @@ export function useSharedDataCenterProjects({
       .channel("data-center-shared-projects")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "data_center_projects" },
+        { event: "*", schema: "workspace", table: "data_center_projects" },
         (payload) => {
           if (payload.eventType === "DELETE") {
             void loadProjects();

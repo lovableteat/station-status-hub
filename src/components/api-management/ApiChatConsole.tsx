@@ -1124,7 +1124,7 @@ export function ApiChatConsole({
       .channel("api-chat-shared-prompts")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "command_library" },
+        { event: "*", schema: "workspace", table: "command_library" },
         () => {
           void loadSharedPrompts();
         }

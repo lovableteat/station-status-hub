@@ -440,7 +440,7 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       .channel("maintenance_project_changes")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "test_projects" },
+        { event: "*", schema: "workspace", table: "test_projects" },
         refreshProjects
       )
       .subscribe();
