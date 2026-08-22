@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 }
 
-const supabaseSchema = Deno.env.get('SUPABASE_DB_SCHEMA') ?? 'public'
+const supabaseSchema = Deno.env.get('APP_DB_SCHEMA') ?? 'public'
 
 serve(async (req) => {
   // Handle CORS preflight requests

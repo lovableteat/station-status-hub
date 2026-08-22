@@ -47,7 +47,7 @@ test("edge functions stay on public until the remote schema cutover is enabled",
 
   for (const functionFile of functionFiles) {
     const source = read(functionFile);
-    assert.match(source, /Deno\.env\.get\(["']SUPABASE_DB_SCHEMA["']\)\s*\?\?\s*["']public["']/);
+    assert.match(source, /Deno\.env\.get\(["']APP_DB_SCHEMA["']\)\s*\?\?\s*["']public["']/);
     assert.match(source, /schema:\s*supabaseSchema/);
   }
 });

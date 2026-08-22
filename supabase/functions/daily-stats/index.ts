@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const supabaseSchema = Deno.env.get('SUPABASE_DB_SCHEMA') ?? 'public'
+const supabaseSchema = Deno.env.get('APP_DB_SCHEMA') ?? 'public'
 
 serve(async (req) => {
   // Handle CORS preflight requests
