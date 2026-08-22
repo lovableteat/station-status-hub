@@ -78,6 +78,37 @@ test("station progress lookup only counts completed items from the matching stat
   assert.equal(lookup.get("system-1\u0000station-2"), 100);
 });
 
+test("unresolved issues derive Blocked display without overwriting completed progress", () => {
+  const items = [
+    { id: "item-a", station_id: "station-1" },
+    { id: "item-b", station_id: "station-1" },
+  ];
+  const progress = [
+    { item_id: "item-a", station_id: "station-1", status: "Done", system_id: "system-1" },
+    { item_id: "item-b", station_id: "station-1", status: "Done", system_id: "system-1" },
+  ];
+  const issues = [
+    {
+      status: "open",
+      station_id: "station-1",
+      system_id: "system-1",
+      test_item_id: "item-a",
+    },
+    {
+      status: "resolved",
+      station_id: "station-1",
+      system_id: "system-1",
+      test_item_id: "item-b",
+    },
+  ];
+
+  const blocked = presentation.createStationBlockedLookup(items, progress, issues);
+  const percentages = presentation.createStationProgressLookup(items, progress);
+
+  assert.equal(blocked.get("system-1\u0000station-1"), 1);
+  assert.equal(percentages.get("system-1\u0000station-1"), 100);
+});
+
 test("virtual tracker range keeps a small overscanned window for 1000 rows", () => {
   assert.equal(typeof presentation.getTrackerVirtualRange, "function");
   const range = presentation.getTrackerVirtualRange({
