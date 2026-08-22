@@ -7,6 +7,7 @@ const SUPABASE_PUBLISHABLE_KEY = (
   import.meta.env.VITE_SUPABASE_ANON_KEY
   ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 ) as string | undefined;
+const SUPABASE_SCHEMA = (import.meta.env.VITE_SUPABASE_SCHEMA ?? "public") as keyof Database;
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   throw new Error(
@@ -44,7 +45,7 @@ const authStorageKey = createTabAuthStorageKey();
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   db: {
-    schema: "workspace",
+    schema: SUPABASE_SCHEMA,
   },
   global: {
     // Only Auth endpoints receive a network deadline. Storage uploads and

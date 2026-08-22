@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const supabaseSchema = Deno.env.get("SUPABASE_DB_SCHEMA") ?? "public";
+
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -41,7 +43,7 @@ serve(async (request) => {
     }
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
-      db: { schema: "workspace" },
+      db: { schema: supabaseSchema },
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: legacyResult, error: legacyError } = await admin.rpc("authenticate_user", {
@@ -119,7 +121,7 @@ serve(async (request) => {
     }
 
     const authClient = createClient(supabaseUrl, anonKey, {
-      db: { schema: "workspace" },
+      db: { schema: supabaseSchema },
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: sessionData, error: signInError } = await authClient.auth.signInWithPassword({
