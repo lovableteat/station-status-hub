@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -64,6 +64,7 @@ import {
   DEFAULT_TRACKER_PAGE_SIZE,
   TRACKER_PAGE_SIZE_OPTIONS,
 } from "./testTrackerPresentation";
+import type { TrackerLinkedIssue } from "./testTrackerPresentation";
 
 type StatusFilter = "all" | "未開始" | "進行中" | "已完成";
 type TrackerView = "table" | "board";
@@ -246,6 +247,55 @@ export function TestTracker() {
   const [pdfExporterOpen, setPdfExporterOpen] = useState(false);
   const [displayStations, setDisplayStations] = useState(stations);
   const [displayItems, setDisplayItems] = useState(items);
+  const [linkedIssues, setLinkedIssues] = useState<TrackerLinkedIssue[]>([]);
+
+  const loadLinkedIssues = useCallback(async () => {
+    if (!activeProjectId) {
+      setLinkedIssues([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("issues")
+      .select("id, status, system_id, station_id, test_item_id")
+      .eq("project_id", activeProjectId)
+      .not("system_id", "is", null)
+      .not("station_id", "is", null)
+      .not("test_item_id", "is", null)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to load linked tracker issues:", error);
+      return;
+    }
+    setLinkedIssues((data ?? []) as TrackerLinkedIssue[]);
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setLinkedIssues([]);
+      return;
+    }
+
+    void loadLinkedIssues();
+    const channel = supabase
+      .channel(`tracker-linked-issues:${activeProjectId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          filter: `project_id=eq.${activeProjectId}`,
+          schema: "workspace",
+          table: "issues",
+        },
+        () => void loadLinkedIssues(),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeProjectId, loadLinkedIssues]);
 
   useEffect(() => {
     if (typeof window === "undefined" || urlFiltersHydrated) return;
@@ -695,6 +745,7 @@ export function TestTracker() {
             systems={pagedSystems}
             stations={displayStations}
             items={displayItems}
+            linkedIssues={linkedIssues}
             progress={progress}
             onCloneSystem={setCloneSourceSystem}
             onEditSystemData={setEditingSystemId}

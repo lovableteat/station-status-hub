@@ -29,6 +29,7 @@ import {
   TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
   TRACKER_ROW_HEIGHT,
 } from "./testTrackerPresentation";
+import type { TrackerLinkedIssue } from "./testTrackerPresentation";
 
 interface TrackerSystem {
   assigned_engineer?: string | null;
@@ -62,6 +63,7 @@ interface TestProgressTableProps {
   columnStorageKey: string;
   headerControls?: ReactNode;
   items: TrackerItem[];
+  linkedIssues: TrackerLinkedIssue[];
   onCloneSystem: (system: TrackerSystem) => void;
   onEditSystemData: (systemId: string) => void;
   onSelectStation: (systemId: string, stationId: string) => void;
@@ -377,6 +379,7 @@ export function TestProgressTable({
   columnStorageKey,
   headerControls,
   items,
+  linkedIssues,
   onCloneSystem,
   onEditSystemData,
   onSelectStation,
@@ -438,8 +441,8 @@ export function TestProgressTable({
     [items, progress]
   );
   const stationBlockedLookup = useMemo(
-    () => createStationBlockedLookup(items, progress),
-    [items, progress]
+    () => createStationBlockedLookup(items, progress, linkedIssues),
+    [items, linkedIssues, progress]
   );
   const systemWindowKey = `${systems.length}:${systems[0]?.id || ""}:${systems[systems.length - 1]?.id || ""}`;
   const virtualRange = getTrackerVirtualRange({

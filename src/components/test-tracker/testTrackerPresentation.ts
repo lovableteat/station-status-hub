@@ -71,6 +71,14 @@ interface TrackerProgressLike {
   system_id: string;
 }
 
+export interface TrackerLinkedIssue {
+  id?: string;
+  station_id: string | null;
+  status?: string | null;
+  system_id: string | null;
+  test_item_id: string | null;
+}
+
 export function getStationProgressKey(systemId: string, stationId: string) {
   return `${systemId}\u0000${stationId}`;
 }
@@ -111,6 +119,7 @@ export function createStationProgressLookup(
 export function createStationBlockedLookup(
   items: TrackerItemLike[],
   progress: TrackerProgressLike[],
+  linkedIssues: TrackerLinkedIssue[] = [],
 ) {
   const itemIdsByStation = new Map<string, Set<string>>();
   items.forEach((item) => {
@@ -120,13 +129,24 @@ export function createStationBlockedLookup(
   });
 
   const blockedItemsBySystemStation = new Map<string, Set<string>>();
+  const addBlockedItem = (systemId: string, stationId: string, itemId: string) => {
+    if (!itemIdsByStation.get(stationId)?.has(itemId)) return;
+    const key = getStationProgressKey(systemId, stationId);
+    const blockedItems = blockedItemsBySystemStation.get(key) ?? new Set<string>();
+    blockedItems.add(itemId);
+    blockedItemsBySystemStation.set(key, blockedItems);
+  };
+
   progress.forEach((entry) => {
     if (!["Error", "Blocked", "異常"].includes(entry.status ?? "")) return;
-    if (!itemIdsByStation.get(entry.station_id)?.has(entry.item_id)) return;
-    const key = getStationProgressKey(entry.system_id, entry.station_id);
-    const blockedItems = blockedItemsBySystemStation.get(key) ?? new Set<string>();
-    blockedItems.add(entry.item_id);
-    blockedItemsBySystemStation.set(key, blockedItems);
+    addBlockedItem(entry.system_id, entry.station_id, entry.item_id);
+  });
+
+  linkedIssues.forEach((issue) => {
+    const status = (issue.status ?? "open").toLowerCase();
+    if (status === "resolved" || status === "closed") return;
+    if (!issue.system_id || !issue.station_id || !issue.test_item_id) return;
+    addBlockedItem(issue.system_id, issue.station_id, issue.test_item_id);
   });
 
   return new Map(
