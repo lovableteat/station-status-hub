@@ -9,14 +9,15 @@ function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
-test("machine and progress citations open the requested system and station", () => {
+test("machine and progress links expose the requested system and station as visible filters", () => {
   const source = read("src/components/test-tracker/TestTracker.tsx");
 
-  assert.match(source, /get\("system"\)/);
-  assert.match(source, /get\("station"\)/);
-  assert.match(source, /system\.id === requestedSystem \|\| system\.system_name === requestedSystem/);
-  assert.match(source, /setLockedStationId\(requestedStation\)/);
-  assert.match(source, /setSelectedSystemId\(matchedSystem\.id\)/);
+  assert.match(source, /parseTrackerAutoFilters\(new URLSearchParams\(window\.location\.search\)\)/);
+  assert.match(source, /station\.id === parsed\.station \|\| station\.station_name === parsed\.station/);
+  assert.match(source, /setStationFilter\(matchedStation\?\.station_name \?\? "all"\)/);
+  assert.match(source, /setSystemFilter\(parsed\.system\)/);
+  assert.match(source, /setQuery\("system", systemFilter\)/);
+  assert.match(source, /setQuery\("station", stationFilter === "all" \? "" : stationFilter\)/);
 });
 
 test("station citations select the requested flow station", () => {

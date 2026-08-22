@@ -81,10 +81,10 @@ test("performance workspace keeps its navigation in a responsive sidebar", async
   assert.match(styleSource, /\.performance-sidebar\.is-mobile-open/);
   assert.match(styleSource, /grid-template-columns: var\(--performance-sidebar-width\)/);
   assert.match(styleSource, /\.performance-workspace\.is-sidebar-collapsed/);
-  assert.match(styleSource, /\.performance-content\s*\{[\s\S]*overflow-y: auto/);
+  assert.match(styleSource, /\.performance-content\s*\{[\s\S]*overflow: visible/);
   assert.match(styleSource, /overscroll-behavior: contain/);
   assert.match(styleSource, /@media \(max-width: 1180px\)/);
   assert.match(styleSource, /@media \(max-width: 480px\)/);
-  assert.match(shellSource, /activeWorkspace === "performance" && "h-\[100dvh\] overflow-hidden"/);
-  assert.match(shellSource, /activeWorkspace === "performance"[\s\S]*?"min-h-0 overflow-hidden"/);
+  assert.match(shellSource, /activeWorkspace === "performance" && "performance-app-shell"/);
+  assert.match(shellSource, /activeWorkspace === "performance"[\s\S]*?"min-h-0"/);
 });

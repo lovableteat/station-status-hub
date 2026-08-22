@@ -19,6 +19,7 @@ import { SystemEditDialog } from "./SystemEditDialog";
 import { SystemDeleteButton } from "./SystemManager";
 import { SystemResetDialog } from "./SystemResetDialog";
 import {
+  createStationBlockedLookup,
   createStationProgressLookup,
   getStationProgressKey,
   getTrackerColumnSpec,
@@ -436,6 +437,10 @@ export function TestProgressTable({
     () => createStationProgressLookup(items, progress),
     [items, progress]
   );
+  const stationBlockedLookup = useMemo(
+    () => createStationBlockedLookup(items, progress),
+    [items, progress]
+  );
   const systemWindowKey = `${systems.length}:${systems[0]?.id || ""}:${systems[systems.length - 1]?.id || ""}`;
   const virtualRange = getTrackerVirtualRange({
     rowCount: systems.length,
@@ -556,10 +561,10 @@ export function TestProgressTable({
     return stationProgressLookup.get(getStationProgressKey(systemId, stationId)) ?? 0;
   };
 
-  if (!systems.length) {
+  if (!isDesktop && !systems.length) {
     return (
-      <div className="maintenance-panel flex min-h-[280px] items-center justify-center text-sm text-[#a9c0d1]">
-        目前篩選條件沒有符合的機台。
+      <div className="maintenance-panel flex min-h-[180px] items-center justify-center text-sm text-[#a9c0d1]">
+        目前篩選條件沒有符合的機台
       </div>
     );
   }
@@ -694,8 +699,23 @@ export function TestProgressTable({
           <div
             role="rowgroup"
             className="relative"
-            style={{ height: systems.length * TRACKER_ROW_HEIGHT }}
+            style={{ height: systems.length ? systems.length * TRACKER_ROW_HEIGHT : 150 }}
           >
+            {!systems.length && (
+              <div
+                role="row"
+                data-testid="test-tracker-empty-row"
+                className="absolute inset-0 flex items-center border-b border-[var(--tracker-table-border)] bg-[var(--tracker-row-even)] text-sm text-[#a9c0d1]"
+              >
+                <div
+                  role="cell"
+                  data-testid="test-tracker-empty-message"
+                  className="sticky left-0 flex h-full w-[min(42rem,calc(100vw-2rem))] items-center justify-center"
+                >
+                  目前篩選條件沒有符合的機台
+                </div>
+              </div>
+            )}
             {visibleSystems.map((system, visibleIndex) => {
               const status = normalizeStatus(system);
               const absoluteIndex = virtualRange.start + visibleIndex;
@@ -772,6 +792,7 @@ export function TestProgressTable({
 
                   {sortedStations.map((station) => {
                     const percent = getStationPercent(system.id, station.id);
+                    const blocked = stationBlockedLookup.get(getStationProgressKey(system.id, station.id)) ?? 0;
                     return (
                       <div key={station.id} role="cell" className="min-w-0 px-0.5">
                         <button
@@ -781,11 +802,14 @@ export function TestProgressTable({
                           aria-label={`編輯 ${system.system_name} ${station.station_name} 進度`}
                         >
                           <div className="mb-0.5 flex items-center justify-between text-[10px] leading-3 text-[#9db6c8]">
-                            <span>{percent === 100 ? "完成" : percent > 0 ? "進度" : "未開始"}</span>
-                            <span className="font-data text-[#d8e6f0]">{percent}%</span>
+                            <span className={cn(blocked > 0 && "font-semibold text-rose-200")}>
+                              {blocked > 0 ? `Blocked ${blocked}` : percent === 100 ? "完成" : percent > 0 ? "進度" : "未開始"}
+                            </span>
+                            <span className={cn("font-data text-[#d8e6f0]", blocked > 0 && "text-rose-100")}>{percent}%</span>
                           </div>
                           <SegmentedProgress
                             value={percent}
+                            tone={blocked ? "danger" : "auto"}
                             label={`${system.system_name} ${station.station_name} 進度`}
                           />
                         </button>

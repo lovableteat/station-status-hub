@@ -4,6 +4,7 @@ interface SegmentedProgressProps {
   className?: string;
   label?: string;
   segments?: number;
+  tone?: "auto" | "danger";
   value: number;
 }
 
@@ -11,12 +12,15 @@ export function SegmentedProgress({
   className,
   label,
   segments = 16,
+  tone = "auto",
   value,
 }: SegmentedProgressProps) {
   const safeValue = Math.min(100, Math.max(0, value));
   const filledSegments = safeValue > 0 ? Math.max(1, Math.round((safeValue / 100) * segments)) : 0;
   const filledClass =
-    safeValue >= 80
+    tone === "danger"
+      ? "bg-rose-400 shadow-[0_0_7px_rgba(251,113,133,0.78)]"
+      : safeValue >= 80
       ? "bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.72)]"
       : safeValue >= 34
         ? "bg-amber-300 shadow-[0_0_7px_rgba(252,211,77,0.68)]"
@@ -26,6 +30,7 @@ export function SegmentedProgress({
     <div
       className={cn(
         "flex h-3.5 w-full items-center rounded-md border border-[#294968] bg-[#071629] px-1",
+        tone === "danger" && "border-rose-300/60 bg-rose-950/35",
         className
       )}
       role="progressbar"
@@ -46,7 +51,7 @@ export function SegmentedProgress({
               "min-w-0 rounded-full transition-colors duration-200 motion-reduce:transition-none",
               index < filledSegments
                 ? filledClass
-                : "bg-[#18324d]"
+                : tone === "danger" ? "bg-rose-400/25" : "bg-[#18324d]"
             )}
           />
         ))}

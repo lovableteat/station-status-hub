@@ -336,6 +336,8 @@ type BaseDatabase = {
           description: string | null
           id: string
           language: string
+          owner_workspace: string | null
+          scope: string
           sop_content: string | null
           tags: string[] | null
           title: string
@@ -348,6 +350,8 @@ type BaseDatabase = {
           description?: string | null
           id?: string
           language?: string
+          owner_workspace?: string | null
+          scope?: string
           sop_content?: string | null
           tags?: string[] | null
           title: string
@@ -360,6 +364,8 @@ type BaseDatabase = {
           description?: string | null
           id?: string
           language?: string
+          owner_workspace?: string | null
+          scope?: string
           sop_content?: string | null
           tags?: string[] | null
           title?: string
@@ -403,7 +409,9 @@ type BaseDatabase = {
           is_active: boolean
           name: string
           notes: string | null
+          owner_workspace: string | null
           platform: string
+          scope: string
           tags: string[] | null
           updated_at: string
         }
@@ -418,7 +426,9 @@ type BaseDatabase = {
           is_active?: boolean
           name: string
           notes?: string | null
+          owner_workspace?: string | null
           platform?: string
+          scope?: string
           tags?: string[] | null
           updated_at?: string
         }
@@ -433,7 +443,9 @@ type BaseDatabase = {
           is_active?: boolean
           name?: string
           notes?: string | null
+          owner_workspace?: string | null
           platform?: string
+          scope?: string
           tags?: string[] | null
           updated_at?: string
         }
@@ -3185,6 +3197,8 @@ type BaseDatabase = {
           file_size: number | null
           id: string
           is_required: boolean | null
+          owner_workspace: string | null
+          scope: string
           sop_content: string | null
           tool_name: string
           updated_at: string | null
@@ -3203,6 +3217,8 @@ type BaseDatabase = {
           file_size?: number | null
           id?: string
           is_required?: boolean | null
+          owner_workspace?: string | null
+          scope?: string
           sop_content?: string | null
           tool_name: string
           updated_at?: string | null
@@ -3221,6 +3237,8 @@ type BaseDatabase = {
           file_size?: number | null
           id?: string
           is_required?: boolean | null
+          owner_workspace?: string | null
+          scope?: string
           sop_content?: string | null
           tool_name?: string
           updated_at?: string | null
@@ -3659,6 +3677,17 @@ type BaseDatabase = {
       }
     }
     Functions: {
+      set_test_progress_status: {
+        Args: {
+          p_project_id: string
+          p_status: string
+          p_station_id: string
+          p_system_id: string
+          p_test_item_id: string
+          p_updates?: Json
+        }
+        Returns: Json
+      }
       approve_system_user: {
         Args: { p_user_id: string }
         Returns: boolean

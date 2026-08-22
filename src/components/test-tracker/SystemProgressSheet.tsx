@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Check, Clock3, Play, Save, Server, Square, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Check, Clock3, ExternalLink, Play, Save, Server, Square, XCircle } from "lucide-react";
 
 import { IssueCreateDialog } from "@/components/issues/IssueCreateDialog";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { SegmentedProgress } from "./SegmentedProgress";
 import { TimeRecordManager } from "./TimeRecordManager";
@@ -64,6 +66,17 @@ interface TrackerProgress {
   status?: string | null;
   system_id: string;
 }
+
+interface LinkedIssue {
+  id: string;
+  priority: string | null;
+  station_id: string | null;
+  status: string | null;
+  test_item_id: string | null;
+  title: string;
+}
+
+const RESOLVED_ISSUE_STATUSES = new Set(["resolved", "closed"]);
 
 function calculateHours(startedAt: string, completedAt: string) {
   const duration = new Date(completedAt).getTime() - new Date(startedAt).getTime();
@@ -182,12 +195,61 @@ export function SystemProgressSheet({
   versionLabel,
 }: SystemProgressSheetProps) {
   const { toast } = useToast();
+  const { activeProjectId } = useTestProject();
   const [selectedStationId, setSelectedStationId] = useState<string>("");
   const [drafts, setDrafts] = useState<Record<string, ItemDraft>>({});
+  const [linkedIssues, setLinkedIssues] = useState<LinkedIssue[]>([]);
   const [savingItemId, setSavingItemId] = useState<string | null>(null);
   const [clockNow, setClockNow] = useState(Date.now());
   const dirtyItemIdsRef = useRef(new Set<string>());
   const draftContextRef = useRef("");
+
+  const loadLinkedIssues = useCallback(async () => {
+    if (!open || !system || !activeProjectId) {
+      setLinkedIssues([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("issues")
+      .select("id, title, status, priority, station_id, test_item_id")
+      .eq("project_id", activeProjectId)
+      .eq("system_id", system.id)
+      .not("test_item_id", "is", null)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to load linked test item issues:", error);
+      return;
+    }
+    setLinkedIssues((data ?? []) as LinkedIssue[]);
+  }, [activeProjectId, open, system]);
+
+  useEffect(() => {
+    if (!open || !system || !activeProjectId) {
+      setLinkedIssues([]);
+      return;
+    }
+
+    void loadLinkedIssues();
+    const channel = supabase
+      .channel(`test-item-issues:${activeProjectId}:${system.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          filter: `project_id=eq.${activeProjectId}`,
+          schema: "workspace",
+          table: "issues",
+        },
+        () => void loadLinkedIssues(),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeProjectId, loadLinkedIssues, open, system]);
 
   useEffect(() => {
     if (!open) return;
@@ -256,6 +318,21 @@ export function SystemProgressSheet({
     const entries = progress.filter((entry) => entry.system_id === system?.id);
     return new Map(entries.map((entry) => [entry.item_id, entry]));
   }, [progress, system?.id]);
+  const linkedIssuesByItemId = useMemo(() => {
+    const grouped = new Map<string, LinkedIssue[]>();
+    linkedIssues.forEach((issue) => {
+      if (!issue.test_item_id) return;
+      const issueRows = grouped.get(issue.test_item_id) ?? [];
+      issueRows.push(issue);
+      grouped.set(issue.test_item_id, issueRows);
+    });
+    return grouped;
+  }, [linkedIssues]);
+  const blockedItemIds = useMemo(() => new Set(
+    linkedIssues
+      .filter((issue) => issue.test_item_id && !RESOLVED_ISSUE_STATUSES.has(issue.status ?? "open"))
+      .map((issue) => issue.test_item_id as string)
+  ), [linkedIssues]);
   const stationItems = useMemo(
     () =>
       items
@@ -263,24 +340,32 @@ export function SystemProgressSheet({
         .sort((left, right) => left.item_order - right.item_order),
     [items, selectedStationId]
   );
+  const stationCompletedCount = stationItems.filter((item) => drafts[item.id]?.status === "Done").length;
+  const stationBlockedCount = stationItems.filter((item) => blockedItemIds.has(item.id)).length;
   const stationPercent = stationItems.length
-    ? Math.round(
-        stationItems.reduce((sum, item) => sum + (drafts[item.id]?.progress_percent ?? 0), 0) /
-          stationItems.length
-      )
+    ? Math.round((stationCompletedCount / stationItems.length) * 100)
     : 0;
 
   const saveItem = async (
     item: TrackerItem,
     override?: ItemDraft,
-    shouldRefresh = true
+    shouldRefresh = true,
+    extraUpdates: Record<string, unknown> = {},
   ) => {
-    if (!system) return false;
+    if (!system || !activeProjectId) return false;
     const draft = override ?? drafts[item.id];
     if (!draft) return false;
+    if (draft.status === "Done" && blockedItemIds.has(item.id)) {
+      toast({
+        title: "尚有問題未被解決",
+        description: "請先將相關問題標記為已解決或已關閉，再完成此測試項目。",
+        variant: "destructive",
+      });
+      return false;
+    }
     const existing = progressByItemId.get(item.id);
     const now = new Date().toISOString();
-    const updates: Record<string, unknown> = { ...draft };
+    const updates: Record<string, unknown> = { ...draft, ...extraUpdates };
 
     if (draft.status === "On-going") {
       updates.started_at = existing?.completed_at ? now : existing?.started_at || now;
@@ -304,7 +389,31 @@ export function SystemProgressSheet({
     }
 
     setSavingItemId(item.id);
-    const success = await updateProgress(system.id, item.station_id, item.id, updates);
+    let success = false;
+    if (draft.status === "Done") {
+      const { error } = await supabase.rpc("set_test_progress_status", {
+        p_project_id: activeProjectId,
+        p_status: draft.status,
+        p_station_id: item.station_id,
+        p_system_id: system.id,
+        p_test_item_id: item.id,
+        p_updates: updates,
+      });
+      if (error) {
+        const unresolved = error.message.includes("尚有問題未被解決");
+        toast({
+          title: unresolved ? "尚有問題未被解決" : "進度儲存失敗",
+          description: unresolved
+            ? "請先將相關問題標記為已解決或已關閉，再完成此測試項目。"
+            : error.message,
+          variant: "destructive",
+        });
+      } else {
+        success = true;
+      }
+    } else {
+      success = await updateProgress(system.id, item.station_id, item.id, updates);
+    }
     setSavingItemId(null);
     if (success) {
       dirtyItemIdsRef.current.delete(item.id);
@@ -350,22 +459,17 @@ export function SystemProgressSheet({
     const startedAt = existing?.started_at || completedAt;
     const nextDraft: ItemDraft = { ...draft, progress_percent: 100, status: "Done" };
 
-    setSavingItemId(item.id);
-    const success = await updateProgress(system.id, item.station_id, item.id, {
-      ...nextDraft,
+    const success = await saveItem(item, nextDraft, true, {
       actual_hours: calculateHours(startedAt, completedAt),
       completed_at: completedAt,
       started_at: startedAt,
     });
-    setSavingItemId(null);
     if (!success) {
-      toast({ title: "完成計時失敗", description: "無法寫入完成時間，請稍後再試。", variant: "destructive" });
       return;
     }
     dirtyItemIdsRef.current.delete(item.id);
     setDrafts((current) => ({ ...current, [item.id]: nextDraft }));
     toast({ title: "計時已完成", description: `${item.item_name} 已設為 100% 完成。` });
-    onUpdated();
   };
 
   const completeStation = async () => {
@@ -420,6 +524,7 @@ export function SystemProgressSheet({
               {stations.map((station) => {
                 const stationItemIds = items.filter((item) => item.station_id === station.id).map((item) => item.id);
                 const completed = stationItemIds.filter((itemId) => drafts[itemId]?.status === "Done").length;
+                const blocked = stationItemIds.filter((itemId) => blockedItemIds.has(itemId)).length;
                 return (
                   <button
                     key={station.id}
@@ -433,7 +538,10 @@ export function SystemProgressSheet({
                     onClick={() => setSelectedStationId(station.id)}
                   >
                     <div className="truncate text-sm font-medium">{station.station_name}</div>
-                    <div className="font-data mt-1 text-xs">{completed}/{stationItemIds.length}</div>
+                    <div className="font-data mt-1 flex items-center gap-2 text-xs">
+                      <span>{completed}/{stationItemIds.length}</span>
+                      {blocked > 0 && <span className="rounded bg-rose-300/15 px-1.5 py-0.5 text-rose-100">Blocked {blocked}</span>}
+                    </div>
                   </button>
                 );
               })}
@@ -445,9 +553,12 @@ export function SystemProgressSheet({
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between text-xs text-[#a9c0d1]">
               <span>{selectedStation?.station_name || "選擇站點"}</span>
-              <span className="font-data">{stationPercent}%</span>
+              <span className="flex items-center gap-2">
+                {stationBlockedCount > 0 && <Badge variant="outline" className="rounded-md border-rose-300/55 bg-rose-300/15 text-rose-100">Blocked {stationBlockedCount}</Badge>}
+                <span className="font-data">{stationPercent}%</span>
+              </span>
             </div>
-            <SegmentedProgress value={stationPercent} className="mt-1.5" label={`${selectedStation?.station_name || "站點"} 進度`} />
+            <SegmentedProgress value={stationPercent} tone={stationBlockedCount ? "danger" : "auto"} className="mt-1.5" label={`${selectedStation?.station_name || "站點"} 進度`} />
           </div>
           <Button size="sm" variant="outline" disabled={!stationItems.length} onClick={completeStation}>
             <Check className="mr-2 h-4 w-4" />
@@ -465,8 +576,10 @@ export function SystemProgressSheet({
               };
               const timeRecord = progressByItemId.get(item.id);
               const isTimerRunning = Boolean(timeRecord?.started_at && !timeRecord?.completed_at);
+              const itemIssues = linkedIssuesByItemId.get(item.id) ?? [];
+              const blocked = blockedItemIds.has(item.id);
               return (
-                <div key={item.id} className={cn("rounded-xl border p-3 transition-colors", statusCardClass(draft.status))}>
+                <div key={item.id} className={cn("rounded-xl border p-3 transition-colors", statusCardClass(blocked ? "Error" : draft.status))}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -475,26 +588,67 @@ export function SystemProgressSheet({
                       </div>
                       {item.description && <p className="mt-1 line-clamp-1 text-xs text-[#a9c0d1]">{item.description}</p>}
                     </div>
-                    <Badge variant="outline" className={cn("shrink-0 rounded-md", statusBadgeClass(draft.status))}>
-                      {STATUS_OPTIONS.find((option) => option.value === draft.status)?.label || draft.status}
-                    </Badge>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {blocked && <Badge variant="outline" className="rounded-md border-rose-300/65 bg-rose-300/20 text-rose-50">Blocked</Badge>}
+                      <Badge variant="outline" className={cn("rounded-md", statusBadgeClass(blocked ? "Error" : draft.status))}>
+                        {blocked ? "異常" : STATUS_OPTIONS.find((option) => option.value === draft.status)?.label || draft.status}
+                      </Badge>
+                    </div>
                   </div>
+
+                  {itemIssues.length > 0 && (
+                    <div className="mt-3 space-y-1.5 rounded-lg border border-rose-300/25 bg-rose-950/20 p-2" aria-label={`${item.item_name} 關聯問題`}>
+                      {itemIssues.map((issue) => {
+                        const unresolved = !RESOLVED_ISSUE_STATUSES.has(issue.status ?? "open");
+                        return (
+                          <button
+                            key={issue.id}
+                            type="button"
+                            className="flex w-full items-center justify-between gap-3 rounded-md border border-transparent px-2 py-1.5 text-left text-xs text-[#dce9f2] hover:border-rose-300/35 hover:bg-rose-300/10"
+                            onClick={() => window.dispatchEvent(new CustomEvent("navigate", {
+                              detail: { module: "issues", params: { openIssue: issue.id } },
+                            }))}
+                          >
+                            <span className="min-w-0 truncate">{issue.title}</span>
+                            <span className={cn("flex shrink-0 items-center gap-1", unresolved ? "text-rose-200" : "text-emerald-200")}>
+                              {unresolved ? "未解決" : issue.status === "closed" ? "已關閉" : "已解決"}
+                              <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {blocked && (
+                    <p
+                      data-testid="blocked-item-warning"
+                      className="mt-2 flex items-center gap-1.5 text-xs font-medium text-rose-100"
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                      尚有問題未被解決
+                    </p>
+                  )}
 
                   <div className="mt-3 grid gap-2 sm:grid-cols-[140px_92px_minmax(0,1fr)_36px]">
                     <Select
                       value={draft.status}
-                      onValueChange={(value) =>
+                      onValueChange={(value) => {
+                        if (value === "Done" && blocked) {
+                          toast({ title: "尚有問題未被解決", variant: "destructive" });
+                          return;
+                        }
                         updateItemDraft(item.id, {
                           ...draft,
                           progress_percent: value === "Done" ? 100 : value === "Not Start" ? 0 : draft.progress_percent,
                           status: value,
-                        })
-                      }
+                        });
+                      }}
                     >
                       <SelectTrigger className={cn("h-9 font-semibold", statusControlClass(draft.status))}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {STATUS_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value} className={statusBadgeClass(option.value)}>
+                          <SelectItem key={option.value} value={option.value} disabled={option.value === "Done" && blocked} className={statusBadgeClass(option.value)}>
                             {option.label}
                           </SelectItem>
                         ))}
@@ -557,7 +711,15 @@ export function SystemProgressSheet({
                             relate: `${selectedStation?.station_name || "未指定站點"} / ${item.item_name}`,
                             category: "L10 測試異常",
                           }}
-                          onIssueCreated={() => undefined}
+                          onIssueCreated={() => {
+                            dirtyItemIdsRef.current.delete(item.id);
+                            setDrafts((current) => ({
+                              ...current,
+                              [item.id]: { ...draft, progress_percent: 0, status: "Error" },
+                            }));
+                            void loadLinkedIssues();
+                            onUpdated();
+                          }}
                           trigger={(
                             <Button
                               type="button"

@@ -40,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,6 +56,8 @@ interface Command {
   tags: string[];
   examples?: string;
   notes?: string;
+  owner_workspace: string | null;
+  scope: "global" | "workspace";
   created_at: string;
   updated_at: string;
 }
@@ -68,6 +71,7 @@ interface CommandDraft {
   tags: string;
   examples: string;
   notes: string;
+  is_global: boolean;
 }
 
 const EMPTY_DRAFT: CommandDraft = {
@@ -79,7 +83,10 @@ const EMPTY_DRAFT: CommandDraft = {
   tags: "",
   examples: "",
   notes: "",
+  is_global: false,
 };
+
+type AssetScopeFilter = "all" | "global" | "workspace";
 
 const categories = [
   { id: "system", name: "系統管理", icon: Settings },
@@ -145,6 +152,8 @@ function mapCommand(item: {
   tags: string[] | null;
   examples: string | null;
   notes: string | null;
+  owner_workspace: string | null;
+  scope: string;
   created_at: string;
   updated_at: string;
 }): Command {
@@ -158,18 +167,21 @@ function mapCommand(item: {
     tags: item.tags || [],
     examples: item.examples || undefined,
     notes: item.notes || undefined,
+    owner_workspace: item.owner_workspace,
+    scope: item.scope === "workspace" ? "workspace" : "global",
     created_at: item.created_at,
     updated_at: item.updated_at,
   };
 }
 
-export function CommandLibrary() {
+export function CommandLibrary({ workspaceKey = "station-status" }: { workspaceKey?: string }) {
   const [commands, setCommands] = useState<Command[]>([]);
   const [selectedCommand, setSelectedCommand] = useState<Command | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [platformFilter, setPlatformFilter] = useState("all");
+  const [scopeFilter, setScopeFilter] = useState<AssetScopeFilter>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<Command | null>(null);
   const [draft, setDraft] = useState<CommandDraft>(EMPTY_DRAFT);
@@ -182,6 +194,7 @@ export function CommandLibrary() {
         .from("command_library")
         .select("*")
         .eq("is_active", true)
+        .or(`scope.eq.global,and(scope.eq.workspace,owner_workspace.eq.${workspaceKey})`)
         .order("updated_at", { ascending: false });
       if (error) throw error;
 
@@ -189,7 +202,7 @@ export function CommandLibrary() {
       if (!nextCommands.length) {
         const { data: inserted, error: insertError } = await supabase
           .from("command_library")
-          .insert(DEFAULT_COMMANDS)
+          .insert(DEFAULT_COMMANDS.map((command) => ({ ...command, owner_workspace: null, scope: "global" })))
           .select();
         if (insertError) throw insertError;
         nextCommands = (inserted || []).map(mapCommand);
@@ -205,7 +218,7 @@ export function CommandLibrary() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, workspaceKey]);
 
   useEffect(() => {
     void loadCommands();
@@ -222,6 +235,7 @@ export function CommandLibrary() {
       tags: command.tags.join(", "),
       examples: command.examples || "",
       notes: command.notes || "",
+      is_global: command.scope === "global",
     } : EMPTY_DRAFT);
     setIsDialogOpen(true);
   };
@@ -242,6 +256,8 @@ export function CommandLibrary() {
       tags: draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
       examples: draft.examples.trim() || null,
       notes: draft.notes.trim() || null,
+      owner_workspace: draft.is_global ? null : workspaceKey,
+      scope: draft.is_global ? "global" : "workspace",
     };
 
     try {
@@ -292,6 +308,7 @@ export function CommandLibrary() {
     const searchable = [command.name, command.command, command.description, command.tags.join(" ")].join(" ").toLowerCase();
     return (categoryFilter === "all" || command.category === categoryFilter)
       && (platformFilter === "all" || command.platform === platformFilter)
+      && (scopeFilter === "all" || command.scope === scopeFilter)
       && (!normalizedSearch || searchable.includes(normalizedSearch));
   });
 
@@ -329,6 +346,11 @@ export function CommandLibrary() {
               <div className="space-y-2"><Label htmlFor="command-description">用途說明</Label><Textarea id="command-description" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} rows={3} /></div>
               <div className="space-y-2"><Label htmlFor="command-examples">使用範例</Label><Textarea id="command-examples" value={draft.examples} onChange={(event) => setDraft((current) => ({ ...current, examples: event.target.value }))} rows={5} wrap="off" className="whitespace-pre bg-[#06111f] font-mono leading-6" /></div>
               <div className="space-y-2"><Label htmlFor="command-notes">備註與風險</Label><Textarea id="command-notes" value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} rows={3} /></div>
+              <div className="flex items-center justify-between rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3">
+                <div><div className="text-sm font-medium text-[#f3f8fc]">通用指令</div><div className="text-xs text-[#a9c0d1]">開啟後可在每個 workspace 顯示、編輯與管理</div></div>
+                <Switch checked={draft.is_global} onCheckedChange={(is_global) => setDraft((current) => ({ ...current, is_global }))} />
+              </div>
+              {editingCommand?.scope === "global" && <div className="rounded-lg border border-amber-300/30 bg-amber-300/[0.08] px-3 py-2 text-sm text-amber-100">這是通用項目，修改後會影響所有 workspace。</div>}
               <DialogFooter><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>取消</Button><Button type="submit"><Check className="mr-2 h-4 w-4" />{editingCommand ? "儲存變更" : "建立指令"}</Button></DialogFooter>
             </form>
           </DialogContent>
@@ -339,6 +361,7 @@ export function CommandLibrary() {
         <div className="relative min-w-[240px] flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7699ad]" /><Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))} className="h-9 border-[#2a526f] bg-[#06111f] pl-9" placeholder="搜尋名稱、內容、說明或標籤" /></div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}><SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">所有分類</SelectItem>{categories.map(({ id, name }) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
         <Select value={platformFilter} onValueChange={setPlatformFilter}><SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">所有平台</SelectItem>{platforms.map((platform) => <SelectItem key={platform.value} value={platform.value}>{platform.label}</SelectItem>)}</SelectContent></Select>
+        <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as AssetScopeFilter)}><SelectTrigger className="h-9 w-[170px]"><SelectValue placeholder="使用範圍" /></SelectTrigger><SelectContent><SelectItem value="all">全部範圍</SelectItem><SelectItem value="global">通用</SelectItem><SelectItem value="workspace">目前 workspace</SelectItem></SelectContent></Select>
       </div>
 
       <div data-testid="command-library-workspace" className="grid min-h-[520px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522] lg:grid-cols-[minmax(280px,0.78fr)_minmax(0,1.55fr)]">
@@ -351,7 +374,7 @@ export function CommandLibrary() {
               const Icon = category?.icon || Code2;
               return (
                 <button key={command.id} type="button" onClick={() => setSelectedCommand(command)} className={cn("w-full rounded-lg border px-3 py-3 text-left transition-colors", activeCommand?.id === command.id ? "border-amber-200/60 bg-amber-300/[0.08]" : "border-transparent hover:border-[#2a526f] hover:bg-[#0b1f31]")}>
-                  <div className="flex items-center gap-2"><Icon className="h-4 w-4 shrink-0 text-[#87cce1]" /><span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#eef8fc]">{command.name}</span><Badge variant="outline" className="border-[#315975] bg-[#091725] text-[10px] text-[#a7d7e8]">{platforms.find((platform) => platform.value === command.platform)?.label || command.platform}</Badge></div>
+                  <div className="flex items-center gap-2"><Icon className="h-4 w-4 shrink-0 text-[#87cce1]" /><span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#eef8fc]">{command.name}</span><Badge variant="outline" className="border-[#315975] bg-[#091725] text-[10px] text-[#a7d7e8]">{platforms.find((platform) => platform.value === command.platform)?.label || command.platform}</Badge><Badge variant="outline" className={cn("text-[10px]", command.scope === "global" ? "border-emerald-300/30 text-emerald-100" : "border-indigo-300/30 text-indigo-100")}>{command.scope === "global" ? "通用" : "目前 workspace"}</Badge></div>
                   <code className="mt-2 block truncate rounded bg-[#06111f] px-2 py-1.5 text-xs text-[#bbd7e4]">{command.command}</code>
                 </button>
               );
@@ -364,7 +387,7 @@ export function CommandLibrary() {
           {activeCommand ? (
             <div className="flex h-full min-h-[520px] flex-col">
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#2a526f] bg-[#0b1b2d] px-5 py-4">
-                <div className="min-w-0"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-amber-200"><SelectedCategoryIcon className="h-4 w-4" />指令預覽</div><h3 className="mt-1 truncate text-lg font-semibold text-[#f3f8fc]">{activeCommand.name}</h3><div className="mt-2 flex flex-wrap gap-1.5"><Badge>{selectedCategory?.name || activeCommand.category}</Badge><Badge variant="outline">{platforms.find((platform) => platform.value === activeCommand.platform)?.label || activeCommand.platform}</Badge>{activeCommand.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div></div>
+                <div className="min-w-0"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-amber-200"><SelectedCategoryIcon className="h-4 w-4" />指令預覽</div><h3 className="mt-1 truncate text-lg font-semibold text-[#f3f8fc]">{activeCommand.name}</h3><div className="mt-2 flex flex-wrap gap-1.5"><Badge>{selectedCategory?.name || activeCommand.category}</Badge><Badge variant="outline">{platforms.find((platform) => platform.value === activeCommand.platform)?.label || activeCommand.platform}</Badge><Badge variant="outline">{activeCommand.scope === "global" ? "通用" : "目前 workspace"}</Badge>{activeCommand.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div></div>
                 <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => void copyToClipboard(activeCommand.command)}><Copy className="mr-2 h-4 w-4" />複製</Button><Button size="sm" onClick={() => openEditor(activeCommand)}><Edit2 className="mr-2 h-4 w-4" />編輯</Button><Button size="sm" variant="destructive" onClick={() => void handleDelete(activeCommand.id)}><Trash2 className="mr-2 h-4 w-4" />刪除</Button></div>
               </div>
               <div className="min-h-0 flex-1 space-y-4 overflow-auto p-5">

@@ -13,6 +13,7 @@ dist-ssr
 *.local
 .env*
 !.env.example
+supabase/.temp/
 __pycache__/
 *.py[cod]
 

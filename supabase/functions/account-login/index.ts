@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const supabaseSchema = Deno.env.get("APP_DB_SCHEMA") ?? "public";
+const supabaseSchema = Deno.env.get("APP_DB_SCHEMA") ?? "workspace";
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {

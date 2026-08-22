@@ -1010,7 +1010,7 @@ export function FlowInfo() {
   }
 
   return (
-    <div className="maintenance-page flex flex-col gap-3">
+    <div className="maintenance-page flex h-full min-h-0 flex-col gap-3">
       <MaintenancePageHeader
         icon={FileSliders}
         title="L10 測試流程設定"

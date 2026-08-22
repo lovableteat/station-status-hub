@@ -190,7 +190,7 @@ test("shared dialogs and admin content stay inside responsive viewport bounds", 
   ]);
 
   assert.match(header, /max-w-\[1920px\]/);
-  assert.match(styles, /\.admin-shell\s*\{[^}]*max-width:\s*1920px;[^}]*margin-inline:\s*auto;/s);
+  assert.match(styles, /\.admin-shell\s*\{[^}]*max-width:\s*none;[^}]*margin-inline:\s*0;/s);
   assert.match(dialog, /max-h-\[calc\(100dvh-1rem\)\]/);
   assert.match(dialog, /w-\[calc\(100vw-1rem\)\]/);
   assert.match(dialog, /overflow-y-auto/);

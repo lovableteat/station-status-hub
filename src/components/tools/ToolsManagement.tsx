@@ -62,6 +62,7 @@ type CommandRow = Database["public"]["Tables"]["command_library"]["Row"];
 type AssetKind = "tool" | "code" | "command";
 type AssetClass = "tool" | "command" | "general";
 type AssetFilter = "all" | AssetClass;
+type AssetScopeFilter = "all" | "global" | "workspace";
 type WorkspaceTab = "applied" | "tools" | "code" | "commands" | "files";
 
 type Asset =
@@ -73,7 +74,9 @@ type Asset =
       kind: "tool";
       assetClass: AssetClass;
       name: string;
+      ownerWorkspace: string | null;
       raw: ToolRow;
+      scope: "global" | "workspace";
       updatedAt: string | null;
     }
   | {
@@ -84,7 +87,9 @@ type Asset =
       kind: "code";
       assetClass: "command";
       name: string;
+      ownerWorkspace: string | null;
       raw: CodeRow;
+      scope: "global" | "workspace";
       updatedAt: string | null;
     }
   | {
@@ -95,7 +100,9 @@ type Asset =
       kind: "command";
       assetClass: "command";
       name: string;
+      ownerWorkspace: string | null;
       raw: CommandRow;
+      scope: "global" | "workspace";
       updatedAt: string | null;
     };
 
@@ -103,6 +110,7 @@ interface ToolDraft {
   category: string;
   description: string;
   is_required: boolean;
+  is_global: boolean;
   sop_content: string;
   tool_name: string;
   version: string;
@@ -112,6 +120,7 @@ const EMPTY_DRAFT: ToolDraft = {
   category: "driver",
   description: "",
   is_required: false,
+  is_global: false,
   sop_content: "",
   tool_name: "",
   version: "",
@@ -198,7 +207,7 @@ function isMissingRelation(error: { code?: string; message?: string } | null) {
     Boolean(error.message?.includes("test_project_") && error.message?.includes("schema cache"));
 }
 
-export function ToolsManagement() {
+export function ToolsManagement({ workspaceKey = "station-status" }: { workspaceKey?: string }) {
   const { activeProject, activeProjectId } = useTestProject();
   const { toast } = useToast();
   const [tools, setTools] = useState<ToolRow[]>([]);
@@ -217,6 +226,7 @@ export function ToolsManagement() {
   });
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<AssetFilter>("all");
+  const [scopeFilter, setScopeFilter] = useState<AssetScopeFilter>("all");
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [editingTool, setEditingTool] = useState<ToolRow | null>(null);
   const [toolDraft, setToolDraft] = useState<ToolDraft>(EMPTY_DRAFT);
@@ -231,12 +241,13 @@ export function ToolsManagement() {
     async function loadAssets() {
       setLoading(true);
       const [toolResult, codeResult, commandResult] = await Promise.all([
-        supabase.from("tools_management").select("*").order("updated_at", { ascending: false }),
-        supabase.from("code_snippets").select("*").order("updated_at", { ascending: false }),
+        supabase.from("tools_management").select("*").or(`scope.eq.global,and(scope.eq.workspace,owner_workspace.eq.${workspaceKey})`).order("updated_at", { ascending: false }),
+        supabase.from("code_snippets").select("*").or(`scope.eq.global,and(scope.eq.workspace,owner_workspace.eq.${workspaceKey})`).order("updated_at", { ascending: false }),
         supabase
           .from("command_library")
           .select("*")
           .eq("is_active", true)
+          .or(`scope.eq.global,and(scope.eq.workspace,owner_workspace.eq.${workspaceKey})`)
           .order("updated_at", { ascending: false }),
       ]);
 
@@ -308,7 +319,7 @@ export function ToolsManagement() {
     return () => {
       active = false;
     };
-  }, [activeProjectId, refreshKey, toast]);
+  }, [activeProjectId, refreshKey, toast, workspaceKey]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -327,7 +338,9 @@ export function ToolsManagement() {
       kind: "tool",
       assetClass: getAssetClass(tool),
       name: tool.tool_name,
+      ownerWorkspace: tool.owner_workspace,
       raw: tool,
+      scope: tool.scope === "workspace" ? "workspace" : "global",
       updatedAt: tool.updated_at,
     })),
     ...snippets.map<Asset>((snippet) => ({
@@ -338,7 +351,9 @@ export function ToolsManagement() {
       kind: "code",
       assetClass: "command",
       name: snippet.title,
+      ownerWorkspace: snippet.owner_workspace,
       raw: snippet,
+      scope: snippet.scope === "workspace" ? "workspace" : "global",
       updatedAt: snippet.updated_at,
     })),
     ...commands.map<Asset>((command) => ({
@@ -349,7 +364,9 @@ export function ToolsManagement() {
       kind: "command",
       assetClass: "command",
       name: command.name,
+      ownerWorkspace: command.owner_workspace,
       raw: command,
+      scope: command.scope === "workspace" ? "workspace" : "global",
       updatedAt: command.updated_at,
     })),
   ], [commands, snippets, tools]);
@@ -380,6 +397,7 @@ export function ToolsManagement() {
           ? asset.assetClass === "general"
           : false;
     const matchesKind = tab !== "applied" || kindFilter === "all" || asset.assetClass === kindFilter;
+    const matchesAssetScope = scopeFilter === "all" || asset.scope === scopeFilter;
     const matchesSearch =
       !normalizedSearch ||
       asset.name.toLowerCase().includes(normalizedSearch) ||
@@ -387,7 +405,7 @@ export function ToolsManagement() {
       asset.category.toLowerCase().includes(normalizedSearch) ||
       ASSET_CLASS_META[asset.assetClass].label.toLowerCase().includes(normalizedSearch) ||
       asset.detail.toLowerCase().includes(normalizedSearch);
-    return matchesScope && matchesKind && matchesSearch;
+    return matchesScope && matchesKind && matchesAssetScope && matchesSearch;
   });
 
   const appliedCount =
@@ -416,6 +434,7 @@ export function ToolsManagement() {
       category: tool.category || "other",
       description: tool.description || "",
       is_required: Boolean(tool.is_required),
+      is_global: tool.scope === "global",
       sop_content: tool.sop_content || "",
       tool_name: tool.tool_name,
       version: tool.version || "",
@@ -435,6 +454,8 @@ export function ToolsManagement() {
       category: toolDraft.category,
       description: toolDraft.description.trim() || null,
       is_required: toolDraft.is_required,
+      owner_workspace: toolDraft.is_global ? null : workspaceKey,
+      scope: toolDraft.is_global ? "global" : "workspace",
       sop_content: toolDraft.sop_content.trim() || null,
       tool_name: toolDraft.tool_name.trim(),
       upload_status: editingTool?.upload_status || "pending",
@@ -656,6 +677,14 @@ export function ToolsManagement() {
                   );
                 })}
               </div>}
+              <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as AssetScopeFilter)}>
+                <SelectTrigger className="h-9 w-[190px]" aria-label="資產使用範圍"><SelectValue placeholder="使用範圍" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部範圍</SelectItem>
+                  <SelectItem value="global">通用工具</SelectItem>
+                  <SelectItem value="workspace">目前 workspace 專用</SelectItem>
+                </SelectContent>
+              </Select>
             </>
           )}
         </div>
@@ -681,10 +710,10 @@ export function ToolsManagement() {
           />
         </TabsContent>
         <TabsContent value="code" className="mt-3 rounded-xl border border-[#2a526f] bg-[#071522] p-3">
-          <CodeStorageManager />
+          <CodeStorageManager workspaceKey={workspaceKey} />
         </TabsContent>
         <TabsContent value="commands" className="mt-3 rounded-xl border border-[#2a526f] bg-[#071522] p-3">
-          <CommandLibrary />
+          <CommandLibrary workspaceKey={workspaceKey} />
         </TabsContent>
         <TabsContent value="files" className="mt-3">
           <AssetList
@@ -759,6 +788,11 @@ export function ToolsManagement() {
                 </div>
               </>
             )}
+            <div className="flex items-center justify-between rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3">
+              <div><div className="text-sm font-medium text-[#f3f8fc]">通用工具</div><div className="text-xs text-[#a9c0d1]">開啟後可在每個 workspace 顯示、編輯與管理</div></div>
+              <Switch checked={toolDraft.is_global} onCheckedChange={(is_global) => setToolDraft((value) => ({ ...value, is_global }))} />
+            </div>
+            {editingTool?.scope === "global" && <div className="rounded-lg border border-amber-300/30 bg-amber-300/[0.08] px-3 py-2 text-sm text-amber-100">這是通用項目，修改後會影響所有 workspace。</div>}
           </div>
           <SheetFooter className="mt-6 flex-row justify-end gap-2">
             <Button variant="outline" onClick={() => setToolSheetOpen(false)}>取消</Button>
@@ -775,6 +809,7 @@ export function ToolsManagement() {
         onUploadSuccess={() => setRefreshKey((value) => value + 1)}
         projectId={activeProjectId}
         canAssignToProject={assignmentsReady}
+        workspaceKey={workspaceKey}
       />
     </div>
   );
@@ -834,7 +869,7 @@ function AssetList({
                 <div className="truncate text-sm font-semibold text-[#f3f8fc]">{asset.name}</div>
                 <div className="mt-0.5 truncate text-xs text-[#a9c0d1]">{asset.description}</div>
               </button>
-              <div><Badge variant="outline" className={cn("rounded-md", meta.tone)}><Icon className="mr-1.5 h-3.5 w-3.5" />{meta.label}</Badge></div>
+              <div className="flex flex-wrap gap-1"><Badge variant="outline" className={cn("rounded-md", meta.tone)}><Icon className="mr-1.5 h-3.5 w-3.5" />{meta.label}</Badge><Badge variant="outline" className={cn("rounded-md text-[10px]", asset.scope === "global" ? "border-emerald-300/30 text-emerald-100" : "border-indigo-300/30 text-indigo-100")}>{asset.scope === "global" ? "通用" : "目前 workspace"}</Badge></div>
               <div className="min-w-0 text-xs text-[#c7d8e4]"><div className="truncate">{sourceLabel}</div><div className="font-data mt-0.5 truncate text-[#82a2b8]">{asset.detail}</div></div>
               <div className="font-data text-xs text-[#a9c0d1]">{formatDate(asset.updatedAt)}</div>
               <div className="col-span-2 flex items-center justify-end gap-2 lg:col-span-1">
@@ -873,7 +908,7 @@ function AssetDetails({
   return (
     <>
       <DialogHeader className="border-b border-[#2a526f] bg-[#0b1b2d] px-6 py-5 text-left">
-        <div className="mb-2 flex items-center gap-2"><Badge variant="outline" className={cn("rounded-md", meta.tone)}><Icon className="mr-1.5 h-3.5 w-3.5" />{meta.label}</Badge>{assigned && <Badge variant="outline" className="rounded-md border-emerald-300/30 bg-emerald-300/10 text-emerald-100">已套用</Badge>}</div>
+        <div className="mb-2 flex items-center gap-2"><Badge variant="outline" className={cn("rounded-md", meta.tone)}><Icon className="mr-1.5 h-3.5 w-3.5" />{meta.label}</Badge><Badge variant="outline" className={cn("rounded-md", asset.scope === "global" ? "border-emerald-300/30 text-emerald-100" : "border-indigo-300/30 text-indigo-100")}>{asset.scope === "global" ? "通用" : "目前 workspace"}</Badge>{assigned && <Badge variant="outline" className="rounded-md border-emerald-300/30 bg-emerald-300/10 text-emerald-100">已套用</Badge>}</div>
         <DialogTitle className="pr-8 text-xl text-[#f3f8fc]">{asset.name}</DialogTitle>
         <DialogDescription className="text-[#a9c0d1]">{asset.description || "無描述資訊"}</DialogDescription>
       </DialogHeader>

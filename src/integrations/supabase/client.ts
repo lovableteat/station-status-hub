@@ -7,7 +7,7 @@ const SUPABASE_PUBLISHABLE_KEY = (
   import.meta.env.VITE_SUPABASE_ANON_KEY
   ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 ) as string | undefined;
-const SUPABASE_SCHEMA = (import.meta.env.VITE_SUPABASE_SCHEMA ?? "public") as keyof Database;
+const SUPABASE_SCHEMA = (import.meta.env.VITE_SUPABASE_SCHEMA ?? "workspace") as keyof Database;
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   throw new Error(

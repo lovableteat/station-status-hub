@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +33,7 @@ interface FileUploadDialogProps {
   onUploadSuccess: () => void;
   projectId: string | null;
   canAssignToProject: boolean;
+  workspaceKey: string;
 }
 
 interface UploadFailure {
@@ -79,9 +81,11 @@ export function FileUploadDialog({
   onUploadSuccess,
   projectId,
   canAssignToProject,
+  workspaceKey,
 }: FileUploadDialogProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [description, setDescription] = useState("");
+  const [isGlobal, setIsGlobal] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [completedCount, setCompletedCount] = useState(0);
@@ -103,6 +107,7 @@ export function FileUploadDialog({
   const resetDialog = () => {
     setFiles([]);
     setDescription("");
+    setIsGlobal(false);
     setIsDragging(false);
     setIsUploading(false);
     setCompletedCount(0);
@@ -120,7 +125,7 @@ export function FileUploadDialog({
   };
 
   const uploadFile = async (file: File) => {
-    const storagePath = `general-assets/${projectId || "company-library"}/${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
+    const storagePath = `general-assets/${isGlobal ? "global" : workspaceKey}/${projectId || "library"}/${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
     const { error: uploadError } = await supabase.storage
       .from(STORAGE_BUCKET)
       .upload(storagePath, file, { contentType: file.type || undefined, upsert: false });
@@ -137,6 +142,8 @@ export function FileUploadDialog({
         file_path: publicUrlData.publicUrl,
         file_size: file.size,
         is_required: false,
+        owner_workspace: isGlobal ? null : workspaceKey,
+        scope: isGlobal ? "global" : "workspace",
         tool_name: file.name,
         upload_status: "completed",
         uploaded_at: new Date().toISOString(),
@@ -207,7 +214,7 @@ export function FileUploadDialog({
 
     toast({
       title: `${successCount} 個檔案已上傳`,
-      description: projectId && canAssignToProject ? "已放入目前專案的不特定資產。" : "已放入公司共用庫。",
+      description: projectId && canAssignToProject ? "已放入目前專案的不特定資產。" : isGlobal ? "已放入通用資產庫。" : "已放入目前 workspace 資產庫。",
     });
     resetDialog();
     onClose();
@@ -228,8 +235,8 @@ export function FileUploadDialog({
               <DialogTitle className="text-xl">上傳不特定檔案</DialogTitle>
               <DialogDescription className="mt-1 text-sm leading-6 text-[#b6cad8]">
                 {projectId
-                  ? "作為專案檔案傳輸區使用。檔案會保留在公司共用庫，並自動套用到目前專案。"
-                  : "作為公司檔案傳輸區使用。選擇專案後，可再將檔案套用到指定專案。"}
+                  ? "作為專案檔案傳輸區使用，並自動套用到目前專案。"
+                  : "作為 workspace 檔案傳輸區使用；需要時可切換為通用檔案。"}
               </DialogDescription>
             </div>
           </div>
@@ -325,6 +332,14 @@ export function FileUploadDialog({
             />
           </div>
 
+          <div className="flex items-center justify-between rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3">
+            <div>
+              <div className="text-sm font-medium text-[#f3f8fc]">通用檔案</div>
+              <div className="text-xs text-[#a9c0d1]">開啟後可在每個 workspace 顯示、編輯與管理</div>
+            </div>
+            <Switch checked={isGlobal} onCheckedChange={setIsGlobal} disabled={isUploading} />
+          </div>
+
           {isUploading && (
             <div className="rounded-xl border border-cyan-300/25 bg-cyan-300/[0.07] p-4">
               <div className="mb-2 flex items-center justify-between text-sm">
@@ -337,7 +352,7 @@ export function FileUploadDialog({
 
           {!canAssignToProject && projectId && (
             <div className="rounded-lg border border-amber-300/30 bg-amber-300/[0.08] px-3 py-2 text-sm text-amber-100">
-              專案套用資料尚未就緒；檔案仍可上傳至公司共用庫，稍後再手動套用。
+              專案套用資料尚未就緒；檔案仍會儲存到所選範圍，稍後再手動套用。
             </div>
           )}
 

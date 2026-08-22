@@ -14,7 +14,7 @@ test("global notifications keep mobile header actions and the desktop chat dock 
   assert.match(sonnerSource, /position="top-right"/);
   assert.match(sonnerSource, /safe-area-inset-top/);
   assert.match(sonnerSource, /mobileOffset=/);
-  assert.match(sonnerSource, /max-sm:!left-2 max-sm:!right-auto/);
+  assert.match(sonnerSource, /max-sm:!left-2 max-sm:!right-2 max-sm:!w-auto/);
   assert.match(sonnerSource, /max-sm:!w-\[min\(250px,calc\(100vw-7\.5rem\)\)\]/);
 
   assert.match(radixToastSource, /left-2 right-auto top-\[max\(6px,env\(safe-area-inset-top\)\)\]/);
