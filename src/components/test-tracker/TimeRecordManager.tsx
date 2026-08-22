@@ -9,6 +9,7 @@ import { Clock, RotateCcw, Trash2 } from "lucide-react";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { saveGuardedTestProgress, unresolvedIssueToast } from "./guardedTestProgress";
 
 interface TimeRecordManagerProps {
   systemId: string;
@@ -80,34 +81,39 @@ export function TimeRecordManager({
 
       console.log('Updating time records:', { systemId, stationId, itemId, updates });
 
-      const { data: existingRecord, error: lookupError } = await supabase
-        .from('test_progress')
-        .select('id')
-        .eq('project_id', activeProjectId)
-        .eq('system_id', systemId)
-        .eq('station_id', stationId)
-        .eq('item_id', itemId)
-        .maybeSingle();
-      if (lookupError) throw lookupError;
+      if (updates.completed_at) {
+        await saveGuardedTestProgress({
+          itemId,
+          projectId: activeProjectId,
+          stationId,
+          status: "Done",
+          systemId,
+          updates: { ...updates, progress_percent: 100 },
+        });
+      } else {
+        const { data: existingRecord, error: lookupError } = await supabase
+          .from('test_progress')
+          .select('id')
+          .eq('project_id', activeProjectId)
+          .eq('system_id', systemId)
+          .eq('station_id', stationId)
+          .eq('item_id', itemId)
+          .maybeSingle();
+        if (lookupError) throw lookupError;
 
-      const result = existingRecord
-        ? await supabase
-            .from('test_progress')
-            .update(updates)
-            .eq('id', existingRecord.id)
-        : await supabase.from('test_progress').insert({
-            ...updates,
-            item_id: itemId,
-            progress_percent: updates.completed_at ? 100 : 0,
-            project_id: activeProjectId,
-            station_id: stationId,
-            status: updates.completed_at ? 'Done' : updates.started_at ? 'On-going' : 'Not Start',
-            system_id: systemId,
-          });
+        const result = existingRecord
+          ? await supabase.from('test_progress').update(updates).eq('id', existingRecord.id)
+          : await supabase.from('test_progress').insert({
+              ...updates,
+              item_id: itemId,
+              progress_percent: 0,
+              project_id: activeProjectId,
+              station_id: stationId,
+              status: updates.started_at ? 'On-going' : 'Not Start',
+              system_id: systemId,
+            });
 
-      if (result.error) {
-        console.error('Error updating time records:', result.error);
-        throw result.error;
+        if (result.error) throw result.error;
       }
 
       console.log('Time records updated successfully');
@@ -122,10 +128,10 @@ export function TimeRecordManager({
       setDialogOpen(false);
     } catch (error) {
       console.error('Error updating time records:', error);
-      toast({
+      toast(unresolvedIssueToast(error) ?? {
         title: "更新失敗",
         description: "無法更新時間記錄",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsUpdating(false);

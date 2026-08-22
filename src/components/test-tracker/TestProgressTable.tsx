@@ -21,6 +21,7 @@ import { SystemResetDialog } from "./SystemResetDialog";
 import {
   createStationBlockedLookup,
   createStationProgressLookup,
+  createSystemBlockedLookup,
   getStationProgressKey,
   getTrackerColumnSpec,
   getTrackerColumnWidth,
@@ -444,6 +445,10 @@ export function TestProgressTable({
     () => createStationBlockedLookup(items, progress, linkedIssues),
     [items, linkedIssues, progress]
   );
+  const systemBlockedLookup = useMemo(
+    () => createSystemBlockedLookup(items, progress, linkedIssues),
+    [items, linkedIssues, progress]
+  );
   const systemWindowKey = `${systems.length}:${systems[0]?.id || ""}:${systems[systems.length - 1]?.id || ""}`;
   const virtualRange = getTrackerVirtualRange({
     rowCount: systems.length,
@@ -577,10 +582,20 @@ export function TestProgressTable({
       <div className="space-y-2">
         {systems.map((system) => {
           const status = normalizeStatus(system);
+          const systemBlockedCount = systemBlockedLookup.get(system.id) ?? 0;
+          const blockedStations = sortedStations.flatMap((station) => {
+            const blocked = stationBlockedLookup.get(getStationProgressKey(system.id, station.id)) ?? 0;
+            return blocked > 0
+              ? [{ blocked, percent: getStationPercent(system.id, station.id), station }]
+              : [];
+          });
           return (
             <div
               key={system.id}
-              className="maintenance-panel w-full p-3 [contain-intrinsic-size:110px] [content-visibility:auto]"
+              className={cn(
+                "maintenance-panel w-full p-3 [contain-intrinsic-size:110px] [content-visibility:auto]",
+                systemBlockedCount > 0 && "border-rose-300/55 bg-rose-950/20",
+              )}
             >
               <div className="flex items-start justify-between gap-3">
                 <button
@@ -593,7 +608,14 @@ export function TestProgressTable({
                     {system.serial_number || "無序號"} · {system.assigned_engineer || "未指定"}
                   </div>
                 </button>
-                <Badge variant="outline" className={cn("rounded-md", statusClass(status))}>{status}</Badge>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  {systemBlockedCount > 0 && (
+                    <Badge variant="outline" className="rounded-md border-rose-300/60 bg-rose-400/15 text-rose-100">
+                      Blocked {systemBlockedCount}
+                    </Badge>
+                  )}
+                  <Badge variant="outline" className={cn("rounded-md", statusClass(status))}>{status}</Badge>
+                </div>
               </div>
               <button
                 type="button"
@@ -603,11 +625,30 @@ export function TestProgressTable({
               >
                 <SegmentedProgress
                   value={system.overall_progress ?? 0}
+                  tone={systemBlockedCount ? "danger" : "auto"}
                   className="flex-1"
                   label={`${system.system_name} 整體進度`}
                 />
                 <span className="font-data text-xs text-cyan-100">{system.overall_progress ?? 0}%</span>
               </button>
+              {blockedStations.map(({ blocked, percent, station }) => (
+                <button
+                  key={station.id}
+                  type="button"
+                  className="mt-2 w-full rounded-lg border border-rose-300/50 bg-rose-950/25 p-2 text-left"
+                  onClick={() => onSelectStation(system.id, station.id)}
+                >
+                  <div className="mb-1 flex items-center justify-between gap-2 text-[11px]">
+                    <span className="truncate text-rose-100">{station.station_name}</span>
+                    <span className="shrink-0 font-semibold text-rose-200">Blocked {blocked}</span>
+                  </div>
+                  <SegmentedProgress
+                    value={percent}
+                    tone="danger"
+                    label={`${system.system_name} ${station.station_name} Blocked 進度`}
+                  />
+                </button>
+              ))}
             </div>
           );
         })}

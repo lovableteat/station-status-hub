@@ -8,6 +8,7 @@ import { Check, X, Clock, Play, Square, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { supabase } from "@/integrations/supabase/client";
+import { saveGuardedTestProgress, unresolvedIssueToast } from "./guardedTestProgress";
 
 interface TestItem {
   id: string;
@@ -28,6 +29,18 @@ interface TestProgress {
   notes: string;
   started_at?: string;
   completed_at?: string;
+}
+
+interface ProgressUpdate {
+  completed_at?: string;
+  item_id: string;
+  notes: string;
+  progress_percent: number;
+  project_id: string;
+  started_at?: string;
+  station_id: string;
+  status: string;
+  system_id: string;
 }
 
 interface MobileProgressInputProps {
@@ -69,7 +82,7 @@ export function MobileProgressInput({
       const currentProgress = getProgressForSystemItem(systemId, stationId, itemId);
       const now = new Date().toISOString();
       
-      let updateData: any = {};
+      let updateData: ProgressUpdate;
       
       switch (action) {
         case 'start':
@@ -117,7 +130,16 @@ export function MobileProgressInput({
           break;
       }
 
-      if (currentProgress) {
+      if (updateData.status === "Done") {
+        await saveGuardedTestProgress({
+          itemId,
+          projectId: activeProjectId,
+          stationId,
+          status: "Done",
+          systemId,
+          updates: updateData,
+        });
+      } else if (currentProgress) {
         const { error } = await supabase
           .from('test_progress')
           .update(updateData)
@@ -143,7 +165,7 @@ export function MobileProgressInput({
       onUpdate();
     } catch (error) {
       console.error('Error updating progress:', error);
-      toast({
+      toast(unresolvedIssueToast(error) ?? {
         title: "更新失敗",
         description: "請稍後再試",
         variant: "destructive",
@@ -165,7 +187,7 @@ export function MobileProgressInput({
       const progressPercent = status === 'Done' ? 100 : 
                             status === 'On-going' ? 50 : 0;
       
-      const updateData: any = {
+      const updateData: ProgressUpdate = {
         project_id: activeProjectId,
         system_id: systemId,
         station_id: stationId,
@@ -184,7 +206,16 @@ export function MobileProgressInput({
         updateData.started_at = now;
       }
 
-      if (currentProgress) {
+      if (status === "Done") {
+        await saveGuardedTestProgress({
+          itemId: selectedItem,
+          projectId: activeProjectId,
+          stationId,
+          status,
+          systemId,
+          updates: updateData,
+        });
+      } else if (currentProgress) {
         const { error } = await supabase
           .from('test_progress')
           .update(updateData)
@@ -211,7 +242,7 @@ export function MobileProgressInput({
       onUpdate();
     } catch (error) {
       console.error('Error updating progress:', error);
-      toast({
+      toast(unresolvedIssueToast(error) ?? {
         title: "更新失敗",
         description: "請稍後再試",
         variant: "destructive",

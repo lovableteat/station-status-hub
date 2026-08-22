@@ -6,6 +6,7 @@ import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { saveGuardedTestProgress, unresolvedIssueToast } from "./guardedTestProgress";
 
 interface SystemCompleteButtonProps {
   systemId: string;
@@ -50,58 +51,25 @@ export function SystemCompleteButton({
         station.station_order >= 0 && station.station_order <= 4
       );
 
-      // 批量更新或新增所有測試項目進度為完成
       const currentTime = new Date().toISOString();
 
-      // 首先獲取現有的進度記錄
-      const { data: existingProgress, error: fetchError } = await supabase
-        .from('test_progress')
-        .select('*')
+      const { data: unresolvedIssues, error: issueError } = await supabase
+        .from("issues")
+        .select("id")
         .eq('project_id', activeProjectId)
-        .eq('system_id', systemId);
+        .eq('system_id', systemId)
+        .in("status", ["open", "in_progress"])
+        .limit(1);
+      if (issueError) throw issueError;
+      if (unresolvedIssues?.length) throw new Error("尚有問題未被解決");
 
-      if (fetchError) {
-        console.error('獲取現有進度錯誤:', fetchError);
-        throw fetchError;
-      }
+      const targetItems = targetStations.flatMap((station) =>
+        items
+          .filter((item) => item.station_id === station.id)
+          .map((item) => ({ item, station })),
+      );
 
-      const progressUpdates = [];
-      const progressInserts = [];
-
-      for (const station of targetStations) {
-        const stationItems = items.filter(item => item.station_id === station.id);
-        
-        for (const item of stationItems) {
-          const existingRecord = existingProgress?.find(p => 
-            p.station_id === station.id && p.item_id === item.id
-          );
-
-          const progressData = {
-            project_id: activeProjectId,
-            system_id: systemId,
-            station_id: station.id,
-            item_id: item.id,
-            status: 'Done',
-            progress_percent: 100,
-            notes: '一鍵完成功能自動設定',
-            started_at: currentTime,
-            completed_at: currentTime
-          };
-
-          if (existingRecord) {
-            // 更新現有記錄
-            progressUpdates.push({
-              id: existingRecord.id,
-              ...progressData
-            });
-          } else {
-            // 新增記錄
-            progressInserts.push(progressData);
-          }
-        }
-      }
-
-      if (progressUpdates.length === 0 && progressInserts.length === 0) {
+      if (targetItems.length === 0) {
         toast({
           title: "無法完成",
           description: "此系統沒有找到可完成的測試項目",
@@ -110,59 +78,25 @@ export function SystemCompleteButton({
         return;
       }
 
-      // 分別處理更新和新增
-      if (progressUpdates.length > 0) {
-        for (const update of progressUpdates) {
-          const { error } = await supabase
-            .from('test_progress')
-            .update({
-              status: update.status,
-              progress_percent: update.progress_percent,
-              notes: update.notes,
-              started_at: update.started_at,
-              completed_at: update.completed_at
-            })
-            .eq('project_id', activeProjectId)
-            .eq('id', update.id);
-
-          if (error) {
-            console.error('更新進度錯誤:', error);
-            throw error;
-          }
-        }
-      }
-
-      if (progressInserts.length > 0) {
-        const { error: insertError } = await supabase
-          .from('test_progress')
-          .insert(progressInserts);
-
-        if (insertError) {
-          console.error('插入進度錯誤:', insertError);
-          throw insertError;
-        }
-      }
-
-      // 手動更新系統狀態為完成
-      const { error: systemError } = await supabase
-        .from('test_systems')
-        .update({
-          status: 'Done',
-          current_station: '已完成',
-          overall_progress: 100,
-          actual_completed_at: currentTime
-        })
-        .eq('project_id', activeProjectId)
-        .eq('id', systemId);
-
-      if (systemError) {
-        console.error('系統狀態更新錯誤:', systemError);
-        throw systemError;
+      for (const { item, station } of targetItems) {
+        await saveGuardedTestProgress({
+          itemId: item.id,
+          projectId: activeProjectId,
+          stationId: station.id,
+          status: "Done",
+          systemId,
+          updates: {
+            completed_at: currentTime,
+            notes: "一鍵完成功能自動設定",
+            progress_percent: 100,
+            started_at: currentTime,
+          },
+        });
       }
 
       toast({
         title: "一鍵完成成功",
-        description: `機台 ${systemName} 的所有測試項目已標記為完成 (共 ${progressUpdates.length + progressInserts.length} 項)`
+        description: `機台 ${systemName} 的所有測試項目已標記為完成 (共 ${targetItems.length} 項)`
       });
 
       // 觸發資料重新載入
@@ -170,10 +104,10 @@ export function SystemCompleteButton({
 
     } catch (error) {
       console.error('一鍵完成失敗:', error);
-      toast({
+      toast(unresolvedIssueToast(error) ?? {
         title: "一鍵完成失敗",
         description: `無法完成機台 ${systemName} 的進度，請稍後重試`,
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsCompleting(false);

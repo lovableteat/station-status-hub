@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/select";
 import { useFlowVersions } from "@/hooks/useFlowVersions";
 import { useTestTrackerData } from "@/hooks/useTestTrackerData";
+import { fetchAllPages } from "@/hooks/fetchAllPages";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +62,7 @@ import {
 } from "./testTrackerFilters";
 import type { TrackerSort } from "./testTrackerFilters";
 import {
+  createSystemBlockedLookup,
   DEFAULT_TRACKER_PAGE_SIZE,
   TRACKER_PAGE_SIZE_OPTIONS,
 } from "./testTrackerPresentation";
@@ -255,14 +257,18 @@ export function TestTracker() {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("issues")
-      .select("id, status, system_id, station_id, test_item_id")
-      .eq("project_id", activeProjectId)
-      .not("system_id", "is", null)
-      .not("station_id", "is", null)
-      .not("test_item_id", "is", null)
-      .order("created_at", { ascending: false });
+    const { data, error } = await fetchAllPages<TrackerLinkedIssue>((from, to) =>
+      supabase
+        .from("issues")
+        .select("id, status, system_id, station_id, test_item_id")
+        .eq("project_id", activeProjectId)
+        .in("status", ["open", "in_progress"])
+        .not("system_id", "is", null)
+        .not("station_id", "is", null)
+        .not("test_item_id", "is", null)
+        .order("created_at", { ascending: false })
+        .range(from, to)
+    );
 
     if (error) {
       console.error("Failed to load linked tracker issues:", error);
@@ -454,6 +460,10 @@ export function TestTracker() {
   const boardLanes = useMemo(
     () => buildTrackerBoardLanes(displayStations, filteredSystems),
     [displayStations, filteredSystems]
+  );
+  const systemBlockedLookup = useMemo(
+    () => createSystemBlockedLookup(displayItems, progress, linkedIssues),
+    [displayItems, linkedIssues, progress]
   );
   const pageCount = Math.max(1, Math.ceil(filteredSystems.length / pageSize));
   const currentPage = Math.min(page, pageCount);
@@ -794,28 +804,40 @@ export function TestTracker() {
                   <Badge variant="outline" className="font-data rounded-md">{lane.systems.length}</Badge>
                 </div>
                 <div className="max-h-[calc(100vh-348px)] space-y-2 overflow-y-auto p-2">
-                  {lane.systems.map((system) => (
-                    <button
-                      key={system.id}
-                      type="button"
-                      className="w-full rounded-lg border border-[#2a526f] bg-[#10263a] p-2.5 text-left hover:border-cyan-300/55"
-                      onClick={() => lane.stationId
-                        ? openStationProgress(system.id, lane.stationId)
-                        : openSystemProgress(system.id)}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-[#f3f8fc]">{system.system_name}</span>
-                        <span className="font-data text-xs text-cyan-100">{system.overall_progress ?? 0}%</span>
-                      </div>
-                      <div className="mt-1 truncate text-xs text-[#a9c0d1]">{system.serial_number || "無序號"} · {system.assigned_engineer || "未指定工程師"}</div>
-                      <div className="mt-1 text-[11px] text-[#8fabbe]">{normalizeTrackerSystemStatus(system)}</div>
-                      <SegmentedProgress
-                        value={system.overall_progress ?? 0}
-                        className="mt-2"
-                        label={`${system.system_name} 整體進度`}
-                      />
-                    </button>
-                  ))}
+                  {lane.systems.map((system) => {
+                    const blocked = systemBlockedLookup.get(system.id) ?? 0;
+                    return (
+                      <button
+                        key={system.id}
+                        type="button"
+                        className={cn(
+                          "w-full rounded-lg border bg-[#10263a] p-2.5 text-left",
+                          blocked
+                            ? "border-rose-300/60 bg-rose-950/25 hover:border-rose-200"
+                            : "border-[#2a526f] hover:border-cyan-300/55",
+                        )}
+                        onClick={() => lane.stationId
+                          ? openStationProgress(system.id, lane.stationId)
+                          : openSystemProgress(system.id)}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-semibold text-[#f3f8fc]">{system.system_name}</span>
+                          <span className={cn("font-data text-xs text-cyan-100", blocked && "text-rose-100")}>{system.overall_progress ?? 0}%</span>
+                        </div>
+                        <div className="mt-1 truncate text-xs text-[#a9c0d1]">{system.serial_number || "無序號"} · {system.assigned_engineer || "未指定工程師"}</div>
+                        <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[#8fabbe]">
+                          <span>{normalizeTrackerSystemStatus(system)}</span>
+                          {blocked > 0 && <span className="font-semibold text-rose-200">Blocked {blocked}</span>}
+                        </div>
+                        <SegmentedProgress
+                          value={system.overall_progress ?? 0}
+                          tone={blocked ? "danger" : "auto"}
+                          className="mt-2"
+                          label={`${system.system_name} 整體進度`}
+                        />
+                      </button>
+                    );
+                  })}
                   {!lane.systems.length && <div className="py-8 text-center text-xs text-[#a9c0d1]">目前沒有機台</div>}
                 </div>
               </section>

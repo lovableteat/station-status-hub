@@ -152,6 +152,7 @@ with backfill_changes as (
     and progress.item_id = audit.item_id
   where audit.change_type = 'update'
     and audit.user_id is null
+    and audit.created_at = '2026-08-22 05:20:24.155319+00'::pg_catalog.timestamptz
     and audit.old_values ->> 'status' = 'Done'
     and audit.new_values ->> 'status' = 'Error'
     and audit.old_values ->> 'completed_at' is not null
