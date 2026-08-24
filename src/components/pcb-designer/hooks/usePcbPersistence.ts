@@ -109,13 +109,15 @@ export function usePcbPersistence({
           lastEditedById: editor.userId,
         }
         : project);
-      setLastSavedEditor(editorLabel);
-      setLastSavedProjectId(activeProjectId);
     }
+    // Keep a local recovery copy immediately, but only mark the document clean
+    // after the shared cloud write confirms success.
     repositoryRef.current.save(snapshot);
-    setSavedRevision(snapshot.updatedAt);
 
     if (!client) {
+      setSavedRevision(snapshot.updatedAt);
+      setLastSavedEditor(editorLabel);
+      setLastSavedProjectId(activeProjectId);
       setStatus("local");
       return true;
     }
@@ -130,7 +132,14 @@ export function usePcbPersistence({
     saveQueueRef.current = remoteSave;
     const saved = await remoteSave;
     if (activeRef.current && request === requestRef.current) {
-      setStatus(saved ? "synced" : "local");
+      if (saved) {
+        setSavedRevision(snapshot.updatedAt);
+        setLastSavedEditor(editorLabel);
+        setLastSavedProjectId(activeProjectId);
+        setStatus("synced");
+      } else {
+        setStatus("unsaved");
+      }
     }
     return saved;
   }, [client, editor]);
@@ -139,7 +148,7 @@ export function usePcbPersistence({
     hasUnsavedChanges,
     markClean,
     saveNow,
-    status: hasUnsavedChanges ? "unsaved" : status,
+    status: status === "saving" ? "saving" : hasUnsavedChanges ? "unsaved" : status,
     lastSavedEditor,
     lastSavedProjectId,
   };

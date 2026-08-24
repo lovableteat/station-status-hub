@@ -395,9 +395,20 @@ export function PcbLeftRail({
             <div className="pcb-project-actions">
               <RowAction label={`開啟 ${project.name}`} icon={FolderOpen} onClick={() => workspace.openProject(project.id)} />
               <RowAction label={`預覽 ${project.name}`} icon={Eye} onClick={() => onPreviewProject(project)} />
-              <RowAction label={`編輯 ${project.name}`} icon={Pencil} disabled={!workspace.canMutate} onClick={() => onEditProject(project)} />
+              <RowAction
+                label={project.id === workspace.activeProject.id ? `編輯 ${project.name}` : `先開啟 ${project.name} 才能編輯`}
+                icon={Pencil}
+                disabled={!workspace.canMutate || project.id !== workspace.activeProject.id}
+                onClick={() => onEditProject(project)}
+              />
               <RowAction label={`複製 ${project.name}`} icon={Copy} disabled={!workspace.canMutate} onClick={() => workspace.duplicateProject(project.id)} />
-              <RowAction label={`刪除 ${project.name}`} icon={Trash2} danger disabled={!workspace.canMutate} onClick={() => onDeleteProject(project)} />
+              <RowAction
+                label={project.id === workspace.activeProject.id ? `刪除 ${project.name}` : `先開啟 ${project.name} 才能刪除`}
+                icon={Trash2}
+                danger
+                disabled={!workspace.canMutate || project.id !== workspace.activeProject.id}
+                onClick={() => onDeleteProject(project)}
+              />
             </div>
           </div>
         ))}

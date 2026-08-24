@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { useUser } from "@/components/auth/UserContext";
@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { authorizePrivateRealtime } from "@/lib/authorizePrivateRealtime";
 
 export type PcbViewMode = "2d" | "3d";
+export type PcbAccessMode = "editor" | "viewer";
 
 export interface PcbProjectPeer {
   displayName: string;
@@ -16,6 +17,7 @@ export interface PcbProjectPeer {
   userId: string;
   username: string;
   viewMode: PcbViewMode;
+  accessMode: PcbAccessMode;
 }
 
 interface CurrentUser {
@@ -34,6 +36,7 @@ function flattenPresenceState(state: Record<string, unknown[]>): PcbProjectPeer[
         && typeof peer.displayName === "string"
         && typeof peer.tabId === "string"
         && typeof peer.projectId === "string"
+        && (peer.accessMode === "editor" || peer.accessMode === "viewer")
         && (peer.viewMode === "2d" || peer.viewMode === "3d");
     });
 
@@ -46,12 +49,18 @@ export function usePcbProjectPresence({
   projectName,
   user,
   viewMode,
+  accessMode,
+  clientId,
+  onProjectSaved,
 }: {
   dirty: boolean;
   projectId: string;
   projectName: string;
   user: CurrentUser | null;
   viewMode: PcbViewMode;
+  accessMode: PcbAccessMode;
+  clientId?: string;
+  onProjectSaved?: () => void;
 }) {
   const { isRealtimeAuthenticated } = useUser();
   const [peers, setPeers] = useState<PcbProjectPeer[]>([]);
@@ -59,7 +68,9 @@ export function usePcbProjectPresence({
   const channelRef = useRef<RealtimeChannel | null>(null);
   const subscribedRef = useRef(false);
   const trackConfirmedRef = useRef(false);
-  const tabIdRef = useRef(`pcb-tab-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+  const tabIdRef = useRef(clientId || `pcb-tab-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+  const onProjectSavedRef = useRef(onProjectSaved);
+  onProjectSavedRef.current = onProjectSaved;
 
   const payload = useMemo<PcbProjectPeer | null>(() => user ? {
     displayName: user.displayName || user.username,
@@ -70,7 +81,8 @@ export function usePcbProjectPresence({
     userId: user.userId,
     username: user.username,
     viewMode,
-  } : null, [dirty, projectId, projectName, user, viewMode]);
+    accessMode,
+  } : null, [accessMode, dirty, projectId, projectName, user, viewMode]);
   const payloadRef = useRef(payload);
   payloadRef.current = payload;
   const presenceUserId = payload?.userId ?? null;
@@ -120,6 +132,7 @@ export function usePcbProjectPresence({
         config: {
           private: isRealtimeAuthenticated,
           presence: { key: `${presenceUserId}:${tabIdRef.current}` },
+          broadcast: { self: false },
         },
       });
       channelRef.current = channel;
@@ -127,6 +140,11 @@ export function usePcbProjectPresence({
         .on("presence", { event: "sync" }, syncPresence)
         .on("presence", { event: "join" }, syncPresence)
         .on("presence", { event: "leave" }, syncPresence)
+        .on("broadcast", { event: "project-saved" }, ({ payload: eventPayload }) => {
+          const event = eventPayload as { projectId?: unknown; senderClientId?: unknown };
+          if (event.projectId !== projectId || event.senderClientId === tabIdRef.current) return;
+          onProjectSavedRef.current?.();
+        })
         .subscribe((status) => {
           subscribedRef.current = status === "SUBSCRIBED";
           if (subscribedRef.current) void trackCurrentPayload();
@@ -158,5 +176,20 @@ export function usePcbProjectPresence({
     });
   }, [payload]);
 
-  return { connected, peers, tabId: tabIdRef.current };
+  const broadcastProjectSaved = useCallback(async (revision: string) => {
+    const channel = channelRef.current;
+    if (!channel || !subscribedRef.current) return false;
+    const result = await channel.send({
+      type: "broadcast",
+      event: "project-saved",
+      payload: {
+        projectId,
+        revision,
+        senderClientId: tabIdRef.current,
+      },
+    });
+    return result === "ok";
+  }, [projectId]);
+
+  return { broadcastProjectSaved, connected, peers, tabId: tabIdRef.current };
 }

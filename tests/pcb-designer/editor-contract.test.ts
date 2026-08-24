@@ -196,15 +196,21 @@ test("saves only on explicit action and warns before abandoning dirty work", () 
   assert.doesNotMatch(workspaceSource, /toLocaleTimeString/);
 });
 
-test("shows same-project editors and tracks their editing context", () => {
+test("shows the single editor and live viewers for the active project", () => {
   assert.match(presenceSource, /pcb_project_presence:\$\{projectId\}/);
   assert.match(presenceSource, /presenceState/);
   assert.match(presenceSource, /dirty/);
   assert.match(presenceSource, /viewMode/);
-  assert.match(collaboratorsSource, /同案編輯者/);
+  assert.match(collaboratorsSource, /同案協作/);
   assert.match(collaboratorsSource, /編輯中，尚未儲存/);
+  assert.match(collaboratorsSource, /即時檢視/);
+  assert.match(presenceSource, /project-saved/);
+  assert.match(workspaceSource, /projectLock/);
   assert.match(workspaceSource, /usePcbProjectPresence/);
   assert.match(workspaceSource, /<PcbCollaborators/);
+  assert.match(railSource, /disabled=\{!workspace\.canMutate \|\| project\.id !== workspace\.activeProject\.id\}/);
+  assert.match(railSource, /project\.id === workspace\.activeProject\.id/);
+  assert.match(hookSource, /deleteProject[\s\S]{0,500}remoteClient\?\.deleteProject/);
 });
 
 test("provides a lazy interactive 3D PCB view without replacing the 2D editor", () => {

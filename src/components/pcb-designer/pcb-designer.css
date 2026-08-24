@@ -30,6 +30,7 @@
 
 .pcb-status-chip,
 .pcb-save-state,
+.pcb-editing-lock,
 .pcb-read-only {
   display: inline-flex;
   min-height: 24px;
@@ -432,8 +433,18 @@
 }
 
 .pcb-read-only {
+  max-width: 230px;
+  overflow: hidden;
+  border: 1px solid rgb(251 191 36 / 28%);
   background: rgb(251 191 36 / 12%);
   color: #fde68a;
+  text-overflow: ellipsis;
+}
+
+.pcb-editing-lock {
+  border: 1px solid rgb(76 201 148 / 30%);
+  background: rgb(76 201 148 / 14%);
+  color: #a7f3d0;
 }
 
 .pcb-editor-grid {
@@ -2132,6 +2143,7 @@
   .pcb-project-symbol,
   .pcb-project-heading,
   .pcb-status-chip,
+  .pcb-editing-lock,
   .pcb-read-only {
     display: none;
   }

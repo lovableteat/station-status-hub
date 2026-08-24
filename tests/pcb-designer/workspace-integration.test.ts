@@ -34,6 +34,15 @@ const remoteSyncSource = await read(
 const accountRemoteSource = await read(
   "src/components/pcb-designer/core/accountRemoteSync.ts",
 );
+const projectLockSource = await read(
+  "src/components/pcb-designer/hooks/usePcbProjectLock.ts",
+);
+const projectLockMigrationSource = await read(
+  "supabase/migrations/20260824110000_lock_pcb_designer_projects.sql",
+);
+const scopedSaveMigrationSource = await read(
+  "supabase/migrations/20260824120000_scope_pcb_designer_locked_saves.sql",
+);
 const completeStorageMigrationSource = await read(
   "supabase/migrations/20260727123000_complete_pcb_designer_workspace.sql",
 );
@@ -346,7 +355,7 @@ test("keeps legacy row storage owner-scoped while sharing fallback projects acro
   assert.match(pcbWorkspaceHookSource, /remoteClient\?: PcbRemoteClient \| null/);
   assert.match(
     pcbWorkspaceHookSource,
-    /allowRemoteSync:\s*canEdit && Boolean\(remoteClient\)/,
+    /allowRemoteSync:\s*effectiveCanEdit && Boolean\(remoteClient\) && remoteReady/,
   );
   assert.match(remoteSyncSource, /onConflict:\s*["']owner_id,id["']/);
   assert.match(workspaceSource, /createPcbAccountRemoteClient/);
@@ -359,6 +368,25 @@ test("keeps legacy row storage owner-scoped while sharing fallback projects acro
   assert.match(accountRemoteSource, /mergePcbFallbackWorkspaces/);
   assert.match(pcbWorkspaceHookSource, /setInterval\([\s\S]{0,100}refreshRemote\(false\)[\s\S]{0,80}8_000/);
   assert.match(pcbWorkspaceHookSource, /addEventListener\(["']focus["'],\s*refreshOnFocus\)/);
+});
+
+test("enforces one cloud editor per PCB project and keeps viewers live", () => {
+  assert.match(projectLockSource, /acquireProjectLock/);
+  assert.match(projectLockSource, /loadProjectLock/);
+  assert.match(projectLockSource, /releaseProjectLock/);
+  assert.match(projectLockSource, /8_000/);
+  assert.match(accountRemoteSource, /save_pcb_designer_workspace_locked/);
+  assert.match(accountRemoteSource, /A lock rejection must never fall through/);
+  assert.match(projectLockMigrationSource, /pcb_designer_project_locks/);
+  assert.match(projectLockMigrationSource, /FOR UPDATE/);
+  assert.match(projectLockMigrationSource, /lease_expires_at/);
+  assert.match(projectLockMigrationSource, /save_pcb_designer_workspace_locked/);
+  assert.match(projectLockSource, /setResult\(EMPTY_RESULT\)[\s\S]{0,100}setStatus\("acquiring"\)/);
+  assert.match(scopedSaveMigrationSource, /jsonb_build_array\(active_project\)/);
+  assert.match(scopedSaveMigrationSource, /delete_pcb_designer_project_locked/);
+  assert.match(scopedSaveMigrationSource, /editor_client_id = p_editor_client_id/);
+  assert.match(accountRemoteSource, /delete_pcb_designer_project_locked/);
+  assert.match(pcbWorkspaceHookSource, /projectId !== stateRef\.current\.activeProjectId/);
 });
 
 test("ships a complete custom-login PCB workspace migration and legacy permission fallback", () => {
