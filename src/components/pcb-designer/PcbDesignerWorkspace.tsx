@@ -519,11 +519,15 @@ export function PcbDesignerWorkspace({
           <PcbCollaborators
             accessMode={workspace.canEdit ? "editor" : "viewer"}
             connected={presence.connected}
+            currentProjectId={workspace.activeProject.id}
+            currentProjectName={workspace.activeProject.name}
             currentUser={user}
             dirty={workspace.hasUnsavedChanges}
             lockEditorName={workspace.projectLock.editorName}
             peers={presence.peers}
             viewMode={viewMode}
+            workspaceConnected={presence.workspaceConnected}
+            workspacePeers={presence.workspacePeers}
           />
           <Button
             type="button"
