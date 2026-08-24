@@ -5,16 +5,22 @@ import {
   Eye,
   FileUp,
   Filter,
-  FolderOpen,
+  MoreHorizontal,
   Pencil,
   PencilLine,
   Plus,
   Search,
   Trash2,
-  UserRound,
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -135,6 +141,10 @@ export function PcbLeftRail({
       .sort((first, second) => second.updatedAt.localeCompare(first.updatedAt)),
     [normalized, statusFilter, workspace.data.projects],
   );
+  const otherProjects = useMemo(
+    () => projects.filter((project) => project.id !== workspace.activeProject.id),
+    [projects, workspace.activeProject.id],
+  );
   const templates = useMemo(
     () => workspace.data.templates.filter((item) =>
       (templateSourceFilter === "all"
@@ -193,7 +203,7 @@ export function PcbLeftRail({
         ))}
       </div>
 
-      <div className="pcb-rail-filter">
+      <div className={cn("pcb-rail-filter", activeTab === "projects" && "is-project-filter")}>
         <label className="relative block">
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
           <Input
@@ -205,7 +215,7 @@ export function PcbLeftRail({
           />
         </label>
         {activeTab === "projects" && (
-          <label className="relative mt-2 block">
+          <label className="relative block">
             <Filter className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
             <select
               value={statusFilter}
@@ -261,11 +271,6 @@ export function PcbLeftRail({
       </div>
 
       <div className="pcb-rail-actions">
-        {activeTab === "projects" && (
-          <Button type="button" size="sm" className="pcb-primary-action" disabled={!workspace.canMutate} onClick={onNewProject}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />新增專案
-          </Button>
-        )}
         {activeTab === "templates" && (
           <Button type="button" size="sm" className="pcb-primary-action" disabled={!workspace.canMutate} onClick={onSaveTemplate}>
             <Plus className="mr-1.5 h-3.5 w-3.5" />另存為模板
@@ -340,76 +345,100 @@ export function PcbLeftRail({
         )}
       </div>
 
-      <div className={cn("pcb-rail-context", activeTab === "templates" && "is-template-context")}>
-        <div className="pcb-rail-context-heading">
-          <strong>{activeTab === "templates" ? "模板中心" : activeTab === "projects" ? "專案檔案" : tabLabels[activeTab]}</strong>
-          <span>{activeTab === "templates" ? `${templates.length} 個可用模板` : activeTab === "projects" ? `${projects.length} 個專案` : "工作區資源"}</span>
-        </div>
-        <p>
-          {activeTab === "templates"
-            ? "模板只用來建立新專案，不會覆蓋目前草稿。"
-            : activeTab === "projects"
-              ? "專案是可編輯、可儲存的實際工作版本。"
+      {activeTab !== "projects" && (
+        <div className={cn("pcb-rail-context", activeTab === "templates" && "is-template-context")}>
+          <div className="pcb-rail-context-heading">
+            <strong>{activeTab === "templates" ? "模板中心" : tabLabels[activeTab]}</strong>
+            <span>{activeTab === "templates" ? `${templates.length} 個可用模板` : "工作區資源"}</span>
+          </div>
+          <p>
+            {activeTab === "templates"
+              ? "模板只用來建立新專案，不會覆蓋目前草稿。"
               : "管理目前工作區可使用的資源。"}
-        </p>
-      </div>
+          </p>
+        </div>
+      )}
 
       {activeTab === "projects" && (
-        <div className="pcb-project-editor-strip" aria-label="最後編輯者">
-          <span className="pcb-project-editor-avatar" aria-hidden="true">
-            <UserRound className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <span className="pcb-project-editor-label">最後編輯者</span>
-            <div className="pcb-project-editor-line">
-              <strong className="truncate">{activeEditorName}</strong>
+        <>
+          <section className="pcb-current-project-card" aria-label="目前板子">
+            <div className="pcb-current-project-eyebrow">
+              <span>目前板子</span>
               <span className={cn("pcb-project-editor-state", workspace.hasUnsavedChanges && "is-editing")}>
                 {workspace.hasUnsavedChanges ? <PencilLine className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
                 {editorState}
               </span>
             </div>
-            <span className="pcb-project-editor-project truncate">{workspace.activeProject.name}</span>
+            <h3 title={workspace.activeProject.name}>{workspace.activeProject.name}</h3>
+            <p>
+              {workspace.activeProject.board.width}×{workspace.activeProject.board.height} mm
+              <span aria-hidden="true"> · </span>
+              最後編輯者：{activeEditorName}
+            </p>
+            <div className="pcb-current-project-actions">
+              <Button type="button" variant="outline" size="sm" onClick={() => onPreviewProject(workspace.activeProject)}>
+                <Eye className="h-3.5 w-3.5" />預覽
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={!workspace.canMutate} onClick={() => onEditProject(workspace.activeProject)}>
+                <Pencil className="h-3.5 w-3.5" />設定
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="icon" aria-label="目前板子更多操作" title="更多操作">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="pcb-project-menu">
+                  <DropdownMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.duplicateProject(workspace.activeProject.id)}>
+                    <Copy className="h-3.5 w-3.5" />複製板子
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-rose-300 focus:text-rose-200" disabled={!workspace.canMutate} onSelect={() => onDeleteProject(workspace.activeProject)}>
+                    <Trash2 className="h-3.5 w-3.5" />刪除板子
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </section>
+          <div className="pcb-project-list-heading">
+            <div>
+              <strong>其他板子</strong>
+              <span>{otherProjects.length} 塊</span>
+            </div>
+            <Button type="button" variant="ghost" size="sm" disabled={!workspace.canMutate} onClick={onNewProject}>
+              <Plus className="h-3.5 w-3.5" />新增
+            </Button>
           </div>
-        </div>
+        </>
       )}
 
       <div className="pcb-rail-list">
-        {activeTab === "projects" && projects.map((project) => (
-          <div key={project.id} className={cn("pcb-rail-item", project.id === workspace.activeProject.id && "is-active")}>
-            <button type="button" className="pcb-project-card-main w-full text-left" onClick={() => workspace.openProject(project.id)}>
-              <span className="pcb-project-card-heading">
-                <span className="truncate text-xs font-semibold text-slate-100">{project.name}</span>
-                {project.id === workspace.activeProject.id && <span className="pcb-project-current-badge">目前</span>}
-              </span>
-              <span className="pcb-project-card-meta">
+        {activeTab === "projects" && otherProjects.map((project) => (
+          <div key={project.id} className="pcb-project-compact-item">
+            <button type="button" className="pcb-project-compact-main" onClick={() => workspace.openProject(project.id)}>
+              <span className="pcb-project-compact-heading">
+                <strong title={project.name}>{project.name}</strong>
                 <span className={cn("pcb-project-status", `is-${project.status}`)}>{projectStatusLabels[project.status]}</span>
-                <span aria-hidden="true">·</span>
-                <span>{project.board.width}×{project.board.height} mm</span>
               </span>
-              <span className="pcb-project-last-editor">
-                最後編輯：{workspace.lastSavedProjectId === project.id
-                  ? workspace.lastSavedEditor ?? project.lastEditedBy ?? "尚無紀錄"
-                  : project.lastEditedBy ?? "尚無紀錄"}
+              <span className="pcb-project-compact-meta">
+                {project.board.width}×{project.board.height} mm · {project.lastEditedBy ?? "尚無編輯紀錄"}
               </span>
             </button>
-            <div className="pcb-project-actions">
-              <RowAction label={`開啟 ${project.name}`} icon={FolderOpen} onClick={() => workspace.openProject(project.id)} />
-              <RowAction label={`預覽 ${project.name}`} icon={Eye} onClick={() => onPreviewProject(project)} />
-              <RowAction
-                label={project.id === workspace.activeProject.id ? `編輯 ${project.name}` : `先開啟 ${project.name} 才能編輯`}
-                icon={Pencil}
-                disabled={!workspace.canMutate || project.id !== workspace.activeProject.id}
-                onClick={() => onEditProject(project)}
-              />
-              <RowAction label={`複製 ${project.name}`} icon={Copy} disabled={!workspace.canMutate} onClick={() => workspace.duplicateProject(project.id)} />
-              <RowAction
-                label={project.id === workspace.activeProject.id ? `刪除 ${project.name}` : `先開啟 ${project.name} 才能刪除`}
-                icon={Trash2}
-                danger
-                disabled={!workspace.canMutate || project.id !== workspace.activeProject.id}
-                onClick={() => onDeleteProject(project)}
-              />
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" className="pcb-project-more" aria-label={`${project.name} 更多操作`} title="更多操作">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="pcb-project-menu">
+                <DropdownMenuItem onSelect={() => onPreviewProject(project)}>
+                  <Eye className="h-3.5 w-3.5" />預覽
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.duplicateProject(project.id)}>
+                  <Copy className="h-3.5 w-3.5" />複製板子
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         ))}
 
@@ -505,7 +534,7 @@ export function PcbLeftRail({
           )
         )}
 
-        {((activeTab === "projects" && projects.length === 0)
+        {((activeTab === "projects" && otherProjects.length === 0)
           || (activeTab === "templates" && templates.length === 0)
           || (activeTab === "library" && library.length === 0)) && (
           <div className="pcb-empty-state">找不到符合條件的項目。</div>

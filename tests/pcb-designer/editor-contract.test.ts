@@ -196,20 +196,25 @@ test("saves only on explicit action and warns before abandoning dirty work", () 
   assert.doesNotMatch(workspaceSource, /toLocaleTimeString/);
 });
 
-test("shows the single editor and live viewers for the active project", () => {
+test("shows editors and live viewers across the PCB workspace", () => {
   assert.match(presenceSource, /pcb_project_presence:\$\{projectId\}/);
+  assert.match(presenceSource, /presence:workspace:pcb:overview/);
   assert.match(presenceSource, /presenceState/);
   assert.match(presenceSource, /dirty/);
   assert.match(presenceSource, /viewMode/);
+  assert.match(presenceSource, /workspacePeers/);
   assert.match(collaboratorsSource, /同案協作/);
+  assert.match(collaboratorsSource, /PCB 即時協作/);
+  assert.match(collaboratorsSource, /projectGroups/);
   assert.match(collaboratorsSource, /編輯中，尚未儲存/);
   assert.match(collaboratorsSource, /即時檢視/);
   assert.match(presenceSource, /project-saved/);
   assert.match(workspaceSource, /projectLock/);
   assert.match(workspaceSource, /usePcbProjectPresence/);
   assert.match(workspaceSource, /<PcbCollaborators/);
-  assert.match(railSource, /disabled=\{!workspace\.canMutate \|\| project\.id !== workspace\.activeProject\.id\}/);
-  assert.match(railSource, /project\.id === workspace\.activeProject\.id/);
+  assert.match(workspaceSource, /workspacePeers=\{presence\.workspacePeers\}/);
+  assert.match(railSource, /otherProjects\.map/);
+  assert.doesNotMatch(railSource, /onEditProject\(project\)/);
   assert.match(hookSource, /deleteProject[\s\S]{0,500}remoteClient\?\.deleteProject/);
 });
 

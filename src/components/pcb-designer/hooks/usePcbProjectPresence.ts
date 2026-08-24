@@ -65,9 +65,14 @@ export function usePcbProjectPresence({
   const { isRealtimeAuthenticated } = useUser();
   const [peers, setPeers] = useState<PcbProjectPeer[]>([]);
   const [connected, setConnected] = useState(false);
+  const [workspacePeers, setWorkspacePeers] = useState<PcbProjectPeer[]>([]);
+  const [workspaceConnected, setWorkspaceConnected] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const workspaceChannelRef = useRef<RealtimeChannel | null>(null);
   const subscribedRef = useRef(false);
+  const workspaceSubscribedRef = useRef(false);
   const trackConfirmedRef = useRef(false);
+  const workspaceTrackConfirmedRef = useRef(false);
   const tabIdRef = useRef(clientId || `pcb-tab-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
   const onProjectSavedRef = useRef(onProjectSaved);
   onProjectSavedRef.current = onProjectSaved;
@@ -167,13 +172,101 @@ export function usePcbProjectPresence({
   }, [isRealtimeAuthenticated, presenceUserId, projectId]);
 
   useEffect(() => {
-    if (!payload || !channelRef.current || !subscribedRef.current) return;
-    const channel = channelRef.current;
-    void channel.track(payload).then((result) => {
-      if (channelRef.current !== channel) return;
-      trackConfirmedRef.current = result === "ok";
-      if (result !== "ok") setConnected(false);
-    });
+    if (!presenceUserId) {
+      setWorkspaceConnected(false);
+      setWorkspacePeers([]);
+      return undefined;
+    }
+
+    let disposed = false;
+    let channel: RealtimeChannel | null = null;
+    workspaceSubscribedRef.current = false;
+    workspaceTrackConfirmedRef.current = false;
+
+    const syncWorkspacePresence = () => {
+      if (!channel) return;
+      const presenceState = channel.presenceState() as Record<string, unknown[]>;
+      const nextPeers = flattenPresenceState(presenceState);
+      setWorkspacePeers(nextPeers.filter((peer) => peer.tabId !== tabIdRef.current));
+      const ownSessionVisible = nextPeers.some((peer) => peer.tabId === tabIdRef.current);
+      setWorkspaceConnected(
+        workspaceSubscribedRef.current && workspaceTrackConfirmedRef.current && ownSessionVisible,
+      );
+    };
+
+    const trackCurrentPayload = async () => {
+      const currentPayload = payloadRef.current;
+      if (!channel || !workspaceSubscribedRef.current || !currentPayload) return;
+      const result = await channel.track(currentPayload);
+      if (workspaceChannelRef.current !== channel) return;
+      workspaceTrackConfirmedRef.current = result === "ok";
+      if (result !== "ok") setWorkspaceConnected(false);
+      syncWorkspacePresence();
+    };
+
+    const connect = async () => {
+      if (isRealtimeAuthenticated && !(await authorizePrivateRealtime())) {
+        if (!disposed) setWorkspaceConnected(false);
+        return;
+      }
+      if (disposed) return;
+
+      const topic = isRealtimeAuthenticated
+        ? "presence:workspace:pcb:overview"
+        : "pcb_workspace_presence";
+      channel = supabase.channel(topic, {
+        config: {
+          private: isRealtimeAuthenticated,
+          presence: { key: `${presenceUserId}:${tabIdRef.current}` },
+        },
+      });
+      workspaceChannelRef.current = channel;
+      channel
+        .on("presence", { event: "sync" }, syncWorkspacePresence)
+        .on("presence", { event: "join" }, syncWorkspacePresence)
+        .on("presence", { event: "leave" }, syncWorkspacePresence)
+        .subscribe((status) => {
+          workspaceSubscribedRef.current = status === "SUBSCRIBED";
+          if (workspaceSubscribedRef.current) void trackCurrentPayload();
+          else setWorkspaceConnected(false);
+        });
+    };
+    void connect();
+
+    return () => {
+      disposed = true;
+      workspaceChannelRef.current = null;
+      workspaceSubscribedRef.current = false;
+      workspaceTrackConfirmedRef.current = false;
+      setWorkspaceConnected(false);
+      setWorkspacePeers([]);
+      if (channel) {
+        void channel.untrack().catch(() => undefined);
+        void supabase.removeChannel(channel);
+      }
+    };
+  }, [isRealtimeAuthenticated, presenceUserId]);
+
+  useEffect(() => {
+    if (!payload) return;
+
+    const projectChannel = channelRef.current;
+    if (projectChannel && subscribedRef.current) {
+      void projectChannel.track(payload).then((result) => {
+        if (channelRef.current !== projectChannel) return;
+        trackConfirmedRef.current = result === "ok";
+        if (result !== "ok") setConnected(false);
+      });
+    }
+
+    const workspaceChannel = workspaceChannelRef.current;
+    if (workspaceChannel && workspaceSubscribedRef.current) {
+      void workspaceChannel.track(payload).then((result) => {
+        if (workspaceChannelRef.current !== workspaceChannel) return;
+        workspaceTrackConfirmedRef.current = result === "ok";
+        if (result !== "ok") setWorkspaceConnected(false);
+      });
+    }
   }, [payload]);
 
   const broadcastProjectSaved = useCallback(async (revision: string) => {
@@ -191,5 +284,12 @@ export function usePcbProjectPresence({
     return result === "ok";
   }, [projectId]);
 
-  return { broadcastProjectSaved, connected, peers, tabId: tabIdRef.current };
+  return {
+    broadcastProjectSaved,
+    connected,
+    peers,
+    tabId: tabIdRef.current,
+    workspaceConnected,
+    workspacePeers,
+  };
 }

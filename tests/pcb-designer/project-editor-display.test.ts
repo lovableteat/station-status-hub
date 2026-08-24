@@ -8,29 +8,33 @@ const read = async (path: string) =>
 const railSource = await read("src/components/pcb-designer/PcbLeftRail.tsx");
 const editorCssSource = await read("src/components/pcb-designer/pcb-designer.css");
 
-test("shows the persisted last editor above and on each project card", () => {
+test("shows the active board once with its persisted editor state", () => {
   assert.doesNotMatch(railSource, /useUser\(\)/);
   assert.match(railSource, /最後編輯者/);
   assert.match(railSource, /lastEditedBy/);
   assert.match(railSource, /lastSavedEditor/);
   assert.match(railSource, /lastSavedProjectId/);
   assert.match(railSource, /workspace\.hasUnsavedChanges/);
-  assert.match(railSource, /pcb-project-editor-strip/);
-  assert.match(railSource, /pcb-project-last-editor/);
+  assert.match(railSource, /pcb-current-project-card/);
+  assert.match(railSource, /pcb-project-editor-state/);
+  assert.match(railSource, /projects\.filter\(\(project\) => project\.id !== workspace\.activeProject\.id\)/);
 });
 
-test("stamps the active project with the account that explicitly saved it", () => {
-  assert.match(railSource, /最後編輯：/);
-  assert.match(railSource, /尚無紀錄/);
-  assert.match(editorCssSource, /\.pcb-project-last-editor\s*\{/);
+test("stamps the active board with the account that explicitly saved it", () => {
+  assert.match(railSource, /const activeEditorName/);
+  assert.match(railSource, /workspace\.lastSavedProjectId === workspace\.activeProject\.id/);
+  assert.match(railSource, /workspace\.lastSavedEditor \?\? workspace\.activeProject\.lastEditedBy/);
+  assert.match(editorCssSource, /\.pcb-current-project-card\s*\{/);
 });
 
-test("keeps project cards structured with status and a dedicated action row", () => {
+test("keeps secondary boards compact and moves low-frequency actions into one menu", () => {
   assert.match(railSource, /projectStatusLabels/);
-  assert.match(railSource, /pcb-project-card-heading/);
-  assert.match(railSource, /pcb-project-card-meta/);
-  assert.match(railSource, /pcb-project-actions/);
-  assert.match(editorCssSource, /\.pcb-project-editor-strip\s*\{/);
-  assert.match(editorCssSource, /\.pcb-project-current-badge,\s*\.pcb-project-status\s*\{/);
-  assert.match(editorCssSource, /\.pcb-project-actions\s*\{/);
+  assert.match(railSource, /pcb-project-list-heading/);
+  assert.match(railSource, /pcb-project-compact-heading/);
+  assert.match(railSource, /pcb-project-compact-meta/);
+  assert.match(railSource, /DropdownMenu/);
+  assert.match(railSource, /MoreHorizontal/);
+  assert.match(editorCssSource, /\.pcb-project-list-heading\s*\{/);
+  assert.match(editorCssSource, /\.pcb-project-compact-item\s*\{/);
+  assert.match(editorCssSource, /\.pcb-current-project-actions\s*\{/);
 });
