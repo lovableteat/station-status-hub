@@ -11,6 +11,7 @@ import {
 
 import { useUser } from "@/components/auth/UserContext";
 import { useToast } from "@/hooks/use-toast";
+import { fetchAllPages } from "@/hooks/fetchAllPages";
 import { supabase } from "@/integrations/supabase/client";
 import {
   SUPABASE_EGRESS_RESTRICTION_MESSAGE,
@@ -182,8 +183,20 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       // The additive migration may not have reached an older environment yet.
       console.info("Project summaries are unavailable until the migration is applied.");
       const [systemsResult, issuesResult] = await Promise.all([
-        supabase.from("test_systems").select("project_id, status"),
-        supabase.from("issues").select("project_id, status"),
+        fetchAllPages((from, to) =>
+          supabase
+            .from("test_systems")
+            .select("id, project_id, status")
+            .order("id")
+            .range(from, to)
+        ),
+        fetchAllPages((from, to) =>
+          supabase
+            .from("issues")
+            .select("id, project_id, status")
+            .order("id")
+            .range(from, to)
+        ),
       ]);
       if (systemsResult.error || issuesResult.error) return;
 
@@ -241,10 +254,14 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
     setIsLoadingProjects(true);
 
     try {
-      const { data, error } = await supabase
-        .from("test_projects")
-        .select("*")
-        .order("updated_at", { ascending: false });
+      const { data, error } = await fetchAllPages((from, to) =>
+        supabase
+          .from("test_projects")
+          .select("*")
+          .order("updated_at", { ascending: false })
+          .order("id")
+          .range(from, to)
+      );
 
       if (error) throw error;
 

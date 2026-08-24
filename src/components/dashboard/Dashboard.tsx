@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -118,26 +118,59 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [isArchiveExporting, setIsArchiveExporting] = useState(false);
   const [issueCounts, setIssueCounts] = useState({ critical: 0, open: 0 });
 
-  useEffect(() => {
+  const loadIssueCounts = useCallback(async () => {
     if (!activeProjectId) {
       setIssueCounts({ critical: 0, open: 0 });
       return;
     }
 
-    supabase
-      .from("issues")
-      .select("priority, status")
-      .eq("project_id", activeProjectId)
-      .then(({ data }) => {
-        const openIssues = (data ?? []).filter(
-          (issue) => !["resolved", "closed"].includes(issue.status ?? "open")
-        );
-        setIssueCounts({
-          critical: openIssues.filter((issue) => issue.priority === "critical").length,
-          open: openIssues.length,
-        });
-      });
+    const [openResult, criticalResult] = await Promise.all([
+      supabase
+        .from("issues")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", activeProjectId)
+        .in("status", ["open", "in_progress"]),
+      supabase
+        .from("issues")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", activeProjectId)
+        .in("status", ["open", "in_progress"])
+        .eq("priority", "critical"),
+    ]);
+
+    if (openResult.error || criticalResult.error) {
+      console.error("Failed to refresh dashboard issue counts:", openResult.error ?? criticalResult.error);
+      return;
+    }
+
+    setIssueCounts({
+      critical: criticalResult.count ?? 0,
+      open: openResult.count ?? 0,
+    });
   }, [activeProjectId]);
+
+  useEffect(() => {
+    void loadIssueCounts();
+    if (!activeProjectId) return;
+
+    const channel = supabase
+      .channel(`dashboard-issues:${activeProjectId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          filter: `project_id=eq.${activeProjectId}`,
+          schema: "workspace",
+          table: "issues",
+        },
+        () => void loadIssueCounts()
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeProjectId, loadIssueCounts]);
 
   const dashboardMetrics = useMemo(
     () => calculateDashboardMetrics({ progress, stations, systems, testItems }),
