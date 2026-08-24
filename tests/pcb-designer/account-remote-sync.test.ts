@@ -26,6 +26,7 @@ function createState(name: string): PcbSaveState {
 function mockDatabase(options: {
   rpcAvailable: boolean;
   sharedRpcAvailable?: boolean;
+  lockedSaveError?: { code: string; message: string };
   rpcState?: PcbSaveState | null;
   permissions?: Record<string, unknown>;
   records?: Array<{ id: string; permissions: Record<string, unknown> }>;
@@ -36,6 +37,9 @@ function mockDatabase(options: {
   const database = {
     async rpc(name, args) {
       calls.push({ name, args });
+      if (name === "save_pcb_designer_workspace_locked" && options.lockedSaveError) {
+        return { data: null, error: options.lockedSaveError };
+      }
       if (name.endsWith("_shared") && options.sharedRpcAvailable === false) {
         return { data: null, error: { code: "PGRST202", message: "missing shared RPC" } };
       }
@@ -45,7 +49,9 @@ function mockDatabase(options: {
       return {
         data: name === "load_pcb_designer_workspace" || name === "load_pcb_designer_workspace_shared"
           ? options.rpcState ?? null
-          : null,
+          : name === "delete_pcb_designer_project_locked"
+            ? true
+            : null,
         error: null,
       };
     },
@@ -246,20 +252,56 @@ test("fallback clients share create and delete operations across two accounts", 
   assert.equal(removedForB?.remoteDeletions?.projects.includes(created.id), true);
 });
 
-test("uses dedicated save RPC when available", async () => {
+test("uses the lock-verified save RPC when available", async () => {
   const state = createState("Saved remotely");
   const mock = mockDatabase({ rpcAvailable: true });
   const client = createPcbAccountRemoteClient(
     mock.database,
     "33333333-3333-4333-8333-333333333333",
+    "browser-tab-a",
   );
 
   assert.equal(await client.save?.(state), true);
-  assert.equal(mock.calls.at(-1)?.name, "save_pcb_designer_workspace_shared");
+  assert.equal(mock.calls.at(-1)?.name, "save_pcb_designer_workspace_locked");
   assert.equal(
     (mock.calls.at(-1)?.args.p_payload as PcbSaveState).projects[0].name,
     "Saved remotely",
   );
+  assert.equal(mock.calls.at(-1)?.args.p_project_id, state.activeProjectId);
+  assert.equal(mock.calls.at(-1)?.args.p_editor_client_id, "browser-tab-a");
+});
+
+test("never falls back to an unlocked write when another editor owns the project", async () => {
+  const state = createState("Protected project");
+  const mock = mockDatabase({
+    rpcAvailable: true,
+    lockedSaveError: { code: "P0001", message: "PCB project is locked by another editor" },
+  });
+  const client = createPcbAccountRemoteClient(
+    mock.database,
+    "33333333-3333-4333-8333-333333333333",
+    "browser-tab-b",
+  );
+
+  assert.equal(await client.save?.(state), false);
+  assert.deepEqual(mock.calls.map((call) => call.name), [
+    "save_pcb_designer_workspace_locked",
+  ]);
+});
+
+test("deletes projects only through the active editor lock", async () => {
+  const state = createState("Delete with lock");
+  const mock = mockDatabase({ rpcAvailable: true });
+  const client = createPcbAccountRemoteClient(
+    mock.database,
+    "33333333-3333-4333-8333-333333333333",
+    "browser-tab-delete",
+  );
+
+  assert.equal(await client.deleteProject?.(state.activeProjectId!), true);
+  assert.equal(mock.calls.at(-1)?.name, "delete_pcb_designer_project_locked");
+  assert.equal(mock.calls.at(-1)?.args.p_project_id, state.activeProjectId);
+  assert.equal(mock.calls.at(-1)?.args.p_editor_client_id, "browser-tab-delete");
 });
 
 test("fallback saves preserve existing account settings", async () => {

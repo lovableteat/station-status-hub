@@ -2,6 +2,28 @@ import type { PcbSaveState } from "../types.ts";
 import { createBlankProject } from "../defaults.ts";
 
 export type PcbPersistenceStatus = "local" | "saving" | "synced" | "unsaved";
+export interface PcbProjectLock {
+  projectId: string;
+  projectName: string;
+  editorUserId: string;
+  editorClientId: string;
+  editorUsername: string;
+  editorDisplayName: string;
+  heartbeatAt: string;
+  leaseExpiresAt: string;
+}
+
+export interface PcbProjectLockResult {
+  available: boolean;
+  acquired: boolean;
+  lock: PcbProjectLock | null;
+}
+
+export interface PcbProjectLockRequest {
+  projectId: string;
+  projectName: string;
+}
+
 type RemoteError = { code?: string; message?: string } | null;
 type RemoteTable = {
   upsert: (
@@ -16,6 +38,10 @@ type RemoteTable = {
 export interface PcbRemoteClient {
   load?: () => Promise<PcbSaveState | null>;
   save?: (state: PcbSaveState) => Promise<boolean>;
+  acquireProjectLock?: (input: PcbProjectLockRequest) => Promise<PcbProjectLockResult>;
+  loadProjectLock?: (projectId: string) => Promise<PcbProjectLockResult>;
+  releaseProjectLock?: (projectId: string) => Promise<boolean>;
+  deleteProject?: (projectId: string) => Promise<boolean>;
   from?: (table: "pcb_designer_projects" | "pcb_designer_templates" | "pcb_designer_library") => RemoteTable;
 }
 

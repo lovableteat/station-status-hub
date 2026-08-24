@@ -26,12 +26,14 @@ import {
   type PcbRemoteClient,
 } from "./usePcbPersistence.ts";
 import { loadPcbRemote, mergePcbRemoteState } from "../core/remoteSync.ts";
+import { usePcbProjectLock } from "./usePcbProjectLock.ts";
 
 export interface UsePcbWorkspaceOptions {
   canEdit: boolean;
   storage?: StorageLike;
   remoteClient?: PcbRemoteClient | null;
   editor?: PcbEditorIdentity | null;
+  clientId?: string;
 }
 
 function browserStorage(): StorageLike {
@@ -46,6 +48,7 @@ export function usePcbWorkspace({
   storage,
   remoteClient,
   editor: editorIdentity,
+  clientId = "pcb-local-client",
 }: UsePcbWorkspaceOptions) {
   const repository = useMemo(
     () => new PcbLocalRepository(storage ?? browserStorage()),
@@ -54,21 +57,31 @@ export function usePcbWorkspace({
   const [state, dispatch] = useReducer(
     reduceWorkspaceState,
     undefined,
-    () => createWorkspaceState(repository.load(), canEdit),
+    () => createWorkspaceState(repository.load(), canEdit && !remoteClient),
   );
   const stateRef = useRef(state.data);
   const viewStateRef = useRef(state);
   const [remoteReady, setRemoteReady] = useState(!remoteClient);
   const hydratedCleanRevisionRef = useRef<string | null>(null);
   const hasUnsavedChangesRef = useRef(false);
+  const refreshRemoteRef = useRef<() => Promise<void>>(async () => undefined);
   stateRef.current = state.data;
   viewStateRef.current = state;
+
+  const projectLock = usePcbProjectLock({
+    client: remoteClient ?? null,
+    clientId,
+    permissionCanEdit: canEdit,
+    projectId: state.activeProject.id,
+    projectName: state.activeProject.name,
+  });
+  const effectiveCanEdit = canEdit && projectLock.canEdit;
 
   const persistence = usePcbPersistence({
     state: state.data,
     storage,
     remoteClient,
-    allowRemoteSync: canEdit && Boolean(remoteClient) && remoteReady,
+    allowRemoteSync: effectiveCanEdit && Boolean(remoteClient) && remoteReady,
     editor: editorIdentity,
   });
   const { markClean } = persistence;
@@ -121,12 +134,14 @@ export function usePcbWorkspace({
       if (initial) setRemoteReady(true);
     };
     const refreshOnFocus = () => void refreshRemote(false);
+    refreshRemoteRef.current = () => refreshRemote(false);
     void refreshRemote(true);
     const refreshTimer = window.setInterval(() => void refreshRemote(false), 8_000);
     window.addEventListener("focus", refreshOnFocus);
 
     return () => {
       active = false;
+      refreshRemoteRef.current = async () => undefined;
       window.clearInterval(refreshTimer);
       window.removeEventListener("focus", refreshOnFocus);
     };
@@ -139,10 +154,11 @@ export function usePcbWorkspace({
   }, [markClean, state.data.updatedAt]);
 
   const editor = usePcbEditorActions(state, dispatch);
+  const refreshRemoteNow = useCallback(() => refreshRemoteRef.current(), []);
 
   useEffect(() => {
-    dispatch({ type: "permission/set", canEdit });
-  }, [canEdit]);
+    dispatch({ type: "permission/set", canEdit: effectiveCanEdit });
+  }, [effectiveCanEdit]);
 
   const createProject = useCallback(
     (input: NewProjectInput) => dispatch({ type: "project/create", input }),
@@ -164,8 +180,13 @@ export function usePcbWorkspace({
     [],
   );
   const deleteProject = useCallback(
-    (projectId: string) => dispatch({ type: "project/delete", projectId }),
-    [],
+    async (projectId: string) => {
+      if (!effectiveCanEdit || projectId !== stateRef.current.activeProjectId) return false;
+      if (remoteClient?.deleteProject && !await remoteClient.deleteProject(projectId)) return false;
+      dispatch({ type: "project/delete", projectId });
+      return true;
+    },
+    [effectiveCanEdit, remoteClient],
   );
   const importProject = useCallback(
     (project: PcbProject) => dispatch({ type: "project/import", project }),
@@ -264,11 +285,11 @@ export function usePcbWorkspace({
   const assignModelAsset = useCallback(
     (componentId: string, metadata: PcbModelAssetMetadata) => {
       const component = state.activeProject.components.find((item) => item.instanceId === componentId);
-      if (!canEdit || state.documentLocked || !component || component.locked) return false;
+      if (!effectiveCanEdit || state.documentLocked || !component || component.locked) return false;
       dispatch({ type: "model/assign", componentId, metadata });
       return true;
     },
-    [canEdit, state.activeProject.components, state.documentLocked],
+    [effectiveCanEdit, state.activeProject.components, state.documentLocked],
   );
   const setZoom = useCallback(
     (zoom: number) => dispatch({ type: "zoom/set", zoom }),
@@ -304,6 +325,9 @@ export function usePcbWorkspace({
     hasUnsavedChanges: persistence.hasUnsavedChanges,
     lastSavedEditor: persistence.lastSavedEditor,
     lastSavedProjectId: persistence.lastSavedProjectId,
+    permissionCanEdit: canEdit,
+    projectLock,
+    refreshRemoteNow,
     createProject,
     openProject,
     renameProject,

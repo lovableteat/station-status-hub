@@ -1,7 +1,7 @@
 import { Users } from "lucide-react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import type { PcbProjectPeer, PcbViewMode } from "./hooks/usePcbProjectPresence.ts";
+import type { PcbAccessMode, PcbProjectPeer, PcbViewMode } from "./hooks/usePcbProjectPresence.ts";
 
 interface CurrentUser {
   displayName: string;
@@ -26,12 +26,16 @@ export function PcbCollaborators({
   connected,
   currentUser,
   dirty,
+  accessMode,
+  lockEditorName,
   peers,
   viewMode,
 }: {
   connected: boolean;
   currentUser: CurrentUser | null;
   dirty: boolean;
+  accessMode: PcbAccessMode;
+  lockEditorName: string | null;
   peers: PcbProjectPeer[];
   viewMode: PcbViewMode;
 }) {
@@ -44,8 +48,8 @@ export function PcbCollaborators({
         <button
           type="button"
           className="pcb-collaborator-trigger"
-          aria-label={`同案編輯者 ${peers.length + 1} 人`}
-          title="查看同案編輯者"
+          aria-label={`同案協作 ${peers.length + 1} 人`}
+          title="查看同案協作狀態"
         >
           <span
             className="pcb-collaborator-avatar is-current"
@@ -74,7 +78,7 @@ export function PcbCollaborators({
       <PopoverContent align="end" className="pcb-collaborator-popover">
         <div className="pcb-collaborator-heading">
           <div>
-            <strong>同案編輯者</strong>
+            <strong>同案協作</strong>
             <span>{connected ? "即時連線中" : "正在連線"}</span>
           </div>
           <span>{peers.length + 1} 人</span>
@@ -87,8 +91,15 @@ export function PcbCollaborators({
             >
               {initials(currentName)}
             </span>
-            <span><strong>{currentName}（你）</strong><small>{viewMode.toUpperCase()} · {dirty ? "編輯中，尚未儲存" : "已儲存"}</small></span>
-            <i className="is-online" />
+            <span>
+              <strong>{currentName}（你）</strong>
+              <small>
+                {viewMode.toUpperCase()} · {accessMode === "editor"
+                  ? dirty ? "編輯中，尚未儲存" : "目前編輯者"
+                  : "即時檢視"}
+              </small>
+            </span>
+            <i className={accessMode === "editor" && dirty ? "is-editing" : "is-online"} />
           </div>
           {peers.map((peer) => (
             <div key={peer.tabId} className="pcb-collaborator-person">
@@ -98,12 +109,23 @@ export function PcbCollaborators({
               >
                 {initials(peer.displayName)}
               </span>
-              <span><strong>{peer.displayName}</strong><small>{peer.viewMode.toUpperCase()} · {peer.dirty ? "編輯中，尚未儲存" : "已儲存"}</small></span>
-              <i className={peer.dirty ? "is-editing" : "is-online"} />
+              <span>
+                <strong>{peer.displayName}</strong>
+                <small>
+                  {peer.viewMode.toUpperCase()} · {peer.accessMode === "editor"
+                    ? peer.dirty ? "編輯中，尚未儲存" : "目前編輯者"
+                    : "即時檢視"}
+                </small>
+              </span>
+              <i className={peer.accessMode === "editor" && peer.dirty ? "is-editing" : "is-online"} />
             </div>
           ))}
         </div>
-        <p className="pcb-collaborator-note">此處顯示目前開啟同一專案的人員與編輯狀態。</p>
+        <p className="pcb-collaborator-note">
+          {accessMode === "viewer" && lockEditorName
+            ? `目前由 ${lockEditorName} 編輯；你會即時看到已儲存版本。`
+            : "同一板子一次只允許一人編輯；其他人會自動切換成即時檢視。"}
+        </p>
       </PopoverContent>
     </Popover>
   );

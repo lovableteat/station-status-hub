@@ -109,17 +109,20 @@ export function PcbDesignerWorkspace({
 }: PcbDesignerWorkspaceProps) {
   const { canEditModule } = usePermissions();
   const { user } = useUser();
+  const clientIdRef = useRef(`pcb-client-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
   const remoteClient = useMemo(
     () => isDatabaseUserId(user?.userId)
       ? createPcbAccountRemoteClient(
-        supabase as unknown as PcbAccountDatabase,
+        supabase.schema("workspace") as unknown as PcbAccountDatabase,
         user.userId,
+        clientIdRef.current,
       )
       : null,
     [user?.userId],
   );
   const workspace = usePcbWorkspace({
     canEdit: canEditModule("pcb-designer"),
+    clientId: clientIdRef.current,
     remoteClient,
     editor: user
       ? {
@@ -139,7 +142,10 @@ export function PcbDesignerWorkspace({
   const projectInputRef = useRef<HTMLInputElement>(null);
   const modelAssetStoreRef = useRef(getDefaultPcbModelAssetStore());
   const presence = usePcbProjectPresence({
+    accessMode: workspace.canEdit ? "editor" : "viewer",
+    clientId: clientIdRef.current,
     dirty: workspace.hasUnsavedChanges,
+    onProjectSaved: workspace.refreshRemoteNow,
     projectId: workspace.activeProject.id,
     projectName: workspace.activeProject.name,
     user,
@@ -147,6 +153,15 @@ export function PcbDesignerWorkspace({
   });
 
   const handleSave = useCallback(async () => {
+    if (!workspace.canEdit) {
+      toast({
+        title: "目前為即時檢視",
+        description: workspace.projectLock.editorName
+          ? `${workspace.projectLock.editorName} 正在編輯這個板子；儲存後你會立即看到最新版本。`
+          : "目前沒有這個板子的編輯權。",
+      });
+      return;
+    }
     const remoteSaved = await saveNow();
     if (remoteClient && !remoteSaved) {
       toast({
@@ -156,13 +171,16 @@ export function PcbDesignerWorkspace({
       });
       return;
     }
+    if (remoteClient) {
+      await presence.broadcastProjectSaved(workspace.data.updatedAt);
+    }
     toast({
       title: remoteClient ? "儲存與同步完成" : "本機草稿已儲存",
       description: remoteClient
-        ? "同一帳號在其他電腦重新開啟後可讀取這次版本。"
+        ? "雲端版本已更新，同案檢視者會立即看到最新內容。"
         : "目前為本機帳號，內容已保存在此瀏覽器。",
     });
-  }, [remoteClient, saveNow]);
+  }, [presence.broadcastProjectSaved, remoteClient, saveNow, workspace.canEdit, workspace.data.updatedAt, workspace.projectLock.editorName]);
 
   const changeViewMode = useCallback((mode: PcbViewMode) => {
     setViewMode(mode);
@@ -359,7 +377,7 @@ export function PcbDesignerWorkspace({
     kind: "confirm",
     title: "刪除專案",
     description: `確定要刪除「${project.name}」嗎？此操作只會在確認後執行。`,
-    onConfirm: () => workspace.deleteProject(project.id),
+    onConfirm: () => void workspace.deleteProject(project.id),
   });
   const requestDeleteTemplate = (template: PcbTemplate) => setDialog({
     kind: "confirm",
@@ -434,7 +452,24 @@ export function PcbDesignerWorkspace({
           <span className="pcb-save-state" data-status={workspace.persistenceStatus} title={persistenceLabel(workspace.persistenceStatus)}>
             {persistenceLabel(workspace.persistenceStatus)}
           </span>
-          {!workspace.canEdit && <span className="pcb-read-only">唯讀</span>}
+          {remoteClient ? (
+            workspace.projectLock.status === "acquiring" ? (
+              <span className="pcb-read-only">確認編輯權...</span>
+            ) : workspace.canEdit ? (
+              <span className="pcb-editing-lock">你正在編輯</span>
+            ) : (
+              <span
+                className="pcb-read-only"
+                title={workspace.projectLock.editorName
+                  ? `${workspace.projectLock.editorName} 正在編輯這個板子`
+                  : "目前為即時檢視"}
+              >
+                {workspace.projectLock.editorName
+                  ? `${workspace.projectLock.editorName} 編輯中 · 即時檢視`
+                  : "即時檢視"}
+              </span>
+            )
+          ) : !workspace.canEdit && <span className="pcb-read-only">唯讀</span>}
 
           <div className="pcb-mobile-project-actions">
             <Button
@@ -482,9 +517,11 @@ export function PcbDesignerWorkspace({
 
         <div className="pcb-project-actions">
           <PcbCollaborators
+            accessMode={workspace.canEdit ? "editor" : "viewer"}
             connected={presence.connected}
             currentUser={user}
             dirty={workspace.hasUnsavedChanges}
+            lockEditorName={workspace.projectLock.editorName}
             peers={presence.peers}
             viewMode={viewMode}
           />
