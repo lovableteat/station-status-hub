@@ -113,7 +113,7 @@ export function MainWorkspaceHeader({
         <span
           aria-hidden="true"
           data-platform-grid-placeholder="controls"
-          className="invisible h-9 min-w-[200px] sm:h-11 2xl:min-w-[520px]"
+          className="invisible h-9 min-w-[200px] sm:h-11 xl:min-w-[380px] 2xl:min-w-[520px]"
         />
 
         <div
