@@ -51,7 +51,6 @@ interface SystemUser {
   created_by: string;
   created_at: string;
   display_name?: string;
-  password_hash?: string;
   auth_user_id?: string | null;
   auth_migrated_at?: string | null;
   registration_requested_at?: string | null;
@@ -64,6 +63,24 @@ type AdminTab = "users" | "collaboration" | "api-management";
 
 const SHOW_ENGINEER_ADMIN = false;
 const SHOW_EXTENDED_ADMIN_COPY = false;
+const SYSTEM_USER_SAFE_COLUMNS = [
+  "id",
+  "username",
+  "display_name",
+  "role",
+  "status",
+  "permissions",
+  "created_by",
+  "created_at",
+  "updated_at",
+  "registration_requested_at",
+  "approved_at",
+  "approved_by",
+  "auth_user_id",
+  "auth_migrated_at",
+  "last_seen_at",
+  "avatar_path",
+].join(",");
 
 export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) {
   const [engineers, setEngineers] = useState<Engineer[]>([]);
@@ -138,7 +155,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     try {
       const { data, error } = await supabase
         .from('system_users')
-        .select('*')
+        .select(SYSTEM_USER_SAFE_COLUMNS)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
