@@ -130,27 +130,35 @@ function useUnifiedDataSource() {
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
   const loadSequenceRef = useRef(0);
+  const loadedProjectRef = useRef<string | null>(null);
 
   const stationStatuses = useStationStatus(systems, stations, progress);
 
   const loadAllData = useCallback(async () => {
     const loadSequence = ++loadSequenceRef.current;
     if (!user || !activeProjectId) {
+      loadedProjectRef.current = null;
       setSystems([]);
       setStations([]);
       setTestItems([]);
       setProgress([]);
       setStationContents([]);
       setIsLoading(false);
+      setIsUpdating(false);
       return;
     }
 
-    setIsLoading(true);
-    setSystems([]);
-    setStations([]);
-    setTestItems([]);
-    setProgress([]);
-    setStationContents([]);
+    const isInitialProjectLoad = loadedProjectRef.current !== activeProjectId;
+    if (isInitialProjectLoad) {
+      setIsLoading(true);
+      setSystems([]);
+      setStations([]);
+      setTestItems([]);
+      setProgress([]);
+      setStationContents([]);
+    } else {
+      setIsUpdating(true);
+    }
 
     try {
       const activeFlowVersionId = activeProject?.active_flow_version_id ?? null;
@@ -239,6 +247,7 @@ function useUnifiedDataSource() {
       setTestItems(nextItems);
       setStationContents(nextContents);
       setProgress(nextProgress);
+      loadedProjectRef.current = activeProjectId;
     } catch (error) {
       console.error("Failed to load project-scoped station data:", error);
       const serviceRestricted = isSupabaseServiceRestrictedError(error);
@@ -252,6 +261,7 @@ function useUnifiedDataSource() {
     } finally {
       if (loadSequence === loadSequenceRef.current) {
         setIsLoading(false);
+        setIsUpdating(false);
       }
     }
   }, [activeProject?.active_flow_version_id, activeProjectId, toast, user]);

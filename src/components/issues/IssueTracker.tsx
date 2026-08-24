@@ -42,6 +42,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { fetchAllPages } from "@/hooks/fetchAllPages";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -162,26 +163,30 @@ export function IssueTracker() {
     }
 
     if (showLoading) setLoading(true);
-    const { data, error } = await supabase
-      .from("issues")
-      .select(`
-        *,
-        test_systems!issues_system_id_fkey (
-          system_name,
-          assigned_engineer,
-          serial_number
-        ),
-        test_flow_stations!issues_station_id_fkey (
-          station_name,
-          station_order
-        ),
-        test_flow_items!issues_test_item_id_fkey (
-          item_name,
-          description
-        )
-      `)
-      .eq("project_id", activeProjectId)
-      .order("created_at", { ascending: false });
+    const { data, error } = await fetchAllPages((from, to) =>
+      supabase
+        .from("issues")
+        .select(`
+          *,
+          test_systems!issues_system_id_fkey (
+            system_name,
+            assigned_engineer,
+            serial_number
+          ),
+          test_flow_stations!issues_station_id_fkey (
+            station_name,
+            station_order
+          ),
+          test_flow_items!issues_test_item_id_fkey (
+            item_name,
+            description
+          )
+        `)
+        .eq("project_id", activeProjectId)
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(from, to)
+    );
 
     if (error) {
       setLoading(false);
@@ -190,11 +195,33 @@ export function IssueTracker() {
     }
 
     const issueIds = (data ?? []).map((issue) => issue.id);
-    const attachmentResult = issueIds.length
-      ? await supabase.from("issue_attachments").select("*").in("issue_id", issueIds)
-      : { data: [], error: null };
+    const attachmentRows: NonNullable<Issue["attachments"]> = [];
+    let attachmentError: { message: string } | null = null;
+    for (let index = 0; index < issueIds.length; index += 200) {
+      const issueIdChunk = issueIds.slice(index, index + 200);
+      const attachmentResult = await fetchAllPages((from, to) =>
+        supabase
+          .from("issue_attachments")
+          .select("*")
+          .in("issue_id", issueIdChunk)
+          .order("id")
+          .range(from, to)
+      );
+      if (attachmentResult.error) {
+        attachmentError = attachmentResult.error as { message: string };
+        break;
+      }
+      attachmentRows.push(...(attachmentResult.data ?? []));
+    }
+    if (attachmentError) {
+      toast({
+        title: "附件載入失敗",
+        description: attachmentError.message,
+        variant: "destructive",
+      });
+    }
     const attachmentsByIssue = new Map<string, NonNullable<Issue["attachments"]>>();
-    (attachmentResult.data ?? []).forEach((attachment) => {
+    attachmentRows.forEach((attachment) => {
       const list = attachmentsByIssue.get(attachment.issue_id) ?? [];
       list.push(attachment);
       attachmentsByIssue.set(attachment.issue_id, list);

@@ -6,7 +6,7 @@ import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { saveGuardedTestProgress, unresolvedIssueToast } from "./guardedTestProgress";
+import { unresolvedIssueToast } from "./guardedTestProgress";
 
 interface SystemCompleteButtonProps {
   systemId: string;
@@ -21,7 +21,7 @@ interface SystemCompleteButtonProps {
     station_id: string;
     item_name: string;
   }>;
-  onSystemUpdate: (newSystemId?: string) => void;
+  onSystemUpdate: (newSystemId?: string) => void | Promise<void>;
   triggerVariant?: "default" | "menu";
 }
 
@@ -51,8 +51,6 @@ export function SystemCompleteButton({
         station.station_order >= 0 && station.station_order <= 4
       );
 
-      const currentTime = new Date().toISOString();
-
       const { data: unresolvedIssues, error: issueError } = await supabase
         .from("issues")
         .select("id")
@@ -78,29 +76,26 @@ export function SystemCompleteButton({
         return;
       }
 
-      for (const { item, station } of targetItems) {
-        await saveGuardedTestProgress({
-          itemId: item.id,
-          projectId: activeProjectId,
-          stationId: station.id,
-          status: "Done",
-          systemId,
-          updates: {
-            completed_at: currentTime,
-            notes: "一鍵完成功能自動設定",
-            progress_percent: 100,
-            started_at: currentTime,
-          },
-        });
-      }
+      const { data: completedCount, error: completionError } = await supabase.rpc(
+        "complete_test_system",
+        {
+          p_assigned_to: null,
+          p_project_id: activeProjectId,
+          p_system_id: systemId,
+        },
+      );
+      if (completionError) throw completionError;
+
+      const completedItems =
+        typeof completedCount === "number" ? completedCount : targetItems.length;
 
       toast({
         title: "一鍵完成成功",
-        description: `機台 ${systemName} 的所有測試項目已標記為完成 (共 ${targetItems.length} 項)`
+        description: `機台 ${systemName} 的所有測試項目已標記為完成 (共 ${completedItems} 項)`
       });
 
       // 觸發資料重新載入
-      onSystemUpdate();
+      await onSystemUpdate(systemId);
 
     } catch (error) {
       console.error('一鍵完成失敗:', error);

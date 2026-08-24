@@ -3677,6 +3677,14 @@ type BaseDatabase = {
       }
     }
     Functions: {
+      complete_test_system: {
+        Args: {
+          p_assigned_to?: string | null
+          p_project_id: string
+          p_system_id: string
+        }
+        Returns: number
+      }
       set_test_progress_status: {
         Args: {
           p_project_id: string
