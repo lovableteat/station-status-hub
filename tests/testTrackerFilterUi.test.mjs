@@ -7,7 +7,7 @@ const tracker = await readFile(
   "utf8",
 );
 const table = await readFile(
-  new URL("../src/components/test-tracker/TestProgressTable.tsx", import.meta.url),
+  new URL("../src/components/test-tracker/TestProgressTable/desktop/DesktopTestProgressTable.tsx", import.meta.url),
   "utf8",
 );
 const filters = await readFile(

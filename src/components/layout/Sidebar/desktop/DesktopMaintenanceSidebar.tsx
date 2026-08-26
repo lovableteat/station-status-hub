@@ -1,15 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  AlertTriangle,
-  Factory,
-  FileSliders,
-  FolderKanban,
-  Gauge,
-  ListChecks,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Wrench,
-} from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,69 +7,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { usePermissions } from "@/hooks/usePermissions";
-import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
-interface SidebarProps {
-  activeModule: string;
-  desktopStickyClass?: string;
-  onModuleChange: (module: string) => void;
-}
-
-interface MaintenanceNavigationProps {
-  activeModule: string;
-  navigationItems: typeof maintenanceNavigationItems;
-  onModuleChange: (module: string) => void;
-}
-
-const SIDEBAR_STORAGE_KEY = "maintenance-workspace:sidebar-collapsed:v1";
-
-const maintenanceNavigationItems = [
-  { id: "dashboard", label: "系統儀表板", icon: Gauge },
-  { id: "test-tracker", label: "L10 測試追蹤", icon: ListChecks },
-  { id: "flow-info", label: "L10 流程設定", icon: FileSliders },
-  { id: "monitor", label: "生產監控牆", icon: Factory },
-  { id: "issues", label: "問題追蹤", icon: AlertTriangle },
-  { id: "tools", label: "工具與資產", icon: Wrench },
-  { id: "test-plan", label: "資料儲存", icon: FolderKanban },
-];
-
-export function MobileMaintenanceNavigation({
-  activeModule,
-  onModuleChange,
-  navigationItems,
-}: MaintenanceNavigationProps) {
-  return (
-    <nav
-      aria-label="維修中心功能"
-      data-mobile-maintenance-nav="true"
-      className="sticky top-[var(--mobile-header-height)] z-30 flex w-full shrink-0 snap-x gap-1 overflow-x-auto rounded-xl border border-cyan-200/20 bg-[#071522]/96 p-1 shadow-[0_14px_34px_-28px_rgba(34,211,238,0.75)] backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:top-[72px]"
-    >
-      {navigationItems.map((item) => {
-        const Icon = item.icon;
-        const isActive = activeModule === item.id;
-        return (
-          <button
-            key={item.id}
-            type="button"
-            aria-current={isActive ? "page" : undefined}
-            onClick={() => onModuleChange(item.id)}
-            className={cn(
-              "flex h-11 min-w-fit snap-start items-center gap-2 rounded-lg border px-3 text-xs font-black transition-colors",
-              isActive
-                ? "border-cyan-100/60 bg-[linear-gradient(135deg,#67e8f9,#60a5fa)] text-[#061927] shadow-[0_10px_24px_-16px_rgba(34,211,238,0.9)]"
-                : "border-transparent bg-white/[0.025] text-slate-300 hover:border-cyan-200/20 hover:bg-cyan-300/10 hover:text-white",
-            )}
-          >
-            <Icon className="h-4.5 w-4.5" />
-            <span>{item.label}</span>
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
+import {
+  SIDEBAR_STORAGE_KEY,
+  type MaintenanceNavigationProps,
+} from "../shared/navigation";
 
 export function DesktopMaintenanceSidebar({
   activeModule,
@@ -173,36 +106,5 @@ export function DesktopMaintenanceSidebar({
         </nav>
       </aside>
     </>
-  );
-}
-
-export function Sidebar({
-  activeModule,
-  desktopStickyClass,
-  onModuleChange,
-}: SidebarProps) {
-  const { canViewModule } = usePermissions();
-  const isCompactLayout = useIsCompactLayout();
-  const visibleNavigationItems = maintenanceNavigationItems.filter((item) =>
-    canViewModule(item.id)
-  );
-
-  if (isCompactLayout) {
-    return (
-      <MobileMaintenanceNavigation
-        activeModule={activeModule}
-        navigationItems={visibleNavigationItems}
-        onModuleChange={onModuleChange}
-      />
-    );
-  }
-
-  return (
-    <DesktopMaintenanceSidebar
-      activeModule={activeModule}
-      desktopStickyClass={desktopStickyClass}
-      navigationItems={visibleNavigationItems}
-      onModuleChange={onModuleChange}
-    />
   );
 }

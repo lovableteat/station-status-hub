@@ -11,10 +11,26 @@ export const RESPONSIVE_BREAKPOINTS = {
 } as const
 
 export type ResponsiveBreakpoint = keyof typeof RESPONSIVE_BREAKPOINTS
+export type ResponsiveMaxBreakpoint = Extract<ResponsiveBreakpoint, "md" | "lg">
 
-export function useMediaQuery(query: string, serverFallback = false) {
+interface MediaQueryOptions {
+  initializeFromMatchMedia?: boolean
+  serverFallback?: boolean
+}
+
+export function useMediaQuery(
+  query: string,
+  {
+    initializeFromMatchMedia = true,
+    serverFallback = false,
+  }: MediaQueryOptions = {}
+) {
   const [matches, setMatches] = React.useState(() =>
-    typeof window === "undefined" ? serverFallback : window.matchMedia(query).matches
+    typeof window === "undefined"
+      ? serverFallback
+      : initializeFromMatchMedia
+        ? window.matchMedia(query).matches
+        : serverFallback
   )
 
   React.useEffect(() => {
@@ -29,11 +45,21 @@ export function useMediaQuery(query: string, serverFallback = false) {
 }
 
 export function useIsMobile() {
-  return useMediaQuery(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+  return useMaxWidth("md")
 }
 
 export function useIsCompactLayout() {
-  return useMediaQuery(`(max-width: ${COMPACT_LAYOUT_BREAKPOINT - 1}px)`)
+  return useMaxWidth("lg")
+}
+
+export function useMaxWidth(
+  breakpoint: ResponsiveMaxBreakpoint,
+  serverFallback = false
+) {
+  return useMediaQuery(
+    `(max-width: ${RESPONSIVE_BREAKPOINTS[breakpoint] - 1}px)`,
+    { initializeFromMatchMedia: false, serverFallback }
+  )
 }
 
 export function useMinWidth(
@@ -42,7 +68,7 @@ export function useMinWidth(
 ) {
   return useMediaQuery(
     `(min-width: ${RESPONSIVE_BREAKPOINTS[breakpoint]}px)`,
-    serverFallback
+    { serverFallback }
   )
 }
 

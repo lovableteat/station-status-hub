@@ -3,7 +3,11 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const tableSourceUrl = new URL(
-  "../src/components/test-tracker/TestProgressTable.tsx",
+  "../src/components/test-tracker/TestProgressTable/desktop/DesktopTestProgressTable.tsx",
+  import.meta.url
+);
+const tableTypesUrl = new URL(
+  "../src/components/test-tracker/TestProgressTable/shared/types.ts",
   import.meta.url
 );
 const trackerSourceUrl = new URL(
@@ -16,7 +20,11 @@ const editorSourceUrl = new URL(
 );
 
 test("machine id opens system data editor without replacing progress actions", async () => {
-  const source = await readFile(tableSourceUrl, "utf8");
+  const [tableSource, tableTypes] = await Promise.all([
+    readFile(tableSourceUrl, "utf8"),
+    readFile(tableTypesUrl, "utf8"),
+  ]);
+  const source = `${tableTypes}\n${tableSource}`;
   const cellStart = source.indexOf('data-testid={`machine-cell-${system.id}`}');
   const serialStart = source.indexOf(
     '<div role="cell" className="truncate font-data',

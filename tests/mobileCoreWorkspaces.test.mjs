@@ -37,7 +37,7 @@ test("mobile header exposes a bundled website QR and a thumb-friendly workspace 
 
 test("maintenance center switches compact layouts to a scrollable module toolbar", async () => {
   const [sidebar, scopeBar, hook] = await Promise.all([
-    read("src/components/layout/Sidebar.tsx"),
+    read("src/components/layout/Sidebar/mobile/MobileMaintenanceNavigation.tsx"),
     read("src/components/test-projects/ProjectScopeBar.tsx"),
     read("src/hooks/use-mobile.tsx"),
   ]);
