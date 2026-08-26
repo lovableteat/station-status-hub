@@ -81,6 +81,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
+import { useIsDesktopLayout, useMinWidth } from "@/hooks/use-mobile";
 import { useUser } from "@/components/auth/UserContext";
 import { cn } from "@/lib/utils";
 
@@ -2540,28 +2541,13 @@ function ModelLibrary({
   );
 }
 
-function useDesktopDataCenterLayout() {
-  const [isDesktop, setIsDesktop] = useState(() =>
-    typeof window === "undefined" ? true : window.matchMedia("(min-width: 1024px)").matches
-  );
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(min-width: 1024px)");
-    const syncLayout = (event: MediaQueryListEvent) => setIsDesktop(event.matches);
-    setIsDesktop(mediaQuery.matches);
-    mediaQuery.addEventListener("change", syncLayout);
-    return () => mediaQuery.removeEventListener("change", syncLayout);
-  }, []);
-
-  return isDesktop;
-}
-
 export function DeploymentPlanningCenter() {
   const { toast } = useToast();
   const { user, isRealtimeAuthenticated } = useUser();
   const { canEditModule } = usePermissions();
   const canEdit = canEditModule("data");
-  const isDesktopLayout = useDesktopDataCenterLayout();
+  const isDesktopLayout = useIsDesktopLayout();
+  const showLabelsByDefault = useMinWidth("sm");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadedUrlsRef = useRef<string[]>([]);
   const importAbortRef = useRef<AbortController | null>(null);
@@ -2580,9 +2566,7 @@ export function DeploymentPlanningCenter() {
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [previewModelId, setPreviewModelId] = useState<string | null>(null);
-  const [showLabels, setShowLabels] = useState(() =>
-    typeof window === "undefined" ? true : window.matchMedia("(min-width: 640px)").matches
-  );
+  const [showLabels, setShowLabels] = useState(showLabelsByDefault);
   const [workspaceMode, setWorkspaceMode] = useState<"3d" | "2d">("3d");
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>("overview");
   const [cameraRequestId, setCameraRequestId] = useState(0);

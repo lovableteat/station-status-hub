@@ -272,7 +272,6 @@ const Index = () => {
   const [activeAdminModule, setActiveAdminModule] = useState<AdminModuleId>(
     getInitialAdminModule
   );
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const stationMainRef = useRef<HTMLElement | null>(null);
 
@@ -518,9 +517,6 @@ const Index = () => {
     pushWorkspaceLocation("station-status", module, params);
     setActiveWorkspace("station-status");
     setActiveStationModule(module as StationModuleId);
-    if (isCompactLayout) {
-      setSidebarOpen(false);
-    }
   };
 
   const renderStationContent = () => {
@@ -627,9 +623,6 @@ const Index = () => {
                 <Sidebar
                   activeModule={activeStationModule}
                   onModuleChange={handleStationNavigation}
-                  isOpen={sidebarOpen}
-                  onToggle={() => setSidebarOpen((value) => !value)}
-                  isMobile={isCompactLayout}
                   desktopStickyClass="top-[140px] h-full"
                 />
 

@@ -10,6 +10,10 @@ const table = await readFile(
   new URL("../src/components/test-tracker/TestProgressTable.tsx", import.meta.url),
   "utf8",
 );
+const mobileTable = await readFile(
+  new URL("../src/components/test-tracker/MobileTestProgressList.tsx", import.meta.url),
+  "utf8",
+);
 const tracker = await readFile(
   new URL("../src/components/test-tracker/TestTracker.tsx", import.meta.url),
   "utf8",
@@ -57,15 +61,17 @@ test("all completion paths use the database guard and show the exact unresolved 
 });
 
 test("station table distinguishes blocked progress from unfinished progress", () => {
+  const tableWorkflows = `${table}\n${mobileTable}`;
+
   assert.match(presentation, /createStationBlockedLookup/);
   assert.match(tracker, /\.from\(["']issues["']\)/);
   assert.match(tracker, /<TestProgressTable[\s\S]*linkedIssues=\{linkedIssues\}/);
   assert.match(table, /linkedIssues:\s*TrackerLinkedIssue\[\]/);
   assert.match(table, /createStationBlockedLookup\(items,\s*progress,\s*linkedIssues\)/);
-  assert.match(table, /Blocked/);
-  assert.match(table, /tone=\{blocked \? "danger" : "auto"\}/);
-  assert.match(table, /systemBlockedLookup/);
-  assert.match(table, /Blocked \{systemBlockedCount\}/);
+  assert.match(tableWorkflows, /Blocked/);
+  assert.match(tableWorkflows, /tone=\{blocked \? "danger" : "auto"\}/);
+  assert.match(tableWorkflows, /systemBlockedLookup/);
+  assert.match(tableWorkflows, /Blocked \{systemBlockedCount\}/);
   assert.match(tracker, /createSystemBlockedLookup/);
   assert.match(tracker, /tone=\{blocked \? "danger" : "auto"\}/);
   assert.match(tracker, /Blocked \{blocked\}/);
