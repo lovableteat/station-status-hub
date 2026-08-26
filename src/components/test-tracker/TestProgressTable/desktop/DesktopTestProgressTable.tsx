@@ -11,19 +11,17 @@ import { Check, Copy, MoreHorizontal, Palette, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useIsDesktopLayout } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
-import { MobileTestProgressList } from "./MobileTestProgressList";
-import { SegmentedProgress } from "./SegmentedProgress";
-import { SystemCompleteButton } from "./SystemCompleteButton";
-import { SystemEditDialog } from "./SystemEditDialog";
-import { SystemDeleteButton } from "./SystemManager";
-import { SystemResetDialog } from "./SystemResetDialog";
+import { SegmentedProgress } from "../../SegmentedProgress";
+import { SystemCompleteButton } from "../../SystemCompleteButton";
+import { SystemEditDialog } from "../../SystemEditDialog";
+import { SystemDeleteButton } from "../../SystemManager";
+import { SystemResetDialog } from "../../SystemResetDialog";
 import {
   getTrackerTableStatusClass,
   normalizeTrackerTableStatus,
-} from "./testProgressTableShared";
+} from "../shared/status";
 import {
   createStationBlockedLookup,
   createStationProgressLookup,
@@ -35,51 +33,9 @@ import {
   getTrackerVirtualRange,
   TRACKER_MACHINE_COLUMN_BOUNDARY_CLASS,
   TRACKER_ROW_HEIGHT,
-} from "./testTrackerPresentation";
-import type { TrackerLinkedIssue } from "./testTrackerPresentation";
-
-export interface TrackerSystem {
-  assigned_engineer?: string | null;
-  current_station?: string | null;
-  id: string;
-  overall_progress?: number | null;
-  serial_number?: string | null;
-  status?: string | null;
-  system_name: string;
-}
-
-export interface TrackerStation {
-  id: string;
-  station_name: string;
-  station_order: number;
-}
-
-export interface TrackerItem {
-  id: string;
-  station_id: string;
-}
-
-export interface TrackerProgress {
-  item_id: string;
-  station_id: string;
-  status?: string | null;
-  system_id: string;
-}
-
-export interface TestProgressTableProps {
-  columnStorageKey: string;
-  headerControls?: ReactNode;
-  items: TrackerItem[];
-  linkedIssues: TrackerLinkedIssue[];
-  onCloneSystem: (system: TrackerSystem) => void;
-  onEditSystemData: (systemId: string) => void;
-  onSelectStation: (systemId: string, stationId: string) => void;
-  onSelectSystem: (systemId: string) => void;
-  onSystemUpdate: () => void;
-  progress: TrackerProgress[];
-  stations: TrackerStation[];
-  systems: TrackerSystem[];
-}
+} from "../../testTrackerPresentation";
+import type { TrackerLinkedIssue } from "../../testTrackerPresentation";
+import type { TestProgressTableProps } from "../shared/types";
 
 interface ColumnLayoutState {
   storageKey: string;
@@ -357,17 +313,7 @@ function ResizableColumnHeader({
   );
 }
 
-export function TestProgressTable({
-  ...props
-}: TestProgressTableProps) {
-  const isDesktopLayout = useIsDesktopLayout();
-
-  return isDesktopLayout
-    ? <DesktopTestProgressTable {...props} />
-    : <MobileTestProgressList {...props} />;
-}
-
-function DesktopTestProgressTable({
+export function DesktopTestProgressTable({
   columnStorageKey,
   headerControls,
   items,

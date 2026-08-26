@@ -1,4 +1,4 @@
-import type { TrackerSystem } from "./TestProgressTable";
+import type { TrackerSystem } from "./types";
 
 export function normalizeTrackerTableStatus(system: TrackerSystem) {
   if (

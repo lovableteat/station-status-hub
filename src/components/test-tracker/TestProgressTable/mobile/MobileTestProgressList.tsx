@@ -3,18 +3,18 @@ import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-import { SegmentedProgress } from "./SegmentedProgress";
-import type { TestProgressTableProps } from "./TestProgressTable";
+import { SegmentedProgress } from "../../SegmentedProgress";
+import type { TestProgressTableProps } from "../shared/types";
 import {
   getTrackerTableStatusClass,
   normalizeTrackerTableStatus,
-} from "./testProgressTableShared";
+} from "../shared/status";
 import {
   createStationBlockedLookup,
   createStationProgressLookup,
   createSystemBlockedLookup,
   getStationProgressKey,
-} from "./testTrackerPresentation";
+} from "../../testTrackerPresentation";
 
 export function MobileTestProgressList({
   items,

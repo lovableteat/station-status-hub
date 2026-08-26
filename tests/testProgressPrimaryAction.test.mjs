@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const sourceUrl = new URL(
-  "../src/components/test-tracker/TestProgressTable.tsx",
+  "../src/components/test-tracker/TestProgressTable/desktop/DesktopTestProgressTable.tsx",
   import.meta.url
 );
 const presentationUrl = new URL(

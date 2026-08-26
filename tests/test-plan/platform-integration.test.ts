@@ -10,7 +10,7 @@ async function source(path: string): Promise<string> {
 
 test("registers Test_Plan in the maintenance navigation and lazy station route", async () => {
   const index = await source("src/pages/Index.tsx");
-  const sidebar = await source("src/components/layout/Sidebar.tsx");
+  const sidebar = await source("src/components/layout/Sidebar/shared/navigation.ts");
 
   assert.match(index, /const TestPlanWorkspace = React\.lazy/);
   assert.match(index, /import\("@\/components\/test-plan\/TestPlanWorkspace"\)/);

@@ -7,11 +7,15 @@ const sheet = await readFile(
   "utf8",
 );
 const table = await readFile(
-  new URL("../src/components/test-tracker/TestProgressTable.tsx", import.meta.url),
+  new URL("../src/components/test-tracker/TestProgressTable/desktop/DesktopTestProgressTable.tsx", import.meta.url),
   "utf8",
 );
 const mobileTable = await readFile(
-  new URL("../src/components/test-tracker/MobileTestProgressList.tsx", import.meta.url),
+  new URL("../src/components/test-tracker/TestProgressTable/mobile/MobileTestProgressList.tsx", import.meta.url),
+  "utf8",
+);
+const tableTypes = await readFile(
+  new URL("../src/components/test-tracker/TestProgressTable/shared/types.ts", import.meta.url),
   "utf8",
 );
 const tracker = await readFile(
@@ -66,7 +70,7 @@ test("station table distinguishes blocked progress from unfinished progress", ()
   assert.match(presentation, /createStationBlockedLookup/);
   assert.match(tracker, /\.from\(["']issues["']\)/);
   assert.match(tracker, /<TestProgressTable[\s\S]*linkedIssues=\{linkedIssues\}/);
-  assert.match(table, /linkedIssues:\s*TrackerLinkedIssue\[\]/);
+  assert.match(tableTypes, /linkedIssues:\s*TrackerLinkedIssue\[\]/);
   assert.match(table, /createStationBlockedLookup\(items,\s*progress,\s*linkedIssues\)/);
   assert.match(tableWorkflows, /Blocked/);
   assert.match(tableWorkflows, /tone=\{blocked \? "danger" : "auto"\}/);

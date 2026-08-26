@@ -2,15 +2,18 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const tableUrl = new URL("../src/components/test-tracker/TestProgressTable.tsx", import.meta.url);
+const tableUrl = new URL("../src/components/test-tracker/TestProgressTable/desktop/DesktopTestProgressTable.tsx", import.meta.url);
+const tableTypesUrl = new URL("../src/components/test-tracker/TestProgressTable/shared/types.ts", import.meta.url);
 const trackerUrl = new URL("../src/components/test-tracker/TestTracker.tsx", import.meta.url);
 const dialogUrl = new URL("../src/components/test-tracker/SystemCloneDialog.tsx", import.meta.url);
 
 test("each tracker row exposes sequential machine cloning", async () => {
-  const [table, tracker] = await Promise.all([
+  const [tableSource, tableTypes, tracker] = await Promise.all([
     readFile(tableUrl, "utf8"),
+    readFile(tableTypesUrl, "utf8"),
     readFile(trackerUrl, "utf8"),
   ]);
+  const table = `${tableTypes}\n${tableSource}`;
 
   assert.match(table, /onCloneSystem: \(system: TrackerSystem\) => void/);
   assert.match(table, /onClick=\{\(\) => onCloneSystem\(system\)\}/);

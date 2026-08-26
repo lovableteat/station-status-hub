@@ -18,7 +18,7 @@ test("tools workspace exposes a dedicated source code repository", async () => {
 });
 
 test("collapsed maintenance sidebar uses one centered icon frame", async () => {
-  const sidebar = await read("../src/components/layout/Sidebar.tsx");
+  const sidebar = await read("../src/components/layout/Sidebar/desktop/DesktopMaintenanceSidebar.tsx");
 
   assert.match(sidebar, /isCompact \? "mx-auto grid h-10 w-10 place-items-center p-0"/);
   assert.match(sidebar, /className="h-5 w-5 shrink-0"/);

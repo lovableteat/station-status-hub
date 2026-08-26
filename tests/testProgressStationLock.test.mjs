@@ -5,11 +5,13 @@ import test from "node:test";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("station cells open a progress sheet locked to their machine and station", async () => {
-  const [table, tracker, sheet] = await Promise.all([
-    read("../src/components/test-tracker/TestProgressTable.tsx"),
+  const [tableSource, tableTypes, tracker, sheet] = await Promise.all([
+    read("../src/components/test-tracker/TestProgressTable/desktop/DesktopTestProgressTable.tsx"),
+    read("../src/components/test-tracker/TestProgressTable/shared/types.ts"),
     read("../src/components/test-tracker/TestTracker.tsx"),
     read("../src/components/test-tracker/SystemProgressSheet.tsx"),
   ]);
+  const table = `${tableTypes}\n${tableSource}`;
 
   assert.match(
     table,
