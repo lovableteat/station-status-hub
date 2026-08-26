@@ -54,6 +54,7 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useFlowVersions } from "@/hooks/useFlowVersions";
+import { useIsWideLayout } from "@/hooks/use-mobile";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -139,9 +140,7 @@ export function FlowInfo() {
   const [isReordering, setIsReordering] = useState(false);
   const [isPreparingFlow, setIsPreparingFlow] = useState(false);
   const [stationAction, setStationAction] = useState<StationAction>(null);
-  const [isWideEditor, setIsWideEditor] = useState(() =>
-    typeof window === "undefined" ? true : window.matchMedia("(min-width: 1280px)").matches
-  );
+  const isWideEditor = useIsWideLayout();
 
   const editingVersionId = activeVersion?.id ?? null;
   const displayedVersionId = activeVersion?.id ?? null;
@@ -266,14 +265,6 @@ export function FlowInfo() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(min-width: 1280px)");
-    const updateLayoutDirection = (event: MediaQueryListEvent) => setIsWideEditor(event.matches);
-    setIsWideEditor(mediaQuery.matches);
-    mediaQuery.addEventListener("change", updateLayoutDirection);
-    return () => mediaQuery.removeEventListener("change", updateLayoutDirection);
-  }, []);
 
   const selectedStation = stations.find((station) => station.id === selectedStationId) ?? null;
   const stationItems = useMemo(
