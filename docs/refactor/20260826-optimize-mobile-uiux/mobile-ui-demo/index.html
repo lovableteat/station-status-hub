@@ -265,6 +265,61 @@
       </section>
     </div>
 
+    <div class="overlay nested-overlay" id="timeOverlay" hidden>
+      <button class="overlay-backdrop" type="button" data-close-time aria-label="關閉時間校正"></button>
+      <section class="sheet time-sheet" role="dialog" aria-modal="true" aria-labelledby="timeTitle" tabindex="-1">
+        <header class="sheet-header">
+          <button class="icon-button" type="button" data-close-time aria-label="返回測項">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <div class="sheet-heading">
+            <p>TIME CORRECTION</p>
+            <h2 id="timeTitle">校正測試時間</h2>
+          </div>
+          <span class="step-label">台灣時間</span>
+        </header>
+
+        <form class="time-form" id="timeForm" novalidate>
+          <div class="context-card" aria-label="時間校正項目">
+            <span class="context-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </span>
+            <div><span>正在校正</span><strong id="timeContext"></strong><small id="timeTaskContext"></small></div>
+          </div>
+
+          <fieldset class="time-fieldset">
+            <legend>開始時間</legend>
+            <div class="time-input-grid">
+              <label class="field"><span>日期</span><input id="timeStartDate" type="date" inputmode="numeric" /></label>
+              <label class="field"><span>時間</span><input id="timeStartClock" type="time" inputmode="numeric" step="60" /></label>
+            </div>
+            <button class="secondary-button time-now-button" type="button" data-set-time="start">套用現在時間</button>
+          </fieldset>
+
+          <fieldset class="time-fieldset">
+            <legend>結束時間</legend>
+            <div class="time-input-grid">
+              <label class="field"><span>日期</span><input id="timeEndDate" type="date" inputmode="numeric" /></label>
+              <label class="field"><span>時間</span><input id="timeEndClock" type="time" inputmode="numeric" step="60" /></label>
+            </div>
+            <button class="secondary-button time-now-button" type="button" data-set-time="end">套用現在時間</button>
+          </fieldset>
+
+          <section class="duration-preview" aria-labelledby="durationPreviewLabel">
+            <span id="durationPreviewLabel">校正後耗時</span>
+            <strong id="durationPreview" class="number" role="status" aria-live="polite">尚未完整設定</strong>
+            <small>耗時由開始與結束時間的實際區隔重新計算。</small>
+          </section>
+          <p class="field-error" id="timeError" role="alert"></p>
+
+          <footer class="form-footer">
+            <button class="secondary-button" type="button" data-close-time>取消</button>
+            <button class="primary-button" id="applyTimeButton" type="submit">套用校正</button>
+          </footer>
+        </form>
+      </section>
+    </div>
+
     <div class="dialog-layer" id="confirmLayer" hidden>
       <button class="dialog-backdrop" type="button" data-cancel-confirm aria-label="取消操作"></button>
       <section class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmDescription" tabindex="-1">
