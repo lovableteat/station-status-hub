@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#071421" />
+    <title>工作整合平台｜L10 測試追蹤手機版 Demo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到主要內容</a>
+
+    <div class="app-shell compact-app" id="appShell">
+      <header class="app-header">
+        <a class="brand" href="#" aria-label="工作整合平台首頁">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 17V7l8-4 8 4v10l-8 4-8-4Z"/><path d="m8 8 4 2 4-2M8 13l4 2 4-2"/><path d="M12 10v5"/></svg>
+          </span>
+          <span><strong>工作整合平台</strong><small>整合式工作平台</small></span>
+        </a>
+        <button class="icon-button avatar-button" type="button" aria-label="開啟使用者選單">
+          <span aria-hidden="true">王</span>
+        </button>
+      </header>
+
+      <main id="main-content" class="page-content">
+        <section class="project-bar" aria-label="目前專案">
+          <button class="project-selector" type="button" aria-label="選擇專案">
+            <span><strong>GB300 EVT 驗證</strong><small>王小明</small></span>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg>
+          </button>
+          <div class="project-actions">
+            <button class="project-action add-machine" type="button" aria-label="新增機台"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+            <button class="project-action project-center" type="button" aria-label="專案中心"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M6 3h12v18H6zM9 11h6M9 15h4"/></svg></button>
+          </div>
+        </section>
+
+        <details class="module-switcher" id="moduleSwitcher">
+          <summary>
+            <span class="current-module">
+              <span class="current-module-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h4"/></svg></span>
+              <span><small>目前功能</small><strong>L10 測試追蹤</strong></span>
+            </span>
+            <span class="module-switch-action">切換功能<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></span>
+          </summary>
+          <nav class="module-menu" aria-label="維修中心功能">
+            <button type="button" data-module-target="系統儀表板"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 19h16M6 16V8h4v8m4 0V4h4v12"/></svg><span>系統儀表板</span></button>
+            <button class="is-active" type="button" aria-current="page"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h4"/></svg><span>L10 測試追蹤</span></button>
+            <button type="button" data-module-target="L10 流程設定"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 8h6M9 12h6"/></svg><span>L10 流程設定</span></button>
+            <button type="button" data-module-target="生產監控牆"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 19h16M7 16V9h10v7M9 9V5h6v4"/></svg><span>生產監控牆</span></button>
+            <button type="button" data-module-target="問題追蹤"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10 3h4l7 16H3l7-16Z"/></svg><span>問題追蹤</span></button>
+            <button type="button" data-module-target="工具與資產"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m14 6 4-3 3 3-3 4m-2-2L7 17m-2-2-2 6 6-2"/></svg><span>工具與資產</span></button>
+            <button type="button" data-module-target="資料儲存"><svg aria-hidden="true" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg><span>資料儲存</span></button>
+          </nav>
+        </details>
+
+        <div class="maintenance-main">
+          <section class="page-heading" aria-labelledby="page-title">
+            <span class="page-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h4"/></svg></span>
+            <div><h1 id="page-title">L10 測試追蹤</h1><p id="pageHeaderDescription">GB300 EVT 驗證 · 4 台符合條件</p></div>
+          </section>
+
+          <section class="progress-overview" aria-labelledby="overviewTitle">
+            <div class="overview-primary">
+              <div class="overview-heading">
+                <span class="overview-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19a8 8 0 1 1 14 0M12 12l4-4"/></svg></span>
+                <div><h2 id="overviewTitle">整體完成率</h2><p>依所有機台平均進度</p></div>
+              </div>
+              <strong class="overview-value" id="overviewValue">58%</strong>
+            </div>
+            <div class="overview-progress">
+              <div class="progress-track" id="overviewProgress" role="progressbar" aria-label="整體完成率 58%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="58"><span style="width:58%"></span></div>
+              <span id="overviewTotal">共 4 台機台</span>
+            </div>
+            <dl class="overview-statuses">
+              <div class="status-waiting"><dt>未開始</dt><dd><strong id="overviewWaiting">1</strong><span>台</span></dd></div>
+              <div class="status-active"><dt>進行中</dt><dd><strong id="overviewActive">2</strong><span>台</span></dd></div>
+              <div class="status-done"><dt>已完成</dt><dd><strong id="overviewDone">1</strong><span>台</span></dd></div>
+            </dl>
+          </section>
+
+          <section class="filter-panel" aria-label="L10 測試追蹤篩選">
+
+          <div class="filter-grid">
+            <label class="field search-field">
+              <span class="input-wrap">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                <input id="searchInput" type="search" placeholder="搜尋機台、序號或工程師" aria-label="搜尋機台、序號或工程師" autocomplete="off" />
+              </span>
+            </label>
+            <label class="field">
+              <span class="sr-only">站點</span>
+              <select id="stationFilter">
+                <option value="">全部站點</option>
+                <option value="電氣測試">電氣測試</option>
+                <option value="功能驗證">功能驗證</option>
+                <option value="出貨檢查">出貨檢查</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="sr-only">狀態</span>
+              <select id="statusFilter">
+                <option value="">全部狀態</option>
+                <option value="進行中">進行中</option>
+                <option value="未開始">未開始</option>
+                <option value="已完成">已完成</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="sr-only">工程師</span>
+              <select id="engineerFilter">
+                <option value="">全部工程師</option>
+                <option value="王小明">王小明</option>
+                <option value="陳怡君">陳怡君</option>
+                <option value="林志豪">林志豪</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="filter-tools">
+            <button class="secondary-button compact" type="button" id="sortButton" aria-pressed="false">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 6h12M8 12h8M8 18h4M4 4v16m0 0-2-2m2 2 2-2"/></svg>
+              待處理優先
+            </button>
+            <span class="result-count" id="resultCount" aria-live="polite"></span>
+          </div>
+
+          <div class="active-filter-region" id="activeFilterRegion" aria-live="polite">
+            <span class="active-filter-label"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4"/></svg>目前條件</span>
+            <div class="filter-chips" id="filterChips"></div>
+            <button class="text-button" id="clearAllButton" type="button">清除全部</button>
+          </div>
+          </section>
+
+          <section class="result-section" aria-label="機台清單">
+          <div class="machine-list" id="machineList" aria-busy="false"></div>
+          <div class="empty-state" id="emptyState" hidden>
+            <span class="empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>
+            </span>
+            <strong>目前篩選條件沒有符合的機台</strong>
+            <button class="secondary-button" type="button" id="emptyClearButton">全部清除</button>
+          </div>
+          </section>
+        </div>
+      </main>
+
+      <nav class="bottom-dock" aria-label="手機工作區導覽">
+        <button type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m3 11 9-8 9 8M5 10v10h14V10M9 20v-6h6v6"/></svg><span>首頁</span></button>
+        <button class="is-active" type="button" aria-current="page"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 14a8 8 0 1 1 16 0M12 14l4-5M5 18h14"/></svg><span>維修</span></button>
+        <button type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M7 10h6M10 7v6"/></svg><span>料號</span></button>
+        <button type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><span>查詢</span></button>
+        <button type="button" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg><span>更多</span></button>
+      </nav>
+    </div>
+
+    <div class="desktop-app-host">
+      <iframe
+        id="desktopAppFrame"
+        class="desktop-app-frame"
+        title="使用 current branch 原始元件與 CSS 的 Desktop Demo"
+        data-src="desktop.html"
+      ></iframe>
+    </div>
+    <div class="overlay" id="progressOverlay" hidden>
+      <button class="overlay-backdrop" type="button" data-close-progress aria-label="關閉進度面板"></button>
+      <section class="sheet progress-sheet" role="dialog" aria-modal="true" aria-labelledby="progressTitle" tabindex="-1">
+        <header class="sheet-header">
+          <button class="icon-button" type="button" data-close-progress aria-label="關閉更新進度">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <div class="sheet-heading">
+            <p id="sheetMachineId"></p>
+            <h2 id="progressTitle">更新測試進度</h2>
+          </div>
+          <span class="save-state" id="saveState" aria-live="polite">已儲存</span>
+        </header>
+
+        <div class="sheet-toolbar">
+          <label class="field station-selector">
+            <span>目前站點</span>
+            <select id="sheetStationSelect"></select>
+          </label>
+          <div class="station-summary">
+            <div><strong id="stationDoneCount">0</strong><span>已完成</span></div>
+            <div><strong id="stationActiveCount">0</strong><span>進行中</span></div>
+            <div><strong id="stationIssueCount">0</strong><span>異常</span></div>
+          </div>
+          <button class="secondary-button complete-station-button" id="completeStationButton" type="button">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
+            完成此站
+          </button>
+        </div>
+
+        <div class="sheet-body" id="taskList" tabindex="0"></div>
+        <footer class="dirty-footer" id="dirtyFooter" hidden>
+          <div><span class="dirty-dot" aria-hidden="true"></span><strong id="dirtyCount">1 項尚未儲存</strong></div>
+          <button class="primary-button" id="saveAllButton" type="button">儲存變更</button>
+        </footer>
+      </section>
+    </div>
+
+    <div class="overlay nested-overlay" id="issueOverlay" hidden>
+      <button class="overlay-backdrop" type="button" data-close-issue aria-label="關閉問題回報"></button>
+      <section class="sheet issue-sheet" role="dialog" aria-modal="true" aria-labelledby="issueTitle" tabindex="-1">
+        <header class="sheet-header">
+          <button class="icon-button" type="button" data-close-issue aria-label="返回測項">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <div class="sheet-heading">
+            <p>QUICK ISSUE</p>
+            <h2 id="issueTitle">回報異常</h2>
+          </div>
+          <span class="step-label">必要欄位</span>
+        </header>
+
+        <form class="issue-form" id="issueForm" novalidate>
+          <div class="context-card" aria-label="問題關聯資訊">
+            <span class="context-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 8h6M9 12h6M9 16h3"/></svg></span>
+            <div><span>已自動關聯</span><strong id="issueContext"></strong><small id="issueTaskContext"></small></div>
+          </div>
+
+          <label class="field">
+            <span>問題描述 <b aria-hidden="true">*</b></span>
+            <textarea id="issueDescription" rows="5" placeholder="描述觀察到的異常、發生條件或需要協助的事項" aria-describedby="issueDescriptionHelp issueDescriptionError"></textarea>
+            <small id="issueDescriptionHelp">請提供足以讓接手者理解與重現的資訊。</small>
+            <span class="field-error" id="issueDescriptionError" role="alert"></span>
+          </label>
+
+          <fieldset class="priority-fieldset">
+            <legend>優先級</legend>
+            <div class="segmented-control">
+              <label><input type="radio" name="priority" value="低" /><span>低</span></label>
+              <label><input type="radio" name="priority" value="中" checked /><span>中</span></label>
+              <label><input type="radio" name="priority" value="高" /><span>高</span></label>
+              <label><input type="radio" name="priority" value="緊急" /><span>緊急</span></label>
+            </div>
+          </fieldset>
+
+          <div class="attachment-field">
+            <div><strong>照片或附件</strong><small>支援照片、PDF，單檔不超過 10MB</small></div>
+            <label class="attachment-button">
+              <input id="attachmentInput" type="file" accept="image/*,.pdf" capture="environment" />
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 8h4l2-3h4l2 3h4v11H4V8Z"/><circle cx="12" cy="13" r="3"/></svg>
+              拍照或選擇檔案
+            </label>
+            <div class="attachment-preview" id="attachmentPreview" hidden></div>
+          </div>
+
+          <details class="advanced-settings">
+            <summary>更多設定</summary>
+            <label class="field"><span>負責人</span><select><option>稍後指派</option><option>王小明</option><option>陳怡君</option></select></label>
+          </details>
+
+          <div class="form-status" id="issueFormStatus" role="status" aria-live="polite"></div>
+          <footer class="form-footer">
+            <button class="secondary-button" type="button" data-close-issue>取消</button>
+            <button class="danger-button" id="createIssueButton" type="submit">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10 3h4l7 16H3l7-16Z"/></svg>
+              建立問題並標記異常
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
+
+    <div class="dialog-layer" id="confirmLayer" hidden>
+      <button class="dialog-backdrop" type="button" data-cancel-confirm aria-label="取消操作"></button>
+      <section class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmDescription" tabindex="-1">
+        <span class="confirm-icon" id="confirmIcon" aria-hidden="true"></span>
+        <h2 id="confirmTitle"></h2>
+        <p id="confirmDescription"></p>
+        <div class="confirm-detail" id="confirmDetail"></div>
+        <div class="confirm-actions">
+          <button class="secondary-button" type="button" data-cancel-confirm>返回</button>
+          <button class="primary-button" type="button" id="confirmActionButton">確認完成</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <script src="app.js"></script>
+  </body>
+</html>
