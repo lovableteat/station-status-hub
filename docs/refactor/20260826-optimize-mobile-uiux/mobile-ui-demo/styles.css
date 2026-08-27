@@ -210,6 +210,18 @@ input:focus, select:focus, textarea:focus { border-color: var(--ring); outline: 
 .quick-actions button { display: flex; min-width: 0; min-height: 44px; align-items: center; justify-content: center; gap: 5px; padding: 8px 5px; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--navy-900); background: white; font-size: .75rem; font-weight: 750; }
 .quick-actions button svg { width: 17px; height: 17px; }
 .quick-actions .issue-action { color: var(--danger-dark); border-color: #e8b8bd; background: var(--danger-bg); }
+.task-time-card { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-subtle); }
+.task-time-heading { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.task-time-heading > span { display: grid; width: 36px; height: 36px; flex: 0 0 36px; place-items: center; border: 1px solid rgba(103,232,249,.3); border-radius: 9px; color: #a5f3fc; background: rgba(34,211,238,.1); }
+.task-time-heading svg { width: 18px; height: 18px; }
+.task-time-heading div { min-width: 0; }
+.task-time-heading small { display: block; color: var(--muted); font-size: .6875rem; }
+.task-time-heading strong { display: block; margin-top: 1px; color: var(--ink); font-size: .9375rem; }
+.task-time-values { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.task-time-values div { min-width: 0; padding: 8px; border-radius: 8px; background: var(--surface); }
+.task-time-values dt { color: var(--muted); font-size: .6875rem; }
+.task-time-values dd { margin-top: 2px; overflow-wrap: anywhere; color: var(--ink); font-size: .75rem; }
+.calibrate-time-button { width: 100%; }
 .range-row { display: grid; grid-template-columns: 1fr 52px; align-items: center; gap: 10px; }
 input[type="range"] { min-height: 44px; padding: 0; border: 0; accent-color: var(--blue-600); }
 .range-value { font-size: .875rem; font-weight: 800; text-align: right; }
@@ -222,6 +234,19 @@ input[type="range"] { min-height: 44px; padding: 0; border: 0; accent-color: var
 
 .issue-form { min-height: 0; flex: 1; padding: 16px 16px calc(92px + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; }
 .issue-form > * + * { margin-top: 18px; }
+.time-form { min-height: 0; flex: 1; padding: 16px 16px calc(92px + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; }
+.time-form > * + * { margin-top: 16px; }
+.time-form .context-card { align-items: center; }
+.time-form .context-card .context-icon { display: inline-flex; width: 40px; height: 40px; flex: 0 0 40px; align-items: center; justify-content: center; border: 1px solid rgba(103,232,249,.3); border-radius: 9px; color: #a5f3fc; background: rgba(34,211,238,.1); }
+.time-form .context-card .context-icon svg { width: 24px; height: 24px; }
+.time-fieldset { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.time-fieldset legend { padding-inline: 4px; color: var(--ink); font-size: .875rem; font-weight: 750; }
+.time-input-grid { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(0,.85fr); gap: 8px; }
+.time-now-button { width: 100%; }
+.duration-preview { display: grid; gap: 3px; padding: 14px; border: 1px solid rgba(103,232,249,.3); border-radius: 12px; background: rgba(34,211,238,.08); }
+.duration-preview > span { color: #a5f3fc; font-size: .75rem; font-weight: 700; }
+.duration-preview strong { color: var(--ink); font-size: 1.25rem; }
+.duration-preview small { color: var(--muted); font-size: .75rem; }
 .context-card { display: flex; gap: 12px; padding: 14px; border-radius: 12px; color: #154f76; background: var(--blue-50); box-shadow: inset 0 0 0 1px #bfdcf2; }
 .context-icon { display: grid; width: 40px; height: 40px; flex: 0 0 40px; place-items: center; border-radius: 10px; background: var(--blue-100); }
 .context-card div { min-width: 0; }
@@ -292,6 +317,7 @@ input[type="range"] { min-height: 44px; padding: 0; border: 0; accent-color: var
   .sheet-header { grid-template-columns: 44px minmax(0,1fr); }
   .sheet-header .save-state, .sheet-header .step-label { grid-column: 2; justify-self: start; }
   .quick-actions { grid-template-columns: 1fr; }
+  .task-time-values, .time-input-grid { grid-template-columns: 1fr; }
   .dirty-footer, .form-footer { grid-template-columns: 1fr; }
 }
 

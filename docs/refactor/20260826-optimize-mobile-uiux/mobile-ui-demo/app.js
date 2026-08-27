@@ -15,10 +15,10 @@
       total: 9,
       issueCount: 1,
       tasks: [
-        { id: "power", name: "電源與接地檢查", status: "已完成", progress: 100, note: "數值正常", updated: "王小明・09:18", issue: null },
-        { id: "io", name: "I/O 訊號逐點確認", status: "異常", progress: 40, note: "DI-07 訊號間歇遺失", updated: "王小明・10:42", issue: "ISS-204" },
-        { id: "safety", name: "安全迴路測試", status: "進行中", progress: 70, note: "待確認 E-stop 回復時間", updated: "王小明・11:06", issue: null },
-        { id: "network", name: "網路連線與位址確認", status: "未開始", progress: 0, note: "", updated: "尚未更新", issue: null }
+        { id: "power", name: "電源與接地檢查", status: "已完成", progress: 100, note: "數值正常", updated: "王小明・09:18", issue: null, startedAt: "2026-08-27T08:12:00+08:00", completedAt: "2026-08-27T09:18:00+08:00" },
+        { id: "io", name: "I/O 訊號逐點確認", status: "異常", progress: 40, note: "DI-07 訊號間歇遺失", updated: "王小明・10:42", issue: "ISS-204", startedAt: "2026-08-27T09:25:00+08:00", completedAt: null },
+        { id: "safety", name: "安全迴路測試", status: "進行中", progress: 70, note: "待確認 E-stop 回復時間", updated: "王小明・11:06", issue: null, startedAt: "2026-08-27T10:03:00+08:00", completedAt: null },
+        { id: "network", name: "網路連線與位址確認", status: "未開始", progress: 0, note: "", updated: "尚未更新", issue: null, startedAt: null, completedAt: null }
       ]
     },
     {
@@ -33,10 +33,10 @@
       total: 8,
       issueCount: 0,
       tasks: [
-        { id: "boot", name: "系統開機與版本確認", status: "已完成", progress: 100, note: "v2.8.1", updated: "陳怡君・08:40", issue: null },
-        { id: "sync", name: "站點資料同步", status: "進行中", progress: 80, note: "連續運行測試中", updated: "陳怡君・10:16", issue: null },
-        { id: "alarm", name: "異常告警驗證", status: "未開始", progress: 0, note: "", updated: "尚未更新", issue: null },
-        { id: "report", name: "報表資料核對", status: "已完成", progress: 100, note: "資料一致", updated: "陳怡君・09:52", issue: null }
+        { id: "boot", name: "系統開機與版本確認", status: "已完成", progress: 100, note: "v2.8.1", updated: "陳怡君・08:40", issue: null, startedAt: "2026-08-27T08:04:00+08:00", completedAt: "2026-08-27T08:40:00+08:00" },
+        { id: "sync", name: "站點資料同步", status: "進行中", progress: 80, note: "連續運行測試中", updated: "陳怡君・10:16", issue: null, startedAt: "2026-08-27T09:41:00+08:00", completedAt: null },
+        { id: "alarm", name: "異常告警驗證", status: "未開始", progress: 0, note: "", updated: "尚未更新", issue: null, startedAt: null, completedAt: null },
+        { id: "report", name: "報表資料核對", status: "已完成", progress: 100, note: "資料一致", updated: "陳怡君・09:52", issue: null, startedAt: "2026-08-27T09:17:00+08:00", completedAt: "2026-08-27T09:52:00+08:00" }
       ]
     },
     {
@@ -51,8 +51,8 @@
       total: 7,
       issueCount: 0,
       tasks: [
-        { id: "visual", name: "外觀與標示檢查", status: "已完成", progress: 100, note: "合格", updated: "林志豪・昨日 16:40", issue: null },
-        { id: "package", name: "配件與包裝確認", status: "已完成", progress: 100, note: "合格", updated: "林志豪・昨日 16:52", issue: null }
+        { id: "visual", name: "外觀與標示檢查", status: "已完成", progress: 100, note: "合格", updated: "林志豪・昨日 16:40", issue: null, startedAt: "2026-08-26T16:08:00+08:00", completedAt: "2026-08-26T16:40:00+08:00" },
+        { id: "package", name: "配件與包裝確認", status: "已完成", progress: 100, note: "合格", updated: "林志豪・昨日 16:52", issue: null, startedAt: "2026-08-26T16:42:00+08:00", completedAt: "2026-08-26T16:52:00+08:00" }
       ]
     },
     {
@@ -67,8 +67,8 @@
       total: 6,
       issueCount: 0,
       tasks: [
-        { id: "input", name: "輸入電壓範圍測試", status: "未開始", progress: 0, note: "", updated: "尚未更新", issue: null },
-        { id: "ground", name: "接地阻抗量測", status: "未開始", progress: 0, note: "", updated: "尚未更新", issue: null }
+        { id: "input", name: "輸入電壓範圍測試", status: "未開始", progress: 0, note: "", updated: "尚未更新", issue: null, startedAt: null, completedAt: null },
+        { id: "ground", name: "接地阻抗量測", status: "未開始", progress: 0, note: "", updated: "尚未更新", issue: null, startedAt: null, completedAt: null }
       ]
     }
   ];
@@ -82,6 +82,7 @@
     dirtyTasks: new Set(),
     originalTasks: null,
     issueDrafts: new Map(),
+    timeLastTrigger: null,
     completedExpanded: false,
     lastTrigger: null,
     issueLastTrigger: null,
@@ -101,6 +102,7 @@
   const emptyState = el("emptyState");
   const progressOverlay = el("progressOverlay");
   const issueOverlay = el("issueOverlay");
+  const timeOverlay = el("timeOverlay");
   const confirmLayer = el("confirmLayer");
   const taskList = el("taskList");
   const closeIcon = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg>';
@@ -117,6 +119,7 @@
       arrow: '<path d="M5 12h14m-5-5 5 5-5 5"/>',
       check: '<path d="m5 12 4 4L19 6"/>',
       play: '<path d="m9 7 8 5-8 5V7Z"/>',
+      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
       more: '<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/>'
     };
     return `<svg aria-hidden="true" viewBox="0 0 24 24">${paths[name] || ""}</svg>`;
@@ -124,6 +127,53 @@
 
   function statusClass(status) {
     return status === "異常" ? "issue" : status === "已完成" ? "done" : status === "未開始" ? "waiting" : "active";
+  }
+
+  function localDateTimeParts(isoValue) {
+    if (!isoValue) return { date: "", time: "" };
+    const value = new Date(isoValue);
+    if (Number.isNaN(value.getTime())) return { date: "", time: "" };
+    const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000).toISOString();
+    return { date: local.slice(0, 10), time: local.slice(11, 16) };
+  }
+
+  function combineLocalDateTime(dateValue, timeValue) {
+    if (!dateValue && !timeValue) return { iso: null, error: null };
+    if (!dateValue || !timeValue) return { iso: null, error: "日期與時間必須一起填寫。" };
+    const value = new Date(`${dateValue}T${timeValue}`);
+    if (Number.isNaN(value.getTime())) return { iso: null, error: "請輸入有效的日期與時間。" };
+    return { iso: value.toISOString(), error: null };
+  }
+
+  function calculateCorrectedDuration(startedAt, completedAt) {
+    if (!startedAt && !completedAt) return { milliseconds: null, error: null };
+    if (!startedAt && completedAt) return { milliseconds: null, error: "設定結束時間前，請先填寫開始時間。" };
+    if (!completedAt) return { milliseconds: null, error: null };
+    const start = new Date(startedAt).getTime();
+    const end = new Date(completedAt).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return { milliseconds: null, error: "請輸入有效的開始與結束時間。" };
+    if (end < start) return { milliseconds: null, error: "結束時間不能早於開始時間。" };
+    return { milliseconds: end - start, error: null };
+  }
+
+  function formatDuration(milliseconds) {
+    if (milliseconds === null) return "尚未完整設定";
+    const totalMinutes = Math.max(0, Math.round(milliseconds / 60_000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (!hours) return `${minutes} 分鐘`;
+    return minutes ? `${hours} 小時 ${minutes} 分鐘` : `${hours} 小時`;
+  }
+
+  function formatTaskTime(isoValue) {
+    if (!isoValue) return "未設定";
+    return new Date(isoValue).toLocaleString("zh-TW", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    });
   }
 
   function loadFiltersFromUrl() {
@@ -229,7 +279,7 @@
   }
 
   function setBodyLock() {
-    document.body.classList.toggle("is-locked", !progressOverlay.hidden || !issueOverlay.hidden || !confirmLayer.hidden);
+    document.body.classList.toggle("is-locked", !progressOverlay.hidden || !issueOverlay.hidden || !timeOverlay.hidden || !confirmLayer.hidden);
   }
 
   function focusableIn(container) {
@@ -310,6 +360,7 @@
 
   function taskTemplate(task) {
     const expanded = state.expandedTaskId === task.id;
+    const duration = calculateCorrectedDuration(task.startedAt, task.completedAt);
     return `<article class="task-card ${task.issue ? "is-issue" : ""}">
       <button class="task-summary" type="button" data-expand-task="${task.id}" aria-expanded="${expanded}">
         <span class="task-summary-main"><strong>${escapeHtml(task.name)}</strong><small>${escapeHtml(task.updated)}</small></span>
@@ -323,6 +374,17 @@
           <button type="button" data-task-action="complete" data-task="${task.id}" ${task.issue ? "disabled title=\"請先解決關聯問題\"" : ""}>${icon("check")}完成</button>
           <button class="issue-action" type="button" data-task-action="issue" data-task="${task.id}">${icon("alert")}回報異常</button>
         </div>
+        <section class="task-time-card" aria-label="${escapeHtml(task.name)}時間記錄">
+          <div class="task-time-heading">
+            <span>${icon("clock")}</span>
+            <div><small>校正後耗時</small><strong class="number">${formatDuration(duration.milliseconds)}</strong></div>
+          </div>
+          <dl class="task-time-values">
+            <div><dt>開始</dt><dd>${formatTaskTime(task.startedAt)}</dd></div>
+            <div><dt>結束</dt><dd>${formatTaskTime(task.completedAt)}</dd></div>
+          </dl>
+          <button class="secondary-button calibrate-time-button" type="button" data-calibrate-time="${task.id}">校正時間</button>
+        </section>
         <label class="field"><span>完成進度</span><span class="range-row"><input type="range" min="0" max="100" step="10" value="${task.progress}" data-task-range="${task.id}" aria-label="${escapeHtml(task.name)}完成進度"><output class="range-value">${task.progress}%</output></span></label>
         <label class="field"><span>測試備註</span><textarea rows="3" data-task-note="${task.id}" placeholder="記錄量測結果或交接事項">${escapeHtml(task.note)}</textarea></label>
       </div>` : ""}
@@ -384,6 +446,89 @@
     progressOverlay.querySelector(".progress-sheet").removeAttribute("aria-hidden");
     setBodyLock();
     if (state.issueLastTrigger) state.issueLastTrigger.focus();
+  }
+
+  function readTimeForm() {
+    const start = combineLocalDateTime(el("timeStartDate").value, el("timeStartClock").value);
+    const end = combineLocalDateTime(el("timeEndDate").value, el("timeEndClock").value);
+    if (start.error || end.error) {
+      return { startedAt: null, completedAt: null, duration: null, error: start.error || end.error };
+    }
+    const duration = calculateCorrectedDuration(start.iso, end.iso);
+    return { startedAt: start.iso, completedAt: end.iso, duration: duration.milliseconds, error: duration.error };
+  }
+
+  function updateTimePreview() {
+    const values = readTimeForm();
+    el("timeError").textContent = values.error || "";
+    el("durationPreview").textContent = values.error
+      ? "無法計算"
+      : values.startedAt && !values.completedAt
+        ? "計時中（尚未設定結束）"
+        : formatDuration(values.duration);
+    el("applyTimeButton").disabled = Boolean(values.error);
+  }
+
+  function openTimeCorrection(taskId, trigger) {
+    const task = state.selectedMachine?.tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    state.selectedTaskId = taskId;
+    state.timeLastTrigger = trigger;
+    const start = localDateTimeParts(task.startedAt);
+    const end = localDateTimeParts(task.completedAt);
+    el("timeContext").textContent = `${state.selectedMachine.id}・${state.selectedMachine.station}`;
+    el("timeTaskContext").textContent = task.name;
+    el("timeStartDate").value = start.date;
+    el("timeStartClock").value = start.time;
+    el("timeEndDate").value = end.date;
+    el("timeEndClock").value = end.time;
+    timeOverlay.hidden = false;
+    progressOverlay.querySelector(".progress-sheet").setAttribute("aria-hidden", "true");
+    updateTimePreview();
+    setBodyLock();
+    requestAnimationFrame(() => timeOverlay.querySelector("[data-close-time]").focus());
+  }
+
+  function closeTimeCorrection() {
+    timeOverlay.hidden = true;
+    progressOverlay.querySelector(".progress-sheet").removeAttribute("aria-hidden");
+    setBodyLock();
+    if (state.timeLastTrigger) state.timeLastTrigger.focus();
+    state.timeLastTrigger = null;
+  }
+
+  function setTimeToNow(target) {
+    const now = localDateTimeParts(new Date().toISOString());
+    el(target === "start" ? "timeStartDate" : "timeEndDate").value = now.date;
+    el(target === "start" ? "timeStartClock" : "timeEndClock").value = now.time;
+    updateTimePreview();
+  }
+
+  function applyTimeCorrection(event) {
+    event.preventDefault();
+    const task = state.selectedMachine?.tasks.find((item) => item.id === state.selectedTaskId);
+    if (!task) return;
+    const values = readTimeForm();
+    if (values.error) {
+      updateTimePreview();
+      return;
+    }
+    task.startedAt = values.startedAt;
+    task.completedAt = values.completedAt;
+    if (task.completedAt) {
+      task.status = "已完成";
+      task.progress = 100;
+    } else if (task.startedAt && task.status === "未開始") {
+      task.status = "進行中";
+      task.progress = Math.max(task.progress, 10);
+    } else if (!task.startedAt && !task.completedAt) {
+      task.status = "未開始";
+      task.progress = 0;
+    }
+    markDirty(task.id);
+    closeTimeCorrection();
+    renderTasks();
+    showToast(`已套用校正，耗時 ${formatDuration(values.duration)}`);
   }
 
   function submitIssue(event) {
@@ -479,7 +624,14 @@
       return;
     }
     if (options.type === "complete") {
-      state.selectedMachine.tasks.forEach((task) => { task.status = "已完成"; task.progress = 100; task.updated = "王小明・剛剛"; });
+      const completedAt = new Date().toISOString();
+      state.selectedMachine.tasks.forEach((task) => {
+        task.status = "已完成";
+        task.progress = 100;
+        task.updated = "王小明・剛剛";
+        task.startedAt = task.startedAt || completedAt;
+        task.completedAt = task.completedAt || completedAt;
+      });
       state.selectedMachine.progress = 100;
       state.selectedMachine.completed = state.selectedMachine.total;
       state.selectedMachine.status = "已完成";
@@ -526,10 +678,28 @@
     if (target.dataset.taskAction) {
       const task = state.selectedMachine.tasks.find((item) => item.id === target.dataset.task);
       if (target.dataset.taskAction === "issue") openIssue(task.id, target);
-      if (target.dataset.taskAction === "start") { task.status = "進行中"; task.progress = Math.max(task.progress, 10); markDirty(task.id); renderTasks(); }
-      if (target.dataset.taskAction === "complete" && !task.issue) { task.status = "已完成"; task.progress = 100; markDirty(task.id); renderTasks(); }
+      if (target.dataset.taskAction === "start") {
+        task.startedAt = task.completedAt ? new Date().toISOString() : task.startedAt || new Date().toISOString();
+        task.completedAt = null;
+        task.status = "進行中";
+        task.progress = Math.max(task.progress, 10);
+        markDirty(task.id);
+        renderTasks();
+      }
+      if (target.dataset.taskAction === "complete" && !task.issue) {
+        const completedAt = new Date().toISOString();
+        task.startedAt = task.startedAt || completedAt;
+        task.completedAt = completedAt;
+        task.status = "已完成";
+        task.progress = 100;
+        markDirty(task.id);
+        renderTasks();
+      }
     }
+    if (target.dataset.calibrateTime) openTimeCorrection(target.dataset.calibrateTime, target);
     if (target.matches("[data-close-issue]")) closeIssue();
+    if (target.matches("[data-close-time]")) closeTimeCorrection();
+    if (target.dataset.setTime) setTimeToNow(target.dataset.setTime);
     if (target.matches("[data-cancel-confirm]")) closeConfirm();
     if (target.dataset.more) showToast("次要操作會放在此選單，不干擾主要更新流程");
     if (target.dataset.viewIssue || target.hasAttribute("data-view-linked-issue")) showToast("Demo：開啟已關聯問題 ISS-204");
@@ -578,6 +748,10 @@
     showToast(`已切換至${state.selectedMachine.station}（展示沿用相同測項）`);
   });
   el("issueForm").addEventListener("submit", submitIssue);
+  el("timeForm").addEventListener("submit", applyTimeCorrection);
+  ["timeStartDate", "timeStartClock", "timeEndDate", "timeEndClock"].forEach((id) => {
+    el(id).addEventListener("input", updateTimePreview);
+  });
   el("issueDescription").addEventListener("input", () => {
     if (state.selectedTaskId) state.issueDrafts.set(state.selectedTaskId, el("issueDescription").value);
     if (el("issueDescription").value.trim()) { el("issueDescriptionError").textContent = ""; el("issueDescription").removeAttribute("aria-invalid"); }
@@ -601,6 +775,11 @@
     if (!issueOverlay.hidden) {
       if (event.key === "Escape") closeIssue();
       trapFocus(event, issueOverlay);
+      return;
+    }
+    if (!timeOverlay.hidden) {
+      if (event.key === "Escape") closeTimeCorrection();
+      trapFocus(event, timeOverlay);
       return;
     }
     if (!progressOverlay.hidden) {
