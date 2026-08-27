@@ -83,6 +83,7 @@
     originalTasks: null,
     issueDrafts: new Map(),
     timeLastTrigger: null,
+    timeInputOffsetMinutes: 480,
     completedExpanded: false,
     lastTrigger: null,
     issueLastTrigger: null,
@@ -129,20 +130,47 @@
     return status === "異常" ? "issue" : status === "已完成" ? "done" : status === "未開始" ? "waiting" : "active";
   }
 
-  function localDateTimeParts(isoValue) {
+  const GMT_OFFSETS = [-720, -660, -600, -570, -540, -480, -420, -360, -300, -240, -210, -180, -120, -60, 0, 60, 120, 180, 210, 240, 270, 300, 330, 345, 360, 390, 420, 480, 525, 540, 570, 600, 630, 660, 720, 765, 780, 840];
+
+  function gmtLabel(offsetMinutes) {
+    if (offsetMinutes === 0) return "GMT+0";
+    const sign = offsetMinutes > 0 ? "+" : "−";
+    const absoluteMinutes = Math.abs(offsetMinutes);
+    const hours = Math.floor(absoluteMinutes / 60);
+    const minutes = absoluteMinutes % 60;
+    return `GMT${sign}${hours}${minutes ? `:${String(minutes).padStart(2, "0")}` : ""}`;
+  }
+
+  function defaultInputOffsetMinutes() {
+    const deviceOffset = -new Date().getTimezoneOffset();
+    return GMT_OFFSETS.includes(deviceOffset) ? deviceOffset : 480;
+  }
+
+  function localDateTimeParts(isoValue, offsetMinutes = 480) {
     if (!isoValue) return { date: "", time: "" };
     const value = new Date(isoValue);
     if (Number.isNaN(value.getTime())) return { date: "", time: "" };
-    const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000).toISOString();
-    return { date: local.slice(0, 10), time: local.slice(11, 16) };
+    const shifted = new Date(value.getTime() + offsetMinutes * 60_000).toISOString();
+    return { date: shifted.slice(0, 10), time: shifted.slice(11, 16) };
   }
 
-  function combineLocalDateTime(dateValue, timeValue) {
+  function combineLocalDateTime(dateValue, timeValue, offsetMinutes) {
     if (!dateValue && !timeValue) return { iso: null, error: null };
     if (!dateValue || !timeValue) return { iso: null, error: "日期與時間必須一起填寫。" };
-    const value = new Date(`${dateValue}T${timeValue}`);
-    if (Number.isNaN(value.getTime())) return { iso: null, error: "請輸入有效的日期與時間。" };
-    return { iso: value.toISOString(), error: null };
+    const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+    const timeMatch = /^(\d{2}):(\d{2})$/.exec(timeValue);
+    if (!dateMatch || !timeMatch) return { iso: null, error: "請輸入有效的日期與時間。" };
+    const [, year, month, day] = dateMatch.map(Number);
+    const [, hours, minutes] = timeMatch.map(Number);
+    const wallTime = Date.UTC(year, month - 1, day, hours, minutes);
+    const wallTimeCheck = new Date(wallTime);
+    const isValid = wallTimeCheck.getUTCFullYear() === year
+      && wallTimeCheck.getUTCMonth() === month - 1
+      && wallTimeCheck.getUTCDate() === day
+      && wallTimeCheck.getUTCHours() === hours
+      && wallTimeCheck.getUTCMinutes() === minutes;
+    if (!isValid || !GMT_OFFSETS.includes(offsetMinutes)) return { iso: null, error: "請輸入有效的日期、時間與 GMT 時區。" };
+    return { iso: new Date(wallTime - offsetMinutes * 60_000).toISOString(), error: null };
   }
 
   function calculateCorrectedDuration(startedAt, completedAt) {
@@ -168,6 +196,7 @@
   function formatTaskTime(isoValue) {
     if (!isoValue) return "未設定";
     return new Date(isoValue).toLocaleString("zh-TW", {
+      timeZone: "Asia/Taipei",
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
@@ -380,8 +409,8 @@
             <div><small>校正後耗時</small><strong class="number">${formatDuration(duration.milliseconds)}</strong></div>
           </div>
           <dl class="task-time-values">
-            <div><dt>開始</dt><dd>${formatTaskTime(task.startedAt)}</dd></div>
-            <div><dt>結束</dt><dd>${formatTaskTime(task.completedAt)}</dd></div>
+            <div><dt>開始（GMT+8）</dt><dd>${formatTaskTime(task.startedAt)}</dd></div>
+            <div><dt>結束（GMT+8）</dt><dd>${formatTaskTime(task.completedAt)}</dd></div>
           </dl>
           <button class="secondary-button calibrate-time-button" type="button" data-calibrate-time="${task.id}">校正時間</button>
         </section>
@@ -449,8 +478,9 @@
   }
 
   function readTimeForm() {
-    const start = combineLocalDateTime(el("timeStartDate").value, el("timeStartClock").value);
-    const end = combineLocalDateTime(el("timeEndDate").value, el("timeEndClock").value);
+    const offsetMinutes = Number(el("timeZoneOffset").value);
+    const start = combineLocalDateTime(el("timeStartDate").value, el("timeStartClock").value, offsetMinutes);
+    const end = combineLocalDateTime(el("timeEndDate").value, el("timeEndClock").value, offsetMinutes);
     if (start.error || end.error) {
       return { startedAt: null, completedAt: null, duration: null, error: start.error || end.error };
     }
@@ -474,8 +504,10 @@
     if (!task) return;
     state.selectedTaskId = taskId;
     state.timeLastTrigger = trigger;
-    const start = localDateTimeParts(task.startedAt);
-    const end = localDateTimeParts(task.completedAt);
+    state.timeInputOffsetMinutes = defaultInputOffsetMinutes();
+    el("timeZoneOffset").value = String(state.timeInputOffsetMinutes);
+    const start = localDateTimeParts(task.startedAt, state.timeInputOffsetMinutes);
+    const end = localDateTimeParts(task.completedAt, state.timeInputOffsetMinutes);
     el("timeContext").textContent = `${state.selectedMachine.id}・${state.selectedMachine.station}`;
     el("timeTaskContext").textContent = task.name;
     el("timeStartDate").value = start.date;
@@ -498,9 +530,29 @@
   }
 
   function setTimeToNow(target) {
-    const now = localDateTimeParts(new Date().toISOString());
+    const now = localDateTimeParts(new Date(Date.now()).toISOString(), state.timeInputOffsetMinutes);
     el(target === "start" ? "timeStartDate" : "timeEndDate").value = now.date;
     el(target === "start" ? "timeStartClock" : "timeEndClock").value = now.time;
+    updateTimePreview();
+  }
+
+  function changeTimeInputOffset() {
+    const nextOffset = Number(el("timeZoneOffset").value);
+    if (!GMT_OFFSETS.includes(nextOffset) || nextOffset === state.timeInputOffsetMinutes) return;
+    const fieldPairs = [
+      ["timeStartDate", "timeStartClock"],
+      ["timeEndDate", "timeEndClock"]
+    ];
+    fieldPairs.forEach(([dateId, timeId]) => {
+      const dateInput = el(dateId);
+      const timeInput = el(timeId);
+      const current = combineLocalDateTime(dateInput.value, timeInput.value, state.timeInputOffsetMinutes);
+      if (!current.iso || current.error) return;
+      const converted = localDateTimeParts(current.iso, nextOffset);
+      dateInput.value = converted.date;
+      timeInput.value = converted.time;
+    });
+    state.timeInputOffsetMinutes = nextOffset;
     updateTimePreview();
   }
 
@@ -749,6 +801,8 @@
   });
   el("issueForm").addEventListener("submit", submitIssue);
   el("timeForm").addEventListener("submit", applyTimeCorrection);
+  el("timeZoneOffset").innerHTML = GMT_OFFSETS.map((offset) => `<option value="${offset}">${gmtLabel(offset)}</option>`).join("");
+  el("timeZoneOffset").addEventListener("change", changeTimeInputOffset);
   ["timeStartDate", "timeStartClock", "timeEndDate", "timeEndClock"].forEach((id) => {
     el(id).addEventListener("input", updateTimePreview);
   });
