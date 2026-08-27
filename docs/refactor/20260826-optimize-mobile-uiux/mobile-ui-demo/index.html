@@ -276,7 +276,7 @@
             <p>TIME CORRECTION</p>
             <h2 id="timeTitle">校正測試時間</h2>
           </div>
-          <span class="step-label">台灣時間</span>
+          <span class="step-label">顯示 GMT+8</span>
         </header>
 
         <form class="time-form" id="timeForm" novalidate>
@@ -286,6 +286,14 @@
             </span>
             <div><span>正在校正</span><strong id="timeContext"></strong><small id="timeTaskContext"></small></div>
           </div>
+
+          <section class="time-zone-card" aria-labelledby="timeZoneLabel">
+            <label class="field" for="timeZoneOffset">
+              <span id="timeZoneLabel">輸入所在地時區</span>
+              <select id="timeZoneOffset" aria-describedby="timeZoneHelp"></select>
+              <small id="timeZoneHelp">只需選擇 GMT 時差；儲存後一律換算並顯示為台灣時間（GMT+8）。</small>
+            </label>
+          </section>
 
           <fieldset class="time-fieldset">
             <legend>開始時間</legend>
@@ -304,6 +312,8 @@
             </div>
             <button class="secondary-button time-now-button" type="button" data-set-time="end">套用現在時間</button>
           </fieldset>
+
+          <p class="time-source-note">「套用現在時間」會取得同一個系統時間點，再換算為所選 GMT；正式服務建議由伺服器提供時間。</p>
 
           <section class="duration-preview" aria-labelledby="durationPreviewLabel">
             <span id="durationPreviewLabel">校正後耗時</span>
