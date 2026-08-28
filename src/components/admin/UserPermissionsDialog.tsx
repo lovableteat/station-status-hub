@@ -16,6 +16,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
+import { REALTIME_COLLABORATION_V2_ENABLED } from "@/lib/realtimeCollaborationConfig";
 import {
   ALL_PAGE_PERMISSIONS,
   DEFAULT_WORKSPACE_ACCESS,
@@ -30,6 +31,7 @@ import {
   WORKSPACE_IDS,
   WORKSPACE_LABELS,
 } from "@/lib/workspacePermissions";
+import { mutateAuthAccount } from "./authAccountSync";
 
 interface UserPermissionsDialogProps {
   isOpen: boolean;
@@ -300,7 +302,7 @@ export function UserPermissionsDialog({
             p_workspace_access: legacyWorkspaceAccess,
           },
         );
-        if (legacyError) throw error;
+        if (legacyError) throw legacyError;
 
         const { data: account, error: accountError } = await supabase
           .from("system_users")
@@ -314,16 +316,30 @@ export function UserPermissionsDialog({
           && !Array.isArray(account.permissions)
           ? account.permissions as Record<string, unknown>
           : {};
-        const { error: mergeError } = await supabase
-          .from("system_users")
-          .update({
-            permissions: {
-              ...currentSettings,
-              workspaceAccess,
-            },
-          })
-          .eq("id", userId);
-        if (mergeError) throw mergeError;
+        const mergedSettings = {
+          ...currentSettings,
+          workspaceAccess,
+        };
+
+        if (REALTIME_COLLABORATION_V2_ENABLED) {
+          // The hosted database may still expose the earlier three-workspace
+          // RPC. Its legacy save above is atomic for page permissions; this
+          // verified Edge Function uses the service role to preserve the full
+          // seven-workspace access map without weakening table policies.
+          const accountSync = await mutateAuthAccount(userId, {
+            action: "update",
+            profile: { permissions: mergedSettings },
+          });
+          if (!accountSync.success) {
+            throw new Error(accountSync.error || "工作區權限同步失敗");
+          }
+        } else {
+          const { error: mergeError } = await supabase
+            .from("system_users")
+            .update({ permissions: mergedSettings })
+            .eq("id", userId);
+          if (mergeError) throw mergeError;
+        }
       }
 
       window.dispatchEvent(

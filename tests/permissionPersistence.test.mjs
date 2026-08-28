@@ -33,6 +33,10 @@ test("workspace permission saves retain atomic writes behind an administrator-on
 test("admin dialog never reports a database failure as a local success", async () => {
   const source = await read("../src/components/admin/UserPermissionsDialog.tsx");
   assert.match(source, /\.rpc\(\s*"set_user_access_permissions"/);
+  assert.match(source, /if \(legacyError\) throw legacyError/);
+  assert.match(source, /import \{ mutateAuthAccount \} from "\.\/authAccountSync"/);
+  assert.match(source, /REALTIME_COLLABORATION_V2_ENABLED/);
+  assert.match(source, /profile: \{ permissions: mergedSettings \}/);
   assert.match(source, /function getSaveErrorMessage/);
   assert.match(source, /description: getSaveErrorMessage\(error\)/);
   assert.doesNotMatch(source, /已以本機方式儲存/);
