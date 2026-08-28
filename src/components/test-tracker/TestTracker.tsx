@@ -363,12 +363,14 @@ export function TestTracker() {
   useEffect(() => {
     if (view === "table" && !canViewList && canViewProductionBoard) {
       setView("board");
-      updateTrackerViewQuery("board");
     } else if (view === "board" && !canViewProductionBoard && canViewList) {
       setView("table");
-      updateTrackerViewQuery("table");
     }
   }, [canViewList, canViewProductionBoard, view]);
+
+  useEffect(() => {
+    updateTrackerViewQuery(view);
+  }, [view]);
 
   useEffect(() => {
     if (!selectedVersionId || selectedVersionId === activeVersion?.id) {
@@ -566,7 +568,6 @@ export function TestTracker() {
     if (nextView === "table" && !canViewList) return;
     if (nextView === "board" && !canViewProductionBoard) return;
     setView(nextView);
-    updateTrackerViewQuery(nextView);
   };
 
   const openFlowSettings = () => {
