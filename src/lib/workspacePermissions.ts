@@ -49,6 +49,11 @@ export interface WorkspaceAccessMap {
 
 export interface UserPermissionSettings {
   workspaceAccess?: Partial<WorkspaceAccessMap>;
+  /**
+   * A durable copy of detailed permissions. This keeps access recoverable on
+   * deployments whose legacy permission RPC cannot update system_users.
+   */
+  pagePermissions?: Permission[];
   [key: string]: unknown;
 }
 
@@ -218,6 +223,20 @@ export const ALL_PAGE_PERMISSIONS: Permission[] = Object.values(
 )
   .flatMap((group) => group.permissions)
   .map((permission) => permission.key);
+
+export function readStoredPagePermissions(value: unknown): Permission[] | null {
+  const settings = value && typeof value === "object" && !Array.isArray(value)
+    ? value as UserPermissionSettings
+    : null;
+  if (!Array.isArray(settings?.pagePermissions)) return null;
+
+  return Array.from(new Set(
+    settings.pagePermissions.filter(
+      (permission): permission is Permission =>
+        typeof permission === "string" && ALL_PAGE_PERMISSIONS.includes(permission as Permission),
+    ),
+  ));
+}
 
 export function normalizeWorkspaceAccess(
   value?: Partial<WorkspaceAccessMap> | null

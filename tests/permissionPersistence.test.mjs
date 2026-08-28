@@ -30,17 +30,17 @@ test("workspace permission saves retain atomic writes behind an administrator-on
   assert.match(sql, /NOTIFY pgrst, 'reload schema'/i);
 });
 
-test("admin dialog never reports a database failure as a local success", async () => {
+test("admin dialog stores a complete permission snapshot through the verified service", async () => {
   const source = await read("../src/components/admin/UserPermissionsDialog.tsx");
-  assert.match(source, /\.rpc\(\s*"set_user_access_permissions"/);
-  assert.match(source, /if \(legacyError\) throw legacyError/);
   assert.match(source, /import \{ mutateAuthAccount \} from "\.\/authAccountSync"/);
+  assert.match(source, /readStoredPagePermissions/);
   assert.match(source, /profile: \{ permissions: mergedSettings \}/);
+  assert.match(source, /pagePermissions: synchronizedPermissions/);
   assert.match(source, /forceVerifiedService: true/);
+  assert.match(source, /Legacy page permission sync skipped/);
   assert.match(source, /function getSaveErrorMessage/);
   assert.match(source, /description: getSaveErrorMessage\(error\)/);
   assert.doesNotMatch(source, /已以本機方式儲存/);
-  assert.doesNotMatch(source, /user_workspace_permissions:/);
 });
 
 test("verified account service can finish a legacy permission save", async () => {
@@ -50,6 +50,15 @@ test("verified account service can finish a legacy permission save", async () =>
     source,
     /!REALTIME_COLLABORATION_V2_ENABLED && !options\.forceVerifiedService/,
   );
+});
+
+test("stored page permissions remain authoritative when legacy rows cannot be updated", async () => {
+  const permissions = await read("../src/hooks/usePermissions.ts");
+  const workspace = await read("../src/lib/workspacePermissions.ts");
+  assert.match(workspace, /pagePermissions\?: Permission\[\]/);
+  assert.match(workspace, /export function readStoredPagePermissions/);
+  assert.match(permissions, /readStoredPagePermissions\(settings\)/);
+  assert.match(permissions, /pagePermissionResult\.error && storedPermissions === null/);
 });
 
 test("flow setup mutations require the flow edit permission", async () => {
