@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  ChevronRight,
   CircuitBoard,
   Gauge,
   House,
@@ -9,10 +10,12 @@ import {
   ServerCog,
   ShieldCheck,
   Target,
+  X,
 } from "lucide-react";
 
 import {
   Drawer,
+  DrawerClose,
   DrawerContent,
   DrawerDescription,
   DrawerHeader,
@@ -74,13 +77,14 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
               key={item.id}
               type="button"
               aria-current={active ? "page" : undefined}
+              data-mobile-dock-item="true"
               onClick={() => selectWorkspace(item.id)}
               className={cn(
                 "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent text-[10px] font-bold tracking-wide text-slate-400 transition-colors",
                 active ? activeToneClasses[item.tone] : "hover:border-white/10 hover:bg-white/[0.05] hover:text-white",
               )}
             >
-              <Icon className="h-[18px] w-[18px]" />
+              <span data-mobile-dock-icon="true"><Icon className="h-[18px] w-[18px]" /></span>
               <span>{item.label}</span>
             </button>
           );
@@ -90,13 +94,14 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
           type="button"
           aria-current={moreActive ? "page" : undefined}
           aria-expanded={moreOpen}
+          data-mobile-dock-item="true"
           onClick={() => setMoreOpen(true)}
           className={cn(
             "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent text-[10px] font-bold tracking-wide text-slate-400 transition-colors",
             moreActive ? "border-violet-200/45 bg-violet-300/90 text-violet-950" : "hover:border-white/10 hover:bg-white/[0.05] hover:text-white",
           )}
         >
-          <MoreHorizontal className="h-[18px] w-[18px]" />
+          <span data-mobile-dock-icon="true"><MoreHorizontal className="h-[18px] w-[18px]" /></span>
           <span>更多</span>
         </button>
       </nav>
@@ -106,11 +111,20 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
           data-mobile-more-sheet="true"
           className="z-[92] max-h-[min(72dvh,560px)] border-cyan-200/25 bg-[#071522] pb-[env(safe-area-inset-bottom)] text-slate-100 lg:hidden"
         >
-          <DrawerHeader className="px-4 pb-3 pt-2 text-left">
+          <DrawerHeader className="relative px-4 pb-3 pt-2 text-left">
             <DrawerTitle className="text-base text-white">更多工作區</DrawerTitle>
-            <DrawerDescription className="text-xs text-slate-400">選擇要開啟的工具，主要工作區仍保留在底部。</DrawerDescription>
+            <DrawerDescription className="text-xs text-slate-400">選擇要開啟的工具</DrawerDescription>
+            <DrawerClose asChild>
+              <button
+                type="button"
+                aria-label="關閉更多工作區"
+                className="absolute right-4 top-1 hidden h-11 w-11 items-center justify-center rounded-2xl border border-slate-600/70 bg-slate-800 text-slate-200 max-sm:flex"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </DrawerClose>
           </DrawerHeader>
-          <div className="grid gap-2 overflow-y-auto px-3 pb-4">
+          <div className="mobile-more-workspace-list grid gap-2 overflow-y-auto px-3 pb-4">
             {secondaryItems.map((item) => {
               const Icon = item.icon;
               const active = activeItem === item.id;
@@ -119,6 +133,7 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
                   key={item.id}
                   type="button"
                   aria-current={active ? "page" : undefined}
+                  data-mobile-more-item="true"
                   onClick={() => selectWorkspace(item.id)}
                   className={cn(
                     "flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2 text-left",
@@ -134,6 +149,7 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
                     <span className="block truncate text-sm font-bold">{item.label}</span>
                     <span className="mt-0.5 block truncate text-xs text-slate-400">{item.description}</span>
                   </span>
+                  <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-slate-500" />
                 </button>
               );
             })}
