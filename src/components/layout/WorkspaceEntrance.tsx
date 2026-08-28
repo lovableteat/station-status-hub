@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   ArrowRight,
   Bot,
+  ChevronRight,
   CheckCircle2,
   FileSpreadsheet,
   ImageIcon,
@@ -102,6 +103,13 @@ const workspaceToneMap: Record<
     description: "用考核週期整理目標、進度、主管回饋與評分，讓每個人的下一步清楚可追蹤。",
     features: ["考核週期", "目標進度", "回饋與評分"],
   },
+};
+
+const mobileWorkspaceTitleMap: Record<string, string> = {
+  "station-status": "機台維修",
+  "data-center": "Data Center",
+  "ai-chat": "資料查詢",
+  performance: "績效考核",
 };
 
 function SegmentedProgress({
@@ -340,11 +348,13 @@ export function WorkspaceEntrance({
           {items.map((item) => {
             const Icon = item.icon;
             const tone = workspaceToneMap[item.id] ?? workspaceToneMap["station-status"];
+            const mobileTitle = mobileWorkspaceTitleMap[item.id] ?? item.title;
 
             return (
               <button
                 key={item.id}
                 type="button"
+                data-workspace-id={item.id}
                 onClick={() => onSelect(item.id)}
                 className="workspace-entrance-mobile-row group flex min-h-[76px] w-full items-center gap-3 border-b border-slate-700/55 px-3 py-2.5 text-left last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300"
               >
@@ -358,13 +368,13 @@ export function WorkspaceEntrance({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[16px] font-black tracking-[-0.025em] text-slate-50">
-                    {item.title}
+                    {mobileTitle}
                   </span>
                   <span className="mt-1 block truncate text-[12px] font-bold text-slate-400">
                     {tone.badge}
                   </span>
                 </span>
-                <ArrowRight className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-active:translate-x-0.5" />
+                <ChevronRight className="workspace-entrance-mobile-chevron h-4 w-4 shrink-0 text-slate-500 transition-transform group-active:translate-x-0.5" />
               </button>
             );
           })}
