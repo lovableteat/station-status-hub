@@ -14,6 +14,10 @@ test("uses a dedicated phone workspace list without replacing the desktop grid",
   assert.match(entranceSource, /workspace-entrance-mobile-list[^\n]*md:hidden/);
   assert.match(entranceSource, /hidden flex-1 gap-3 md:grid/);
   assert.match(entranceSource, /我的工作區/);
+  assert.match(entranceSource, /data-workspace-id=\{item\.id\}/);
+  assert.match(entranceSource, /workspace-entrance-mobile-chevron/);
+  assert.match(entranceSource, /"station-status": "機台維修"/);
+  assert.match(entranceSource, /"data-center": "Data Center"/);
 });
 
 test("keeps the five-destination mobile dock and an accessible more sheet", () => {
@@ -21,13 +25,17 @@ test("keeps the five-destination mobile dock and an accessible more sheet", () =
     assert.match(dockSource, new RegExp(label));
   }
   assert.match(dockSource, /data-mobile-dock-item="true"/);
+  assert.match(dockSource, /data-mobile-dock-id=\{item\.id\}/);
   assert.match(dockSource, /aria-label="關閉更多工作區"/);
   assert.match(dockSource, /data-mobile-more-item="true"/);
 });
 
 test("scopes the new shell tokens and surfaces to phone widths", () => {
-  assert.match(globalCssSource, /@media \(max-width: 767px\)[\s\S]*--mobile-header-height: 72px/);
+  assert.match(globalCssSource, /@media \(max-width: 767px\)[\s\S]*--mobile-header-height: 76px/);
   assert.match(globalCssSource, /@media \(max-width: 767px\)[\s\S]*--mobile-dock-height: 74px/);
-  assert.match(globalCssSource, /\[data-mobile-workspace-dock="true"\][\s\S]*background: rgb\(6 17 31/);
-  assert.match(globalCssSource, /\[data-mobile-more-sheet="true"\][\s\S]*border-top-left-radius: 1\.75rem/);
+  assert.match(globalCssSource, /--mobile-active: #6794df/);
+  assert.match(globalCssSource, /\[data-mobile-workspace-dock="true"\][\s\S]*background: rgb\(7 21 34/);
+  assert.match(globalCssSource, /\[data-mobile-more-sheet="true"\][\s\S]*border-top-left-radius: 2rem/);
+  assert.match(globalCssSource, /\.workspace-entrance-mobile-row\[data-workspace-id="station-status"\]/);
+  assert.match(globalCssSource, /@media \(max-width: 359px\)[\s\S]*min-height: 68px/);
 });

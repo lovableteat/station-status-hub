@@ -78,6 +78,7 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
               type="button"
               aria-current={active ? "page" : undefined}
               data-mobile-dock-item="true"
+              data-mobile-dock-id={item.id}
               onClick={() => selectWorkspace(item.id)}
               className={cn(
                 "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent text-[10px] font-bold tracking-wide text-slate-400 transition-colors",
@@ -95,6 +96,7 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
           aria-current={moreActive ? "page" : undefined}
           aria-expanded={moreOpen}
           data-mobile-dock-item="true"
+          data-mobile-dock-id="more"
           onClick={() => setMoreOpen(true)}
           className={cn(
             "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent text-[10px] font-bold tracking-wide text-slate-400 transition-colors",
@@ -111,14 +113,14 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
           data-mobile-more-sheet="true"
           className="z-[92] max-h-[min(72dvh,560px)] border-cyan-200/25 bg-[#071522] pb-[env(safe-area-inset-bottom)] text-slate-100 lg:hidden"
         >
-          <DrawerHeader className="relative px-4 pb-3 pt-2 text-left">
+          <DrawerHeader data-mobile-more-header="true" className="relative px-5 pb-4 pt-3 text-left">
             <DrawerTitle className="text-base text-white">更多工作區</DrawerTitle>
             <DrawerDescription className="text-xs text-slate-400">選擇要開啟的工具</DrawerDescription>
             <DrawerClose asChild>
               <button
                 type="button"
                 aria-label="關閉更多工作區"
-                className="absolute right-4 top-1 hidden h-11 w-11 items-center justify-center rounded-2xl border border-slate-600/70 bg-slate-800 text-slate-200 max-sm:flex"
+                className="absolute right-5 top-2 hidden h-12 w-12 items-center justify-center rounded-2xl border border-slate-600/70 bg-slate-800 text-slate-200 max-sm:flex"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -134,6 +136,7 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
                   type="button"
                   aria-current={active ? "page" : undefined}
                   data-mobile-more-item="true"
+                  data-mobile-more-id={item.id}
                   onClick={() => selectWorkspace(item.id)}
                   className={cn(
                     "flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2 text-left",
