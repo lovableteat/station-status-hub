@@ -43,6 +43,16 @@ export type GroupMoveResult =
   | { ok: true; project: PcbProject; components: PcbPlacedComponent[]; changed: boolean }
   | { ok: false; reason: string };
 
+export type ObjectGroupMoveResult =
+  | {
+    ok: true;
+    project: PcbProject;
+    components: PcbPlacedComponent[];
+    keepouts: PcbKeepout[];
+    changed: boolean;
+  }
+  | { ok: false; reason: string };
+
 interface ComponentBounds {
   left: number;
   top: number;
@@ -263,6 +273,83 @@ export function moveComponents(
     ok: true,
     project: next,
     components: next.components.filter((component) => movedIds.has(component.instanceId)),
+    changed: true,
+  };
+}
+
+/** Moves selected components and keepouts as one rigid, undoable group. */
+export function moveObjects(
+  project: PcbProject,
+  objectIds: readonly string[],
+  delta: PcbPoint,
+  bypassSnap: boolean,
+): ObjectGroupMoveResult {
+  const uniqueIds = [...new Set(objectIds)];
+  if (!uniqueIds.length) return { ok: false, reason: "請先選取元件或禁制區。" };
+  if (![delta.x, delta.y].every(Number.isFinite)) {
+    return { ok: false, reason: "群組移動位移必須為有效數值。" };
+  }
+
+  const selectedIds = new Set(uniqueIds);
+  const components = project.components.filter((component) => selectedIds.has(component.instanceId));
+  const keepouts = project.keepouts.filter((keepout) => selectedIds.has(keepout.id));
+  if (components.length + keepouts.length !== uniqueIds.length) {
+    return { ok: false, reason: "選取群組包含無法移動的物件。" };
+  }
+  if (components.some((component) => component.locked)) {
+    return { ok: false, reason: "選取群組包含鎖定元件，請先解除鎖定。" };
+  }
+
+  const appliedDelta = project.board.snapToGrid && !bypassSnap
+    ? {
+      x: snapValue(delta.x, project.board.gridSize),
+      y: snapValue(delta.y, project.board.gridSize),
+    }
+    : { ...delta };
+  if (appliedDelta.x === 0 && appliedDelta.y === 0) {
+    return { ok: true, project, components, keepouts, changed: false };
+  }
+
+  const movedComponents = components.map((component) => ({
+    ...component,
+    x: component.x + appliedDelta.x,
+    y: component.y + appliedDelta.y,
+  }));
+  const movedKeepouts = keepouts.map((keepout) => ({
+    ...keepout,
+    x: keepout.x + appliedDelta.x,
+    y: keepout.y + appliedDelta.y,
+  }));
+  const obstacleProject: PcbProject = {
+    ...project,
+    components: project.components.filter((component) => !selectedIds.has(component.instanceId)),
+    keepouts: project.keepouts.filter((keepout) => !selectedIds.has(keepout.id)),
+  };
+  if (movedComponents.some((component) => !canPlaceComponent(obstacleProject, component))) {
+    return { ok: false, reason: "群組移動後元件超出板框或與未選取物件衝突。" };
+  }
+  if (movedKeepouts.some((keepout) => (
+    keepout.x < 0
+    || keepout.y < 0
+    || keepout.x + keepout.width > project.board.width
+    || keepout.y + keepout.height > project.board.height
+  ))) {
+    return { ok: false, reason: "群組移動後禁制區會超出板框。" };
+  }
+
+  const movedComponentsById = new Map(
+    movedComponents.map((component) => [component.instanceId, component]),
+  );
+  const movedKeepoutsById = new Map(movedKeepouts.map((keepout) => [keepout.id, keepout]));
+  const next = clone(project);
+  next.components = next.components.map((component) =>
+    movedComponentsById.get(component.instanceId) ?? component);
+  next.keepouts = next.keepouts.map((keepout) => movedKeepoutsById.get(keepout.id) ?? keepout);
+  return {
+    ok: true,
+    project: next,
+    components: movedComponents,
+    keepouts: movedKeepouts,
     changed: true,
   };
 }

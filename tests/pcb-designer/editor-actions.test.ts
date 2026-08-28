@@ -268,6 +268,94 @@ test("moves unlocked members while leaving locked members in a mixed group", () 
   );
 });
 
+test("moves selected components and keepouts as one rigid snapped transaction", () => {
+  assert.equal(typeof editorModule.moveObjects, "function");
+  const project = createBlankProject("Mixed object move");
+  project.components = [{
+    ...structuredClone(BUILT_IN_COMPONENTS[3]),
+    instanceId: "component-a",
+    reference: "R1",
+    x: 20,
+    y: 20,
+    rotation: 0,
+    layer: "top" as const,
+    locked: false,
+  }];
+  project.keepouts = [{
+    id: "keepout-a",
+    name: "禁制區 A",
+    x: 40,
+    y: 30,
+    width: 10,
+    height: 8,
+    color: "#fb7185",
+    rotation: 0,
+  }];
+  const before = structuredClone(project);
+
+  const result = editorModule.moveObjects(
+    project,
+    ["component-a", "keepout-a"],
+    { x: 3.2, y: 4.1 },
+    false,
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.changed, true);
+  assert.deepEqual(
+    { x: result.project.components[0].x, y: result.project.components[0].y },
+    { x: 23, y: 24 },
+  );
+  assert.deepEqual(
+    { x: result.project.keepouts[0].x, y: result.project.keepouts[0].y },
+    { x: 43, y: 34 },
+  );
+  assert.deepEqual(project, before);
+});
+
+test("mixed object moves fail as a whole at board bounds or with a locked member", () => {
+  const project = createBlankProject("Mixed move guards");
+  project.components = [{
+    ...structuredClone(BUILT_IN_COMPONENTS[3]),
+    instanceId: "component-a",
+    reference: "R1",
+    x: 20,
+    y: 20,
+    rotation: 0,
+    layer: "top" as const,
+    locked: false,
+  }];
+  project.keepouts = [{
+    id: "keepout-a",
+    name: "禁制區 A",
+    x: 90,
+    y: 70,
+    width: 10,
+    height: 10,
+    color: "#fb7185",
+    rotation: 0,
+  }];
+
+  const outOfBounds = editorModule.moveObjects(
+    project,
+    ["component-a", "keepout-a"],
+    { x: 1, y: 0 },
+    true,
+  );
+  assert.equal(outOfBounds.ok, false);
+  assert.match(outOfBounds.reason, /禁制區.*超出板框/);
+
+  project.components[0].locked = true;
+  const locked = editorModule.moveObjects(
+    project,
+    ["component-a", "keepout-a"],
+    { x: -1, y: 0 },
+    true,
+  );
+  assert.equal(locked.ok, false);
+  assert.match(locked.reason, /鎖定元件/);
+});
+
 test("aligns components by their rotated visual edges and centers", () => {
   assert.equal(typeof editorModule.arrangeComponents, "function");
   const createProject = () => {
@@ -479,11 +567,13 @@ test("duplicates a keepout with a new identity and legal offset", () => {
 test("editor hook exposes group move and duplication actions for later UI wiring", () => {
   assert.match(editorHookSource, /const moveComponents = useCallback/);
   assert.match(editorHookSource, /moveComponentsRecord/);
+  assert.match(editorHookSource, /const moveObjects = useCallback/);
+  assert.match(editorHookSource, /moveObjectsRecord/);
   assert.match(editorHookSource, /const duplicateKeepout = useCallback/);
   assert.match(editorHookSource, /duplicateKeepoutRecord/);
   assert.match(editorHookSource, /const duplicateSelected = useCallback/);
   assert.match(editorHookSource, /dispatch\(\{ type: "selection\/duplicate", objectIds: duplicableIds \}\)/);
-  assert.match(editorHookSource, /return \{[\s\S]*moveComponents,[\s\S]*duplicateKeepout,[\s\S]*duplicateSelected,/);
+  assert.match(editorHookSource, /return \{[\s\S]*moveComponents,[\s\S]*moveObjects,[\s\S]*duplicateKeepout,[\s\S]*duplicateSelected,/);
 });
 
 test("selection actions rotate, lock, delete, and nudge the selected component", () => {

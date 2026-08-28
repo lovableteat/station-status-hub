@@ -28,6 +28,7 @@ import type {
   PcbMeasurement,
   PcbPlacedComponent,
   PcbPoint,
+  PcbProject,
   PcbSelection,
   PcbVisibleLayer,
 } from "./types.ts";
@@ -64,23 +65,16 @@ type PointerInteraction =
     center: PcbPoint;
   }
   | {
-    kind: "component";
+    kind: "object-move";
     pointerId: number;
-    instanceId: string;
-    instanceIds: string[];
+    primaryKind: "component" | "keepout";
+    primaryId: string;
+    objectIds: string[];
     origin: PcbPoint;
     originById: Record<string, PcbPoint>;
     offset: PcbPoint;
     preview: PcbPoint;
     delta: PcbPoint;
-    bypassSnap: boolean;
-  }
-  | {
-    kind: "keepout-move";
-    pointerId: number;
-    id: string;
-    offset: PcbPoint;
-    preview: PcbPoint;
     bypassSnap: boolean;
   }
   | {
@@ -182,6 +176,13 @@ function componentPoint(component: Pick<PcbPlacedComponent, "x" | "y">): PcbPoin
   return { x: component.x, y: component.y };
 }
 
+function movableObjectPoint(project: PcbProject, objectId: string): PcbPoint | null {
+  const component = project.components.find((item) => item.instanceId === objectId);
+  if (component) return componentPoint(component);
+  const keepout = project.keepouts.find((item) => item.id === objectId);
+  return keepout ? { x: keepout.x, y: keepout.y } : null;
+}
+
 function getSelectionById(
   objectId: string,
   project: PcbWorkspaceApi["activeProject"],
@@ -252,6 +253,11 @@ export function PcbCanvas({
         project.keepouts.some((keepout) => keepout.id === objectId)),
     ),
     [project.keepouts, selectionIds],
+  );
+  const selectedMovableObjectIds = useMemo(
+    () => selectionIds.filter((objectId) =>
+      selectedComponentIds.has(objectId) || selectedKeepoutIds.has(objectId)),
+    [selectedComponentIds, selectedKeepoutIds, selectionIds],
   );
   const placementLibraryComponent = placementComponentId
     ? workspace.data.library.find((component) => component.id === placementComponentId) ?? null
@@ -334,7 +340,7 @@ export function PcbCanvas({
   };
 
   const previewPointForComponent = useCallback((component: PcbPlacedComponent) => {
-    if (interaction?.kind !== "component" || !interaction.originById[component.instanceId]) {
+    if (interaction?.kind !== "object-move" || !interaction.originById[component.instanceId]) {
       return componentPoint(component);
     }
     const origin = interaction.originById[component.instanceId];
@@ -405,8 +411,8 @@ export function PcbCanvas({
       ),
     }
     : null;
-  const keepoutPreview = interaction?.kind === "keepout-move"
-    ? { id: interaction.id, point: interaction.preview }
+  const keepoutPreview = interaction?.kind === "object-move" && interaction.primaryKind === "keepout"
+    ? { id: interaction.primaryId, point: interaction.preview }
     : null;
   const selectedBounds = interaction?.kind === "keepout-resize"
     && workspace.selection?.id === interaction.id
@@ -547,7 +553,7 @@ export function PcbCanvas({
       return;
     }
 
-    const groupedIds = [...selectedComponentIds];
+    const groupedIds = [...selectedMovableObjectIds];
     const dragIds = groupedIds.includes(component.instanceId) && groupedIds.length > 1
       ? groupedIds
       : [component.instanceId];
@@ -559,24 +565,76 @@ export function PcbCanvas({
     const svg = svgRef.current;
     if (!svg || workspace.tool !== "select" || !workspace.canMutate || component.locked) return;
     const point = pointForEvent(svg, event.clientX, event.clientY);
-    const originById = Object.fromEntries(
-      dragIds
-        .map((instanceId) => {
-          const item = project.components.find((projectComponent) => projectComponent.instanceId === instanceId);
-          return item ? [instanceId, componentPoint(item)] : null;
-        })
-        .filter((entry): entry is [string, PcbPoint] => entry !== null),
-    );
+    if (dragIds.some((objectId) =>
+      project.components.some((item) => item.instanceId === objectId && item.locked))) {
+      toast({ title: "無法移動選取群組", description: "選取群組包含鎖定元件，請先解除鎖定。", variant: "destructive" });
+      return;
+    }
+    const originById = Object.fromEntries(dragIds.flatMap((objectId) => {
+      const origin = movableObjectPoint(project, objectId);
+      return origin ? [[objectId, origin] as [string, PcbPoint]] : [];
+    }));
     svg.setPointerCapture(event.pointerId);
     setInteraction({
-      kind: "component",
+      kind: "object-move",
       pointerId: event.pointerId,
-      instanceId: component.instanceId,
-      instanceIds: dragIds,
+      primaryKind: "component",
+      primaryId: component.instanceId,
+      objectIds: dragIds,
       origin: componentPoint(component),
       originById,
       offset: { x: point.x - component.x, y: point.y - component.y },
       preview: { x: component.x, y: component.y },
+      delta: { x: 0, y: 0 },
+      bypassSnap: event.altKey,
+    });
+  };
+
+  const beginKeepoutDrag = (
+    event: ReactPointerEvent<SVGRectElement>,
+    keepout: PcbKeepout,
+  ) => {
+    if (workspace.tool === "pan" || event.button === 1) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.button !== 0) return;
+    const additive = event.ctrlKey || event.metaKey;
+    if (additive) {
+      selectObject({ kind: "keepout", id: keepout.id }, true);
+      return;
+    }
+    const groupedIds = [...selectedMovableObjectIds];
+    const dragIds = groupedIds.includes(keepout.id) && groupedIds.length > 1
+      ? groupedIds
+      : [keepout.id];
+    if (dragIds.length > 1) {
+      workspace.selectObject({ kind: "keepout", id: keepout.id });
+    } else {
+      selectObject({ kind: "keepout", id: keepout.id });
+    }
+    const svg = svgRef.current;
+    if (!svg || workspace.tool !== "select" || !workspace.canMutate) return;
+    if (dragIds.some((objectId) =>
+      project.components.some((item) => item.instanceId === objectId && item.locked))) {
+      toast({ title: "無法移動選取群組", description: "選取群組包含鎖定元件，請先解除鎖定。", variant: "destructive" });
+      return;
+    }
+    const point = pointForEvent(svg, event.clientX, event.clientY);
+    const originById = Object.fromEntries(dragIds.flatMap((objectId) => {
+      const origin = movableObjectPoint(project, objectId);
+      return origin ? [[objectId, origin] as [string, PcbPoint]] : [];
+    }));
+    svg.setPointerCapture(event.pointerId);
+    setInteraction({
+      kind: "object-move",
+      pointerId: event.pointerId,
+      primaryKind: "keepout",
+      primaryId: keepout.id,
+      objectIds: dragIds,
+      origin: { x: keepout.x, y: keepout.y },
+      originById,
+      offset: { x: point.x - keepout.x, y: point.y - keepout.y },
+      preview: { x: keepout.x, y: keepout.y },
       delta: { x: 0, y: 0 },
       bypassSnap: event.altKey,
     });
@@ -673,37 +731,29 @@ export function PcbCanvas({
       workspace.setViewCenter({ x, y });
       return;
     }
-    if (interaction.kind === "component") {
+    if (interaction.kind === "object-move") {
       const bypassSnap = event.altKey;
       const x = point.x - interaction.offset.x;
       const y = point.y - interaction.offset.y;
       const preview = project.board.snapToGrid
         ? snapPoint({ x, y }, gridSize, bypassSnap)
         : { x, y };
+      const primaryKeepout = interaction.primaryKind === "keepout"
+        ? project.keepouts.find((item) => item.id === interaction.primaryId)
+        : null;
+      const boundedPreview = primaryKeepout && interaction.objectIds.length === 1
+        ? {
+          x: clamp(preview.x, 0, Math.max(0, project.board.width - primaryKeepout.width)),
+          y: clamp(preview.y, 0, Math.max(0, project.board.height - primaryKeepout.height)),
+        }
+        : preview;
       setInteraction({
         ...interaction,
         bypassSnap,
-        preview,
+        preview: boundedPreview,
         delta: {
-          x: preview.x - interaction.origin.x,
-          y: preview.y - interaction.origin.y,
-        },
-      });
-    } else if (interaction.kind === "keepout-move") {
-      const bypassSnap = event.altKey;
-      const x = point.x - interaction.offset.x;
-      const y = point.y - interaction.offset.y;
-      const keepout = project.keepouts.find((item) => item.id === interaction.id);
-      if (!keepout) return;
-      const snappedPoint = project.board.snapToGrid
-        ? snapPoint({ x, y }, gridSize, bypassSnap)
-        : { x, y };
-      setInteraction({
-        ...interaction,
-        bypassSnap,
-        preview: {
-          x: clamp(snappedPoint.x, 0, Math.max(0, project.board.width - keepout.width)),
-          y: clamp(snappedPoint.y, 0, Math.max(0, project.board.height - keepout.height)),
+          x: boundedPreview.x - interaction.origin.x,
+          y: boundedPreview.y - interaction.origin.y,
         },
       });
     } else if (interaction.kind === "keepout-resize") {
@@ -775,26 +825,25 @@ export function PcbCanvas({
           interaction.additive,
         );
       }
-    } else if (interaction.kind === "component") {
-      const result = interaction.instanceIds.length > 1
-        ? workspace.moveComponents(
-          interaction.instanceIds,
+    } else if (interaction.kind === "object-move") {
+      const result = interaction.objectIds.length > 1
+        ? workspace.moveObjects(
+          interaction.objectIds,
           interaction.delta,
           interaction.bypassSnap,
         )
-        : workspace.moveComponent(
-          interaction.instanceId,
-          interaction.preview,
-          interaction.bypassSnap,
-        );
-      if (result.ok === false) toast({ title: "無法移動元件", description: result.reason, variant: "destructive" });
-    } else if (interaction.kind === "keepout-move") {
-      const result = workspace.moveKeepout(
-        interaction.id,
-        interaction.preview,
-        interaction.bypassSnap,
-      );
-      if (result.ok === false) toast({ title: "無法移動禁制區", description: result.reason, variant: "destructive" });
+        : interaction.primaryKind === "component"
+          ? workspace.moveComponent(
+            interaction.primaryId,
+            interaction.preview,
+            interaction.bypassSnap,
+          )
+          : workspace.moveKeepout(
+            interaction.primaryId,
+            interaction.preview,
+            interaction.bypassSnap,
+          );
+      if (result.ok === false) toast({ title: "無法移動選取群組", description: result.reason, variant: "destructive" });
     } else if (interaction.kind === "keepout-resize") {
       const source = project.keepouts.find((item) => item.id === interaction.id);
       const changed = source && (
@@ -994,8 +1043,15 @@ export function PcbCanvas({
 
         <g data-layer="keepouts">
           {project.keepouts.map((keepout) => {
-            const preview = interaction?.kind === "keepout-move" && interaction.id === keepout.id
-              ? { ...keepout, ...interaction.preview }
+            const moveOrigin = interaction?.kind === "object-move"
+              ? interaction.originById[keepout.id]
+              : null;
+            const preview = moveOrigin
+              ? {
+                ...keepout,
+                x: moveOrigin.x + interaction.delta.x,
+                y: moveOrigin.y + interaction.delta.y,
+              }
               : interaction?.kind === "keepout-resize" && interaction.id === keepout.id
                 ? { ...keepout, ...interaction.preview }
                 : keepout;
@@ -1016,30 +1072,7 @@ export function PcbCanvas({
                 data-pcb-selected={selectedKeepoutIds.has(keepout.id) ? "true" : "false"}
                 role="button"
                 tabIndex={0}
-                onPointerDown={(event) => {
-                  if (workspace.tool === "pan" || event.button === 1) return;
-                  event.preventDefault();
-                  event.stopPropagation();
-                  if (event.button !== 0) return;
-                  const additive = event.ctrlKey || event.metaKey;
-                  if (additive) {
-                    selectObject({ kind: "keepout", id: keepout.id }, true);
-                    return;
-                  }
-                  selectObject({ kind: "keepout", id: keepout.id });
-                  const svg = svgRef.current;
-                  if (!svg || workspace.tool !== "select" || !workspace.canMutate) return;
-                  const point = pointForEvent(svg, event.clientX, event.clientY);
-                  svg.setPointerCapture(event.pointerId);
-                  setInteraction({
-                    kind: "keepout-move",
-                    pointerId: event.pointerId,
-                    id: keepout.id,
-                    offset: { x: point.x - keepout.x, y: point.y - keepout.y },
-                    preview: { x: keepout.x, y: keepout.y },
-                    bypassSnap: event.altKey,
-                  });
-                }}
+                onPointerDown={(event) => beginKeepoutDrag(event, keepout)}
                 onKeyDown={(event) =>
                   selectWithKeyboard(event, { kind: "keepout", id: keepout.id })}
                 aria-label={`禁制區 ${keepout.name}`}

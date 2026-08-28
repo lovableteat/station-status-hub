@@ -305,13 +305,15 @@ test("uses filtered colors in 2D and keeps physical PCB faces distinct in both 3
   assert.match(softwareCanvas3dSource, /view\.pitch >= 0 \? ["']Top 面["'] : ["']Bottom 面["']/);
 });
 
-test("supports Ctrl or Cmd multi-selection, shared layer filters, and group drag on the 2D canvas", () => {
+test("supports Ctrl or Cmd multi-selection, shared layer filters, and mixed-object group drag on the 2D canvas", () => {
   assert.match(canvasSource, /workspace\.visibleLayer/);
   assert.match(canvasSource, /workspace\.selectedObjects/);
   assert.match(canvasSource, /event\.ctrlKey \|\| event\.metaKey/);
   assert.match(canvasSource, /workspace\.toggleObjectSelection/);
   assert.match(canvasSource, /workspace\.clearObjectSelection/);
-  assert.match(canvasSource, /workspace\.moveComponents/);
+  assert.match(canvasSource, /workspace\.moveObjects/);
+  assert.match(canvasSource, /selectedMovableObjectIds/);
+  assert.match(canvasSource, /kind:\s*["']object-move["']/);
 });
 
 test("makes existing canvas objects keyboard-selectable", () => {
@@ -454,7 +456,7 @@ test("provides complete board, selection, internal DRC, and PNG workflows", () =
   assert.match(canvasSource, /const strokeWidth = Math\.max\(project\.board\.width,\s*project\.board\.height\) \/ 700/);
   assert.match(canvasSource, /<style>[\s\S]{0,500}\.pcb-svg-label[\s\S]{0,300}font-family/);
   assert.match(workspaceSource, /<PcbCanvas/);
-  assert.match(canvasSource, /kind:\s*["']keepout-move["']/);
+  assert.match(canvasSource, /kind:\s*["']object-move["']/);
   assert.match(canvasSource, /cursorPoint[\s\S]*toFixed/);
   assert.match(canvasSource, /drc-overlay[\s\S]*translate\([\s\S]*rotate\(/);
   assert.match(editorCssSource, /max-width:\s*1279px[\s\S]*pcb-left-drawer,[\s\S]*visibility:\s*hidden[\s\S]*is-open[\s\S]*visibility:\s*visible/);

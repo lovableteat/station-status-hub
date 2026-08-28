@@ -298,7 +298,7 @@ test("keeps visible-layer filtering and grouped selection in sync across the PCB
   assert.match(toolbarSource, /pcb-layer-control/);
   assert.match(toolbarSource, /DropdownMenuRadioGroup[\s\S]{0,180}onVisibleLayerChange/);
   assert.match(canvasSource, /workspace\.visibleLayer/);
-  assert.match(canvasSource, /workspace\.moveComponents/);
+  assert.match(canvasSource, /workspace\.moveObjects/);
   assert.match(canvasSource, /workspace\.toggleObjectSelection/);
   assert.match(canvas3dSource, /visibleLayer/);
   assert.match(canvas3dSource, /workspace\.selectedObjects/);
