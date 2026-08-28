@@ -317,24 +317,62 @@ export function WorkspaceEntrance({
       <div className="flex w-full flex-1 flex-col">
         <div className="workspace-entrance-header mb-3 flex flex-col gap-3 rounded-[1.35rem] border border-primary/15 bg-[linear-gradient(180deg,rgba(15,24,42,0.94),rgba(9,15,29,0.97))] px-4 py-3.5 sm:flex-row sm:items-end sm:justify-between sm:px-5">
           <div className="space-y-1.5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-primary/75">
+            <p className="hidden text-[11px] font-bold uppercase tracking-[0.24em] text-primary/75 md:block">
               Workspace
             </p>
             <h1 className="text-2xl font-black tracking-[-0.04em] text-foreground sm:text-3xl">
-              選擇要進入的工作區
+              <span className="md:hidden">我的工作區</span>
+              <span className="hidden md:inline">選擇要進入的工作區</span>
             </h1>
-            <p className="max-w-2xl text-sm leading-6 text-slate-300">
+            <p className="hidden max-w-2xl text-sm leading-6 text-slate-300 md:block">
               從專案維修、BOM 協作到資料分析，所有日常工作都從這裡開始。
             </p>
           </div>
-          <div className="inline-flex w-fit items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-slate-200">
+          <div className="hidden w-fit items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-slate-200 md:inline-flex">
             {items.length} 個入口
           </div>
         </div>
 
         <div
+          className="workspace-entrance-mobile-list overflow-hidden rounded-[1.4rem] border border-slate-700/70 bg-[#0c1929] md:hidden"
+          data-testid="workspace-entrance-mobile-list"
+        >
+          {items.map((item) => {
+            const Icon = item.icon;
+            const tone = workspaceToneMap[item.id] ?? workspaceToneMap["station-status"];
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onSelect(item.id)}
+                className="workspace-entrance-mobile-row group flex min-h-[76px] w-full items-center gap-3 border-b border-slate-700/55 px-3 py-2.5 text-left last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300"
+              >
+                <span
+                  className={cn(
+                    "workspace-entrance-mobile-icon grid h-12 w-12 shrink-0 place-items-center rounded-2xl border",
+                    tone.iconWrap,
+                  )}
+                >
+                  <Icon className="h-[22px] w-[22px]" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[16px] font-black tracking-[-0.025em] text-slate-50">
+                    {item.title}
+                  </span>
+                  <span className="mt-1 block truncate text-[12px] font-bold text-slate-400">
+                    {tone.badge}
+                  </span>
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-active:translate-x-0.5" />
+              </button>
+            );
+          })}
+        </div>
+
+        <div
           className={cn(
-            "grid flex-1 gap-3 2xl:gap-4",
+            "hidden flex-1 gap-3 md:grid 2xl:gap-4",
             isFiveItemLayout && "xl:auto-rows-fr",
             gridClass,
           )}
