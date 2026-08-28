@@ -13,6 +13,12 @@ export interface AdminAccountMutationOptions {
   action?: "create" | "update" | "sync" | "delete";
   password?: string;
   profile?: AdminAccountProfile;
+  /**
+   * Some legacy database RPCs can persist only a subset of a user's
+   * permissions.  Their compatibility path still needs the verified account
+   * service to store the complete settings, even while realtime V2 is off.
+   */
+  forceVerifiedService?: boolean;
 }
 
 export interface AdminAccountMutationResult {
@@ -59,7 +65,7 @@ export async function mutateAuthAccount(
   userId: string,
   options: AdminAccountMutationOptions = {},
 ): Promise<AdminAccountMutationResult> {
-  if (!REALTIME_COLLABORATION_V2_ENABLED) {
+  if (!REALTIME_COLLABORATION_V2_ENABLED && !options.forceVerifiedService) {
     return { success: false, error: "Realtime account synchronization is disabled" };
   }
 

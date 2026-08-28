@@ -35,12 +35,21 @@ test("admin dialog never reports a database failure as a local success", async (
   assert.match(source, /\.rpc\(\s*"set_user_access_permissions"/);
   assert.match(source, /if \(legacyError\) throw legacyError/);
   assert.match(source, /import \{ mutateAuthAccount \} from "\.\/authAccountSync"/);
-  assert.match(source, /REALTIME_COLLABORATION_V2_ENABLED/);
   assert.match(source, /profile: \{ permissions: mergedSettings \}/);
+  assert.match(source, /forceVerifiedService: true/);
   assert.match(source, /function getSaveErrorMessage/);
   assert.match(source, /description: getSaveErrorMessage\(error\)/);
   assert.doesNotMatch(source, /已以本機方式儲存/);
   assert.doesNotMatch(source, /user_workspace_permissions:/);
+});
+
+test("verified account service can finish a legacy permission save", async () => {
+  const source = await read("../src/components/admin/authAccountSync.ts");
+  assert.match(source, /forceVerifiedService\?: boolean/);
+  assert.match(
+    source,
+    /!REALTIME_COLLABORATION_V2_ENABLED && !options\.forceVerifiedService/,
+  );
 });
 
 test("flow setup mutations require the flow edit permission", async () => {
