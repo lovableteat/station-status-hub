@@ -16,7 +16,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
-import { REALTIME_COLLABORATION_V2_ENABLED } from "@/lib/realtimeCollaborationConfig";
 import {
   ALL_PAGE_PERMISSIONS,
   DEFAULT_WORKSPACE_ACCESS,
@@ -321,24 +320,17 @@ export function UserPermissionsDialog({
           workspaceAccess,
         };
 
-        if (REALTIME_COLLABORATION_V2_ENABLED) {
-          // The hosted database may still expose the earlier three-workspace
-          // RPC. Its legacy save above is atomic for page permissions; this
-          // verified Edge Function uses the service role to preserve the full
-          // seven-workspace access map without weakening table policies.
-          const accountSync = await mutateAuthAccount(userId, {
-            action: "update",
-            profile: { permissions: mergedSettings },
-          });
-          if (!accountSync.success) {
-            throw new Error(accountSync.error || "工作區權限同步失敗");
-          }
-        } else {
-          const { error: mergeError } = await supabase
-            .from("system_users")
-            .update({ permissions: mergedSettings })
-            .eq("id", userId);
-          if (mergeError) throw mergeError;
+        // The hosted database may still expose the earlier three-workspace
+        // RPC. Its legacy save above is atomic for page permissions; this
+        // verified Edge Function uses the service role to preserve the full
+        // seven-workspace access map without weakening table policies.
+        const accountSync = await mutateAuthAccount(userId, {
+          action: "update",
+          profile: { permissions: mergedSettings },
+          forceVerifiedService: true,
+        });
+        if (!accountSync.success) {
+          throw new Error(accountSync.error || "工作區權限同步失敗");
         }
       }
 
