@@ -19,9 +19,22 @@ test("permission updates are atomic and publish real-time changes", async () => 
   assert.match(sql, /supabase_realtime/i);
 });
 
+test("workspace permission saves retain atomic writes behind an administrator-only RPC", async () => {
+  const sql = await read("../supabase/migrations/20260828120000_repair_workspace_permission_saves.sql");
+  assert.match(sql, /CREATE OR REPLACE FUNCTION workspace\.set_user_access_permissions/i);
+  assert.match(sql, /SECURITY DEFINER/i);
+  assert.match(sql, /workspace\.current_user_can_workspace\('user-management', 'edit'\)/);
+  assert.match(sql, /DELETE FROM workspace\.user_page_permissions/i);
+  assert.match(sql, /UPDATE workspace\.system_users/i);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION workspace\.set_user_access_permissions/i);
+  assert.match(sql, /NOTIFY pgrst, 'reload schema'/i);
+});
+
 test("admin dialog never reports a database failure as a local success", async () => {
   const source = await read("../src/components/admin/UserPermissionsDialog.tsx");
   assert.match(source, /\.rpc\(\s*"set_user_access_permissions"/);
+  assert.match(source, /function getSaveErrorMessage/);
+  assert.match(source, /description: getSaveErrorMessage\(error\)/);
   assert.doesNotMatch(source, /已以本機方式儲存/);
   assert.doesNotMatch(source, /user_workspace_permissions:/);
 });
