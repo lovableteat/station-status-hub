@@ -68,6 +68,17 @@ const DETAIL_PERMISSION_SECTIONS: Array<{
   },
 ];
 
+function getSaveErrorMessage(error: unknown) {
+  if (error && typeof error === "object" && "message" in error) {
+    const message = String((error as { message?: unknown }).message ?? "").trim();
+    if (message) return message;
+  }
+
+  if (error instanceof Error && error.message) return error.message;
+
+  return "資料庫未完成更新，原權限已完整保留，請稍後重試。";
+}
+
 function getWorkspaceCardTone(level: WorkspaceAccessLevel) {
   switch (level) {
     case "edit":
@@ -330,10 +341,7 @@ export function UserPermissionsDialog({
     } catch (error) {
       toast({
         title: "權限儲存失敗",
-        description:
-          error instanceof Error
-            ? error.message
-            : "資料庫未完成更新，原權限已完整保留，請稍後重試。",
+        description: getSaveErrorMessage(error),
         variant: "destructive",
       });
     } finally {
