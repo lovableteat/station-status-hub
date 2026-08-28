@@ -133,6 +133,16 @@ export function PcbDesignerWorkspace({
       : null,
   });
   const { saveNow, setTool } = workspace;
+  const selectedComponentCount = useMemo(() => {
+    const selectedIds = new Set([
+      ...workspace.selectedObjects,
+      ...(workspace.selection?.kind === "component" ? [workspace.selection.id] : []),
+    ]);
+    return workspace.activeProject.components.reduce(
+      (count, component) => count + (selectedIds.has(component.instanceId) ? 1 : 0),
+      0,
+    );
+  }, [workspace.activeProject.components, workspace.selectedObjects, workspace.selection]);
   const [dialog, setDialog] = useState<PcbDialogState | null>(null);
   const [exportIncludesGrid, setExportIncludesGrid] = useState(true);
   const [openDrawer, setOpenDrawer] = useState<"left" | "right" | null>(null);
@@ -586,6 +596,7 @@ export function PcbDesignerWorkspace({
         zoom={workspace.zoom}
         canUndo={workspace.canUndo}
         canRedo={workspace.canRedo}
+        selectedComponentCount={selectedComponentCount}
         isSaving={workspace.persistenceStatus === "saving"}
         viewMode={viewMode}
         exportPngAvailable={viewMode === "2d"}
@@ -622,6 +633,7 @@ export function PcbDesignerWorkspace({
         onExportIncludesGridChange={setExportIncludesGrid}
         onUndo={workspace.undo}
         onRedo={workspace.redo}
+        onArrangeSelection={workspace.arrangeSelectedComponents}
         onToolChange={workspace.setTool}
         onActiveLayerChange={workspace.setActiveLayer}
         onVisibleLayerChange={workspace.setVisibleLayer}

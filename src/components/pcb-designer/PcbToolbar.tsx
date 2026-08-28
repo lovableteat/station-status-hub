@@ -1,5 +1,13 @@
 import type { ComponentType } from "react";
 import {
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignHorizontalSpaceBetween,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  AlignVerticalSpaceBetween,
   Ban,
   Box,
   ChevronDown,
@@ -26,8 +34,10 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -37,7 +47,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { PcbTool, PcbVisibleLayer } from "./types.ts";
+import type { PcbComponentArrangement, PcbTool, PcbVisibleLayer } from "./types.ts";
 import type { PcbViewMode } from "./hooks/usePcbProjectPresence.ts";
 
 interface ToolButtonProps {
@@ -50,6 +60,23 @@ interface ToolButtonProps {
   onClick: () => void;
   tone?: "save" | "import";
 }
+
+const ARRANGEMENT_ITEMS: readonly {
+  value: PcbComponentArrangement;
+  label: string;
+  shortcut: string;
+  icon: ComponentType<{ className?: string }>;
+  minimum: 2 | 3;
+}[] = [
+  { value: "align-left", label: "靠左對齊", shortcut: "Alt+L", icon: AlignStartVertical, minimum: 2 },
+  { value: "align-horizontal-center", label: "水平置中", shortcut: "Alt+C", icon: AlignCenterVertical, minimum: 2 },
+  { value: "align-right", label: "靠右對齊", shortcut: "Alt+R", icon: AlignEndVertical, minimum: 2 },
+  { value: "align-top", label: "靠上對齊", shortcut: "Alt+T", icon: AlignStartHorizontal, minimum: 2 },
+  { value: "align-vertical-center", label: "垂直置中", shortcut: "Alt+M", icon: AlignCenterHorizontal, minimum: 2 },
+  { value: "align-bottom", label: "靠下對齊", shortcut: "Alt+B", icon: AlignEndHorizontal, minimum: 2 },
+  { value: "distribute-horizontal", label: "水平均分", shortcut: "Alt+H", icon: AlignHorizontalSpaceBetween, minimum: 3 },
+  { value: "distribute-vertical", label: "垂直均分", shortcut: "Alt+V", icon: AlignVerticalSpaceBetween, minimum: 3 },
+];
 
 function ToolButton({
   label,
@@ -104,6 +131,7 @@ export interface PcbToolbarProps {
   zoom: number;
   canUndo: boolean;
   canRedo: boolean;
+  selectedComponentCount: number;
   isSaving: boolean;
   viewMode: PcbViewMode;
   exportPngAvailable: boolean;
@@ -118,6 +146,7 @@ export interface PcbToolbarProps {
   onExportIncludesGridChange: (checked: boolean) => void;
   onUndo: () => void;
   onRedo: () => void;
+  onArrangeSelection: (arrangement: PcbComponentArrangement) => void;
   onToolChange: (tool: PcbTool) => void;
   onActiveLayerChange: (layer: "top" | "bottom") => void;
   onVisibleLayerChange: (layer: PcbVisibleLayer) => void;
@@ -136,6 +165,7 @@ export function PcbToolbar({
   zoom,
   canUndo,
   canRedo,
+  selectedComponentCount,
   isSaving,
   viewMode,
   exportPngAvailable,
@@ -150,6 +180,7 @@ export function PcbToolbar({
   onExportIncludesGridChange,
   onUndo,
   onRedo,
+  onArrangeSelection,
   onToolChange,
   onActiveLayerChange,
   onVisibleLayerChange,
@@ -310,6 +341,75 @@ export function PcbToolbar({
         <span className="pcb-tool-separator" aria-hidden="true" />
         <ToolButton label="復原" shortcut="Ctrl+Z" icon={Undo2} disabled={!canMutate || !canUndo} onClick={onUndo} />
         <ToolButton label="重做" shortcut="Ctrl+Shift+Z" icon={Redo2} disabled={!canMutate || !canRedo} onClick={onRedo} />
+
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="pcb-tool-button is-labeled pcb-arrange-trigger"
+                  aria-label={`元件對齊與均分，已選取 ${selectedComponentCount} 個元件`}
+                >
+                  <AlignHorizontalSpaceBetween className="h-4 w-4" />
+                  <span>對齊</span>
+                  {selectedComponentCount > 0 && (
+                    <span className="pcb-arrange-count" aria-hidden="true">{selectedComponentCount}</span>
+                  )}
+                  <ChevronDown className="h-3 w-3" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent className="pcb-tool-tooltip text-xs">
+              {selectedComponentCount >= 2
+                ? `調整 ${selectedComponentCount} 個選取元件`
+                : "先選取至少 2 個元件"}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="start" className="pcb-dropdown-menu pcb-arrange-menu w-60">
+            <DropdownMenuLabel>對齊元件</DropdownMenuLabel>
+            {ARRANGEMENT_ITEMS.slice(0, 3).map((item) => (
+              <DropdownMenuItem
+                key={item.value}
+                disabled={!canMutate || selectedComponentCount < item.minimum}
+                onSelect={() => onArrangeSelection(item.value)}
+              >
+                <item.icon className="mr-2 h-4 w-4" />
+                <span>{item.label}</span>
+                <kbd>{item.shortcut}</kbd>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            {ARRANGEMENT_ITEMS.slice(3, 6).map((item) => (
+              <DropdownMenuItem
+                key={item.value}
+                disabled={!canMutate || selectedComponentCount < item.minimum}
+                onSelect={() => onArrangeSelection(item.value)}
+              >
+                <item.icon className="mr-2 h-4 w-4" />
+                <span>{item.label}</span>
+                <kbd>{item.shortcut}</kbd>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>均分間距</DropdownMenuLabel>
+            {ARRANGEMENT_ITEMS.slice(6).map((item) => (
+              <DropdownMenuItem
+                key={item.value}
+                disabled={!canMutate || selectedComponentCount < item.minimum}
+                onSelect={() => onArrangeSelection(item.value)}
+              >
+                <item.icon className="mr-2 h-4 w-4" />
+                <span>{item.label}</span>
+                <kbd>{item.shortcut}</kbd>
+              </DropdownMenuItem>
+            ))}
+            <p className="pcb-arrange-hint">
+              對齊需 2 個；均分需 3 個元件
+            </p>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <span className="pcb-tool-separator" aria-hidden="true" />
         <ToolButton label="選取工具" shortcut="V" icon={MousePointer2} active={tool === "select"} onClick={() => onToolChange("select")} />
