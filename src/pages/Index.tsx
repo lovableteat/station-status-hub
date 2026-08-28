@@ -5,7 +5,6 @@ import {
   Camera,
   CircuitBoard,
   ClipboardList,
-  Factory,
   FileText,
   FolderKanban,
   LayoutDashboard,
@@ -71,11 +70,6 @@ const PerformanceAppraisalPage = React.lazy(() =>
     default: module.PerformanceAppraisalPage,
   }))
 );
-const ProductionMonitor = React.lazy(() =>
-  import("@/components/production/ProductionMonitor").then((module) => ({
-    default: module.ProductionMonitor,
-  }))
-);
 const FlowInfo = React.lazy(() =>
   import("@/components/test-tracker/FlowInfo").then((module) => ({ default: module.FlowInfo }))
 );
@@ -108,7 +102,6 @@ type StationModuleId =
   | "dashboard"
   | "test-tracker"
   | "flow-info"
-  | "monitor"
   | "issues"
   | "tools"
   | "test-plan";
@@ -123,7 +116,6 @@ const stationModuleItems: Array<{
   { id: "dashboard", label: "系統儀表板", icon: LayoutDashboard },
   { id: "test-tracker", label: "L10 測試追蹤", icon: ClipboardList },
   { id: "flow-info", label: "L10 流程設定", icon: FileText },
-  { id: "monitor", label: "生產監控牆", icon: Factory },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle },
   { id: "tools", label: "工具管理", icon: Wrench },
   { id: "test-plan", label: "資料儲存", icon: FolderKanban },
@@ -213,6 +205,10 @@ function getInitialWorkspace(): WorkspaceId | null {
     return "ai-chat";
   }
 
+  if (module === "monitor" || stationModuleItems.some((item) => item.id === module)) {
+    return "station-status";
+  }
+
   if (
     workspace === "station-status" ||
     workspace === "material-requests" ||
@@ -238,13 +234,14 @@ function getInitialStationModule(): StationModuleId {
     value === "dashboard" ||
     value === "test-tracker" ||
     value === "flow-info" ||
-    value === "monitor" ||
     value === "issues" ||
     value === "tools" ||
     value === "test-plan"
   ) {
     return value;
   }
+
+  if (value === "monitor") return "test-tracker";
 
   return "dashboard";
 }
@@ -379,7 +376,11 @@ const Index = () => {
   );
 
   const availableStationModules = useMemo(
-    () => stationModuleItems.filter((item) => canViewModule(item.id)),
+    () => stationModuleItems.filter((item) =>
+      item.id === "test-tracker"
+        ? canViewModule("test-tracker") || canViewModule("monitor")
+        : canViewModule(item.id)
+    ),
     [canViewModule]
   );
   const availableAdminModules = useMemo<AdminModuleId[]>(
@@ -434,15 +435,20 @@ const Index = () => {
       const targetWorkspace = moduleWorkspaceMap[module];
       if (!targetWorkspace) return;
 
-      pushWorkspaceLocation(targetWorkspace, module, event.detail?.params);
+      const normalizedModule = module === "monitor" ? "test-tracker" : module;
+      const normalizedParams = module === "monitor"
+        ? { ...event.detail?.params, trackerView: "board" }
+        : event.detail?.params;
+
+      pushWorkspaceLocation(targetWorkspace, normalizedModule, normalizedParams);
 
       setActiveWorkspace(targetWorkspace);
 
       if (
         targetWorkspace === "station-status" &&
-        stationModuleItems.some((item) => item.id === module)
+        stationModuleItems.some((item) => item.id === normalizedModule)
       ) {
-        setActiveStationModule(module as StationModuleId);
+        setActiveStationModule(normalizedModule as StationModuleId);
       }
 
       if (targetWorkspace === "user-management") {
@@ -515,9 +521,13 @@ const Index = () => {
   };
 
   const handleStationNavigation = (module: string, params?: Record<string, string>) => {
-    pushWorkspaceLocation("station-status", module, params);
+    const normalizedModule = module === "monitor" ? "test-tracker" : module;
+    const normalizedParams = module === "monitor"
+      ? { ...params, trackerView: "board" }
+      : params;
+    pushWorkspaceLocation("station-status", normalizedModule, normalizedParams);
     setActiveWorkspace("station-status");
-    setActiveStationModule(module as StationModuleId);
+    setActiveStationModule(normalizedModule as StationModuleId);
     if (isCompactLayout) {
       setSidebarOpen(false);
     }
@@ -533,7 +543,7 @@ const Index = () => {
         );
       case "test-tracker":
         return (
-          <PermissionGuard module="test-tracker">
+          <PermissionGuard modules={["test-tracker", "monitor"]}>
             <TestTracker />
           </PermissionGuard>
         );
@@ -541,12 +551,6 @@ const Index = () => {
         return (
           <PermissionGuard module="flow-info">
             <FlowInfo />
-          </PermissionGuard>
-        );
-      case "monitor":
-        return (
-          <PermissionGuard module="monitor">
-            <ProductionMonitor />
           </PermissionGuard>
         );
       case "issues":

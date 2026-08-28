@@ -133,10 +133,12 @@ export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
     ],
   },
   test_tracker: {
-    name: "L10 測試追蹤",
+    name: "L10 測試追蹤（列表／生產看板）",
     permissions: [
-      { key: "test_tracker_view", label: "檢視測試追蹤" },
-      { key: "test_tracker_edit", label: "編輯測試追蹤" },
+      { key: "test_tracker_view", label: "檢視列表" },
+      { key: "test_tracker_edit", label: "編輯測試進度" },
+      { key: "production_view", label: "檢視生產看板" },
+      { key: "production_edit", label: "管理生產看板" },
     ],
   },
   flow_info: {
@@ -151,13 +153,6 @@ export const LEGACY_PAGE_PERMISSION_GROUPS: Record<
     permissions: [
       { key: "issues_view", label: "檢視問題追蹤與統計" },
       { key: "issues_edit", label: "編輯問題追蹤與統計" },
-    ],
-  },
-  production: {
-    name: "產線監控",
-    permissions: [
-      { key: "production_view", label: "檢視產線監控" },
-      { key: "production_edit", label: "編輯產線監控" },
     ],
   },
   data_center: {

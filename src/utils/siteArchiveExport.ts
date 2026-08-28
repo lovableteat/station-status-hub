@@ -49,7 +49,6 @@ const SNAPSHOT_MODULES: SnapshotModule[] = [
   { id: "dashboard", label: "系統儀表板" },
   { id: "test-tracker", label: "L10 測試追蹤" },
   { id: "flow-info", label: "L10 測試流程設定" },
-  { id: "monitor", label: "生產監控牆" },
   { id: "issues", label: "問題追蹤" },
   { id: "data", label: "資料中心" },
   { id: "tools", label: "工具管理" },

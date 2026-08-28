@@ -72,7 +72,7 @@ const App = () => {
                           <Route
                             path="/test-tracker"
                             element={
-                              <PermissionGuard module="test-tracker">
+                              <PermissionGuard modules={["test-tracker", "monitor"]}>
                                 <TestTrackerPage />
                               </PermissionGuard>
                             }
