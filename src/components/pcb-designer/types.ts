@@ -171,6 +171,16 @@ export interface PcbPendingPlacement {
 
 export type PcbTool = "select" | "pan" | "measure" | "keepout";
 
+export type PcbComponentArrangement =
+  | "align-left"
+  | "align-horizontal-center"
+  | "align-right"
+  | "align-top"
+  | "align-vertical-center"
+  | "align-bottom"
+  | "distribute-horizontal"
+  | "distribute-vertical";
+
 export type PcbSelection =
   | { kind: "component"; id: string }
   | { kind: "keepout"; id: string }

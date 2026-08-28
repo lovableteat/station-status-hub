@@ -1446,6 +1446,42 @@
   font-weight: 700;
 }
 
+.pcb-arrange-trigger {
+  min-width: 98px;
+}
+
+.pcb-arrange-count {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid rgb(103 232 249 / 28%);
+  border-radius: 999px;
+  background: rgb(14 165 233 / 13%);
+  padding: 0 5px;
+  color: #c9f3fc;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.pcb-arrange-menu [role="menuitem"] kbd {
+  margin-left: auto;
+  border: 1px solid rgb(148 163 184 / 18%);
+  border-radius: 5px;
+  background: rgb(15 23 42 / 66%);
+  padding: 2px 5px;
+  color: #8fa3bd;
+  font-family: inherit;
+  font-size: 10px;
+}
+
+.pcb-arrange-hint {
+  margin: 5px 8px 2px;
+  color: #74869d;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 .pcb-tool-button.is-save,
 .pcb-tool-button.is-import,
 .pcb-tool-button.is-export {

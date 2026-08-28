@@ -3,6 +3,7 @@ import type {
   PcbKeepout,
   PcbLibraryComponent,
   PcbMeasurement,
+  PcbComponentArrangement,
   PcbPlacedComponent,
   PcbPoint,
   PcbProject,
@@ -10,6 +11,7 @@ import type {
 } from "../types.ts";
 import {
   canPlaceComponent,
+  getRotatedRectangleCorners,
   MAX_PLACEMENT_CHECKS,
   searchPlacement,
   snapValue,
@@ -40,6 +42,17 @@ export type KeepoutMoveResult =
 export type GroupMoveResult =
   | { ok: true; project: PcbProject; components: PcbPlacedComponent[]; changed: boolean }
   | { ok: false; reason: string };
+
+interface ComponentBounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+}
 
 export type KeepoutDuplicateResult =
   | { ok: true; project: PcbProject; keepout: PcbKeepout }
@@ -250,6 +263,154 @@ export function moveComponents(
     ok: true,
     project: next,
     components: next.components.filter((component) => movedIds.has(component.instanceId)),
+    changed: true,
+  };
+}
+
+function visualComponentBounds(component: PcbPlacedComponent): ComponentBounds {
+  const corners = getRotatedRectangleCorners(component);
+  const xs = corners.map((point) => point.x);
+  const ys = corners.map((point) => point.y);
+  const left = Math.min(...xs);
+  const top = Math.min(...ys);
+  const right = Math.max(...xs);
+  const bottom = Math.max(...ys);
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+    centerX: (left + right) / 2,
+    centerY: (top + bottom) / 2,
+  };
+}
+
+/**
+ * Aligns selected components using their rotated visual bounds. Distribution
+ * keeps the two outer components fixed and gives every gap the same size.
+ */
+export function arrangeComponents(
+  project: PcbProject,
+  instanceIds: readonly string[],
+  arrangement: PcbComponentArrangement,
+): GroupMoveResult {
+  const uniqueIds = [...new Set(instanceIds)];
+  const minimumCount = arrangement.startsWith("distribute-") ? 3 : 2;
+  if (uniqueIds.length < minimumCount) {
+    return {
+      ok: false,
+      reason: minimumCount === 3
+        ? "均分至少需要選取 3 個元件。"
+        : "對齊至少需要選取 2 個元件。",
+    };
+  }
+
+  const components = uniqueIds.map((instanceId) =>
+    project.components.find((component) => component.instanceId === instanceId));
+  if (components.some((component) => !component)) {
+    return { ok: false, reason: "找不到要對齊的元件。" };
+  }
+  const selected = components as PcbPlacedComponent[];
+  if (selected.some((component) => component.locked)) {
+    return { ok: false, reason: "選取範圍包含鎖定元件，請先解除元件鎖定。" };
+  }
+
+  const boundsById = new Map(selected.map((component) => [
+    component.instanceId,
+    visualComponentBounds(component),
+  ]));
+  const nextPositions = new Map(selected.map((component) => [
+    component.instanceId,
+    { x: component.x, y: component.y },
+  ]));
+  const allBounds = [...boundsById.values()];
+  const groupLeft = Math.min(...allBounds.map((bounds) => bounds.left));
+  const groupRight = Math.max(...allBounds.map((bounds) => bounds.right));
+  const groupTop = Math.min(...allBounds.map((bounds) => bounds.top));
+  const groupBottom = Math.max(...allBounds.map((bounds) => bounds.bottom));
+  const groupCenterX = (groupLeft + groupRight) / 2;
+  const groupCenterY = (groupTop + groupBottom) / 2;
+
+  if (arrangement === "distribute-horizontal") {
+    const sorted = [...selected].sort((first, second) => {
+      const firstBounds = boundsById.get(first.instanceId)!;
+      const secondBounds = boundsById.get(second.instanceId)!;
+      return firstBounds.left - secondBounds.left
+        || firstBounds.right - secondBounds.right
+        || first.instanceId.localeCompare(second.instanceId);
+    });
+    const firstBounds = boundsById.get(sorted[0].instanceId)!;
+    const lastBounds = boundsById.get(sorted.at(-1)!.instanceId)!;
+    const totalWidth = sorted.reduce(
+      (sum, component) => sum + boundsById.get(component.instanceId)!.width,
+      0,
+    );
+    const gap = (lastBounds.right - firstBounds.left - totalWidth) / (sorted.length - 1);
+    let cursor = firstBounds.left;
+    for (const component of sorted) {
+      const bounds = boundsById.get(component.instanceId)!;
+      nextPositions.set(component.instanceId, {
+        x: component.x + cursor - bounds.left,
+        y: component.y,
+      });
+      cursor += bounds.width + gap;
+    }
+  } else if (arrangement === "distribute-vertical") {
+    const sorted = [...selected].sort((first, second) => {
+      const firstBounds = boundsById.get(first.instanceId)!;
+      const secondBounds = boundsById.get(second.instanceId)!;
+      return firstBounds.top - secondBounds.top
+        || firstBounds.bottom - secondBounds.bottom
+        || first.instanceId.localeCompare(second.instanceId);
+    });
+    const firstBounds = boundsById.get(sorted[0].instanceId)!;
+    const lastBounds = boundsById.get(sorted.at(-1)!.instanceId)!;
+    const totalHeight = sorted.reduce(
+      (sum, component) => sum + boundsById.get(component.instanceId)!.height,
+      0,
+    );
+    const gap = (lastBounds.bottom - firstBounds.top - totalHeight) / (sorted.length - 1);
+    let cursor = firstBounds.top;
+    for (const component of sorted) {
+      const bounds = boundsById.get(component.instanceId)!;
+      nextPositions.set(component.instanceId, {
+        x: component.x,
+        y: component.y + cursor - bounds.top,
+      });
+      cursor += bounds.height + gap;
+    }
+  } else {
+    for (const component of selected) {
+      const bounds = boundsById.get(component.instanceId)!;
+      const position = nextPositions.get(component.instanceId)!;
+      if (arrangement === "align-left") position.x += groupLeft - bounds.left;
+      if (arrangement === "align-horizontal-center") position.x += groupCenterX - bounds.centerX;
+      if (arrangement === "align-right") position.x += groupRight - bounds.right;
+      if (arrangement === "align-top") position.y += groupTop - bounds.top;
+      if (arrangement === "align-vertical-center") position.y += groupCenterY - bounds.centerY;
+      if (arrangement === "align-bottom") position.y += groupBottom - bounds.bottom;
+    }
+  }
+
+  const changed = selected.some((component) => {
+    const position = nextPositions.get(component.instanceId)!;
+    return Math.abs(position.x - component.x) > 1e-9
+      || Math.abs(position.y - component.y) > 1e-9;
+  });
+  if (!changed) return { ok: true, project, components: selected, changed: false };
+
+  const selectedIds = new Set(uniqueIds);
+  const next = clone(project);
+  next.components = next.components.map((component) => {
+    if (!selectedIds.has(component.instanceId)) return component;
+    return { ...component, ...nextPositions.get(component.instanceId)! };
+  });
+  return {
+    ok: true,
+    project: next,
+    components: next.components.filter((component) => selectedIds.has(component.instanceId)),
     changed: true,
   };
 }

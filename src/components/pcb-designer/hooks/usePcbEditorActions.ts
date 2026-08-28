@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type Dispatch } from "react";
 import { toast } from "@/hooks/use-toast";
 import {
+  arrangeComponents as arrangeComponentsRecord,
   createKeepout as createKeepoutRecord,
   createMeasurement as createMeasurementRecord,
   duplicateKeepout as duplicateKeepoutRecord,
@@ -19,6 +20,7 @@ import {
   type PlacementResult,
 } from "../core/editor.ts";
 import type {
+  PcbComponentArrangement,
   PcbKeepout,
   PcbMeasurement,
   PcbPlacedComponent,
@@ -36,6 +38,28 @@ import { isValidBoard } from "../core/validation.ts";
 
 export const MAX_AUTO_PLACE_ITEMS = 50;
 export const MAX_AUTO_PLACE_COLLISION_TESTS = 1_000_000;
+
+const ARRANGEMENT_LABELS: Record<PcbComponentArrangement, string> = {
+  "align-left": "靠左對齊",
+  "align-horizontal-center": "水平置中",
+  "align-right": "靠右對齊",
+  "align-top": "靠上對齊",
+  "align-vertical-center": "垂直置中",
+  "align-bottom": "靠下對齊",
+  "distribute-horizontal": "水平均分",
+  "distribute-vertical": "垂直均分",
+};
+
+const ARRANGEMENT_SHORTCUTS: Record<string, PcbComponentArrangement> = {
+  l: "align-left",
+  c: "align-horizontal-center",
+  r: "align-right",
+  t: "align-top",
+  m: "align-vertical-center",
+  b: "align-bottom",
+  h: "distribute-horizontal",
+  v: "distribute-vertical",
+};
 
 export function usePcbEditorActions(
   state: PcbWorkspaceState,
@@ -225,6 +249,55 @@ export function usePcbEditorActions(
       return result;
     },
     [dispatch, state.activeProject, state.canEdit, state.documentLocked],
+  );
+  const arrangeSelectedComponents = useCallback(
+    (arrangement: PcbComponentArrangement) => {
+      if (!state.canEdit || state.documentLocked) {
+        toast({
+          title: "目前無法調整元件",
+          description: "文件已鎖定或目前為唯讀。",
+          variant: "destructive",
+        });
+        return false;
+      }
+      const selectedIds = new Set([
+        ...state.selectedObjects,
+        ...(state.selection?.kind === "component" ? [state.selection.id] : []),
+      ]);
+      const componentIds = state.activeProject.components
+        .filter((component) => selectedIds.has(component.instanceId))
+        .map((component) => component.instanceId);
+      const result = arrangeComponentsRecord(state.activeProject, componentIds, arrangement);
+      if (!result.ok) {
+        toast({
+          title: `無法${ARRANGEMENT_LABELS[arrangement]}`,
+          description: result.reason,
+          variant: "destructive",
+        });
+        return false;
+      }
+      if (!result.changed) {
+        toast({
+          title: `已${ARRANGEMENT_LABELS[arrangement]}`,
+          description: "選取的元件目前已位於目標位置。",
+        });
+        return true;
+      }
+      dispatch({ type: "project/commit", update: result.project });
+      toast({
+        title: `已${ARRANGEMENT_LABELS[arrangement]}`,
+        description: `已調整 ${result.components.length} 個元件，可按 Ctrl+Z 復原。`,
+      });
+      return true;
+    },
+    [
+      dispatch,
+      state.activeProject,
+      state.canEdit,
+      state.documentLocked,
+      state.selectedObjects,
+      state.selection,
+    ],
   );
   const moveKeepout = useCallback(
     (id: string, point: PcbPoint, bypassSnap = false): KeepoutMoveResult => {
@@ -440,6 +513,7 @@ export function usePcbEditorActions(
 
   const shortcutRef = useRef({
     activeProject: state.activeProject,
+    arrangeSelectedComponents,
     canEdit: state.canEdit,
     copySelected,
     deleteSelected,
@@ -454,6 +528,7 @@ export function usePcbEditorActions(
   });
   shortcutRef.current = {
     activeProject: state.activeProject,
+    arrangeSelectedComponents,
     canEdit: state.canEdit,
     copySelected,
     deleteSelected,
@@ -504,6 +579,14 @@ export function usePcbEditorActions(
           return;
         }
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+      }
+      if (event.altKey && !event.ctrlKey && !event.metaKey) {
+        const arrangement = ARRANGEMENT_SHORTCUTS[key];
+        if (arrangement) {
+          event.preventDefault();
+          shortcuts.arrangeSelectedComponents(arrangement);
+          return;
+        }
       }
       if (event.key === "Escape") {
         event.preventDefault();
@@ -614,6 +697,7 @@ export function usePcbEditorActions(
     placeLibraryComponent,
     placePendingPlacement,
     autoPlacePending,
+    arrangeSelectedComponents,
     selectObject,
     setViewCenter,
     resetView,

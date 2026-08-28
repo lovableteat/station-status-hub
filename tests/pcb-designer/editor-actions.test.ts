@@ -268,6 +268,160 @@ test("moves unlocked members while leaving locked members in a mixed group", () 
   );
 });
 
+test("aligns components by their rotated visual edges and centers", () => {
+  assert.equal(typeof editorModule.arrangeComponents, "function");
+  const createProject = () => {
+    const project = createBlankProject("Alignment");
+    project.components = [
+      {
+        ...structuredClone(BUILT_IN_COMPONENTS[3]),
+        instanceId: "component-a",
+        reference: "R1",
+        width: 10,
+        height: 4,
+        x: 10,
+        y: 10,
+        rotation: 0,
+        layer: "top" as const,
+        locked: false,
+      },
+      {
+        ...structuredClone(BUILT_IN_COMPONENTS[4]),
+        instanceId: "component-b",
+        reference: "C1",
+        width: 4,
+        height: 10,
+        x: 30,
+        y: 25,
+        rotation: 90,
+        layer: "top" as const,
+        locked: false,
+      },
+    ];
+    return project;
+  };
+  const ids = ["component-a", "component-b"];
+  const expectations = [
+    ["align-left", [[10, 10], [10, 25]]],
+    ["align-horizontal-center", [[20, 10], [20, 25]]],
+    ["align-right", [[30, 10], [30, 25]]],
+    ["align-top", [[10, 10], [30, 10]]],
+    ["align-vertical-center", [[10, 17.5], [30, 17.5]]],
+    ["align-bottom", [[10, 25], [30, 25]]],
+  ] as const;
+
+  for (const [arrangement, expected] of expectations) {
+    const project = createProject();
+    const before = structuredClone(project);
+    const result = editorModule.arrangeComponents(project, ids, arrangement);
+    assert.equal(result.ok, true, arrangement);
+    assert.equal(result.changed, true, arrangement);
+    assert.deepEqual(
+      result.project.components.map(({ x, y }: { x: number; y: number }) => [x, y]),
+      expected,
+      arrangement,
+    );
+    assert.deepEqual(project, before, `${arrangement} must not mutate the source project`);
+  }
+});
+
+test("distributes component gaps evenly while keeping outer components fixed", () => {
+  const project = createBlankProject("Distribution");
+  project.components = [
+    {
+      ...structuredClone(BUILT_IN_COMPONENTS[3]),
+      instanceId: "component-a",
+      reference: "R1",
+      width: 10,
+      height: 10,
+      x: 10,
+      y: 10,
+      rotation: 0,
+      layer: "top" as const,
+      locked: false,
+    },
+    {
+      ...structuredClone(BUILT_IN_COMPONENTS[4]),
+      instanceId: "component-b",
+      reference: "C1",
+      width: 20,
+      height: 20,
+      x: 35,
+      y: 35,
+      rotation: 0,
+      layer: "top" as const,
+      locked: false,
+    },
+    {
+      ...structuredClone(BUILT_IN_COMPONENTS[5]),
+      instanceId: "component-c",
+      reference: "L1",
+      width: 10,
+      height: 10,
+      x: 80,
+      y: 80,
+      rotation: 0,
+      layer: "top" as const,
+      locked: false,
+    },
+  ];
+  const ids = project.components.map((component) => component.instanceId);
+
+  const horizontal = editorModule.arrangeComponents(project, ids, "distribute-horizontal");
+  assert.equal(horizontal.ok, true);
+  assert.deepEqual(horizontal.project.components.map(({ x }: { x: number }) => x), [10, 45, 80]);
+  assert.deepEqual(horizontal.project.components.map(({ y }: { y: number }) => y), [10, 35, 80]);
+
+  const vertical = editorModule.arrangeComponents(project, ids, "distribute-vertical");
+  assert.equal(vertical.ok, true);
+  assert.deepEqual(vertical.project.components.map(({ x }: { x: number }) => x), [10, 35, 80]);
+  assert.deepEqual(vertical.project.components.map(({ y }: { y: number }) => y), [10, 45, 80]);
+});
+
+test("alignment validates selection size and refuses partial locked moves", () => {
+  const project = createBlankProject("Alignment guards");
+  project.components = [
+    {
+      ...structuredClone(BUILT_IN_COMPONENTS[3]),
+      instanceId: "component-a",
+      reference: "R1",
+      x: 10,
+      y: 10,
+      rotation: 0,
+      layer: "top" as const,
+      locked: false,
+    },
+    {
+      ...structuredClone(BUILT_IN_COMPONENTS[4]),
+      instanceId: "component-b",
+      reference: "C1",
+      x: 30,
+      y: 30,
+      rotation: 0,
+      layer: "top" as const,
+      locked: true,
+    },
+  ];
+
+  const one = editorModule.arrangeComponents(project, ["component-a"], "align-left");
+  assert.equal(one.ok, false);
+  assert.match(one.reason, /2 個/);
+  const twoForDistribution = editorModule.arrangeComponents(
+    project,
+    ["component-a", "component-b"],
+    "distribute-horizontal",
+  );
+  assert.equal(twoForDistribution.ok, false);
+  assert.match(twoForDistribution.reason, /3 個/);
+  const locked = editorModule.arrangeComponents(
+    project,
+    ["component-a", "component-b"],
+    "align-top",
+  );
+  assert.equal(locked.ok, false);
+  assert.match(locked.reason, /鎖定元件/);
+});
+
 test("releasing a component without moving it is a successful no-op", () => {
   const project = createBlankProject("No-op move");
   const placed = editorModule.placeLibraryComponent(project, BUILT_IN_COMPONENTS[3]);
