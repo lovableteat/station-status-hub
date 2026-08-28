@@ -6,6 +6,7 @@ import { Shield } from "lucide-react";
 interface PermissionGuardProps {
   children: React.ReactNode;
   module?: string;
+  modules?: string[];
   requireEdit?: boolean;
   fallback?: React.ReactNode;
 }
@@ -13,6 +14,7 @@ interface PermissionGuardProps {
 export function PermissionGuard({ 
   children, 
   module, 
+  modules,
   requireEdit = false, 
   fallback 
 }: PermissionGuardProps) {
@@ -26,9 +28,10 @@ export function PermissionGuard({
     );
   }
 
-  if (module) {
-    const hasViewAccess = canViewModule(module);
-    const hasEditAccess = canEditModule(module);
+  const guardedModules = modules?.length ? modules : module ? [module] : [];
+  if (guardedModules.length) {
+    const hasViewAccess = guardedModules.some((moduleId) => canViewModule(moduleId));
+    const hasEditAccess = guardedModules.some((moduleId) => canEditModule(moduleId));
 
     if (!hasViewAccess) {
       return fallback || (

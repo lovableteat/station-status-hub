@@ -822,9 +822,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               variant="outline"
               size="sm"
               className="h-8 shrink-0 border-cyan-300/30 bg-cyan-300/[0.07] text-cyan-100 hover:bg-cyan-300/[0.13]"
-              onClick={() => onNavigate?.("monitor", { attention: "1" })}
+              onClick={() => onNavigate?.("test-tracker", { attention: "1", trackerView: "board" })}
             >
-              開啟生產監控牆
+              開啟生產看板
             </Button>
           </div>
 

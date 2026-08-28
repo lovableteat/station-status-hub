@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
-  Factory,
   FileSliders,
   FolderKanban,
   Gauge,
@@ -35,7 +34,6 @@ const navigationItems = [
   { id: "dashboard", label: "系統儀表板", icon: Gauge },
   { id: "test-tracker", label: "L10 測試追蹤", icon: ListChecks },
   { id: "flow-info", label: "L10 流程設定", icon: FileSliders },
-  { id: "monitor", label: "生產監控牆", icon: Factory },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle },
   { id: "tools", label: "工具與資產", icon: Wrench },
   { id: "test-plan", label: "資料儲存", icon: FolderKanban },
@@ -55,6 +53,10 @@ export function Sidebar({
   });
   const { canViewModule } = usePermissions();
   const isCompact = !isMobile && collapsed;
+  const canViewNavigationItem = (moduleId: string) =>
+    moduleId === "test-tracker"
+      ? canViewModule("test-tracker") || canViewModule("monitor")
+      : canViewModule(moduleId);
 
   useEffect(() => {
     if (!isMobile) {
@@ -75,7 +77,7 @@ export function Sidebar({
         className="sticky top-[var(--mobile-header-height)] z-30 flex w-full shrink-0 snap-x gap-1 overflow-x-auto rounded-xl border border-cyan-200/20 bg-[#071522]/96 p-1 shadow-[0_14px_34px_-28px_rgba(34,211,238,0.75)] backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:top-[72px]"
       >
         {navigationItems.map((item) => {
-          if (!canViewModule(item.id)) return null;
+          if (!canViewNavigationItem(item.id)) return null;
           const Icon = item.icon;
           const isActive = activeModule === item.id;
           return (
@@ -145,7 +147,7 @@ export function Sidebar({
         <nav className="flex-1 overflow-y-auto p-2">
           <div className="space-y-1">
             {navigationItems.map((item) => {
-              if (!canViewModule(item.id)) return null;
+              if (!canViewNavigationItem(item.id)) return null;
               const Icon = item.icon;
               const isActive = activeModule === item.id;
               const button = (

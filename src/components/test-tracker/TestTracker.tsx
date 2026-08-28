@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -11,7 +11,6 @@ import {
   FileText,
   Gauge,
   Hourglass,
-  LayoutGrid,
   List,
   Search,
   SlidersHorizontal,
@@ -39,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useFlowVersions } from "@/hooks/useFlowVersions";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useTestTrackerData } from "@/hooks/useTestTrackerData";
 import { fetchAllPages } from "@/hooks/fetchAllPages";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,14 +47,12 @@ import { cn } from "@/lib/utils";
 import { BulkResetDialog } from "./BulkResetDialog";
 import { ExportManager } from "./ExportManager";
 import { PDFExportDialog } from "./pdf/PDFExportDialog";
-import { SegmentedProgress } from "./SegmentedProgress";
 import { SystemCloneDialog } from "./SystemCloneDialog";
 import { SystemEditDialog } from "./SystemEditDialog";
 import { SystemManager } from "./SystemManager";
 import { SystemProgressSheet } from "./SystemProgressSheet";
 import { TestProgressTable } from "./TestProgressTable";
 import {
-  buildTrackerBoardLanes,
   createStationIncompleteSystemIds,
   filterAndSortTrackerSystems,
   normalizeTrackerSystemStatus,
@@ -62,7 +60,6 @@ import {
 } from "./testTrackerFilters";
 import type { TrackerSort } from "./testTrackerFilters";
 import {
-  createSystemBlockedLookup,
   DEFAULT_TRACKER_PAGE_SIZE,
   TRACKER_PAGE_SIZE_OPTIONS,
 } from "./testTrackerPresentation";
@@ -70,6 +67,12 @@ import type { TrackerLinkedIssue } from "./testTrackerPresentation";
 
 type StatusFilter = "all" | "未開始" | "進行中" | "已完成";
 type TrackerView = "table" | "board";
+
+const ProductionMonitor = lazy(() =>
+  import("@/components/production/ProductionMonitor").then((module) => ({
+    default: module.ProductionMonitor,
+  }))
+);
 
 const KPI_TONES = {
   blue: {
@@ -190,6 +193,9 @@ export function TestTracker() {
     updateProgress,
   } = useTestTrackerData();
   const { activeProject, activeProjectId } = useTestProject();
+  const { canViewModule } = usePermissions();
+  const canViewList = canViewModule("test-tracker");
+  const canViewProductionBoard = canViewModule("monitor");
   const {
     activeVersion,
     selectedVersionId,
@@ -233,10 +239,15 @@ export function TestTracker() {
   const [urlFiltersHydrated, setUrlFiltersHydrated] = useState(false);
   const [view, setView] = useState<TrackerView>(() => {
     if (typeof window === "undefined") return "table";
-    return new URLSearchParams(window.location.search).get("trackerView") === "board"
+    const params = new URLSearchParams(window.location.search);
+    return params.get("trackerView") === "board" || params.get("module") === "monitor"
       ? "board"
       : "table";
   });
+  const [attentionFilter, setAttentionFilter] = useState(() =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("attention") === "1"
+  );
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TRACKER_PAGE_SIZE);
   const [editingSystemId, setEditingSystemId] = useState<string | null>(null);
@@ -335,8 +346,10 @@ export function TestTracker() {
     setQuery("sort", sortOrder === "machine-asc" ? "" : sortOrder);
     setQuery("system", systemFilter);
     setQuery("excludeStatus", excludeCompleted ? "completed" : "");
+    setQuery("attention", attentionFilter ? "1" : "");
     window.history.replaceState({}, "", url);
   }, [
+    attentionFilter,
     engineerFilter,
     excludeCompleted,
     searchTerm,
@@ -346,6 +359,16 @@ export function TestTracker() {
     systemFilter,
     urlFiltersHydrated,
   ]);
+
+  useEffect(() => {
+    if (view === "table" && !canViewList && canViewProductionBoard) {
+      setView("board");
+      updateTrackerViewQuery("board");
+    } else if (view === "board" && !canViewProductionBoard && canViewList) {
+      setView("table");
+      updateTrackerViewQuery("table");
+    }
+  }, [canViewList, canViewProductionBoard, view]);
 
   useEffect(() => {
     if (!selectedVersionId || selectedVersionId === activeVersion?.id) {
@@ -450,20 +473,37 @@ export function TestTracker() {
     [baseFilteredSystems]
   );
 
+  const attentionSystemIds = useMemo(
+    () =>
+      new Set(
+        [...systems]
+          .filter(
+            (system) =>
+              normalizeTrackerSystemStatus(system) !== "已完成" &&
+              system.exclude_from_dashboard !== true
+          )
+          .sort(
+            (left, right) =>
+              (left.overall_progress ?? 0) - (right.overall_progress ?? 0) ||
+              left.system_name.localeCompare(right.system_name, "zh-Hant")
+          )
+          .slice(0, 5)
+          .map((system) => system.id)
+      ),
+    [systems]
+  );
+
   const filteredSystems = useMemo(
-    () => filterAndSortTrackerSystems(baseFilteredSystems, {
-      sort: sortOrder,
-      status: statusFilter,
-    }),
-    [baseFilteredSystems, sortOrder, statusFilter]
-  );
-  const boardLanes = useMemo(
-    () => buildTrackerBoardLanes(displayStations, filteredSystems),
-    [displayStations, filteredSystems]
-  );
-  const systemBlockedLookup = useMemo(
-    () => createSystemBlockedLookup(displayItems, progress, linkedIssues),
-    [displayItems, linkedIssues, progress]
+    () => {
+      const nextSystems = filterAndSortTrackerSystems(baseFilteredSystems, {
+        sort: sortOrder,
+        status: statusFilter,
+      });
+      return attentionFilter
+        ? nextSystems.filter((system) => attentionSystemIds.has(system.id))
+        : nextSystems;
+    },
+    [attentionFilter, attentionSystemIds, baseFilteredSystems, sortOrder, statusFilter]
   );
   const pageCount = Math.max(1, Math.ceil(filteredSystems.length / pageSize));
   const currentPage = Math.min(page, pageCount);
@@ -523,6 +563,8 @@ export function TestTracker() {
   );
 
   const changeView = (nextView: TrackerView) => {
+    if (nextView === "table" && !canViewList) return;
+    if (nextView === "board" && !canViewProductionBoard) return;
     setView(nextView);
     updateTrackerViewQuery(nextView);
   };
@@ -538,6 +580,7 @@ export function TestTracker() {
     statusFilter !== "all",
     Boolean(systemFilter),
     excludeCompleted,
+    attentionFilter,
   ].filter(Boolean).length;
 
   const clearTrackerFilters = () => {
@@ -547,6 +590,7 @@ export function TestTracker() {
     setStatusFilter("all");
     setSystemFilter("");
     setExcludeCompleted(false);
+    setAttentionFilter(false);
   };
 
   const trackerFilterToolbar = (
@@ -604,23 +648,29 @@ export function TestTracker() {
             <SelectItem value="created-asc">建立時間：舊到新</SelectItem>
           </SelectContent>
         </Select>
-        <div className="flex h-9 items-center gap-1 rounded-lg border border-[#315574] bg-[#06111f] p-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn("h-7 w-8 rounded-md", view === "table" && "bg-[#183654] text-cyan-100")}
-            onClick={() => changeView("table")}
-          >
-            <List className="h-4 w-4" /><span className="sr-only">表格檢視</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn("h-7 w-8 rounded-md", view === "board" && "bg-[#183654] text-cyan-100")}
-            onClick={() => changeView("board")}
-          >
-            <LayoutGrid className="h-4 w-4" /><span className="sr-only">站點看板</span>
-          </Button>
+        <div className="flex h-9 items-center gap-1 rounded-lg border border-[#315574] bg-[#06111f] p-1" aria-label="L10 顯示方式">
+          {canViewList && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-pressed={view === "table"}
+              className={cn("h-7 rounded-md px-2.5 text-xs", view === "table" && "bg-[#4c8dff] text-[#06111f] hover:bg-[#6ba2ff] hover:text-[#06111f]")}
+              onClick={() => changeView("table")}
+            >
+              <List className="mr-1.5 h-4 w-4" />列表
+            </Button>
+          )}
+          {canViewProductionBoard && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-pressed={view === "board"}
+              className={cn("h-7 rounded-md px-2.5 text-xs", view === "board" && "bg-[#4c8dff] text-[#06111f] hover:bg-[#6ba2ff] hover:text-[#06111f]")}
+              onClick={() => changeView("board")}
+            >
+              <Activity className="mr-1.5 h-4 w-4" />生產看板
+            </Button>
+          )}
         </div>
         <Badge variant="outline" className="font-data ml-auto h-8 rounded-lg border-blue-300/35 bg-blue-300/10 px-3 text-blue-100">
           {filteredSystems.length} 台
@@ -638,6 +688,7 @@ export function TestTracker() {
           {engineerFilter !== "all" && <button type="button" onClick={() => setEngineerFilter("all")} className="rounded-full border border-violet-300/30 bg-violet-300/10 px-2 py-1 text-[11px] text-violet-100">工程師：{engineerFilter} <X className="ml-1 inline h-3 w-3" /></button>}
           {systemFilter && <button type="button" onClick={() => setSystemFilter("")} className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-[11px] text-emerald-100">機台：{systemFilter} <X className="ml-1 inline h-3 w-3" /></button>}
           {excludeCompleted && <button type="button" onClick={() => setExcludeCompleted(false)} className="rounded-full border border-amber-300/35 bg-amber-300/10 px-2 py-1 text-[11px] text-amber-100">排除：已完成 <X className="ml-1 inline h-3 w-3" /></button>}
+          {attentionFilter && <button type="button" onClick={() => setAttentionFilter(false)} className="rounded-full border border-amber-300/35 bg-amber-300/10 px-2 py-1 text-[11px] text-amber-100">範圍：需關注機台 <X className="ml-1 inline h-3 w-3" /></button>}
           {activeFilterCount === 0 && <span className="text-[11px] text-[#7895aa]">顯示全部機台</span>}
           <Button variant="ghost" size="sm" className="h-7 text-xs" disabled={activeFilterCount === 0} onClick={clearTrackerFilters}>
             清除全部
@@ -796,53 +847,19 @@ export function TestTracker() {
           </div>
         </>
       ) : (
-        <div className="flex min-h-[430px] gap-3 overflow-x-auto pb-2">
-          {boardLanes.map((lane) => (
-              <section key={lane.id} className="maintenance-panel min-w-[250px] flex-1 overflow-hidden">
-                <div className="flex h-11 items-center justify-between border-b border-[#2a526f]/70 px-3">
-                  <h2 className="truncate text-sm font-semibold text-[#f3f8fc]">{lane.label}</h2>
-                  <Badge variant="outline" className="font-data rounded-md">{lane.systems.length}</Badge>
-                </div>
-                <div className="max-h-[calc(100vh-348px)] space-y-2 overflow-y-auto p-2">
-                  {lane.systems.map((system) => {
-                    const blocked = systemBlockedLookup.get(system.id) ?? 0;
-                    return (
-                      <button
-                        key={system.id}
-                        type="button"
-                        className={cn(
-                          "w-full rounded-lg border bg-[#10263a] p-2.5 text-left",
-                          blocked
-                            ? "border-rose-300/60 bg-rose-950/25 hover:border-rose-200"
-                            : "border-[#2a526f] hover:border-cyan-300/55",
-                        )}
-                        onClick={() => lane.stationId
-                          ? openStationProgress(system.id, lane.stationId)
-                          : openSystemProgress(system.id)}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-semibold text-[#f3f8fc]">{system.system_name}</span>
-                          <span className={cn("font-data text-xs text-cyan-100", blocked && "text-rose-100")}>{system.overall_progress ?? 0}%</span>
-                        </div>
-                        <div className="mt-1 truncate text-xs text-[#a9c0d1]">{system.serial_number || "無序號"} · {system.assigned_engineer || "未指定工程師"}</div>
-                        <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[#8fabbe]">
-                          <span>{normalizeTrackerSystemStatus(system)}</span>
-                          {blocked > 0 && <span className="font-semibold text-rose-200">Blocked {blocked}</span>}
-                        </div>
-                        <SegmentedProgress
-                          value={system.overall_progress ?? 0}
-                          tone={blocked ? "danger" : "auto"}
-                          className="mt-2"
-                          label={`${system.system_name} 整體進度`}
-                        />
-                      </button>
-                    );
-                  })}
-                  {!lane.systems.length && <div className="py-8 text-center text-xs text-[#a9c0d1]">目前沒有機台</div>}
-                </div>
-              </section>
-          ))}
-        </div>
+        <Suspense fallback={<MaintenanceLoading label="正在載入生產看板" />}>
+          <ProductionMonitor
+            embedded
+            systemsOverride={filteredSystems}
+            stationsOverride={displayStations}
+            testItemsOverride={displayItems}
+            progressOverride={progress}
+            stationFilterOverride={selectedStation?.id ?? "all"}
+            attentionFilterOverride={attentionFilter}
+            attentionSystemIdsOverride={attentionSystemIds}
+            onAttentionFilterChange={setAttentionFilter}
+          />
+        </Suspense>
       )}
 
       <SystemProgressSheet

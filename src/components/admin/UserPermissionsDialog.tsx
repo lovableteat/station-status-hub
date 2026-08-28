@@ -59,8 +59,8 @@ const DETAIL_PERMISSION_SECTIONS: Array<{
   {
     workspaceId: "station-status",
     title: "機台維修紀錄中心內頁",
-    description: "控制儀表板、測試流程、產線、問題與工具等維修工作頁面。",
-    groupKeys: ["dashboard", "test_tracker", "flow_info", "issues", "production", "tools"],
+    description: "控制儀表板、L10 列表與生產看板、測試流程、問題與工具等維修工作頁面。",
+    groupKeys: ["dashboard", "test_tracker", "flow_info", "issues", "tools"],
   },
   {
     workspaceId: "user-management",

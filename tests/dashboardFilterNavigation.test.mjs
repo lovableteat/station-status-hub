@@ -20,8 +20,11 @@ test("station cards navigate to L10 with station and non-completed filters", () 
 });
 
 test("attention actions target the correct workspaces with automatic filters", () => {
-  assert.match(dashboard, /開啟生產監控牆/);
-  assert.match(dashboard, /onNavigate\?\.\("monitor",\s*\{\s*attention:\s*"1"\s*\}\)/);
+  assert.match(dashboard, /開啟生產看板/);
+  assert.match(
+    dashboard,
+    /onNavigate\?\.\("test-tracker",\s*\{\s*attention:\s*"1",\s*trackerView:\s*"board"\s*\}\)/,
+  );
   assert.match(dashboard, /onNavigate\?\.\("test-tracker",\s*\{\s*system:\s*system\.id\s*\}\)/);
 });
 
@@ -37,6 +40,11 @@ test("workspace navigation preserves all automatic filter query keys", () => {
   for (const key of ["attention", "excludeStatus", "sort", "status", "trackerSearch", "engineer"]) {
     assert.match(index, new RegExp(`"${key}"`));
   }
+});
+
+test("legacy monitor links are normalized into the merged L10 production board", () => {
+  assert.match(index, /module === "monitor" \? "test-tracker" : module/);
+  assert.match(index, /trackerView: "board"/);
 });
 
 test("deep links are not cleared before database permissions finish loading", () => {

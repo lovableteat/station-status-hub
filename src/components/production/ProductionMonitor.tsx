@@ -140,9 +140,38 @@ function formatClock(value?: string | null) {
   }).format(date);
 }
 
-export function ProductionMonitor() {
+type UnifiedData = ReturnType<typeof useUnifiedData>;
+
+interface ProductionMonitorProps {
+  embedded?: boolean;
+  systemsOverride?: UnifiedData["systems"];
+  stationsOverride?: UnifiedData["stations"];
+  testItemsOverride?: UnifiedData["testItems"];
+  progressOverride?: UnifiedData["progress"];
+  stationFilterOverride?: string;
+  attentionFilterOverride?: boolean;
+  attentionSystemIdsOverride?: ReadonlySet<string>;
+  onAttentionFilterChange?: (active: boolean) => void;
+}
+
+export function ProductionMonitor({
+  attentionFilterOverride,
+  attentionSystemIdsOverride,
+  embedded = false,
+  onAttentionFilterChange,
+  progressOverride,
+  stationFilterOverride,
+  stationsOverride,
+  systemsOverride,
+  testItemsOverride,
+}: ProductionMonitorProps = {}) {
   const { activeProject } = useTestProject();
-  const { isLoading, progress, stations, systems, testItems } = useUnifiedData();
+  const unifiedData = useUnifiedData();
+  const isLoading = embedded ? false : unifiedData.isLoading;
+  const progress = progressOverride ?? unifiedData.progress;
+  const stations = stationsOverride ?? unifiedData.stations;
+  const systems = systemsOverride ?? unifiedData.systems;
+  const testItems = testItemsOverride ?? unifiedData.testItems;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<MonitorFilter>("all");
@@ -150,13 +179,19 @@ export function ProductionMonitor() {
   const [engineerFilter, setEngineerFilter] = useState("all");
   const [onlyErrors, setOnlyErrors] = useState(false);
   const [onlyOverdue, setOnlyOverdue] = useState(false);
-  const [attentionFilter, setAttentionFilter] = useState(() =>
+  const [localAttentionFilter, setLocalAttentionFilter] = useState(() =>
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("attention") === "1"
   );
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const attentionFilter = attentionFilterOverride ?? localAttentionFilter;
+  const effectiveStationFilter = stationFilterOverride ?? stationFilter;
+  const setAttentionFilter = (active: boolean) => {
+    if (onAttentionFilterChange) onAttentionFilterChange(active);
+    else setLocalAttentionFilter(active);
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -170,12 +205,13 @@ export function ProductionMonitor() {
   }, []);
 
   useEffect(() => {
+    if (attentionFilterOverride !== undefined) return;
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
     if (attentionFilter) url.searchParams.set("attention", "1");
     else url.searchParams.delete("attention");
     window.history.replaceState({}, "", url);
-  }, [attentionFilter]);
+  }, [attentionFilter, attentionFilterOverride]);
 
   const sortedStations = useMemo(
     () => [...stations].sort((left, right) => left.station_order - right.station_order),
@@ -305,9 +341,9 @@ export function ProductionMonitor() {
     [systems]
   );
 
-  const attentionSystemIds = useMemo(() => new Set(
+  const calculatedAttentionSystemIds = useMemo(() => new Set(
     systemViews
-      .filter((view) => view.state !== "completed" && view.system.include_in_dashboard !== false)
+      .filter((view) => view.state !== "completed" && view.system.exclude_from_dashboard !== true)
       .sort((left, right) =>
         Number(right.state === "error") - Number(left.state === "error") ||
         Number(right.overdue) - Number(left.overdue) ||
@@ -317,6 +353,7 @@ export function ProductionMonitor() {
       .slice(0, 5)
       .map((view) => view.system.id)
   ), [systemViews]);
+  const attentionSystemIds = attentionSystemIdsOverride ?? calculatedAttentionSystemIds;
 
   const filteredViews = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
@@ -328,7 +365,7 @@ export function ProductionMonitor() {
         system.serial_number?.toLowerCase().includes(keyword) ||
         system.assigned_engineer?.toLowerCase().includes(keyword);
       const matchesState = statusFilter === "all" || statusFilter === view.state;
-      const matchesStation = stationFilter === "all" || stationFilter === view.laneId;
+      const matchesStation = effectiveStationFilter === "all" || effectiveStationFilter === view.laneId;
       const matchesEngineer =
         engineerFilter === "all" || system.assigned_engineer === engineerFilter;
       return (
@@ -341,7 +378,7 @@ export function ProductionMonitor() {
         (!onlyOverdue || view.overdue)
       );
     });
-  }, [attentionFilter, attentionSystemIds, engineerFilter, onlyErrors, onlyOverdue, searchTerm, stationFilter, statusFilter, systemViews]);
+  }, [attentionFilter, attentionSystemIds, effectiveStationFilter, engineerFilter, onlyErrors, onlyOverdue, searchTerm, statusFilter, systemViews]);
 
   const stateCounts = useMemo(
     () =>
@@ -362,14 +399,14 @@ export function ProductionMonitor() {
       label: station.station_name,
       stationId: station.id as string | null,
     }));
-    if (systems.length) {
+    if (systems.length || (embedded && sortedStations.length)) {
       nextLanes.push({ id: "completed", label: "最近完成", stationId: null });
     }
     if (!sortedStations.length && systems.length) {
       nextLanes.unshift({ id: "unassigned", label: "未分配站點", stationId: null });
     }
     return nextLanes;
-  }, [sortedStations, systems.length]);
+  }, [embedded, sortedStations, systems.length]);
 
   const selectedView = systemViews.find((view) => view.system.id === selectedSystemId) ?? null;
 
@@ -390,7 +427,7 @@ export function ProductionMonitor() {
     return <MaintenanceLoading label="載入生產監控資料" />;
   }
 
-  if (!systems.length) {
+  if (!embedded && !systems.length) {
     return (
       <div className="maintenance-page space-y-3">
         <MaintenancePageHeader
@@ -417,100 +454,71 @@ export function ProductionMonitor() {
     <div
       ref={rootRef}
       className={cn(
-        "maintenance-page space-y-3",
+        embedded ? "space-y-2" : "maintenance-page space-y-3",
         isFullscreen && "min-h-screen overflow-auto bg-[#06111f] p-4"
       )}
     >
-      <MaintenancePageHeader
-        icon={Factory}
-        title="生產監控牆"
-        description={`${activeProject?.name || "目前專案"} · ${systems.length} 台機台即時狀態`}
-        actions={
-          <Button variant="outline" size="sm" className="h-9 rounded-lg" onClick={toggleFullscreen}>
-            {isFullscreen ? (
-              <Minimize2 className="mr-2 h-4 w-4" />
-            ) : (
-              <Expand className="mr-2 h-4 w-4" />
-            )}
-            {isFullscreen ? "離開全螢幕" : "全螢幕"}
-          </Button>
-        }
-      />
+      {!embedded && (
+        <>
+          <MaintenancePageHeader
+            icon={Factory}
+            title="生產監控牆"
+            description={`${activeProject?.name || "目前專案"} · ${systems.length} 台機台即時狀態`}
+            actions={
+              <Button variant="outline" size="sm" className="h-9 rounded-lg" onClick={toggleFullscreen}>
+                {isFullscreen ? (
+                  <Minimize2 className="mr-2 h-4 w-4" />
+                ) : (
+                  <Expand className="mr-2 h-4 w-4" />
+                )}
+                {isFullscreen ? "離開全螢幕" : "全螢幕"}
+              </Button>
+            }
+          />
 
-      <section className="grid grid-cols-2 gap-2 lg:grid-cols-5">
-        <MonitorKpi
-          icon={Server}
-          label="總機台"
-          value={systems.length}
-          detail="全部專案機台"
-          tone="neutral"
-        />
-        <MonitorKpi
-          icon={Clock3}
-          label="進行中"
-          value={stateCounts.active}
-          detail={`占比 ${Math.round((stateCounts.active / systems.length) * 100)}%`}
-          tone="blue"
-        />
-        <MonitorKpi
-          icon={CheckCircle2}
-          label="已完成"
-          value={stateCounts.completed}
-          detail={`占比 ${Math.round((stateCounts.completed / systems.length) * 100)}%`}
-          tone="emerald"
-        />
-        <MonitorKpi
-          icon={AlertTriangle}
-          label="異常"
-          value={stateCounts.error}
-          detail={stateCounts.error ? "需要立即處理" : "目前無阻塞"}
-          tone="rose"
-        />
-        <MonitorKpi
-          icon={TimerReset}
-          label="測站超時"
-          value={stateCounts.overdue}
-          detail={stateCounts.overdue ? "已超過站點預估工時" : "皆在預估時間內"}
-          tone="amber"
-        />
-      </section>
+          <section className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+            <MonitorKpi icon={Server} label="總機台" value={systems.length} detail="全部專案機台" tone="neutral" />
+            <MonitorKpi icon={Clock3} label="進行中" value={stateCounts.active} detail={`占比 ${Math.round((stateCounts.active / systems.length) * 100)}%`} tone="blue" />
+            <MonitorKpi icon={CheckCircle2} label="已完成" value={stateCounts.completed} detail={`占比 ${Math.round((stateCounts.completed / systems.length) * 100)}%`} tone="emerald" />
+            <MonitorKpi icon={AlertTriangle} label="異常" value={stateCounts.error} detail={stateCounts.error ? "需要立即處理" : "目前無阻塞"} tone="rose" />
+            <MonitorKpi icon={TimerReset} label="測站超時" value={stateCounts.overdue} detail={stateCounts.overdue ? "已超過站點預估工時" : "皆在預估時間內"} tone="amber" />
+          </section>
+        </>
+      )}
 
       <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
-        <div className="relative min-w-[260px] flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a9c0d1]" />
-          <Input
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))}
-            className="h-9 border-[#2a526f] bg-[#071522] pl-9 text-[#f3f8fc]"
-            placeholder="搜尋機台、序號或工程師"
-          />
-        </div>
-        <Select value={stationFilter} onValueChange={setStationFilter}>
-          <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部站點</SelectItem>
-            {sortedStations.map((station) => (
-              <SelectItem key={station.id} value={station.id}>{station.station_name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as MonitorFilter)}>
-          <SelectTrigger className="h-9 w-[135px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部狀態</SelectItem>
-            <SelectItem value="active">進行中</SelectItem>
-            <SelectItem value="completed">已完成</SelectItem>
-            <SelectItem value="error">異常</SelectItem>
-            <SelectItem value="waiting">待開始</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={engineerFilter} onValueChange={setEngineerFilter}>
-          <SelectTrigger className="h-9 w-[145px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部工程師</SelectItem>
-            {engineers.map((engineer) => <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {!embedded && (
+          <>
+            <div className="relative min-w-[260px] flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a9c0d1]" />
+              <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))} className="h-9 border-[#2a526f] bg-[#071522] pl-9 text-[#f3f8fc]" placeholder="搜尋機台、序號或工程師" />
+            </div>
+            <Select value={stationFilter} onValueChange={setStationFilter}>
+              <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部站點</SelectItem>
+                {sortedStations.map((station) => <SelectItem key={station.id} value={station.id}>{station.station_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as MonitorFilter)}>
+              <SelectTrigger className="h-9 w-[135px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部狀態</SelectItem>
+                <SelectItem value="active">進行中</SelectItem>
+                <SelectItem value="completed">已完成</SelectItem>
+                <SelectItem value="error">異常</SelectItem>
+                <SelectItem value="waiting">待開始</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={engineerFilter} onValueChange={setEngineerFilter}>
+              <SelectTrigger className="h-9 w-[145px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部工程師</SelectItem>
+                {engineers.map((engineer) => <SelectItem key={engineer} value={engineer}>{engineer}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </>
+        )}
         <button
           type="button"
           aria-pressed={onlyErrors}
@@ -537,6 +545,26 @@ export function ProductionMonitor() {
         >
           <Hourglass className="h-3.5 w-3.5" />只看超時
         </button>
+        {onlyErrors && (
+          <button
+            type="button"
+            className="flex h-8 items-center gap-1.5 rounded-full border border-rose-300/45 bg-rose-300/12 px-2.5 text-[11px] font-semibold text-rose-100"
+            onClick={() => setOnlyErrors(false)}
+            aria-label="清除只看異常篩選"
+          >
+            狀態：異常 <X className="h-3 w-3" aria-hidden="true" />
+          </button>
+        )}
+        {onlyOverdue && (
+          <button
+            type="button"
+            className="flex h-8 items-center gap-1.5 rounded-full border border-amber-300/45 bg-amber-300/12 px-2.5 text-[11px] font-semibold text-amber-100"
+            onClick={() => setOnlyOverdue(false)}
+            aria-label="清除只看超時篩選"
+          >
+            時效：已超時 <X className="h-3 w-3" aria-hidden="true" />
+          </button>
+        )}
         {attentionFilter && (
           <button
             type="button"
@@ -547,6 +575,12 @@ export function ProductionMonitor() {
             需關注機台
             <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
+        )}
+        {embedded && (
+          <Button variant="outline" size="sm" className="h-9 rounded-lg" onClick={toggleFullscreen}>
+            {isFullscreen ? <Minimize2 className="mr-2 h-4 w-4" /> : <Expand className="mr-2 h-4 w-4" />}
+            {isFullscreen ? "離開全螢幕" : "看板全螢幕"}
+          </Button>
         )}
         <Badge variant="outline" className="font-data ml-auto h-8 rounded-lg border-blue-300/35 bg-blue-300/10 px-3 text-blue-100">
           {filteredViews.length} 台
@@ -677,8 +711,12 @@ export function ProductionMonitor() {
                 {!laneViews.length && (
                   <div className="flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed border-[#2a526f] bg-[#071522]/70 px-4 text-center">
                     <Server className="h-8 w-8 text-[#476b83]" />
-                    <p className="mt-3 text-sm font-medium text-[#9eb8ca]">目前無機台</p>
-                    <p className="mt-1 text-[11px] text-[#6f91a8]">調整篩選條件或等待機台進站</p>
+                    <p className="mt-3 text-sm font-medium text-[#9eb8ca]">
+                      {embedded ? "目前篩選條件沒有符合的機台" : "目前無機台"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-[#6f91a8]">
+                      {embedded ? "可調整上方共用條件" : "調整篩選條件或等待機台進站"}
+                    </p>
                   </div>
                 )}
               </div>

@@ -24,8 +24,9 @@ test("L10 exposes a persistent filter toolbar with sorting and visible active fi
   assert.doesNotMatch(tracker, /控制項收在這裡/);
 });
 
-test("board view uses complete lanes instead of current-station-only filtering", () => {
-  assert.match(tracker, /buildTrackerBoardLanes/);
+test("board view uses the complete production monitor lanes instead of current-station-only filtering", () => {
+  assert.match(tracker, /<ProductionMonitor/);
+  assert.match(tracker, /stationsOverride=\{displayStations\}/);
   assert.doesNotMatch(tracker, /filteredSystems\.filter\(\s*\(system\) => system\.current_station === station\.station_name/);
   assert.match(filters, /待開始/);
   assert.match(filters, /未對應站點/);
