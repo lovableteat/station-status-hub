@@ -9,12 +9,14 @@ import {
   moveComponent as moveComponentRecord,
   moveComponents as moveComponentsRecord,
   moveKeepout as moveKeepoutRecord,
+  moveObjects as moveObjectsRecord,
   normalizeRotation,
   placeLibraryComponent as placeComponentRecord,
   selectionCenter,
   type GroupMoveResult,
   type KeepoutDuplicateResult,
   type MoveResult,
+  type ObjectGroupMoveResult,
   type KeepoutMoveResult,
   type PcbPlacementOptions,
   type PlacementResult,
@@ -250,6 +252,23 @@ export function usePcbEditorActions(
     },
     [dispatch, state.activeProject, state.canEdit, state.documentLocked],
   );
+  const moveObjects = useCallback(
+    (
+      objectIds: readonly string[],
+      delta: PcbPoint,
+      bypassSnap = false,
+    ): ObjectGroupMoveResult => {
+      if (!state.canEdit || state.documentLocked) {
+        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法移動選取群組。" };
+      }
+      const result = moveObjectsRecord(state.activeProject, objectIds, delta, bypassSnap);
+      if (result.ok && result.changed) {
+        dispatch({ type: "project/commit", update: result.project });
+      }
+      return result;
+    },
+    [dispatch, state.activeProject, state.canEdit, state.documentLocked],
+  );
   const arrangeSelectedComponents = useCallback(
     (arrangement: PcbComponentArrangement) => {
       if (!state.canEdit || state.documentLocked) {
@@ -447,10 +466,33 @@ export function usePcbEditorActions(
   const deleteSelected = useCallback(() => applySelectionEdit({ type: "delete" }), [applySelectionEdit]);
   const rotateSelected = useCallback(() => applySelectionEdit({ type: "rotate" }), [applySelectionEdit]);
   const toggleSelectedLock = useCallback(() => applySelectionEdit({ type: "toggle-lock" }), [applySelectionEdit]);
-  const nudgeSelected = useCallback(
-    (dx: number, dy: number) => applySelectionEdit({ type: "nudge", dx, dy }),
-    [applySelectionEdit],
-  );
+  const nudgeSelected = useCallback((dx: number, dy: number) => {
+    const selectedIds = new Set([
+      ...state.selectedObjects,
+      ...(state.selection ? [state.selection.id] : []),
+    ]);
+    const movableIds = [
+      ...state.activeProject.components
+        .filter((component) => selectedIds.has(component.instanceId))
+        .map((component) => component.instanceId),
+      ...state.activeProject.keepouts
+        .filter((keepout) => selectedIds.has(keepout.id))
+        .map((keepout) => keepout.id),
+    ];
+    if (movableIds.length > 1) {
+      const result = moveObjects(movableIds, { x: dx, y: dy }, true);
+      if (!result.ok) {
+        toast({
+          title: "無法移動選取群組",
+          description: result.reason,
+          variant: "destructive",
+        });
+        return false;
+      }
+      return result.changed;
+    }
+    return applySelectionEdit({ type: "nudge", dx, dy });
+  }, [applySelectionEdit, moveObjects, state.activeProject.components, state.activeProject.keepouts, state.selectedObjects, state.selection]);
   const duplicateSelected = useCallback((objectIds?: string[]) => {
     if (!state.canEdit || state.documentLocked) return false;
     const requestedIds = objectIds !== undefined
@@ -703,6 +745,7 @@ export function usePcbEditorActions(
     resetView,
     moveComponent,
     moveComponents,
+    moveObjects,
     moveKeepout,
     duplicateKeepout,
     updateBoard,
