@@ -18,6 +18,7 @@ import {
   type UserPermissionSettings,
   type WorkspaceAccessMap,
   MODULE_WORKSPACE_MAP,
+  readStoredPagePermissions,
   readWorkspaceAccess,
 } from "@/lib/workspacePermissions";
 
@@ -87,7 +88,6 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           .maybeSingle(),
       ]);
 
-      if (pagePermissionResult.error) throw pagePermissionResult.error;
       if (userResult.error) throw userResult.error;
       if (!userResult.data) throw new Error("找不到目前登入帳號");
       if (requestId !== requestIdRef.current) return;
@@ -98,9 +98,13 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         !Array.isArray(userResult.data.permissions)
           ? (userResult.data.permissions as UserPermissionSettings)
           : {};
+      const storedPermissions = readStoredPagePermissions(settings);
+      if (pagePermissionResult.error && storedPermissions === null) {
+        throw pagePermissionResult.error;
+      }
 
       setPermissions(
-        pagePermissionResult.data?.map(
+        storedPermissions ?? pagePermissionResult.data?.map(
           (item) => item.permission as Permission
         ) ?? []
       );

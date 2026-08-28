@@ -120,7 +120,7 @@ test("admin dialogs and API console use the restrained maintenance color system"
     /radial-gradient|bg-\[linear-gradient|bg-gradient-to-br|#17425d|#16445a|#12413f|#342c59|#443b20|violet-/,
   );
 
-  assert.match(permissions, /set_user_access_permissions/);
+  assert.match(permissions, /mutateAuthAccount/);
   assert.match(userEditor, /\.from\('system_users'\)\s*\.update/);
   assert.match(apiKeys, /openCreateDialog/);
   assert.match(apiKeys, /toggleKeyStatus/);
