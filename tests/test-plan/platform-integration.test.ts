@@ -143,7 +143,7 @@ test("admin permission editor explains inherited Test_Plan access instead of exp
   assert.match(dialog, /\.filter\(\(\[groupKey\]\)\s*=>\s*groupKey\s*!==\s*"test_plan"\)/);
 });
 
-test("admin permission saves synchronize Test_Plan rows from maintenance access for compatibility", async () => {
+test("admin permission saves persist the synchronized Test_Plan snapshot through the verified service", async () => {
   const dialog = await source(
     "src/components/admin/UserPermissionsDialog.tsx",
   );
@@ -152,11 +152,9 @@ test("admin permission saves synchronize Test_Plan rows from maintenance access 
     dialog,
     /const synchronizedPermissions = synchronizeWorkspacePermissions\(\s*permissions,\s*"station-status",\s*workspaceAccess\["station-status"\],\s*\)/,
   );
-  assert.match(dialog, /p_permissions:\s*synchronizedPermissions/);
-  assert.match(
-    dialog,
-    /const legacyPermissions = synchronizedPermissions\.filter\(/,
-  );
+  assert.match(dialog, /pagePermissions: synchronizedPermissions/);
+  assert.match(dialog, /profile: \{ permissions: mergedSettings \}/);
+  assert.match(dialog, /forceVerifiedService: true/);
 });
 
 test("publishes Test_Plan labels to collaboration and offline export catalogs", async () => {
