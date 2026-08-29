@@ -389,7 +389,7 @@ test("enforces one cloud editor per PCB project and keeps viewers live", () => {
   assert.match(pcbWorkspaceHookSource, /projectId !== stateRef\.current\.activeProjectId/);
 });
 
-test("ships a complete custom-login PCB workspace migration and legacy permission fallback", () => {
+test("ships a complete custom-login PCB workspace migration and verified permission persistence", () => {
   assert.match(
     completeStorageMigrationSource,
     /CREATE TABLE IF NOT EXISTS public\.pcb_designer_workspaces/i,
@@ -402,11 +402,11 @@ test("ships a complete custom-login PCB workspace migration and legacy permissio
   assert.match(completeStorageMigrationSource, /octet_length\(p_payload::text\) > 5 \* 1024 \* 1024/i);
   assert.match(completeStorageMigrationSource, /permissions -> 'pcbDesignerWorkspace'/i);
   assert.match(completeStorageMigrationSource, /NOTIFY pgrst, 'reload schema'/i);
-  assert.match(dialogSource, /legacyPermissions/);
-  assert.match(dialogSource, /permission\.startsWith\(["']pcb_designer_["']\)/);
-  assert.match(dialogSource, /legacyWorkspaceIds\s*=\s*new Set\(\[/);
-  assert.match(dialogSource, /legacyWorkspaceIds\.has\(workspaceId\)/);
-  assert.match(dialogSource, /\.update\(\{[\s\S]*workspaceAccess/);
+  assert.match(dialogSource, /readStoredPagePermissions/);
+  assert.match(dialogSource, /pagePermissions: synchronizedPermissions/);
+  assert.match(dialogSource, /profile: \{ permissions: mergedSettings \}/);
+  assert.match(dialogSource, /forceVerifiedService: true/);
+  assert.match(dialogSource, /Legacy page permission sync skipped/);
 });
 
 test("promotes PCB projects to a shared, conflict-safe team catalog", () => {
