@@ -223,29 +223,29 @@ test("replaces the loading shell with one native three-area PCB workbench", asyn
   assert.match(stylesSource, /\.pcb-toolbar[\s\S]*overflow-x:\s*auto/);
 });
 
-test("wires BOM import previews with typed summaries and caps visible errors at 100", async () => {
+test("keeps library import previews while removing BOM import UI", async () => {
   const dialogsSource = await read(
     "src/components/pcb-designer/PcbDialogs.tsx",
   );
-
-  assert.match(
-    dialogsSource,
-    /kind:\s*["']import-preview["'][\s\S]*importKind:\s*["']library["']\s*\|\s*["']bom["']/,
+  const leftRailSource = await read(
+    "src/components/pcb-designer/PcbLeftRail.tsx",
   );
+
+  assert.match(dialogsSource, /kind:\s*["']import-preview["']/);
   assert.match(dialogsSource, /totalCount:\s*number/);
-  assert.match(dialogsSource, /placementCount\?:\s*number/);
   assert.match(dialogsSource, /dialog\.errors\.slice\(0,\s*100\)/);
   assert.match(dialogsSource, /dialog\.errors\.length\s*-\s*100/);
-  assert.match(dialogsSource, /待放置清單/);
-  assert.match(dialogsSource, /不會直接放到畫布/);
-  assert.match(dialogsSource, /dialog\.importKind === ["']library["'][\s\S]*匯入元件庫/);
-  assert.match(dialogsSource, /dialog\.importKind === ["']bom["'][\s\S]*建立待放置項目/);
+  assert.match(dialogsSource, /匯入元件庫/);
+  assert.doesNotMatch(dialogsSource, /importKind|placementCount|待放置清單|建立待放置項目|BOM 匯入/);
+  assert.match(leftRailSource, /activeTab === ["']bom["'][\s\S]*autoPlacePending/);
+  assert.doesNotMatch(leftRailSource, /onBomFile|BOM_FILE_ACCEPT|匯入 BOM/);
+  assert.doesNotMatch(indexSource, /匯入 BOM/);
 });
 
-test("passes BOM preview metadata from the workspace through a typed object API", () => {
+test("routes only library file previews from the workspace", () => {
   assert.match(
     workspaceSource,
-    /type ImportPreviewInput = \{[\s\S]*title: string;[\s\S]*importKind: ["']library["'] \| ["']bom["'];[\s\S]*validCount: number;[\s\S]*totalCount: number;[\s\S]*errors: TabularImportError\[];[\s\S]*placementCount\?: number;[\s\S]*onCommit: \(\) => void;[\s\S]*\}/,
+    /type ImportPreviewInput = \{[\s\S]*title: string;[\s\S]*validCount: number;[\s\S]*totalCount: number;[\s\S]*errors: TabularImportError\[];[\s\S]*onCommit: \(\) => void;[\s\S]*\}/,
   );
   assert.match(
     workspaceSource,
@@ -253,17 +253,10 @@ test("passes BOM preview metadata from the workspace through a typed object API"
   );
   assert.match(
     workspaceSource,
-    /previewImport\(\s*\{[\s\S]*title:\s*["']元件庫匯入預覽["'][\s\S]*importKind:\s*["']library["'][\s\S]*validCount:\s*result\.valid\.length[\s\S]*totalCount:\s*result\.valid\.length \+ result\.errors\.length[\s\S]*errors:\s*result\.errors[\s\S]*onCommit:\s*\(\)\s*=>\s*\{/,
+    /previewImport\(\s*\{[\s\S]*title:\s*["']元件庫匯入預覽["'][\s\S]*validCount:\s*result\.valid\.length[\s\S]*totalCount:\s*result\.valid\.length \+ result\.errors\.length[\s\S]*errors:\s*result\.errors[\s\S]*onCommit:\s*\(\)\s*=>\s*\{/,
   );
-  assert.match(
-    workspaceSource,
-    /previewImport\(\s*\{[\s\S]*title:\s*["']BOM 匯入預覽["'][\s\S]*importKind:\s*["']bom["'][\s\S]*validCount:\s*result\.valid\.length[\s\S]*totalCount:\s*result\.valid\.length \+ result\.errors\.length[\s\S]*errors:\s*result\.errors[\s\S]*placementCount:\s*result\.placementCount[\s\S]*onCommit:\s*\(\)\s*=>\s*\{/,
-  );
-  assert.doesNotMatch(workspaceSource, /validCountOrKind|errorsOrValidCount|onCommitOrTotalCount|importKindOrErrors|placementCountOrCommit/);
-  assert.doesNotMatch(workspaceSource, /\sas\s+TabularImportError\[]/);
-  assert.doesNotMatch(workspaceSource, /\sas\s+\(\)\s*=>\s*void/);
-  assert.match(workspaceSource, /workspace\.importBom\(result\.valid\)/);
   assert.match(workspaceSource, /workspace\.uploadLibraryComponents\(result\.valid\)/);
+  assert.doesNotMatch(workspaceSource, /parseBomRows|handleBomPreviewFile|workspace\.importBom|BOM 匯入預覽|onBomFile/);
 });
 
 test("preserves the pre-task project and component form copy while extending import preview", async () => {

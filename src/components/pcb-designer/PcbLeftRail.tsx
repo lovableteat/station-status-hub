@@ -3,7 +3,6 @@ import {
   CheckCircle2,
   Copy,
   Eye,
-  FileUp,
   Filter,
   MoreHorizontal,
   Pencil,
@@ -25,10 +24,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PCB_LIBRARY_DRAG_TYPE } from "./PcbCanvas.tsx";
-import {
-  BOM_FILE_ACCEPT,
-  LIBRARY_FILE_ACCEPT,
-} from "./core/files.ts";
+import { LIBRARY_FILE_ACCEPT } from "./core/files.ts";
 import type {
   PcbLibraryComponent,
   PcbProject,
@@ -56,7 +52,6 @@ interface PcbLeftRailProps {
   onDeleteTemplate: (template: PcbTemplate) => void;
   onDeleteComponent: (component: PcbLibraryComponent) => void;
   onLibraryFile: (file: File) => void;
-  onBomFile: (file: File) => void;
 }
 
 const tabLabels: Record<PcbLeftTab, string> = {
@@ -122,7 +117,6 @@ export function PcbLeftRail({
   onDeleteTemplate,
   onDeleteComponent,
   onLibraryFile,
-  onBomFile,
 }: PcbLeftRailProps) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -303,47 +297,28 @@ export function PcbLeftRail({
           </>
         )}
         {activeTab === "bom" && (
-          <>
-            <label
-              className={cn(
-                "pcb-upload-action flex-1 justify-center",
-                !workspace.canMutate && "pointer-events-none opacity-50",
-              )}
-              title="上傳 CSV 或 XLSX BOM"
-            >
-              <FileUp className="mr-1.5 h-3.5 w-3.5" />
-              匯入 BOM
-              <input
-                type="file"
-                accept={BOM_FILE_ACCEPT}
-                className="sr-only"
-                disabled={!workspace.canMutate}
-                onChange={(event) => chooseFile(event, onBomFile)}
-              />
-            </label>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="pcb-secondary-action"
-              disabled={!workspace.canMutate || workspace.pendingPlacements.length === 0}
-              onClick={() => {
-                const result = workspace.autoPlacePending();
-                const details = [
-                  result.failed ? `${result.failed} 個項目本次未找到合法位置。` : "",
-                  result.deferred ? `${result.deferred} 個項目保留在佇列，可再次分批執行。` : "",
-                  result.limited ? "已達安全搜尋上限，未放置項目不會遺失。" : "",
-                ].filter(Boolean).join(" ");
-                toast({
-                  title: result.placed ? `已自動放置 ${result.placed} 個元件` : "沒有元件可自動放置",
-                  description: details || "BOM 佇列已處理完成。",
-                  variant: result.placed ? "default" : "destructive",
-                });
-              }}
-            >
-              自動放置
-            </Button>
-          </>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="pcb-secondary-action"
+            disabled={!workspace.canMutate || workspace.pendingPlacements.length === 0}
+            onClick={() => {
+              const result = workspace.autoPlacePending();
+              const details = [
+                result.failed ? `${result.failed} 個項目本次未找到合法位置。` : "",
+                result.deferred ? `${result.deferred} 個項目保留在佇列，可再次分批執行。` : "",
+                result.limited ? "已達安全搜尋上限，未放置項目不會遺失。" : "",
+              ].filter(Boolean).join(" ");
+              toast({
+                title: result.placed ? `已自動放置 ${result.placed} 個元件` : "沒有元件可自動放置",
+                description: details || "BOM 佇列已處理完成。",
+                variant: result.placed ? "default" : "destructive",
+              });
+            }}
+          >
+            自動放置
+          </Button>
         )}
       </div>
 
@@ -539,7 +514,7 @@ export function PcbLeftRail({
             </div>
           )) : (
             <div className="pcb-empty-state">
-              尚無待放置元件。匯入 BOM 後，項目會保留在這裡等待畫布放置。
+              目前沒有待放置的 BOM 元件。
             </div>
           )
         )}
