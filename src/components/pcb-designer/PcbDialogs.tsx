@@ -224,7 +224,13 @@ export function PcbDialogs({
   return (
     <Dialog open={Boolean(dialog)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        data-dialog-tone={dialog?.kind === "confirm" ? "danger" : "engineering"}
+        data-dialog-tone={
+          dialog?.kind === "confirm"
+            ? "danger"
+            : dialog?.kind === "project-settings"
+              ? "project-settings"
+              : "engineering"
+        }
         className="pcb-dialog max-h-[88vh] max-w-xl gap-4 overflow-y-auto p-5 text-slate-100"
       >
         {dialog?.kind === "confirm" && (
@@ -420,9 +426,13 @@ export function PcbDialogs({
         )}
 
         {isForm && (
-          <form onSubmit={submit} className="workspace-dialog-section workspace-dialog-section--violet rounded-2xl p-4">
+          <form
+            data-pcb-dialog-form={dialog.kind}
+            onSubmit={submit}
+            className="workspace-dialog-section workspace-dialog-section--violet rounded-2xl p-4"
+          >
             <DialogHeader>
-              <DialogTitle>
+              <DialogTitle className={dialog.kind === "project-settings" ? "text-cyan-100" : undefined}>
                 {dialog.kind === "new-project" && "新增 PCB 專案"}
                 {dialog.kind === "project-settings" && "專案設定"}
                 {dialog.kind === "save-template" && "儲存為模板"}
@@ -435,7 +445,7 @@ export function PcbDialogs({
             </DialogHeader>
 
             <div className="mt-4 space-y-3">
-              <label className="block text-xs text-slate-300">
+              <label data-pcb-field-tone="identity" className="block text-xs text-slate-300">
                 名稱
                 <Input
                   value={values.name ?? ""}
@@ -447,7 +457,7 @@ export function PcbDialogs({
 
               {(dialog.kind === "new-project" || dialog.kind === "project-settings") && (
                 <>
-                  <label className="block text-xs text-slate-300">
+                  <label data-pcb-field-tone="description" className="block text-xs text-slate-300">
                     描述
                     <Input
                       value={values.description ?? ""}
@@ -455,12 +465,12 @@ export function PcbDialogs({
                       className="mt-1 h-9 border-[#356985] bg-[#10263a]"
                     />
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div data-pcb-field-tone="dimensions" className="grid grid-cols-2 gap-3">
                     <NumberField label="寬度 (mm)" value={values.width} onChange={(value) => update("width", value)} />
                     <NumberField label="高度 (mm)" value={values.height} onChange={(value) => update("height", value)} />
                   </div>
                   {dialog.kind === "project-settings" && (
-                    <label className="block text-xs text-slate-300">
+                    <label data-pcb-field-tone={values.status || "draft"} className="block text-xs text-slate-300">
                       狀態
                       <select
                         value={values.status}
@@ -543,7 +553,7 @@ export function PcbDialogs({
             </div>
 
             {error && <p className="mt-3 text-sm text-rose-300" role="alert">{error}</p>}
-            <DialogFooter className="mt-5">
+            <DialogFooter data-pcb-project-footer className="mt-5">
               <Button type="button" variant="outline" onClick={onClose}>取消</Button>
               <Button type="submit">儲存</Button>
             </DialogFooter>
