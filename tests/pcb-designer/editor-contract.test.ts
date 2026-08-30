@@ -75,6 +75,74 @@ test("replaces the browser menu with contextual PCB canvas actions", () => {
   }
 });
 
+test("makes PCB context actions explicit and confirms every mutation", () => {
+  assert.match(canvasSource, /複製到剪貼簿/);
+  assert.match(canvasSource, /直接複製一份/);
+  assert.doesNotMatch(canvasSource, />\s*建立副本\s*</);
+  assert.match(canvasSource, /副本已建立並保持選取/);
+  assert.match(canvasSource, /沒有可複製的物件/);
+  assert.match(canvasSource, /const runContextSelectionAction/);
+  for (const action of [
+    "duplicateSelected",
+    "rotateSelected",
+    "toggleSelectedLock",
+    "deleteSelected",
+  ]) {
+    assert.match(
+      canvasSource,
+      new RegExp(`runContextSelectionAction\\(\\s*workspace\\.${action}`),
+    );
+  }
+  assert.match(canvasSource, /操作未執行/);
+});
+
+test("keeps PCB selection actions on one row and header actions at one size", () => {
+  assert.match(
+    editorCssSource,
+    /\.pcb-inspector-actions\s*\{[\s\S]{0,180}flex-wrap:\s*nowrap/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-inspector-actions\s*>\s*button[\s\S]{0,220}min-width:\s*0[\s\S]{0,120}gap:\s*3px/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-collaborator-trigger\s*\{[\s\S]{0,120}height:\s*36px[\s\S]{0,120}border-radius:\s*10px/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-template-center-action,[\s\S]{0,100}\.pcb-header-icon-button[\s\S]{0,180}height:\s*36px[\s\S]{0,160}border-radius:\s*10px/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-project-actions\s*>\s*\.pcb-collaborator-trigger,[\s\S]{0,180}\.pcb-project-actions\s*>\s*\.pcb-settings-action\s*\{[^}]*width:\s*126px/,
+  );
+  assert.doesNotMatch(
+    editorCssSource,
+    /\.pcb-project-actions\s*\{[^}]*margin-top:/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-inspector-tabs\s*\{[\s\S]{0,100}grid-template-columns:\s*repeat\(2,/,
+  );
+  assert.match(
+    editorCssSource,
+    /@media \(max-width: 1279px\)[\s\S]{0,900}\.pcb-panel-toggle\s*\{[^}]*display:\s*inline-flex/,
+  );
+  assert.match(
+    editorCssSource,
+    /\.pcb-mobile-project-actions \.pcb-panel-toggle\s*\{[^}]*width:\s*44px[^}]*height:\s*44px/,
+  );
+});
+
+test("makes locked PCB components persistently visible and accessible", () => {
+  assert.match(
+    editorCssSource,
+    /\.pcb-component-object\.is-locked\s*\{[\s\S]{0,120}opacity:/,
+  );
+  assert.match(canvasSource, /component\.locked\s*\?\s*"（已鎖定）"/);
+});
+
 test("renders PCB layers in the required stable order", () => {
   assert.match(
     canvasSource,
