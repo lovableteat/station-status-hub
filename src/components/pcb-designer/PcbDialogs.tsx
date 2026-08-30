@@ -42,11 +42,9 @@ export type PcbDialogState =
   | {
     kind: "import-preview";
     title: string;
-    importKind: "library" | "bom";
     validCount: number;
     totalCount: number;
     errors: TabularImportError[];
-    placementCount?: number;
     onCommit: () => void;
   };
 
@@ -291,9 +289,7 @@ export function PcbDialogs({
             <DialogHeader>
               <DialogTitle>{dialog.title}</DialogTitle>
               <DialogDescription className="text-slate-300">
-                {dialog.importKind === "bom"
-                  ? "BOM 匯入會建立左側待放置清單，不會直接放到畫布。"
-                  : "請先確認有效資料與錯誤摘要，確認後才會匯入元件庫。"}
+                請先確認有效資料與錯誤摘要，確認後才會匯入元件庫。
               </DialogDescription>
             </DialogHeader>
             <div className="my-4 flex flex-wrap gap-3 text-sm">
@@ -306,11 +302,6 @@ export function PcbDialogs({
               <span className="rounded-md bg-rose-400/10 px-2 py-1 text-rose-200">
                 錯誤 {dialog.errors.length} 筆
               </span>
-              {dialog.importKind === "bom" && (
-                <span className="rounded-md bg-sky-400/10 px-2 py-1 text-sky-200">
-                  待放置 {dialog.placementCount ?? 0} 筆
-                </span>
-              )}
             </div>
             {dialog.errors.length > 0 && (
               <div className="max-h-52 overflow-auto rounded-lg border border-rose-300/25 bg-rose-950/20 p-3">
@@ -331,7 +322,7 @@ export function PcbDialogs({
             <DialogFooter className="mt-4">
               <Button type="button" variant="outline" onClick={onClose}>取消</Button>
               <Button type="button" disabled={dialog.validCount === 0} onClick={confirm}>
-                {dialog.importKind === "library" ? "匯入元件庫" : "建立待放置項目"}
+                匯入元件庫
               </Button>
             </DialogFooter>
           </div>

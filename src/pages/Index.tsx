@@ -320,7 +320,7 @@ const Index = () => {
       {
         id: "pcb-designer" as const,
         label: "PCB Designer",
-        description: "建立 PCB 專案、匯入 BOM，並在同一工作區完成板框、元件配置與設計規則檢查。",
+        description: "建立 PCB 專案、管理元件庫，並在同一工作區完成板框、元件配置與設計規則檢查。",
         icon: CircuitBoard,
         visible: canViewModule("pcb-designer"),
       },

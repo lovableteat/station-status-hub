@@ -23,7 +23,6 @@ import {
   readTabularFile,
 } from "./core/files.ts";
 import {
-  parseBomRows,
   parseComponentRows,
   type TabularImportError,
 } from "./core/tabular.ts";
@@ -75,11 +74,9 @@ export interface PcbDesignerWorkspaceProps {
 
 type ImportPreviewInput = {
   title: string;
-  importKind: "library" | "bom";
   validCount: number;
   totalCount: number;
   errors: TabularImportError[];
-  placementCount?: number;
   onCommit: () => void;
 };
 
@@ -309,7 +306,6 @@ export function PcbDesignerWorkspace({
       const result = parseComponentRows(await readTabularFile(file));
       previewImport({
         title: "元件庫匯入預覽",
-        importKind: "library",
         validCount: result.valid.length,
         totalCount: result.valid.length + result.errors.length,
         errors: result.errors,
@@ -321,44 +317,12 @@ export function PcbDesignerWorkspace({
     } catch (error) {
       previewImport({
         title: "元件庫匯入預覽",
-        importKind: "library",
         validCount: 0,
         totalCount: 1,
         errors: [{
           row: 1,
           message: error instanceof Error ? error.message : "無法解析元件庫檔案。",
         }],
-        onCommit: () => undefined,
-      });
-    }
-  };
-
-  const handleBomPreviewFile = async (file: File) => {
-    try {
-      const result = parseBomRows(await readTabularFile(file));
-      previewImport({
-        title: "BOM 匯入預覽",
-        importKind: "bom",
-        validCount: result.valid.length,
-        totalCount: result.valid.length + result.errors.length,
-        errors: result.errors,
-        placementCount: result.placementCount,
-        onCommit: () => {
-          workspace.importBom(result.valid);
-          toast({ title: "BOM 已匯入", description: `建立 ${result.placementCount} 筆待放置項目。` });
-        },
-      });
-    } catch (error) {
-      previewImport({
-        title: "BOM 匯入預覽",
-        importKind: "bom",
-        validCount: 0,
-        totalCount: 1,
-        errors: [{
-          row: 1,
-          message: error instanceof Error ? error.message : "無法解析 BOM 檔案。",
-        }],
-        placementCount: 0,
         onCommit: () => undefined,
       });
     }
@@ -692,7 +656,6 @@ export function PcbDesignerWorkspace({
             onDeleteTemplate={requestDeleteTemplate}
             onDeleteComponent={requestDeleteComponent}
             onLibraryFile={(file) => void handleLibraryPreviewFile(file)}
-            onBomFile={(file) => void handleBomPreviewFile(file)}
           />
         </div>
 
