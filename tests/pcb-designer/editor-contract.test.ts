@@ -55,6 +55,26 @@ test("exposes an interactive SVG canvas with pointer, wheel, and drop contracts"
   assert.match(canvasSource, /workspace\.tool === ["']measure["']\s*\?\s*["']measurement["']/);
 });
 
+test("replaces the browser menu with contextual PCB canvas actions", () => {
+  assert.match(canvasSource, /from ["']@\/components\/ui\/context-menu["']/);
+  assert.match(canvasSource, /<ContextMenu>[\s\S]*<ContextMenuTrigger asChild>/);
+  assert.match(canvasSource, /onContextMenu=\{handleContextMenu\}/);
+  assert.match(canvasSource, /data-pcb-context-menu/);
+  assert.match(canvasSource, /data-pcb-object-kind/);
+  assert.match(canvasSource, /data-pcb-object-id/);
+  for (const action of [
+    "copySelected",
+    "pasteCopied",
+    "duplicateSelected",
+    "rotateSelected",
+    "toggleSelectedLock",
+    "deleteSelected",
+    "resetView",
+  ]) {
+    assert.match(canvasSource, new RegExp(`workspace\\.${action}`));
+  }
+});
+
 test("renders PCB layers in the required stable order", () => {
   assert.match(
     canvasSource,
