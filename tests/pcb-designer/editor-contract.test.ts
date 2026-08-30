@@ -349,6 +349,18 @@ test("lets users drag either measurement endpoint with snapping and safe persist
   assert.match(editorCssSource, /pcb-measurement-endpoint-control:hover[\s\S]{0,180}#67e8f9/);
 });
 
+test("keeps the measurement inspector focused on length instead of endpoint coordinates", () => {
+  const measurementInspector = inspectorSource.match(
+    /function MeasurementInspector[\s\S]*?(?=export function PcbInspector)/,
+  )?.[0] ?? "";
+
+  assert.match(measurementInspector, />量測長度</);
+  assert.match(measurementInspector, /Math\.hypot[\s\S]{0,180}\.toFixed\(2\)[\s\S]{0,80}mm/);
+  for (const coordinate of ["X1", "Y1", "X2", "Y2"]) {
+    assert.doesNotMatch(measurementInspector, new RegExp(`label=["']${coordinate}["']`));
+  }
+});
+
 test("suppresses native SVG focus halos while retaining the custom selection bounds", () => {
   assert.match(canvasSource, /className=\{`pcb-component-object/);
   assert.match(editorCssSource, /\[role=["']button["']\]:focus,[\s\S]{0,180}outline:\s*none\s*!important/);

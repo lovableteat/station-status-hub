@@ -369,15 +369,11 @@ function MeasurementInspector({
   const disabled = !workspace.canMutate;
   return (
     <div className="pcb-inspector-form" data-selection-kind="measurement">
-      <h2>測量</h2>
+      <h2>量測長度</h2>
       <p className="pcb-measurement-value">
         {Math.hypot(measurement.x2 - measurement.x1, measurement.y2 - measurement.y1).toFixed(2)} mm
       </p>
       <div className="pcb-inspector-field-grid">
-        <NumberField label="X1" value={measurement.x1} disabled={disabled} onCommit={(x1) => workspace.updateMeasurement(measurement.id, { x1 })} />
-        <NumberField label="Y1" value={measurement.y1} disabled={disabled} onCommit={(y1) => workspace.updateMeasurement(measurement.id, { y1 })} />
-        <NumberField label="X2" value={measurement.x2} disabled={disabled} onCommit={(x2) => workspace.updateMeasurement(measurement.id, { x2 })} />
-        <NumberField label="Y2" value={measurement.y2} disabled={disabled} onCommit={(y2) => workspace.updateMeasurement(measurement.id, { y2 })} />
         <InspectorField label="顏色">
           <input type="color" value={measurement.color} disabled={disabled} onChange={(event) => workspace.updateMeasurement(measurement.id, { color: event.target.value })} />
         </InspectorField>
