@@ -1124,53 +1124,56 @@ export function DirectMessagesPanel({
                 正在載入所有同事
               </div>
             ) : (
-              <div className="flex gap-1.5 overflow-x-auto pb-1">
-              {availableContacts.map((contact) => (
-                <button
-                  key={contact.userId}
-                  type="button"
-                  onClick={() => {
-                    const existing = threads.find((thread) => thread.otherUserId === contact.userId);
-                    if (existing) setSelectedThreadId(existing.threadId);
-                    else void startDirectChat(contact.userId).then(setSelectedThreadId);
-                  }}
-                  className={cn(
-                    "h-11 min-w-[124px] rounded-lg border px-2 text-left transition-colors sm:h-10",
-                    contact.online
-                      ? "border-emerald-300/22 bg-emerald-400/[0.09] hover:border-emerald-200/45 hover:bg-emerald-400/16"
-                      : "border-slate-400/16 bg-slate-300/[0.045] hover:border-cyan-200/30 hover:bg-cyan-300/[0.08]",
-                  )}
-                  aria-label={`傳訊息給 ${contact.displayName || contact.username}，${contact.online ? "在線" : "離線"}`}
-                >
-                  <span className="flex items-center gap-2">
-                    <UserAvatar
-                      avatarPath={contact.avatarPath}
-                      displayName={contact.displayName || contact.username}
-                      className="h-6 w-6 shrink-0 rounded-md"
-                      fallbackClassName="rounded-md text-[10px] font-black"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-bold text-white">
-                        {contact.displayName || contact.username}
+              <div
+                data-direct-message-contacts
+                className="grid max-h-[94px] grid-cols-2 gap-1.5 overflow-x-hidden overflow-y-auto overscroll-contain pr-1 sm:max-h-[86px]"
+              >
+                {availableContacts.map((contact) => (
+                  <button
+                    key={contact.userId}
+                    type="button"
+                    onClick={() => {
+                      const existing = threads.find((thread) => thread.otherUserId === contact.userId);
+                      if (existing) setSelectedThreadId(existing.threadId);
+                      else void startDirectChat(contact.userId).then(setSelectedThreadId);
+                    }}
+                    className={cn(
+                      "h-11 min-w-0 rounded-lg border px-2 text-left transition-colors sm:h-10",
+                      contact.online
+                        ? "border-emerald-300/22 bg-emerald-400/[0.09] hover:border-emerald-200/45 hover:bg-emerald-400/16"
+                        : "border-slate-400/16 bg-slate-300/[0.045] hover:border-cyan-200/30 hover:bg-cyan-300/[0.08]",
+                    )}
+                    aria-label={`傳訊息給 ${contact.displayName || contact.username}，${contact.online ? "在線" : "離線"}`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <UserAvatar
+                        avatarPath={contact.avatarPath}
+                        displayName={contact.displayName || contact.username}
+                        className="h-6 w-6 shrink-0 rounded-md"
+                        fallbackClassName="rounded-md text-[10px] font-black"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-bold text-white">
+                          {contact.displayName || contact.username}
+                        </span>
+                        <span className={cn(
+                          "block text-[9px] font-semibold",
+                          contact.online ? "text-emerald-300" : "text-slate-500",
+                        )}>
+                          {contact.online ? "在線" : "離線 · 可留言"}
+                        </span>
                       </span>
-                      <span className={cn(
-                        "block text-[9px] font-semibold",
-                        contact.online ? "text-emerald-300" : "text-slate-500",
-                      )}>
-                        {contact.online ? "在線" : "離線 · 可留言"}
-                      </span>
+                      <span
+                        className={cn(
+                          "h-1.5 w-1.5 shrink-0 rounded-full",
+                          contact.online ? "bg-emerald-400" : "bg-slate-600",
+                        )}
+                        aria-hidden="true"
+                      />
                     </span>
-                    <span
-                      className={cn(
-                        "h-1.5 w-1.5 shrink-0 rounded-full",
-                        contact.online ? "bg-emerald-400" : "bg-slate-600",
-                      )}
-                      aria-hidden="true"
-                    />
-                  </span>
-                </button>
-              ))}
-            </div>
+                  </button>
+                ))}
+              </div>
             )}
             {contactsError ? (
               <p className="mt-1.5 text-[10px] font-medium text-amber-200/80">{contactsError}</p>

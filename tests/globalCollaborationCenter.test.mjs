@@ -102,6 +102,20 @@ test("floating chat exposes the full member directory including offline contacts
   assert.match(panel, /startDirectChat\(contact\.userId\)/);
 });
 
+test("mobile chat contacts use two rows without horizontal dragging", async () => {
+  const panel = await readSource("src/components/collaboration/DirectMessagesPanel.tsx");
+
+  assert.match(
+    panel,
+    /grid max-h-\[94px\] grid-cols-2 gap-1\.5 overflow-x-hidden overflow-y-auto overscroll-contain pr-1 sm:max-h-\[86px\]/,
+  );
+  assert.doesNotMatch(
+    panel,
+    /flex gap-1\.5 overflow-x-auto pb-1[\s\S]{0,180}availableContacts\.map/,
+  );
+  assert.doesNotMatch(panel, /h-11 min-w-\[124px\][^"\n]*rounded-lg/);
+});
+
 test("chat scroll anchors do not create a trailing blank message row", async () => {
   const [aiChat, directChat] = await Promise.all([
     readSource("src/components/api-management/ApiChatConsole.tsx"),

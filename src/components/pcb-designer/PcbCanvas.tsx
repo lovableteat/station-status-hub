@@ -6,9 +6,20 @@ import {
   useState,
   type DragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent,
 } from "react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { toast } from "@/hooks/use-toast";
 import {
   canPlaceComponent,
@@ -214,6 +225,7 @@ export function PcbCanvas({
   const [cursorPoint, setCursorPoint] = useState<PcbPoint | null>(null);
   const [placementPoint, setPlacementPoint] = useState<PcbPoint | null>(null);
   const [placementRotation, setPlacementRotation] = useState(0);
+  const [contextSelection, setContextSelection] = useState<PcbSelection | null>(null);
   const previewFrameRef = useRef<number | null>(null);
   const queuedPreviewRef = useRef<{ cursor: PcbPoint; placement: PcbPoint | null } | null>(null);
   const zoomFrameRef = useRef<number | null>(null);
@@ -367,6 +379,37 @@ export function PcbCanvas({
     workspace.clearObjectSelection();
   }, [workspace]);
 
+  const handleContextMenu = (event: ReactMouseEvent<HTMLElement>) => {
+    const target = event.target instanceof Element
+      ? event.target.closest<SVGElement>("[data-pcb-object-kind][data-pcb-object-id]")
+      : null;
+    const selection = target?.dataset.pcbObjectId
+      ? getSelectionById(target.dataset.pcbObjectId, project)
+      : null;
+    setContextSelection(selection);
+    if (!selection) {
+      selectObject(null);
+    } else if (selectionIds.includes(selection.id)) {
+      workspace.selectObject(selection);
+    } else {
+      selectObject(selection);
+    }
+  };
+
+  const copyContextSelection = () => {
+    if (workspace.copySelected()) {
+      toast({ title: "已複製選取物件", description: "可在畫布空白處按右鍵貼上。" });
+    }
+  };
+
+  const pasteContextSelection = () => {
+    if (workspace.pasteCopied()) {
+      toast({ title: "已貼上整組布局", description: "副本已保持選取，可繼續調整。" });
+    } else {
+      toast({ title: "目前沒有可貼上的內容", description: "請先複製元件或禁制區。", variant: "destructive" });
+    }
+  };
+
   const viewBox = useMemo(() => {
     const viewportAspect = size.width / Math.max(1, size.height);
     const boardAspect = project.board.width / project.board.height;
@@ -433,6 +476,12 @@ export function PcbCanvas({
     && selectedMeasurement?.id === interaction.id
     ? interaction.preview
     : selectedMeasurement;
+  const contextComponent = contextSelection?.kind === "component"
+    ? project.components.find((component) => component.instanceId === contextSelection.id) ?? null
+    : null;
+  const contextCanDuplicate = contextSelection?.kind === "component"
+    || contextSelection?.kind === "keepout";
+  const contextComponentLocked = Boolean(contextComponent?.locked);
   const gridSize = project.board.gridSize;
   const strokeWidth = Math.max(project.board.width, project.board.height) / 700;
   const boardSurfaceColor = visibleLayer === "all"
@@ -915,12 +964,15 @@ export function PcbCanvas({
   };
 
   return (
-    <main
-      ref={hostRef}
-      className="pcb-canvas-host"
-      data-testid="pcb-canvas-host"
-      aria-label="PCB 互動式佈局畫布"
-    >
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <main
+          ref={hostRef}
+          className="pcb-canvas-host"
+          data-testid="pcb-canvas-host"
+          aria-label="PCB 互動式佈局畫布"
+          onContextMenu={handleContextMenu}
+        >
       <svg
         ref={svgRef}
         className="pcb-canvas"
@@ -1059,6 +1111,8 @@ export function PcbCanvas({
               <rect
                 key={keepout.id}
                 className="pcb-keepout-object"
+                data-pcb-object-kind="keepout"
+                data-pcb-object-id={keepout.id}
                 x={preview.x}
                 y={preview.y}
                 width={preview.width}
@@ -1089,24 +1143,26 @@ export function PcbCanvas({
               : measurement;
             return (
               <g
-              key={measurement.id}
-              className="pcb-measurement-object"
-              role="button"
-              tabIndex={0}
-              onPointerDown={(event) => {
-                if (workspace.tool === "pan" || event.button === 1) return;
-                if (event.button !== 0) return;
-                event.preventDefault();
-                event.stopPropagation();
-                selectObject(
-                  { kind: "measurement", id: measurement.id },
-                  event.ctrlKey || event.metaKey,
-                );
-              }}
-              onKeyDown={(event) =>
-                selectWithKeyboard(event, { kind: "measurement", id: measurement.id })}
-              aria-label="測量線"
-            >
+                key={measurement.id}
+                className="pcb-measurement-object"
+                data-pcb-object-kind="measurement"
+                data-pcb-object-id={measurement.id}
+                role="button"
+                tabIndex={0}
+                onPointerDown={(event) => {
+                  if (workspace.tool === "pan" || event.button === 1) return;
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  selectObject(
+                    { kind: "measurement", id: measurement.id },
+                    event.ctrlKey || event.metaKey,
+                  );
+                }}
+                onKeyDown={(event) =>
+                  selectWithKeyboard(event, { kind: "measurement", id: measurement.id })}
+                aria-label="測量線"
+              >
               <line
                 className="pcb-measurement-hit-target"
                 x1={renderedMeasurement.x1}
@@ -1164,6 +1220,8 @@ export function PcbCanvas({
                 key={component.instanceId}
                 transform={transform}
                 className={`pcb-component-object${component.locked ? " is-locked" : ""}`}
+                data-pcb-object-kind="component"
+                data-pcb-object-id={component.instanceId}
                 data-pcb-coordinate={`${previewViewState.coordinate.x},${previewViewState.coordinate.y}`}
                 data-pcb-rotation={String(viewState.rotation)}
                 data-pcb-layer={viewState.layer}
@@ -1267,6 +1325,8 @@ export function PcbCanvas({
                   <circle
                     key={handle}
                     className="pcb-keepout-resize-handle"
+                    data-pcb-object-kind="keepout"
+                    data-pcb-object-id={workspace.selection?.id}
                     cx={x}
                     cy={y}
                     r={strokeWidth * 3.2}
@@ -1307,6 +1367,8 @@ export function PcbCanvas({
                 <g
                   key={endpoint}
                   className="pcb-measurement-endpoint-control"
+                  data-pcb-object-kind="measurement"
+                  data-pcb-object-id={selectedMeasurementVisual.id}
                   role="button"
                   tabIndex={0}
                   onPointerDown={(event) => beginMeasurementResize(
@@ -1484,17 +1546,120 @@ export function PcbCanvas({
           <span>取消</span>
         </div>
       )}
-      <div className="pcb-canvas-hud" data-export-hidden>
-        <span>{placementLibraryComponent ? "放置元件" : workspace.tool === "select" ? "選取" : workspace.tool === "pan" ? "平移" : workspace.tool === "measure" ? "測量" : "禁制區"}</span>
-        {workspace.tool === "select" && <span>拖曳框選 · Ctrl+C 複製 · Ctrl+V 貼上</span>}
-        {selectedKeepout && workspace.tool === "select" && <span>拖曳四角縮放 · Delete 刪除</span>}
-        {selectedMeasurementVisual && workspace.tool === "select" && <span>拖曳亮色端點調整 · Alt 暫停吸附</span>}
-        <span>Alt 暫停吸附</span>
-        <span className="font-mono">
-          X {cursorPoint?.x.toFixed(2) ?? "—"} · Y {cursorPoint?.y.toFixed(2) ?? "—"}
-        </span>
-        <span className="font-mono">{workspace.zoom}%</span>
-      </div>
-    </main>
+          <div className="pcb-canvas-hud" data-export-hidden>
+            <span>{placementLibraryComponent ? "放置元件" : workspace.tool === "select" ? "選取" : workspace.tool === "pan" ? "平移" : workspace.tool === "measure" ? "測量" : "禁制區"}</span>
+            {workspace.tool === "select" && <span>拖曳框選 · Ctrl+C 複製 · Ctrl+V 貼上</span>}
+            {selectedKeepout && workspace.tool === "select" && <span>拖曳四角縮放 · Delete 刪除</span>}
+            {selectedMeasurementVisual && workspace.tool === "select" && <span>拖曳亮色端點調整 · Alt 暫停吸附</span>}
+            <span>Alt 暫停吸附</span>
+            <span className="font-mono">
+              X {cursorPoint?.x.toFixed(2) ?? "—"} · Y {cursorPoint?.y.toFixed(2) ?? "—"}
+            </span>
+            <span className="font-mono">{workspace.zoom}%</span>
+          </div>
+        </main>
+      </ContextMenuTrigger>
+      <ContextMenuContent data-pcb-context-menu className="w-56">
+        {contextSelection ? (
+          <>
+            <ContextMenuLabel>
+              {contextSelection.kind === "component"
+                ? "元件操作"
+                : contextSelection.kind === "keepout"
+                  ? "禁制區操作"
+                  : "量測線操作"}
+            </ContextMenuLabel>
+            {contextCanDuplicate ? (
+              <>
+                <ContextMenuGroup>
+                  <ContextMenuItem onSelect={copyContextSelection}>
+                    複製
+                    <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    disabled={!workspace.canMutate || contextComponentLocked}
+                    onSelect={() => workspace.duplicateSelected()}
+                  >
+                    建立副本
+                    <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    disabled={!workspace.canMutate || contextComponentLocked}
+                    onSelect={() => workspace.rotateSelected()}
+                  >
+                    旋轉 90°
+                    <ContextMenuShortcut>R</ContextMenuShortcut>
+                  </ContextMenuItem>
+                  {contextComponent ? (
+                    <ContextMenuItem
+                      disabled={!workspace.canMutate}
+                      onSelect={() => workspace.toggleSelectedLock()}
+                    >
+                      {contextComponent.locked ? "解鎖元件" : "鎖定元件"}
+                    </ContextMenuItem>
+                  ) : null}
+                </ContextMenuGroup>
+                <ContextMenuSeparator />
+              </>
+            ) : null}
+            <ContextMenuGroup>
+              <ContextMenuItem
+                className="text-rose-300 focus:bg-rose-500/15 focus:text-rose-100"
+                disabled={!workspace.canMutate || contextComponentLocked}
+                onSelect={() => workspace.deleteSelected()}
+              >
+                刪除
+                <ContextMenuShortcut>Delete</ContextMenuShortcut>
+              </ContextMenuItem>
+            </ContextMenuGroup>
+          </>
+        ) : (
+          <>
+            <ContextMenuLabel>畫布操作 · {workspace.zoom}%</ContextMenuLabel>
+            <ContextMenuGroup>
+              <ContextMenuItem onSelect={pasteContextSelection}>
+                貼上
+                <ContextMenuShortcut>Ctrl+V</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuItem
+                disabled={!workspace.canMutate || !workspace.canUndo}
+                onSelect={() => workspace.undo()}
+              >
+                復原
+                <ContextMenuShortcut>Ctrl+Z</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuItem
+                disabled={!workspace.canMutate || !workspace.canRedo}
+                onSelect={() => workspace.redo()}
+              >
+                重做
+                <ContextMenuShortcut>Ctrl+Shift+Z</ContextMenuShortcut>
+              </ContextMenuItem>
+            </ContextMenuGroup>
+            <ContextMenuSeparator />
+            <ContextMenuGroup>
+              <ContextMenuItem
+                disabled={workspace.zoom >= 400}
+                onSelect={() => workspace.setZoom(workspace.zoom + 25)}
+              >
+                放大
+                <ContextMenuShortcut>+</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuItem
+                disabled={workspace.zoom <= 25}
+                onSelect={() => workspace.setZoom(workspace.zoom - 25)}
+              >
+                縮小
+                <ContextMenuShortcut>−</ContextMenuShortcut>
+              </ContextMenuItem>
+              <ContextMenuItem onSelect={() => workspace.resetView()}>
+                重設檢視
+                <ContextMenuShortcut>F</ContextMenuShortcut>
+              </ContextMenuItem>
+            </ContextMenuGroup>
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
