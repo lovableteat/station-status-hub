@@ -1143,6 +1143,71 @@ All colors MUST be HSL for proper theming support.
     color: #b2c0d2;
   }
 
+  [data-mobile-maintenance-module] {
+    min-height: 44px;
+    border-color: var(--mobile-module-border);
+    background: var(--mobile-module-bg);
+    color: var(--mobile-module-text);
+  }
+
+  [data-mobile-maintenance-module="dashboard"] {
+    --mobile-module-border: rgb(76 173 196 / 0.55);
+    --mobile-module-bg: #123345;
+    --mobile-module-text: #b8edf5;
+    --mobile-module-active: linear-gradient(135deg, #4cbaca, #5d97df);
+  }
+
+  [data-mobile-maintenance-module="test-tracker"] {
+    --mobile-module-border: rgb(105 143 211 / 0.55);
+    --mobile-module-bg: #162b49;
+    --mobile-module-text: #cbdcff;
+    --mobile-module-active: linear-gradient(135deg, #5c8ddd, #5574c9);
+  }
+
+  [data-mobile-maintenance-module="flow-info"] {
+    --mobile-module-border: rgb(150 128 204 / 0.55);
+    --mobile-module-bg: #25213f;
+    --mobile-module-text: #e1d8ff;
+    --mobile-module-active: linear-gradient(135deg, #8d7bd6, #7964bf);
+  }
+
+  [data-mobile-maintenance-module="issues"] {
+    --mobile-module-border: rgb(190 105 132 / 0.55);
+    --mobile-module-bg: #3a2230;
+    --mobile-module-text: #ffd2df;
+    --mobile-module-active: linear-gradient(135deg, #d96e8c, #b95176);
+  }
+
+  [data-mobile-maintenance-module="tools"] {
+    --mobile-module-border: rgb(189 150 70 / 0.55);
+    --mobile-module-bg: #392c19;
+    --mobile-module-text: #f9d989;
+    --mobile-module-active: linear-gradient(135deg, #d5a53f, #b78328);
+  }
+
+  [data-mobile-maintenance-module="test-plan"] {
+    --mobile-module-border: rgb(70 165 140 / 0.55);
+    --mobile-module-bg: #163b38;
+    --mobile-module-text: #b9f2de;
+    --mobile-module-active: linear-gradient(135deg, #51b997, #368b7b);
+  }
+
+  [data-mobile-maintenance-module]:hover {
+    filter: brightness(1.08);
+  }
+
+  [data-mobile-maintenance-module]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(103 148 223 / 0.38);
+  }
+
+  [data-mobile-maintenance-module][aria-current="page"] {
+    border-color: color-mix(in srgb, var(--mobile-module-text) 72%, white) !important;
+    background: var(--mobile-module-active) !important;
+    color: #061927 !important;
+    box-shadow: 0 10px 22px -16px rgb(96 165 250 / 0.85);
+  }
+
   [data-mobile-workspace-dock="true"] {
     height: var(--mobile-shell-bottom);
     gap: 0.3rem;
@@ -1153,6 +1218,7 @@ All colors MUST be HSL for proper theming support.
   }
 
   [data-mobile-dock-item="true"] {
+    min-height: 44px;
     gap: 0.22rem;
     border-radius: 1.05rem;
     font-size: 0.7rem;
@@ -1160,6 +1226,11 @@ All colors MUST be HSL for proper theming support.
     font-weight: 750;
     letter-spacing: 0;
     color: #8b9eb5;
+  }
+
+  [data-mobile-dock-item="true"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(103 148 223 / 0.4);
   }
 
   [data-mobile-dock-item="true"] [data-mobile-dock-icon="true"] {
@@ -1176,16 +1247,80 @@ All colors MUST be HSL for proper theming support.
     stroke-width: 2.15;
   }
 
-  [data-mobile-dock-id="material-requests"] {
-    background: #1a3345;
-    color: #aeeefa;
+  [data-mobile-dock-item="true"][aria-current="page"] {
+    border-color: rgb(170 211 255 / 0.72) !important;
+    background: linear-gradient(180deg, #568bd5 0%, #3f73b9 100%) !important;
+    color: #f8fbff !important;
+    box-shadow: 0 10px 22px -16px rgb(96 165 250 / 0.95), 0 0 0 1px rgb(103 148 223 / 0.2);
   }
 
-  [data-mobile-dock-item="true"][aria-current="page"] {
-    border-color: rgb(150 187 244 / 0.34) !important;
-    background: var(--mobile-active) !important;
-    color: #f8fbff !important;
+  [data-mobile-ai-command-bar="true"] {
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  [data-mobile-ai-command-bar="true"] :is(button, [role="combobox"]) {
+    min-height: 44px;
+    border-color: rgb(75 117 153 / 0.7);
+    border-radius: 0.85rem;
+    background: #102a43;
+    color: #e6f2ff;
     box-shadow: none;
+  }
+
+  [data-mobile-ai-command-bar="true"] > button:last-child {
+    border-color: rgb(154 198 255 / 0.75);
+    background: #4f82cf;
+    color: #fff;
+    box-shadow: 0 10px 22px -16px rgb(96 165 250 / 0.9);
+  }
+
+  [data-mobile-ai-command-bar="true"] :is(button, [role="combobox"]):focus-visible {
+    outline: none;
+    border-color: rgb(151 213 255 / 0.95);
+    box-shadow: 0 0 0 3px rgb(56 189 248 / 0.22);
+  }
+
+  [data-mobile-ai-source-toggle="true"] {
+    min-width: 3rem;
+    width: 3rem;
+    height: 1.75rem;
+    border: 1px solid rgb(103 145 181 / 0.72);
+    background: #1a334b;
+  }
+
+  [data-mobile-ai-source-toggle="true"][data-state="checked"] {
+    border-color: rgb(117 219 240 / 0.82);
+    background: #2d8daf;
+  }
+
+  [data-mobile-ai-source-toggle="true"] > span {
+    width: 1.25rem;
+    height: 1.25rem;
+    background: #b8cbe0;
+  }
+
+  [data-mobile-ai-source-toggle="true"][data-state="checked"] > span {
+    background: #fff;
+  }
+
+  [data-mobile-ai-composer="true"] > div > div:first-child > button,
+  [data-mobile-ai-composer="true"] > div > div:last-child > button {
+    min-height: 44px;
+    border-color: rgb(75 117 153 / 0.7);
+    background: #16324d;
+    color: #d8efff;
+  }
+
+  [data-mobile-ai-composer="true"] > div > div:last-child > button[aria-label="送出查詢"] {
+    border-color: rgb(154 198 255 / 0.75);
+    background: #4f82cf;
+    color: #fff;
+  }
+
+  [data-mobile-ai-composer="true"] :is(button, [role="button"]):focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(56 189 248 / 0.22);
   }
 
   [data-mobile-more-sheet="true"] {

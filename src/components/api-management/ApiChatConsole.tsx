@@ -2952,7 +2952,7 @@ export function ApiChatConsole({
                   onKeyDown={handleComposerKeyDown}
                   onPaste={handleComposerPaste}
                   aria-label="輸入查詢內容"
-                  placeholder="輸入問題，或貼上圖片／文件"
+                  placeholder="輸入問題"
                   className="min-h-10 max-h-24 border-0 bg-transparent px-0 py-0 text-base leading-6 text-white shadow-none placeholder:text-slate-300 focus-visible:ring-0 sm:min-h-[74px] sm:max-h-28 sm:text-[17px] sm:leading-7"
                 />
               </div>

@@ -48,11 +48,20 @@ interface DashboardProps {
 }
 
 const KPI_TONES = {
-  blue: "border-blue-300/30 bg-[#0d2139] text-blue-200",
-  cyan: "border-cyan-300/30 bg-[#0b2434] text-cyan-200",
-  emerald: "border-emerald-300/30 bg-[#0c2828] text-emerald-200",
-  rose: "border-rose-300/30 bg-[#2b1822] text-rose-200",
+  blue: "border-blue-300/55 bg-[#123252] text-blue-100",
+  cyan: "border-cyan-300/55 bg-[#123545] text-cyan-100",
+  emerald: "border-emerald-300/55 bg-[#103a35] text-emerald-100",
+  rose: "border-rose-300/55 bg-[#3a202d] text-rose-100",
 } as const;
+
+const STATION_TONE_CLASSES = [
+  "border-cyan-300/55 border-l-cyan-200/90 bg-[#0b2b3a] hover:border-cyan-100/80 hover:bg-[#123c4d]",
+  "border-blue-300/55 border-l-blue-200/90 bg-[#102b49] hover:border-blue-100/80 hover:bg-[#16385b]",
+  "border-violet-300/55 border-l-violet-200/90 bg-[#25213f] hover:border-violet-100/80 hover:bg-[#302952]",
+  "border-emerald-300/55 border-l-emerald-200/90 bg-[#103a35] hover:border-emerald-100/80 hover:bg-[#174941]",
+  "border-amber-300/55 border-l-amber-200/90 bg-[#3a2c18] hover:border-amber-100/80 hover:bg-[#49371c]",
+  "border-rose-300/55 border-l-rose-200/90 bg-[#3a202d] hover:border-rose-100/80 hover:bg-[#4b2838]",
+] as const;
 
 function buildTrendPoints(values: number[], maxValue: number) {
   return values.map((value, index) => ({
@@ -89,7 +98,7 @@ function ExecutiveKpi({
   value: string | number;
 }) {
   return (
-    <div className={cn("flex min-w-[142px] snap-start items-center gap-2 rounded-xl border px-3 py-2 lg:min-w-0 lg:gap-3 lg:px-4 lg:py-3", KPI_TONES[tone])}>
+    <div className={cn("flex min-w-0 items-center gap-2 rounded-xl border border-l-4 px-3 py-2 lg:gap-3 lg:px-4 lg:py-3", KPI_TONES[tone])}>
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/20 lg:h-10 lg:w-10 lg:rounded-xl">
         <Icon className="h-4 w-4 lg:h-5 lg:w-5" aria-hidden="true" />
       </div>
@@ -338,7 +347,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         }
       />
 
-      <div data-mobile-dashboard-kpis="true" className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:grid lg:grid-cols-4 lg:overflow-visible lg:pb-0">
+      <div data-mobile-dashboard-kpis="true" className="grid grid-cols-2 gap-2 pb-1 lg:grid-cols-4 lg:overflow-visible lg:pb-0">
         <ExecutiveKpi icon={Server} label="專案機台" value={includedSystems.length} detail="納入管理報表" tone="blue" />
         <ExecutiveKpi icon={Gauge} label="平均測試進度" value={`${portfolioProgress}%`} detail={`${statusCounts.active} 台進行中`} tone="cyan" />
         <ExecutiveKpi icon={CheckCircle2} label="已完成" value={statusCounts.completed} detail={`交付完成率 ${completionRate}%`} tone="emerald" />
@@ -582,10 +591,10 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             </div>
             <div
               data-testid="station-capacity-flow"
-              className="overflow-x-auto pb-3 snap-x snap-mandatory"
+              className="pb-3 lg:overflow-x-auto lg:snap-x lg:snap-mandatory"
               aria-label={`站點產能流程，共 ${stationRows.length} 站，依第一站至最後一站排列`}
             >
-              <ol className="flex min-w-max items-stretch">
+              <ol className="grid gap-2 items-stretch lg:flex lg:min-w-max">
                 {stationRows.map((station, index) => {
               const remainingShare = totalRemainingHours
                 ? Math.round((station.remainingHours / totalRemainingHours) * 100)
@@ -595,12 +604,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 : 0;
               const isBottleneck =
                 station.id === bottleneckStation?.id && station.remainingHours > 0;
+              const stationTone = STATION_TONE_CLASSES[index % STATION_TONE_CLASSES.length];
 
               return (
                 <li
                   key={station.id}
                   data-station-order={station.order}
-                  className="relative flex w-80 min-w-80 snap-start items-stretch pr-10 last:pr-0"
+                  className="relative flex min-w-0 items-stretch pr-0 lg:w-80 lg:min-w-80 lg:snap-start lg:pr-10 lg:last:pr-0"
                 >
                 <HoverCard openDelay={220} closeDelay={120}>
                   <HoverCardTrigger asChild>
@@ -609,8 +619,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                       data-testid={`station-capacity-card-${index}`}
                       aria-label={`查看 ${station.name}，總共 ${station.totalSystems} 台，整站已完成 ${station.completedSystems} 台，還有 ${station.incompleteSystems} 台處理中，預估剩餘 ${station.remainingHours.toFixed(1)} 小時；滑鼠停留可查看計算方式`}
                       className={cn(
-                        "h-full w-full min-w-0 rounded-xl border border-[#315d78]/75 bg-[#0a1c2e] p-4 text-left outline-none transition-colors hover:border-cyan-300/45 hover:bg-[#10283c] focus-visible:ring-2 focus-visible:ring-cyan-300/70",
-                        isBottleneck && "border-amber-300/55 bg-amber-300/[0.08] hover:border-amber-200/70 hover:bg-amber-300/[0.11]"
+                        "h-full w-full min-w-0 rounded-xl border border-l-4 p-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cyan-300/70",
+                        stationTone,
+                        isBottleneck && "!border-amber-300/75 !border-l-amber-200 !bg-[#49371c]"
                       )}
                       onClick={() => onNavigate?.("test-tracker", { station: station.id, excludeStatus: "completed" })}
                     >
@@ -793,7 +804,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   {index < stationRows.length - 1 && (
                     <span
                       aria-hidden="true"
-                      className="absolute right-1 top-1/2 flex w-8 -translate-y-1/2 items-center text-cyan-300/70"
+                      className="absolute right-1 top-1/2 hidden w-8 -translate-y-1/2 items-center text-cyan-300/70 lg:flex"
                     >
                       <span className="h-px flex-1 bg-cyan-300/45" />
                       <ChevronRight className="h-4 w-4 shrink-0" />

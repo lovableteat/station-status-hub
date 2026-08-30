@@ -6,7 +6,13 @@ const read = async (path: string) =>
   readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 const entranceSource = await read("src/components/layout/WorkspaceEntrance.tsx");
+const sidebarSource = await read("src/components/layout/Sidebar.tsx");
 const dockSource = await read("src/components/layout/MobileWorkspaceDock.tsx");
+const metricStripSource = await read("src/components/maintenance/MaintenanceMetricStrip.tsx");
+const dashboardSource = await read("src/components/dashboard/Dashboard.tsx");
+const aiConsoleSource = await read("src/components/api-management/ApiChatConsole.tsx");
+const maintenanceSelectorSource = await read("src/components/api-management/MaintenanceSourceSelector.tsx");
+const adminCssSource = await read("src/components/admin/admin-panel.css");
 const globalCssSource = await read("src/index.css");
 
 test("uses a dedicated phone workspace list without replacing the desktop grid", () => {
@@ -38,4 +44,37 @@ test("scopes the new shell tokens and surfaces to phone widths", () => {
   assert.match(globalCssSource, /\[data-mobile-more-sheet="true"\][\s\S]*border-top-left-radius: 2rem/);
   assert.match(globalCssSource, /\.workspace-entrance-mobile-row\[data-workspace-id="station-status"\]/);
   assert.match(globalCssSource, /@media \(max-width: 359px\)[\s\S]*min-height: 68px/);
+});
+
+test("only the current workspace receives the mobile dock active style", () => {
+  assert.doesNotMatch(globalCssSource, /\[data-mobile-dock-id="material-requests"\][\s\S]*background:/);
+  assert.match(dockSource, /const activeDockClasses =/);
+  assert.match(dockSource, /active \? activeDockClasses :/);
+  assert.match(dockSource, /moreActive \? activeDockClasses :/);
+});
+
+test("keeps mobile AI controls thumb-friendly and visually consistent", () => {
+  assert.match(aiConsoleSource, /data-mobile-ai-command-bar="true"/);
+  assert.match(maintenanceSelectorSource, /data-mobile-ai-source-toggle="true"/);
+  assert.match(globalCssSource, /\[data-mobile-ai-command-bar="true"\] :is\(button, \[role="combobox"\]\)[\s\S]*min-height: 44px/);
+  assert.match(globalCssSource, /\[data-mobile-ai-source-toggle="true"\][\s\S]*background:/);
+});
+
+test("keeps mobile maintenance navigation and metrics readable without horizontal rails", () => {
+  assert.match(sidebarSource, /data-mobile-maintenance-module=\{item\.id\}/);
+  assert.match(sidebarSource, /grid-cols-2/);
+  assert.doesNotMatch(sidebarSource, /overflow-x-auto/);
+  assert.match(metricStripSource, /grid-cols-2/);
+  assert.doesNotMatch(metricStripSource, /overflow-x-auto/);
+});
+
+test("uses a responsive dashboard grid and distinct admin zone colors", () => {
+  assert.match(dashboardSource, /data-mobile-dashboard-kpis="true"[^>]*className="grid grid-cols-2/);
+  assert.doesNotMatch(dashboardSource, /data-mobile-dashboard-kpis="true"[^>]*className="[^\"]*overflow-x-auto/);
+  assert.match(adminCssSource, /\[data-admin-zone="filters"\]/);
+  assert.match(adminCssSource, /\[data-admin-zone="accounts"\]/);
+});
+
+test("keeps the mobile AI composer prompt on one line", () => {
+  assert.match(aiConsoleSource, /placeholder="輸入問題"/);
 });
