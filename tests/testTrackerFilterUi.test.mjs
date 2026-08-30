@@ -24,6 +24,12 @@ test("L10 exposes a persistent filter toolbar with sorting and visible active fi
   assert.doesNotMatch(tracker, /控制項收在這裡/);
 });
 
+test("mobile L10 project actions stay in one compact row", () => {
+  assert.match(tracker, /data-mobile-test-tracker-actions="true"/);
+  assert.match(tracker, /grid-cols-4/);
+  assert.match(tracker, /max-sm:\[&_button_svg\]:hidden/);
+});
+
 test("board view uses the complete production monitor lanes instead of current-station-only filtering", () => {
   assert.match(tracker, /<ProductionMonitor/);
   assert.match(tracker, /stationsOverride=\{displayStations\}/);

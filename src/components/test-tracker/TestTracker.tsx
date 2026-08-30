@@ -696,7 +696,10 @@ export function TestTracker() {
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-l border-[#254866] pl-2">
+        <div
+          data-mobile-test-tracker-actions="true"
+          className="grid w-full grid-cols-4 items-center gap-1.5 border-l-0 pl-0 sm:flex sm:w-auto sm:flex-nowrap sm:gap-2 sm:border-l sm:pl-2 [&>*]:min-w-0 max-sm:[&_button]:h-11 max-sm:[&_button]:w-full max-sm:[&_button]:min-w-0 max-sm:[&_button]:px-1 max-sm:[&_button]:text-[11px] max-sm:[&_button_svg]:hidden"
+        >
           <SystemManager onSystemUpdate={loadData} showDeleteAll={false} />
           <BulkResetDialog onReset={loadData} />
           <ExportManager systems={filteredSystems} stations={displayStations} progress={progress} />
