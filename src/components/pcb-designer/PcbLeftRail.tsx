@@ -49,6 +49,7 @@ interface PcbLeftRailProps {
   onPreviewProject: (project: PcbProject) => void;
   onSaveTemplate: () => void;
   onApplyTemplate: (templateId: string) => void;
+  onDuplicateTemplate: (template: PcbTemplate) => void;
   onRenameTemplate: (template: PcbTemplate) => void;
   onEditComponent: (component?: PcbLibraryComponent) => void;
   onDeleteProject: (project: PcbProject) => void;
@@ -114,6 +115,7 @@ export function PcbLeftRail({
   onPreviewProject,
   onSaveTemplate,
   onApplyTemplate,
+  onDuplicateTemplate,
   onRenameTemplate,
   onEditComponent,
   onDeleteProject,
@@ -353,7 +355,7 @@ export function PcbLeftRail({
           </div>
           <p>
             {activeTab === "templates"
-              ? "模板只用來建立新專案，不會覆蓋目前草稿。"
+              ? "內建模板可直接建立專案；若要改名或刪除，請先複製後編輯。"
               : "管理目前工作區可使用的資源。"}
           </p>
         </div>
@@ -458,10 +460,18 @@ export function PcbLeftRail({
               <span>{template.project.board.width}×{template.project.board.height} mm</span>
               <span>{template.project.components.length} 個元件</span>
             </div>
-            <div className="mt-1 flex justify-end">
-              <RowAction label={`重新命名 ${template.name}`} icon={Pencil} disabled={!workspace.canMutate || template.isBuiltIn} onClick={() => onRenameTemplate(template)} />
-              <RowAction label={`複製 ${template.name}`} icon={Copy} disabled={!workspace.canMutate} onClick={() => workspace.duplicateTemplate(template.id)} />
-              <RowAction label={`刪除 ${template.name}`} icon={Trash2} danger disabled={!workspace.canMutate || template.isBuiltIn} onClick={() => onDeleteTemplate(template)} />
+            <div className="mt-1 flex justify-end gap-1">
+              {template.isBuiltIn ? (
+                <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[10px] text-cyan-200" disabled={!workspace.canMutate} onClick={() => onDuplicateTemplate(template)}>
+                  <Copy className="mr-1 h-3.5 w-3.5" />複製後編輯
+                </Button>
+              ) : (
+                <>
+                  <RowAction label={`重新命名 ${template.name}`} icon={Pencil} disabled={!workspace.canMutate} onClick={() => onRenameTemplate(template)} />
+                  <RowAction label={`複製 ${template.name}`} icon={Copy} disabled={!workspace.canMutate} onClick={() => onDuplicateTemplate(template)} />
+                  <RowAction label={`刪除 ${template.name}`} icon={Trash2} danger disabled={!workspace.canMutate} onClick={() => onDeleteTemplate(template)} />
+                </>
+              )}
             </div>
           </div>
         ))}

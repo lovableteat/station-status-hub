@@ -154,6 +154,57 @@ test("templates create new projects while built-ins cannot be renamed or deleted
   assert.equal(deleted.data.templates.find((item) => item.id === builtIn.id)?.name, builtIn.name);
 });
 
+test("new custom templates appear first so the save result stays visible", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedState(), true);
+  const saved = reduceWorkspaceState(initial, {
+    type: "template/save",
+    input: {
+      name: "Visible template",
+      category: "Test",
+      description: "Saved from the active project",
+    },
+  });
+
+  assert.equal(saved.data.templates[0].name, "Visible template");
+  assert.equal(saved.data.templates[0].isBuiltIn, false);
+});
+
+test("duplicated templates appear directly after their source", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedState(), true);
+  const source = initial.data.templates[0];
+  const duplicated = reduceWorkspaceState(initial, {
+    type: "template/duplicate",
+    templateId: source.id,
+  });
+  const sourceIndex = duplicated.data.templates.findIndex((item) => item.id === source.id);
+  const copy = duplicated.data.templates[sourceIndex + 1];
+
+  assert.equal(copy.name, `${source.name} 複本`);
+  assert.equal(copy.isBuiltIn, false);
+});
+
+test("renaming a custom template marks workspace data as changed", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedState(), true);
+  const saved = reduceWorkspaceState(initial, {
+    type: "template/save",
+    input: { name: "Before", category: "Test", description: "Rename target" },
+  });
+  const staleRevision = "2000-01-01T00:00:00.000Z";
+  const renamed = reduceWorkspaceState({
+    ...saved,
+    data: { ...saved.data, updatedAt: staleRevision },
+  }, {
+    type: "template/rename",
+    templateId: saved.data.templates[0].id,
+    name: "After",
+  });
+
+  assert.notEqual(renamed.data.updatedAt, staleRevision);
+});
+
 test("library CRUD preserves built-ins and import upserts duplicate part numbers", async () => {
   const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
   const initial = createWorkspaceState(seedState(), true);
