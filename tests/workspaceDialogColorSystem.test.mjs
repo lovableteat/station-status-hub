@@ -40,13 +40,22 @@ test("Data Center dialogs encode project, facility, thermal, and power areas wit
 });
 
 test("PCB settings and admin collaboration panels use semantic accents instead of one blue surface", async () => {
-  const [pcbDialogs, adminCollaboration] = await Promise.all([
+  const [pcbDialogs, pcbStyles, adminCollaboration] = await Promise.all([
     read("../src/components/pcb-designer/PcbDialogs.tsx"),
+    read("../src/components/pcb-designer/pcb-designer.css"),
     read("../src/components/collaboration/AdminCollaborationPanel.tsx"),
   ]);
 
-  assert.match(pcbDialogs, /data-dialog-tone=\{dialog\?\.kind === "confirm" \? "danger" : "engineering"\}/);
+  assert.match(pcbDialogs, /dialog\?\.kind === "project-settings"[\s\S]*"project-settings"/);
+  assert.match(pcbDialogs, /data-pcb-dialog-form=\{dialog\.kind\}/);
+  assert.match(pcbDialogs, /data-pcb-field-tone="identity"/);
+  assert.match(pcbDialogs, /data-pcb-field-tone="dimensions"/);
+  assert.match(pcbDialogs, /data-pcb-field-tone=\{values\.status \|\| "draft"\}/);
+  assert.match(pcbDialogs, /data-pcb-project-footer/);
   assert.match(pcbDialogs, /workspace-dialog-section--violet/);
+  assert.match(pcbStyles, /\[data-pcb-dialog-form="project-settings"\]/);
+  assert.match(pcbStyles, /\[data-pcb-field-tone="draft"\]/);
+  assert.match(pcbStyles, /\[data-pcb-project-footer\]/);
   assert.match(adminCollaboration, /surface-accent--teal/);
   assert.match(adminCollaboration, /surface-accent--green/);
   assert.match(adminCollaboration, /surface-accent--violet/);

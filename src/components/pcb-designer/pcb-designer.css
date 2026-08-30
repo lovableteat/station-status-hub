@@ -2446,6 +2446,13 @@
     linear-gradient(180deg, #261c2c, #151a2b);
 }
 
+.pcb-dialog[data-dialog-tone="project-settings"] {
+  border-color: rgb(103 232 249 / 38%);
+  background:
+    radial-gradient(circle at 90% 0%, rgb(56 189 248 / 14%), transparent 18rem),
+    linear-gradient(180deg, #17283d, #101b2d);
+}
+
 .pcb-dialog input,
 .pcb-dialog select,
 .pcb-dialog textarea {
@@ -2453,6 +2460,93 @@
   border-radius: 10px;
   background: #1b283c;
   color: #edf4ff;
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] {
+  border-color: rgb(103 232 249 / 28%);
+  background: #101f34;
+  box-shadow: inset 3px 0 0 rgb(34 211 238 / 72%);
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone] {
+  color: var(--pcb-project-label);
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone] :is(input, select) {
+  border-color: var(--pcb-project-border);
+  background: var(--pcb-project-field) !important;
+  color: #f8fafc;
+  box-shadow: none;
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone="identity"] {
+  --pcb-project-label: #a5f3fc;
+  --pcb-project-border: rgb(103 232 249 / 55%);
+  --pcb-project-field: #0a2a36;
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone="description"] {
+  --pcb-project-label: #bfdbfe;
+  --pcb-project-border: rgb(96 165 250 / 52%);
+  --pcb-project-field: #102440;
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone="dimensions"] {
+  --pcb-project-label: #ddd6fe;
+  --pcb-project-border: rgb(167 139 250 / 52%);
+  --pcb-project-field: #211f3b;
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone="dimensions"] label {
+  color: var(--pcb-project-label);
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone="draft"] {
+  --pcb-project-label: #fde68a;
+  --pcb-project-border: rgb(250 204 21 / 52%);
+  --pcb-project-field: #302816;
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone="review"] {
+  --pcb-project-label: #ddd6fe;
+  --pcb-project-border: rgb(167 139 250 / 52%);
+  --pcb-project-field: #251e3c;
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone="approved"] {
+  --pcb-project-label: #a7f3d0;
+  --pcb-project-border: rgb(52 211 153 / 52%);
+  --pcb-project-field: #0f3029;
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] :is(input, select):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(56 189 248 / 22%);
+}
+
+.pcb-dialog [data-pcb-dialog-form="project-settings"] select option {
+  background: #101b2d;
+  color: #f8fafc;
+}
+
+.pcb-dialog [data-pcb-project-footer] button {
+  min-height: 44px;
+}
+
+.pcb-dialog [data-pcb-project-footer] button[type="button"] {
+  border-color: rgb(148 163 184 / 38%);
+  background: #17243a;
+  color: #e2e8f0;
+}
+
+.pcb-dialog [data-pcb-project-footer] button[type="submit"] {
+  border: 1px solid rgb(147 197 253 / 72%);
+  background: #60a5fa;
+  color: #071522;
+}
+
+.pcb-dialog [data-pcb-project-footer] button[type="submit"]:hover {
+  background: #7dd3fc;
 }
 
 .pcb-dialog button {
