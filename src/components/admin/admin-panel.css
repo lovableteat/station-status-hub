@@ -1313,6 +1313,26 @@
     display: none;
   }
 
+  [data-admin-zone="filters"] {
+    border-color: rgb(167 139 250 / 48%);
+    background:
+      radial-gradient(circle at 100% 0%, rgb(167 139 250 / 14%), transparent 14rem),
+      #121f38;
+  }
+
+  [data-admin-zone="filters"] input,
+  [data-admin-zone="filters"] [role="combobox"] {
+    border-color: rgb(167 139 250 / 42%);
+    background: #172743;
+  }
+
+  [data-admin-zone="accounts"] {
+    border-color: rgb(64 217 199 / 48%);
+    background:
+      radial-gradient(circle at 0% 0%, rgb(64 217 199 / 12%), transparent 16rem),
+      #0b2938;
+  }
+
   .admin-primary-action {
     width: 44px;
     min-width: 44px;

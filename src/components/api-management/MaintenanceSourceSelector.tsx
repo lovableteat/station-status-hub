@@ -180,6 +180,7 @@ export function MaintenanceSourceSelector({
         ) : null}
 
         <Switch
+          data-mobile-ai-source-toggle="true"
           checked={enabled}
           onCheckedChange={onEnabledChange}
           aria-describedby="maintenance-source-help"

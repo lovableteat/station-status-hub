@@ -7,12 +7,14 @@ const source = await readFile(
   "utf8",
 );
 
-test("station capacity is rendered as one ordered, horizontally scrollable process rail", () => {
+test("station capacity stacks on phones and keeps the desktop process rail", () => {
   assert.match(source, /data-testid="station-capacity-flow"/);
   assert.match(
     source,
-    /data-testid="station-capacity-flow"[\s\S]*?className="[^"]*overflow-x-auto[^"]*snap-x[^"]*"/,
+    /data-testid="station-capacity-flow"[\s\S]*?className="pb-3 lg:overflow-x-auto lg:snap-x lg:snap-mandatory"/,
   );
+  assert.match(source, /<ol className="grid gap-2 items-stretch lg:flex lg:min-w-max"/);
+  assert.match(source, /className="absolute right-1 top-1\/2 hidden w-8/);
   assert.match(source, /<ol[\s\S]*?stationRows\.map/);
   assert.match(source, /<li[\s\S]*?data-station-order=\{station\.order\}/);
   assert.match(source, /第 \{index \+ 1\} 站/);

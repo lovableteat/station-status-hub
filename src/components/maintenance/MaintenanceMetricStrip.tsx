@@ -10,23 +10,23 @@ export interface MaintenanceMetric {
 }
 
 const accentClasses = {
-  amber: "border-amber-300/35 bg-amber-300/[0.08] text-amber-100",
-  blue: "border-blue-300/35 bg-blue-300/[0.08] text-blue-100",
-  cyan: "border-cyan-300/35 bg-cyan-300/[0.08] text-cyan-100",
-  emerald: "border-emerald-300/35 bg-emerald-300/[0.08] text-emerald-100",
-  rose: "border-rose-300/35 bg-rose-300/[0.08] text-rose-100",
+  amber: "border-amber-300/55 bg-[#3a2c18] text-amber-100",
+  blue: "border-blue-300/55 bg-[#123252] text-blue-100",
+  cyan: "border-cyan-300/55 bg-[#123545] text-cyan-100",
+  emerald: "border-emerald-300/55 bg-[#103a35] text-emerald-100",
+  rose: "border-rose-300/55 bg-[#3a202d] text-rose-100",
 };
 
 export function MaintenanceMetricStrip({ metrics }: { metrics: MaintenanceMetric[] }) {
   return (
-    <div data-mobile-metric-strip="true" className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:overflow-visible">
+    <div data-mobile-metric-strip="true" className="grid grid-cols-2 gap-2 pb-1 lg:grid-cols-4 lg:overflow-visible">
       {metrics.map((metric) => {
         const Icon = metric.icon;
         return (
           <div
             key={metric.label}
             className={cn(
-              "flex min-w-[132px] flex-1 snap-start items-center justify-between gap-2 rounded-xl border px-3 py-2 lg:min-w-[150px] lg:gap-3 lg:py-2.5",
+              "flex min-w-0 items-center justify-between gap-2 rounded-xl border border-l-4 px-3 py-2 lg:gap-3 lg:py-2.5",
               accentClasses[metric.accent || "blue"]
             )}
           >

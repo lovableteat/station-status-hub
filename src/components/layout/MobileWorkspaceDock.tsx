@@ -30,10 +30,10 @@ interface MobileWorkspaceDockProps {
 }
 
 const PRIMARY_WORKSPACES = [
-  { id: "workspace-home", label: "首頁", icon: House, tone: "cyan" },
-  { id: "station-status", label: "維修", icon: Gauge, tone: "blue" },
-  { id: "material-requests", label: "料號", icon: PackageSearch, tone: "amber" },
-  { id: "ai-chat", label: "查詢", icon: Search, tone: "lime" },
+  { id: "workspace-home", label: "首頁", icon: House },
+  { id: "station-status", label: "維修", icon: Gauge },
+  { id: "material-requests", label: "料號", icon: PackageSearch },
+  { id: "ai-chat", label: "查詢", icon: Search },
 ] as const;
 
 const SECONDARY_WORKSPACES = [
@@ -43,12 +43,8 @@ const SECONDARY_WORKSPACES = [
   { id: "performance", label: "績效考核", icon: Target, description: "考核週期、目標與主管回饋" },
 ] as const;
 
-const activeToneClasses = {
-  amber: "border-amber-200/45 bg-amber-300/90 text-amber-950",
-  blue: "border-blue-200/45 bg-blue-400/90 text-white",
-  cyan: "border-cyan-200/45 bg-cyan-300/90 text-cyan-950",
-  lime: "border-lime-200/45 bg-lime-300/90 text-lime-950",
-};
+const activeDockClasses =
+  "border-blue-200/60 bg-[linear-gradient(180deg,#568bd5_0%,#3f73b9_100%)] text-white shadow-[0_10px_22px_-16px_rgba(96,165,250,0.95)]";
 
 export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: MobileWorkspaceDockProps) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -82,7 +78,7 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
               onClick={() => selectWorkspace(item.id)}
               className={cn(
                 "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent text-[10px] font-bold tracking-wide text-slate-400 transition-colors",
-                active ? activeToneClasses[item.tone] : "hover:border-white/10 hover:bg-white/[0.05] hover:text-white",
+                active ? activeDockClasses : "border-slate-700/70 bg-[#0c2033] text-slate-300 hover:border-blue-300/40 hover:bg-[#132b43] hover:text-white",
               )}
             >
               <span data-mobile-dock-icon="true"><Icon className="h-[18px] w-[18px]" /></span>
@@ -100,7 +96,7 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
           onClick={() => setMoreOpen(true)}
           className={cn(
             "flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent text-[10px] font-bold tracking-wide text-slate-400 transition-colors",
-            moreActive ? "border-violet-200/45 bg-violet-300/90 text-violet-950" : "hover:border-white/10 hover:bg-white/[0.05] hover:text-white",
+            moreActive ? activeDockClasses : "border-slate-700/70 bg-[#0c2033] text-slate-300 hover:border-blue-300/40 hover:bg-[#132b43] hover:text-white",
           )}
         >
           <span data-mobile-dock-icon="true"><MoreHorizontal className="h-[18px] w-[18px]" /></span>

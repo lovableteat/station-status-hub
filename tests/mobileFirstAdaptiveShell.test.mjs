@@ -63,7 +63,8 @@ test("administration and maintenance expose compact phone summaries", async () =
   assert.match(admin, /data-mobile-user-last-login="true"/);
   assert.match(scope, /data-mobile-project-primary-actions="true"/);
   assert.match(metrics, /data-mobile-metric-strip="true"/);
-  assert.match(metrics, /snap-x/);
+  assert.match(metrics, /grid-cols-2/);
+  assert.doesNotMatch(metrics, /overflow-x-auto/);
 });
 
 test("material and AI keep only primary phone controls above content", async () => {
