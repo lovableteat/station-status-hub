@@ -111,14 +111,14 @@
 
 .pcb-collaborator-trigger {
   display: inline-flex;
-  min-width: 170px;
-  height: 42px;
+  min-width: 0;
+  height: 36px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid rgb(102 211 233 / 42%);
-  border-radius: 13px;
+  border-radius: 10px;
   background: linear-gradient(135deg, rgb(20 61 79 / 92%), rgb(18 37 62 / 96%));
-  padding: 0 10px;
+  padding: 0 11px;
   color: #e8f8ff;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), 0 8px 20px rgb(1 7 18 / 20%);
 }
@@ -620,7 +620,10 @@
   flex: 1;
 }
 
-.pcb-panel-toggle,
+.pcb-panel-toggle {
+  display: none;
+}
+
 .pcb-mobile-project-actions,
 .pcb-mobile-advisory,
 .pcb-drawer-scrim {
@@ -666,6 +669,11 @@
 
 .pcb-component-object {
   transition: none;
+}
+
+.pcb-component-object.is-locked {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .pcb-canvas .pcb-keepout-object:focus-visible {
@@ -866,8 +874,9 @@
 
 .pcb-inspector-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 3px;
   border-top: 1px solid #23445d;
   padding-top: 11px;
 }
@@ -879,6 +888,19 @@
   background: var(--pcb-panel-raised);
   padding-inline: 8px;
   font-size: 11px;
+}
+
+.pcb-inspector-actions > button {
+  min-width: 0;
+  gap: 3px;
+  padding-inline: 5px;
+  font-size: 10px;
+}
+
+.pcb-inspector-actions > button svg {
+  width: 12px;
+  height: 12px;
+  margin-right: 0;
 }
 
 .pcb-model-import {
@@ -924,10 +946,12 @@
 
 .pcb-selection-count {
   display: inline-flex;
+  flex: none;
   align-items: center;
   color: #9fb2c7;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .pcb-danger-action {
@@ -1255,6 +1279,12 @@
   flex: 0 0 auto;
 }
 
+.pcb-project-actions > .pcb-collaborator-trigger,
+.pcb-project-actions > .pcb-template-center-action,
+.pcb-project-actions > .pcb-settings-action {
+  width: 126px;
+}
+
 .pcb-project-symbol {
   display: inline-flex;
   width: 34px;
@@ -1333,12 +1363,6 @@
   font-size: 11px;
   font-weight: 650;
   transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
-}
-
-/* Wide desktop keeps both side panels in the grid; drawer toggles are only
- * meaningful once the responsive overlay layout is active. */
-.pcb-panel-toggle {
-  display: none;
 }
 
 .pcb-template-center-action:hover,
@@ -1768,7 +1792,7 @@
 }
 
 .pcb-inspector-tabs {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .pcb-rail-tab,
@@ -2309,13 +2333,6 @@
   color: #a7efcf;
 }
 
-.pcb-project-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 3px;
-  margin-top: 7px;
-}
-
 .pcb-bom-row {
   display: flex;
   align-items: center;
@@ -2408,6 +2425,10 @@
 .pcb-inspector-body button {
   min-height: 34px;
   border-radius: 10px;
+}
+
+.pcb-inspector-body .pcb-inspector-actions > button {
+  min-height: 30px;
 }
 
 .pcb-hud {
@@ -2625,6 +2646,12 @@
     gap: 2px;
   }
 
+  .pcb-mobile-project-actions .pcb-panel-toggle {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
   .pcb-project-symbol,
   .pcb-project-heading,
   .pcb-status-chip,
@@ -2713,5 +2740,9 @@
 
   .pcb-status-bar span:nth-child(n + 5) {
     display: none;
+  }
+
+  .pcb-inspector-body .pcb-inspector-actions > button {
+    min-height: 44px;
   }
 }

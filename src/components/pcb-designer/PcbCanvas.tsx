@@ -399,7 +399,25 @@ export function PcbCanvas({
   const copyContextSelection = () => {
     if (workspace.copySelected()) {
       toast({ title: "已複製選取物件", description: "可在畫布空白處按右鍵貼上。" });
+    } else {
+      toast({ title: "沒有可複製的物件", description: "請先選取元件或禁制區。", variant: "destructive" });
     }
+  };
+
+  const runContextSelectionAction = (
+    action: () => boolean,
+    title: string,
+    description: string,
+  ) => {
+    if (action()) {
+      toast({ title, description });
+      return;
+    }
+    toast({
+      title: "操作未執行",
+      description: "請確認物件未鎖定，且專案允許編輯。",
+      variant: "destructive",
+    });
   };
 
   const pasteContextSelection = () => {
@@ -1230,7 +1248,7 @@ export function PcbCanvas({
                 tabIndex={0}
                 onKeyDown={(event) =>
                   selectWithKeyboard(event, { kind: "component", id: component.instanceId })}
-                aria-label={`元件 ${component.reference} ${component.name}`}
+                aria-label={`元件 ${component.reference} ${component.name}${component.locked ? "（已鎖定）" : ""}`}
               >
                 {component.shape === "circle" ? (
                   <circle
@@ -1573,19 +1591,27 @@ export function PcbCanvas({
               <>
                 <ContextMenuGroup>
                   <ContextMenuItem onSelect={copyContextSelection}>
-                    複製
+                    複製到剪貼簿
                     <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
                   </ContextMenuItem>
                   <ContextMenuItem
                     disabled={!workspace.canMutate || contextComponentLocked}
-                    onSelect={() => workspace.duplicateSelected()}
+                    onSelect={() => runContextSelectionAction(
+                      workspace.duplicateSelected,
+                      "已複製一份",
+                      "副本已建立並保持選取。",
+                    )}
                   >
-                    建立副本
+                    直接複製一份
                     <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
                   </ContextMenuItem>
                   <ContextMenuItem
                     disabled={!workspace.canMutate || contextComponentLocked}
-                    onSelect={() => workspace.rotateSelected()}
+                    onSelect={() => runContextSelectionAction(
+                      workspace.rotateSelected,
+                      "已旋轉 90°",
+                      "選取物件的方向已更新。",
+                    )}
                   >
                     旋轉 90°
                     <ContextMenuShortcut>R</ContextMenuShortcut>
@@ -1593,7 +1619,13 @@ export function PcbCanvas({
                   {contextComponent ? (
                     <ContextMenuItem
                       disabled={!workspace.canMutate}
-                      onSelect={() => workspace.toggleSelectedLock()}
+                      onSelect={() => runContextSelectionAction(
+                        workspace.toggleSelectedLock,
+                        contextComponent.locked ? "元件已解鎖" : "元件已鎖定",
+                        contextComponent.locked
+                          ? "現在可以移動、旋轉或刪除。"
+                          : "已避免誤移動或誤刪除。",
+                      )}
                     >
                       {contextComponent.locked ? "解鎖元件" : "鎖定元件"}
                     </ContextMenuItem>
@@ -1606,7 +1638,11 @@ export function PcbCanvas({
               <ContextMenuItem
                 className="text-rose-300 focus:bg-rose-500/15 focus:text-rose-100"
                 disabled={!workspace.canMutate || contextComponentLocked}
-                onSelect={() => workspace.deleteSelected()}
+                onSelect={() => runContextSelectionAction(
+                  workspace.deleteSelected,
+                  "已刪除選取物件",
+                  "可使用 Ctrl+Z 復原。",
+                )}
               >
                 刪除
                 <ContextMenuShortcut>Delete</ContextMenuShortcut>
