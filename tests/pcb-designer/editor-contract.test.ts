@@ -143,6 +143,16 @@ test("makes locked PCB components persistently visible and accessible", () => {
   assert.match(canvasSource, /component\.locked\s*\?\s*"（已鎖定）"/);
 });
 
+test("keeps template mutations visible and explains protected built-ins", () => {
+  assert.match(railSource, /內建模板可直接建立專案/);
+  assert.match(railSource, /複製後編輯/);
+  assert.match(railSource, /onDuplicateTemplate/);
+  assert.match(workspaceSource, /const saveCurrentAsTemplate/);
+  assert.match(workspaceSource, /const duplicateTemplate/);
+  assert.match(workspaceSource, /已儲存自訂模板/);
+  assert.match(workspaceSource, /已建立可編輯副本/);
+});
+
 test("renders PCB layers in the required stable order", () => {
   assert.match(
     canvasSource,

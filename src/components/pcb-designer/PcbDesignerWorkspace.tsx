@@ -43,6 +43,7 @@ import { PcbCanvas } from "./PcbCanvas.tsx";
 import { PcbCollaborators } from "./PcbCollaborators.tsx";
 import { PcbInspector } from "./PcbInspector.tsx";
 import { exportPcbSvgAsPng } from "./core/pngExport.ts";
+import type { TemplateInput } from "./core/workspace.ts";
 import {
   createPcbAccountRemoteClient,
   isDatabaseUserId,
@@ -389,11 +390,26 @@ export function PcbDesignerWorkspace({
     description: `確定要刪除「${project.name}」嗎？此操作只會在確認後執行。`,
     onConfirm: () => void workspace.deleteProject(project.id),
   });
+  const saveCurrentAsTemplate = (input: TemplateInput) => {
+    workspace.saveTemplate(input);
+    toast({ title: "已儲存自訂模板", description: `「${input.name}」已顯示在模板清單最上方。` });
+  };
+  const duplicateTemplate = (template: PcbTemplate) => {
+    workspace.duplicateTemplate(template.id);
+    toast({ title: "已建立可編輯副本", description: `「${template.name} 複本」已顯示在原模板下方。` });
+  };
+  const renameTemplate = (templateId: string, name: string) => {
+    workspace.renameTemplate(templateId, name);
+    toast({ title: "模板已重新命名", description: `新名稱：${name}` });
+  };
   const requestDeleteTemplate = (template: PcbTemplate) => setDialog({
     kind: "confirm",
     title: "刪除自訂模板",
     description: `確定要刪除「${template.name}」嗎？內建模板不會被刪除。`,
-    onConfirm: () => workspace.deleteTemplate(template.id),
+    onConfirm: () => {
+      workspace.deleteTemplate(template.id);
+      toast({ title: "自訂模板已刪除", description: template.name });
+    },
   });
   const requestDeleteComponent = (component: PcbLibraryComponent) => setDialog({
     kind: "confirm",
@@ -669,6 +685,7 @@ export function PcbDesignerWorkspace({
             })}
             onSaveTemplate={() => setDialog({ kind: "save-template" })}
             onApplyTemplate={createProjectFromTemplate}
+            onDuplicateTemplate={duplicateTemplate}
             onRenameTemplate={(template) => setDialog({ kind: "rename-template", template })}
             onEditComponent={(component) => setDialog({ kind: "component", component })}
             onDeleteProject={requestDeleteProject}
@@ -719,8 +736,8 @@ export function PcbDesignerWorkspace({
         onClose={() => setDialog(null)}
         onCreateProject={workspace.createProject}
         onUpdateProject={workspace.updateProjectSettings}
-        onSaveTemplate={workspace.saveTemplate}
-        onRenameTemplate={workspace.renameTemplate}
+        onSaveTemplate={saveCurrentAsTemplate}
+        onRenameTemplate={renameTemplate}
         onSaveComponent={saveComponent}
       />
     </section>

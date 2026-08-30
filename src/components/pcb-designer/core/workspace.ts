@@ -502,23 +502,26 @@ export function reduceWorkspaceState(
         ...state,
         data: {
           ...state.data,
-          templates: [...state.data.templates.map(clone), template],
+          templates: [template, ...state.data.templates.map(clone)],
           updatedAt: now,
         },
       });
     }
     case "template/rename": {
       const name = action.name.trim();
-      if (!name) return state;
+      const template = state.data.templates.find((item) => item.id === action.templateId);
+      if (!name || !template || template.isBuiltIn || template.name === name) return state;
+      const now = timestamp();
       return materialize({
         ...state,
         data: {
           ...state.data,
           templates: state.data.templates.map((item) =>
-            item.id === action.templateId && !item.isBuiltIn
-              ? { ...clone(item), name, updatedAt: timestamp() }
+            item.id === action.templateId
+              ? { ...clone(item), name, updatedAt: now }
               : clone(item),
           ),
+          updatedAt: now,
         },
       });
     }
@@ -538,7 +541,8 @@ export function reduceWorkspaceState(
         ...state,
         data: {
           ...state.data,
-          templates: [...state.data.templates.map(clone), copy],
+          templates: state.data.templates.flatMap((item) =>
+            item.id === source.id ? [clone(item), copy] : [clone(item)]),
           updatedAt: now,
         },
       });
