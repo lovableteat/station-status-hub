@@ -449,8 +449,8 @@
   gap: 12px;
 }
 .rd2-filter-bar {
-  border: 1px solid var(--rd2-border);
-  border-radius: 6px 6px 0 0;
+  border: 1px solid var(--rd2-border-soft);
+  border-radius: var(--rd2-radius) var(--rd2-radius) 0 0;
   padding: 16px;
   background: var(--rd2-panel);
 }
@@ -495,9 +495,16 @@
 }
 .rd2-records-table {
   background: var(--rd2-panel);
-  border: 1px solid var(--rd2-border);
+  border: 1px solid var(--rd2-border-soft);
   border-top: 0;
-  border-radius: 0 0 6px 6px;
+  border-radius: 0 0 var(--rd2-radius) var(--rd2-radius);
+}
+/* Status, score and actions only need their content width; without this the
+   action buttons claimed a third of the table and squeezed the data columns. */
+.rd2-records-table th:nth-child(n + 4),
+.rd2-records-table td:nth-child(n + 4) {
+  width: 1%;
+  white-space: nowrap;
 }
 .rd2-workspace td small {
   display: block;
@@ -506,9 +513,16 @@
 }
 .rd2-row-actions {
   display: flex;
-  flex-wrap: wrap;
+  /* Must not wrap: the cell is content-sized, so wrapping would stack the
+     buttons and triple the row height. The table scrolls if space runs out. */
+  flex-wrap: nowrap;
   gap: 6px;
-  min-width: 180px;
+  justify-content: flex-end;
+}
+.rd2-row-actions button {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 .rd2-status {
   display: inline-block;
@@ -647,7 +661,9 @@
   color: var(--rd2-muted);
 }
 .rd2-chart-body {
-  margin-inline: -6px;
+  /* ResponsiveContainer already fills the card; a negative inline margin here
+     pushed the SVG 6px past the card edge on both chart tabs. */
+  min-width: 0;
 }
 .rd2-chart-tooltip {
   background: var(--rd2-panel-soft);
