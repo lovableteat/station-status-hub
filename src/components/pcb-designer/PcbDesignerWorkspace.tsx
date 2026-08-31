@@ -131,6 +131,10 @@ export function PcbDesignerWorkspace({
       : null,
   });
   const { saveNow, setTool } = workspace;
+  const selectedObjectCount = new Set([
+    ...workspace.selectedObjects,
+    ...(workspace.selection ? [workspace.selection.id] : []),
+  ]).size;
   const selectedComponentCount = useMemo(() => {
     const selectedIds = new Set([
       ...workspace.selectedObjects,
@@ -577,6 +581,7 @@ export function PcbDesignerWorkspace({
         canUndo={workspace.canUndo}
         canRedo={workspace.canRedo}
         selectedComponentCount={selectedComponentCount}
+        selectedObjectCount={selectedObjectCount}
         isSaving={workspace.persistenceStatus === "saving"}
         viewMode={viewMode}
         exportPngAvailable={viewMode === "2d"}
@@ -614,6 +619,7 @@ export function PcbDesignerWorkspace({
         onUndo={workspace.undo}
         onRedo={workspace.redo}
         onArrangeSelection={workspace.arrangeSelectedComponents}
+        onDeleteSelection={workspace.deleteSelected}
         onToolChange={workspace.setTool}
         onActiveLayerChange={workspace.setActiveLayer}
         onVisibleLayerChange={workspace.setVisibleLayer}

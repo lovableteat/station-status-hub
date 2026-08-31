@@ -15,6 +15,24 @@ interface Bounds {
   bottom: number;
 }
 
+export function deletePcbSelection(project: PcbProject, objectIds: readonly string[]):
+  | { ok: true; project: PcbProject; count: number }
+  | { ok: false; reason: string } {
+  const ids = new Set(objectIds);
+  const locked = project.components.filter((item) => ids.has(item.instanceId) && item.locked);
+  if (locked.length) {
+    return { ok: false, reason: `選取範圍包含 ${locked.length} 個鎖定元件，請先解除鎖定；尚未刪除任何項目。` };
+  }
+  const components = project.components.filter((item) => !ids.has(item.instanceId));
+  const keepouts = project.keepouts.filter((item) => !ids.has(item.id));
+  const measurements = project.measurements.filter((item) => !ids.has(item.id));
+  const count = project.components.length - components.length
+    + project.keepouts.length - keepouts.length
+    + project.measurements.length - measurements.length;
+  if (!count) return { ok: false, reason: "請先選取要刪除的元件或物件。" };
+  return { ok: true, project: { ...project, components, keepouts, measurements }, count };
+}
+
 export interface DuplicatePcbSelectionResult {
   project: PcbProject;
   objectIds: string[];

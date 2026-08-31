@@ -24,6 +24,7 @@ import {
   Ruler,
   Save,
   Square,
+  Trash2,
   Undo2,
   ZoomIn,
   ZoomOut,
@@ -132,6 +133,7 @@ export interface PcbToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   selectedComponentCount: number;
+  selectedObjectCount: number;
   isSaving: boolean;
   viewMode: PcbViewMode;
   exportPngAvailable: boolean;
@@ -147,6 +149,7 @@ export interface PcbToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   onArrangeSelection: (arrangement: PcbComponentArrangement) => void;
+  onDeleteSelection: () => void;
   onToolChange: (tool: PcbTool) => void;
   onActiveLayerChange: (layer: "top" | "bottom") => void;
   onVisibleLayerChange: (layer: PcbVisibleLayer) => void;
@@ -166,6 +169,7 @@ export function PcbToolbar({
   canUndo,
   canRedo,
   selectedComponentCount,
+  selectedObjectCount,
   isSaving,
   viewMode,
   exportPngAvailable,
@@ -181,6 +185,7 @@ export function PcbToolbar({
   onUndo,
   onRedo,
   onArrangeSelection,
+  onDeleteSelection,
   onToolChange,
   onActiveLayerChange,
   onVisibleLayerChange,
@@ -413,6 +418,19 @@ export function PcbToolbar({
 
         <span className="pcb-tool-separator" aria-hidden="true" />
         <ToolButton label="選取工具" shortcut="V" icon={MousePointer2} active={tool === "select"} onClick={() => onToolChange("select")} />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={!canMutate || selectedObjectCount === 0}
+          onClick={onDeleteSelection}
+          aria-keyshortcuts="Delete Backspace"
+          title="拖曳框選或 Ctrl / Shift 點選多個項目，再按 Delete；Ctrl+Z 可復原"
+        >
+          <Trash2 data-icon="inline-start" />
+          刪除選取{selectedObjectCount > 0 ? `（${selectedObjectCount}）` : ""}
+        </Button>
         <ToolButton label="拖曳畫布" shortcut="H / Space" icon={Hand} active={tool === "pan"} onClick={() => onToolChange("pan")} />
         <ToolButton label="測量工具" shortcut="M" icon={Ruler} disabled={!canMutate} active={tool === "measure"} onClick={() => onToolChange("measure")} />
         <ToolButton

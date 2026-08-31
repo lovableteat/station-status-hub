@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  deletePcbSelection,
   duplicatePcbSelection,
   getMarqueeSelectionIds,
 } from "../../src/components/pcb-designer/core/selection.ts";
@@ -72,6 +73,31 @@ test("marquee selects intersecting components and keepouts while respecting visi
     getMarqueeSelectionIds(board, { x: 10, y: 10 }, { x: 30, y: 50 }, "bottom"),
     ["keepout-a"],
   );
+});
+
+test("batch deletion removes only selected objects without mutating the source", () => {
+  const board = project();
+  board.components[0].keepout = { top: 1, bottom: 2, left: 3, right: 4 };
+  board.measurements = [{ id: "measure-a", x1: 0, y1: 0, x2: 10, y2: 10, color: "#fff" }];
+  const before = structuredClone(board);
+  const result = deletePcbSelection(board, ["top", "top", "keepout-a", "measure-a", "missing"]);
+  assert.ok(result.ok);
+  assert.equal(result.count, 3);
+  assert.deepEqual(result.project.components.map(item => item.instanceId), ["bottom"]);
+  assert.deepEqual(result.project.keepouts, []);
+  assert.deepEqual(result.project.measurements, []);
+  assert.deepEqual(board, before);
+});
+
+test("locked members block the entire batch, and empty or stale selections do nothing", () => {
+  const board = project();
+  board.components[1].locked = true;
+  const before = structuredClone(board);
+  const result = deletePcbSelection(board, ["top", "bottom", "keepout-a"]);
+  assert.equal(result.ok, false);
+  assert.deepEqual(board, before);
+  assert.equal(deletePcbSelection(board, []).ok, false);
+  assert.equal(deletePcbSelection(board, ["missing"]).ok, false);
 });
 
 test("mixed component and keepout copies preserve their relative offset", () => {

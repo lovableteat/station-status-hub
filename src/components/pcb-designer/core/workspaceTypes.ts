@@ -91,6 +91,7 @@ export type PcbWorkspaceAction =
   | { type: "selection/set-many"; objectIds: string[]; additive?: boolean }
   | { type: "selection/toggle"; objectId: string }
   | { type: "selection/duplicate"; objectIds?: string[] }
+  | { type: "selection/delete" }
   | { type: "selection/clear-group" }
   | { type: "panel/right"; tab: PcbWorkspaceState["rightTab"] }
   | { type: "permission/set"; canEdit: boolean }

@@ -114,9 +114,11 @@
   min-width: 0;
   height: 36px;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   border: 1px solid rgb(102 211 233 / 42%);
   border-radius: 10px;
+  flex: none;
+  width: max-content;
   background: linear-gradient(135deg, rgb(20 61 79 / 92%), rgb(18 37 62 / 96%));
   padding: 0 11px;
   color: #e8f8ff;
@@ -156,7 +158,7 @@
 .pcb-collaborator-trigger-copy {
   display: flex;
   min-width: 0;
-  flex: 1;
+  flex: none;
   flex-direction: column;
   align-items: flex-start;
   line-height: 1.1;
@@ -726,6 +728,8 @@
   left: 10px;
   bottom: 10px;
   display: flex;
+  max-width: calc(100% - 20px);
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   border: 1px solid var(--pcb-border);
@@ -735,6 +739,11 @@
   font-size: 11px;
   color: #b8c8d9;
   pointer-events: none;
+}
+
+.pcb-canvas-hud > span {
+  flex: none;
+  max-width: 100%;
 }
 
 .pcb-inspector {
@@ -1279,7 +1288,6 @@
   flex: 0 0 auto;
 }
 
-.pcb-project-actions > .pcb-collaborator-trigger,
 .pcb-project-actions > .pcb-template-center-action,
 .pcb-project-actions > .pcb-settings-action {
   width: 126px;

@@ -38,6 +38,7 @@ import type {
 import { libraryIdentity } from "../core/workspaceRecords.ts";
 import { isValidBoard } from "../core/validation.ts";
 import { isValidComponentKeepout } from "../core/componentKeepout.ts";
+import { deletePcbSelection } from "../core/selection.ts";
 
 export const MAX_AUTO_PLACE_ITEMS = 50;
 export const MAX_AUTO_PLACE_COLLISION_TESTS = 1_000_000;
@@ -465,7 +466,20 @@ export function usePcbEditorActions(
     if (action.type === "delete") dispatch({ type: "selection/set", selection: null });
     return true;
   }, [dispatch, state.activeProject, state.canEdit, state.documentLocked, state.selection]);
-  const deleteSelected = useCallback(() => applySelectionEdit({ type: "delete" }), [applySelectionEdit]);
+  const deleteSelected = useCallback(() => {
+    if (!state.canEdit || state.documentLocked) return false;
+    const result = deletePcbSelection(state.activeProject, [
+      ...state.selectedObjects,
+      ...(state.selection ? [state.selection.id] : []),
+    ]);
+    if (result.ok === false) {
+      toast({ title: "無法刪除選取項目", description: result.reason, variant: "destructive" });
+      return false;
+    }
+    dispatch({ type: "selection/delete" });
+    toast({ title: `已刪除 ${result.count} 個選取項目`, description: "可使用 Ctrl+Z 一次復原整批項目。" });
+    return true;
+  }, [dispatch, state.activeProject, state.canEdit, state.documentLocked, state.selectedObjects, state.selection]);
   const rotateSelected = useCallback(() => applySelectionEdit({ type: "rotate" }), [applySelectionEdit]);
   const toggleSelectedLock = useCallback(() => applySelectionEdit({ type: "toggle-lock" }), [applySelectionEdit]);
   const nudgeSelected = useCallback((dx: number, dy: number) => {
@@ -634,7 +648,7 @@ export function usePcbEditorActions(
       }
       if (event.key === "Escape") {
         event.preventDefault();
-        shortcuts.dispatch({ type: "selection/set", selection: null });
+        shortcuts.dispatch({ type: "selection/set-many", objectIds: [] });
         shortcuts.dispatch({ type: "tool/set", tool: "select" });
         return;
       }
