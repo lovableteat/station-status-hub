@@ -582,10 +582,6 @@ export function PerformanceAppraisalPage() {
             </select>
           </div>
         </header>
-        <PerformanceFlowGuide
-          status={editorReview?.status ?? null}
-          employeeName={editorReview?.employeeName}
-        />
         {loadError && (
           <div className="rd2-error rd2-load-error" role="alert">
             <span>{loadError}</span>
@@ -599,7 +595,12 @@ export function PerformanceAppraisalPage() {
             </Button>
           </div>
         )}
-        {tab === "policy" && <AssessmentPolicy />}
+        {tab === "policy" && (
+          <>
+            <PerformanceFlowGuide />
+            <AssessmentPolicy />
+          </>
+        )}
         {tab === "manager" && canEdit && (
           <div
             className="rd2-view-switch"
@@ -649,7 +650,7 @@ export function PerformanceAppraisalPage() {
                   className="rd2-editor-context"
                   hidden={tab === "self"}
                 >
-                  <label htmlFor="rd2-existing">評核對象</label>
+                  <label htmlFor="rd2-existing">正在評核</label>
                   <select
                     id="rd2-existing"
                     value={editorId || ""}
@@ -662,7 +663,9 @@ export function PerformanceAppraisalPage() {
                       )
                     }
                   >
-                    <option value="">直接建立主管評核</option>
+                    <option value="">
+                      ＋ 建立新的一筆（員工還沒自評）
+                    </option>
                     {reviews
                       .filter(
                         (review) =>
@@ -676,6 +679,10 @@ export function PerformanceAppraisalPage() {
                         </option>
                       ))}
                   </select>
+                  <p className="rd2-hint rd2-editor-context-hint">
+                    要評核既有的自評，從「考核紀錄」點該員的「主管評分」最快；
+                    在這裡可以直接換人，或在員工還沒自評時先開一筆。
+                  </p>
                   {!canEdit && (
                     <Button
                       type="button"

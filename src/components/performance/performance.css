@@ -782,6 +782,13 @@
 .rd2-editor-context select {
   flex: 1;
 }
+/* The explainer belongs on its own line under the control, not squeezed
+   into the flex row beside it. */
+.rd2-workspace .rd2-editor-context-hint {
+  flex: 1 1 100%;
+  margin: -4px 0 0;
+  line-height: 1.7;
+}
 .rd2-records-heading {
   display: flex;
   justify-content: space-between;
