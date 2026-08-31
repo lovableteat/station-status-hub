@@ -71,7 +71,11 @@ export function AssessmentPolicy() {
         </p>
         <div className="rd2-guidance-grid">
           {Object.keys(CATEGORY_GUIDANCE).map((category) => (
-            <article className="rd2-guidance-item" key={category}>
+            <article
+              className="rd2-guidance-item"
+              data-category={category}
+              key={category}
+            >
               <h4>
                 <span className="rd2-guidance-tag" data-category={category}>
                   {category}

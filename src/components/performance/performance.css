@@ -31,16 +31,18 @@
   color-scheme: dark;
 }
 .rd2-sidebar {
-  position: sticky;
-  top: 16px;
-  align-self: start;
-  height: calc(100dvh - 116px);
-  background: var(--rd2-panel);
+  /* Matches the maintenance workspace rail. Deliberately NOT sticky: that
+     workspace scrolls an inner pane, so its rail never appears to move, but
+     this page scrolls as a whole and a sticky rail visibly drifts against
+     the content. */
+  position: static;
+  align-self: stretch;
+  background: #071522;
   color: hsl(var(--sidebar-foreground));
-  border: 1px solid var(--rd2-border-soft);
-  border-radius: var(--rd2-radius);
-  box-shadow: 0 18px 40px -28px rgb(0 0 0 / 0.9);
-  padding: 20px 12px;
+  border: 1px solid #2a526f;
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 16px 10px;
 }
 .rd2-brand {
   display: flex;
@@ -163,6 +165,32 @@
 .rd2-workspace select {
   appearance: auto;
 }
+/* The global input reset applies `appearance: none`, which in Chrome strips
+   the native calendar button off date fields - the picker became unreachable.
+   Restore it here and tint it to the workspace accent so it reads on the
+   dark panel. */
+.rd2-workspace input[type="date"] {
+  position: relative;
+  appearance: auto;
+  -webkit-appearance: auto;
+  padding-right: 10px;
+}
+.rd2-workspace input[type="date"]::-webkit-calendar-picker-indicator {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  opacity: 0.95;
+  cursor: pointer;
+  filter: invert(72%) sepia(38%) saturate(820%) hue-rotate(165deg)
+    brightness(112%) contrast(96%);
+}
+.rd2-workspace input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  filter: invert(80%) sepia(60%) saturate(1200%) hue-rotate(165deg)
+    brightness(120%) contrast(98%);
+}
+
 .rd2-workspace input:focus-visible,
 .rd2-workspace textarea:focus-visible,
 .rd2-workspace select:focus-visible {
@@ -226,7 +254,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 .rd2-category-grid > .rd2-card {
   margin-bottom: 0;
@@ -242,7 +270,47 @@
   }
 }
 .rd2-category {
-  border-top: 3px solid var(--rd2-accent);
+  border-top: 3px solid var(--card-accent, var(--rd2-accent));
+}
+/* Equal-height columns would leave dead space in the shorter cards, so let
+   the STAR textarea absorb the slack instead of padding the card with air. */
+.rd2-category {
+  display: flex;
+  flex-direction: column;
+}
+.rd2-category > [data-slot="field-group"] {
+  flex: 1;
+  min-height: 0;
+}
+.rd2-category > [data-slot="field-group"] > [data-slot="field"]:first-child {
+  flex: 1;
+  min-height: 0;
+}
+.rd2-category > [data-slot="field-group"] > [data-slot="field"]:first-child
+  textarea {
+  flex: 1;
+  min-height: 96px;
+}
+
+.rd2-category[data-category="KPI"] { --card-accent: #4085f5; }
+.rd2-category[data-category="OKR"] { --card-accent: #1aa167; }
+.rd2-category[data-category="IDP"] { --card-accent: #7d5ae8; }
+.rd2-category[data-category] .rd2-category-heading h3 {
+  color: var(--card-accent);
+}
+
+/* The scoring form was a wall of identical grey boxes - give each block its
+   own accent so the sections are distinguishable at a glance. */
+.rd2-identity {
+  border-top: 3px solid #5fa2f8;
+}
+.rd2-question {
+  border-top: 3px solid var(--card-accent, var(--rd2-accent));
+}
+.rd2-question[data-question-index="1"] { --card-accent: #5fdef2; }
+.rd2-question[data-question-index="2"] { --card-accent: #9578ed; }
+.rd2-feedback-card {
+  border-top: 3px solid #3ddc97;
 }
 .rd2-category-heading h3 {
   font-size: 15px;
@@ -343,15 +411,18 @@
 }
 .rd2-records-summary {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
+  gap: 12px;
   margin-bottom: 16px;
 }
 .rd2-records-summary .rd2-stat-row {
   margin-bottom: 0;
-  /* 3 + 2 balances against the chart card better than 4 + 1. */
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* All five fit one row on a desktop; wrapping them was wasted height. */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+@media (max-width: 1180px) {
+  .rd2-records-summary .rd2-stat-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 @media (max-width: 640px) {
   .rd2-records-summary .rd2-stat-row {
@@ -370,17 +441,27 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 .rd2-question-grid > .rd2-card {
   margin-bottom: 0;
 }
 .rd2-question legend {
+  /* Floating the legend takes it out of the fieldset's border slot, so it
+     renders as a normal heading inside the card and leaves the border whole. */
+  float: left;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 10px;
   font-weight: 700;
-  padding: 0 6px;
-  color: var(--rd2-muted);
   font-size: 12px;
   letter-spacing: 0.04em;
+  color: var(--card-accent, var(--rd2-muted));
+}
+.rd2-question::after {
+  content: "";
+  display: table;
+  clear: both;
 }
 .rd2-question h3 {
   margin-top: 8px;
@@ -404,8 +485,22 @@
   background: var(--rd2-soft);
 }
 .rd2-form-footer {
-  padding: 18px 0;
-  border-top: 1px solid var(--rd2-border);
+  /* Moved above the form: saving no longer means scrolling to the bottom. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--rd2-border-soft);
+  border-radius: var(--rd2-radius);
+  background: var(--rd2-panel);
+}
+.rd2-form-footer > .rd2-error,
+.rd2-form-footer > .rd2-draft-status {
+  flex: 1 1 100%;
+  margin: 0;
 }
 .rd2-form-footer > .rd2-actions {
   margin-top: 12px;
@@ -564,16 +659,40 @@
    Wide-screen layout: spend the horizontal space instead of stacking every
    card into one tall column, so the page scrolls far less on a desktop.
    --------------------------------------------------------------------------- */
+/* Cards supply their own margin-bottom; a grid wrapper zeroes it on its
+   children, so every wrapper must re-supply the gap to the block below it.
+   Missing this is what made blocks sit flush against each other. */
+.rd2-policy-grid,
+.rd2-level-grid,
+.rd2-guidance-grid,
+.rd2-category-grid,
+.rd2-question-grid {
+  margin-bottom: 16px;
+}
+.rd2-level-grid,
+.rd2-guidance-grid {
+  margin-bottom: 0;
+}
+
 .rd2-policy-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+}
+.rd2-policy-grid > .rd2-card {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
 }
 .rd2-level-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
   gap: 12px;
+  /* Take the slack left by the taller neighbouring column so the two cards
+     finish level instead of leaving a gap under the shorter one. */
+  flex: 1;
 }
 .rd2-guidance-grid {
   display: grid;
@@ -743,8 +862,79 @@
   font-size: 11px;
   color: var(--rd2-muted);
 }
-.rd2-stat-tile[data-tone="good"] .rd2-stat-value { color: #34d399; }
-.rd2-stat-tile[data-tone="warning"] .rd2-stat-value { color: #fbbd23; }
+/* Each tile carries its own accent so the row reads as five distinct
+   measures rather than one grey block. */
+.rd2-stat-tile {
+  border-left: 3px solid var(--tile-accent, hsl(var(--border) / 0.6));
+}
+.rd2-stat-tile .rd2-stat-value {
+  color: var(--tile-accent, var(--rd2-ink));
+}
+.rd2-stat-tile[data-tone="info"] { --tile-accent: #5fa2f8; }
+.rd2-stat-tile[data-tone="good"] { --tile-accent: #3ddc97; }
+.rd2-stat-tile[data-tone="warning"] { --tile-accent: #fbbd23; }
+.rd2-stat-tile[data-tone="score"] { --tile-accent: #a48aef; }
+.rd2-stat-tile[data-tone="progress"] { --tile-accent: #5fdef2; }
+.rd2-stat-tile[data-tone="default"] { --tile-accent: var(--rd2-ink); }
+
+/* --- Status composition strip --- */
+.rd2-status-bar {
+  display: flex;
+  gap: 2px;
+  height: 30px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.rd2-status-seg {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #06111f;
+}
+.rd2-status-legend {
+  gap: 8px 16px;
+}
+.rd2-status-legend b {
+  margin-left: 2px;
+  color: var(--rd2-ink);
+}
+.rd2-status-legend li[data-empty="true"] {
+  opacity: 0.45;
+}
+
+/* --- Level cards: a cool-to-warm progression across the four grades --- */
+.rd2-level-grid > :nth-child(1) { --level-accent: #5fdef2; }
+.rd2-level-grid > :nth-child(2) { --level-accent: #5a96f6; }
+.rd2-level-grid > :nth-child(3) { --level-accent: #9578ed; }
+.rd2-level-grid > :nth-child(4) { --level-accent: #f65a72; }
+.rd2-level-item {
+  border-left: 3px solid var(--level-accent, var(--rd2-border));
+}
+.rd2-level-item h4 {
+  color: var(--level-accent, var(--rd2-ink));
+}
+
+/* --- Guidance cards echo their category hue --- */
+.rd2-guidance-item[data-category="KPI"] { border-top: 3px solid #4085f5; }
+.rd2-guidance-item[data-category="OKR"] { border-top: 3px solid #1aa167; }
+.rd2-guidance-item[data-category="IDP"] { border-top: 3px solid #7d5ae8; }
+
+/* --- Section headings get a coloured rule --- */
+.rd2-policy .rd2-card > h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.rd2-policy .rd2-card > h3::before {
+  content: "";
+  width: 3px;
+  height: 15px;
+  border-radius: 2px;
+  background: var(--rd2-accent);
+}
 
 /* ---- Exact values stay available behind a disclosure -------------------- */
 .rd2-table-details {
