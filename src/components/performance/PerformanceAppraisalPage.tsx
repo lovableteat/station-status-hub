@@ -5,10 +5,8 @@ import {
   ClipboardCheck,
   Download,
   FileText,
-  Moon,
   Plus,
   RefreshCw,
-  Sun,
   UserRound,
   X,
 } from "lucide-react";
@@ -193,13 +191,6 @@ export function PerformanceAppraisalPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const editorId = params.get("performanceReview");
   const [editorRevision, setEditorRevision] = useState(0);
-  const [light, setLight] = useState(() => {
-    try {
-      return localStorage.getItem("station-status-hub:rd2-theme") !== "dark";
-    } catch {
-      return true;
-    }
-  });
   const savedId = useRef<{ key: string; id: string } | null>(null);
   const requestNumber = useRef(0);
   const tab = NAV.some((item) => item.id === params.get("performanceTab"))
@@ -437,9 +428,7 @@ export function PerformanceAppraisalPage() {
     initial.dueDate = `${cycle.slice(0, 4)}-${cycle.endsWith("q2") ? "06-30" : "09-30"}`;
 
   return (
-    <div
-      className={`performance-workspace rd2-workspace ${light ? "rd2-light" : "rd2-dark"}`}
-    >
+    <div className="performance-workspace rd2-workspace">
       <aside className="rd2-sidebar" data-testid="performance-sidebar">
         <div className="rd2-brand">
           <ClipboardCheck />
@@ -488,25 +477,6 @@ export function PerformanceAppraisalPage() {
                 </option>
               ))}
             </select>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label={light ? "切換深色模式" : "切換淺色模式"}
-              onClick={() => {
-                setLight(!light);
-                try {
-                  localStorage.setItem(
-                    "station-status-hub:rd2-theme",
-                    light ? "dark" : "light",
-                  );
-                } catch {
-                  /* Theme works without persistence too. */
-                }
-              }}
-            >
-              {light ? <Moon /> : <Sun />}
-            </Button>
           </div>
         </header>
         {loadError && (
