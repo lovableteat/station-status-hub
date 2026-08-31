@@ -210,6 +210,44 @@
 .rd2-section-heading {
   margin-bottom: 18px;
 }
+/* Accent-tinted surfaces -------------------------------------------------
+   Flat identical panels read as a spreadsheet. Each accent-bearing block
+   gets a soft wash of its own hue from the top-left, echoing the platform's
+   .surface-accent language, plus a matching tinted border. The tint peaks
+   around 12% and fades out, so body text still sits on close to the plain
+   panel colour and keeps its contrast. */
+.rd2-workspace :is(
+  .rd2-identity,
+  .rd2-feedback-card,
+  .rd2-question,
+  .rd2-category,
+  .rd2-level-item,
+  .rd2-guidance-item,
+  .rd2-stat-tile
+) {
+  background:
+    radial-gradient(
+      circle at 0% 0%,
+      color-mix(in srgb, var(--card-accent, transparent) 13%, transparent),
+      transparent 65%
+    ),
+    var(--rd2-panel);
+  border-color: color-mix(
+    in srgb,
+    var(--card-accent, transparent) 26%,
+    var(--rd2-border-soft)
+  );
+}
+.rd2-workspace :is(.rd2-level-item, .rd2-guidance-item) {
+  background:
+    radial-gradient(
+      circle at 0% 0%,
+      color-mix(in srgb, var(--card-accent, transparent) 11%, transparent),
+      transparent 70%
+    ),
+    var(--rd2-panel-soft);
+}
+
 .rd2-card {
   background: var(--rd2-panel);
   border: 1px solid var(--rd2-border-soft);
@@ -302,7 +340,8 @@
 /* The scoring form was a wall of identical grey boxes - give each block its
    own accent so the sections are distinguishable at a glance. */
 .rd2-identity {
-  border-top: 3px solid #5fa2f8;
+  --card-accent: #5fa2f8;
+  border-top: 3px solid var(--card-accent);
 }
 .rd2-question {
   border-top: 3px solid var(--card-accent, var(--rd2-accent));
@@ -310,7 +349,8 @@
 .rd2-question[data-question-index="1"] { --card-accent: #5fdef2; }
 .rd2-question[data-question-index="2"] { --card-accent: #9578ed; }
 .rd2-feedback-card {
-  border-top: 3px solid #3ddc97;
+  --card-accent: #3ddc97;
+  border-top: 3px solid var(--card-accent);
 }
 .rd2-category-heading h3 {
   font-size: 15px;
@@ -321,6 +361,26 @@
   align-items: start;
   gap: 12px;
 }
+.rd2-category-heading h3::after {
+  content: "未填寫";
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  background: hsl(var(--secondary));
+  color: var(--rd2-muted);
+}
+.rd2-category:has(textarea:not(:placeholder-shown))
+  .rd2-category-heading
+  h3::after {
+  content: "已填寫";
+  background: color-mix(in srgb, var(--card-accent) 24%, transparent);
+  color: var(--card-accent);
+}
+
 .rd2-category-heading span {
   color: var(--rd2-muted);
   font-size: 12px;
@@ -485,7 +545,11 @@
   background: var(--rd2-soft);
 }
 .rd2-form-footer {
-  /* Moved above the form: saving no longer means scrolling to the bottom. */
+  /* Above the form AND pinned, so save/submit stays reachable while writing
+     three long STAR entries. */
+  position: sticky;
+  top: 84px;
+  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -865,17 +929,17 @@
 /* Each tile carries its own accent so the row reads as five distinct
    measures rather than one grey block. */
 .rd2-stat-tile {
-  border-left: 3px solid var(--tile-accent, hsl(var(--border) / 0.6));
+  border-left: 3px solid var(--card-accent, hsl(var(--border) / 0.6));
 }
 .rd2-stat-tile .rd2-stat-value {
-  color: var(--tile-accent, var(--rd2-ink));
+  color: var(--card-accent, var(--rd2-ink));
 }
-.rd2-stat-tile[data-tone="info"] { --tile-accent: #5fa2f8; }
-.rd2-stat-tile[data-tone="good"] { --tile-accent: #3ddc97; }
-.rd2-stat-tile[data-tone="warning"] { --tile-accent: #fbbd23; }
-.rd2-stat-tile[data-tone="score"] { --tile-accent: #a48aef; }
-.rd2-stat-tile[data-tone="progress"] { --tile-accent: #5fdef2; }
-.rd2-stat-tile[data-tone="default"] { --tile-accent: var(--rd2-ink); }
+.rd2-stat-tile[data-tone="info"] { --card-accent: #5fa2f8; }
+.rd2-stat-tile[data-tone="good"] { --card-accent: #3ddc97; }
+.rd2-stat-tile[data-tone="warning"] { --card-accent: #fbbd23; }
+.rd2-stat-tile[data-tone="score"] { --card-accent: #a48aef; }
+.rd2-stat-tile[data-tone="progress"] { --card-accent: #5fdef2; }
+.rd2-stat-tile[data-tone="default"] { --card-accent: var(--rd2-ink); }
 
 /* --- Status composition strip --- */
 .rd2-status-bar {
@@ -906,21 +970,24 @@
 }
 
 /* --- Level cards: a cool-to-warm progression across the four grades --- */
-.rd2-level-grid > :nth-child(1) { --level-accent: #5fdef2; }
-.rd2-level-grid > :nth-child(2) { --level-accent: #5a96f6; }
-.rd2-level-grid > :nth-child(3) { --level-accent: #9578ed; }
-.rd2-level-grid > :nth-child(4) { --level-accent: #f65a72; }
+.rd2-level-grid > :nth-child(1) { --card-accent: #5fdef2; }
+.rd2-level-grid > :nth-child(2) { --card-accent: #5a96f6; }
+.rd2-level-grid > :nth-child(3) { --card-accent: #9578ed; }
+.rd2-level-grid > :nth-child(4) { --card-accent: #f65a72; }
 .rd2-level-item {
-  border-left: 3px solid var(--level-accent, var(--rd2-border));
+  border-left: 3px solid var(--card-accent, var(--rd2-border));
 }
 .rd2-level-item h4 {
-  color: var(--level-accent, var(--rd2-ink));
+  color: var(--card-accent, var(--rd2-ink));
 }
 
 /* --- Guidance cards echo their category hue --- */
-.rd2-guidance-item[data-category="KPI"] { border-top: 3px solid #4085f5; }
-.rd2-guidance-item[data-category="OKR"] { border-top: 3px solid #1aa167; }
-.rd2-guidance-item[data-category="IDP"] { border-top: 3px solid #7d5ae8; }
+.rd2-guidance-item[data-category="KPI"] { --card-accent: #4085f5; }
+.rd2-guidance-item[data-category="OKR"] { --card-accent: #1aa167; }
+.rd2-guidance-item[data-category="IDP"] { --card-accent: #7d5ae8; }
+.rd2-guidance-item[data-category] {
+  border-top: 3px solid var(--card-accent);
+}
 
 /* --- Section headings get a coloured rule --- */
 .rd2-policy .rd2-card > h3 {
