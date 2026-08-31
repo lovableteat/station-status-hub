@@ -65,10 +65,11 @@ test("performance CSV exports headers, status labels, and escaped values", () =>
 });
 
 test("performance workspace keeps its navigation in a responsive sidebar", async () => {
-  const [pageSource, styleSource, shellSource] = await Promise.all([
+  const [pageSource, styleSource, shellSource, githubSource] = await Promise.all([
     readFile(new URL("../src/components/performance/PerformanceAppraisalPage.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/performance/performance.css", import.meta.url), "utf8"),
     readFile(new URL("../src/pages/Index.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/performance/githubPerformanceData.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(pageSource, /data-testid="performance-sidebar"/);
@@ -87,4 +88,13 @@ test("performance workspace keeps its navigation in a responsive sidebar", async
   assert.match(styleSource, /@media \(max-width: 480px\)/);
   assert.match(shellSource, /activeWorkspace === "performance" && "performance-app-shell"/);
   assert.match(shellSource, /activeWorkspace === "performance"[\s\S]*?"min-h-0"/);
+  assert.match(pageSource, /data-performance-zone="github-source"/);
+  assert.match(pageSource, /fetchDemoRepositorySnapshot/);
+  assert.match(pageSource, /openReviewFromCommit/);
+  assert.match(pageSource, /帶入考核/);
+  assert.match(githubSource, /demo-repository/);
+  assert.match(githubSource, /DEMO_REPOSITORY_CACHED_SNAPSHOT/);
+  assert.match(githubSource, /source: "live"/);
+  assert.match(githubSource, /Promise\.all\(\[/);
+  assert.match(styleSource, /\.performance-repository/);
 });
