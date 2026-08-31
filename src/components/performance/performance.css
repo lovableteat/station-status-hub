@@ -515,6 +515,194 @@
   box-shadow: 0 20px 48px -38px rgba(49, 191, 205, 0.75);
 }
 
+.performance-repository {
+  border-color: rgba(103, 232, 249, 0.2);
+  background: linear-gradient(145deg, rgba(13, 45, 61, 0.9), rgba(8, 25, 41, 0.96));
+}
+
+.performance-repository-heading,
+.performance-repository-section-heading,
+.performance-repository-commit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.performance-repository-icon {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  border: 1px solid rgba(103, 232, 249, 0.25);
+  border-radius: 12px;
+  background: rgba(103, 232, 249, 0.1);
+  color: #a5f3fc;
+}
+
+.performance-repository-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.performance-repository-heading h2 {
+  margin-top: 2px;
+  color: #f5fbff;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.performance-repository-heading p:last-child {
+  margin-top: 2px;
+  color: #8caabd;
+  font-size: 0.7rem;
+}
+
+.performance-repository-description,
+.performance-repository-footnote {
+  color: #9bb4c5;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.performance-repository-description {
+  margin-top: 12px;
+}
+
+.performance-repository-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.performance-repository-stats > div {
+  min-width: 0;
+  border: 1px solid rgba(132, 189, 223, 0.14);
+  border-radius: 10px;
+  background: rgba(3, 17, 29, 0.38);
+  padding: 8px;
+}
+
+.performance-repository-stats strong,
+.performance-repository-stats span {
+  display: block;
+}
+
+.performance-repository-stats strong {
+  overflow: hidden;
+  color: #dffbff;
+  font-size: 0.9rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.performance-repository-stats span {
+  margin-top: 2px;
+  color: #7895a8;
+  font-size: 0.62rem;
+}
+
+.performance-repository-section-heading {
+  margin-top: 16px;
+  color: #dffbff;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.performance-repository-section-heading span,
+.performance-repository-section-heading a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.performance-repository-section-heading svg {
+  width: 14px;
+  height: 14px;
+}
+
+.performance-repository-section-heading a {
+  color: #8eeafa;
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.performance-repository-section-heading a:hover {
+  color: #d5fbff;
+}
+
+.performance-repository-commits {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.performance-repository-commit {
+  min-width: 0;
+  align-items: flex-start;
+  border-top: 1px solid rgba(132, 189, 223, 0.11);
+  padding-top: 9px;
+}
+
+.performance-repository-commit > div {
+  min-width: 0;
+}
+
+.performance-repository-commit strong,
+.performance-repository-commit p {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.performance-repository-commit strong {
+  color: #edfaff;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.performance-repository-commit p {
+  margin-top: 3px;
+  color: #7895a8;
+  font-size: 0.62rem;
+}
+
+.performance-repository-commit code {
+  display: inline-block;
+  margin-top: 4px;
+  border-radius: 4px;
+  background: rgba(103, 232, 249, 0.08);
+  padding: 2px 5px;
+  color: #8eeafa;
+  font-size: 0.58rem;
+}
+
+.performance-repository-state {
+  margin-top: 14px;
+  color: #9bb4c5;
+  font-size: 0.72rem;
+}
+
+.performance-repository-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  color: #fecdd3;
+  font-size: 0.72rem;
+}
+
+.performance-repository-footnote {
+  margin-top: 12px;
+  color: #68879a;
+  font-size: 0.62rem;
+}
+
 .performance-stat {
   min-height: 118px;
   border: 1px solid var(--performance-border);

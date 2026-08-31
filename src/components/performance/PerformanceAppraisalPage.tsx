@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowUpRight,
   BarChart3,
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
   Clock3,
   Download,
+  ExternalLink,
   FileText,
+  GitBranch,
+  Github,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -47,6 +49,14 @@ import {
   normalizePerformanceReview,
   toPerformanceCsv,
 } from "./performanceData.mjs";
+import {
+  DEMO_REPOSITORY,
+  DEMO_REPOSITORY_CACHED_SNAPSHOT,
+  fetchDemoRepositorySnapshot,
+  formatGithubDate,
+  type GithubCommitActivity,
+  type GithubRepositorySnapshot,
+} from "./githubPerformanceData";
 import "./performance.css";
 
 const STORAGE_KEY = "station-status-hub:performance-reviews:v1";
@@ -186,6 +196,8 @@ const getMine = (review: PerformanceReview, user: { userId?: string; username?: 
   return candidates.includes(review.employeeId) || candidates.includes(review.employeeName);
 };
 
+const normalizeIdentity = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+
 const getReviewForm = (review?: PerformanceReview | null, reviewerName = "管理員"): ReviewFormState => {
   if (!review) return { ...EMPTY_FORM, reviewerName };
   const goal = review.goals[0];
@@ -225,6 +237,98 @@ function ProgressBar({ value }: { value: number }) {
       </div>
       <span className="w-9 text-right text-xs font-bold text-cyan-100">{value}%</span>
     </div>
+  );
+}
+
+function GithubRepositoryPanel({
+  snapshot,
+  isLoading,
+  error,
+  canEdit,
+  onRefresh,
+  onUseCommit,
+}: {
+  snapshot: GithubRepositorySnapshot | null;
+  isLoading: boolean;
+  error: string | null;
+  canEdit: boolean;
+  onRefresh: () => void;
+  onUseCommit: (commit: GithubCommitActivity) => void;
+}) {
+  return (
+    <section className="performance-surface performance-repository rounded-2xl p-4 sm:p-5" data-performance-zone="github-source">
+      <div className="performance-repository-heading">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="performance-repository-icon" aria-hidden="true"><Github /></span>
+          <div className="min-w-0">
+            <p className="performance-kicker">GITHUB 活動來源</p>
+            <h2 className="truncate">{DEMO_REPOSITORY.name}</h2>
+            <p>將專案活動帶入考核佐證</p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="shrink-0 rounded-xl text-slate-300 hover:bg-cyan-300/10 hover:text-cyan-100"
+          onClick={onRefresh}
+          disabled={isLoading}
+          aria-label="重新整理 GitHub 專案資料"
+          title="重新整理 GitHub 專案資料"
+        >
+          <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+        </Button>
+      </div>
+
+      {isLoading && <p className="performance-repository-state">正在讀取 GitHub 專案活動…</p>}
+      {!isLoading && error && (
+        <div className="performance-repository-error" role={snapshot ? "status" : "alert"} aria-live="polite">
+          <p>{error}</p>
+          <Button type="button" variant="outline" size="sm" onClick={onRefresh}>再試一次</Button>
+        </div>
+      )}
+      {!isLoading && snapshot && (
+        <>
+          <p className="performance-repository-description">{snapshot.description || "GitHub 專案活動資料"}</p>
+          <div className="performance-repository-stats" aria-label="GitHub 專案摘要">
+            <div><strong>{snapshot.commits.length}</strong><span>最近提交</span></div>
+            <div><strong>{snapshot.workflows.length}</strong><span>Actions</span></div>
+            <div><strong>{snapshot.defaultBranch}</strong><span>預設分支</span></div>
+          </div>
+          <div className="performance-repository-section-heading">
+            <span><GitBranch />最近活動</span>
+            <a href={snapshot.htmlUrl} target="_blank" rel="noreferrer">開啟專案 <ExternalLink /></a>
+          </div>
+          {snapshot.commits.length ? (
+            <div className="performance-repository-commits">
+              {snapshot.commits.map((commit) => (
+                <article key={commit.sha} className="performance-repository-commit">
+                  <div className="min-w-0">
+                    <strong title={commit.message}>{commit.message}</strong>
+                    <p>{commit.authorName}{commit.authorLogin ? ` · @${commit.authorLogin}` : ""} · {formatGithubDate(commit.authoredAt)}</p>
+                    <code>{commit.shortSha}</code>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 rounded-lg border-cyan-200/20 text-cyan-100"
+                    disabled={!canEdit}
+                    onClick={() => onUseCommit(commit)}
+                    title={canEdit ? "用這筆提交建立考核目標" : "需要績效考核管理權限"}
+                  >
+                    帶入考核
+                  </Button>
+                </article>
+              ))}
+            </div>
+          ) : <p className="performance-repository-state">目前沒有可顯示的提交紀錄。</p>}
+          <p className="performance-repository-footnote">
+            資料來源：{snapshot.source === "live" ? "公開 GitHub API" : "最近一次同步的 GitHub 資料"} · 最後推送 {formatGithubDate(snapshot.pushedAt)}
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -420,6 +524,9 @@ export function PerformanceAppraisalPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | PerformanceStatus>("all");
   const [isLoading, setIsLoading] = useState(false);
   const [dataSource, setDataSource] = useState<"cloud" | "local">("local");
+  const [repositorySnapshot, setRepositorySnapshot] = useState<GithubRepositorySnapshot | null>(null);
+  const [repositoryLoading, setRepositoryLoading] = useState(true);
+  const [repositoryError, setRepositoryError] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
@@ -463,9 +570,32 @@ export function PerformanceAppraisalPage() {
     }
   }, []);
 
+  const loadRepositoryData = useCallback(async (signal?: AbortSignal) => {
+    setRepositoryLoading(true);
+    setRepositoryError(null);
+    try {
+      const snapshot = await fetchDemoRepositorySnapshot({ signal });
+      if (signal?.aborted) return;
+      setRepositorySnapshot(snapshot);
+    } catch (error) {
+      if (signal?.aborted) return;
+      console.warn("GitHub repository activity is unavailable.", error);
+      setRepositorySnapshot(DEMO_REPOSITORY_CACHED_SNAPSHOT);
+      setRepositoryError("GitHub API 目前無法取得，以下顯示最近一次同步資料。可稍後再試以取得最新活動。");
+    } finally {
+      if (!signal?.aborted) setRepositoryLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadRepositoryData(controller.signal);
+    return () => controller.abort();
+  }, [loadRepositoryData]);
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
@@ -525,6 +655,30 @@ export function PerformanceAppraisalPage() {
     setFormReview(null);
     setForm(getReviewForm(null, user?.displayName || "管理員"));
     setFormOpen(true);
+  };
+
+  const openReviewFromCommit = (commit: GithubCommitActivity) => {
+    const author = commit.authorLogin || commit.authorName;
+    const normalizedAuthor = normalizeIdentity(author);
+    const employee = employeeOptions.find((option) =>
+      [option.id, option.label].some((value) => normalizeIdentity(value) === normalizedAuthor),
+    );
+    setFormMode("admin");
+    setFormReview(null);
+    setForm({
+      ...getReviewForm(null, user?.displayName || "管理員"),
+      employeeId: employee?.id || "",
+      employeeName: employee?.label || "",
+      department: employee?.department || "",
+      role: employee?.role || "工程師",
+      goalCategory: "KPI",
+      goalTitle: `demo-repository：${commit.message}`,
+      goalProgress: "0",
+      goalWeight: "100",
+      selfFeedback: `GitHub 提交佐證：${commit.message}\n提交者：${commit.authorName}${commit.authorLogin ? ` (@${commit.authorLogin})` : ""}\n提交日期：${formatGithubDate(commit.authoredAt)}\n提交連結：${commit.url}`,
+    });
+    setFormOpen(true);
+    toast({ title: "已帶入 GitHub 活動", description: "請確認員工與目標內容後再儲存考核。" });
   };
 
   const openEditReview = (review: PerformanceReview) => {
@@ -869,8 +1023,14 @@ export function PerformanceAppraisalPage() {
           </section>
 
           <aside className="space-y-4" data-performance-zone="cycle-insights">
-            <section className="performance-surface performance-help rounded-2xl p-4 sm:p-5"><details><summary><span className="flex min-w-0 items-center gap-2"><FileText className="h-5 w-5 shrink-0 text-cyan-200" /><span><strong>不確定怎麼用？</strong><small>看 3 步驟</small></span></span><span className="performance-help-toggle" aria-hidden="true">+</span></summary><div className="performance-help-body space-y-3">{[["01", "員工自評", "寫下成果，再送出給主管。"], ["02", "主管評分", "沿用同一筆目標補上評分與回饋。"], ["03", "完成考核", "確認後送出，完成本期考核。"]].map(([step, title, description]) => <div key={step} className="flex gap-3"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-300/10 text-xs font-black text-cyan-100">{step}</span><div><strong className="block text-sm text-slate-100">{title}</strong><p className="mt-0.5 text-xs leading-5 text-slate-500">{description}</p></div></div>)}</div></details></section>
-            <section className="rounded-2xl border border-emerald-200/15 bg-emerald-300/[0.06] p-4"><div className="flex gap-3"><ArrowUpRight className="mt-0.5 h-5 w-5 shrink-0 text-emerald-200" /><div><strong className="block text-sm text-emerald-50">權限依工作區控管</strong><p className="mt-1 text-xs leading-5 text-emerald-100/65">目前為 {canEdit ? "管理模式，可新增、編輯與完成考核" : "檢視模式，只能查看與匯出報表"}。</p></div></div></section>
+            <GithubRepositoryPanel
+              snapshot={repositorySnapshot}
+              isLoading={repositoryLoading}
+              error={repositoryError}
+              canEdit={canEdit}
+              onRefresh={() => void loadRepositoryData()}
+              onUseCommit={openReviewFromCommit}
+            />
           </aside>
         </div>
       </div>
