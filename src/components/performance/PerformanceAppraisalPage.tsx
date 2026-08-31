@@ -554,10 +554,11 @@ export function PerformanceAppraisalPage() {
               </p>
             ) : (
               <>
-                <div className="rd2-editor-context">
-                  <label htmlFor="rd2-existing">
-                    {tab === "self" ? "填寫考核" : "評核對象"}
-                  </label>
+                <div
+                  className="rd2-editor-context"
+                  hidden={tab === "self"}
+                >
+                  <label htmlFor="rd2-existing">評核對象</label>
                   <select
                     id="rd2-existing"
                     value={editorId || ""}
@@ -570,9 +571,7 @@ export function PerformanceAppraisalPage() {
                       )
                     }
                   >
-                    <option value="">
-                      {tab === "self" ? "新增一份自評" : "直接建立主管評核"}
-                    </option>
+                    <option value="">直接建立主管評核</option>
                     {reviews
                       .filter(
                         (review) =>
@@ -612,11 +611,11 @@ export function PerformanceAppraisalPage() {
                   readonly={
                     tab === "self" && editorReview?.status === "approved"
                   }
-                  identityLocked={
-                    !!editorReview || (!canEdit && tab === "self")
-                  }
+                  identityLocked={tab === "self" || !!editorReview}
                   canSubmit={canEdit && !loadError && !loading}
-                  employees={canEdit ? employeeOptions : []}
+                  employees={
+                    tab === "manager" && canEdit ? employeeOptions : []
+                  }
                   demo={demo}
                   onSave={save}
                 />
