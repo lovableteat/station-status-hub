@@ -52,7 +52,7 @@ const performanceDb = supabase as any;
 const NAV = [
   { id: "policy", label: "系統說明與政策", icon: BookOpen },
   { id: "self", label: "員工自評", icon: UserRound },
-  { id: "manager", label: "主管評分", icon: ClipboardCheck },
+  { id: "manager", label: "主管評分與紀錄", icon: ClipboardCheck },
   { id: "records", label: "考核紀錄", icon: FileText },
 ];
 const LEGACY_CACHE = "station-status-hub:performance-reviews:v1";
@@ -482,7 +482,9 @@ export function PerformanceAppraisalPage() {
           <strong>RD2 績效考核</strong>
         </div>
         <nav aria-label="績效考核導覽">
-          {NAV.filter((item) => item.id !== "manager" || canEdit).map(
+          {NAV.filter((item) =>
+            item.id === "manager" ? canEdit : item.id !== "records" || !canEdit,
+          ).map(
             (item) => (
               <button
                 type="button"
@@ -584,13 +586,15 @@ export function PerformanceAppraisalPage() {
                         </option>
                       ))}
                   </select>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => navigate("records")}
-                  >
-                    查看考核紀錄
-                  </Button>
+                  {!canEdit && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => navigate("records")}
+                    >
+                      查看考核紀錄
+                    </Button>
+                  )}
                 </div>
                 {editorReview && tab === "manager" && (
                   <details className="rd2-card">
@@ -620,7 +624,7 @@ export function PerformanceAppraisalPage() {
             )}
           </>
         )}
-        {tab === "records" && (
+        {(tab === "records" || (tab === "manager" && canEdit)) && (
           <section>
             <header className="rd2-section-heading rd2-records-heading">
               <div>
