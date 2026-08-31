@@ -508,6 +508,9 @@
 }
 .rd2-workspace td small {
   display: block;
+  /* Browser default (0.8em of a 13px table) rendered these secondary labels
+     at 10.4px, which is below comfortable reading size. */
+  font-size: 11.5px;
   color: var(--rd2-muted);
   margin-top: 3px;
 }
@@ -601,17 +604,29 @@
   line-height: 1.65;
   color: var(--rd2-muted);
 }
+/* Solid fills put white 11px text at 4.24:1 - under the 4.5 AA floor for
+   small text. A tinted chip with a light tint of the same hue keeps the
+   category identity and clears AA (KPI 6.07, OKR 8.09, IDP 5.29). */
 .rd2-guidance-tag {
   display: inline-block;
-  padding: 1px 8px;
+  padding: 2px 9px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 800;
-  color: #f2f4f8;
+  letter-spacing: 0.02em;
 }
-.rd2-guidance-tag[data-category="KPI"] { background: #4085f5; }
-.rd2-guidance-tag[data-category="OKR"] { background: #1aa167; }
-.rd2-guidance-tag[data-category="IDP"] { background: #7d5ae8; }
+.rd2-guidance-tag[data-category="KPI"] {
+  background: #122f51;
+  color: #81aff8;
+}
+.rd2-guidance-tag[data-category="OKR"] {
+  background: #154042;
+  color: #8decc3;
+}
+.rd2-guidance-tag[data-category="IDP"] {
+  background: #1b244e;
+  color: #a48aef;
+}
 .rd2-workspace .rd2-card-lead {
   margin: 0;
   font-size: 14px;
