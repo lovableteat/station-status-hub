@@ -548,6 +548,7 @@ export function AssessmentEditor({
       </fieldset>
       {mode === "self" && (
         <>
+          <div className="rd2-category-grid">
           {CATEGORIES.map((value) => {
             const category = value as Category;
             const guide = CATEGORY_GUIDANCE[category];
@@ -635,6 +636,7 @@ export function AssessmentEditor({
               </fieldset>
             );
           })}
+          </div>
           {form.self.legacyText && (
             <section className="rd2-card">
               <Field>
