@@ -12,7 +12,7 @@ import {
   undoHistory,
 } from "./history.ts";
 import { runDrc } from "./drc.ts";
-import { duplicatePcbSelection } from "./selection.ts";
+import { deletePcbSelection, duplicatePcbSelection } from "./selection.ts";
 import {
   MAX_BOM_QUANTITY_PER_ROW,
   MAX_BOM_TOTAL_PLACEMENTS,
@@ -857,6 +857,14 @@ export function reduceWorkspaceState(
         selection: preferredId ? selectionForObject(state, preferredId) : null,
         selectedObjects,
       });
+    }
+    case "selection/delete": {
+      const result = deletePcbSelection(state.activeProject, [
+        ...state.selectedObjects,
+        ...(state.selection ? [state.selection.id] : []),
+      ]);
+      if (!result.ok) return state;
+      return replaceProject(state, result.project, true, state.pendingPlacements, emptySelectionSnapshot());
     }
     case "selection/duplicate": {
       const sourceIds = action.objectIds?.length

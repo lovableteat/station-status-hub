@@ -53,6 +53,42 @@ function seedStateWithSelectedComponent(): PcbSaveState {
   return state;
 }
 
+test("batch delete and one-step undo/redo restore both the document and multi-selection", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedStateWithLayeredComponents(), true);
+  const selected = reduceWorkspaceState(initial, {
+    type: "selection/set-many", objectIds: ["top-component", "bottom-component"],
+  });
+  const deleted = reduceWorkspaceState(selected, { type: "selection/delete" });
+  assert.equal(deleted.activeProject.components.length, 0);
+  assert.equal(deleted.selection, null);
+  assert.deepEqual(deleted.selectedObjects, []);
+  const undone = reduceWorkspaceState(deleted, { type: "history/undo" });
+  assert.deepEqual(undone.activeProject.components, selected.activeProject.components);
+  assert.deepEqual(undone.selectedObjects, selected.selectedObjects);
+  assert.deepEqual(undone.selection, selected.selection);
+  const redone = reduceWorkspaceState(undone, { type: "history/redo" });
+  assert.equal(redone.activeProject.components.length, 0);
+  assert.deepEqual(redone.selectedObjects, []);
+  assert.equal(redone.selection, null);
+});
+
+test("batch delete respects read-only, document locks and component locks without partial deletion", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedStateWithLayeredComponents(), true);
+  const selected = reduceWorkspaceState(initial, {
+    type: "selection/set-many", objectIds: ["top-component", "bottom-component"],
+  });
+  for (const blocked of [
+    { ...selected, canEdit: false },
+    { ...selected, documentLocked: true },
+    { ...selected, activeProject: { ...selected.activeProject, components: selected.activeProject.components.map((c, i) => ({ ...c, locked: i === 0 })) } },
+  ]) {
+    assert.equal(reduceWorkspaceState(blocked, { type: "selection/delete" }), blocked);
+  }
+  assert.equal(reduceWorkspaceState(initial, { type: "selection/delete" }), initial);
+});
+
 function seedStateWithLayeredComponents(): PcbSaveState {
   const state = seedState();
   state.projects[0].components = [

@@ -600,7 +600,7 @@ export function PcbCanvas({
         pointerId: event.pointerId,
         start,
         end: start,
-        additive: event.ctrlKey || event.metaKey,
+        additive: event.ctrlKey || event.metaKey || event.shiftKey,
       });
       return;
     }
@@ -626,7 +626,7 @@ export function PcbCanvas({
     event.preventDefault();
     event.stopPropagation();
     if (event.button !== 0) return;
-    const additive = event.ctrlKey || event.metaKey;
+    const additive = event.ctrlKey || event.metaKey || event.shiftKey;
     if (additive) {
       selectObject({ kind: "component", id: component.instanceId }, true);
       return;
@@ -677,7 +677,7 @@ export function PcbCanvas({
     event.preventDefault();
     event.stopPropagation();
     if (event.button !== 0) return;
-    const additive = event.ctrlKey || event.metaKey;
+    const additive = event.ctrlKey || event.metaKey || event.shiftKey;
     if (additive) {
       selectObject({ kind: "keepout", id: keepout.id }, true);
       return;
@@ -1638,7 +1638,8 @@ export function PcbCanvas({
       )}
           <div className="pcb-canvas-hud" data-export-hidden>
             <span>{placementLibraryComponent ? "放置元件" : workspace.tool === "select" ? "選取" : workspace.tool === "pan" ? "平移" : workspace.tool === "measure" ? "測量" : "禁制區"}</span>
-            {workspace.tool === "select" && <span>拖曳框選 · Ctrl+C 複製 · Ctrl+V 貼上</span>}
+            {workspace.tool === "select" && <span>拖曳框選 · Ctrl / Shift 點選多選 · Delete 刪除 · Esc 取消選取</span>}
+            {selectionIds.length > 0 && <span>已選 {selectionIds.length} 項</span>}
             {selectedKeepout && workspace.tool === "select" && <span>拖曳四角縮放 · Delete 刪除</span>}
             {selectedMeasurementVisual && workspace.tool === "select" && <span>拖曳亮色端點調整 · Alt 暫停吸附</span>}
             <span>Alt 暫停吸附</span>
@@ -1714,14 +1715,10 @@ export function PcbCanvas({
             <ContextMenuGroup>
               <ContextMenuItem
                 className="text-rose-300 focus:bg-rose-500/15 focus:text-rose-100"
-                disabled={!workspace.canMutate || contextComponentLocked}
-                onSelect={() => runContextSelectionAction(
-                  workspace.deleteSelected,
-                  "已刪除選取物件",
-                  "可使用 Ctrl+Z 復原。",
-                )}
+                disabled={!workspace.canMutate}
+                onSelect={() => workspace.deleteSelected()}
               >
-                刪除
+                {selectionIds.length > 1 ? `刪除選取的 ${selectionIds.length} 個項目` : "刪除"}
                 <ContextMenuShortcut>Delete</ContextMenuShortcut>
               </ContextMenuItem>
             </ContextMenuGroup>

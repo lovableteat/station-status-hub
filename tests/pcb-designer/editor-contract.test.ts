@@ -86,7 +86,6 @@ test("makes PCB context actions explicit and confirms every mutation", () => {
     "duplicateSelected",
     "rotateSelected",
     "toggleSelectedLock",
-    "deleteSelected",
   ]) {
     assert.match(
       canvasSource,
@@ -94,9 +93,20 @@ test("makes PCB context actions explicit and confirms every mutation", () => {
     );
   }
   assert.match(canvasSource, /操作未執行/);
+  assert.match(canvasSource, /onSelect=\{\(\) => workspace\.deleteSelected\(\)\}/);
+  assert.match(editorHookSource, /已刪除 \$\{result.count\} 個選取項目/);
 });
 
-test("keeps PCB selection actions on one row and header actions at one size", () => {
+test("batch deletion has a counted toolbar action and clears the whole selection on Escape", () => {
+  assert.match(toolbarSource, /onClick=\{onDeleteSelection\}/);
+  assert.match(toolbarSource, /selectedObjectCount === 0/);
+  assert.match(workspaceSource, /onDeleteSelection=\{workspace.deleteSelected\}/);
+  assert.match(editorHookSource, /dispatch\(\{ type: "selection\/delete" \}\)/);
+  assert.match(editorHookSource, /event.key === "Escape"[\s\S]{0,180}type: "selection\/set-many", objectIds: \[\]/);
+  assert.match(canvasSource, /event.ctrlKey \|\| event.metaKey \|\| event.shiftKey/);
+});
+
+test("keeps header action heights consistent while collaboration grows with its content", () => {
   assert.match(
     editorCssSource,
     /\.pcb-inspector-actions\s*\{[\s\S]{0,180}flex-wrap:\s*nowrap/,
@@ -115,8 +125,11 @@ test("keeps PCB selection actions on one row and header actions at one size", ()
   );
   assert.match(
     editorCssSource,
-    /\.pcb-project-actions\s*>\s*\.pcb-collaborator-trigger,[\s\S]{0,180}\.pcb-project-actions\s*>\s*\.pcb-settings-action\s*\{[^}]*width:\s*126px/,
+    /\.pcb-project-actions\s*>\s*\.pcb-template-center-action,[\s\S]{0,180}\.pcb-project-actions\s*>\s*\.pcb-settings-action\s*\{[^}]*width:\s*126px/,
   );
+  assert.match(editorCssSource, /\.pcb-collaborator-trigger\s*\{[^}]*flex:\s*none;[^}]*width:\s*max-content/);
+  assert.match(editorCssSource, /\.pcb-collaborator-trigger-copy\s*\{[^}]*flex:\s*none/);
+  assert.doesNotMatch(editorCssSource, /\.pcb-project-actions\s*>\s*\.pcb-collaborator-trigger,/);
   assert.doesNotMatch(
     editorCssSource,
     /\.pcb-project-actions\s*\{[^}]*margin-top:/,
@@ -348,7 +361,7 @@ test("supports marquee selection and mixed component/keepout clipboard workflows
   assert.match(canvasSource, /workspace\.selectObjects/);
   assert.match(canvasSource, /data-pcb-marquee/);
   assert.match(canvasSource, /selectedKeepoutIds/);
-  assert.match(canvasSource, /Ctrl\+C 複製 · Ctrl\+V 貼上/);
+  assert.match(canvasSource, /Ctrl \/ Shift 點選多選 · Delete 刪除/);
   assert.match(editorHookSource, /copiedObjectIdsRef/);
   assert.match(editorHookSource, /已貼上整組布局/);
   assert.match(editorHookSource, /目前沒有可貼上的內容/);
