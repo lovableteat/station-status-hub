@@ -11,6 +11,8 @@ import {
   DEFAULT_PCB_TOP_LAYER_COLOR,
 } from "../defaults.ts";
 
+import { isValidComponentKeepout } from "./componentKeepout.ts";
+
 export type ParseResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: string };
@@ -212,7 +214,8 @@ function validateComponent(value: unknown): value is RecordValue {
     && (value.shape === undefined || value.shape === "rectangle" || value.shape === "circle")
     && (value.layer === "top" || value.layer === "bottom")
     && typeof value.locked === "boolean"
-    && (value.modelAssetId === undefined || isNonEmptyString(value.modelAssetId));
+    && (value.modelAssetId === undefined || isNonEmptyString(value.modelAssetId))
+    && (value.keepout === undefined || isValidComponentKeepout(value.keepout));
 }
 
 function validateKeepout(value: unknown): value is RecordValue {

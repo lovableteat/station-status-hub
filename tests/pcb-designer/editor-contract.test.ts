@@ -325,7 +325,7 @@ test("provides a lazy interactive 3D PCB view without replacing the 2D editor", 
   assert.match(canvas3dSource, /visibleLayer/);
   assert.match(canvas3dSource, /project\.components\.map/);
   assert.match(canvas3dSource, /componentViewStates[\s\S]{0,120}\.filter[\s\S]{0,120}\.map/);
-  assert.match(canvas3dSource, /project\.keepouts\.map/);
+  assert.match(canvas3dSource, /getRenderedKeepouts\(project, visibleLayer\)\.map/);
   assert.match(canvas3dSource, /workspace\.selectObject/);
   assert.match(canvas3dSource, /重設視角/);
 });

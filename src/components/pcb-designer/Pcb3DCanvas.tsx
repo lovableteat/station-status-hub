@@ -4,6 +4,7 @@ import { Edges, Html, OrbitControls } from "@react-three/drei";
 import { Box3, BufferGeometry, Color, DoubleSide, Float32BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three/examples/jsm/controls/OrbitControls.js";
 import { Focus, MousePointer2 } from "lucide-react";
+import { getRenderedKeepouts } from "./core/componentKeepout.ts";
 
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 import { PcbSoftware3DCanvas } from "./PcbSoftware3DCanvas.tsx";
@@ -339,21 +340,21 @@ function Scene({
         </mesh>
       ))}
 
-      {project.keepouts.map((keepout) => {
-        const selected = selectedIds.has(keepout.id);
+      {getRenderedKeepouts(project, visibleLayer).map((keepout) => {
+        const selected = selectedIds.has(keepout.componentId ?? keepout.id);
         return (
           <mesh
             key={keepout.id}
             position={[
               keepout.x + keepout.width / 2 - project.board.width / 2,
-              boardThickness / 2 + 0.22,
+              (keepout.layer === "bottom" ? -1 : 1) * (boardThickness / 2 + 0.22),
               keepout.y + keepout.height / 2 - project.board.height / 2,
             ]}
             rotation={[0, -((keepout.rotation ?? 0) * Math.PI) / 180, 0]}
             onClick={(event) => {
               event.stopPropagation();
               selectObject(
-                { kind: "keepout", id: keepout.id },
+                keepout.componentId ? { kind: "component", id: keepout.componentId } : { kind: "keepout", id: keepout.id },
                 event.nativeEvent.ctrlKey || event.nativeEvent.metaKey,
               );
             }}

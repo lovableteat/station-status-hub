@@ -85,6 +85,14 @@ export interface PcbModelAsset {
   parts: PcbModelAssetPart[];
 }
 
+/** Clearance from the component's unrotated local edges, in millimetres. */
+export interface PcbComponentKeepout {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
 export interface PcbPlacedComponent extends PcbLibraryComponent {
   instanceId: string;
   reference: string;
@@ -94,6 +102,7 @@ export interface PcbPlacedComponent extends PcbLibraryComponent {
   layer: "top" | "bottom";
   locked: boolean;
   modelAssetId?: string;
+  keepout?: PcbComponentKeepout;
 }
 
 export interface PcbKeepout {

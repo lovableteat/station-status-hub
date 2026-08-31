@@ -1,4 +1,5 @@
 import type { PcbKeepout, PcbPlacedComponent, PcbProject } from "../types.ts";
+import { getComponentKeepout } from "./componentKeepout.ts";
 
 type Rectangle = Pick<PcbPlacedComponent, "x" | "y" | "width" | "height" | "rotation">;
 
@@ -232,13 +233,17 @@ export function overlapsKeepout(component: Rectangle, keepout: PcbKeepout): bool
 
 export function canPlaceComponent(project: PcbProject, candidate: PcbPlacedComponent): boolean {
   if (!isWithinBoard(candidate, project.board)) return false;
+  const candidateKeepout = getComponentKeepout(candidate);
+  if (candidateKeepout && !isWithinBoard(keepoutRectangle(candidateKeepout), project.board)) return false;
   if (project.keepouts.some((keepout) => overlapsKeepout(candidate, keepout))) return false;
 
-  return !project.components.some((existing) => (
-    existing.instanceId !== candidate.instanceId
-      && existing.layer === candidate.layer
-      && rectanglesOverlap(existing, candidate)
-  ));
+  return !project.components.some((existing) => {
+    if (existing.instanceId === candidate.instanceId || existing.layer !== candidate.layer) return false;
+    if (rectanglesOverlap(existing, candidate)) return true;
+    if (candidateKeepout && overlapsKeepout(existing, candidateKeepout)) return true;
+    const keepout = getComponentKeepout(existing);
+    return keepout !== null && overlapsKeepout(candidate, keepout);
+  });
 }
 
 /** Searches nearest-first while distinguishing an exhausted board from a safety limit. */
