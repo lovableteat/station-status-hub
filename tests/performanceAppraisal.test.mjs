@@ -118,3 +118,48 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
   );
   assert.match(source, /new URLSearchParams\(previous\)/);
 });
+
+test("performance workspace inherits the platform theme without a separate light-mode preference", async () => {
+  const [source, styles] = await Promise.all([
+    readFile(
+      new URL(
+        "../src/components/performance/PerformanceAppraisalPage.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL("../src/components/performance/performance.css", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.doesNotMatch(source, /rd2-theme|rd2-light|rd2-dark|setLight/);
+  for (const token of [
+    "background",
+    "card",
+    "foreground",
+    "muted-foreground",
+    "primary",
+    "sidebar-background",
+    "destructive",
+    "platform-green",
+    "warning",
+  ]) {
+    assert.ok(
+      styles.includes(`hsl(var(--${token})`),
+      `Uses platform ${token} color`,
+    );
+  }
+  // The workspace must not shadow shared component tokens or retain a hardcoded palette.
+  assert.doesNotMatch(
+    styles,
+    /--(?:background|foreground|card|secondary|primary|border|ring)\s*:/,
+  );
+  assert.doesNotMatch(
+    styles,
+    /#[0-9a-f]{3,8}\b|rd2-light|rd2-dark|button\.interactive-lift/i,
+  );
+  assert.match(styles, /--rd2-bg: var\(--mobile-canvas\)/);
+  assert.match(styles, /--rd2-panel: var\(--mobile-panel\)/);
+});
