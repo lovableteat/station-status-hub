@@ -37,6 +37,7 @@ import type {
 } from "../core/workspaceTypes.ts";
 import { libraryIdentity } from "../core/workspaceRecords.ts";
 import { isValidBoard } from "../core/validation.ts";
+import { isValidComponentKeepout } from "../core/componentKeepout.ts";
 
 export const MAX_AUTO_PLACE_ITEMS = 50;
 export const MAX_AUTO_PLACE_COLLISION_TESTS = 1_000_000;
@@ -287,7 +288,7 @@ export function usePcbEditorActions(
         .filter((component) => selectedIds.has(component.instanceId))
         .map((component) => component.instanceId);
       const result = arrangeComponentsRecord(state.activeProject, componentIds, arrangement);
-      if (!result.ok) {
+      if (result.ok === false) {
         toast({
           title: `無法${ARRANGEMENT_LABELS[arrangement]}`,
           description: result.reason,
@@ -365,6 +366,7 @@ export function usePcbEditorActions(
       };
       if (![candidate.width, candidate.height, candidate.maxHeight, candidate.x, candidate.y, candidate.rotation].every(Number.isFinite)) return false;
       if (candidate.width <= 0 || candidate.height <= 0 || candidate.maxHeight <= 0) return false;
+      if (candidate.keepout !== undefined && !isValidComponentKeepout(candidate.keepout)) return false;
       if (JSON.stringify(candidate) === JSON.stringify(source)) return false;
       dispatch({
         type: "project/commit",
@@ -481,7 +483,7 @@ export function usePcbEditorActions(
     ];
     if (movableIds.length > 1) {
       const result = moveObjects(movableIds, { x: dx, y: dy }, true);
-      if (!result.ok) {
+      if (result.ok === false) {
         toast({
           title: "無法移動選取群組",
           description: result.reason,
@@ -587,7 +589,7 @@ export function usePcbEditorActions(
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+      if (target?.closest("input, textarea, select, [role='dialog'], [contenteditable]:not([contenteditable='false'])")) return;
       const shortcuts = shortcutRef.current;
       const key = event.key.toLocaleLowerCase();
       if (event.ctrlKey || event.metaKey) {

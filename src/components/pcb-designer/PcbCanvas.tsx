@@ -33,8 +33,11 @@ import {
   getPcbSelectionIds,
 } from "./core/viewSync.ts";
 import { getMarqueeSelectionIds } from "./core/selection.ts";
+import { getComponentKeepoutBounds, KEEPOUT_SIDES, KEEPOUT_SIDE_LABELS, resizeComponentKeepoutSide } from "./core/componentKeepout.ts";
+import { PcbComponentKeepoutDialog } from "./PcbComponentKeepoutDialog";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 import type {
+  PcbComponentKeepout,
   PcbKeepout,
   PcbMeasurement,
   PcbPlacedComponent,
@@ -69,6 +72,13 @@ interface PcbCanvasProps {
 }
 
 type PointerInteraction =
+  | {
+    kind: "component-keepout-resize";
+    pointerId: number;
+    id: string;
+    side: keyof PcbComponentKeepout;
+    preview: PcbComponentKeepout;
+  }
   | {
     kind: "pan";
     pointerId: number;
@@ -226,11 +236,13 @@ export function PcbCanvas({
   const [placementPoint, setPlacementPoint] = useState<PcbPoint | null>(null);
   const [placementRotation, setPlacementRotation] = useState(0);
   const [contextSelection, setContextSelection] = useState<PcbSelection | null>(null);
+  const [keepoutEditorId, setKeepoutEditorId] = useState<string | null>(null);
   const previewFrameRef = useRef<number | null>(null);
   const queuedPreviewRef = useRef<{ cursor: PcbPoint; placement: PcbPoint | null } | null>(null);
   const zoomFrameRef = useRef<number | null>(null);
   const queuedZoomRef = useRef(workspace.zoom);
   const project = workspace.activeProject;
+  const keepoutEditorComponent = project.components.find((component) => component.instanceId === keepoutEditorId);
   const selectedSelections = useMemo(
     () => selectedObjects
       .map((objectId) => getSelectionById(objectId, project))
@@ -305,7 +317,7 @@ export function PcbCanvas({
   useEffect(() => {
     const cancelDraft = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+      if (target?.closest("input, textarea, select, [role='dialog'], [contenteditable]:not([contenteditable='false'])")) return;
       if (placementComponentId && event.key.toLocaleLowerCase() === "r") {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -734,6 +746,18 @@ export function PcbCanvas({
     });
   };
 
+  const beginComponentKeepoutResize = (
+    event: ReactPointerEvent<SVGCircleElement>,
+    component: PcbPlacedComponent,
+    side: keyof PcbComponentKeepout,
+  ) => {
+    event.stopPropagation();
+    if (event.button !== 0 || workspace.tool !== "select" || !workspace.canMutate || component.locked || !component.keepout) return;
+    event.preventDefault();
+    svgRef.current?.setPointerCapture(event.pointerId);
+    setInteraction({ kind: "component-keepout-resize", pointerId: event.pointerId, id: component.instanceId, side, preview: component.keepout });
+  };
+
   const beginMeasurementResize = (
     event: ReactPointerEvent<SVGGElement>,
     measurement: PcbMeasurement,
@@ -798,7 +822,10 @@ export function PcbCanvas({
       workspace.setViewCenter({ x, y });
       return;
     }
-    if (interaction.kind === "object-move") {
+    if (interaction.kind === "component-keepout-resize") {
+      const component = project.components.find((item) => item.instanceId === interaction.id);
+      if (component) setInteraction({ ...interaction, preview: resizeComponentKeepoutSide(component, interaction.side, point, project.board.snapToGrid && !event.altKey ? gridSize : 0) });
+    } else if (interaction.kind === "object-move") {
       const bypassSnap = event.altKey;
       const x = point.x - interaction.offset.x;
       const y = point.y - interaction.offset.y;
@@ -891,6 +918,12 @@ export function PcbCanvas({
           getMarqueeSelectionIds(project, interaction.start, interaction.end, visibleLayer),
           interaction.additive,
         );
+      }
+    } else if (interaction.kind === "component-keepout-resize") {
+      const component = project.components.find((item) => item.instanceId === interaction.id);
+      if (component && JSON.stringify(component.keepout) !== JSON.stringify(interaction.preview)
+        && !workspace.updateComponent(interaction.id, { keepout: interaction.preview })) {
+        toast({ title: "無法調整元件禁制區", description: "請確認元件未鎖定且仍可編輯。", variant: "destructive" });
       }
     } else if (interaction.kind === "object-move") {
       const result = interaction.objectIds.length > 1
@@ -1112,11 +1145,22 @@ export function PcbCanvas({
         </g>
 
         <g data-layer="keepouts">
+          {visibleComponents.map(({ component }) => {
+            const rendered = interaction?.kind === "component-keepout-resize" && interaction.id === component.instanceId
+              ? { ...component, keepout: interaction.preview } : component;
+            const bounds = getComponentKeepoutBounds(rendered);
+            return bounds ? (
+              <g key={`attached-${component.instanceId}`} transform={getComponentCanvasTransform(component, previewPointForComponent(component))}
+                data-component-keepout={component.instanceId} pointerEvents="none">
+                <rect {...bounds} className="pcb-component-keepout-outline" strokeWidth={strokeWidth} />
+              </g>
+            ) : null;
+          })}
           {project.keepouts.map((keepout) => {
             const moveOrigin = interaction?.kind === "object-move"
               ? interaction.originById[keepout.id]
               : null;
-            const preview = moveOrigin
+            const preview = moveOrigin && interaction?.kind === "object-move"
               ? {
                 ...keepout,
                 x: moveOrigin.x + interaction.delta.x,
@@ -1288,6 +1332,34 @@ export function PcbCanvas({
         </g>
 
         <g data-layer="selection-handles" data-export-hidden>
+          {selectedComponentVisual && workspace.tool === "select" && workspace.canMutate && !selectedComponentVisual.component.locked && (() => {
+            const component = selectedComponentVisual.component;
+            const rendered = interaction?.kind === "component-keepout-resize" && interaction.id === component.instanceId
+              ? { ...component, keepout: interaction.preview } : component;
+            const bounds = getComponentKeepoutBounds(rendered);
+            if (!bounds) return null;
+            const handles = {
+              top: { x: bounds.x + bounds.width / 2, y: bounds.y },
+              right: { x: bounds.x + bounds.width, y: bounds.y + bounds.height / 2 },
+              bottom: { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height },
+              left: { x: bounds.x, y: bounds.y + bounds.height / 2 },
+            };
+            return <g transform={selectedComponentVisual.geometry.transform}>
+              {KEEPOUT_SIDES.map((side) => <circle key={side} cx={handles[side].x} cy={handles[side].y}
+                r={Math.max(strokeWidth * 3, viewBox.width / Math.max(1, size.width) * 6)}
+                className="pcb-component-keepout-handle" data-keepout-side={side} role="slider" tabIndex={0}
+                aria-label={`${component.reference} 禁制區${KEEPOUT_SIDE_LABELS[side]}`} aria-valuemin={0} aria-valuenow={rendered.keepout![side]}
+                aria-valuetext={`${rendered.keepout![side]} mm`} strokeWidth={strokeWidth}
+                onPointerDown={(event) => beginComponentKeepoutResize(event, component, side)}
+                onKeyDown={(event) => {
+                  if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+                  event.preventDefault(); event.stopPropagation();
+                  const step = event.shiftKey ? 0.1 : gridSize;
+                  const direction = event.key === "ArrowUp" || event.key === "ArrowRight" ? 1 : -1;
+                  workspace.updateComponent(component.instanceId, { keepout: { ...component.keepout!, [side]: Math.max(0, Math.round((component.keepout![side] + direction * step) * 10000) / 10000) } });
+                }}><title>{KEEPOUT_SIDE_LABELS[side]} {rendered.keepout![side]} mm · 拖曳調整，Alt 暫停吸附</title></circle>)}
+            </g>;
+          })()}
           {selectedComponentVisual && (
             <g
               data-selection-kind="component"
@@ -1580,13 +1652,18 @@ export function PcbCanvas({
       <ContextMenuContent data-pcb-context-menu className="w-56">
         {contextSelection ? (
           <>
-            <ContextMenuLabel>
-              {contextSelection.kind === "component"
-                ? "元件操作"
-                : contextSelection.kind === "keepout"
-                  ? "禁制區操作"
-                  : "量測線操作"}
-            </ContextMenuLabel>
+            {contextSelection.kind !== "component" && <ContextMenuLabel>
+              {contextSelection.kind === "keepout" ? "禁制區操作" : "量測線操作"}
+            </ContextMenuLabel>}
+            {contextComponent && <>
+              <ContextMenuGroup>
+                <ContextMenuItem disabled={!workspace.canMutate || contextComponentLocked}
+                  onSelect={() => setKeepoutEditorId(contextComponent.instanceId)}>
+                  {contextComponent.keepout ? "調整元件禁制區" : "設定元件禁制區"}
+                </ContextMenuItem>
+              </ContextMenuGroup>
+              <ContextMenuSeparator />
+            </>}
             {contextCanDuplicate ? (
               <>
                 <ContextMenuGroup>
@@ -1696,6 +1773,8 @@ export function PcbCanvas({
           </>
         )}
       </ContextMenuContent>
+      {keepoutEditorComponent && <PcbComponentKeepoutDialog key={`${project.id}:${keepoutEditorComponent.instanceId}`}
+        component={keepoutEditorComponent} workspace={workspace} onClose={() => setKeepoutEditorId(null)} />}
     </ContextMenu>
   );
 }

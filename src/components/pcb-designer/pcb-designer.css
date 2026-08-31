@@ -2746,3 +2746,41 @@
     min-height: 44px;
   }
 }
+
+.pcb-component-keepout-outline {
+  fill: #ef8354;
+  fill-opacity: 0.16;
+  stroke: #ef8354;
+  stroke-dasharray: 1.4 0.8;
+}
+
+.pcb-component-keepout-handle {
+  fill: #ef8354;
+  stroke: #fff3bf;
+  cursor: grab;
+  touch-action: none;
+}
+
+.pcb-component-keepout-handle:focus-visible {
+  stroke: #ffffff;
+  stroke-width: 0.8;
+  outline: none;
+}
+
+.pcb-component-keepout-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--muted) / 0.4);
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+
+.pcb-component-keepout-preview svg {
+  width: 100%;
+  height: 150px;
+}

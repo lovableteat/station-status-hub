@@ -1,3 +1,4 @@
+import { getRenderedKeepouts } from "./core/componentKeepout.ts";
 import {
   useCallback,
   useEffect,
@@ -386,9 +387,9 @@ export function PcbSoftware3DCanvas({
       }
     });
 
-    project.keepouts.forEach((keepout) => {
-      const selected = selectedIds.has(keepout.id);
-      const renderOrder = getSoftwareLayerRenderOrder("top", camera.eye.y);
+    getRenderedKeepouts(project, visibleLayer).forEach((keepout) => {
+      const selected = selectedIds.has(keepout.componentId ?? keepout.id);
+      const renderOrder = getSoftwareLayerRenderOrder(keepout.layer ?? "top", camera.eye.y);
       const isNearSide = renderOrder > SOFTWARE_RENDER_ORDER.board;
       const centerX = keepout.x + keepout.width / 2 - project.board.width / 2;
       const centerZ = keepout.y + keepout.height / 2 - project.board.height / 2;
@@ -397,12 +398,12 @@ export function PcbSoftware3DCanvas({
       const sin = Math.sin(angle);
       const worldVertices = createSoftwareBoxVertices(keepout.width, 0.36, keepout.height).map((point) => ({
         x: centerX + point.x * cos + point.z * sin,
-        y: BOARD_THICKNESS / 2 + 0.2 + point.y,
+        y: (keepout.layer === "bottom" ? -1 : 1) * (BOARD_THICKNESS / 2 + 0.2) + point.y,
         z: centerZ - point.x * sin + point.z * cos,
       }));
       addBox(worldVertices, keepout.color || "#ef8354", selected ? "#fff3bf" : "#f2a56d", renderOrder, selected ? 0.7 : 0.38, selected ? 1.5 : 0.7);
       const bounds = getProjectedBounds(worldVertices.map((point) => projectSoftwarePoint(point, camera)));
-      if (bounds && isNearSide) hits.push({ kind: "keepout", id: keepout.id, ...bounds, selected });
+      if (bounds && isNearSide) hits.push({ kind: keepout.componentId ? "component" : "keepout", id: keepout.componentId ?? keepout.id, ...bounds, selected });
     });
 
     const visibleComponents = project.components
