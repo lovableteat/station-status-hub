@@ -1,6 +1,20 @@
+import {
+  CATEGORIES,
+  readSelfAssessment,
+  readManagerAssessment,
+} from "./rd2Assessment.mjs";
+
 export const PERFORMANCE_CYCLES = [
-  { id: "2026-q3", label: "2026 Q3 · 季度考核", period: "2026/07/01 - 2026/09/30" },
-  { id: "2026-q2", label: "2026 Q2 · 歷史考核", period: "2026/04/01 - 2026/06/30" },
+  {
+    id: "2026-q3",
+    label: "2026 Q3 · 季度考核",
+    period: "2026/07/01 - 2026/09/30",
+  },
+  {
+    id: "2026-q2",
+    label: "2026 Q2 · 歷史考核",
+    period: "2026/04/01 - 2026/06/30",
+  },
 ];
 
 export const PERFORMANCE_STATUS = {
@@ -10,7 +24,11 @@ export const PERFORMANCE_STATUS = {
   approved: { label: "已完成", tone: "emerald" },
 };
 
-export function getPerformanceStatusForAction({ mode, action, currentStatus = "draft" }) {
+export function getPerformanceStatusForAction({
+  mode,
+  action,
+  currentStatus = "draft",
+}) {
   if (mode === "self") return action === "submit" ? "submitted" : "in-progress";
   if (mode === "manager") {
     if (action === "return") return "in-progress";
@@ -35,9 +53,27 @@ export const DEFAULT_PERFORMANCE_REVIEWS = [
     selfFeedback: "已完成工作區權限與協作流程整理。",
     managerFeedback: "",
     goals: [
-      { id: "goal-operator-1", category: "KPI", title: "完成工作區權限盤點", progress: 75, weight: 40 },
-      { id: "goal-operator-2", category: "OKR", title: "降低跨頁操作等待時間", progress: 50, weight: 30 },
-      { id: "goal-operator-3", category: "IDP", title: "建立新人上手文件", progress: 25, weight: 30 },
+      {
+        id: "goal-operator-1",
+        category: "KPI",
+        title: "完成工作區權限盤點",
+        progress: 75,
+        weight: 40,
+      },
+      {
+        id: "goal-operator-2",
+        category: "OKR",
+        title: "降低跨頁操作等待時間",
+        progress: 50,
+        weight: 30,
+      },
+      {
+        id: "goal-operator-3",
+        category: "IDP",
+        title: "建立新人上手文件",
+        progress: 25,
+        weight: 30,
+      },
     ],
   },
   {
@@ -55,9 +91,24 @@ export const DEFAULT_PERFORMANCE_REVIEWS = [
     selfFeedback: "完成 PCB Designer 的 2D／3D 對照與 BOM 整理。",
     managerFeedback: "功能交付穩定，建議加強跨部門文件同步。",
     goals: [
-      { id: "goal-yumin-1", title: "完成 E2 Switch board 版圖", progress: 100, weight: 45 },
-      { id: "goal-yumin-2", title: "建立料號申請標準流程", progress: 85, weight: 35 },
-      { id: "goal-yumin-3", title: "協助新人熟悉 BOM 工具", progress: 60, weight: 20 },
+      {
+        id: "goal-yumin-1",
+        title: "完成 E2 Switch board 版圖",
+        progress: 100,
+        weight: 45,
+      },
+      {
+        id: "goal-yumin-2",
+        title: "建立料號申請標準流程",
+        progress: 85,
+        weight: 35,
+      },
+      {
+        id: "goal-yumin-3",
+        title: "協助新人熟悉 BOM 工具",
+        progress: 60,
+        weight: 20,
+      },
     ],
   },
   {
@@ -75,8 +126,18 @@ export const DEFAULT_PERFORMANCE_REVIEWS = [
     selfFeedback: "完成跨工作區問題追蹤與維修紀錄整合。",
     managerFeedback: "主動協作且能穩定完成高優先級問題。",
     goals: [
-      { id: "goal-ben-1", title: "完成 L10 測試流程優化", progress: 100, weight: 50 },
-      { id: "goal-ben-2", title: "縮短問題回報到結案時間", progress: 90, weight: 30 },
+      {
+        id: "goal-ben-1",
+        title: "完成 L10 測試流程優化",
+        progress: 100,
+        weight: 50,
+      },
+      {
+        id: "goal-ben-2",
+        title: "縮短問題回報到結案時間",
+        progress: 90,
+        weight: 30,
+      },
       { id: "goal-ben-3", title: "補齊維修紀錄範本", progress: 80, weight: 20 },
     ],
   },
@@ -95,9 +156,24 @@ export const DEFAULT_PERFORMANCE_REVIEWS = [
     selfFeedback: "",
     managerFeedback: "",
     goals: [
-      { id: "goal-henry-1", title: "完成 Data Center 場景資料整理", progress: 65, weight: 40 },
-      { id: "goal-henry-2", title: "提升共用資料查詢穩定性", progress: 40, weight: 35 },
-      { id: "goal-henry-3", title: "支援跨組技術分享", progress: 50, weight: 25 },
+      {
+        id: "goal-henry-1",
+        title: "完成 Data Center 場景資料整理",
+        progress: 65,
+        weight: 40,
+      },
+      {
+        id: "goal-henry-2",
+        title: "提升共用資料查詢穩定性",
+        progress: 40,
+        weight: 35,
+      },
+      {
+        id: "goal-henry-3",
+        title: "支援跨組技術分享",
+        progress: 50,
+        weight: 25,
+      },
     ],
   },
   {
@@ -115,16 +191,34 @@ export const DEFAULT_PERFORMANCE_REVIEWS = [
     selfFeedback: "",
     managerFeedback: "",
     goals: [
-      { id: "goal-johnny-1", title: "完成 Station 1 測試資產盤點", progress: 30, weight: 40 },
-      { id: "goal-johnny-2", title: "建立異常回報範例", progress: 20, weight: 30 },
-      { id: "goal-johnny-3", title: "改善交接資訊完整度", progress: 25, weight: 30 },
+      {
+        id: "goal-johnny-1",
+        title: "完成 Station 1 測試資產盤點",
+        progress: 30,
+        weight: 40,
+      },
+      {
+        id: "goal-johnny-2",
+        title: "建立異常回報範例",
+        progress: 20,
+        weight: 30,
+      },
+      {
+        id: "goal-johnny-3",
+        title: "改善交接資訊完整度",
+        progress: 25,
+        weight: 30,
+      },
     ],
   },
 ];
 
 export function normalizePerformanceReview(value) {
   const review = value && typeof value === "object" ? value : {};
-  const status = Object.prototype.hasOwnProperty.call(PERFORMANCE_STATUS, review.status)
+  const status = Object.prototype.hasOwnProperty.call(
+    PERFORMANCE_STATUS,
+    review.status,
+  )
     ? review.status
     : "draft";
   const goals = Array.isArray(review.goals) ? review.goals : [];
@@ -133,19 +227,34 @@ export function normalizePerformanceReview(value) {
     id: String(review.id || `performance-${Date.now()}`),
     cycleId: String(review.cycleId || review.cycle_id || "2026-q3"),
     employeeId: String(review.employeeId || review.employee_id || ""),
-    employeeName: String(review.employeeName || review.employee_name || "未指定員工"),
+    employeeName: String(
+      review.employeeName || review.employee_name || "未指定員工",
+    ),
     department: String(review.department || "未指定部門"),
     role: String(review.role || "工程師"),
-    reviewerName: String(review.reviewerName || review.reviewer_name || "管理員"),
+    reviewerName: String(
+      review.reviewerName || review.reviewer_name || "管理員",
+    ),
     status,
-    score: Number.isFinite(Number(review.score)) ? Number(review.score) : null,
+    score:
+      review.score == null || review.score === ""
+        ? null
+        : Number.isFinite(Number(review.score))
+          ? Number(review.score)
+          : null,
     dueDate: String(review.dueDate || review.due_date || "2026-09-30"),
-    updatedAt: String(review.updatedAt || review.updated_at || new Date().toISOString()),
+    updatedAt: String(
+      review.updatedAt || review.updated_at || new Date().toISOString(),
+    ),
     selfFeedback: String(review.selfFeedback || review.self_feedback || ""),
-    managerFeedback: String(review.managerFeedback || review.manager_feedback || ""),
+    managerFeedback: String(
+      review.managerFeedback || review.manager_feedback || "",
+    ),
     goals: goals.map((goal, index) => ({
       id: String(goal?.id || `${review.id || "goal"}-${index + 1}`),
-      category: ["KPI", "OKR", "IDP"].includes(goal?.category) ? goal.category : "KPI",
+      category: ["KPI", "OKR", "IDP"].includes(goal?.category)
+        ? goal.category
+        : "KPI",
       title: String(goal?.title || "未命名目標"),
       progress: Math.min(100, Math.max(0, Number(goal?.progress) || 0)),
       weight: Math.max(0, Number(goal?.weight) || 0),
@@ -156,35 +265,92 @@ export function normalizePerformanceReview(value) {
 export function calculatePerformanceSummary(reviews) {
   const rows = Array.isArray(reviews) ? reviews : [];
   const scored = rows.filter((review) => Number.isFinite(review.score));
-  const progressValues = rows.flatMap((review) => review.goals?.map((goal) => goal.progress) || []);
+  const progressValues = rows.flatMap(
+    (review) => review.goals?.map((goal) => goal.progress) || [],
+  );
 
   return {
     total: rows.length,
     completed: rows.filter((review) => review.status === "approved").length,
     pending: rows.filter((review) => review.status !== "approved").length,
     averageScore: scored.length
-      ? Math.round(scored.reduce((sum, review) => sum + review.score, 0) / scored.length)
+      ? Math.round(
+          scored.reduce((sum, review) => sum + review.score, 0) / scored.length,
+        )
       : 0,
     averageProgress: progressValues.length
-      ? Math.round(progressValues.reduce((sum, progress) => sum + progress, 0) / progressValues.length)
+      ? Math.round(
+          progressValues.reduce((sum, progress) => sum + progress, 0) /
+            progressValues.length,
+        )
       : 0,
   };
 }
 
 export function toPerformanceCsv(reviews) {
-  const headers = ["員工", "部門", "考核人", "狀態", "分數", "目標平均進度", "截止日期"];
-  const rows = (reviews || []).map((review) => [
-    review.employeeName,
-    review.department,
-    review.reviewerName,
-    PERFORMANCE_STATUS[review.status]?.label || review.status,
-    review.score ?? "",
-    review.goals?.length
-      ? Math.round(review.goals.reduce((sum, goal) => sum + goal.progress, 0) / review.goals.length)
-      : 0,
-    review.dueDate,
-  ]);
+  const headers = [
+    "員工",
+    "部門",
+    "考核人",
+    "狀態",
+    "分數",
+    "目標平均進度",
+    "截止日期",
+    "工號",
+    "團隊",
+    "職級",
+    "IDP 實績",
+    "OKR 實績",
+    "KPI 實績",
+    "當責題一",
+    "當責題二",
+    "主管回饋",
+    "既有自評",
+    "證明連結",
+    "圖片附件數",
+  ];
+  const rows = (reviews || []).map((review) => {
+    const self = readSelfAssessment(review.selfFeedback);
+    const manager = readManagerAssessment(review.managerFeedback);
+    return [
+      review.employeeName,
+      review.department,
+      review.reviewerName,
+      PERFORMANCE_STATUS[review.status]?.label || review.status,
+      review.score ?? "",
+      review.goals?.length
+        ? Math.round(
+            review.goals.reduce((sum, goal) => sum + goal.progress, 0) /
+              review.goals.length,
+          )
+        : 0,
+      review.dueDate,
+      self.employeeNumber || manager.employeeNumber,
+      self.team,
+      self.level,
+      ...CATEGORIES.map((category) => self.sections[category].text),
+      manager.answers.q1 ?? "",
+      manager.answers.q2 ?? "",
+      manager.feedback,
+      self.legacyText,
+      CATEGORIES.flatMap((category) => self.sections[category].links).join(
+        "\n",
+      ),
+      CATEGORIES.reduce(
+        (count, category) => count + self.sections[category].images.length,
+        0,
+      ),
+    ];
+  });
   return [headers, ...rows]
-    .map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","))
+    .map((row) =>
+      row
+        .map((value) => {
+          const text = String(value);
+          const safe = /^[\s]*[=+@-]/.test(text) ? `'${text}` : text;
+          return `"${safe.replaceAll('"', '""')}"`;
+        })
+        .join(","),
+    )
     .join("\n");
 }
