@@ -298,21 +298,33 @@ export function PerformanceAppraisalPage() {
         review.id === (editorId || effectiveSavedId),
     ) || null;
   const employeeOptions = useMemo(() => {
-    const options = new Map(
-      employees.map((employee) => [employee.id, employee]),
-    );
+    // system_users (後台管理) is the authoritative roster. Review rows and the
+    // signed-in user are folded in so historic names stay pickable, but they
+    // were previously keyed by id alone: a review created with a free-typed
+    // name carries an id that does not match that person's account, so the
+    // same person surfaced twice. Claim each display name once, letting the
+    // roster entry win.
+    const options = new Map<string, EmployeeOption>();
+    const claimed = new Set<string>();
+    const nameKey = (label: string) => label.trim().toLocaleLowerCase();
+    const add = (option: EmployeeOption) => {
+      const label = (option.label || "").trim();
+      if (!label) return;
+      const key = nameKey(label);
+      if (claimed.has(key)) return;
+      claimed.add(key);
+      options.set(option.id, { ...option, label });
+    };
+
+    employees.forEach(add);
     reviews.forEach((review) =>
-      options.set(review.employeeId, {
-        id: review.employeeId,
-        label: review.employeeName,
-      }),
+      add({ id: review.employeeId, label: review.employeeName }),
     );
-    if (user)
-      options.set(userId, {
-        id: userId,
-        label: user.displayName || user.username,
-      });
-    return Array.from(options.values());
+    if (user) add({ id: userId, label: user.displayName || user.username });
+
+    return Array.from(options.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, "zh-Hant"),
+    );
   }, [employees, reviews, user, userId]);
   const visibleReviews = useMemo(
     () =>
@@ -644,37 +656,35 @@ export function PerformanceAppraisalPage() {
                   label="本期考核"
                   value={recordSummary.total}
                   suffix=" 筆"
+                  tone="info"
                   hint="符合目前篩選條件"
                 />
                 <StatTile
                   label="已完成"
                   value={recordSummary.approved}
                   suffix=" 筆"
-                  tone={
-                    recordSummary.total &&
-                    recordSummary.approved === recordSummary.total
-                      ? "good"
-                      : "default"
-                  }
+                  tone="good"
                   hint="主管已確認"
                 />
                 <StatTile
                   label="待主管評分"
                   value={recordSummary.awaiting}
                   suffix=" 筆"
-                  tone={recordSummary.awaiting ? "warning" : "default"}
+                  tone="warning"
                   hint="員工已送出自評"
                 />
                 <StatTile
                   label="平均綜合評分"
                   value={recordSummary.averageScore ?? "--"}
                   suffix={recordSummary.averageScore === null ? "" : " 分"}
+                  tone="score"
                   hint="僅計入已評分者"
                 />
                 <StatTile
                   label="平均目標進度"
                   value={recordSummary.averageProgress ?? "--"}
                   suffix={recordSummary.averageProgress === null ? "" : "%"}
+                  tone="progress"
                   hint="所有目標平均"
                 />
               </div>

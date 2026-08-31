@@ -425,6 +425,77 @@ export function AssessmentEditor({
             : "針對當責維度題目評分，兩題皆須完成。"}
         </p>
       </header>
+      {!readonly && (
+        <footer className="rd2-form-footer">
+          {draftConflict && (
+            <p className="rd2-error" role="alert">
+              工作區已有較新版本，目前顯示舊草稿供你核對。請先複製要保留的文字，再清除本機草稿以載入最新內容。
+            </p>
+          )}
+          {error && (
+            <p className="rd2-error" role="alert">
+              {error}
+            </p>
+          )}
+          {!canSubmit && (
+            <p className="rd2-hint">
+              目前為檢視權限，可暫存本機草稿；送出需要績效考核管理權限。
+            </p>
+          )}
+          <p className="rd2-draft-status" role="status">
+            {draftStatus}
+          </p>
+          <div className="rd2-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={saving || !!imageJobs}
+              onClick={() => setClearOpen(true)}
+            >
+              <Trash2 data-icon="inline-start" />
+              清除本機草稿
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving || !!imageJobs}
+              onClick={persistDraft}
+            >
+              <Save data-icon="inline-start" />
+              儲存本機草稿
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!canSubmit || saving || !!imageJobs}
+              onClick={() => void submit("draft")}
+            >
+              儲存至工作區
+            </Button>
+            {mode === "manager" && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!canSubmit || saving || !!imageJobs}
+                onClick={() => void submit("return")}
+              >
+                退回補充
+              </Button>
+            )}
+            <Button
+              type="submit"
+              disabled={!canSubmit || saving || !!imageJobs}
+            >
+              <Send data-icon="inline-start" />
+              {saving
+                ? "儲存中…"
+                : mode === "self"
+                  ? "送出自評"
+                  : "送出主管評分"}
+            </Button>
+          </div>
+        </footer>
+      )}
       <fieldset disabled={readonly || saving} className="rd2-card rd2-identity">
         <FieldGroup className="rd2-field-grid">
           {!identityLocked && !!employees.length && (
@@ -556,6 +627,7 @@ export function AssessmentEditor({
               <fieldset
                 disabled={readonly || saving}
                 key={category}
+                data-category={category}
                 className="rd2-card rd2-category"
               >
                 <div className="rd2-category-heading">
@@ -833,6 +905,7 @@ export function AssessmentEditor({
             <fieldset
               key={question.id}
               disabled={readonly || saving}
+              data-question-index={index + 1}
               className="rd2-card rd2-question"
             >
               <legend>
@@ -876,7 +949,10 @@ export function AssessmentEditor({
             </fieldset>
           ))}
           </div>
-          <fieldset disabled={readonly || saving} className="rd2-card">
+          <fieldset
+            disabled={readonly || saving}
+            className="rd2-card rd2-feedback-card"
+          >
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="rd2-feedback">主管回饋</FieldLabel>
@@ -920,77 +996,6 @@ export function AssessmentEditor({
             </FieldGroup>
           </fieldset>
         </>
-      )}
-      {!readonly && (
-        <footer className="rd2-form-footer">
-          {draftConflict && (
-            <p className="rd2-error" role="alert">
-              工作區已有較新版本，目前顯示舊草稿供你核對。請先複製要保留的文字，再清除本機草稿以載入最新內容。
-            </p>
-          )}
-          {error && (
-            <p className="rd2-error" role="alert">
-              {error}
-            </p>
-          )}
-          {!canSubmit && (
-            <p className="rd2-hint">
-              目前為檢視權限，可暫存本機草稿；送出需要績效考核管理權限。
-            </p>
-          )}
-          <p className="rd2-draft-status" role="status">
-            {draftStatus}
-          </p>
-          <div className="rd2-actions">
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={saving || !!imageJobs}
-              onClick={() => setClearOpen(true)}
-            >
-              <Trash2 data-icon="inline-start" />
-              清除本機草稿
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={saving || !!imageJobs}
-              onClick={persistDraft}
-            >
-              <Save data-icon="inline-start" />
-              儲存本機草稿
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!canSubmit || saving || !!imageJobs}
-              onClick={() => void submit("draft")}
-            >
-              儲存至工作區
-            </Button>
-            {mode === "manager" && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!canSubmit || saving || !!imageJobs}
-                onClick={() => void submit("return")}
-              >
-                退回補充
-              </Button>
-            )}
-            <Button
-              type="submit"
-              disabled={!canSubmit || saving || !!imageJobs}
-            >
-              <Send data-icon="inline-start" />
-              {saving
-                ? "儲存中…"
-                : mode === "self"
-                  ? "送出自評"
-                  : "送出主管評分"}
-            </Button>
-          </div>
-        </footer>
       )}
       <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
         <AlertDialogContent>
