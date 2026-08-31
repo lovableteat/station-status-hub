@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { AssessmentPolicy } from "./AssessmentPolicy";
+import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { saveAssessmentRecord } from "./assessmentPersistence.mjs";
 import {
   ACCOUNTABILITY_QUESTIONS,
@@ -334,6 +335,40 @@ export function PerformanceAppraisalPage() {
       ),
     [reviews, cycle, status, scope, query, user],
   );
+
+  const recordSummary = useMemo(() => {
+    const counts: Record<string, number> = {
+      draft: 0,
+      "in-progress": 0,
+      submitted: 0,
+      approved: 0,
+    };
+    let scoreSum = 0;
+    let scored = 0;
+    let progressSum = 0;
+    let progressCount = 0;
+    visibleReviews.forEach((review) => {
+      counts[review.status] = (counts[review.status] ?? 0) + 1;
+      if (Number.isFinite(review.score)) {
+        scoreSum += review.score as number;
+        scored += 1;
+      }
+      (review.goals || []).forEach((goal) => {
+        progressSum += goal.progress;
+        progressCount += 1;
+      });
+    });
+    return {
+      counts,
+      total: visibleReviews.length,
+      approved: counts.approved,
+      awaiting: counts.submitted,
+      averageScore: scored ? Math.round(scoreSum / scored) : null,
+      averageProgress: progressCount
+        ? Math.round(progressSum / progressCount)
+        : null,
+    };
+  }, [visibleReviews]);
   const navigate = (
     nextTab: string,
     review: PerformanceReview | null = null,
@@ -603,6 +638,50 @@ export function PerformanceAppraisalPage() {
                 </Button>
               </div>
             </header>
+            <div className="rd2-records-summary">
+              <div className="rd2-stat-row">
+                <StatTile
+                  label="本期考核"
+                  value={recordSummary.total}
+                  suffix=" 筆"
+                  hint="符合目前篩選條件"
+                />
+                <StatTile
+                  label="已完成"
+                  value={recordSummary.approved}
+                  suffix=" 筆"
+                  tone={
+                    recordSummary.total &&
+                    recordSummary.approved === recordSummary.total
+                      ? "good"
+                      : "default"
+                  }
+                  hint="主管已確認"
+                />
+                <StatTile
+                  label="待主管評分"
+                  value={recordSummary.awaiting}
+                  suffix=" 筆"
+                  tone={recordSummary.awaiting ? "warning" : "default"}
+                  hint="員工已送出自評"
+                />
+                <StatTile
+                  label="平均綜合評分"
+                  value={recordSummary.averageScore ?? "--"}
+                  suffix={recordSummary.averageScore === null ? "" : " 分"}
+                  hint="僅計入已評分者"
+                />
+                <StatTile
+                  label="平均目標進度"
+                  value={recordSummary.averageProgress ?? "--"}
+                  suffix={recordSummary.averageProgress === null ? "" : "%"}
+                  hint="所有目標平均"
+                />
+              </div>
+              <section className="rd2-card rd2-records-chart">
+                <StatusBreakdownChart counts={recordSummary.counts} />
+              </section>
+            </div>
             <div className="rd2-filter-bar" aria-label="考核篩選">
               <div className="rd2-filters">
                 <Input

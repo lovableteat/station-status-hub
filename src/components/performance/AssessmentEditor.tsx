@@ -416,13 +416,13 @@ export function AssessmentEditor({
           {readonly
             ? "考核內容"
             : mode === "self"
-              ? "員工自評填寫區 (STAR)"
-              : "主管評分區 (當責維度)"}
+              ? "員工自評填寫區（STAR）"
+              : "主管評分區（當責維度）"}
         </h2>
         <p>
           {mode === "self"
             ? "依 IDP、OKR、KPI 分別填寫實績，並附上證明。"
-            : "依原站當責題目評分；兩題皆須完成。"}
+            : "針對當責維度題目評分，兩題皆須完成。"}
         </p>
       </header>
       <fieldset disabled={readonly || saving} className="rd2-card rd2-identity">
@@ -826,6 +826,7 @@ export function AssessmentEditor({
       )}
       {mode === "manager" && (
         <>
+          <div className="rd2-question-grid">
           {ACCOUNTABILITY_QUESTIONS.map((question, index) => (
             <fieldset
               key={question.id}
@@ -833,7 +834,7 @@ export function AssessmentEditor({
               className="rd2-card rd2-question"
             >
               <legend>
-                {index + 1}. {question.dimension}
+                第 {index + 1} 題 · {question.dimension}
               </legend>
               <p className="rd2-hint">{question.role}</p>
               <h3 id={`question-${question.id}`}>{question.text}</h3>
@@ -872,6 +873,7 @@ export function AssessmentEditor({
               <p className="rd2-hint">1 分：低度符合 · 5 分：高度符合</p>
             </fieldset>
           ))}
+          </div>
           <fieldset disabled={readonly || saving} className="rd2-card">
             <FieldGroup>
               <Field>
