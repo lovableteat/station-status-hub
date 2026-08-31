@@ -7,18 +7,30 @@ import {
   FileText,
   Plus,
   RefreshCw,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
 import { useUser } from "@/components/auth/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
+import { PerformanceFlowGuide } from "./PerformanceFlowGuide";
 import { saveAssessmentRecord } from "./assessmentPersistence.mjs";
 import {
   ACCOUNTABILITY_QUESTIONS,
@@ -393,6 +405,48 @@ export function PerformanceAppraisalPage() {
       performanceReview: review?.id || null,
     });
   };
+  const [managerView, setManagerView] = useState<"records" | "score">(
+    "records",
+  );
+  const [pendingDelete, setPendingDelete] =
+    useState<PerformanceReview | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const removeReview = async (review: PerformanceReview) => {
+    setDeleting(true);
+    try {
+      if (!demo) {
+        const { error } = await performanceDb
+          .from("performance_reviews")
+          .delete()
+          .eq("id", review.id);
+        if (error) throw error;
+      }
+      const nextRows = reviews.filter((row) => row.id !== review.id);
+      setReviews(nextRows);
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(nextRows));
+      } catch {
+        /* cache is best-effort */
+      }
+      if (detailId === review.id) setDetailId(null);
+      if (editorId === review.id) navigate(tab);
+      toast({
+        title: "考核已刪除",
+        description: `${review.employeeName} 的這期考核紀錄已移除。`,
+      });
+      setPendingDelete(null);
+    } catch {
+      toast({
+        title: "刪除失敗",
+        description: "請確認你的權限與工作區連線後再試一次。",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const save = async (form: AssessmentForm, action: AssessmentAction) => {
     if (!canEdit || loading || loadError)
       throw new Error("目前無法送出，請確認管理權限與工作區連線。");
@@ -528,6 +582,10 @@ export function PerformanceAppraisalPage() {
             </select>
           </div>
         </header>
+        <PerformanceFlowGuide
+          status={editorReview?.status ?? null}
+          employeeName={editorReview?.employeeName}
+        />
         {loadError && (
           <div className="rd2-error rd2-load-error" role="alert">
             <span>{loadError}</span>
@@ -542,7 +600,40 @@ export function PerformanceAppraisalPage() {
           </div>
         )}
         {tab === "policy" && <AssessmentPolicy />}
-        {(tab === "self" || tab === "manager") && (
+        {tab === "manager" && canEdit && (
+          <div
+            className="rd2-view-switch"
+            role="tablist"
+            aria-label="主管評分與紀錄檢視"
+          >
+            {[
+              {
+                id: "records" as const,
+                label: "考核紀錄",
+                hint: "看誰還沒送、誰等著評分，從這裡挑對象",
+              },
+              {
+                id: "score" as const,
+                label: "主管評分",
+                hint: "為選定的員工打當責分數與回饋",
+              },
+            ].map((view) => (
+              <button
+                key={view.id}
+                type="button"
+                role="tab"
+                aria-selected={managerView === view.id}
+                data-active={managerView === view.id || undefined}
+                onClick={() => setManagerView(view.id)}
+              >
+                <strong>{view.label}</strong>
+                <small>{view.hint}</small>
+              </button>
+            ))}
+          </div>
+        )}
+        {(tab === "self" ||
+          (tab === "manager" && (!canEdit || managerView === "score"))) && (
           <>
             {tab === "manager" && !canEdit ? (
               <p role="alert">需要績效考核管理權限才能進行主管評分。</p>
@@ -623,7 +714,8 @@ export function PerformanceAppraisalPage() {
             )}
           </>
         )}
-        {(tab === "records" || (tab === "manager" && canEdit)) && (
+        {(tab === "records" ||
+          (tab === "manager" && canEdit && managerView === "records")) && (
           <section>
             <header className="rd2-section-heading rd2-records-heading">
               <div>
@@ -848,9 +940,24 @@ export function PerformanceAppraisalPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => navigate("manager", review)}
+                              onClick={() => {
+                                setManagerView("score");
+                                navigate("manager", review);
+                              }}
                             >
                               主管評分
+                            </Button>
+                          )}
+                          {canEdit && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              aria-label={`刪除 ${review.employeeName} 的考核`}
+                              className="rd2-delete-action"
+                              onClick={() => setPendingDelete(review)}
+                            >
+                              <Trash2 />
+                              刪除
                             </Button>
                           )}
                         </div>
@@ -881,6 +988,36 @@ export function PerformanceAppraisalPage() {
           </section>
         )}
       </main>
+
+      <AlertDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>刪除這份考核紀錄？</AlertDialogTitle>
+            <AlertDialogDescription>
+              將永久移除{pendingDelete ? ` ${pendingDelete.employeeName} ` : ""}
+              在「
+              {PERFORMANCE_CYCLES.find((item) => item.id === cycle)?.label ??
+                cycle}
+              」的自評內容、主管評分與回饋，且無法復原。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={(event) => {
+                event.preventDefault();
+                if (pendingDelete) void removeReview(pendingDelete);
+              }}
+            >
+              {deleting ? "刪除中…" : "確定刪除"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
