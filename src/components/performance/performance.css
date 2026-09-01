@@ -235,6 +235,10 @@
   color: var(--rd2-accent);
   font-size: 13px;
 }
+.rd2-manager-selection-required {
+  margin-top: 16px;
+  min-height: 96px;
+}
 
 /* --- Reviewer page: switch views instead of stacking both --- */
 .rd2-view-switch {

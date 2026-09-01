@@ -757,7 +757,9 @@ export function PerformanceAppraisalPage() {
                     }
                   >
                     <option value="">
-                      ＋ 建立新的一筆（員工還沒自評）
+                      {canManageAll
+                        ? "＋ 建立新的一筆（員工還沒自評）"
+                        : "請選擇直屬同仁的考核"}
                     </option>
                     {reviews
                       .filter(
@@ -798,22 +800,31 @@ export function PerformanceAppraisalPage() {
                     />
                   </details>
                 )}
-                <AssessmentEditor
-                  key={`${userId}:${cycle}:${tab}:${editorId || "new"}:${editorRevision}`}
-                  initial={initial}
-                  mode={tab}
-                  storageKey={draftKey(userId, cycle, tab, editorId)}
-                  readonly={
-                    tab === "self" && editorReview?.status === "approved"
-                  }
-                  identityLocked={tab === "self" || !!editorReview}
-                  canSubmit={canEdit && !loadError && !loading}
-                  employees={
-                    tab === "manager" && canEdit ? employeeOptions : []
-                  }
-                  demo={demo}
-                  onSave={save}
-                />
+                {tab === "manager" && !canManageAll && !editorReview ? (
+                  <div
+                    className="rd2-empty rd2-manager-selection-required"
+                    role="status"
+                  >
+                    請先從「直屬同仁紀錄」選擇一筆考核，再查看自評並填寫主管評分。
+                  </div>
+                ) : (
+                  <AssessmentEditor
+                    key={`${userId}:${cycle}:${tab}:${editorId || "new"}:${editorRevision}`}
+                    initial={initial}
+                    mode={tab}
+                    storageKey={draftKey(userId, cycle, tab, editorId)}
+                    readonly={
+                      tab === "self" && editorReview?.status === "approved"
+                    }
+                    identityLocked={tab === "self" || !!editorReview}
+                    canSubmit={canEdit && !loadError && !loading}
+                    employees={
+                      tab === "manager" && canEdit ? employeeOptions : []
+                    }
+                    demo={demo}
+                    onSave={save}
+                  />
+                )}
               </>
             )}
           </>
