@@ -492,6 +492,14 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       }));
   };
 
+  const isPerformanceManager = (permissionSettings: unknown) =>
+    Boolean(
+      permissionSettings &&
+        typeof permissionSettings === "object" &&
+        !Array.isArray(permissionSettings) &&
+        (permissionSettings as { performanceManager?: unknown }).performanceManager === true,
+    );
+
   const isProtectedSystemUser = (systemUser: SystemUser) =>
     systemUser.username === "liu52417" ||
     systemUser.display_name === "管理員" ||
@@ -830,6 +838,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               {isProtected ? (
                                 <Badge variant="outline" className="border-white/10 bg-white/[0.04] text-slate-400">
                                   保留帳號
+                                </Badge>
+                              ) : null}
+                              {isPerformanceManager(systemUser.permissions) ? (
+                                <Badge className="border-amber-300/25 bg-amber-300/10 text-amber-100">
+                                  績效主管
                                 </Badge>
                               ) : null}
                             </div>

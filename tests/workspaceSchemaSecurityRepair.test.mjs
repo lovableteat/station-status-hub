@@ -11,6 +11,10 @@ const performancePrivacyMigrationUrl = new URL(
   "../supabase/migrations/20260901120000_scope_performance_reviews_to_managers.sql",
   import.meta.url,
 );
+const performanceManagerMigrationUrl = new URL(
+  "../supabase/migrations/20260901130000_assign_performance_managers.sql",
+  import.meta.url,
+);
 
 const readMigration = () => readFile(migrationUrl, "utf8");
 
@@ -73,6 +77,20 @@ test("performance review RLS limits manager rows to administrators or assigned s
   assert.match(sql, /lower\(coalesce\(current_user\.display_name/i);
   assert.match(sql, /lower\(coalesce\(current_user\.username/i);
   assert.match(sql, /create policy performance_reviews_update[\s\S]*?with check/i);
+});
+
+test("performance manager assignment is explicit and protects private fields", async () => {
+  const sql = await readFile(performanceManagerMigrationUrl, "utf8");
+
+  assert.match(sql, /current_user_is_performance_manager/i);
+  assert.match(sql, /performanceManager/);
+  assert.match(sql, /create trigger guard_performance_review_self_update/i);
+  assert.match(sql, /new\.manager_feedback is distinct from old\.manager_feedback/i);
+  assert.match(sql, /Only an assigned performance manager can edit manager assessment fields/i);
+  assert.match(
+    sql,
+    /performance_reviews_read[\s\S]*?current_user_is_performance_manager\(\)[\s\S]*?current_user_can_workspace\('performance', 'edit'\)/i,
+  );
 });
 
 test("metadata repair is additive, conflict safe, and leaves operational rows untouched", async () => {

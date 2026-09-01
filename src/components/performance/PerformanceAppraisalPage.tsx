@@ -101,7 +101,7 @@ function readCache(
     displayName?: string;
     role?: string;
   } | null,
-  canEdit: boolean,
+  canManagePerformance: boolean,
   canManageAll: boolean,
 ): PerformanceReview[] {
   try {
@@ -127,7 +127,7 @@ function readCache(
           return false;
         return (
           matchesUser(review, user) ||
-          (canEdit && (canManageAll || matchesReviewer(review, user)))
+          (canManagePerformance && (canManageAll || matchesReviewer(review, user)))
         );
       },
     );
@@ -224,11 +224,15 @@ function ReviewDetail({
 
 export function PerformanceAppraisalPage() {
   const { user, sessionMode } = useUser();
-  const { canEditModule } = usePermissions();
+  const { canEditModule, isPerformanceManager } = usePermissions();
   const { toast } = useToast();
   const [params, setParams] = useSearchParams();
   const canEdit = canEditModule("performance");
   const canManageAll = isAdministrator(user);
+  // Editing the performance workspace is intentionally not enough to expose
+  // manager reviews. Administrators must explicitly assign the reviewer role
+  // in the backend account-permissions dialog.
+  const canManagePerformance = canManageAll || (canEdit && isPerformanceManager);
   const demo = sessionMode === "demo";
   const userId = user?.userId || user?.username || "signed-out";
   const cacheKey = `station-status-hub:performance-reviews:v2:${demo ? "demo" : "cloud"}:${encodeURIComponent(userId)}`;
@@ -246,13 +250,13 @@ export function PerformanceAppraisalPage() {
   // A manually crafted URL must not expose the manager workflow to employees
   // who only have view access. Keep them on their own self-assessment screen.
   const tab =
-    requestedTab === "manager" && !canEdit
+    requestedTab === "manager" && !canManagePerformance
       ? "self"
-      : requestedTab === "records" && canEdit
+      : requestedTab === "records" && canManagePerformance
         ? "manager"
         : requestedTab;
   const editorId =
-    requestedTab === "manager" && !canEdit
+    requestedTab === "manager" && !canManagePerformance
       ? null
       : params.get("performanceReview");
   const cycle = PERFORMANCE_CYCLES.some(
@@ -288,7 +292,9 @@ export function PerformanceAppraisalPage() {
     const request = ++requestNumber.current;
     setLoading(true);
     setLoadError("");
-    setReviews(readCache(cacheKey, demo, user, canEdit, canManageAll));
+    setReviews(
+      readCache(cacheKey, demo, user, canManagePerformance, canManageAll),
+    );
     if (demo) {
       setLoading(false);
       return;
@@ -300,10 +306,10 @@ export function PerformanceAppraisalPage() {
         .order("updated_at", { ascending: false });
       // Employees request only their own row. Managers can request the rows
       // assigned to them; administrators retain the full review workspace.
-      if (!canEdit) reviewsQuery.eq("employee_id", userId);
+      if (!canManagePerformance) reviewsQuery.eq("employee_id", userId);
       const [{ data, error }, employeeResult] = await Promise.all([
         reviewsQuery,
-        canEdit
+        canManagePerformance
           ? performanceDb
               .from("system_users")
               .select("id, display_name, username")
@@ -319,7 +325,8 @@ export function PerformanceAppraisalPage() {
       const accessible = rows.filter(
         (review) =>
           matchesUser(review, user) ||
-          (canEdit && (canManageAll || matchesReviewer(review, user))),
+          (canManagePerformance &&
+            (canManageAll || matchesReviewer(review, user))),
       );
       setReviews(accessible);
       try {
@@ -347,7 +354,7 @@ export function PerformanceAppraisalPage() {
     } finally {
       if (request === requestNumber.current) setLoading(false);
     }
-  }, [cacheKey, demo, user, canEdit, canManageAll, userId]);
+  }, [cacheKey, demo, user, canManagePerformance, canManageAll, userId]);
   useEffect(() => {
     void load();
     const request = requestNumber.current;
@@ -359,7 +366,8 @@ export function PerformanceAppraisalPage() {
     reviews.find(
       (review) =>
         review.cycleId === cycle &&
-        review.id === (editorId || effectiveSavedId),
+        review.id === (editorId || effectiveSavedId) &&
+        (tab !== "self" || matchesUser(review, user)),
     ) || null;
   const employeeOptions = useMemo(() => {
     // system_users (後台管理) is the authoritative roster. Review rows and the
@@ -521,6 +529,10 @@ export function PerformanceAppraisalPage() {
     if (!canEdit || loading || loadError)
       throw new Error("目前無法送出，請確認管理權限與工作區連線。");
     const mode = tab as AssessmentMode;
+    if (mode === "manager" && !canManagePerformance)
+      throw new Error("只有管理員指定的績效主管才能送出主管評分。");
+    if (mode === "self" && !matchesUser(form as PerformanceReview, user))
+      throw new Error("員工自評只能編輯目前登入帳號自己的紀錄。");
     const validation = validateAssessment(form, mode, action);
     if (validation) throw new Error(validation);
     const previous = reviews.find(
@@ -586,7 +598,9 @@ export function PerformanceAppraisalPage() {
   };
   const exportCsv = () => {
     const url = URL.createObjectURL(
-      new Blob(["\uFEFF", toPerformanceCsv(visibleReviews, { includeManager: canEdit })], {
+      // Manager-only fields are exported only for an administrator-assigned
+      // reviewer.
+      new Blob(["\uFEFF", toPerformanceCsv(visibleReviews, { includeManager: canManagePerformance })], {
         type: "text/csv;charset=utf-8;",
       }),
     );
@@ -613,7 +627,9 @@ export function PerformanceAppraisalPage() {
         </div>
         <nav aria-label="績效考核導覽">
           {NAV.filter((item) =>
-            item.id === "manager" ? canEdit : item.id !== "records" || !canEdit,
+            item.id === "manager"
+              ? canManagePerformance
+              : item.id !== "records" || !canManagePerformance,
           ).map(
             (item) => (
               <button
@@ -674,13 +690,13 @@ export function PerformanceAppraisalPage() {
         {tab === "policy" && (
           <>
             <PerformanceFlowGuide
-              canManage={canEdit}
+              canManage={canManagePerformance}
               canManageAll={canManageAll}
             />
             <AssessmentPolicy />
           </>
         )}
-        {tab === "manager" && canEdit && (
+        {tab === "manager" && canManagePerformance && (
           <>
             <div className="rd2-manager-only-notice" role="note">
               <strong>{canManageAll ? "績效管理者檢視" : "主管專用"}</strong>
@@ -725,10 +741,10 @@ export function PerformanceAppraisalPage() {
           </>
         )}
         {(tab === "self" ||
-          (tab === "manager" && (!canEdit || managerView === "score"))) && (
+          (tab === "manager" && (!canManagePerformance || managerView === "score"))) && (
           <>
-            {tab === "manager" && !canEdit ? (
-              <p role="alert">需要績效考核管理權限才能進行主管評分。</p>
+            {tab === "manager" && !canManagePerformance ? (
+              <p role="alert">需要由管理員指定為績效主管才能進行主管評分。</p>
             ) : loading ? (
               <p role="status">正在讀取考核…</p>
             ) : editorId && !editorReview ? (
@@ -763,7 +779,7 @@ export function PerformanceAppraisalPage() {
                       .filter(
                         (review) =>
                           review.cycleId === cycle &&
-                          (canEdit || matchesUser(review, user)),
+                          (canManageAll || matchesReviewer(review, user)),
                       )
                       .map((review) => (
                         <option key={review.id} value={review.id}>
@@ -777,7 +793,7 @@ export function PerformanceAppraisalPage() {
                       ? "從全部考核紀錄選擇對象後，即可查看自評並完成主管評分。"
                       : "只能選擇考核人設定為你的直屬同仁；一般員工不會看到主管評分內容。"}
                   </p>
-                  {!canEdit && (
+                  {!canManagePerformance && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -815,9 +831,9 @@ export function PerformanceAppraisalPage() {
                       tab === "self" && editorReview?.status === "approved"
                     }
                     identityLocked={tab === "self" || !!editorReview}
-                    canSubmit={canEdit && !loadError && !loading}
+                    canSubmit={canEdit && (tab !== "manager" || canManagePerformance) && !loadError && !loading}
                     employees={
-                      tab === "manager" && canEdit ? employeeOptions : []
+                      tab === "manager" && canManagePerformance ? employeeOptions : []
                     }
                     demo={demo}
                     onSave={save}
@@ -828,14 +844,16 @@ export function PerformanceAppraisalPage() {
           </>
         )}
         {(tab === "records" ||
-          (tab === "manager" && canEdit && managerView === "records")) && (
+          (tab === "manager" && canManagePerformance && managerView === "records")) && (
           <section>
             <header className="rd2-section-heading rd2-records-heading">
               <div>
                 <h2>考核紀錄</h2>
                 <p>
                   {visibleReviews.length} 筆 ·{" "}
-                  {canEdit ? "自評、主管評分與既有目標" : "我的自評與既有目標"}
+                  {canManagePerformance
+                    ? "自評、主管評分與既有目標"
+                    : "我的自評與既有目標"}
                 </p>
               </div>
               <div className="rd2-actions">
@@ -884,7 +902,7 @@ export function PerformanceAppraisalPage() {
                   tone="warning"
                   hint="員工已送出自評"
                 />
-                {canEdit && (
+                {canManagePerformance && (
                   <StatTile
                     label="平均綜合評分"
                     value={recordSummary.averageScore ?? "--"}
@@ -1001,7 +1019,7 @@ export function PerformanceAppraisalPage() {
                     <th>部門／職級</th>
                     <th>考核人</th>
                     <th>狀態</th>
-                    {canEdit && <th>綜合評分</th>}
+                    {canManagePerformance && <th>綜合評分</th>}
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -1030,7 +1048,7 @@ export function PerformanceAppraisalPage() {
                           {PERFORMANCE_STATUS[review.status].label}
                         </span>
                       </td>
-                      {canEdit && <td>{review.score ?? "—"}</td>}
+                      {canManagePerformance && <td>{review.score ?? "—"}</td>}
                       <td>
                         <div className="rd2-row-actions">
                           <Button
@@ -1044,7 +1062,7 @@ export function PerformanceAppraisalPage() {
                           >
                             查看
                           </Button>
-                          {(canEdit || matchesUser(review, user)) &&
+                          {matchesUser(review, user) &&
                             review.status !== "approved" && (
                               <Button
                                 size="sm"
@@ -1054,7 +1072,7 @@ export function PerformanceAppraisalPage() {
                                 填寫自評
                               </Button>
                             )}
-                          {canEdit && (
+                          {canManagePerformance && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -1084,7 +1102,7 @@ export function PerformanceAppraisalPage() {
                   ))}
                   {!visibleReviews.length && (
                     <tr>
-                      <td colSpan={canEdit ? 6 : 5} className="rd2-empty">
+                      <td colSpan={canManagePerformance ? 6 : 5} className="rd2-empty">
                         {loading
                           ? "正在讀取考核…"
                           : "目前篩選條件沒有符合的考核"}
@@ -1102,7 +1120,7 @@ export function PerformanceAppraisalPage() {
                 </Button>
                 <ReviewDetail
                   review={detail}
-                  showManagerAssessment={canEdit}
+                  showManagerAssessment={canManagePerformance}
                 />
               </section>
             )}

@@ -101,6 +101,7 @@ export function UserPermissionsDialog({
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [workspaceAccess, setWorkspaceAccess] =
     useState<WorkspaceAccessMap>(DEFAULT_WORKSPACE_ACCESS);
+  const [performanceManager, setPerformanceManager] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const { user } = useUser();
@@ -136,10 +137,12 @@ export function UserPermissionsDialog({
       setPermissions(loadedPermissions);
 
       setWorkspaceAccess(readWorkspaceAccess(permissionSettings, loadedPermissions));
+      setPerformanceManager(permissionSettings.performanceManager === true);
     } catch (error) {
       console.error("Failed to load user permissions:", error);
       setPermissions([]);
       setWorkspaceAccess(DEFAULT_WORKSPACE_ACCESS);
+      setPerformanceManager(false);
 
       toast({
         title: "權限載入失敗",
@@ -177,6 +180,19 @@ export function UserPermissionsDialog({
     setPermissions((prev) =>
       synchronizeWorkspacePermissions(prev, workspaceId, level)
     );
+  };
+
+  const handlePerformanceManagerChange = (checked: boolean) => {
+    setPerformanceManager(checked);
+    // A reviewer must be able to submit scores. Grant the minimum performance
+    // workspace level when an administrator assigns this responsibility; an
+    // uncheck never revokes other performance access the administrator chose.
+    if (checked && workspaceAccess.performance !== "edit") {
+      setWorkspaceAccess((prev) => ({ ...prev, performance: "edit" }));
+      setPermissions((prev) =>
+        synchronizeWorkspacePermissions(prev, "performance", "edit"),
+      );
+    }
   };
 
   const applyGlobalPreset = (level: WorkspaceAccessLevel) => {
@@ -282,6 +298,7 @@ export function UserPermissionsDialog({
         ...currentSettings,
         workspaceAccess,
         pagePermissions: synchronizedPermissions,
+        performanceManager,
       };
 
       // The verified service uses the server-only key after it has confirmed
@@ -391,6 +408,29 @@ export function UserPermissionsDialog({
             </div>
           </div>
         </div>
+
+        <section
+          data-admin-zone="performance-manager-assignment"
+          className="mx-3 mt-3 rounded-xl border border-amber-200/20 bg-amber-400/5 p-3 sm:mx-4"
+        >
+          <Label className="flex cursor-pointer items-start gap-3">
+            <Checkbox
+              checked={performanceManager}
+              onCheckedChange={(checked) =>
+                handlePerformanceManagerChange(checked === true)
+              }
+              className="mt-0.5"
+            />
+            <span className="space-y-1">
+              <strong className="block text-sm text-amber-100">
+                指定為績效主管（主管專用）
+              </strong>
+              <span className="block text-xs text-amber-100/70">
+                只有被管理員勾選的帳號，且具備績效工作區管理權限，才能看到「主管評分」頁面；員工自評與主管回饋會分開保護。
+              </span>
+            </span>
+          </Label>
+        </section>
 
         <div className="admin-permissions-scroll min-h-0 overflow-y-auto p-3 sm:p-4">
           <div className="admin-permissions-layout grid gap-3">

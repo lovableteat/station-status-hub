@@ -36,6 +36,9 @@ test("admin dialog stores a complete permission snapshot through the verified se
   assert.match(source, /readStoredPagePermissions/);
   assert.match(source, /profile: \{ permissions: mergedSettings \}/);
   assert.match(source, /pagePermissions: synchronizedPermissions/);
+  assert.match(source, /performanceManager/);
+  assert.match(source, /performance-manager-assignment/);
+  assert.match(source, /synchronizeWorkspacePermissions\(prev, "performance", "edit"\)/);
   assert.match(source, /forceVerifiedService: true/);
   assert.match(source, /Legacy page permission sync skipped/);
   assert.match(source, /function getSaveErrorMessage/);

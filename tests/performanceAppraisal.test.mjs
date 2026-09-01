@@ -139,10 +139,12 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
   );
   assert.match(source, /new URLSearchParams\(previous\)/);
   assert.match(source, /主管評分（主管專用）/);
-  assert.match(source, /requestedTab === "manager" && !canEdit/);
+  assert.match(source, /requestedTab === "manager" && !canManagePerformance/);
+  assert.match(source, /isPerformanceManager/);
+  assert.match(source, /canManagePerformance = canManageAll \|\|/);
   assert.match(source, /matchesReviewer/);
   assert.match(source, /reviewsQuery\.eq\("employee_id", userId\)/);
-  assert.match(source, /toPerformanceCsv\(visibleReviews, \{ includeManager: canEdit \}/);
+  assert.match(source, /toPerformanceCsv\(visibleReviews, \{ includeManager: canManagePerformance \}/);
   assert.match(source, /showManagerAssessment/);
   assert.match(flowGuide, /canManage = false/);
   assert.match(flowGuide, /主管評分與回饋不會出現在員工畫面/);
