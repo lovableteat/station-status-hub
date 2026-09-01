@@ -5,10 +5,11 @@
   /* Match the AI knowledge workspace: blue-navy elevated panels on a glowing
      platform field, instead of the flat grey-navy cards this page used before. */
   --rd2-bg: hsl(var(--background));
-  --rd2-panel: #081c2d;
-  --rd2-panel-soft: #0b2438;
+  --rd2-panel: hsl(var(--card));
+  --rd2-panel-soft: hsl(var(--secondary));
   --rd2-ink: hsl(var(--foreground));
   --rd2-muted: hsl(var(--muted-foreground));
+  --rd2-sidebar: hsl(var(--sidebar-background));
   --rd2-border: hsl(205 45% 30% / 0.85);
   --rd2-border-soft: hsl(205 45% 30% / 0.5);
   --rd2-accent: hsl(var(--primary));
@@ -37,7 +38,7 @@
      the content. */
   position: static;
   align-self: stretch;
-  background: #071522;
+  background: var(--rd2-sidebar);
   color: hsl(var(--sidebar-foreground));
   border: 1px solid #2a526f;
   border-radius: 12px;
@@ -213,6 +214,26 @@
   .rd2-flow-steps {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* --- Reviewer page: keep the private manager workflow explicit ----------- */
+.rd2-manager-only-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--rd2-accent) 34%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--rd2-accent) 8%, var(--rd2-panel));
+  color: var(--rd2-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.rd2-manager-only-notice strong {
+  color: var(--rd2-accent);
+  font-size: 13px;
 }
 
 /* --- Reviewer page: switch views instead of stacking both --- */

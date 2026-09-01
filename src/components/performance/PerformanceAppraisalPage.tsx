@@ -65,7 +65,7 @@ const performanceDb = supabase as any;
 const NAV = [
   { id: "policy", label: "系統說明與政策", icon: BookOpen },
   { id: "self", label: "員工自評", icon: UserRound },
-  { id: "manager", label: "主管評分與紀錄", icon: ClipboardCheck },
+  { id: "manager", label: "主管評分（主管專用）", icon: ClipboardCheck },
   { id: "records", label: "考核紀錄", icon: FileText },
 ];
 const LEGACY_CACHE = "station-status-hub:performance-reviews:v1";
@@ -78,11 +78,32 @@ const matchesUser = (
     .filter(Boolean)
     .some((id) => review.employeeId.toLowerCase() === id.toLowerCase());
 
+const isAdministrator = (user: { role?: string } | null) =>
+  user?.role === "admin" || user?.role === "super_admin";
+
+const matchesReviewer = (
+  review: PerformanceReview,
+  user: { username?: string; displayName?: string } | null,
+) => {
+  if (!user) return false;
+  const reviewer = review.reviewerName.trim().toLocaleLowerCase();
+  if (!reviewer) return false;
+  return [user.displayName, user.username]
+    .filter(Boolean)
+    .some((name) => reviewer === name!.trim().toLocaleLowerCase());
+};
+
 function readCache(
   key: string,
   demo: boolean,
-  user: { userId?: string; username?: string } | null,
+  user: {
+    userId?: string;
+    username?: string;
+    displayName?: string;
+    role?: string;
+  } | null,
   canEdit: boolean,
+  canManageAll: boolean,
 ): PerformanceReview[] {
   try {
     const scoped = localStorage.getItem(key);
@@ -105,7 +126,10 @@ function readCache(
           )
         )
           return false;
-        return canEdit || matchesUser(review, user);
+        return (
+          matchesUser(review, user) ||
+          (canEdit && (canManageAll || matchesReviewer(review, user)))
+        );
       },
     );
   } catch {
@@ -113,7 +137,13 @@ function readCache(
   }
 }
 
-function ReviewDetail({ review }: { review: PerformanceReview }) {
+function ReviewDetail({
+  review,
+  showManagerAssessment,
+}: {
+  review: PerformanceReview;
+  showManagerAssessment: boolean;
+}) {
   const self = readSelfAssessment(review.selfFeedback);
   const manager = readManagerAssessment(review.managerFeedback);
   return (
@@ -164,27 +194,31 @@ function ReviewDetail({ review }: { review: PerformanceReview }) {
           </ul>
         </section>
       )}
-      <section>
-        <h4>主管當責評分</h4>
-        {ACCOUNTABILITY_QUESTIONS.map((question) => (
-          <p key={question.id}>
-            {question.text}：
-            <strong>
-              {manager.answers[question.id] == null
-                ? "尚未評分"
-                : `${manager.answers[question.id]} / 5`}
-            </strong>
-          </p>
-        ))}
-      </section>
-      <section>
-        <h4>主管回饋</h4>
-        <p className="rd2-prewrap">{manager.feedback || "尚無回饋"}</p>
-        <p>
-          綜合評分：
-          {review.score == null ? "尚未評分" : `${review.score} / 100`}
-        </p>
-      </section>
+      {showManagerAssessment && (
+        <>
+          <section>
+            <h4>主管當責評分</h4>
+            {ACCOUNTABILITY_QUESTIONS.map((question) => (
+              <p key={question.id}>
+                {question.text}：
+                <strong>
+                  {manager.answers[question.id] == null
+                    ? "尚未評分"
+                    : `${manager.answers[question.id]} / 5`}
+                </strong>
+              </p>
+            ))}
+          </section>
+          <section>
+            <h4>主管回饋</h4>
+            <p className="rd2-prewrap">{manager.feedback || "尚無回饋"}</p>
+            <p>
+              綜合評分：
+              {review.score == null ? "尚未評分" : `${review.score} / 100`}
+            </p>
+          </section>
+        </>
+      )}
     </article>
   );
 }
@@ -195,6 +229,7 @@ export function PerformanceAppraisalPage() {
   const { toast } = useToast();
   const [params, setParams] = useSearchParams();
   const canEdit = canEditModule("performance");
+  const canManageAll = isAdministrator(user);
   const demo = sessionMode === "demo";
   const userId = user?.userId || user?.username || "signed-out";
   const cacheKey = `station-status-hub:performance-reviews:v2:${demo ? "demo" : "cloud"}:${encodeURIComponent(userId)}`;
@@ -203,13 +238,24 @@ export function PerformanceAppraisalPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
-  const editorId = params.get("performanceReview");
   const [editorRevision, setEditorRevision] = useState(0);
   const savedId = useRef<{ key: string; id: string } | null>(null);
   const requestNumber = useRef(0);
-  const tab = NAV.some((item) => item.id === params.get("performanceTab"))
+  const requestedTab = NAV.some((item) => item.id === params.get("performanceTab"))
     ? params.get("performanceTab")!
     : "policy";
+  // A manually crafted URL must not expose the manager workflow to employees
+  // who only have view access. Keep them on their own self-assessment screen.
+  const tab =
+    requestedTab === "manager" && !canEdit
+      ? "self"
+      : requestedTab === "records" && canEdit
+        ? "manager"
+        : requestedTab;
+  const editorId =
+    requestedTab === "manager" && !canEdit
+      ? null
+      : params.get("performanceReview");
   const cycle = PERFORMANCE_CYCLES.some(
     (item) => item.id === params.get("performanceCycle"),
   )
@@ -243,17 +289,21 @@ export function PerformanceAppraisalPage() {
     const request = ++requestNumber.current;
     setLoading(true);
     setLoadError("");
-    setReviews(readCache(cacheKey, demo, user, canEdit));
+    setReviews(readCache(cacheKey, demo, user, canEdit, canManageAll));
     if (demo) {
       setLoading(false);
       return;
     }
     try {
+      const reviewsQuery = performanceDb
+        .from("performance_reviews")
+        .select("*")
+        .order("updated_at", { ascending: false });
+      // Employees request only their own row. Managers can request the rows
+      // assigned to them; administrators retain the full review workspace.
+      if (!canEdit) reviewsQuery.eq("employee_id", userId);
       const [{ data, error }, employeeResult] = await Promise.all([
-        performanceDb
-          .from("performance_reviews")
-          .select("*")
-          .order("updated_at", { ascending: false }),
+        reviewsQuery,
         canEdit
           ? performanceDb
               .from("system_users")
@@ -267,9 +317,11 @@ export function PerformanceAppraisalPage() {
       const rows = (data || []).map(
         normalizePerformanceReview,
       ) as PerformanceReview[];
-      const accessible = canEdit
-        ? rows
-        : rows.filter((review) => matchesUser(review, user));
+      const accessible = rows.filter(
+        (review) =>
+          matchesUser(review, user) ||
+          (canEdit && (canManageAll || matchesReviewer(review, user))),
+      );
       setReviews(accessible);
       try {
         localStorage.setItem(cacheKey, JSON.stringify(accessible));
@@ -296,7 +348,7 @@ export function PerformanceAppraisalPage() {
     } finally {
       if (request === requestNumber.current) setLoading(false);
     }
-  }, [cacheKey, demo, user, canEdit]);
+  }, [cacheKey, demo, user, canEdit, canManageAll, userId]);
   useEffect(() => {
     void load();
     const request = requestNumber.current;
@@ -329,21 +381,39 @@ export function PerformanceAppraisalPage() {
       options.set(option.id, { ...option, label });
     };
 
-    employees.forEach(add);
-    reviews.forEach((review) =>
+    const managedReviews = reviews.filter(
+      (review) => canManageAll || matchesReviewer(review, user),
+    );
+    const managedEmployeeIds = new Set(
+      managedReviews.map((review) => review.employeeId).filter(Boolean),
+    );
+    const managedEmployeeNames = new Set(
+      managedReviews.map((review) => nameKey(review.employeeName)),
+    );
+    const roster = canManageAll
+      ? employees
+      : employees.filter(
+          (employee) =>
+            managedEmployeeIds.has(employee.id) ||
+            managedEmployeeNames.has(nameKey(employee.label)),
+        );
+    roster.forEach(add);
+    managedReviews.forEach((review) =>
       add({ id: review.employeeId, label: review.employeeName }),
     );
-    if (user) add({ id: userId, label: user.displayName || user.username });
+    if (canManageAll && user)
+      add({ id: userId, label: user.displayName || user.username });
 
     return Array.from(options.values()).sort((a, b) =>
       a.label.localeCompare(b.label, "zh-Hant"),
     );
-  }, [employees, reviews, user, userId]);
+  }, [canManageAll, employees, reviews, user, userId]);
   const visibleReviews = useMemo(
     () =>
       reviews.filter(
         (review) =>
           review.cycleId === cycle &&
+          (tab !== "manager" || canManageAll || matchesReviewer(review, user)) &&
           (!status || review.status === status) &&
           (scope !== "mine" || matchesUser(review, user)) &&
           (!query.trim() ||
@@ -358,7 +428,7 @@ export function PerformanceAppraisalPage() {
               .toLowerCase()
               .includes(query.trim().toLowerCase())),
       ),
-    [reviews, cycle, status, scope, query, user],
+    [reviews, cycle, status, scope, query, user, tab, canManageAll],
   );
 
   const recordSummary = useMemo(() => {
@@ -457,6 +527,12 @@ export function PerformanceAppraisalPage() {
     const previous = reviews.find(
       (review) => review.id === (effectiveSavedId || editorId),
     );
+    if (
+      mode === "manager" &&
+      !canManageAll &&
+      (!previous || !matchesReviewer(previous, user))
+    )
+      throw new Error("只能評分考核人設定為你的直屬同仁，請先從直屬同仁紀錄選擇對象。");
     if (previous?.status === "approved" && mode === "self")
       throw new Error("此考核已完成，請由主管處理。");
     if (!effectiveSavedId)
@@ -511,7 +587,7 @@ export function PerformanceAppraisalPage() {
   };
   const exportCsv = () => {
     const url = URL.createObjectURL(
-      new Blob(["\uFEFF", toPerformanceCsv(visibleReviews)], {
+      new Blob(["\uFEFF", toPerformanceCsv(visibleReviews, { includeManager: canEdit })], {
         type: "text/csv;charset=utf-8;",
       }),
     );
@@ -599,41 +675,56 @@ export function PerformanceAppraisalPage() {
         {tab === "policy" && (
           <>
             <PlatformIntroVideo />
-            <PerformanceFlowGuide />
+            <PerformanceFlowGuide
+              canManage={canEdit}
+              canManageAll={canManageAll}
+            />
             <AssessmentPolicy />
           </>
         )}
         {tab === "manager" && canEdit && (
-          <div
-            className="rd2-view-switch"
-            role="tablist"
-            aria-label="主管評分與紀錄檢視"
-          >
-            {[
-              {
-                id: "records" as const,
-                label: "考核紀錄",
-                hint: "看誰還沒送、誰等著評分，從這裡挑對象",
-              },
-              {
-                id: "score" as const,
-                label: "主管評分",
-                hint: "為選定的員工打當責分數與回饋",
-              },
-            ].map((view) => (
-              <button
-                key={view.id}
-                type="button"
-                role="tab"
-                aria-selected={managerView === view.id}
-                data-active={managerView === view.id || undefined}
-                onClick={() => setManagerView(view.id)}
-              >
-                <strong>{view.label}</strong>
-                <small>{view.hint}</small>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="rd2-manager-only-notice" role="note">
+              <strong>{canManageAll ? "績效管理者檢視" : "主管專用"}</strong>
+              <span>
+                {canManageAll
+                  ? "可檢視全部考核並處理主管評分。"
+                  : "只顯示考核人設定為你的直屬同仁；一般員工不會看到這個分頁。"}
+              </span>
+            </div>
+            <div
+              className="rd2-view-switch"
+              role="tablist"
+              aria-label="主管評分與紀錄檢視"
+            >
+              {[
+                {
+                  id: "records" as const,
+                  label: canManageAll ? "全部考核紀錄" : "直屬同仁紀錄",
+                  hint: canManageAll
+                    ? "查看所有員工的送件狀態並挑選評分對象"
+                    : "只查看你負責的直屬同仁並挑選評分對象",
+                },
+                {
+                  id: "score" as const,
+                  label: "主管評分",
+                  hint: "為選定的員工打當責分數與回饋",
+                },
+              ].map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={managerView === view.id}
+                  data-active={managerView === view.id || undefined}
+                  onClick={() => setManagerView(view.id)}
+                >
+                  <strong>{view.label}</strong>
+                  <small>{view.hint}</small>
+                </button>
+              ))}
+            </div>
+          </>
         )}
         {(tab === "self" ||
           (tab === "manager" && (!canEdit || managerView === "score"))) && (
@@ -682,8 +773,9 @@ export function PerformanceAppraisalPage() {
                       ))}
                   </select>
                   <p className="rd2-hint rd2-editor-context-hint">
-                    要評核既有的自評，從「考核紀錄」點該員的「主管評分」最快；
-                    在這裡可以直接換人，或在員工還沒自評時先開一筆。
+                    {canManageAll
+                      ? "從全部考核紀錄選擇對象後，即可查看自評並完成主管評分。"
+                      : "只能選擇考核人設定為你的直屬同仁；一般員工不會看到主管評分內容。"}
                   </p>
                   {!canEdit && (
                     <Button
@@ -700,7 +792,10 @@ export function PerformanceAppraisalPage() {
                     <summary>
                       查看 {editorReview.employeeName} 的自評與現有回饋
                     </summary>
-                    <ReviewDetail review={editorReview} />
+                    <ReviewDetail
+                      review={editorReview}
+                      showManagerAssessment
+                    />
                   </details>
                 )}
                 <AssessmentEditor
@@ -729,7 +824,10 @@ export function PerformanceAppraisalPage() {
             <header className="rd2-section-heading rd2-records-heading">
               <div>
                 <h2>考核紀錄</h2>
-                <p>{visibleReviews.length} 筆 · 自評、主管評分與既有目標</p>
+                <p>
+                  {visibleReviews.length} 筆 ·{" "}
+                  {canEdit ? "自評、主管評分與既有目標" : "我的自評與既有目標"}
+                </p>
               </div>
               <div className="rd2-actions">
                 <Button
@@ -777,13 +875,15 @@ export function PerformanceAppraisalPage() {
                   tone="warning"
                   hint="員工已送出自評"
                 />
-                <StatTile
-                  label="平均綜合評分"
-                  value={recordSummary.averageScore ?? "--"}
-                  suffix={recordSummary.averageScore === null ? "" : " 分"}
-                  tone="score"
-                  hint="僅計入已評分者"
-                />
+                {canEdit && (
+                  <StatTile
+                    label="平均綜合評分"
+                    value={recordSummary.averageScore ?? "--"}
+                    suffix={recordSummary.averageScore === null ? "" : " 分"}
+                    tone="score"
+                    hint="僅計入已評分者"
+                  />
+                )}
                 <StatTile
                   label="平均目標進度"
                   value={recordSummary.averageProgress ?? "--"}
@@ -892,7 +992,7 @@ export function PerformanceAppraisalPage() {
                     <th>部門／職級</th>
                     <th>考核人</th>
                     <th>狀態</th>
-                    <th>綜合評分</th>
+                    {canEdit && <th>綜合評分</th>}
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -921,7 +1021,7 @@ export function PerformanceAppraisalPage() {
                           {PERFORMANCE_STATUS[review.status].label}
                         </span>
                       </td>
-                      <td>{review.score ?? "—"}</td>
+                      {canEdit && <td>{review.score ?? "—"}</td>}
                       <td>
                         <div className="rd2-row-actions">
                           <Button
@@ -975,7 +1075,7 @@ export function PerformanceAppraisalPage() {
                   ))}
                   {!visibleReviews.length && (
                     <tr>
-                      <td colSpan={6} className="rd2-empty">
+                      <td colSpan={canEdit ? 6 : 5} className="rd2-empty">
                         {loading
                           ? "正在讀取考核…"
                           : "目前篩選條件沒有符合的考核"}
@@ -991,7 +1091,10 @@ export function PerformanceAppraisalPage() {
                   <X data-icon="inline-start" />
                   關閉考核內容
                 </Button>
-                <ReviewDetail review={detail} />
+                <ReviewDetail
+                  review={detail}
+                  showManagerAssessment={canEdit}
+                />
               </section>
             )}
           </section>

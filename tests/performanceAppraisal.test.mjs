@@ -90,16 +90,37 @@ test("performance CSV exports headers, status labels, and escaped values", () =>
   assert.match(csv, /"Ben ""B"""/);
   assert.match(csv, /"填寫中"/);
   assert.match(csv, /"50"/);
+
+  const employeeCsv = toPerformanceCsv(
+    [
+      {
+        ...DEFAULT_PERFORMANCE_REVIEWS[0],
+        managerFeedback: "主管私密回饋",
+        score: 99,
+      },
+    ],
+    { includeManager: false },
+  );
+  assert.doesNotMatch(employeeCsv, /分數|主管回饋|主管私密回饋|"99"/);
 });
 
 test("performance workspace exposes RD2 workflows and persistent record filters", async () => {
-  const source = await readFile(
-    new URL(
-      "../src/components/performance/PerformanceAppraisalPage.tsx",
-      import.meta.url,
+  const [source, flowGuide] = await Promise.all([
+    readFile(
+      new URL(
+        "../src/components/performance/PerformanceAppraisalPage.tsx",
+        import.meta.url,
+      ),
+      "utf8",
     ),
-    "utf8",
-  );
+    readFile(
+      new URL(
+        "../src/components/performance/PerformanceFlowGuide.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
   for (const text of [
     "系統說明與政策",
     "員工自評",
@@ -117,6 +138,14 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
     /GithubRepositoryPanel|fetchDemoRepositorySnapshot|demo-repository/,
   );
   assert.match(source, /new URLSearchParams\(previous\)/);
+  assert.match(source, /主管評分（主管專用）/);
+  assert.match(source, /requestedTab === "manager" && !canEdit/);
+  assert.match(source, /matchesReviewer/);
+  assert.match(source, /reviewsQuery\.eq\("employee_id", userId\)/);
+  assert.match(source, /toPerformanceCsv\(visibleReviews, \{ includeManager: canEdit \}/);
+  assert.match(source, /showManagerAssessment/);
+  assert.match(flowGuide, /canManage = false/);
+  assert.match(flowGuide, /主管評分與回饋不會出現在員工畫面/);
 });
 
 test("performance workspace inherits the platform theme without a separate light-mode preference", async () => {
