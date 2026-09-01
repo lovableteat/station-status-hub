@@ -69,7 +69,7 @@ const NAV = [
 ];
 const LEGACY_CACHE = "station-status-hub:performance-reviews:v1";
 const matchesUser = (
-  review: PerformanceReview,
+  review: { employeeId: string },
   user: { userId?: string; username?: string } | null,
 ) =>
   !!user &&
@@ -531,7 +531,7 @@ export function PerformanceAppraisalPage() {
     const mode = tab as AssessmentMode;
     if (mode === "manager" && !canManagePerformance)
       throw new Error("只有管理員指定的績效主管才能送出主管評分。");
-    if (mode === "self" && !matchesUser(form as PerformanceReview, user))
+    if (mode === "self" && !matchesUser(form, user))
       throw new Error("員工自評只能編輯目前登入帳號自己的紀錄。");
     const validation = validateAssessment(form, mode, action);
     if (validation) throw new Error(validation);
