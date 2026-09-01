@@ -466,7 +466,9 @@ test("keeps the measurement inspector focused on length instead of endpoint coor
   )?.[0] ?? "";
 
   assert.match(measurementInspector, />量測長度</);
-  assert.match(measurementInspector, /Math\.hypot[\s\S]{0,180}\.toFixed\(2\)[\s\S]{0,80}mm/);
+  assert.match(measurementInspector, /label=["']長度 \(mm\)["']/);
+  assert.match(measurementInspector, /updateMeasurement\(measurement\.id/);
+  assert.match(measurementInspector, /length\.toFixed\(2\)/);
   for (const coordinate of ["X1", "Y1", "X2", "Y2"]) {
     assert.doesNotMatch(measurementInspector, new RegExp(`label=["']${coordinate}["']`));
   }

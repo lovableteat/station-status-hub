@@ -367,12 +367,28 @@ function MeasurementInspector({
   measurement: PcbMeasurement;
 }) {
   const disabled = !workspace.canMutate;
+  const length = Math.hypot(
+    measurement.x2 - measurement.x1,
+    measurement.y2 - measurement.y1,
+  );
   return (
     <div className="pcb-inspector-form" data-selection-kind="measurement">
       <h2>量測長度</h2>
-      <p className="pcb-measurement-value">
-        {Math.hypot(measurement.x2 - measurement.x1, measurement.y2 - measurement.y1).toFixed(2)} mm
-      </p>
+      <NumberField
+        label="長度 (mm)"
+        value={Number(length.toFixed(2))}
+        disabled={disabled}
+        step="0.01"
+        onCommit={(nextLength) => {
+          if (nextLength < 0.01 || length < 0.01) return false;
+          const scale = nextLength / length;
+          return workspace.updateMeasurement(measurement.id, {
+            x2: measurement.x1 + (measurement.x2 - measurement.x1) * scale,
+            y2: measurement.y1 + (measurement.y2 - measurement.y1) * scale,
+          });
+        }}
+      />
+      <p className="pcb-inspector-note">修改長度會固定量測起點，沿目前方向調整終點；超出板框時不會套用。</p>
       <div className="pcb-inspector-field-grid">
         <InspectorField label="顏色">
           <input type="color" value={measurement.color} disabled={disabled} onChange={(event) => workspace.updateMeasurement(measurement.id, { color: event.target.value })} />
