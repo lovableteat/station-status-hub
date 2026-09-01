@@ -52,6 +52,12 @@ function NumberField({
             event.currentTarget.value = String(value);
           }
         }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+        }}
       />
     </InspectorField>
   );
