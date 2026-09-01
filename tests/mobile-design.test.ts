@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -6,6 +7,7 @@ const read = async (path: string) =>
   readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 const entranceSource = await read("src/components/layout/WorkspaceEntrance.tsx");
+const performanceSource = await read("src/components/performance/PerformanceAppraisalPage.tsx");
 const sidebarSource = await read("src/components/layout/Sidebar.tsx");
 const dockSource = await read("src/components/layout/MobileWorkspaceDock.tsx");
 const metricStripSource = await read("src/components/maintenance/MaintenanceMetricStrip.tsx");
@@ -14,6 +16,15 @@ const aiConsoleSource = await read("src/components/api-management/ApiChatConsole
 const maintenanceSelectorSource = await read("src/components/api-management/MaintenanceSourceSelector.tsx");
 const adminCssSource = await read("src/components/admin/admin-panel.css");
 const globalCssSource = await read("src/index.css");
+
+test("does not embed the platform introduction video in the app", () => {
+  assert.doesNotMatch(entranceSource, /PlatformIntroVideo|platform-introduction|uegeSwdfWjQ/);
+  assert.doesNotMatch(performanceSource, /PlatformIntroVideo|platform-introduction|uegeSwdfWjQ/);
+  assert.equal(
+    existsSync(new URL("../public/videos/platform-introduction.mp4", import.meta.url)),
+    false,
+  );
+});
 
 test("uses a dedicated phone workspace list without replacing the desktop grid", () => {
   assert.match(entranceSource, /data-testid="workspace-entrance-mobile-list"/);

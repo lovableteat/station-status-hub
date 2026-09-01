@@ -27,7 +27,6 @@ import {
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { PlatformIntroVideo } from "@/components/layout/PlatformIntroVideo";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
@@ -674,7 +673,6 @@ export function PerformanceAppraisalPage() {
         )}
         {tab === "policy" && (
           <>
-            <PlatformIntroVideo />
             <PerformanceFlowGuide
               canManage={canEdit}
               canManageAll={canManageAll}

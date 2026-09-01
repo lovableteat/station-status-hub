@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 
 import { PcbWorkspacePreview } from "@/components/pcb-designer/PcbWorkspacePreview";
-import { PlatformIntroVideo } from "@/components/layout/PlatformIntroVideo";
 import { cn } from "@/lib/utils";
 
 interface WorkspaceEntranceItem {
@@ -341,8 +340,6 @@ export function WorkspaceEntrance({
             {items.length} 個入口
           </div>
         </div>
-
-        <PlatformIntroVideo />
 
         <div
           className="workspace-entrance-mobile-list overflow-hidden rounded-[1.4rem] border border-slate-700/70 bg-[#0c1929] md:hidden"
