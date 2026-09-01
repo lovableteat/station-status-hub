@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { Copy, FileUp, Lock, LockOpen, RotateCw, Scissors, Trash2 } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Check, Copy, FileUp, Lock, LockOpen, RotateCw, Scissors, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PcbKeepout, PcbMeasurement, PcbModelAssetMetadata, PcbPlacedComponent } from "./types.ts";
@@ -365,6 +365,85 @@ function KeepoutInspector({
   );
 }
 
+function MeasurementLengthField({
+  measurementId,
+  length,
+  disabled,
+  onCommit,
+}: {
+  measurementId: string;
+  length: number;
+  disabled: boolean;
+  onCommit: (value: number) => boolean;
+}) {
+  const formattedLength = length.toFixed(2);
+  const [draft, setDraft] = useState(formattedLength);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(formattedLength);
+    setError(null);
+  }, [measurementId, formattedLength]);
+
+  const commit = () => {
+    const nextLength = Number(draft);
+    if (!draft.trim() || !Number.isFinite(nextLength) || nextLength < 0.01) {
+      setError("請輸入大於 0 的長度。");
+      return;
+    }
+    if (nextLength === length || onCommit(nextLength)) {
+      setDraft(nextLength.toFixed(2));
+      setError(null);
+      return;
+    }
+    setError("無法套用，請確認長度未超出板框範圍。");
+  };
+
+  return (
+    <div className="pcb-inspector-field" data-testid="measurement-length-field">
+      <span>長度 (mm)</span>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min="0.01"
+          step="0.01"
+          value={draft}
+          disabled={disabled}
+          aria-label="長度 (mm)"
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? "measurement-length-error" : undefined}
+          onChange={(event) => {
+            setDraft(event.currentTarget.value);
+            if (error) setError(null);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commit();
+            }
+          }}
+        />
+        <Button
+          type="button"
+          size="sm"
+          className="shrink-0"
+          disabled={disabled}
+          onClick={commit}
+          aria-label="確認套用量測長度"
+          data-testid="measurement-length-confirm"
+        >
+          <Check className="mr-1.5 h-3.5 w-3.5" />確認
+        </Button>
+      </div>
+      {error && (
+        <span id="measurement-length-error" className="text-[10px] leading-4 text-rose-300" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function MeasurementInspector({
   workspace,
   measurement,
@@ -380,11 +459,10 @@ function MeasurementInspector({
   return (
     <div className="pcb-inspector-form" data-selection-kind="measurement">
       <h2>量測長度</h2>
-      <NumberField
-        label="長度 (mm)"
-        value={Number(length.toFixed(2))}
+      <MeasurementLengthField
+        measurementId={measurement.id}
+        length={length}
         disabled={disabled}
-        step="0.01"
         onCommit={(nextLength) => {
           if (nextLength < 0.01 || length < 0.01) return false;
           const scale = nextLength / length;
@@ -394,7 +472,7 @@ function MeasurementInspector({
           });
         }}
       />
-      <p className="pcb-inspector-note">修改長度會固定量測起點，沿目前方向調整終點；超出板框時不會套用。</p>
+      <p className="pcb-inspector-note">輸入長度後按「確認」套用（也可按 Enter）；會固定量測起點，沿目前方向調整終點。</p>
       <div className="pcb-inspector-field-grid">
         <InspectorField label="顏色">
           <input type="color" value={measurement.color} disabled={disabled} onChange={(event) => workspace.updateMeasurement(measurement.id, { color: event.target.value })} />

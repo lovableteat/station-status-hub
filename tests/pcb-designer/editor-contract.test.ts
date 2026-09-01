@@ -464,12 +464,21 @@ test("keeps the measurement inspector focused on length instead of endpoint coor
   const measurementInspector = inspectorSource.match(
     /function MeasurementInspector[\s\S]*?(?=export function PcbInspector)/,
   )?.[0] ?? "";
+  const measurementLengthField = inspectorSource.match(
+    /function MeasurementLengthField[\s\S]*?(?=function MeasurementInspector)/,
+  )?.[0] ?? "";
 
   assert.match(measurementInspector, />量測長度</);
-  assert.match(measurementInspector, /label=["']長度 \(mm\)["']/);
+  assert.match(inspectorSource, /function MeasurementLengthField[\s\S]*data-testid=["']measurement-length-field["']/);
+  assert.match(inspectorSource, /aria-label=["']長度 \(mm\)["']/);
+  assert.match(inspectorSource, /data-testid=["']measurement-length-confirm["']/);
+  assert.match(inspectorSource, /aria-label=["']確認套用量測長度["']/);
   assert.match(measurementInspector, /updateMeasurement\(measurement\.id/);
-  assert.match(measurementInspector, /length\.toFixed\(2\)/);
-  assert.match(inspectorSource, /onKeyDown=\{\(event\) => \{[\s\S]{0,180}event\.currentTarget\.blur\(\)/);
+  assert.match(inspectorSource, /const formattedLength = length\.toFixed\(2\)/);
+  assert.match(inspectorSource, /onKeyDown=\{\(event\) => \{[\s\S]{0,220}event\.preventDefault\(\)[\s\S]{0,120}commit\(\)/);
+  assert.match(measurementLengthField, /onClick=\{commit\}/);
+  assert.doesNotMatch(measurementLengthField, /onBlur=/);
+  assert.match(measurementInspector, /輸入長度後按「確認」套用（也可按 Enter）/);
   for (const coordinate of ["X1", "Y1", "X2", "Y2"]) {
     assert.doesNotMatch(measurementInspector, new RegExp(`label=["']${coordinate}["']`));
   }
