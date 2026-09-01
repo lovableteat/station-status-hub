@@ -25,6 +25,8 @@ import {
 interface PermissionsContextValue {
   permissions: Permission[];
   workspacePermissions: WorkspaceAccessMap;
+  /** Whether an administrator explicitly assigned this account as a reviewer. */
+  isPerformanceManager: boolean;
   loading: boolean;
   hasPermission: (permission: Permission) => boolean;
   hasAnyPermission: (permissions: Permission[]) => boolean;
@@ -177,6 +179,8 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const isAdmin =
     accountActive &&
     (effectiveRole === "admin" || effectiveRole === "super_admin");
+  const isPerformanceManager =
+    isAdmin || permissionSettings.performanceManager === true;
 
   const hasPermission = useCallback(
     (permission: Permission) =>
@@ -229,6 +233,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     () => ({
       permissions,
       workspacePermissions,
+      isPerformanceManager,
       loading,
       hasPermission,
       hasAnyPermission,
@@ -243,6 +248,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       getWorkspaceAccess,
       hasAnyPermission,
       hasPermission,
+      isPerformanceManager,
       loading,
       permissions,
       reloadPermissions,

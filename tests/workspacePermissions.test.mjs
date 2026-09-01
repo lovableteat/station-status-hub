@@ -237,6 +237,23 @@ test("workspace preset synchronizes station page permissions", () => {
   );
 });
 
+test("performance manager assignment synchronizes reviewer edit access", () => {
+  assert.deepEqual(
+    synchronizeWorkspacePermissions(["dashboard_view"], "performance", "edit").sort(),
+    ["dashboard_view", "performance_edit", "performance_view"].sort(),
+  );
+  assert.equal(
+    canAccessModule({
+      module: "performance",
+      action: "edit",
+      role: "engineer",
+      permissions: ["performance_edit"],
+      permissionSettings: configured({ performance: "edit" }),
+    }),
+    true,
+  );
+});
+
 test("permission settings expose the same seven workspaces as the home page", () => {
   const access = readWorkspaceAccess(
     {},

@@ -50,6 +50,12 @@ export interface WorkspaceAccessMap {
 export interface UserPermissionSettings {
   workspaceAccess?: Partial<WorkspaceAccessMap>;
   /**
+   * Explicit administrator assignment for the private manager review flow.
+   * This is intentionally separate from the performance workspace level:
+   * employees may edit their own self-assessment without being reviewers.
+   */
+  performanceManager?: boolean;
+  /**
    * A durable copy of detailed permissions. This keeps access recoverable on
    * deployments whose legacy permission RPC cannot update system_users.
    */
@@ -424,6 +430,8 @@ export function synchronizeWorkspacePermissions(
     ? STATION_STATUS_PERMISSIONS
     : workspace === "user-management"
       ? USER_MANAGEMENT_PERMISSIONS
+      : workspace === "performance"
+        ? (["performance_view", "performance_edit"] as Permission[])
       : null;
   if (!workspacePermissions) return current;
 
