@@ -6,9 +6,12 @@
 
 ## 平台介紹影片
 
-[▶️ **播放工作整合平台介紹影片（YouTube）**](https://www.youtube.com/watch?v=uegeSwdfWjQ)
+<video controls preload="metadata" width="800">
+  <source src="https://lovableteat.github.io/station-status-hub/videos/platform-introduction.mp4" type="video/mp4" />
+  你的瀏覽器不支援影片播放，請改看 [YouTube 影片](https://www.youtube.com/watch?v=uegeSwdfWjQ)。
+</video>
 
-點擊上方播放連結即可觀看完整介紹。
+<small>影片來源：<a href="https://www.youtube.com/watch?v=uegeSwdfWjQ">YouTube</a></small>
 
 ## 平台內容
 
