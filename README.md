@@ -6,9 +6,9 @@
 
 ## 平台介紹影片
 
-[![觀看工作整合平台介紹影片](https://img.youtube.com/vi/uegeSwdfWjQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=uegeSwdfWjQ)
+[▶️ **播放工作整合平台介紹影片（YouTube）**](https://www.youtube.com/watch?v=uegeSwdfWjQ)
 
-點擊上方影片縮圖即可觀看完整介紹。
+點擊上方播放連結即可觀看完整介紹。
 
 ## 平台內容
 
