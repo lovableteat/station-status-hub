@@ -4,6 +4,12 @@
 
 [開啟線上版本](https://lovableteat.github.io/station-status-hub/) · [閱讀完整架構](./docs/architecture.md) · [查看最新交接](./docs/codex-handoff-2026-08-10.md)
 
+## 平台介紹影片
+
+[![觀看工作整合平台介紹影片](https://img.youtube.com/vi/uegeSwdfWjQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=uegeSwdfWjQ)
+
+點擊上方影片縮圖即可觀看完整介紹。
+
 ## 平台內容
 
 平台目前有七個正式工作區，入口會依使用者權限顯示：
