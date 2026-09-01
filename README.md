@@ -6,12 +6,9 @@
 
 ## 平台介紹影片
 
-<video controls preload="metadata" width="800">
-  <source src="https://lovableteat.github.io/station-status-hub/videos/platform-introduction.mp4" type="video/mp4" />
-  你的瀏覽器不支援影片播放，請改看 [YouTube 影片](https://www.youtube.com/watch?v=uegeSwdfWjQ)。
-</video>
+[▶️ **直接播放工作整合平台介紹影片**](https://lovableteat.github.io/station-status-hub/videos/platform-introduction.mp4)
 
-<small>影片來源：<a href="https://www.youtube.com/watch?v=uegeSwdfWjQ">YouTube</a></small>
+影片檔已部署至 GitHub Pages；GitHub README 會過濾播放器標籤，點擊播放連結即可在瀏覽器內直接觀看。影片來源：[YouTube](https://www.youtube.com/watch?v=uegeSwdfWjQ)。
 
 ## 平台內容
 
