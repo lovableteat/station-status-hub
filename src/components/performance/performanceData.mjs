@@ -233,7 +233,7 @@ export function normalizePerformanceReview(value) {
     department: String(review.department || "未指定部門"),
     role: String(review.role || "工程師"),
     reviewerName: String(
-      review.reviewerName || review.reviewer_name || "管理員",
+      review.reviewerName || review.reviewer_name || "",
     ),
     status,
     score:
