@@ -7,6 +7,10 @@ const migrationUrl = new URL(
   import.meta.url,
 );
 const adminPanelUrl = new URL("../src/components/admin/AdminPanel.tsx", import.meta.url);
+const performancePrivacyMigrationUrl = new URL(
+  "../supabase/migrations/20260901120000_scope_performance_reviews_to_managers.sql",
+  import.meta.url,
+);
 
 const readMigration = () => readFile(migrationUrl, "utf8");
 
@@ -52,6 +56,23 @@ test("repair uses authenticated permission-aware RLS for repaired feature tables
   assert.match(sql, /current_user_can_workspace\('ai-chat', 'view'\)/i);
   assert.match(sql, /create policy test_project_system_fields_write[\s\S]*?to authenticated/i);
   assert.match(sql, /current_user_can_workspace\('station-status', 'edit'\)/i);
+});
+
+test("performance review RLS limits manager rows to administrators or assigned supervisors", async () => {
+  const sql = await readFile(performancePrivacyMigrationUrl, "utf8");
+
+  assert.match(sql, /drop policy if exists performance_reviews_read/i);
+  assert.match(
+    sql,
+    /performance_reviews_read[\s\S]*?current_user_can_workspace\('performance', 'view'\)[\s\S]*?employee_id = workspace\.current_system_user_id\(\)::text/i,
+  );
+  assert.match(
+    sql,
+    /performance_reviews_read[\s\S]*?current_user_can_workspace\('performance', 'edit'\)[\s\S]*?reviewer_name/i,
+  );
+  assert.match(sql, /lower\(coalesce\(current_user\.display_name/i);
+  assert.match(sql, /lower\(coalesce\(current_user\.username/i);
+  assert.match(sql, /create policy performance_reviews_update[\s\S]*?with check/i);
 });
 
 test("metadata repair is additive, conflict safe, and leaves operational rows untouched", async () => {

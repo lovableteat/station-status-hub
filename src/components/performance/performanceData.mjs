@@ -287,13 +287,12 @@ export function calculatePerformanceSummary(reviews) {
   };
 }
 
-export function toPerformanceCsv(reviews) {
+export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
   const headers = [
     "員工",
     "部門",
     "考核人",
     "狀態",
-    "分數",
     "目標平均進度",
     "截止日期",
     "工號",
@@ -302,22 +301,22 @@ export function toPerformanceCsv(reviews) {
     "IDP 實績",
     "OKR 實績",
     "KPI 實績",
-    "當責題一",
-    "當責題二",
-    "主管回饋",
     "既有自評",
     "證明連結",
     "圖片附件數",
   ];
+  if (includeManager) {
+    headers.splice(4, 0, "分數");
+    headers.splice(13, 0, "當責題一", "當責題二", "主管回饋");
+  }
   const rows = (reviews || []).map((review) => {
     const self = readSelfAssessment(review.selfFeedback);
     const manager = readManagerAssessment(review.managerFeedback);
-    return [
+    const row = [
       review.employeeName,
       review.department,
       review.reviewerName,
       PERFORMANCE_STATUS[review.status]?.label || review.status,
-      review.score ?? "",
       review.goals?.length
         ? Math.round(
             review.goals.reduce((sum, goal) => sum + goal.progress, 0) /
@@ -329,9 +328,6 @@ export function toPerformanceCsv(reviews) {
       self.team,
       self.level,
       ...CATEGORIES.map((category) => self.sections[category].text),
-      manager.answers.q1 ?? "",
-      manager.answers.q2 ?? "",
-      manager.feedback,
       self.legacyText,
       CATEGORIES.flatMap((category) => self.sections[category].links).join(
         "\n",
@@ -341,6 +337,17 @@ export function toPerformanceCsv(reviews) {
         0,
       ),
     ];
+    if (includeManager) {
+      row.splice(4, 0, review.score ?? "");
+      row.splice(
+        13,
+        0,
+        manager.answers.q1 ?? "",
+        manager.answers.q2 ?? "",
+        manager.feedback,
+      );
+    }
+    return row;
   });
   return [headers, ...rows]
     .map((row) =>
