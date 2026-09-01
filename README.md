@@ -6,6 +6,8 @@
 
 ## 平台介紹影片
 
+[<img src="https://img.youtube.com/vi/uegeSwdfWjQ/maxresdefault.jpg" alt="▶️ 播放工作整合平台介紹影片" width="800" />](https://lovableteat.github.io/station-status-hub/videos/platform-introduction.mp4)
+
 [▶️ **直接播放工作整合平台介紹影片**](https://lovableteat.github.io/station-status-hub/videos/platform-introduction.mp4)
 
 影片檔已部署至 GitHub Pages；GitHub README 會過濾播放器標籤，點擊播放連結即可在瀏覽器內直接觀看。影片來源：[YouTube](https://www.youtube.com/watch?v=uegeSwdfWjQ)。
