@@ -40,6 +40,16 @@ test("performance rows normalize cloud snake_case data and keep goal progress sa
   assert.equal(review.goals[0].category, "KPI");
 });
 
+test("unassigned performance reviews keep an empty reviewer", () => {
+  const review = normalizePerformanceReview({
+    id: "unassigned-review",
+    employee_name: "Employee",
+    reviewer_name: "",
+  });
+
+  assert.equal(review.reviewerName, "");
+});
+
 test("performance workflow maps employee and manager actions to the review status", () => {
   assert.equal(
     getPerformanceStatusForAction({
