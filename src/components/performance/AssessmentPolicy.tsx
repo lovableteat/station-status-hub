@@ -83,6 +83,11 @@ export function AssessmentPolicy() {
                 {CATEGORY_GUIDANCE[category].title}
               </h4>
               <p>{CATEGORY_GUIDANCE[category].focus}</p>
+              <ul className="rd2-guidance-list">
+                {CATEGORY_GUIDANCE[category].details.map((detail) => (
+                  <li key={detail}>{detail}</li>
+                ))}
+              </ul>
             </article>
           ))}
         </div>
