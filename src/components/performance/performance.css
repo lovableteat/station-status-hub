@@ -1003,6 +1003,18 @@
   line-height: 1.65;
   color: var(--rd2-muted);
 }
+.rd2-guidance-list {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--rd2-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.rd2-guidance-list li::marker {
+  color: var(--card-accent, var(--rd2-accent));
+}
 /* Solid fills put white 11px text at 4.24:1 - under the 4.5 AA floor for
    small text. A tinted chip with a light tint of the same hue keeps the
    category identity and clears AA (KPI 6.07, OKR 8.09, IDP 5.29). */
