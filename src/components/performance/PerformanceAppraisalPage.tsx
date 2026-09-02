@@ -70,12 +70,20 @@ const NAV = [
 const LEGACY_CACHE = "station-status-hub:performance-reviews:v1";
 const matchesUser = (
   review: { employeeId: string },
-  user: { userId?: string; username?: string } | null,
+  user: {
+    userId?: string;
+    username?: string;
+    displayName?: string;
+  } | null,
 ) =>
   !!user &&
-  [user.userId, user.username]
+  [user.userId, user.username, user.displayName]
     .filter(Boolean)
-    .some((id) => review.employeeId.toLowerCase() === id.toLowerCase());
+    .some(
+      (id) =>
+        review.employeeId.trim().toLocaleLowerCase() ===
+        id!.trim().toLocaleLowerCase(),
+    );
 
 const isAdministrator = (user: { role?: string } | null) =>
   user?.role === "admin" || user?.role === "super_admin";

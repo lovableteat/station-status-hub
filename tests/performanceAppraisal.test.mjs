@@ -155,6 +155,7 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
   assert.match(source, /matchesReviewer/);
   assert.doesNotMatch(source, /reviewsQuery\.eq\("employee_id", userId\)/);
   assert.match(source, /An employee has one editable record per cycle/);
+  assert.match(source, /user\.displayName/);
   assert.match(source, /tab === "self" \? userId : editorRecordId/);
   assert.match(source, /toPerformanceCsv\(visibleReviews, \{ includeManager: canManagePerformance \}/);
   assert.match(source, /showManagerAssessment/);
