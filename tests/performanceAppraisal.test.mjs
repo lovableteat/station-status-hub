@@ -153,11 +153,28 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
   assert.match(source, /isPerformanceManager/);
   assert.match(source, /canManagePerformance = canManageAll \|\|/);
   assert.match(source, /matchesReviewer/);
-  assert.match(source, /reviewsQuery\.eq\("employee_id", userId\)/);
+  assert.doesNotMatch(source, /reviewsQuery\.eq\("employee_id", userId\)/);
+  assert.match(source, /An employee has one editable record per cycle/);
+  assert.match(source, /tab === "self" \? userId : editorRecordId/);
   assert.match(source, /toPerformanceCsv\(visibleReviews, \{ includeManager: canManagePerformance \}/);
   assert.match(source, /showManagerAssessment/);
   assert.match(flowGuide, /canManage = false/);
   assert.match(flowGuide, /主管評分與回饋不會出現在員工畫面/);
+});
+
+test("performance employee RLS accepts legacy account identifiers", async () => {
+  const migration = await readFile(
+    new URL(
+      "../supabase/migrations/20260902130000_restore_performance_employee_identity.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(migration, /current_user_is_performance_employee/);
+  assert.match(migration, /lower\(trim\(coalesce\(actor\.username/);
+  assert.match(migration, /trim\(p_employee_id\) = actor\.id::text/);
+  assert.match(migration, /drop policy if exists performance_reviews_read/);
+  assert.match(migration, /create policy performance_reviews_update/);
 });
 
 test("performance workspace inherits the platform theme without a separate light-mode preference", async () => {

@@ -304,9 +304,12 @@ export function PerformanceAppraisalPage() {
         .from("performance_reviews")
         .select("*")
         .order("updated_at", { ascending: false });
-      // Employees request only their own row. Managers can request the rows
-      // assigned to them; administrators retain the full review workspace.
-      if (!canManagePerformance) reviewsQuery.eq("employee_id", userId);
+      // RLS already limits employees to their own rows. Do not add a second
+      // client-side identity filter here: older records may have been created
+      // with the account username instead of the auth UUID. Filtering by one
+      // representation would hide that record and make the editor look new.
+      // Managers can request the rows assigned to them; administrators retain
+      // the full review workspace.
       const [{ data, error }, employeeResult] = await Promise.all([
         reviewsQuery,
         canManagePerformance
@@ -354,7 +357,7 @@ export function PerformanceAppraisalPage() {
     } finally {
       if (request === requestNumber.current) setLoading(false);
     }
-  }, [cacheKey, demo, user, canManagePerformance, canManageAll, userId]);
+  }, [cacheKey, demo, user, canManagePerformance, canManageAll]);
   useEffect(() => {
     void load();
     const request = requestNumber.current;
@@ -363,12 +366,30 @@ export function PerformanceAppraisalPage() {
     };
   }, [load]);
   const editorReview =
-    reviews.find(
-      (review) =>
-        review.cycleId === cycle &&
-        review.id === (editorId || effectiveSavedId) &&
-        (tab !== "self" || matchesUser(review, user)),
-    ) || null;
+    (() => {
+      // An employee has one editable record per cycle. Opening the self tab
+      // without a URL id must resume that record instead of creating a second
+      // blank one. This also lets a saved local draft follow the same identity
+      // before and after the cloud row is created.
+      const existingSelfReview =
+        tab === "self"
+          ? reviews.find(
+              (review) =>
+                review.cycleId === cycle && matchesUser(review, user),
+            )
+          : null;
+      const selectedId =
+        editorId || existingSelfReview?.id || effectiveSavedId || null;
+      return (
+        reviews.find(
+          (review) =>
+            review.cycleId === cycle &&
+            review.id === selectedId &&
+            (tab !== "self" || matchesUser(review, user)),
+        ) || null
+      );
+    })();
+  const editorRecordId = editorReview?.id || editorId || effectiveSavedId;
   const employeeOptions = useMemo(() => {
     // system_users (後台管理) is the authoritative roster. Review rows and the
     // signed-in user are folded in so historic names stay pickable, but they
@@ -536,7 +557,7 @@ export function PerformanceAppraisalPage() {
     const validation = validateAssessment(form, mode, action);
     if (validation) throw new Error(validation);
     const previous = reviews.find(
-      (review) => review.id === (effectiveSavedId || editorId),
+      (review) => review.id === (editorRecordId || ""),
     );
     if (
       mode === "manager" &&
@@ -760,7 +781,7 @@ export function PerformanceAppraisalPage() {
                   <label htmlFor="rd2-existing">正在評核</label>
                   <select
                     id="rd2-existing"
-                    value={editorId || ""}
+                    value={editorRecordId || ""}
                     onChange={(event) =>
                       navigate(
                         tab,
@@ -823,10 +844,18 @@ export function PerformanceAppraisalPage() {
                   </div>
                 ) : (
                   <AssessmentEditor
-                    key={`${userId}:${cycle}:${tab}:${editorId || "new"}:${editorRevision}`}
+                    key={`${userId}:${cycle}:${tab}:${editorRecordId || "new"}:${editorRevision}`}
                     initial={initial}
                     mode={tab}
-                    storageKey={draftKey(userId, cycle, tab, editorId)}
+                    // Self drafts are keyed to the account rather than a row
+                    // id, so a draft made before the first cloud save is
+                    // restored when the same review is opened from records.
+                    storageKey={draftKey(
+                      userId,
+                      cycle,
+                      tab,
+                      tab === "self" ? userId : editorRecordId,
+                    )}
                     readonly={
                       tab === "self" && editorReview?.status === "approved"
                     }
