@@ -448,6 +448,45 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
     [projects.length, refreshProjects, toast]
   );
 
+  const deleteProject = useCallback(
+    async (projectId: string) => {
+      try {
+        const { error } = await supabase.rpc("delete_test_project", {
+          p_project_id: projectId,
+        });
+
+        if (error) throw error;
+
+        await refreshProjects();
+        toast({
+          title: "專案已刪除",
+          description: "專案及其機台、流程、問題與資料空間已永久移除。",
+        });
+        return true;
+      } catch (error) {
+        console.error("Failed to delete maintenance project:", error);
+        const message = error instanceof Error ? error.message : "";
+        const isLastProject = message.includes("At least one active project");
+        const isUnauthorized = message.includes("edit access");
+        toast({
+          title: isLastProject
+            ? "無法刪除最後一個使用中專案"
+            : isUnauthorized
+              ? "沒有刪除專案的權限"
+              : "專案刪除失敗",
+          description: isLastProject
+            ? "請先建立或保留另一個使用中專案。"
+            : isUnauthorized
+              ? "需要工作區的編輯權限才能永久刪除專案。"
+              : "請稍後再試；若專案資料仍在同步，請重新整理後再操作。",
+          variant: "destructive",
+        });
+        return false;
+      }
+    },
+    [refreshProjects, toast]
+  );
+
   useEffect(() => {
     void refreshProjects();
 
@@ -486,7 +525,7 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       allProjects,
       archiveProject: (projectId) => setArchivedState(projectId, true),
       createProject,
-      deleteProject: (projectId) => setArchivedState(projectId, true),
+      deleteProject,
       isLoadingProjects,
       isSwitchingProject,
       projectSummaries,
@@ -501,6 +540,7 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       activeProjectIdState,
       allProjects,
       createProject,
+      deleteProject,
       isLoadingProjects,
       isSwitchingProject,
       projectSummaries,
