@@ -490,6 +490,7 @@ export function TestPlanWorkspace() {
     activeSpace,
     folders,
     files,
+    activeProject,
     loading,
     busy,
     error,
@@ -795,7 +796,9 @@ export function TestPlanWorkspace() {
       <header className="test-plan-header">
         <MaintenancePageHeader
           title="資料儲存"
-          description="集中管理電路板與工程資料：測試計畫、機構圖、PCB、韌體、程式碼、量測紀錄與 Office 檔案"
+          description={activeProject
+            ? `${activeProject.name} 專案的電路板與工程資料：測試計畫、機構圖、PCB、韌體、程式碼、量測紀錄與 Office 檔案（各專案獨立儲存）`
+            : "請先選擇維修專案，再管理該專案的工程資料。"}
           icon={FolderKanban}
           actions={(
             <>

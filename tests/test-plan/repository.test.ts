@@ -13,6 +13,7 @@ function createRecordSet() {
   return {
     spaces: [{
       id: "space-1",
+      projectId: "project-1",
       ownerId: "owner-1",
       name: "Main",
       description: null,
@@ -71,9 +72,9 @@ function createAdapter(options: {
     records,
     operations,
     adapter: {
-      async listSpaces(ownerId: string) {
-        operations.push(`list-spaces:${ownerId}`);
-        return [...records.spaces];
+      async listSpaces(projectId: string) {
+        operations.push(`list-spaces:${projectId}`);
+        return records.spaces.filter((space) => space.projectId === projectId);
       },
       async listFolders(spaceId: string) {
         operations.push(`list-folders:${spaceId}`);
@@ -87,6 +88,7 @@ function createAdapter(options: {
         operations.push(`create-space:${input.ownerId}`);
         const space = {
           id: `space-${records.spaces.length + 1}`,
+          projectId: String(input.projectId),
           ownerId: String(input.ownerId),
           name: String(input.name),
           description: input.description ? String(input.description) : null,
@@ -100,8 +102,8 @@ function createAdapter(options: {
       async updateSpace() {
         throw new Error("not used");
       },
-      async deleteSpace(spaceId: string, ownerId: string) {
-        operations.push(`delete-space:${spaceId}:${ownerId}`);
+      async deleteSpace(spaceId: string, ownerId: string, projectId: string) {
+        operations.push(`delete-space:${spaceId}:${ownerId}:${projectId}`);
         records.files
           .filter((file) => file.spaceId === spaceId)
           .forEach((file) => cleanupPaths.push(file.storagePath));
@@ -205,23 +207,23 @@ function createAdapter(options: {
   };
 }
 
-test("loads shared spaces and activates the requested or first available space", async () => {
+test("loads only the active project's spaces and activates the requested or first available space", async () => {
   const fake = createAdapter();
   fake.records.spaces.push({
     ...fake.records.spaces[0],
     id: "other-space",
-    ownerId: "owner-2",
+    projectId: "project-2",
   });
   const repository = repositoryModule.createTestPlanRepository(fake.adapter);
 
-  const loaded = await repository.loadWorkspace("owner-1", "missing");
+  const loaded = await repository.loadWorkspace("owner-1", "project-1", "missing");
 
   assert.equal(loaded.activeSpaceId, "space-1");
   assert.deepEqual(
     loaded.spaces.map((space: { id: string }) => space.id),
-    ["space-1", "other-space"],
+    ["space-1"],
   );
-  assert.ok(fake.operations.includes("list-spaces:owner-1"));
+  assert.ok(fake.operations.includes("list-spaces:project-1"));
   assert.ok(fake.operations.includes("list-folders:space-1"));
 });
 
@@ -230,7 +232,7 @@ test("creating the first personal space returns an immediately activatable recor
   fake.records.spaces.length = 0;
   const repository = repositoryModule.createTestPlanRepository(fake.adapter);
 
-  const space = await repository.createSpace("owner-1", {
+  const space = await repository.createSpace("owner-1", "project-1", {
     name: "Power board",
     description: "EVT files",
     color: "#38bdf8",
@@ -250,6 +252,7 @@ test("cleans an uploaded object when metadata insertion fails and continues the 
 
   const result = await repository.uploadFiles({
     ownerId: "owner-1",
+    projectId: "project-1",
     spaceId: "space-1",
     folderId: null,
     files,
@@ -271,6 +274,7 @@ test("durably queues an uploaded object when immediate rollback cleanup fails", 
 
   await repository.uploadFiles({
     ownerId: "owner-1",
+    projectId: "project-1",
     spaceId: "space-1",
     folderId: null,
     files: [new File(["bad"], "bad.step", { type: "model/step" })],
@@ -278,7 +282,7 @@ test("durably queues an uploaded object when immediate rollback cleanup fails", 
 
   assert.ok(
     fake.operations.some((operation) =>
-      operation.startsWith("queue-cleanup:owner-1:owner-1/space-1/")),
+      operation.startsWith("queue-cleanup:owner-1:owner-1/project-1/space-1/")),
   );
 });
 
@@ -288,6 +292,7 @@ test("keeps an empty browser MIME type as null metadata", async () => {
 
   const result = await repository.uploadFiles({
     ownerId: "owner-1",
+    projectId: "project-1",
     spaceId: "space-1",
     folderId: null,
     files: [new File(["firmware"], "controller.hex", { type: "" })],
@@ -303,6 +308,7 @@ test("gives same-name Unicode uploads distinct opaque ASCII storage keys", async
 
   const result = await repository.uploadFiles({
     ownerId: "owner-1",
+    projectId: "project-1",
     spaceId: "space-1",
     folderId: null,
     files: [
@@ -410,10 +416,10 @@ test("deleting a non-active space cleans cascaded objects through the durable qu
   const fake = createAdapter();
   const repository = repositoryModule.createTestPlanRepository(fake.adapter);
 
-  await repository.deleteSpace("owner-1", "space-1");
+  await repository.deleteSpace("owner-1", "space-1", "project-1");
 
   assert.deepEqual(fake.operations.slice(-4), [
-    "delete-space:space-1:owner-1",
+    "delete-space:space-1:owner-1:project-1",
     "list-cleanup:owner-1",
     `remove:${fake.records.files[0].storagePath}`,
     `complete-cleanup:owner-1:${fake.records.files[0].storagePath}`,

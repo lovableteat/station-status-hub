@@ -151,19 +151,21 @@ test("rejects executable extensions when an existing file is renamed", () => {
 test("builds opaque ASCII-only keys for Unicode, emoji, and multi-dot display names", () => {
   const pdfPath = filesModule.buildStoragePath(
     "owner-1",
+    "project-1",
     "space-2",
     "測試報告✅.final.PDF",
     "object-3",
   );
   const pcbPath = filesModule.buildStoragePath(
     "owner-1",
+    "project-1",
     "space-2",
     "控制板.rev.2.KICAD_PCB",
     "object-4",
   );
 
-  assert.equal(pdfPath, "owner-1/space-2/object-3.pdf");
-  assert.equal(pcbPath, "owner-1/space-2/object-4.kicad_pcb");
+  assert.equal(pdfPath, "owner-1/project-1/space-2/object-3.pdf");
+  assert.equal(pcbPath, "owner-1/project-1/space-2/object-4.kicad_pcb");
   for (const path of [pdfPath, pcbPath]) {
     assert.match(path, /^[a-zA-Z0-9._/-]+$/);
     assert.doesNotMatch(path, /\.\.|#|%|\\|\/\//);
