@@ -46,8 +46,7 @@ begin
   end if;
 
   update workspace.test_plan_spaces as spaces
-  set project_id = projects.id
-  from lateral (
+  set project_id = (
     select projects.id
     from workspace.test_projects as projects
     where projects.owner_user_id = spaces.owner_id
@@ -55,7 +54,7 @@ begin
       and not projects.is_archived
     order by projects.updated_at desc, projects.created_at desc
     limit 1
-  ) as projects
+  )
   where spaces.project_id is null;
 
   update workspace.test_plan_spaces
@@ -236,6 +235,10 @@ drop policy if exists "test-plan-folders-shared-read" on workspace.test_plan_fol
 drop policy if exists "test-plan-folders-shared-insert" on workspace.test_plan_folders;
 drop policy if exists "test-plan-folders-shared-update" on workspace.test_plan_folders;
 drop policy if exists "test-plan-folders-shared-delete" on workspace.test_plan_folders;
+drop policy if exists "test-plan-folders-project-read" on workspace.test_plan_folders;
+drop policy if exists "test-plan-folders-project-insert" on workspace.test_plan_folders;
+drop policy if exists "test-plan-folders-project-update" on workspace.test_plan_folders;
+drop policy if exists "test-plan-folders-project-delete" on workspace.test_plan_folders;
 
 create policy "test-plan-folders-project-read"
 on workspace.test_plan_folders for select
@@ -262,6 +265,10 @@ drop policy if exists "test-plan-files-shared-read" on workspace.test_plan_files
 drop policy if exists "test-plan-files-shared-insert" on workspace.test_plan_files;
 drop policy if exists "test-plan-files-shared-update" on workspace.test_plan_files;
 drop policy if exists "test-plan-files-shared-delete" on workspace.test_plan_files;
+drop policy if exists "test-plan-files-project-read" on workspace.test_plan_files;
+drop policy if exists "test-plan-files-project-insert" on workspace.test_plan_files;
+drop policy if exists "test-plan-files-project-update" on workspace.test_plan_files;
+drop policy if exists "test-plan-files-project-delete" on workspace.test_plan_files;
 
 create policy "test-plan-files-project-read"
 on workspace.test_plan_files for select
@@ -288,13 +295,17 @@ drop policy if exists "test-plan-files-shared-read" on storage.objects;
 drop policy if exists "test-plan-files-shared-write" on storage.objects;
 drop policy if exists "test-plan-files-shared-update" on storage.objects;
 drop policy if exists "test-plan-files-shared-delete" on storage.objects;
+drop policy if exists "test-plan-files-project-read" on storage.objects;
+drop policy if exists "test-plan-files-project-write" on storage.objects;
+drop policy if exists "test-plan-files-project-update" on storage.objects;
+drop policy if exists "test-plan-files-project-delete" on storage.objects;
 
 create policy "test-plan-files-project-read"
 on storage.objects for select
 to authenticated
 using (
   bucket_id = 'test-plan-files'
-  and workspace.test_plan_current_user_can_read_storage_object(name)
+  and workspace.test_plan_current_user_can_read_storage_object(storage.objects.name)
 );
 
 create policy "test-plan-files-project-write"
@@ -302,17 +313,17 @@ on storage.objects for insert
 to authenticated
 with check (
   bucket_id = 'test-plan-files'
-  and (storage.foldername(name))[1]
+  and (storage.foldername(storage.objects.name))[1]
     = workspace.test_plan_current_system_user_id()::text
-  and (storage.foldername(name))[2] is not null
-  and (storage.foldername(name))[3] is not null
+  and (storage.foldername(storage.objects.name))[2] is not null
+  and (storage.foldername(storage.objects.name))[3] is not null
   and exists (
     select 1
     from workspace.test_plan_spaces as spaces
     join workspace.test_projects as projects
       on projects.id = spaces.project_id
-    where spaces.id::text = (storage.foldername(name))[3]
-      and spaces.project_id::text = (storage.foldername(name))[2]
+    where spaces.id::text = (storage.foldername(storage.objects.name))[3]
+      and spaces.project_id::text = (storage.foldername(storage.objects.name))[2]
       and projects.status <> 'archived'
       and not projects.is_archived
   )
@@ -324,11 +335,11 @@ on storage.objects for update
 to authenticated
 using (
   bucket_id = 'test-plan-files'
-  and workspace.test_plan_current_user_can_manage_storage_object(name)
+  and workspace.test_plan_current_user_can_manage_storage_object(storage.objects.name)
 )
 with check (
   bucket_id = 'test-plan-files'
-  and workspace.test_plan_current_user_can_manage_storage_object(name)
+  and workspace.test_plan_current_user_can_manage_storage_object(storage.objects.name)
 );
 
 create policy "test-plan-files-project-delete"
@@ -336,7 +347,7 @@ on storage.objects for delete
 to authenticated
 using (
   bucket_id = 'test-plan-files'
-  and workspace.test_plan_current_user_can_manage_storage_object(name)
+  and workspace.test_plan_current_user_can_manage_storage_object(storage.objects.name)
 );
 
 notify pgrst, 'reload schema';
