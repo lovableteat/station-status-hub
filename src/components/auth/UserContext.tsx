@@ -387,7 +387,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const authenticate = useCallback(
     async (username: string, password: string): Promise<AuthenticationResult | null> => {
-      const normalizedUsername = username.trim();
+      // Usernames are case-insensitive at login time. Keep the password
+      // untouched so its existing case-sensitive verification remains intact.
+      const normalizedUsername = username.trim().toLowerCase();
 
       if (REALTIME_COLLABORATION_V2_ENABLED) {
         const edgeResult = await runLoginWithTransientRetry(() =>

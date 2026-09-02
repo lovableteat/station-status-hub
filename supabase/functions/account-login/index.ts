@@ -36,7 +36,9 @@ serve(async (request) => {
     }
 
     const payload = await request.json().catch(() => ({}));
-    const username = typeof payload?.username === "string" ? payload.username.trim() : "";
+    // Account names are case-insensitive; passwords must remain byte-for-byte
+    // unchanged because password verification is case-sensitive.
+    const username = typeof payload?.username === "string" ? payload.username.trim().toLowerCase() : "";
     const password = typeof payload?.password === "string" ? payload.password : "";
     if (!username || username.length > 50 || !password || password.length > 200) {
       return jsonResponse({ success: false, error: "Invalid credentials" }, 401);
