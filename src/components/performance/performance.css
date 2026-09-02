@@ -37,7 +37,9 @@
      this page scrolls as a whole and a sticky rail visibly drifts against
      the content. */
   position: static;
-  align-self: stretch;
+  /* Keep the navigation rail sized to its own content instead of stretching
+     to the full workspace height and leaving an empty panel below the menu. */
+  align-self: start;
   background: var(--rd2-sidebar);
   color: hsl(var(--sidebar-foreground));
   border: 1px solid #2a526f;
