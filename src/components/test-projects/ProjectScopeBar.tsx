@@ -11,6 +11,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  Trash2,
   UserRound,
 } from "lucide-react";
 
@@ -144,6 +145,7 @@ export function ProjectScopeBar() {
     allProjects,
     archiveProject,
     createProject,
+    deleteProject,
     isLoadingProjects,
     projectSummaries,
     projects,
@@ -156,6 +158,7 @@ export function ProjectScopeBar() {
   const canCreateSystems = canEditModule("test-tracker");
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -267,6 +270,18 @@ export function ProjectScopeBar() {
 
     setIsSaving(false);
     if (!savedProject) return;
+    setShowForm(false);
+    resetForm();
+  };
+
+  const handleDelete = async () => {
+    if (!editingProjectId) return;
+
+    setIsDeleting(true);
+    const deleted = await deleteProject(editingProjectId);
+    setIsDeleting(false);
+    if (!deleted) return;
+
     setShowForm(false);
     resetForm();
   };
@@ -532,11 +547,46 @@ export function ProjectScopeBar() {
                 </div>
               )}
 
-              <div className="mt-6 flex justify-end gap-2 border-t border-[#2a526f]/60 pt-4">
-                <Button variant="outline" onClick={() => setShowForm(false)}>取消</Button>
-                <Button disabled={!form.name.trim() || isSaving} onClick={handleSave}>
-                  {isSaving ? "儲存中..." : editingProjectId ? "儲存變更" : "建立專案"}
-                </Button>
+              <div className="mt-6 flex justify-between gap-2 border-t border-[#2a526f]/60 pt-4">
+                {editingProjectId && canCreateSystems ? (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={isSaving || isDeleting}
+                        className="text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        刪除專案
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>永久刪除「{form.name}」？</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          這會永久刪除專案、機台、流程、測試進度、問題、工時與資料空間。刪除後無法復原，請確認不再需要這些資料。
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>取消</AlertDialogCancel>
+                        <AlertDialogAction
+                          disabled={isDeleting}
+                          onClick={() => void handleDelete()}
+                          className="bg-rose-600 text-white hover:bg-rose-500"
+                        >
+                          {isDeleting ? "刪除中..." : "永久刪除"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : <span />}
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setShowForm(false)}>取消</Button>
+                  <Button disabled={!form.name.trim() || isSaving} onClick={handleSave}>
+                    {isSaving ? "儲存中..." : editingProjectId ? "儲存變更" : "建立專案"}
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (
@@ -659,6 +709,37 @@ export function ProjectScopeBar() {
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>取消</AlertDialogCancel>
                                     <AlertDialogAction onClick={() => archiveProject(project.id)}>確認封存</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                            {canCreateSystems && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-rose-200/80 hover:bg-rose-400/10 hover:text-rose-100"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <span className="sr-only">刪除 {project.name}</span>
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>永久刪除「{project.name}」？</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      這會永久刪除專案及其機台、流程、進度、問題、工時與資料空間，且無法復原。
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>取消</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => void deleteProject(project.id)}
+                                      className="bg-rose-600 text-white hover:bg-rose-500"
+                                    >
+                                      永久刪除
+                                    </AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>

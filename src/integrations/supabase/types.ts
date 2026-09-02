@@ -3838,6 +3838,10 @@ type BaseDatabase = {
           isSetofReturn: false
         }
       }
+      delete_test_project: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
       delete_test_system: { Args: { p_system_id: string }; Returns: undefined }
       dismiss_read_user_notifications: { Args: never; Returns: number }
       dismiss_user_notification: {
