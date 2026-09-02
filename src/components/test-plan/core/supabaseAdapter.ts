@@ -24,6 +24,7 @@ type FileRow = Tables<"test_plan_files">;
 function mapSpace(row: SpaceRow): TestPlanSpace {
   return {
     id: row.id,
+    projectId: row.project_id,
     ownerId: row.owner_id,
     name: row.name,
     description: row.description,
@@ -212,10 +213,11 @@ async function uploadLargeObject(
 
 export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
   return {
-    async listSpaces(_ownerId) {
+    async listSpaces(projectId) {
       const { data, error } = await supabase
         .from("test_plan_spaces")
         .select("*")
+        .eq("project_id", projectId)
         .order("updated_at", { ascending: false });
       throwIfError(error);
       return (data ?? []).map(mapSpace);
@@ -241,6 +243,7 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
     async createSpace(input) {
       const payload: TablesInsert<"test_plan_spaces"> = {
         owner_id: input.ownerId,
+        project_id: input.projectId,
         name: input.name,
         description: input.description,
         color: input.color,
@@ -253,7 +256,7 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
       throwIfError(error);
       return mapSpace(data);
     },
-    async updateSpace(spaceId, _ownerId, patch) {
+    async updateSpace(spaceId, _ownerId, projectId, patch) {
       const payload: TablesUpdate<"test_plan_spaces"> = {
         ...(patch.name === undefined ? {} : { name: patch.name }),
         ...(patch.description === undefined
@@ -265,16 +268,18 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
         .from("test_plan_spaces")
         .update(payload)
         .eq("id", spaceId)
+        .eq("project_id", projectId)
         .select()
         .single();
       throwIfError(error);
       return mapSpace(data);
     },
-    async deleteSpace(spaceId, _ownerId) {
+    async deleteSpace(spaceId, _ownerId, projectId) {
       const { data, error } = await supabase
         .from("test_plan_spaces")
         .delete()
         .eq("id", spaceId)
+        .eq("project_id", projectId)
         .select("id")
         .maybeSingle();
       throwIfError(error);
@@ -410,10 +415,11 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
         .remove([...paths]);
       throwIfError(error);
     },
-    async listCleanupPaths(_ownerId) {
+    async listCleanupPaths(ownerId) {
       const { data, error } = await supabase
         .from("test_plan_storage_cleanup_queue")
         .select("storage_path")
+        .eq("owner_id", ownerId)
         .order("queued_at", { ascending: true });
       throwIfError(error);
       return (data ?? []).map((row) => row.storage_path);
@@ -429,11 +435,12 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
         .upsert(payload, { onConflict: "storage_path" });
       throwIfError(error);
     },
-    async completeCleanupPaths(_ownerId, paths) {
+    async completeCleanupPaths(ownerId, paths) {
       if (paths.length === 0) return;
       const { error } = await supabase
         .from("test_plan_storage_cleanup_queue")
         .delete()
+        .eq("owner_id", ownerId)
         .in("storage_path", paths);
       throwIfError(error);
     },

@@ -134,6 +134,29 @@ test("latest Test_Plan sharing migration exposes spaces to permitted accounts wi
   );
 });
 
+test("scopes every Test_Plan space and storage key to the active maintenance project", async () => {
+  const migration = await source(
+    "supabase/migrations/20260902100000_scope_test_plan_storage_to_projects.sql",
+  );
+  const adapter = await source(
+    "src/components/test-plan/core/supabaseAdapter.ts",
+  );
+  const hook = await source(
+    "src/components/test-plan/hooks/useTestPlanWorkspace.ts",
+  );
+  const files = await source("src/components/test-plan/core/files.ts");
+
+  assert.match(migration, /workspace\.test_plan_spaces[\s\S]{0,120}project_id uuid/i);
+  assert.match(migration, /test_plan_spaces_project_id_fkey/i);
+  assert.match(migration, /test_plan_spaces_project_owner_name_uidx/i);
+  assert.match(migration, /Legacy Imported Project/i);
+  assert.match(migration, /spaces\.project_id::text\s*=\s*\(storage\.foldername\(name\)\)\[2\]/i);
+  assert.match(adapter, /\.from\("test_plan_spaces"\)[\s\S]{0,180}\.eq\("project_id", projectId\)/);
+  assert.match(hook, /useTestProject/);
+  assert.match(hook, /repository\.loadWorkspace\([\s\S]{0,100}activeProjectId/);
+  assert.match(files, /assertStorageSegment\(projectId, "專案識別碼"\)/);
+});
+
 test("admin permission editor explains inherited Test_Plan access instead of exposing an independent toggle", async () => {
   const dialog = await source(
     "src/components/admin/UserPermissionsDialog.tsx",

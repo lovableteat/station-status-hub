@@ -2135,6 +2135,7 @@ type BaseDatabase = {
           id: string
           name: string
           owner_id: string
+          project_id: string
           updated_at: string
         }
         Insert: {
@@ -2144,6 +2145,7 @@ type BaseDatabase = {
           id?: string
           name: string
           owner_id: string
+          project_id: string
           updated_at?: string
         }
         Update: {
@@ -2153,6 +2155,7 @@ type BaseDatabase = {
           id?: string
           name?: string
           owner_id?: string
+          project_id?: string
           updated_at?: string
         }
         Relationships: [
@@ -2161,6 +2164,13 @@ type BaseDatabase = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "system_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_plan_spaces_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "test_projects"
             referencedColumns: ["id"]
           },
         ]

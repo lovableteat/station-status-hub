@@ -374,6 +374,7 @@ function getSafeStorageExtension(fileName: string): string {
 
 export function buildStoragePath(
   ownerId: string,
+  projectId: string,
   spaceId: string,
   fileName: string,
   objectId = crypto.randomUUID(),
@@ -384,6 +385,7 @@ export function buildStoragePath(
   }`;
   return [
     assertStorageSegment(ownerId, "使用者識別碼"),
+    assertStorageSegment(projectId, "專案識別碼"),
     assertStorageSegment(spaceId, "空間識別碼"),
     objectName,
   ].join("/");

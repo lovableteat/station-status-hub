@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import { useUser } from "@/components/auth/UserContext";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { usePermissions } from "@/hooks/usePermissions";
 
 import {
@@ -43,6 +44,7 @@ export function useTestPlanWorkspace(
   options: UseTestPlanWorkspaceOptions = {},
 ) {
   const { user, sessionMode } = useUser();
+  const { activeProject, activeProjectId } = useTestProject();
   const { canEditModule } = usePermissions();
   const repository = useMemo(
     () =>
@@ -67,8 +69,10 @@ export function useTestPlanWorkspace(
   const mutationInFlightRef = useRef(false);
   const activeSpaceIdRef = useRef<string | null>(activeSpaceId);
   const ownerIdRef = useRef<string | null>(ownerId);
+  const projectIdRef = useRef<string | null>(activeProjectId);
   activeSpaceIdRef.current = activeSpaceId;
   ownerIdRef.current = ownerId;
+  projectIdRef.current = activeProjectId;
 
   const requireEdit = useCallback(() => {
     if (!isAuthenticated) {
@@ -92,14 +96,20 @@ export function useTestPlanWorkspace(
   const refreshWorkspace = useCallback(
     async (preferredSpaceId?: string | null) => {
       const requestId = ++requestIdRef.current;
-      if (!ownerId) {
+      if (!ownerId || !activeProjectId) {
         applyWorkspace({
           spaces: [],
           activeSpaceId: null,
           folders: [],
           files: [],
         });
-        setError(user ? AUTHENTICATED_SESSION_REQUIRED : null);
+        setError(
+          !ownerId && user
+            ? AUTHENTICATED_SESSION_REQUIRED
+            : !activeProjectId && user
+              ? "目前沒有可用的維修專案，請先建立或選擇專案。"
+              : null,
+        );
         setLoading(false);
         return;
       }
@@ -109,6 +119,7 @@ export function useTestPlanWorkspace(
       try {
         const workspace = await repository.loadWorkspace(
           ownerId,
+          activeProjectId,
           preferredSpaceId ?? activeSpaceId,
         );
         if (requestId === requestIdRef.current) applyWorkspace(workspace);
@@ -120,12 +131,12 @@ export function useTestPlanWorkspace(
         if (requestId === requestIdRef.current) setLoading(false);
       }
     },
-    [activeSpaceId, applyWorkspace, ownerId, repository, user],
+    [activeProjectId, activeSpaceId, applyWorkspace, ownerId, repository, user],
   );
 
   useEffect(() => {
     void refreshWorkspace(null);
-  }, [ownerId, repository]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeProjectId, ownerId, repository]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openSpace = useCallback(
     async (spaceId: string) => {
@@ -182,14 +193,16 @@ export function useTestPlanWorkspace(
   const refreshActiveSpace = useCallback(async (
     expectedSpaceId: string | null,
     expectedOwnerId: string | null,
+    expectedProjectId: string | null,
   ) => {
-    if (!expectedSpaceId || !expectedOwnerId) return;
+    if (!expectedSpaceId || !expectedOwnerId || !expectedProjectId) return;
     const requestId = ++requestIdRef.current;
     const space = await repository.loadSpace(expectedSpaceId);
     if (
       requestId !== requestIdRef.current
       || activeSpaceIdRef.current !== expectedSpaceId
       || ownerIdRef.current !== expectedOwnerId
+      || projectIdRef.current !== expectedProjectId
     ) {
       return;
     }
@@ -200,12 +213,12 @@ export function useTestPlanWorkspace(
   const createSpace = useCallback(
     (input: { name: string; description?: string; color?: string }) =>
       runMutation(async () => {
-        if (!ownerId) throw new Error("請先登入再建立空間。");
-        const created = await repository.createSpace(ownerId, input);
+        if (!ownerId || !activeProjectId) throw new Error("請先登入並選擇專案再建立空間。");
+        const created = await repository.createSpace(ownerId, activeProjectId, input);
         await refreshWorkspace(created.id);
         return created;
       }),
-    [ownerId, refreshWorkspace, repository, runMutation],
+    [activeProjectId, ownerId, refreshWorkspace, repository, runMutation],
   );
 
   const updateSpace = useCallback(
@@ -214,22 +227,22 @@ export function useTestPlanWorkspace(
       patch: Partial<Pick<TestPlanSpace, "name" | "description" | "color">>,
     ) =>
       runMutation(async () => {
-        if (!ownerId) throw new Error("請先登入再編輯空間。");
-        const updated = await repository.updateSpace(ownerId, spaceId, patch);
+        if (!ownerId || !activeProjectId) throw new Error("請先登入並選擇專案再編輯空間。");
+        const updated = await repository.updateSpace(ownerId, spaceId, activeProjectId, patch);
         await refreshWorkspace(spaceId);
         return updated;
       }),
-    [ownerId, refreshWorkspace, repository, runMutation],
+    [activeProjectId, ownerId, refreshWorkspace, repository, runMutation],
   );
 
   const deleteSpace = useCallback(
     (spaceId: string) =>
       runMutation(async () => {
-        if (!ownerId) throw new Error("請先登入再刪除空間。");
-        await repository.deleteSpace(ownerId, spaceId);
+        if (!ownerId || !activeProjectId) throw new Error("請先登入並選擇專案再刪除空間。");
+        await repository.deleteSpace(ownerId, spaceId, activeProjectId);
         await refreshWorkspace(null);
       }),
-    [ownerId, refreshWorkspace, repository, runMutation],
+    [activeProjectId, ownerId, refreshWorkspace, repository, runMutation],
   );
 
   const createFolder = useCallback(
@@ -244,20 +257,20 @@ export function useTestPlanWorkspace(
           parentId,
           name,
         );
-        await refreshActiveSpace(activeSpaceId, ownerId);
+        await refreshActiveSpace(activeSpaceId, ownerId, activeProjectId);
         return created;
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeProjectId, activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
   );
 
   const renameFolder = useCallback(
     (folderId: string, name: string) =>
       runMutation(async () => {
         const updated = await repository.renameFolder(folderId, name);
-        await refreshActiveSpace(activeSpaceId, ownerId);
+        await refreshActiveSpace(activeSpaceId, ownerId, activeProjectId);
         return updated;
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeProjectId, activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
   );
 
   const moveFolder = useCallback(
@@ -268,27 +281,27 @@ export function useTestPlanWorkspace(
           parentId,
           folders,
         );
-        await refreshActiveSpace(activeSpaceId, ownerId);
+        await refreshActiveSpace(activeSpaceId, ownerId, activeProjectId);
         return updated;
       }),
-    [activeSpaceId, folders, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeProjectId, activeSpaceId, folders, ownerId, refreshActiveSpace, repository, runMutation],
   );
 
   const deleteFolder = useCallback(
     (folderId: string) =>
       runMutation(async () => {
-        if (!ownerId) throw new Error("請先登入再刪除資料夾。");
+        if (!ownerId || !activeProjectId) throw new Error("請先登入並選擇專案再刪除資料夾。");
         await repository.deleteFolder(ownerId, folderId);
-        await refreshActiveSpace(activeSpaceId, ownerId);
+        await refreshActiveSpace(activeSpaceId, ownerId, activeProjectId);
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeProjectId, activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
   );
 
   const uploadFiles = useCallback(
     (folderId: string | null, incoming: readonly File[]) =>
       runMutation(async () => {
-        if (!ownerId || !activeSpaceId) {
-          throw new Error("請先選擇一個空間。");
+        if (!ownerId || !activeProjectId || !activeSpaceId) {
+          throw new Error("請先選擇專案與資料空間。");
         }
         setUploadProgress({
           completed: 0,
@@ -300,38 +313,39 @@ export function useTestPlanWorkspace(
         try {
           const result = await repository.uploadFiles({
             ownerId,
+            projectId: activeProjectId,
             spaceId: activeSpaceId,
             folderId,
             files: incoming,
             onProgress: setUploadProgress,
           });
-          await refreshActiveSpace(activeSpaceId, ownerId);
+          await refreshActiveSpace(activeSpaceId, ownerId, activeProjectId);
           return result;
         } finally {
           setUploadProgress(null);
         }
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeProjectId, activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
   );
 
   const renameFile = useCallback(
     (fileId: string, name: string) =>
       runMutation(async () => {
         const updated = await repository.renameFile(fileId, name);
-        await refreshActiveSpace(activeSpaceId, ownerId);
+        await refreshActiveSpace(activeSpaceId, ownerId, activeProjectId);
         return updated;
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeProjectId, activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
   );
 
   const moveFile = useCallback(
     (fileId: string, folderId: string | null) =>
       runMutation(async () => {
         const updated = await repository.moveFile(fileId, folderId);
-        await refreshActiveSpace(activeSpaceId, ownerId);
+        await refreshActiveSpace(activeSpaceId, ownerId, activeProjectId);
         return updated;
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeProjectId, activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
   );
 
   const updateFileDescription = useCallback(
@@ -341,10 +355,10 @@ export function useTestPlanWorkspace(
           fileId,
           description,
         );
-        await refreshActiveSpace(activeSpaceId, ownerId);
+        await refreshActiveSpace(activeSpaceId, ownerId, activeProjectId);
         return updated;
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeProjectId, activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
   );
 
   const deleteFile = useCallback(
@@ -352,9 +366,9 @@ export function useTestPlanWorkspace(
       runMutation(async () => {
         if (!ownerId) throw new Error("請先登入再刪除檔案。");
         await repository.deleteFile(ownerId, file);
-        await refreshActiveSpace(activeSpaceId, ownerId);
+        await refreshActiveSpace(activeSpaceId, ownerId, activeProjectId);
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeProjectId, activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
   );
 
   const downloadFile = useCallback(
@@ -366,10 +380,10 @@ export function useTestPlanWorkspace(
     (file: TestPlanFileRecord, contents: Blob) =>
       runMutation(async () => {
         const updated = await repository.replaceFileContents(file, contents);
-        await refreshActiveSpace(activeSpaceId, ownerId);
+        await refreshActiveSpace(activeSpaceId, ownerId, activeProjectId);
         return updated;
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeProjectId, activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
   );
 
   return {
@@ -385,6 +399,8 @@ export function useTestPlanWorkspace(
     uploadProgress,
     canEdit,
     isAuthenticated,
+    activeProject,
+    activeProjectId,
     openSpace,
     refreshWorkspace,
     createSpace,
