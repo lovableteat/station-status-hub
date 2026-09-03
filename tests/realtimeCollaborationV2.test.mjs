@@ -417,7 +417,7 @@ test("direct chat media helpers validate limits, create safe paths, and label pr
   assert.match(media.validateDirectMessageFiles(new Array(5).fill(image)).error, /最多只能選擇 4 個/);
   assert.match(media.validateDirectMessageFiles([
     { name: "bad.pdf", size: 10, type: "application/pdf" },
-  ]).error, /只支援照片與影片/);
+  ]).error, /支援圖片、影片、PowerPoint/);
   assert.match(media.validateDirectMessageFiles([
     { ...image, size: 12 * 1024 * 1024 + 1 },
   ]).error, /照片.*12 MB/);
@@ -447,7 +447,7 @@ test("direct message hook uploads private media and resolves signed attachment U
   assert.match(panel, /type="file"/);
   assert.match(panel, /accept=\{CHAT_MEDIA_ACCEPT\}/);
   assert.match(panel, /multiple/);
-  assert.match(panel, /aria-label="加入圖片或影片"/);
+  assert.match(panel, /aria-label="加入附件"/);
   assert.match(panel, /ImagePlus/);
   assert.match(panel, /selectedMediaFiles/);
   assert.match(panel, /URL\.createObjectURL/);
