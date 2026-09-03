@@ -12,6 +12,7 @@ import {
 
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
+import { watchPermissionRefresh } from "@/lib/permissionRefresh.mjs";
 import {
   canAccessModule,
   type Permission,
@@ -57,7 +58,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     setAccountActive(false);
   }, []);
 
-  const reloadPermissions = useCallback(async () => {
+  const reloadPermissions = useCallback(async ({ background = false } = {}) => {
     const userId = user?.userId;
     const requestId = ++requestIdRef.current;
 
@@ -76,7 +77,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setLoading(true);
+    // Background revalidation must not unmount the assessment editor and
+    // discard an employee's unsaved work.
+    if (!background) setLoading(true);
     try {
       const [pagePermissionResult, userResult] = await Promise.all([
         supabase
@@ -134,10 +137,16 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     const handlePermissionUpdate = (event: Event) => {
       const detail = (event as CustomEvent<{ userId?: string }>).detail;
       if (!detail?.userId || detail.userId === userId) {
-        void reloadPermissions();
+        void reloadPermissions({ background: true });
       }
     };
     window.addEventListener("station-permissions-updated", handlePermissionUpdate);
+    const refresh = () => void reloadPermissions({ background: true });
+    const stopRefresh = watchPermissionRefresh({
+      windowTarget: window,
+      documentTarget: document,
+      refresh,
+    });
 
     const channel = supabase
       .channel(`current-user-permissions:${userId}`)
@@ -149,7 +158,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           table: "user_page_permissions",
           filter: `user_id=eq.${userId}`,
         },
-        () => void reloadPermissions()
+        refresh
       )
       .on(
         "postgres_changes",
@@ -159,11 +168,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           table: "system_users",
           filter: `id=eq.${userId}`,
         },
-        () => void reloadPermissions()
+        refresh
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") refresh();
+      });
 
     return () => {
+      stopRefresh();
       window.removeEventListener(
         "station-permissions-updated",
         handlePermissionUpdate
