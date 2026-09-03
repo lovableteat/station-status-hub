@@ -902,7 +902,7 @@ export function PerformanceOrganization({
                   </Field>
                 )}
                 <p className="rd2-hint">
-                  只調整績效權限，其他工作區與全站帳號角色維持原設定。部長可查看所屬各課；課長可查看課內成員。密碼保護仍適用。
+                  只調整績效權限，其他工作區與全站帳號角色維持原設定。課長只評核直屬職員，部長只評核直屬課長及審閱課長彙整；代理課同仁由部長直接評核。密碼保護仍適用。
                 </p>
                 {saveError && (
                   <p className="rd2-error" role="alert">

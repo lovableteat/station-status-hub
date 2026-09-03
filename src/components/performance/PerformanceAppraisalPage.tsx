@@ -35,6 +35,7 @@ import { PerformanceFlowGuide } from "./PerformanceFlowGuide";
 import { saveAssessmentRecord } from "./assessmentPersistence.mjs";
 import { AssessmentEntryList } from "./AssessmentEntryList";
 import { PerformanceOrganization } from "./PerformanceOrganization";
+import { PerformanceSectionReports } from "./PerformanceSectionReports";
 import { PerformancePrivacyPanel } from "./PerformancePrivacyPanel";
 import { usePerformancePrivacy } from "./usePerformancePrivacy";
 import { watchPermissionRefresh } from "@/lib/permissionRefresh.mjs";
@@ -72,6 +73,7 @@ const NAV = [
   { id: "policy", label: "系統說明與政策", icon: BookOpen },
   { id: "self", label: "員工自評", icon: UserRound },
   { id: "manager", label: "主管評分（主管專用）", icon: ClipboardCheck },
+  { id: "section-reports", label: "課長彙整與部長審閱", icon: FileText },
   { id: "records", label: "考核紀錄", icon: FileText },
   { id: "organization", label: "組織架構", icon: Network },
 ];
@@ -276,7 +278,7 @@ export function PerformanceAppraisalPage() {
   // A manually crafted URL must not expose the manager workflow to employees
   // who only have view access. Keep them on their own self-assessment screen.
   const tab =
-    ["manager", "organization"].includes(requestedTab) && !canManagePerformance
+    ["manager", "organization", "section-reports"].includes(requestedTab) && !canManagePerformance
       ? "self"
       : requestedTab === "records" && canManagePerformance
         ? "manager"
@@ -674,7 +676,7 @@ export function PerformanceAppraisalPage() {
         </div>
         <nav aria-label="績效考核導覽">
           {NAV.filter((item) =>
-            ["manager", "organization"].includes(item.id)
+            ["manager", "organization", "section-reports"].includes(item.id)
               ? canManagePerformance
               : item.id !== "records" || !canManagePerformance,
           ).map(
@@ -743,7 +745,8 @@ export function PerformanceAppraisalPage() {
             <AssessmentPolicy />
           </>
         )}
-        {canManagePerformance && !demo && tab === "manager" && <PerformancePrivacyPanel privacy={privacy} userId={userId} configure={false} />}
+        {canManagePerformance && !demo && ["manager", "section-reports"].includes(tab) && <PerformancePrivacyPanel privacy={privacy} userId={userId} configure={false} />}
+        {tab === "section-reports" && canManagePerformance && <PerformanceSectionReports key={`${userId}:${cycle}:${privacyRevision}`} userId={userId} cycle={cycle} ready={privacy.ready && !demo} />}
         {tab === "organization" && canManagePerformance && <PerformanceOrganization reviews={privacy.ready ? reviews : []} cycle={cycle} onChanged={() => { void load(); }} />}
         {canManagePerformance && !demo && tab === "organization" && <div className="rd2-org-privacy-after"><PerformancePrivacyPanel privacy={privacy} userId={userId} configure /></div>}
         {tab === "manager" && canManagePerformance && (
@@ -753,7 +756,7 @@ export function PerformanceAppraisalPage() {
               <span>
                 {canManageAll
                   ? "可處理已授權的考核；受密碼保護的資料須先解鎖。"
-                  : "部長可查看所屬各課，課長可查看課內成員；受保護資料須先解鎖。"}
+                  : "課長只評核直屬職員，部長只評核直屬課長；部長代理的課由部長直接處理。課長完成後至「課長彙整與部長審閱」送交彙整，受保護資料須先解鎖。"}
               </span>
             </div>
             <div

@@ -140,7 +140,7 @@ try {
           "select count(*)::int as total from supabase_migrations.schema_migrations",
         )
       )[0].total,
-      4,
+      5,
       "deployment transaction verifies content and records all migration sources",
     );
   } else {
@@ -149,12 +149,17 @@ try {
     );
     await db.exec(await migration("20260903130000_protect_performance_groups"));
   }
-  await db.exec(
-    await migration("20260903160000_remove_performance_organization_members"),
-  );
-  await db.exec(
-    await migration("20260903180000_allow_acting_performance_directors"),
-  );
+  if (!process.argv[3]) {
+    await db.exec(
+      await migration("20260903160000_remove_performance_organization_members"),
+    );
+    await db.exec(
+      await migration("20260903180000_allow_acting_performance_directors"),
+    );
+    await db.exec(
+      await migration("20260903190000_add_direct_performance_review_workflow"),
+    );
+  }
   check(
     (
       await query(
@@ -261,8 +266,8 @@ try {
   await actor(2);
   check(
     await visible(),
-    ["a", "b", "chief", "legacy"],
-    "director sees both sections, not another department",
+    ["chief"],
+    "director sees the direct chief, never the chief's employees",
   );
   await actor(3);
   check(
@@ -322,11 +327,7 @@ try {
     "administrator cannot delete locked record",
   );
   await actor(2);
-  check(
-    await visible(),
-    ["b"],
-    "department director also needs section password",
-  );
+  check(await visible(), [], "department director also needs section password");
   await actor(5);
   check(
     await visible(),
@@ -405,6 +406,23 @@ try {
     "knowing password never grants unrelated organizational access",
   );
   await actor(2);
+  await query("select workspace.unlock_performance_group($1,'secret-123')", [
+    id(3),
+  ]);
+  check(
+    await visible(),
+    ["chief"],
+    "unlocked director still cannot read grandchild employee assessments",
+  );
+  check(
+    (
+      await query(
+        "update workspace.performance_reviews set manager_feedback='skip chief' where id='a' returning id",
+      )
+    ).length,
+    0,
+    "director cannot edit a chief's employee assessment",
+  );
   await query(
     "select workspace.set_performance_group_password('director-123')",
   );
@@ -785,6 +803,180 @@ try {
     { reviewer_name: "user8", manager_feedback: "director evaluation" },
     "after unlock the new chief receives the open review without losing evaluation content",
   );
+  // The section summary is a separate chief-authored document, without raw
+  // employee assessment fields. Exercise the complete return/resubmit cycle.
+  const reports = async () =>
+    (
+      await query(
+        "select workspace.get_performance_section_reports('2026-q3') as reports",
+      )
+    )[0].reports;
+  const reportSave = (content, submit, version = null) =>
+    query(
+      "select workspace.save_performance_section_report('2026-q3',$1,$2,$3) as id",
+      [content, submit, version],
+    );
+  await actor(9);
+  await assert.rejects(() => reportSave("forged", true));
+  checks++;
+  console.log("PASS employee cannot submit a chief summary");
+  await actor(7);
+  await assert.rejects(() => reportSave("forged", true));
+  checks++;
+  console.log("PASS director cannot impersonate a chief's summary");
+  await actor(8);
+  await query("select workspace.set_performance_group_password('summary-123')");
+  const reportId = (await reportSave("本課成果與改善計畫", false))[0].id;
+  const draftReport = (await reports())[0];
+  check(
+    draftReport.chief_id,
+    id(8),
+    "summary owner is derived from the authenticated chief",
+  );
+  check(
+    draftReport.director_id,
+    id(7),
+    "summary is routed to the actual direct department director",
+  );
+  await assert.rejects(() => reportSave("duplicate", false));
+  checks++;
+  console.log(
+    "PASS a duplicate or stale summary cannot overwrite an existing draft",
+  );
+  await actor(7);
+  check(await reports(), [], "director cannot read an unsubmitted chief draft");
+  await actor(8);
+  await reportSave("本課成果與改善計畫", true, draftReport.updated_at);
+  let submittedReport = (await reports())[0];
+  check(
+    submittedReport.status,
+    "submitted",
+    "chief can submit the summary for director review",
+  );
+  check(
+    JSON.stringify(submittedReport).includes("private evidence"),
+    false,
+    "summary does not embed original employee assessment content",
+  );
+  await assert.rejects(() =>
+    reportSave("rewrite sent", false, submittedReport.updated_at),
+  );
+  checks++;
+  console.log("PASS sent summary is locked until the director returns it");
+  await actor(9);
+  check(await reports(), [], "employee cannot read chief summaries");
+  await actor(4);
+  check(
+    await reports(),
+    [],
+    "sibling chief cannot read another chief's summary",
+  );
+  await actor(1);
+  check(
+    await reports(),
+    [],
+    "administrator cannot bypass the chief's summary password",
+  );
+  await rejects(
+    "update workspace.performance_section_reports set status='approved' where id=$1",
+    [reportId],
+    "client cannot directly mutate summary workflow fields",
+  );
+  await actor(7);
+  check(
+    await reports(),
+    [],
+    "director must unlock a protected submitted summary",
+  );
+  await query("select workspace.unlock_performance_group($1,'summary-123')", [
+    id(8),
+  ]);
+  check(
+    (await reports()).length,
+    1,
+    "director receives the chief summary after unlocking",
+  );
+  check(
+    (await visible()).includes("c"),
+    false,
+    "summary password does not expose the underlying employee assessment to the director",
+  );
+  const reportReview = (action, feedback, version) =>
+    query("select workspace.review_performance_section_report($1,$2,$3,$4)", [
+      reportId,
+      action,
+      feedback,
+      version,
+    ]);
+  await rejects(
+    "select workspace.review_performance_section_report($1,'return','',$2)",
+    [reportId, submittedReport.updated_at],
+    "returning a summary requires feedback",
+  );
+  await reportReview("return", "請補充改善時程", submittedReport.updated_at);
+  await actor(8);
+  const returnedReport = (await reports())[0];
+  check(
+    [returnedReport.status, returnedReport.director_feedback],
+    ["returned", "請補充改善時程"],
+    "chief receives the director's return and feedback",
+  );
+  await assert.rejects(() =>
+    reportSave("stale", true, submittedReport.updated_at),
+  );
+  checks++;
+  console.log("PASS old browser version cannot overwrite returned feedback");
+  await reportSave("已補充改善時程", true, returnedReport.updated_at);
+  submittedReport = (await reports())[0];
+  await actor(1);
+  await query("select workspace.unlock_performance_group($1,'summary-123')", [
+    id(8),
+  ]);
+  check(
+    (await reports()).length,
+    1,
+    "unlocked administrator may inspect the summary under existing policy",
+  );
+  await assert.rejects(() =>
+    reportReview("approve", "", submittedReport.updated_at),
+  );
+  checks++;
+  console.log(
+    "PASS administrator cannot impersonate the assigned director's approval",
+  );
+  await actor(7);
+  await reportReview("approve", "確認本課成果", submittedReport.updated_at);
+  check(
+    (await reports())[0].status,
+    "approved",
+    "director confirms the resubmitted summary",
+  );
+  await actor(8);
+  const approvedReport = (await reports())[0];
+  await assert.rejects(() =>
+    reportSave("rewrite approved", false, approvedReport.updated_at),
+  );
+  checks++;
+  console.log(
+    "PASS completed summary cannot be silently rewritten by its chief",
+  );
+  await actor(1);
+  await save(8, 2, "section_chief", "", "產品課");
+  await save(8, 7, "section_chief", "", "產品課");
+  await actor(7);
+  check(
+    await reports(),
+    [],
+    "reparenting a chief retains intermediate department password protection",
+  );
+  await query("select workspace.unlock_performance_group($1,'director-123')", [
+    id(2),
+  ]);
+  check(
+    (await reports())[0].summary,
+    "已補充改善時程",
+    "unlocking retained scopes restores the unchanged approved summary",
+  );
   await root();
   await query(
     "update workspace.system_users set status='inactive' where id=$1",
@@ -792,6 +984,11 @@ try {
   );
   await actor(1);
   check(await visible(), [], "inactive administrator cannot read records");
+  check(
+    await reports(),
+    [],
+    "inactive administrator cannot read section summaries",
+  );
   console.log(
     `\n${checks} database checks passed; migrations executed against PostgreSQL with real RLS and pgcrypto.`,
   );
