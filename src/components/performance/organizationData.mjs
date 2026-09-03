@@ -12,6 +12,29 @@ export const availableOrganizationMembers = (members) =>
       member.account_status === "active" && !isOrganizationAssigned(member),
   );
 
+// Acting sections are presentation groups, not duplicate employee accounts.
+// The saved manager_id remains the director for permissions and review routing.
+export function organizationActingSections(parent, reports) {
+  if (parent.org_level !== "director") return [];
+  const sections = new Map();
+  for (const member of reports) {
+    if (
+      member.org_level !== "member" ||
+      member.manager_id !== parent.employee_id
+    )
+      continue;
+    const section = member.section.trim();
+    if (!sections.has(section))
+      sections.set(section, {
+        key: JSON.stringify(["acting-section", parent.employee_id, section]),
+        section,
+        members: [],
+      });
+    sections.get(section).members.push(member);
+  }
+  return [...sections.values()];
+}
+
 export function findOrganizationReview(member, reviews, cycle) {
   const candidates = reviews.filter((review) => review.cycleId === cycle);
   return (
