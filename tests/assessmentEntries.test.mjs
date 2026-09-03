@@ -17,7 +17,73 @@ import {
   organizationTreeMembers,
   validateOrganizationManager,
   availableOrganizationMembers,
+  organizationActingSections,
 } from "../src/components/performance/organizationData.mjs";
+
+test("acting sections group direct members by section without duplicating classified accounts", () => {
+  const director = {
+    employee_id: "director",
+    manager_id: null,
+    org_level: "director",
+  };
+  const reports = [
+    {
+      employee_id: "chief",
+      manager_id: "director",
+      org_level: "section_chief",
+      section: "韌體課",
+    },
+    {
+      employee_id: "a",
+      manager_id: "director",
+      org_level: "member",
+      section: "硬體課",
+    },
+    {
+      employee_id: "b",
+      manager_id: "director",
+      org_level: "member",
+      section: "硬體課",
+    },
+    {
+      employee_id: "c",
+      manager_id: "director",
+      org_level: "member",
+      section: "測試課",
+    },
+    {
+      employee_id: "other",
+      manager_id: "chief",
+      org_level: "member",
+      section: "韌體課",
+    },
+  ];
+  const before = structuredClone(reports);
+  const groups = organizationActingSections(director, reports);
+  assert.deepEqual(
+    groups.map((g) => [g.section, g.members.map((m) => m.employee_id)]),
+    [
+      ["硬體課", ["a", "b"]],
+      ["測試課", ["c"]],
+    ],
+  );
+  assert.deepEqual(reports, before);
+  assert.deepEqual(organizationActingSections(reports[0], reports), []);
+  const filtered = organizationTreeMembers(
+    [director, ...reports],
+    new Set(["b"]),
+  );
+  assert.deepEqual(
+    filtered.map((m) => m.employee_id),
+    ["director", "b"],
+  );
+  assert.deepEqual(
+    organizationActingSections(director, filtered).map((g) =>
+      g.members.map((m) => m.employee_id),
+    ),
+    [["b"]],
+  );
+});
 
 test("organization dropdown excludes every classified level and restores only removed active accounts", () => {
   const roster = [

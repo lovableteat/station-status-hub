@@ -9,7 +9,11 @@ import {
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { OrganizationMember } from "./PerformanceOrganization";
+import type {
+  OrganizationMember,
+  OrganizationAddOptions,
+} from "./PerformanceOrganization";
+import { organizationActingSections } from "./organizationData.mjs";
 
 const LEVELS = { director: "部長", section_chief: "課長", member: "一般同仁" };
 type Props = {
@@ -24,7 +28,10 @@ type Props = {
   onInspect: (member: OrganizationMember) => void;
   onEdit: (member: OrganizationMember) => void;
   onRemove: (member: OrganizationMember) => void;
-  onAdd: (parent?: OrganizationMember) => void;
+  onAdd: (
+    parent?: OrganizationMember,
+    options?: OrganizationAddOptions,
+  ) => void;
 };
 
 export function PerformanceOrganizationTree({
@@ -86,6 +93,11 @@ export function PerformanceOrganizationTree({
   ): ReactNode => {
     if (ancestors.has(member.employee_id)) return null;
     const reports = children.get(member.employee_id) || [];
+    const actingSections = organizationActingSections(member, reports);
+    const regularReports =
+      member.org_level === "director"
+        ? reports.filter((child) => child.org_level !== "member")
+        : reports;
     const open = filtering || !collapsed.has(member.employee_id);
     const parentMissing = member.org_level !== "director" && !member.manager_id;
     const addLabel = member.org_level === "director" ? "新增課長" : "新增同仁";
@@ -194,12 +206,110 @@ export function PerformanceOrganizationTree({
               {open ? "收合" : `${reports.length} 位直屬`}
             </button>
           )}
+          {administrator &&
+            member.org_level === "director" &&
+            member.is_manager &&
+            member.account_status === "active" && (
+              <button
+                type="button"
+                className="rd2-orgchart-add"
+                disabled={!canAdd}
+                aria-label={`在 ${member.display_name} 代理的課新增同仁`}
+                onClick={() => {
+                  setCollapsed((previous) => {
+                    const next = new Set(previous);
+                    next.delete(member.employee_id);
+                    return next;
+                  });
+                  onAdd(member, { org_level: "member" });
+                }}
+              >
+                <Plus />
+                新增代理課同仁
+              </button>
+            )}
         </article>
         {reports.length > 0 && open && (
           <ul>
-            {reports.map((child) =>
+            {regularReports.map((child) =>
               renderNode(child, new Set([...ancestors, member.employee_id])),
             )}
+            {actingSections.map((group) => {
+              const expanded = filtering || !collapsed.has(group.key);
+              return (
+                <li key={group.key}>
+                  <article
+                    className="rd2-orgchart-node rd2-orgchart-acting"
+                    data-level="section_chief"
+                    aria-label={`${group.section || "未設定課別"} · ${member.display_name} 部長代理`}
+                  >
+                    <div className="rd2-orgchart-node-top">
+                      <span className="rd2-orgchart-level">部長代理</span>
+                      <span className="rd2-orgchart-unit">
+                        {group.section || "未設定課別"}
+                      </span>
+                    </div>
+                    <div className="rd2-orgchart-person">
+                      <span className="rd2-orgchart-avatar" aria-hidden="true">
+                        <Users />
+                      </span>
+                      <div>
+                        <strong>{member.display_name}</strong>
+                        <span>代理課長 · {group.members.length} 位同仁</span>
+                      </div>
+                    </div>
+                    <p className="rd2-orgchart-note">
+                      {member.department} · 考核由部長負責
+                    </p>
+                    {administrator &&
+                      member.is_manager &&
+                      member.account_status === "active" && (
+                        <button
+                          type="button"
+                          className="rd2-orgchart-add"
+                          disabled={!canAdd}
+                          aria-label={`在 ${group.section || "代理課"} 新增同仁`}
+                          onClick={() => {
+                            setCollapsed((previous) => {
+                              const next = new Set(previous);
+                              next.delete(group.key);
+                              return next;
+                            });
+                            onAdd(member, {
+                              org_level: "member",
+                              section: group.section,
+                            });
+                          }}
+                        >
+                          <Plus />
+                          新增同仁
+                        </button>
+                      )}
+                    <button
+                      type="button"
+                      className="rd2-orgchart-branch-toggle"
+                      disabled={filtering}
+                      aria-expanded={expanded}
+                      onClick={() => toggle(group.key)}
+                      aria-label={`${expanded ? "收合" : "展開"} ${group.section || "代理課"} 的同仁`}
+                    >
+                      {expanded ? <ChevronUp /> : <ChevronDown />}
+                      {expanded ? "收合" : `${group.members.length} 位同仁`}
+                    </button>
+                  </article>
+                  {expanded && (
+                    <ul>
+                      {group.members.map((child) =>
+                        renderNode(
+                          child,
+                          new Set([...ancestors, member.employee_id]),
+                        ),
+                      )}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </li>

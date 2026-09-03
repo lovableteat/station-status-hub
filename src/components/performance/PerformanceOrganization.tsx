@@ -48,6 +48,10 @@ export interface OrganizationMember {
   performance_role: "none" | "employee" | "manager";
   updated_at: string | null;
 }
+export interface OrganizationAddOptions {
+  org_level?: OrganizationMember["org_level"];
+  section?: string;
+}
 // New private RPCs are not yet present in the generated database types.
 const orgDb = supabase as unknown as {
   rpc: (
@@ -220,20 +224,27 @@ export function PerformanceOrganization({
       performanceSearch: member.display_name,
       performanceReview: null,
     });
-  const addMember = (parent?: OrganizationMember) => {
+  const addMember = (
+    parent?: OrganizationMember,
+    options: OrganizationAddOptions = {},
+  ) => {
     if (!administrator || loading || error || !availableMembers.length) return;
-    const org_level = parent
-      ? parent.org_level === "director"
-        ? "section_chief"
-        : "member"
-      : "director";
+    const org_level =
+      options.org_level ||
+      (parent
+        ? parent.org_level === "director"
+          ? "section_chief"
+          : "member"
+        : "director");
     setAdding(true);
     setEditing({
       ...blankMember(),
       org_level,
       manager_id: parent?.employee_id || null,
       department: parent?.department || "",
-      section: org_level === "member" ? parent?.section || "" : "",
+      section:
+        options.section ??
+        (org_level === "member" ? parent?.section || "" : ""),
       performance_role: org_level === "member" ? "employee" : "manager",
     });
     setSaveError("");
@@ -269,6 +280,14 @@ export function PerformanceOrganization({
       editing.employee_id,
       editing.manager_id,
     );
+    if (
+      editing.org_level === "member" &&
+      byId.get(editing.manager_id || "")?.org_level === "director" &&
+      !editing.section.trim()
+    ) {
+      setSaveError("請填寫由部長代理的課名稱。");
+      return;
+    }
     if (validation) {
       setSaveError(validation);
       return;
@@ -373,7 +392,7 @@ export function PerformanceOrganization({
         <div>
           <h2>組織架構樹狀圖</h2>
           <p>
-            部長 → 課長 → 一般成員；一個部可包含多個課。
+            部長 → 課長 → 一般成員；沒有課長時，可由部長代理並直接管理該課同仁。
             {administrator
               ? "從全站帳號設定績效層級與歸屬。"
               : "人員歸屬由管理員設定。"}
@@ -767,8 +786,9 @@ export function PerformanceOrganization({
                         manager_id: parent?.employee_id || null,
                         department: parent?.department || editing.department,
                         section:
-                          editing.org_level === "member"
-                            ? parent?.section || ""
+                          editing.org_level === "member" &&
+                          parent?.org_level === "section_chief"
+                            ? parent.section
                             : editing.section,
                       });
                     }}
@@ -783,15 +803,19 @@ export function PerformanceOrganization({
                         (m) =>
                           editing.org_level !== "director" &&
                           m.employee_id !== editing.employee_id &&
-                          m.org_level ===
-                            (editing.org_level === "section_chief"
-                              ? "director"
-                              : "section_chief"),
+                          (editing.org_level === "section_chief"
+                            ? m.org_level === "director"
+                            : m.org_level === "section_chief" ||
+                              m.org_level === "director"),
                       )
                       .map((m) => (
                         <option key={m.employee_id} value={m.employee_id}>
                           {m.display_name} · {m.department}
                           {m.section ? `／${m.section}` : ""}
+                          {editing.org_level === "member" &&
+                          m.org_level === "director"
+                            ? "（部長代理）"
+                            : ""}
                         </option>
                       ))}
                   </select>
@@ -815,16 +839,29 @@ export function PerformanceOrganization({
                     <Input
                       id="org-edit-section"
                       maxLength={100}
-                      required={editing.org_level === "section_chief"}
+                      required={
+                        editing.org_level === "section_chief" ||
+                        byId.get(editing.manager_id || "")?.org_level ===
+                          "director"
+                      }
                       disabled={
                         saving ||
-                        (editing.org_level === "member" && !!editing.manager_id)
+                        (editing.org_level === "member" &&
+                          byId.get(editing.manager_id || "")?.org_level ===
+                            "section_chief")
                       }
                       value={editing.section}
                       onChange={(e) =>
                         setEditing({ ...editing, section: e.target.value })
                       }
                     />
+                    {editing.org_level === "member" &&
+                      byId.get(editing.manager_id || "")?.org_level ===
+                        "director" && (
+                        <p className="rd2-hint">
+                          此課由部長代理。填寫課名稱後，同課同仁會集中顯示在「部長代理」節點下，考核交由該部長負責。
+                        </p>
+                      )}
                   </Field>
                 )}
                 <Field>
