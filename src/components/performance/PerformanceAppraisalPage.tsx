@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   Download,
   FileText,
+  Network,
   Plus,
   RefreshCw,
   Trash2,
@@ -32,6 +33,12 @@ import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { PerformanceFlowGuide } from "./PerformanceFlowGuide";
 import { saveAssessmentRecord } from "./assessmentPersistence.mjs";
+import { AssessmentEntryList } from "./AssessmentEntryList";
+import { PerformanceOrganization } from "./PerformanceOrganization";
+import { PerformancePrivacyPanel } from "./PerformancePrivacyPanel";
+import { usePerformancePrivacy } from "./usePerformancePrivacy";
+import { watchPermissionRefresh } from "@/lib/permissionRefresh.mjs";
+import { ACCOUNTABILITY_ROLES, getAccountabilityQuestions, getAccountabilityRole } from "./rd2Standards.mjs";
 import {
   ACCOUNTABILITY_QUESTIONS,
   CATEGORIES,
@@ -66,6 +73,7 @@ const NAV = [
   { id: "self", label: "員工自評", icon: UserRound },
   { id: "manager", label: "主管評分（主管專用）", icon: ClipboardCheck },
   { id: "records", label: "考核紀錄", icon: FileText },
+  { id: "organization", label: "組織架構", icon: Network },
 ];
 const LEGACY_CACHE = "station-status-hub:performance-reviews:v1";
 const matchesUser = (
@@ -158,14 +166,12 @@ function ReviewDetail({
       <h3>{review.employeeName} · 考核內容</h3>
       <p className="rd2-hint">
         工號 {self.employeeNumber || manager.employeeNumber || "未填寫"} ·{" "}
-        {review.department} · {review.role}
+        {review.department} · {review.role} · 職等 {self.grade || "未填寫"}
       </p>
       {CATEGORIES.map((category) => (
         <section key={category}>
           <h4>{category}</h4>
-          <p className="rd2-prewrap">
-            {self.sections[category].text || "尚未填寫"}
-          </p>
+          <AssessmentEntryList category={category} section={self.sections[category]} readonly onChange={() => {}} />
           <div className="rd2-images">
             {self.sections[category].images.map((image) => (
               <a key={image.id} href={image.dataUrl} download={image.name}>
@@ -205,7 +211,9 @@ function ReviewDetail({
         <>
           <section>
             <h4>主管當責評分</h4>
-            {ACCOUNTABILITY_QUESTIONS.map((question) => (
+            {!manager.standardsVersion && <p className="rd2-hint">既有評分保留原題號；舊版兩題不會換算為新版七題評分。</p>}
+            <p>{ACCOUNTABILITY_ROLES.find((role) => role.value === manager.roleGroup)?.label || "既有評分"}</p>
+            {(manager.roleGroup ? getAccountabilityQuestions(manager.roleGroup) : ACCOUNTABILITY_QUESTIONS.filter((question) => manager.answers[question.id] != null)).map((question) => (
               <p key={question.id}>
                 {question.text}：
                 <strong>
@@ -252,13 +260,23 @@ export function PerformanceAppraisalPage() {
   const [editorRevision, setEditorRevision] = useState(0);
   const savedId = useRef<{ key: string; id: string } | null>(null);
   const requestNumber = useRef(0);
+  const accessGeneration = useRef(0);
+  const [privacyRevision, setPrivacyRevision] = useState(0);
+  const privacy = usePerformancePrivacy(canManagePerformance && !demo, userId, () => {
+    ++requestNumber.current;
+    ++accessGeneration.current;
+    setReviews([]); setDetailId(null);
+    setPendingDelete(null);
+    setEditorRevision((revision) => revision + 1);
+    setPrivacyRevision((revision) => revision + 1);
+  });
   const requestedTab = NAV.some((item) => item.id === params.get("performanceTab"))
     ? params.get("performanceTab")!
     : "policy";
   // A manually crafted URL must not expose the manager workflow to employees
   // who only have view access. Keep them on their own self-assessment screen.
   const tab =
-    requestedTab === "manager" && !canManagePerformance
+    ["manager", "organization"].includes(requestedTab) && !canManagePerformance
       ? "self"
       : requestedTab === "records" && canManagePerformance
         ? "manager"
@@ -296,13 +314,12 @@ export function PerformanceAppraisalPage() {
       },
       { replace: true },
     );
-  const load = useCallback(async () => {
+  const load = useCallback(async (background = false) => {
     const request = ++requestNumber.current;
-    setLoading(true);
+    if (!background) setLoading(true);
     setLoadError("");
-    setReviews(
-      readCache(cacheKey, demo, user, canManagePerformance, canManageAll),
-    );
+    if (!background) setReviews(demo ? readCache(cacheKey, true, user, canManagePerformance, canManageAll) : []);
+    if (!demo && canManagePerformance && !privacy.ready) { setReviews([]); setLoading(false); return; }
     if (demo) {
       setLoading(false);
       return;
@@ -316,63 +333,63 @@ export function PerformanceAppraisalPage() {
       // client-side identity filter here: older records may have been created
       // with the account username instead of the auth UUID. Filtering by one
       // representation would hide that record and make the editor look new.
-      // Managers can request the rows assigned to them; administrators retain
-      // the full review workspace.
+      // RLS applies organizational scope and password checks to every manager,
+      // including application administrators.
       const [{ data, error }, employeeResult] = await Promise.all([
         reviewsQuery,
         canManagePerformance
-          ? performanceDb
-              .from("system_users")
-              .select("id, display_name, username")
-              .eq("status", "active")
-              .order("display_name")
+          ? performanceDb.rpc("get_performance_organization")
           : Promise.resolve({ data: [] }),
       ]);
       if (request !== requestNumber.current) return;
       if (error) throw error;
+      if (employeeResult.error) throw employeeResult.error;
       const rows = (data || []).map(
         normalizePerformanceReview,
       ) as PerformanceReview[];
-      const accessible = rows.filter(
-        (review) =>
-          matchesUser(review, user) ||
-          (canManagePerformance &&
-            (canManageAll || matchesReviewer(review, user))),
-      );
+      // RLS supplies rows authorized by both hierarchy and password grants.
+      const accessible = rows.filter((review) => canManagePerformance || matchesUser(review, user));
       setReviews(accessible);
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify(accessible));
-      } catch {
-        /* The server remains the source of truth. */
-      }
+
       setEmployees(
         (employeeResult.data || []).map(
           (employee: {
-            id: string;
+            employee_id: string;
             display_name: string;
             username: string;
+            org_level: string;
           }) => ({
-            id: employee.id,
+            id: employee.employee_id,
             label: employee.display_name || employee.username,
+            orgLevel: employee.org_level,
           }),
         ),
       );
     } catch {
-      if (request === requestNumber.current)
-        setLoadError(
-          "無法讀取工作區考核。以下僅為本機快取；請重新整理後再儲存，避免覆蓋較新的內容。",
-        );
+      if (request === requestNumber.current) {
+        setReviews([]); setDetailId(null);
+        setLoadError("無法讀取工作區考核，請重新整理。考核內容會在權限確認後顯示。");
+      }
     } finally {
       if (request === requestNumber.current) setLoading(false);
     }
-  }, [cacheKey, demo, user, canManagePerformance, canManageAll]);
+  }, [cacheKey, demo, user, canManagePerformance, canManageAll, privacy.ready]);
   useEffect(() => {
     void load();
-    const request = requestNumber.current;
     return () => {
-      requestNumber.current = request + 1;
+      // Cancel every outstanding request, including later background refreshes.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ++requestNumber.current;
     };
-  }, [load]);
+  }, [load, privacyRevision]);
+  useEffect(() => {
+    if (demo) return;
+    try {
+      localStorage.removeItem(LEGACY_CACHE);
+      Object.keys(localStorage).filter((key) => key.startsWith("station-status-hub:performance-reviews:v2:cloud:") || (key.startsWith("station-status-hub:rd2-draft:") && key.includes(":manager:"))).forEach((key) => localStorage.removeItem(key));
+    } catch { /* Cloud records and manager drafts are never restored offline. */ }
+    return watchPermissionRefresh({ windowTarget: window, documentTarget: document, refresh: () => void load(true) });
+  }, [demo, load]);
   const editorReview =
     (() => {
       // An employee has one editable record per cycle. Opening the self tab
@@ -418,7 +435,7 @@ export function PerformanceAppraisalPage() {
     };
 
     const managedReviews = reviews.filter(
-      (review) => canManageAll || matchesReviewer(review, user),
+      (review) => canManageAll || !matchesUser(review, user),
     );
     const managedEmployeeIds = new Set(
       managedReviews.map((review) => review.employeeId).filter(Boolean),
@@ -449,7 +466,7 @@ export function PerformanceAppraisalPage() {
       reviews.filter(
         (review) =>
           review.cycleId === cycle &&
-          (tab !== "manager" || canManageAll || matchesReviewer(review, user)) &&
+          (tab !== "manager" || canManageAll || !matchesUser(review, user)) &&
           (!status || review.status === status) &&
           (scope !== "mine" || matchesUser(review, user)) &&
           (!query.trim() ||
@@ -520,19 +537,21 @@ export function PerformanceAppraisalPage() {
   const [deleting, setDeleting] = useState(false);
 
   const removeReview = async (review: PerformanceReview) => {
+    const accessVersion = accessGeneration.current;
     setDeleting(true);
     try {
       if (!demo) {
-        const { error } = await performanceDb
+        const { data, error } = await performanceDb
           .from("performance_reviews")
           .delete()
-          .eq("id", review.id);
-        if (error) throw error;
+          .eq("id", review.id).select("id").single();
+        if (error || data?.id !== review.id) throw error || new Error("Deletion was not confirmed");
       }
+      if (accessVersion !== accessGeneration.current) return;
       const nextRows = reviews.filter((row) => row.id !== review.id);
-      setReviews(nextRows);
+      setReviews((current) => current.filter((row) => row.id !== review.id));
       try {
-        localStorage.setItem(cacheKey, JSON.stringify(nextRows));
+        if (demo) localStorage.setItem(cacheKey, JSON.stringify(nextRows));
       } catch {
         /* cache is best-effort */
       }
@@ -555,6 +574,7 @@ export function PerformanceAppraisalPage() {
   };
 
   const save = async (form: AssessmentForm, action: AssessmentAction) => {
+    const accessVersion = accessGeneration.current;
     if (!canEdit || loading || loadError)
       throw new Error("目前無法送出，請確認管理權限與工作區連線。");
     const mode = tab as AssessmentMode;
@@ -570,9 +590,9 @@ export function PerformanceAppraisalPage() {
     if (
       mode === "manager" &&
       !canManageAll &&
-      (!previous || !matchesReviewer(previous, user))
+      (!previous || matchesUser(previous, user))
     )
-      throw new Error("只能評分考核人設定為你的直屬同仁，請先從直屬同仁紀錄選擇對象。");
+      throw new Error("請先從你有權限查看的下屬考核中選擇對象。");
     if (previous?.status === "approved" && mode === "self")
       throw new Error("此考核已完成，請由主管處理。");
     if (!effectiveSavedId)
@@ -597,18 +617,13 @@ export function PerformanceAppraisalPage() {
         nextReview,
         previous,
       )) as PerformanceReview;
+    if (accessVersion !== accessGeneration.current) throw new Error("資料存取權限已更新，請重新開啟考核確認儲存結果。");
     const nextRows = [
       confirmed,
       ...reviews.filter((review) => review.id !== confirmed.id),
     ];
     if (demo) localStorage.setItem(cacheKey, JSON.stringify(nextRows));
-    else {
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify(nextRows));
-      } catch {
-        /* Already confirmed by the server. */
-      }
-    }
+
     setReviews(nextRows);
     toast({
       title:
@@ -644,6 +659,9 @@ export function PerformanceAppraisalPage() {
     editorReview,
     tab === "self" ? user || {} : {},
   ) as AssessmentForm;
+  const assessedEmployee = employees.find((employee) => employee.id === initial.employeeId)
+    || employees.find((employee) => employee.label === initial.employeeName);
+  if (tab === "manager" && assessedEmployee?.orgLevel) initial.manager.roleGroup = getAccountabilityRole(assessedEmployee.orgLevel);
   if (!editorReview)
     initial.dueDate = `${cycle.slice(0, 4)}-${cycle.endsWith("q2") ? "06-30" : "09-30"}`;
 
@@ -656,7 +674,7 @@ export function PerformanceAppraisalPage() {
         </div>
         <nav aria-label="績效考核導覽">
           {NAV.filter((item) =>
-            item.id === "manager"
+            ["manager", "organization"].includes(item.id)
               ? canManagePerformance
               : item.id !== "records" || !canManagePerformance,
           ).map(
@@ -725,14 +743,16 @@ export function PerformanceAppraisalPage() {
             <AssessmentPolicy />
           </>
         )}
+        {canManagePerformance && !demo && (tab === "organization" || tab === "manager") && <PerformancePrivacyPanel privacy={privacy} userId={userId} configure={tab === "organization"} />}
+        {tab === "organization" && canManagePerformance && <PerformanceOrganization reviews={privacy.ready ? reviews : []} cycle={cycle} onChanged={() => { void load(); }} />}
         {tab === "manager" && canManagePerformance && (
           <>
             <div className="rd2-manager-only-notice" role="note">
               <strong>{canManageAll ? "績效管理者檢視" : "主管專用"}</strong>
               <span>
                 {canManageAll
-                  ? "可檢視全部考核並處理主管評分。"
-                  : "只顯示考核人設定為你的直屬同仁；一般員工不會看到這個分頁。"}
+                  ? "可處理已授權的考核；受密碼保護的資料須先解鎖。"
+                  : "部長可查看所屬各課，課長可查看課內成員；受保護資料須先解鎖。"}
               </span>
             </div>
             <div
@@ -743,10 +763,10 @@ export function PerformanceAppraisalPage() {
               {[
                 {
                   id: "records" as const,
-                  label: canManageAll ? "全部考核紀錄" : "直屬同仁紀錄",
+                  label: canManageAll ? "可查看的考核紀錄" : "所屬同仁紀錄",
                   hint: canManageAll
                     ? "查看所有員工的送件狀態並挑選評分對象"
-                    : "只查看你負責的直屬同仁並挑選評分對象",
+                    : "只查看你負責的所屬同仁並挑選評分對象",
                 },
                 {
                   id: "score" as const,
@@ -774,7 +794,7 @@ export function PerformanceAppraisalPage() {
           <>
             {tab === "manager" && !canManagePerformance ? (
               <p role="alert">需要由管理員指定為績效主管才能進行主管評分。</p>
-            ) : loading ? (
+            ) : loading || (canManagePerformance && !privacy.ready && !demo) ? (
               <p role="status">正在讀取考核…</p>
             ) : editorId && !editorReview ? (
               <p role="alert">
@@ -802,13 +822,13 @@ export function PerformanceAppraisalPage() {
                     <option value="">
                       {canManageAll
                         ? "＋ 建立新的一筆（員工還沒自評）"
-                        : "請選擇直屬同仁的考核"}
+                        : "請選擇所屬同仁的考核"}
                     </option>
                     {reviews
                       .filter(
                         (review) =>
                           review.cycleId === cycle &&
-                          (canManageAll || matchesReviewer(review, user)),
+                          (canManageAll || !matchesUser(review, user)),
                       )
                       .map((review) => (
                         <option key={review.id} value={review.id}>
@@ -819,8 +839,8 @@ export function PerformanceAppraisalPage() {
                   </select>
                   <p className="rd2-hint rd2-editor-context-hint">
                     {canManageAll
-                      ? "從全部考核紀錄選擇對象後，即可查看自評並完成主管評分。"
-                      : "只能選擇考核人設定為你的直屬同仁；一般員工不會看到主管評分內容。"}
+                      ? "從可查看的考核紀錄選擇對象後，即可查看自評並完成主管評分。"
+                      : "只能選擇依組織權限可查看的同仁；一般員工不會看到主管評分內容。"}
                   </p>
                   {!canManagePerformance && (
                     <Button
@@ -848,11 +868,11 @@ export function PerformanceAppraisalPage() {
                     className="rd2-empty rd2-manager-selection-required"
                     role="status"
                   >
-                    請先從「直屬同仁紀錄」選擇一筆考核，再查看自評並填寫主管評分。
+                    請先從「所屬同仁紀錄」選擇一筆考核，再查看自評並填寫主管評分。
                   </div>
                 ) : (
                   <AssessmentEditor
-                    key={`${userId}:${cycle}:${tab}:${editorRecordId || "new"}:${editorRevision}`}
+                    key={`${userId}:${cycle}:${tab}:${editorRecordId || "new"}:${editorRevision}:${initial.manager.roleGroup}`}
                     initial={initial}
                     mode={tab}
                     // Self drafts are keyed to the account rather than a row
@@ -994,7 +1014,7 @@ export function PerformanceAppraisalPage() {
                     })
                   }
                 >
-                  <option value="all">全部考核</option>
+                  <option value="all">可查看的考核</option>
                   <option value="mine">我的考核</option>
                 </select>
               </div>
@@ -1044,7 +1064,7 @@ export function PerformanceAppraisalPage() {
                     全部清除
                   </Button>
                 ) : (
-                  <span className="rd2-hint">顯示全部考核</span>
+                  <span className="rd2-hint">顯示目前有權限查看的考核</span>
                 )}
               </div>
             </div>

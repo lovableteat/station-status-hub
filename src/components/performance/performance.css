@@ -582,13 +582,24 @@
   background: hsl(var(--secondary));
   color: var(--rd2-muted);
 }
-.rd2-category:has(textarea:not(:placeholder-shown))
+.rd2-category[data-has-entries="true"]
   .rd2-category-heading
   h3::after {
   content: "已填寫";
   background: color-mix(in srgb, var(--card-accent) 24%, transparent);
   color: var(--card-accent);
 }
+
+.rd2-achievements { display: grid; gap: 12px; min-width: 0; }
+.rd2-entry-composer-actions, .rd2-entry-heading, .rd2-entry-actions {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+}
+.rd2-entry-count { color: var(--rd2-muted); font-size: 12px; margin: 0; }
+.rd2-entry-list { display: grid; gap: 10px; list-style: none; padding: 0; margin: 0; }
+.rd2-entry-item { min-width: 0; padding: 12px; border: 1px solid var(--rd2-border-soft); border-radius: 8px; background: var(--rd2-panel-soft); }
+.rd2-entry-heading { margin-bottom: 8px; font-size: 13px; }
+.rd2-entry-item p { margin: 0; overflow-wrap: anywhere; }
+.rd2-entry-actions svg { width: 14px; height: 14px; }
 
 .rd2-category-heading span {
   color: var(--rd2-muted);
@@ -1354,6 +1365,34 @@
     padding: 8px;
   }
 }
+.rd2-organization { display: grid; gap: 20px; min-width: 0; }
+.rd2-org-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.rd2-org-header p { max-width: 72ch; }
+.rd2-org-summary { display: flex; gap: 16px; flex-wrap: wrap; }
+.rd2-org-summary > span { padding: 16px 20px; background: var(--rd2-panel); border: 1px solid var(--rd2-border); border-radius: 12px; flex: 1; min-width: 130px; }
+.rd2-org-summary strong { color: var(--rd2-accent); font-size: 24px; margin-right: 8px; }
+.rd2-org-filters { display: grid; grid-template-columns: minmax(180px, 1.8fr) repeat(4, minmax(120px, 1fr)); align-items: end; gap: 12px; }
+.rd2-org-view { grid-column: 1 / -1; justify-self: end; }
+.rd2-org-view svg { width: 16px; height: 16px; margin-right: 6px; }
+.rd2-org-tree { list-style: none; padding: 0; margin: 16px 0 0; }
+.rd2-org-tree .rd2-org-tree { border-left: 1px solid var(--rd2-border); margin-left: 22px; padding-left: 24px; }
+.rd2-org-tree li { margin: 12px 0; }
+.rd2-org-node { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; padding: 16px; border: 1px solid var(--rd2-border); border-radius: 10px; background: var(--rd2-soft); }
+.rd2-org-node > div { flex: 1; min-width: 160px; }
+.rd2-org-node > svg { flex: none; color: var(--rd2-accent); }
+.rd2-org-node strong { display: block; font-size: 16px; }
+.rd2-org-node strong small { font-weight: 400; margin-left: 8px; color: var(--rd2-muted); }
+.rd2-org-node span, .rd2-org-node > small, .rd2-org-account { font-size: 13px; color: var(--rd2-muted); }
+.rd2-org-node[data-context] { background: transparent; border-style: dashed; }
+.rd2-org-account { display: block; }
+.rd2-privacy { margin-bottom: 24px; }
+.rd2-privacy h3 { display: flex; align-items: center; gap: 10px; }
+.rd2-privacy h3 svg { width: 20px; height: 20px; }
+.rd2-privacy-groups { display: flex; flex-wrap: wrap; gap: 12px; padding: 0; margin-top: 16px; list-style: none; }
+.rd2-privacy-groups li { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; border: 1px solid var(--rd2-border); border-radius: 10px; padding: 12px; }
+.rd2-org-edit select { width: 100%; min-height: 40px; border: 1px solid hsl(var(--input)); background: hsl(var(--background)); padding: 8px 12px; border-radius: 6px; }
+@media (max-width: 1100px) { .rd2-org-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rd2-org-filters > :first-child { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .rd2-org-tree .rd2-org-tree { margin-left: 8px; padding-left: 10px; } .rd2-org-node { padding: 12px; gap: 10px; } .rd2-org-node > div { min-width: 120px; } .rd2-org-node > span { width: 100%; } .rd2-org-view { justify-self: start; } }
 @media (max-width: 480px) {
   .rd2-workspace .rd2-field-grid {
     grid-template-columns: 1fr;
