@@ -51,6 +51,9 @@ export async function saveAssessmentRecord(db, review, previous) {
       Object.entries(payload).every(
         ([key, value]) =>
           key === "updated_at" ||
+          // A verified organization trigger owns reviewer assignment. A lost
+          // insert response may return its canonical reviewer on the retry.
+          (key === "reviewer_name" && Array.isArray(existing.data.privacy_scope_ids)) ||
           JSON.stringify(canonical(existing.data[key])) ===
             JSON.stringify(canonical(value)),
       );
