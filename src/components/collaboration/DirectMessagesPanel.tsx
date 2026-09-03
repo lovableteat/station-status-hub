@@ -12,7 +12,9 @@ import {
   CornerUpLeft,
   Download,
   Film,
+  FileText,
   ImagePlus,
+  Paperclip,
   LoaderCircle,
   MessageCircle,
   Pin,
@@ -27,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { UserAvatar } from "@/components/account/UserAvatar";
+import { DirectMessageDocument } from "./DirectMessageDocument";
 import { useUser } from "@/components/auth/UserContext";
 import {
   CHAT_MEDIA_ACCEPT,
@@ -80,7 +83,7 @@ export interface DirectMessageContact {
 interface SelectedMediaFile {
   file: File;
   previewUrl: string;
-  mediaKind: "image" | "video";
+  mediaKind: "image" | "video" | "document";
 }
 
 type ThreadFilter = "all" | "unread" | "pinned";
@@ -429,7 +432,7 @@ export function DirectMessagesPanel({
     const additions = files.map((file) => ({
       file,
       previewUrl: URL.createObjectURL(file),
-      mediaKind: (getDirectMessageMediaKind(file) ?? "image") as "image" | "video",
+      mediaKind: (getDirectMessageMediaKind(file) ?? "image") as SelectedMediaFile["mediaKind"],
     }));
     setSelectedMediaFiles((current) => [...current, ...additions]);
     setMediaError(null);
@@ -557,7 +560,7 @@ export function DirectMessagesPanel({
               {selectedThread?.otherDisplayName || "未命名對話"}
             </div>
             <div className="mt-1 text-xs text-slate-400">
-              {typingUsers.length > 0 ? "對方正在輸入…" : "輸入訊息、圖片或影片，內容會即時同步。"}
+              {typingUsers.length > 0 ? "對方正在輸入…" : "可傳送圖片、影片、PowerPoint 與 Excel。"}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -717,9 +720,11 @@ export function DirectMessagesPanel({
                               {message.attachments.map((attachment) => (
                                 <div
                                   key={attachment.id}
-                                  className="min-w-0 overflow-hidden rounded-xl bg-[#071522]/90"
+                                  className={cn("min-w-0 overflow-hidden rounded-xl bg-[#071522]/90", attachment.mediaKind === "document" && "col-span-full")}
                                 >
-                                  {attachment.url && attachment.mediaKind === "image" ? (
+                                  {attachment.mediaKind === "document" ? (
+                                    <DirectMessageDocument attachment={attachment} />
+                                  ) : attachment.url && attachment.mediaKind === "image" ? (
                                     <button
                                       type="button"
                                       title={`預覽 ${attachment.fileName}`}
@@ -872,7 +877,7 @@ export function DirectMessagesPanel({
             </div>
           ) : null}
           {selectedMediaFiles.length > 0 ? (
-            <div className="mb-2 flex gap-2 overflow-x-auto pb-1" aria-label="已選擇的媒體檔案">
+            <div className="mb-2 flex gap-2 overflow-x-auto pb-1" aria-label="已選擇的附件">
               {selectedMediaFiles.map((item, index) => (
                 <div
                   key={`${item.file.name}-${item.file.lastModified}-${index}`}
@@ -882,8 +887,8 @@ export function DirectMessagesPanel({
                     <img src={item.previewUrl} alt={item.file.name} className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-1 px-2 text-slate-300">
-                      <Film className="h-5 w-5 text-cyan-200" />
-                      <span className="w-full truncate text-center text-[10px]">{item.file.name}</span>
+                      {item.mediaKind === "document" ? <FileText className="h-5 w-5 text-cyan-200" /> : <Film className="h-5 w-5 text-cyan-200" />}
+                      <span className="w-full truncate text-center text-[10px]" title={item.file.name}>{item.file.name}</span>
                     </div>
                   )}
                   <span className="absolute bottom-1 left-1 rounded bg-[#06111f]/85 px-1 text-[9px] text-slate-200">
@@ -909,6 +914,7 @@ export function DirectMessagesPanel({
             <input
               ref={mediaInputRef}
               type="file"
+              aria-label="選擇聊天附件"
               accept={CHAT_MEDIA_ACCEPT}
               multiple
               disabled={isSendingMedia || selectedMediaFiles.length >= 4}
@@ -919,13 +925,13 @@ export function DirectMessagesPanel({
               type="button"
               variant="outline"
               size="icon"
-              aria-label="加入圖片或影片"
-              title="加入圖片或影片"
+              aria-label="加入附件"
+              title="加入圖片、影片、PowerPoint 或 Excel（最多 4 個；圖片 12 MB，影片與文件 50 MB）"
               disabled={isSendingMedia || selectedMediaFiles.length >= 4}
               onClick={() => mediaInputRef.current?.click()}
               className="h-11 w-11 shrink-0 rounded-2xl border-white/10 bg-white/[0.04] text-cyan-200 hover:bg-cyan-300/10"
             >
-              <ImagePlus className="h-4.5 w-4.5" />
+              <Paperclip className="h-4.5 w-4.5" />
             </Button>
             <Button
               type="button"
