@@ -124,13 +124,31 @@ try {
   await query(
     "insert into workspace.performance_reviews(id,employee_id,employee_name,reviewer_name) values ('legacy','user5','人員5','user3')",
   );
-  await db.exec(await migration("20260903120000_add_performance_organization"));
   // Latest privacy migration must install its own guard even if the legacy
   // optional manager migration was skipped by an existing deployment.
   await db.exec(
     "drop trigger if exists guard_performance_review_self_update on workspace.performance_reviews",
   );
-  await db.exec(await migration("20260903130000_protect_performance_groups"));
+  if (process.argv[3]) {
+    await db.exec(
+      "create schema supabase_migrations; create table supabase_migrations.schema_migrations(version text primary key, name text, statements text[])",
+    );
+    await db.exec(await fs.readFile(process.argv[3], "utf8"));
+    check(
+      (
+        await query(
+          "select count(*)::int as total from supabase_migrations.schema_migrations",
+        )
+      )[0].total,
+      2,
+      "deployment transaction verifies content and records both migration sources",
+    );
+  } else {
+    await db.exec(
+      await migration("20260903120000_add_performance_organization"),
+    );
+    await db.exec(await migration("20260903130000_protect_performance_groups"));
+  }
   check(
     (
       await query(

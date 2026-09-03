@@ -26,7 +26,7 @@
 
 1. 在正式前端所用 Supabase 專案確認 `workspace.system_users`、`workspace.performance_reviews`、`workspace.user_page_permissions`、`workspace.current_system_user_id()` 及 `workspace.current_user_can_workspace(text,text)` 可用，依維護流程備份資料庫。
 2. 在同一交易按順序執行 `20260903120000_add_performance_organization.sql`、`20260903130000_protect_performance_groups.sql`。兩檔位於 `supabase/migrations/`。可執行 `node scripts/prepare-performance-organization-migration.mjs`，產生含 BEGIN／COMMIT 的 `tmp/performance-organization-deploy.sql`；此命令只產檔，不連線或寫資料庫。
-3. SQL 建立表、RPC、觸發器與 RLS，正規化可唯一辨識的舊員工 ID，保留舊主管及祖先保護範圍。不唯一的舊姓名不自動指派。SQL 內含 PostgREST schema 重載通知，執行後依既有流程記錄 migration 版本。
+3. SQL 建立表、RPC、觸發器與 RLS，正規化可唯一辨識的舊員工 ID，保留舊主管及祖先保護範圍。不唯一的舊姓名不自動指派。產生的交易會核對考核內容與全站角色／權限雜湊並記錄兩份 migration 原文；若不一致則整批回復。SQL 內含 PostgREST schema 重載通知。
 4. 用測試帳號驗證下列案例，再合併前端並確認 Pages 發布成功。首次由管理員按部長→課長→成員順序建立關係。
 
 不要盲目補跑全部歷史 migrations：既有 `20260901130000_assign_performance_managers.sql` 在本機 PostgreSQL 重播時因保留字別名失敗。新兩份 SQL 自行安裝 manager 判定、身份解析及 guard 觸發器，不依賴該份已成功執行。
@@ -48,3 +48,9 @@ node tests/performanceOrganization.integration.mjs <已安裝的-@electric-sql/p
 ```
 
 使用隔離安裝的 `@electric-sql/pglite@0.5.8` 與 pgcrypto，執行真實 PostgreSQL／RLS，不需要正式帳號或 token。瀏覽器使用本機測試服務，未寫入正式人事資料。
+
+另可將產生的 `tmp/performance-organization-deploy.sql` 作為資料庫測試第三個參數，驗證整份部署交易、內容保留檢查與 migration 記錄（共 41 項）。
+
+## 2026-09-03 部署記錄
+
+已在正式專案 `rfppeuzuoxtqkpbwehbq` 套用兩份 migration（20260903120000、20260903130000）。整份交易成功並確認既有考核內容與全站角色／權限雜湊一致。部署前專案顯示最近一次自動備份為 14 小時前；沒有新增測試人事資料或替任何主管設定密碼。組織關係保留待管理員依實際名單設定，不猜測主管人選。
