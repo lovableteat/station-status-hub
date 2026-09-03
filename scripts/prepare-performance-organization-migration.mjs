@@ -1,12 +1,15 @@
 // Prepare a reviewable transaction. Never connects to a database.
 import fs from "node:fs/promises";
-const migrations = process.argv.includes("--removal-only")
-  ? ["20260903160000_remove_performance_organization_members.sql"]
-  : [
-      "20260903120000_add_performance_organization.sql",
-      "20260903130000_protect_performance_groups.sql",
-      "20260903160000_remove_performance_organization_members.sql",
-    ];
+const migrations = process.argv.includes("--acting-director-only")
+  ? ["20260903180000_allow_acting_performance_directors.sql"]
+  : process.argv.includes("--removal-only")
+    ? ["20260903160000_remove_performance_organization_members.sql"]
+    : [
+        "20260903120000_add_performance_organization.sql",
+        "20260903130000_protect_performance_groups.sql",
+        "20260903160000_remove_performance_organization_members.sql",
+        "20260903180000_allow_acting_performance_directors.sql",
+      ];
 const parts = await Promise.all(
   migrations.map(async (name) => ({
     name,

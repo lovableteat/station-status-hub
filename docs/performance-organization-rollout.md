@@ -25,7 +25,7 @@
 先資料庫、再前端。`.github/workflows/main.yml` 只部署 GitHub Pages，不執行 Supabase migrations。
 
 1. 在正式前端所用 Supabase 專案確認 `workspace.system_users`、`workspace.performance_reviews`、`workspace.user_page_permissions`、`workspace.current_system_user_id()` 及 `workspace.current_user_can_workspace(text,text)` 可用，依維護流程備份資料庫。
-2. 在同一交易按順序執行 `20260903120000_add_performance_organization.sql`、`20260903130000_protect_performance_groups.sql`、`20260903160000_remove_performance_organization_members.sql`。三檔位於 `supabase/migrations/`。可執行 `node scripts/prepare-performance-organization-migration.mjs`，產生含 BEGIN／COMMIT 的 `tmp/performance-organization-deploy.sql`；此命令只產檔，不連線或寫資料庫。已完成前兩份的既有環境使用 `--removal-only`，只部署人員移除更新，避免重複 migration 版本。
+2. 在同一交易按順序執行 `20260903120000_add_performance_organization.sql`、`20260903130000_protect_performance_groups.sql`、`20260903160000_remove_performance_organization_members.sql`、`20260903180000_allow_acting_performance_directors.sql`。四檔位於 `supabase/migrations/`。可執行 `node scripts/prepare-performance-organization-migration.mjs`，產生含 BEGIN／COMMIT 的 `tmp/performance-organization-deploy.sql`；此命令只產檔，不連線或寫資料庫。已完成前兩份的既有環境使用 `--removal-only`，只部署人員移除更新；已完成前三份的環境使用 `--acting-director-only`，只部署部長代理更新，避免重複 migration 版本。
 3. SQL 建立表、RPC、觸發器與 RLS，正規化可唯一辨識的舊員工 ID，保留舊主管及祖先保護範圍。不唯一的舊姓名不自動指派。產生的交易會核對考核內容與全站角色／權限雜湊並記錄所選 migration 原文；若不一致則整批回復。SQL 內含 PostgREST schema 重載通知。
 4. 用測試帳號驗證下列案例，再合併前端並確認 Pages 發布成功。首次由管理員按部長→課長→成員順序建立關係。
 
@@ -49,10 +49,18 @@ node tests/performanceOrganization.integration.mjs <已安裝的-@electric-sql/p
 
 使用隔離安裝的 `@electric-sql/pglite@0.5.8` 與 pgcrypto，執行真實 PostgreSQL／RLS，不需要正式帳號或 token。瀏覽器使用本機測試服務，未寫入正式人事資料。
 
-另可將未加 `--removal-only` 產生的 `tmp/performance-organization-deploy.sql` 作為資料庫測試第三個參數，驗證整份部署交易、內容保留檢查與 migration 記錄（共 58 項）。未提供第三個參數時執行 57 項資料庫檢查。新增案例涵蓋重複分類、移除與重新加入、過期版本、主管／員工無權移除、有下屬時拒絕，以及移除後仍保留歷史密碼與全站權限。
+另可將不加任何選項產生的 `tmp/performance-organization-deploy.sql` 作為資料庫測試第三個參數，驗證整份部署交易、內容保留檢查與 migration 記錄（共 72 項）。未提供第三個參數時執行 71 項資料庫檢查。案例涵蓋重複分類、移除與重新加入、過期版本、管理員專屬組織修改、部長代理多課、自評自動送交代理部長、主管評分、改回課長隸屬，以及保留歷史密碼與全站權限。
+
+## 課長出缺時由部長代理
+
+管理員可在部長節點按「新增代理課同仁」，選擇未分類帳號並填寫課名稱。既有同仁則編輯直屬主管，選擇標示「部長代理」的部長並保留課名稱。同一部長、同一課的直屬同仁會集中呈現在「部長 → 課別（部長代理）→ 同仁」的樹狀結構；一位部長可代理多個課。代理節點只呈現分組，不建立重複帳號，也不占用人員下拉選單。
+
+新增課長後，管理員可將同仁改隸屬該課長，課名自動沿用課長設定，未完成考核同步交接；已完成紀錄及歷史密碼保護繼續保留。移除課長前仍需先重新分配同仁，避免誤刪造成未指定主管。
 
 ## 2026-09-03 部署記錄
 
 已在正式專案 `rfppeuzuoxtqkpbwehbq` 套用兩份 migration（20260903120000、20260903130000）。整份交易成功並確認既有考核內容與全站角色／權限雜湊一致。部署前專案顯示最近一次自動備份為 14 小時前；沒有新增測試人事資料或替任何主管設定密碼。組織關係保留待管理員依實際名單設定，不猜測主管人選。
 
 同日追加 `20260903160000`，使用 `--removal-only` 產生的交易部署。內容與全站角色／權限完整性檢查通過；確認移除 RPC 已建立、移除歷史表啟用 RLS、一般登入帳號無權直接讀取歷史表、匿名帳號無權執行移除。正式組織分類筆數維持部署前的 0 筆，未替任何人新增或移除分類。
+
+同日追加 `20260903180000`，使用 `--acting-director-only` 產生的交易部署，考核內容與全站角色／權限完整性檢查通過。核對代理規則已啟用、migration 僅記錄一次、匿名帳號仍無權執行編輯；當次既有 7 筆組織分類及 1 筆考核維持不變。本機瀏覽器驗證新增代理課、排除已分類帳號、既有同仁改隸屬部長、移除出缺課長、代理多課及搜尋保留祖先連線。
