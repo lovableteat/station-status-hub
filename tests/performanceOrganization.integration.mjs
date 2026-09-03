@@ -140,8 +140,8 @@ try {
           "select count(*)::int as total from supabase_migrations.schema_migrations",
         )
       )[0].total,
-      2,
-      "deployment transaction verifies content and records both migration sources",
+      3,
+      "deployment transaction verifies content and records all migration sources",
     );
   } else {
     await db.exec(
@@ -149,6 +149,9 @@ try {
     );
     await db.exec(await migration("20260903130000_protect_performance_groups"));
   }
+  await db.exec(
+    await migration("20260903160000_remove_performance_organization_members"),
+  );
   check(
     (
       await query(
@@ -476,6 +479,161 @@ try {
     await visible(),
     ["c"],
     "expired grants cannot read old protected scopes",
+  );
+  const removalVersion = (
+    await query(
+      "select updated_at from workspace.performance_org_members where employee_id=$1",
+      [id(9)],
+    )
+  )[0].updated_at;
+  const removeSql =
+    "select workspace.remove_performance_organization_member($1,$2)";
+  await actor(8);
+  await rejects(
+    removeSql,
+    [id(9), removalVersion],
+    "supervisor cannot remove organization classifications",
+  );
+  await actor(9);
+  await rejects(
+    removeSql,
+    [id(9), removalVersion],
+    "employee cannot remove their classification",
+  );
+  await actor(1);
+  await rejects(
+    "select workspace.save_performance_organization_member($1,$2,'','','2000-01-01'::timestamptz,'employee','member','')",
+    [id(9), id(8)],
+    "stale assignment cannot overwrite an existing organization member",
+  );
+  await rejects(
+    "select workspace.save_performance_organization_member($1,$2,'','',null,'employee','member','')",
+    [id(9), id(8)],
+    "duplicate addition from another dropdown is rejected",
+  );
+  await rejects(
+    removeSql,
+    [id(9), "2000-01-01"],
+    "stale removal does not remove a newer classification",
+  );
+  await query(
+    "update workspace.performance_reviews set status='approved',manager_feedback='completed assessment' where id='c'",
+  );
+  const completedBefore = await query(
+    "select reviewer_name,self_feedback,manager_feedback,status from workspace.performance_reviews where id='c'",
+  );
+  await query(removeSql, [id(9), removalVersion]);
+  check(
+    (
+      await query(
+        "select updated_at from workspace.get_performance_organization() where employee_id=$1",
+        [id(9)],
+      )
+    )[0].updated_at,
+    null,
+    "removed member returns to the unassigned dropdown source",
+  );
+  check(
+    await query(
+      "select reviewer_name,self_feedback,manager_feedback,status from workspace.performance_reviews where id='c'",
+    ),
+    completedBefore,
+    "removal retains completed review content and original reviewer",
+  );
+  await rejects(
+    removeSql,
+    [id(9), removalVersion],
+    "repeating removal cannot act on an absent classification",
+  );
+  await actor(8);
+  check(
+    (await visible()).includes("c"),
+    false,
+    "removal does not reactivate legacy reviewer access to completed records",
+  );
+  await actor(1);
+  await save(9, 8, "member");
+  check(
+    (
+      await query(
+        "select updated_at is not null as assigned from workspace.get_performance_organization() where employee_id=$1",
+        [id(9)],
+      )
+    )[0].assigned,
+    true,
+    "re-added member disappears from the dropdown source again",
+  );
+  await actor(8);
+  check(
+    (await visible()).includes("c"),
+    true,
+    "re-adding restores the actual supervisor relationship",
+  );
+  await actor(1);
+  const directorVersion = (
+    await query(
+      "select updated_at from workspace.performance_org_members where employee_id=$1",
+      [id(2)],
+    )
+  )[0].updated_at;
+  await rejects(
+    removeSql,
+    [id(2), directorVersion],
+    "director with reports cannot be removed",
+  );
+  const chiefVersion = (
+    await query(
+      "select updated_at from workspace.performance_org_members where employee_id=$1",
+      [id(3)],
+    )
+  )[0].updated_at;
+  await root();
+  const secretBefore = await query(
+    "select password_hash,version from workspace.performance_group_secrets where owner_id=$1",
+    [id(3)],
+  );
+  const accountBefore = await query(
+    "select role, permissions - 'performanceManager' as permissions from workspace.system_users where id=$1",
+    [id(3)],
+  );
+  await actor(1);
+  await query(removeSql, [id(3), chiefVersion]);
+  check(
+    (await visible()).includes("chief"),
+    false,
+    "removing a supervisor preserves password protection even against administrators",
+  );
+  await rejects(
+    "select * from workspace.performance_org_removed_members",
+    [],
+    "removal history is private to the database",
+  );
+  await root();
+  check(
+    await query(
+      "select password_hash,version from workspace.performance_group_secrets where owner_id=$1",
+      [id(3)],
+    ),
+    secretBefore,
+    "removal never deletes or resets an existing group password",
+  );
+  check(
+    await query(
+      "select role, permissions - 'performanceManager' as permissions from workspace.system_users where id=$1",
+      [id(3)],
+    ),
+    accountBefore,
+    "removal preserves global role and other site permissions",
+  );
+  check(
+    (
+      await query(
+        "select permissions->>'performanceManager' as manager from workspace.system_users where id=$1",
+        [id(3)],
+      )
+    )[0].manager,
+    "false",
+    "removal revokes only the performance supervisor designation",
   );
   await root();
   await query(
