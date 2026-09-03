@@ -3,6 +3,15 @@ const key = (value) =>
     .trim()
     .toLocaleLowerCase();
 
+// The roster includes every site account; only an actual organization row has
+// an updated_at value. A root director has no manager but is still assigned.
+export const isOrganizationAssigned = (member) => member.updated_at != null;
+export const availableOrganizationMembers = (members) =>
+  members.filter(
+    (member) =>
+      member.account_status === "active" && !isOrganizationAssigned(member),
+  );
+
 export function findOrganizationReview(member, reviews, cycle) {
   const candidates = reviews.filter((review) => review.cycleId === cycle);
   return (
