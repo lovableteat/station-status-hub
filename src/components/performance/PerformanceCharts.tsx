@@ -9,7 +9,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { LEVELS, getLevelWeights } from "./rd2Assessment.mjs";
+import { WEIGHT_GROUPS } from "./rd2Standards.mjs";
 
 /**
  * Categorical hues for the KPI / OKR / IDP identity, in fixed order.
@@ -30,7 +30,6 @@ const CATEGORY_ORDER = ["KPI", "OKR", "IDP"] as const;
 /** Panel surface - doubles as the 2px spacer stroke between stacked fills. */
 const SURFACE = "#081c2d";
 
-const shortLevelLabel = (label: string) => label.replace(/\s*\([^)]*\)\s*$/, "");
 
 interface WeightRow {
   level: string;
@@ -76,11 +75,10 @@ function WeightTooltip({
  */
 export function WeightDistributionChart() {
   const titleId = useId();
-  const data: WeightRow[] = LEVELS.map((level) => {
-    const weights = getLevelWeights(level.value);
+  const data: WeightRow[] = WEIGHT_GROUPS.map((weights) => {
     return {
-      level: shortLevelLabel(level.label),
-      full: level.label,
+      level: weights.label,
+      full: weights.label,
       KPI: weights.KPI,
       OKR: weights.OKR,
       IDP: weights.IDP,
@@ -90,7 +88,7 @@ export function WeightDistributionChart() {
   return (
     <figure className="rd2-chart" aria-labelledby={titleId}>
       <figcaption id={titleId} className="rd2-chart-caption">
-        <span>各職級評核權重組成</span>
+        <span>各數字職等評核權重組成</span>
         <ul className="rd2-chart-legend">
           {CATEGORY_ORDER.map((key) => (
             <li key={key}>

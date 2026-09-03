@@ -7,8 +7,14 @@ export interface EvidenceImage {
   name: string;
   dataUrl: string;
 }
+export interface AssessmentEntry {
+  id: string;
+  text: string;
+}
 export interface AssessmentSection {
   text: string;
+  entries?: AssessmentEntry[];
+  draftText?: string;
   links: string[];
   images: EvidenceImage[];
 }
@@ -16,13 +22,16 @@ export interface SelfAssessment {
   employeeNumber: string;
   team: string;
   level: string;
+  grade: string;
   legacyText: string;
   sections: Record<Category, AssessmentSection>;
 }
 export interface ManagerAssessment {
   employeeNumber: string;
   feedback: string;
-  answers: { q1: number | null; q2: number | null };
+  roleGroup: string;
+  standardsVersion: string;
+  answers: Record<string, number | null>;
 }
 export interface PerformanceGoal {
   id: string;
@@ -64,4 +73,5 @@ export interface AssessmentForm {
 export interface EmployeeOption {
   id: string;
   label: string;
+  orgLevel?: string;
 }

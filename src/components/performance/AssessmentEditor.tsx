@@ -5,6 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { AssessmentEntryList } from "./AssessmentEntryList";
+import {
+  commitAssessmentEntries,
+  getAssessmentEntries,
+} from "./assessmentEntries.mjs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,7 +21,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  ACCOUNTABILITY_QUESTIONS,
   CATEGORIES,
   CATEGORY_GUIDANCE,
   LEVELS,
@@ -30,6 +34,14 @@ import {
   saveAssessmentDraft,
   validateAssessment,
 } from "./rd2Assessment.mjs";
+import {
+  JOB_GRADES,
+  ACCOUNTABILITY_ROLES,
+  RATING_SCALE,
+  COMMON_KPI_REFERENCES,
+  getAccountabilityRole,
+  getAccountabilityQuestions,
+} from "./rd2Standards.mjs";
 import type {
   AssessmentAction,
   AssessmentForm,
@@ -277,8 +289,11 @@ export function AssessmentEditor({
   demo,
   onSave,
 }: Props) {
+  const localDrafts = demo || mode === "self";
   const [restored] = useState(() =>
-    readonly ? null : readAssessmentDraft(localStorage, storageKey, initial),
+    readonly || !localDrafts
+      ? null
+      : readAssessmentDraft(localStorage, storageKey, initial),
   );
   const [draftConflict, setDraftConflict] = useState(
     () =>
@@ -290,7 +305,9 @@ export function AssessmentEditor({
   const [draftStatus, setDraftStatus] = useState(
     restored
       ? `已恢復本機草稿 · ${new Date(restored.savedAt).toLocaleString("zh-TW")}`
-      : "尚無本機草稿",
+      : localDrafts
+        ? "尚無本機草稿"
+        : "主管評分請儲存至工作區；資料鎖定後會清除未儲存內容。",
   );
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -300,6 +317,10 @@ export function AssessmentEditor({
   const pending = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const persistDraft = () => {
+    if (!localDrafts) {
+      setDraftStatus("有未儲存變更，請儲存至工作區。");
+      return;
+    }
     try {
       const savedAt = saveAssessmentDraft(
         localStorage,
@@ -323,13 +344,15 @@ export function AssessmentEditor({
     pending.current = true;
     setForm(next);
     setError("");
-    setDraftStatus("正在暫存…");
+    setDraftStatus(
+      localDrafts ? "正在暫存…" : "有未儲存變更，請儲存至工作區。",
+    );
     clearTimeout(timer.current);
-    timer.current = setTimeout(persistDraft, 500);
+    if (localDrafts) timer.current = setTimeout(persistDraft, 500);
   };
   useEffect(() => {
     const flush = () => {
-      if (!pending.current) return;
+      if (!pending.current || !localDrafts) return;
       try {
         saveAssessmentDraft(localStorage, storageKey, latest.current);
         pending.current = false;
@@ -350,7 +373,7 @@ export function AssessmentEditor({
       flush();
       window.removeEventListener("beforeunload", beforeUnload);
     };
-  }, [storageKey]);
+  }, [storageKey, localDrafts]);
   const updateSection = (
     category: Category,
     update: (section: AssessmentSection) => AssessmentSection,
@@ -366,8 +389,13 @@ export function AssessmentEditor({
       },
     }));
   const reference = getKpiReference(form.self.team, form.self.level);
-  const weights = getLevelWeights(form.self.level);
+  const weights = getLevelWeights(form.self.grade);
+  const roleFromOrg = getAccountabilityRole(
+    employees.find((employee) => employee.id === form.employeeId)?.orgLevel,
+  );
+  const questions = getAccountabilityQuestions(form.manager.roleGroup);
   const submit = async (action: AssessmentAction) => {
+    if (mode === "self") change(commitAssessmentEntries);
     const validation = validateAssessment(latest.current, mode, action);
     if (validation) {
       setError(validation);
@@ -422,7 +450,7 @@ export function AssessmentEditor({
         <p>
           {mode === "self"
             ? "依 IDP、OKR、KPI 分別填寫實績，並附上證明。"
-            : "針對當責維度題目評分，兩題皆須完成。"}
+            : "依受評者的組織層級，完成對應的 7 題當責評分。"}
         </p>
       </header>
       {!readonly && (
@@ -446,24 +474,28 @@ export function AssessmentEditor({
             {draftStatus}
           </p>
           <div className="rd2-actions">
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={saving || !!imageJobs}
-              onClick={() => setClearOpen(true)}
-            >
-              <Trash2 data-icon="inline-start" />
-              清除本機草稿
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={saving || !!imageJobs}
-              onClick={persistDraft}
-            >
-              <Save data-icon="inline-start" />
-              儲存本機草稿
-            </Button>
+            {localDrafts && (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={saving || !!imageJobs}
+                  onClick={() => setClearOpen(true)}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  清除本機草稿
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saving || !!imageJobs}
+                  onClick={persistDraft}
+                >
+                  <Save data-icon="inline-start" />
+                  儲存本機草稿
+                </Button>
+              </>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -514,6 +546,10 @@ export function AssessmentEditor({
                     ...previous,
                     employeeId: employee?.id || "",
                     employeeName: employee?.label || "",
+                    manager: {
+                      ...previous.manager,
+                      roleGroup: getAccountabilityRole(employee?.orgLevel),
+                    },
                   }));
                 }}
               >
@@ -542,10 +578,11 @@ export function AssessmentEditor({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="rd2-number">員工工號 *</FieldLabel>
+            <FieldLabel htmlFor="rd2-number">員工工號{mode === "self" ? " *" : ""}</FieldLabel>
             <Input
               id="rd2-number"
               value={form.self.employeeNumber}
+              readOnly={mode === "manager"}
               onChange={(event) =>
                 change((previous) => ({
                   ...previous,
@@ -580,7 +617,7 @@ export function AssessmentEditor({
                 </select>
               </Field>
               <Field>
-                <FieldLabel htmlFor="rd2-level">職級 *</FieldLabel>
+                <FieldLabel htmlFor="rd2-level">職務角色 *</FieldLabel>
                 <select
                   id="rd2-level"
                   value={form.self.level}
@@ -591,7 +628,7 @@ export function AssessmentEditor({
                     }))
                   }
                 >
-                  <option value="">請選擇職級</option>
+                  <option value="">請選擇職務角色</option>
                   {LEVELS.map((level) => (
                     <option key={level.value} value={level.value}>
                       {level.label}
@@ -599,7 +636,64 @@ export function AssessmentEditor({
                   ))}
                 </select>
               </Field>
+              <Field>
+                <FieldLabel htmlFor="rd2-grade">數字職等 *</FieldLabel>
+                <select
+                  id="rd2-grade"
+                  value={form.self.grade}
+                  onChange={(event) =>
+                    change((previous) => ({
+                      ...previous,
+                      self: { ...previous.self, grade: event.target.value },
+                    }))
+                  }
+                >
+                  <option value="">請選擇職等</option>
+                  {JOB_GRADES.map((grade) => (
+                    <option key={grade} value={grade}>
+                      {grade}
+                    </option>
+                  ))}
+                </select>
+                <p className="rd2-hint">
+                  權重以實際數字職等為準。
+                  {form.self.grade && !weights
+                    ? `原表未提供職等 ${form.self.grade} 的權重，待確認。`
+                    : ""}
+                </p>
+              </Field>
             </>
+          )}
+          {mode === "manager" && (
+            <Field>
+              <FieldLabel htmlFor="rd2-accountability-role">
+                受評者當責職級
+              </FieldLabel>
+              <select
+                id="rd2-accountability-role"
+                value={form.manager.roleGroup}
+                disabled={!!roleFromOrg || readonly || saving}
+                onChange={(event) =>
+                  change((previous) => ({
+                    ...previous,
+                    manager: {
+                      ...previous.manager,
+                      roleGroup: event.target.value,
+                    },
+                  }))
+                }
+              >
+                <option value="">請確認當責職級</option>
+                {ACCOUNTABILITY_ROLES.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+              <p className="rd2-hint">
+                部長對應高階管理層，課長對應中階管理層，一般成員對應一般員工。
+              </p>
+            </Field>
           )}
           <Field>
             <FieldLabel htmlFor="rd2-due">截止日期</FieldLabel>
@@ -620,94 +714,106 @@ export function AssessmentEditor({
       {mode === "self" && (
         <>
           <div className="rd2-category-grid">
-          {CATEGORIES.map((value) => {
-            const category = value as Category;
-            const guide = CATEGORY_GUIDANCE[category];
-            return (
-              <fieldset
-                disabled={readonly || saving}
-                key={category}
-                data-category={category}
-                className="rd2-card rd2-category"
-              >
-                <div className="rd2-category-heading">
-                  <h3>
-                    {category} — {guide.title}
-                  </h3>
-                  {form.self.level && (
-                    <span>政策權重 {weights[category]}%</span>
-                  )}
-                </div>
-                <details className="rd2-reference" open={category === "KPI"}>
-                  <summary>
-                    {category === "KPI"
-                      ? `角色專屬標準${reference ? ` (${form.self.team} · ${form.self.level.toUpperCase()})` : ""}`
-                      : "撰寫參考與範例"}
-                  </summary>
-                  {category === "KPI" ? (
-                    reference ? (
-                      <div className="rd2-reference-grid">
-                        <div>
-                          <h4>Base line</h4>
-                          <ul>
-                            {reference.baseline.map((line: string) => (
-                              <li key={line}>{line}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div>
-                          <h4>Outstanding</h4>
-                          <ul>
-                            {reference.outstanding.map((line: string) => (
-                              <li key={line}>{line}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
+            {CATEGORIES.map((value) => {
+              const category = value as Category;
+              const guide = CATEGORY_GUIDANCE[category];
+              return (
+                <fieldset
+                  disabled={readonly || saving}
+                  key={category}
+                  data-category={category}
+                  data-has-entries={
+                    getAssessmentEntries(form.self.sections[category]).some(
+                      (entry) => entry.text.trim(),
+                    ) || undefined
+                  }
+                  className="rd2-card rd2-category"
+                >
+                  <div className="rd2-category-heading">
+                    <h3>
+                      {category} — {guide.title}
+                    </h3>
+                    {weights && <span>政策權重 {weights[category]}%</span>}
+                  </div>
+                  <details className="rd2-reference">
+                    <summary>
+                      {category === "KPI"
+                        ? `角色專屬標準${reference ? ` (${form.self.team} · ${form.self.level.toUpperCase()})` : ""}`
+                        : "撰寫參考與範例"}
+                    </summary>
+                    {category === "KPI" ? (
+                      reference ? (
+                        <>
+                          <div className="rd2-reference-grid">
+                            <div>
+                              <h4>Base line</h4>
+                              <ul>
+                                {reference.baseline.map((line: string) => (
+                                  <li key={line}>{line}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <h4>Outstanding</h4>
+                              <ul>
+                                {reference.outstanding.map((line: string) => (
+                                  <li key={line}>{line}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                          {COMMON_KPI_REFERENCES[form.self.level] && (
+                            <details>
+                              <summary>共通 KPI 與工作態度</summary>
+                              <p className="rd2-prewrap">
+                                {COMMON_KPI_REFERENCES[form.self.level]}
+                              </p>
+                            </details>
+                          )}
+                          {form.self.team === "FW" &&
+                            form.self.level === "leader" && (
+                              <p className="rd2-hint">
+                                原表 FW Leader 第 8 點使用 HW／hardware
+                                字樣，保留原文待確認。
+                              </p>
+                            )}
+                        </>
+                      ) : (
+                        <p>先選擇團隊與職務角色，即可查看對應標準。</p>
+                      )
                     ) : (
-                      <p>先選擇團隊與職級，即可查看對應標準。</p>
-                    )
-                  ) : (
-                    <>
-                      <p>{guide.focus}</p>
-                      <p className="rd2-prewrap">{guide.example}</p>
-                    </>
-                  )}
-                </details>
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel htmlFor={`rd2-${category}`}>
-                      {category} 實績 *
-                    </FieldLabel>
-                    <Textarea
-                      id={`rd2-${category}`}
-                      rows={6}
-                      placeholder={
-                        "S（情境）：…\nT（任務）：…\nA（行動）：…\nR（結果）：…"
-                      }
-                      value={form.self.sections[category].text}
-                      onChange={(event) =>
-                        updateSection(category, (previous) => ({
-                          ...previous,
-                          text: event.target.value,
-                        }))
-                      }
+                      <>
+                        <p>{guide.focus}</p>
+                        {category === "OKR" && (
+                          <p className="rd2-hint">
+                            以下包含原表 2025Q4／2026Q1 歷史範例，作為撰寫參考。
+                          </p>
+                        )}
+                        <p className="rd2-prewrap">{guide.example}</p>
+                      </>
+                    )}
+                  </details>
+                  <FieldGroup>
+                    <AssessmentEntryList
+                      category={category}
+                      section={form.self.sections[category]}
+                      readonly={readonly}
+                      onChange={(update) => updateSection(category, update)}
                     />
-                  </Field>
-                  <Evidence
-                    category={category}
-                    section={form.self.sections[category]}
-                    readonly={readonly}
-                    onChange={(update) => updateSection(category, update)}
-                    onBusy={(busy) =>
-                      setImageJobs((count) => count + (busy ? 1 : -1))
-                    }
-                    onError={setError}
-                  />
-                </FieldGroup>
-              </fieldset>
-            );
-          })}
+                    <Evidence
+                      category={category}
+                      section={form.self.sections[category]}
+                      readonly={readonly}
+                      onChange={(update) => updateSection(category, update)}
+                      onBusy={(busy) =>
+                        setImageJobs((count) => count + (busy ? 1 : -1))
+                      }
+                      onError={setError}
+                    />
+                  </FieldGroup>
+                </fieldset>
+              );
+            })}
           </div>
           {form.self.legacyText && (
             <section className="rd2-card">
@@ -901,53 +1007,53 @@ export function AssessmentEditor({
       {mode === "manager" && (
         <>
           <div className="rd2-question-grid">
-          {ACCOUNTABILITY_QUESTIONS.map((question, index) => (
-            <fieldset
-              key={question.id}
-              disabled={readonly || saving}
-              data-question-index={index + 1}
-              className="rd2-card rd2-question"
-            >
-              <legend>
-                第 {index + 1} 題 · {question.dimension}
-              </legend>
-              <p className="rd2-hint">{question.role}</p>
-              <h3 id={`question-${question.id}`}>{question.text}</h3>
-              <RadioGroup
-                className="rd2-rating"
-                aria-labelledby={`question-${question.id}`}
-                value={String(
-                  form.manager.answers[question.id as "q1" | "q2"] || "",
-                )}
+            {questions.map((question, index) => (
+              <fieldset
+                key={question.id}
                 disabled={readonly || saving}
-                onValueChange={(value) =>
-                  change((previous) => ({
-                    ...previous,
-                    manager: {
-                      ...previous.manager,
-                      answers: {
-                        ...previous.manager.answers,
-                        [question.id]: Number(value),
-                      },
-                    },
-                  }))
-                }
+                data-question-index={index + 1}
+                className="rd2-card rd2-question"
               >
-                {[1, 2, 3, 4, 5].map((value) => (
-                  <Field key={value} orientation="horizontal">
-                    <RadioGroupItem
-                      id={`${question.id}-${value}`}
-                      value={String(value)}
-                    />
-                    <FieldLabel htmlFor={`${question.id}-${value}`}>
-                      {value} 分
-                    </FieldLabel>
-                  </Field>
-                ))}
-              </RadioGroup>
-              <p className="rd2-hint">1 分：低度符合 · 5 分：高度符合</p>
-            </fieldset>
-          ))}
+                <legend>
+                  第 {index + 1} 題 · {question.dimension}
+                </legend>
+                <p className="rd2-hint">{question.role}</p>
+                <h3 id={`question-${question.id}`}>{question.text}</h3>
+                <RadioGroup
+                  className="rd2-rating"
+                  aria-labelledby={`question-${question.id}`}
+                  value={String(form.manager.answers[question.id] || "")}
+                  disabled={readonly || saving}
+                  onValueChange={(value) =>
+                    change((previous) => ({
+                      ...previous,
+                      manager: {
+                        ...previous.manager,
+                        answers: {
+                          ...previous.manager.answers,
+                          [question.id]: Number(value),
+                        },
+                      },
+                    }))
+                  }
+                >
+                  {RATING_SCALE.map(({ value, label }) => (
+                    <Field key={value} orientation="horizontal">
+                      <RadioGroupItem
+                        id={`${question.id}-${value}`}
+                        value={String(value)}
+                      />
+                      <FieldLabel htmlFor={`${question.id}-${value}`}>
+                        {label}
+                      </FieldLabel>
+                    </Field>
+                  ))}
+                </RadioGroup>
+                <p className="rd2-hint">
+                  來源題號 {question.number} · 評分標準依原表 1–5 分描述。
+                </p>
+              </fieldset>
+            ))}
           </div>
           <fieldset
             disabled={readonly || saving}

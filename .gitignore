@@ -25,6 +25,7 @@ tmp/parse-test/
 tmp/ref_location_*
 tmp/timer-*.pid
 tmp/*.xlsx
+tmp/performance-organization-deploy.sql
 tmp_preflight_*.sql
 
 # Editor directories and files

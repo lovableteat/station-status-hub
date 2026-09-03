@@ -3,6 +3,10 @@ import {
   readSelfAssessment,
   readManagerAssessment,
 } from "./rd2Assessment.mjs";
+import {
+  ACCOUNTABILITY_QUESTIONS,
+  ACCOUNTABILITY_ROLES,
+} from "./rd2Standards.mjs";
 
 export const PERFORMANCE_CYCLES = [
   {
@@ -232,9 +236,7 @@ export function normalizePerformanceReview(value) {
     ),
     department: String(review.department || "未指定部門"),
     role: String(review.role || "工程師"),
-    reviewerName: String(
-      review.reviewerName || review.reviewer_name || "",
-    ),
+    reviewerName: String(review.reviewerName || review.reviewer_name || ""),
     status,
     score:
       review.score == null || review.score === ""
@@ -297,7 +299,8 @@ export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
     "截止日期",
     "工號",
     "團隊",
-    "職級",
+    "職務角色",
+    "數字職等",
     "IDP 實績",
     "OKR 實績",
     "KPI 實績",
@@ -307,7 +310,14 @@ export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
   ];
   if (includeManager) {
     headers.splice(4, 0, "分數");
-    headers.splice(13, 0, "當責題一", "當責題二", "主管回饋");
+    headers.push(
+      "當責職級",
+      "評分標準版本",
+      ...ACCOUNTABILITY_QUESTIONS.map(
+        (question) => `${question.role} Q${question.number} ${question.text}`,
+      ),
+      "主管回饋",
+    );
   }
   const rows = (reviews || []).map((review) => {
     const self = readSelfAssessment(review.selfFeedback);
@@ -327,6 +337,7 @@ export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
       self.employeeNumber || manager.employeeNumber,
       self.team,
       self.level,
+      self.grade,
       ...CATEGORIES.map((category) => self.sections[category].text),
       self.legacyText,
       CATEGORIES.flatMap((category) => self.sections[category].links).join(
@@ -339,11 +350,13 @@ export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
     ];
     if (includeManager) {
       row.splice(4, 0, review.score ?? "");
-      row.splice(
-        13,
-        0,
-        manager.answers.q1 ?? "",
-        manager.answers.q2 ?? "",
+      row.push(
+        ACCOUNTABILITY_ROLES.find((role) => role.value === manager.roleGroup)
+          ?.label || "既有評分",
+        manager.standardsVersion || "舊版",
+        ...ACCOUNTABILITY_QUESTIONS.map(
+          (question) => manager.answers[question.id] ?? "",
+        ),
         manager.feedback,
       );
     }

@@ -25,6 +25,7 @@ import {
   normalizePerformanceReview,
   toPerformanceCsv,
 } from "../src/components/performance/performanceData.mjs";
+import { getAccountabilityQuestions } from "../src/components/performance/rd2Standards.mjs";
 import { saveAssessmentRecord } from "../src/components/performance/assessmentPersistence.mjs";
 
 const makeForm = () => {
@@ -36,6 +37,7 @@ const makeForm = () => {
     employeeNumber: "12345",
     team: "FW",
     level: "senior",
+    grade: "23",
   });
   CATEGORIES.forEach((category) => {
     form.self.sections[category].text = `${category}: STAR result`;
@@ -73,7 +75,7 @@ test("all eight team/level combinations expose baseline and outstanding criteria
   assert.equal(getKpiReference("invalid", "senior"), null);
   assert.ok(
     getKpiReference("FW", "senior").baseline.includes(
-      "System firmware architecture design.",
+      "System firmware architecture design (Boot sequence, BIOS/BMC interaction).",
     ),
   );
   assert.ok(
@@ -82,10 +84,10 @@ test("all eight team/level combinations expose baseline and outstanding criteria
     ),
   );
 });
-test("policy weights are separate from the two original accountability questions", () => {
-  assert.deepEqual(getLevelWeights("senior"), { KPI: 60, OKR: 20, IDP: 20 });
-  assert.deepEqual(getLevelWeights("manager"), { KPI: 40, OKR: 35, IDP: 25 });
-  assert.equal(ACCOUNTABILITY_QUESTIONS.length, 2);
+test("numeric grade weights are separate from the complete accountability question bank", () => {
+  assert.deepEqual(getLevelWeights(23), { KPI: 60, OKR: 20, IDP: 20 });
+  assert.deepEqual(getLevelWeights(39), { KPI: 40, OKR: 35, IDP: 25 });
+  assert.equal(ACCOUNTABILITY_QUESTIONS.length, 21);
   assert.equal(
     ACCOUNTABILITY_QUESTIONS[0].text,
     "我能清晰地定義並傳達組織的使命與願景",
@@ -101,24 +103,26 @@ test("self submission requires employee number, team, level and all three narrat
   assert.match(validateAssessment(form, "self", "submit"), /工號/);
   form.self.employeeNumber = "1";
   form.self.team = "invalid";
-  assert.match(validateAssessment(form, "self", "submit"), /團隊與職級/);
+  assert.match(validateAssessment(form, "self", "submit"), /團隊與職務角色/);
 });
-test("manager requires both integer ratings, supports return, and keeps optional score null", () => {
+test("manager requires the assessed role’s seven integer ratings, supports return, and keeps optional score null", () => {
   const form = makeForm();
-  form.manager.answers.q1 = 5;
+  form.manager.roleGroup = 'employee';
+  getAccountabilityQuestions('employee').forEach(question => { form.manager.answers[question.id] = 5; });
   for (const value of [null, 0, 6, 2.5, "4"]) {
-    form.manager.answers.q2 = value;
-    assert.match(validateAssessment(form, "manager", "submit"), /兩題/);
+    form.manager.answers.q21 = value;
+    assert.match(validateAssessment(form, "manager", "submit"), /7 題/);
   }
-  form.manager.answers.q2 = 4;
+  form.manager.answers.q21 = 4;
   assert.equal(validateAssessment(form, "manager", "submit"), "");
+  form.self.employeeNumber = "";
+  assert.equal(validateAssessment(form, "manager", "submit"), "", "legacy reviews without an employee number remain reviewable without changing self-assessment");
   const record = build(form, "manager");
   assert.equal(record.status, "approved");
   assert.equal(record.score, null);
-  assert.deepEqual(readManagerAssessment(record.managerFeedback).answers, {
-    q1: 5,
-    q2: 4,
-  });
+  assert.equal(readManagerAssessment(record.managerFeedback).answers.q15, 5);
+  assert.equal(readManagerAssessment(record.managerFeedback).answers.q21, 4);
+  assert.equal(readManagerAssessment(record.managerFeedback).answers.q1, null);
   assert.match(validateAssessment(form, "manager", "return"), /回饋/);
   form.manager.feedback = "請補充數據";
   assert.equal(build(form, "manager", "return").status, "in-progress");
@@ -253,8 +257,9 @@ test("null scores stay unscored and CSV exports narratives/ratings, not JSON or 
   });
   const csv = toPerformanceCsv([review]);
   assert.match(csv, /IDP: STAR result/);
-  assert.match(csv, /當責題一/);
-  assert.match(csv, /"4","5","Good"/);
+  assert.match(csv, /高階管理層 Q1/);
+  assert.match(csv, /"4","5"/);
+  assert.match(csv, /"Good"/);
   assert.match(csv, /"'=HYPERLINK/);
   assert.doesNotMatch(csv, /RD2_SELF_V1|data:image/);
 });
@@ -347,4 +352,13 @@ test("new-record retries verify identical content without overwriting later edit
     saveAssessmentRecord(changed.chain, review, null),
     /尚未確認儲存/,
   );
+});
+
+test("retry accepts a database-assigned reviewer without changing submitted content", async () => {
+  const review = build(makeForm());
+  let attempts = 0;
+  const { chain } = mockDb((payload) => ++attempts === 1
+    ? { error: { code: "23505" }, data: null }
+    : { data: { ...payload, reviewer_name: "verified-chief", privacy_scope_ids: ["chief-id"] }, error: null });
+  assert.equal((await saveAssessmentRecord(chain, review, null)).reviewerName, "verified-chief");
 });
