@@ -8,6 +8,7 @@ import {
 import {
   createDirectMessageMediaPath,
   getDirectMessageMediaKind,
+  getDirectMessageMimeType,
   validateDirectMessageFiles,
 } from "@/components/collaboration/directMessageMedia.mjs";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,10 +33,10 @@ function describeDirectMessageFailure(error: unknown, fallback: string) {
   const detail = [candidate.message, candidate.error]
     .find((value): value is string => typeof value === "string" && value.trim().length > 0);
   if (!detail) return fallback;
-  if (/bucket.*not found|not found.*bucket/i.test(detail)) return "聊天室圖片空間尚未建立，請重新整理後再試。";
-  if (/row-level security|unauthorized|permission|policy/i.test(detail)) return "圖片上傳權限尚未同步，請重新登入後再試。";
-  if (/mime|content.?type/i.test(detail)) return "這個圖片格式未被聊天室接受，請改用 JPG、PNG、WebP 或 GIF。";
-  if (/payload|too large|maximum.*size|exceeded/i.test(detail)) return "圖片檔案超過聊天室上傳限制。";
+  if (/bucket.*not found|not found.*bucket/i.test(detail)) return "聊天室附件空間尚未建立，請重新整理後再試。";
+  if (/row-level security|unauthorized|permission|policy/i.test(detail)) return "附件上傳權限尚未同步，請重新登入後再試。";
+  if (/mime|content.?type/i.test(detail)) return "這個檔案格式未被聊天室接受，請確認為支援的圖片、影片、PPT／PPTX 或 XLS／XLSX。";
+  if (/payload|too large|maximum.*size|exceeded/i.test(detail)) return "檔案超過聊天室上傳限制：圖片 12 MB，影片與文件 50 MB。";
   return fallback;
 }
 
@@ -71,7 +72,7 @@ export interface DirectMessageAttachment {
   fileName: string;
   mimeType: string;
   fileSize: number;
-  mediaKind: "image" | "video";
+  mediaKind: "image" | "video" | "document";
   position: number;
   url: string | null;
 }
@@ -427,18 +428,19 @@ export function useDirectMessages(threadId: string | null) {
           index,
         );
         const mediaKind = getDirectMessageMediaKind(file);
-        if (!mediaKind) return null;
+        const mimeType = getDirectMessageMimeType(file);
+        if (!mediaKind || !mimeType) return null;
 
         const { error: uploadError } = await supabase.storage.from(CHAT_MEDIA_BUCKET).upload(
           storagePath,
           file,
-          { contentType: file.type, cacheControl: "3600", upsert: false },
+          { contentType: mimeType, cacheControl: "3600", upsert: false },
         );
         if (uploadError) {
           console.error("Direct-message media upload failed", JSON.stringify(uploadError));
           persistErrorRef.current = describeDirectMessageFailure(
             uploadError,
-            "圖片無法寫入聊天室儲存空間，請稍後再試。",
+            "附件無法寫入聊天室儲存空間，請稍後再試。",
           );
           if (uploadedPaths.length > 0) {
             await supabase.storage.from(CHAT_MEDIA_BUCKET).remove(uploadedPaths);
@@ -449,7 +451,7 @@ export function useDirectMessages(threadId: string | null) {
         attachments.push({
           storage_path: storagePath,
           file_name: file.name.slice(0, 255),
-          mime_type: file.type,
+          mime_type: mimeType,
           file_size: file.size,
           media_kind: mediaKind,
         });
@@ -495,7 +497,7 @@ export function useDirectMessages(threadId: string | null) {
         console.error("Direct-message attachment record failed", JSON.stringify(insertError));
         persistErrorRef.current = describeDirectMessageFailure(
           insertError,
-          "圖片已上傳，但無法建立聊天室訊息，請稍後再試。",
+          "附件已上傳，但無法建立聊天室訊息，請稍後再試。",
         );
       }
       return null;
@@ -529,7 +531,7 @@ export function useDirectMessages(threadId: string | null) {
           id: `optimistic-attachment:${clientId}:${index}`,
           storagePath: "",
           fileName: file.name,
-          mimeType: file.type,
+          mimeType: getDirectMessageMimeType(file) ?? file.type,
           fileSize: file.size,
           mediaKind: getDirectMessageMediaKind(file) ?? "image",
           position: index,
@@ -549,7 +551,7 @@ export function useDirectMessages(threadId: string | null) {
       }
 
       setError(files.length > 0
-        ? persistErrorRef.current || "照片或影片上傳失敗，已保留選取內容，請再試一次。"
+        ? persistErrorRef.current || "附件上傳失敗，已保留選取內容，請再試一次。"
         : null);
       setMessages((current) => files.length > 0
         ? current.filter((message) => message.clientId !== clientId)
