@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Save, Shield, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -103,10 +103,17 @@ export function UserPermissionsDialog({
     useState<WorkspaceAccessMap>(DEFAULT_WORKSPACE_ACCESS);
   const [performanceManager, setPerformanceManager] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
+  const [isReading, setIsReading] = useState(true);
+  const loadRequest = useRef({ id: 0 });
+  const canConfigure = loadedUserId === userId && !isReading && !isLoading;
   const { toast } = useToast();
   const { user } = useUser();
 
   const loadUserPermissions = useCallback(async () => {
+    const request = ++loadRequest.current.id;
+    setIsReading(true);
+    setLoadedUserId(null);
     try {
       const [{ data: pagePermissions, error: pagePermissionError }, { data: userData, error: userError }] =
         await Promise.all([
@@ -122,6 +129,8 @@ export function UserPermissionsDialog({
         ]);
 
       if (userError) throw userError;
+      if (!userData) throw new Error("找不到要設定權限的帳號");
+      if (request !== loadRequest.current.id) return;
 
       const permissionSettings =
         userData?.permissions && typeof userData.permissions === "object"
@@ -138,7 +147,9 @@ export function UserPermissionsDialog({
 
       setWorkspaceAccess(readWorkspaceAccess(permissionSettings, loadedPermissions));
       setPerformanceManager(permissionSettings.performanceManager === true);
+      setLoadedUserId(userId);
     } catch (error) {
+      if (request !== loadRequest.current.id) return;
       console.error("Failed to load user permissions:", error);
       setPermissions([]);
       setWorkspaceAccess(DEFAULT_WORKSPACE_ACCESS);
@@ -149,13 +160,20 @@ export function UserPermissionsDialog({
         description: "無法讀取資料庫權限，請稍後重試。為避免誤設，未載入本機舊資料。",
         variant: "destructive",
       });
+    } finally {
+      if (request === loadRequest.current.id) setIsReading(false);
     }
   }, [toast, userId]);
 
   useEffect(() => {
+    const counter = loadRequest.current;
     if (isOpen && userId) {
       void loadUserPermissions();
     }
+    return () => {
+      ++counter.id;
+      setLoadedUserId(null);
+    };
   }, [isOpen, loadUserPermissions, userId]);
 
   const handlePermissionChange = (permission: Permission, checked: boolean) => {
@@ -274,6 +292,7 @@ export function UserPermissionsDialog({
   };
 
   const handleSave = async () => {
+    if (!canConfigure) return;
     try {
       setIsLoading(true);
       const synchronizedPermissions = synchronizeWorkspacePermissions(
@@ -390,10 +409,10 @@ export function UserPermissionsDialog({
 
             <div className="admin-permissions-presets" aria-label="快速套用">
               <span>快速套用</span>
-              <Button type="button" variant="outline" size="sm" onClick={() => applyGlobalPreset("view")}>
+              <Button type="button" variant="outline" size="sm" disabled={!canConfigure} onClick={() => applyGlobalPreset("view")}>
                 全站檢視
               </Button>
-              <Button type="button" size="sm" onClick={() => applyGlobalPreset("edit")}>
+              <Button type="button" size="sm" disabled={!canConfigure} onClick={() => applyGlobalPreset("edit")}>
                 全站管理
               </Button>
               <Button
@@ -401,6 +420,7 @@ export function UserPermissionsDialog({
                 variant="ghost"
                 size="sm"
                 onClick={() => applyGlobalPreset("none")}
+                disabled={!canConfigure}
                 className="text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
               >
                 清空
@@ -416,6 +436,7 @@ export function UserPermissionsDialog({
           <Label className="flex cursor-pointer items-start gap-3">
             <Checkbox
               checked={performanceManager}
+              disabled={!canConfigure}
               onCheckedChange={(checked) =>
                 handlePerformanceManagerChange(checked === true)
               }
@@ -455,6 +476,7 @@ export function UserPermissionsDialog({
 
                       <RadioGroup
                         value={workspace.level}
+                        disabled={!canConfigure}
                         onValueChange={(value) =>
                           handleWorkspaceLevelChange(
                             workspace.id,
@@ -549,6 +571,7 @@ export function UserPermissionsDialog({
                                       type="button"
                                       variant="ghost"
                                       size="sm"
+                                      disabled={!canConfigure}
                                       onClick={() => applyPermissionGroupPreset(selectablePermissions, "all")}
                                     >
                                       全選
@@ -557,6 +580,7 @@ export function UserPermissionsDialog({
                                       type="button"
                                       variant="ghost"
                                       size="sm"
+                                      disabled={!canConfigure}
                                       onClick={() => applyPermissionGroupPreset(groupPermissions, "none")}
                                     >
                                       清除
@@ -579,7 +603,7 @@ export function UserPermissionsDialog({
                                           <Checkbox
                                             id={permission.key}
                                             checked={checked}
-                                            disabled={disabled}
+                                            disabled={disabled || !canConfigure}
                                             onCheckedChange={(checkedValue) =>
                                               handlePermissionChange(
                                                 permission.key,
@@ -607,7 +631,11 @@ export function UserPermissionsDialog({
 
         <div className="admin-permissions-footer flex items-center justify-between gap-3 border-t border-border/70 bg-card/95 px-4 py-3 sm:px-5">
           <div className="text-xs text-muted-foreground">
-            儲存後立即更新工作區入口與細部頁面權限。
+            {isReading ? "正在讀取此帳號的最新權限…" : loadedUserId !== userId ? (
+              <Button variant="outline" size="sm" onClick={() => void loadUserPermissions()}>
+                重新載入權限
+              </Button>
+            ) : "儲存後自動更新入口；其他使用中的裝置每 30 秒同步權限。"}
           </div>
 
           <div className="flex shrink-0 justify-end gap-2">
@@ -615,7 +643,7 @@ export function UserPermissionsDialog({
               <X className="mr-2 h-4 w-4" />
               取消
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={isLoading}>
+            <Button size="sm" onClick={handleSave} disabled={!canConfigure}>
               <Save className="mr-2 h-4 w-4" />
               {isLoading ? "儲存中..." : "儲存權限"}
             </Button>

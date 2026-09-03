@@ -19,9 +19,37 @@ const {
   canAccessModule,
   readWorkspaceAccess,
   synchronizeWorkspacePermissions,
+  readStoredPagePermissions,
+  ALL_PAGE_PERMISSIONS,
+  WORKSPACE_IDS,
 } = permissionsModule;
 
 const configured = (workspaceAccess) => ({ workspaceAccess });
+
+test("a new employee can open and edit performance after a full-access snapshot is saved", () => {
+  const settings = {
+    workspaceAccess: Object.fromEntries(WORKSPACE_IDS.map((id) => [id, "edit"])),
+    pagePermissions: ALL_PAGE_PERMISSIONS,
+    performanceManager: false,
+  };
+  const restored = JSON.parse(JSON.stringify(settings));
+  const permissions = readStoredPagePermissions(restored);
+  const access = { module: "performance", role: "engineer", permissions, permissionSettings: restored };
+  assert.equal(readWorkspaceAccess(restored, permissions).performance, "edit");
+  assert.equal(canAccessModule({ ...access, action: "view" }), true);
+  assert.equal(canAccessModule({ ...access, action: "edit" }), true);
+  // Self-assessment access does not require the separate reviewer assignment.
+  assert.equal(restored.performanceManager, false);
+});
+
+test("a refreshed performance denial overrides previously granted page permissions", () => {
+  const access = {
+    module: "performance", role: "engineer", permissions: ALL_PAGE_PERMISSIONS,
+    permissionSettings: configured({ performance: "none" }),
+  };
+  assert.equal(canAccessModule({ ...access, action: "view" }), false);
+  assert.equal(canAccessModule({ ...access, action: "edit" }), false);
+});
 
 test("station workspace edit does not override missing page permission", () => {
   const allowed = canAccessModule({

@@ -234,6 +234,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     }
 
     try {
+      let createdUserId: string | undefined;
       if (REALTIME_COLLABORATION_V2_ENABLED) {
         const result = await mutateAuthAccount("", {
           action: "create",
@@ -247,6 +248,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
           },
         });
         if (!result.success) throw new Error(result.error || "帳號與登入身分建立失敗");
+        createdUserId = result.userId;
       } else {
         // Legacy deployment path remains available until the rollout flag is enabled.
         const { data: hashedPassword, error: hashError } = await supabase.rpc('hash_password', {
@@ -254,7 +256,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         });
         if (hashError) throw new Error('密碼加密失敗');
 
-        const { error } = await supabase
+        const { data: createdUser, error } = await supabase
           .from('system_users')
           .insert([{
             username: newUser.username,
@@ -263,16 +265,24 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             permissions: newUser.permissions,
             display_name: newUser.displayName,
             created_by: user?.username || 'admin'
-          }]);
+          }])
+          .select('id')
+          .single();
         if (error) throw error;
+        createdUserId = createdUser.id;
       }
 
       toast({
         title: "新增成功",
-        description: "系統用戶已成功新增"
+        description: "系統用戶已新增，請接著設定此人員可使用的工作區。"
       });
 
       setIsUserDialogOpen(false);
+      if (createdUserId) {
+        setSelectedUserId(createdUserId);
+        setSelectedUsername(newUser.username);
+        setPermissionsDialogOpen(true);
+      }
       setNewUser({ username: "", password: "", role: "engineer", permissions: {}, displayName: "" });
       loadSystemUsers();
     } catch (error: unknown) {
