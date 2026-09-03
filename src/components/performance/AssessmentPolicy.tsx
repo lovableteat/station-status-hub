@@ -24,12 +24,29 @@ export function AssessmentPolicy() {
   return (
     <section className="rd2-policy">
       <header className="rd2-section-heading">
-        <h2>系統說明與政策</h2>
+        <h2>評分標準與撰寫參考</h2>
         <p>依數字職等確認權重、依 HW／FW 角色確認 KPI，再用 STAR 填寫實績。</p>
         <p className="rd2-hint">
           標準來源：{STANDARDS_SOURCE.file} · {STANDARDS_SOURCE.sheet}
         </p>
       </header>
+
+      <div className="rd2-policy-principles">
+        <p>
+          <strong>組織歸屬</strong>
+          <span>決定誰評核誰，由管理員設定部長、課長及同仁。</span>
+        </p>
+        <p>
+          <strong>職務與職等</strong>
+          <span>決定 KPI 參考與政策權重；當責題目則依組織層級帶入。</span>
+        </p>
+        <p>
+          <strong>資料保護</strong>
+          <span>
+            主管可在組織架構設定群組密碼；包含管理員，受保護資料都須先解鎖。
+          </span>
+        </p>
+      </div>
 
       <div className="rd2-policy-grid">
         <section className="rd2-card">

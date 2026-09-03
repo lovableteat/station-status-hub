@@ -20,15 +20,15 @@ import { WEIGHT_GROUPS } from "./rd2Standards.mjs";
  * never carried by colour alone.
  */
 const CATEGORY_COLORS = {
-  KPI: "#4085F5",
-  OKR: "#1AA167",
-  IDP: "#7D5AE8",
+  KPI: "var(--rd2-kpi, #4085F5)",
+  OKR: "var(--rd2-okr, #1AA167)",
+  IDP: "var(--rd2-idp, #7D5AE8)",
 } as const;
 
 const CATEGORY_ORDER = ["KPI", "OKR", "IDP"] as const;
 
 /** Panel surface - doubles as the 2px spacer stroke between stacked fills. */
-const SURFACE = "#081c2d";
+const SURFACE = "var(--rd2-panel, #081c2d)";
 
 
 interface WeightRow {
