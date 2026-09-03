@@ -16,7 +16,48 @@ import {
 import {
   organizationTreeMembers,
   validateOrganizationManager,
+  availableOrganizationMembers,
 } from "../src/components/performance/organizationData.mjs";
+
+test("organization dropdown excludes every classified level and restores only removed active accounts", () => {
+  const roster = [
+    {
+      employee_id: "director",
+      account_status: "active",
+      org_level: "director",
+      manager_id: null,
+      updated_at: "2026-09-03T08:00:00Z",
+    },
+    {
+      employee_id: "chief",
+      account_status: "active",
+      org_level: "section_chief",
+      updated_at: "2026-09-03T08:00:00Z",
+    },
+    {
+      employee_id: "member",
+      account_status: "active",
+      org_level: "member",
+      updated_at: "2026-09-03T08:00:00Z",
+    },
+    { employee_id: "new", account_status: "active", updated_at: null },
+    { employee_id: "inactive", account_status: "inactive", updated_at: null },
+  ];
+  assert.deepEqual(
+    availableOrganizationMembers(roster).map((m) => m.employee_id),
+    ["new"],
+  );
+  roster[0].updated_at = null;
+  assert.deepEqual(
+    availableOrganizationMembers(roster).map((m) => m.employee_id),
+    ["director", "new"],
+  );
+  roster[0].updated_at = "2026-09-03T09:00:00Z";
+  assert.deepEqual(
+    availableOrganizationMembers(roster).map((m) => m.employee_id),
+    ["new"],
+  );
+});
 
 test("legacy STAR text remains a single intact entry and supports continued additions", () => {
   const legacy = {

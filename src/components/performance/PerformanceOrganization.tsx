@@ -6,7 +6,16 @@ import {
   type ReactNode,
 } from "react";
 import { useSearchParams } from "react-router-dom";
-import { GitBranch, List, Pencil, RefreshCw, Users, X } from "lucide-react";
+import {
+  GitBranch,
+  List,
+  Pencil,
+  Plus,
+  RefreshCw,
+  UserMinus,
+  Users,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +34,8 @@ import {
   findOrganizationReview,
   organizationTreeMembers,
   validateOrganizationManager,
+  availableOrganizationMembers,
+  isOrganizationAssigned,
 } from "./organizationData.mjs";
 import { PERFORMANCE_STATUS } from "./performanceData.mjs";
 import type { PerformanceReview } from "./assessmentTypes";
@@ -63,6 +74,20 @@ const STATUS: Record<string, string> = {
   ),
 };
 const LEVELS = { director: "部長", section_chief: "課長", member: "一般成員" };
+const blankMember = (): OrganizationMember => ({
+  employee_id: "",
+  username: "",
+  display_name: "",
+  account_status: "active",
+  is_manager: false,
+  manager_id: null,
+  department: "",
+  job_title: "",
+  org_level: "director",
+  section: "",
+  performance_role: "manager",
+  updated_at: null,
+});
 
 export function PerformanceOrganization({
   reviews,
@@ -86,6 +111,10 @@ export function PerformanceOrganization({
   const [editing, setEditing] = useState<OrganizationMember | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<OrganizationMember | null>(null);
+  const [removalError, setRemovalError] = useState("");
+  const [removalSaving, setRemovalSaving] = useState(false);
   const search = params.get("orgSearch") || "";
   const status = params.get("orgStatus") || "";
   const manager = params.get("orgManager") || "";
@@ -131,14 +160,19 @@ export function PerformanceOrganization({
     () => new Map(members.map((member) => [member.employee_id, member])),
     [members],
   );
-  const managers = members.filter(
+  const assignedMembers = members.filter(isOrganizationAssigned);
+  const availableMembers: OrganizationMember[] =
+    availableOrganizationMembers(members);
+  const managers = assignedMembers.filter(
     (member) => member.is_manager && member.account_status === "active",
   );
   const departments = [
-    ...new Set(members.map((member) => member.department).filter(Boolean)),
+    ...new Set(
+      assignedMembers.map((member) => member.department).filter(Boolean),
+    ),
   ].sort();
   const sections = [
-    ...new Set(members.map((member) => member.section).filter(Boolean)),
+    ...new Set(assignedMembers.map((member) => member.section).filter(Boolean)),
   ].sort();
   // Only server-authorized records supply status. A locked row is never
   // presented as missing, nor inferred from administrator status.
@@ -146,7 +180,7 @@ export function PerformanceOrganization({
     !!findOrganizationReview(member, reviews, cycle);
   const statusOf = (member: OrganizationMember) =>
     findOrganizationReview(member, reviews, cycle)?.status || "unavailable";
-  const filtered = members.filter((member) => {
+  const filtered = assignedMembers.filter((member) => {
     const managerName = byId.get(member.manager_id || "")?.display_name || "";
     const matchesSearch = [
       member.display_name,
@@ -193,11 +227,22 @@ export function PerformanceOrganization({
       performanceReview: null,
     });
   const edit = (member: OrganizationMember) => {
+    setAdding(false);
     setEditing({ ...member });
     setSaveError("");
   };
   const save = async () => {
     if (!editing || !administrator || saving) return;
+    if (
+      !editing.employee_id ||
+      (adding &&
+        !availableMembers.some(
+          (member) => member.employee_id === editing.employee_id,
+        ))
+    ) {
+      setSaveError("請從尚未分類的人員選單選擇帳號。");
+      return;
+    }
     if (
       editing.org_level === "member" &&
       editing.performance_role === "manager"
@@ -239,20 +284,75 @@ export function PerformanceOrganization({
       onChanged();
     } catch (cause) {
       const code = (cause as { code?: string }).code;
+      if (adding && code === "40001") {
+        await load();
+        setEditing((current) =>
+          current
+            ? { ...current, employee_id: "", username: "", display_name: "" }
+            : null,
+        );
+      }
       setSaveError(
         code === "40001"
-          ? "組織資料已被其他人更新，請關閉視窗並重新整理後再編輯。"
+          ? adding
+            ? "此人員已被加入組織，選單已更新，請重新選擇。"
+            : "組織資料已被其他人更新，請關閉視窗並重新整理後再編輯。"
           : "儲存失敗，請確認管理員權限與主管設定後重試。",
       );
     } finally {
       setSaving(false);
     }
   };
+  const remove = async () => {
+    if (!administrator || !removing || removalSaving) return;
+    setRemovalSaving(true);
+    setRemovalError("");
+    try {
+      const result = await orgDb.rpc("remove_performance_organization_member", {
+        p_employee_id: removing.employee_id,
+        p_expected_updated_at: removing.updated_at,
+      });
+      if (result.error) throw result.error;
+      setRemoving(null);
+      setNotice(
+        "已移除組織分類；啟用中的帳號已重新加入人員選單。考核內容與密碼保護保留。",
+      );
+      await load();
+      onChanged();
+    } catch (cause) {
+      const code = (cause as { code?: string }).code;
+      setRemovalError(
+        code === "23503"
+          ? "此人員仍有下屬，請先調整或移除下屬分類。"
+          : code === "40001"
+            ? "組織資料已更新，請關閉視窗並重新整理後再移除。"
+            : "移除失敗，請確認管理員權限與連線後重試。",
+      );
+    } finally {
+      setRemovalSaving(false);
+    }
+  };
+  const removeButton = (member: OrganizationMember) =>
+    administrator && (
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        aria-label={`移除 ${member.display_name} 組織分類`}
+        onClick={() => {
+          setRemoving(member);
+          setRemovalError("");
+        }}
+      >
+        <UserMinus />
+        移除分類
+      </Button>
+    );
   if (!allowed)
     return <p role="alert">只有績效主管與管理員可以查看組織架構。</p>;
   const matchingIds = new Set(filtered.map((member) => member.employee_id));
   const treeMembers: OrganizationMember[] = organizationTreeMembers(
-    members,
+    assignedMembers,
     matchingIds,
   );
   const treeIds = new Set(treeMembers.map((member) => member.employee_id));
@@ -318,6 +418,7 @@ export function PerformanceOrganization({
                     編輯
                   </Button>
                 )}
+                {removeButton(member)}
               </div>
               {!!children.length &&
                 renderNodes(
@@ -341,15 +442,31 @@ export function PerformanceOrganization({
               : "人員歸屬由管理員設定。"}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={loading}
-          onClick={() => void load()}
-        >
-          <RefreshCw data-icon="inline-start" />
-          重新整理組織
-        </Button>
+        <div className="rd2-actions">
+          {administrator && (
+            <Button
+              type="button"
+              disabled={loading || !!error || !availableMembers.length}
+              onClick={() => {
+                setAdding(true);
+                setEditing(blankMember());
+                setSaveError("");
+              }}
+            >
+              <Plus />
+              新增組織人員
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loading}
+            onClick={() => void load()}
+          >
+            <RefreshCw data-icon="inline-start" />
+            重新整理組織
+          </Button>
+        </div>
       </header>
       {notice && (
         <p role="status" className="rd2-hint">
@@ -364,7 +481,7 @@ export function PerformanceOrganization({
           <strong>
             {
               new Set(
-                members
+                assignedMembers
                   .filter((m) => m.section)
                   .map((m) => `${m.department}:${m.section}`),
               ).size
@@ -373,22 +490,17 @@ export function PerformanceOrganization({
           課
         </span>
         <span>
-          <strong>{members.length}</strong> 全站帳號
+          <strong>{assignedMembers.length}</strong> 已分類人員
         </span>
         <span>
-          <strong>
-            {
-              members.filter(
-                (m) =>
-                  m.account_status === "active" &&
-                  m.org_level !== "director" &&
-                  !m.manager_id,
-              ).length
-            }
-          </strong>{" "}
-          待分配人員
+          <strong>{availableMembers.length}</strong> 可新增人員
         </span>
       </div>
+      {administrator && (
+        <p className="rd2-hint">
+          從全站帳號的下拉選單新增部長、課長或一般成員。已分類的人員不再列入選單，移除分類後才可重新選取。
+        </p>
+      )}
       {error && (
         <p role="alert" className="rd2-error">
           {error}
@@ -515,7 +627,7 @@ export function PerformanceOrganization({
           </div>
         )}
         <p className="rd2-hint">
-          顯示 {filtered.length} / {members.length} 位人員
+          顯示 {filtered.length} / {assignedMembers.length} 位已分類人員
           {view === "tree" && chips.length ? "；上層主管保留為架構參考。" : ""}
         </p>
         {loading ? (
@@ -595,6 +707,7 @@ export function PerformanceOrganization({
                               編輯
                             </Button>
                           )}
+                        {removeButton(member)}
                       </div>
                     </td>
                   </tr>
@@ -617,9 +730,15 @@ export function PerformanceOrganization({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>編輯 {editing?.display_name} 的組織資料</DialogTitle>
+            <DialogTitle>
+              {adding
+                ? "新增組織人員"
+                : `編輯 ${editing?.display_name} 的組織資料`}
+            </DialogTitle>
             <DialogDescription>
-              變更直屬主管後，未完成考核會交由新主管負責；已完成紀錄保留原考核人。
+              {adding
+                ? "選擇層級與尚未分類的人員，再設定所屬部門及主管。"
+                : "變更直屬主管後，未完成考核會交由新主管負責；已完成紀錄保留原考核人。"}
             </DialogDescription>
           </DialogHeader>
           {editing && (
@@ -655,6 +774,49 @@ export function PerformanceOrganization({
                     ))}
                   </select>
                 </Field>
+                {adding && (
+                  <Field>
+                    <FieldLabel htmlFor="org-edit-person">
+                      選擇
+                      {editing.org_level === "member"
+                        ? "一般成員"
+                        : LEVELS[editing.org_level]}{" "}
+                      *
+                    </FieldLabel>
+                    <select
+                      id="org-edit-person"
+                      required
+                      disabled={saving}
+                      value={editing.employee_id}
+                      onChange={(event) => {
+                        const account = availableMembers.find(
+                          (member) => member.employee_id === event.target.value,
+                        );
+                        setEditing({
+                          ...editing,
+                          employee_id: account?.employee_id || "",
+                          username: account?.username || "",
+                          display_name: account?.display_name || "",
+                        });
+                        setSaveError("");
+                      }}
+                    >
+                      <option value="">請選擇尚未分類的人員</option>
+                      {availableMembers.map((account) => (
+                        <option
+                          key={account.employee_id}
+                          value={account.employee_id}
+                        >
+                          {account.display_name}（{account.username}）
+                        </option>
+                      ))}
+                    </select>
+                    <p className="rd2-hint">
+                      已分類者不會重複出現；尚有 {availableMembers.length}{" "}
+                      位啟用帳號可選。
+                    </p>
+                  </Field>
+                )}
                 <Field>
                   <FieldLabel htmlFor="org-edit-manager">直屬主管</FieldLabel>
                   <select
@@ -682,6 +844,7 @@ export function PerformanceOrganization({
                     {managers
                       .filter(
                         (m) =>
+                          editing.org_level !== "director" &&
                           m.employee_id !== editing.employee_id &&
                           m.org_level ===
                             (editing.org_level === "section_chief"
@@ -781,13 +944,54 @@ export function PerformanceOrganization({
                   >
                     取消
                   </Button>
-                  <Button type="submit" disabled={saving}>
-                    {saving ? "儲存中…" : "儲存組織資料"}
+                  <Button
+                    type="submit"
+                    disabled={saving || !editing.employee_id}
+                  >
+                    {saving ? "儲存中…" : adding ? "加入組織" : "儲存組織資料"}
                   </Button>
                 </div>
               </FieldGroup>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!removing}
+        onOpenChange={(open) => {
+          if (!open && !removalSaving) setRemoving(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              移除 {removing?.display_name} 的組織分類？
+            </DialogTitle>
+            <DialogDescription>
+              移除後，啟用中的帳號會重新出現在人員下拉選單。全站帳號、自評與既有密碼保護會保留，績效主管身分會解除。若仍有下屬，請先調整下屬分類。
+            </DialogDescription>
+          </DialogHeader>
+          {removalError && (
+            <p role="alert" className="rd2-error">
+              {removalError}
+            </p>
+          )}
+          <div className="rd2-actions">
+            <Button
+              variant="outline"
+              disabled={removalSaving}
+              onClick={() => setRemoving(null)}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={removalSaving}
+              onClick={() => void remove()}
+            >
+              {removalSaving ? "移除中…" : "確認移除分類"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </section>
