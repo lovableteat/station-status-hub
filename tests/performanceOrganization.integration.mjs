@@ -140,7 +140,7 @@ try {
           "select count(*)::int as total from supabase_migrations.schema_migrations",
         )
       )[0].total,
-      3,
+      4,
       "deployment transaction verifies content and records all migration sources",
     );
   } else {
@@ -151,6 +151,9 @@ try {
   }
   await db.exec(
     await migration("20260903160000_remove_performance_organization_members"),
+  );
+  await db.exec(
+    await migration("20260903180000_allow_acting_performance_directors"),
   );
   check(
     (
@@ -206,9 +209,9 @@ try {
     },
     "performance assignment preserves global role and unrelated permissions",
   );
-  await assert.rejects(() => save(5, 2, "member"));
+  await assert.rejects(() => save(5, 2, "member"), /section name/);
   checks++;
-  console.log("PASS rejects skipping section chief level");
+  console.log("PASS director acting for a chief requires a named section");
   await assert.rejects(() => save(2, 3, "director"));
   checks++;
   console.log("PASS rejects cycle/top-level parent");
@@ -634,6 +637,153 @@ try {
     )[0].manager,
     "false",
     "removal revokes only the performance supervisor designation",
+  );
+  await actor(1);
+  await save(10, 2, "member", "ignored department", "代理一課");
+  check(
+    (
+      await query(
+        "select manager_id,department,section,org_level from workspace.performance_org_members where employee_id=$1",
+        [id(10)],
+      )
+    )[0],
+    {
+      manager_id: id(2),
+      department: "研發部",
+      section: "代理一課",
+      org_level: "member",
+    },
+    "acting section uses the existing director account and inherits its department",
+  );
+  check(
+    (
+      await query(
+        "select role,permissions from workspace.system_users where id=$1",
+        [id(10)],
+      )
+    )[0],
+    {
+      role: "engineer",
+      permissions: {
+        workspaceAccess: { "station-status": "view", performance: "edit" },
+        pagePermissions: [
+          "dashboard_view",
+          "performance_view",
+          "performance_edit",
+        ],
+        custom: "preserve",
+        performanceManager: false,
+      },
+    },
+    "acting assignment preserves global permissions and keeps the employee role",
+  );
+  await actor(10);
+  await query(
+    "insert into workspace.performance_reviews(id,employee_id,employee_name,self_feedback) values ('acting',$1,'人員10','acting section evidence')",
+    [id(10)],
+  );
+  check(
+    (
+      await query(
+        "select reviewer_name from workspace.performance_reviews where id='acting'",
+      )
+    )[0].reviewer_name,
+    "user2",
+    "new self-assessment automatically routes to the acting director",
+  );
+  await actor(2);
+  await query("select workspace.unlock_performance_group($1,'director-123')", [
+    id(2),
+  ]);
+  check(
+    (await visible()).includes("acting"),
+    true,
+    "acting director can read their direct employee review",
+  );
+  await query(
+    "update workspace.performance_reviews set manager_feedback='director evaluation' where id='acting'",
+  );
+  check(
+    (
+      await query(
+        "select manager_feedback from workspace.performance_reviews where id='acting'",
+      )
+    )[0].manager_feedback,
+    "director evaluation",
+    "acting director can evaluate the employee",
+  );
+  await assert.rejects(() => save(10, 4, "member"), /Administrator/);
+  checks++;
+  console.log("PASS acting director cannot edit organization assignments");
+  await actor(4);
+  check(
+    (await visible()).includes("acting"),
+    false,
+    "other section chief cannot read an acting section",
+  );
+  await actor(1);
+  check(
+    (await visible()).includes("acting"),
+    false,
+    "acting director password also blocks the site administrator",
+  );
+  await save(5, 2, "member", "ignored", "代理二課");
+  check(
+    (
+      await query(
+        "select count(distinct section)::int as sections from workspace.performance_org_members where manager_id=$1 and org_level='member'",
+        [id(2)],
+      )
+    )[0].sections,
+    2,
+    "one director can act for multiple named sections",
+  );
+  await save(2, null, "director", "研發二部");
+  check(
+    (
+      await query(
+        "select department,section from workspace.performance_org_members where employee_id=$1",
+        [id(10)],
+      )
+    )[0],
+    { department: "研發二部", section: "代理一課" },
+    "department rename preserves the acting section name",
+  );
+  await actor(2);
+  check(
+    (await visible()).includes("a"),
+    false,
+    "moving to an acting director cannot bypass the previous chief password",
+  );
+  await actor(1);
+  await save(10, 8, "member", "ignored", "ignored section");
+  check(
+    (
+      await query(
+        "select section from workspace.performance_org_members where employee_id=$1",
+        [id(10)],
+      )
+    )[0].section,
+    "產品課",
+    "appointing a regular chief restores section inheritance",
+  );
+  await actor(8);
+  check(
+    (await visible()).includes("acting"),
+    false,
+    "new chief still needs the former acting director password",
+  );
+  await query("select workspace.unlock_performance_group($1,'director-123')", [
+    id(2),
+  ]);
+  check(
+    (
+      await query(
+        "select reviewer_name,manager_feedback from workspace.performance_reviews where id='acting'",
+      )
+    )[0],
+    { reviewer_name: "user8", manager_feedback: "director evaluation" },
+    "after unlock the new chief receives the open review without losing evaluation content",
   );
   await root();
   await query(

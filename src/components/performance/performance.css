@@ -1410,6 +1410,7 @@
 .rd2-orgchart-node { --node-color: #94a3b8; width: 248px; flex-shrink: 0; position: relative; padding: 12px; border: 1px solid var(--rd2-border); border-top: 3px solid var(--node-color); border-radius: 10px; background: var(--rd2-panel); box-shadow: 0 6px 16px #0002; }
 .rd2-orgchart-node[data-level="director"] { --node-color: #709bff; }
 .rd2-orgchart-node[data-level="section_chief"] { --node-color: #53c8bd; }
+.rd2-orgchart-node.rd2-orgchart-acting { --node-color: #d6b36b; border-style: dashed; }
 .rd2-orgchart-node[data-context] { border-style: dashed; opacity: .8; }
 .rd2-orgchart-node-top { display: flex; align-items: start; gap: 8px; justify-content: space-between; margin-bottom: 8px; }
 .rd2-orgchart-level { color: var(--node-color); font-size: 12px; font-weight: 700; white-space: nowrap; }
