@@ -1411,6 +1411,17 @@
 .rd2-orgchart-node[data-level="director"] { --node-color: #709bff; }
 .rd2-orgchart-node[data-level="section_chief"] { --node-color: #53c8bd; }
 .rd2-orgchart-node.rd2-orgchart-acting { --node-color: #d6b36b; border-style: dashed; }
+.rd2-section-report-filters { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; margin-bottom: 12px; }
+.rd2-section-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.rd2-section-header > div:first-child { flex: 1 1 340px; }
+.rd2-section-header p { color: var(--rd2-muted); font-size: 13px; margin-top: 6px; }
+.rd2-section-report .rd2-pill { border: 1px solid var(--rd2-border); padding: 4px 10px; border-radius: 999px; font-size: 12px; color: var(--rd2-accent); }
+.rd2-section-report-list { display: grid; gap: 16px; }
+.rd2-section-report { padding: 18px; border: 1px solid var(--rd2-border); border-radius: 10px; }
+.rd2-section-report > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.rd2-section-report .rd2-prewrap { overflow-wrap: anywhere; margin: 12px 0; }
+.rd2-section-report-feedback { border-left: 3px solid var(--rd2-accent); padding: 8px 14px; background: var(--rd2-soft); margin: 12px 0; }
+@media (max-width: 640px) { .rd2-section-report-filters { grid-template-columns: 1fr; } }
 .rd2-orgchart-node[data-context] { border-style: dashed; opacity: .8; }
 .rd2-orgchart-node-top { display: flex; align-items: start; gap: 8px; justify-content: space-between; margin-bottom: 8px; }
 .rd2-orgchart-level { color: var(--node-color); font-size: 12px; font-weight: 700; white-space: nowrap; }
