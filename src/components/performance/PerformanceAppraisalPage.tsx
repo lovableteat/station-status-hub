@@ -666,7 +666,7 @@ export function PerformanceAppraisalPage() {
     initial.dueDate = `${cycle.slice(0, 4)}-${cycle.endsWith("q2") ? "06-30" : "09-30"}`;
 
   return (
-    <div className="performance-workspace rd2-workspace">
+    <div className="performance-workspace rd2-workspace" data-performance-view={tab}>
       <aside className="rd2-sidebar" data-testid="performance-sidebar">
         <div className="rd2-brand">
           <ClipboardCheck />
@@ -743,8 +743,9 @@ export function PerformanceAppraisalPage() {
             <AssessmentPolicy />
           </>
         )}
-        {canManagePerformance && !demo && (tab === "organization" || tab === "manager") && <PerformancePrivacyPanel privacy={privacy} userId={userId} configure={tab === "organization"} />}
+        {canManagePerformance && !demo && tab === "manager" && <PerformancePrivacyPanel privacy={privacy} userId={userId} configure={false} />}
         {tab === "organization" && canManagePerformance && <PerformanceOrganization reviews={privacy.ready ? reviews : []} cycle={cycle} onChanged={() => { void load(); }} />}
+        {canManagePerformance && !demo && tab === "organization" && <div className="rd2-org-privacy-after"><PerformancePrivacyPanel privacy={privacy} userId={userId} configure /></div>}
         {tab === "manager" && canManagePerformance && (
           <>
             <div className="rd2-manager-only-notice" role="note">

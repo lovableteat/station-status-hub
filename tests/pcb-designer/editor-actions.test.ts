@@ -268,6 +268,27 @@ test("moves unlocked members while leaving locked members in a mixed group", () 
   );
 });
 
+test("measurement flips mirror around the center without changing length and are reversible", () => {
+  const project = createBlankProject("Mirror dimensions");
+  const line = { id: "diagonal", x1: -5.5, y1: 10.25, x2: 24.5, y2: 50.25, color: "#facc15" };
+  project.measurements = [line];
+  const selection = { kind: "measurement", id: line.id };
+  for (const axis of ["horizontal", "vertical"]) {
+    const mirrored = editorModule.editSelectedObject(project, selection, { type: "flip-measurement", axis });
+    const copy = mirrored.measurements[0];
+    assert.equal(copy.x1 + copy.x2, line.x1 + line.x2);
+    assert.equal(copy.y1 + copy.y2, line.y1 + line.y2);
+    assert.equal(Math.hypot(copy.x2 - copy.x1, copy.y2 - copy.y1), 50);
+    assert.equal(copy.id, line.id);
+    assert.equal(copy.color, line.color);
+    assert.equal(copy.x1, axis === "horizontal" ? line.x2 : line.x1);
+    assert.equal(copy.y1, axis === "vertical" ? line.y2 : line.y1);
+    assert.deepEqual(editorModule.editSelectedObject(mirrored, selection, { type: "flip-measurement", axis }), project);
+  }
+  assert.deepEqual(project.measurements, [line]);
+  assert.deepEqual(editorModule.editSelectedObject(project, null, { type: "flip-measurement", axis: "horizontal" }), project);
+});
+
 test("moves selected components and keepouts as one rigid snapped transaction", () => {
   assert.equal(typeof editorModule.moveObjects, "function");
   const project = createBlankProject("Mixed object move");

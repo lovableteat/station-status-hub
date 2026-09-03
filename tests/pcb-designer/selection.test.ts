@@ -142,3 +142,46 @@ test("whole-board selections still paste when no collision-free offset exists", 
   assert.notEqual(result.project.components[1].instanceId, "board-filling-component");
   assert.notEqual(result.project.components[1].reference, "U1");
 });
+
+test("measurement copies retain length, direction and color, including outside-board endpoints", () => {
+  for (const endpoints of [
+    { x1: -5, y1: 0, x2: -5, y2: 40 },
+    { x1: 0, y1: 80, x2: 100, y2: 80 },
+    { x1: 37.5, y1: 42.25, x2: -2.5, y2: 7.25 },
+  ]) {
+    const board = project();
+    const line = { id: "dimension", ...endpoints, color: "#facc15" };
+    board.measurements = [line];
+    const before = structuredClone(board);
+    const result = duplicatePcbSelection(board, [line.id, line.id]);
+    assert.ok(result);
+    assert.equal(result.project.measurements.length, 2);
+    const copy = result.project.measurements[1];
+    assert.notEqual(copy.id, line.id);
+    assert.deepEqual(result.objectIds, [copy.id]);
+    assert.equal(copy.x2 - copy.x1, line.x2 - line.x1);
+    assert.equal(copy.y2 - copy.y1, line.y2 - line.y1);
+    assert.equal(copy.color, line.color);
+    assert.ok(copy.x1 !== line.x1 || copy.y1 !== line.y1);
+    assert.deepEqual(board, before);
+
+    const pastedAgain = duplicatePcbSelection(result.project, [line.id]);
+    assert.ok(pastedAgain);
+    const another = pastedAgain.project.measurements[2];
+    assert.notEqual(another.id, copy.id);
+    assert.ok(another.x1 !== copy.x1 || another.y1 !== copy.y1);
+  }
+});
+
+test("measurements copied with components preserve their relative placement", () => {
+  const board = project();
+  board.measurements = [{ id: "dimension", x1: 20, y1: 5, x2: 20, y2: 25, color: "#fff" }];
+  const result = duplicatePcbSelection(board, ["top", "dimension"]);
+  assert.ok(result);
+  const copiedComponent = result.project.components.find(item => item.instanceId === result.idMap.get("top"))!;
+  const copy = result.project.measurements[1];
+  assert.equal(copy.x1 - 20, copiedComponent.x - 20);
+  assert.equal(copy.y1 - 5, copiedComponent.y - 20);
+  assert.deepEqual(result.objectIds, [copiedComponent.instanceId, copy.id]);
+  assert.equal(duplicatePcbSelection(board, ["missing"]), null);
+});

@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   GitBranch,
@@ -13,7 +7,6 @@ import {
   Plus,
   RefreshCw,
   UserMinus,
-  Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,6 +32,7 @@ import {
 } from "./organizationData.mjs";
 import { PERFORMANCE_STATUS } from "./performanceData.mjs";
 import type { PerformanceReview } from "./assessmentTypes";
+import { PerformanceOrganizationTree } from "./PerformanceOrganizationTree";
 
 export interface OrganizationMember {
   employee_id: string;
@@ -226,6 +220,24 @@ export function PerformanceOrganization({
       performanceSearch: member.display_name,
       performanceReview: null,
     });
+  const addMember = (parent?: OrganizationMember) => {
+    if (!administrator || loading || error || !availableMembers.length) return;
+    const org_level = parent
+      ? parent.org_level === "director"
+        ? "section_chief"
+        : "member"
+      : "director";
+    setAdding(true);
+    setEditing({
+      ...blankMember(),
+      org_level,
+      manager_id: parent?.employee_id || null,
+      department: parent?.department || "",
+      section: org_level === "member" ? parent?.section || "" : "",
+      performance_role: org_level === "member" ? "employee" : "manager",
+    });
+    setSaveError("");
+  };
   const edit = (member: OrganizationMember) => {
     setAdding(false);
     setEditing({ ...member });
@@ -355,86 +367,11 @@ export function PerformanceOrganization({
     assignedMembers,
     matchingIds,
   );
-  const treeIds = new Set(treeMembers.map((member) => member.employee_id));
-  const renderNodes = (
-    nodes: OrganizationMember[],
-    ancestors = new Set<string>(),
-  ): ReactNode => (
-    <ul className="rd2-org-tree">
-      {nodes
-        .filter((member) => !ancestors.has(member.employee_id))
-        .map((member) => {
-          const children = treeMembers.filter(
-            (child) => child.manager_id === member.employee_id,
-          );
-          return (
-            <li key={member.employee_id}>
-              <div
-                className="rd2-org-node"
-                data-context={!matchingIds.has(member.employee_id) || undefined}
-              >
-                <Users aria-hidden="true" />
-                <div>
-                  <strong>
-                    {member.display_name}{" "}
-                    <small>{LEVELS[member.org_level]}</small>
-                  </strong>
-                  <span>
-                    {[
-                      member.department || "未分配部門",
-                      member.section,
-                      member.job_title,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                    {member.account_status !== "active" ? " · 未啟用" : ""}
-                    {member.performance_role === "none" ? " · 未開通績效" : ""}
-                  </span>
-                </div>
-                <small>
-                  {children.length ? `${children.length} 位直屬` : ""}
-                </small>
-                <span>{STATUS[statusOf(member)] || ""}</span>
-                {canInspect(member) && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openReview(member)}
-                    aria-label={`查看 ${member.display_name} 考核`}
-                  >
-                    考核紀錄
-                  </Button>
-                )}
-                {administrator && member.account_status === "active" && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => edit(member)}
-                    aria-label={`編輯 ${member.display_name} 組織資料`}
-                  >
-                    <Pencil />
-                    編輯
-                  </Button>
-                )}
-                {removeButton(member)}
-              </div>
-              {!!children.length &&
-                renderNodes(
-                  children,
-                  new Set([...ancestors, member.employee_id]),
-                )}
-            </li>
-          );
-        })}
-    </ul>
-  );
   return (
     <section className="rd2-organization">
       <header className="rd2-section-heading rd2-org-header">
         <div>
-          <h2>組織架構</h2>
+          <h2>組織架構樹狀圖</h2>
           <p>
             部長 → 課長 → 一般成員；一個部可包含多個課。
             {administrator
@@ -447,11 +384,7 @@ export function PerformanceOrganization({
             <Button
               type="button"
               disabled={loading || !!error || !availableMembers.length}
-              onClick={() => {
-                setAdding(true);
-                setEditing(blankMember());
-                setSaveError("");
-              }}
+              onClick={() => addMember()}
             >
               <Plus />
               新增組織人員
@@ -496,11 +429,6 @@ export function PerformanceOrganization({
           <strong>{availableMembers.length}</strong> 可新增人員
         </span>
       </div>
-      {administrator && (
-        <p className="rd2-hint">
-          從全站帳號的下拉選單新增部長、課長或一般成員。已分類的人員不再列入選單，移除分類後才可重新選取。
-        </p>
-      )}
       {error && (
         <p role="alert" className="rd2-error">
           {error}
@@ -583,9 +511,9 @@ export function PerformanceOrganization({
             }}
             aria-label="組織檢視方式"
           >
-            <ToggleGroupItem value="tree" aria-label="架構檢視">
+            <ToggleGroupItem value="tree" aria-label="樹狀圖檢視">
               <GitBranch />
-              架構
+              樹狀圖
             </ToggleGroupItem>
             <ToggleGroupItem value="list" aria-label="清單檢視">
               <List />
@@ -632,19 +560,28 @@ export function PerformanceOrganization({
         </p>
         {loading ? (
           <p role="status">正在讀取組織架構…</p>
+        ) : error ? (
+          <p role="status">組織資料暫時無法顯示，請重新整理組織。</p>
         ) : view === "tree" ? (
-          <>
-            {filtered.length ? (
-              renderNodes(
-                treeMembers.filter(
-                  (member) =>
-                    !member.manager_id || !treeIds.has(member.manager_id),
-                ),
-              )
-            ) : (
-              <p>目前篩選條件沒有符合的人員</p>
-            )}
-          </>
+          <PerformanceOrganizationTree
+            members={treeMembers}
+            matchingIds={matchingIds}
+            administrator={administrator}
+            canAdd={availableMembers.length > 0}
+            filtering={chips.length > 0}
+            emptyOrganization={
+              assignedMembers.length === 0 && chips.length === 0
+            }
+            statusOf={(member) => STATUS[statusOf(member)] || ""}
+            canInspect={canInspect}
+            onInspect={openReview}
+            onEdit={edit}
+            onRemove={(member) => {
+              setRemovalError("");
+              setRemoving(member);
+            }}
+            onAdd={addMember}
+          />
         ) : (
           <div className="rd2-table-wrap">
             <table>
