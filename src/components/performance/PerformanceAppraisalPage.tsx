@@ -31,7 +31,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
-import { PerformanceFlowGuide } from "./PerformanceFlowGuide";
+import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGuide";
 import { saveAssessmentRecord } from "./assessmentPersistence.mjs";
 import { AssessmentEntryList } from "./AssessmentEntryList";
 import { PerformanceOrganization } from "./PerformanceOrganization";
@@ -65,6 +65,7 @@ import type {
   PerformanceReview,
 } from "./assessmentTypes";
 import "./performance.css";
+import "./performance-bright.css";
 
 // The deployed table is not yet included in the generated database types.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -668,7 +669,7 @@ export function PerformanceAppraisalPage() {
     initial.dueDate = `${cycle.slice(0, 4)}-${cycle.endsWith("q2") ? "06-30" : "09-30"}`;
 
   return (
-    <div className="performance-workspace rd2-workspace" data-performance-view={tab}>
+    <div className={`performance-workspace rd2-workspace${["policy", "self", "manager"].includes(tab) ? " rd2-bright" : ""}`} data-performance-view={tab}>
       <aside className="rd2-sidebar" data-testid="performance-sidebar">
         <div className="rd2-brand">
           <ClipboardCheck />
@@ -698,8 +699,8 @@ export function PerformanceAppraisalPage() {
       <main className="performance-content">
         <header className="rd2-page-header">
           <div>
-            <h1>績效與當責評估系統</h1>
-            <p>{demo ? "本機示範模式" : "RD2 · 員工自評與主管評核"}</p>
+            <h1>{tab === "policy" ? "系統說明與政策" : tab === "self" ? "員工自評" : tab === "manager" ? "主管評分" : "績效與當責評估系統"}</h1>
+            <p>{demo ? "本機示範模式" : tab === "policy" ? "組織分工、填寫流程與完整評分標準" : tab === "self" ? "記錄本期成果，讓每一份努力有據可循。" : tab === "manager" ? "依組織歸屬評核，逐一完成直屬同仁的考核。" : "RD2 · 員工自評與主管評核"}</p>
           </div>
           <div className="rd2-header-actions">
             <select
@@ -740,11 +741,14 @@ export function PerformanceAppraisalPage() {
           <>
             <PerformanceFlowGuide
               canManage={canManagePerformance}
-              canManageAll={canManageAll}
+              onStartSelf={() => navigate("self")}
+              onOrganization={() => navigate("organization")}
             />
             <AssessmentPolicy />
           </>
         )}
+        {tab === "self" && <PerformanceTaskGuide mode="self" status={editorReview?.status} />}
+        {tab === "manager" && canManagePerformance && <PerformanceTaskGuide mode="manager" />}
         {canManagePerformance && !demo && ["manager", "section-reports"].includes(tab) && <PerformancePrivacyPanel privacy={privacy} userId={userId} configure={false} />}
         {tab === "section-reports" && canManagePerformance && <PerformanceSectionReports key={`${userId}:${cycle}:${privacyRevision}`} userId={userId} cycle={cycle} ready={privacy.ready && !demo} />}
         {tab === "organization" && canManagePerformance && <PerformanceOrganization reviews={privacy.ready ? reviews : []} cycle={cycle} onChanged={() => { void load(); }} />}
@@ -756,8 +760,9 @@ export function PerformanceAppraisalPage() {
               <span>
                 {canManageAll
                   ? "可處理已授權的考核；受密碼保護的資料須先解鎖。"
-                  : "課長只評核直屬職員，部長只評核直屬課長；部長代理的課由部長直接處理。課長完成後至「課長彙整與部長審閱」送交彙整，受保護資料須先解鎖。"}
+                  : "完成個人評核後，課長另行彙整本課成果，再送交部長審閱。"}
               </span>
+              <Button size="sm" variant="outline" onClick={() => navigate("section-reports")}>前往課務彙整</Button>
             </div>
             <div
               className="rd2-view-switch"
@@ -769,7 +774,7 @@ export function PerformanceAppraisalPage() {
                   id: "records" as const,
                   label: canManageAll ? "可查看的考核紀錄" : "所屬同仁紀錄",
                   hint: canManageAll
-                    ? "查看所有員工的送件狀態並挑選評分對象"
+                    ? "查看已授權的送件狀態並挑選評分對象"
                     : "只查看你負責的所屬同仁並挑選評分對象",
                 },
                 {
@@ -856,8 +861,9 @@ export function PerformanceAppraisalPage() {
                     </Button>
                   )}
                 </div>
+                <div className={editorReview && tab === "manager" ? "rd2-review-layout" : undefined}>
                 {editorReview && tab === "manager" && (
-                  <details className="rd2-card">
+                  <details className="rd2-card rd2-review-evidence" open>
                     <summary>
                       查看 {editorReview.employeeName} 的自評與現有回饋
                     </summary>
@@ -900,6 +906,7 @@ export function PerformanceAppraisalPage() {
                     onSave={save}
                   />
                 )}
+                </div>
               </>
             )}
           </>
@@ -972,17 +979,18 @@ export function PerformanceAppraisalPage() {
                     hint="僅計入已評分者"
                   />
                 )}
-                <StatTile
+                {tab !== "manager" && <StatTile
                   label="平均目標進度"
                   value={recordSummary.averageProgress ?? "--"}
                   suffix={recordSummary.averageProgress === null ? "" : "%"}
                   tone="progress"
                   hint="所有目標平均"
-                />
+                />}
               </div>
-              <section className="rd2-card rd2-records-chart">
+              <details className="rd2-card rd2-records-chart">
+                <summary>查看考核狀態分佈</summary>
                 <StatusBreakdownChart counts={recordSummary.counts} />
-              </section>
+              </details>
             </div>
             <div className="rd2-filter-bar" aria-label="考核篩選">
               <div className="rd2-filters">
