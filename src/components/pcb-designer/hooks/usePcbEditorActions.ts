@@ -39,7 +39,7 @@ import { libraryIdentity } from "../core/workspaceRecords.ts";
 import { isValidBoard } from "../core/validation.ts";
 import { isValidComponentKeepout } from "../core/componentKeepout.ts";
 import { deletePcbSelection } from "../core/selection.ts";
-import { DEFAULT_MEASUREMENT_SHORTCUTS, MEASUREMENT_SHORTCUTS_KEY, measurementShortcutAxis, validMeasurementShortcuts, type MeasurementFlipAxis, type MeasurementShortcuts } from "../core/measurementShortcuts.ts";
+import { DEFAULT_MEASUREMENT_SHORTCUTS, MEASUREMENT_SHORTCUTS_KEY, measurementShortcutDirection, validMeasurementShortcuts, type MeasurementRotationDirection, type MeasurementShortcuts } from "../core/measurementShortcuts.ts";
 
 export const MAX_AUTO_PLACE_ITEMS = 50;
 export const MAX_AUTO_PLACE_COLLISION_TESTS = 1_000_000;
@@ -499,15 +499,15 @@ export function usePcbEditorActions(
     return true;
   }, [dispatch, state.activeProject, state.canEdit, state.documentLocked, state.selectedObjects, state.selection]);
   const rotateSelected = useCallback(() => applySelectionEdit({ type: "rotate" }), [applySelectionEdit]);
-  const flipSelectedMeasurement = useCallback((axis: MeasurementFlipAxis) => {
+  const rotateSelectedMeasurement = useCallback((direction: MeasurementRotationDirection) => {
     if (!state.canEdit || state.documentLocked || state.selection?.kind !== "measurement") return false;
     const line = state.activeProject.measurements.find(item => item.id === state.selection?.id);
     if (!line) return false;
-    const changed = applySelectionEdit({ type: "flip-measurement", axis });
-    const sameAppearance = line.x1 === line.x2 || line.y1 === line.y2;
+    const changed = applySelectionEdit({ type: "rotate", direction });
+    if (!changed) return false;
     toast({
-      title: changed ? `已${axis === "horizontal" ? "左右" : "上下"}翻轉量測線` : "翻轉後外觀相同",
-      description: sameAppearance ? "水平或垂直線翻轉後外觀相同，長度不變。" : "以線段中心翻轉，長度不變；Ctrl+Z 可復原。",
+      title: `已${direction === "clockwise" ? "順時針" : "逆時針"}旋轉 90°`,
+      description: "以線段中心旋轉，長度不變；Ctrl+Z 可復原。",
     });
     return true;
   }, [applySelectionEdit, state.activeProject.measurements, state.canEdit, state.documentLocked, state.selection]);
@@ -603,7 +603,7 @@ export function usePcbEditorActions(
 
   const shortcutRef = useRef({
     measurementShortcuts,
-    flipSelectedMeasurement,
+    rotateSelectedMeasurement,
     selection: state.selection,
     activeProject: state.activeProject,
     arrangeSelectedComponents,
@@ -621,7 +621,7 @@ export function usePcbEditorActions(
   });
   shortcutRef.current = {
     measurementShortcuts,
-    flipSelectedMeasurement,
+    rotateSelectedMeasurement,
     selection: state.selection,
     activeProject: state.activeProject,
     arrangeSelectedComponents,
@@ -645,10 +645,10 @@ export function usePcbEditorActions(
       if (target?.closest("input, textarea, select, [role='dialog'], [contenteditable]:not([contenteditable='false'])")) return;
       const shortcuts = shortcutRef.current;
       const key = event.key.toLocaleLowerCase();
-      const flipAxis = measurementShortcutAxis(event, shortcuts.measurementShortcuts);
-      if (shortcuts.selection?.kind === "measurement" && flipAxis) {
+      const rotationDirection = measurementShortcutDirection(event, shortcuts.measurementShortcuts);
+      if (shortcuts.selection?.kind === "measurement" && rotationDirection) {
         event.preventDefault();
-        if (!event.repeat) shortcuts.flipSelectedMeasurement(flipAxis);
+        if (!event.repeat) shortcuts.rotateSelectedMeasurement(rotationDirection);
         return;
       }
       if (event.ctrlKey || event.metaKey) {
@@ -720,6 +720,7 @@ export function usePcbEditorActions(
         return;
       }
       if (key === "r") {
+        if (shortcuts.selection?.kind === "measurement") return;
         event.preventDefault();
         shortcuts.rotateSelected();
         return;
@@ -823,7 +824,7 @@ export function usePcbEditorActions(
     nudgeSelected,
     pasteCopied,
     centerDrcIssue,
-    flipSelectedMeasurement,
+    rotateSelectedMeasurement,
     measurementShortcuts,
     configureMeasurementShortcuts,
   };

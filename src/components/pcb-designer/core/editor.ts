@@ -70,9 +70,8 @@ export type KeepoutDuplicateResult =
 
 export type SelectionEdit =
   | { type: "delete" }
-  | { type: "rotate" }
+  | { type: "rotate"; direction?: "clockwise" | "counterclockwise" }
   | { type: "toggle-lock" }
-  | { type: "flip-measurement"; axis: "horizontal" | "vertical" }
   | { type: "nudge"; dx: number; dy: number };
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -614,14 +613,19 @@ export function editSelectedObject(
     }
   } else if (action.type === "delete") {
     next.measurements = next.measurements.filter((item) => item.id !== selection.id);
-  } else if (action.type === "flip-measurement") {
+  } else if (action.type === "rotate") {
     const measurement = next.measurements.find((item) => item.id === selection.id);
     if (measurement) {
-      if (action.axis === "horizontal") {
-        [measurement.x1, measurement.x2] = [measurement.x2, measurement.x1];
-      } else {
-        [measurement.y1, measurement.y2] = [measurement.y2, measurement.y1];
-      }
+      const centerX = (measurement.x1 + measurement.x2) / 2;
+      const centerY = (measurement.y1 + measurement.y2) / 2;
+      const direction = action.direction === "counterclockwise" ? -1 : 1;
+      const halfX = (measurement.x2 - measurement.x1) / 2 * direction;
+      const halfY = (measurement.y2 - measurement.y1) / 2 * direction;
+      // SVG uses downward-positive Y. Rotate both endpoints about their midpoint.
+      measurement.x1 = centerX + halfY;
+      measurement.y1 = centerY - halfX;
+      measurement.x2 = centerX - halfY;
+      measurement.y2 = centerY + halfX;
     }
   } else if (action.type === "nudge") {
     const measurement = next.measurements.find((item) => item.id === selection.id);

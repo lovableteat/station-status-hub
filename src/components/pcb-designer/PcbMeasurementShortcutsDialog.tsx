@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import {
   DEFAULT_MEASUREMENT_SHORTCUTS,
   validMeasurementShortcuts,
+  MEASUREMENT_SHORTCUT_OPTIONS,
+  measurementShortcutLabel,
 } from "./core/measurementShortcuts.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 
@@ -46,7 +48,8 @@ export function PcbMeasurementShortcutsDialog({
         <DialogHeader>
           <DialogTitle>量測線快捷鍵</DialogTitle>
           <DialogDescription>
-            選取量測線後，按 Shift 加上設定的字母即可翻轉。設定保留在此瀏覽器。
+            選取量測線後，按設定的快捷鍵即可旋轉 90°。預設 R 順時針、Shift+R
+            逆時針。設定保留在此瀏覽器。
           </DialogDescription>
         </DialogHeader>
         <form
@@ -56,22 +59,24 @@ export function PcbMeasurementShortcutsDialog({
             if (workspace.configureMeasurementShortcuts(draft)) onClose();
           }}
         >
-          {(["horizontal", "vertical"] as const).map((axis) => (
-            <div key={axis} className="grid gap-2">
-              <Label htmlFor={`measurement-shortcut-${axis}`}>
-                {axis === "horizontal" ? "左右翻轉" : "上下翻轉"}
+          {(["clockwise", "counterclockwise"] as const).map((direction) => (
+            <div key={direction} className="grid gap-2">
+              <Label htmlFor={`measurement-shortcut-${direction}`}>
+                {direction === "clockwise"
+                  ? "順時針旋轉 90°"
+                  : "逆時針旋轉 90°"}
               </Label>
               <select
-                id={`measurement-shortcut-${axis}`}
+                id={`measurement-shortcut-${direction}`}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={draft[axis]}
+                value={draft[direction]}
                 onChange={(event) =>
-                  setDraft({ ...draft, [axis]: event.target.value })
+                  setDraft({ ...draft, [direction]: event.target.value })
                 }
               >
-                {"abcdefghijklmnopqrstuvwxyz".split("").map((key) => (
+                {MEASUREMENT_SHORTCUT_OPTIONS.map((key) => (
                   <option key={key} value={key}>
-                    Shift+{key.toUpperCase()}
+                    {measurementShortcutLabel(key)}
                   </option>
                 ))}
               </select>
@@ -79,12 +84,12 @@ export function PcbMeasurementShortcutsDialog({
           ))}
           {!valid && (
             <p role="alert" className="text-sm text-destructive">
-              上下與左右翻轉請使用不同快捷鍵。
+              順時針與逆時針旋轉請使用不同快捷鍵。
             </p>
           )}
           <p className="text-sm text-muted-foreground">
-            方向鍵可移動整條線；Shift＋方向鍵微調 0.1
-            mm。翻轉以線段中心為軸，水平或垂直線的外觀可能相同。
+            方向鍵可移動整條線；Shift＋方向鍵微調 0.1 mm。每次以線段中心旋轉
+            90°，長度保持不變。
           </p>
           <DialogFooter className="gap-2">
             <Button
