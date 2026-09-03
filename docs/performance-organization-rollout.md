@@ -25,7 +25,7 @@
 先資料庫、再前端。`.github/workflows/main.yml` 只部署 GitHub Pages，不執行 Supabase migrations。
 
 1. 在正式前端所用 Supabase 專案確認 `workspace.system_users`、`workspace.performance_reviews`、`workspace.user_page_permissions`、`workspace.current_system_user_id()` 及 `workspace.current_user_can_workspace(text,text)` 可用，依維護流程備份資料庫。
-2. 在同一交易按順序執行 `20260903120000_add_performance_organization.sql`、`20260903130000_protect_performance_groups.sql`、`20260903160000_remove_performance_organization_members.sql`、`20260903180000_allow_acting_performance_directors.sql`。四檔位於 `supabase/migrations/`。可執行 `node scripts/prepare-performance-organization-migration.mjs`，產生含 BEGIN／COMMIT 的 `tmp/performance-organization-deploy.sql`；此命令只產檔，不連線或寫資料庫。已完成前兩份的既有環境使用 `--removal-only`，只部署人員移除更新；已完成前三份的環境使用 `--acting-director-only`，只部署部長代理更新，避免重複 migration 版本。
+2. 在同一交易按順序執行 `20260903120000_add_performance_organization.sql`、`20260903130000_protect_performance_groups.sql`、`20260903160000_remove_performance_organization_members.sql`、`20260903180000_allow_acting_performance_directors.sql`、`20260903190000_add_direct_performance_review_workflow.sql`。五檔位於 `supabase/migrations/`。可執行 `node scripts/prepare-performance-organization-migration.mjs`，產生含 BEGIN／COMMIT 的 `tmp/performance-organization-deploy.sql`；此命令只產檔，不連線或寫資料庫。既有環境依已部署版本使用 `--removal-only`（160000）、`--acting-director-only`（180000）或 `--direct-review-only`（190000），每次只產生指定更新，避免重複 migration 版本。
 3. SQL 建立表、RPC、觸發器與 RLS，正規化可唯一辨識的舊員工 ID，保留舊主管及祖先保護範圍。不唯一的舊姓名不自動指派。產生的交易會核對考核內容與全站角色／權限雜湊並記錄所選 migration 原文；若不一致則整批回復。SQL 內含 PostgREST schema 重載通知。
 4. 用測試帳號驗證下列案例，再合併前端並確認 Pages 發布成功。首次由管理員按部長→課長→成員順序建立關係。
 
@@ -33,7 +33,7 @@
 
 ## 驗收與回復
 
-- 管理員可編輯全站帳號的績效組織，主管唯讀、員工被拒；全站角色與其他權限保持原值。部長看多課、課長不看其他課，禁止更改紀錄所屬員工及員工更改主管分數。
+- 管理員可編輯全站帳號的績效組織，主管唯讀、員工被拒；全站角色與其他權限保持原值。課長只評核直屬職員，部長只評核直屬課長並審閱課長彙整；明確指定由部長代理的同仁例外。部長即使取得課長密碼也不能越級查看該課職員的原始考核。禁止更改紀錄所屬員工及員工更改主管分數。
 - 主管設密碼後，網站管理員與上級主管不能讀寫受保護列或讀取密碼雜湊。正確密碼只解鎖原授權範圍，員工仍可自評。
 - 解鎖限登入、30 分鐘；連錯五次暫停五分鐘。變更需舊密碼並撤銷先前解鎖。移動員工或整課後仍保留原保護。
 - 標準、權重、七題分類與原表一致，舊內容不重算／覆寫；確認回讀、匯出與新帳號入口。
@@ -49,7 +49,15 @@ node tests/performanceOrganization.integration.mjs <已安裝的-@electric-sql/p
 
 使用隔離安裝的 `@electric-sql/pglite@0.5.8` 與 pgcrypto，執行真實 PostgreSQL／RLS，不需要正式帳號或 token。瀏覽器使用本機測試服務，未寫入正式人事資料。
 
-另可將不加任何選項產生的 `tmp/performance-organization-deploy.sql` 作為資料庫測試第三個參數，驗證整份部署交易、內容保留檢查與 migration 記錄（共 72 項）。未提供第三個參數時執行 71 項資料庫檢查。案例涵蓋重複分類、移除與重新加入、過期版本、管理員專屬組織修改、部長代理多課、自評自動送交代理部長、主管評分、改回課長隸屬，以及保留歷史密碼與全站權限。
+另可將不加任何選項產生的 `tmp/performance-organization-deploy.sql` 作為資料庫測試第三個參數，驗證整份部署交易、內容保留檢查與 migration 記錄（共 100 項）。未提供第三個參數時執行 99 項資料庫檢查。案例涵蓋組織分類、移除與重新加入、過期版本、管理員專屬組織修改、部長代理多課、禁止越級讀寫、課長彙整送審／退回／再送審／確認、不可冒用課長或部長身分，以及保留歷史密碼與全站權限。
+
+## 逐級評核與課長彙整
+
+職員自評交由直屬課長評核；課長自己的自評由直屬部長評核。一般主管僅透過直接隸屬關係取得原始考核的存取權，不能利用祖先關係或舊 reviewer_name 越級讀取。既有管理員的查看能力仍受密碼保護，不改全站角色或其他工作區權限。
+
+「課長彙整與部長審閱」使用獨立 `performance_section_reports` 表。課長自行撰寫成果、改善事項及協助需求，每期一份，草稿不向部長顯示。送交後由實際直屬部長確認或退回，退回需理由；送出及確認的內容不能直接覆寫，所有更新檢查版本。彙整僅帶入課長文字及送交時本課人數／可查看的已完成評核人數，不含職員考核原文、分數明細或可展開的原始考核連結。
+
+彙整沿用主管密碼、登入階段與到期規則。部長及管理員須解鎖受保護彙整；課長仍可撰寫自己的彙整。改組時保留舊部門保護範圍，防止透過移動課長繞過密碼。網站管理員不因此取得代替部長確認彙整的權限。
 
 ## 課長出缺時由部長代理
 
@@ -64,3 +72,5 @@ node tests/performanceOrganization.integration.mjs <已安裝的-@electric-sql/p
 同日追加 `20260903160000`，使用 `--removal-only` 產生的交易部署。內容與全站角色／權限完整性檢查通過；確認移除 RPC 已建立、移除歷史表啟用 RLS、一般登入帳號無權直接讀取歷史表、匿名帳號無權執行移除。正式組織分類筆數維持部署前的 0 筆，未替任何人新增或移除分類。
 
 同日追加 `20260903180000`，使用 `--acting-director-only` 產生的交易部署，考核內容與全站角色／權限完整性檢查通過。核對代理規則已啟用、migration 僅記錄一次、匿名帳號仍無權執行編輯；當次既有 7 筆組織分類及 1 筆考核維持不變。本機瀏覽器驗證新增代理課、排除已分類帳號、既有同仁改隸屬部長、移除出缺課長、代理多課及搜尋保留祖先連線。
+
+同日追加 `20260903190000`，使用 `--direct-review-only` 產生的交易部署並通過內容／全站權限雜湊檢查。核對直接隸屬規則已生效、彙整表啟用 RLS、一般登入帳號無權直接更新送審狀態。既有 7 筆組織分類與 1 筆考核保持不變，彙整表為 0 筆，未加入正式測試資料。本機瀏覽器走完課長草稿、送審、部長解鎖、退回補充、重新送審及確認，並確認搜尋清除、鎖定後移除可見內容，以及職員使用彙整網址仍只顯示自評。

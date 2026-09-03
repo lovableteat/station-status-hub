@@ -9,24 +9,22 @@ const STEPS = [
   },
   {
     id: "manager",
-    title: "主管評分",
-    who: "所屬主管",
-    what: "依組織架構查看所屬同仁；部長涵蓋所屬各課，課長涵蓋課內成員。受密碼保護的考核須先解鎖，再依受評者層級完成 7 題當責評分、主管回饋與選填的綜合評分。",
+    title: "直屬主管評核",
+    who: "課長／部長",
+    what: "職員自評交給直屬課長；課長本人的自評交給部長。課長只看直屬職員，部長只看直屬課長；課長出缺的代理課，由部長直接評核同仁。受密碼保護的考核須先解鎖。",
   },
   {
     id: "done",
-    title: "完成考核",
-    who: "系統",
-    what: "主管送出後狀態轉為「已完成」，該期考核定案，紀錄會保留在考核紀錄中供查詢與匯出。",
+    title: "課長彙整送部長",
+    who: "課長 → 部長",
+    what: "課長完成職員評核後，在「課長彙整與部長審閱」整理本課成果並送交部長。部長查看課長提交的彙整，可確認或退回課長補充；不直接展開非代理課職員的原始考核。個人考核與課務彙整分別記錄完成狀態。",
   },
 ] as const;
 
 /** Which step a record is sitting on right now. */
 const stepStateFor = (status: ReviewStatus | null, index: number) => {
   if (!status) return index === 0 ? "current" : "todo";
-  const reached =
-    status === "approved" ? 3 : status === "submitted" ? 1 : 0;
-  if (status === "approved") return "done";
+  const reached = status === "approved" ? 2 : status === "submitted" ? 1 : 0;
   if (index < reached) return "done";
   if (index === reached) return "current";
   return "todo";
@@ -43,14 +41,12 @@ export function PerformanceFlowGuide({
   canManage?: boolean;
   canManageAll?: boolean;
 }) {
-  const visibleSteps = canManage
-    ? STEPS
-    : STEPS.filter((step) => step.id !== "manager");
+  const visibleSteps = STEPS;
 
   return (
     <details className="rd2-flow" open>
       <summary>
-        <span className="rd2-flow-title">怎麼用？{canManage ? "三個" : "兩個"}步驟</span>
+        <span className="rd2-flow-title">評核流程：三個階段</span>
         <span className="rd2-flow-context">
           {employeeName
             ? `目前檢視：${employeeName}`
