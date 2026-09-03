@@ -35,6 +35,7 @@ import {
 import { getMarqueeSelectionIds } from "./core/selection.ts";
 import { getComponentKeepoutBounds, KEEPOUT_SIDES, KEEPOUT_SIDE_LABELS, resizeComponentKeepoutSide } from "./core/componentKeepout.ts";
 import { PcbComponentKeepoutDialog } from "./PcbComponentKeepoutDialog";
+import { PcbMeasurementShortcutsDialog } from "./PcbMeasurementShortcutsDialog";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 import type {
   PcbComponentKeepout,
@@ -237,6 +238,7 @@ export function PcbCanvas({
   const [placementRotation, setPlacementRotation] = useState(0);
   const [contextSelection, setContextSelection] = useState<PcbSelection | null>(null);
   const [keepoutEditorId, setKeepoutEditorId] = useState<string | null>(null);
+  const [measurementShortcutsOpen, setMeasurementShortcutsOpen] = useState(false);
   const previewFrameRef = useRef<number | null>(null);
   const queuedPreviewRef = useRef<{ cursor: PcbPoint; placement: PcbPoint | null } | null>(null);
   const zoomFrameRef = useRef<number | null>(null);
@@ -412,7 +414,7 @@ export function PcbCanvas({
     if (workspace.copySelected()) {
       toast({ title: "已複製選取物件", description: "可在畫布空白處按右鍵貼上。" });
     } else {
-      toast({ title: "沒有可複製的物件", description: "請先選取元件或禁制區。", variant: "destructive" });
+      toast({ title: "沒有可複製的物件", description: "請先選取元件、禁制區或量測線。", variant: "destructive" });
     }
   };
 
@@ -436,7 +438,7 @@ export function PcbCanvas({
     if (workspace.pasteCopied()) {
       toast({ title: "已貼上整組布局", description: "副本已保持選取，可繼續調整。" });
     } else {
-      toast({ title: "目前沒有可貼上的內容", description: "請先複製元件或禁制區。", variant: "destructive" });
+      toast({ title: "目前沒有可貼上的內容", description: "請先複製元件、禁制區或量測線。", variant: "destructive" });
     }
   };
 
@@ -510,7 +512,8 @@ export function PcbCanvas({
     ? project.components.find((component) => component.instanceId === contextSelection.id) ?? null
     : null;
   const contextCanDuplicate = contextSelection?.kind === "component"
-    || contextSelection?.kind === "keepout";
+    || contextSelection?.kind === "keepout"
+    || contextSelection?.kind === "measurement";
   const contextComponentLocked = Boolean(contextComponent?.locked);
   const gridSize = project.board.gridSize;
   const strokeWidth = Math.max(project.board.width, project.board.height) / 700;
@@ -1641,7 +1644,7 @@ export function PcbCanvas({
             {workspace.tool === "select" && <span>拖曳框選 · Ctrl / Shift 點選多選 · Delete 刪除 · Esc 取消選取</span>}
             {selectionIds.length > 0 && <span>已選 {selectionIds.length} 項</span>}
             {selectedKeepout && workspace.tool === "select" && <span>拖曳四角縮放 · Delete 刪除</span>}
-            {selectedMeasurementVisual && workspace.tool === "select" && <span>拖曳亮色端點調整 · Alt 暫停吸附</span>}
+            {selectedMeasurementVisual && workspace.tool === "select" && <span>右鍵複製 · 方向鍵移動整條線 · 拖曳亮色端點調整 · Alt 暫停吸附</span>}
             <span>Alt 暫停吸附</span>
             <span className="font-mono">
               X {cursorPoint?.x.toFixed(2) ?? "—"} · Y {cursorPoint?.y.toFixed(2) ?? "—"}
@@ -1683,7 +1686,7 @@ export function PcbCanvas({
                     直接複製一份
                     <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
                   </ContextMenuItem>
-                  <ContextMenuItem
+                  {contextSelection.kind !== "measurement" && <ContextMenuItem
                     disabled={!workspace.canMutate || contextComponentLocked}
                     onSelect={() => runContextSelectionAction(
                       workspace.rotateSelected,
@@ -1693,7 +1696,7 @@ export function PcbCanvas({
                   >
                     旋轉 90°
                     <ContextMenuShortcut>R</ContextMenuShortcut>
-                  </ContextMenuItem>
+                  </ContextMenuItem>}
                   {contextComponent ? (
                     <ContextMenuItem
                       disabled={!workspace.canMutate}
@@ -1713,6 +1716,18 @@ export function PcbCanvas({
               </>
             ) : null}
             <ContextMenuGroup>
+              {contextSelection.kind === "measurement" && <>
+                <ContextMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.flipSelectedMeasurement("horizontal")}>
+                  左右翻轉
+                  <ContextMenuShortcut>Shift+{workspace.measurementShortcuts.horizontal.toUpperCase()}</ContextMenuShortcut>
+                </ContextMenuItem>
+                <ContextMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.flipSelectedMeasurement("vertical")}>
+                  上下翻轉
+                  <ContextMenuShortcut>Shift+{workspace.measurementShortcuts.vertical.toUpperCase()}</ContextMenuShortcut>
+                </ContextMenuItem>
+                <ContextMenuItem onSelect={() => setMeasurementShortcutsOpen(true)}>量測線快捷鍵設定</ContextMenuItem>
+                <ContextMenuSeparator />
+              </>}
               <ContextMenuItem
                 className="text-rose-300 focus:bg-rose-500/15 focus:text-rose-100"
                 disabled={!workspace.canMutate}
@@ -1727,7 +1742,7 @@ export function PcbCanvas({
           <>
             <ContextMenuLabel>畫布操作 · {workspace.zoom}%</ContextMenuLabel>
             <ContextMenuGroup>
-              <ContextMenuItem onSelect={pasteContextSelection}>
+              <ContextMenuItem disabled={!workspace.canMutate} onSelect={pasteContextSelection}>
                 貼上
                 <ContextMenuShortcut>Ctrl+V</ContextMenuShortcut>
               </ContextMenuItem>
@@ -1772,6 +1787,7 @@ export function PcbCanvas({
       </ContextMenuContent>
       {keepoutEditorComponent && <PcbComponentKeepoutDialog key={`${project.id}:${keepoutEditorComponent.instanceId}`}
         component={keepoutEditorComponent} workspace={workspace} onClose={() => setKeepoutEditorId(null)} />}
+      {measurementShortcutsOpen && <PcbMeasurementShortcutsDialog workspace={workspace} onClose={() => setMeasurementShortcutsOpen(false)} />}
     </ContextMenu>
   );
 }

@@ -72,6 +72,7 @@ export type SelectionEdit =
   | { type: "delete" }
   | { type: "rotate" }
   | { type: "toggle-lock" }
+  | { type: "flip-measurement"; axis: "horizontal" | "vertical" }
   | { type: "nudge"; dx: number; dy: number };
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -613,6 +614,15 @@ export function editSelectedObject(
     }
   } else if (action.type === "delete") {
     next.measurements = next.measurements.filter((item) => item.id !== selection.id);
+  } else if (action.type === "flip-measurement") {
+    const measurement = next.measurements.find((item) => item.id === selection.id);
+    if (measurement) {
+      if (action.axis === "horizontal") {
+        [measurement.x1, measurement.x2] = [measurement.x2, measurement.x1];
+      } else {
+        [measurement.y1, measurement.y2] = [measurement.y2, measurement.y1];
+      }
+    }
   } else if (action.type === "nudge") {
     const measurement = next.measurements.find((item) => item.id === selection.id);
     if (measurement) {

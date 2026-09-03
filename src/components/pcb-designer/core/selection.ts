@@ -1,6 +1,7 @@
 import { createId } from "../defaults.ts";
 import type {
   PcbKeepout,
+  PcbMeasurement,
   PcbPoint,
   PcbProject,
   PcbVisibleLayer,
@@ -38,6 +39,47 @@ export interface DuplicatePcbSelectionResult {
   objectIds: string[];
   idMap: Map<string, string>;
   usedOverlapFallback: boolean;
+}
+
+function appendMeasurementCopies(
+  source: PcbProject,
+  target: PcbProject,
+  objectIds: readonly string[],
+  offset: PcbPoint,
+  idMap: Map<string, string>,
+): void {
+  const ids = new Set(objectIds);
+  for (const line of source.measurements) {
+    if (!ids.has(line.id)) continue;
+    const copy: PcbMeasurement = {
+      ...line,
+      id: createId("measurement"),
+      x1: line.x1 + offset.x,
+      y1: line.y1 + offset.y,
+      x2: line.x2 + offset.x,
+      y2: line.y2 + offset.y,
+    };
+    target.measurements.push(copy);
+    idMap.set(line.id, copy.id);
+  }
+}
+
+function measurementCopyOffset(project: PcbProject, objectIds: readonly string[]): PcbPoint {
+  const lines = project.measurements.filter((line) => objectIds.includes(line.id));
+  const first = lines[0];
+  const step = Math.max(project.board.gridSize, 1) * 2;
+  const vertical = Math.abs(first.y2 - first.y1) > Math.abs(first.x2 - first.x1);
+  // Measurements may sit outside the board. Translate both endpoints together,
+  // and keep repeated pastes apart without clipping or changing the dimension.
+  for (let index = 1; ; index += 1) {
+    const offset = { x: vertical ? step * index : 0, y: vertical ? 0 : step * index };
+    const overlaps = lines.some((line) => project.measurements.some((existing) =>
+      Math.abs(existing.x1 - line.x1 - offset.x) < 0.001
+      && Math.abs(existing.y1 - line.y1 - offset.y) < 0.001
+      && Math.abs(existing.x2 - line.x2 - offset.x) < 0.001
+      && Math.abs(existing.y2 - line.y2 - offset.y) < 0.001));
+    if (!overlaps) return offset;
+  }
 }
 
 function normalizedBounds(start: PcbPoint, end: PcbPoint): Bounds {
@@ -184,6 +226,7 @@ function duplicateAtOffset(
     idMap.set(component.instanceId, result.component.instanceId);
   }
 
+  appendMeasurementCopies(project, next, objectIds, offset, idMap);
   const copiedIds = objectIds
     .map((objectId) => idMap.get(objectId))
     .filter((objectId): objectId is string => Boolean(objectId));
@@ -260,6 +303,7 @@ function duplicateWithOverlapFallback(
     idMap.set(keepout.id, copy.id);
   });
 
+  appendMeasurementCopies(project, next, objectIds, offset, idMap);
   const copiedIds = objectIds
     .map((objectId) => idMap.get(objectId))
     .filter((objectId): objectId is string => Boolean(objectId));
@@ -275,7 +319,12 @@ export function duplicatePcbSelection(
   const validIds = [...new Set(objectIds)].filter((objectId) => (
     project.components.some((component) => component.instanceId === objectId)
     || project.keepouts.some((keepout) => keepout.id === objectId)
+    || project.measurements.some((measurement) => measurement.id === objectId)
   ));
+  if (!validIds.length) return null;
+  if (validIds.every((id) => project.measurements.some((line) => line.id === id))) {
+    return duplicateAtOffset(project, validIds, measurementCopyOffset(project, validIds));
+  }
   for (const offset of candidateOffsets(project, validIds)) {
     const result = duplicateAtOffset(project, validIds, offset);
     if (result) return result;

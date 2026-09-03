@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type Dispatch } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch } from "react";
 import { toast } from "@/hooks/use-toast";
 import {
   arrangeComponents as arrangeComponentsRecord,
@@ -39,6 +39,7 @@ import { libraryIdentity } from "../core/workspaceRecords.ts";
 import { isValidBoard } from "../core/validation.ts";
 import { isValidComponentKeepout } from "../core/componentKeepout.ts";
 import { deletePcbSelection } from "../core/selection.ts";
+import { DEFAULT_MEASUREMENT_SHORTCUTS, MEASUREMENT_SHORTCUTS_KEY, measurementShortcutAxis, validMeasurementShortcuts, type MeasurementFlipAxis, type MeasurementShortcuts } from "../core/measurementShortcuts.ts";
 
 export const MAX_AUTO_PLACE_ITEMS = 50;
 export const MAX_AUTO_PLACE_COLLISION_TESTS = 1_000_000;
@@ -70,6 +71,23 @@ export function usePcbEditorActions(
   dispatch: Dispatch<PcbWorkspaceAction>,
 ) {
   const toolBeforeSpaceRef = useRef<PcbTool | null>(null);
+  const [measurementShortcuts, setMeasurementShortcuts] = useState<MeasurementShortcuts>(() => {
+    try {
+      const saved: unknown = JSON.parse(window.localStorage.getItem(MEASUREMENT_SHORTCUTS_KEY) || "null");
+      if (validMeasurementShortcuts(saved)) return saved;
+    } catch { /* Use defaults when browser storage is unavailable. */ }
+    return { ...DEFAULT_MEASUREMENT_SHORTCUTS };
+  });
+  const configureMeasurementShortcuts = useCallback((keys: MeasurementShortcuts) => {
+    if (!validMeasurementShortcuts(keys)) return false;
+    setMeasurementShortcuts({ ...keys });
+    try {
+      window.localStorage.setItem(MEASUREMENT_SHORTCUTS_KEY, JSON.stringify(keys));
+    } catch {
+      toast({ title: "快捷鍵已套用", description: "瀏覽器無法保留設定，下次開啟會恢復預設。" });
+    }
+    return true;
+  }, []);
   const placeLibraryComponent = useCallback(
     (
       componentId: string,
@@ -481,6 +499,18 @@ export function usePcbEditorActions(
     return true;
   }, [dispatch, state.activeProject, state.canEdit, state.documentLocked, state.selectedObjects, state.selection]);
   const rotateSelected = useCallback(() => applySelectionEdit({ type: "rotate" }), [applySelectionEdit]);
+  const flipSelectedMeasurement = useCallback((axis: MeasurementFlipAxis) => {
+    if (!state.canEdit || state.documentLocked || state.selection?.kind !== "measurement") return false;
+    const line = state.activeProject.measurements.find(item => item.id === state.selection?.id);
+    if (!line) return false;
+    const changed = applySelectionEdit({ type: "flip-measurement", axis });
+    const sameAppearance = line.x1 === line.x2 || line.y1 === line.y2;
+    toast({
+      title: changed ? `已${axis === "horizontal" ? "左右" : "上下"}翻轉量測線` : "翻轉後外觀相同",
+      description: sameAppearance ? "水平或垂直線翻轉後外觀相同，長度不變。" : "以線段中心翻轉，長度不變；Ctrl+Z 可復原。",
+    });
+    return true;
+  }, [applySelectionEdit, state.activeProject.measurements, state.canEdit, state.documentLocked, state.selection]);
   const toggleSelectedLock = useCallback(() => applySelectionEdit({ type: "toggle-lock" }), [applySelectionEdit]);
   const nudgeSelected = useCallback((dx: number, dy: number) => {
     const selectedIds = new Set([
@@ -520,6 +550,7 @@ export function usePcbEditorActions(
     const duplicableIds = requestedIds.filter((objectId) => (
       state.activeProject.components.some((component) => component.instanceId === objectId)
       || state.activeProject.keepouts.some((keepout) => keepout.id === objectId)
+      || state.activeProject.measurements.some((measurement) => measurement.id === objectId)
     ));
     if (!duplicableIds.length) return false;
     dispatch({ type: "selection/duplicate", objectIds: duplicableIds });
@@ -540,10 +571,11 @@ export function usePcbEditorActions(
     ])].filter((objectId) => (
       state.activeProject.components.some((component) => component.instanceId === objectId)
       || state.activeProject.keepouts.some((keepout) => keepout.id === objectId)
+      || state.activeProject.measurements.some((measurement) => measurement.id === objectId)
     ));
     copiedObjectIdsRef.current = selectedIds;
     return selectedIds.length > 0;
-  }, [state.activeProject.components, state.activeProject.keepouts, state.selectedObjects, state.selection]);
+  }, [state.activeProject.components, state.activeProject.keepouts, state.activeProject.measurements, state.selectedObjects, state.selection]);
   const pasteCopied = useCallback(
     () => duplicateSelected(copiedObjectIdsRef.current),
     [duplicateSelected],
@@ -570,6 +602,9 @@ export function usePcbEditorActions(
   }, [dispatch, state.activeProject, state.drcIssues]);
 
   const shortcutRef = useRef({
+    measurementShortcuts,
+    flipSelectedMeasurement,
+    selection: state.selection,
     activeProject: state.activeProject,
     arrangeSelectedComponents,
     canEdit: state.canEdit,
@@ -585,6 +620,9 @@ export function usePcbEditorActions(
     zoom: state.zoom,
   });
   shortcutRef.current = {
+    measurementShortcuts,
+    flipSelectedMeasurement,
+    selection: state.selection,
     activeProject: state.activeProject,
     arrangeSelectedComponents,
     canEdit: state.canEdit,
@@ -602,10 +640,17 @@ export function usePcbEditorActions(
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [role='dialog'], [contenteditable]:not([contenteditable='false'])")) return;
       const shortcuts = shortcutRef.current;
       const key = event.key.toLocaleLowerCase();
+      const flipAxis = measurementShortcutAxis(event, shortcuts.measurementShortcuts);
+      if (shortcuts.selection?.kind === "measurement" && flipAxis) {
+        event.preventDefault();
+        if (!event.repeat) shortcuts.flipSelectedMeasurement(flipAxis);
+        return;
+      }
       if (event.ctrlKey || event.metaKey) {
         if (key === "z") {
           event.preventDefault();
@@ -624,7 +669,7 @@ export function usePcbEditorActions(
           if (shortcuts.copySelected()) {
             toast({ title: "已複製選取物件", description: "按 Ctrl+V 可貼上整組布局。" });
           } else {
-            toast({ title: "沒有可複製的物件", description: "請先框選零件或禁制區。", variant: "destructive" });
+            toast({ title: "沒有可複製的物件", description: "請先選取元件、禁制區或量測線。", variant: "destructive" });
           }
           return;
         } else if (key === "v") {
@@ -632,7 +677,7 @@ export function usePcbEditorActions(
           if (shortcuts.pasteCopied()) {
             toast({ title: "已貼上整組布局", description: "副本已保持選取，可繼續調整。" });
           } else {
-            toast({ title: "目前沒有可貼上的內容", description: "請先按 Ctrl+C 複製零件或禁制區。", variant: "destructive" });
+            toast({ title: "目前沒有可貼上的內容", description: "請先按 Ctrl+C 複製元件、禁制區或量測線。", variant: "destructive" });
           }
           return;
         }
@@ -778,5 +823,8 @@ export function usePcbEditorActions(
     nudgeSelected,
     pasteCopied,
     centerDrcIssue,
+    flipSelectedMeasurement,
+    measurementShortcuts,
+    configureMeasurementShortcuts,
   };
 }
