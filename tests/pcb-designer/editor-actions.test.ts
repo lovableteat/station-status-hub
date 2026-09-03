@@ -268,25 +268,38 @@ test("moves unlocked members while leaving locked members in a mixed group", () 
   );
 });
 
-test("measurement flips mirror around the center without changing length and are reversible", () => {
-  const project = createBlankProject("Mirror dimensions");
-  const line = { id: "diagonal", x1: -5.5, y1: 10.25, x2: 24.5, y2: 50.25, color: "#facc15" };
-  project.measurements = [line];
-  const selection = { kind: "measurement", id: line.id };
-  for (const axis of ["horizontal", "vertical"]) {
-    const mirrored = editorModule.editSelectedObject(project, selection, { type: "flip-measurement", axis });
-    const copy = mirrored.measurements[0];
-    assert.equal(copy.x1 + copy.x2, line.x1 + line.x2);
-    assert.equal(copy.y1 + copy.y2, line.y1 + line.y2);
-    assert.equal(Math.hypot(copy.x2 - copy.x1, copy.y2 - copy.y1), 50);
-    assert.equal(copy.id, line.id);
-    assert.equal(copy.color, line.color);
-    assert.equal(copy.x1, axis === "horizontal" ? line.x2 : line.x1);
-    assert.equal(copy.y1, axis === "vertical" ? line.y2 : line.y1);
-    assert.deepEqual(editorModule.editSelectedObject(mirrored, selection, { type: "flip-measurement", axis }), project);
+test("measurement quarter turns preserve the midpoint and length and reverse exactly", () => {
+  for (const coordinates of [
+    { x1: 20, y1: 10, x2: 20, y2: 50 },
+    { x1: -5.5, y1: 10.25, x2: 24.5, y2: 50.25 },
+    { x1: 0, y1: 80, x2: 100, y2: 80 },
+  ]) {
+    const project = createBlankProject("Rotate dimensions");
+    const line = { id: "dimension", ...coordinates, color: "#facc15" };
+    project.measurements = [line];
+    const before = structuredClone(project);
+    const selection = { kind: "measurement", id: line.id };
+    for (const direction of ["clockwise", "counterclockwise"]) {
+      const rotated = editorModule.editSelectedObject(project, selection, { type: "rotate", direction });
+      const copy = rotated.measurements[0];
+      const dx = line.x2 - line.x1, dy = line.y2 - line.y1;
+      assert.equal(copy.x1 + copy.x2, line.x1 + line.x2);
+      assert.equal(copy.y1 + copy.y2, line.y1 + line.y2);
+      assert.equal(Math.hypot(copy.x2 - copy.x1, copy.y2 - copy.y1), Math.hypot(dx, dy));
+      assert.equal(copy.x2 - copy.x1 + 0, (direction === "clockwise" ? -dy : dy) + 0);
+      assert.equal(copy.y2 - copy.y1 + 0, (direction === "clockwise" ? dx : -dx) + 0);
+      assert.equal(copy.id, line.id);
+      assert.equal(copy.color, line.color);
+      assert.deepEqual(editorModule.editSelectedObject(rotated, selection, {
+        type: "rotate", direction: direction === "clockwise" ? "counterclockwise" : "clockwise",
+      }), project);
+      let fullTurn = rotated;
+      for (let i = 0; i < 3; i++) fullTurn = editorModule.editSelectedObject(fullTurn, selection, { type: "rotate", direction });
+      assert.deepEqual(fullTurn, project);
+    }
+    assert.deepEqual(project, before);
+    assert.deepEqual(editorModule.editSelectedObject(project, null, { type: "rotate" }), project);
   }
-  assert.deepEqual(project.measurements, [line]);
-  assert.deepEqual(editorModule.editSelectedObject(project, null, { type: "flip-measurement", axis: "horizontal" }), project);
 });
 
 test("moves selected components and keepouts as one rigid snapped transaction", () => {

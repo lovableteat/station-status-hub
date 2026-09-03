@@ -1,38 +1,39 @@
-export type MeasurementFlipAxis = "horizontal" | "vertical";
-export type MeasurementShortcuts = Record<MeasurementFlipAxis, string>;
-
+export type MeasurementRotationDirection = "clockwise" | "counterclockwise";
+export type MeasurementShortcuts = Record<MeasurementRotationDirection, string>;
 export const DEFAULT_MEASUREMENT_SHORTCUTS: MeasurementShortcuts = {
-  horizontal: "h",
-  vertical: "v",
+  clockwise: "r",
+  counterclockwise: "Shift+r",
 };
 export const MEASUREMENT_SHORTCUTS_KEY =
-  "work-platform:pcb-measurement-shortcuts:v1";
-
+  "work-platform:pcb-measurement-rotation-shortcuts:v1";
+export const MEASUREMENT_SHORTCUT_OPTIONS = [
+  "r",
+  ..."abcdefghijklmnopqrstuvwxyz".split("").map((key) => `Shift+${key}`),
+];
+export function measurementShortcutLabel(shortcut: string): string {
+  return shortcut.replace(/[a-z]$/, (key) => key.toUpperCase());
+}
 export function validMeasurementShortcuts(
   value: unknown,
 ): value is MeasurementShortcuts {
   if (!value || typeof value !== "object") return false;
   const keys = value as MeasurementShortcuts;
   return (
-    typeof keys.horizontal === "string" &&
-    /^[a-z]$/.test(keys.horizontal) &&
-    typeof keys.vertical === "string" &&
-    /^[a-z]$/.test(keys.vertical) &&
-    keys.horizontal !== keys.vertical
+    MEASUREMENT_SHORTCUT_OPTIONS.includes(keys.clockwise) &&
+    MEASUREMENT_SHORTCUT_OPTIONS.includes(keys.counterclockwise) &&
+    keys.clockwise !== keys.counterclockwise
   );
 }
-
-export function measurementShortcutAxis(
+export function measurementShortcutDirection(
   event: Pick<
     KeyboardEvent,
     "key" | "shiftKey" | "ctrlKey" | "metaKey" | "altKey"
   >,
   keys: MeasurementShortcuts,
-): MeasurementFlipAxis | null {
-  if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey)
-    return null;
-  const key = event.key.toLowerCase();
-  if (key === keys.horizontal) return "horizontal";
-  if (key === keys.vertical) return "vertical";
+): MeasurementRotationDirection | null {
+  if (event.ctrlKey || event.metaKey || event.altKey) return null;
+  const key = `${event.shiftKey ? "Shift+" : ""}${event.key.toLowerCase()}`;
+  if (key === keys.clockwise) return "clockwise";
+  if (key === keys.counterclockwise) return "counterclockwise";
   return null;
 }

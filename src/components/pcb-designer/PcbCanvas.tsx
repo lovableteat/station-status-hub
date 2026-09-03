@@ -35,6 +35,7 @@ import {
 import { getMarqueeSelectionIds } from "./core/selection.ts";
 import { getComponentKeepoutBounds, KEEPOUT_SIDES, KEEPOUT_SIDE_LABELS, resizeComponentKeepoutSide } from "./core/componentKeepout.ts";
 import { PcbComponentKeepoutDialog } from "./PcbComponentKeepoutDialog";
+import { measurementShortcutLabel } from "./core/measurementShortcuts.ts";
 import { PcbMeasurementShortcutsDialog } from "./PcbMeasurementShortcutsDialog";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 import type {
@@ -1644,7 +1645,7 @@ export function PcbCanvas({
             {workspace.tool === "select" && <span>拖曳框選 · Ctrl / Shift 點選多選 · Delete 刪除 · Esc 取消選取</span>}
             {selectionIds.length > 0 && <span>已選 {selectionIds.length} 項</span>}
             {selectedKeepout && workspace.tool === "select" && <span>拖曳四角縮放 · Delete 刪除</span>}
-            {selectedMeasurementVisual && workspace.tool === "select" && <span>右鍵複製 · 方向鍵移動整條線 · 拖曳亮色端點調整 · Alt 暫停吸附</span>}
+            {selectedMeasurementVisual && workspace.tool === "select" && <span>右鍵複製／旋轉 · 方向鍵移動整條線 · 拖曳亮色端點調整 · Alt 暫停吸附</span>}
             <span>Alt 暫停吸附</span>
             <span className="font-mono">
               X {cursorPoint?.x.toFixed(2) ?? "—"} · Y {cursorPoint?.y.toFixed(2) ?? "—"}
@@ -1717,13 +1718,13 @@ export function PcbCanvas({
             ) : null}
             <ContextMenuGroup>
               {contextSelection.kind === "measurement" && <>
-                <ContextMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.flipSelectedMeasurement("horizontal")}>
-                  左右翻轉
-                  <ContextMenuShortcut>Shift+{workspace.measurementShortcuts.horizontal.toUpperCase()}</ContextMenuShortcut>
+                <ContextMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.rotateSelectedMeasurement("clockwise")}>
+                  順時針旋轉 90°
+                  <ContextMenuShortcut>{measurementShortcutLabel(workspace.measurementShortcuts.clockwise)}</ContextMenuShortcut>
                 </ContextMenuItem>
-                <ContextMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.flipSelectedMeasurement("vertical")}>
-                  上下翻轉
-                  <ContextMenuShortcut>Shift+{workspace.measurementShortcuts.vertical.toUpperCase()}</ContextMenuShortcut>
+                <ContextMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.rotateSelectedMeasurement("counterclockwise")}>
+                  逆時針旋轉 90°
+                  <ContextMenuShortcut>{measurementShortcutLabel(workspace.measurementShortcuts.counterclockwise)}</ContextMenuShortcut>
                 </ContextMenuItem>
                 <ContextMenuItem onSelect={() => setMeasurementShortcutsOpen(true)}>量測線快捷鍵設定</ContextMenuItem>
                 <ContextMenuSeparator />
