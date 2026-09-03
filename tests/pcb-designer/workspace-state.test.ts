@@ -545,6 +545,34 @@ test("visible-layer changes prune hidden component selections", async () => {
   assert.deepEqual(bottomOnly.selection, { kind: "component", id: "bottom-component" });
 });
 
+test("measurement duplication selects the copy, persists it and supports undo/redo with permission guards", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedState(), true);
+  const line = { id: "measurement-original", x1: -5, y1: 10, x2: -5, y2: 50, color: "#facc15" };
+  const withLine = reduceWorkspaceState(initial, {
+    type: "project/commit",
+    update: { ...initial.activeProject, measurements: [line] },
+  });
+  const selected = reduceWorkspaceState(withLine, {
+    type: "selection/set", selection: { kind: "measurement", id: line.id },
+  });
+  const action = { type: "selection/duplicate" as const, objectIds: [line.id] };
+  const duplicated = reduceWorkspaceState(selected, action);
+  const copy = duplicated.activeProject.measurements[1];
+  assert.ok(copy);
+  assert.deepEqual(duplicated.selection, { kind: "measurement", id: copy.id });
+  assert.deepEqual(duplicated.selectedObjects, [copy.id]);
+  assert.deepEqual(duplicated.data.projects.find(item => item.id === duplicated.activeProject.id)?.measurements,
+    duplicated.activeProject.measurements);
+  const undone = reduceWorkspaceState(duplicated, { type: "history/undo" });
+  assert.deepEqual(undone.activeProject.measurements, [line]);
+  const redone = reduceWorkspaceState(undone, { type: "history/redo" });
+  assert.deepEqual(redone.activeProject.measurements, duplicated.activeProject.measurements);
+  for (const guarded of [{ ...selected, canEdit: false }, { ...selected, documentLocked: true }]) {
+    assert.deepEqual(reduceWorkspaceState(guarded, action).activeProject.measurements, [line]);
+  }
+});
+
 test("one BOM placement transaction restores both the component and queue through undo and redo", async () => {
   const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
   const initial = createWorkspaceState(seedState(), true);
