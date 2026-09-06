@@ -1453,6 +1453,39 @@
 .rd2-orgchart-canvas .rd2-orgchart-roots > li { padding-top: 0; }
 .rd2-orgchart-canvas .rd2-orgchart-roots > li::before,
 .rd2-orgchart-canvas .rd2-orgchart-roots > li::after { display: none; }
+/* Members are laid out as one endless flex row of 248px cards, so a section
+   with 20 people needed ~5000px of horizontal scrolling. Let the leaf level
+   (list items that have no children of their own) wrap into a block, and
+   shrink those cards - the branch connectors only make sense on a single row,
+   so they are replaced by a bracket around the wrapped group. */
+.rd2-orgchart-canvas ul:not(:has(> li > ul)) {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  /* Plain px: the canvas is width:max-content, so a % or vw max-width
+     resolves against an indeterminate box and collapsed the row to zero. */
+  max-width: 1040px;
+  row-gap: 14px;
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 2px solid var(--rd2-border-soft);
+  border-radius: 10px 10px 0 0;
+}
+.rd2-orgchart-canvas ul:not(:has(> li > ul)) > li {
+  padding: 0 7px;
+}
+.rd2-orgchart-canvas ul:not(:has(> li > ul)) > li::before,
+.rd2-orgchart-canvas ul:not(:has(> li > ul)) > li::after {
+  display: none;
+}
+.rd2-orgchart-canvas ul:not(:has(> li > ul)) .rd2-orgchart-node {
+  width: 196px;
+  padding: 10px;
+}
+.rd2-orgchart-canvas ul:not(:has(> li > ul)) .rd2-orgchart-note,
+.rd2-orgchart-canvas ul:not(:has(> li > ul)) .rd2-orgchart-unit {
+  font-size: 10.5px;
+}
+
 .rd2-orgchart-node { --node-color: #94a3b8; width: 248px; flex-shrink: 0; position: relative; padding: 12px; border: 1px solid var(--rd2-border); border-top: 3px solid var(--node-color); border-radius: 10px; background: var(--rd2-panel); box-shadow: 0 6px 16px #0002; }
 .rd2-orgchart-node[data-level="director"] { --node-color: #709bff; }
 .rd2-orgchart-node[data-level="section_chief"] { --node-color: #53c8bd; }
