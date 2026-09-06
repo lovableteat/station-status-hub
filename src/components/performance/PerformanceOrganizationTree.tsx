@@ -13,7 +13,6 @@ import type {
   OrganizationMember,
   OrganizationAddOptions,
 } from "./PerformanceOrganization";
-import { organizationActingSections } from "./organizationData.mjs";
 
 const LEVELS = { director: "部長", section_chief: "課長", member: "一般同仁" };
 type Props = {
@@ -50,6 +49,49 @@ export function PerformanceOrganizationTree({
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const viewport = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const panning = useRef<{ x: number; y: number; left: number; top: number } | null>(
+    null,
+  );
+  const ZOOM_MIN = 0.4;
+  const ZOOM_MAX = 1.6;
+  const clampZoom = (value: number) =>
+    Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
+  const stepZoom = (delta: number) => setZoom((value) => clampZoom(value + delta));
+
+  /** Ctrl/⌘ + wheel zooms; a plain wheel keeps scrolling the viewport. */
+  const onWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    stepZoom(event.deltaY > 0 ? -0.1 : 0.1);
+  };
+
+  /** Drag anywhere that is not a control to pan the chart. */
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest("button, a, input, select")) return;
+    const node = viewport.current;
+    if (!node) return;
+    panning.current = {
+      x: event.clientX,
+      y: event.clientY,
+      left: node.scrollLeft,
+      top: node.scrollTop,
+    };
+    node.setPointerCapture(event.pointerId);
+  };
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = panning.current;
+    const node = viewport.current;
+    if (!start || !node) return;
+    node.scrollLeft = start.left - (event.clientX - start.x);
+    node.scrollTop = start.top - (event.clientY - start.y);
+  };
+  const endPan = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!panning.current) return;
+    panning.current = null;
+    viewport.current?.releasePointerCapture(event.pointerId);
+  };
   const { roots, children } = useMemo(() => {
     const ids = new Set(members.map((member) => member.employee_id));
     const children = new Map<string, OrganizationMember[]>();
@@ -93,11 +135,11 @@ export function PerformanceOrganizationTree({
   ): ReactNode => {
     if (ancestors.has(member.employee_id)) return null;
     const reports = children.get(member.employee_id) || [];
-    const actingSections = organizationActingSections(member, reports);
-    const regularReports =
-      member.org_level === "director"
-        ? reports.filter((child) => child.org_level !== "member")
-        : reports;
+    // Members reporting straight to a director are genuine direct reports
+    // (their manager_id is the director), so they hang off the director node
+    // instead of a synthetic "代理課" grouping. Each card still shows its own
+    // 課別, so nothing is lost by dropping the wrapper.
+    const regularReports = reports;
     const open = filtering || !collapsed.has(member.employee_id);
     const parentMissing = member.org_level !== "director" && !member.manager_id;
     const addLabel = member.org_level === "director" ? "新增課長" : "新增同仁";
@@ -234,82 +276,6 @@ export function PerformanceOrganizationTree({
             {regularReports.map((child) =>
               renderNode(child, new Set([...ancestors, member.employee_id])),
             )}
-            {actingSections.map((group) => {
-              const expanded = filtering || !collapsed.has(group.key);
-              return (
-                <li key={group.key}>
-                  <article
-                    className="rd2-orgchart-node rd2-orgchart-acting"
-                    data-level="section_chief"
-                    aria-label={`${group.section || "未設定課別"} · ${member.display_name} 部長代理`}
-                  >
-                    <div className="rd2-orgchart-node-top">
-                      <span className="rd2-orgchart-level">部長代理</span>
-                      <span className="rd2-orgchart-unit">
-                        {group.section || "未設定課別"}
-                      </span>
-                    </div>
-                    <div className="rd2-orgchart-person">
-                      <span className="rd2-orgchart-avatar" aria-hidden="true">
-                        <Users />
-                      </span>
-                      <div>
-                        <strong>{member.display_name}</strong>
-                        <span>代理課長 · {group.members.length} 位同仁</span>
-                      </div>
-                    </div>
-                    <p className="rd2-orgchart-note">
-                      {member.department} · 考核由部長負責
-                    </p>
-                    {administrator &&
-                      member.is_manager &&
-                      member.account_status === "active" && (
-                        <button
-                          type="button"
-                          className="rd2-orgchart-add"
-                          disabled={!canAdd}
-                          aria-label={`在 ${group.section || "代理課"} 新增同仁`}
-                          onClick={() => {
-                            setCollapsed((previous) => {
-                              const next = new Set(previous);
-                              next.delete(group.key);
-                              return next;
-                            });
-                            onAdd(member, {
-                              org_level: "member",
-                              section: group.section,
-                            });
-                          }}
-                        >
-                          <Plus />
-                          新增同仁
-                        </button>
-                      )}
-                    <button
-                      type="button"
-                      className="rd2-orgchart-branch-toggle"
-                      disabled={filtering}
-                      aria-expanded={expanded}
-                      onClick={() => toggle(group.key)}
-                      aria-label={`${expanded ? "收合" : "展開"} ${group.section || "代理課"} 的同仁`}
-                    >
-                      {expanded ? <ChevronUp /> : <ChevronDown />}
-                      {expanded ? "收合" : `${group.members.length} 位同仁`}
-                    </button>
-                  </article>
-                  {expanded && (
-                    <ul>
-                      {group.members.map((child) =>
-                        renderNode(
-                          child,
-                          new Set([...ancestors, member.employee_id]),
-                        ),
-                      )}
-                    </ul>
-                  )}
-                </li>
-              );
-            })}
           </ul>
         )}
       </li>
@@ -344,6 +310,34 @@ export function PerformanceOrganizationTree({
               </Button>
             </>
           )}
+          <div className="rd2-orgchart-zoom" role="group" aria-label="縮放">
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label="縮小"
+              disabled={zoom <= ZOOM_MIN}
+              onClick={() => stepZoom(-0.1)}
+            >
+              −
+            </Button>
+            <button
+              type="button"
+              className="rd2-orgchart-zoom-value"
+              title="回到 100%"
+              onClick={() => setZoom(1)}
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label="放大"
+              disabled={zoom >= ZOOM_MAX}
+              onClick={() => stepZoom(0.1)}
+            >
+              ＋
+            </Button>
+          </div>
           <Button size="sm" variant="ghost" onClick={centerRoot}>
             回到頂層
           </Button>
@@ -363,10 +357,18 @@ export function PerformanceOrganizationTree({
         ref={viewport}
         className="rd2-orgchart-viewport"
         role="region"
-        aria-label="組織樹狀圖，可水平捲動"
+        aria-label="組織樹狀圖，可拖曳平移，Ctrl 加滾輪縮放"
         tabIndex={0}
+        onWheel={onWheel}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endPan}
+        onPointerCancel={endPan}
       >
-        <div className="rd2-orgchart-canvas">
+        <div
+          className="rd2-orgchart-canvas"
+          style={{ zoom }}
+        >
           {emptyOrganization ? (
             <ul className="rd2-orgchart-roots rd2-orgchart-placeholder">
               <li>
