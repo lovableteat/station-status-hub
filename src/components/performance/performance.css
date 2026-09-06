@@ -1432,7 +1432,13 @@
 .rd2-orgchart-title svg { width: 18px; height: 18px; color: var(--rd2-accent); }
 .rd2-orgchart-controls { display: flex; gap: 4px; }
 .rd2-orgchart-controls button { font-size: 12px; }
-.rd2-orgchart-viewport { overflow: auto; max-height: 720px; min-height: 260px; overscroll-behavior: contain; background-color: var(--rd2-bg); background-image: radial-gradient(var(--rd2-border-soft) 1px, transparent 1px); background-size: 20px 20px; }
+.rd2-orgchart-zoom { display: inline-flex; align-items: center; gap: 2px; padding: 0 4px; }
+.rd2-orgchart-zoom-value { min-width: 46px; padding: 4px 6px; border: 0; border-radius: 6px; background: transparent; color: var(--rd2-muted); font-size: 12px; font-weight: 700; cursor: pointer; }
+.rd2-orgchart-zoom-value:hover { color: var(--rd2-ink); background: hsl(var(--secondary)); }
+/* Drag anywhere on the canvas to pan; `zoom` (not transform) so the scroll
+   extents track the scaled layout and panning stays accurate. */
+.rd2-orgchart-viewport { cursor: grab; overflow: auto; max-height: 720px; min-height: 260px; overscroll-behavior: contain; background-color: var(--rd2-bg); background-image: radial-gradient(var(--rd2-border-soft) 1px, transparent 1px); background-size: 20px 20px; }
+.rd2-orgchart-viewport:active { cursor: grabbing; }
 .rd2-orgchart-viewport:focus-visible { outline: 2px solid var(--rd2-accent); outline-offset: -3px; }
 .rd2-orgchart-canvas { width: max-content; min-width: 100%; padding: 28px 24px 36px; }
 .rd2-orgchart-canvas ul { display: flex; justify-content: center; position: relative; list-style: none; margin: 0; padding: 24px 0 0; }
