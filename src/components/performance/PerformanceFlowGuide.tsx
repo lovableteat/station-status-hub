@@ -34,41 +34,34 @@ export function PerformanceFlowGuide({
         </div>
       </div>
       <div className="rd2-process-layout">
-        <div
-          className="rd2-process-tree"
-          aria-label="組織分工示意，實際歸屬依組織架構設定"
-        >
-          <p className="rd2-process-caption">組織分工示意</p>
-          <div className="rd2-process-node" data-role="director">
-            <Network />
-            <div>
-              <strong>部長</strong>
-              <span>評核直屬課長 · 審閱課務彙整</span>
-            </div>
-          </div>
-          <div className="rd2-process-branches">
-            {["課別 A", "課別 B"].map((section) => (
-              <div className="rd2-process-branch" key={section}>
-                <div className="rd2-process-node" data-role="chief">
-                  <ClipboardCheck />
-                  <div>
-                    <strong>課長</strong>
-                    <span>{section} · 評核與彙整</span>
-                  </div>
-                </div>
-                <div className="rd2-process-node" data-role="member">
-                  <UserRound />
-                  <div>
-                    <strong>一般同仁</strong>
-                    <span>逐條填寫個人實績</span>
-                  </div>
-                </div>
+        <div className="rd2-process-roles">
+          <p className="rd2-process-caption">誰評核誰</p>
+          <ul>
+            <li data-role="director">
+              <Network aria-hidden="true" />
+              <div>
+                <strong>部長</strong>
+                <span>評核直屬課長，審閱各課彙整</span>
               </div>
-            ))}
-          </div>
+            </li>
+            <li data-role="chief">
+              <ClipboardCheck aria-hidden="true" />
+              <div>
+                <strong>課長</strong>
+                <span>評核本課同仁，並彙整本課成果送部長</span>
+              </div>
+            </li>
+            <li data-role="member">
+              <UserRound aria-hidden="true" />
+              <div>
+                <strong>一般同仁</strong>
+                <span>逐條填寫個人實績，送交直屬課長</span>
+              </div>
+            </li>
+          </ul>
           <p className="rd2-acting-note">
-            <strong>課長出缺時</strong>{" "}
-            由部長代理，直接評核該課同仁。實際歸屬由管理員在組織架構設定。
+            <strong>實際歸屬不在這裡設定。</strong>{" "}
+            每個人隸屬哪一層由管理員在「組織架構」逐一指派；課長出缺時由部長代理，直接評核該課同仁。
           </p>
         </div>
         <ol className="rd2-process-stages">

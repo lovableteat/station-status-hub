@@ -669,7 +669,10 @@ export function PerformanceAppraisalPage() {
     initial.dueDate = `${cycle.slice(0, 4)}-${cycle.endsWith("q2") ? "06-30" : "09-30"}`;
 
   return (
-    <div className={`performance-workspace rd2-workspace${["policy", "self", "manager"].includes(tab) ? " rd2-bright" : ""}`} data-performance-view={tab}>
+    <div
+      className="performance-workspace rd2-workspace rd2-bright"
+      data-performance-view={tab}
+    >
       <aside className="rd2-sidebar" data-testid="performance-sidebar">
         <div className="rd2-brand">
           <ClipboardCheck />
