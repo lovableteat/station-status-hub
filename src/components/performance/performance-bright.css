@@ -458,6 +458,41 @@
 .rd2-bright .rd2-category textarea {
   min-height: 185px;
 }
+/* Card bodies were a single flat grey under a coloured header. Carry each
+   category's hue through the blocks inside it, keeping fills dark and using
+   the light tint for text and borders so contrast holds. */
+.rd2-bright .rd2-category .rd2-self-score {
+  border: 1px solid color-mix(in srgb, var(--card-accent) 34%, transparent);
+  border-left: 3px solid var(--card-accent);
+  background: color-mix(in srgb, var(--card-accent) 9%, var(--rd2-panel-soft));
+}
+.rd2-bright .rd2-category .rd2-self-score-title {
+  color: var(--card-accent);
+}
+.rd2-bright .rd2-category .rd2-self-score-input input {
+  border-color: color-mix(in srgb, var(--card-accent) 46%, transparent);
+  color: var(--card-accent);
+}
+.rd2-bright .rd2-category .rd2-self-score-input input:focus-visible {
+  outline-color: var(--card-accent);
+}
+.rd2-bright .rd2-category .rd2-self-score-input span {
+  color: var(--card-accent);
+}
+.rd2-bright .rd2-category .rd2-reference {
+  border: 1px solid color-mix(in srgb, var(--card-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--card-accent) 7%, var(--rd2-panel-soft));
+}
+.rd2-bright .rd2-category .rd2-reference > summary {
+  color: var(--card-accent);
+}
+.rd2-bright .rd2-category [data-slot="field-label"] {
+  color: var(--card-accent);
+}
+.rd2-bright .rd2-category textarea:focus-visible,
+.rd2-bright .rd2-category .rd2-link-input input:focus-visible {
+  outline-color: var(--card-accent);
+}
 .rd2-bright .rd2-entry-count {
   color: var(--card-accent);
   font-weight: 700;
