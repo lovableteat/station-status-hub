@@ -139,7 +139,18 @@ export function PerformanceOrganizationTree({
     // (their manager_id is the director), so they hang off the director node
     // instead of a synthetic "代理課" grouping. Each card still shows its own
     // 課別, so nothing is lost by dropping the wrapper.
-    const regularReports = reports;
+    // A director can have both 課長 and its own members. Rendering them as
+    // siblings puts a 一般同仁 on the 課長 row; keep the chiefs on that row and
+    // drop the director's own members through an unlabelled branch so every
+    // member lands on the bottom row.
+    const chiefReports =
+      member.org_level === "director"
+        ? reports.filter((child) => child.org_level !== "member")
+        : reports;
+    const passthroughReports =
+      member.org_level === "director"
+        ? reports.filter((child) => child.org_level === "member")
+        : [];
     const open = filtering || !collapsed.has(member.employee_id);
     const parentMissing = member.org_level !== "director" && !member.manager_id;
     const addLabel = member.org_level === "director" ? "新增課長" : "新增同仁";
@@ -273,8 +284,17 @@ export function PerformanceOrganizationTree({
         </article>
         {reports.length > 0 && open && (
           <ul>
-            {regularReports.map((child) =>
+            {chiefReports.map((child) =>
               renderNode(child, new Set([...ancestors, member.employee_id])),
+            )}
+            {passthroughReports.length > 0 && (
+              <li className="rd2-orgchart-passthrough">
+                <ul>
+                  {passthroughReports.map((child) =>
+                    renderNode(child, new Set([...ancestors, member.employee_id])),
+                  )}
+                </ul>
+              </li>
             )}
           </ul>
         )}

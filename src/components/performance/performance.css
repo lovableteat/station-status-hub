@@ -1443,6 +1443,14 @@
 .rd2-orgchart-canvas { width: max-content; min-width: 100%; padding: 28px 24px 36px; }
 .rd2-orgchart-canvas ul { display: flex; justify-content: center; position: relative; list-style: none; margin: 0; padding: 24px 0 0; }
 .rd2-orgchart-canvas li { display: flex; flex-direction: column; align-items: center; position: relative; padding: 24px 14px 0; }
+/* Branches stretch to the tallest sibling and each child list is pushed to the
+   bottom, so every member row lines up even when one branch has no card of its
+   own - a director's direct members drop through an unlabelled branch rather
+   than sitting on the 課長 row. */
+.rd2-orgchart-canvas ul { align-items: stretch; }
+.rd2-orgchart-canvas li > ul { margin-top: auto; }
+.rd2-orgchart-passthrough { padding-top: 24px; }
+.rd2-orgchart-passthrough > ul { padding-top: 0; }
 .rd2-orgchart-canvas li::before,
 .rd2-orgchart-canvas li::after { content: ""; position: absolute; top: 0; width: 50%; height: 24px; border-top: 2px solid var(--rd2-orgchart-line, #52769e); }
 .rd2-orgchart-canvas li::before { right: 50%; }
@@ -1471,7 +1479,9 @@
      resolves against an indeterminate box and collapsed the row to zero. */
   max-width: 1040px;
   row-gap: 14px;
-  margin-top: 8px;
+  /* auto, not a fixed gap: the child list must sit at the bottom of its branch
+     so member rows line up across branches of different heights. */
+  margin-top: auto;
   padding-top: 18px;
   border-top: 2px solid var(--rd2-border-soft);
   border-radius: 10px 10px 0 0;
