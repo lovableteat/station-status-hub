@@ -289,6 +289,28 @@ export function PerformanceOrganizationTree({
             )}
             {passthroughReports.length > 0 && (
               <li className="rd2-orgchart-passthrough">
+                <article
+                  className="rd2-orgchart-node rd2-orgchart-acting"
+                  data-level="section_chief"
+                  aria-label={`此課由 ${member.display_name} 部長代理，直接評核 ${passthroughReports.length} 位同仁`}
+                >
+                  <div className="rd2-orgchart-node-top">
+                    <span className="rd2-orgchart-level">課長出缺</span>
+                    <span className="rd2-orgchart-unit">
+                      {passthroughReports.length} 位同仁
+                    </span>
+                  </div>
+                  <div className="rd2-orgchart-person">
+                    <span className="rd2-orgchart-avatar" aria-hidden="true">
+                      <Users />
+                    </span>
+                    <div>
+                      <strong>部長代理中</strong>
+                      <span>{member.display_name}</span>
+                    </div>
+                  </div>
+                  <p className="rd2-orgchart-note">由部長直接評核</p>
+                </article>
                 <ul>
                   {passthroughReports.map((child) =>
                     renderNode(child, new Set([...ancestors, member.employee_id])),
