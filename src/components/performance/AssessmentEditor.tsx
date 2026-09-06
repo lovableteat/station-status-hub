@@ -753,42 +753,41 @@ export function AssessmentEditor({
                       readonly={readonly}
                       onChange={(update) => updateSection(category, update)}
                     />
-                    <fieldset
-                      className="rd2-self-score"
-                      disabled={readonly || saving}
-                      aria-label={`${category} 我給自己的分數`}
-                    >
-                      <p className="rd2-self-score-title">我給自己的分數</p>
-                      <RadioGroup
-                        className="rd2-rating"
-                        aria-label={`${category} 自評分數`}
-                        value={String(
-                          form.self.sections[category].selfScore ?? "",
-                        )}
-                        disabled={readonly || saving}
-                        onValueChange={(value) =>
-                          updateSection(category, (section) => ({
-                            ...section,
-                            selfScore: Number(value),
-                          }))
-                        }
+                    <div className="rd2-self-score">
+                      <label
+                        className="rd2-self-score-title"
+                        htmlFor={`${category}-self-score`}
                       >
-                        {[1, 2, 3, 4, 5].map((value) => (
-                          <Field key={value} orientation="horizontal">
-                            <RadioGroupItem
-                              id={`${category}-self-${value}`}
-                              value={String(value)}
-                            />
-                            <FieldLabel htmlFor={`${category}-self-${value}`}>
-                              {value}
-                            </FieldLabel>
-                          </Field>
-                        ))}
-                      </RadioGroup>
+                        我給自己的分數
+                      </label>
+                      <div className="rd2-self-score-input">
+                        <Input
+                          id={`${category}-self-score`}
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={1}
+                          inputMode="numeric"
+                          placeholder="0–100"
+                          disabled={readonly || saving}
+                          value={
+                            form.self.sections[category].selfScore ?? ""
+                          }
+                          onChange={(event) => {
+                            const raw = event.target.value;
+                            updateSection(category, (section) => ({
+                              ...section,
+                              selfScore:
+                                raw === "" ? null : Number(raw),
+                            }));
+                          }}
+                        />
+                        <span>分</span>
+                      </div>
                       <p className="rd2-hint">
-                        1 分：待加強 · 5 分：表現優異。主管評分時會看到這個分數，但不會被它取代。
+                        0–100 分，填你認為這一項的表現。主管評分時會看到這個分數，但不會被它取代。
                       </p>
-                    </fieldset>
+                    </div>
                     <Evidence
                       category={category}
                       section={form.self.sections[category]}

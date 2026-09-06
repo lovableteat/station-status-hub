@@ -39,6 +39,14 @@ export const MAX_IMAGES_PER_CATEGORY = 2;
 const str = (value) => (typeof value === "string" ? value : "");
 const validRating = (value) =>
   Number.isInteger(value) && value >= 1 && value <= 5 ? value : null;
+/** Employee's own 0-100 figure for a category; anything else is dropped. */
+const validSelfScore = (value) =>
+  Number.isFinite(Number(value)) &&
+  String(value).trim() !== "" &&
+  Number(value) >= 0 &&
+  Number(value) <= 100
+    ? Math.round(Number(value))
+    : null;
 export const safeEvidenceUrl = (value) => {
   try {
     const url = new URL(str(value).trim());
@@ -71,7 +79,7 @@ export function readSelfAssessment(raw = "") {
           category,
           {
             text: str(section?.text),
-            selfScore: validRating(section?.selfScore),
+            selfScore: validSelfScore(section?.selfScore),
             ...(Array.isArray(section?.entries)
               ? withAssessmentEntries({}, getAssessmentEntries(section))
               : {}),

@@ -178,9 +178,9 @@ function ReviewDetail({
             <span className="rd2-self-score-badge">
               員工自評{" "}
               <b>
-                {self.sections[category].selfScore
-                  ? `${self.sections[category].selfScore} / 5`
-                  : "未評"}
+                {self.sections[category].selfScore == null
+                  ? "未評"
+                  : `${self.sections[category].selfScore} 分`}
               </b>
             </span>
           </h4>

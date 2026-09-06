@@ -737,28 +737,21 @@
   letter-spacing: 0.02em;
   color: var(--card-accent, var(--rd2-ink));
 }
-/* These cards sit three-across, so the row has ~194px for five options. Give
-   each an equal share and stack the dot over the number, instead of letting
-   the shared rating style squeeze "1 分" into 34px. */
-.rd2-workspace .rd2-self-score .rd2-rating {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-  margin: 0 0 8px;
-}
-.rd2-workspace .rd2-self-score .rd2-rating [data-slot="field"] {
-  flex-direction: column;
+.rd2-self-score-input {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 0;
-  padding: 8px 2px;
-  text-align: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
-.rd2-workspace .rd2-self-score .rd2-rating [data-slot="field-label"] {
-  flex: 0 0 auto;
-  font-size: 13px;
+.rd2-workspace .rd2-self-score-input input {
+  max-width: 110px;
+  text-align: center;
+  font-size: 15px;
   font-weight: 700;
+}
+.rd2-self-score-input span {
+  font-size: 12px;
+  color: var(--rd2-muted);
 }
 .rd2-workspace .rd2-self-score .rd2-hint {
   margin: 0;
