@@ -5,6 +5,11 @@ import { cn } from "@/lib/utils";
 import type { PcbKeepout, PcbMeasurement, PcbModelAssetMetadata, PcbPlacedComponent } from "./types.ts";
 import { PCB_MODEL_FILE_ACCEPT } from "./core/modelAssets.ts";
 import { createBoardGridCuts } from "./core/boardCuts.ts";
+import {
+  PCB_RESIZE_ANCHORS,
+  PCB_RESIZE_ANCHOR_LABELS,
+  type PcbResizeAnchor,
+} from "./core/resizeBoard.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 
 function InspectorField({
@@ -156,6 +161,7 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
   const disabled = !workspace.canMutate;
   const [columns, setColumns] = useState("1");
   const [rows, setRows] = useState("1");
+  const [resizeAnchor, setResizeAnchor] = useState<PcbResizeAnchor>("top-left");
   const applyCuts = () => {
     const nextColumns = Number(columns);
     const nextRows = Number(rows);
@@ -167,8 +173,8 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
     <div className="pcb-inspector-form">
       <h2>板設定</h2>
       <div className="pcb-inspector-field-grid">
-        <NumberField label="寬度 (mm)" value={board.width} disabled={disabled} onCommit={(width) => workspace.updateBoard({ width })} />
-        <NumberField label="高度 (mm)" value={board.height} disabled={disabled} onCommit={(height) => workspace.updateBoard({ height })} />
+        <NumberField label="寬度 (mm)" value={board.width} disabled={disabled} onCommit={(width) => workspace.resizeBoardFromAnchor({ width }, resizeAnchor)} />
+        <NumberField label="高度 (mm)" value={board.height} disabled={disabled} onCommit={(height) => workspace.resizeBoardFromAnchor({ height }, resizeAnchor)} />
         <NumberField label="網格 (mm)" value={board.gridSize} disabled={disabled} onCommit={(gridSize) => workspace.updateBoard({ gridSize })} />
         <InspectorField label="板色">
           <input type="color" value={board.background} disabled={disabled} onChange={(event) => workspace.updateBoard({ background: event.target.value })} />
@@ -201,6 +207,29 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
               })}
           />
         </InspectorField>
+      </div>
+      <div className="pcb-resize-anchor" role="group" aria-label="改變尺寸時固定的邊">
+        <div className="pcb-resize-anchor-head">
+          <span>增減方向</span>
+          <small>{PCB_RESIZE_ANCHOR_LABELS[resizeAnchor]}</small>
+        </div>
+        <div className="pcb-resize-anchor-grid">
+          {PCB_RESIZE_ANCHORS.map((anchor) => (
+            <button
+              key={anchor}
+              type="button"
+              disabled={disabled}
+              aria-pressed={resizeAnchor === anchor}
+              aria-label={PCB_RESIZE_ANCHOR_LABELS[anchor]}
+              title={PCB_RESIZE_ANCHOR_LABELS[anchor]}
+              data-active={resizeAnchor === anchor || undefined}
+              onClick={() => setResizeAnchor(anchor)}
+            />
+          ))}
+        </div>
+        <p className="pcb-resize-anchor-hint">
+          選定的邊或角在改尺寸時不動，板上元件會跟著位移。
+        </p>
       </div>
       <label className="pcb-inspector-check">
         <input type="checkbox" checked={board.showGrid} disabled={disabled} onChange={(event) => workspace.updateBoard({ showGrid: event.target.checked })} />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch } from "react";
 import { toast } from "@/hooks/use-toast";
+import { resizeBoard, type PcbResizeAnchor } from "../core/resizeBoard";
 import {
   arrangeComponents as arrangeComponentsRecord,
   createKeepout as createKeepoutRecord,
@@ -369,6 +370,20 @@ export function usePcbEditorActions(
       const board = { ...state.activeProject.board, ...patch };
       if (!isValidBoard(board)) return false;
       dispatch({ type: "project/commit", update: { ...state.activeProject, board } });
+      return true;
+    },
+    [dispatch, state.activeProject, state.canEdit, state.documentLocked],
+  );
+  /**
+   * Board size change that keeps the chosen edge or corner fixed by shifting
+   * every placed item, instead of always growing away from the origin.
+   */
+  const resizeBoardFromAnchor = useCallback(
+    (size: { width?: number; height?: number }, anchor: PcbResizeAnchor) => {
+      if (!state.canEdit || state.documentLocked) return false;
+      const next = resizeBoard(state.activeProject, size, anchor);
+      if (!isValidBoard(next.board)) return false;
+      dispatch({ type: "project/commit", update: next });
       return true;
     },
     [dispatch, state.activeProject, state.canEdit, state.documentLocked],
@@ -811,6 +826,7 @@ export function usePcbEditorActions(
     moveKeepout,
     duplicateKeepout,
     updateBoard,
+    resizeBoardFromAnchor,
     updateComponent,
     updateKeepout,
     updateMeasurement,
