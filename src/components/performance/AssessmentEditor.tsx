@@ -753,6 +753,41 @@ export function AssessmentEditor({
                       readonly={readonly}
                       onChange={(update) => updateSection(category, update)}
                     />
+                    <fieldset
+                      className="rd2-self-score"
+                      disabled={readonly || saving}
+                    >
+                      <legend>我給自己的分數</legend>
+                      <RadioGroup
+                        className="rd2-rating"
+                        aria-label={`${category} 自評分數`}
+                        value={String(
+                          form.self.sections[category].selfScore ?? "",
+                        )}
+                        disabled={readonly || saving}
+                        onValueChange={(value) =>
+                          updateSection(category, (section) => ({
+                            ...section,
+                            selfScore: Number(value),
+                          }))
+                        }
+                      >
+                        {[1, 2, 3, 4, 5].map((value) => (
+                          <Field key={value} orientation="horizontal">
+                            <RadioGroupItem
+                              id={`${category}-self-${value}`}
+                              value={String(value)}
+                            />
+                            <FieldLabel htmlFor={`${category}-self-${value}`}>
+                              {value} 分
+                            </FieldLabel>
+                          </Field>
+                        ))}
+                      </RadioGroup>
+                      <p className="rd2-hint">
+                        1 分：待加強 · 5 分：表現優異。主管評分時會看到這個分數，但不會被它取代。
+                      </p>
+                    </fieldset>
                     <Evidence
                       category={category}
                       section={form.self.sections[category]}
