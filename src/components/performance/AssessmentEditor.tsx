@@ -756,8 +756,9 @@ export function AssessmentEditor({
                     <fieldset
                       className="rd2-self-score"
                       disabled={readonly || saving}
+                      aria-label={`${category} 我給自己的分數`}
                     >
-                      <legend>我給自己的分數</legend>
+                      <p className="rd2-self-score-title">我給自己的分數</p>
                       <RadioGroup
                         className="rd2-rating"
                         aria-label={`${category} 自評分數`}
@@ -779,7 +780,7 @@ export function AssessmentEditor({
                               value={String(value)}
                             />
                             <FieldLabel htmlFor={`${category}-self-${value}`}>
-                              {value} 分
+                              {value}
                             </FieldLabel>
                           </Field>
                         ))}
