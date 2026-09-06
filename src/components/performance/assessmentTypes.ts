@@ -13,6 +13,8 @@ export interface AssessmentEntry {
 }
 export interface AssessmentSection {
   text: string;
+  /** The employee's own 1-5 rating for this category. */
+  selfScore: number | null;
   entries?: AssessmentEntry[];
   draftText?: string;
   links: string[];

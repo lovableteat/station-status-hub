@@ -719,6 +719,50 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* Employee's own rating for a category, sitting under that category's entries. */
+.rd2-self-score {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--rd2-border-soft);
+  border-radius: 10px;
+  background: var(--rd2-panel-soft);
+}
+.rd2-self-score legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--card-accent, var(--rd2-ink));
+}
+.rd2-self-score::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+.rd2-workspace .rd2-self-score .rd2-rating {
+  margin: 0 0 8px;
+}
+.rd2-workspace .rd2-self-score .rd2-hint {
+  margin: 0;
+}
+/* Shown to the reviewer next to each category heading. */
+.rd2-self-score-badge {
+  margin-left: 10px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: hsl(var(--secondary));
+  color: var(--rd2-muted);
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.rd2-self-score-badge b {
+  color: var(--rd2-ink);
+}
+
 .rd2-question-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));

@@ -71,6 +71,7 @@ export function readSelfAssessment(raw = "") {
           category,
           {
             text: str(section?.text),
+            selfScore: validRating(section?.selfScore),
             ...(Array.isArray(section?.entries)
               ? withAssessmentEntries({}, getAssessmentEntries(section))
               : {}),

@@ -173,7 +173,17 @@ function ReviewDetail({
       </p>
       {CATEGORIES.map((category) => (
         <section key={category}>
-          <h4>{category}</h4>
+          <h4>
+            {category}
+            <span className="rd2-self-score-badge">
+              員工自評{" "}
+              <b>
+                {self.sections[category].selfScore
+                  ? `${self.sections[category].selfScore} / 5`
+                  : "未評"}
+              </b>
+            </span>
+          </h4>
           <AssessmentEntryList category={category} section={self.sections[category]} readonly onChange={() => {}} />
           <div className="rd2-images">
             {self.sections[category].images.map((image) => (
