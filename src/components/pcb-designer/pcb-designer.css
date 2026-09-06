@@ -2850,3 +2850,76 @@
   line-height: 1.6;
   color: #94a3b8;
 }
+
+/* --- DXF board outline import ------------------------------------------- */
+.pcb-dxf-import {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgb(148 163 184 / 0.25);
+  border-radius: 10px;
+  background: rgb(15 23 42 / 0.45);
+}
+.pcb-dxf-import-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+.pcb-dxf-import-head small {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fbbf24;
+  overflow-wrap: anywhere;
+}
+.pcb-dxf-import-drop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed rgb(148 163 184 / 0.5);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+.pcb-dxf-import-drop:hover {
+  border-color: #38bdf8;
+  color: #e0f2fe;
+}
+.pcb-dxf-import-drop svg {
+  width: 15px;
+  height: 15px;
+}
+.pcb-dxf-import-drop input {
+  display: none;
+}
+.pcb-dxf-import-clear {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #94a3b8;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.pcb-dxf-import-clear:hover {
+  color: #e2e8f0;
+}
+.pcb-dxf-import-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #94a3b8;
+}
+.pcb-dxf-import-error {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #fca5a5;
+}

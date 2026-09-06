@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { PcbKeepout, PcbMeasurement, PcbModelAssetMetadata, PcbPlacedComponent } from "./types.ts";
 import { PCB_MODEL_FILE_ACCEPT } from "./core/modelAssets.ts";
 import { createBoardGridCuts } from "./core/boardCuts.ts";
+import { parseDxfOutline } from "./core/dxf.ts";
 import {
   PCB_RESIZE_ANCHORS,
   PCB_RESIZE_ANCHOR_LABELS,
@@ -162,6 +163,40 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
   const [columns, setColumns] = useState("1");
   const [rows, setRows] = useState("1");
   const [resizeAnchor, setResizeAnchor] = useState<PcbResizeAnchor>("top-left");
+  const [dxfError, setDxfError] = useState("");
+
+  /** Take the board edge from an ME drawing: extents become the board size. */
+  const importDxf = async (file: File) => {
+    setDxfError("");
+    try {
+      const outline = parseDxfOutline(await file.text());
+      if (!outline.paths.length) {
+        setDxfError("這個檔案沒有可用的線段，請確認匯出時包含板框圖層。");
+        return;
+      }
+      if (outline.width < 20 || outline.height < 20
+        || outline.width > 1000 || outline.height > 1000) {
+        setDxfError(
+          `板框尺寸 ${outline.width} × ${outline.height} mm 超出可用範圍（20–1000 mm）。`,
+        );
+        return;
+      }
+      const applied = workspace.updateBoard({
+        width: outline.width,
+        height: outline.height,
+        outline: outline.paths,
+        outlineSource: file.name,
+      });
+      if (!applied) setDxfError("目前無法修改板框，請確認編輯權限。");
+      else if (outline.skipped.length) {
+        setDxfError(
+          `已匯入板框；已略過不支援的圖元：${outline.skipped.join("、")}。`,
+        );
+      }
+    } catch {
+      setDxfError("無法讀取這個 DXF 檔案。");
+    }
+  };
   const applyCuts = () => {
     const nextColumns = Number(columns);
     const nextRows = Number(rows);
@@ -230,6 +265,43 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
         <p className="pcb-resize-anchor-hint">
           選定的邊或角在改尺寸時不動，板上元件會跟著位移。
         </p>
+      </div>
+      <div className="pcb-dxf-import">
+        <div className="pcb-dxf-import-head">
+          <span>ME 板框（DXF）</span>
+          {board.outlineSource && <small>{board.outlineSource}</small>}
+        </div>
+        <label className="pcb-dxf-import-drop">
+          <FileUp aria-hidden="true" />
+          <span>{board.outline?.length ? "更換 DXF 板框" : "匯入 DXF 當版型"}</span>
+          <input
+            type="file"
+            accept=".dxf,application/dxf,image/vnd.dxf"
+            disabled={disabled}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void importDxf(file);
+            }}
+          />
+        </label>
+        {board.outline?.length ? (
+          <button
+            type="button"
+            className="pcb-dxf-import-clear"
+            disabled={disabled}
+            onClick={() => {
+              setDxfError("");
+              workspace.updateBoard({ outline: undefined, outlineSource: undefined });
+            }}
+          >
+            清除板框，回到矩形板
+          </button>
+        ) : null}
+        <p className="pcb-dxf-import-hint">
+          讀取 LINE／LWPOLYLINE／POLYLINE／ARC／CIRCLE，取外框範圍當板子寬高，並在畫布描出實際輪廓。
+        </p>
+        {dxfError && <p className="pcb-dxf-import-error">{dxfError}</p>}
       </div>
       <label className="pcb-inspector-check">
         <input type="checkbox" checked={board.showGrid} disabled={disabled} onChange={(event) => workspace.updateBoard({ showGrid: event.target.checked })} />
