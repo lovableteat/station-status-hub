@@ -9,6 +9,7 @@ import {
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { organizationActingSections } from "./organizationData.mjs";
 import type {
   OrganizationMember,
   OrganizationAddOptions,
@@ -147,9 +148,11 @@ export function PerformanceOrganizationTree({
       member.org_level === "director"
         ? reports.filter((child) => child.org_level !== "member")
         : reports;
-    const passthroughReports =
+    // A director can be acting for more than one vacant 課, and those members
+    // do not share a section - group them so each 課 keeps its own card.
+    const actingSections =
       member.org_level === "director"
-        ? reports.filter((child) => child.org_level === "member")
+        ? organizationActingSections(member, reports)
         : [];
     const open = filtering || !collapsed.has(member.employee_id);
     const parentMissing = member.org_level !== "director" && !member.manager_id;
@@ -287,17 +290,17 @@ export function PerformanceOrganizationTree({
             {chiefReports.map((child) =>
               renderNode(child, new Set([...ancestors, member.employee_id])),
             )}
-            {passthroughReports.length > 0 && (
-              <li className="rd2-orgchart-passthrough">
+            {actingSections.map((group) => (
+              <li className="rd2-orgchart-passthrough" key={group.key}>
                 <article
                   className="rd2-orgchart-node rd2-orgchart-acting"
                   data-level="section_chief"
-                  aria-label={`此課由 ${member.display_name} 部長代理，直接評核 ${passthroughReports.length} 位同仁`}
+                  aria-label={`${group.section || "未設定課別"}由 ${member.display_name} 部長代理，直接評核 ${group.members.length} 位同仁`}
                 >
                   <div className="rd2-orgchart-node-top">
                     <span className="rd2-orgchart-level">課長出缺</span>
                     <span className="rd2-orgchart-unit">
-                      {passthroughReports.length} 位同仁
+                      {group.section || "未設定課別"}
                     </span>
                   </div>
                   <div className="rd2-orgchart-person">
@@ -306,18 +309,44 @@ export function PerformanceOrganizationTree({
                     </span>
                     <div>
                       <strong>部長代理中</strong>
-                      <span>{member.display_name}</span>
+                      <span>
+                        {member.display_name} · {group.members.length} 位同仁
+                      </span>
                     </div>
                   </div>
                   <p className="rd2-orgchart-note">由部長直接評核</p>
+                  {administrator &&
+                    member.is_manager &&
+                    member.account_status === "active" && (
+                      <button
+                        type="button"
+                        className="rd2-orgchart-add"
+                        disabled={!canAdd}
+                        aria-label={`在 ${group.section || "未設定課別"}新增同仁`}
+                        onClick={() => {
+                          setCollapsed((previous) => {
+                            const next = new Set(previous);
+                            next.delete(member.employee_id);
+                            return next;
+                          });
+                          onAdd(member, {
+                            org_level: "member",
+                            section: group.section,
+                          });
+                        }}
+                      >
+                        <Plus />
+                        新增同仁
+                      </button>
+                    )}
                 </article>
                 <ul>
-                  {passthroughReports.map((child) =>
+                  {group.members.map((child) =>
                     renderNode(child, new Set([...ancestors, member.employee_id])),
                   )}
                 </ul>
               </li>
-            )}
+            ))}
           </ul>
         )}
       </li>
