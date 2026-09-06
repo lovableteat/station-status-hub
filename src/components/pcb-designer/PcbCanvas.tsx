@@ -1115,6 +1115,19 @@ export function PcbCanvas({
             stroke="#7ee8f5"
             strokeWidth={strokeWidth}
           />
+          {project.board.outline?.map((path, index) => (
+            <polyline
+              key={`outline-${index}`}
+              data-pcb-board-outline=""
+              points={path.map((point) => `${point.x},${point.y}`).join(" ")}
+              fill="none"
+              stroke="#ffd166"
+              strokeWidth={strokeWidth * 1.6}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
           <circle cx="0" cy="0" r={strokeWidth * 2.2} fill="#e2f9fb" aria-label="原點" />
         </g>
 

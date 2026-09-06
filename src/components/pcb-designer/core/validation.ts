@@ -113,7 +113,21 @@ export function isValidBoard(value: unknown): boolean {
         || (cut.orientation === "horizontal" && cut.position < Number(value.height))))
     && new Set(cuts.map((cut) => cut.id)).size === cuts.length
   );
-  return isFiniteNumber(value.width) && value.width >= 20 && value.width <= 1000
+  const outline = value.outline;
+  const hasValidOutline = outline === undefined || (
+    Array.isArray(outline)
+    && outline.length <= 400
+    && outline.every((path) => Array.isArray(path)
+      && path.length >= 2
+      && path.length <= 4000
+      && path.every((point) => isRecord(point)
+        && isFiniteNumber(point.x)
+        && isFiniteNumber(point.y)))
+  );
+  const hasValidOutlineSource =
+    value.outlineSource === undefined || typeof value.outlineSource === "string";
+  return hasValidOutline && hasValidOutlineSource
+    && isFiniteNumber(value.width) && value.width >= 20 && value.width <= 1000
     && isFiniteNumber(value.height) && value.height >= 20 && value.height <= 1000
     && isFiniteNumber(value.gridSize) && value.gridSize >= 0.1 && value.gridSize <= 50
     && typeof value.showGrid === "boolean"

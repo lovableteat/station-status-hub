@@ -9,9 +9,21 @@ export interface PcbBoardCut {
   position: number;
 }
 
+export interface PcbBoardOutlinePoint {
+  x: number;
+  y: number;
+}
+
 export interface PcbBoard {
   width: number;
   height: number;
+  /**
+   * Board edge imported from a mechanical DXF, in board millimetres with the
+   * origin at the top-left. Absent for a plain rectangular board.
+   */
+  outline?: PcbBoardOutlinePoint[][];
+  /** File the outline came from, shown so the source stays traceable. */
+  outlineSource?: string;
   gridSize: number;
   showGrid: boolean;
   snapToGrid: boolean;
