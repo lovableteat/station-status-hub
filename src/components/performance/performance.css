@@ -281,7 +281,9 @@
     var(--rd2-panel);
 }
 .rd2-view-switch button[data-active] strong {
-  color: var(--rd2-accent);
+  /* The base accent lands at 4.3 on the active tab's own accent tint, just
+     under AA; the lighter tint of the same hue clears it. */
+  color: #81aff8;
 }
 @media (max-width: 700px) {
   .rd2-view-switch {
