@@ -727,23 +727,38 @@
   border-radius: 10px;
   background: var(--rd2-panel-soft);
 }
-.rd2-self-score legend {
-  float: left;
-  width: 100%;
-  padding: 0;
-  margin-bottom: 8px;
+/* Not a floated <legend>: .rd2-rating is a flex container, so it establishes
+   its own formatting context and shrinks away from a float instead of sitting
+   under it - a full-width floated legend squeezed the five options to nothing. */
+.rd2-workspace .rd2-self-score-title {
+  margin: 0 0 8px;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.02em;
   color: var(--card-accent, var(--rd2-ink));
 }
-.rd2-self-score::after {
-  content: "";
-  display: table;
-  clear: both;
-}
+/* These cards sit three-across, so the row has ~194px for five options. Give
+   each an equal share and stack the dot over the number, instead of letting
+   the shared rating style squeeze "1 分" into 34px. */
 .rd2-workspace .rd2-self-score .rd2-rating {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
   margin: 0 0 8px;
+}
+.rd2-workspace .rd2-self-score .rd2-rating [data-slot="field"] {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 2px;
+  text-align: center;
+}
+.rd2-workspace .rd2-self-score .rd2-rating [data-slot="field-label"] {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
 }
 .rd2-workspace .rd2-self-score .rd2-hint {
   margin: 0;
