@@ -39,7 +39,12 @@ import { PerformanceSectionReports } from "./PerformanceSectionReports";
 import { PerformancePrivacyPanel } from "./PerformancePrivacyPanel";
 import { usePerformancePrivacy } from "./usePerformancePrivacy";
 import { watchPermissionRefresh } from "@/lib/permissionRefresh.mjs";
-import { ACCOUNTABILITY_ROLES, getAccountabilityQuestions, getAccountabilityRole } from "./rd2Standards.mjs";
+import {
+  ACCOUNTABILITY_ROLES,
+  calculateWeightedSelfScores,
+  getAccountabilityQuestions,
+  getAccountabilityRole,
+} from "./rd2Standards.mjs";
 import {
   ACCOUNTABILITY_QUESTIONS,
   CATEGORIES,
@@ -164,6 +169,7 @@ function ReviewDetail({
   showManagerAssessment: boolean;
 }) {
   const self = readSelfAssessment(review.selfFeedback);
+  const weightedSelf = calculateWeightedSelfScores(self.grade, self.sections);
   const manager = readManagerAssessment(review.managerFeedback);
   return (
     <article className="rd2-card rd2-detail">
@@ -172,17 +178,36 @@ function ReviewDetail({
         工號 {self.employeeNumber || manager.employeeNumber || "未填寫"} ·{" "}
         {review.department} · {review.role} · 職等 {self.grade || "未填寫"}
       </p>
+      <div className="rd2-review-weighted-score">
+        <span>員工加權自評</span>
+        <strong>
+          {weightedSelf
+            ? `${weightedSelf.total.toLocaleString("zh-TW", { maximumFractionDigits: 2 })} / 100`
+            : "無法計算"}
+        </strong>
+        <small>
+          {weightedSelf
+            ? CATEGORIES.map((category) => {
+                const item = weightedSelf.categories[category];
+                return `${category} ${item.score ?? "—"} × ${item.weight}% = ${item.weighted ?? "—"}`;
+              }).join("　＋　")
+            : `職等 ${self.grade || "未填"} 沒有政策權重`}
+        </small>
+      </div>
       {CATEGORIES.map((category) => (
         <section key={category}>
           <h4>
             {category}
             <span className="rd2-self-score-badge">
-              員工自評{" "}
+              原始自評{" "}
               <b>
                 {self.sections[category].selfScore == null
                   ? "未評"
                   : `${self.sections[category].selfScore} 分`}
               </b>
+              {weightedSelf?.categories[category].weighted != null && (
+                <> · 加權 <b>{weightedSelf.categories[category].weighted} 分</b></>
+              )}
             </span>
           </h4>
           <AssessmentEntryList category={category} section={self.sections[category]} readonly onChange={() => {}} />
@@ -1158,7 +1183,8 @@ export function PerformanceAppraisalPage() {
                     <th>部門／職級</th>
                     <th>考核人</th>
                     <th>狀態</th>
-                    {canManagePerformance && <th>綜合評分</th>}
+                    {canManagePerformance && <th>員工加權自評</th>}
+                    {canManagePerformance && <th>主管綜合評分</th>}
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -1187,6 +1213,15 @@ export function PerformanceAppraisalPage() {
                           {PERFORMANCE_STATUS[review.status].label}
                         </span>
                       </td>
+                      {canManagePerformance && (
+                        <td>
+                          {(() => {
+                            const self = readSelfAssessment(review.selfFeedback);
+                            const weighted = calculateWeightedSelfScores(self.grade, self.sections);
+                            return weighted?.complete ? weighted.total : "—";
+                          })()}
+                        </td>
+                      )}
                       {canManagePerformance && <td>{review.score ?? "—"}</td>}
                       <td>
                         <div className="rd2-row-actions">

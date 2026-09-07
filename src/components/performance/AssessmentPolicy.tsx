@@ -99,6 +99,10 @@ export function AssessmentPolicy() {
             沒有提供權重，待確認。
             原表未提供當責分數與綜合評分的換算公式，兩者分開記錄。
           </p>
+          <p className="rd2-policy-formula">
+            <strong>提供主管的加權自評</strong>
+            <span>各類原始自評乘上該類政策權重，再將 IDP、OKR、KPI 三項相加。</span>
+          </p>
         </section>
       </div>
 

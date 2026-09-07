@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   ACCOUNTABILITY_QUESTIONS,
   KPI_REFERENCES,
+  calculateWeightedSelfScores,
   getAccountabilityQuestions,
   getAccountabilityRole,
   getLevelWeights,
@@ -29,6 +30,21 @@ test("workbook A7:D9 weights use numeric grade without filling unpublished 13/49
     assert.deepEqual(getLevelWeights(grade), { KPI: 40, OKR: 35, IDP: 25 });
   for (const grade of [13, 49, "junior", "manager", "", null])
     assert.equal(getLevelWeights(grade), null);
+});
+test("employee self scores are multiplied by the workbook policy weights", () => {
+  const result = calculateWeightedSelfScores(23, {
+    IDP: { selfScore: 90 },
+    OKR: { selfScore: 80 },
+    KPI: { selfScore: 85 },
+  });
+  assert.deepEqual(result.categories, {
+    IDP: { score: 90, weight: 20, weighted: 18 },
+    OKR: { score: 80, weight: 20, weighted: 16 },
+    KPI: { score: 85, weight: 60, weighted: 51 },
+  });
+  assert.equal(result.total, 85);
+  assert.equal(result.complete, true);
+  assert.equal(calculateWeightedSelfScores(13, {}), null);
 });
 test("all 91 HW/FW criteria from B16:E17 are retained, including gate ownership and regression", () => {
   const counts = {
