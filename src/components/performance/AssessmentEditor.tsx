@@ -26,6 +26,9 @@ import {
   LEVELS,
   MAX_EVIDENCE_CHARACTERS,
   MAX_IMAGES_PER_CATEGORY,
+  MAX_MANAGER_ATTACHMENTS,
+  MAX_MANAGER_ATTACHMENT_BYTES,
+  MAX_MANAGER_ATTACHMENT_CHARACTERS,
   TEAMS,
   calculateWeightedManagerScores,
   calculateWeightedSelfScores,
@@ -53,7 +56,141 @@ import type {
   Category,
   EmployeeOption,
   EvidenceImage,
+  ReviewAttachment,
 } from "./assessmentTypes";
+
+const REVIEW_ATTACHMENT_ACCEPT =
+  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.zip,.jpg,.jpeg,.png,.webp";
+
+const formatFileSize = (size: number) =>
+  size < 1024 * 1024
+    ? `${Math.max(1, Math.round(size / 1024))} KB`
+    : `${(size / 1024 / 1024).toLocaleString("zh-TW", { maximumFractionDigits: 1 })} MB`;
+
+async function prepareReviewAttachment(file: File): Promise<ReviewAttachment> {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  const allowed = REVIEW_ATTACHMENT_ACCEPT.split(",").map((value) =>
+    value.slice(1),
+  );
+  if (!extension || !allowed.includes(extension))
+    throw new Error("附件支援 PDF、Word、Excel、PowerPoint、文字、ZIP 與圖片檔。");
+  if (file.size > MAX_MANAGER_ATTACHMENT_BYTES)
+    throw new Error("單一附件不可超過 4 MB。");
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("附件讀取失敗，請重新選擇檔案。"));
+    reader.readAsDataURL(file);
+  });
+  return {
+    id: crypto.randomUUID(),
+    name: file.name,
+    mimeType: file.type || "application/octet-stream",
+    size: file.size,
+    dataUrl,
+  };
+}
+
+function ManagerAttachments({
+  attachments,
+  readonly,
+  onChange,
+  onBusy,
+  onError,
+}: {
+  attachments: ReviewAttachment[];
+  readonly: boolean;
+  onChange?: (attachments: ReviewAttachment[]) => void;
+  onBusy?: (busy: boolean) => void;
+  onError?: (message: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const totalCharacters = attachments.reduce(
+    (total, attachment) => total + attachment.dataUrl.length,
+    0,
+  );
+  return (
+    <div className="rd2-review-attachments">
+      {!readonly && (
+        <>
+          <div className="rd2-evidence-actions">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy || attachments.length >= MAX_MANAGER_ATTACHMENTS}
+              onClick={() => inputRef.current?.click()}
+            >
+              <Upload data-icon="inline-start" />
+              {busy ? "處理附件中…" : "附加退回檔案"}
+            </Button>
+            <span className="rd2-hint">
+              最多 4 個檔案，單檔 4 MB、合計約 4.5 MB。
+            </span>
+          </div>
+          <input
+            ref={inputRef}
+            type="file"
+            className="sr-only"
+            aria-label="主管退回附件"
+            accept={REVIEW_ATTACHMENT_ACCEPT}
+            disabled={busy}
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (!file) return;
+              setBusy(true);
+              onBusy?.(true);
+              try {
+                const attachment = await prepareReviewAttachment(file);
+                if (
+                  totalCharacters + attachment.dataUrl.length >
+                  MAX_MANAGER_ATTACHMENT_CHARACTERS
+                )
+                  throw new Error("附件總量過大，請移除部分檔案後再加入。");
+                onChange?.([...attachments, attachment]);
+                onError?.("");
+              } catch (cause) {
+                onError?.(
+                  cause instanceof Error ? cause.message : "附件處理失敗，請重試。",
+                );
+              } finally {
+                setBusy(false);
+                onBusy?.(false);
+              }
+            }}
+          />
+        </>
+      )}
+      {!!attachments.length && (
+        <ul className="rd2-review-attachment-list">
+          {attachments.map((attachment) => (
+            <li key={attachment.id}>
+              <a href={attachment.dataUrl} download={attachment.name}>
+                <span>{attachment.name}</span>
+                <small>{formatFileSize(attachment.size)}</small>
+              </a>
+              {!readonly && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`移除附件 ${attachment.name}`}
+                  onClick={() =>
+                    onChange?.(attachments.filter((item) => item.id !== attachment.id))
+                  }
+                >
+                  <X />
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 async function prepareImage(file: File): Promise<EvidenceImage> {
   if (
@@ -274,6 +411,7 @@ interface Props {
   identityLocked?: boolean;
   canSubmit: boolean;
   submitBlockedMessage?: string;
+  showReturnFeedback?: boolean;
   employees: EmployeeOption[];
   demo: boolean;
   onSave: (
@@ -290,6 +428,7 @@ export function AssessmentEditor({
   identityLocked = false,
   canSubmit,
   submitBlockedMessage,
+  showReturnFeedback = false,
   employees,
   demo,
   onSave,
@@ -663,6 +802,22 @@ export function AssessmentEditor({
       </fieldset>
       {mode === "self" && (
         <>
+          {showReturnFeedback &&
+            (form.manager.feedback || form.manager.attachments.length > 0) && (
+            <section className="rd2-card rd2-return-feedback" aria-label="主管退回內容">
+              <div className="rd2-form-section-title">
+                <strong>主管退回回饋與附件</strong>
+                <span>請依主管說明補充內容，再重新送出自評。</span>
+              </div>
+              {form.manager.feedback && (
+                <p className="rd2-prewrap">{form.manager.feedback}</p>
+              )}
+              <ManagerAttachments
+                attachments={form.manager.attachments}
+                readonly
+              />
+            </section>
+            )}
           <div className="rd2-form-section-title">
             <strong>02 · 填寫本期實績</strong>
             <span>每寫一條按「新增實績」，內容會依序列在下方。</span>
@@ -1253,6 +1408,23 @@ export function AssessmentEditor({
                 </Field>
               )}
             </FieldGroup>
+            <ManagerAttachments
+              attachments={form.manager.attachments}
+              readonly={readonly || saving}
+              onChange={(attachments) =>
+                change((previous) => ({
+                  ...previous,
+                  manager: {
+                    ...previous.manager,
+                    attachments,
+                  },
+                }))
+              }
+              onBusy={(busy) =>
+                setImageJobs((count) => count + (busy ? 1 : -1))
+              }
+              onError={setError}
+            />
           </fieldset>
           <details className="rd2-accountability-details" open>
             <summary>

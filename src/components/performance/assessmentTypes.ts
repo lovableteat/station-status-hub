@@ -7,6 +7,13 @@ export interface EvidenceImage {
   name: string;
   dataUrl: string;
 }
+export interface ReviewAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  dataUrl: string;
+}
 export interface AssessmentEntry {
   id: string;
   text: string;
@@ -31,6 +38,7 @@ export interface SelfAssessment {
 export interface ManagerAssessment {
   employeeNumber: string;
   feedback: string;
+  attachments: ReviewAttachment[];
   categoryReviews: Record<Category, {
     score: number | null;
     feedback: string;
