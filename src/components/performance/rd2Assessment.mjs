@@ -42,6 +42,9 @@ import {
 } from "./rd2Standards.mjs";
 export const MAX_EVIDENCE_CHARACTERS = 1_500_000;
 export const MAX_IMAGES_PER_CATEGORY = 2;
+export const MAX_MANAGER_ATTACHMENTS = 4;
+export const MAX_MANAGER_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+export const MAX_MANAGER_ATTACHMENT_CHARACTERS = 6_000_000;
 const str = (value) => (typeof value === "string" ? value : "");
 const validRating = (value) =>
   Number.isInteger(value) && value >= 1 && value <= 5 ? value : null;
@@ -55,6 +58,45 @@ const validSelfScore = (value) =>
   Number(value) <= 100
     ? Math.round(Number(value))
     : null;
+const SAFE_ATTACHMENT_EXTENSIONS = new Set([
+  "pdf",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+  "csv",
+  "txt",
+  "zip",
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+]);
+const safeManagerAttachments = (value) =>
+  (Array.isArray(value) ? value : [])
+    .filter((attachment) => {
+      const extension = str(attachment?.name).split(".").pop()?.toLowerCase();
+      return (
+        str(attachment?.id) &&
+        SAFE_ATTACHMENT_EXTENSIONS.has(extension) &&
+        Number.isFinite(Number(attachment?.size)) &&
+        Number(attachment.size) >= 0 &&
+        Number(attachment.size) <= MAX_MANAGER_ATTACHMENT_BYTES &&
+        /^data:(?:application\/(?:pdf|msword|vnd\.[^;,]+|zip|x-zip-compressed|octet-stream)|text\/(?:plain|csv)|image\/(?:jpeg|png|webp));base64,/i.test(
+          str(attachment?.dataUrl),
+        )
+      );
+    })
+    .slice(0, MAX_MANAGER_ATTACHMENTS)
+    .map((attachment) => ({
+      id: str(attachment.id),
+      name: str(attachment.name),
+      mimeType: str(attachment.mimeType),
+      size: Number(attachment.size),
+      dataUrl: str(attachment.dataUrl),
+    }));
 export const safeEvidenceUrl = (value) => {
   try {
     const url = new URL(str(value).trim());
@@ -131,6 +173,7 @@ export function readManagerAssessment(raw = "") {
       const parsed = JSON.parse(raw.slice(MANAGER_PREFIX.length));
       return {
         feedback: str(parsed.feedback),
+        attachments: safeManagerAttachments(parsed.attachments),
         categoryReviews: Object.fromEntries(
           CATEGORIES.map((category) => [
             category,
@@ -160,6 +203,7 @@ export function readManagerAssessment(raw = "") {
   }
   return {
     feedback: str(raw),
+    attachments: [],
     categoryReviews: emptyCategoryReviews(),
     employeeNumber: "",
     roleGroup: "",
@@ -193,6 +237,12 @@ export function validateAssessment(form, mode, action) {
   );
   if (evidenceSize > MAX_EVIDENCE_CHARACTERS)
     return "證明圖片總量過大，請減少圖片或改用內部連結。";
+  const managerAttachmentSize = form.manager.attachments.reduce(
+    (total, attachment) => total + attachment.dataUrl.length,
+    0,
+  );
+  if (managerAttachmentSize > MAX_MANAGER_ATTACHMENT_CHARACTERS)
+    return "主管附件總量過大，請移除部分檔案後再儲存。";
   if (action === "draft") return "";
   if (mode === "self") {
     if (!form.self.employeeNumber?.trim()) return "請填寫員工工號。";
@@ -248,9 +298,10 @@ export function validateAssessment(form, mode, action) {
   if (
     mode === "manager" &&
     action === "return" &&
-    !form.manager.feedback.trim()
+    !form.manager.feedback.trim() &&
+    !form.manager.attachments.length
   )
-    return "退回補充時請留下回饋。";
+    return "退回補充時請留下回饋或附加檔案。";
   return "";
 }
 export function createAssessmentForm(review, user = {}) {
@@ -311,7 +362,10 @@ export function buildAssessmentReview({
           LEVELS.find((l) => l.value === form.self.level)?.label ||
           ""
         : previous?.role || form.role,
-    reviewerName: mode === "manager" ? reviewerName : form.reviewerName,
+    // The protected database trigger assigns the verified manager from the
+    // organization. A new self-review must not claim this protected field.
+    reviewerName:
+      mode === "manager" ? reviewerName : previous?.reviewerName || "",
     status:
       mode === "self"
         ? action === "submit"
