@@ -95,7 +95,7 @@ test("performance CSV exports headers, status labels, and escaped values", () =>
 
   assert.match(
     csv,
-    /^"員工","部門","考核人","狀態","分數","目標平均進度","截止日期"/,
+    /^"員工","部門","考核人","狀態","員工加權自評","主管綜合評分","目標平均進度","截止日期"/,
   );
   assert.match(csv, /"Ben ""B"""/);
   assert.match(csv, /"填寫中"/);

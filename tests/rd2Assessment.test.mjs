@@ -41,6 +41,7 @@ const makeForm = () => {
   });
   CATEGORIES.forEach((category) => {
     form.self.sections[category].text = `${category}: STAR result`;
+    form.self.sections[category].selfScore = 80;
   });
   return form;
 };
@@ -96,6 +97,9 @@ test("numeric grade weights are separate from the complete accountability questi
 test("self submission requires employee number, team, level and all three narratives", () => {
   const form = makeForm();
   assert.equal(validateAssessment(form, "self", "submit"), "");
+  form.self.sections.IDP.selfScore = null;
+  assert.match(validateAssessment(form, "self", "submit"), /三類自評分數/);
+  form.self.sections.IDP.selfScore = 80;
   form.self.sections.OKR.text = "   ";
   assert.match(validateAssessment(form, "self", "submit"), /IDP、OKR、KPI/);
   assert.equal(validateAssessment(form, "self", "draft"), "");

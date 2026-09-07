@@ -27,6 +27,7 @@ import {
   MAX_EVIDENCE_CHARACTERS,
   MAX_IMAGES_PER_CATEGORY,
   TEAMS,
+  calculateWeightedSelfScores,
   getKpiReference,
   getLevelWeights,
   readAssessmentDraft,
@@ -392,6 +393,12 @@ export function AssessmentEditor({
     }));
   const reference = getKpiReference(form.self.team, form.self.level);
   const weights = getLevelWeights(form.self.grade);
+  const weightedSelf = calculateWeightedSelfScores(
+    form.self.grade,
+    form.self.sections,
+  );
+  const formatScore = (value: number) =>
+    value.toLocaleString("zh-TW", { maximumFractionDigits: 2 });
   const roleFromOrg = getAccountabilityRole(
     employees.find((employee) => employee.id === form.employeeId)?.orgLevel,
   );
@@ -786,8 +793,20 @@ export function AssessmentEditor({
                         />
                         <span>分</span>
                       </div>
+                      {weightedSelf && (
+                        <p className="rd2-weighted-line" aria-live="polite">
+                          <span>
+                            原始分數 × 政策權重 {weights?.[category]}%
+                          </span>
+                          <strong>
+                            = {weightedSelf.categories[category].weighted == null
+                              ? "—"
+                              : formatScore(weightedSelf.categories[category].weighted)} 加權分
+                          </strong>
+                        </p>
+                      )}
                       <p className="rd2-hint">
-                        0–100 分，填你認為這一項的表現。主管評分時會看到這個分數，但不會被它取代。
+                        0–100 分，填你認為這一項的表現。送交主管時會乘上政策權重；主管評分仍會另外保留。
                       </p>
                     </div>
                     <Evidence
@@ -805,6 +824,33 @@ export function AssessmentEditor({
               );
             })}
           </div>
+          <section className="rd2-weighted-summary" data-complete={weightedSelf?.complete || undefined}>
+            <div>
+              <span>提供主管的加權自評</span>
+              <strong>
+                {weightedSelf
+                  ? `${formatScore(weightedSelf.total)} / 100`
+                  : "尚無政策權重"}
+              </strong>
+            </div>
+            {weightedSelf ? (
+              <p>
+                {CATEGORIES.map((category) => {
+                  const item = weightedSelf.categories[category];
+                  return `${category} ${item.score ?? "—"} × ${item.weight}% = ${item.weighted == null ? "—" : formatScore(item.weighted)}`;
+                }).join("　＋　")}
+              </p>
+            ) : (
+              <p>
+                {form.self.grade
+                  ? `職等 ${form.self.grade} 的原始政策未提供權重，暫不計算加權分數。`
+                  : "選擇數字職等後，這裡會依政策顯示加權總分。"}
+              </p>
+            )}
+            {weightedSelf && !weightedSelf.complete && (
+              <small>目前完成 {weightedSelf.completed} / 3 類分數；三類填完後才是完整加權總分。</small>
+            )}
+          </section>
           {form.self.legacyText && (
             <section className="rd2-card">
               <Field>
