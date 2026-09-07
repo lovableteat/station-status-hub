@@ -25,7 +25,7 @@
 先資料庫、再前端。`.github/workflows/main.yml` 只部署 GitHub Pages，不執行 Supabase migrations。
 
 1. 在正式前端所用 Supabase 專案確認 `workspace.system_users`、`workspace.performance_reviews`、`workspace.user_page_permissions`、`workspace.current_system_user_id()` 及 `workspace.current_user_can_workspace(text,text)` 可用，依維護流程備份資料庫。
-2. 在同一交易按順序執行 `20260903120000_add_performance_organization.sql`、`20260903130000_protect_performance_groups.sql`、`20260903160000_remove_performance_organization_members.sql`、`20260903180000_allow_acting_performance_directors.sql`、`20260903190000_add_direct_performance_review_workflow.sql`。五檔位於 `supabase/migrations/`。可執行 `node scripts/prepare-performance-organization-migration.mjs`，產生含 BEGIN／COMMIT 的 `tmp/performance-organization-deploy.sql`；此命令只產檔，不連線或寫資料庫。既有環境依已部署版本使用 `--removal-only`（160000）、`--acting-director-only`（180000）或 `--direct-review-only`（190000），每次只產生指定更新，避免重複 migration 版本。
+2. 在同一交易按順序執行 `20260903120000_add_performance_organization.sql`、`20260903130000_protect_performance_groups.sql`、`20260903160000_remove_performance_organization_members.sql`、`20260903180000_allow_acting_performance_directors.sql`、`20260903190000_add_direct_performance_review_workflow.sql`、`20260907130000_restrict_performance_scores_to_assigned_supervisors.sql`。六檔位於 `supabase/migrations/`。可執行 `node scripts/prepare-performance-organization-migration.mjs`，產生含 BEGIN／COMMIT 的 `tmp/performance-organization-deploy.sql`；此命令只產檔，不連線或寫資料庫。既有環境依已部署版本使用 `--removal-only`（160000）、`--acting-director-only`（180000）、`--direct-review-only`（190000）或 `--access-notification-only`（20260907130000），每次只產生指定更新，避免重複 migration 版本。
 3. SQL 建立表、RPC、觸發器與 RLS，正規化可唯一辨識的舊員工 ID，保留舊主管及祖先保護範圍。不唯一的舊姓名不自動指派。產生的交易會核對考核內容與全站角色／權限雜湊並記錄所選 migration 原文；若不一致則整批回復。SQL 內含 PostgREST schema 重載通知。
 4. 用測試帳號驗證下列案例，再合併前端並確認 Pages 發布成功。首次由管理員按部長→課長→成員順序建立關係。
 
@@ -53,7 +53,7 @@ node tests/performanceOrganization.integration.mjs <已安裝的-@electric-sql/p
 
 ## 逐級評核與課長彙整
 
-職員自評交由直屬課長評核；課長自己的自評由直屬部長評核。一般主管僅透過直接隸屬關係取得原始考核的存取權，不能利用祖先關係或舊 reviewer_name 越級讀取。既有管理員的查看能力仍受密碼保護，不改全站角色或其他工作區權限。
+職員自評交由直屬課長評核；課長自己的自評由直屬部長評核。一般主管僅透過直接隸屬關係取得原始考核的存取權，不能利用祖先關係或舊 reviewer_name 越級讀取。網站管理員只維護績效組織，除非同時被明確編入組織為直屬部長或課長，否則不能讀取、評分、匯出或刪除他人的考核。這項限制不改全站角色或其他工作區權限。
 
 「課長彙整與部長審閱」使用獨立 `performance_section_reports` 表。課長自行撰寫成果、改善事項及協助需求，每期一份，草稿不向部長顯示。送交後由實際直屬部長確認或退回，退回需理由；送出及確認的內容不能直接覆寫，所有更新檢查版本。彙整僅帶入課長文字及送交時本課人數／可查看的已完成評核人數，不含職員考核原文、分數明細或可展開的原始考核連結。
 
@@ -74,3 +74,7 @@ node tests/performanceOrganization.integration.mjs <已安裝的-@electric-sql/p
 同日追加 `20260903180000`，使用 `--acting-director-only` 產生的交易部署，考核內容與全站角色／權限完整性檢查通過。核對代理規則已啟用、migration 僅記錄一次、匿名帳號仍無權執行編輯；當次既有 7 筆組織分類及 1 筆考核維持不變。本機瀏覽器驗證新增代理課、排除已分類帳號、既有同仁改隸屬部長、移除出缺課長、代理多課及搜尋保留祖先連線。
 
 同日追加 `20260903190000`，使用 `--direct-review-only` 產生的交易部署並通過內容／全站權限雜湊檢查。核對直接隸屬規則已生效、彙整表啟用 RLS、一般登入帳號無權直接更新送審狀態。既有 7 筆組織分類與 1 筆考核保持不變，彙整表為 0 筆，未加入正式測試資料。本機瀏覽器走完課長草稿、送審、部長解鎖、退回補充、重新送審及確認，並確認搜尋清除、鎖定後移除可見內容，以及職員使用彙整網址仍只顯示自評。
+
+## 2026-09-07 權限與退回通知更新
+
+`20260907130000_restrict_performance_scores_to_assigned_supervisors.sql` 取消網站管理員對個人成績及課別彙整的例外讀取權。只有組織架構直接指派的部長或課長可以讀寫直屬對象的考核；管理員仍可讀取全站帳號清單並維護組織分類。主管退回自評時只可建立給該位直屬員工的私人通知，通知資料不含主管分數；其他員工與管理員不能列出該通知。

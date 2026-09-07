@@ -5,6 +5,7 @@ import { UserAvatar } from "@/components/account/UserAvatar";
 import { PlatformLogoMark } from "@/components/brand/PlatformLogoMark";
 import { Button } from "@/components/ui/button";
 import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
+import { NotificationIndicator } from "@/components/common/NotificationIndicator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +33,7 @@ interface MainWorkspaceHeaderProps {
   userAvatarPath?: string | null;
   userRoleLabel?: string;
   showOnlineUsers?: boolean;
+  showNotifications?: boolean;
   userMenuItems?: Array<{
     id: string;
     label: string;
@@ -52,6 +54,7 @@ export function MainWorkspaceHeader({
   userAvatarPath,
   userRoleLabel,
   showOnlineUsers = true,
+  showNotifications = true,
   userMenuItems = [],
 }: MainWorkspaceHeaderProps) {
   const brand = (
@@ -120,6 +123,8 @@ export function MainWorkspaceHeader({
           data-platform-controls="top-right"
           className="absolute right-[max(0.625rem,env(safe-area-inset-right))] top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center justify-end gap-1.5 sm:gap-2 xl:gap-3"
         >
+          {showNotifications && <NotificationIndicator />}
+
           {showOnlineUsers && <div className="hidden md:block"><OnlineUsersIndicator /></div>}
 
           <div className="hidden md:block"><WebsiteQrButton /></div>
