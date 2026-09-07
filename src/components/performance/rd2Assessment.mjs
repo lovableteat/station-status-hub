@@ -20,12 +20,14 @@ export {
   LEVELS,
   JOB_GRADES,
   CATEGORY_GUIDANCE,
+  CATEGORY_ROLE_REFERENCES,
   KPI_REFERENCES,
   ACCOUNTABILITY_QUESTIONS,
   calculateWeightedManagerScores,
   calculateWeightedSelfScores,
   getLevelWeights,
   getKpiReference,
+  getCategoryRoleReference,
 } from "./rd2Standards.mjs";
 import {
   LEVELS,
