@@ -148,6 +148,14 @@ function normalizeBoardLayerColors(layerColors: unknown): PcbBoardLayerColors {
 function normalizeBoard(board: PcbBoard | RecordValue): PcbBoard {
   const width = Number(board.width);
   const height = Number(board.height);
+  const outline = Array.isArray(board.outline)
+    ? board.outline
+      .filter((path): path is RecordValue[] => Array.isArray(path))
+      .map((path) => path
+        .filter((point): point is RecordValue => isRecord(point))
+        .map((point) => ({ x: Number(point.x), y: Number(point.y) })))
+      .filter((path) => path.length >= 2)
+    : undefined;
   const cuts = Array.isArray(board.cuts)
     ? board.cuts
       .filter((cut): cut is RecordValue => isRecord(cut))
@@ -168,6 +176,10 @@ function normalizeBoard(board: PcbBoard | RecordValue): PcbBoard {
     snapToGrid: Boolean(board.snapToGrid),
     background: isNonEmptyString(board.background) ? board.background : "#0f766e",
     layerColors: normalizeBoardLayerColors(board.layerColors),
+    ...(outline ? { outline } : {}),
+    ...(typeof board.outlineSource === "string"
+      ? { outlineSource: board.outlineSource }
+      : {}),
     ...(Array.isArray(board.cuts) ? { cuts } : {}),
   };
 }

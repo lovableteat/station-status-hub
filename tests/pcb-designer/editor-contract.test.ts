@@ -275,7 +275,7 @@ test("wires keyboard editing while skipping editable controls", () => {
   assert.match(editorHookSource, /key === ["']v["'][\s\S]{0,160}pasteCopied/);
   assert.match(editorHookSource, /key === ["']v["'] \|\| key === ["']h["']/);
   assert.match(editorHookSource, /key === ["']m["'] \|\| key === ["']k["']/);
-  assert.match(editorHookSource, /key === ["']r["'][\s\S]{0,120}rotateSelected/);
+  assert.match(editorHookSource, /key === ["']r["'][\s\S]{0,240}shortcuts\.rotateSelected/);
   assert.match(editorHookSource, /addEventListener\(["']keyup["']/);
   assert.match(canvasSource, /event\.key === ["']Escape["'][\s\S]{0,220}onPlacementCancel/);
   assert.match(workspaceSource, /key\.toLocaleLowerCase\(\) !== ["']s["']/);

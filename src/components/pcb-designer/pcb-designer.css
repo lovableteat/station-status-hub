@@ -2831,6 +2831,10 @@
   border-radius: 6px;
   background: rgb(30 41 59 / 0.7);
   cursor: pointer;
+  color: #cbd5e1;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
 }
 .pcb-resize-anchor-grid button:hover:not(:disabled) {
   border-color: #38bdf8;
@@ -2839,6 +2843,7 @@
   border-color: #38bdf8;
   background: #0ea5e9;
   box-shadow: 0 0 0 2px rgb(56 189 248 / 0.25);
+  color: #082f49;
 }
 .pcb-resize-anchor-grid button:disabled {
   opacity: 0.45;
@@ -2917,9 +2922,17 @@
   line-height: 1.6;
   color: #94a3b8;
 }
-.pcb-dxf-import-error {
+.pcb-dxf-import-message {
   margin: 8px 0 0;
   font-size: 11px;
   line-height: 1.6;
+}
+.pcb-dxf-import-message[data-tone="success"] {
+  color: #86efac;
+}
+.pcb-dxf-import-message[data-tone="warning"] {
+  color: #fde68a;
+}
+.pcb-dxf-import-message[data-tone="error"] {
   color: #fca5a5;
 }
