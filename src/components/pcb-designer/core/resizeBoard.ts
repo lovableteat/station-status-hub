@@ -24,6 +24,31 @@ export const PCB_RESIZE_ANCHOR_LABELS: Record<PcbResizeAnchor, string> = {
   "bottom-right": "右下固定",
 };
 
+/** Direction in which the board edge moves when this anchor is selected. */
+export const PCB_RESIZE_DIRECTION_LABELS: Record<PcbResizeAnchor, string> = {
+  "top-left": "往右下增減",
+  top: "往下增減",
+  "top-right": "往左下增減",
+  left: "往右增減",
+  center: "由中心向外增減",
+  right: "往左增減",
+  "bottom-left": "往右上增減",
+  bottom: "往上增減",
+  "bottom-right": "往左上增減",
+};
+
+export const PCB_RESIZE_DIRECTION_SYMBOLS: Record<PcbResizeAnchor, string> = {
+  "top-left": "↘",
+  top: "↓",
+  "top-right": "↙",
+  left: "→",
+  center: "↔",
+  right: "←",
+  "bottom-left": "↗",
+  bottom: "↑",
+  "bottom-right": "↖",
+};
+
 /**
  * Fraction of the size change that existing content must move by so the
  * anchored edge stays where it was: anchoring the left edge means content
