@@ -6,6 +6,7 @@ import {
 import {
   ACCOUNTABILITY_QUESTIONS,
   ACCOUNTABILITY_ROLES,
+  calculateWeightedManagerScores,
   calculateWeightedSelfScores,
 } from "./rd2Standards.mjs";
 
@@ -310,7 +311,7 @@ export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
     "圖片附件數",
   ];
   if (includeManager) {
-    headers.splice(4, 0, "員工加權自評", "主管綜合評分");
+    headers.splice(4, 0, "員工加權自評", "主管加權評分");
     headers.push(
       "IDP 原始自評",
       "IDP 加權分",
@@ -318,6 +319,15 @@ export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
       "OKR 加權分",
       "KPI 原始自評",
       "KPI 加權分",
+      "IDP 主管評分",
+      "IDP 主管加權分",
+      "IDP 主管評語",
+      "OKR 主管評分",
+      "OKR 主管加權分",
+      "OKR 主管評語",
+      "KPI 主管評分",
+      "KPI 主管加權分",
+      "KPI 主管評語",
       "當責職級",
       "評分標準版本",
       ...ACCOUNTABILITY_QUESTIONS.map(
@@ -357,11 +367,20 @@ export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
     ];
     if (includeManager) {
       const weightedSelf = calculateWeightedSelfScores(self.grade, self.sections);
+      const weightedManager = calculateWeightedManagerScores(
+        self.grade,
+        manager.categoryReviews,
+      );
       row.splice(4, 0, weightedSelf?.complete ? weightedSelf.total : "", review.score ?? "");
       row.push(
         ...CATEGORIES.flatMap((category) => [
           weightedSelf?.categories[category].score ?? "",
           weightedSelf?.categories[category].weighted ?? "",
+        ]),
+        ...CATEGORIES.flatMap((category) => [
+          manager.categoryReviews[category].score ?? "",
+          weightedManager?.categories[category].weighted ?? "",
+          manager.categoryReviews[category].feedback,
         ]),
         ACCOUNTABILITY_ROLES.find((role) => role.value === manager.roleGroup)
           ?.label || "既有評分",

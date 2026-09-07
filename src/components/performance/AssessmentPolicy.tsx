@@ -102,6 +102,7 @@ export function AssessmentPolicy() {
           <p className="rd2-policy-formula">
             <strong>提供主管的加權自評</strong>
             <span>各類原始自評乘上該類政策權重，再將 IDP、OKR、KPI 三項相加。</span>
+            <span>主管逐類對照同一份自評給 0–100 分與評語，並用相同權重產生主管加權評分；7 題當責量表另外保留。</span>
           </p>
         </section>
       </div>

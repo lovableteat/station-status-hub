@@ -80,7 +80,7 @@ export function PerformanceFlowGuide({
             <div>
               <h3>課長評核，整理本課成果</h3>
               <p>
-                查看直屬職員自評，完成 7 題當責評分及回饋；需要補件時退回補充。
+                逐類對照直屬職員的 IDP、OKR、KPI 自評並留下評語，再完成 7 題當責評分；需要補件時退回補充。
               </p>
             </div>
           </li>
@@ -97,7 +97,7 @@ export function PerformanceFlowGuide({
       </div>
       <div className="rd2-process-footnote">
         <strong>課長本人的自評 → 直屬部長</strong>
-        <span>個人考核與課務彙整分開完成；主管回饋不顯示在員工頁面。</span>
+        <span>個人考核與課務彙整分開完成；主管評分與回饋不會出現在員工畫面。</span>
       </div>
     </section>
   );
@@ -113,7 +113,7 @@ export function PerformanceTaskGuide({
   const self = mode === "self";
   const steps = self
     ? ["確認基本資料", "逐條新增實績與佐證", "送交直屬主管"]
-    : ["選擇直屬評核對象", "閱讀實績並完成 7 題評分", "填寫回饋並送出"];
+    : ["選擇直屬評核對象", "逐類對照自評並留下評語", "完成當責量表並送出"];
   return (
     <section
       className="rd2-task-guide"

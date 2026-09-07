@@ -41,6 +41,7 @@ import { usePerformancePrivacy } from "./usePerformancePrivacy";
 import { watchPermissionRefresh } from "@/lib/permissionRefresh.mjs";
 import {
   ACCOUNTABILITY_ROLES,
+  calculateWeightedManagerScores,
   calculateWeightedSelfScores,
   getAccountabilityQuestions,
   getAccountabilityRole,
@@ -171,6 +172,10 @@ function ReviewDetail({
   const self = readSelfAssessment(review.selfFeedback);
   const weightedSelf = calculateWeightedSelfScores(self.grade, self.sections);
   const manager = readManagerAssessment(review.managerFeedback);
+  const weightedManager = calculateWeightedManagerScores(
+    self.grade,
+    manager.categoryReviews,
+  );
   return (
     <article className="rd2-card rd2-detail">
       <h3>{review.employeeName} · 考核內容</h3>
@@ -225,6 +230,23 @@ function ReviewDetail({
               </a>
             </p>
           ))}
+          {showManagerAssessment && (
+            <div className="rd2-detail-manager-review">
+              <strong>
+                主管評分：{manager.categoryReviews[category].score == null
+                  ? "尚未評分"
+                  : `${manager.categoryReviews[category].score} / 100`}
+              </strong>
+              {weightedManager?.categories[category].weighted != null && (
+                <span>
+                  加權 {weightedManager.categories[category].weighted} 分
+                </span>
+              )}
+              <p className="rd2-prewrap">
+                {manager.categoryReviews[category].feedback || "尚無此類評語"}
+              </p>
+            </div>
+          )}
         </section>
       ))}
       {self.legacyText && (
@@ -264,10 +286,10 @@ function ReviewDetail({
             ))}
           </section>
           <section>
-            <h4>主管回饋</h4>
+            <h4>主管整體回饋與工作指示</h4>
             <p className="rd2-prewrap">{manager.feedback || "尚無回饋"}</p>
             <p>
-              綜合評分：
+              主管加權評分：
               {review.score == null ? "尚未評分" : `${review.score} / 100`}
             </p>
           </section>
@@ -873,7 +895,7 @@ export function PerformanceAppraisalPage() {
                 {
                   id: "score" as const,
                   label: "主管評分",
-                  hint: "為選定的員工打當責分數與回饋",
+                  hint: "逐類對照自評，填寫主管分數與評語",
                 },
               ].map((view) => (
                 <button
@@ -951,18 +973,7 @@ export function PerformanceAppraisalPage() {
                     </Button>
                   )}
                 </div>}
-                <div className={editorReview && tab === "manager" ? "rd2-review-layout" : undefined}>
-                {editorReview && tab === "manager" && (
-                  <details className="rd2-card rd2-review-evidence" open>
-                    <summary>
-                      查看 {editorReview.employeeName} 的自評與現有回饋
-                    </summary>
-                    <ReviewDetail
-                      review={editorReview}
-                      showManagerAssessment
-                    />
-                  </details>
-                )}
+                <div>
                 {tab === "manager" && !canManageAll && !editorReview ? (
                   <div
                     className="rd2-empty rd2-manager-selection-required"
@@ -1067,7 +1078,7 @@ export function PerformanceAppraisalPage() {
                 />
                 {canManagePerformance && (
                   <StatTile
-                    label="平均綜合評分"
+                    label="平均主管加權評分"
                     value={recordSummary.averageScore ?? "--"}
                     suffix={recordSummary.averageScore === null ? "" : " 分"}
                     tone="score"
@@ -1184,7 +1195,7 @@ export function PerformanceAppraisalPage() {
                     <th>考核人</th>
                     <th>狀態</th>
                     {canManagePerformance && <th>員工加權自評</th>}
-                    {canManagePerformance && <th>主管綜合評分</th>}
+                    {canManagePerformance && <th>主管加權評分</th>}
                     <th>操作</th>
                   </tr>
                 </thead>

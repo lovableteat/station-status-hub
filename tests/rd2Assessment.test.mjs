@@ -109,10 +109,16 @@ test("self submission requires employee number, team, level and all three narrat
   form.self.team = "invalid";
   assert.match(validateAssessment(form, "self", "submit"), /團隊與職務角色/);
 });
-test("manager requires the assessed role’s seven integer ratings, supports return, and keeps optional score null", () => {
+test("manager aligns three category scores, requires seven accountability ratings, and supports return", () => {
   const form = makeForm();
   form.manager.roleGroup = 'employee';
   getAccountabilityQuestions('employee').forEach(question => { form.manager.answers[question.id] = 5; });
+  assert.match(validateAssessment(form, "manager", "submit"), /三類主管評分/);
+  Object.assign(form.manager.categoryReviews, {
+    IDP: { score: 70, feedback: "持續深化" },
+    OKR: { score: 80, feedback: "改善有效" },
+    KPI: { score: 90, feedback: "交付穩定" },
+  });
   for (const value of [null, 0, 6, 2.5, "4"]) {
     form.manager.answers.q21 = value;
     assert.match(validateAssessment(form, "manager", "submit"), /7 題/);
@@ -123,7 +129,8 @@ test("manager requires the assessed role’s seven integer ratings, supports ret
   assert.equal(validateAssessment(form, "manager", "submit"), "", "legacy reviews without an employee number remain reviewable without changing self-assessment");
   const record = build(form, "manager");
   assert.equal(record.status, "approved");
-  assert.equal(record.score, null);
+  assert.equal(record.score, 84);
+  assert.equal(readManagerAssessment(record.managerFeedback).categoryReviews.KPI.feedback, "交付穩定");
   assert.equal(readManagerAssessment(record.managerFeedback).answers.q15, 5);
   assert.equal(readManagerAssessment(record.managerFeedback).answers.q21, 4);
   assert.equal(readManagerAssessment(record.managerFeedback).answers.q1, null);
@@ -196,9 +203,14 @@ test("manager updates preserve every self-assessment byte and all legacy goals",
   const form = createAssessmentForm(previous);
   form.manager.answers = { q1: 4, q2: 5 };
   form.manager.feedback = "Approved";
+  form.manager.categoryReviews.IDP = { score: 78, feedback: "IDP comment" };
   const updated = build(form, "manager", "submit", previous);
   assert.equal(updated.selfFeedback, previous.selfFeedback);
   assert.deepEqual(updated.goals, previous.goals);
+  assert.deepEqual(
+    readManagerAssessment(updated.managerFeedback).categoryReviews.IDP,
+    { score: 78, feedback: "IDP comment" },
+  );
   const self = build(createAssessmentForm(updated), "self", "draft", updated);
   assert.equal(self.managerFeedback, updated.managerFeedback);
   assert.equal(self.employeeId, previous.employeeId);
@@ -257,6 +269,11 @@ test("null scores stay unscored and CSV exports narratives/ratings, not JSON or 
   review.managerFeedback = serializeManagerAssessment({
     employeeNumber: "12345",
     answers: { q1: 4, q2: 5 },
+    categoryReviews: {
+      IDP: { score: 70, feedback: "IDP comment" },
+      OKR: { score: 80, feedback: "OKR comment" },
+      KPI: { score: 90, feedback: "KPI comment" },
+    },
     feedback: "Good",
   });
   const csv = toPerformanceCsv([review]);
@@ -264,6 +281,8 @@ test("null scores stay unscored and CSV exports narratives/ratings, not JSON or 
   assert.match(csv, /高階管理層 Q1/);
   assert.match(csv, /"4","5"/);
   assert.match(csv, /"Good"/);
+  assert.match(csv, /"IDP comment"/);
+  assert.match(csv, /"70","14","IDP comment"/);
   assert.match(csv, /"'=HYPERLINK/);
   assert.doesNotMatch(csv, /RD2_SELF_V1|data:image/);
 });
