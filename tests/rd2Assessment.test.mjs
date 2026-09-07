@@ -137,6 +137,18 @@ test("manager aligns three category scores, requires seven accountability rating
   assert.match(validateAssessment(form, "manager", "return"), /回饋/);
   form.manager.feedback = "請補充數據";
   assert.equal(build(form, "manager", "return").status, "in-progress");
+  form.manager.feedback = "";
+  form.manager.attachments = [
+    {
+      id: "return-file",
+      name: "補充說明.xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      size: 3,
+      dataUrl:
+        "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,YWJj",
+    },
+  ];
+  assert.equal(validateAssessment(form, "manager", "return"), "");
   form.score = "101";
   assert.match(validateAssessment(form, "manager", "draft"), /0–100/);
 });
@@ -155,11 +167,52 @@ test("versioned feedback round-trips text, images and links without public uploa
     "原本的自由文字",
   );
   assert.equal(readManagerAssessment("原主管回饋").feedback, "原主管回饋");
+  const manager = readManagerAssessment(
+    serializeManagerAssessment({
+      feedback: "請依附件補充",
+      attachments: [
+        {
+          id: "file-1",
+          name: "review.pptx",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          size: 3,
+          dataUrl:
+            "data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,YWJj",
+        },
+      ],
+    }),
+  );
+  assert.equal(manager.attachments[0].name, "review.pptx");
+  assert.equal(manager.attachments[0].dataUrl.endsWith("YWJj"), true);
+  const unsafeManager = readManagerAssessment(
+    serializeManagerAssessment({
+      attachments: [
+        {
+          id: "bad",
+          name: "run.html",
+          mimeType: "text/html",
+          size: 3,
+          dataUrl: "data:text/html;base64,YWJj",
+        },
+      ],
+    }),
+  );
+  assert.deepEqual(unsafeManager.attachments, []);
   assert.equal(
     readSelfAssessment(SELF_PREFIX + "bad json").legacyText,
     SELF_PREFIX + "bad json",
   );
   assert.doesNotThrow(() => readManagerAssessment("RD2_MANAGER_V1\nnull"));
+});
+test("new self review leaves protected reviewer assignment to the organization trigger", () => {
+  const form = makeForm();
+  form.reviewerName = "Section Chief";
+  const created = build(form, "self", "draft");
+  assert.equal(created.reviewerName, "");
+  const existing = { ...created, reviewerName: "verified-chief" };
+  const updated = build(createAssessmentForm(existing), "self", "draft", existing);
+  assert.equal(updated.reviewerName, "verified-chief");
 });
 test("unsafe evidence schemes, SVG and excess images are rejected", () => {
   for (const value of [

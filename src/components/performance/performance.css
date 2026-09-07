@@ -762,6 +762,60 @@
   display: grid;
   gap: 12px;
 }
+.rd2-review-attachments {
+  display: grid;
+  gap: 10px;
+}
+.rd2-review-attachment-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rd2-review-attachment-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--rd2-border);
+  border-radius: 8px;
+  background: var(--rd2-panel-soft);
+}
+.rd2-review-attachment-list a {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  color: var(--rd2-ink);
+  text-decoration: none;
+}
+.rd2-review-attachment-list a:hover span {
+  text-decoration: underline;
+}
+.rd2-review-attachment-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rd2-review-attachment-list small {
+  flex-shrink: 0;
+  color: var(--rd2-muted);
+}
+.rd2-return-feedback {
+  border-color: hsl(38 92% 55% / 0.7);
+  background: linear-gradient(135deg, hsl(38 92% 55% / 0.12), var(--rd2-panel));
+}
+.rd2-return-feedback > .rd2-prewrap {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-left: 3px solid hsl(38 92% 55%);
+  border-radius: 0 8px 8px 0;
+  background: hsl(38 92% 55% / 0.08);
+}
 .rd2-link-input {
   display: flex;
   gap: 8px;

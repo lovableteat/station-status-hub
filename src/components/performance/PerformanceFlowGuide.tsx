@@ -97,7 +97,7 @@ export function PerformanceFlowGuide({
       </div>
       <div className="rd2-process-footnote">
         <strong>課長本人的自評 → 直屬部長</strong>
-        <span>個人考核與課務彙整分開完成；主管評分與回饋不會出現在員工畫面。</span>
+        <span>個人考核與課務彙整分開完成；主管分數維持隱藏，退回說明與附件會顯示給員工補充。</span>
       </div>
     </section>
   );
