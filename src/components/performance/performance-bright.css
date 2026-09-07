@@ -581,6 +581,93 @@
 .rd2-bright .rd2-editor-context[hidden] {
   display: none;
 }
+.rd2-bright .rd2-self-org-card {
+  margin: 18px 0;
+  padding: 20px;
+  border: 1px solid #2e6fb2;
+  border-left: 5px solid #38bdf8;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #12345a 0%, #163d43 100%);
+  box-shadow: 0 12px 30px rgb(3 20 40 / 24%);
+}
+.rd2-bright .rd2-self-org-card > header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.rd2-bright .rd2-self-org-card h2,
+.rd2-bright .rd2-self-org-card p {
+  margin: 0;
+}
+.rd2-bright .rd2-self-org-card header p {
+  margin-top: 4px;
+  color: #b9dcff;
+}
+.rd2-bright .rd2-self-org-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 12px;
+  background: #38bdf8;
+  color: #08233e;
+}
+.rd2-bright .rd2-self-org-icon svg {
+  width: 24px;
+  height: 24px;
+}
+.rd2-bright .rd2-self-org-card dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.rd2-bright .rd2-self-org-card dl > div {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid rgb(125 211 252 / 30%);
+  border-radius: 10px;
+  background: rgb(5 23 43 / 55%);
+}
+.rd2-bright .rd2-self-org-card dt {
+  margin-bottom: 5px;
+  color: #7dd3fc;
+  font-size: 12px;
+  font-weight: 700;
+}
+.rd2-bright .rd2-self-org-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #f8fbff;
+  font-weight: 700;
+}
+.rd2-bright .rd2-self-org-card[data-state="missing"] {
+  border-color: #f59e0b;
+  border-left-color: #fbbf24;
+  background: linear-gradient(135deg, #3b2a12 0%, #243a46 100%);
+}
+.rd2-bright .rd2-self-org-warning {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgb(120 53 15 / 45%);
+  color: #fde68a;
+  font-weight: 700;
+}
+@media (max-width: 980px) {
+  .rd2-bright .rd2-self-org-card dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .rd2-bright .rd2-self-org-card {
+    padding: 16px;
+  }
+  .rd2-bright .rd2-self-org-card dl {
+    grid-template-columns: 1fr;
+  }
+}
 .rd2-bright .rd2-question {
   border-top: 3px solid #0f766e;
 }

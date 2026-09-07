@@ -62,6 +62,7 @@ import type {
   AssessmentForm,
   AssessmentMode,
   EmployeeOption,
+  PerformanceSelfContext,
   PerformanceReview,
 } from "./assessmentTypes";
 import "./performance.css";
@@ -267,6 +268,8 @@ export function PerformanceAppraisalPage() {
   const cacheKey = `station-status-hub:performance-reviews:v2:${demo ? "demo" : "cloud"}:${encodeURIComponent(userId)}`;
   const [reviews, setReviews] = useState<PerformanceReview[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [selfContext, setSelfContext] = useState<PerformanceSelfContext | null>(null);
+  const [selfContextLoaded, setSelfContextLoaded] = useState(demo);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -330,6 +333,7 @@ export function PerformanceAppraisalPage() {
   const load = useCallback(async (background = false) => {
     const request = ++requestNumber.current;
     if (!background) setLoading(true);
+    if (!background && !demo) setSelfContextLoaded(false);
     setLoadError("");
     if (!background) setReviews(demo ? readCache(cacheKey, true, user, canManagePerformance, canManageAll) : []);
     if (!demo && canManagePerformance && !privacy.ready) { setReviews([]); setLoading(false); return; }
@@ -348,15 +352,17 @@ export function PerformanceAppraisalPage() {
       // representation would hide that record and make the editor look new.
       // RLS applies organizational scope and password checks to every manager,
       // including application administrators.
-      const [{ data, error }, employeeResult] = await Promise.all([
+      const [{ data, error }, employeeResult, selfContextResult] = await Promise.all([
         reviewsQuery,
         canManagePerformance
           ? performanceDb.rpc("get_performance_organization")
           : Promise.resolve({ data: [] }),
+        performanceDb.rpc("get_performance_self_context"),
       ]);
       if (request !== requestNumber.current) return;
       if (error) throw error;
       if (employeeResult.error) throw employeeResult.error;
+      if (selfContextResult.error) throw selfContextResult.error;
       const rows = (data || []).map(
         normalizePerformanceReview,
       ) as PerformanceReview[];
@@ -378,9 +384,26 @@ export function PerformanceAppraisalPage() {
           }),
         ),
       );
+      const context = selfContextResult.data?.[0];
+      setSelfContext(context ? {
+        employeeId: context.employee_id,
+        username: context.username,
+        displayName: context.display_name,
+        managerId: context.manager_id,
+        managerName: context.manager_name,
+        managerOrgLevel: context.manager_org_level,
+        department: context.department,
+        section: context.section,
+        jobTitle: context.job_title,
+        orgLevel: context.org_level,
+        performanceRole: context.performance_role,
+        assigned: context.assigned,
+      } : null);
+      setSelfContextLoaded(true);
     } catch {
       if (request === requestNumber.current) {
         setReviews([]); setDetailId(null);
+        setSelfContext(null); setSelfContextLoaded(true);
         setLoadError("無法讀取工作區考核，請重新整理。考核內容會在權限確認後顯示。");
       }
     } finally {
@@ -593,6 +616,8 @@ export function PerformanceAppraisalPage() {
     const mode = tab as AssessmentMode;
     if (mode === "manager" && !canManagePerformance)
       throw new Error("只有管理員指定的績效主管才能送出主管評分。");
+    if (mode === "self" && !demo && selfContext?.assigned !== true)
+      throw new Error("管理員尚未將你的帳號加入績效組織，目前不能儲存或送出。");
     if (mode === "self" && !matchesUser(form, user))
       throw new Error("員工自評只能編輯目前登入帳號自己的紀錄。");
     const validation = validateAssessment(form, mode, action);
@@ -672,6 +697,13 @@ export function PerformanceAppraisalPage() {
     editorReview,
     tab === "self" ? user || {} : {},
   ) as AssessmentForm;
+  if (tab === "self" && selfContext?.assigned) {
+    initial.employeeId = selfContext.employeeId;
+    initial.employeeName = selfContext.displayName;
+    initial.department = [selfContext.department, selfContext.section].filter(Boolean).join(" / ");
+    initial.role = selfContext.jobTitle || ({ director: "部長", section_chief: "課長", member: "一般成員" } as const)[selfContext.orgLevel];
+    initial.reviewerName = selfContext.managerName;
+  }
   const assessedEmployee = employees.find((employee) => employee.id === initial.employeeId)
     || employees.find((employee) => employee.label === initial.employeeName);
   if (tab === "manager" && assessedEmployee?.orgLevel) initial.manager.roleGroup = getAccountabilityRole(assessedEmployee.orgLevel);
@@ -761,6 +793,29 @@ export function PerformanceAppraisalPage() {
           </>
         )}
         {tab === "self" && <PerformanceTaskGuide mode="self" status={editorReview?.status} />}
+        {tab === "self" && !loading && !demo && (
+          <section className="rd2-self-org-card" data-state={selfContext?.assigned ? "assigned" : "missing"}>
+            <header>
+              <span className="rd2-self-org-icon"><Network /></span>
+              <div>
+                <h2>我的績效組織</h2>
+                <p>自評會依此組織路徑送交直屬主管。</p>
+              </div>
+            </header>
+            {selfContext?.assigned ? (
+              <dl>
+                <div><dt>組織歸屬</dt><dd>{[selfContext.department, selfContext.section].filter(Boolean).join(" / ") || "未設定"}</dd></div>
+                <div><dt>組織層級</dt><dd>{({ director: "部長", section_chief: "課長", member: "一般成員" } as const)[selfContext.orgLevel]}</dd></div>
+                <div><dt>組織職務</dt><dd>{selfContext.jobTitle || "未設定"}</dd></div>
+                <div><dt>自評送審</dt><dd>{selfContext.managerName || "組織最上層（未設定送審主管）"}</dd></div>
+              </dl>
+            ) : (
+              <p className="rd2-self-org-warning" role="alert">
+                {selfContextLoaded ? "你尚未加入績效組織。請管理員先到「組織架構」完成分類，才能儲存或送出自評。" : "正在確認你的績效組織…"}
+              </p>
+            )}
+          </section>
+        )}
         {tab === "manager" && canManagePerformance && <PerformanceTaskGuide mode="manager" />}
         {canManagePerformance && !demo && ["manager", "section-reports"].includes(tab) && <PerformancePrivacyPanel privacy={privacy} userId={userId} configure={false} />}
         {tab === "section-reports" && canManagePerformance && <PerformanceSectionReports key={`${userId}:${cycle}:${privacyRevision}`} userId={userId} cycle={cycle} ready={privacy.ready && !demo} />}
@@ -824,10 +879,7 @@ export function PerformanceAppraisalPage() {
               </p>
             ) : (
               <>
-                <div
-                  className="rd2-editor-context"
-                  hidden={tab === "self"}
-                >
+                {tab === "manager" && <div className="rd2-editor-context">
                   <label htmlFor="rd2-existing">正在評核</label>
                   <select
                     id="rd2-existing"
@@ -873,7 +925,7 @@ export function PerformanceAppraisalPage() {
                       查看考核紀錄
                     </Button>
                   )}
-                </div>
+                </div>}
                 <div className={editorReview && tab === "manager" ? "rd2-review-layout" : undefined}>
                 {editorReview && tab === "manager" && (
                   <details className="rd2-card rd2-review-evidence" open>
@@ -911,7 +963,12 @@ export function PerformanceAppraisalPage() {
                       tab === "self" && editorReview?.status === "approved"
                     }
                     identityLocked={tab === "self" || !!editorReview}
-                    canSubmit={canEdit && (tab !== "manager" || canManagePerformance) && !loadError && !loading}
+                    canSubmit={canEdit && (tab !== "manager" || canManagePerformance) && (tab !== "self" || demo || selfContext?.assigned === true) && !loadError && !loading}
+                    submitBlockedMessage={tab === "self" && !demo && selfContext?.assigned !== true
+                      ? selfContextLoaded
+                        ? "管理員尚未將你的帳號加入績效組織，因此目前不能儲存或送出。"
+                        : "正在確認你的績效組織，請稍候。"
+                      : undefined}
                     employees={
                       tab === "manager" && canManagePerformance ? employeeOptions : []
                     }
