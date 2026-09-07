@@ -430,6 +430,7 @@
 .rd2-workspace :is(
   .rd2-identity,
   .rd2-feedback-card,
+  .rd2-manager-category,
   .rd2-question,
   .rd2-category,
   .rd2-level-item,
@@ -562,6 +563,114 @@
 .rd2-feedback-card {
   --card-accent: #3ddc97;
   border-top: 3px solid var(--card-accent);
+}
+.rd2-manager-category-grid {
+  display: grid;
+  gap: 18px;
+}
+.rd2-manager-category {
+  border-top: 4px solid var(--card-accent);
+  margin-bottom: 0;
+}
+.rd2-manager-category[data-category="IDP"] { --card-accent: #8b6cf0; }
+.rd2-manager-category[data-category="OKR"] { --card-accent: #35bd7b; }
+.rd2-manager-category[data-category="KPI"] { --card-accent: #4f8df7; }
+.rd2-manager-category-heading,
+.rd2-manager-panel-heading,
+.rd2-manager-score-row,
+.rd2-accountability-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rd2-manager-category-heading { margin-bottom: 14px; }
+.rd2-manager-category-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rd2-manager-category-heading h3 { margin: 0; font-size: 17px; }
+.rd2-manager-category-code {
+  display: inline-flex;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--card-accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+.rd2-manager-weight {
+  color: var(--card-accent);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.rd2-manager-compare-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  gap: 14px;
+}
+.rd2-manager-self-panel,
+.rd2-manager-response-panel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--card-accent) 28%, var(--rd2-border-soft));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--card-accent) 7%, var(--rd2-panel-soft));
+}
+.rd2-manager-response-panel {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  background: color-mix(in srgb, var(--card-accent) 12%, var(--rd2-panel));
+}
+.rd2-manager-panel-heading { margin-bottom: 12px; }
+.rd2-manager-panel-heading span { color: var(--card-accent); font-size: 13px; font-weight: 800; }
+.rd2-manager-score-row input { max-width: 140px; }
+.rd2-manager-score-row > span { color: var(--card-accent); font-size: 14px; font-weight: 800; white-space: nowrap; }
+.rd2-manager-score-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 260px)) minmax(240px, 1fr);
+  align-items: center;
+  gap: 16px;
+  margin: 18px 0;
+  padding: 16px 20px;
+  border: 1px solid color-mix(in srgb, #6ea8fe 42%, var(--rd2-border));
+  border-radius: var(--rd2-radius);
+  background: linear-gradient(110deg, color-mix(in srgb, #2563eb 20%, var(--rd2-panel)), color-mix(in srgb, #8b5cf6 13%, var(--rd2-panel)));
+}
+.rd2-manager-score-summary > div { display: flex; align-items: baseline; gap: 8px; }
+.rd2-manager-score-summary span { color: var(--rd2-muted); font-size: 13px; }
+.rd2-manager-score-summary strong { color: #8fc0ff; font-size: 28px; }
+.rd2-manager-score-summary small { color: var(--rd2-muted); }
+.rd2-manager-score-summary p { margin: 0; color: var(--rd2-ink); font-size: 13px; }
+.rd2-accountability-details {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--rd2-border-soft);
+  border-radius: var(--rd2-radius);
+  background: var(--rd2-panel-soft);
+}
+.rd2-accountability-details > summary { cursor: pointer; }
+.rd2-accountability-details > summary span { color: #b39cff; font-size: 13px; font-weight: 800; }
+.rd2-accountability-details .rd2-question-grid { margin-top: 14px; }
+.rd2-detail-manager-review {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: start;
+  gap: 8px 14px;
+  margin-top: 14px;
+  padding: 12px;
+  border-left: 3px solid var(--rd2-accent);
+  border-radius: 8px;
+  background: var(--rd2-soft);
+}
+.rd2-detail-manager-review > span { color: var(--rd2-accent); font-weight: 700; }
+.rd2-detail-manager-review > p { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 1000px) {
+  .rd2-manager-compare-grid,
+  .rd2-manager-score-summary { grid-template-columns: 1fr; }
 }
 .rd2-category-heading h3 {
   font-size: 15px;
