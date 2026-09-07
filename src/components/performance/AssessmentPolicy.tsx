@@ -2,6 +2,7 @@ import {
   CATEGORY_GUIDANCE,
   LEVELS,
   TEAMS,
+  getCategoryRoleReference,
   getKpiReference,
 } from "./rd2Assessment.mjs";
 import { useState } from "react";
@@ -245,18 +246,37 @@ export function AssessmentPolicy() {
                   <li key={detail}>{detail}</li>
                 ))}
               </ul>
-              {category !== "KPI" && (
-                <details>
-                  <summary>
-                    {category === "OKR"
-                      ? "原表歷史 OKR 範例（2025Q4／2026Q1）"
-                      : "完整 IDP 指引"}
-                  </summary>
-                  <p className="rd2-prewrap">
-                    {CATEGORY_GUIDANCE[category].example}
-                  </p>
-                </details>
-              )}
+              {category !== "KPI" && (() => {
+                const categoryReference = getCategoryRoleReference(category, role);
+                return categoryReference ? (
+                  <details>
+                    <summary>
+                      {LEVELS.find((item) => item.value === role)?.label} · 完整標準
+                    </summary>
+                    <p className="rd2-hint">
+                      來源：評分表 {categoryReference.source}
+                    </p>
+                    <div className="rd2-role-reference-columns">
+                      <div>
+                        <h5>Baseline · 基本要求</h5>
+                        <ol>
+                          {categoryReference.baseline.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ol>
+                      </div>
+                      <div>
+                        <h5>Outstanding · 卓越表現</h5>
+                        <ol>
+                          {categoryReference.outstanding.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    </div>
+                  </details>
+                ) : null;
+              })()}
             </article>
           ))}
         </div>

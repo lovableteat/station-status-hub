@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ACCOUNTABILITY_QUESTIONS,
+  CATEGORY_GUIDANCE,
+  CATEGORY_ROLE_REFERENCES,
   KPI_REFERENCES,
   calculateWeightedManagerScores,
   calculateWeightedSelfScores,
   getAccountabilityQuestions,
   getAccountabilityRole,
+  getCategoryRoleReference,
   getLevelWeights,
   RATING_SCALE,
 } from "../src/components/performance/rd2Standards.mjs";
@@ -91,6 +94,47 @@ test("all 91 HW/FW criteria from B16:E17 are retained, including gate ownership 
   assert.match(KPI_REFERENCES.EE.leader.baseline[6], /PCB Gerber release/);
   assert.match(KPI_REFERENCES.FW.manager.outstanding[3], /Develop FW Leaders/);
   assert.match(KPI_REFERENCES.FW.leader.baseline[7], /Drive HW activities/); // source ambiguity explicitly retained
+});
+test("yellow workbook cells B13:E14 provide role-specific IDP and OKR guidance", () => {
+  const expectedCounts = {
+    IDP: [
+      [3, 3],
+      [3, 3],
+      [3, 3],
+      [2, 2],
+    ],
+    OKR: [
+      [3, 2],
+      [3, 3],
+      [3, 3],
+      [2, 2],
+    ],
+  };
+  for (const [row, category] of [
+    [13, "IDP"],
+    [14, "OKR"],
+  ]) {
+    ["junior", "senior", "leader", "manager"].forEach((role, index) => {
+      const reference = CATEGORY_ROLE_REFERENCES[category][role];
+      assert.equal(reference.source, `${String.fromCharCode(66 + index)}${row}`);
+      assert.deepEqual(
+        [reference.baseline.length, reference.outstanding.length],
+        expectedCounts[category][index],
+      );
+      assert.equal(getCategoryRoleReference(category, role), reference);
+    });
+  }
+  assert.match(CATEGORY_GUIDANCE.IDP.focus, /技術學習、專案應用、知識輸出/);
+  assert.match(CATEGORY_GUIDANCE.OKR.focus, /業務與專案影響力/);
+  assert.match(
+    CATEGORY_ROLE_REFERENCES.IDP.senior.outstanding[1],
+    /可複用的工程資產/,
+  );
+  assert.match(
+    CATEGORY_ROLE_REFERENCES.OKR.leader.outstanding[1],
+    /20% 以上重複性研發資源/,
+  );
+  assert.equal(getCategoryRoleReference("KPI", "junior"), null);
 });
 test("workbook question IDs remain stable and each hierarchy selects its own seven questions", () => {
   assert.equal(ACCOUNTABILITY_QUESTIONS.length, 21);
