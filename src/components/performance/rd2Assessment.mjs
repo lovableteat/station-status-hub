@@ -22,6 +22,7 @@ export {
   CATEGORY_GUIDANCE,
   KPI_REFERENCES,
   ACCOUNTABILITY_QUESTIONS,
+  calculateWeightedSelfScores,
   getLevelWeights,
   getKpiReference,
 } from "./rd2Standards.mjs";
@@ -32,6 +33,7 @@ import {
   ACCOUNTABILITY_ROLES,
   STANDARDS_SOURCE,
   getAccountabilityQuestions,
+  getLevelWeights,
   getKpiReference,
 } from "./rd2Standards.mjs";
 export const MAX_EVIDENCE_CHARACTERS = 1_500_000;
@@ -41,6 +43,8 @@ const validRating = (value) =>
   Number.isInteger(value) && value >= 1 && value <= 5 ? value : null;
 /** Employee's own 0-100 figure for a category; anything else is dropped. */
 const validSelfScore = (value) =>
+  value !== null &&
+  value !== undefined &&
   Number.isFinite(Number(value)) &&
   String(value).trim() !== "" &&
   Number(value) >= 0 &&
@@ -192,6 +196,16 @@ export function validateAssessment(form, mode, action) {
       )
     )
       return "請填寫或刪除空白的實績項目後再送出。";
+    if (
+      getLevelWeights(form.self.grade) &&
+      CATEGORIES.some(
+        (category) => {
+          const score = form.self.sections[category].selfScore;
+          return score == null || !Number.isFinite(Number(score)) || Number(score) < 0 || Number(score) > 100;
+        },
+      )
+    )
+      return "請填寫 IDP、OKR、KPI 三類自評分數，系統會依政策權重計算後送交主管。";
   } else if (
     action === "submit" &&
     (!getAccountabilityQuestions(form.manager.roleGroup).length ||

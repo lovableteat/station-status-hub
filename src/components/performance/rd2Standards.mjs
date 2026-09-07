@@ -512,6 +512,47 @@ export const getLevelWeights = (grade) => {
   );
   return match ? { KPI: match.KPI, OKR: match.OKR, IDP: match.IDP } : null;
 };
+const roundWeightedScore = (value) => Math.round(value * 100) / 100;
+export const calculateWeightedSelfScores = (grade, sections = {}) => {
+  const weights = getLevelWeights(grade);
+  if (!weights) return null;
+  const categories = Object.fromEntries(
+    ["IDP", "OKR", "KPI"].map((category) => {
+      const raw = sections?.[category]?.selfScore;
+      const score =
+        raw !== null && raw !== undefined && String(raw).trim() !== "" &&
+        Number.isFinite(Number(raw)) && Number(raw) >= 0 && Number(raw) <= 100
+          ? Number(raw)
+          : null;
+      return [
+        category,
+        {
+          score,
+          weight: weights[category],
+          weighted:
+            score === null
+              ? null
+              : roundWeightedScore((score * weights[category]) / 100),
+        },
+      ];
+    }),
+  );
+  const completed = Object.values(categories).filter(
+    (item) => item.weighted !== null,
+  ).length;
+  return {
+    weights,
+    categories,
+    completed,
+    complete: completed === 3,
+    total: roundWeightedScore(
+      Object.values(categories).reduce(
+        (sum, item) => sum + (item.weighted ?? 0),
+        0,
+      ),
+    ),
+  };
+};
 export const getKpiReference = (team, level) =>
   KPI_REFERENCES[team]?.[level] || null;
 export const getAccountabilityQuestions = (roleGroup) =>

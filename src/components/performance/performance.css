@@ -756,6 +756,71 @@
 .rd2-workspace .rd2-self-score .rd2-hint {
   margin: 0;
 }
+.rd2-weighted-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card-accent, var(--rd2-accent)) 12%, transparent);
+  color: var(--rd2-muted);
+  font-size: 12px;
+}
+.rd2-weighted-line strong {
+  color: var(--card-accent, var(--rd2-accent));
+}
+.rd2-weighted-summary,
+.rd2-review-weighted-score,
+.rd2-policy-formula {
+  border: 1px solid color-mix(in srgb, var(--rd2-accent) 44%, transparent);
+  border-left: 4px solid var(--rd2-accent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--rd2-accent) 10%, var(--rd2-panel));
+}
+.rd2-weighted-summary {
+  margin: 18px 0;
+  padding: 16px 18px;
+}
+.rd2-weighted-summary > div,
+.rd2-review-weighted-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 18px;
+}
+.rd2-weighted-summary strong,
+.rd2-review-weighted-score strong {
+  color: var(--rd2-accent);
+  font-size: 24px;
+}
+.rd2-weighted-summary p,
+.rd2-weighted-summary small {
+  display: block;
+  margin: 7px 0 0;
+  color: var(--rd2-muted);
+}
+.rd2-review-weighted-score {
+  margin: 12px 0 18px;
+  padding: 14px 16px;
+}
+.rd2-review-weighted-score small {
+  flex-basis: 100%;
+  color: var(--rd2-muted);
+}
+.rd2-policy-formula {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+}
+.rd2-policy-formula span {
+  color: var(--rd2-muted);
+  font-size: 12px;
+}
 /* Shown to the reviewer next to each category heading. */
 .rd2-self-score-badge {
   margin-left: 10px;

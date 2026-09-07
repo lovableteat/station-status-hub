@@ -6,6 +6,7 @@ import {
 import {
   ACCOUNTABILITY_QUESTIONS,
   ACCOUNTABILITY_ROLES,
+  calculateWeightedSelfScores,
 } from "./rd2Standards.mjs";
 
 export const PERFORMANCE_CYCLES = [
@@ -309,8 +310,14 @@ export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
     "圖片附件數",
   ];
   if (includeManager) {
-    headers.splice(4, 0, "分數");
+    headers.splice(4, 0, "員工加權自評", "主管綜合評分");
     headers.push(
+      "IDP 原始自評",
+      "IDP 加權分",
+      "OKR 原始自評",
+      "OKR 加權分",
+      "KPI 原始自評",
+      "KPI 加權分",
       "當責職級",
       "評分標準版本",
       ...ACCOUNTABILITY_QUESTIONS.map(
@@ -349,8 +356,13 @@ export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
       ),
     ];
     if (includeManager) {
-      row.splice(4, 0, review.score ?? "");
+      const weightedSelf = calculateWeightedSelfScores(self.grade, self.sections);
+      row.splice(4, 0, weightedSelf?.complete ? weightedSelf.total : "", review.score ?? "");
       row.push(
+        ...CATEGORIES.flatMap((category) => [
+          weightedSelf?.categories[category].score ?? "",
+          weightedSelf?.categories[category].weighted ?? "",
+        ]),
         ACCOUNTABILITY_ROLES.find((role) => role.value === manager.roleGroup)
           ?.label || "既有評分",
         manager.standardsVersion || "舊版",
