@@ -140,7 +140,7 @@ try {
           "select count(*)::int as total from supabase_migrations.schema_migrations",
         )
       )[0].total,
-      5,
+      6,
       "deployment transaction verifies content and records all migration sources",
     );
   } else {
