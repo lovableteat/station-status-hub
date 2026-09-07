@@ -192,7 +192,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     accountActive &&
     (effectiveRole === "admin" || effectiveRole === "super_admin");
   const isPerformanceManager =
-    isAdmin || permissionSettings.performanceManager === true;
+    accountActive && permissionSettings.performanceManager === true;
 
   const hasPermission = useCallback(
     (permission: Permission) =>

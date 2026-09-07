@@ -693,6 +693,7 @@ const Index = () => {
         userAvatarPath={user?.avatarPath}
         userRoleLabel={getRoleLabel(user?.role)}
         showOnlineUsers={!isDemoMode}
+        showNotifications={!isDemoMode}
         userMenuItems={isDemoMode ? [] : [
           {
             id: "personal-profile",

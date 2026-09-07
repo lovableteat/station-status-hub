@@ -1,7 +1,9 @@
 // Prepare a reviewable transaction. Never connects to a database.
 import fs from "node:fs/promises";
-const migrations = process.argv.includes("--direct-review-only")
-  ? ["20260903190000_add_direct_performance_review_workflow.sql"]
+const migrations = process.argv.includes("--access-notification-only")
+  ? ["20260907130000_restrict_performance_scores_to_assigned_supervisors.sql"]
+  : process.argv.includes("--direct-review-only")
+    ? ["20260903190000_add_direct_performance_review_workflow.sql"]
   : process.argv.includes("--acting-director-only")
     ? ["20260903180000_allow_acting_performance_directors.sql"]
     : process.argv.includes("--removal-only")
@@ -12,6 +14,7 @@ const migrations = process.argv.includes("--direct-review-only")
           "20260903160000_remove_performance_organization_members.sql",
           "20260903180000_allow_acting_performance_directors.sql",
           "20260903190000_add_direct_performance_review_workflow.sql",
+          "20260907130000_restrict_performance_scores_to_assigned_supervisors.sql",
         ];
 const parts = await Promise.all(
   migrations.map(async (name) => ({

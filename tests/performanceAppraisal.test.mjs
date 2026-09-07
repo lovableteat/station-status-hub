@@ -158,7 +158,8 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
   assert.match(source, /主管評分（主管專用）/);
   assert.match(source, /requestedTab === "manager" && !canManagePerformance/);
   assert.match(source, /isPerformanceManager/);
-  assert.match(source, /canManagePerformance = canManageAll \|\|/);
+  assert.match(source, /isAssignedOrganizationManager/);
+  assert.match(source, /canAccessOrganization = administrator \|\| canManagePerformance/);
   assert.match(source, /matchesReviewer/);
   assert.doesNotMatch(source, /reviewsQuery\.eq\("employee_id", userId\)/);
   assert.match(source, /An employee has one editable record per cycle/);
