@@ -288,6 +288,22 @@ function ReviewDetail({
           <section>
             <h4>主管整體回饋與工作指示</h4>
             <p className="rd2-prewrap">{manager.feedback || "尚無回饋"}</p>
+            {!!manager.attachments.length && (
+              <ul className="rd2-review-attachment-list">
+                {manager.attachments.map((attachment) => (
+                  <li key={attachment.id}>
+                    <a href={attachment.dataUrl} download={attachment.name}>
+                      <span>{attachment.name}</span>
+                      <small>
+                        {attachment.size < 1024 * 1024
+                          ? `${Math.max(1, Math.round(attachment.size / 1024))} KB`
+                          : `${(attachment.size / 1024 / 1024).toLocaleString("zh-TW", { maximumFractionDigits: 1 })} MB`}
+                      </small>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
             <p>
               主管加權評分：
               {review.score == null ? "尚未評分" : `${review.score} / 100`}
@@ -1005,6 +1021,9 @@ export function PerformanceAppraisalPage() {
                         ? "管理員尚未將你的帳號加入績效組織，因此目前不能儲存或送出。"
                         : "正在確認你的績效組織，請稍候。"
                       : undefined}
+                    showReturnFeedback={
+                      tab === "self" && editorReview?.status === "in-progress"
+                    }
                     employees={
                       tab === "manager" && canManagePerformance ? employeeOptions : []
                     }

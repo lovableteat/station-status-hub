@@ -115,7 +115,7 @@ test("performance CSV exports headers, status labels, and escaped values", () =>
 });
 
 test("performance workspace exposes RD2 workflows and persistent record filters", async () => {
-  const [source, flowGuide] = await Promise.all([
+  const [source, flowGuide, editor] = await Promise.all([
     readFile(
       new URL(
         "../src/components/performance/PerformanceAppraisalPage.tsx",
@@ -126,6 +126,13 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
     readFile(
       new URL(
         "../src/components/performance/PerformanceFlowGuide.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../src/components/performance/AssessmentEditor.tsx",
         import.meta.url,
       ),
       "utf8",
@@ -163,7 +170,9 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
   assert.match(source, /toPerformanceCsv\(visibleReviews, \{ includeManager: canManagePerformance \}/);
   assert.match(source, /showManagerAssessment/);
   assert.match(flowGuide, /canManage = false/);
-  assert.match(flowGuide, /主管評分與回饋不會出現在員工畫面/);
+  assert.match(flowGuide, /主管分數維持隱藏，退回說明與附件會顯示給員工補充/);
+  assert.match(source, /manager\.attachments/);
+  assert.match(editor, /主管退回回饋與附件/);
 });
 
 test("performance employee RLS accepts legacy account identifiers", async () => {
