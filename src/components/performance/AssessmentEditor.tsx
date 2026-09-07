@@ -270,6 +270,7 @@ interface Props {
   readonly?: boolean;
   identityLocked?: boolean;
   canSubmit: boolean;
+  submitBlockedMessage?: string;
   employees: EmployeeOption[];
   demo: boolean;
   onSave: (
@@ -285,6 +286,7 @@ export function AssessmentEditor({
   readonly = false,
   identityLocked = false,
   canSubmit,
+  submitBlockedMessage,
   employees,
   demo,
   onSave,
@@ -1122,7 +1124,8 @@ export function AssessmentEditor({
           )}
           {!canSubmit && (
             <p className="rd2-hint">
-              目前為檢視權限，可暫存本機草稿；送出需要績效考核管理權限。
+              {submitBlockedMessage ||
+                "目前為檢視權限，可暫存本機草稿；送出需要績效考核管理權限。"}
             </p>
           )}
           <p className="rd2-submit-explainer">

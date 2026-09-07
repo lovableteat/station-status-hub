@@ -253,12 +253,15 @@ export function buildAssessmentReview({
     employeeName: previous?.employeeName || form.employeeName.trim(),
     department:
       mode === "self"
-        ? TEAMS.find((t) => t.value === form.self.team)?.label ||
-          form.department
+        ? form.department ||
+          TEAMS.find((t) => t.value === form.self.team)?.label ||
+          ""
         : previous?.department || form.department,
     role:
       mode === "self"
-        ? LEVELS.find((l) => l.value === form.self.level)?.label || form.role
+        ? form.role ||
+          LEVELS.find((l) => l.value === form.self.level)?.label ||
+          ""
         : previous?.role || form.role,
     reviewerName: mode === "manager" ? reviewerName : form.reviewerName,
     status:
