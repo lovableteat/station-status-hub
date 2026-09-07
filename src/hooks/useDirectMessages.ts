@@ -17,6 +17,8 @@ import { authorizePrivateRealtime } from "@/lib/authorizePrivateRealtime";
 const MESSAGE_PAGE_SIZE = 40;
 const TYPING_THROTTLE_MS = 500;
 const TYPING_EXPIRY_MS = 2_500;
+const CHAT_BACKGROUND_REFRESH_MS = 8_000;
+const CHAT_RECONNECT_RETRY_MS = 1_500;
 const DIRECT_CHAT_CLEARED_EVENT = "station-direct-chat-cleared";
 const CHAT_MEDIA_BUCKET = "chat-media";
 const MESSAGE_SELECT = `
@@ -172,14 +174,15 @@ export function useDirectMessageThreads() {
   const [error, setError] = useState<string | null>(null);
   const reloadTimerRef = useRef<number>();
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (options?: { background?: boolean }) => {
     if (!isRealtimeAuthenticated) {
       setThreads([]);
       setError("即時協作需要重新登入後才能使用。");
       return;
     }
 
-    setLoading(true);
+    const background = options?.background === true;
+    if (!background) setLoading(true);
     const { data, error: queryError } = await database.rpc("list_direct_chat_threads");
     if (queryError) {
       setError("訊息服務尚未啟用或目前無法連線。");
@@ -187,12 +190,15 @@ export function useDirectMessageThreads() {
       setThreads((data ?? []).map(mapThread));
       setError(null);
     }
-    setLoading(false);
+    if (!background) setLoading(false);
   }, [isRealtimeAuthenticated]);
 
-  const scheduleReload = useCallback(() => {
+  const scheduleReload = useCallback((delay = 120) => {
     if (reloadTimerRef.current) window.clearTimeout(reloadTimerRef.current);
-    reloadTimerRef.current = window.setTimeout(() => void reload(), 120);
+    reloadTimerRef.current = window.setTimeout(
+      () => void reload({ background: true }),
+      delay,
+    );
   }, [reload]);
 
   const handleInboxChange = useCallback((payload: any) => {
@@ -214,40 +220,93 @@ export function useDirectMessageThreads() {
     if (!isRealtimeAuthenticated || !user?.userId) return;
     let active = true;
     let inbox: ReturnType<typeof supabase.channel> | null = null;
-    void authorizePrivateRealtime().then((authorized) => {
+    let reconnectTimer: number | undefined;
+
+    const scheduleInboxReconnect = () => {
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      reconnectTimer = window.setTimeout(() => {
+        void connectInbox();
+      }, CHAT_RECONNECT_RETRY_MS);
+    };
+    const connectInbox = async () => {
+      const authorized = await authorizePrivateRealtime();
       if (!active || !authorized) return;
-      inbox = supabase
+      const previous = inbox;
+      inbox = null;
+      if (previous) await supabase.removeChannel(previous);
+      if (!active) return;
+
+      const nextInbox = supabase
         .channel(`chat-inbox:${user.userId}`, { config: { private: true } })
         .on("broadcast", { event: "INSERT" }, handleInboxChange)
         .on("broadcast", { event: "UPDATE" }, handleInboxChange)
-        .subscribe();
-    });
+        .on("broadcast", { event: "DELETE" }, handleInboxChange);
+      inbox = nextInbox;
+      nextInbox.subscribe((status) => {
+        if (!active || inbox !== nextInbox) return;
+        if (status === "SUBSCRIBED") {
+          if (reconnectTimer) window.clearTimeout(reconnectTimer);
+          void reload({ background: true });
+        } else if (
+          status === "CHANNEL_ERROR"
+          || status === "TIMED_OUT"
+          || status === "CLOSED"
+        ) {
+          scheduleReload(CHAT_RECONNECT_RETRY_MS);
+          scheduleInboxReconnect();
+        }
+      });
+    };
+
+    void connectInbox();
     return () => {
       active = false;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
       if (inbox) void supabase.removeChannel(inbox);
     };
-  }, [handleInboxChange, isRealtimeAuthenticated, user?.userId]);
+  }, [handleInboxChange, isRealtimeAuthenticated, reload, scheduleReload, user?.userId]);
 
-  const threadSignature = threads.map((thread) => thread.threadId).sort().join(":");
+  // A single inbox channel updates every conversation row. Opening a thread
+  // creates its own channel for messages and typing, so subscribing to every
+  // thread here would duplicate the active topic and make reconnects brittle.
   useEffect(() => {
-    if (!isRealtimeAuthenticated || !threadSignature) return;
+    if (!isRealtimeAuthenticated) return;
     let active = true;
-    let channels: Array<ReturnType<typeof supabase.channel>> = [];
-    void authorizePrivateRealtime().then((authorized) => {
-      if (!active || !authorized) return;
-      channels = threads.map((thread) =>
-        supabase
-          .channel(`chat:${thread.threadId}`, { config: { private: true } })
-          .on("broadcast", { event: "INSERT" }, scheduleReload)
-          .on("broadcast", { event: "UPDATE" }, scheduleReload)
-          .subscribe(),
-      );
-    });
+    let refreshTimer: number | undefined;
+
+    const refreshVisibleThreads = () => {
+      if (!active || document.visibilityState === "hidden" || navigator.onLine === false) return;
+      void reload({ background: true });
+    };
+    const restoreRealtimeAndRefresh = () => {
+      if (!active || document.visibilityState === "hidden" || navigator.onLine === false) return;
+      void authorizePrivateRealtime().then((authorized) => {
+        if (active && authorized) refreshVisibleThreads();
+      });
+    };
+    const scheduleBackgroundRefresh = () => {
+      refreshTimer = window.setTimeout(() => {
+        refreshVisibleThreads();
+        if (active) scheduleBackgroundRefresh();
+      }, CHAT_BACKGROUND_REFRESH_MS);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") restoreRealtimeAndRefresh();
+    };
+
+    window.addEventListener("focus", restoreRealtimeAndRefresh);
+    window.addEventListener("online", restoreRealtimeAndRefresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    scheduleBackgroundRefresh();
+
     return () => {
       active = false;
-      channels.forEach((channel) => void supabase.removeChannel(channel));
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      window.removeEventListener("focus", restoreRealtimeAndRefresh);
+      window.removeEventListener("online", restoreRealtimeAndRefresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isRealtimeAuthenticated, scheduleReload, threadSignature]);
+  }, [isRealtimeAuthenticated, reload]);
 
   const startDirectChat = useCallback(
     async (otherUserId: string) => {
@@ -302,6 +361,7 @@ export function useDirectMessages(threadId: string | null) {
   const [readByOtherAt, setReadByOtherAt] = useState<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastTypingSentRef = useRef(0);
+  const lastMarkedReadIdRef = useRef<string | null>(null);
   const typingTimersRef = useRef(new Map<string, number>());
   const persistErrorRef = useRef<string | null>(null);
 
@@ -328,13 +388,14 @@ export function useDirectMessages(threadId: string | null) {
     [isRealtimeAuthenticated, threadId],
   );
 
-  const loadLatest = useCallback(async () => {
+  const loadLatest = useCallback(async (options?: { background?: boolean }) => {
     if (!threadId || !isRealtimeAuthenticated) {
       setMessages([]);
       return;
     }
 
-    setLoading(true);
+    const background = options?.background === true;
+    if (!background) setLoading(true);
     const [messageResult, clearResult] = await Promise.all([
       database
         .from("chat_messages")
@@ -362,9 +423,12 @@ export function useDirectMessages(threadId: string | null) {
       setHasMore((data?.length ?? 0) === MESSAGE_PAGE_SIZE);
       setError(null);
       const lastMessage = latest.at(-1);
-      if (lastMessage) void markRead(lastMessage.id);
+      if (lastMessage && lastMessage.id !== lastMarkedReadIdRef.current) {
+        lastMarkedReadIdRef.current = lastMessage.id;
+        void markRead(lastMessage.id);
+      }
     }
-    setLoading(false);
+    if (!background) setLoading(false);
     void loadReadReceipts();
   }, [isRealtimeAuthenticated, loadReadReceipts, markRead, threadId]);
 
@@ -379,7 +443,7 @@ export function useDirectMessages(threadId: string | null) {
       .maybeSingle();
 
     if (queryError) {
-      void loadLatest();
+      void loadLatest({ background: true });
       return null;
     }
     if (!data) {
@@ -652,10 +716,47 @@ export function useDirectMessages(threadId: string | null) {
     setMessages([]);
     setTypingUsers([]);
     setReadByOtherAt(null);
+    lastMarkedReadIdRef.current = null;
     if (!threadId || !user?.userId || !isRealtimeAuthenticated) return;
     let active = true;
     void loadLatest();
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let reconnectTimer: number | undefined;
+    let refreshTimer: number | undefined;
+    const typingTimers = typingTimersRef.current;
+
+    const refreshVisibleMessages = () => {
+      if (!active || document.visibilityState === "hidden" || navigator.onLine === false) return;
+      void loadLatest({ background: true });
+    };
+    const restoreRealtimeAndRefresh = () => {
+      if (!active || document.visibilityState === "hidden" || navigator.onLine === false) return;
+      void authorizePrivateRealtime().then((authorized) => {
+        if (active && authorized) refreshVisibleMessages();
+      });
+    };
+    const scheduleReconnectRefresh = () => {
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      reconnectTimer = window.setTimeout(
+        restoreRealtimeAndRefresh,
+        CHAT_RECONNECT_RETRY_MS,
+      );
+    };
+    const scheduleBackgroundRefresh = () => {
+      refreshTimer = window.setTimeout(() => {
+        refreshVisibleMessages();
+        if (active) scheduleBackgroundRefresh();
+      }, CHAT_BACKGROUND_REFRESH_MS);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") restoreRealtimeAndRefresh();
+    };
+
+    window.addEventListener("focus", restoreRealtimeAndRefresh);
+    window.addEventListener("online", restoreRealtimeAndRefresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    scheduleBackgroundRefresh();
+
     void authorizePrivateRealtime().then((authorized) => {
       if (!active || !authorized) return;
       channel = supabase.channel(`chat:${threadId}`, { config: { private: true } });
@@ -668,7 +769,10 @@ export function useDirectMessages(threadId: string | null) {
             void loadReadReceipts();
           } else if (table === "chat_messages" && changedThreadId === threadId && recordId) {
             void loadVisibleMessage(recordId).then((message) => {
-              if (message && message.senderId !== user.userId) void markRead(message.id);
+              if (message && message.senderId !== user.userId) {
+                lastMarkedReadIdRef.current = message.id;
+                void markRead(message.id);
+              }
             });
           }
         })
@@ -688,10 +792,10 @@ export function useDirectMessages(threadId: string | null) {
         .on("broadcast", { event: "typing" }, ({ payload }) => {
           const typingUserId = payload?.userId;
           if (!active || !typingUserId || typingUserId === user.userId) return;
-          const existingTimer = typingTimersRef.current.get(typingUserId);
+          const existingTimer = typingTimers.get(typingUserId);
           if (existingTimer) window.clearTimeout(existingTimer);
           if (!payload.isTyping) {
-            typingTimersRef.current.delete(typingUserId);
+            typingTimers.delete(typingUserId);
             setTypingUsers((current) => current.filter((id) => id !== typingUserId));
             return;
           }
@@ -699,21 +803,36 @@ export function useDirectMessages(threadId: string | null) {
             current.includes(typingUserId) ? current : [...current, typingUserId],
           );
           const timer = window.setTimeout(() => {
-            typingTimersRef.current.delete(typingUserId);
+            typingTimers.delete(typingUserId);
             setTypingUsers((current) => current.filter((id) => id !== typingUserId));
           }, TYPING_EXPIRY_MS);
-          typingTimersRef.current.set(typingUserId, timer);
+          typingTimers.set(typingUserId, timer);
         })
         .subscribe((status) => {
-          if (status === "SUBSCRIBED") void loadLatest();
+          if (!active) return;
+          if (status === "SUBSCRIBED") {
+            if (reconnectTimer) window.clearTimeout(reconnectTimer);
+            void loadLatest({ background: true });
+          } else if (
+            status === "CHANNEL_ERROR"
+            || status === "TIMED_OUT"
+            || status === "CLOSED"
+          ) {
+            scheduleReconnectRefresh();
+          }
         });
     });
 
     return () => {
       active = false;
       channelRef.current = null;
-      typingTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-      typingTimersRef.current.clear();
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      window.removeEventListener("focus", restoreRealtimeAndRefresh);
+      window.removeEventListener("online", restoreRealtimeAndRefresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      typingTimers.forEach((timer) => window.clearTimeout(timer));
+      typingTimers.clear();
       if (channel) void supabase.removeChannel(channel);
     };
   }, [
