@@ -22,6 +22,7 @@ export {
   CATEGORY_GUIDANCE,
   KPI_REFERENCES,
   ACCOUNTABILITY_QUESTIONS,
+  calculateWeightedManagerScores,
   calculateWeightedSelfScores,
   getLevelWeights,
   getKpiReference,
@@ -32,6 +33,7 @@ import {
   ACCOUNTABILITY_QUESTIONS,
   ACCOUNTABILITY_ROLES,
   STANDARDS_SOURCE,
+  calculateWeightedManagerScores,
   getAccountabilityQuestions,
   getLevelWeights,
   getKpiReference,
@@ -114,12 +116,28 @@ export function readSelfAssessment(raw = "") {
 export const serializeSelfAssessment = (value) =>
   SELF_PREFIX +
   JSON.stringify(readSelfAssessment(SELF_PREFIX + JSON.stringify(value)));
+const emptyCategoryReviews = () =>
+  Object.fromEntries(
+    CATEGORIES.map((category) => [
+      category,
+      { score: null, feedback: "" },
+    ]),
+  );
 export function readManagerAssessment(raw = "") {
   if (str(raw).startsWith(MANAGER_PREFIX)) {
     try {
       const parsed = JSON.parse(raw.slice(MANAGER_PREFIX.length));
       return {
         feedback: str(parsed.feedback),
+        categoryReviews: Object.fromEntries(
+          CATEGORIES.map((category) => [
+            category,
+            {
+              score: validSelfScore(parsed.categoryReviews?.[category]?.score),
+              feedback: str(parsed.categoryReviews?.[category]?.feedback),
+            },
+          ]),
+        ),
         employeeNumber: str(parsed.employeeNumber),
         roleGroup: ACCOUNTABILITY_ROLES.some(
           (role) => role.value === parsed.roleGroup,
@@ -140,6 +158,7 @@ export function readManagerAssessment(raw = "") {
   }
   return {
     feedback: str(raw),
+    categoryReviews: emptyCategoryReviews(),
     employeeNumber: "",
     roleGroup: "",
     standardsVersion: "",
@@ -206,14 +225,23 @@ export function validateAssessment(form, mode, action) {
       )
     )
       return "請填寫 IDP、OKR、KPI 三類自評分數，系統會依政策權重計算後送交主管。";
-  } else if (
-    action === "submit" &&
-    (!getAccountabilityQuestions(form.manager.roleGroup).length ||
+  } else if (action === "submit") {
+    if (
+      getLevelWeights(form.self.grade) &&
+      CATEGORIES.some(
+        (category) =>
+          validSelfScore(form.manager.categoryReviews?.[category]?.score) ==
+          null,
+      )
+    )
+      return "請對照員工自評，完成 IDP、OKR、KPI 三類主管評分（0–100 分）。";
+    if (
+      !getAccountabilityQuestions(form.manager.roleGroup).length ||
       getAccountabilityQuestions(form.manager.roleGroup).some(
         (q) => validRating(form.manager.answers[q.id]) == null,
-      ))
-  ) {
-    return "請依受評者當責職級完成全部 7 題評分（1–5 分）。";
+      )
+    )
+      return "請依受評者當責職級完成全部 7 題評分（1–5 分）。";
   }
   if (
     mode === "manager" &&
@@ -258,6 +286,10 @@ export function buildAssessmentReview({
     employeeNumber: form.self.employeeNumber,
     standardsVersion: STANDARDS_SOURCE.version,
   };
+  const weightedManager = calculateWeightedManagerScores(
+    form.self.grade,
+    manager.categoryReviews,
+  );
   return {
     ...previous,
     id: previous?.id || id,
@@ -290,9 +322,13 @@ export function buildAssessmentReview({
             : previous?.status || "draft",
     score:
       mode === "manager"
-        ? form.score === ""
-          ? null
-          : Number(form.score)
+        ? weightedManager
+          ? weightedManager.complete
+            ? weightedManager.total
+            : null
+          : form.score === ""
+            ? null
+            : Number(form.score)
         : (previous?.score ?? null),
     dueDate: form.dueDate,
     updatedAt: now,

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   ACCOUNTABILITY_QUESTIONS,
   KPI_REFERENCES,
+  calculateWeightedManagerScores,
   calculateWeightedSelfScores,
   getAccountabilityQuestions,
   getAccountabilityRole,
@@ -45,6 +46,18 @@ test("employee self scores are multiplied by the workbook policy weights", () =>
   assert.equal(result.total, 85);
   assert.equal(result.complete, true);
   assert.equal(calculateWeightedSelfScores(13, {}), null);
+});
+test("manager category scores use the same policy weights as employee self scores", () => {
+  const result = calculateWeightedManagerScores(23, {
+    IDP: { score: 70 },
+    OKR: { score: 80 },
+    KPI: { score: 90 },
+  });
+  assert.equal(result.categories.IDP.weighted, 14);
+  assert.equal(result.categories.OKR.weighted, 16);
+  assert.equal(result.categories.KPI.weighted, 54);
+  assert.equal(result.total, 84);
+  assert.equal(result.complete, true);
 });
 test("all 91 HW/FW criteria from B16:E17 are retained, including gate ownership and regression", () => {
   const counts = {
@@ -116,6 +129,8 @@ test("new role-specific scoring preserves legacy answers without reusing them as
   getAccountabilityQuestions("employee").forEach((q) => {
     form.manager.answers[q.id] = 3;
   });
+  for (const category of ["IDP", "OKR", "KPI"])
+    form.manager.categoryReviews[category].score = 80;
   assert.equal(validateAssessment(form, "manager", "submit"), "");
   const reopened = readManagerAssessment(
     serializeManagerAssessment(form.manager),
