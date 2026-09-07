@@ -60,6 +60,55 @@ test("round-trips a versioned save payload through the configured storage key", 
   assert.equal(new PcbLocalRepository(storage).load().projects[0].name, "Saved PCB");
 });
 
+test("round-trips an imported DXF outline in both projects and custom templates", () => {
+  const storage = new MemoryStorage();
+  const repository = new PcbLocalRepository(storage);
+  const state = repository.load();
+  const outline = [[
+    { x: 0, y: 0 },
+    { x: 120, y: 0 },
+    { x: 120, y: 80 },
+    { x: 0, y: 80 },
+    { x: 0, y: 0 },
+  ]];
+  const project = {
+    ...state.projects[0],
+    board: {
+      ...state.projects[0].board,
+      width: 120,
+      height: 80,
+      outline,
+      outlineSource: "ME-board-outline.dxf",
+    },
+  };
+  const template = {
+    ...structuredClone(state.templates[0]),
+    id: "template-dxf",
+    name: "ME DXF template",
+    isBuiltIn: false,
+    project: structuredClone(project),
+  };
+
+  repository.save({
+    ...state,
+    projects: [project],
+    templates: [...state.templates, template],
+    activeProjectId: project.id,
+  });
+
+  const loaded = new PcbLocalRepository(storage).load();
+  assert.deepEqual(loaded.projects[0].board.outline, outline);
+  assert.equal(loaded.projects[0].board.outlineSource, "ME-board-outline.dxf");
+  assert.deepEqual(
+    loaded.templates.find((item) => item.id === template.id)?.project.board.outline,
+    outline,
+  );
+  assert.equal(
+    loaded.templates.find((item) => item.id === template.id)?.project.board.outlineSource,
+    "ME-board-outline.dxf",
+  );
+});
+
 test("round-trips the project last editor metadata", () => {
   const storage = new MemoryStorage();
   const repository = new PcbLocalRepository(storage);

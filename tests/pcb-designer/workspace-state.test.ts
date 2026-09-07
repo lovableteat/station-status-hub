@@ -206,6 +206,41 @@ test("new custom templates appear first so the save result stays visible", async
   assert.equal(saved.data.templates[0].isBuiltIn, false);
 });
 
+test("a custom template carries its imported DXF board outline into a new project", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedState(), true);
+  const outline = [[
+    { x: 0, y: 0 },
+    { x: 120, y: 0 },
+    { x: 120, y: 80 },
+    { x: 0, y: 0 },
+  ]];
+  const withDxf = reduceWorkspaceState(initial, {
+    type: "project/commit",
+    update: {
+      ...initial.activeProject,
+      board: {
+        ...initial.activeProject.board,
+        width: 120,
+        height: 80,
+        outline,
+        outlineSource: "ME-board.dxf",
+      },
+    },
+  });
+  const saved = reduceWorkspaceState(withDxf, {
+    type: "template/save",
+    input: { name: "ME board", category: "ME", description: "DXF board template" },
+  });
+  const applied = reduceWorkspaceState(saved, {
+    type: "template/apply",
+    templateId: saved.data.templates[0].id,
+  });
+
+  assert.deepEqual(applied.activeProject.board.outline, outline);
+  assert.equal(applied.activeProject.board.outlineSource, "ME-board.dxf");
+});
+
 test("duplicated templates appear directly after their source", async () => {
   const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
   const initial = createWorkspaceState(seedState(), true);
