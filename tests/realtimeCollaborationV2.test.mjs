@@ -217,6 +217,30 @@ test("direct messages are member-only, incremental, retryable, and idempotent", 
   assert.doesNotMatch(hook, /location\.reload|window\.location\.assign|setInterval/);
 });
 
+test("direct messages recover missed realtime events without a page refresh", async () => {
+  const [hook, recoveryMigration] = await Promise.all([
+    readSource("src/hooks/useDirectMessages.ts"),
+    readSource("supabase/migrations/20260907180000_improve_direct_chat_realtime_recovery.sql"),
+  ]);
+
+  assert.match(hook, /CHAT_BACKGROUND_REFRESH_MS = 8_000/);
+  assert.match(hook, /CHAT_RECONNECT_RETRY_MS = 1_500/);
+  assert.match(hook, /\.on\("broadcast", \{ event: "DELETE" \}, handleInboxChange\)/);
+  assert.match(hook, /status === "CHANNEL_ERROR"[\s\S]*status === "TIMED_OUT"[\s\S]*status === "CLOSED"/);
+  assert.match(hook, /window\.addEventListener\("focus", restoreRealtimeAndRefresh\)/);
+  assert.match(hook, /window\.addEventListener\("online", restoreRealtimeAndRefresh\)/);
+  assert.match(hook, /document\.addEventListener\("visibilitychange", handleVisibilityChange\)/);
+  assert.match(hook, /loadLatest\(\{ background: true \}\)/);
+  assert.doesNotMatch(hook, /const threadSignature = threads\.map/);
+  assert.doesNotMatch(hook, /channels = threads\.map/);
+
+  assert.match(recoveryMigration, /create or replace function workspace\.broadcast_chat_inbox_change\(\)/i);
+  assert.match(recoveryMigration, /perform realtime\.send\(/i);
+  assert.match(recoveryMigration, /'record_id', v_record_id/i);
+  assert.match(recoveryMigration, /after insert or update or delete on workspace\.chat_messages/i);
+  assert.doesNotMatch(recoveryMigration, /realtime\.broadcast_changes\(/i);
+});
+
 test("direct conversation clearing is private to the current member and enforced by RLS", async () => {
   const migration = await readSource(
     "supabase/migrations/20260809150000_clear_direct_chat_history.sql",
