@@ -159,6 +159,9 @@ try {
     await db.exec(
       await migration("20260903190000_add_direct_performance_review_workflow"),
     );
+    await db.exec(
+      await migration("20260907120000_add_performance_self_context"),
+    );
   }
   check(
     (
@@ -234,6 +237,31 @@ try {
     "select * from workspace.get_performance_organization()",
     [],
     "employee cannot query organization RPC",
+  );
+  const selfContext = await query(
+    "select * from workspace.get_performance_self_context()",
+  );
+  check(selfContext.length, 1, "employee organization RPC returns only the signed-in account");
+  check(
+    {
+      employee_id: selfContext[0].employee_id,
+      manager_id: selfContext[0].manager_id,
+      manager_name: selfContext[0].manager_name,
+      department: selfContext[0].department,
+      section: selfContext[0].section,
+      org_level: selfContext[0].org_level,
+      assigned: selfContext[0].assigned,
+    },
+    {
+      employee_id: id(5),
+      manager_id: id(3),
+      manager_name: "人員3",
+      department: "研發部",
+      section: "韌體課",
+      org_level: "member",
+      assigned: true,
+    },
+    "employee sees the organization route used for self-review submission",
   );
   await query(
     "insert into workspace.performance_reviews(id,employee_id,employee_name,self_feedback) values ('a',$1,'人員5','private A')",
