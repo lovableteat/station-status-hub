@@ -77,3 +77,17 @@ export interface EmployeeOption {
   label: string;
   orgLevel?: string;
 }
+export interface PerformanceSelfContext {
+  employeeId: string;
+  username: string;
+  displayName: string;
+  managerId: string | null;
+  managerName: string;
+  managerOrgLevel: string;
+  department: string;
+  section: string;
+  jobTitle: string;
+  orgLevel: "director" | "section_chief" | "member";
+  performanceRole: "none" | "employee" | "manager";
+  assigned: boolean;
+}
