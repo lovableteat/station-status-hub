@@ -33,6 +33,7 @@ import { useUser } from "@/components/auth/UserContext";
 import { useUserPresence, type OnlineUser } from "@/hooks/useUserPresence";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import { DirectMessagesPanel } from "./DirectMessagesPanel";
 
 type CollaborationTab = "notifications" | "online";
@@ -211,6 +212,7 @@ function MemberCard({
 
 export function CollaborationCenter() {
   const { user, isRealtimeAuthenticated } = useUser();
+  const { toast } = useToast();
   const {
     onlineAccounts,
     onlineUsers,
@@ -288,11 +290,25 @@ export function CollaborationCenter() {
       .on(
         "postgres_changes",
         { event: "*", schema: "workspace", table: "user_notifications", filter: `recipient_id=eq.${user.userId}` },
-        () => void loadNotifications(),
+        (payload) => {
+          const notification = payload.new as Partial<NotificationRow>;
+          if (
+            payload.eventType === "INSERT" &&
+            notification.notification_type === "performance_review_returned"
+          ) {
+            toast({
+              title: notification.title || "績效自評已退回補充",
+              description:
+                notification.message ||
+                "請前往績效考核系統查看退回內容。",
+            });
+          }
+          void loadNotifications();
+        },
       )
       .subscribe();
     return () => void supabase.removeChannel(channel);
-  }, [loadNotifications, user?.userId]);
+  }, [loadNotifications, toast, user?.userId]);
 
   useEffect(() => {
     const openCenter = (event: Event) => {

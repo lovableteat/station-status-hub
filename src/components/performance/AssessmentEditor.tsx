@@ -804,7 +804,7 @@ export function AssessmentEditor({
         <>
           {showReturnFeedback &&
             (form.manager.feedback || form.manager.attachments.length > 0) && (
-            <section className="rd2-card rd2-return-feedback" aria-label="主管退回內容">
+            <section id="rd2-return-feedback" className="rd2-card rd2-return-feedback" aria-label="主管退回內容">
               <div className="rd2-form-section-title">
                 <strong>主管退回回饋與附件</strong>
                 <span>請依主管說明補充內容，再重新送出自評。</span>
