@@ -144,6 +144,31 @@ test("validates and preserves optional board cuts", () => {
   assert.equal(isValidBoard({ ...project.board, cuts: [{ ...project.board.cuts[0], id: project.board.cuts[0].id }, project.board.cuts[0]] }), false);
 });
 
+test("normalization preserves a valid imported DXF outline and its source name", () => {
+  const project = validProject();
+  project.board.outline = [[
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 80 },
+    { x: 0, y: 0 },
+  ]];
+  project.board.outlineSource = "ME-outline.dxf";
+
+  const normalized = normalizePcbSaveState({
+    projects: [project],
+    templates: [],
+    library: [],
+    activeProjectId: project.id,
+    updatedAt: project.updatedAt,
+  });
+  const parsed = parseProjectJson(project);
+
+  assert.deepEqual(normalized.projects[0].board.outline, project.board.outline);
+  assert.equal(normalized.projects[0].board.outlineSource, "ME-outline.dxf");
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) assert.deepEqual(parsed.value.board.outline, project.board.outline);
+});
+
 test("normalizes legacy project JSON before it reaches the editor", () => {
   const project = validProject();
   const legacyProject = {

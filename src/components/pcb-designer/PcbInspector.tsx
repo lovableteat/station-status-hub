@@ -9,6 +9,8 @@ import { parseDxfOutline } from "./core/dxf.ts";
 import {
   PCB_RESIZE_ANCHORS,
   PCB_RESIZE_ANCHOR_LABELS,
+  PCB_RESIZE_DIRECTION_LABELS,
+  PCB_RESIZE_DIRECTION_SYMBOLS,
   type PcbResizeAnchor,
 } from "./core/resizeBoard.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
@@ -163,22 +165,23 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
   const [columns, setColumns] = useState("1");
   const [rows, setRows] = useState("1");
   const [resizeAnchor, setResizeAnchor] = useState<PcbResizeAnchor>("top-left");
-  const [dxfError, setDxfError] = useState("");
+  const [dxfMessage, setDxfMessage] = useState<{ tone: "success" | "warning" | "error"; text: string } | null>(null);
 
   /** Take the board edge from an ME drawing: extents become the board size. */
   const importDxf = async (file: File) => {
-    setDxfError("");
+    setDxfMessage(null);
     try {
       const outline = parseDxfOutline(await file.text());
       if (!outline.paths.length) {
-        setDxfError("這個檔案沒有可用的線段，請確認匯出時包含板框圖層。");
+        setDxfMessage({ tone: "error", text: "這個檔案沒有可用的線段，請確認匯出時包含板框圖層。" });
         return;
       }
       if (outline.width < 20 || outline.height < 20
         || outline.width > 1000 || outline.height > 1000) {
-        setDxfError(
-          `板框尺寸 ${outline.width} × ${outline.height} mm 超出可用範圍（20–1000 mm）。`,
-        );
+        setDxfMessage({
+          tone: "error",
+          text: `板框尺寸 ${outline.width} × ${outline.height} mm 超出可用範圍（20–1000 mm）。`,
+        });
         return;
       }
       const applied = workspace.updateBoard({
@@ -187,14 +190,17 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
         outline: outline.paths,
         outlineSource: file.name,
       });
-      if (!applied) setDxfError("目前無法修改板框，請確認編輯權限。");
+      if (!applied) setDxfMessage({ tone: "error", text: "目前無法修改板框，請確認編輯權限或 DXF 複雜度。" });
       else if (outline.skipped.length) {
-        setDxfError(
-          `已匯入板框；已略過不支援的圖元：${outline.skipped.join("、")}。`,
-        );
+        setDxfMessage({
+          tone: "warning",
+          text: `已匯入 ME 板框；已略過不支援的圖元：${outline.skipped.join("、")}。請按「儲存」保留變更。`,
+        });
+      } else {
+        setDxfMessage({ tone: "success", text: "ME 板框已套用為目前版型，請按「儲存」保留變更。" });
       }
     } catch {
-      setDxfError("無法讀取這個 DXF 檔案。");
+      setDxfMessage({ tone: "error", text: "無法讀取這個 DXF 檔案。" });
     }
   };
   const applyCuts = () => {
@@ -243,10 +249,10 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
           />
         </InspectorField>
       </div>
-      <div className="pcb-resize-anchor" role="group" aria-label="改變尺寸時固定的邊">
+      <div className="pcb-resize-anchor" role="group" aria-label="板框尺寸增減方向">
         <div className="pcb-resize-anchor-head">
           <span>增減方向</span>
-          <small>{PCB_RESIZE_ANCHOR_LABELS[resizeAnchor]}</small>
+          <small>{PCB_RESIZE_DIRECTION_LABELS[resizeAnchor]} · {PCB_RESIZE_ANCHOR_LABELS[resizeAnchor]}</small>
         </div>
         <div className="pcb-resize-anchor-grid">
           {PCB_RESIZE_ANCHORS.map((anchor) => (
@@ -255,15 +261,17 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
               type="button"
               disabled={disabled}
               aria-pressed={resizeAnchor === anchor}
-              aria-label={PCB_RESIZE_ANCHOR_LABELS[anchor]}
-              title={PCB_RESIZE_ANCHOR_LABELS[anchor]}
+              aria-label={`${PCB_RESIZE_DIRECTION_LABELS[anchor]}，${PCB_RESIZE_ANCHOR_LABELS[anchor]}`}
+              title={`${PCB_RESIZE_DIRECTION_LABELS[anchor]}（${PCB_RESIZE_ANCHOR_LABELS[anchor]}）`}
               data-active={resizeAnchor === anchor || undefined}
               onClick={() => setResizeAnchor(anchor)}
-            />
+            >
+              <span aria-hidden="true">{PCB_RESIZE_DIRECTION_SYMBOLS[anchor]}</span>
+            </button>
           ))}
         </div>
         <p className="pcb-resize-anchor-hint">
-          選定的邊或角在改尺寸時不動，板上元件會跟著位移。
+          箭頭是板框增減的方向；相反側會固定，板上元件會跟著位移。
         </p>
       </div>
       <div className="pcb-dxf-import">
@@ -291,7 +299,7 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
             className="pcb-dxf-import-clear"
             disabled={disabled}
             onClick={() => {
-              setDxfError("");
+              setDxfMessage(null);
               workspace.updateBoard({ outline: undefined, outlineSource: undefined });
             }}
           >
@@ -299,9 +307,9 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
           </button>
         ) : null}
         <p className="pcb-dxf-import-hint">
-          讀取 LINE／LWPOLYLINE／POLYLINE／ARC／CIRCLE，取外框範圍當板子寬高，並在畫布描出實際輪廓。
+          讀取 LINE／LWPOLYLINE／POLYLINE／ARC／CIRCLE，取外框範圍當板子寬高並描出輪廓；也會隨專案或自訂模板一起儲存。
         </p>
-        {dxfError && <p className="pcb-dxf-import-error">{dxfError}</p>}
+        {dxfMessage && <p className="pcb-dxf-import-message" data-tone={dxfMessage.tone}>{dxfMessage.text}</p>}
       </div>
       <label className="pcb-inspector-check">
         <input type="checkbox" checked={board.showGrid} disabled={disabled} onChange={(event) => workspace.updateBoard({ showGrid: event.target.checked })} />
