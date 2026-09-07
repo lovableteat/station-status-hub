@@ -27,6 +27,7 @@ import {
   MAX_EVIDENCE_CHARACTERS,
   MAX_IMAGES_PER_CATEGORY,
   TEAMS,
+  calculateWeightedManagerScores,
   calculateWeightedSelfScores,
   getKpiReference,
   getLevelWeights,
@@ -397,6 +398,10 @@ export function AssessmentEditor({
     form.self.grade,
     form.self.sections,
   );
+  const weightedManager = calculateWeightedManagerScores(
+    form.self.grade,
+    form.manager.categoryReviews,
+  );
   const formatScore = (value: number) =>
     value.toLocaleString("zh-TW", { maximumFractionDigits: 2 });
   const roleFromOrg = getAccountabilityRole(
@@ -454,12 +459,12 @@ export function AssessmentEditor({
             ? "考核內容"
             : mode === "self"
               ? "員工自評填寫區（STAR）"
-              : "主管評分區（當責維度）"}
+              : "主管對照評分區"}
         </h2>
         <p>
           {mode === "self"
             ? "依 IDP、OKR、KPI 分別填寫實績，並附上證明。"
-            : "依受評者的組織層級，完成對應的 7 題當責評分。"}
+            : "逐類對照員工的 IDP、OKR、KPI 自評，填寫主管分數與評語，再完成當責量表。"}
         </p>
       </header>
       <fieldset disabled={readonly || saving} className="rd2-card rd2-identity">
@@ -1043,81 +1048,158 @@ export function AssessmentEditor({
       {mode === "manager" && (
         <>
           <div className="rd2-form-section-title">
-            <strong>02 · 當責評分</strong>
+            <strong>02 · 對照員工自評</strong>
             <span role="status">
-              已填{" "}
-              {
-                questions.filter(
-                  (question) => !!form.manager.answers[question.id],
-                ).length
-              }
-              ／{questions.length} 題 · 依實際表現選擇 1–5 分
+              主管已評 {weightedManager?.completed || 0}／3 類 · 分數依相同政策權重計算
             </span>
           </div>
-          <div className="rd2-question-grid">
-            {questions.map((question, index) => (
-              <fieldset
-                key={question.id}
-                disabled={readonly || saving}
-                data-question-index={index + 1}
-                className="rd2-card rd2-question"
-              >
-                <legend>
-                  第 {index + 1} 題 · {question.dimension}
-                </legend>
-                <p className="rd2-hint">{question.role}</p>
-                <h3 id={`question-${question.id}`}>{question.text}</h3>
-                <RadioGroup
-                  className="rd2-rating"
-                  aria-labelledby={`question-${question.id}`}
-                  value={String(form.manager.answers[question.id] || "")}
+          <div className="rd2-manager-category-grid">
+            {CATEGORIES.map((category) => {
+              const section = form.self.sections[category];
+              const categoryReview = form.manager.categoryReviews[category];
+              const selfResult = weightedSelf?.categories[category];
+              const managerResult = weightedManager?.categories[category];
+              return (
+                <fieldset
+                  key={category}
                   disabled={readonly || saving}
-                  onValueChange={(value) =>
-                    change((previous) => ({
-                      ...previous,
-                      manager: {
-                        ...previous.manager,
-                        answers: {
-                          ...previous.manager.answers,
-                          [question.id]: Number(value),
-                        },
-                      },
-                    }))
-                  }
+                  className="rd2-card rd2-manager-category"
+                  data-category={category}
                 >
-                  {RATING_SCALE.map(({ value, label }) => (
-                    <Field key={value} orientation="horizontal">
-                      <RadioGroupItem
-                        id={`${question.id}-${value}`}
-                        value={String(value)}
+                  <div className="rd2-manager-category-heading">
+                    <div>
+                      <span className="rd2-manager-category-code">{category}</span>
+                      <h3>{CATEGORY_GUIDANCE[category].title}</h3>
+                    </div>
+                    <span className="rd2-manager-weight">
+                      政策權重 {managerResult?.weight ?? "—"}%
+                    </span>
+                  </div>
+                  <div className="rd2-manager-compare-grid">
+                    <section className="rd2-manager-self-panel" aria-label={`${category} 員工自評`}>
+                      <div className="rd2-manager-panel-heading">
+                        <strong>員工自評內容</strong>
+                        <span>
+                          原始 {selfResult?.score ?? "—"} 分
+                          {selfResult?.weighted != null && ` · 加權 ${formatScore(selfResult.weighted)} 分`}
+                        </span>
+                      </div>
+                      <AssessmentEntryList
+                        category={category}
+                        section={section}
+                        readonly
+                        onChange={() => {}}
                       />
-                      <FieldLabel htmlFor={`${question.id}-${value}`}>
-                        <strong>{value} 分</strong>
-                        <span>{label.replace(/^\d分（|）$/g, "")}</span>
-                      </FieldLabel>
-                    </Field>
-                  ))}
-                </RadioGroup>
-                <p className="rd2-hint">
-                  來源題號 {question.number} · 評分標準依原表 1–5 分描述。
-                </p>
-              </fieldset>
-            ))}
+                      {!!section.images.length && (
+                        <div className="rd2-images">
+                          {section.images.map((image) => (
+                            <a key={image.id} href={image.dataUrl} download={image.name}>
+                              <img src={image.dataUrl} alt={image.name} loading="lazy" />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                      {section.links.map((url) => (
+                        <p className="rd2-evidence-link" key={url}>
+                          <a href={url} target="_blank" rel="noopener noreferrer">{url}</a>
+                        </p>
+                      ))}
+                    </section>
+                    <section className="rd2-manager-response-panel" aria-label={`${category} 主管評分與評語`}>
+                      <Field>
+                        <FieldLabel htmlFor={`manager-${category}-score`}>
+                          主管評分（0–100）
+                        </FieldLabel>
+                        <div className="rd2-manager-score-row">
+                          <Input
+                            id={`manager-${category}-score`}
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={categoryReview.score ?? ""}
+                            placeholder="請評分"
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              change((previous) => ({
+                                ...previous,
+                                manager: {
+                                  ...previous.manager,
+                                  categoryReviews: {
+                                    ...previous.manager.categoryReviews,
+                                    [category]: {
+                                      ...previous.manager.categoryReviews[category],
+                                      score: value === "" ? null : Number(value),
+                                    },
+                                  },
+                                },
+                              }));
+                            }}
+                          />
+                          <span>
+                            加權 {managerResult?.weighted == null ? "—" : formatScore(managerResult.weighted)} 分
+                          </span>
+                        </div>
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor={`manager-${category}-feedback`}>
+                          主管評語／Comment
+                        </FieldLabel>
+                        <Textarea
+                          id={`manager-${category}-feedback`}
+                          rows={4}
+                          value={categoryReview.feedback}
+                          placeholder={`針對 ${category} 成果留下肯定、改善建議或工作指示`}
+                          onChange={(event) =>
+                            change((previous) => ({
+                              ...previous,
+                              manager: {
+                                ...previous.manager,
+                                categoryReviews: {
+                                  ...previous.manager.categoryReviews,
+                                  [category]: {
+                                    ...previous.manager.categoryReviews[category],
+                                    feedback: event.target.value,
+                                  },
+                                },
+                              },
+                            }))
+                          }
+                        />
+                      </Field>
+                    </section>
+                  </div>
+                </fieldset>
+              );
+            })}
           </div>
+          <section className="rd2-manager-score-summary" aria-live="polite">
+            <div>
+              <span>員工加權自評</span>
+              <strong>{weightedSelf?.complete ? formatScore(weightedSelf.total) : "—"}</strong>
+              <small>/ 100</small>
+            </div>
+            <div>
+              <span>主管加權評分</span>
+              <strong>{weightedManager?.complete ? formatScore(weightedManager.total) : "—"}</strong>
+              <small>/ 100</small>
+            </div>
+            <p>兩邊使用同一組 IDP／OKR／KPI 政策權重，可直接逐類比較。</p>
+          </section>
           <fieldset
             disabled={readonly || saving}
             className="rd2-card rd2-feedback-card"
           >
             <div className="rd2-form-section-title">
-              <strong>03 · 主管回饋</strong>
-              <span>具體說明成果、待改善項目與下一步。</span>
+              <strong>03 · 整體回饋與工作指示</strong>
+              <span>這裡可留下整體評語、改善要求或下一期工作指示。</span>
             </div>
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="rd2-feedback">主管回饋</FieldLabel>
+                <FieldLabel htmlFor="rd2-feedback">整體評語／Comment</FieldLabel>
                 <Textarea
                   id="rd2-feedback"
                   rows={5}
+                  placeholder="例如：本期成果肯定、需要改善的項目、下一步任務或期限"
                   value={form.manager.feedback}
                   onChange={(event) =>
                     change((previous) => ({
@@ -1130,30 +1212,74 @@ export function AssessmentEditor({
                   }
                 />
               </Field>
-              <Field>
-                <FieldLabel htmlFor="rd2-score">
-                  綜合評分（0–100，選填）
-                </FieldLabel>
-                <Input
-                  id="rd2-score"
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={form.score}
-                  placeholder="尚未評分"
-                  onChange={(event) =>
-                    change((previous) => ({
-                      ...previous,
-                      score: event.target.value,
-                    }))
-                  }
-                />
-                <p className="rd2-hint">
-                  延續平台既有欄位，不以當責題目換算總分。
-                </p>
-              </Field>
+              {!weightedManager && (
+                <Field>
+                  <FieldLabel htmlFor="rd2-score">綜合評分（0–100）</FieldLabel>
+                  <Input
+                    id="rd2-score"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={form.score}
+                    placeholder="此職等未設定政策權重，請手動評分"
+                    onChange={(event) =>
+                      change((previous) => ({ ...previous, score: event.target.value }))
+                    }
+                  />
+                </Field>
+              )}
             </FieldGroup>
           </fieldset>
+          <details className="rd2-accountability-details" open>
+            <summary>
+              <strong>04 · 當責評分（7 題）</strong>
+              <span role="status">
+                已填 {questions.filter((question) => !!form.manager.answers[question.id]).length}
+                ／{questions.length} 題
+              </span>
+            </summary>
+            <p className="rd2-hint">依受評者層級完成原評分表的 1–5 分當責量表。</p>
+            <div className="rd2-question-grid">
+              {questions.map((question, index) => (
+                <fieldset
+                  key={question.id}
+                  disabled={readonly || saving}
+                  data-question-index={index + 1}
+                  className="rd2-card rd2-question"
+                >
+                  <legend>第 {index + 1} 題 · {question.dimension}</legend>
+                  <p className="rd2-hint">{question.role}</p>
+                  <h3 id={`question-${question.id}`}>{question.text}</h3>
+                  <RadioGroup
+                    className="rd2-rating"
+                    aria-labelledby={`question-${question.id}`}
+                    value={String(form.manager.answers[question.id] || "")}
+                    disabled={readonly || saving}
+                    onValueChange={(value) =>
+                      change((previous) => ({
+                        ...previous,
+                        manager: {
+                          ...previous.manager,
+                          answers: { ...previous.manager.answers, [question.id]: Number(value) },
+                        },
+                      }))
+                    }
+                  >
+                    {RATING_SCALE.map(({ value, label }) => (
+                      <Field key={value} orientation="horizontal">
+                        <RadioGroupItem id={`${question.id}-${value}`} value={String(value)} />
+                        <FieldLabel htmlFor={`${question.id}-${value}`}>
+                          <strong>{value} 分</strong>
+                          <span>{label.replace(/^\d分（|）$/g, "")}</span>
+                        </FieldLabel>
+                      </Field>
+                    ))}
+                  </RadioGroup>
+                  <p className="rd2-hint">來源題號 {question.number} · 評分標準依原表 1–5 分描述。</p>
+                </fieldset>
+              ))}
+            </div>
+          </details>
         </>
       )}
       {!readonly && (

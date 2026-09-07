@@ -13,7 +13,7 @@ export interface AssessmentEntry {
 }
 export interface AssessmentSection {
   text: string;
-  /** The employee's own 1-5 rating for this category. */
+  /** The employee's own 0-100 score for this category. */
   selfScore: number | null;
   entries?: AssessmentEntry[];
   draftText?: string;
@@ -31,6 +31,10 @@ export interface SelfAssessment {
 export interface ManagerAssessment {
   employeeNumber: string;
   feedback: string;
+  categoryReviews: Record<Category, {
+    score: number | null;
+    feedback: string;
+  }>;
   roleGroup: string;
   standardsVersion: string;
   answers: Record<string, number | null>;
