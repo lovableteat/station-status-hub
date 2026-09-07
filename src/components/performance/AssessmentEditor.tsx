@@ -29,6 +29,7 @@ import {
   TEAMS,
   calculateWeightedManagerScores,
   calculateWeightedSelfScores,
+  getCategoryRoleReference,
   getKpiReference,
   getLevelWeights,
   readAssessmentDraft,
@@ -684,6 +685,10 @@ export function AssessmentEditor({
             {CATEGORIES.map((value) => {
               const category = value as Category;
               const guide = CATEGORY_GUIDANCE[category];
+              const categoryReference = getCategoryRoleReference(
+                category,
+                form.self.level,
+              );
               return (
                 <fieldset
                   disabled={readonly || saving}
@@ -706,7 +711,7 @@ export function AssessmentEditor({
                     <summary>
                       {category === "KPI"
                         ? `角色專屬標準${reference ? ` (${form.self.team} · ${form.self.level.toUpperCase()})` : ""}`
-                        : "撰寫參考與範例"}
+                        : `職務專屬撰寫參考${categoryReference ? ` (${form.self.level.toUpperCase()})` : ""}`}
                     </summary>
                     {category === "KPI" ? (
                       reference ? (
@@ -749,15 +754,34 @@ export function AssessmentEditor({
                         <p>先選擇團隊與職務角色，即可查看對應標準。</p>
                       )
                     ) : (
-                      <>
+                      categoryReference ? (
+                        <>
                         <p>{guide.focus}</p>
-                        {category === "OKR" && (
                           <p className="rd2-hint">
-                            以下包含原表 2025Q4／2026Q1 歷史範例，作為撰寫參考。
+                            來源：評分表 {categoryReference.source} · 基本要求 {categoryReference.baseline.length} 項、卓越表現 {categoryReference.outstanding.length} 項
                           </p>
-                        )}
-                        <p className="rd2-prewrap">{guide.example}</p>
-                      </>
+                          <div className="rd2-reference-grid">
+                            <div>
+                              <h4>Baseline · 基本要求</h4>
+                              <ol>
+                                {categoryReference.baseline.map((line: string) => (
+                                  <li key={line}>{line}</li>
+                                ))}
+                              </ol>
+                            </div>
+                            <div>
+                              <h4>Outstanding · 卓越表現</h4>
+                              <ol>
+                                {categoryReference.outstanding.map((line: string) => (
+                                  <li key={line}>{line}</li>
+                                ))}
+                              </ol>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <p>先選擇職務角色，即可查看對應標準。</p>
+                      )
                     )}
                   </details>
                   <FieldGroup>

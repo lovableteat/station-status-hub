@@ -1,10 +1,10 @@
 // Authoritative data transcribed from the user-provided workbook.
 // Cell references and original KPI text are retained for auditing.
 export const STANDARDS_SOURCE = {
-  file: "RD2_HW2_KPI-OKR_IDP_example.xlsx",
+  file: "RD2_HW2_KPI-OKR_IDP_example (1).xlsx",
   sheet: "評分表",
-  version: "rd2-hw2-20260903",
-  sha256: "d7d7f39ebdf7294682f6014329a365e9e19e1d2a9d810019d7fdc78b285d5281",
+  version: "rd2-hw2-20260907",
+  sha256: "035cb82748ebac6883d702017f49b49fdc7641c64034ee14152224dce774582a",
 };
 
 export const LEVELS = [
@@ -64,28 +64,26 @@ export const WEIGHT_GROUPS = [
 export const CATEGORY_GUIDANCE = {
   IDP: {
     title: "未來潛力",
-    focus: "「未來潛力」, 不是公司要求，是你「個人投資自己」",
+    focus:
+      "看「未來潛力與個人投資」，而非被動接受指派；落實「技術學習、專案應用、知識輸出」。",
     details: [
       "技術學習與吸收：主動學習專案相關技術，能說明背景、風險點與應用場景。",
       "實務應用於專案：協助解決技術問題、流程卡關或溝通落差。",
       "知識輸出與影響力：透過文件、簡報或會議分享，把學習轉化為團隊知識或流程。",
     ],
-    example:
-      "透過系統性學習與實務應用，提升在專案中的技術判斷能力、問題解決能力與跨部門協作成效，並能將個人學習轉化為團隊可用的知識或流程\n1.技術學習與吸收\n    主動學習與專案相關之新技術 / 系統知識\n （如：Server / Rack / Power / FW / BOM / Data Center 架構等）\n   能說明技術背景、風險點與應用場景\n\n2.實務應用於專案\n   將新學習內容實際應用於專案中\n   協助解決技術問題、流程卡關或溝通落差\n\n3.知識輸出與影響力\n   透過文件、簡報或會議分享，將知識傳遞給團隊\n   非只停留在個人學習",
-    source: "B13",
+    source: "A13:E13",
     cadence: "在較深的 1:1（半年 / 一年）",
   },
   OKR: {
     title: "創新與改善能力",
-    focus: "看「影響力」而不是工時, 對齊公司與專案「結果」",
+    focus:
+      "看「業務與專案影響力」，而非例行工時；對齊團隊方向，驅動創新與流程改善。",
     details: [
       "提出新想法或改善流程。",
       "對問題具備前瞻性思考。",
       "提升團隊或工作效率，包含專利研發。",
     ],
-    example:
-      "-是否能提出新想法或改善流程\n-對問題是否有前瞻性思考\n-是否能有效提升團隊或工作的效率\n-專利研發\n\nRD2-HW2 2025Q4 OKR\n-KR1 : 技術創新，導入 PegaAI 助手與自動化檢查清單，減少 RD 資源投入20%並降低錯誤。\n-KR2 : 效率與品質並重，12月底交付16櫃，時間縮短 20%，現場支援一次完成率達 95%。\n-KR3 : 客戶成功策略，交付後 30 天完成性能驗證，並將專案轉化為 BU showcase，提升品牌影響力。​\n\nRD2-HW2 2026Q1 OKR\n-KR1 : 產品推廣 ,學習並製作與 NVIDIA 相關的 AI 模型測試，產出實際分數，作為 Sales 與 Marketing 推廣 GB300 產品時的佐證，證明 Pega 產品符合 NVIDIA 標準。初期以 L10 驗證，後期擴展至 L11\n-KR2 : 客戶感受 ,與Diag team 合作完成一套具備圖形化人機介面（GUI）、操作簡單的 Debug 工具，支援 FAE 與客戶在 Debug 與 RMA 流程中快速定位問題並執行必要操作。\n    1. 工具需支援至少 3 項核心 Debug 功能（例如：Log 擷取、錯誤碼分析、硬體狀態檢測）。​\n    2. 提供 RMA 流程專用功能（如故障分類、報告匯出）​\n    3. GUI 設計需符合 使用者操作步驟 < 3 步完成主要功能​\n    4. 工具啟動時間 < 5 秒，主要操作回應時間 < 2 秒。\n-KR3 : 優化生產管理 ,將 RD 所建立的生產測試管理系統（GUI）與 JIRA 進行整合，讓 MFG 與 RD 端能夠透過共同的介面與紀錄，完善 Carlo Next AI Server 的測試與執行流程",
-    source: "B14",
+    source: "A14:E14",
     cadence: "在 team meeting（方向、取捨）",
   },
   KPI: {
@@ -101,6 +99,117 @@ export const CATEGORY_GUIDANCE = {
     cadence: "在 1:1（穩定度、紀律）",
   },
 };
+
+// Yellow workbook cells B13:E14. IDP and OKR use the same role selector as KPI,
+// so employees see the reference that matches the role chosen on their review.
+export const CATEGORY_ROLE_REFERENCES = {
+  IDP: {
+    junior: {
+      baseline: [
+        "制定清晰的專業基礎學習計畫並按期完成。",
+        "將所學基礎知識直接應用於負責的模組開發或排查。",
+        "整理學習筆記，於組內進行一次性基礎知識分享。",
+      ],
+      outstanding: [
+        "超前學習跨模組基礎架構（如系統整機觀念、硬韌交互）。",
+        "主動接手過去未接觸過的複雜子項目並成功落地。",
+        "產出清晰的初階操作說明或除錯心得文件供新人參考。",
+      ],
+      source: "B13",
+    },
+    senior: {
+      baseline: [
+        "自主掌握一項新技術架構／平台規範，並能分析其風險與優缺點。",
+        "將新技術成功應用於現行專案，解決一項複雜問題。",
+        "撰寫標準化指引文件或進行正式的團隊內部分享。",
+      ],
+      outstanding: [
+        "拓展至跨領域技能（如硬體跨系統功耗、韌體跨安全架構）。",
+        "將所學轉化為具體可複用的工程資產（如通用檢核表、模組範本）。",
+        "指導初階工程師掌握該領域知識，提升整體梯隊能力。",
+      ],
+      source: "C13",
+    },
+    leader: {
+      baseline: [
+        "深化系統級全局架構與跨領域判斷力（涵蓋設計、驗證與生產考量）。",
+        "建立團隊技術維度演進方向，引導成員補齊關鍵能力。",
+        "主持跨領域技術復盤會議，將專案教訓沉澱為團隊資產。",
+      ],
+      outstanding: [
+        "具備預測下一代架構風險能力，並在專案啟動前完成評估。",
+        "建立可持續維護的團隊知識庫或常見問題資料庫。",
+        "成功培育出能獨立負責子領域的資深工程師。",
+      ],
+      source: "D13",
+    },
+    manager: {
+      baseline: [
+        "拓展技術戰略視野與組織管理能力，對齊業界趨勢。",
+        "定期評估團隊技術梯隊與關鍵崗位接班人計畫。",
+      ],
+      outstanding: [
+        "建立自驅型的知識共享體系與工程文化，推動跨組織人才流動。",
+        "培育出具備獨立決策能力的技術負責人與中階主管。",
+      ],
+      source: "E13",
+    },
+  },
+  OKR: {
+    junior: {
+      baseline: [
+        "主動使用團隊推薦之自動化工具或輔助系統。",
+        "依標準流程執行驗證，及時回報流程中的阻塞點。",
+        "參與團隊效率改善行動，落實執行交辦工作。",
+      ],
+      outstanding: [
+        "自主發現重複性作業並提出自動化／腳本化改善建議。",
+        "在既定工作流程中主動優化操作步驟，縮短個人交付時間。",
+      ],
+      source: "B14",
+    },
+    senior: {
+      baseline: [
+        "針對現有專案瓶頸提出明確改善方案並落地實施。",
+        "與相鄰職能團隊協作，改善跨模組介面或測試交付流程。",
+        "確保自己負責的模組交付能縮短驗證時程、提高一次通過率。",
+      ],
+      outstanding: [
+        "跨組主導開發通用工具／自動化檢驗機制，供多人使用。",
+        "改善關鍵驗證流程，顯著縮短交付週期（如縮短 15% 以上）。",
+        "主動化解跨部門技術落差，推動客戶端或下游團隊效率提升。",
+      ],
+      source: "C14",
+    },
+    leader: {
+      baseline: [
+        "拆解部門季度 OKR 至團隊日常執行目標並定期追蹤。",
+        "建立跨模組問題排查機制，降低跨組溝通摩擦。",
+        "確保團隊各專案交付節奏對齊業務目標。",
+      ],
+      outstanding: [
+        "建立全流程標準化驗證機制，消除常見設計／測試死角。",
+        "提出架構級或工具鏈創新，為團隊釋放 20% 以上重複性研發資源。",
+        "帶領團隊化解關鍵交付危機，達成業務端具體指標。",
+      ],
+      source: "D14",
+    },
+    manager: {
+      baseline: [
+        "統籌各項目標與資源調配，確保組織整體目標達標率。",
+        "建立研發與生產／客戶支援端的高效協作介面。",
+      ],
+      outstanding: [
+        "主導全組織級的流程再造，顯著降低跨部門溝通與反覆驗證成本。",
+        "推動關鍵技術資產化，轉化為對外業務競爭力或 showcase。",
+      ],
+      source: "E14",
+    },
+  },
+};
+
+export const getCategoryRoleReference = (category, role) =>
+  CATEGORY_ROLE_REFERENCES[category]?.[role] || null;
 
 export const KPI_REFERENCES = {
   EE: {
