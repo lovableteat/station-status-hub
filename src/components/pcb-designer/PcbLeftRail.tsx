@@ -5,6 +5,8 @@ import {
   Eye,
   Filter,
   MoreHorizontal,
+  Box,
+  LoaderCircle,
   Pencil,
   PencilLine,
   Plus,
@@ -25,6 +27,7 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PCB_LIBRARY_DRAG_TYPE } from "./PcbCanvas.tsx";
 import { LIBRARY_FILE_ACCEPT } from "./core/files.ts";
+import { PCB_MODEL_FILE_ACCEPT } from "./core/modelAssets.ts";
 import type {
   PcbLibraryComponent,
   PcbProject,
@@ -51,6 +54,7 @@ interface PcbLeftRailProps {
   onDeleteProject: (project: PcbProject) => void;
   onDeleteTemplate: (template: PcbTemplate) => void;
   onDeleteComponent: (component: PcbLibraryComponent) => void;
+  libraryImportState: "idle" | "loading";
   onLibraryFile: (file: File) => void;
 }
 
@@ -116,6 +120,7 @@ export function PcbLeftRail({
   onDeleteProject,
   onDeleteTemplate,
   onDeleteComponent,
+  libraryImportState,
   onLibraryFile,
 }: PcbLeftRailProps) {
   const [query, setQuery] = useState("");
@@ -280,17 +285,19 @@ export function PcbLeftRail({
             <label
               className={cn(
                 "pcb-upload-action",
-                !workspace.canMutate && "pointer-events-none opacity-50",
+                (!workspace.canMutate || libraryImportState === "loading") && "pointer-events-none opacity-50",
               )}
-              title="上傳 JSON、CSV 或 XLSX 元件庫"
+              title="匯入 STP、STEP、JSON、CSV 或 XLSX 元件庫"
             >
-              <Upload className="mr-1 h-3.5 w-3.5" />
-              上傳
+              {libraryImportState === "loading"
+                ? <LoaderCircle className="mr-1 h-3.5 w-3.5 animate-spin" />
+                : <Upload className="mr-1 h-3.5 w-3.5" />}
+              {libraryImportState === "loading" ? "解析 STEP" : "匯入檔案"}
               <input
                 type="file"
-                accept={LIBRARY_FILE_ACCEPT}
+                accept={`${PCB_MODEL_FILE_ACCEPT},${LIBRARY_FILE_ACCEPT}`}
                 className="sr-only"
-                disabled={!workspace.canMutate}
+                disabled={!workspace.canMutate || libraryImportState === "loading"}
                 onChange={(event) => chooseFile(event, onLibraryFile)}
               />
             </label>
@@ -331,7 +338,9 @@ export function PcbLeftRail({
           <p>
             {activeTab === "templates"
               ? "內建模板可直接建立專案；若要改名或刪除，請先複製後編輯。"
-              : "管理目前工作區可使用的資源。"}
+              : activeTab === "library"
+                ? "匯入 STEP／STP 會自動建立含 3D 外形與實體尺寸的元件，可直接拖放到板子。"
+                : "管理目前工作區可使用的資源。"}
           </p>
         </div>
       )}
@@ -474,7 +483,14 @@ export function PcbLeftRail({
             >
               <span className="mt-0.5 h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: component.color }} aria-hidden="true" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-slate-100">{component.name}</p>
+                <p className="flex items-center gap-1 truncate text-xs font-semibold text-slate-100">
+                  <span className="truncate">{component.name}</span>
+                  {component.modelAssetId && (
+                    <span className="pcb-library-model-badge" title="包含可重複放置的 STEP 3D 模型">
+                      <Box className="h-2.5 w-2.5" />3D
+                    </span>
+                  )}
+                </p>
                 <p className="truncate font-mono text-[10px] text-slate-400">{component.manufacturer || "—"} · {component.partNumber || "無料號"}</p>
                 <p className="font-mono text-[10px] text-slate-500">長 {component.width} × 寬 {component.height} × 高 {component.maxHeight} mm</p>
               </div>
