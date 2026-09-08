@@ -179,33 +179,71 @@ function ReviewDetail({
     self.grade,
     manager.categoryReviews,
   );
+  const categoryMeta = {
+    IDP: { index: "01", label: "未來潛力與成長" },
+    OKR: { index: "02", label: "創新與改善能力" },
+    KPI: { index: "03", label: "角色基本盤穩定度" },
+  } as const;
   return (
     <article className="rd2-card rd2-detail">
-      <h3>{review.employeeName} · 考核內容</h3>
-      <p className="rd2-hint">
-        工號 {self.employeeNumber || manager.employeeNumber || "未填寫"} ·{" "}
-        {review.department} · {review.role} · 職等 {self.grade || "未填寫"}
-      </p>
+      <header className="rd2-review-detail-header">
+        <div>
+          <span className="rd2-review-detail-eyebrow">考核內容</span>
+          <h3>{review.employeeName}</h3>
+          <p>
+            工號 {self.employeeNumber || manager.employeeNumber || "未填寫"} ·{" "}
+            {review.department} · {review.role} · 職等 {self.grade || "未填寫"}
+          </p>
+        </div>
+        <span className="rd2-review-detail-status">員工自評</span>
+      </header>
       <div className="rd2-review-weighted-score">
-        <span>員工加權自評</span>
-        <strong>
-          {weightedSelf
-            ? `${weightedSelf.total.toLocaleString("zh-TW", { maximumFractionDigits: 2 })} / 100`
-            : "無法計算"}
-        </strong>
-        <small>
-          {weightedSelf
-            ? CATEGORIES.map((category) => {
-                const item = weightedSelf.categories[category];
-                return `${category} ${item.score ?? "—"} × ${item.weight}% = ${item.weighted ?? "—"}`;
-              }).join("　＋　")
-            : `職等 ${self.grade || "未填"} 沒有政策權重`}
-        </small>
+        <div className="rd2-review-score-total">
+          <span>員工加權自評</span>
+          <div>
+            <strong>
+              {weightedSelf
+                ? weightedSelf.total.toLocaleString("zh-TW", { maximumFractionDigits: 2 })
+                : "—"}
+            </strong>
+            <small>/ 100</small>
+          </div>
+          <p>{weightedSelf ? "依政策權重自動換算" : `職等 ${self.grade || "未填"} 沒有政策權重`}</p>
+        </div>
+        <div className="rd2-review-score-breakdown">
+          {CATEGORIES.map((category) => {
+            const item = weightedSelf?.categories[category];
+            return (
+              <div
+                key={category}
+                className="rd2-review-score-part"
+                data-category={category}
+              >
+                <div>
+                  <b>{category}</b>
+                  <span>權重 {item?.weight ?? "—"}%</span>
+                </div>
+                <strong>{item?.weighted ?? "—"}<small> 分</small></strong>
+                <p>{item?.score ?? "—"} 原始分 × {item?.weight ?? "—"}%</p>
+              </div>
+            );
+          })}
+        </div>
       </div>
       {CATEGORIES.map((category) => (
-        <section key={category}>
-          <h4>
-            {category}
+        <section
+          key={category}
+          className="rd2-review-category"
+          data-category={category}
+        >
+          <header className="rd2-review-category-header">
+            <div className="rd2-review-category-title">
+              <span className="rd2-review-category-index">{categoryMeta[category].index}</span>
+              <div>
+                <h4>{category}</h4>
+                <p>{categoryMeta[category].label}</p>
+              </div>
+            </div>
             <span className="rd2-self-score-badge">
               原始自評{" "}
               <b>
@@ -217,49 +255,54 @@ function ReviewDetail({
                 <> · 加權 <b>{weightedSelf.categories[category].weighted} 分</b></>
               )}
             </span>
-          </h4>
-          <AssessmentEntryList category={category} section={self.sections[category]} readonly onChange={() => {}} />
-          <div className="rd2-images">
-            {self.sections[category].images.map((image) => (
-              <a key={image.id} href={image.dataUrl} download={image.name}>
-                <img src={image.dataUrl} alt={image.name} loading="lazy" />
-              </a>
-            ))}
-          </div>
-          {self.sections[category].links.map((url) => (
-            <p key={url}>
-              <a href={url} target="_blank" rel="noopener noreferrer">
-                {url}
-              </a>
-            </p>
-          ))}
-          {showManagerAssessment && (
-            <div className="rd2-detail-manager-review">
-              <strong>
-                主管評分：{manager.categoryReviews[category].score == null
-                  ? "尚未評分"
-                  : `${manager.categoryReviews[category].score} / 100`}
-              </strong>
-              {weightedManager?.categories[category].weighted != null && (
-                <span>
-                  加權 {weightedManager.categories[category].weighted} 分
-                </span>
-              )}
-              <p className="rd2-prewrap">
-                {manager.categoryReviews[category].feedback || "尚無此類評語"}
-              </p>
+          </header>
+          <div className="rd2-review-category-body">
+            <AssessmentEntryList category={category} section={self.sections[category]} readonly onChange={() => {}} />
+            <div className="rd2-images">
+              {self.sections[category].images.map((image) => (
+                <a key={image.id} href={image.dataUrl} download={image.name}>
+                  <img src={image.dataUrl} alt={image.name} loading="lazy" />
+                </a>
+              ))}
             </div>
-          )}
+            {!!self.sections[category].links.length && (
+              <div className="rd2-review-evidence-links">
+                <strong>證明連結</strong>
+                {self.sections[category].links.map((url) => (
+                  <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                    {url}
+                  </a>
+                ))}
+              </div>
+            )}
+            {showManagerAssessment && (
+              <div className="rd2-detail-manager-review">
+                <strong>
+                  主管評分：{manager.categoryReviews[category].score == null
+                    ? "尚未評分"
+                    : `${manager.categoryReviews[category].score} / 100`}
+                </strong>
+                {weightedManager?.categories[category].weighted != null && (
+                  <span>
+                    加權 {weightedManager.categories[category].weighted} 分
+                  </span>
+                )}
+                <p className="rd2-prewrap">
+                  {manager.categoryReviews[category].feedback || "尚無此類評語"}
+                </p>
+              </div>
+            )}
+          </div>
         </section>
       ))}
       {self.legacyText && (
-        <section>
+        <section className="rd2-review-secondary-section">
           <h4>既有自評內容</h4>
           <p className="rd2-prewrap">{self.legacyText}</p>
         </section>
       )}
       {!!review.goals.length && (
-        <section>
+        <section className="rd2-review-secondary-section">
           <h4>既有目標與進度</h4>
           <ul>
             {review.goals.map((goal) => (
@@ -273,7 +316,7 @@ function ReviewDetail({
       )}
       {showManagerAssessment && (
         <>
-          <section>
+          <section className="rd2-review-secondary-section" data-tone="accountability">
             <h4>主管當責評分</h4>
             {!manager.standardsVersion && <p className="rd2-hint">既有評分保留原題號；舊版兩題不會換算為新版七題評分。</p>}
             <p>{ACCOUNTABILITY_ROLES.find((role) => role.value === manager.roleGroup)?.label || "既有評分"}</p>
@@ -288,7 +331,7 @@ function ReviewDetail({
               </p>
             ))}
           </section>
-          <section>
+          <section className="rd2-review-secondary-section" data-tone="feedback">
             <h4>主管整體回饋與工作指示</h4>
             <p className="rd2-prewrap">{manager.feedback || "尚無回饋"}</p>
             {!!manager.attachments.length && (
