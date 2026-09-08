@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access } from "node:fs/promises";
 import test from "node:test";
 import { BUILT_IN_COMPONENTS, BUILT_IN_TEMPLATES, createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
-import type { PcbSaveState } from "../../src/components/pcb-designer/types.ts";
+import type { PcbModelAssetMetadata, PcbSaveState } from "../../src/components/pcb-designer/types.ts";
 
 const moduleUrl = new URL(
   "../../src/components/pcb-designer/core/workspace.ts",
@@ -317,6 +317,46 @@ test("library CRUD preserves built-ins and import upserts duplicate part numbers
 
   assert.equal(matches.length, 1);
   assert.equal(matches[0].name, "Controller revised");
+});
+
+test("STEP model import creates a reusable library component with measured dimensions", async () => {
+  const { createWorkspaceState, reduceWorkspaceState } = await loadWorkspaceModule();
+  const initial = createWorkspaceState(seedState(), true);
+  const metadata: PcbModelAssetMetadata = {
+    schemaVersion: 1,
+    id: "step-library-asset",
+    fileName: "usb_connector.step",
+    createdAt: "2026-09-08T00:00:00.000Z",
+    updatedAt: "2026-09-08T00:00:00.000Z",
+    dimensions: { widthMm: 12, depthMm: 8, heightMm: 4 },
+    calibratedDimensions: { widthMm: 12, depthMm: 8, heightMm: 4 },
+    upAxis: "z",
+    bounds: { min: [0, 0, 0], max: [12, 8, 4] },
+    parts: [{ id: "shell", name: "Shell", vertexCount: 8, indexCount: 36 }],
+  };
+  const imported = reduceWorkspaceState(initial, {
+    type: "library/import-model",
+    component: {
+      name: "usb connector",
+      type: "STEP 3D 元件",
+      manufacturer: "",
+      partNumber: "usb connector",
+      width: 12,
+      height: 8,
+      maxHeight: 4,
+      color: "#63c6dd",
+      shape: "rectangle",
+    },
+    metadata,
+  });
+  const component = imported.data.library.at(-1)!;
+
+  assert.equal(component.modelAssetId, metadata.id);
+  assert.deepEqual(
+    [component.width, component.height, component.maxHeight],
+    [12, 8, 4],
+  );
+  assert.equal(imported.data.modelAssets?.[metadata.id].fileName, "usb_connector.step");
 });
 
 test("commit, undo and redo refresh project history and DRC", async () => {

@@ -34,6 +34,7 @@ import {
   getDefaultPcbModelAssetStore,
   isStepModelFile,
   toPcbModelAsset,
+  toStepLibraryComponent,
 } from "./core/modelAssets.ts";
 import { PcbDialogs, type PcbDialogState } from "./PcbDialogs.tsx";
 import { PcbLeftRail, type PcbLeftTab } from "./PcbLeftRail.tsx";
@@ -151,6 +152,7 @@ export function PcbDesignerWorkspace({
   const [leftRailTab, setLeftRailTab] = useState<PcbLeftTab>("projects");
   const [viewMode, setViewMode] = useState<PcbViewMode>("2d");
   const [placementComponentId, setPlacementComponentId] = useState<string | null>(null);
+  const [libraryImportState, setLibraryImportState] = useState<"idle" | "loading">("idle");
   const projectInputRef = useRef<HTMLInputElement>(null);
   const modelAssetStoreRef = useRef(getDefaultPcbModelAssetStore());
   const presence = usePcbProjectPresence({
@@ -305,7 +307,40 @@ export function PcbDesignerWorkspace({
     }
   };
 
-  const handleLibraryPreviewFile = async (file: File) => {
+  const handleLibraryFile = async (file: File) => {
+    if (isStepModelFile(file)) {
+      if (!workspace.canMutate) {
+        notifyError("無法匯入 STEP 元件", new Error("目前沒有元件庫編輯權限。"));
+        return;
+      }
+      if (file.size > MAX_PCB_MODEL_FILE_BYTES) {
+        notifyError(
+          "無法匯入 STEP 元件",
+          new Error(`STEP 模型檔案不可超過 ${Math.round(MAX_PCB_MODEL_FILE_BYTES / 1024 / 1024)} MB。`),
+        );
+        return;
+      }
+      setLibraryImportState("loading");
+      let assetId: string | null = null;
+      try {
+        const model = await importStepModel(file);
+        const asset = toPcbModelAsset(model);
+        assetId = asset.metadata.id;
+        await modelAssetStoreRef.current.put(asset);
+        workspace.importLibraryModel(toStepLibraryComponent(asset.metadata), asset.metadata);
+        toast({
+          title: "STEP 元件已加入元件庫",
+          description: `${toStepLibraryComponent(asset.metadata).name} · 長 ${asset.metadata.calibratedDimensions.widthMm} × 寬 ${asset.metadata.calibratedDimensions.depthMm} × 高 ${asset.metadata.calibratedDimensions.heightMm} mm`,
+        });
+      } catch (error) {
+        if (assetId) await modelAssetStoreRef.current.delete(assetId);
+        notifyError("無法匯入 STEP 元件", error);
+      } finally {
+        setLibraryImportState("idle");
+      }
+      return;
+    }
+
     try {
       const result = parseComponentRows(await readTabularFile(file));
       previewImport({
@@ -661,7 +696,8 @@ export function PcbDesignerWorkspace({
             onDeleteProject={requestDeleteProject}
             onDeleteTemplate={requestDeleteTemplate}
             onDeleteComponent={requestDeleteComponent}
-            onLibraryFile={(file) => void handleLibraryPreviewFile(file)}
+            libraryImportState={libraryImportState}
+            onLibraryFile={(file) => void handleLibraryFile(file)}
           />
         </div>
 

@@ -45,6 +45,8 @@ export interface PcbLibraryComponent {
   maxHeight: number;
   color: string;
   shape?: PcbComponentShape;
+  /** Reusable STEP geometry copied to every board instance placed from this library record. */
+  modelAssetId?: string;
   source: "built-in" | "custom" | "bom";
   createdAt: string;
 }

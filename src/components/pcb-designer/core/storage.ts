@@ -85,6 +85,7 @@ function isLibraryComponent(value: unknown): boolean {
     && isPositiveFiniteNumber(value.width)
     && isPositiveFiniteNumber(value.height)
     && isPositiveFiniteNumber(value.maxHeight)
+    && (value.modelAssetId === undefined || isNonEmptyString(value.modelAssetId))
     && (value.source === "built-in" || value.source === "custom" || value.source === "bom")
     && (value.shape === undefined || value.shape === "rectangle" || value.shape === "circle");
 }
