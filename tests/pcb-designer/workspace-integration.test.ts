@@ -259,14 +259,18 @@ test("routes only library file previews from the workspace", () => {
   assert.doesNotMatch(workspaceSource, /parseBomRows|handleBomPreviewFile|workspace\.importBom|BOM 匯入預覽|onBomFile/);
 });
 
-test("preserves the pre-task project and component form copy while extending import preview", async () => {
+test("keeps project sizing and labels component dimensions as length width and height", async () => {
   const dialogsSource = await read(
     "src/components/pcb-designer/PcbDialogs.tsx",
   );
 
   assert.match(dialogsSource, /板框尺寸必須介於 20 到 1000 mm。/);
-  assert.match(dialogsSource, /尺寸與最大高度必須是大於 0 的數值。/);
+  assert.match(dialogsSource, /長度、寬度與高度必須是大於 0 的數值。/);
   assert.match(dialogsSource, /請填寫必要欄位後再儲存變更。/);
+  assert.match(dialogsSource, /尺寸順序固定為長 × 寬 × 高/);
+  assert.match(dialogsSource, /NumberField axis=["']X["'] label=["']長度 \(mm\)["']/);
+  assert.match(dialogsSource, /NumberField axis=["']Y["'] label=["']寬度 \(mm\)["']/);
+  assert.match(dialogsSource, /NumberField axis=["']Z["'] label=["']高度 \(mm\)["']/);
   assert.match(dialogsSource, /NumberField label=["']寬度 \(mm\)["']/);
   assert.match(dialogsSource, /NumberField label=["']高度 \(mm\)["']/);
 });
