@@ -42,8 +42,10 @@ import { PcbToolbar } from "./PcbToolbar.tsx";
 import { PcbCanvas } from "./PcbCanvas.tsx";
 import { PcbCollaborators } from "./PcbCollaborators.tsx";
 import { PcbInspector } from "./PcbInspector.tsx";
+import { PcbStepModelDialog } from "./PcbStepModelDialog.tsx";
 import { exportPcbSvgAsPng } from "./core/pngExport.ts";
 import type { TemplateInput } from "./core/workspace.ts";
+import type { PcbModelAsset } from "./types.ts";
 import {
   createPcbAccountRemoteClient,
   isDatabaseUserId,
@@ -153,6 +155,8 @@ export function PcbDesignerWorkspace({
   const [viewMode, setViewMode] = useState<PcbViewMode>("2d");
   const [placementComponentId, setPlacementComponentId] = useState<string | null>(null);
   const [libraryImportState, setLibraryImportState] = useState<"idle" | "loading">("idle");
+  const [stepPreview, setStepPreview] = useState<{ asset: PcbModelAsset; mode: "library" | "view" } | null>(null);
+  const [stepPreviewSaving, setStepPreviewSaving] = useState(false);
   const projectInputRef = useRef<HTMLInputElement>(null);
   const modelAssetStoreRef = useRef(getDefaultPcbModelAssetStore());
   const presence = usePcbProjectPresence({
@@ -321,22 +325,11 @@ export function PcbDesignerWorkspace({
         return;
       }
       setLibraryImportState("loading");
-      let assetId: string | null = null;
       try {
         const model = await importStepModel(file);
         const asset = toPcbModelAsset(model);
-        assetId = asset.metadata.id;
-        await modelAssetStoreRef.current.put(asset);
-        if (remoteClient?.saveModelAsset && !(await remoteClient.saveModelAsset(asset))) {
-          throw new Error("STEP 模型無法寫入雲端，元件尚未加入。請確認網路後重試。");
-        }
-        workspace.importLibraryModel(toStepLibraryComponent(asset.metadata), asset.metadata);
-        toast({
-          title: "STEP 元件已加入元件庫",
-          description: `${toStepLibraryComponent(asset.metadata).name} · 長 ${asset.metadata.calibratedDimensions.widthMm} × 寬 ${asset.metadata.calibratedDimensions.depthMm} × 高 ${asset.metadata.calibratedDimensions.heightMm} mm`,
-        });
+        setStepPreview({ asset, mode: "library" });
       } catch (error) {
-        if (assetId) await modelAssetStoreRef.current.delete(assetId);
         notifyError("無法匯入 STEP 元件", error);
       } finally {
         setLibraryImportState("idle");
@@ -391,8 +384,46 @@ export function PcbDesignerWorkspace({
       await modelAssetStoreRef.current.delete(asset.metadata.id);
       throw new Error("元件在匯入期間已被鎖定或不可編輯，模型未套用。 ");
     }
+    setStepPreview({ asset, mode: "view" });
     return asset.metadata;
   }, [remoteClient, workspace]);
+
+  const confirmStepLibraryImport = useCallback(async () => {
+    if (!stepPreview || stepPreview.mode !== "library" || stepPreviewSaving) return;
+    const { asset } = stepPreview;
+    setStepPreviewSaving(true);
+    try {
+      await modelAssetStoreRef.current.put(asset);
+      if (remoteClient?.saveModelAsset && !(await remoteClient.saveModelAsset(asset))) {
+        throw new Error("STEP 模型無法寫入雲端，元件尚未加入。請確認網路後重試。");
+      }
+      const component = toStepLibraryComponent(asset.metadata);
+      workspace.importLibraryModel(component, asset.metadata);
+      setStepPreview(null);
+      toast({
+        title: "STEP 元件已加入元件庫",
+        description: `${component.name} · 長 ${component.width} × 寬 ${component.height} × 高 ${component.maxHeight} mm`,
+      });
+    } catch (error) {
+      await modelAssetStoreRef.current.delete(asset.metadata.id);
+      notifyError("無法儲存 STEP 元件", error);
+    } finally {
+      setStepPreviewSaving(false);
+    }
+  }, [remoteClient, stepPreview, stepPreviewSaving, workspace]);
+
+  const viewComponentModel = useCallback(async (assetId: string) => {
+    let asset = await modelAssetStoreRef.current.get(assetId);
+    if (!asset) {
+      asset = await workspace.loadModelAsset(assetId);
+      if (asset) await modelAssetStoreRef.current.put(asset);
+    }
+    if (!asset) {
+      notifyError("無法開啟 STEP 預覽", new Error("找不到這個元件的模型資料，請重新匯入 STEP。"));
+      return;
+    }
+    setStepPreview({ asset, mode: "view" });
+  }, [workspace]);
 
   const requestDeleteProject = (project: PcbProject) => setDialog({
     kind: "confirm",
@@ -727,7 +758,11 @@ export function PcbDesignerWorkspace({
           </Suspense>
         )}
         <div className={cn("pcb-right-drawer", openDrawer === "right" && "is-open")}>
-          <PcbInspector workspace={workspace} onImportModel={handleModelFile} />
+          <PcbInspector
+            workspace={workspace}
+            onImportModel={handleModelFile}
+            onViewModel={(assetId) => void viewComponentModel(assetId)}
+          />
         </div>
       </div>
 
@@ -751,6 +786,13 @@ export function PcbDesignerWorkspace({
         onSaveTemplate={saveCurrentAsTemplate}
         onRenameTemplate={renameTemplate}
         onSaveComponent={saveComponent}
+      />
+      <PcbStepModelDialog
+        asset={stepPreview?.asset ?? null}
+        busy={stepPreviewSaving}
+        confirmLabel={stepPreview?.mode === "library" ? "加入元件庫" : undefined}
+        onClose={() => !stepPreviewSaving && setStepPreview(null)}
+        onConfirm={stepPreview?.mode === "library" ? confirmStepLibraryImport : undefined}
       />
     </section>
   );
