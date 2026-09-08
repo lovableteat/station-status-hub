@@ -184,6 +184,31 @@ test("stores model payloads through the in-memory asset fallback", async () => {
   assert.equal(await store.get("step-asset"), null);
 });
 
+test("compresses and restores a validated STEP mesh for cross-computer sharing", async () => {
+  const { deserializePcbModelAsset, serializePcbModelAsset } = await import(
+    "../../src/components/pcb-designer/core/modelAssets.ts"
+  );
+  const asset = {
+    metadata: {
+      schemaVersion: 1 as const,
+      id: "shared-step-asset",
+      fileName: "shared-connector.step",
+      createdAt: "2026-09-08T00:00:00.000Z",
+      updatedAt: "2026-09-08T00:00:00.000Z",
+      dimensions: { widthMm: 12, depthMm: 8, heightMm: 4 },
+      calibratedDimensions: { widthMm: 12, depthMm: 8, heightMm: 4 },
+      upAxis: "z" as const,
+      bounds: { min: [0, 0, 0] as [number, number, number], max: [12, 8, 4] as [number, number, number] },
+      parts: [{ id: "shell", name: "Shell", vertexCount: 3, indexCount: 3 }],
+    },
+    parts: [{ id: "shell", position: [0, 0, 0, 12, 0, 0, 0, 8, 4], index: [0, 1, 2] }],
+  };
+
+  const compressed = await serializePcbModelAsset(asset);
+  assert.ok(compressed.length > 0);
+  assert.deepEqual(await deserializePcbModelAsset(compressed), asset);
+});
+
 test("rejects oversized model meshes before storing them", async () => {
   const { MAX_PCB_MODEL_PARTS, toPcbModelAssetMetadata } = await import(
     "../../src/components/pcb-designer/core/modelAssets.ts"
