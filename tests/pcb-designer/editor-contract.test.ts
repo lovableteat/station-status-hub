@@ -484,6 +484,15 @@ test("keeps the measurement inspector focused on length instead of endpoint coor
   }
 });
 
+test("renders PCB assemblies with studio lighting, shadows, physical materials, and visible procedural leads", () => {
+  assert.match(canvas3dSource, /ContactShadows/);
+  assert.match(canvas3dSource, /shadows/);
+  assert.match(canvas3dSource, /meshPhysicalMaterial/);
+  assert.match(canvas3dSource, /pinColor/);
+  assert.match(canvas3dSource, /circleGeometry/);
+  assert.match(canvas3dSource, /camera\.position\.set\(size \* 0\.88, size \* 0\.82, size \* 0\.96\)/);
+});
+
 test("suppresses native SVG focus halos while retaining the custom selection bounds", () => {
   assert.match(canvasSource, /className=\{`pcb-component-object/);
   assert.match(editorCssSource, /\[role=["']button["']\]:focus,[\s\S]{0,180}outline:\s*none\s*!important/);

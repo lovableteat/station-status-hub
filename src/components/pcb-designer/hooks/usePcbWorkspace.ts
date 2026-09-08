@@ -331,6 +331,7 @@ export function usePcbWorkspace({
     visibleLayer: state.visibleLayer,
     selectedObjects: state.selectedObjects,
     persistenceStatus: persistence.status,
+    remoteReady,
     hasUnsavedChanges: persistence.hasUnsavedChanges,
     lastSavedEditor: persistence.lastSavedEditor,
     lastSavedProjectId: persistence.lastSavedProjectId,
