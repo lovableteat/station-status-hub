@@ -10,8 +10,8 @@ import type {
 export const PCB_MODEL_FILE_ACCEPT = ".stp,.step,model/step,application/step";
 export const MAX_PCB_MODEL_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_PCB_MODEL_PARTS = 256;
-export const MAX_PCB_MODEL_VERTICES = 500_000;
-export const MAX_PCB_MODEL_INDICES = 1_500_000;
+export const MAX_PCB_MODEL_VERTICES = 800_000;
+export const MAX_PCB_MODEL_INDICES = 2_400_000;
 export const MAX_PCB_CLOUD_ASSET_BYTES = 64 * 1024 * 1024;
 
 export function isStepModelFile(file: File): boolean {
@@ -283,6 +283,97 @@ function footprintPartColor(asset: PcbModelAsset, partId: string, fallback: stri
   return color ? partColorToHex(color) : fallback;
 }
 
+function boundsForFootprint(points: Array<{ x: number; y: number }>) {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  };
+}
+
+/**
+ * Finds disconnected surfaces at the model's board-facing plane. Mechanical
+ * STEP assemblies often store the plastic body and every pin in one mesh;
+ * these contact islands provide the pad/lead detail needed by a 2D layout.
+ */
+function buildBoardContactFootprints(
+  asset: PcbModelAsset,
+  widthAxis: number,
+  depthAxis: number,
+  widthCenter: number,
+  depthCenter: number,
+  widthSpan: number,
+  depthSpan: number,
+): PcbModelFootprintPrimitive[] {
+  const upAxis = asset.metadata.upAxis === "x" ? 0 : asset.metadata.upAxis === "y" ? 1 : 2;
+  const minUp = asset.metadata.bounds.min[upAxis];
+  const upSpan = asset.metadata.bounds.max[upAxis] - minUp;
+  const contactLimit = minUp + Math.max(upSpan * 0.08, 0.02);
+  const contacts: PcbModelFootprintPrimitive[] = [];
+
+  asset.parts.forEach((part) => {
+    const parent = new Map<number, number>();
+    const find = (value: number): number => {
+      const current = parent.get(value);
+      if (current === undefined) {
+        parent.set(value, value);
+        return value;
+      }
+      if (current === value) return value;
+      const root = find(current);
+      parent.set(value, root);
+      return root;
+    };
+    const join = (left: number, right: number) => {
+      const leftRoot = find(left);
+      const rightRoot = find(right);
+      if (leftRoot !== rightRoot) parent.set(rightRoot, leftRoot);
+    };
+
+    for (let offset = 0; offset < part.index.length; offset += 3) {
+      const triangle = [part.index[offset], part.index[offset + 1], part.index[offset + 2]];
+      if (!triangle.every((vertex) => part.position[vertex * 3 + upAxis] <= contactLimit)) continue;
+      join(triangle[0], triangle[1]);
+      join(triangle[1], triangle[2]);
+    }
+
+    const groups = new Map<number, number[]>();
+    parent.forEach((_, vertex) => {
+      const root = find(vertex);
+      const vertices = groups.get(root) ?? [];
+      vertices.push(vertex);
+      groups.set(root, vertices);
+    });
+
+    [...groups.values()].forEach((vertices, groupIndex) => {
+      const points = convexHull(vertices.map((vertex) => ({
+        x: (part.position[vertex * 3 + widthAxis] - widthCenter) / widthSpan,
+        y: (part.position[vertex * 3 + depthAxis] - depthCenter) / depthSpan,
+      })));
+      if (points.length < 3) return;
+      const bounds = boundsForFootprint(points);
+      const spanX = bounds.maxX - bounds.minX;
+      const spanY = bounds.maxY - bounds.minY;
+      const area = spanX * spanY;
+      const nearEdge = bounds.minX < -0.32 || bounds.maxX > 0.32
+        || bounds.minY < -0.32 || bounds.maxY > 0.32;
+      const slender = Math.min(spanX, spanY) / Math.max(spanX, spanY, 0.000001) < 0.45;
+      if (area < 0.000004 || area > 0.08 || (!nearEdge && !slender && area > 0.025)) return;
+      contacts.push({
+        id: `${part.id}-board-contact-${groupIndex}`,
+        role: "lead",
+        points,
+        color: "#f6c453",
+      });
+    });
+  });
+
+  return contacts.slice(0, 256);
+}
+
 export function getPcbModelPartColor(asset: PcbModelAsset, partId: string, fallback: string): string {
   return footprintPartColor(asset, partId, fallback);
 }
@@ -314,14 +405,7 @@ export function buildPcbModelFootprint(
       });
     }
     const hull = convexHull(points);
-    const xs = hull.map((point) => point.x);
-    const ys = hull.map((point) => point.y);
-    const bounds = hull.length ? {
-      minX: Math.min(...xs),
-      maxX: Math.max(...xs),
-      minY: Math.min(...ys),
-      maxY: Math.max(...ys),
-    } : { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    const bounds = hull.length ? boundsForFootprint(hull) : { minX: 0, maxX: 0, minY: 0, maxY: 0 };
     const metadata = asset.metadata.parts[partIndex];
     return {
       id: part.id,
@@ -334,7 +418,7 @@ export function buildPcbModelFootprint(
     };
   }).filter((part) => part.points.length >= 3 && part.areaRatio > 0.000001);
 
-  return projected.map((part) => {
+  const primitives = projected.map((part) => {
     const normalizedName = part.name.toLocaleLowerCase();
     const namedLead = /(?:pin|lead|terminal|contact|solder|pad|ball|leg|腳|針|端子|接點)/i.test(normalizedName);
     const touchesEdge = part.bounds.minX < -0.38 || part.bounds.maxX > 0.38
@@ -359,6 +443,19 @@ export function buildPcbModelFootprint(
       color: part.color,
     };
   }).sort((left, right) => Number(left.role === "lead") - Number(right.role === "lead"));
+
+  const knownLeadParts = new Set(primitives.filter((part) => part.role === "lead").map((part) => part.id));
+  const contactPrimitives = buildBoardContactFootprints(
+    asset,
+    widthAxis,
+    depthAxis,
+    widthCenter,
+    depthCenter,
+    widthSpan,
+    depthSpan,
+  ).filter((contact) => !knownLeadParts.has(contact.id.replace(/-board-contact-\d+$/, "")));
+
+  return [...primitives.filter((part) => part.role === "body"), ...contactPrimitives, ...primitives.filter((part) => part.role === "lead")];
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

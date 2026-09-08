@@ -169,6 +169,27 @@ test("merges every teammate project even when the local account snapshot is newe
   assert.equal(merged.activeProjectId, local.activeProjectId);
 });
 
+test("merges the shared component catalog even when the local board revision is newer", () => {
+  const local = state("Local project");
+  const remote = state("Remote project");
+  local.updatedAt = "2026-09-08T12:00:00.000Z";
+  remote.updatedAt = "2026-09-08T11:00:00.000Z";
+  local.library = [{
+    id: "local-part", name: "Local", type: "Other", manufacturer: "", partNumber: "L1",
+    width: 2, height: 2, maxHeight: 1, color: "#ffffff", shape: "rectangle", source: "custom",
+  }];
+  remote.library = [{
+    id: "shared-step", name: "Shared STEP", type: "STEP 3D 元件", manufacturer: "", partNumber: "S1",
+    width: 8, height: 5, maxHeight: 3, color: "#63c6dd", shape: "rectangle", source: "custom",
+    modelAssetId: "step-model",
+  }];
+
+  const merged = mergePcbRemoteState(local, remote);
+
+  assert.deepEqual(merged.library.map((component) => component.id).sort(), ["local-part", "shared-step"]);
+  assert.equal(merged.library.find((component) => component.id === "shared-step")?.modelAssetId, "step-model");
+});
+
 test("preserves the locally selected project during background reconciliation", () => {
   const local = state("Local project");
   const selected = createBlankProject("Selected local project");
