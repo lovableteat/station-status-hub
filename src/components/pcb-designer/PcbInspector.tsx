@@ -418,10 +418,13 @@ function ComponentInspector({
           <option value="top">PCB 頂面 Top</option><option value="bottom">PCB 底面 Bottom</option>
         </select>
       </InspectorField>
+      <NumberField label="Pin 插入深度 (mm)" value={component.insertionDepth ?? 0} disabled={componentDisabled} step="0.1"
+        onCommit={insertionDepth => workspace.updateComponent(component.instanceId, { insertionDepth })} />
+      <p className="pcb-inspector-note">0＝最低點接觸板面；增加深度讓 pin 伸入板內，不改變模型尺寸。請依實際 pin 長度調整，避免本體埋進板子。</p>
       <div className="pcb-model-import" data-model-import-status={modelImportState.status}>
         {component.modelAssetId && <section className="pcb-inspector-section">
           <h3>模型朝向／貼板面</h3>
-          <p className="pcb-inspector-note">旋轉零件本身，讓正確的一面朝下。旋轉後自動貼板；上方長寬高是旋轉前尺寸。</p>
+          <p className="pcb-inspector-note">旋轉零件本身，讓正確的一面朝下，再用插入深度調整安裝位置；上方長寬高是旋轉前尺寸。</p>
           {(["x", "y", "z"] as const).map(axis => <div key={axis} className="flex items-end gap-2">
             <NumberField label={`${axis.toUpperCase()} 軸 (°)`} value={component.modelRotation?.[axis] ?? 0} disabled={componentDisabled}
               onCommit={value => workspace.updateComponent(component.instanceId, { modelRotation: { x: 0, y: 0, z: 0, ...component.modelRotation, [axis]: ((value % 360) + 360) % 360 } })} />

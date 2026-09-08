@@ -18,6 +18,16 @@ import {
 const board = { width: 100, height: 80 };
 const viewport = { width: 1200, height: 700 };
 
+test("pin insertion moves the model inward on either PCB face without changing its height", () => {
+  for (const layer of ["top", "bottom"] as const) {
+    const component = { x: 50, y: 40, width: 10, height: 6, maxHeight: 8, rotation: 0, layer, insertionDepth: 1.6 };
+    const tip = transformPcbComponentPoint({ x: 0, y: -4, z: 0 }, component, board);
+    const top = transformPcbComponentPoint({ x: 0, y: 4, z: 0 }, component, board);
+    assert.ok(Math.abs(tip.y - (layer === "top" ? -0.8 : 0.8)) < 1e-9);
+    assert.equal(Math.abs(top.y - tip.y), 8);
+  }
+});
+
 test("renders compatibility 3D above CSS resolution without exceeding its pixel budget", () => {
   const standard = getSoftwareCanvasResolution(1200, 700, 1);
   assert.equal(standard.scale, 2);

@@ -36,6 +36,18 @@ function validProject(): PcbProject {
   };
 }
 
+test("insertion depth persists and rejects invalid values", () => {
+  const project = validProject();
+  project.components[0].insertionDepth = 1.6;
+  const parsed = parseProjectJson(JSON.stringify(project));
+  assert.ok(parsed.ok);
+  if (parsed.ok) assert.equal(parsed.value.components[0].insertionDepth, 1.6);
+  for (const depth of [-1, NaN, Infinity, 1001]) {
+    project.components[0].insertionDepth = depth;
+    assert.equal(parseProjectJson(project).ok, false);
+  }
+});
+
 test("parses a valid project without mutating the parsed input", () => {
   const input = validProject();
   const before = structuredClone(input);

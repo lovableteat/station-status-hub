@@ -239,9 +239,13 @@ export function createSoftwareBoxVertices(
   ];
 }
 
+export function getPcbMountY(component: Pick<PcbPlacedComponent, "maxHeight" | "layer" | "insertionDepth">, boardThickness = 1.6): number {
+  return (component.layer === "top" ? 1 : -1) * (boardThickness / 2 + component.maxHeight / 2 - (component.insertionDepth ?? 0));
+}
+
 export function transformPcbComponentPoint(
   localPoint: SoftwarePoint3,
-  component: Pick<PcbPlacedComponent, "x" | "y" | "width" | "height" | "maxHeight" | "rotation" | "layer">,
+  component: Pick<PcbPlacedComponent, "x" | "y" | "width" | "height" | "maxHeight" | "rotation" | "layer" | "insertionDepth">,
   board: Pick<PcbBoard, "width" | "height">,
   boardThickness = 1.6,
 ): SoftwarePoint3 {
@@ -252,7 +256,7 @@ export function transformPcbComponentPoint(
   const layerSign = component.layer === "top" ? 1 : -1;
   const raisedPoint = {
     x: localPoint.x,
-    y: layerSign * (localPoint.y + boardThickness / 2 + component.maxHeight / 2),
+    y: layerSign * localPoint.y + getPcbMountY(component, boardThickness),
     z: localPoint.z,
   };
   const rotated = {

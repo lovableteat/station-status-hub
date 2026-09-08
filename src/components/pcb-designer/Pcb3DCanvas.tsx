@@ -4,6 +4,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, Edges, Html, OrbitControls } from "@react-three/drei";
 import { Box3, BufferGeometry, Color, DoubleSide, ExtrudeGeometry, Shape, Vector2, Float32BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
 import { getBoardPolygon } from "./core/boardOutline.ts";
+import { getPcbMountY } from "./core/software3d.ts";
 import type { OrbitControls as OrbitControlsImpl } from "three/examples/jsm/controls/OrbitControls.js";
 import { Focus, MousePointer2 } from "lucide-react";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
@@ -210,13 +211,13 @@ function ProceduralComponentMeshes({
   const isChip = /(ic|mcu|cpu|qfp|qfn|bga|processor|memory|buffer|chip|晶片)/.test(descriptor);
   const bodyWidth = isChip ? component.width * 0.72 : component.width;
   const bodyDepth = isChip ? component.height * 0.72 : component.height;
-  const bodyHeight = component.maxHeight * (!isCircular && (isChip || isConnector) ? 0.74 : 1);
+  const pinHeight = !isCircular && (isChip || isConnector) ? Math.min(0.5, component.maxHeight * 0.09) : 0;
+  const bodyHeight = component.maxHeight - pinHeight;
   const bodyCenterY = (component.maxHeight - bodyHeight) / 2;
   const pinColor = "#d7d9d2";
   const pinCountX = Math.min(12, Math.max(3, Math.round(component.height / 1.2)));
   const pinCountZ = Math.min(12, Math.max(3, Math.round(component.width / 1.2)));
   const pinWidth = Math.max(0.16, Math.min(0.55, Math.min(component.width, component.height) * 0.07));
-  const pinHeight = component.maxHeight - bodyHeight;
   const pinLength = Math.max(0.3, Math.min(component.width, component.height) * 0.16);
   const bodyColor = isChip
     ? "#171c1f"
@@ -524,8 +525,7 @@ function Scene({
         .map(({ component, viewState }) => {
         const selected = viewState.selected;
         const transform = getPcb3DComponentTransform(component, project.board);
-        const yOffset = (boardThickness / 2 + component.maxHeight / 2)
-          * (component.layer === "top" ? 1 : -1);
+        const yOffset = getPcbMountY(component, boardThickness);
         const modelAsset = component.modelAssetId ? modelAssets[component.modelAssetId] : null;
         const useProceduralFallback = !modelAsset;
         const proceduralFallback = useProceduralFallback;
