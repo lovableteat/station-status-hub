@@ -83,8 +83,8 @@ export async function importStepModel(file: File): Promise<ImportedStepModel> {
     result = occt.ReadStepFile(fileBuffer, {
       linearUnit: "millimeter",
       linearDeflectionType: "bounding_box_ratio",
-      linearDeflection: 0.004,
-      angularDeflection: 0.4,
+      linearDeflection: 0.0015,
+      angularDeflection: 0.18,
     });
   } catch (error) {
     throw new Error(`STEP 解析失敗：${error instanceof Error ? error.message : "檔案格式或內容無法解析"}`);

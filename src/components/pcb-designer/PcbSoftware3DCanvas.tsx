@@ -26,6 +26,8 @@ import {
   createSoftwareBoxVertices,
   createSoftwareCamera,
   getSoftwareFaceNormal,
+  getSoftwareCanvasResolution,
+  getSoftwareProjectedHull,
   getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
   projectSoftwarePoint,
@@ -171,7 +173,7 @@ export function PcbSoftware3DCanvas({
   const hitTargetsRef = useRef<HitTarget[]>([]);
   const pointerDragRef = useRef<PointerDragState | null>(null);
   const [view, setView] = useState<SoftwareViewState>(DEFAULT_SOFTWARE_VIEW);
-  const [viewport, setViewport] = useState({ width: 1, height: 1, dpr: 1 });
+  const [viewport, setViewport] = useState(() => getSoftwareCanvasResolution(1, 1));
   const project = workspace.activeProject;
   const loadModelAsset = workspace.loadModelAsset;
   const modelAssetIds = useMemo(
@@ -219,20 +221,23 @@ export function PcbSoftware3DCanvas({
     if (!host) return;
     const updateSize = () => {
       const bounds = host.getBoundingClientRect();
-      const width = Math.max(1, Math.round(bounds.width));
-      const height = Math.max(1, Math.round(bounds.height));
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      setViewport((current) => current.width === width && current.height === height && current.dpr === dpr
+      const next = getSoftwareCanvasResolution(bounds.width, bounds.height, window.devicePixelRatio || 1);
+      setViewport((current) => current.width === next.width
+        && current.height === next.height
+        && current.pixelWidth === next.pixelWidth
+        && current.pixelHeight === next.pixelHeight
         ? current
-        : { width, height, dpr });
+        : next);
     };
     updateSize();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateSize);
     observer?.observe(host);
     window.addEventListener("resize", updateSize);
+    window.visualViewport?.addEventListener("resize", updateSize);
     return () => {
       observer?.disconnect();
       window.removeEventListener("resize", updateSize);
+      window.visualViewport?.removeEventListener("resize", updateSize);
     };
   }, []);
 
@@ -251,11 +256,13 @@ export function PcbSoftware3DCanvas({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || viewport.width <= 1 || viewport.height <= 1) return;
-    canvas.width = Math.round(viewport.width * viewport.dpr);
-    canvas.height = Math.round(viewport.height * viewport.dpr);
+    canvas.width = viewport.pixelWidth;
+    canvas.height = viewport.pixelHeight;
     const context = canvas.getContext("2d");
     if (!context) return;
-    context.setTransform(viewport.dpr, 0, 0, viewport.dpr, 0, 0);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.setTransform(viewport.scale, 0, 0, viewport.scale, 0, 0);
     context.clearRect(0, 0, viewport.width, viewport.height);
 
     const backdrop = context.createRadialGradient(
@@ -472,6 +479,28 @@ export function PcbSoftware3DCanvas({
           const partTriangleCount = Math.floor(part.index.length / 3);
           const partBudget = Math.max(1, Math.floor(modelBudget * (partTriangleCount / totalTriangles)));
           const color = getPcbModelPartColor(asset, part.id, component.color);
+          const vertexStride = Math.max(1, Math.ceil(positions.length / 3 / 5_000));
+          const silhouettePoints: SoftwareProjectedPoint[] = [];
+          for (let vertexOffset = 0; vertexOffset < positions.length; vertexOffset += 3 * vertexStride) {
+            silhouettePoints.push(projectSoftwarePoint(transformPcbComponentPoint({
+              x: positions[vertexOffset],
+              y: positions[vertexOffset + 1],
+              z: positions[vertexOffset + 2],
+            }, component, project.board, BOARD_THICKNESS), camera));
+          }
+          const silhouette = getSoftwareProjectedHull(silhouettePoints);
+          if (silhouette.length >= 3) {
+            shapes.push({
+              kind: "polygon",
+              points: silhouette,
+              depth: Math.max(...silhouette.map((point) => point.depth)) + 0.001,
+              renderOrder,
+              fill: shadeColor(color, 0.78),
+              stroke: shadeColor(color, selected ? 0.98 : 0.56),
+              alpha: 1,
+              lineWidth: selected ? 0.9 : 0.45,
+            });
+          }
           sampleTriangleOffsets(part.index.length, partBudget).forEach((offset) => {
             const worldPoints = [0, 1, 2].map((corner) => {
               const vertexIndex = part.index[offset + corner] * 3;

@@ -159,6 +159,7 @@ export function PcbDesignerWorkspace({
   const [stepPreviewSaving, setStepPreviewSaving] = useState(false);
   const projectInputRef = useRef<HTMLInputElement>(null);
   const modelAssetStoreRef = useRef(getDefaultPcbModelAssetStore());
+  const pendingLibrarySyncRef = useRef(false);
   const presence = usePcbProjectPresence({
     accessMode: workspace.canEdit ? "editor" : "viewer",
     clientId: clientIdRef.current,
@@ -169,6 +170,25 @@ export function PcbDesignerWorkspace({
     user,
     viewMode,
   });
+
+  useEffect(() => {
+    if (!pendingLibrarySyncRef.current) return;
+    pendingLibrarySyncRef.current = false;
+    void saveNow().then((saved) => {
+      if (saved) {
+        toast({
+          title: "共用元件庫已同步",
+          description: "其他帳號重新整理元件庫後即可使用這筆料件。",
+        });
+      } else {
+        toast({
+          title: "元件已保留，但共用同步失敗",
+          description: "請確認網路後按上方「儲存」再次同步。",
+          variant: "destructive",
+        });
+      }
+    });
+  }, [saveNow, workspace.data.library]);
 
   const handleSave = useCallback(async () => {
     if (!workspace.canEdit) {
@@ -345,6 +365,7 @@ export function PcbDesignerWorkspace({
         totalCount: result.valid.length + result.errors.length,
         errors: result.errors,
         onCommit: () => {
+          pendingLibrarySyncRef.current = true;
           workspace.uploadLibraryComponents(result.valid);
           toast({ title: "元件庫已更新", description: `寫入 ${result.valid.length} 筆有效元件。` });
         },
@@ -398,11 +419,12 @@ export function PcbDesignerWorkspace({
         throw new Error("STEP 模型無法寫入雲端，元件尚未加入。請確認網路後重試。");
       }
       const component = toStepLibraryComponent(asset.metadata);
+      pendingLibrarySyncRef.current = true;
       workspace.importLibraryModel(component, asset.metadata);
       setStepPreview(null);
       toast({
         title: "STEP 元件已加入元件庫",
-        description: `${component.name} · 長 ${component.width} × 寬 ${component.height} × 高 ${component.maxHeight} mm`,
+        description: `${component.name} · 長 ${component.width} × 寬 ${component.height} × 高 ${component.maxHeight} mm，正在同步給其他帳號。`,
       });
     } catch (error) {
       await modelAssetStoreRef.current.delete(asset.metadata.id);

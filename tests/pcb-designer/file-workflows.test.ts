@@ -242,6 +242,38 @@ test("projects STEP bodies and edge contacts into a visible 2D footprint", async
   assert.ok(footprint.every((part) => part.points.length >= 4));
 });
 
+test("extracts separate board contacts when one STEP mesh contains the body and pins", async () => {
+  const { buildPcbModelFootprint } = await import(
+    "../../src/components/pcb-designer/core/modelAssets.ts"
+  );
+  const position = [
+    2, 1, 0, 8, 1, 0, 8, 7, 0, 2, 7, 0,
+    0, 3, 0, 2, 3, 0, 2, 4, 0, 0, 4, 0,
+    8, 3, 0, 10, 3, 0, 10, 4, 0, 8, 4, 0,
+  ];
+  const index = [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11];
+  const asset = {
+    metadata: {
+      schemaVersion: 1 as const,
+      id: "single-mesh-connector",
+      fileName: "single-mesh.step",
+      createdAt: "2026-09-08T00:00:00.000Z",
+      updatedAt: "2026-09-08T00:00:00.000Z",
+      dimensions: { widthMm: 10, depthMm: 8, heightMm: 3 },
+      calibratedDimensions: { widthMm: 10, depthMm: 8, heightMm: 3 },
+      upAxis: "z" as const,
+      bounds: { min: [0, 0, 0] as [number, number, number], max: [10, 8, 3] as [number, number, number] },
+      parts: [{ id: "assembly", name: "Assembly", vertexCount: 12, indexCount: 18 }],
+    },
+    parts: [{ id: "assembly", position, index }],
+  };
+
+  const footprint = buildPcbModelFootprint(asset);
+  const contacts = footprint.filter((part) => part.role === "lead");
+  assert.equal(contacts.length, 2);
+  assert.ok(contacts.every((part) => part.id.includes("board-contact")));
+});
+
 test("shows parsed dimensions and STEP top-view details before adding a library model", async () => {
   const [workspace, canvas, preview] = await Promise.all([
     readFile(new URL("../../src/components/pcb-designer/PcbDesignerWorkspace.tsx", import.meta.url), "utf8"),
@@ -250,6 +282,8 @@ test("shows parsed dimensions and STEP top-view details before adding a library 
   ]);
 
   assert.match(workspace, /confirmStepLibraryImport/);
+  assert.match(workspace, /pendingLibrarySyncRef/);
+  assert.match(workspace, /共用元件庫已同步/);
   assert.match(workspace, /setStepPreview\(\{ asset, mode: "library" \}\)/);
   assert.match(canvas, /buildPcbModelFootprint/);
   assert.match(canvas, /data-footprint-role/);
