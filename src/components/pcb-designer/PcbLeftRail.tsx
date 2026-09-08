@@ -476,7 +476,7 @@ export function PcbLeftRail({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold text-slate-100">{component.name}</p>
                 <p className="truncate font-mono text-[10px] text-slate-400">{component.manufacturer || "—"} · {component.partNumber || "無料號"}</p>
-                <p className="font-mono text-[10px] text-slate-500">{component.width}×{component.height}×{component.maxHeight} mm</p>
+                <p className="font-mono text-[10px] text-slate-500">長 {component.width} × 寬 {component.height} × 高 {component.maxHeight} mm</p>
               </div>
             </button>
             <div className="mt-1 flex justify-end">
