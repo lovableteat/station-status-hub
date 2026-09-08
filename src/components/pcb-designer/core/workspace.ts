@@ -281,6 +281,9 @@ export function reduceWorkspaceState(
     case "project/create": {
       const project = createBlankProject(action.input.name.trim());
       project.description = action.input.description?.trim() ?? "";
+      project.projectGroup = action.input.projectGroup?.trim() ?? "";
+      project.revision = action.input.revision?.trim() || "1";
+      project.boardFamilyId = project.id;
       if (action.input.width !== undefined) project.board.width = action.input.width;
       if (action.input.height !== undefined) project.board.height = action.input.height;
       return materialize({
@@ -344,6 +347,20 @@ export function reduceWorkspaceState(
       const project = state.data.projects.find((item) => item.id === action.projectId);
       if (!project) return state;
       const copy = withProjectIdentity(project, `${project.name} 複本`);
+      if (action.newRevision) {
+        copy.name = project.name;
+        copy.boardFamilyId = project.boardFamilyId ?? project.id;
+        copy.status = "draft";
+        const used = new Set(state.data.projects.filter(p => (p.boardFamilyId ?? p.id) === copy.boardFamilyId).map(p => p.revision ?? "1"));
+        const match = (project.revision || "1").match(/^(.*?)(\d+)$/);
+        const prefix = match ? match[1] : `${project.revision}.`;
+        let number = match ? BigInt(match[2]) + BigInt(1) : BigInt(1);
+        while (used.has(`${prefix}${number}`)) number++;
+        copy.revision = `${prefix}${number}`;
+      } else {
+        copy.boardFamilyId = copy.id;
+        copy.revision = "1";
+      }
       const sourcePending = state.data.pendingPlacementsByProject?.[project.id] ?? [];
       return materialize({
         ...state,

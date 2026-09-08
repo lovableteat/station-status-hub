@@ -603,7 +603,7 @@ export function PcbDesignerWorkspace({
             aria-label="目前 PCB 專案"
           >
             {workspace.data.projects.map((project) => (
-              <option key={project.id} value={project.id}>{project.name}</option>
+              <option key={project.id} value={project.id}>{project.projectGroup ? `${project.projectGroup} / ` : ""}{project.name} · {project.revision || "1"}</option>
             ))}
           </select>
           <span className="pcb-status-chip">{statusLabel(workspace.activeProject.status)}</span>

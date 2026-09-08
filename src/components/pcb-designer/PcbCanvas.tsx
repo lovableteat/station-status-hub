@@ -1,4 +1,5 @@
 import { getPcbModelTopViewImage } from "./core/modelProjection.ts";
+import { getBoardPolygon } from "./core/boardOutline.ts";
 import {
   useCallback,
   useEffect,
@@ -1134,7 +1135,8 @@ export function PcbCanvas({
           </pattern>
         </defs>
 
-        <g data-layer="grid">
+        <defs><clipPath id={`board-clip-${project.id}`}><polygon points={getBoardPolygon(project.board).map(p => `${p.x},${p.y}`).join(" ")} /></clipPath></defs>
+        <g data-layer="grid" clipPath={`url(#board-clip-${project.id})`}>
           <rect
             data-grid-surface
             display={project.board.showGrid ? undefined : "none"}
@@ -1146,7 +1148,7 @@ export function PcbCanvas({
           />
         </g>
 
-        <g data-layer="board">
+        <g data-layer="board" clipPath={`url(#board-clip-${project.id})`}>
           <rect
             data-pcb-board-color={project.board.background}
             data-pcb-top-color={project.board.layerColors.top}

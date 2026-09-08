@@ -240,7 +240,7 @@ test("keeps library import previews while removing BOM import UI", async () => {
   assert.match(dialogsSource, /dialog\.errors\.length\s*-\s*100/);
   assert.match(dialogsSource, /匯入元件庫/);
   assert.doesNotMatch(dialogsSource, /importKind|placementCount|待放置清單|建立待放置項目|BOM 匯入/);
-  assert.match(leftRailSource, /activeTab === ["']bom["'][\s\S]*autoPlacePending/);
+  assert.doesNotMatch(leftRailSource, /activeTab === ["']bom["']|autoPlacePending/);
   assert.doesNotMatch(leftRailSource, /onBomFile|BOM_FILE_ACCEPT|匯入 BOM/);
   assert.doesNotMatch(indexSource, /匯入 BOM/);
 });

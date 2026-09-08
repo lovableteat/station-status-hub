@@ -17,6 +17,8 @@ import type {
 } from "./tabular.ts";
 
 export interface NewProjectInput {
+  projectGroup?: string;
+  revision?: string;
   name: string;
   description?: string;
   width?: number;
@@ -60,7 +62,7 @@ export type PcbWorkspaceAction =
   | { type: "project/create"; input: NewProjectInput }
   | { type: "project/open"; projectId: string }
   | { type: "project/rename"; projectId: string; name: string }
-  | { type: "project/duplicate"; projectId: string }
+  | { type: "project/duplicate"; projectId: string; newRevision?: boolean }
   | { type: "project/delete"; projectId: string }
   | { type: "project/import"; project: PcbProject }
   | { type: "project/commit"; update: PcbProject }

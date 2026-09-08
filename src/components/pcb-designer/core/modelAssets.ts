@@ -63,10 +63,21 @@ function toPlainNumberArray(values: ArrayLike<number>): number[] {
   return Array.from(values);
 }
 
+const rotationMinimumCache = new WeakMap<PcbModelAsset, { key: string; minY: number }>();
+
+export function rotateModelPoint(point: [number, number, number], rotation: { x: number; y: number; z: number }): [number, number, number] {
+  let [x, y, z] = point;
+  const [rx, ry, rz] = [rotation.x, rotation.y, rotation.z].map(value => value * Math.PI / 180);
+  [y, z] = [y * Math.cos(rx) - z * Math.sin(rx), y * Math.sin(rx) + z * Math.cos(rx)];
+  [x, z] = [x * Math.cos(ry) + z * Math.sin(ry), -x * Math.sin(ry) + z * Math.cos(ry)];
+  [x, y] = [x * Math.cos(rz) - y * Math.sin(rz), x * Math.sin(rz) + y * Math.cos(rz)];
+  return [x, y, z];
+}
+
 export function mapPcbModelPartToComponentSpace(
   part: PcbModelAssetPart,
   asset: PcbModelAsset,
-  component: Pick<PcbPlacedComponent, "width" | "height" | "maxHeight">,
+  component: Pick<PcbPlacedComponent, "width" | "height" | "maxHeight" | "modelRotation">,
 ): number[] {
   const { min, max } = asset.metadata.bounds;
   const spans = [
@@ -83,18 +94,24 @@ export function mapPcbModelPartToComponentSpace(
   const heightAxis = asset.metadata.upAxis === "x" ? 0 : asset.metadata.upAxis === "y" ? 1 : 2;
   const boardDepthAxis = asset.metadata.upAxis === "z" ? 1 : 2;
   const positions: number[] = [];
+  const rotation = component.modelRotation ?? { x: 0, y: 0, z: 0 };
+  const mapPoint = (p: number[], offset: number): [number, number, number] => rotateModelPoint([
+    (p[offset + widthAxis] - center[widthAxis]) / spans[widthAxis] * component.width,
+    (p[offset + heightAxis] - center[heightAxis]) / spans[heightAxis] * component.maxHeight,
+    (p[offset + boardDepthAxis] - center[boardDepthAxis]) / spans[boardDepthAxis] * component.height,
+  ], rotation);
+  const key = JSON.stringify([component.width, component.height, component.maxHeight, rotation]);
+  let cached = rotationMinimumCache.get(asset);
+  if (!cached || cached.key !== key) {
+    let minY = Infinity;
+    for (const mesh of asset.parts) for (let i = 0; i < mesh.position.length; i += 3) minY = Math.min(minY, mapPoint(mesh.position, i)[1]);
+    cached = { key, minY: Number.isFinite(minY) ? minY : -component.maxHeight / 2 };
+    rotationMinimumCache.set(asset, cached);
+  }
 
   for (let offset = 0; offset < part.position.length; offset += 3) {
-    const raw = [
-      part.position[offset] - center[0],
-      part.position[offset + 1] - center[1],
-      part.position[offset + 2] - center[2],
-    ];
-    positions.push(
-      (raw[widthAxis] / spans[widthAxis]) * component.width,
-      (raw[heightAxis] / spans[heightAxis]) * component.maxHeight,
-      (raw[boardDepthAxis] / spans[boardDepthAxis]) * component.height,
-    );
+    const [x, y, z] = mapPoint(part.position, offset);
+    positions.push(x, y - cached.minY - component.maxHeight / 2, z);
   }
 
   return positions;

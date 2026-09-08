@@ -214,7 +214,7 @@ test("reports placement search limits truthfully and batches BOM auto-placement"
   assert.match(editorHookSource, /batch\.length \* worstCaseObstacles/);
   assert.match(editorHookSource, /deferred/);
   assert.match(editorHookSource, /search-limit/);
-  assert.match(railSource, /result\.deferred/);
+  assert.doesNotMatch(railSource, /activeTab === ["\']bom["\']/);
 });
 
 test("keeps all four tools mutually exclusive and accessible", () => {
@@ -396,8 +396,8 @@ test("shares 2D and 3D synchronization helpers and renderer-safe inspection meta
 });
 
 test("lets the board inspector edit top and bottom colors separately", () => {
-  assert.match(inspectorSource, /label=["']Top 色["']/);
-  assert.match(inspectorSource, /label=["']Bottom 色["']/);
+  assert.match(inspectorSource, /label=["']頂面 Top["']/);
+  assert.match(inspectorSource, /label=["']底面 Bottom["']/);
   assert.match(inspectorSource, /type="color"[\s\S]{0,400}layerColors/);
   assert.match(inspectorSource, /workspace\.updateBoard\(\{[\s\S]{0,160}layerColors:\s*\{[\s\S]{0,200}top:/);
   assert.match(inspectorSource, /workspace\.updateBoard\(\{[\s\S]{0,160}layerColors:\s*\{[\s\S]{0,200}bottom:/);
@@ -411,8 +411,8 @@ test("uses filtered colors in 2D and keeps physical PCB faces distinct in both 3
   assert.match(canvas3dSource, /boardBottomColor = safeColor\(project\.board\.layerColors\.bottom/);
   assert.match(canvas3dSource, /attach=["']material-2["'] color=\{boardTopColor\}/);
   assert.match(canvas3dSource, /attach=["']material-3["'] color=\{boardBottomColor\}/);
-  assert.match(softwareCanvas3dSource, /const boardFaceColors = \[[\s\S]{0,120}project\.board\.layerColors\.top,[\s\S]{0,80}project\.board\.layerColors\.bottom/);
-  assert.match(softwareCanvas3dSource, /shadeColor\(boardFaceColors\[faceIndex\]/);
+  assert.match(softwareCanvas3dSource, /getBoardPolygon\(project\.board\)/);
+  assert.match(softwareCanvas3dSource, /i === 0 \? project\.board\.layerColors\.top : i === 1 \? project\.board\.layerColors\.bottom/);
   assert.match(softwareCanvas3dSource, /view\.pitch >= 0 \? ["']Top 面["'] : ["']Bottom 面["']/);
 });
 

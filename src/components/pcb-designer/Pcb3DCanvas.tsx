@@ -2,7 +2,8 @@ import { getPcbModelRenderIndices } from "./core/modelProjection.ts";
 import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, Edges, Html, OrbitControls } from "@react-three/drei";
-import { Box3, BufferGeometry, Color, DoubleSide, Float32BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
+import { Box3, BufferGeometry, Color, DoubleSide, ExtrudeGeometry, Shape, Vector2, Float32BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
+import { getBoardPolygon } from "./core/boardOutline.ts";
 import type { OrbitControls as OrbitControlsImpl } from "three/examples/jsm/controls/OrbitControls.js";
 import { Focus, MousePointer2 } from "lucide-react";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
@@ -59,6 +60,7 @@ export function Pcb3DCanvasSafe({
     <div
       className="pcb-3d-host"
       data-testid="pcb-3d-canvas-host"
+      data-pcb-outline-source={workspace.activeProject.board.outlineSource ?? "rectangle"}
       data-pcb-board-color={workspace.activeProject.board.background}
       data-pcb-top-color={workspace.activeProject.board.layerColors.top}
       data-pcb-bottom-color={workspace.activeProject.board.layerColors.bottom}
@@ -208,12 +210,13 @@ function ProceduralComponentMeshes({
   const isChip = /(ic|mcu|cpu|qfp|qfn|bga|processor|memory|buffer|chip|晶片)/.test(descriptor);
   const bodyWidth = isChip ? component.width * 0.72 : component.width;
   const bodyDepth = isChip ? component.height * 0.72 : component.height;
-  const bodyHeight = Math.max(0.35, component.maxHeight * (isChip ? 0.74 : 0.88));
+  const bodyHeight = component.maxHeight * (!isCircular && (isChip || isConnector) ? 0.74 : 1);
+  const bodyCenterY = (component.maxHeight - bodyHeight) / 2;
   const pinColor = "#d7d9d2";
   const pinCountX = Math.min(12, Math.max(3, Math.round(component.height / 1.2)));
   const pinCountZ = Math.min(12, Math.max(3, Math.round(component.width / 1.2)));
   const pinWidth = Math.max(0.16, Math.min(0.55, Math.min(component.width, component.height) * 0.07));
-  const pinHeight = Math.max(0.12, component.maxHeight * 0.09);
+  const pinHeight = component.maxHeight - bodyHeight;
   const pinLength = Math.max(0.3, Math.min(component.width, component.height) * 0.16);
   const bodyColor = isChip
     ? "#171c1f"
@@ -240,7 +243,7 @@ function ProceduralComponentMeshes({
 
   return (
     <group>
-      <mesh castShadow receiveShadow position={[0, component.maxHeight * 0.04, 0]}>
+      <mesh castShadow receiveShadow position={[0, bodyCenterY, 0]}>
         <boxGeometry args={[bodyWidth, bodyHeight, bodyDepth]} />
         <meshPhysicalMaterial
           color={safeColor(bodyColor, "#20262a")}
@@ -254,7 +257,7 @@ function ProceduralComponentMeshes({
       {(isChip || isConnector) && Array.from({ length: pinCountX }, (_, index) => {
         const z = pinCountX === 1 ? 0 : -bodyDepth / 2 + (index / (pinCountX - 1)) * bodyDepth;
         return [-1, 1].map((side) => (
-          <mesh key={`x-${side}-${index}`} castShadow position={[side * (bodyWidth / 2 + pinLength / 2), -bodyHeight * 0.34, z]}>
+          <mesh key={`x-${side}-${index}`} castShadow position={[side * (bodyWidth / 2 + pinLength / 2), -component.maxHeight / 2 + pinHeight / 2, z]}>
             <boxGeometry args={[pinLength, pinHeight, pinWidth]} />
             <meshStandardMaterial color={pinColor} metalness={0.88} roughness={0.18} />
           </mesh>
@@ -263,14 +266,14 @@ function ProceduralComponentMeshes({
       {isChip && Array.from({ length: pinCountZ }, (_, index) => {
         const x = pinCountZ === 1 ? 0 : -bodyWidth / 2 + (index / (pinCountZ - 1)) * bodyWidth;
         return [-1, 1].map((side) => (
-          <mesh key={`z-${side}-${index}`} castShadow position={[x, -bodyHeight * 0.34, side * (bodyDepth / 2 + pinLength / 2)]}>
+          <mesh key={`z-${side}-${index}`} castShadow position={[x, -component.maxHeight / 2 + pinHeight / 2, side * (bodyDepth / 2 + pinLength / 2)]}>
             <boxGeometry args={[pinWidth, pinHeight, pinLength]} />
             <meshStandardMaterial color={pinColor} metalness={0.88} roughness={0.18} />
           </mesh>
         ));
       })}
       {isChip && (
-        <mesh position={[-bodyWidth * 0.29, bodyHeight / 2 + component.maxHeight * 0.04 + 0.02, -bodyDepth * 0.29]} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh position={[-bodyWidth * 0.29, bodyHeight / 2 + bodyCenterY + 0.02, -bodyDepth * 0.29]} rotation={[Math.PI / 2, 0, 0]}>
           <circleGeometry args={[Math.max(0.16, Math.min(bodyWidth, bodyDepth) * 0.055), 24]} />
           <meshStandardMaterial color="#d8ddd9" roughness={0.5} />
         </mesh>
@@ -375,6 +378,17 @@ function Scene({
     [selectionIds],
   );
   const boardThickness = 1.6;
+  const outlineGeometry = useMemo(() => {
+    if (project.board.outlineSource !== "手繪板框") return null;
+    const shape = new Shape(getBoardPolygon(project.board).map(p => new Vector2(p.x - project.board.width / 2, p.y - project.board.height / 2)));
+    const geometry = new ExtrudeGeometry(shape, { depth: 1.6, bevelEnabled: false, steps: 1 });
+    geometry.translate(0, 0, -0.8); geometry.rotateX(Math.PI / 2);
+    geometry.clearGroups();
+    const normals = geometry.getAttribute("normal");
+    for (let i = 0; i < normals.count; i += 3) geometry.addGroup(i, 3, normals.getY(i) > 0.5 ? 2 : normals.getY(i) < -0.5 ? 3 : 0);
+    return geometry;
+  }, [project.board]);
+  useEffect(() => () => outlineGeometry?.dispose(), [outlineGeometry]);
   const boardSideColor = safeColor(project.board.background, "#174f3a").lerp(new Color("#153e31"), 0.42);
   const boardTopColor = safeColor(project.board.layerColors.top, "#176b46").lerp(new Color("#12633f"), 0.38);
   const boardBottomColor = safeColor(project.board.layerColors.bottom, "#164f38").lerp(new Color("#123d2f"), 0.5);
@@ -444,7 +458,7 @@ function Scene({
           selectObject(null);
         }}
       >
-        <boxGeometry args={[project.board.width, boardThickness, project.board.height]} />
+        {outlineGeometry ? <primitive object={outlineGeometry} attach="geometry" /> : <boxGeometry args={[project.board.width, boardThickness, project.board.height]} />}
         <meshPhysicalMaterial attach="material-0" color={boardSideColor} roughness={0.52} metalness={0.08} clearcoat={0.2} />
         <meshPhysicalMaterial attach="material-1" color={boardSideColor} roughness={0.52} metalness={0.08} clearcoat={0.2} />
         <meshPhysicalMaterial attach="material-2" color={boardTopColor} roughness={0.46} metalness={0.06} clearcoat={0.42} clearcoatRoughness={0.4} />
@@ -529,6 +543,7 @@ function Scene({
           >
             <group
               position={[0, yOffset, 0]}
+              scale={[1, component.layer === "bottom" ? -1 : 1, 1]}
               onClick={(event) => {
                 event.stopPropagation();
                 selectObject(

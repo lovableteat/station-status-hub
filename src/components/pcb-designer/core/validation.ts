@@ -12,6 +12,7 @@ import {
 } from "../defaults.ts";
 
 import { isValidComponentKeepout } from "./componentKeepout.ts";
+import { outlineError, sampleBoardNodes } from "./boardOutline.ts";
 
 export type ParseResult<T> =
   | { ok: true; value: T }
@@ -126,7 +127,12 @@ export function isValidBoard(value: unknown): boolean {
   );
   const hasValidOutlineSource =
     value.outlineSource === undefined || typeof value.outlineSource === "string";
-  return hasValidOutline && hasValidOutlineSource
+  const validPoint = (p: unknown) => isRecord(p) && isFiniteNumber(p.x) && isFiniteNumber(p.y);
+  const validNodes = value.outlineNodes === undefined || (Array.isArray(value.outlineNodes) && value.outlineNodes.length >= 3 && value.outlineNodes.length <= 100
+    && value.outlineNodes.every(n => isRecord(n) && validPoint(n) && (n.in === undefined || validPoint(n.in)) && (n.out === undefined || validPoint(n.out))));
+  const manualOutlineValid = value.outlineSource !== "手繪板框" || (hasValidOutline && validNodes && Array.isArray(value.outlineNodes)
+    && outlineError(sampleBoardNodes(value.outlineNodes as PcbBoard["outlineNodes"]), { width: Number(value.width), height: Number(value.height) }) === "");
+  return hasValidOutline && hasValidOutlineSource && validNodes && manualOutlineValid
     && isFiniteNumber(value.width) && value.width >= 20 && value.width <= 1000
     && isFiniteNumber(value.height) && value.height >= 20 && value.height <= 1000
     && isFiniteNumber(value.gridSize) && value.gridSize >= 0.1 && value.gridSize <= 50
@@ -148,7 +154,7 @@ function normalizeBoardLayerColors(layerColors: unknown): PcbBoardLayerColors {
 function normalizeBoard(board: PcbBoard | RecordValue): PcbBoard {
   const width = Number(board.width);
   const height = Number(board.height);
-  const outline = Array.isArray(board.outline)
+  let outline = Array.isArray(board.outline)
     ? board.outline
       .filter((path): path is RecordValue[] => Array.isArray(path))
       .map((path) => path
@@ -156,6 +162,10 @@ function normalizeBoard(board: PcbBoard | RecordValue): PcbBoard {
         .map((point) => ({ x: Number(point.x), y: Number(point.y) })))
       .filter((path) => path.length >= 2)
     : undefined;
+  if (board.outlineSource === "手繪板框" && Array.isArray(board.outlineNodes)) {
+    const points = sampleBoardNodes(board.outlineNodes as NonNullable<PcbBoard["outlineNodes"]>);
+    outline = [[...points, { ...points[0] }]];
+  }
   const cuts = Array.isArray(board.cuts)
     ? board.cuts
       .filter((cut): cut is RecordValue => isRecord(cut))
@@ -177,6 +187,7 @@ function normalizeBoard(board: PcbBoard | RecordValue): PcbBoard {
     background: isNonEmptyString(board.background) ? board.background : "#0f766e",
     layerColors: normalizeBoardLayerColors(board.layerColors),
     ...(outline ? { outline } : {}),
+    ...(Array.isArray(board.outlineNodes) ? { outlineNodes: structuredClone(board.outlineNodes) as PcbBoard["outlineNodes"] } : {}),
     ...(typeof board.outlineSource === "string"
       ? { outlineSource: board.outlineSource }
       : {}),
@@ -238,6 +249,7 @@ function validateComponent(value: unknown): value is RecordValue {
     && (value.layer === "top" || value.layer === "bottom")
     && typeof value.locked === "boolean"
     && (value.modelAssetId === undefined || isNonEmptyString(value.modelAssetId))
+    && (value.modelRotation === undefined || (isRecord(value.modelRotation) && ["x", "y", "z"].every(axis => isFiniteNumber(value.modelRotation[axis]) && Math.abs(Number(value.modelRotation[axis])) <= 360)))
     && (value.keepout === undefined || isValidComponentKeepout(value.keepout));
 }
 
@@ -274,6 +286,7 @@ export function parseProjectJson(input: unknown): ParseResult<PcbProject> {
     return { ok: false, error: "Project contains required strings that are missing." };
   }
   if (value.createdBy !== undefined && !isNonEmptyString(value.createdBy)) return { ok: false, error: "createdBy must be a string." };
+  if (["projectGroup", "revision", "boardFamilyId"].some(key => value[key] !== undefined && (typeof value[key] !== "string" || String(value[key]).length > 120))) return { ok: false, error: "Project group or revision is invalid." };
   if (value.lastEditedBy !== undefined && !isNonEmptyString(value.lastEditedBy)) return { ok: false, error: "lastEditedBy must be a string." };
   if (value.lastEditedById !== undefined && !isNonEmptyString(value.lastEditedById)) return { ok: false, error: "lastEditedById must be a string." };
   if (value.status !== "draft" && value.status !== "review" && value.status !== "approved") return { ok: false, error: "Project status is invalid." };
