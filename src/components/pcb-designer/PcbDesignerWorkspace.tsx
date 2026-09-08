@@ -216,16 +216,23 @@ export function PcbDesignerWorkspace({
         ...projects.flatMap((project) =>
           project.components.map((component) => component.modelAssetId).filter(Boolean)),
       ]);
-      const recoveredFingerprints = new Set<string>();
-      const recoverable = metadataList.filter((metadata) => {
-        if (referencedAssetIds.has(metadata.id)) return false;
+      const fingerprintFor = (metadata: typeof metadataList[number]) => {
         const dimensions = metadata.calibratedDimensions;
-        const fingerprint = [
+        return [
           metadata.fileName.trim().toLocaleLowerCase(),
           dimensions.widthMm.toFixed(4),
           dimensions.depthMm.toFixed(4),
           dimensions.heightMm.toFixed(4),
         ].join("|");
+      };
+      const recoveredFingerprints = new Set(
+        metadataList
+          .filter((metadata) => referencedAssetIds.has(metadata.id))
+          .map(fingerprintFor),
+      );
+      const recoverable = metadataList.filter((metadata) => {
+        if (referencedAssetIds.has(metadata.id)) return false;
+        const fingerprint = fingerprintFor(metadata);
         if (recoveredFingerprints.has(fingerprint)) return false;
         recoveredFingerprints.add(fingerprint);
         return true;
