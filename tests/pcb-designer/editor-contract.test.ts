@@ -417,7 +417,7 @@ test("uses filtered colors in 2D and keeps physical PCB faces distinct in both 3
   assert.match(canvas3dSource, /attach=["']material-2["'] color=\{boardTopColor\}/);
   assert.match(canvas3dSource, /attach=["']material-3["'] color=\{boardBottomColor\}/);
   assert.match(softwareCanvas3dSource, /getBoardPolygon\(project\.board\)/);
-  assert.match(softwareCanvas3dSource, /i === 0 \? project\.board\.layerColors\.top : i === 1 \? project\.board\.layerColors\.bottom/);
+  assert.match(softwareCanvas3dSource, /sign === 1 \? project\.board\.layerColors\.top : project\.board\.layerColors\.bottom/);
   assert.match(softwareCanvas3dSource, /view\.pitch >= 0 \? ["']Top 面["'] : ["']Bottom 面["']/);
 });
 
@@ -495,7 +495,10 @@ test("renders PCB assemblies with studio lighting, shadows, physical materials, 
   assert.match(canvas3dSource, /meshPhysicalMaterial/);
   assert.match(canvas3dSource, /pinColor/);
   assert.match(canvas3dSource, /circleGeometry/);
-  assert.match(canvas3dSource, /camera\.position\.set\(size \* 0\.88, size \* 0\.82, size \* 0\.96\)/);
+  assert.match(canvas3dSource, /face === "bottom" \? -1 : 1/);
+  assert.match(canvas3dSource, /ref\.current\.visible = camera\.position\.y >= 0/);
+  assert.match(canvas3dSource, /position=\{\[80, -135, 65\]\}/);
+  assert.match(canvas3dSource, /shape\.holes = getBoardHoles/);
 });
 
 test("suppresses native SVG focus halos while retaining the custom selection bounds", () => {

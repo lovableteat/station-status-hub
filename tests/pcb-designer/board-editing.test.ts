@@ -7,6 +7,8 @@ import { parseProjectJson } from "../../src/components/pcb-designer/core/validat
 import { createWorkspaceState, reduceWorkspaceState } from "../../src/components/pcb-designer/core/workspace.ts";
 import { mapPcbModelPartToComponentSpace } from "../../src/components/pcb-designer/core/modelAssets.ts";
 import type { PcbModelAsset } from "../../src/components/pcb-designer/types.ts";
+import { resizeBoard } from "../../src/components/pcb-designer/core/resizeBoard.ts";
+import { ShapeUtils, Vector2 } from "three";
 
 test("curved board nodes survive JSON and concave board rejects crossings and off-board placements", () => {
   const project = createBlankProject();
@@ -37,6 +39,30 @@ test("new revisions preserve original documents and choose unused revision numbe
   const third = reduceWorkspaceState(next, { type: "project/duplicate", projectId: project.id, newRevision: true });
   assert.equal(third.activeProject.revision, "R3");
   assert.equal(reduceWorkspaceState(createWorkspaceState(data, false), { type: "project/duplicate", projectId: project.id, newRevision: true }).data.projects.length, 1);
+});
+
+test("board holes survive save and reject component placements in the void", () => {
+  const project = createBlankProject();
+  project.board.holes = [[{x:40,y:30},{x:60,y:30},{x:60,y:50},{x:40,y:50}]];
+  assert.equal(isWithinBoard({x:50,y:40,width:4,height:4,rotation:0}, project.board), false);
+  const result = parseProjectJson(JSON.stringify(project));
+  assert.ok(result.ok);
+  if (result.ok) assert.deepEqual(result.value.board.holes, project.board.holes);
+  const scaled = resizeBoard(project, {width:200,height:160}, "top-left");
+  assert.deepEqual(scaled.board.holes?.[0][0], {x:80,y:60});
+  project.board.holes.push(structuredClone(project.board.holes[0]));
+  assert.equal(parseProjectJson(project).ok, false, "overlapping holes rejected");
+  project.board.holes.pop();
+  project.board.holes[0][0].x = -5;
+  assert.equal(parseProjectJson(project).ok, false);
+});
+
+test("triangulation used by compatibility 3D leaves the hole empty", () => {
+  const outer = [new Vector2(0,0),new Vector2(100,0),new Vector2(100,80),new Vector2(0,80)];
+  const hole = [new Vector2(40,30),new Vector2(60,30),new Vector2(60,50),new Vector2(40,50)];
+  const points = [...outer,...hole];
+  const area = ShapeUtils.triangulateShape(outer,[hole]).reduce((sum,ids)=>sum+Math.abs(ShapeUtils.area(ids.map(i=>points[i]))),0);
+  assert.equal(area, 8000-400);
 });
 
 test("every model rotation grounds the entire multipart mesh without deforming or mutating it", () => {

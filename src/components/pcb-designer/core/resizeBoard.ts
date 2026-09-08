@@ -83,6 +83,7 @@ export function resizeBoard(
 
   const scale = (p: { x: number; y: number }) => ({ x: p.x * width / project.board.width, y: p.y * height / project.board.height });
   const board = { ...project.board, width, height,
+    ...(project.board.holes && { holes: project.board.holes.map(hole => hole.map(n => ({ ...scale(n), ...(n.in && { in: scale(n.in) }), ...(n.out && { out: scale(n.out) }) }))) }),
     ...(project.board.outline && { outline: project.board.outline.map(path => path.map(scale)) }),
     ...(project.board.outlineNodes && { outlineNodes: project.board.outlineNodes.map(n => ({ ...scale(n), ...(n.in && { in: scale(n.in) }), ...(n.out && { out: scale(n.out) }) })) }),
   };

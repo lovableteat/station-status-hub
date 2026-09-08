@@ -12,7 +12,7 @@ import {
 } from "../defaults.ts";
 
 import { isValidComponentKeepout } from "./componentKeepout.ts";
-import { outlineError, sampleBoardNodes } from "./boardOutline.ts";
+import { boardHolesError, outlineError, sampleBoardNodes } from "./boardOutline.ts";
 
 export type ParseResult<T> =
   | { ok: true; value: T }
@@ -132,7 +132,10 @@ export function isValidBoard(value: unknown): boolean {
     && value.outlineNodes.every(n => isRecord(n) && validPoint(n) && (n.in === undefined || validPoint(n.in)) && (n.out === undefined || validPoint(n.out))));
   const manualOutlineValid = value.outlineSource !== "手繪板框" || (hasValidOutline && validNodes && Array.isArray(value.outlineNodes)
     && outlineError(sampleBoardNodes(value.outlineNodes as PcbBoard["outlineNodes"]), { width: Number(value.width), height: Number(value.height) }) === "");
-  return hasValidOutline && hasValidOutlineSource && validNodes && manualOutlineValid
+  const validHoles = value.holes === undefined || (Array.isArray(value.holes) && value.holes.length <= 16
+    && value.holes.every(hole => Array.isArray(hole) && hole.length >= 3 && hole.length <= 100 && hole.every(n => isRecord(n) && validPoint(n) && (n.in === undefined || validPoint(n.in)) && (n.out === undefined || validPoint(n.out)))));
+  return hasValidOutline && hasValidOutlineSource && validNodes && manualOutlineValid && validHoles
+    && (value.holes === undefined || boardHolesError(value as unknown as PcbBoard) === "")
     && isFiniteNumber(value.width) && value.width >= 20 && value.width <= 1000
     && isFiniteNumber(value.height) && value.height >= 20 && value.height <= 1000
     && isFiniteNumber(value.gridSize) && value.gridSize >= 0.1 && value.gridSize <= 50
@@ -188,6 +191,7 @@ function normalizeBoard(board: PcbBoard | RecordValue): PcbBoard {
     layerColors: normalizeBoardLayerColors(board.layerColors),
     ...(outline ? { outline } : {}),
     ...(Array.isArray(board.outlineNodes) ? { outlineNodes: structuredClone(board.outlineNodes) as PcbBoard["outlineNodes"] } : {}),
+    ...(Array.isArray(board.holes) ? { holes: structuredClone(board.holes) as PcbBoard["holes"] } : {}),
     ...(typeof board.outlineSource === "string"
       ? { outlineSource: board.outlineSource }
       : {}),

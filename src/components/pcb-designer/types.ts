@@ -30,6 +30,7 @@ export interface PcbBoard {
   /** File the outline came from, shown so the source stays traceable. */
   outlineSource?: string;
   outlineNodes?: PcbOutlineNode[];
+  holes?: PcbOutlineNode[][];
   gridSize: number;
   showGrid: boolean;
   snapToGrid: boolean;

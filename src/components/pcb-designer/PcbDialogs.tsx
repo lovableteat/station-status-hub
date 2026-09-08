@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import type { TabularImportError } from "./core/tabular.ts";
 import type { NewProjectInput, TemplateInput } from "./core/workspace.ts";
 import { resizeBoard } from "./core/resizeBoard.ts";
-import { getBoardPolygon } from "./core/boardOutline.ts";
+import { boardSurfacePath } from "./core/boardOutline.ts";
 import type {
   ImportedComponent,
   PcbLibraryComponent,
@@ -365,7 +365,7 @@ export function PcbDialogs({
                 role="img"
                 aria-label={`${dialog.project.name} 板面預覽`}
               >
-                <polygon points={getBoardPolygon(dialog.project.board).map(p => `${p.x},${p.y}`).join(" ")} fill={dialog.project.board.background} stroke="#7ee8f5" strokeWidth="0.5" />
+                <path d={boardSurfacePath(dialog.project.board)} fillRule="evenodd" fill={dialog.project.board.background} stroke="#7ee8f5" strokeWidth="0.5" />
                 {dialog.project.keepouts.map((keepout) => (
                   <rect
                     key={keepout.id}

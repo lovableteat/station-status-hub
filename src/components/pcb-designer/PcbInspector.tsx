@@ -191,6 +191,7 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
         height: outline.height,
         outline: outline.paths,
         outlineNodes: undefined,
+        holes: undefined,
         outlineSource: file.name,
       });
       if (!applied) setDxfMessage({ tone: "error", text: "目前無法修改板框，請確認編輯權限或 DXF 複雜度。" });
@@ -218,16 +219,78 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
       <h2>板設定</h2>
       {drawing && <PcbBoardOutlineDialog workspace={workspace} onClose={() => setDrawing(false)} />}
       <section className="pcb-inspector-section">
-      <h3 className="text-cyan-200">外形與尺寸</h3>
+      <h3 className="text-cyan-200">板形與尺寸</h3>
       {workspace.drcIssues.some(issue => issue.code === "OUT_OF_BOUNDS") && <p role="status" className="text-xs text-amber-200">有元件超出目前板框，原元件已保留，請調整位置或板形。</p>}
       <p className="pcb-inspector-note">目前：{board.outlineSource || "矩形板"}。輸入尺寸後按 Enter 套用。</p>
-      <Button type="button" size="sm" disabled={disabled} onClick={() => setDrawing(true)}>{board.outlineNodes?.length ? "編輯手繪板框" : "自行繪製板框"}</Button>
+      <Button type="button" size="sm" disabled={disabled} onClick={() => setDrawing(true)}>編輯外框／挖孔</Button>
       <div className="pcb-inspector-field-grid">
         <NumberField label="寬度 (mm)" value={board.width} disabled={disabled} onCommit={(width) => workspace.resizeBoardFromAnchor({ width }, resizeAnchor)} />
         <NumberField label="高度 (mm)" value={board.height} disabled={disabled} onCommit={(height) => workspace.resizeBoardFromAnchor({ height }, resizeAnchor)} />
       </div>
+      <details className="mt-2" aria-label="板框尺寸增減方向">
+        <summary className="cursor-pointer text-xs text-cyan-200">尺寸調整方向 · {PCB_RESIZE_ANCHOR_LABELS[resizeAnchor]}</summary>
+        <div className="pcb-resize-anchor-head">
+          <span>增減方向</span>
+          <small>{PCB_RESIZE_DIRECTION_LABELS[resizeAnchor]} · {PCB_RESIZE_ANCHOR_LABELS[resizeAnchor]}</small>
+        </div>
+        <div className="pcb-resize-anchor-grid">
+          {PCB_RESIZE_ANCHORS.map((anchor) => (
+            <button
+              key={anchor}
+              type="button"
+              disabled={disabled}
+              aria-pressed={resizeAnchor === anchor}
+              aria-label={`${PCB_RESIZE_DIRECTION_LABELS[anchor]}，${PCB_RESIZE_ANCHOR_LABELS[anchor]}`}
+              title={`${PCB_RESIZE_DIRECTION_LABELS[anchor]}（${PCB_RESIZE_ANCHOR_LABELS[anchor]}）`}
+              data-active={resizeAnchor === anchor || undefined}
+              onClick={() => setResizeAnchor(anchor)}
+            >
+              <span aria-hidden="true">{PCB_RESIZE_DIRECTION_SYMBOLS[anchor]}</span>
+            </button>
+          ))}
+        </div>
+        <p className="pcb-resize-anchor-hint">
+          僅選箭頭不會改變尺寸。修改寬高時，相反側固定，板上元件隨之位移。
+        </p>
+      </details>
+      <details className="mt-3"><summary className="cursor-pointer text-sm">從 DXF 匯入板形（取代目前外框）</summary><div className="pcb-dxf-import">
+        <div className="pcb-dxf-import-head">
+          <span>ME 板框（DXF）</span>
+          {board.outlineSource && board.outlineSource !== "手繪板框" && <small>{board.outlineSource}</small>}
+        </div>
+        <label className="pcb-dxf-import-drop">
+          <FileUp aria-hidden="true" />
+          <span>{board.outline?.length ? "更換 DXF 板框" : "匯入 DXF 當版型"}</span>
+          <input
+            type="file"
+            accept=".dxf,application/dxf,image/vnd.dxf"
+            disabled={disabled}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void importDxf(file);
+            }}
+          />
+        </label>
+        <p className="pcb-dxf-import-hint">
+          讀取 LINE／LWPOLYLINE／POLYLINE／ARC／CIRCLE，取外框範圍當板子寬高並描出輪廓；也會隨專案或自訂模板一起儲存。
+        </p>
+        {dxfMessage && <p className="pcb-dxf-import-message" data-tone={dxfMessage.tone}>{dxfMessage.text}</p>}
+      </div>
+</details>
       </section>
-      <details className="pcb-inspector-section">
+      <section className="pcb-inspector-section">
+      <h3 className="text-emerald-200">顯示與吸附</h3>
+      <NumberField label="網格 (mm)" value={board.gridSize} disabled={disabled} onCommit={(gridSize) => workspace.updateBoard({ gridSize })} />
+      <label className="pcb-inspector-check">
+        <input type="checkbox" checked={board.showGrid} disabled={disabled} onChange={(event) => workspace.updateBoard({ showGrid: event.target.checked })} />
+        顯示網格
+      </label>
+      <label className="pcb-inspector-check">
+        <input type="checkbox" checked={board.snapToGrid} disabled={disabled} onChange={(event) => workspace.updateBoard({ snapToGrid: event.target.checked })} />
+        吸附網格
+      </label>
+      <details className="mt-3">
       <summary className="cursor-pointer text-xs font-semibold text-violet-200">板面顏色</summary>
       <div className="pcb-inspector-field-grid mt-3">
         <InspectorField label="板材／側面">
@@ -263,75 +326,14 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
         </InspectorField>
       </div>
       </details>
-      <details className="pcb-resize-anchor" aria-label="板框尺寸增減方向">
-        <summary className="cursor-pointer text-xs text-cyan-200">尺寸調整方向 · {PCB_RESIZE_ANCHOR_LABELS[resizeAnchor]}</summary>
-        <div className="pcb-resize-anchor-head">
-          <span>增減方向</span>
-          <small>{PCB_RESIZE_DIRECTION_LABELS[resizeAnchor]} · {PCB_RESIZE_ANCHOR_LABELS[resizeAnchor]}</small>
-        </div>
-        <div className="pcb-resize-anchor-grid">
-          {PCB_RESIZE_ANCHORS.map((anchor) => (
-            <button
-              key={anchor}
-              type="button"
-              disabled={disabled}
-              aria-pressed={resizeAnchor === anchor}
-              aria-label={`${PCB_RESIZE_DIRECTION_LABELS[anchor]}，${PCB_RESIZE_ANCHOR_LABELS[anchor]}`}
-              title={`${PCB_RESIZE_DIRECTION_LABELS[anchor]}（${PCB_RESIZE_ANCHOR_LABELS[anchor]}）`}
-              data-active={resizeAnchor === anchor || undefined}
-              onClick={() => setResizeAnchor(anchor)}
-            >
-              <span aria-hidden="true">{PCB_RESIZE_DIRECTION_SYMBOLS[anchor]}</span>
-            </button>
-          ))}
-        </div>
-        <p className="pcb-resize-anchor-hint">
-          僅選箭頭不會改變尺寸。修改寬高時，相反側固定，板上元件隨之位移。
-        </p>
-      </details>
-      <div className="pcb-dxf-import">
-        <div className="pcb-dxf-import-head">
-          <span>ME 板框（DXF）</span>
-          {board.outlineSource && board.outlineSource !== "手繪板框" && <small>{board.outlineSource}</small>}
-        </div>
-        <label className="pcb-dxf-import-drop">
-          <FileUp aria-hidden="true" />
-          <span>{board.outline?.length ? "更換 DXF 板框" : "匯入 DXF 當版型"}</span>
-          <input
-            type="file"
-            accept=".dxf,application/dxf,image/vnd.dxf"
-            disabled={disabled}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file) void importDxf(file);
-            }}
-          />
-        </label>
-        <p className="pcb-dxf-import-hint">
-          讀取 LINE／LWPOLYLINE／POLYLINE／ARC／CIRCLE，取外框範圍當板子寬高並描出輪廓；也會隨專案或自訂模板一起儲存。
-        </p>
-        {dxfMessage && <p className="pcb-dxf-import-message" data-tone={dxfMessage.tone}>{dxfMessage.text}</p>}
-      </div>
-      <section className="pcb-inspector-section">
-      <h3 className="text-emerald-200">網格與吸附</h3>
-      <NumberField label="網格 (mm)" value={board.gridSize} disabled={disabled} onCommit={(gridSize) => workspace.updateBoard({ gridSize })} />
-      <label className="pcb-inspector-check">
-        <input type="checkbox" checked={board.showGrid} disabled={disabled} onChange={(event) => workspace.updateBoard({ showGrid: event.target.checked })} />
-        顯示網格
-      </label>
-      <label className="pcb-inspector-check">
-        <input type="checkbox" checked={board.snapToGrid} disabled={disabled} onChange={(event) => workspace.updateBoard({ snapToGrid: event.target.checked })} />
-        吸附網格
-      </label>
       </section>
       <div className="pcb-inspector-section" data-testid="pcb-board-cuts">
         <div className="flex items-center gap-2">
           <Scissors className="h-4 w-4 text-amber-300" aria-hidden="true" />
-          <h3>切板</h3>
+          <h3>分板參考線（不是挖孔）</h3>
           <span className="ml-auto text-xs text-slate-400">{board.cuts?.length ?? 0} 條分板線</span>
         </div>
-        <p className="pcb-inspector-note">把板框切成等分面板；不會移除元件，2D 與 3D 會同步顯示切線。</p>
+        <p className="pcb-inspector-note">只標示等分位置，不會切除板材。要改外形或挖洞，請使用「編輯外框／挖孔」。</p>
         <div className="pcb-inspector-field-grid">
           <InspectorField label="左右分板數">
             <input type="number" min="1" max="20" step="1" value={columns} disabled={disabled} onChange={(event) => setColumns(event.target.value)} />
