@@ -69,9 +69,9 @@ export function Pcb3DCanvasSafe({
           <Canvas
             fallback={softwareFallback}
             frameloop="demand"
-            dpr={[1, 1.25]}
+            dpr={[1, 2]}
             camera={{ position: [0, size * 1.8, -0.001], up: [0, 0, -1], fov: 42, near: 0.1, far: size * 25 }}
-            gl={{ antialias: false, powerPreference: "default", failIfMajorPerformanceCaveat: false }}
+            gl={{ antialias: true, powerPreference: "high-performance", failIfMajorPerformanceCaveat: false }}
             onPointerMissed={() => {
               workspace.selectObject(null);
               workspace.clearObjectSelection();
@@ -473,7 +473,7 @@ export function Pcb3DCanvas({
         <Canvas
           fallback={softwareFallback}
           frameloop="demand"
-          dpr={[1, 1.5]}
+          dpr={[1, 2]}
           camera={{ position: [size * 0.82, size * 0.72, size * 0.92], fov: 42, near: 0.1, far: size * 25 }}
           gl={{ antialias: true, powerPreference: "high-performance" }}
           onPointerMissed={() => {
