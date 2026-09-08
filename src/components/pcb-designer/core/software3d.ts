@@ -45,12 +45,10 @@ export interface SoftwareProjectedPoint {
 }
 
 export const DEFAULT_SOFTWARE_VIEW: SoftwareViewState = {
-  // Keep the fallback camera on the same reading direction as the 2D canvas:
-  // X grows right and Y grows down when projected to the screen.
-  yaw: Math.PI,
-  // The fallback starts in the exact 2D-aligned top view. Dragging tilts it
-  // into a real perspective view without changing the stored board data.
-  pitch: 1.25,
+  // Start with a three-quarter product view so the component body, leads and
+  // height are immediately readable, matching the WebGL renderer.
+  yaw: 2.35,
+  pitch: 0.72,
   zoom: 1,
   panX: 0,
   panY: 0,

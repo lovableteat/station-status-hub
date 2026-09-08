@@ -134,6 +134,11 @@ export function PcbDesignerWorkspace({
       : null,
   });
   const { saveNow, setTool } = workspace;
+  const importLibraryModel = workspace.importLibraryModel;
+  const remoteReady = workspace.remoteReady;
+  const canMutate = workspace.canMutate;
+  const sharedLibrary = workspace.data.library;
+  const sharedProjects = workspace.data.projects;
   const selectedObjectCount = new Set([
     ...workspace.selectedObjects,
     ...(workspace.selection ? [workspace.selection.id] : []),
@@ -160,6 +165,9 @@ export function PcbDesignerWorkspace({
   const projectInputRef = useRef<HTMLInputElement>(null);
   const modelAssetStoreRef = useRef(getDefaultPcbModelAssetStore());
   const pendingLibrarySyncRef = useRef(false);
+  const modelAssetRecoveryStartedRef = useRef(false);
+  const sharedCatalogRef = useRef({ library: sharedLibrary, projects: sharedProjects });
+  sharedCatalogRef.current = { library: sharedLibrary, projects: sharedProjects };
   const presence = usePcbProjectPresence({
     accessMode: workspace.canEdit ? "editor" : "viewer",
     clientId: clientIdRef.current,
@@ -189,6 +197,60 @@ export function PcbDesignerWorkspace({
       }
     });
   }, [saveNow, workspace.data.library]);
+
+  useEffect(() => {
+    if (
+      modelAssetRecoveryStartedRef.current
+      || !remoteReady
+      || !canMutate
+      || !remoteClient?.listModelAssets
+    ) return;
+
+    modelAssetRecoveryStartedRef.current = true;
+    let active = true;
+    void remoteClient.listModelAssets().then((metadataList) => {
+      if (!active || metadataList.length === 0) return;
+      const { library, projects } = sharedCatalogRef.current;
+      const referencedAssetIds = new Set([
+        ...library.map((component) => component.modelAssetId).filter(Boolean),
+        ...projects.flatMap((project) =>
+          project.components.map((component) => component.modelAssetId).filter(Boolean)),
+      ]);
+      const recoveredFingerprints = new Set<string>();
+      const recoverable = metadataList.filter((metadata) => {
+        if (referencedAssetIds.has(metadata.id)) return false;
+        const dimensions = metadata.calibratedDimensions;
+        const fingerprint = [
+          metadata.fileName.trim().toLocaleLowerCase(),
+          dimensions.widthMm.toFixed(4),
+          dimensions.depthMm.toFixed(4),
+          dimensions.heightMm.toFixed(4),
+        ].join("|");
+        if (recoveredFingerprints.has(fingerprint)) return false;
+        recoveredFingerprints.add(fingerprint);
+        return true;
+      });
+      if (recoverable.length === 0) return;
+
+      pendingLibrarySyncRef.current = true;
+      recoverable.forEach((metadata) => {
+        importLibraryModel(toStepLibraryComponent(metadata), metadata);
+      });
+      toast({
+        title: "已找回遺失的 STEP 元件",
+        description: recoverable.length === 1
+          ? `${toStepLibraryComponent(recoverable[0]).name} 已重新加入共用元件庫。`
+          : `已重新加入 ${recoverable.length} 筆雲端 STEP 元件，並排除重複上傳。`,
+      });
+    }).catch(() => {
+      modelAssetRecoveryStartedRef.current = false;
+    });
+
+    return () => {
+      active = false;
+      modelAssetRecoveryStartedRef.current = false;
+    };
+  }, [canMutate, importLibraryModel, remoteClient, remoteReady]);
 
   const handleSave = useCallback(async () => {
     if (!workspace.canEdit) {

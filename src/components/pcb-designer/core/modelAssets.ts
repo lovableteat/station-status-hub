@@ -169,18 +169,7 @@ export function isPcbModelAsset(value: unknown): value is PcbModelAsset {
   if (!value || typeof value !== "object") return false;
   const asset = value as Partial<PcbModelAsset>;
   const metadata = asset.metadata;
-  if (!metadata || typeof metadata !== "object" || !Array.isArray(asset.parts)) return false;
-  if (metadata.schemaVersion !== 1 || typeof metadata.id !== "string" || !metadata.id
-    || typeof metadata.fileName !== "string" || typeof metadata.createdAt !== "string"
-    || typeof metadata.updatedAt !== "string" || !["x", "y", "z"].includes(metadata.upAxis)
-    || !isPositiveDimensions(metadata.dimensions)
-    || !isPositiveDimensions(metadata.calibratedDimensions)
-    || !isFiniteTuple(metadata.bounds?.min) || !isFiniteTuple(metadata.bounds?.max)
-    || metadata.bounds.max.some((item, index) => item <= metadata.bounds.min[index])
-    || !Array.isArray(metadata.parts)
-    || !metadata.parts.every((part) => typeof part?.id === "string" && typeof part.name === "string"
-      && Number.isInteger(part.vertexCount) && part.vertexCount > 0
-      && Number.isInteger(part.indexCount) && part.indexCount > 0)) return false;
+  if (!isPcbModelAssetMetadata(metadata) || !Array.isArray(asset.parts)) return false;
   if (asset.parts.length !== metadata.parts.length || asset.parts.length > MAX_PCB_MODEL_PARTS) return false;
 
   let vertices = 0;
@@ -197,6 +186,23 @@ export function isPcbModelAsset(value: unknown): value is PcbModelAsset {
     indices += part.index.length;
   }
   return vertices <= MAX_PCB_MODEL_VERTICES && indices <= MAX_PCB_MODEL_INDICES;
+}
+
+export function isPcbModelAssetMetadata(value: unknown): value is PcbModelAssetMetadata {
+  if (!value || typeof value !== "object") return false;
+  const metadata = value as Partial<PcbModelAssetMetadata>;
+  if (metadata.schemaVersion !== 1 || typeof metadata.id !== "string" || !metadata.id
+    || typeof metadata.fileName !== "string" || typeof metadata.createdAt !== "string"
+    || typeof metadata.updatedAt !== "string" || !["x", "y", "z"].includes(metadata.upAxis)
+    || !isPositiveDimensions(metadata.dimensions)
+    || !isPositiveDimensions(metadata.calibratedDimensions)
+    || !isFiniteTuple(metadata.bounds?.min) || !isFiniteTuple(metadata.bounds?.max)
+    || metadata.bounds.max.some((item, index) => item <= metadata.bounds.min[index])
+    || !Array.isArray(metadata.parts) || metadata.parts.length > MAX_PCB_MODEL_PARTS
+    || !metadata.parts.every((part) => typeof part?.id === "string" && typeof part.name === "string"
+      && Number.isInteger(part.vertexCount) && part.vertexCount > 0
+      && Number.isInteger(part.indexCount) && part.indexCount > 0)) return false;
+  return true;
 }
 
 export function toPcbModelAssetMetadata(model: ImportedStepModel): PcbModelAssetMetadata {

@@ -2,9 +2,10 @@ import type { PcbSaveState } from "../types.ts";
 import { isPcbSaveState, refreshBuiltInCatalog } from "./storage.ts";
 import {
   deserializePcbModelAsset,
+  isPcbModelAssetMetadata,
   serializePcbModelAsset,
 } from "./modelAssets.ts";
-import type { PcbModelAsset } from "../types.ts";
+import type { PcbModelAsset, PcbModelAssetMetadata } from "../types.ts";
 import type {
   PcbProjectLock,
   PcbProjectLockResult,
@@ -50,7 +51,8 @@ export interface PcbAccountDatabase {
       | "release_pcb_designer_project_lock"
       | "delete_pcb_designer_project_locked"
       | "save_pcb_designer_model_asset"
-      | "load_pcb_designer_model_asset",
+      | "load_pcb_designer_model_asset"
+      | "list_pcb_designer_model_assets",
     args: Record<string, unknown>,
   ) => DatabaseResult<unknown>;
   from: (table: "system_users") => SystemUserTable;
@@ -108,6 +110,10 @@ function parseCloudModel(value: unknown): { payloadBase64: string } | null {
   return typeof payload.payloadBase64 === "string" && payload.payloadBase64
     ? { payloadBase64: payload.payloadBase64 }
     : null;
+}
+
+function parseCloudModelList(value: unknown): PcbModelAssetMetadata[] {
+  return Array.isArray(value) ? value.filter(isPcbModelAssetMetadata) : [];
 }
 
 const LEGACY_LOCK_RESULT: PcbProjectLockResult = {
@@ -378,6 +384,13 @@ export function createPcbAccountRemoteClient(
       } catch {
         return null;
       }
+    },
+    listModelAssets: async () => {
+      const result = await database.rpc("list_pcb_designer_model_assets", {
+        p_user_id: userId,
+      });
+      if (result.error) return [];
+      return parseCloudModelList(result.data);
     },
   };
 }
