@@ -1,26 +1,37 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { boardNodesPath, outlineError, sampleBoardNodes } from "./core/boardOutline.ts";
+import { boardNodesPath, boardHolesError, getBoardPolygon, outlineError, sampleBoardNodes } from "./core/boardOutline.ts";
 import { snapPoint } from "./core/geometry.ts";
 import type { PcbOutlineNode, PcbPoint } from "./types.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 
-type Draft = { nodes: PcbOutlineNode[]; closed: boolean };
+type Ring = { nodes: PcbOutlineNode[]; closed: boolean };
+type Drawing = { outer: Ring; holes: Ring[] };
+type Tool = "edit" | "line" | "curve" | "rectangle" | "circle";
 export function PcbBoardOutlineDialog({ workspace, onClose }: { workspace: PcbWorkspaceApi; onClose: () => void }) {
   const board = workspace.activeProject.board;
-  const [draft, setDraft] = useState<Draft>(() => ({ nodes: structuredClone(board.outlineNodes ?? []), closed: Boolean(board.outlineNodes?.length) }));
-  const [past, setPast] = useState<Draft[]>([]), [future, setFuture] = useState<Draft[]>([]);
+  const [drawing, setDrawing] = useState<Drawing>(() => ({
+    outer: { nodes: structuredClone(board.outlineNodes ?? getBoardPolygon(board)), closed: true },
+    holes: (board.holes ?? []).map(nodes => ({nodes: structuredClone(nodes),closed:true})),
+  }));
+  const [active, setActive] = useState(-1);
+  const [tool, setTool] = useState<Tool>("edit");
+  const [past, setPast] = useState<Drawing[]>([]), [future, setFuture] = useState<Drawing[]>([]);
   const [selected, setSelected] = useState<number | null>(null), [error, setError] = useState("");
   const [x, setX] = useState("0"), [y, setY] = useState("0");
+  const draft = active < 0 ? drawing.outer : drawing.holes[active];
+  const replaceRing = (doc: Drawing, ring: Ring): Drawing => active < 0 ? {...doc,outer:ring} : {...doc,holes:doc.holes.map((h,i)=>i===active?ring:h)};
+  const setDraft = (update: Ring | ((ring: Ring) => Ring)) => setDrawing(doc => replaceRing(doc, typeof update === "function" ? update(active<0?doc.outer:doc.holes[active]) : update));
   useEffect(() => {
     if (selected !== null && draft.nodes[selected]) { setX(String(draft.nodes[selected].x)); setY(String(draft.nodes[selected].y)); }
   }, [selected, draft.nodes]);
   const drag = useRef<{ index: number; slot: string; origin: PcbOutlineNode; start: PcbPoint } | null>(null);
   const padding = Math.max(board.width, board.height) * 0.06;
-  const commit = (next: Draft) => { setPast([...past.slice(-99), draft]); setFuture([]); setDraft(next); setError(""); };
-  const undo = () => { if (!past.length) return; setFuture([draft, ...future]); setDraft(past[past.length - 1]); setPast(past.slice(0, -1)); setSelected(null); };
-  const redo = () => { if (!future.length) return; setPast([...past, draft]); setDraft(future[0]); setFuture(future.slice(1)); setSelected(null); };
+  const remember = () => { setPast([...past.slice(-99), drawing]); setFuture([]); setError(""); };
+  const commit = (next: Ring) => { remember(); setDraft(next); };
+  const undo = () => { if (!past.length) return; setFuture([drawing, ...future]); setDrawing(past[past.length - 1]); setPast(past.slice(0, -1)); setSelected(null); setActive(-1); };
+  const redo = () => { if (!future.length) return; setPast([...past, drawing]); setDrawing(future[0]); setFuture(future.slice(1)); setSelected(null); setActive(-1); };
   const moveNode = (n: PcbOutlineNode, dx: number, dy: number): PcbOutlineNode => ({ x: n.x + dx, y: n.y + dy,
     ...(n.in && { in: { x: n.in.x + dx, y: n.in.y + dy } }), ...(n.out && { out: { x: n.out.x + dx, y: n.out.y + dy } }) });
   const add = (p: PcbPoint) => {
@@ -37,22 +48,39 @@ export function PcbBoardOutlineDialog({ workspace, onClose }: { workspace: PcbWo
     return { x: Math.round(q.x * 1000) / 1000, y: Math.round(q.y * 1000) / 1000 };
   };
   const apply = () => {
-    const points = sampleBoardNodes(draft.nodes), message = outlineError(points, board);
+    if (!drawing.outer.closed || drawing.holes.some(h => !h.closed)) { setError("請先封閉所有外框與孔洞，或刪除未完成的孔洞。"); return; }
+    const points = sampleBoardNodes(drawing.outer.nodes), message = outlineError(points, board);
     if (message) { setError(message); return; }
-    if (workspace.updateBoard({ outline: [[...points, { ...points[0] }]], outlineNodes: draft.nodes, outlineSource: "手繪板框" })) onClose();
+    const next = { ...board, outline: [[...points, { ...points[0] }]], outlineNodes: drawing.outer.nodes, holes: drawing.holes.map(h=>h.nodes), outlineSource: "手繪板框" };
+    const holesError = boardHolesError(next); if (holesError) { setError(holesError); return; }
+    if (workspace.updateBoard(next)) onClose();
     else setError("無法套用，請確認目前仍可編輯。");
   };
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className="max-w-4xl max-h-[94dvh] overflow-y-auto" onKeyDown={e => {
+    <DialogContent className="max-w-6xl max-h-[94dvh] overflow-y-auto gap-2 p-4" onKeyDown={e => {
       if ((e.target as HTMLElement).matches("input,textarea")) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) redo(); else undo(); }
       if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); e.stopPropagation(); remove(); }
     }}>
-      <DialogHeader><DialogTitle>板框鋼筆編輯器</DialogTitle><DialogDescription>點一下畫直線；按住拖曳拉出曲線把手；點回起點封閉。封閉後可拖動節點與把手。完成才套入主畫面，取消保留原板。</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>板形編輯器 · 外框與挖孔</DialogTitle><DialogDescription>先選「外框」或「新增孔洞」，再選繪圖工具。孔洞會真正穿透板子；完成後按「套用板形」，取消不改原板。</DialogDescription></DialogHeader>
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-600 pb-3">
+        <label className="text-sm">正在編輯 <select aria-label="編輯輪廓" className="pcb-control" value={active} onChange={e=>{setActive(Number(e.target.value));setSelected(null);setTool("edit");}}>
+          <option value={-1}>外框</option>{drawing.holes.map((_,i)=><option key={i} value={i}>孔洞 {i+1}</option>)}
+        </select></label>
+        <Button variant="outline" disabled={drawing.holes.length>=16} onClick={()=>{remember();setDrawing({...drawing,holes:[...drawing.holes,{nodes:[],closed:false}]});setActive(drawing.holes.length);setSelected(null);setTool("line");}}>＋ 新增孔洞</Button>
+        {active>=0 && <Button variant="outline" onClick={()=>{remember();setDrawing({...drawing,holes:drawing.holes.filter((_,i)=>i!==active)});setActive(-1);setSelected(null);}}>刪除此孔</Button>}
+        <span className="text-sm text-cyan-200">{board.width} × {board.height} mm · {drawing.holes.length} 個孔洞</span>
+      </div>
+      <div className="flex flex-wrap gap-2" role="toolbar" aria-label="板形繪圖工具">
+        {([["edit","選取／移動"],["line","直線鋼筆"],["curve","曲線鋼筆"],["rectangle","矩形"],["circle","圓形"]] as const).map(([value,label])=><Button key={value} variant={tool===value?"default":"outline"} aria-pressed={tool===value} onClick={()=>setTool(value)}>{label}</Button>)}
+      </div>
+      <p className="text-sm text-cyan-100" role="status">{tool==="edit"?"拖動節點改形狀；選取節點後，可拖紫色把手調曲線。":tool==="rectangle"||tool==="circle"?"在畫布按住拖出大小，放開完成；會替換目前選取的輪廓。":draft.closed?"此輪廓已封閉。要重畫請按「重畫目前輪廓」；挖孔請按「新增孔洞」。":tool==="line"?"沿板邊逐點點擊，凹角也直接點；最後點起點或按「封閉輪廓」。":"每個位置按住拖曳產生曲線把手，再往下一個位置畫；點起點封閉。"}</p>
       <div className="flex flex-wrap gap-2">
+        {!draft.closed && <Button disabled={draft.nodes.length<3} onClick={()=>{commit({...draft,closed:true});setTool("edit");}}>封閉輪廓</Button>}
         <Button variant="outline" disabled={!past.length} onClick={undo}>復原</Button><Button variant="outline" disabled={!future.length} onClick={redo}>重做</Button>
-        <Button variant="outline" onClick={() => { commit({ nodes: [], closed: false }); setSelected(null); }}>重新繪製</Button>
-        <Button variant="outline" onClick={() => { commit({ nodes: [{ x: 0, y: 0 }, { x: board.width, y: 0 }, { x: board.width, y: board.height }, { x: 0, y: board.height }], closed: true }); setSelected(null); }}>矩形起稿</Button>
+        <Button variant="outline" onClick={() => { commit({ nodes: [], closed: false }); setSelected(null); setTool("line"); }}>重畫目前輪廓</Button>
+        <Button variant="outline" disabled={active >= 0} onClick={() => { commit({ nodes: [{ x: 0, y: 0 }, { x: board.width, y: 0 }, { x: board.width, y: board.height }, { x: 0, y: board.height }], closed: true }); setSelected(null); }}>填滿矩形外框</Button>
+        <details><summary className="cursor-pointer text-sm p-2">節點微調</summary><div className="flex flex-wrap gap-2 py-2">
         <Button variant="outline" disabled={selected === null} onClick={remove}>刪除節點</Button>
         <Button variant="outline" disabled={selected === null} onClick={() => commit({ ...draft, nodes: draft.nodes.map((p, i) => i === selected ? { x: p.x, y: p.y } : p) })}>轉為尖角</Button>
         <Button variant="outline" disabled={selected === null || draft.nodes.length < 2} onClick={() => {
@@ -70,38 +98,55 @@ export function PcbBoardOutlineDialog({ workspace, onClose }: { workspace: PcbWo
           const nodes = [...draft.nodes]; nodes[i] = { ...a, out: ac }; nodes[j] = { ...b, in: db };
           nodes.splice(i + 1, 0, { ...mid(left, right), in: left, out: right }); commit({ ...draft, nodes }); setSelected(i + 1);
         }}>下一段插入節點</Button>
+        </div></details>
       </div>
-      <svg viewBox={`${-padding} ${-padding} ${board.width + padding * 2} ${board.height + padding * 2}`} className="w-full h-[min(48vh,460px)] rounded-lg border border-cyan-700 bg-slate-950 touch-none focus:outline focus:outline-2 focus:outline-cyan-300" role="img" aria-label="板框鋼筆畫布" tabIndex={0}
+      <svg viewBox={`${-padding} ${-padding} ${board.width + padding * 2} ${board.height + padding * 2}`} className="w-full h-[min(43vh,460px)] rounded-lg border border-cyan-700 bg-slate-950 touch-none focus:outline focus:outline-2 focus:outline-cyan-300" role="img" aria-label="板框鋼筆畫布" tabIndex={0}
         onPointerDown={e => {
           if (e.button !== 0 || !workspace.canMutate) return;
           e.currentTarget.setPointerCapture(e.pointerId);
           const p = pointFor(e.currentTarget, e.clientX, e.clientY, e.altKey), target = (e.target as Element).closest("[data-node]");
+          if (tool === "rectangle" || tool === "circle") {
+            remember(); drag.current = {index:0,slot:tool,origin:p,start:p}; setSelected(null); return;
+          }
           if (target) {
             const index = Number(target.getAttribute("data-node"));
-            if (index === 0 && !draft.closed && draft.nodes.length >= 3) { commit({ ...draft, closed: true }); return; }
-            setSelected(index); setPast([...past.slice(-99), draft]); setFuture([]);
+            if (index === 0 && !draft.closed && draft.nodes.length >= 3) { commit({ ...draft, closed: true }); setTool("edit"); return; }
+            setSelected(index); remember();
             drag.current = { index, slot: target.getAttribute("data-slot")!, origin: structuredClone(draft.nodes[index]), start: p };
-          } else if (!draft.closed && draft.nodes.length < 100 && p.x >= 0 && p.y >= 0 && p.x <= board.width && p.y <= board.height) {
-            add(p); drag.current = { index: draft.nodes.length, slot: "new", origin: p, start: p };
+          } else if (tool !== "edit" && !draft.closed && draft.nodes.length < 100 && p.x >= 0 && p.y >= 0 && p.x <= board.width && p.y <= board.height) {
+            add(p); drag.current = { index: draft.nodes.length, slot: tool === "curve" ? "new" : "line", origin: p, start: p };
           }
         }} onPointerMove={e => {
           const active = drag.current; if (!active) return;
           const p = pointFor(e.currentTarget, e.clientX, e.clientY, e.altKey);
+          if (active.slot === "rectangle" || active.slot === "circle") {
+            const x1=Math.min(p.x,active.start.x),y1=Math.min(p.y,active.start.y),x2=Math.max(p.x,active.start.x),y2=Math.max(p.y,active.start.y);
+            const cx=(x1+x2)/2,cy=(y1+y2)/2,rx=(x2-x1)/2,ry=(y2-y1)/2,k=.5522847498;
+            const nodes = active.slot === "rectangle" ? [{x:x1,y:y1},{x:x2,y:y1},{x:x2,y:y2},{x:x1,y:y2}] : [
+              {x:cx+rx,y:cy,in:{x:cx+rx,y:cy-k*ry},out:{x:cx+rx,y:cy+k*ry}},
+              {x:cx,y:cy+ry,in:{x:cx+k*rx,y:cy+ry},out:{x:cx-k*rx,y:cy+ry}},
+              {x:cx-rx,y:cy,in:{x:cx-rx,y:cy+k*ry},out:{x:cx-rx,y:cy-k*ry}},
+              {x:cx,y:cy-ry,in:{x:cx-k*rx,y:cy-ry},out:{x:cx+k*rx,y:cy-ry}}];
+            setDraft({nodes,closed:true}); return;
+          }
+          if (active.slot === "line") return;
           setDraft(current => ({ ...current, nodes: current.nodes.map((n, i) => {
             if (i !== active.index) return n; const a = active.origin;
             if (active.slot === "new") return Math.hypot(p.x - a.x, p.y - a.y) < 0.1 ? a : { ...a, out: p, in: { x: 2 * a.x - p.x, y: 2 * a.y - p.y } };
             return active.slot === "node" ? moveNode(a, p.x - active.start.x, p.y - active.start.y) : { ...n, [active.slot]: p };
           }) }));
-        }} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
+        }} onPointerUp={() => { if (drag.current?.slot === "rectangle" || drag.current?.slot === "circle") setTool("edit"); drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
         <rect width={board.width} height={board.height} fill="#122536" stroke="#496477" strokeWidth={padding / 12} />
         {board.showGrid && <><defs><pattern id="outline-editor-grid" width={board.gridSize} height={board.gridSize} patternUnits="userSpaceOnUse"><path d={`M ${board.gridSize} 0 L 0 0 0 ${board.gridSize}`} fill="none" stroke="#76b8ca" strokeOpacity="0.25" strokeWidth="0.15" /></pattern></defs><rect width={board.width} height={board.height} fill="url(#outline-editor-grid)" /></>}
-        <path d={boardNodesPath(draft.nodes, draft.closed)} fill={draft.closed ? "#28c7b844" : "none"} stroke="#5eead4" strokeWidth={padding / 7} />
+        <path d={[drawing.outer,...drawing.holes].filter(r=>r.closed).map(r=>boardNodesPath(r.nodes,true)).join(" ")} fill="#28c7b844" fillRule="evenodd" stroke="#5eead4" strokeWidth={padding/10}/>
+        <path d={boardNodesPath(draft.nodes,draft.closed)} fill="none" stroke={active<0?"#5eead4":"#fbbf24"} strokeWidth={padding/6}/>
+        {!draft.nodes.length && <text x={board.width/2} y={board.height/2} textAnchor="middle" fill="#e2e8f0" fontSize={padding*.55}>在這裡逐點畫輪廓，或選矩形／圓形拖曳</text>}
         {draft.nodes.map((p, i) => <g key={i}>
           {i === selected && (["in", "out"] as const).map(slot => p[slot] && <g key={slot}><line x1={p.x} y1={p.y} x2={p[slot]!.x} y2={p[slot]!.y} stroke="#c4b5fd" strokeWidth={padding / 12} /><circle data-node={i} data-slot={slot} cx={p[slot]!.x} cy={p[slot]!.y} r={padding / 3} fill="#c4b5fd" /></g>)}
           <circle data-node={i} data-slot="node" cx={p.x} cy={p.y} r={padding / 3} stroke={i === selected ? "white" : "none"} strokeWidth={padding / 8} fill={i === 0 ? "#fbbf24" : "#5eead4"} />
         </g>)}
       </svg>
-      <div className="flex flex-wrap items-end gap-2">
+      <details><summary className="cursor-pointer text-sm">精確座標／鍵盤編輯</summary><div className="flex flex-wrap items-end gap-2 mt-2">
         <label className="flex-1 min-w-20 text-xs">X (mm)<input aria-label="板框頂點 X" type="number" value={x} onChange={e => setX(e.target.value)} className="pcb-control w-full" /></label>
         <label className="flex-1 min-w-20 text-xs">Y (mm)<input aria-label="板框頂點 Y" type="number" value={y} onChange={e => setY(e.target.value)} className="pcb-control w-full" /></label>
         <Button variant="outline" disabled={!workspace.canMutate || draft.closed || !x.trim() || !y.trim()} onClick={() => add({ x: Number(x), y: Number(y) })}>加入頂點</Button>
@@ -110,10 +155,10 @@ export function PcbBoardOutlineDialog({ workspace, onClose }: { workspace: PcbWo
           const px = Number(x), py = Number(y); if (selected === null || !Number.isFinite(px) || !Number.isFinite(py)) return;
           const n = draft.nodes[selected]; commit({ ...draft, nodes: draft.nodes.map((p, i) => i === selected ? moveNode(p, px - n.x, py - n.y) : p) });
         }}>移動節點</Button>
-      </div>
+      </div></details>
       <p className="text-sm text-slate-300" aria-live="polite">{draft.nodes.length} 個節點 · {draft.closed ? "已封閉，可調整節點與把手" : "繪製中"} · {board.snapToGrid ? `吸附 ${board.gridSize} mm；Alt 暫停` : "自由定位"}</p>
       {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
-      <DialogFooter><Button variant="outline" onClick={onClose}>取消</Button><Button disabled={!workspace.canMutate || draft.nodes.length < 3} onClick={apply}>封閉並套用</Button></DialogFooter>
+      <DialogFooter className="sticky bottom-0 z-10 bg-slate-900 py-2"><Button variant="outline" onClick={onClose}>取消</Button><Button disabled={!workspace.canMutate} onClick={apply}>套用板形</Button></DialogFooter>
     </DialogContent>
   </Dialog>;
 }

@@ -1,6 +1,6 @@
 import type { PcbKeepout, PcbPlacedComponent, PcbProject } from "../types.ts";
 import { getComponentKeepout } from "./componentKeepout.ts";
-import { getBoardPolygon, polygonContainsRectangle } from "./boardOutline.ts";
+import { getBoardPolygon, getBoardHoles, polygonsOverlap, polygonContainsRectangle } from "./boardOutline.ts";
 
 type Rectangle = Pick<PcbPlacedComponent, "x" | "y" | "width" | "height" | "rotation">;
 
@@ -222,6 +222,7 @@ function keepoutRectangle(keepout: PcbKeepout): Rectangle {
 }
 
 export function isWithinBoard(component: Rectangle, board: PcbProject["board"]): boolean {
+  if (getBoardHoles(board).some(hole => polygonsOverlap(getRotatedRectangleCorners(component), hole))) return false;
   if (board.outlineSource === "手繪板框") return polygonContainsRectangle(getRotatedRectangleCorners(component), getBoardPolygon(board));
   return getRotatedRectangleCorners(component).every((point) => (
     point.x >= -EPSILON && point.x <= board.width + EPSILON

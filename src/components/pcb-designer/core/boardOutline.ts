@@ -58,6 +58,34 @@ export function getBoardPolygon(board: PcbBoard): PcbPoint[] {
   return [{ x: 0, y: 0 }, { x: board.width, y: 0 }, { x: board.width, y: board.height }, { x: 0, y: board.height }];
 }
 
+export const getBoardHoles = (board: PcbBoard) => (board.holes ?? []).map(sampleBoardNodes);
+export const boardSurfacePath = (board: PcbBoard) => [getBoardPolygon(board), ...getBoardHoles(board)]
+  .map(points => `M ${points.map(p => `${p.x},${p.y}`).join(" L ")} Z`).join(" ");
+
+export function polygonsOverlap(a: readonly PcbPoint[], b: readonly PcbPoint[]): boolean {
+  return a.some(p => pointInBoardPolygon(p, b)) || b.some(p => pointInBoardPolygon(p, a)) || polygonEdgesCross(a, b);
+}
+
+function polygonEdgesCross(a: readonly PcbPoint[], b: readonly PcbPoint[]): boolean {
+  return a.some((p, i) => b.some((r, j) => {
+    const q = a[(i + 1) % a.length], s = b[(j + 1) % b.length];
+    return cross(p,q,r) * cross(p,q,s) < 0 && cross(r,s,p) * cross(r,s,q) < 0
+      || onSegment(r,p,q) || onSegment(s,p,q) || onSegment(p,r,s) || onSegment(q,r,s);
+  }));
+}
+
+export function boardHolesError(board: PcbBoard): string {
+  const outer = getBoardPolygon(board), holes = getBoardHoles(board);
+  for (let i = 0; i < holes.length; i++) {
+    const hole = holes[i];
+    const error = outlineError(hole, board);
+    if (error) return `孔 ${i + 1}：${error}`;
+    if (!hole.every(p => pointInBoardPolygon(p, outer)) || polygonEdgesCross(hole, outer)) return `孔 ${i + 1} 必須完整位於板內，不能碰到板邊。`;
+    if (holes.slice(0, i).some(other => polygonsOverlap(hole, other))) return "孔洞不能重疊或相互包含。";
+  }
+  return "";
+}
+
 export function pointInBoardPolygon(point: PcbPoint, polygon: readonly PcbPoint[]): boolean {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {

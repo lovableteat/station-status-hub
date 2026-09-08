@@ -1,4 +1,5 @@
-import { getBoardPolygon } from "./core/boardOutline.ts";
+import { ShapeUtils, Vector2 } from "three";
+import { getBoardPolygon, getBoardHoles } from "./core/boardOutline.ts";
 import { getPcbModelRenderIndices } from "./core/modelProjection.ts";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
 import {
@@ -328,12 +329,20 @@ export function PcbSoftware3DCanvas({
     };
 
     const boardPolygon = getBoardPolygon(project.board);
-    const top = boardPolygon.map(p => ({ x: p.x - project.board.width / 2, y: BOARD_THICKNESS / 2, z: p.y - project.board.height / 2 }));
-    const bottom = top.map(p => ({ ...p, y: -BOARD_THICKNESS / 2 }));
-    const boardFaces = [top, [...bottom].reverse(), ...top.map((p, i) => [p, top[(i + 1) % top.length], bottom[(i + 1) % top.length], bottom[i]])];
-    boardFaces.forEach((face, i) => addPolygon(face, i === 0 ? project.board.layerColors.top : i === 1 ? project.board.layerColors.bottom : project.board.background, "#7de7e8", SOFTWARE_RENDER_ORDER.board, 1, 1.05));
+    const holes = getBoardHoles(project.board);
+    const allPoints = [...boardPolygon, ...holes.flat()];
+    const triangles = ShapeUtils.triangulateShape(boardPolygon.map(p => new Vector2(p.x,p.y)), holes.map(h => h.map(p => new Vector2(p.x,p.y))));
+    const world = (p: {x:number;y:number}, y:number) => ({x:p.x-project.board.width/2,y,z:p.y-project.board.height/2});
+    for (const triangle of triangles) for (const sign of [1,-1]) {
+      const color = sign === 1 ? project.board.layerColors.top : project.board.layerColors.bottom;
+      addPolygon(triangle.map(i => world(allPoints[i], sign*BOARD_THICKNESS/2)), color, color, SOFTWARE_RENDER_ORDER.board, 1, 0);
+    }
+    for (const ring of [boardPolygon, ...holes]) ring.forEach((p,i) => {
+      const q=ring[(i+1)%ring.length];
+      addPolygon([world(p,.8),world(q,.8),world(q,-.8),world(p,-.8)],project.board.background,"#7de7e8",SOFTWARE_RENDER_ORDER.board,1,.7);
+    });
 
-    if (project.board.showGrid && project.board.outlineSource !== "手繪板框") {
+    if (project.board.showGrid && project.board.outlineSource !== "手繪板框" && !project.board.holes?.length) {
       const gridStep = Math.max(project.board.gridSize, Math.ceil(Math.max(project.board.width, project.board.height) / 80));
       const gridLayers: Array<"top" | "bottom"> = visibleLayer === "all"
         ? ["top", "bottom"]
@@ -559,7 +568,9 @@ export function PcbSoftware3DCanvas({
     hitTargetsRef.current = hits.sort((left, right) => left.depth - right.depth);
   }, [mappedModelParts, modelAssets, project, selectedIds, selectionIds, view, viewport, visibleLayer]);
 
-  const resetView = useCallback(() => setView(DEFAULT_SOFTWARE_VIEW), []);
+  const face = visibleLayer === "all" ? workspace.activeLayer : visibleLayer;
+  const resetView = useCallback(() => setView({ ...DEFAULT_SOFTWARE_VIEW, pitch: Math.abs(DEFAULT_SOFTWARE_VIEW.pitch) * (face === "bottom" ? -1 : 1) }), [face]);
+  useEffect(() => { resetView(); }, [resetView]);
 
   const selectAt = useCallback((x: number, y: number, additive: boolean) => {
     const target = hitTargetsRef.current.find((candidate) =>

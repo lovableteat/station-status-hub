@@ -1,11 +1,11 @@
 import { getPcbModelRenderIndices } from "./core/modelProjection.ts";
 import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ContactShadows, Edges, Html, OrbitControls } from "@react-three/drei";
-import { Box3, BufferGeometry, Color, DoubleSide, ExtrudeGeometry, Shape, Vector2, Float32BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
-import { getBoardPolygon } from "./core/boardOutline.ts";
+import { Box3, BufferGeometry, Color, DoubleSide, ExtrudeGeometry, Shape, Path, Group, Vector2, Float32BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
+import { getBoardPolygon, getBoardHoles } from "./core/boardOutline.ts";
 import { getPcbMountY } from "./core/software3d.ts";
-import type { OrbitControls as OrbitControlsImpl } from "three/examples/jsm/controls/OrbitControls.js";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Focus, MousePointer2 } from "lucide-react";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
 
@@ -98,12 +98,18 @@ export function Pcb3DCanvasSafe({
   );
 }
 
-function CameraControls({ boardWidth, boardHeight }: { boardWidth: number; boardHeight: number }) {
+function TopSideOnly({ children }: { children: ReactNode }) {
+  const ref = useRef<Group>(null);
+  useFrame(({ camera }) => { if (ref.current) ref.current.visible = camera.position.y >= 0; });
+  return <group ref={ref}>{children}</group>;
+}
+
+function CameraControls({ boardWidth, boardHeight, side }: { boardWidth: number; boardHeight: number; side: "top" | "bottom" }) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const { camera, invalidate } = useThree();
-  const reset = useCallback(() => {
+  const reset = useCallback((face: "top" | "bottom" = side) => {
     const size = Math.max(boardWidth, boardHeight, 40);
-    camera.position.set(size * 0.88, size * 0.82, size * 0.96);
+    camera.position.set(size * 0.88, size * 0.82 * (face === "bottom" ? -1 : 1), size * 0.96);
     camera.up.set(0, 1, 0);
     camera.near = 0.1;
     camera.far = size * 25;
@@ -111,7 +117,8 @@ function CameraControls({ boardWidth, boardHeight }: { boardWidth: number; board
     controlsRef.current?.target.set(0, 0, 0);
     controlsRef.current?.update();
     invalidate();
-  }, [boardHeight, boardWidth, camera, invalidate]);
+  }, [boardHeight, boardWidth, camera, invalidate, side]);
+  useEffect(() => { reset(); }, [reset]);
 
   return (
     <>
@@ -123,11 +130,15 @@ function CameraControls({ boardWidth, boardHeight }: { boardWidth: number; board
         minDistance={Math.max(boardWidth, boardHeight) * 0.2}
         maxDistance={Math.max(boardWidth, boardHeight) * 8}
       />
-      <Html fullscreen style={{ pointerEvents: "none" }}>
-        <button type="button" className="pcb-3d-reset" onClick={reset} style={{ pointerEvents: "auto" }}>
+      <Html zIndexRange={[20, 0]} fullscreen style={{ pointerEvents: "none" }}>
+        <button type="button" className="pcb-3d-reset" onClick={() => reset()} style={{ pointerEvents: "auto" }}>
           <Focus aria-hidden="true" />
           重設視角
         </button>
+        <div style={{ position: "absolute", top: 12, left: 12, display: "flex", gap: 6, pointerEvents: "auto" }}>
+          <button className="pcb-3d-reset" style={{ position: "static", whiteSpace: "nowrap", flexShrink: 0 }} onClick={() => reset("top")}>看頂面 Top</button>
+          <button className="pcb-3d-reset" style={{ position: "static", whiteSpace: "nowrap", flexShrink: 0 }} onClick={() => reset("bottom")}>看底面 Bottom</button>
+        </div>
       </Html>
     </>
   );
@@ -380,8 +391,9 @@ function Scene({
   );
   const boardThickness = 1.6;
   const outlineGeometry = useMemo(() => {
-    if (project.board.outlineSource !== "手繪板框") return null;
+    if (project.board.outlineSource !== "手繪板框" && !project.board.holes?.length) return null;
     const shape = new Shape(getBoardPolygon(project.board).map(p => new Vector2(p.x - project.board.width / 2, p.y - project.board.height / 2)));
+    shape.holes = getBoardHoles(project.board).map(hole => new Path(hole.map(p => new Vector2(p.x - project.board.width / 2, p.y - project.board.height / 2))));
     const geometry = new ExtrudeGeometry(shape, { depth: 1.6, bevelEnabled: false, steps: 1 });
     geometry.translate(0, 0, -0.8); geometry.rotateX(Math.PI / 2);
     geometry.clearGroups();
@@ -425,7 +437,7 @@ function Scene({
     <>
       <color attach="background" args={["#dfe8e3"]} />
       <fog attach="fog" args={["#dfe8e3", Math.max(project.board.width, project.board.height) * 2.5, Math.max(project.board.width, project.board.height) * 7]} />
-      <ambientLight intensity={0.42} />
+      <ambientLight intensity={0.7} />
       <hemisphereLight args={["#f7fbff", "#6d8179", 0.86]} />
       <directionalLight
         castShadow
@@ -438,6 +450,8 @@ function Scene({
       <directionalLight position={[-70, 60, -90]} intensity={0.92} color="#b8dcff" />
       <directionalLight position={[15, 35, -100]} intensity={0.5} color="#ffffff" />
 
+      <directionalLight position={[80, -135, 65]} intensity={2.1} color="#f7fbff" />
+      <TopSideOnly>
       {project.board.showGrid && (
         <gridHelper
           args={[
@@ -450,6 +464,7 @@ function Scene({
         />
       )}
 
+      </TopSideOnly>
       <mesh
         position={[0, 0, 0]}
         castShadow
@@ -469,7 +484,7 @@ function Scene({
         <Edges color="#8bb7a7" threshold={24} />
       </mesh>
 
-      <ContactShadows
+      <TopSideOnly><ContactShadows
         key={Object.keys(modelAssets).filter(id => modelAssets[id]).join("|")}
         position={[0, -boardThickness / 2 - 0.8, 0]}
         opacity={0.34}
@@ -478,7 +493,7 @@ function Scene({
         far={Math.max(25, sceneBounds.max.y * 2)}
         frames={1}
         color="#273d35"
-      />
+      /></TopSideOnly>
 
       {project.board.cuts?.map((cut) => (
         <mesh
@@ -560,12 +575,12 @@ function Scene({
                 : <StoredModelMeshes asset={modelAsset} component={component} />}
             </group>
             {component.modelAssetId && useProceduralFallback && (
-              <Html center position={[0, component.maxHeight / 2 + 2, 0]} distanceFactor={80}>
+              <Html zIndexRange={[20, 0]} center position={[0, component.maxHeight / 2 + 2, 0]} distanceFactor={80}>
                 <span className="pcb-3d-fallback-hint" style={{ display: "block", width: 190, whiteSpace: "normal", textAlign: "center" }} role="status">{modelAssets[component.modelAssetId] === undefined ? "正在載入 STEP 模型…" : "STEP 模型載入失敗，請重新開啟 3D 重試"}</span>
               </Html>
             )}
             {selected && (
-              <Html center position={[0, component.maxHeight / 2 + 4, 0]} distanceFactor={80}>
+              <Html zIndexRange={[20, 0]} center position={[0, component.maxHeight / 2 + 4, 0]} distanceFactor={80}>
                 <span className="pcb-3d-label">{component.reference}</span>
               </Html>
             )}
@@ -573,7 +588,7 @@ function Scene({
         );
       })}
 
-      <CameraControls boardWidth={sceneBounds.max.x - sceneBounds.min.x} boardHeight={sceneBounds.max.z - sceneBounds.min.z} />
+      <CameraControls side={visibleLayer === "all" ? workspace.activeLayer : visibleLayer} boardWidth={sceneBounds.max.x - sceneBounds.min.x} boardHeight={sceneBounds.max.z - sceneBounds.min.z} />
     </>
   );
 }
