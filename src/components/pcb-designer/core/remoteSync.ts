@@ -70,9 +70,10 @@ export function isBlankSeedWorkspace(state: PcbSaveState): boolean {
 }
 
 /**
- * Shared projects are merged per project revision. Account-specific templates,
- * library items and active selection continue to follow the newest account
- * snapshot, while server tombstones always remove stale local project copies.
+ * Shared projects are merged per project revision. The component library has
+ * its own shared catalog, so it is merged independently from the active board
+ * revision. Server tombstones always remove stale local project copies and
+ * deleted library records.
  */
 export function mergePcbRemoteState(
   localState: PcbSaveState,
@@ -101,6 +102,20 @@ export function mergePcbRemoteState(
   const preferRemoteAccountState = localIsSeed
     || revision(remoteState.updatedAt) >= revision(localState.updatedAt);
   const accountState = preferRemoteAccountState ? remoteState : localState;
+  const deletedLibrary = new Set([
+    ...(remoteState.remoteDeletions?.library ?? []),
+    ...(localState.remoteDeletions?.library ?? []),
+  ]);
+  const library = new Map(
+    remoteState.library
+      .filter((component) => !deletedLibrary.has(component.id))
+      .map((component) => [component.id, structuredClone(component)]),
+  );
+  for (const component of localState.library) {
+    if (!deletedLibrary.has(component.id) && !library.has(component.id)) {
+      library.set(component.id, structuredClone(component));
+    }
+  }
   const mergedProjects = [...projects.values()];
   // A local project selection is a view preference, not shared document content.
   // Keep it during background reconciliation so another tab/device cannot pull
@@ -117,11 +132,12 @@ export function mergePcbRemoteState(
   return {
     ...structuredClone(accountState),
     projects: mergedProjects,
+    library: [...library.values()],
     activeProjectId,
     remoteDeletions: {
       projects: [...deletedProjects],
       templates: [...new Set(accountState.remoteDeletions?.templates ?? [])],
-      library: [...new Set(accountState.remoteDeletions?.library ?? [])],
+      library: [...deletedLibrary],
     },
     updatedAt: revision(remoteState.updatedAt) >= revision(localState.updatedAt)
       ? remoteState.updatedAt

@@ -8,6 +8,8 @@ import {
   createSoftwareBoxVertices,
   createSoftwareCamera,
   getSoftwareLayerRenderOrder,
+  getSoftwareCanvasResolution,
+  getSoftwareProjectedHull,
   projectSoftwarePoint,
   sampleTriangleOffsets,
   transformPcbComponentPoint,
@@ -15,6 +17,29 @@ import {
 
 const board = { width: 100, height: 80 };
 const viewport = { width: 1200, height: 700 };
+
+test("renders compatibility 3D above CSS resolution without exceeding its pixel budget", () => {
+  const standard = getSoftwareCanvasResolution(1200, 700, 1);
+  assert.equal(standard.scale, 2);
+  assert.equal(standard.pixelWidth, 2400);
+  assert.equal(standard.pixelHeight, 1400);
+
+  const large = getSoftwareCanvasResolution(3840, 2160, 3);
+  assert.ok(large.scale >= 1);
+  assert.ok(large.pixelWidth * large.pixelHeight <= 12_010_000);
+});
+
+test("builds a closed screen-space silhouette behind sampled STEP triangles", () => {
+  const hull = getSoftwareProjectedHull([
+    { x: 1, y: 1, depth: 3, visible: true },
+    { x: 9, y: 1, depth: 3, visible: true },
+    { x: 9, y: 7, depth: 2, visible: true },
+    { x: 1, y: 7, depth: 2, visible: true },
+    { x: 5, y: 4, depth: 1, visible: true },
+    { x: -20, y: -20, depth: 1, visible: false },
+  ]);
+  assert.deepEqual(hull.map(({ x, y }) => [x, y]), [[1, 1], [9, 1], [9, 7], [1, 7]]);
+});
 
 test("projects the PCB origin into a finite software 3D viewport", () => {
   const camera = createSoftwareCamera(board, viewport, DEFAULT_SOFTWARE_VIEW);

@@ -20,6 +20,12 @@ export interface SoftwareViewport {
   height: number;
 }
 
+export interface SoftwareCanvasResolution extends SoftwareViewport {
+  pixelWidth: number;
+  pixelHeight: number;
+  scale: number;
+}
+
 export interface SoftwareCamera {
   eye: SoftwarePoint3;
   forward: SoftwarePoint3;
@@ -52,6 +58,32 @@ export const DEFAULT_SOFTWARE_VIEW: SoftwareViewState = {
 
 export const MAX_SOFTWARE_MODEL_TRIANGLES = 8_000;
 
+// The compatibility renderer is vector based, so drawing above the CSS pixel
+// resolution and letting the browser downsample removes the stair-step edges
+// that are especially visible on large boards and diagonal package outlines.
+export const MAX_SOFTWARE_CANVAS_PIXELS = 12_000_000;
+
+export function getSoftwareCanvasResolution(
+  width: number,
+  height: number,
+  devicePixelRatio = 1,
+): SoftwareCanvasResolution {
+  const logicalWidth = Math.max(1, Math.round(width));
+  const logicalHeight = Math.max(1, Math.round(height));
+  const nativeScale = Number.isFinite(devicePixelRatio) ? Math.max(1, devicePixelRatio) : 1;
+  const requestedScale = Math.min(3, Math.max(2, nativeScale * 1.25));
+  const pixelBudgetScale = Math.sqrt(MAX_SOFTWARE_CANVAS_PIXELS / (logicalWidth * logicalHeight));
+  const scale = Math.max(1, Math.min(requestedScale, pixelBudgetScale));
+
+  return {
+    width: logicalWidth,
+    height: logicalHeight,
+    pixelWidth: Math.max(1, Math.round(logicalWidth * scale)),
+    pixelHeight: Math.max(1, Math.round(logicalHeight * scale)),
+    scale,
+  };
+}
+
 export const SOFTWARE_RENDER_ORDER = {
   farObject: 0,
   farSurface: 1,
@@ -79,6 +111,30 @@ export function compareSoftwareRenderDepth(
   right: { depth: number; renderOrder: number },
 ): number {
   return left.renderOrder - right.renderOrder || right.depth - left.depth;
+}
+
+export function getSoftwareProjectedHull(
+  points: readonly SoftwareProjectedPoint[],
+): SoftwareProjectedPoint[] {
+  const visible = [...new Map(points.filter((point) => point.visible).map((point) => [
+    `${point.x.toFixed(3)}:${point.y.toFixed(3)}`,
+    point,
+  ])).values()].sort((left, right) => left.x - right.x || left.y - right.y);
+  if (visible.length <= 2) return visible;
+  const turn = (origin: SoftwareProjectedPoint, left: SoftwareProjectedPoint, right: SoftwareProjectedPoint) =>
+    (left.x - origin.x) * (right.y - origin.y) - (left.y - origin.y) * (right.x - origin.x);
+  const lower: SoftwareProjectedPoint[] = [];
+  visible.forEach((point) => {
+    while (lower.length >= 2 && turn(lower.at(-2)!, lower.at(-1)!, point) <= 0) lower.pop();
+    lower.push(point);
+  });
+  const upper: SoftwareProjectedPoint[] = [];
+  for (let index = visible.length - 1; index >= 0; index -= 1) {
+    const point = visible[index];
+    while (upper.length >= 2 && turn(upper.at(-2)!, upper.at(-1)!, point) <= 0) upper.pop();
+    upper.push(point);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }
 
 function subtract(a: SoftwarePoint3, b: SoftwarePoint3): SoftwarePoint3 {
