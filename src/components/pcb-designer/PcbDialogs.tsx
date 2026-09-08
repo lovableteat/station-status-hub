@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Box, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -185,7 +186,7 @@ export function PcbDialogs({
       const height = positiveNumber(values.height);
       const maxHeight = positiveNumber(values.maxHeight);
       if (!width || !height || !maxHeight) {
-        setError("尺寸與最大高度必須是大於 0 的數值。");
+        setError("長度、寬度與高度必須是大於 0 的數值。");
         return;
       }
       onSaveComponent({
@@ -222,6 +223,7 @@ export function PcbDialogs({
   return (
     <Dialog open={Boolean(dialog)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
+        data-dialog-kind={dialog?.kind}
         data-dialog-tone={
           dialog?.kind === "confirm"
             ? "danger"
@@ -422,29 +424,43 @@ export function PcbDialogs({
             onSubmit={submit}
             className="workspace-dialog-section workspace-dialog-section--violet rounded-2xl p-4"
           >
-            <DialogHeader>
-              <DialogTitle className={dialog.kind === "project-settings" ? "text-cyan-100" : undefined}>
-                {dialog.kind === "new-project" && "新增 PCB 專案"}
-                {dialog.kind === "project-settings" && "專案設定"}
-                {dialog.kind === "save-template" && "儲存為模板"}
-                {dialog.kind === "rename-template" && "重新命名模板"}
-                {dialog.kind === "component" && (dialog.component ? "編輯自訂元件" : "新增自訂元件")}
-              </DialogTitle>
-              <DialogDescription className="text-slate-300">
-                請填寫必要欄位後再儲存變更。
-              </DialogDescription>
+            <DialogHeader className={dialog.kind === "component" ? "pcb-component-dialog-header" : undefined}>
+              {dialog.kind === "component" && (
+                <span className="pcb-component-dialog-icon" aria-hidden="true">
+                  <Box />
+                </span>
+              )}
+              <div>
+                {dialog.kind === "component" && (
+                  <span className="pcb-component-dialog-eyebrow">PCB COMPONENT LIBRARY</span>
+                )}
+                <DialogTitle className={dialog.kind === "project-settings" ? "text-cyan-100" : undefined}>
+                  {dialog.kind === "new-project" && "新增 PCB 專案"}
+                  {dialog.kind === "project-settings" && "專案設定"}
+                  {dialog.kind === "save-template" && "儲存為模板"}
+                  {dialog.kind === "rename-template" && "重新命名模板"}
+                  {dialog.kind === "component" && (dialog.component ? "編輯自訂元件" : "新增自訂元件")}
+                </DialogTitle>
+                <DialogDescription className="text-slate-300">
+                  {dialog.kind === "component"
+                    ? "設定元件資料與實體尺寸；尺寸順序固定為長 × 寬 × 高。"
+                    : "請填寫必要欄位後再儲存變更。"}
+                </DialogDescription>
+              </div>
             </DialogHeader>
 
-            <div className="mt-4 space-y-3">
-              <label data-pcb-field-tone="identity" className="block text-xs text-slate-300">
-                名稱
-                <Input
-                  value={values.name ?? ""}
-                  onChange={(event) => update("name", event.target.value)}
-                  className="mt-1 h-9 border-[#356985] bg-[#10263a]"
-                  autoFocus
-                />
-              </label>
+            <div className="pcb-dialog-form-body mt-4 space-y-3">
+              {dialog.kind !== "component" && (
+                <label data-pcb-field-tone="identity" className="block text-xs text-slate-300">
+                  名稱
+                  <Input
+                    value={values.name ?? ""}
+                    onChange={(event) => update("name", event.target.value)}
+                    className="mt-1 h-9 border-[#356985] bg-[#10263a]"
+                    autoFocus
+                  />
+                </label>
+              )}
 
               {(dialog.kind === "new-project" || dialog.kind === "project-settings") && (
                 <>
@@ -491,62 +507,107 @@ export function PcbDialogs({
               )}
 
               {dialog.kind === "component" && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="block text-xs text-slate-300">
-                      類型
-                      <select
-                        value={values.type ?? "Other"}
-                        onChange={(event) => update("type", event.target.value)}
-                        className="mt-1 h-9 w-full rounded-md border border-[#356985] bg-[#10263a] px-3 text-sm"
-                      >
-                        <option>Other</option>
-                        <option>IC</option>
-                        <option>Connector</option>
-                        <option>Resistor</option>
-                        <option>Capacitor</option>
-                        <option>Screw Hole</option>
-                      </select>
-                    </label>
-                    <label className="block text-xs text-slate-300">
-                      元件形狀
-                      <select
-                        value={values.shape ?? "rectangle"}
-                        onChange={(event) => update("shape", event.target.value)}
-                        className="mt-1 h-9 w-full rounded-md border border-[#356985] bg-[#10263a] px-3 text-sm"
-                      >
-                        <option value="rectangle">矩形</option>
-                        <option value="circle">圓形（Screw Hole）</option>
-                      </select>
-                    </label>
-                    <label className="col-span-2 block text-xs text-slate-300">
-                      顏色
-                      <span className="mt-1 flex h-10 items-center gap-3 rounded-md border border-[#356985] bg-[#10263a] px-2">
-                        <input
-                          type="color"
-                          value={values.color || "#39c6e8"}
-                          onChange={(event) => update("color", event.target.value)}
-                          aria-label="選擇元件顏色"
-                          className="h-8 w-12 cursor-pointer rounded border-0 bg-transparent p-0"
+                <div className="pcb-component-form-stack">
+                  <section className="pcb-component-form-section" data-section-tone="identity">
+                    <header>
+                      <span>01</span>
+                      <div>
+                        <strong>基本資料</strong>
+                        <small>辨識元件與板面外形</small>
+                      </div>
+                    </header>
+                    <div className="pcb-component-identity-grid">
+                      <label className="pcb-component-name-field block text-xs text-slate-300">
+                        名稱
+                        <Input
+                          value={values.name ?? ""}
+                          onChange={(event) => update("name", event.target.value)}
+                          autoFocus
                         />
-                        <span className="h-6 flex-1 rounded" style={{ backgroundColor: values.color || "#39c6e8" }} />
-                        <span className="font-mono text-xs text-slate-300">已選顏色</span>
-                      </span>
-                    </label>
-                    <TextField label="製造商" value={values.manufacturer} onChange={(value) => update("manufacturer", value)} />
-                    <TextField label="料號" value={values.partNumber} onChange={(value) => update("partNumber", value)} />
-                    <NumberField label="寬度 (mm)" value={values.width} onChange={(value) => update("width", value)} />
-                    <NumberField label="高度 (mm)" value={values.height} onChange={(value) => update("height", value)} />
-                    <NumberField label="最大高度 (mm)" value={values.maxHeight} onChange={(value) => update("maxHeight", value)} />
-                  </div>
-                </>
+                      </label>
+                      <label className="block text-xs text-slate-300">
+                        類型
+                        <select
+                          value={values.type ?? "Other"}
+                          onChange={(event) => update("type", event.target.value)}
+                        >
+                          <option>Other</option>
+                          <option>IC</option>
+                          <option>Connector</option>
+                          <option>Resistor</option>
+                          <option>Capacitor</option>
+                          <option>Screw Hole</option>
+                        </select>
+                      </label>
+                      <label className="block text-xs text-slate-300">
+                        板面形狀
+                        <select
+                          value={values.shape ?? "rectangle"}
+                          onChange={(event) => update("shape", event.target.value)}
+                        >
+                          <option value="rectangle">矩形</option>
+                          <option value="circle">圓形（Screw Hole）</option>
+                        </select>
+                      </label>
+                    </div>
+                  </section>
+
+                  <section className="pcb-component-form-section" data-section-tone="source">
+                    <header>
+                      <span>02</span>
+                      <div>
+                        <strong>識別與外觀</strong>
+                        <small>料件資訊與畫布顏色</small>
+                      </div>
+                    </header>
+                    <div className="pcb-component-source-grid">
+                      <TextField label="製造商" value={values.manufacturer} onChange={(value) => update("manufacturer", value)} />
+                      <TextField label="料號" value={values.partNumber} onChange={(value) => update("partNumber", value)} />
+                      <label className="pcb-component-color-field block text-xs text-slate-300">
+                        元件顏色
+                        <span className="pcb-component-color-control">
+                          <input
+                            type="color"
+                            value={values.color || "#39c6e8"}
+                            onChange={(event) => update("color", event.target.value)}
+                            aria-label="選擇元件顏色"
+                          />
+                          <span className="pcb-component-color-swatch" style={{ backgroundColor: values.color || "#39c6e8" }} />
+                          <span>{values.color || "#39c6e8"}</span>
+                        </span>
+                      </label>
+                    </div>
+                  </section>
+
+                  <section className="pcb-component-form-section" data-section-tone="dimensions">
+                    <header>
+                      <span className="pcb-component-section-icon" aria-hidden="true"><Ruler /></span>
+                      <div>
+                        <strong>實體尺寸</strong>
+                        <small>固定順序：長 × 寬 × 高，單位皆為 mm</small>
+                      </div>
+                    </header>
+                    <div className="pcb-component-dimension-order" aria-label="尺寸方向說明">
+                      <span><b>X</b> 長度・板面左右</span>
+                      <i>×</i>
+                      <span><b>Y</b> 寬度・板面上下</span>
+                      <i>×</i>
+                      <span><b>Z</b> 高度・離板高度</span>
+                    </div>
+                    <div className="pcb-component-dimension-grid">
+                      <NumberField axis="X" label="長度 (mm)" value={values.width} onChange={(value) => update("width", value)} />
+                      <NumberField axis="Y" label="寬度 (mm)" value={values.height} onChange={(value) => update("height", value)} />
+                      <NumberField axis="Z" label="高度 (mm)" value={values.maxHeight} onChange={(value) => update("maxHeight", value)} />
+                    </div>
+                  </section>
+                </div>
               )}
             </div>
 
             {error && <p className="mt-3 text-sm text-rose-300" role="alert">{error}</p>}
             <DialogFooter data-pcb-project-footer className="mt-5">
               <Button type="button" variant="outline" onClick={onClose}>取消</Button>
-              <Button type="submit">儲存</Button>
+              <Button type="submit">{dialog.kind === "component" ? "儲存元件" : "儲存"}</Button>
             </DialogFooter>
           </form>
         )}
@@ -577,16 +638,18 @@ function TextField({
 }
 
 function NumberField({
+  axis,
   label,
   value,
   onChange,
 }: {
+  axis?: "X" | "Y" | "Z";
   label: string;
   value?: string;
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="block text-xs text-slate-300">
+    <label data-dimension-axis={axis} className="block text-xs text-slate-300">
       {label}
       <Input
         type="number"
