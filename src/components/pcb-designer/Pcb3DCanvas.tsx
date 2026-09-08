@@ -1,3 +1,4 @@
+import { getPcbModelRenderIndices } from "./core/modelProjection.ts";
 import { Component, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, Edges, Html, OrbitControls } from "@react-three/drei";
@@ -155,37 +156,41 @@ function ModelPartMesh({
   part,
   positions,
   color,
+  name = "",
+  upAxis = "y",
 }: {
   part: PcbModelAssetPart;
   positions: number[];
   color: string;
+  name?: string;
+  upAxis?: "x" | "y" | "z";
 }) {
   const material = useMemo(() => {
-    const partName = part.name.toLocaleLowerCase();
+    const partName = name.toLocaleLowerCase();
     const parsedColor = safeColor(color, "#6bc7d9");
     const nearlyNeutral = Math.max(parsedColor.r, parsedColor.g, parsedColor.b)
       - Math.min(parsedColor.r, parsedColor.g, parsedColor.b) < 0.14;
-    const metallic = nearlyNeutral || /(pin|lead|terminal|contact|metal|shield|screw|bolt|nut)/.test(partName);
+    const metallic = (nearlyNeutral && Math.min(parsedColor.r, parsedColor.g, parsedColor.b) > 0.45) || /(pin|lead|terminal|contact|metal|shield|screw|bolt|nut)/.test(partName);
     return {
       color: parsedColor,
       metalness: metallic ? 0.72 : 0.12,
       roughness: metallic ? 0.24 : 0.42,
       clearcoat: metallic ? 0.12 : 0.32,
     };
-  }, [color, part.name]);
+  }, [color, name]);
   const geometry = useMemo(() => {
     const next = new BufferGeometry();
     next.setAttribute("position", new Float32BufferAttribute(positions, 3));
-    next.setIndex(new Uint32BufferAttribute(part.index, 1));
+    next.setIndex(new Uint32BufferAttribute(getPcbModelRenderIndices(part.index, upAxis), 1));
     next.computeVertexNormals();
     return next;
-  }, [part.index, positions]);
+  }, [part.index, positions, upAxis]);
 
   useEffect(() => () => geometry.dispose(), [geometry]);
 
   return (
     <mesh geometry={geometry} castShadow receiveShadow>
-      <meshPhysicalMaterial {...material} clearcoatRoughness={0.32} />
+      <meshPhysicalMaterial {...material} side={DoubleSide} clearcoatRoughness={0.32} />
     </mesh>
   );
 }
@@ -276,13 +281,15 @@ function ProceduralComponentMeshes({
 
 function StoredModelMeshes({ asset, component }: { asset: PcbModelAsset; component: PcbWorkspaceApi["activeProject"]["components"][number] }) {
   return (
-    <group data-model-renderer="buffer-geometry">
+    <group userData={{ modelRenderer: "buffer-geometry" }}>
       {asset.parts.map((part) => (
         <ModelPartMesh
           key={part.id}
           part={part}
           positions={mapPcbModelPartToComponentSpace(part, asset, component)}
-          color={getPcbModelPartColor(asset, part.id, component.color)}
+          color={getPcbModelPartColor(asset, part.id, "#b7bec7")}
+          name={asset.metadata.parts.find(meta => meta.id === part.id)?.name}
+          upAxis={asset.metadata.upAxis}
         />
       ))}
     </group>
@@ -327,12 +334,16 @@ function Scene({
     const store = getDefaultPcbModelAssetStore();
     const ids = modelAssetKey ? modelAssetKey.split("|") : [];
     void Promise.all(ids.map(async (id) => {
-      let asset = await store.get(id);
-      if (!asset) {
-        asset = await loadModelAsset(id);
-        if (asset) await store.put(asset);
+      try {
+        let asset = await store.get(id).catch(() => null);
+        if (!asset || !isPcbModelAsset(asset)) {
+          asset = await loadModelAsset(id);
+          if (asset) await store.put(asset).catch(() => undefined);
+        }
+        return [id, asset] as const;
+      } catch {
+        return [id, null] as const;
       }
-      return [id, asset] as const;
     }))
       .then((entries) => {
         if (!active) return;
@@ -444,6 +455,7 @@ function Scene({
       </mesh>
 
       <ContactShadows
+        key={Object.keys(modelAssets).filter(id => modelAssets[id]).join("|")}
         position={[0, -boardThickness / 2 - 0.8, 0]}
         opacity={0.34}
         scale={Math.max(project.board.width, project.board.height) * 1.9}
@@ -526,12 +538,15 @@ function Scene({
               }}
             >
               {proceduralFallback
-                ? <ProceduralComponentMeshes component={component} selected={selected} />
+                ? component.modelAssetId ? <mesh>
+                    <boxGeometry args={[component.width, component.maxHeight, component.height]} />
+                    <meshBasicMaterial color="#91a4b8" wireframe />
+                  </mesh> : <ProceduralComponentMeshes component={component} selected={selected} />
                 : <StoredModelMeshes asset={modelAsset} component={component} />}
             </group>
             {component.modelAssetId && useProceduralFallback && (
               <Html center position={[0, component.maxHeight / 2 + 2, 0]} distanceFactor={80}>
-                <span className="pcb-3d-fallback-hint" role="status">3D 模型無法載入，使用程序化外觀</span>
+                <span className="pcb-3d-fallback-hint" style={{ display: "block", width: 190, whiteSpace: "normal", textAlign: "center" }} role="status">{modelAssets[component.modelAssetId] === undefined ? "正在載入 STEP 模型…" : "STEP 模型載入失敗，請重新開啟 3D 重試"}</span>
               </Html>
             )}
             {selected && (
