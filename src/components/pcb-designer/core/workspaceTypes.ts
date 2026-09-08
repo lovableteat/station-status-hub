@@ -76,6 +76,7 @@ export type PcbWorkspaceAction =
   | { type: "library/duplicate"; componentId: string }
   | { type: "library/delete"; componentId: string }
   | { type: "library/import"; components: ImportedComponent[] }
+  | { type: "library/import-model"; component: ImportedComponent; metadata: PcbModelAssetMetadata }
   | { type: "bom/import"; items: ImportedBomItem[] }
   | { type: "bom/remove"; index: number }
   | { type: "history/undo" }

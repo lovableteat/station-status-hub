@@ -255,6 +255,11 @@ export function usePcbWorkspace({
       dispatch({ type: "library/import", components }),
     [],
   );
+  const importLibraryModel = useCallback(
+    (component: ImportedComponent, metadata: PcbModelAssetMetadata) =>
+      dispatch({ type: "library/import-model", component, metadata }),
+    [],
+  );
   const importBom = useCallback(
     (items: ImportedBomItem[]) => dispatch({ type: "bom/import", items }),
     [],
@@ -346,6 +351,7 @@ export function usePcbWorkspace({
     duplicateLibraryComponent,
     deleteLibraryComponent,
     uploadLibraryComponents,
+    importLibraryModel,
     importBom,
     removePendingPlacement,
     undo,

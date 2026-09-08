@@ -1,4 +1,5 @@
 import type { ImportedStepModel } from "@/components/data-center/dataCenterTypes";
+import type { ImportedComponent } from "./tabular.ts";
 import type {
   PcbModelAsset,
   PcbModelAssetMetadata,
@@ -15,6 +16,37 @@ export const MAX_PCB_MODEL_INDICES = 1_500_000;
 export function isStepModelFile(file: File): boolean {
   const name = file.name.toLocaleLowerCase();
   return name.endsWith(".stp") || name.endsWith(".step");
+}
+
+function stepFileDisplayName(fileName: string): string {
+  const withoutExtension = fileName.replace(/\.(?:stp|step)$/i, "");
+  return withoutExtension.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim() || "STEP 元件";
+}
+
+function partColorToHex(color?: [number, number, number]): string {
+  if (!color) return "#63c6dd";
+  const channel = (value: number) => Math.round(Math.min(1, Math.max(0, value)) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `#${color.map(channel).join("")}`;
+}
+
+/** Builds an immediately placeable library record from measured STEP metadata. */
+export function toStepLibraryComponent(
+  metadata: PcbModelAssetMetadata,
+): ImportedComponent {
+  const dimensions = metadata.calibratedDimensions;
+  return {
+    name: stepFileDisplayName(metadata.fileName),
+    type: "STEP 3D 元件",
+    manufacturer: "",
+    partNumber: stepFileDisplayName(metadata.fileName),
+    width: dimensions.widthMm,
+    height: dimensions.depthMm,
+    maxHeight: dimensions.heightMm,
+    color: partColorToHex(metadata.parts.find((part) => part.color)?.color),
+    shape: "rectangle",
+  };
 }
 
 function clonePart(part: PcbModelAssetPart): PcbModelAssetPart {

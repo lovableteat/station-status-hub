@@ -641,6 +641,24 @@ export function reduceWorkspaceState(
           updatedAt: timestamp(),
         },
       });
+    case "library/import-model": {
+      const component = {
+        ...toLibraryComponent(action.component),
+        modelAssetId: action.metadata.id,
+      };
+      return materialize({
+        ...state,
+        data: {
+          ...state.data,
+          library: [...state.data.library.map(clone), component],
+          modelAssets: {
+            ...(state.data.modelAssets ?? {}),
+            [action.metadata.id]: clone(action.metadata),
+          },
+          updatedAt: timestamp(),
+        },
+      });
+    }
     case "bom/import": {
       let importCount = 0;
       for (const item of action.items) {
