@@ -1,3 +1,4 @@
+import { getPcbModelRenderIndices } from "./core/modelProjection.ts";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
 import {
   useCallback,
@@ -20,18 +21,18 @@ import {
 } from "./core/modelAssets.ts";
 import {
   DEFAULT_SOFTWARE_VIEW,
-  MAX_SOFTWARE_MODEL_TRIANGLES,
+
   SOFTWARE_RENDER_ORDER,
   compareSoftwareRenderDepth,
   createSoftwareBoxVertices,
   createSoftwareCamera,
   getSoftwareFaceNormal,
   getSoftwareCanvasResolution,
-  getSoftwareProjectedHull,
+
   getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
   projectSoftwarePoint,
-  sampleTriangleOffsets,
+
   transformPcbComponentPoint,
   type SoftwarePoint3,
   type SoftwareProjectedPoint,
@@ -188,12 +189,16 @@ export function PcbSoftware3DCanvas({
     const store = getDefaultPcbModelAssetStore();
     const ids = modelAssetKey ? modelAssetKey.split("|") : [];
     void Promise.all(ids.map(async (id) => {
-      let asset = await store.get(id);
-      if (!asset) {
-        asset = await loadModelAsset(id);
-        if (asset) await store.put(asset);
+      try {
+        let asset = await store.get(id).catch(() => null);
+        if (!asset || !isPcbModelAsset(asset)) {
+          asset = await loadModelAsset(id);
+          if (asset) await store.put(asset).catch(() => undefined);
+        }
+        return [id, asset] as const;
+      } catch {
+        return [id, null] as const;
       }
-      return [id, asset] as const;
     })).then((entries) => {
       if (!active) return;
       setModelAssets(Object.fromEntries(entries.map(([id, asset]) => [id, asset && isPcbModelAsset(asset) ? asset : null])));
@@ -209,7 +214,7 @@ export function PcbSoftware3DCanvas({
       const asset = component.modelAssetId ? modelAssets[component.modelAssetId] : null;
       if (!asset) return;
       mapped[component.instanceId] = asset.parts.map((part) => ({
-        part,
+        part: { ...part, index: getPcbModelRenderIndices(part.index, asset.metadata.upAxis) },
         positions: mapPcbModelPartToComponentSpace(part, asset, component),
       }));
     });
@@ -422,8 +427,6 @@ export function PcbSoftware3DCanvas({
         viewState: getPcbComponentViewState(component, visibleLayer, selectionIds),
       }))
       .filter(({ viewState }) => viewState.visible);
-    const modelComponentCount = Math.max(1, visibleComponents.filter(({ component }) => component.modelAssetId && modelAssets[component.modelAssetId]).length);
-    const modelBudget = Math.max(320, Math.floor(MAX_SOFTWARE_MODEL_TRIANGLES / modelComponentCount));
 
     visibleComponents.forEach(({ component, viewState }) => {
       const selected = viewState.selected;
@@ -474,34 +477,10 @@ export function PcbSoftware3DCanvas({
           addBox(worldBounds, component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
         }
       } else {
-        const totalTriangles = Math.max(1, cachedParts.reduce((total, { part }) => total + Math.floor(part.index.length / 3), 0));
         cachedParts.forEach(({ part, positions }) => {
-          const partTriangleCount = Math.floor(part.index.length / 3);
-          const partBudget = Math.max(1, Math.floor(modelBudget * (partTriangleCount / totalTriangles)));
-          const color = getPcbModelPartColor(asset, part.id, component.color);
-          const vertexStride = Math.max(1, Math.ceil(positions.length / 3 / 5_000));
-          const silhouettePoints: SoftwareProjectedPoint[] = [];
-          for (let vertexOffset = 0; vertexOffset < positions.length; vertexOffset += 3 * vertexStride) {
-            silhouettePoints.push(projectSoftwarePoint(transformPcbComponentPoint({
-              x: positions[vertexOffset],
-              y: positions[vertexOffset + 1],
-              z: positions[vertexOffset + 2],
-            }, component, project.board, BOARD_THICKNESS), camera));
-          }
-          const silhouette = getSoftwareProjectedHull(silhouettePoints);
-          if (silhouette.length >= 3) {
-            shapes.push({
-              kind: "polygon",
-              points: silhouette,
-              depth: Math.max(...silhouette.map((point) => point.depth)) + 0.001,
-              renderOrder,
-              fill: shadeColor(color, 0.78),
-              stroke: shadeColor(color, selected ? 0.98 : 0.56),
-              alpha: 1,
-              lineWidth: selected ? 0.9 : 0.45,
-            });
-          }
-          sampleTriangleOffsets(part.index.length, partBudget).forEach((offset) => {
+          const color = getPcbModelPartColor(asset, part.id, "#b7bec7");
+          // Skipping triangles opens holes in the model; draw every source face.
+          for (let offset = 0; offset < part.index.length; offset += 3) {
             const worldPoints = [0, 1, 2].map((corner) => {
               const vertexIndex = part.index[offset + corner] * 3;
               return transformPcbComponentPoint({
@@ -517,9 +496,9 @@ export function PcbSoftware3DCanvas({
               shadeColor(color, selected ? 0.82 : 0.58),
               renderOrder,
               1,
-              selected ? 0.32 : 0.16,
+              0,
             );
-          });
+          }
         });
       }
 
@@ -550,7 +529,7 @@ export function PcbSoftware3DCanvas({
       } else {
         context.lineTo(shape.points[1].x, shape.points[1].y);
       }
-      context.stroke();
+      if (shape.lineWidth > 0) context.stroke();
       context.restore();
     });
 

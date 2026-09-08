@@ -1,3 +1,4 @@
+import { getPcbModelTopViewImage } from "./core/modelProjection.ts";
 import {
   useCallback,
   useEffect,
@@ -37,7 +38,6 @@ import { getComponentKeepoutBounds, KEEPOUT_SIDES, KEEPOUT_SIDE_LABELS, resizeCo
 import { PcbComponentKeepoutDialog } from "./PcbComponentKeepoutDialog";
 import { measurementShortcutLabel } from "./core/measurementShortcuts.ts";
 import {
-  buildPcbModelFootprint,
   getDefaultPcbModelAssetStore,
   isPcbModelAsset,
 } from "./core/modelAssets.ts";
@@ -285,12 +285,16 @@ export function PcbCanvas({
     const store = getDefaultPcbModelAssetStore();
     const ids = modelAssetKey ? modelAssetKey.split("|") : [];
     void Promise.all(ids.map(async (id) => {
-      let asset = await store.get(id);
-      if (!asset) {
-        asset = await loadModelAsset(id);
-        if (asset) await store.put(asset);
+      try {
+        let asset = await store.get(id).catch(() => null);
+        if (!asset || !isPcbModelAsset(asset)) {
+          asset = await loadModelAsset(id);
+          if (asset) await store.put(asset).catch(() => undefined);
+        }
+        return [id, asset] as const;
+      } catch {
+        return [id, null] as const;
       }
-      return [id, asset] as const;
     })).then((entries) => {
       if (!active) return;
       setModelAssets(Object.fromEntries(entries.map(([id, asset]) => [
@@ -305,7 +309,7 @@ export function PcbCanvas({
   const modelFootprints = useMemo(
     () => Object.fromEntries(Object.entries(modelAssets).map(([id, asset]) => [
       id,
-      asset ? buildPcbModelFootprint(asset) : [],
+      asset ? getPcbModelTopViewImage(asset) : "",
     ])),
     [modelAssets],
   );
@@ -1325,8 +1329,8 @@ export function PcbCanvas({
           {visibleComponents.map(({ component, viewState }) => {
             const center = previewPointForComponent(component);
             const footprint = component.modelAssetId
-              ? modelFootprints[component.modelAssetId] ?? []
-              : [];
+              ? modelFootprints[component.modelAssetId] ?? ""
+              : "";
             const previewViewState = getPcbComponentViewState({
               instanceId: component.instanceId,
               x: center.x,
@@ -1371,18 +1375,9 @@ export function PcbCanvas({
                       onPointerDown={(event) => beginComponentDrag(event, component)}
                     />
                     <g className="pcb-step-footprint" pointerEvents="none">
-                      {footprint.map((primitive) => (
-                        <polygon
-                          key={primitive.id}
-                          data-footprint-role={primitive.role}
-                          points={primitive.points.map((point) => `${point.x * component.width},${point.y * component.height}`).join(" ")}
-                          fill={primitive.role === "lead" ? "#f6c453" : primitive.color}
-                          fillOpacity={primitive.role === "lead" ? 0.96 : component.layer === "bottom" ? 0.32 : 0.68}
-                          stroke={primitive.role === "lead" ? "#fff1ad" : "#142d3d"}
-                          strokeWidth={strokeWidth * (primitive.role === "lead" ? 0.72 : 0.48)}
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      ))}
+                      <image href={footprint} x={-component.width / 2} y={-component.height / 2}
+                        width={component.width} height={component.height} preserveAspectRatio="none"
+                        opacity={component.layer === "bottom" ? 0.5 : 1} data-model-projection="triangles" />
                     </g>
                   </>
                 ) : component.shape === "circle" ? (
@@ -1410,7 +1405,8 @@ export function PcbCanvas({
                 )}
                 <text
                   className="pcb-svg-label pcb-component-reference"
-                  fontSize={Math.max(1.5, Math.min(component.width, component.height) * 0.34)}
+                  fontSize={footprint ? Math.max(0.8, Math.min(component.width, component.height) * 0.12) : Math.max(1.5, Math.min(component.width, component.height) * 0.34)}
+                  y={footprint ? -component.height / 2 - Math.max(0.8, component.height * 0.1) : 0}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   pointerEvents="none"
