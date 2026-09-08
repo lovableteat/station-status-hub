@@ -1,5 +1,10 @@
 import type { PcbSaveState } from "../types.ts";
 import { isPcbSaveState, refreshBuiltInCatalog } from "./storage.ts";
+import {
+  deserializePcbModelAsset,
+  serializePcbModelAsset,
+} from "./modelAssets.ts";
+import type { PcbModelAsset } from "../types.ts";
 import type {
   PcbProjectLock,
   PcbProjectLockResult,
@@ -43,7 +48,9 @@ export interface PcbAccountDatabase {
       | "acquire_pcb_designer_project_lock"
       | "load_pcb_designer_project_lock"
       | "release_pcb_designer_project_lock"
-      | "delete_pcb_designer_project_locked",
+      | "delete_pcb_designer_project_locked"
+      | "save_pcb_designer_model_asset"
+      | "load_pcb_designer_model_asset",
     args: Record<string, unknown>,
   ) => DatabaseResult<unknown>;
   from: (table: "system_users") => SystemUserTable;
@@ -94,6 +101,13 @@ function parseProjectLock(value: unknown): PcbProjectLockResult | null {
     acquired: payload.acquired,
     lock: lock as unknown as PcbProjectLock,
   };
+}
+
+function parseCloudModel(value: unknown): { payloadBase64: string } | null {
+  const payload = asRecord(value);
+  return typeof payload.payloadBase64 === "string" && payload.payloadBase64
+    ? { payloadBase64: payload.payloadBase64 }
+    : null;
 }
 
 const LEGACY_LOCK_RESULT: PcbProjectLockResult = {
@@ -336,6 +350,34 @@ export function createPcbAccountRemoteClient(
         p_editor_client_id: clientId,
       });
       return !result.error && result.data === true;
+    },
+    saveModelAsset: async (asset: PcbModelAsset) => {
+      try {
+        const payloadBase64 = await serializePcbModelAsset(asset);
+        const result = await database.rpc("save_pcb_designer_model_asset", {
+          p_user_id: userId,
+          p_asset_id: asset.metadata.id,
+          p_metadata: asset.metadata,
+          p_payload_base64: payloadBase64,
+        });
+        return !result.error;
+      } catch {
+        return false;
+      }
+    },
+    loadModelAsset: async (assetId: string) => {
+      const result = await database.rpc("load_pcb_designer_model_asset", {
+        p_user_id: userId,
+        p_asset_id: assetId,
+      });
+      if (result.error) return null;
+      const cloud = parseCloudModel(result.data);
+      if (!cloud) return null;
+      try {
+        return await deserializePcbModelAsset(cloud.payloadBase64);
+      } catch {
+        return null;
+      }
     },
   };
 }

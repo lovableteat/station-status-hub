@@ -305,7 +305,7 @@ test("round-trips model metadata and an assigned component asset id", () => {
   assert.equal(loaded.load().projects[0].components[0].modelAssetId, asset.id);
 });
 
-test("drops an invalid or missing model asset reference without rejecting the project", () => {
+test("preserves a model asset reference so another computer can retrieve it from cloud storage", () => {
   const repository = new PcbLocalRepository(new MemoryStorage());
   const state = repository.load();
   const project = {
@@ -324,7 +324,7 @@ test("drops an invalid or missing model asset reference without rejecting the pr
   };
 
   const saved = repository.save({ ...state, projects: [project], modelAssets: {} });
-  assert.equal(saved.projects[0].components[0].modelAssetId, undefined);
+  assert.equal(saved.projects[0].components[0].modelAssetId, "deleted-asset");
 });
 
 test("refreshes stale built-in templates while preserving custom catalog records", () => {
