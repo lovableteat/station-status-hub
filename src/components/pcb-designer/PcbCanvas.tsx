@@ -36,12 +36,18 @@ import { getMarqueeSelectionIds } from "./core/selection.ts";
 import { getComponentKeepoutBounds, KEEPOUT_SIDES, KEEPOUT_SIDE_LABELS, resizeComponentKeepoutSide } from "./core/componentKeepout.ts";
 import { PcbComponentKeepoutDialog } from "./PcbComponentKeepoutDialog";
 import { measurementShortcutLabel } from "./core/measurementShortcuts.ts";
+import {
+  buildPcbModelFootprint,
+  getDefaultPcbModelAssetStore,
+  isPcbModelAsset,
+} from "./core/modelAssets.ts";
 import { PcbMeasurementShortcutsDialog } from "./PcbMeasurementShortcutsDialog";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 import type {
   PcbComponentKeepout,
   PcbKeepout,
   PcbMeasurement,
+  PcbModelAsset,
   PcbPlacedComponent,
   PcbPoint,
   PcbProject,
@@ -266,6 +272,42 @@ export function PcbCanvas({
   const visibleComponents = useMemo(
     () => componentViewStates.filter(({ viewState }) => viewState.visible),
     [componentViewStates],
+  );
+  const loadModelAsset = workspace.loadModelAsset;
+  const modelAssetIds = useMemo(
+    () => [...new Set(project.components.map((component) => component.modelAssetId).filter(Boolean))] as string[],
+    [project.components],
+  );
+  const modelAssetKey = modelAssetIds.join("|");
+  const [modelAssets, setModelAssets] = useState<Record<string, PcbModelAsset | null>>({});
+  useEffect(() => {
+    let active = true;
+    const store = getDefaultPcbModelAssetStore();
+    const ids = modelAssetKey ? modelAssetKey.split("|") : [];
+    void Promise.all(ids.map(async (id) => {
+      let asset = await store.get(id);
+      if (!asset) {
+        asset = await loadModelAsset(id);
+        if (asset) await store.put(asset);
+      }
+      return [id, asset] as const;
+    })).then((entries) => {
+      if (!active) return;
+      setModelAssets(Object.fromEntries(entries.map(([id, asset]) => [
+        id,
+        asset && isPcbModelAsset(asset) ? asset : null,
+      ])));
+    });
+    return () => {
+      active = false;
+    };
+  }, [loadModelAsset, modelAssetKey]);
+  const modelFootprints = useMemo(
+    () => Object.fromEntries(Object.entries(modelAssets).map(([id, asset]) => [
+      id,
+      asset ? buildPcbModelFootprint(asset) : [],
+    ])),
+    [modelAssets],
   );
   const selectedComponentIds = useMemo(
     () => new Set(
@@ -1282,6 +1324,9 @@ export function PcbCanvas({
         <g data-layer="components">
           {visibleComponents.map(({ component, viewState }) => {
             const center = previewPointForComponent(component);
+            const footprint = component.modelAssetId
+              ? modelFootprints[component.modelAssetId] ?? []
+              : [];
             const previewViewState = getPcbComponentViewState({
               instanceId: component.instanceId,
               x: center.x,
@@ -1311,7 +1356,36 @@ export function PcbCanvas({
                   selectWithKeyboard(event, { kind: "component", id: component.instanceId })}
                 aria-label={`元件 ${component.reference} ${component.name}${component.locked ? "（已鎖定）" : ""}`}
               >
-                {component.shape === "circle" ? (
+                {footprint.length > 0 ? (
+                  <>
+                    <rect
+                      x={-component.width / 2}
+                      y={-component.height / 2}
+                      width={component.width}
+                      height={component.height}
+                      rx={Math.min(0.55, component.width / 8, component.height / 8)}
+                      fill="transparent"
+                      stroke={selectedComponentIds.has(component.instanceId) ? "#f8fafc" : "#4c7184"}
+                      strokeWidth={strokeWidth * 0.72}
+                      strokeDasharray={selectedComponentIds.has(component.instanceId) ? undefined : `${strokeWidth * 2.2} ${strokeWidth * 1.4}`}
+                      onPointerDown={(event) => beginComponentDrag(event, component)}
+                    />
+                    <g className="pcb-step-footprint" pointerEvents="none">
+                      {footprint.map((primitive) => (
+                        <polygon
+                          key={primitive.id}
+                          data-footprint-role={primitive.role}
+                          points={primitive.points.map((point) => `${point.x * component.width},${point.y * component.height}`).join(" ")}
+                          fill={primitive.role === "lead" ? "#f6c453" : primitive.color}
+                          fillOpacity={primitive.role === "lead" ? 0.96 : component.layer === "bottom" ? 0.32 : 0.68}
+                          stroke={primitive.role === "lead" ? "#fff1ad" : "#142d3d"}
+                          strokeWidth={strokeWidth * (primitive.role === "lead" ? 0.72 : 0.48)}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      ))}
+                    </g>
+                  </>
+                ) : component.shape === "circle" ? (
                   <circle
                     r={Math.min(component.width, component.height) / 2}
                     fill={component.color}

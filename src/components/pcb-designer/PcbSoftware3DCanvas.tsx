@@ -14,6 +14,7 @@ import { Box, Focus, MousePointer2 } from "lucide-react";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
 import {
   getDefaultPcbModelAssetStore,
+  getPcbModelPartColor,
   isPcbModelAsset,
   mapPcbModelPartToComponentSpace,
 } from "./core/modelAssets.ts";
@@ -116,12 +117,6 @@ function parseHexColor(value: string, fallback = "#6bc7d9"): [number, number, nu
 function shadeColor(value: string, level: number): string {
   const [red, green, blue] = parseHexColor(value);
   return `rgb(${Math.round(clamp(red * level, 0, 255))} ${Math.round(clamp(green * level, 0, 255))} ${Math.round(clamp(blue * level, 0, 255))})`;
-}
-
-function partColor(asset: PcbModelAsset, partId: string, fallback: string): string {
-  const color = asset.metadata.parts.find((part) => part.id === partId)?.color;
-  if (!color) return fallback;
-  return `#${color.map((channel) => Math.round(clamp(channel, 0, 1) * 255).toString(16).padStart(2, "0")).join("")}`;
 }
 
 function projectedArea(points: readonly SoftwareProjectedPoint[]): number {
@@ -476,7 +471,7 @@ export function PcbSoftware3DCanvas({
         cachedParts.forEach(({ part, positions }) => {
           const partTriangleCount = Math.floor(part.index.length / 3);
           const partBudget = Math.max(1, Math.floor(modelBudget * (partTriangleCount / totalTriangles)));
-          const color = partColor(asset, part.id, component.color);
+          const color = getPcbModelPartColor(asset, part.id, component.color);
           sampleTriangleOffsets(part.index.length, partBudget).forEach((offset) => {
             const worldPoints = [0, 1, 2].map((corner) => {
               const vertexIndex = part.index[offset + corner] * 3;
@@ -490,10 +485,10 @@ export function PcbSoftware3DCanvas({
             addPolygon(
               worldPoints,
               shadeColor(color, getSoftwareLightLevel(normal)),
-              selected ? "#f8fafc" : shadeColor(color, 0.58),
+              shadeColor(color, selected ? 0.82 : 0.58),
               renderOrder,
               1,
-              selected ? 0.95 : 0.2,
+              selected ? 0.32 : 0.16,
             );
           });
         });

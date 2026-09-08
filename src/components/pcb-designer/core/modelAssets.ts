@@ -233,6 +233,134 @@ export function toPcbModelAsset(model: ImportedStepModel): PcbModelAsset {
   return { metadata, parts };
 }
 
+export interface PcbModelFootprintPrimitive {
+  id: string;
+  role: "body" | "lead";
+  /** Normalized top-view coordinates, centered on the component. */
+  points: Array<{ x: number; y: number }>;
+  color: string;
+}
+
+function projectedAxes(upAxis: PcbModelAssetMetadata["upAxis"]) {
+  return {
+    widthAxis: upAxis === "x" ? 1 : 0,
+    depthAxis: upAxis === "z" ? 1 : 2,
+  } as const;
+}
+
+function cross(
+  origin: { x: number; y: number },
+  left: { x: number; y: number },
+  right: { x: number; y: number },
+) {
+  return (left.x - origin.x) * (right.y - origin.y)
+    - (left.y - origin.y) * (right.x - origin.x);
+}
+
+function convexHull(points: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
+  const unique = [...new Map(points.map((point) => [
+    `${point.x.toFixed(5)}:${point.y.toFixed(5)}`,
+    point,
+  ])).values()].sort((left, right) => left.x - right.x || left.y - right.y);
+  if (unique.length <= 2) return unique;
+
+  const lower: typeof unique = [];
+  for (const point of unique) {
+    while (lower.length >= 2 && cross(lower.at(-2)!, lower.at(-1)!, point) <= 0) lower.pop();
+    lower.push(point);
+  }
+  const upper: typeof unique = [];
+  for (let index = unique.length - 1; index >= 0; index -= 1) {
+    const point = unique[index];
+    while (upper.length >= 2 && cross(upper.at(-2)!, upper.at(-1)!, point) <= 0) upper.pop();
+    upper.push(point);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+function footprintPartColor(asset: PcbModelAsset, partId: string, fallback: string): string {
+  const color = asset.metadata.parts.find((part) => part.id === partId)?.color;
+  return color ? partColorToHex(color) : fallback;
+}
+
+export function getPcbModelPartColor(asset: PcbModelAsset, partId: string, fallback: string): string {
+  return footprintPartColor(asset, partId, fallback);
+}
+
+/**
+ * Creates a lightweight top-view mechanical footprint from a STEP assembly.
+ * Separate lead/contact solids remain visible instead of collapsing the model
+ * into the component's rectangular bounding box.
+ */
+export function buildPcbModelFootprint(
+  asset: PcbModelAsset,
+  fallbackColor = "#63c6dd",
+): PcbModelFootprintPrimitive[] {
+  const { min, max } = asset.metadata.bounds;
+  const { widthAxis, depthAxis } = projectedAxes(asset.metadata.upAxis);
+  const widthSpan = Math.max(max[widthAxis] - min[widthAxis], 0.001);
+  const depthSpan = Math.max(max[depthAxis] - min[depthAxis], 0.001);
+  const widthCenter = (min[widthAxis] + max[widthAxis]) / 2;
+  const depthCenter = (min[depthAxis] + max[depthAxis]) / 2;
+
+  const projected = asset.parts.map((part, partIndex) => {
+    const sampleStride = Math.max(1, Math.ceil(part.position.length / 3 / 8_000));
+    const points: Array<{ x: number; y: number }> = [];
+    for (let offset = 0; offset < part.position.length; offset += 3 * sampleStride) {
+      const raw = [part.position[offset], part.position[offset + 1], part.position[offset + 2]];
+      points.push({
+        x: (raw[widthAxis] - widthCenter) / widthSpan,
+        y: (raw[depthAxis] - depthCenter) / depthSpan,
+      });
+    }
+    const hull = convexHull(points);
+    const xs = hull.map((point) => point.x);
+    const ys = hull.map((point) => point.y);
+    const bounds = hull.length ? {
+      minX: Math.min(...xs),
+      maxX: Math.max(...xs),
+      minY: Math.min(...ys),
+      maxY: Math.max(...ys),
+    } : { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    const metadata = asset.metadata.parts[partIndex];
+    return {
+      id: part.id,
+      name: metadata?.name ?? part.id,
+      rawColor: metadata?.color,
+      points: hull,
+      bounds,
+      areaRatio: Math.max(0, bounds.maxX - bounds.minX) * Math.max(0, bounds.maxY - bounds.minY),
+      color: footprintPartColor(asset, part.id, fallbackColor),
+    };
+  }).filter((part) => part.points.length >= 3 && part.areaRatio > 0.000001);
+
+  return projected.map((part) => {
+    const normalizedName = part.name.toLocaleLowerCase();
+    const namedLead = /(?:pin|lead|terminal|contact|solder|pad|ball|leg|腳|針|端子|接點)/i.test(normalizedName);
+    const touchesEdge = part.bounds.minX < -0.38 || part.bounds.maxX > 0.38
+      || part.bounds.minY < -0.38 || part.bounds.maxY > 0.38;
+    const spanX = part.bounds.maxX - part.bounds.minX;
+    const spanY = part.bounds.maxY - part.bounds.minY;
+    const slender = Math.min(spanX, spanY) / Math.max(spanX, spanY, 0.000001) < 0.38;
+    const colorRange = part.rawColor
+      ? Math.max(...part.rawColor) - Math.min(...part.rawColor)
+      : 1;
+    const colorLevel = part.rawColor
+      ? part.rawColor.reduce((sum, channel) => sum + channel, 0) / 3
+      : 0;
+    const metallicContact = colorRange < 0.22 && colorLevel > 0.38 && part.areaRatio < 0.1;
+    const likelyLead = namedLead
+      || metallicContact
+      || (touchesEdge && part.areaRatio < 0.08 && (slender || part.areaRatio < 0.018));
+    return {
+      id: part.id,
+      role: likelyLead ? "lead" : "body",
+      points: part.points,
+      color: part.color,
+    };
+  }).sort((left, right) => Number(left.role === "lead") - Number(right.role === "lead"));
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   const chunkSize = 32_768;
   let binary = "";
