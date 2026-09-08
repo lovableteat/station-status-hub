@@ -23,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PCB_LIBRARY_DRAG_TYPE } from "./PcbCanvas.tsx";
 import { LIBRARY_FILE_ACCEPT } from "./core/files.ts";
@@ -35,7 +34,7 @@ import type {
   PcbWorkspaceApi,
 } from "./hooks/usePcbWorkspace.ts";
 
-export type PcbLeftTab = "projects" | "templates" | "library" | "bom";
+export type PcbLeftTab = "projects" | "templates" | "library";
 
 interface PcbLeftRailProps {
   workspace: PcbWorkspaceApi;
@@ -62,7 +61,6 @@ const tabLabels: Record<PcbLeftTab, string> = {
   projects: "專案",
   templates: "模板中心",
   library: "元件庫",
-  bom: "BOM",
 };
 
 const projectStatusLabels: Record<PcbProject["status"], string> = {
@@ -138,8 +136,8 @@ export function PcbLeftRail({
     () => [...workspace.data.projects]
       .filter((item) =>
         (statusFilter === "all" || item.status === statusFilter)
-        && `${item.name} ${item.description}`.toLocaleLowerCase().includes(normalized))
-      .sort((first, second) => second.updatedAt.localeCompare(first.updatedAt)),
+        && `${item.name} ${item.description} ${item.projectGroup ?? ""} ${item.revision ?? "1"}`.toLocaleLowerCase().includes(normalized))
+      .sort((first, second) => (first.projectGroup || "未分類大專案").localeCompare(second.projectGroup || "未分類大專案", "zh-Hant") || second.updatedAt.localeCompare(first.updatedAt)),
     [normalized, statusFilter, workspace.data.projects],
   );
   const otherProjects = useMemo(
@@ -166,6 +164,13 @@ export function PcbLeftRail({
       && `${item.name} ${item.manufacturer} ${item.partNumber}`.toLocaleLowerCase().includes(normalized)),
     [normalized, sourceFilter, typeFilter, workspace.data.library],
   );
+
+  const activeFilters: [string, () => void][] = [];
+  if (normalized) activeFilters.push([`搜尋：${query.trim()}`, () => setQuery("")]);
+  if (activeTab === "projects" && statusFilter !== "all") activeFilters.push([`狀態：${projectStatusLabels[statusFilter as PcbProject["status"]]}`, () => setStatusFilter("all")]);
+  if (activeTab === "library" && typeFilter !== "all") activeFilters.push([`類型：${typeFilter}`, () => setTypeFilter("all")]);
+  if (activeTab === "library" && sourceFilter !== "all") activeFilters.push([`來源：${sourceFilter === "built-in" ? "內建" : sourceFilter === "custom" ? "自訂" : "BOM"}`, () => setSourceFilter("all")]);
+  if (activeTab === "templates" && templateSourceFilter !== "all") activeFilters.push([`模板：${templateSourceFilter === "built-in" ? "內建模板" : "我的模板"}`, () => setTemplateSourceFilter("all")]);
 
   const chooseFile = (
     event: ChangeEvent<HTMLInputElement>,
@@ -203,6 +208,111 @@ export function PcbLeftRail({
           </button>
         ))}
       </div>
+
+      <div className="pcb-rail-actions">
+        {activeTab === "templates" && (
+          <Button type="button" size="sm" className="pcb-primary-action" disabled={!workspace.canMutate} onClick={onSaveTemplate}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />另存為模板
+          </Button>
+        )}
+        {activeTab === "library" && (
+          <>
+            <Button type="button" size="sm" className="pcb-primary-action" disabled={!workspace.canMutate} onClick={() => onEditComponent()}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />新增元件
+            </Button>
+            <label
+              className={cn(
+                "pcb-upload-action",
+                (!workspace.canMutate || libraryImportState === "loading") && "pointer-events-none opacity-50",
+              )}
+              title="匯入 STP、STEP、JSON、CSV 或 XLSX 元件庫"
+            >
+              {libraryImportState === "loading"
+                ? <LoaderCircle className="mr-1 h-3.5 w-3.5 animate-spin" />
+                : <Upload className="mr-1 h-3.5 w-3.5" />}
+              {libraryImportState === "loading" ? "解析 STEP" : "匯入檔案"}
+              <input
+                type="file"
+                accept={`${PCB_MODEL_FILE_ACCEPT},${LIBRARY_FILE_ACCEPT}`}
+                className="sr-only"
+                disabled={!workspace.canMutate || libraryImportState === "loading"}
+                onChange={(event) => chooseFile(event, onLibraryFile)}
+              />
+            </label>
+          </>
+        )}
+      </div>
+
+      {activeTab !== "projects" && (
+        <div className={cn("pcb-rail-context", activeTab === "templates" && "is-template-context")}>
+          <div className="pcb-rail-context-heading">
+            <strong>{activeTab === "templates" ? "模板中心" : tabLabels[activeTab]}</strong>
+            <span>{activeTab === "templates" ? `${templates.length} 個可用模板` : "工作區資源"}</span>
+          </div>
+          <p>
+            {activeTab === "templates"
+              ? "內建模板可直接建立專案；若要改名或刪除，請先複製後編輯。"
+              : activeTab === "library"
+                ? "匯入 STEP／STP 會自動建立含 3D 外形與實體尺寸的元件，可直接拖放到板子。"
+                : "管理目前工作區可使用的資源。"}
+          </p>
+        </div>
+      )}
+
+      {activeTab === "projects" && (
+        <>
+          <section className="pcb-current-project-card" aria-label="目前板子">
+            <div className="pcb-current-project-eyebrow">
+              <span>目前板子</span>
+              <span className={cn("pcb-project-editor-state", workspace.hasUnsavedChanges && "is-editing")}>
+                {workspace.hasUnsavedChanges ? <PencilLine className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+                {editorState}
+              </span>
+            </div>
+            <h3 title={workspace.activeProject.name}>{workspace.activeProject.name}</h3>
+            <p className="text-xs text-cyan-200">{workspace.activeProject.projectGroup || "未分類大專案"} · 版本 {workspace.activeProject.revision || "1"}</p>
+            <p>
+              {workspace.activeProject.board.width}×{workspace.activeProject.board.height} mm
+              <span aria-hidden="true"> · </span>
+              最後編輯者：{activeEditorName}
+            </p>
+            <div className="pcb-current-project-actions">
+              <Button type="button" variant="outline" size="sm" onClick={() => onPreviewProject(workspace.activeProject)}>
+                <Eye className="h-3.5 w-3.5" />預覽
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={!workspace.canMutate} onClick={() => onEditProject(workspace.activeProject)}>
+                <Pencil className="h-3.5 w-3.5" />設定
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="icon" aria-label="目前板子更多操作" title="更多操作">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="pcb-project-menu">
+                  <DropdownMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.duplicateProject(workspace.activeProject.id, true)}>建立新版（保留原版）</DropdownMenuItem>
+                  <DropdownMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.duplicateProject(workspace.activeProject.id)}>
+                    <Copy className="h-3.5 w-3.5" />複製板子
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-rose-300 focus:text-rose-200" disabled={!workspace.canMutate} onSelect={() => onDeleteProject(workspace.activeProject)}>
+                    <Trash2 className="h-3.5 w-3.5" />刪除板子
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </section>
+          <div className="pcb-project-list-heading">
+            <div>
+              <strong>其他板子</strong>
+              <span>{otherProjects.length} 塊</span>
+            </div>
+            <Button type="button" variant="ghost" size="sm" disabled={!workspace.canMutate} onClick={onNewProject}>
+              <Plus className="h-3.5 w-3.5" />新增
+            </Button>
+          </div>
+        </>
+      )}
 
       <div className={cn("pcb-rail-filter", activeTab === "projects" && "is-project-filter")}>
         <label className="relative block">
@@ -271,135 +381,15 @@ export function PcbLeftRail({
         )}
       </div>
 
-      <div className="pcb-rail-actions">
-        {activeTab === "templates" && (
-          <Button type="button" size="sm" className="pcb-primary-action" disabled={!workspace.canMutate} onClick={onSaveTemplate}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />另存為模板
-          </Button>
-        )}
-        {activeTab === "library" && (
-          <>
-            <Button type="button" size="sm" className="pcb-primary-action" disabled={!workspace.canMutate} onClick={() => onEditComponent()}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" />新增元件
-            </Button>
-            <label
-              className={cn(
-                "pcb-upload-action",
-                (!workspace.canMutate || libraryImportState === "loading") && "pointer-events-none opacity-50",
-              )}
-              title="匯入 STP、STEP、JSON、CSV 或 XLSX 元件庫"
-            >
-              {libraryImportState === "loading"
-                ? <LoaderCircle className="mr-1 h-3.5 w-3.5 animate-spin" />
-                : <Upload className="mr-1 h-3.5 w-3.5" />}
-              {libraryImportState === "loading" ? "解析 STEP" : "匯入檔案"}
-              <input
-                type="file"
-                accept={`${PCB_MODEL_FILE_ACCEPT},${LIBRARY_FILE_ACCEPT}`}
-                className="sr-only"
-                disabled={!workspace.canMutate || libraryImportState === "loading"}
-                onChange={(event) => chooseFile(event, onLibraryFile)}
-              />
-            </label>
-          </>
-        )}
-        {activeTab === "bom" && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="pcb-secondary-action"
-            disabled={!workspace.canMutate || workspace.pendingPlacements.length === 0}
-            onClick={() => {
-              const result = workspace.autoPlacePending();
-              const details = [
-                result.failed ? `${result.failed} 個項目本次未找到合法位置。` : "",
-                result.deferred ? `${result.deferred} 個項目保留在佇列，可再次分批執行。` : "",
-                result.limited ? "已達安全搜尋上限，未放置項目不會遺失。" : "",
-              ].filter(Boolean).join(" ");
-              toast({
-                title: result.placed ? `已自動放置 ${result.placed} 個元件` : "沒有元件可自動放置",
-                description: details || "BOM 佇列已處理完成。",
-                variant: result.placed ? "default" : "destructive",
-              });
-            }}
-          >
-            自動放置
-          </Button>
-        )}
-      </div>
-
-      {activeTab !== "projects" && (
-        <div className={cn("pcb-rail-context", activeTab === "templates" && "is-template-context")}>
-          <div className="pcb-rail-context-heading">
-            <strong>{activeTab === "templates" ? "模板中心" : tabLabels[activeTab]}</strong>
-            <span>{activeTab === "templates" ? `${templates.length} 個可用模板` : "工作區資源"}</span>
-          </div>
-          <p>
-            {activeTab === "templates"
-              ? "內建模板可直接建立專案；若要改名或刪除，請先複製後編輯。"
-              : activeTab === "library"
-                ? "匯入 STEP／STP 會自動建立含 3D 外形與實體尺寸的元件，可直接拖放到板子。"
-                : "管理目前工作區可使用的資源。"}
-          </p>
-        </div>
-      )}
-
-      {activeTab === "projects" && (
-        <>
-          <section className="pcb-current-project-card" aria-label="目前板子">
-            <div className="pcb-current-project-eyebrow">
-              <span>目前板子</span>
-              <span className={cn("pcb-project-editor-state", workspace.hasUnsavedChanges && "is-editing")}>
-                {workspace.hasUnsavedChanges ? <PencilLine className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-                {editorState}
-              </span>
-            </div>
-            <h3 title={workspace.activeProject.name}>{workspace.activeProject.name}</h3>
-            <p>
-              {workspace.activeProject.board.width}×{workspace.activeProject.board.height} mm
-              <span aria-hidden="true"> · </span>
-              最後編輯者：{activeEditorName}
-            </p>
-            <div className="pcb-current-project-actions">
-              <Button type="button" variant="outline" size="sm" onClick={() => onPreviewProject(workspace.activeProject)}>
-                <Eye className="h-3.5 w-3.5" />預覽
-              </Button>
-              <Button type="button" variant="outline" size="sm" disabled={!workspace.canMutate} onClick={() => onEditProject(workspace.activeProject)}>
-                <Pencil className="h-3.5 w-3.5" />設定
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon" aria-label="目前板子更多操作" title="更多操作">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="pcb-project-menu">
-                  <DropdownMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.duplicateProject(workspace.activeProject.id)}>
-                    <Copy className="h-3.5 w-3.5" />複製板子
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-rose-300 focus:text-rose-200" disabled={!workspace.canMutate} onSelect={() => onDeleteProject(workspace.activeProject)}>
-                    <Trash2 className="h-3.5 w-3.5" />刪除板子
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </section>
-          <div className="pcb-project-list-heading">
-            <div>
-              <strong>其他板子</strong>
-              <span>{otherProjects.length} 塊</span>
-            </div>
-            <Button type="button" variant="ghost" size="sm" disabled={!workspace.canMutate} onClick={onNewProject}>
-              <Plus className="h-3.5 w-3.5" />新增
-            </Button>
-          </div>
-        </>
-      )}
+      {activeFilters.length > 0 && <div className="flex flex-wrap items-center gap-1 px-2 py-2" aria-label="作用中篩選">
+        {activeFilters.map(([label, clear]) => <Button key={label} type="button" variant="outline" size="sm" className="h-auto min-h-8 max-w-full whitespace-normal px-2 text-[10px]" aria-label={`清除${label}`} onClick={clear}>{label} ×</Button>)}
+        <Button type="button" variant="ghost" size="sm" onClick={() => activeFilters.forEach(([, clear]) => clear())}>全部清除</Button>
+      </div>}
 
       <div className="pcb-rail-list">
-        {activeTab === "projects" && otherProjects.map((project) => (
+        {activeTab === "projects" && otherProjects.map((project, index) => (
+          <div key={project.id} className="contents">
+          {(index === 0 || (otherProjects[index - 1].projectGroup || "") !== (project.projectGroup || "")) && <h3 className="mt-2 border-b border-cyan-800 pb-2 text-xs font-semibold text-cyan-200">{project.projectGroup || "未分類大專案"}</h3>}
           <div key={project.id} className="pcb-project-compact-item">
             <button type="button" className="pcb-project-compact-main" onClick={() => workspace.openProject(project.id)}>
               <span className="pcb-project-compact-heading">
@@ -407,6 +397,7 @@ export function PcbLeftRail({
                 <span className={cn("pcb-project-status", `is-${project.status}`)}>{projectStatusLabels[project.status]}</span>
               </span>
               <span className="pcb-project-compact-meta">
+                版本 {project.revision || "1"} ·
                 {project.board.width}×{project.board.height} mm · {project.lastEditedBy ?? "尚無編輯紀錄"}
               </span>
             </button>
@@ -420,11 +411,13 @@ export function PcbLeftRail({
                 <DropdownMenuItem onSelect={() => onPreviewProject(project)}>
                   <Eye className="h-3.5 w-3.5" />預覽
                 </DropdownMenuItem>
+                <DropdownMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.duplicateProject(project.id, true)}>建立新版（保留原版）</DropdownMenuItem>
                 <DropdownMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.duplicateProject(project.id)}>
                   <Copy className="h-3.5 w-3.5" />複製板子
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
           </div>
         ))}
 
@@ -504,36 +497,6 @@ export function PcbLeftRail({
           </div>
         ))}
 
-        {activeTab === "bom" && (
-          workspace.pendingPlacements.length ? workspace.pendingPlacements.map((item, index) => (
-            <div key={`${item.reference}-${item.partNumber}-${index}`} className="pcb-rail-item pcb-bom-row">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-slate-100">{item.reference || "待編號"} · {item.name}</p>
-                <p className="truncate font-mono text-[10px] text-slate-400">{item.partNumber || "無料號"}</p>
-              </div>
-              <RowAction
-                label={`放置 ${item.name}`}
-                icon={Plus}
-                disabled={!workspace.canMutate}
-                onClick={() => {
-                  const result = workspace.placePendingPlacement(index);
-                  toast({
-                    title: result.ok ? "BOM 元件已放置" : "無法放置 BOM 元件",
-                    description: result.ok === true
-                      ? `${result.component.reference} · ${result.component.name}`
-                      : result.reason,
-                    variant: result.ok ? "default" : "destructive",
-                  });
-                }}
-              />
-              <RowAction label={`移除 ${item.name}`} icon={Trash2} danger disabled={!workspace.canMutate} onClick={() => workspace.removePendingPlacement(index)} />
-            </div>
-          )) : (
-            <div className="pcb-empty-state">
-              目前沒有待放置的 BOM 元件。
-            </div>
-          )
-        )}
 
         {((activeTab === "projects" && otherProjects.length === 0)
           || (activeTab === "templates" && templates.length === 0)

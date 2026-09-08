@@ -176,7 +176,7 @@ export function usePcbWorkspace({
     [],
   );
   const duplicateProject = useCallback(
-    (projectId: string) => dispatch({ type: "project/duplicate", projectId }),
+    (projectId: string, newRevision = false) => dispatch({ type: "project/duplicate", projectId, newRevision }),
     [],
   );
   const deleteProject = useCallback(

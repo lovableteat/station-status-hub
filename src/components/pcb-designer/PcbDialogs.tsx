@@ -12,6 +12,8 @@ import {
 import { Input } from "@/components/ui/input";
 import type { TabularImportError } from "./core/tabular.ts";
 import type { NewProjectInput, TemplateInput } from "./core/workspace.ts";
+import { resizeBoard } from "./core/resizeBoard.ts";
+import { getBoardPolygon } from "./core/boardOutline.ts";
 import type {
   ImportedComponent,
   PcbLibraryComponent,
@@ -98,10 +100,12 @@ export function PcbDialogs({
       return;
     }
     if (dialog.kind === "new-project") {
-      setValues({ name: "", description: "", width: "100", height: "80" });
+      setValues({ name: "", description: "", width: "100", height: "80", projectGroup: "", revision: "1" });
     } else if (dialog.kind === "project-settings") {
       setValues({
         name: dialog.project.name,
+        projectGroup: dialog.project.projectGroup ?? "",
+        revision: dialog.project.revision ?? "1",
         description: dialog.project.description,
         width: String(dialog.project.board.width),
         height: String(dialog.project.board.height),
@@ -149,6 +153,8 @@ export function PcbDialogs({
       }
       onCreateProject({
         name,
+        projectGroup: values.projectGroup?.trim(),
+        revision: values.revision?.trim() || "1",
         description: values.description,
         width,
         height,
@@ -163,10 +169,12 @@ export function PcbDialogs({
       }
       onUpdateProject({
         ...dialog.project,
+        projectGroup: values.projectGroup?.trim(),
+        revision: values.revision?.trim() || "1",
         name,
         description: values.description ?? "",
         status: values.status as PcbProject["status"],
-        board: { ...dialog.project.board, width, height },
+        board: resizeBoard(dialog.project, { width, height }, "top-left").board,
       });
       onClose();
     } else if (dialog.kind === "save-template") {
@@ -353,10 +361,11 @@ export function PcbDialogs({
             <div className="mt-4 overflow-hidden rounded-2xl border border-cyan-300/20 bg-[#071522] p-4">
               <svg
                 viewBox={`0 0 ${dialog.project.board.width} ${dialog.project.board.height}`}
-                className="aspect-[5/3] w-full rounded-xl bg-[#255e58]"
+                className="aspect-[5/3] w-full rounded-xl bg-[#071522]"
                 role="img"
                 aria-label={`${dialog.project.name} 板面預覽`}
               >
+                <polygon points={getBoardPolygon(dialog.project.board).map(p => `${p.x},${p.y}`).join(" ")} fill={dialog.project.board.background} stroke="#7ee8f5" strokeWidth="0.5" />
                 {dialog.project.keepouts.map((keepout) => (
                   <rect
                     key={keepout.id}
@@ -464,6 +473,11 @@ export function PcbDialogs({
 
               {(dialog.kind === "new-project" || dialog.kind === "project-settings") && (
                 <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="text-xs text-slate-300">所屬大專案<Input maxLength={120} value={values.projectGroup ?? ""} placeholder="例如：E2 系統" onChange={e => update("projectGroup", e.target.value)} /></label>
+                    <label className="text-xs text-slate-300">版本號<Input maxLength={40} value={values.revision ?? "1"} placeholder="例如：R1、1.0" onChange={e => update("revision", e.target.value)} /></label>
+                  </div>
+                  <p className="text-xs text-slate-400">同一大專案名稱可收納多塊板。要保留目前版本，請在板子選單使用「建立新版」。</p>
                   <label data-pcb-field-tone="description" className="block text-xs text-slate-300">
                     描述
                     <Input

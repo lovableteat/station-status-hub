@@ -14,6 +14,11 @@ export interface PcbBoardOutlinePoint {
   y: number;
 }
 
+export interface PcbOutlineNode extends PcbBoardOutlinePoint {
+  in?: PcbBoardOutlinePoint;
+  out?: PcbBoardOutlinePoint;
+}
+
 export interface PcbBoard {
   width: number;
   height: number;
@@ -24,6 +29,7 @@ export interface PcbBoard {
   outline?: PcbBoardOutlinePoint[][];
   /** File the outline came from, shown so the source stays traceable. */
   outlineSource?: string;
+  outlineNodes?: PcbOutlineNode[];
   gridSize: number;
   showGrid: boolean;
   snapToGrid: boolean;
@@ -108,6 +114,7 @@ export interface PcbComponentKeepout {
 }
 
 export interface PcbPlacedComponent extends PcbLibraryComponent {
+  modelRotation?: { x: number; y: number; z: number };
   instanceId: string;
   reference: string;
   x: number;
@@ -140,6 +147,9 @@ export interface PcbMeasurement {
 }
 
 export interface PcbProject {
+  projectGroup?: string;
+  boardFamilyId?: string;
+  revision?: string;
   schemaVersion: 1;
   id: string;
   name: string;

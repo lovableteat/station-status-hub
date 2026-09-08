@@ -1,3 +1,4 @@
+import { getBoardPolygon } from "./core/boardOutline.ts";
 import { getPcbModelRenderIndices } from "./core/modelProjection.ts";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
 import {
@@ -326,29 +327,13 @@ export function PcbSoftware3DCanvas({
       });
     };
 
-    const boardVertices = createSoftwareBoxVertices(project.board.width, BOARD_THICKNESS, project.board.height);
-    const boardFaceColors = [
-      project.board.layerColors.top,
-      project.board.layerColors.bottom,
-      project.board.background,
-      project.board.background,
-      project.board.background,
-      project.board.background,
-    ] as const;
-    BOX_FACES.forEach((face, faceIndex) => {
-      const worldPoints = face.map((index) => boardVertices[index]);
-      const normal = getSoftwareFaceNormal(worldPoints[0], worldPoints[1], worldPoints[2]);
-      addPolygon(
-        worldPoints,
-        shadeColor(boardFaceColors[faceIndex], getSoftwareLightLevel(normal)),
-        "#7de7e8",
-        SOFTWARE_RENDER_ORDER.board,
-        1,
-        1.05,
-      );
-    });
+    const boardPolygon = getBoardPolygon(project.board);
+    const top = boardPolygon.map(p => ({ x: p.x - project.board.width / 2, y: BOARD_THICKNESS / 2, z: p.y - project.board.height / 2 }));
+    const bottom = top.map(p => ({ ...p, y: -BOARD_THICKNESS / 2 }));
+    const boardFaces = [top, [...bottom].reverse(), ...top.map((p, i) => [p, top[(i + 1) % top.length], bottom[(i + 1) % top.length], bottom[i]])];
+    boardFaces.forEach((face, i) => addPolygon(face, i === 0 ? project.board.layerColors.top : i === 1 ? project.board.layerColors.bottom : project.board.background, "#7de7e8", SOFTWARE_RENDER_ORDER.board, 1, 1.05));
 
-    if (project.board.showGrid) {
+    if (project.board.showGrid && project.board.outlineSource !== "手繪板框") {
       const gridStep = Math.max(project.board.gridSize, Math.ceil(Math.max(project.board.width, project.board.height) / 80));
       const gridLayers: Array<"top" | "bottom"> = visibleLayer === "all"
         ? ["top", "bottom"]

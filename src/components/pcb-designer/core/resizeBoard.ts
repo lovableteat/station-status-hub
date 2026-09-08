@@ -81,7 +81,11 @@ export function resizeBoard(
   const dx = dw * fx;
   const dy = dh * fy;
 
-  const board = { ...project.board, width, height };
+  const scale = (p: { x: number; y: number }) => ({ x: p.x * width / project.board.width, y: p.y * height / project.board.height });
+  const board = { ...project.board, width, height,
+    ...(project.board.outline && { outline: project.board.outline.map(path => path.map(scale)) }),
+    ...(project.board.outlineNodes && { outlineNodes: project.board.outlineNodes.map(n => ({ ...scale(n), ...(n.in && { in: scale(n.in) }), ...(n.out && { out: scale(n.out) }) })) }),
+  };
   if (!dx && !dy) return { ...project, board };
 
   const round = (value: number) => Math.round(value * 1000) / 1000;
