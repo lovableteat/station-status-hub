@@ -193,24 +193,16 @@ export function normalizePcbSaveState(state: PcbSaveState): PcbSaveState {
     ...project,
     board: normalizeBoard(project.board),
     components: project.components.map((component) => {
-      const normalized = {
+      return {
         ...component,
         shape: component.shape === "circle" ? "circle" as const : "rectangle" as const,
       };
-      if (!component.modelAssetId || modelAssets?.[component.modelAssetId]) return normalized;
-      const { modelAssetId: _removed, ...withoutAsset } = normalized;
-      return withoutAsset;
     }),
     keepouts: project.keepouts.map((keepout) => ({
       ...keepout,
       rotation: Number.isFinite(keepout.rotation) ? ((keepout.rotation! % 360) + 360) % 360 : 0,
     })),
   }));
-  const library = cloned.library.map((component) => {
-    if (!component.modelAssetId || modelAssets?.[component.modelAssetId]) return component;
-    const { modelAssetId: _removed, ...withoutAsset } = component;
-    return withoutAsset;
-  });
   const templates = cloned.templates.map((template) => ({
     ...template,
     project: {
@@ -222,7 +214,6 @@ export function normalizePcbSaveState(state: PcbSaveState): PcbSaveState {
     ...cloned,
     projects,
     templates,
-    library,
     modelAssets: structuredClone(modelAssets ?? {}),
     pendingPlacementsByProject: structuredClone(cloned.pendingPlacementsByProject ?? {}),
     remoteDeletions: structuredClone(cloned.remoteDeletions ?? {

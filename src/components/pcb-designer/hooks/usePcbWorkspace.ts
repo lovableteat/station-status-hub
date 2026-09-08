@@ -320,6 +320,10 @@ export function usePcbWorkspace({
     [],
   );
   const saveNow = persistence.saveNow;
+  const loadModelAsset = useCallback(
+    (assetId: string) => remoteClient?.loadModelAsset?.(assetId) ?? Promise.resolve(null),
+    [remoteClient],
+  );
 
   return {
     ...state,
@@ -361,6 +365,7 @@ export function usePcbWorkspace({
     setActiveLayer,
     setVisibleLayer,
     assignModelAsset,
+    loadModelAsset,
     setZoom,
     setRightTab,
     runDrc,

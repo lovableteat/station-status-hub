@@ -216,6 +216,7 @@ function Scene({
   selectedObjects: readonly string[];
 }) {
   const project = workspace.activeProject;
+  const loadModelAsset = workspace.loadModelAsset;
   const modelAssetIds = useMemo(
     () => [...new Set(project.components.map((component) => component.modelAssetId).filter(Boolean))] as string[],
     [project.components],
@@ -226,7 +227,14 @@ function Scene({
     let active = true;
     const store = getDefaultPcbModelAssetStore();
     const ids = modelAssetKey ? modelAssetKey.split("|") : [];
-    void Promise.all(ids.map(async (id) => [id, await store.get(id)] as const))
+    void Promise.all(ids.map(async (id) => {
+      let asset = await store.get(id);
+      if (!asset) {
+        asset = await loadModelAsset(id);
+        if (asset) await store.put(asset);
+      }
+      return [id, asset] as const;
+    }))
       .then((entries) => {
         if (!active) return;
         setModelAssets(Object.fromEntries(entries.map(([id, asset]) => [id, asset && isPcbModelAsset(asset) ? asset : null])));
@@ -234,7 +242,7 @@ function Scene({
     return () => {
       active = false;
     };
-  }, [modelAssetKey]);
+  }, [loadModelAsset, modelAssetKey]);
   const selectedSelections = useMemo(
     () => selectedObjects
       .map((objectId) => getSelectionById(objectId, project))
