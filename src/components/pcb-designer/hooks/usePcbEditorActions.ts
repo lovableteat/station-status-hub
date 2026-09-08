@@ -400,6 +400,7 @@ export function usePcbEditorActions(
       };
       if (![candidate.width, candidate.height, candidate.maxHeight, candidate.x, candidate.y, candidate.rotation].every(Number.isFinite)) return false;
       if (candidate.width <= 0 || candidate.height <= 0 || candidate.maxHeight <= 0) return false;
+      if (candidate.insertionDepth !== undefined && (!Number.isFinite(candidate.insertionDepth) || candidate.insertionDepth < 0 || candidate.insertionDepth > 1000)) return false;
       if (candidate.keepout !== undefined && !isValidComponentKeepout(candidate.keepout)) return false;
       if (JSON.stringify(candidate) === JSON.stringify(source)) return false;
       dispatch({

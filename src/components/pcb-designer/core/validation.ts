@@ -250,6 +250,7 @@ function validateComponent(value: unknown): value is RecordValue {
     && typeof value.locked === "boolean"
     && (value.modelAssetId === undefined || isNonEmptyString(value.modelAssetId))
     && (value.modelRotation === undefined || (isRecord(value.modelRotation) && ["x", "y", "z"].every(axis => isFiniteNumber(value.modelRotation[axis]) && Math.abs(Number(value.modelRotation[axis])) <= 360)))
+    && (value.insertionDepth === undefined || (isFiniteNumber(value.insertionDepth) && value.insertionDepth >= 0 && value.insertionDepth <= 1000))
     && (value.keepout === undefined || isValidComponentKeepout(value.keepout));
 }
 

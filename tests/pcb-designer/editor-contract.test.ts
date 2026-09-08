@@ -19,6 +19,11 @@ const persistenceSource = await read("src/components/pcb-designer/hooks/usePcbPe
 const presenceSource = await read("src/components/pcb-designer/hooks/usePcbProjectPresence.ts");
 const collaboratorsSource = await read("src/components/pcb-designer/PcbCollaborators.tsx");
 const canvas3dSource = await read("src/components/pcb-designer/Pcb3DCanvas.tsx");
+test("procedural leads stay thin and WebGL shares the insertion transform", () => {
+  assert.match(canvas3dSource, /Math\.min\(0\.5, component\.maxHeight \* 0\.09\)/);
+  assert.match(canvas3dSource, /const bodyHeight = component\.maxHeight - pinHeight/);
+  assert.match(canvas3dSource, /const yOffset = getPcbMountY\(component, boardThickness\)/);
+});
 const softwareCanvas3dSource = await read("src/components/pcb-designer/PcbSoftware3DCanvas.tsx");
 const runtimeBoundarySource = await read("src/components/common/AppRuntimeBoundary.tsx");
 const modelAssetsSource = await read("src/components/pcb-designer/core/modelAssets.ts");

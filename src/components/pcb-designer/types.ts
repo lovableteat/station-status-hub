@@ -115,6 +115,7 @@ export interface PcbComponentKeepout {
 
 export interface PcbPlacedComponent extends PcbLibraryComponent {
   modelRotation?: { x: number; y: number; z: number };
+  insertionDepth?: number;
   instanceId: string;
   reference: string;
   x: number;
