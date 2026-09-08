@@ -12,6 +12,7 @@ export const MAX_PCB_MODEL_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_PCB_MODEL_PARTS = 256;
 export const MAX_PCB_MODEL_VERTICES = 500_000;
 export const MAX_PCB_MODEL_INDICES = 1_500_000;
+export const MAX_PCB_CLOUD_ASSET_BYTES = 64 * 1024 * 1024;
 
 export function isStepModelFile(file: File): boolean {
   const name = file.name.toLocaleLowerCase();
@@ -230,6 +231,49 @@ export function toPcbModelAsset(model: ImportedStepModel): PcbModelAsset {
     index: Array.from(part.index),
   }));
   return { metadata, parts };
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunkSize = 32_768;
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value.replace(/\s+/g, ""));
+  if (binary.length > MAX_PCB_CLOUD_ASSET_BYTES) {
+    throw invalidModel("雲端模型超過安全大小上限。");
+  }
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+/** Compresses the validated mesh payload before sending it to the shared cloud catalog. */
+export async function serializePcbModelAsset(asset: PcbModelAsset): Promise<string> {
+  if (!isPcbModelAsset(asset)) throw invalidModel("雲端儲存資料未通過完整性檢查。");
+  const stream = new Blob([JSON.stringify(asset)])
+    .stream()
+    .pipeThrough(new CompressionStream("gzip"));
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  if (bytes.byteLength > MAX_PCB_CLOUD_ASSET_BYTES) {
+    throw invalidModel("壓縮後的雲端模型超過 64 MB 上限。");
+  }
+  return bytesToBase64(bytes);
+}
+
+/** Restores and revalidates a shared mesh payload downloaded on another computer. */
+export async function deserializePcbModelAsset(payloadBase64: string): Promise<PcbModelAsset> {
+  if (!payloadBase64 || payloadBase64.length > Math.ceil(MAX_PCB_CLOUD_ASSET_BYTES / 3) * 4 + 16) {
+    throw invalidModel("雲端模型內容為空或超過安全大小上限。");
+  }
+  const stream = new Blob([base64ToBytes(payloadBase64)])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
+  const parsed = JSON.parse(await new Response(stream).text()) as unknown;
+  if (!isPcbModelAsset(parsed)) throw invalidModel("雲端模型內容損壞或格式不符。");
+  return parsed;
 }
 
 export interface ModelAssetStore {

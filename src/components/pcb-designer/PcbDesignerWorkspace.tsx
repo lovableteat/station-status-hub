@@ -327,6 +327,9 @@ export function PcbDesignerWorkspace({
         const asset = toPcbModelAsset(model);
         assetId = asset.metadata.id;
         await modelAssetStoreRef.current.put(asset);
+        if (remoteClient?.saveModelAsset && !(await remoteClient.saveModelAsset(asset))) {
+          throw new Error("STEP 模型無法寫入雲端，元件尚未加入。請確認網路後重試。");
+        }
         workspace.importLibraryModel(toStepLibraryComponent(asset.metadata), asset.metadata);
         toast({
           title: "STEP 元件已加入元件庫",
@@ -379,13 +382,17 @@ export function PcbDesignerWorkspace({
     const model = await importStepModel(file);
     const asset = toPcbModelAsset(model);
     await modelAssetStoreRef.current.put(asset);
+    if (remoteClient?.saveModelAsset && !(await remoteClient.saveModelAsset(asset))) {
+      await modelAssetStoreRef.current.delete(asset.metadata.id);
+      throw new Error("STEP 模型無法寫入雲端，尚未套用到元件。請確認網路後重試。");
+    }
     const assigned = workspace.assignModelAsset(componentId, asset.metadata);
     if (!assigned) {
       await modelAssetStoreRef.current.delete(asset.metadata.id);
       throw new Error("元件在匯入期間已被鎖定或不可編輯，模型未套用。 ");
     }
     return asset.metadata;
-  }, [workspace]);
+  }, [remoteClient, workspace]);
 
   const requestDeleteProject = (project: PcbProject) => setDialog({
     kind: "confirm",

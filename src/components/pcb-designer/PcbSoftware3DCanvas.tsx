@@ -178,6 +178,7 @@ export function PcbSoftware3DCanvas({
   const [view, setView] = useState<SoftwareViewState>(DEFAULT_SOFTWARE_VIEW);
   const [viewport, setViewport] = useState({ width: 1, height: 1, dpr: 1 });
   const project = workspace.activeProject;
+  const loadModelAsset = workspace.loadModelAsset;
   const modelAssetIds = useMemo(
     () => [...new Set(project.components.map((component) => component.modelAssetId).filter(Boolean))] as string[],
     [project.components],
@@ -189,14 +190,21 @@ export function PcbSoftware3DCanvas({
     let active = true;
     const store = getDefaultPcbModelAssetStore();
     const ids = modelAssetKey ? modelAssetKey.split("|") : [];
-    void Promise.all(ids.map(async (id) => [id, await store.get(id)] as const)).then((entries) => {
+    void Promise.all(ids.map(async (id) => {
+      let asset = await store.get(id);
+      if (!asset) {
+        asset = await loadModelAsset(id);
+        if (asset) await store.put(asset);
+      }
+      return [id, asset] as const;
+    })).then((entries) => {
       if (!active) return;
       setModelAssets(Object.fromEntries(entries.map(([id, asset]) => [id, asset && isPcbModelAsset(asset) ? asset : null])));
     });
     return () => {
       active = false;
     };
-  }, [modelAssetKey]);
+  }, [loadModelAsset, modelAssetKey]);
 
   const mappedModelParts = useMemo(() => {
     const mapped: Record<string, CachedModelPart[]> = {};
