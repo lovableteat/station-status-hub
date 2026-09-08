@@ -11,6 +11,7 @@ import { PcbSoftware3DCanvas } from "./PcbSoftware3DCanvas.tsx";
 import { detectWebglSupport } from "./core/webgl.ts";
 import {
   getDefaultPcbModelAssetStore,
+  getPcbModelPartColor,
   isPcbModelAsset,
   mapPcbModelPartToComponentSpace,
 } from "./core/modelAssets.ts";
@@ -183,7 +184,7 @@ function StoredModelMeshes({ asset, component }: { asset: PcbModelAsset; compone
           key={part.id}
           part={part}
           positions={mapPcbModelPartToComponentSpace(part, asset, component)}
-          color={component.color}
+          color={getPcbModelPartColor(asset, part.id, component.color)}
         />
       ))}
     </group>

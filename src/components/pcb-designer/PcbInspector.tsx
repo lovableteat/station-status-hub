@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Copy, FileUp, Lock, LockOpen, RotateCw, Scissors, Trash2 } from "lucide-react";
+import { Check, Copy, Eye, FileUp, Lock, LockOpen, RotateCw, Scissors, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PcbKeepout, PcbMeasurement, PcbModelAssetMetadata, PcbPlacedComponent } from "./types.ts";
@@ -352,10 +352,12 @@ function ComponentInspector({
   workspace,
   component,
   onImportModel,
+  onViewModel,
 }: {
   workspace: PcbWorkspaceApi;
   component: PcbPlacedComponent;
   onImportModel?: (file: File, componentId: string) => Promise<PcbModelAssetMetadata>;
+  onViewModel?: (assetId: string) => void;
 }) {
   const disabled = !workspace.canMutate;
   const componentDisabled = disabled || component.locked;
@@ -431,6 +433,17 @@ function ComponentInspector({
             }}
           />
         </label>
+        {component.modelAssetId && onViewModel && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => onViewModel(component.modelAssetId!)}
+          >
+            <Eye className="mr-1.5 h-3.5 w-3.5" />查看尺寸與 2D 封裝
+          </Button>
+        )}
         {modelImportState.status === "loading" && <p className="pcb-model-status">載入 STEP 模型中…</p>}
         {modelImportState.status === "error" && <p className="pcb-model-status is-error">{modelImportState.error}</p>}
         {modelImportState.status === "success" && modelImportState.metadata && (
@@ -595,9 +608,11 @@ function MeasurementInspector({
 export function PcbInspector({
   workspace,
   onImportModel,
+  onViewModel,
 }: {
   workspace: PcbWorkspaceApi;
   onImportModel?: (file: File, componentId: string) => Promise<PcbModelAssetMetadata>;
+  onViewModel?: (assetId: string) => void;
 }) {
   const selected = workspace.selection && workspace.selectedObject;
   const activeTab = workspace.rightTab === "drc" ? "board" : workspace.rightTab;
@@ -633,6 +648,7 @@ export function PcbInspector({
               workspace={workspace}
               component={workspace.selectedObject as PcbPlacedComponent}
               onImportModel={onImportModel}
+              onViewModel={onViewModel}
             />
           ) : workspace.selection?.kind === "keepout" ? (
             <KeepoutInspector workspace={workspace} keepout={workspace.selectedObject as PcbKeepout} />
