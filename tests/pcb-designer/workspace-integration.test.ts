@@ -49,6 +49,9 @@ const completeStorageMigrationSource = await read(
 const sharedProjectsMigrationSource = await read(
   "supabase/migrations/20260813123000_share_pcb_designer_projects.sql",
 );
+const modelAssetRecoveryMigrationSource = await read(
+  "supabase/migrations/20260908160000_list_pcb_designer_model_assets.sql",
+);
 const supabaseTypesSource = await read("src/integrations/supabase/types.ts");
 const collaborationSource = await read(
   "src/components/collaboration/CollaborationCenter.tsx",
@@ -419,4 +422,12 @@ test("promotes PCB projects to a shared, conflict-safe team catalog", () => {
   assert.match(sharedProjectsMigrationSource, /jsonb_set\(p_payload, '\{projects\}', '\[\]'::jsonb/i);
   assert.match(pcbWorkspaceHookSource, /mergePcbRemoteState\(localState, remoteState\)/);
   assert.match(remoteSyncSource, /server tombstones always remove stale local project copies/i);
+});
+
+test("lists shared STEP metadata for automatic orphan recovery without exposing mesh payloads", () => {
+  assert.match(modelAssetRecoveryMigrationSource, /list_pcb_designer_model_assets/);
+  assert.match(modelAssetRecoveryMigrationSource, /pcb_designer_can_view\(p_user_id\)/);
+  assert.match(modelAssetRecoveryMigrationSource, /jsonb_agg\(asset\.metadata ORDER BY asset\.updated_at DESC\)/);
+  assert.doesNotMatch(modelAssetRecoveryMigrationSource, /compressed_payload/);
+  assert.match(modelAssetRecoveryMigrationSource, /SECURITY DEFINER/i);
 });

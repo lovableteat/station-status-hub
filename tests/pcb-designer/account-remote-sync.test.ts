@@ -8,7 +8,7 @@ import {
   type PcbAccountDatabase,
 } from "../../src/components/pcb-designer/core/accountRemoteSync.ts";
 import { BUILT_IN_TEMPLATES, createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
-import type { PcbSaveState } from "../../src/components/pcb-designer/types.ts";
+import type { PcbModelAssetMetadata, PcbSaveState } from "../../src/components/pcb-designer/types.ts";
 
 function createState(name: string): PcbSaveState {
   const project = createBlankProject(name);
@@ -30,6 +30,7 @@ function mockDatabase(options: {
   rpcState?: PcbSaveState | null;
   permissions?: Record<string, unknown>;
   records?: Array<{ id: string; permissions: Record<string, unknown> }>;
+  modelAssets?: unknown[];
 }) {
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
   let permissions = structuredClone(options.permissions ?? {});
@@ -47,7 +48,9 @@ function mockDatabase(options: {
         return { data: null, error: { code: "PGRST202", message: "missing RPC" } };
       }
       return {
-        data: name === "load_pcb_designer_workspace" || name === "load_pcb_designer_workspace_shared"
+        data: name === "list_pcb_designer_model_assets"
+          ? options.modelAssets ?? []
+          : name === "load_pcb_designer_workspace" || name === "load_pcb_designer_workspace_shared"
           ? options.rpcState ?? null
           : name === "delete_pcb_designer_project_locked"
             ? true
@@ -97,6 +100,33 @@ function mockDatabase(options: {
     getPermissions: () => permissions,
   };
 }
+
+const cloudMetadata: PcbModelAssetMetadata = {
+  schemaVersion: 1,
+  id: "step-cloud-part",
+  fileName: "connector.step",
+  createdAt: "2026-09-08T08:00:00.000Z",
+  updatedAt: "2026-09-08T08:00:00.000Z",
+  dimensions: { widthMm: 20, depthMm: 10, heightMm: 6 },
+  calibratedDimensions: { widthMm: 20, depthMm: 10, heightMm: 6 },
+  upAxis: "z",
+  bounds: { min: [0, 0, 0], max: [20, 10, 6] },
+  parts: [{ id: "body", name: "Body", vertexCount: 8, indexCount: 36 }],
+};
+
+test("lists valid cloud STEP metadata so an orphaned library entry can be rebuilt", async () => {
+  const mock = mockDatabase({
+    rpcAvailable: true,
+    modelAssets: [cloudMetadata, { ...cloudMetadata, id: "", fileName: "broken.step" }],
+  });
+  const client = createPcbAccountRemoteClient(
+    mock.database,
+    "11111111-1111-4111-8111-111111111111",
+  );
+
+  assert.deepEqual(await client.listModelAssets?.(), [cloudMetadata]);
+  assert.equal(mock.calls.at(-1)?.name, "list_pcb_designer_model_assets");
+});
 
 test("loads a dedicated account workspace and refreshes built-in catalogs", async () => {
   const state = createState("Cloud project");

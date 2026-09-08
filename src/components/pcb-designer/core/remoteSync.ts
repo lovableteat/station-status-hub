@@ -1,6 +1,6 @@
 import type { PcbSaveState } from "../types.ts";
 import { createBlankProject } from "../defaults.ts";
-import type { PcbModelAsset } from "../types.ts";
+import type { PcbModelAsset, PcbModelAssetMetadata } from "../types.ts";
 
 export type PcbPersistenceStatus = "local" | "saving" | "synced" | "unsaved";
 export interface PcbProjectLock {
@@ -45,6 +45,7 @@ export interface PcbRemoteClient {
   deleteProject?: (projectId: string) => Promise<boolean>;
   saveModelAsset?: (asset: PcbModelAsset) => Promise<boolean>;
   loadModelAsset?: (assetId: string) => Promise<PcbModelAsset | null>;
+  listModelAssets?: () => Promise<PcbModelAssetMetadata[]>;
   from?: (table: "pcb_designer_projects" | "pcb_designer_templates" | "pcb_designer_library") => RemoteTable;
 }
 
