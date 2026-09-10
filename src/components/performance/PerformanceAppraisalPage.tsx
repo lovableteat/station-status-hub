@@ -83,7 +83,7 @@ const NAV = [
   { id: "policy", label: "系統說明與政策", icon: BookOpen },
   { id: "self", label: "員工自評", icon: UserRound },
   { id: "manager", label: "主管評分（主管專用）", icon: ClipboardCheck },
-  { id: "section-reports", label: "課長彙整與部長審閱", icon: FileText },
+  { id: "section-reports", label: "部門績效總覽", icon: FileText },
   { id: "records", label: "考核紀錄", icon: FileText },
   { id: "organization", label: "組織架構", icon: Network },
 ];
@@ -894,7 +894,7 @@ export function PerformanceAppraisalPage() {
       <main className="performance-content">
         <header className="rd2-page-header">
           <div>
-            <h1>{tab === "policy" ? "系統說明與政策" : tab === "self" ? "員工自評" : tab === "manager" ? "主管評分" : "績效與當責評估系統"}</h1>
+            <h1>{tab === "policy" ? "系統說明與政策" : tab === "self" ? "員工自評" : tab === "manager" ? "主管評分" : tab === "section-reports" ? "部門績效總覽" : "績效與當責評估系統"}</h1>
             <p>{demo ? "本機示範模式" : tab === "policy" ? "組織分工、填寫流程與完整評分標準" : tab === "self" ? "記錄本期成果，讓每一份努力有據可循。" : tab === "manager" ? "依組織歸屬評核，逐一完成直屬同仁的考核。" : "RD2 · 員工自評與主管評核"}</p>
           </div>
           <div className="rd2-header-actions">
@@ -989,15 +989,15 @@ export function PerformanceAppraisalPage() {
         )}
         {tab === "manager" && canManagePerformance && <PerformanceTaskGuide mode="manager" />}
         {canManagePerformance && !demo && ["manager", "section-reports"].includes(tab) && <PerformancePrivacyPanel privacy={privacy} userId={userId} configure={false} />}
-        {tab === "section-reports" && canManagePerformance && <PerformanceSectionReports key={`${userId}:${cycle}:${privacyRevision}`} userId={userId} cycle={cycle} ready={privacy.ready && !demo} />}
+        {tab === "section-reports" && canManagePerformance && <PerformanceSectionReports key={`${userId}:${cycle}:${privacyRevision}`} userId={userId} cycle={cycle} ready={privacy.ready && !demo} onEvaluate={() => { setManagerView("records"); navigate("manager"); }} />}
         {tab === "organization" && canAccessOrganization && <PerformanceOrganization reviews={canManagePerformance && privacy.ready ? reviews : []} cycle={cycle} onChanged={() => { void load(); }} />}
         {canManagePerformance && !demo && tab === "organization" && <div className="rd2-org-privacy-after"><PerformancePrivacyPanel privacy={privacy} userId={userId} configure /></div>}
         {tab === "manager" && canManagePerformance && (
           <>
             <div className="rd2-manager-only-notice" role="note">
-              <strong>組織指定主管專用</strong>
+              <strong>{selfContext?.orgLevel === "director" ? "個人評核 · 直屬課長與代理課同仁" : "個人評核 · 直屬同仁"}</strong>
               <span>只顯示組織架構直接指派給你的同仁；網站管理員不會取得成績檢視權。</span>
-              <Button size="sm" variant="outline" onClick={() => navigate("section-reports")}>前往課務彙整</Button>
+              <Button size="sm" variant="outline" onClick={() => navigate("section-reports")}>前往部門績效總覽</Button>
             </div>
             <div
               className="rd2-view-switch"

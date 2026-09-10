@@ -1499,7 +1499,7 @@ export function AssessmentEditor({
           <p className="rd2-submit-explainer">
             {mode === "self"
               ? "確認三類實績與佐證後，送交直屬主管；尚未完成可先儲存至工作區。"
-              : "送出主管評分後，這份個人考核即完成；課務彙整請另至「課長彙整與部長審閱」處理。"}
+              : "送出主管評分後，這份個人考核即完成；課務彙整請另至「部門績效總覽」處理。"}
           </p>
           <p className="rd2-draft-status" role="status">
             {draftStatus}
