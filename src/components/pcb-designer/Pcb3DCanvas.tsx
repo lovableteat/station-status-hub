@@ -391,7 +391,7 @@ function Scene({
   );
   const boardThickness = 1.6;
   const outlineGeometry = useMemo(() => {
-    if (project.board.outlineSource !== "手繪板框" && !project.board.holes?.length) return null;
+    if (!project.board.outline?.length && !project.board.holes?.length) return null;
     const shape = new Shape(getBoardPolygon(project.board).map(p => new Vector2(p.x - project.board.width / 2, p.y - project.board.height / 2)));
     shape.holes = getBoardHoles(project.board).map(hole => new Path(hole.map(p => new Vector2(p.x - project.board.width / 2, p.y - project.board.height / 2))));
     const geometry = new ExtrudeGeometry(shape, { depth: 1.6, bevelEnabled: false, steps: 1 });

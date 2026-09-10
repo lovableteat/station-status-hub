@@ -257,7 +257,7 @@ function ReviewDetail({
             </span>
           </header>
           <div className="rd2-review-category-body">
-            <AssessmentEntryList category={category} section={self.sections[category]} readonly onChange={() => {}} />
+            <AssessmentEntryList category={category} section={self.sections[category]} readonly feedback={showManagerAssessment ? manager.categoryReviews[category].entryFeedback : undefined} onChange={() => {}} />
             <div className="rd2-images">
               {self.sections[category].images.map((image) => (
                 <a key={image.id} href={image.dataUrl} download={image.name}>

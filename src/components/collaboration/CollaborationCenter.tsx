@@ -1,3 +1,4 @@
+import { useNotificationInbox, type NotificationRow } from "@/hooks/useNotificationInbox";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
@@ -38,19 +39,6 @@ import { DirectMessagesPanel } from "./DirectMessagesPanel";
 
 type CollaborationTab = "notifications" | "online";
 type NotificationFilter = "all" | "unread" | "read";
-type NotificationRow = {
-  id: string;
-  title: string;
-  message: string;
-  notification_type: string;
-  is_read: boolean;
-  created_at: string;
-  reference_type: string | null;
-  reference_id: string | null;
-  action_url: string | null;
-  metadata: unknown;
-};
-
 type CollaborationDirectoryMember = {
   user_id: string;
   username: string;
@@ -223,9 +211,6 @@ export function CollaborationCenter() {
   } = useUserPresence();
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<CollaborationTab>("notifications");
-  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [activeAnnouncement, setActiveAnnouncement] = useState<NotificationRow | null>(null);
   const [acknowledgingAnnouncement, setAcknowledgingAnnouncement] = useState(false);
   const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
@@ -240,21 +225,11 @@ export function CollaborationCenter() {
   const [clearingRead, setClearingRead] = useState(false);
   const autoAnnouncementShownRef = useRef(false);
 
-  const loadNotifications = useCallback(async () => {
-    if (!user?.userId) return;
-    setLoading(true);
-    setError(null);
-    const { data, error: queryError } = await supabase
-      .from("user_notifications")
-      .select("id,title,message,notification_type,is_read,created_at,reference_type,reference_id,action_url,metadata")
-      .eq("recipient_id", user.userId)
-      .is("archived_at", null)
-      .order("created_at", { ascending: false })
-      .limit(80);
-    if (queryError) setError("通知載入失敗，請確認網路後重試。");
-    else setNotifications((data || []) as NotificationRow[]);
-    setLoading(false);
-  }, [user?.userId]);
+  const showReturnedNotification = useCallback((notification: NotificationRow) => toast({
+    title: notification.title || "績效自評已退回補充",
+    description: notification.message || "請前往績效考核系統查看退回內容。",
+  }), [toast]);
+  const { notifications, setNotifications, loading, error, setError, loadNotifications } = useNotificationInbox(user?.userId, isRealtimeAuthenticated, showReturnedNotification);
 
   const loadMemberDirectory = useCallback(async () => {
     if (!user?.userId || !isRealtimeAuthenticated) {
@@ -275,40 +250,8 @@ export function CollaborationCenter() {
     setDirectoryLoading(false);
   }, [isRealtimeAuthenticated, user?.userId]);
 
-  useEffect(() => {
-    void loadNotifications();
-  }, [loadNotifications]);
-
-  useEffect(() => {
-    void loadMemberDirectory();
-  }, [loadMemberDirectory]);
-
-  useEffect(() => {
-    if (!user?.userId) return;
-    const channel = supabase
-      .channel(`collaboration-notifications:${user.userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "workspace", table: "user_notifications", filter: `recipient_id=eq.${user.userId}` },
-        (payload) => {
-          const notification = payload.new as Partial<NotificationRow>;
-          if (
-            payload.eventType === "INSERT" &&
-            notification.notification_type === "performance_review_returned"
-          ) {
-            toast({
-              title: notification.title || "績效自評已退回補充",
-              description:
-                notification.message ||
-                "請前往績效考核系統查看退回內容。",
-            });
-          }
-          void loadNotifications();
-        },
-      )
-      .subscribe();
-    return () => void supabase.removeChannel(channel);
-  }, [loadNotifications, toast, user?.userId]);
+  useEffect(() => { if (open) void loadNotifications(); }, [open, loadNotifications]);
+  useEffect(() => { void loadMemberDirectory(); }, [loadMemberDirectory]);
 
   useEffect(() => {
     const openCenter = (event: Event) => {
@@ -726,6 +669,7 @@ export function CollaborationCenter() {
               </button>
             </header>
             <DirectMessagesPanel
+              isVisible={messageFloatOpen}
               onlineUsers={onlineUsers}
               contacts={collaborationMembers
                 .filter((member) => member.userId !== user?.userId)
