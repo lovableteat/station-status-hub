@@ -262,7 +262,7 @@ test("manager updates preserve every self-assessment byte and all legacy goals",
   assert.deepEqual(updated.goals, previous.goals);
   assert.deepEqual(
     readManagerAssessment(updated.managerFeedback).categoryReviews.IDP,
-    { score: 78, feedback: "IDP comment" },
+    { score: 78, feedback: "IDP comment", entryFeedback: {} },
   );
   const self = build(createAssessmentForm(updated), "self", "draft", updated);
   assert.equal(self.managerFeedback, updated.managerFeedback);

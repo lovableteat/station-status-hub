@@ -223,7 +223,7 @@ function keepoutRectangle(keepout: PcbKeepout): Rectangle {
 
 export function isWithinBoard(component: Rectangle, board: PcbProject["board"]): boolean {
   if (getBoardHoles(board).some(hole => polygonsOverlap(getRotatedRectangleCorners(component), hole))) return false;
-  if (board.outlineSource === "手繪板框") return polygonContainsRectangle(getRotatedRectangleCorners(component), getBoardPolygon(board));
+  if (board.outline?.length) return polygonContainsRectangle(getRotatedRectangleCorners(component), getBoardPolygon(board));
   return getRotatedRectangleCorners(component).every((point) => (
     point.x >= -EPSILON && point.x <= board.width + EPSILON
       && point.y >= -EPSILON && point.y <= board.height + EPSILON

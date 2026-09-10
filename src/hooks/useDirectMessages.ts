@@ -173,10 +173,16 @@ export function useDirectMessageThreads() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const reloadTimerRef = useRef<number>();
+  const inboxRequest = useRef(0);
+  const inboxAccount = useRef(user?.userId);
+  inboxAccount.current = user?.userId;
 
   const reload = useCallback(async (options?: { background?: boolean }) => {
-    if (!isRealtimeAuthenticated) {
+    const version = ++inboxRequest.current;
+    const account = user?.userId;
+    if (!isRealtimeAuthenticated || !account) {
       setThreads([]);
+      setLoading(false);
       setError("即時協作需要重新登入後才能使用。");
       return;
     }
@@ -184,14 +190,15 @@ export function useDirectMessageThreads() {
     const background = options?.background === true;
     if (!background) setLoading(true);
     const { data, error: queryError } = await database.rpc("list_direct_chat_threads");
+    if (version !== inboxRequest.current || inboxAccount.current !== account) return;
     if (queryError) {
       setError("訊息服務尚未啟用或目前無法連線。");
     } else {
       setThreads((data ?? []).map(mapThread));
       setError(null);
     }
-    if (!background) setLoading(false);
-  }, [isRealtimeAuthenticated]);
+    setLoading(false);
+  }, [isRealtimeAuthenticated, user?.userId]);
 
   const scheduleReload = useCallback((delay = 120) => {
     if (reloadTimerRef.current) window.clearTimeout(reloadTimerRef.current);
@@ -210,8 +217,10 @@ export function useDirectMessageThreads() {
   }, [scheduleReload]);
 
   useEffect(() => {
+    setThreads([]);
     void reload();
     return () => {
+      ++inboxRequest.current;
       if (reloadTimerRef.current) window.clearTimeout(reloadTimerRef.current);
     };
   }, [reload]);
@@ -230,7 +239,8 @@ export function useDirectMessageThreads() {
     };
     const connectInbox = async () => {
       const authorized = await authorizePrivateRealtime();
-      if (!active || !authorized) return;
+      if (!active) return;
+      if (!authorized) { scheduleInboxReconnect(); return; }
       const previous = inbox;
       inbox = null;
       if (previous) await supabase.removeChannel(previous);
@@ -350,7 +360,9 @@ export function useDirectMessageThreads() {
   return { threads, unreadCount, loading, error, reload, startDirectChat, clearDirectChat };
 }
 
-export function useDirectMessages(threadId: string | null) {
+export function useDirectMessages(threadId: string | null, { isVisible = true }: { isVisible?: boolean } = {}) {
+  const panelVisible = useRef(isVisible);
+  panelVisible.current = isVisible;
   const { user, isRealtimeAuthenticated } = useUser();
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -364,9 +376,14 @@ export function useDirectMessages(threadId: string | null) {
   const lastMarkedReadIdRef = useRef<string | null>(null);
   const typingTimersRef = useRef(new Map<string, number>());
   const persistErrorRef = useRef<string | null>(null);
+  const activeScope = useRef("");
+  const messageScope = `${user?.userId || ""}:${threadId || ""}:${isRealtimeAuthenticated}`;
+  activeScope.current = messageScope;
+  const latestRequest = useRef(0);
 
   const loadReadReceipts = useCallback(async () => {
     if (!threadId || !user?.userId || !isRealtimeAuthenticated) return;
+    const scope = messageScope;
     const { data } = await database
       .from("chat_read_receipts")
       .select("user_id,last_read_at")
@@ -374,12 +391,12 @@ export function useDirectMessages(threadId: string | null) {
       .neq("user_id", user.userId)
       .order("last_read_at", { ascending: false })
       .limit(1);
-    setReadByOtherAt(data?.[0]?.last_read_at ?? null);
+    if (scope === activeScope.current) setReadByOtherAt(data?.[0]?.last_read_at ?? null);
   }, [isRealtimeAuthenticated, threadId, user?.userId]);
 
   const markRead = useCallback(
     async (messageId?: string | null) => {
-      if (!threadId || !isRealtimeAuthenticated) return;
+      if (!threadId || !isRealtimeAuthenticated || !panelVisible.current || document.visibilityState !== "visible") return;
       await database.rpc("mark_chat_thread_read", {
         p_thread_id: threadId,
         p_message_id: messageId ?? null,
@@ -389,6 +406,8 @@ export function useDirectMessages(threadId: string | null) {
   );
 
   const loadLatest = useCallback(async (options?: { background?: boolean }) => {
+    const scope = messageScope;
+    const version = ++latestRequest.current;
     if (!threadId || !isRealtimeAuthenticated) {
       setMessages([]);
       return;
@@ -410,11 +429,13 @@ export function useDirectMessages(threadId: string | null) {
         .eq("thread_id", threadId)
         .maybeSingle(),
     ]);
+    if (scope !== activeScope.current || version !== latestRequest.current) return;
     const { data, error: queryError } = messageResult;
     if (queryError) {
       setError("訊息載入失敗，已保留目前畫面與未送出內容。");
     } else {
       const latest = await resolveSignedAttachmentUrls((data ?? []).map(mapMessage).reverse());
+      if (scope !== activeScope.current || version !== latestRequest.current) return;
       setMessages((current) => replaceVisibleDirectMessages(
         current,
         latest,
@@ -423,17 +444,22 @@ export function useDirectMessages(threadId: string | null) {
       setHasMore((data?.length ?? 0) === MESSAGE_PAGE_SIZE);
       setError(null);
       const lastMessage = latest.at(-1);
-      if (lastMessage && lastMessage.id !== lastMarkedReadIdRef.current) {
+      if (panelVisible.current && document.visibilityState === "visible" && lastMessage && lastMessage.id !== lastMarkedReadIdRef.current) {
         lastMarkedReadIdRef.current = lastMessage.id;
         void markRead(lastMessage.id);
       }
     }
-    if (!background) setLoading(false);
+    setLoading(false);
     void loadReadReceipts();
   }, [isRealtimeAuthenticated, loadReadReceipts, markRead, threadId]);
 
+  useEffect(() => {
+    if (isVisible) void loadLatest({ background: true });
+  }, [isVisible, loadLatest]);
+
   const loadVisibleMessage = useCallback(async (recordId: string) => {
     if (!threadId || !recordId || !isRealtimeAuthenticated) return null;
+    const scope = messageScope;
     const { data, error: queryError } = await database
       .from("chat_messages")
       .select(MESSAGE_SELECT)
@@ -442,6 +468,7 @@ export function useDirectMessages(threadId: string | null) {
       .is("deleted_at", null)
       .maybeSingle();
 
+    if (scope !== activeScope.current) return null;
     if (queryError) {
       void loadLatest({ background: true });
       return null;
@@ -452,6 +479,7 @@ export function useDirectMessages(threadId: string | null) {
     }
 
     const [message] = await resolveSignedAttachmentUrls([mapMessage(data)]);
+    if (scope !== activeScope.current) return null;
     setMessages((current) => mergeMessages(current, [message]));
     return message;
   }, [isRealtimeAuthenticated, loadLatest, threadId]);
@@ -460,6 +488,7 @@ export function useDirectMessages(threadId: string | null) {
     const oldest = messages.find((message) => message.delivery === "sent");
     if (!threadId || !oldest || loadingMore || !hasMore) return;
     setLoadingMore(true);
+    const scope = messageScope;
     const { data, error: queryError } = await database
       .from("chat_messages")
       .select(MESSAGE_SELECT)
@@ -468,8 +497,10 @@ export function useDirectMessages(threadId: string | null) {
       .lt("created_at", oldest.createdAt)
       .order("created_at", { ascending: false })
       .limit(MESSAGE_PAGE_SIZE);
+    if (scope !== activeScope.current) return;
     if (!queryError) {
       const older = await resolveSignedAttachmentUrls((data ?? []).map(mapMessage).reverse());
+      if (scope !== activeScope.current) return;
       setMessages((current) => mergeMessages(current, older));
       setHasMore((data?.length ?? 0) === MESSAGE_PAGE_SIZE);
     }
@@ -738,7 +769,7 @@ export function useDirectMessages(threadId: string | null) {
     const scheduleReconnectRefresh = () => {
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       reconnectTimer = window.setTimeout(
-        restoreRealtimeAndRefresh,
+        () => { restoreRealtimeAndRefresh(); void connectThread(); },
         CHAT_RECONNECT_RETRY_MS,
       );
     };
@@ -757,10 +788,20 @@ export function useDirectMessages(threadId: string | null) {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     scheduleBackgroundRefresh();
 
-    void authorizePrivateRealtime().then((authorized) => {
-      if (!active || !authorized) return;
+    let connecting = false;
+    const connectThread = async () => {
+      if (!active || connecting) return;
+      connecting = true;
+      const authorized = await authorizePrivateRealtime();
+      if (!active || !authorized) { connecting = false; if (active) scheduleReconnectRefresh(); return; }
+      const previous = channel;
+      channel = null;
+      channelRef.current = null;
+      if (previous) await supabase.removeChannel(previous);
+      if (!active) { connecting = false; return; }
       channel = supabase.channel(`chat:${threadId}`, { config: { private: true } });
       channelRef.current = channel;
+      const connectedChannel = channel;
       channel
         .on("broadcast", { event: "INSERT" }, (payload) => {
           if (!active) return;
@@ -769,7 +810,7 @@ export function useDirectMessages(threadId: string | null) {
             void loadReadReceipts();
           } else if (table === "chat_messages" && changedThreadId === threadId && recordId) {
             void loadVisibleMessage(recordId).then((message) => {
-              if (message && message.senderId !== user.userId) {
+              if (active && panelVisible.current && document.visibilityState === "visible" && message && message.senderId !== user.userId) {
                 lastMarkedReadIdRef.current = message.id;
                 void markRead(message.id);
               }
@@ -809,7 +850,7 @@ export function useDirectMessages(threadId: string | null) {
           typingTimers.set(typingUserId, timer);
         })
         .subscribe((status) => {
-          if (!active) return;
+          if (!active || channel !== connectedChannel) return;
           if (status === "SUBSCRIBED") {
             if (reconnectTimer) window.clearTimeout(reconnectTimer);
             void loadLatest({ background: true });
@@ -821,10 +862,13 @@ export function useDirectMessages(threadId: string | null) {
             scheduleReconnectRefresh();
           }
         });
-    });
+      connecting = false;
+    };
+    void connectThread();
 
     return () => {
       active = false;
+      ++latestRequest.current;
       channelRef.current = null;
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       if (refreshTimer) window.clearTimeout(refreshTimer);
