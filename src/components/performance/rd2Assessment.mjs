@@ -42,9 +42,8 @@ import {
 } from "./rd2Standards.mjs";
 export const MAX_EVIDENCE_CHARACTERS = 1_500_000;
 export const MAX_IMAGES_PER_CATEGORY = 2;
-export const MAX_MANAGER_ATTACHMENTS = 4;
-export const MAX_MANAGER_ATTACHMENT_BYTES = 4 * 1024 * 1024;
-export const MAX_MANAGER_ATTACHMENT_CHARACTERS = 6_000_000;
+export { MAX_MANAGER_ATTACHMENTS, MAX_MANAGER_ATTACHMENT_BYTES, MAX_MANAGER_ATTACHMENT_CHARACTERS } from "./assessmentAttachmentPolicy.mjs";
+import { safeManagerAttachments, MAX_MANAGER_ATTACHMENT_CHARACTERS } from "./assessmentAttachmentPolicy.mjs";
 const str = (value) => (typeof value === "string" ? value : "");
 const validRating = (value) =>
   Number.isInteger(value) && value >= 1 && value <= 5 ? value : null;
@@ -58,45 +57,6 @@ const validSelfScore = (value) =>
   Number(value) <= 100
     ? Math.round(Number(value))
     : null;
-const SAFE_ATTACHMENT_EXTENSIONS = new Set([
-  "pdf",
-  "doc",
-  "docx",
-  "xls",
-  "xlsx",
-  "ppt",
-  "pptx",
-  "csv",
-  "txt",
-  "zip",
-  "jpg",
-  "jpeg",
-  "png",
-  "webp",
-]);
-const safeManagerAttachments = (value) =>
-  (Array.isArray(value) ? value : [])
-    .filter((attachment) => {
-      const extension = str(attachment?.name).split(".").pop()?.toLowerCase();
-      return (
-        str(attachment?.id) &&
-        SAFE_ATTACHMENT_EXTENSIONS.has(extension) &&
-        Number.isFinite(Number(attachment?.size)) &&
-        Number(attachment.size) >= 0 &&
-        Number(attachment.size) <= MAX_MANAGER_ATTACHMENT_BYTES &&
-        /^data:(?:application\/(?:pdf|msword|vnd\.[^;,]+|zip|x-zip-compressed|octet-stream)|text\/(?:plain|csv)|image\/(?:jpeg|png|webp));base64,/i.test(
-          str(attachment?.dataUrl),
-        )
-      );
-    })
-    .slice(0, MAX_MANAGER_ATTACHMENTS)
-    .map((attachment) => ({
-      id: str(attachment.id),
-      name: str(attachment.name),
-      mimeType: str(attachment.mimeType),
-      size: Number(attachment.size),
-      dataUrl: str(attachment.dataUrl),
-    }));
 export const safeEvidenceUrl = (value) => {
   try {
     const url = new URL(str(value).trim());
@@ -164,7 +124,7 @@ const emptyCategoryReviews = () =>
   Object.fromEntries(
     CATEGORIES.map((category) => [
       category,
-      { score: null, feedback: "" },
+      { score: null, feedback: "", entryFeedback: {} },
     ]),
   );
 export function readManagerAssessment(raw = "") {
@@ -180,6 +140,7 @@ export function readManagerAssessment(raw = "") {
             {
               score: validSelfScore(parsed.categoryReviews?.[category]?.score),
               feedback: str(parsed.categoryReviews?.[category]?.feedback),
+              entryFeedback: Object.fromEntries(Object.entries(parsed.categoryReviews?.[category]?.entryFeedback || {}).filter(([id, value]) => id && typeof value === "string")),
             },
           ]),
         ),
@@ -237,6 +198,8 @@ export function validateAssessment(form, mode, action) {
   );
   if (evidenceSize > MAX_EVIDENCE_CHARACTERS)
     return "證明圖片總量過大，請減少圖片或改用內部連結。";
+  const entryAttachmentSize = CATEGORIES.reduce((total, category) => total + getAssessmentEntries(form.self.sections[category]).reduce((sum, entry) => sum + entry.attachments.reduce((size, file) => size + file.dataUrl.length, 0), 0), 0);
+  if (entryAttachmentSize > MAX_MANAGER_ATTACHMENT_CHARACTERS) return "實績附件總量過大，所有實績合計約 4.5 MB，請移除部分附件或改用證明連結。";
   const managerAttachmentSize = form.manager.attachments.reduce(
     (total, attachment) => total + attachment.dataUrl.length,
     0,
@@ -299,7 +262,8 @@ export function validateAssessment(form, mode, action) {
     mode === "manager" &&
     action === "return" &&
     !form.manager.feedback.trim() &&
-    !form.manager.attachments.length
+    !form.manager.attachments.length &&
+    !CATEGORIES.some(category => Object.values(form.manager.categoryReviews[category].entryFeedback || {}).some(text => typeof text === "string" && text.trim()))
   )
     return "退回補充時請留下回饋或附加檔案。";
   return "";
@@ -339,6 +303,14 @@ export function buildAssessmentReview({
     employeeNumber: form.self.employeeNumber,
     standardsVersion: STANDARDS_SOURCE.version,
   };
+  if (mode === "manager" && action === "return") {
+    const marker = "\n\n【逐筆實績補充要求】\n";
+    const comments = CATEGORIES.flatMap(category => getAssessmentEntries(form.self.sections[category]).flatMap((entry,index) => {
+      const feedback = manager.categoryReviews[category].entryFeedback?.[entry.id];
+      return feedback?.trim() ? [`${category} 實績 ${index+1}：${entry.text.slice(0,80)}\n${feedback.trim()}`] : [];
+    }));
+    manager.feedback = manager.feedback.split(marker)[0] + (comments.length ? marker + comments.join("\n\n") : "");
+  }
   const weightedManager = calculateWeightedManagerScores(
     form.self.grade,
     manager.categoryReviews,
