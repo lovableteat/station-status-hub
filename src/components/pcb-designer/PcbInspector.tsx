@@ -1,3 +1,5 @@
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { boardSurfacePath } from "./core/boardOutline.ts";
 import { useEffect, useState, type ReactNode } from "react";
 import { Check, Copy, Eye, FileUp, Lock, LockOpen, RotateCw, Scissors, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -5,7 +7,7 @@ import { cn } from "@/lib/utils";
 import type { PcbKeepout, PcbMeasurement, PcbModelAssetMetadata, PcbPlacedComponent } from "./types.ts";
 import { PCB_MODEL_FILE_ACCEPT } from "./core/modelAssets.ts";
 import { createBoardGridCuts } from "./core/boardCuts.ts";
-import { parseDxfOutline } from "./core/dxf.ts";
+import { parseDxfBoardOutline } from "./core/dxf.ts";
 import { PcbBoardOutlineDialog } from "./PcbBoardOutlineDialog.tsx";
 import {
   PCB_RESIZE_ANCHORS,
@@ -167,13 +169,16 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
   const [columns, setColumns] = useState("1");
   const [rows, setRows] = useState("1");
   const [resizeAnchor, setResizeAnchor] = useState<PcbResizeAnchor>("top-left");
+  const [dxfPreview, setDxfPreview] = useState<{ outline: ReturnType<typeof parseDxfBoardOutline>; name: string } | null>(null);
+  const [includeDxfHoles, setIncludeDxfHoles] = useState(true);
+  const [dxfApplyError, setDxfApplyError] = useState("");
   const [dxfMessage, setDxfMessage] = useState<{ tone: "success" | "warning" | "error"; text: string } | null>(null);
 
   /** Take the board edge from an ME drawing: extents become the board size. */
   const importDxf = async (file: File) => {
     setDxfMessage(null);
     try {
-      const outline = parseDxfOutline(await file.text());
+      const outline = parseDxfBoardOutline(await file.text());
       if (!outline.paths.length) {
         setDxfMessage({ tone: "error", text: "這個檔案沒有可用的線段，請確認匯出時包含板框圖層。" });
         return;
@@ -186,25 +191,11 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
         });
         return;
       }
-      const applied = workspace.updateBoard({
-        width: outline.width,
-        height: outline.height,
-        outline: outline.paths,
-        outlineNodes: undefined,
-        holes: undefined,
-        outlineSource: file.name,
-      });
-      if (!applied) setDxfMessage({ tone: "error", text: "目前無法修改板框，請確認編輯權限或 DXF 複雜度。" });
-      else if (outline.skipped.length) {
-        setDxfMessage({
-          tone: "warning",
-          text: `已匯入 ME 板框；已略過不支援的圖元：${outline.skipped.join("、")}。請按「儲存」保留變更。`,
-        });
-      } else {
-        setDxfMessage({ tone: "success", text: "ME 板框已套用為目前版型，請按「儲存」保留變更。" });
-      }
-    } catch {
-      setDxfMessage({ tone: "error", text: "無法讀取這個 DXF 檔案。" });
+      setDxfApplyError("");
+      setIncludeDxfHoles(true);
+      setDxfPreview({ outline, name: file.name });
+    } catch (error) {
+      setDxfMessage({ tone: "error", text: error instanceof Error ? error.message : "無法讀取這個 DXF 檔案。" });
     }
   };
   const applyCuts = () => {
@@ -217,6 +208,26 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
   return (
     <div className="pcb-inspector-form">
       <h2>板設定</h2>
+      <Dialog open={!!dxfPreview} onOpenChange={open => { if (!open) setDxfPreview(null); }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>確認 DXF 板形</DialogTitle><DialogDescription>確認輪廓後套用；取消會保留原板。元件不會刪除，超出版框時會提示調整。</DialogDescription></DialogHeader>
+          {dxfPreview && <>
+            <p>{dxfPreview.name} · {dxfPreview.outline.width} × {dxfPreview.outline.height} mm</p>
+            <svg role="img" aria-label="DXF 裁板預覽" viewBox={`-2 -2 ${dxfPreview.outline.width+4} ${dxfPreview.outline.height+4}`} style={{width:"100%",height:260,background:"#112333"}}>
+              <path fill="#287e68" stroke="#ffd166" strokeWidth={.4} fillRule="evenodd" d={boardSurfacePath({...board,width:dxfPreview.outline.width,height:dxfPreview.outline.height,outline:dxfPreview.outline.paths,holes:includeDxfHoles?dxfPreview.outline.holes:[],outlineSource:dxfPreview.name})}/>
+            </svg>
+            <label><input type="checkbox" checked={includeDxfHoles} onChange={event=>setIncludeDxfHoles(event.target.checked)}/> 將內部封閉輪廓挖孔（{dxfPreview.outline.holes?.length || 0} 個，請確認不是標註線）</label>
+            {!!dxfPreview.outline.skipped.length && <p>略過：{dxfPreview.outline.skipped.join("、")}</p>}
+            {dxfApplyError && <p role="alert">{dxfApplyError}</p>}
+            <div className="flex justify-end gap-2"><Button variant="outline" onClick={()=>setDxfPreview(null)}>取消</Button><Button disabled={disabled} onClick={()=>{
+              const outline=dxfPreview.outline;
+              const applied=workspace.updateBoard({width:outline.width,height:outline.height,outline:outline.paths,outlineNodes:undefined,holes:includeDxfHoles?outline.holes:[],outlineSource:dxfPreview.name});
+              if (!applied) {setDxfApplyError("板形無法套用，請確認編輯權限；孔洞不得碰到板邊或互相重疊。");return;}
+              setDxfPreview(null);setDxfMessage({tone:"success",text:"已依 DXF 輪廓裁板，2D 與 3D 共用此板形。請按儲存保留變更。"});
+            }}>套用板形</Button></div>
+          </>}
+        </DialogContent>
+      </Dialog>
       {drawing && <PcbBoardOutlineDialog workspace={workspace} onClose={() => setDrawing(false)} />}
       <section className="pcb-inspector-section">
       <h3 className="text-cyan-200">板形與尺寸</h3>
@@ -273,7 +284,7 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
           />
         </label>
         <p className="pcb-dxf-import-hint">
-          讀取 LINE／LWPOLYLINE／POLYLINE／ARC／CIRCLE，取外框範圍當板子寬高並描出輪廓；也會隨專案或自訂模板一起儲存。
+          讀取 LINE／LWPOLYLINE／POLYLINE／ARC／CIRCLE，接合封閉板邊並依實際輪廓裁板，內部封閉輪廓作為孔洞，請檢查匯入結果；也會隨專案或自訂模板一起儲存。
         </p>
         {dxfMessage && <p className="pcb-dxf-import-message" data-tone={dxfMessage.tone}>{dxfMessage.text}</p>}
       </div>

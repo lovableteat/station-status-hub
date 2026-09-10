@@ -1,9 +1,10 @@
+import { safeManagerAttachments } from "./assessmentAttachmentPolicy.mjs";
 // Keep the existing text summary for older readers and CSV exports while
 // preserving each achievement as an independently editable entry.
 export function getAssessmentEntries(section) {
   if (!Array.isArray(section?.entries)) {
     return typeof section?.text === "string" && section.text.trim()
-      ? [{ id: "legacy-entry", text: section.text }]
+      ? [{ id: "legacy-entry", text: section.text, attachments: [] }]
       : [];
   }
   const ids = new Set();
@@ -14,7 +15,8 @@ export function getAssessmentEntries(section) {
         typeof entry.id === "string" && entry.id ? entry.id : `entry-${index}`;
       while (ids.has(id)) id += `-${index}`;
       ids.add(id);
-      return { id, text: entry.text };
+      return { id, text: entry.text, attachments: safeManagerAttachments(entry.attachments),
+        links: [...new Set((Array.isArray(entry.links) ? entry.links : []).flatMap(value => { try {const url = new URL(value);return url.protocol === "https:" ? [url.href] : [];} catch {return [];} }))] };
     });
 }
 

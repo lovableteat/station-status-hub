@@ -1,3 +1,4 @@
+import { stitchDxfLoops } from "./dxfTopology.ts";
 import type { PcbBoard, PcbPoint, PcbOutlineNode } from "../types.ts";
 
 export function sampleBoardNodes(nodes: readonly PcbOutlineNode[]): PcbPoint[] {
@@ -52,8 +53,10 @@ export function outlineError(points: readonly PcbPoint[], board: Pick<PcbBoard, 
 }
 
 export function getBoardPolygon(board: PcbBoard): PcbPoint[] {
-  // DXF can contain unrelated open drafting paths. Only a hand-drawn closed board replaces the substrate.
-  const path = board.outlineSource === "手繪板框" ? board.outline?.[0] : undefined;
+  // Imported and hand-drawn outlines share the same substrate geometry.
+  const loops = stitchDxfLoops(board.outline ?? []);
+  const area = (path: PcbPoint[]) => Math.abs(path.reduce((sum,p,i) => { const q = path[(i+1)%path.length]; return sum + p.x*q.y - q.x*p.y; },0));
+  const path = loops.sort((a,b) => area(b)-area(a))[0];
   if (path && path.length >= 4 && same(path[0], path[path.length - 1])) return path.slice(0, -1);
   return [{ x: 0, y: 0 }, { x: board.width, y: 0 }, { x: board.width, y: board.height }, { x: 0, y: board.height }];
 }
