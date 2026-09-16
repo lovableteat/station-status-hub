@@ -1,4 +1,8 @@
 import { useNotificationInbox, type NotificationRow } from "@/hooks/useNotificationInbox";
+import {
+  buildPerformanceReturnActionUrl,
+  PERFORMANCE_RETURN_NOTIFICATION_TYPE,
+} from "@/components/performance/performanceNotifications.mjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
@@ -410,6 +414,22 @@ export function CollaborationCenter() {
     const metadata = notification.metadata && typeof notification.metadata === "object"
       ? notification.metadata as Record<string, unknown>
       : {};
+    const cycleId = typeof metadata.cycle_id === "string" ? metadata.cycle_id : "";
+    const reviewId = notification.reference_id || (
+      typeof metadata.review_id === "string" ? metadata.review_id : ""
+    );
+    if (
+      notification.notification_type === PERFORMANCE_RETURN_NOTIFICATION_TYPE &&
+      cycleId &&
+      reviewId
+    ) {
+      window.location.assign(buildPerformanceReturnActionUrl({
+        currentUrl: window.location.href,
+        reviewId,
+        cycleId,
+      }));
+      return;
+    }
     const module = typeof metadata.module === "string"
       ? metadata.module
       : notification.reference_type === "issue" ? "issues" : undefined;
