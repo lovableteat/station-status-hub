@@ -69,3 +69,46 @@ export async function saveAssessmentRecord(db, review, previous) {
   }
   return normalizePerformanceReview(data);
 }
+
+// Keep one request ID while retrying identical form content after a lost response.
+// This is memory only; no assessment content is written to localStorage.
+const pendingRequests = new Map();
+export async function submitAssessmentRecord(db, review, { mode, action, expectedUpdatedAt }) {
+  const payload = {
+    id: review.id, cycle_id: review.cycleId, employee_id: review.employeeId,
+    employee_name: review.employeeName, department: review.department,
+    role: review.role, due_date: review.dueDate || null, goals: review.goals,
+    ...(mode === "self" ? { self_feedback: review.selfFeedback }
+      : { manager_feedback: review.managerFeedback, score: review.score }),
+  };
+  const key = JSON.stringify([payload, mode, action, expectedUpdatedAt]);
+  let requestId = pendingRequests.get(key);
+  if (!requestId) {
+    requestId = crypto.randomUUID();
+    if (pendingRequests.size >= 20) pendingRequests.delete(pendingRequests.keys().next().value);
+    pendingRequests.set(key, requestId);
+  }
+  const args = { p_request_id: requestId, p_review: payload, p_mode: mode,
+    p_action: action, p_expected_updated_at: expectedUpdatedAt };
+  let result;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      result = await db.rpc("submit_performance_assessment", args);
+    } catch {
+      result = { error: { message: "連線中斷", code: "NETWORK" } };
+    }
+    if (!result.error) break;
+    const code = result.error.code || "";
+    if (attempt === 0 && (code === "NETWORK" || !code || code.startsWith("08"))) continue;
+    if (code === "40001") throw new Error(result.error.message);
+    if (code === "42501" || code === "22023") throw new Error(result.error.message);
+    if (code === "PGRST202") throw new Error("提交服務更新尚未完成，本頁輸入仍保留，請稍後重試。");
+    throw new Error(`提交未完成（${code || "連線異常"}），本頁輸入仍保留。請再按提交重試。`);
+  }
+  const expectedStatus = action === "return" ? "in-progress" : mode === "self" ? "submitted" : "approved";
+  if (!result.data?.review || result.data.review.id !== review.id || result.data.review.status !== expectedStatus ||
+      (action === "return" && !result.data.notification_id)) {
+    throw new Error("提交結果尚未確認，本頁輸入仍保留。請再按提交重試。");
+  }
+  return normalizePerformanceReview(result.data.review);
+}
