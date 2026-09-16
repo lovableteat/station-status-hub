@@ -1,55 +1,44 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-
-const migrationUrl = new URL(
-  "../supabase/migrations/20260916100000_atomic_performance_return_notifications.sql",
-  import.meta.url,
-);
-
-test("a supervisor return creates its notification in the same transaction", async () => {
-  const migration = await readFile(migrationUrl, "utf8");
-
-  assert.match(migration, /after update of status on workspace\.performance_reviews/i);
-  assert.match(migration, /old\.status = 'submitted' and new\.status = 'in-progress'/i);
-  assert.match(migration, /perform workspace\.ensure_performance_return_notification\(new\.id\)/i);
-  assert.match(migration, /workspace\.can_manage_performance_record/i);
-  assert.match(migration, /workspace\.resolve_performance_employee\(v_review\.employee_id\)/i);
+import { submitAssessmentRecord } from "../src/components/performance/assessmentPersistence.mjs";
+const review={id:"performance-text-id",cycleId:"2026-q3",employeeId:"employee",employeeName:"員工",selfFeedback:"已補充",managerFeedback:"主管私密評分",score:88,goals:[]};
+const options={mode:"self",action:"submit",expectedUpdatedAt:"2026-09-16T00:00:00.123456Z"};
+test("employee submission omits all supervisor fields and keeps the loaded version precision",async()=>{
+  const db={rpc:async(name,args)=>{
+    assert.equal(name,"submit_performance_assessment");
+    assert.equal(args.p_review.id,review.id);
+    assert.equal(args.p_expected_updated_at,options.expectedUpdatedAt);
+    assert.equal("manager_feedback" in args.p_review,false);
+    assert.equal("score" in args.p_review,false);
+    return {data:{review:{...args.p_review,status:"submitted"}}};
+  }};
+  assert.equal((await submitAssessmentRecord(db,review,options)).status,"submitted");
+});
+test("lost response automatically retries the same request without duplicate writes",async()=>{
+  const ids=[];
+  const db={rpc:async(name,args)=>{
+    ids.push(args.p_request_id);
+    if(ids.length===1) throw new Error("connection lost after commit");
+    return {data:{review:{...args.p_review,status:"submitted"}}};
+  }};
+  await submitAssessmentRecord(db,review,options);
+  assert.equal(ids.length,2); assert.equal(ids[0],ids[1]);
+});
+test("return cannot report success without the transaction's notification receipt",async()=>{
+  const db={rpc:async()=>({data:{review:{id:review.id,status:"in-progress"},notification_id:null}})};
+  await assert.rejects(()=>submitAssessmentRecord(db,review,{...options,mode:"manager",action:"return"}),/結果尚未確認/);
+});
+test("confirmed return requires both returned state and notification",async()=>{
+  const db={rpc:async()=>({data:{review:{id:review.id,status:"in-progress"},notification_id:"notice"}})};
+  assert.equal((await submitAssessmentRecord(db,review,{...options,mode:"manager",action:"return"})).status,"in-progress");
 });
 
-test("return notification retry is private and idempotent", async () => {
-  const migration = await readFile(migrationUrl, "utf8");
-
-  assert.match(migration, /security definer/i);
-  assert.match(migration, /pg_advisory_xact_lock/i);
-  assert.match(migration, /notification\.is_read = false/i);
-  assert.match(migration, /notification_type = 'performance_review_returned'/i);
-  assert.match(migration, /revoke all on function workspace\.ensure_performance_return_notification\(uuid\)[\s\S]*from public, anon/i);
-  assert.doesNotMatch(migration, /score|manager_feedback/);
+test("a notification receipt without a returned review cannot report success",async()=>{
+  const db={rpc:async()=>({data:{review:{id:review.id,status:"submitted"},notification_id:"notice"}})};
+  await assert.rejects(()=>submitAssessmentRecord(db,review,{...options,mode:"manager",action:"return"}),/結果尚未確認/);
 });
-
-test("the manager UI requests the verified database notification", async () => {
-  const source = await readFile(
-    new URL("../src/components/performance/PerformanceAppraisalPage.tsx", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(source, /rpc\(\s*"ensure_performance_return_notification"/);
-  assert.match(source, /notificationError\?\.code === "PGRST202"/);
-  assert.match(source, /from\("user_notifications"\)\s*\.insert/);
-  assert.match(source, /!notificationRpcMissing && previous\?\.status === "submitted"/);
-  assert.doesNotMatch(source, /請稍後再按一次退回/);
-});
-
-test("return notification casts the UUID for the text reference column", async () => {
-  const migration = await readFile(
-    new URL(
-      "../supabase/migrations/20260916133000_fix_performance_return_notification_reference_type.sql",
-      import.meta.url,
-    ),
-    "utf8",
-  );
-
-  assert.match(migration, /notification\.reference_id\s*=\s*p_review_id::text/i);
-  assert.match(migration, /v_review\.id::text/);
+test("concurrent update remains a real conflict and never silently overwrites",async()=>{
+  let calls=0;
+  const db={rpc:async()=>{calls++;return {error:{code:"40001",message:"考核已由另一個視窗更新"}};}};
+  await assert.rejects(()=>submitAssessmentRecord(db,review,options),/另一個視窗/); assert.equal(calls,1);
 });
