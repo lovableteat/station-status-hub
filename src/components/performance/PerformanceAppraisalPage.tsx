@@ -34,7 +34,6 @@ import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGuide";
 import { saveAssessmentRecord } from "./assessmentPersistence.mjs";
-import { buildPerformanceReturnNotification } from "./performanceNotifications.mjs";
 import { AssessmentEntryList } from "./AssessmentEntryList";
 import { PerformanceOrganization } from "./PerformanceOrganization";
 import { PerformanceSectionReports } from "./PerformanceSectionReports";
@@ -768,26 +767,19 @@ export function PerformanceAppraisalPage() {
       )) as PerformanceReview;
     let returnNotificationSent = true;
     if (!demo && mode === "manager" && action === "return") {
-      const recipient = employees.find(
-        (employee) =>
-          employee.id === confirmed.employeeId ||
-          employee.label.trim().toLocaleLowerCase() ===
-            confirmed.employeeName.trim().toLocaleLowerCase(),
-      );
       try {
-        const notification = buildPerformanceReturnNotification({
-          review: confirmed,
-          recipientId: recipient?.id || confirmed.employeeId,
-          senderId: user?.userId,
-          senderName: user?.displayName || user?.username || "直屬主管",
-          currentUrl: window.location.href,
-        });
-        const { error: notificationError } = await performanceDb
-          .from("user_notifications")
-          .insert(notification);
-        returnNotificationSent = !notificationError;
+        const { error: notificationError } = await performanceDb.rpc(
+          "ensure_performance_return_notification",
+          {
+            p_review_id: confirmed.id,
+          },
+        );
+        if (notificationError) throw notificationError;
       } catch {
-        returnNotificationSent = false;
+        // A submitted -> in-progress transition creates the notification in
+        // the same database transaction as the return. If the follow-up RPC
+        // response was lost, the successful save still proves it was sent.
+        returnNotificationSent = previous?.status === "submitted";
       }
     }
     if (accessVersion !== accessGeneration.current) throw new Error("資料存取權限已更新，請重新開啟考核確認儲存結果。");
@@ -811,7 +803,7 @@ export function PerformanceAppraisalPage() {
         action === "return" && !demo
           ? returnNotificationSent
             ? `已通知 ${confirmed.employeeName} 回來查看回饋並補充。`
-            : `考核已退回，但通知 ${confirmed.employeeName} 失敗，請稍後再按一次退回。`
+            : `考核已退回；通知服務暫時無法確認，重新整理後可再次補送通知。`
           : demo
             ? "本機示範模式，不會寫入正式資料。"
             : "已確認儲存至工作區。",
