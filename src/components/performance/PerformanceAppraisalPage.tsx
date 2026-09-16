@@ -33,8 +33,7 @@ import { AssessmentEditor } from "./AssessmentEditor";
 import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGuide";
-import { saveAssessmentRecord } from "./assessmentPersistence.mjs";
-import { buildPerformanceReturnNotification } from "./performanceNotifications.mjs";
+import { submitAssessmentRecord } from "./assessmentPersistence.mjs";
 import { AssessmentEntryList } from "./AssessmentEntryList";
 import { PerformanceOrganization } from "./PerformanceOrganization";
 import { PerformanceSectionReports } from "./PerformanceSectionReports";
@@ -53,7 +52,6 @@ import {
   CATEGORIES,
   buildAssessmentReview,
   createAssessmentForm,
-  draftKey,
   readManagerAssessment,
   readSelfAssessment,
   validateAssessment,
@@ -539,7 +537,7 @@ export function PerformanceAppraisalPage() {
     if (demo) return;
     try {
       localStorage.removeItem(LEGACY_CACHE);
-      Object.keys(localStorage).filter((key) => key.startsWith("station-status-hub:performance-reviews:v2:cloud:") || (key.startsWith("station-status-hub:rd2-draft:") && key.includes(":manager:"))).forEach((key) => localStorage.removeItem(key));
+      Object.keys(localStorage).filter((key) => key.startsWith("station-status-hub:performance-reviews:v2:cloud:") || key.startsWith("station-status-hub:rd2-draft:")).forEach((key) => localStorage.removeItem(key));
     } catch { /* Cloud records and manager drafts are never restored offline. */ }
     return watchPermissionRefresh({ windowTarget: window, documentTarget: document, refresh: () => void load(true) });
   }, [demo, load]);
@@ -761,54 +759,11 @@ export function PerformanceAppraisalPage() {
     }) as PerformanceReview;
     let confirmed = nextReview;
     if (!demo)
-      confirmed = (await saveAssessmentRecord(
-        performanceDb,
-        nextReview,
-        previous,
-      )) as PerformanceReview;
-    let returnNotificationSent = true;
-    if (!demo && mode === "manager" && action === "return") {
-      let notificationRpcMissing = false;
-      try {
-        const { error: notificationError } = await performanceDb.rpc(
-          "ensure_performance_return_notification",
-          {
-            p_review_id: confirmed.id,
-          },
-        );
-        if (notificationError?.code === "PGRST202") {
-          notificationRpcMissing = true;
-          // During a staggered deployment, keep the previous protected insert
-          // until PostgREST reloads the new RPC. It may still be rejected by
-          // the old RLS policy, but it must never report a false success.
-          const recipient = employees.find(
-            (employee) =>
-              employee.id === confirmed.employeeId ||
-              employee.label.trim().toLocaleLowerCase() ===
-                confirmed.employeeName.trim().toLocaleLowerCase(),
-          );
-          const notification = buildPerformanceReturnNotification({
-            review: confirmed,
-            recipientId: recipient?.id || confirmed.employeeId,
-            senderId: user?.userId,
-            senderName: user?.displayName || user?.username || "直屬主管",
-            currentUrl: window.location.href,
-          });
-          const { error: fallbackError } = await performanceDb
-            .from("user_notifications")
-            .insert(notification);
-          if (fallbackError) throw fallbackError;
-        } else if (notificationError) {
-          throw notificationError;
-        }
-      } catch {
-        // A submitted -> in-progress transition creates the notification in
-        // the same database transaction as the return. If the follow-up RPC
-        // response was lost, the successful save still proves it was sent.
-        returnNotificationSent =
-          !notificationRpcMissing && previous?.status === "submitted";
-      }
-    }
+      confirmed = (await submitAssessmentRecord(performanceDb, nextReview, {
+        mode,
+        action,
+        expectedUpdatedAt: form.sourceUpdatedAt || null,
+      })) as PerformanceReview;
     if (accessVersion !== accessGeneration.current) throw new Error("資料存取權限已更新，請重新開啟考核確認儲存結果。");
     const nextRows = [
       confirmed,
@@ -828,16 +783,10 @@ export function PerformanceAppraisalPage() {
               : "主管評分已送出",
       description:
         action === "return" && !demo
-          ? returnNotificationSent
-            ? `已通知 ${confirmed.employeeName} 回來查看回饋並補充。`
-            : `考核已退回；通知服務暫時無法確認，重新整理後可再次補送通知。`
+          ? `已通知 ${confirmed.employeeName} 回來查看回饋並補充。`
           : demo
             ? "本機示範模式，不會寫入正式資料。"
-            : "已確認儲存至工作區。",
-      variant:
-        action === "return" && !demo && !returnNotificationSent
-          ? "destructive"
-          : undefined,
+            : "已確認提交成功。",
     });
     return createAssessmentForm(confirmed) as AssessmentForm;
   };
@@ -1117,15 +1066,6 @@ export function PerformanceAppraisalPage() {
                     key={`${userId}:${cycle}:${tab}:${editorRecordId || "new"}:${editorRevision}:${initial.manager.roleGroup}`}
                     initial={initial}
                     mode={tab}
-                    // Self drafts are keyed to the account rather than a row
-                    // id, so a draft made before the first cloud save is
-                    // restored when the same review is opened from records.
-                    storageKey={draftKey(
-                      userId,
-                      cycle,
-                      tab,
-                      tab === "self" ? userId : editorRecordId,
-                    )}
                     readonly={
                       tab === "self" && editorReview?.status === "approved"
                     }
