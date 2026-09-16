@@ -35,6 +35,8 @@ test("the manager UI requests the verified database notification", async () => {
   );
 
   assert.match(source, /rpc\(\s*"ensure_performance_return_notification"/);
-  assert.doesNotMatch(source, /from\("user_notifications"\)\s*\.insert/);
+  assert.match(source, /notificationError\?\.code === "PGRST202"/);
+  assert.match(source, /from\("user_notifications"\)\s*\.insert/);
+  assert.match(source, /!notificationRpcMissing && previous\?\.status === "submitted"/);
   assert.doesNotMatch(source, /請稍後再按一次退回/);
 });
