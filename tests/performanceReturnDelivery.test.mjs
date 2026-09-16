@@ -40,3 +40,16 @@ test("the manager UI requests the verified database notification", async () => {
   assert.match(source, /!notificationRpcMissing && previous\?\.status === "submitted"/);
   assert.doesNotMatch(source, /請稍後再按一次退回/);
 });
+
+test("return notification casts the UUID for the text reference column", async () => {
+  const migration = await readFile(
+    new URL(
+      "../supabase/migrations/20260916133000_fix_performance_return_notification_reference_type.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(migration, /notification\.reference_id\s*=\s*p_review_id::text/i);
+  assert.match(migration, /v_review\.id::text/);
+});
