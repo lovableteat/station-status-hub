@@ -1,6 +1,6 @@
 import { AssessmentAttachments } from "./AssessmentAttachments";
 import { useEffect, useRef, useState } from "react";
-import { Link2, Plus, Save, Send, Trash2, Upload, X } from "lucide-react";
+import { Link2, Plus, Send, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,16 +11,6 @@ import {
   commitAssessmentEntries,
   getAssessmentEntries,
 } from "./assessmentEntries.mjs";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   CATEGORIES,
   CATEGORY_GUIDANCE,
@@ -36,9 +26,7 @@ import {
   getCategoryRoleReference,
   getKpiReference,
   getLevelWeights,
-  readAssessmentDraft,
   safeEvidenceUrl,
-  saveAssessmentDraft,
   validateAssessment,
 } from "./rd2Assessment.mjs";
 import {
@@ -274,7 +262,6 @@ function Evidence({
 interface Props {
   initial: AssessmentForm;
   mode: AssessmentMode;
-  storageKey: string;
   readonly?: boolean;
   identityLocked?: boolean;
   canSubmit: boolean;
@@ -291,7 +278,6 @@ interface Props {
 export function AssessmentEditor({
   initial,
   mode,
-  storageKey,
   readonly = false,
   identityLocked = false,
   canSubmit,
@@ -301,91 +287,33 @@ export function AssessmentEditor({
   demo,
   onSave,
 }: Props) {
-  const localDrafts = demo || mode === "self";
-  const [restored] = useState(() =>
-    readonly || !localDrafts
-      ? null
-      : readAssessmentDraft(localStorage, storageKey, initial),
-  );
-  const [draftConflict, setDraftConflict] = useState(
-    () =>
-      !!restored &&
-      !!initial.sourceUpdatedAt &&
-      restored.form.sourceUpdatedAt !== initial.sourceUpdatedAt,
-  );
-  const [form, setForm] = useState<AssessmentForm>(restored?.form || initial);
-  const [draftStatus, setDraftStatus] = useState(
-    restored
-      ? `已恢復本機草稿 · ${new Date(restored.savedAt).toLocaleString("zh-TW")}`
-      : localDrafts
-        ? "尚無本機草稿"
-        : "主管評分請儲存至工作區；資料鎖定後會清除未儲存內容。",
-  );
+  const [form, setForm] = useState<AssessmentForm>(initial);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [imageJobs, setImageJobs] = useState(0);
-  const [clearOpen, setClearOpen] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState("");
   const latest = useRef(form);
   const pending = useRef(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
-  const persistDraft = () => {
-    if (!localDrafts) {
-      setDraftStatus("有未儲存變更，請儲存至工作區。");
-      return;
-    }
-    try {
-      const savedAt = saveAssessmentDraft(
-        localStorage,
-        storageKey,
-        latest.current,
-      );
-      pending.current = false;
-      setDraftStatus(
-        `本機草稿已儲存 · ${new Date(savedAt).toLocaleTimeString("zh-TW")}`,
-      );
-    } catch {
-      setDraftStatus(
-        "本機空間不足，草稿尚未儲存；請減少圖片或先儲存到工作區。",
-      );
-    }
-  };
+  const submitting = useRef(false);
   const change = (update: (previous: AssessmentForm) => AssessmentForm) => {
-    if (readonly || saving) return;
+    if (readonly || submitting.current) return;
     const next = update(latest.current);
     latest.current = next;
     pending.current = true;
     setForm(next);
     setError("");
-    setDraftStatus(
-      localDrafts ? "正在暫存…" : "有未儲存變更，請儲存至工作區。",
-    );
-    clearTimeout(timer.current);
-    if (localDrafts) timer.current = setTimeout(persistDraft, 500);
+    setSubmitStatus("");
   };
   useEffect(() => {
-    const flush = () => {
-      if (!pending.current || !localDrafts) return;
-      try {
-        saveAssessmentDraft(localStorage, storageKey, latest.current);
-        pending.current = false;
-      } catch {
-        /* Keep the live form intact when storage is full. */
-      }
-    };
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      flush();
       if (pending.current) {
         event.preventDefault();
         event.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", beforeUnload);
-    return () => {
-      clearTimeout(timer.current);
-      flush();
-      window.removeEventListener("beforeunload", beforeUnload);
-    };
-  }, [storageKey, localDrafts]);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, []);
   const updateSection = (
     category: Category,
     update: (section: AssessmentSection) => AssessmentSection,
@@ -417,38 +345,30 @@ export function AssessmentEditor({
   );
   const questions = getAccountabilityQuestions(form.manager.roleGroup);
   const submit = async (action: AssessmentAction) => {
+    if (submitting.current || readonly || !canSubmit || imageJobs) return;
     if (mode === "self") change(commitAssessmentEntries);
     const validation = validateAssessment(latest.current, mode, action);
     if (validation) {
       setError(validation);
       return;
     }
+    submitting.current = true;
     setSaving(true);
     setError("");
     try {
-      if (draftConflict)
-        throw new Error(
-          "工作區已有較新版本，請先複製要保留的草稿文字，再清除本機草稿以載入最新內容。",
-        );
       const confirmed = await onSave(latest.current, action);
       latest.current = confirmed;
       setForm(confirmed);
-      clearTimeout(timer.current);
       pending.current = false;
-      try {
-        localStorage.removeItem(storageKey);
-      } catch {
-        /* Cloud confirmation is independent of browser storage. */
-      }
-      setDraftStatus(demo ? "已儲存至本機示範紀錄" : "已儲存至工作區");
+      setSubmitStatus(demo ? "示範提交完成" : action === "return" ? "已退回補充，通知已送達員工通知中心。" : "提交成功");
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
-          : "儲存失敗，草稿仍保留，請稍後重試。",
+          : "提交尚未完成，本頁輸入仍保留，請再按提交重試。",
       );
-      persistDraft();
     } finally {
+      submitting.current = false;
       setSaving(false);
     }
   };
@@ -1353,11 +1273,6 @@ export function AssessmentEditor({
       )}
       {!readonly && (
         <footer className="rd2-form-footer">
-          {draftConflict && (
-            <p className="rd2-error" role="alert">
-              工作區已有較新版本，目前顯示舊草稿供你核對。請先複製要保留的文字，再清除本機草稿以載入最新內容。
-            </p>
-          )}
           {error && (
             <p className="rd2-error" role="alert">
               {error}
@@ -1366,49 +1281,18 @@ export function AssessmentEditor({
           {!canSubmit && (
             <p className="rd2-hint">
               {submitBlockedMessage ||
-                "目前為檢視權限，可暫存本機草稿；送出需要績效考核管理權限。"}
+                "目前為檢視權限，請由本人或指定主管提交。"}
             </p>
           )}
           <p className="rd2-submit-explainer">
             {mode === "self"
-              ? "確認三類實績與佐證後，送交直屬主管；尚未完成可先儲存至工作區。"
+              ? "確認三類實績與佐證後，按「提交」送交直屬主管。離開前請完成提交。"
               : "送出主管評分後，這份個人考核即完成；課務彙整請另至「部門績效總覽」處理。"}
           </p>
           <p className="rd2-draft-status" role="status">
-            {draftStatus}
+            {submitStatus}
           </p>
           <div className="rd2-actions">
-            {localDrafts && (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={saving || !!imageJobs}
-                  className="rd2-delete-action"
-                  onClick={() => setClearOpen(true)}
-                >
-                  <Trash2 data-icon="inline-start" />
-                  清除本機草稿
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={saving || !!imageJobs}
-                  onClick={persistDraft}
-                >
-                  <Save data-icon="inline-start" />
-                  儲存本機草稿
-                </Button>
-              </>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={!canSubmit || saving || !!imageJobs}
-              onClick={() => void submit("draft")}
-            >
-              儲存至工作區
-            </Button>
             {mode === "manager" && (
               <Button
                 type="button"
@@ -1426,45 +1310,12 @@ export function AssessmentEditor({
             >
               <Send data-icon="inline-start" />
               {saving
-                ? "儲存中…"
-                : mode === "self"
-                  ? "送出自評"
-                  : "送出主管評分"}
+                ? "提交中…"
+                : "提交"}
             </Button>
           </div>
         </footer>
       )}
-      <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>清除目前的本機草稿？</AlertDialogTitle>
-            <AlertDialogDescription>
-              僅清除這份草稿並回復工作區已儲存的內容，不會刪除考核紀錄或其他人的草稿。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                try {
-                  localStorage.removeItem(storageKey);
-                  clearTimeout(timer.current);
-                  pending.current = false;
-                  latest.current = initial;
-                  setForm(initial);
-                  setDraftConflict(false);
-                  setDraftStatus("本機草稿已清除");
-                  setError("");
-                } catch {
-                  setError("無法清除本機草稿，請檢查瀏覽器儲存設定。");
-                }
-              }}
-            >
-              清除草稿
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </form>
   );
 }
