@@ -34,6 +34,7 @@ import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGuide";
 import { saveAssessmentRecord } from "./assessmentPersistence.mjs";
+import { buildPerformanceReturnNotification } from "./performanceNotifications.mjs";
 import { AssessmentEntryList } from "./AssessmentEntryList";
 import { PerformanceOrganization } from "./PerformanceOrganization";
 import { PerformanceSectionReports } from "./PerformanceSectionReports";
@@ -767,6 +768,7 @@ export function PerformanceAppraisalPage() {
       )) as PerformanceReview;
     let returnNotificationSent = true;
     if (!demo && mode === "manager" && action === "return") {
+      let notificationRpcMissing = false;
       try {
         const { error: notificationError } = await performanceDb.rpc(
           "ensure_performance_return_notification",
@@ -774,12 +776,37 @@ export function PerformanceAppraisalPage() {
             p_review_id: confirmed.id,
           },
         );
-        if (notificationError) throw notificationError;
+        if (notificationError?.code === "PGRST202") {
+          notificationRpcMissing = true;
+          // During a staggered deployment, keep the previous protected insert
+          // until PostgREST reloads the new RPC. It may still be rejected by
+          // the old RLS policy, but it must never report a false success.
+          const recipient = employees.find(
+            (employee) =>
+              employee.id === confirmed.employeeId ||
+              employee.label.trim().toLocaleLowerCase() ===
+                confirmed.employeeName.trim().toLocaleLowerCase(),
+          );
+          const notification = buildPerformanceReturnNotification({
+            review: confirmed,
+            recipientId: recipient?.id || confirmed.employeeId,
+            senderId: user?.userId,
+            senderName: user?.displayName || user?.username || "直屬主管",
+            currentUrl: window.location.href,
+          });
+          const { error: fallbackError } = await performanceDb
+            .from("user_notifications")
+            .insert(notification);
+          if (fallbackError) throw fallbackError;
+        } else if (notificationError) {
+          throw notificationError;
+        }
       } catch {
         // A submitted -> in-progress transition creates the notification in
         // the same database transaction as the return. If the follow-up RPC
         // response was lost, the successful save still proves it was sent.
-        returnNotificationSent = previous?.status === "submitted";
+        returnNotificationSent =
+          !notificationRpcMissing && previous?.status === "submitted";
       }
     }
     if (accessVersion !== accessGeneration.current) throw new Error("資料存取權限已更新，請重新開啟考核確認儲存結果。");
