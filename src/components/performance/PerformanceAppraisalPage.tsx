@@ -36,6 +36,7 @@ import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGui
 import { saveAssessmentRecord } from "./assessmentPersistence.mjs";
 import { buildPerformanceReturnNotification } from "./performanceNotifications.mjs";
 import { AssessmentEntryList } from "./AssessmentEntryList";
+import { AssessmentEntryFeedback, AssessmentReturnHistory } from './AssessmentEntryFeedback';
 import { PerformanceOrganization } from "./PerformanceOrganization";
 import { PerformanceSectionReports } from "./PerformanceSectionReports";
 import { PerformancePrivacyPanel } from "./PerformancePrivacyPanel";
@@ -257,7 +258,8 @@ function ReviewDetail({
             </span>
           </header>
           <div className="rd2-review-category-body">
-            <AssessmentEntryList category={category} section={self.sections[category]} readonly onChange={() => {}} />
+            <AssessmentEntryList category={category} section={self.sections[category]} readonly onChange={() => {}}
+              renderFeedback={(entry, index) => <AssessmentEntryFeedback category={category} entry={entry} index={index} manager={manager} showFeedback={true} />} />
             <div className="rd2-images">
               {self.sections[category].images.map((image) => (
                 <a key={image.id} href={image.dataUrl} download={image.name}>
@@ -301,6 +303,7 @@ function ReviewDetail({
           <p className="rd2-prewrap">{self.legacyText}</p>
         </section>
       )}
+      <AssessmentReturnHistory manager={manager} />
       {!!review.goals.length && (
         <section className="rd2-review-secondary-section">
           <h4>既有目標與進度</h4>
@@ -387,6 +390,8 @@ export function PerformanceAppraisalPage() {
   const canAccessOrganization = administrator || canManagePerformance;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [notificationRetryId, setNotificationRetryId] = useState<string | null>(null);
+  const [retryingNotification, setRetryingNotification] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editorRevision, setEditorRevision] = useState(0);
   const savedId = useRef<{ key: string; id: string } | null>(null);
@@ -497,6 +502,7 @@ export function PerformanceAppraisalPage() {
           }) => ({
             id: employee.employee_id,
             label: employee.display_name || employee.username,
+            username: employee.username,
             orgLevel: employee.org_level,
           }),
         ),
@@ -721,6 +727,34 @@ export function PerformanceAppraisalPage() {
     }
   };
 
+  const sendReturnNotification = async (review: PerformanceReview) => {
+    // Resolve exact account identity, never a non-unique display name.
+    const recipient = employees.find(employee => employee.id === review.employeeId ||
+      employee.username?.toLocaleLowerCase() === review.employeeId.trim().toLocaleLowerCase());
+    if (!recipient) return false;
+    try {
+      const notification = buildPerformanceReturnNotification({
+        review, recipientId: recipient.id, senderId: user?.userId,
+        senderName: user?.displayName || user?.username || '直屬主管', currentUrl: window.location.href,
+      });
+      const { error } = await performanceDb.from('user_notifications').insert(notification);
+      // Each return has one stable notification ID. A lost successful response
+      // is safe to retry without another return or a duplicate notice.
+      return !error || (Boolean(notification.id) && error.code === '23505');
+    } catch { return false; }
+  };
+  const retryReturnNotification = async () => {
+    const review = reviews.find(item => item.id === (notificationRetryId || editorRecordId));
+    if (!review || !canManagePerformance || retryingNotification) return;
+    const generation = accessGeneration.current;
+    setRetryingNotification(true);
+    const sent = await sendReturnNotification(review);
+    if (generation === accessGeneration.current) {
+      if (sent) setNotificationRetryId(null);
+      toast({ title: sent ? '通知已送出' : '通知尚未送出', description: sent ? '原退回紀錄不變。' : '請確認連線後重送通知，不需再次退回。', variant: sent ? undefined : 'destructive' });
+    }
+    setRetryingNotification(false);
+  };
   const save = async (form: AssessmentForm, action: AssessmentAction) => {
     const accessVersion = accessGeneration.current;
     if (!canEdit || loading || loadError)
@@ -737,6 +771,8 @@ export function PerformanceAppraisalPage() {
     const previous = reviews.find(
       (review) => review.id === (editorRecordId || ""),
     );
+    if (previous && form.sourceUpdatedAt !== previous.updatedAt)
+      throw new Error('考核已有較新版本，請重新開啟後再儲存；目前輸入仍保留。');
     if (
       mode === "manager" &&
       (!previous || matchesUser(previous, user))
@@ -768,29 +804,10 @@ export function PerformanceAppraisalPage() {
       )) as PerformanceReview;
     let returnNotificationSent = true;
     if (!demo && mode === "manager" && action === "return") {
-      const recipient = employees.find(
-        (employee) =>
-          employee.id === confirmed.employeeId ||
-          employee.label.trim().toLocaleLowerCase() ===
-            confirmed.employeeName.trim().toLocaleLowerCase(),
-      );
-      try {
-        const notification = buildPerformanceReturnNotification({
-          review: confirmed,
-          recipientId: recipient?.id || confirmed.employeeId,
-          senderId: user?.userId,
-          senderName: user?.displayName || user?.username || "直屬主管",
-          currentUrl: window.location.href,
-        });
-        const { error: notificationError } = await performanceDb
-          .from("user_notifications")
-          .insert(notification);
-        returnNotificationSent = !notificationError;
-      } catch {
-        returnNotificationSent = false;
-      }
+      returnNotificationSent = await sendReturnNotification(confirmed);
     }
     if (accessVersion !== accessGeneration.current) throw new Error("資料存取權限已更新，請重新開啟考核確認儲存結果。");
+    if (action === 'return') setNotificationRetryId(returnNotificationSent ? null : confirmed.id);
     const nextRows = [
       confirmed,
       ...reviews.filter((review) => review.id !== confirmed.id),
@@ -811,7 +828,7 @@ export function PerformanceAppraisalPage() {
         action === "return" && !demo
           ? returnNotificationSent
             ? `已通知 ${confirmed.employeeName} 回來查看回饋並補充。`
-            : `考核已退回，但通知 ${confirmed.employeeName} 失敗，請稍後再按一次退回。`
+            : `考核與退回紀錄已儲存，但通知尚未送出。請使用「重送通知」，不需再次退回。`
           : demo
             ? "本機示範模式，不會寫入正式資料。"
             : "已確認儲存至工作區。",
@@ -856,7 +873,7 @@ export function PerformanceAppraisalPage() {
     ? readManagerAssessment(editorReview.managerFeedback)
     : null;
   const hasReturnDetails = Boolean(
-    returnDetails?.feedback || returnDetails?.attachments.length,
+    returnDetails?.feedback || returnDetails?.attachments.length || returnDetails?.returnHistory.length,
   );
 
   return (
@@ -929,6 +946,14 @@ export function PerformanceAppraisalPage() {
               disabled={loading}
             >
               重新整理
+            </Button>
+          </div>
+        )}
+        {!demo && canManagePerformance && ((notificationRetryId && reviews.some(review => review.id === notificationRetryId)) || (tab === 'manager' && !!returnDetails?.returnHistory.length)) && (
+          <div className="rd2-return-history" role="status">
+            <p>{notificationRetryId ? '退回紀錄已儲存，通知尚未送出。' : '需要重新通知下屬時，可重送上次退回通知；不會新增退回紀錄或重複通知。'}</p>
+            <Button type="button" variant="outline" disabled={retryingNotification} onClick={() => void retryReturnNotification()}>
+              {retryingNotification ? '重送中…' : '重送通知'}
             </Button>
           </div>
         )}
@@ -1120,6 +1145,8 @@ export function PerformanceAppraisalPage() {
                     showReturnFeedback={
                       tab === "self" && editorReview?.status === "in-progress"
                     }
+                    showEntryFeedback={tab === 'self'}
+                    focusEntry={params.get('performanceEntry') ? { category: params.get('performanceCategory') || '', entryId: params.get('performanceEntry')! } : undefined}
                     employees={
                       tab === "manager" && canManagePerformance ? employeeOptions : []
                     }

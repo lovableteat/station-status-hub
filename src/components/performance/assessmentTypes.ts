@@ -39,6 +39,8 @@ export interface ManagerAssessment {
   employeeNumber: string;
   feedback: string;
   attachments: ReviewAttachment[];
+  entryReviews: Record<Category, Record<string, AssessmentEntryReview>>;
+  returnHistory: AssessmentReturn[];
   categoryReviews: Record<Category, {
     score: number | null;
     feedback: string;
@@ -46,6 +48,17 @@ export interface ManagerAssessment {
   roleGroup: string;
   standardsVersion: string;
   answers: Record<string, number | null>;
+}
+export interface AssessmentEntryReview {
+  feedback: string;
+  returnRequested: boolean;
+  attachments: ReviewAttachment[];
+}
+export interface AssessmentReturn {
+  id: string;
+  returnedAt: string;
+  reviewerName: string;
+  entries: { category: Category; entryId: string; text: string; feedback: string; attachments: ReviewAttachment[] }[];
 }
 export interface PerformanceGoal {
   id: string;
@@ -87,6 +100,7 @@ export interface AssessmentForm {
 export interface EmployeeOption {
   id: string;
   label: string;
+  username?: string;
   orgLevel?: string;
 }
 export interface PerformanceSelfContext {

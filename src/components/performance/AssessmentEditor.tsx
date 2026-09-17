@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AssessmentEntryList } from "./AssessmentEntryList";
+import { AssessmentEntryFeedback, AssessmentReturnHistory, ManagerAttachments } from './AssessmentEntryFeedback';
 import {
   commitAssessmentEntries,
   getAssessmentEntries,
@@ -26,9 +27,6 @@ import {
   LEVELS,
   MAX_EVIDENCE_CHARACTERS,
   MAX_IMAGES_PER_CATEGORY,
-  MAX_MANAGER_ATTACHMENTS,
-  MAX_MANAGER_ATTACHMENT_BYTES,
-  MAX_MANAGER_ATTACHMENT_CHARACTERS,
   TEAMS,
   calculateWeightedManagerScores,
   calculateWeightedSelfScores,
@@ -39,6 +37,7 @@ import {
   safeEvidenceUrl,
   saveAssessmentDraft,
   validateAssessment,
+  selectedReturnEntries,
 } from "./rd2Assessment.mjs";
 import {
   JOB_GRADES,
@@ -57,140 +56,8 @@ import type {
   EmployeeOption,
   EvidenceImage,
   ReviewAttachment,
+  ManagerAssessment,
 } from "./assessmentTypes";
-
-const REVIEW_ATTACHMENT_ACCEPT =
-  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.zip,.jpg,.jpeg,.png,.webp";
-
-const formatFileSize = (size: number) =>
-  size < 1024 * 1024
-    ? `${Math.max(1, Math.round(size / 1024))} KB`
-    : `${(size / 1024 / 1024).toLocaleString("zh-TW", { maximumFractionDigits: 1 })} MB`;
-
-async function prepareReviewAttachment(file: File): Promise<ReviewAttachment> {
-  const extension = file.name.split(".").pop()?.toLowerCase();
-  const allowed = REVIEW_ATTACHMENT_ACCEPT.split(",").map((value) =>
-    value.slice(1),
-  );
-  if (!extension || !allowed.includes(extension))
-    throw new Error("附件支援 PDF、Word、Excel、PowerPoint、文字、ZIP 與圖片檔。");
-  if (file.size > MAX_MANAGER_ATTACHMENT_BYTES)
-    throw new Error("單一附件不可超過 4 MB。");
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("附件讀取失敗，請重新選擇檔案。"));
-    reader.readAsDataURL(file);
-  });
-  return {
-    id: crypto.randomUUID(),
-    name: file.name,
-    mimeType: file.type || "application/octet-stream",
-    size: file.size,
-    dataUrl,
-  };
-}
-
-function ManagerAttachments({
-  attachments,
-  readonly,
-  onChange,
-  onBusy,
-  onError,
-}: {
-  attachments: ReviewAttachment[];
-  readonly: boolean;
-  onChange?: (attachments: ReviewAttachment[]) => void;
-  onBusy?: (busy: boolean) => void;
-  onError?: (message: string) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const totalCharacters = attachments.reduce(
-    (total, attachment) => total + attachment.dataUrl.length,
-    0,
-  );
-  return (
-    <div className="rd2-review-attachments">
-      {!readonly && (
-        <>
-          <div className="rd2-evidence-actions">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy || attachments.length >= MAX_MANAGER_ATTACHMENTS}
-              onClick={() => inputRef.current?.click()}
-            >
-              <Upload data-icon="inline-start" />
-              {busy ? "處理附件中…" : "附加退回檔案"}
-            </Button>
-            <span className="rd2-hint">
-              最多 4 個檔案，單檔 4 MB、合計約 4.5 MB。
-            </span>
-          </div>
-          <input
-            ref={inputRef}
-            type="file"
-            className="sr-only"
-            aria-label="主管退回附件"
-            accept={REVIEW_ATTACHMENT_ACCEPT}
-            disabled={busy}
-            onChange={async (event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (!file) return;
-              setBusy(true);
-              onBusy?.(true);
-              try {
-                const attachment = await prepareReviewAttachment(file);
-                if (
-                  totalCharacters + attachment.dataUrl.length >
-                  MAX_MANAGER_ATTACHMENT_CHARACTERS
-                )
-                  throw new Error("附件總量過大，請移除部分檔案後再加入。");
-                onChange?.([...attachments, attachment]);
-                onError?.("");
-              } catch (cause) {
-                onError?.(
-                  cause instanceof Error ? cause.message : "附件處理失敗，請重試。",
-                );
-              } finally {
-                setBusy(false);
-                onBusy?.(false);
-              }
-            }}
-          />
-        </>
-      )}
-      {!!attachments.length && (
-        <ul className="rd2-review-attachment-list">
-          {attachments.map((attachment) => (
-            <li key={attachment.id}>
-              <a href={attachment.dataUrl} download={attachment.name}>
-                <span>{attachment.name}</span>
-                <small>{formatFileSize(attachment.size)}</small>
-              </a>
-              {!readonly && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`移除附件 ${attachment.name}`}
-                  onClick={() =>
-                    onChange?.(attachments.filter((item) => item.id !== attachment.id))
-                  }
-                >
-                  <X />
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 async function prepareImage(file: File): Promise<EvidenceImage> {
   if (
@@ -412,6 +279,8 @@ interface Props {
   canSubmit: boolean;
   submitBlockedMessage?: string;
   showReturnFeedback?: boolean;
+  showEntryFeedback?: boolean;
+  focusEntry?: { category: string; entryId: string };
   employees: EmployeeOption[];
   demo: boolean;
   onSave: (
@@ -429,6 +298,8 @@ export function AssessmentEditor({
   canSubmit,
   submitBlockedMessage,
   showReturnFeedback = false,
+  showEntryFeedback = false,
+  focusEntry,
   employees,
   demo,
   onSave,
@@ -445,7 +316,17 @@ export function AssessmentEditor({
       !!initial.sourceUpdatedAt &&
       restored.form.sourceUpdatedAt !== initial.sourceUpdatedAt,
   );
-  const [form, setForm] = useState<AssessmentForm>(restored?.form || initial);
+  const [form, setForm] = useState<AssessmentForm>(() => restored
+    ? { ...restored.form, manager: mode === 'self' ? initial.manager : restored.form.manager }
+    : initial);
+  const focusCategory = focusEntry?.category;
+  const focusEntryId = focusEntry?.entryId;
+  useEffect(() => {
+    if (!focusCategory || !focusEntryId || !CATEGORIES.includes(focusCategory)) return;
+    const target = document.getElementById(`rd2-entry-${focusCategory}-${focusEntryId}`);
+    target?.scrollIntoView({ block: 'center' });
+    target?.focus({ preventScroll: true });
+  }, [focusCategory, focusEntryId]);
   const [draftStatus, setDraftStatus] = useState(
     restored
       ? `已恢復本機草稿 · ${new Date(restored.savedAt).toLocaleString("zh-TW")}`
@@ -548,7 +429,13 @@ export function AssessmentEditor({
     employees.find((employee) => employee.id === form.employeeId)?.orgLevel,
   );
   const questions = getAccountabilityQuestions(form.manager.roleGroup);
+  const updateEntryFeedback = (category: Category, entryId: string, feedback: string, returnRequested: boolean, attachments: ReviewAttachment[]) =>
+    change(previous => ({ ...previous, manager: { ...previous.manager, entryReviews: {
+      ...previous.manager.entryReviews,
+      [category]: { ...previous.manager.entryReviews[category], [entryId]: { feedback, returnRequested, attachments } },
+    } } }));
   const submit = async (action: AssessmentAction) => {
+    if (saving || readonly || !canSubmit || imageJobs) return;
     if (mode === "self") change(commitAssessmentEntries);
     const validation = validateAssessment(latest.current, mode, action);
     if (validation) {
@@ -802,9 +689,10 @@ export function AssessmentEditor({
       </fieldset>
       {mode === "self" && (
         <>
+          <AssessmentReturnHistory manager={form.manager} />
           {showReturnFeedback &&
             (form.manager.feedback || form.manager.attachments.length > 0) && (
-            <section id="rd2-return-feedback" className="rd2-card rd2-return-feedback" aria-label="主管退回內容">
+            <section id={form.manager.returnHistory.length ? undefined : "rd2-return-feedback"} className="rd2-card rd2-return-feedback" aria-label="主管退回內容">
               <div className="rd2-form-section-title">
                 <strong>主管退回回饋與附件</strong>
                 <span>請依主管說明補充內容，再重新送出自評。</span>
@@ -944,6 +832,7 @@ export function AssessmentEditor({
                       category={category}
                       section={form.self.sections[category]}
                       readonly={readonly}
+                      renderFeedback={(entry, index) => <AssessmentEntryFeedback category={category} entry={entry} index={index} manager={form.manager} showFeedback={showEntryFeedback} />}
                       onChange={(update) => updateSection(category, update)}
                     />
                     <div className="rd2-self-score">
@@ -1226,6 +1115,7 @@ export function AssessmentEditor({
       )}
       {mode === "manager" && (
         <>
+          <AssessmentReturnHistory manager={form.manager} />
           <div className="rd2-form-section-title">
             <strong>02 · 對照員工自評</strong>
             <span role="status">
@@ -1254,7 +1144,7 @@ export function AssessmentEditor({
                       政策權重 {managerResult?.weight ?? "—"}%
                     </span>
                   </div>
-                  <div className="rd2-manager-compare-grid">
+                  <div className="rd2-manager-compare-grid rd2-manager-entry-layout">
                     <section className="rd2-manager-self-panel" aria-label={`${category} 員工自評`}>
                       <div className="rd2-manager-panel-heading">
                         <strong>員工自評內容</strong>
@@ -1268,6 +1158,25 @@ export function AssessmentEditor({
                         section={section}
                         readonly
                         onChange={() => {}}
+                        renderFeedback={(entry, index) => <AssessmentEntryFeedback
+                          category={category} entry={entry} index={index} manager={form.manager}
+                          editable disabled={readonly || saving || !canSubmit || !!imageJobs}
+                          onBusy={busy => setImageJobs(count => count + (busy ? 1 : -1))}
+                          onError={setError}
+                          onChange={(feedback, selected, attachments) => updateEntryFeedback(category, entry.id, feedback, selected, attachments)}
+                          onReturn={() => {
+                            change(previous => ({ ...previous, manager: { ...previous.manager, entryReviews:
+                              Object.fromEntries(CATEGORIES.map(key => [key, Object.fromEntries(
+                                getAssessmentEntries(previous.self.sections[key]).map(item => [item.id, {
+                                  feedback: previous.manager.entryReviews[key][item.id]?.feedback || '',
+                                  returnRequested: key === category && item.id === entry.id,
+                                  attachments: previous.manager.entryReviews[key][item.id]?.attachments || [],
+                                }]),
+                              )])) as ManagerAssessment['entryReviews'],
+                            } }));
+                            void submit('return');
+                          }}
+                        />}
                       />
                       {!!section.images.length && (
                         <div className="rd2-images">
@@ -1319,32 +1228,8 @@ export function AssessmentEditor({
                           </span>
                         </div>
                       </Field>
-                      <Field>
-                        <FieldLabel htmlFor={`manager-${category}-feedback`}>
-                          主管評語／Comment
-                        </FieldLabel>
-                        <Textarea
-                          id={`manager-${category}-feedback`}
-                          rows={4}
-                          value={categoryReview.feedback}
-                          placeholder={`針對 ${category} 成果留下肯定、改善建議或工作指示`}
-                          onChange={(event) =>
-                            change((previous) => ({
-                              ...previous,
-                              manager: {
-                                ...previous.manager,
-                                categoryReviews: {
-                                  ...previous.manager.categoryReviews,
-                                  [category]: {
-                                    ...previous.manager.categoryReviews[category],
-                                    feedback: event.target.value,
-                                  },
-                                },
-                              },
-                            }))
-                          }
-                        />
-                      </Field>
+                      <p className="rd2-hint">評語請填在各筆實績下方；此處分數仍以整個類別計算。</p>
+                      {categoryReview.feedback && <details><summary>舊版類別評語（保留）</summary><p className="rd2-prewrap">{categoryReview.feedback}</p></details>}
                     </section>
                   </div>
                 </fieldset>
@@ -1544,7 +1429,7 @@ export function AssessmentEditor({
                 className="rd2-return-action"
                 onClick={() => void submit("return")}
               >
-                退回補充
+                退回勾選實績（{selectedReturnEntries(form).length}）
               </Button>
             )}
             <Button

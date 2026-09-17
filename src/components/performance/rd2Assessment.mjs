@@ -167,6 +167,24 @@ const emptyCategoryReviews = () =>
       { score: null, feedback: "" },
     ]),
   );
+const readEntryReviews = (value) => Object.fromEntries(CATEGORIES.map(category => [
+  category, Object.fromEntries(Object.entries(value?.[category] || {}).map(([id, item]) => [
+    id, { feedback: str(item?.feedback), returnRequested: item?.returnRequested === true, attachments: safeManagerAttachments(item?.attachments) },
+  ])),
+]));
+const readReturnHistory = (value) => (Array.isArray(value) ? value : [])
+  .filter(item => item && typeof item.id === 'string' && typeof item.returnedAt === 'string')
+  .map(item => ({
+    id: item.id, returnedAt: item.returnedAt, reviewerName: str(item.reviewerName),
+    entries: (Array.isArray(item.entries) ? item.entries : [])
+      .filter(entry => CATEGORIES.includes(entry?.category) && typeof entry.entryId === 'string')
+      .map(entry => ({ category: entry.category, entryId: entry.entryId, text: str(entry.text), feedback: str(entry.feedback), attachments: safeManagerAttachments(entry.attachments) })),
+  }));
+export const selectedReturnEntries = (form) => CATEGORIES.flatMap(category =>
+  getAssessmentEntries(form.self.sections[category])
+    .filter(entry => form.manager.entryReviews?.[category]?.[entry.id]?.returnRequested)
+    .map(entry => ({ category, entryId: entry.id, text: entry.text, feedback: form.manager.entryReviews[category][entry.id].feedback.trim(), attachments: safeManagerAttachments(form.manager.entryReviews[category][entry.id].attachments) })),
+);
 export function readManagerAssessment(raw = "") {
   if (str(raw).startsWith(MANAGER_PREFIX)) {
     try {
@@ -174,6 +192,8 @@ export function readManagerAssessment(raw = "") {
       return {
         feedback: str(parsed.feedback),
         attachments: safeManagerAttachments(parsed.attachments),
+        entryReviews: readEntryReviews(parsed.entryReviews),
+        returnHistory: readReturnHistory(parsed.returnHistory),
         categoryReviews: Object.fromEntries(
           CATEGORIES.map((category) => [
             category,
@@ -204,6 +224,8 @@ export function readManagerAssessment(raw = "") {
   return {
     feedback: str(raw),
     attachments: [],
+    entryReviews: readEntryReviews(),
+    returnHistory: [],
     categoryReviews: emptyCategoryReviews(),
     employeeNumber: "",
     roleGroup: "",
@@ -237,7 +259,10 @@ export function validateAssessment(form, mode, action) {
   );
   if (evidenceSize > MAX_EVIDENCE_CHARACTERS)
     return "證明圖片總量過大，請減少圖片或改用內部連結。";
-  const managerAttachmentSize = form.manager.attachments.reduce(
+  const managerAttachmentSize = [
+    ...form.manager.attachments,
+    ...CATEGORIES.flatMap(category => Object.values(form.manager.entryReviews?.[category] || {}).flatMap(review => review.attachments || [])),
+  ].reduce(
     (total, attachment) => total + attachment.dataUrl.length,
     0,
   );
@@ -295,13 +320,11 @@ export function validateAssessment(form, mode, action) {
     )
       return "請依受評者當責職級完成全部 7 題評分（1–5 分）。";
   }
-  if (
-    mode === "manager" &&
-    action === "return" &&
-    !form.manager.feedback.trim() &&
-    !form.manager.attachments.length
-  )
-    return "退回補充時請留下回饋或附加檔案。";
+  if (mode === "manager" && action === "return") {
+    const entries = selectedReturnEntries(form);
+    if (!entries.length) return "請勾選要退回的實績，並填寫該筆退回原因。";
+    if (entries.some(entry => !entry.feedback)) return "請填寫每筆退回實績的原因。";
+  }
   return "";
 }
 export function createAssessmentForm(review, user = {}) {
@@ -338,7 +361,19 @@ export function buildAssessmentReview({
     ...form.manager,
     employeeNumber: form.self.employeeNumber,
     standardsVersion: STANDARDS_SOURCE.version,
+    // Never replace saved history with a stale form or a restored draft.
+    returnHistory: readManagerAssessment(previous?.managerFeedback).returnHistory,
   };
+  if (mode === 'manager' && action === 'return') {
+    const entries = selectedReturnEntries(form);
+    if (!entries.length || entries.some(entry => !entry.feedback)) throw new Error('請選擇實績並填寫每筆退回原因。');
+    manager.returnHistory = [...manager.returnHistory, {
+      id: crypto.randomUUID(), returnedAt: now, reviewerName, entries,
+    }];
+    manager.entryReviews = Object.fromEntries(CATEGORIES.map(category => [category,
+      Object.fromEntries(Object.entries(manager.entryReviews?.[category] || {}).map(([id, item]) => [id, { ...item, returnRequested: false }])),
+    ]));
+  }
   const weightedManager = calculateWeightedManagerScores(
     form.self.grade,
     manager.categoryReviews,
