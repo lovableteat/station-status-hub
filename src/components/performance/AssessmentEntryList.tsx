@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Check, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,10 +19,12 @@ export function AssessmentEntryList({
   section,
   readonly,
   onChange,
+  renderFeedback,
 }: {
   category: Category;
   section: AssessmentSection;
   readonly: boolean;
+  renderFeedback?: (entry: AssessmentEntry, index: number) => ReactNode;
   onChange: (
     update: (previous: AssessmentSection) => AssessmentSection,
   ) => void;
@@ -88,7 +90,7 @@ export function AssessmentEntryList({
       {entries.length ? (
         <ol className="rd2-entry-list" aria-label={`${category} 已新增實績`}>
           {entries.map((entry, index) => (
-            <li key={entry.id} className="rd2-entry-item">
+            <li key={entry.id} id={`rd2-entry-${category}-${entry.id}`} tabIndex={-1} className="rd2-entry-item">
               <div className="rd2-entry-heading">
                 <strong>實績 {index + 1}</strong>
                 {!readonly && (
@@ -151,6 +153,7 @@ export function AssessmentEntryList({
               ) : (
                 <p className="rd2-prewrap">{entry.text || "尚未填寫內容"}</p>
               )}
+              {renderFeedback?.(entry, index)}
             </li>
           ))}
         </ol>
