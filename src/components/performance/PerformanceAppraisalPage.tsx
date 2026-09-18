@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   BookOpen,
   BellRing,
+  CheckCircle2,
   ClipboardCheck,
   Download,
   FileText,
@@ -61,6 +62,7 @@ import {
   DEFAULT_PERFORMANCE_REVIEWS,
   PERFORMANCE_CYCLES,
   PERFORMANCE_STATUS,
+  getSelfAssessmentDisplayState,
   normalizePerformanceReview,
   toPerformanceCsv,
 } from "./performanceData.mjs";
@@ -829,6 +831,10 @@ export function PerformanceAppraisalPage() {
   const returnDetails = editorReview
     ? readManagerAssessment(editorReview.managerFeedback)
     : null;
+  const selfAssessmentDisplayState =
+    tab === "self" && editorReview
+      ? getSelfAssessmentDisplayState(editorReview.status)
+      : "editable";
   const hasReturnDetails = Boolean(
     returnDetails?.feedback || returnDetails?.attachments.length || returnDetails?.returnHistory.length,
   );
@@ -1060,7 +1066,36 @@ export function PerformanceAppraisalPage() {
                   )}
                 </div>}
                 <div>
-                {tab === "manager" && !editorReview ? (
+                {tab === "self" && selfAssessmentDisplayState !== "editable" ? (
+                  <section
+                    className="rd2-self-complete-state"
+                    data-state={selfAssessmentDisplayState}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span className="rd2-self-complete-icon" aria-hidden="true">
+                      <CheckCircle2 />
+                    </span>
+                    <div>
+                      <h2>
+                        {selfAssessmentDisplayState === "approved"
+                          ? "本期自評已完成"
+                          : "自評已送出"}
+                      </h2>
+                      <p>
+                        {selfAssessmentDisplayState === "approved"
+                          ? "主管已完成評核，本期自評資料已封存。"
+                          : "已送交直屬主管，等待主管評核；若需補充，主管會退回並通知你。"}
+                      </p>
+                      {editorReview?.updatedAt && (
+                        <small>
+                          {selfAssessmentDisplayState === "approved" ? "完成時間" : "送出時間"}：
+                          {new Date(editorReview.updatedAt).toLocaleString("zh-TW")}
+                        </small>
+                      )}
+                    </div>
+                  </section>
+                ) : tab === "manager" && !editorReview ? (
                   <div
                     className="rd2-empty rd2-manager-selection-required"
                     role="status"
