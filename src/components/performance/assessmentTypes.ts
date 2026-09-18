@@ -17,6 +17,8 @@ export interface ReviewAttachment {
 export interface AssessmentEntry {
   id: string;
   text: string;
+  attachments?: ReviewAttachment[];
+  links?: string[];
 }
 export interface AssessmentSection {
   text: string;
@@ -44,6 +46,7 @@ export interface ManagerAssessment {
   categoryReviews: Record<Category, {
     score: number | null;
     feedback: string;
+    entryFeedback?: Record<string, string>;
   }>;
   roleGroup: string;
   standardsVersion: string;
