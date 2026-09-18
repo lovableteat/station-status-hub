@@ -32,6 +32,9 @@ test("a returned review notifies only its employee and opens that self review", 
     PERFORMANCE_RETURN_NOTIFICATION_TYPE,
   );
   const url = new URL(notification.action_url);
+  assert.equal(notification.category, "system");
+  assert.equal(notification.reference_id, null);
+  assert.equal(notification.metadata.review_id, "4c371c84-9033-4fe8-a15e-7d734e1d81ef");
   assert.equal(url.searchParams.get("workspace"), "performance");
   assert.match(url.hash, /performanceTab=self/);
   assert.match(url.hash, /performanceCycle=2026-q3/);

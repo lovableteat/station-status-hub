@@ -132,7 +132,7 @@ export function isValidBoard(value: unknown): boolean {
     && value.outlineNodes.every(n => isRecord(n) && validPoint(n) && (n.in === undefined || validPoint(n.in)) && (n.out === undefined || validPoint(n.out))));
   const manualOutlineValid = value.outlineSource !== "手繪板框" || (hasValidOutline && validNodes && Array.isArray(value.outlineNodes)
     && outlineError(sampleBoardNodes(value.outlineNodes as PcbBoard["outlineNodes"]), { width: Number(value.width), height: Number(value.height) }) === "");
-  const validHoles = value.holes === undefined || (Array.isArray(value.holes) && value.holes.length <= 16
+  const validHoles = value.holes === undefined || (Array.isArray(value.holes) && value.holes.length <= 128
     && value.holes.every(hole => Array.isArray(hole) && hole.length >= 3 && hole.length <= 100 && hole.every(n => isRecord(n) && validPoint(n) && (n.in === undefined || validPoint(n.in)) && (n.out === undefined || validPoint(n.out)))));
   return hasValidOutline && hasValidOutlineSource && validNodes && manualOutlineValid && validHoles
     && (value.holes === undefined || boardHolesError(value as unknown as PcbBoard) === "")

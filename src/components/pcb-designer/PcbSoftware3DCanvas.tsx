@@ -1,4 +1,3 @@
-import { ShapeUtils, Vector2 } from "three";
 import { getBoardPolygon, getBoardHoles } from "./core/boardOutline.ts";
 import { getPcbModelRenderIndices } from "./core/modelProjection.ts";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
@@ -58,6 +57,7 @@ const BOX_FACES = [
 
 interface ScenePolygon {
   kind: "polygon";
+  holes?: ReturnType<typeof projectSoftwarePoint>[][];
   points: SoftwareProjectedPoint[];
   depth: number;
   renderOrder: number;
@@ -330,19 +330,23 @@ export function PcbSoftware3DCanvas({
 
     const boardPolygon = getBoardPolygon(project.board);
     const holes = getBoardHoles(project.board);
-    const allPoints = [...boardPolygon, ...holes.flat()];
-    const triangles = ShapeUtils.triangulateShape(boardPolygon.map(p => new Vector2(p.x,p.y)), holes.map(h => h.map(p => new Vector2(p.x,p.y))));
     const world = (p: {x:number;y:number}, y:number) => ({x:p.x-project.board.width/2,y,z:p.y-project.board.height/2});
-    for (const triangle of triangles) for (const sign of [1,-1]) {
-      const color = sign === 1 ? project.board.layerColors.top : project.board.layerColors.bottom;
-      addPolygon(triangle.map(i => world(allPoints[i], sign*BOARD_THICKNESS/2)), color, color, SOFTWARE_RENDER_ORDER.board, 1, 0);
-    }
+    // Fill the visible face as one compound path. Separate triangles leave
+    // antialias seams and allow painter-sorted back faces to show through.
+    const faceSign = camera.eye.y >= 0 ? 1 : -1;
+    const projectedOuter = boardPolygon.map(p => projectSoftwarePoint(world(p,faceSign*BOARD_THICKNESS/2),camera));
+    shapes.push({ kind: "polygon", points: projectedOuter,
+      holes: holes.map(ring => ring.map(p => projectSoftwarePoint(world(p,faceSign*BOARD_THICKNESS/2),camera))),
+      depth: projectedOuter.reduce((sum,p)=>sum+p.depth,0)/projectedOuter.length,
+      renderOrder: SOFTWARE_RENDER_ORDER.board + .1,
+      fill: faceSign === 1 ? project.board.layerColors.top : project.board.layerColors.bottom,
+      stroke: "#7de7e8", alpha: 1, lineWidth: .7 });
     for (const ring of [boardPolygon, ...holes]) ring.forEach((p,i) => {
       const q=ring[(i+1)%ring.length];
       addPolygon([world(p,.8),world(q,.8),world(q,-.8),world(p,-.8)],project.board.background,"#7de7e8",SOFTWARE_RENDER_ORDER.board,1,.7);
     });
 
-    if (project.board.showGrid && project.board.outlineSource !== "手繪板框" && !project.board.holes?.length) {
+    if (project.board.showGrid && !project.board.outline?.length && !project.board.holes?.length) {
       const gridStep = Math.max(project.board.gridSize, Math.ceil(Math.max(project.board.width, project.board.height) / 80));
       const gridLayers: Array<"top" | "bottom"> = visibleLayer === "all"
         ? ["top", "bottom"]
@@ -519,7 +523,12 @@ export function PcbSoftware3DCanvas({
         }
         context.closePath();
         context.fillStyle = shape.fill;
-        context.fill();
+        for (const hole of shape.holes || []) {
+          context.moveTo(hole[0].x,hole[0].y);
+          hole.slice(1).forEach(p => context.lineTo(p.x,p.y));
+          context.closePath();
+        }
+        context.fill("evenodd");
       } else {
         context.lineTo(shape.points[1].x, shape.points[1].y);
       }

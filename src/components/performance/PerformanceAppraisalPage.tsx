@@ -33,8 +33,7 @@ import { AssessmentEditor } from "./AssessmentEditor";
 import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGuide";
-import { saveAssessmentRecord } from "./assessmentPersistence.mjs";
-import { buildPerformanceReturnNotification } from "./performanceNotifications.mjs";
+import { submitAssessmentRecord } from "./assessmentPersistence.mjs";
 import { AssessmentEntryList } from "./AssessmentEntryList";
 import { AssessmentEntryFeedback, AssessmentReturnHistory } from './AssessmentEntryFeedback';
 import { PerformanceOrganization } from "./PerformanceOrganization";
@@ -54,7 +53,6 @@ import {
   CATEGORIES,
   buildAssessmentReview,
   createAssessmentForm,
-  draftKey,
   readManagerAssessment,
   readSelfAssessment,
   validateAssessment,
@@ -84,7 +82,7 @@ const NAV = [
   { id: "policy", label: "系統說明與政策", icon: BookOpen },
   { id: "self", label: "員工自評", icon: UserRound },
   { id: "manager", label: "主管評分（主管專用）", icon: ClipboardCheck },
-  { id: "section-reports", label: "課長彙整與部長審閱", icon: FileText },
+  { id: "section-reports", label: "部門績效總覽", icon: FileText },
   { id: "records", label: "考核紀錄", icon: FileText },
   { id: "organization", label: "組織架構", icon: Network },
 ];
@@ -390,8 +388,6 @@ export function PerformanceAppraisalPage() {
   const canAccessOrganization = administrator || canManagePerformance;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [notificationRetryId, setNotificationRetryId] = useState<string | null>(null);
-  const [retryingNotification, setRetryingNotification] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editorRevision, setEditorRevision] = useState(0);
   const savedId = useRef<{ key: string; id: string } | null>(null);
@@ -545,7 +541,7 @@ export function PerformanceAppraisalPage() {
     if (demo) return;
     try {
       localStorage.removeItem(LEGACY_CACHE);
-      Object.keys(localStorage).filter((key) => key.startsWith("station-status-hub:performance-reviews:v2:cloud:") || (key.startsWith("station-status-hub:rd2-draft:") && key.includes(":manager:"))).forEach((key) => localStorage.removeItem(key));
+      Object.keys(localStorage).filter((key) => key.startsWith("station-status-hub:performance-reviews:v2:cloud:") || key.startsWith("station-status-hub:rd2-draft:")).forEach((key) => localStorage.removeItem(key));
     } catch { /* Cloud records and manager drafts are never restored offline. */ }
     return watchPermissionRefresh({ windowTarget: window, documentTarget: document, refresh: () => void load(true) });
   }, [demo, load]);
@@ -727,34 +723,6 @@ export function PerformanceAppraisalPage() {
     }
   };
 
-  const sendReturnNotification = async (review: PerformanceReview) => {
-    // Resolve exact account identity, never a non-unique display name.
-    const recipient = employees.find(employee => employee.id === review.employeeId ||
-      employee.username?.toLocaleLowerCase() === review.employeeId.trim().toLocaleLowerCase());
-    if (!recipient) return false;
-    try {
-      const notification = buildPerformanceReturnNotification({
-        review, recipientId: recipient.id, senderId: user?.userId,
-        senderName: user?.displayName || user?.username || '直屬主管', currentUrl: window.location.href,
-      });
-      const { error } = await performanceDb.from('user_notifications').insert(notification);
-      // Each return has one stable notification ID. A lost successful response
-      // is safe to retry without another return or a duplicate notice.
-      return !error || (Boolean(notification.id) && error.code === '23505');
-    } catch { return false; }
-  };
-  const retryReturnNotification = async () => {
-    const review = reviews.find(item => item.id === (notificationRetryId || editorRecordId));
-    if (!review || !canManagePerformance || retryingNotification) return;
-    const generation = accessGeneration.current;
-    setRetryingNotification(true);
-    const sent = await sendReturnNotification(review);
-    if (generation === accessGeneration.current) {
-      if (sent) setNotificationRetryId(null);
-      toast({ title: sent ? '通知已送出' : '通知尚未送出', description: sent ? '原退回紀錄不變。' : '請確認連線後重送通知，不需再次退回。', variant: sent ? undefined : 'destructive' });
-    }
-    setRetryingNotification(false);
-  };
   const save = async (form: AssessmentForm, action: AssessmentAction) => {
     const accessVersion = accessGeneration.current;
     if (!canEdit || loading || loadError)
@@ -797,17 +765,12 @@ export function PerformanceAppraisalPage() {
     }) as PerformanceReview;
     let confirmed = nextReview;
     if (!demo)
-      confirmed = (await saveAssessmentRecord(
-        performanceDb,
-        nextReview,
-        previous,
-      )) as PerformanceReview;
-    let returnNotificationSent = true;
-    if (!demo && mode === "manager" && action === "return") {
-      returnNotificationSent = await sendReturnNotification(confirmed);
-    }
+      confirmed = (await submitAssessmentRecord(performanceDb, nextReview, {
+        mode,
+        action,
+        expectedUpdatedAt: form.sourceUpdatedAt || null,
+      })) as PerformanceReview;
     if (accessVersion !== accessGeneration.current) throw new Error("資料存取權限已更新，請重新開啟考核確認儲存結果。");
-    if (action === 'return') setNotificationRetryId(returnNotificationSent ? null : confirmed.id);
     const nextRows = [
       confirmed,
       ...reviews.filter((review) => review.id !== confirmed.id),
@@ -826,16 +789,10 @@ export function PerformanceAppraisalPage() {
               : "主管評分已送出",
       description:
         action === "return" && !demo
-          ? returnNotificationSent
-            ? `已通知 ${confirmed.employeeName} 回來查看回饋並補充。`
-            : `考核與退回紀錄已儲存，但通知尚未送出。請使用「重送通知」，不需再次退回。`
+          ? `已通知 ${confirmed.employeeName} 回來查看回饋並補充。`
           : demo
             ? "本機示範模式，不會寫入正式資料。"
-            : "已確認儲存至工作區。",
-      variant:
-        action === "return" && !demo && !returnNotificationSent
-          ? "destructive"
-          : undefined,
+            : "已確認提交成功。",
     });
     return createAssessmentForm(confirmed) as AssessmentForm;
   };
@@ -911,7 +868,7 @@ export function PerformanceAppraisalPage() {
       <main className="performance-content">
         <header className="rd2-page-header">
           <div>
-            <h1>{tab === "policy" ? "系統說明與政策" : tab === "self" ? "員工自評" : tab === "manager" ? "主管評分" : "績效與當責評估系統"}</h1>
+            <h1>{tab === "policy" ? "系統說明與政策" : tab === "self" ? "員工自評" : tab === "manager" ? "主管評分" : tab === "section-reports" ? "部門績效總覽" : "績效與當責評估系統"}</h1>
             <p>{demo ? "本機示範模式" : tab === "policy" ? "組織分工、填寫流程與完整評分標準" : tab === "self" ? "記錄本期成果，讓每一份努力有據可循。" : tab === "manager" ? "依組織歸屬評核，逐一完成直屬同仁的考核。" : "RD2 · 員工自評與主管評核"}</p>
           </div>
           <div className="rd2-header-actions">
@@ -946,14 +903,6 @@ export function PerformanceAppraisalPage() {
               disabled={loading}
             >
               重新整理
-            </Button>
-          </div>
-        )}
-        {!demo && canManagePerformance && ((notificationRetryId && reviews.some(review => review.id === notificationRetryId)) || (tab === 'manager' && !!returnDetails?.returnHistory.length)) && (
-          <div className="rd2-return-history" role="status">
-            <p>{notificationRetryId ? '退回紀錄已儲存，通知尚未送出。' : '需要重新通知下屬時，可重送上次退回通知；不會新增退回紀錄或重複通知。'}</p>
-            <Button type="button" variant="outline" disabled={retryingNotification} onClick={() => void retryReturnNotification()}>
-              {retryingNotification ? '重送中…' : '重送通知'}
             </Button>
           </div>
         )}
@@ -1014,15 +963,15 @@ export function PerformanceAppraisalPage() {
         )}
         {tab === "manager" && canManagePerformance && <PerformanceTaskGuide mode="manager" />}
         {canManagePerformance && !demo && ["manager", "section-reports"].includes(tab) && <PerformancePrivacyPanel privacy={privacy} userId={userId} configure={false} />}
-        {tab === "section-reports" && canManagePerformance && <PerformanceSectionReports key={`${userId}:${cycle}:${privacyRevision}`} userId={userId} cycle={cycle} ready={privacy.ready && !demo} />}
+        {tab === "section-reports" && canManagePerformance && <PerformanceSectionReports key={`${userId}:${cycle}:${privacyRevision}`} userId={userId} cycle={cycle} ready={privacy.ready && !demo} onEvaluate={() => { setManagerView("records"); navigate("manager"); }} />}
         {tab === "organization" && canAccessOrganization && <PerformanceOrganization reviews={canManagePerformance && privacy.ready ? reviews : []} cycle={cycle} onChanged={() => { void load(); }} />}
         {canManagePerformance && !demo && tab === "organization" && <div className="rd2-org-privacy-after"><PerformancePrivacyPanel privacy={privacy} userId={userId} configure /></div>}
         {tab === "manager" && canManagePerformance && (
           <>
             <div className="rd2-manager-only-notice" role="note">
-              <strong>組織指定主管專用</strong>
+              <strong>{selfContext?.orgLevel === "director" ? "個人評核 · 直屬課長與代理課同仁" : "個人評核 · 直屬同仁"}</strong>
               <span>只顯示組織架構直接指派給你的同仁；網站管理員不會取得成績檢視權。</span>
-              <Button size="sm" variant="outline" onClick={() => navigate("section-reports")}>前往課務彙整</Button>
+              <Button size="sm" variant="outline" onClick={() => navigate("section-reports")}>前往部門績效總覽</Button>
             </div>
             <div
               className="rd2-view-switch"
@@ -1123,15 +1072,6 @@ export function PerformanceAppraisalPage() {
                     key={`${userId}:${cycle}:${tab}:${editorRecordId || "new"}:${editorRevision}:${initial.manager.roleGroup}`}
                     initial={initial}
                     mode={tab}
-                    // Self drafts are keyed to the account rather than a row
-                    // id, so a draft made before the first cloud save is
-                    // restored when the same review is opened from records.
-                    storageKey={draftKey(
-                      userId,
-                      cycle,
-                      tab,
-                      tab === "self" ? userId : editorRecordId,
-                    )}
                     readonly={
                       tab === "self" && editorReview?.status === "approved"
                     }

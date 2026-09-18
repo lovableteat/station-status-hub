@@ -1422,3 +1422,38 @@
     padding: 14px;
   }
 }
+
+/* Department overview: separate individual appraisal from section reporting. */
+.rd2-work-purpose { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:20px 0; }
+.rd2-work-purpose > div { padding:22px; border:1px solid #619be0; border-top:4px solid #83baff; border-radius:14px; background:#193656; }
+.rd2-work-purpose > div[data-current] { border-color:#69d8b5; background:#173e39; }
+.rd2-work-purpose span { color:#b6d7ff; font-weight:700; font-size:13px; }
+.rd2-work-purpose > div[data-current] span { color:#a1efd3; }
+.rd2-work-purpose h3 { margin:8px 0; color:#fff; font-size:20px; }
+.rd2-work-purpose p { color:#d7e5ef; line-height:1.75; margin-bottom:14px; }
+.rd2-department-metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:20px 0; }
+.rd2-department-metrics > div { padding:18px; border-radius:12px; background:#223b59; border:1px solid #527dac; display:flex; flex-direction:column; gap:8px; }
+.rd2-department-metrics strong { font-size:30px; color:#c9e3ff; }
+.rd2-department-metrics span { color:#ecf4ff; }
+.rd2-department-metrics [data-tone="1"] { background:#51412a; border-color:#ca9b4d; }
+.rd2-department-metrics [data-tone="1"] strong { color:#ffda8e; }
+.rd2-department-metrics [data-tone="2"] { background:#4a3042; border-color:#b8799d; }
+.rd2-department-metrics [data-tone="3"] { background:#20463d; border-color:#56b69a; }
+.rd2-department-metrics [data-tone="3"] strong { color:#a1efd3; }
+.rd2-overview-guidance { padding:22px; background:#233347; border-left:4px solid #86baff; border-radius:10px; margin:18px 0; }
+.rd2-overview-guidance h3 { color:#f6f9ff; margin-bottom:8px; }
+.rd2-overview-guidance p { color:#d5e0ec; line-height:1.7; }
+.rd2-department-overview .rd2-section-report { border-left:4px solid #79b0e8; padding:22px; }
+.rd2-department-overview .rd2-section-report[data-status="submitted"] { border-left-color:#ffd178; }
+.rd2-department-overview .rd2-section-report[data-status="returned"] { border-left-color:#f1a6c7; }
+.rd2-department-overview .rd2-section-report[data-status="approved"] { border-left-color:#7cdbb8; }
+.rd2-report-content { display:grid; gap:12px; margin:16px 0; }
+.rd2-report-content section { padding:14px 16px; background:#253447; border-radius:8px; border:1px solid #4d647d; overflow-wrap:anywhere; }
+.rd2-report-content h4 { color:#a9d6ff; margin:0 0 8px; font-size:14px; }
+.rd2-report-content p { color:#f0f5fa; line-height:1.8; margin:0; }
+.rd2-report-content section:last-child h4 { color:#ffdb91; }
+.rd2-report-progress { display:flex; gap:12px; flex-wrap:wrap; align-items:center; color:#c7d8e9; font-size:12px; }
+.rd2-report-progress progress { accent-color:#72d3b0; max-width:100%; height:10px; }
+@media(max-width:700px) { .rd2-work-purpose { grid-template-columns:1fr; } .rd2-department-metrics { grid-template-columns:repeat(2,1fr); } }
+
+.rd2-section-report-dialog { max-height: 85dvh; overflow-y: auto; }

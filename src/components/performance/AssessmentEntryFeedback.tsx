@@ -1,75 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, X } from 'lucide-react';
-import { useRef, useState } from 'react';
-import { MAX_MANAGER_ATTACHMENTS, MAX_MANAGER_ATTACHMENT_BYTES, MAX_MANAGER_ATTACHMENT_CHARACTERS } from './rd2Assessment.mjs';
+import { useState } from 'react';
+import { AssessmentAttachments as ManagerAttachments } from './AssessmentAttachments';
 import type { AssessmentEntry, Category, ManagerAssessment, ReviewAttachment } from './assessmentTypes';
-
-const REVIEW_ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.zip,.jpg,.jpeg,.png,.webp';
-const formatFileSize = (size: number) => size < 1024 * 1024
-  ? `${Math.max(1, Math.round(size / 1024))} KB`
-  : `${(size / 1024 / 1024).toLocaleString('zh-TW', { maximumFractionDigits: 1 })} MB`;
-
-async function prepareReviewAttachment(file: File): Promise<ReviewAttachment> {
-  const extension = file.name.split('.').pop()?.toLowerCase();
-  if (!extension || !REVIEW_ATTACHMENT_ACCEPT.split(',').map(value => value.slice(1)).includes(extension))
-    throw new Error('附件支援 PDF、Word、Excel、PowerPoint、文字、ZIP 與圖片檔。');
-  if (file.size > MAX_MANAGER_ATTACHMENT_BYTES) throw new Error('單一附件不可超過 4 MB。');
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('附件讀取失敗，請重新選擇檔案。'));
-    reader.readAsDataURL(file);
-  });
-  return { id: crypto.randomUUID(), name: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, dataUrl };
-}
-
-export function ManagerAttachments({ attachments, readonly, disabled = false, buttonLabel = '附加退回檔案', onChange, onBusy, onError }: {
-  attachments: ReviewAttachment[]; readonly: boolean; disabled?: boolean; buttonLabel?: string;
-  onChange?: (attachments: ReviewAttachment[]) => void;
-  onBusy?: (busy: boolean) => void;
-  onError?: (message: string) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const totalCharacters = attachments.reduce((total, attachment) => total + attachment.dataUrl.length, 0);
-  return <div className="rd2-review-attachments">
-    {!readonly && <>
-      <div className="rd2-evidence-actions">
-        <Button type="button" variant="outline" size="sm" disabled={disabled || busy || attachments.length >= MAX_MANAGER_ATTACHMENTS} onClick={() => inputRef.current?.click()}>
-          <Upload data-icon="inline-start" />{busy ? '處理附件中…' : buttonLabel}
-        </Button>
-        <span className="rd2-hint">每處最多 4 個檔案；單檔 4 MB，整份附件合計約 4.5 MB。</span>
-      </div>
-      <input ref={inputRef} type="file" className="sr-only" aria-label={buttonLabel} accept={REVIEW_ATTACHMENT_ACCEPT} disabled={disabled || busy}
-        onChange={async event => {
-          const file = event.target.files?.[0];
-          event.target.value = '';
-          if (!file) return;
-          setBusy(true); setError(''); onBusy?.(true);
-          try {
-            const attachment = await prepareReviewAttachment(file);
-            if (totalCharacters + attachment.dataUrl.length > MAX_MANAGER_ATTACHMENT_CHARACTERS)
-              throw new Error('附件總量過大，請移除部分檔案後再加入。');
-            onChange?.([...attachments, attachment]); onError?.('');
-          } catch (cause) {
-            const message = cause instanceof Error ? cause.message : '附件處理失敗，請重試。';
-            setError(message); onError?.(message);
-          } finally {
-            setBusy(false); onBusy?.(false);
-          }
-        }} />
-    </>}
-    {!!attachments.length && <ul className="rd2-review-attachment-list">
-      {attachments.map(attachment => <li key={attachment.id}>
-        <a href={attachment.dataUrl} download={attachment.name}><span>{attachment.name}</span><small>{formatFileSize(attachment.size)}</small></a>
-        {!readonly && <Button type="button" variant="ghost" size="icon" disabled={disabled || busy} aria-label={`移除附件 ${attachment.name}`} onClick={() => onChange?.(attachments.filter(item => item.id !== attachment.id))}><X /></Button>}
-      </li>)}
-    </ul>}
-    {error && <p role="alert">{error}</p>}
-  </div>;
-}
 
 function focusAssessmentEntry(category: Category, entryId: string) {
   const target = document.getElementById(`rd2-entry-${category}-${entryId}`);
@@ -124,6 +57,7 @@ export function AssessmentEntryFeedback({ category, entry, index, manager, edita
         placeholder="針對這筆實績填寫肯定、建議，或需要補充的內容"
         onChange={event => onChange?.(event.target.value, value.returnRequested, value.attachments)} />
       <ManagerAttachments attachments={value.attachments} readonly={false} disabled={disabled} buttonLabel="附加此筆檔案" onBusy={onBusy} onError={onError}
+        label={`${label} · 主管回應附件`}
         onChange={attachments => onChange?.(value.feedback, value.returnRequested, attachments)} />
       <div className="rd2-entry-actions">
         <label><input type="checkbox" aria-label={`勾選退回 ${label}`} checked={value.returnRequested} disabled={disabled}

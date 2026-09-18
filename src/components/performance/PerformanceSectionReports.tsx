@@ -1,3 +1,4 @@
+import { SECTION_REPORT_FIELDS, readSectionReportContent, writeSectionReportContent } from "./sectionReportContent.mjs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Plus, RefreshCw, X } from "lucide-react";
@@ -43,10 +44,12 @@ export function PerformanceSectionReports({
   userId,
   cycle,
   ready,
+  onEvaluate,
 }: {
   userId: string;
   cycle: string;
   ready: boolean;
+  onEvaluate: () => void;
 }) {
   const [params, setParams] = useSearchParams();
   const search = params.get("sectionReportSearch") || "";
@@ -61,6 +64,7 @@ export function PerformanceSectionReports({
     report: SectionReport | null;
   } | null>(null);
   const [text, setText] = useState("");
+  const [content, setContent] = useState(readSectionReportContent());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const request = useRef(0);
@@ -145,6 +149,7 @@ export function PerformanceSectionReports({
   }, [load]);
   const open = (mode: "compose" | "review", report: SectionReport | null) => {
     setEditor({ mode, report });
+    setContent(readSectionReportContent(report?.summary || ""));
     setText(
       mode === "compose"
         ? report?.summary || ""
@@ -154,12 +159,16 @@ export function PerformanceSectionReports({
   };
   const submit = async (action: "draft" | "submit" | "approve" | "return") => {
     if (!editor || saving || !ready) return;
-    if ((action === "submit" || action === "return") && !text.trim()) {
+    if ((action === "submit" && !content.achievements.trim()) || (action === "return" && !text.trim())) {
       setSaveError(
         action === "return"
           ? "請填寫需要課長補充的內容。"
           : "請填寫本課彙整內容。",
       );
+      return;
+    }
+    if (editor.mode === "compose" && writeSectionReportContent(content).length > 20000) {
+      setSaveError("彙整內容過長，請縮短後再儲存（合計上限 20,000 字元）。");
       return;
     }
     setSaving(true);
@@ -169,7 +178,7 @@ export function PerformanceSectionReports({
         editor.mode === "compose"
           ? await privacyDb.rpc("save_performance_section_report", {
               p_cycle_id: cycle,
-              p_summary: text,
+              p_summary: writeSectionReportContent(content),
               p_submit: action === "submit",
               p_expected_updated_at: editor.report?.updated_at || null,
             })
@@ -216,12 +225,12 @@ export function PerformanceSectionReports({
     !!own.manager_id &&
     !rows.some((r) => r.chief_id === userId);
   return (
-    <section>
+    <section className="rd2-department-overview">
       <header className="rd2-section-header">
         <div>
-          <h2>課長彙整與部長審閱</h2>
+          <h2>部門績效總覽</h2>
           <p>
-            職員交給課長評核；課長彙整本課成果後送部長。部長查看課長提交的彙整，職員原始考核由直屬課長管理。
+            查看各課送交的成果、考核完成進度與待協助事項，將回饋交給課長。
           </p>
         </div>
         <div className="rd2-actions">
@@ -244,6 +253,14 @@ export function PerformanceSectionReports({
           </Button>
         </div>
       </header>
+      <div className="rd2-work-purpose">
+        <div><span>個人評核</span><h3>評核直屬課長／同仁</h3><p>查看個人自評、給分與回饋；部長代理的課別同仁也在這裡處理。</p><Button variant="outline" onClick={onEvaluate}>前往主管評分</Button></div>
+        <div data-current="true"><span>目前頁面 · 各課成果</span><h3>掌握進度、回覆課長</h3><p>課長整理成果、問題與資源需求；部長查看彙整並回覆。個人成績不在這頁展開。</p></div>
+      </div>
+      <div className="rd2-department-metrics" aria-label="本期彙整處理進度">
+        {[['可查看彙整', rows.length], ['待部長回覆', rows.filter(r => r.status === 'submitted').length], ['待課長補充', rows.filter(r => r.status === 'returned').length], ['已確認', rows.filter(r => r.status === 'approved').length]].map(([label,value],index) => <div key={String(label)} data-tone={index}><span>{label}</span><strong>{loading || !ready || error ? '—' : value}</strong></div>)}
+      </div>
+      {!loading && ready && !error && !rows.length && <div className="rd2-overview-guidance" role="status"><h3>{own?.org_level === 'section_chief' ? '從本課成果開始' : '本期尚無可查看的課別彙整'}</h3><p>{own?.org_level === 'section_chief' ? '按「新增本期彙整」，填寫成果、問題與需要部長協助的事項，送出後部長才會收到。' : '課長送出後，這裡會顯示各課成果與待回覆事項。未送出的草稿或尚未解鎖的彙整不會顯示。'}</p><p>課長本人的考核請到「主管評分」處理；管理員身分不會取得考核成績。</p></div>}
       {notice && (
         <p role="status" className="rd2-hint">
           {notice}
@@ -331,6 +348,7 @@ export function PerformanceSectionReports({
             <article
               key={report.id}
               className="rd2-section-report"
+              data-status={report.status}
               aria-label={`${report.section} ${report.chief_name} 的彙整`}
             >
               <header>
@@ -341,12 +359,10 @@ export function PerformanceSectionReports({
               </header>
               <p className="rd2-hint">
                 {report.department} · 送交部長：{report.director_name} ·
-                彙整時本課 {report.total_members} 人，可查看已完成評核{" "}
-                {report.completed_members} 人
+                彙整時本課 {report.total_members} 人，已完成評核 {report.completed_members} 人
               </p>
-              <p className="rd2-prewrap">
-                {report.summary || "尚未填寫彙整內容"}
-              </p>
+              <div className="rd2-report-progress"><progress aria-label={report.section + ' 彙整時考核完成進度'} max={Math.max(1,report.total_members)} value={Math.min(report.total_members, report.completed_members)} /><span>彙整快照 · {new Date(report.updated_at).toLocaleDateString('zh-TW')}，非即時個人成績</span></div>
+              <div className="rd2-report-content">{SECTION_REPORT_FIELDS.map(field => <section key={field.key}><h4>{field.label}</h4><p className="rd2-prewrap">{readSectionReportContent(report.summary)[field.key] || '未提供'}</p></section>)}</div>
               {report.director_feedback && (
                 <div className="rd2-section-report-feedback">
                   <strong>部長回覆</strong>
@@ -388,7 +404,7 @@ export function PerformanceSectionReports({
           if (!value && !saving) setEditor(null);
         }}
       >
-        <DialogContent>
+        <DialogContent className="rd2-section-report-dialog">
           <DialogHeader>
             <DialogTitle>
               {editor?.mode === "compose" ? "本課績效彙整" : "審閱課長彙整"}
@@ -400,19 +416,22 @@ export function PerformanceSectionReports({
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>
+            {editor?.mode === "compose" ? SECTION_REPORT_FIELDS.map(field => <Field key={field.key}><FieldLabel htmlFor={`report-${field.key}`}>{field.label}{field.key === "achievements" ? " *" : ""}</FieldLabel><Textarea id={`report-${field.key}`} rows={4} disabled={saving} value={content[field.key]} placeholder={field.placeholder} onChange={event => setContent(previous => ({ ...previous, [field.key]: event.target.value }))} /></Field>) : <>
+            {editor?.report && <div className="rd2-report-content">{SECTION_REPORT_FIELDS.map(field => <section key={field.key}><h4>{field.label}</h4><p className="rd2-prewrap">{readSectionReportContent(editor.report.summary)[field.key] || "未提供"}</p></section>)}</div>}
             <Field>
               <FieldLabel htmlFor="section-report-content">
-                {editor?.mode === "compose" ? "本課彙整" : "部長回覆"}
+                部長回覆
               </FieldLabel>
               <Textarea
                 id="section-report-content"
                 rows={9}
-                maxLength={editor?.mode === "compose" ? 20000 : 10000}
+                maxLength={10000}
                 disabled={saving}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
               />
             </Field>
+            </>}
             {saveError && (
               <p className="rd2-error" role="alert">
                 {saveError}

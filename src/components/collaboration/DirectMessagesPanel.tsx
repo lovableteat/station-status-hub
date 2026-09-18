@@ -63,6 +63,7 @@ import {
 import { cn } from "@/lib/utils";
 
 interface DirectMessagesPanelProps {
+  isVisible?: boolean;
   onlineUsers: OnlineUser[];
   contacts: DirectMessageContact[];
   contactsLoading?: boolean;
@@ -245,6 +246,7 @@ function ThreadRow({
 }
 
 export function DirectMessagesPanel({
+  isVisible = true,
   onlineUsers,
   contacts,
   contactsLoading = false,
@@ -295,7 +297,7 @@ export function DirectMessagesPanel({
     retryMessage,
     deleteMessage,
     sendTyping,
-  } = useDirectMessages(selectedThreadId);
+  } = useDirectMessages(selectedThreadId, { isVisible });
   const messageEndRef = useRef<HTMLDivElement | null>(null);
   const onlineUserById = useMemo(
     () => new Map(onlineUsers.map((onlineUser) => [onlineUser.userId, onlineUser])),
