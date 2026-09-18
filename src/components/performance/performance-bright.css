@@ -591,6 +591,65 @@
   box-shadow: 0 12px 30px rgb(3 20 40 / 24%);
 }
 
+.rd2-bright .rd2-self-complete-state {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 18px 0;
+  padding: 22px 24px;
+  border: 1px solid #2fba84;
+  border-left: 5px solid #34d399;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #123f3a 0%, #173b58 100%);
+  box-shadow: 0 12px 30px rgb(3 20 40 / 24%);
+}
+
+.rd2-bright .rd2-self-complete-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: #34d399;
+  color: #06281f;
+}
+
+.rd2-bright .rd2-self-complete-icon svg {
+  width: 27px;
+  height: 27px;
+}
+
+.rd2-bright .rd2-self-complete-state h2,
+.rd2-bright .rd2-self-complete-state p,
+.rd2-bright .rd2-self-complete-state small {
+  margin: 0;
+}
+
+.rd2-bright .rd2-self-complete-state h2 {
+  color: #ecfff8;
+  font-size: 18px;
+}
+
+.rd2-bright .rd2-self-complete-state p {
+  margin-top: 4px;
+  color: #b7f4dc;
+}
+
+.rd2-bright .rd2-self-complete-state small {
+  display: block;
+  margin-top: 8px;
+  color: #8bd8c0;
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .rd2-bright .rd2-self-complete-state {
+    align-items: flex-start;
+    padding: 18px;
+  }
+}
+
 .rd2-bright .rd2-return-alert {
   display: flex;
   align-items: center;

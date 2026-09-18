@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   calculatePerformanceSummary,
   DEFAULT_PERFORMANCE_REVIEWS,
+  getSelfAssessmentDisplayState,
   getPerformanceStatusForAction,
   normalizePerformanceReview,
   toPerformanceCsv,
@@ -83,6 +84,13 @@ test("performance workflow maps employee and manager actions to the review statu
     }),
     "approved",
   );
+});
+
+test("employee self view hides submitted data until a manager returns it", () => {
+  assert.equal(getSelfAssessmentDisplayState("draft"), "editable");
+  assert.equal(getSelfAssessmentDisplayState("in-progress"), "editable");
+  assert.equal(getSelfAssessmentDisplayState("submitted"), "submitted");
+  assert.equal(getSelfAssessmentDisplayState("approved"), "approved");
 });
 
 test("performance CSV exports headers, status labels, and escaped values", () => {
@@ -170,6 +178,8 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
   assert.doesNotMatch(source, /hidden=\{tab === "self"\}/);
   assert.match(source, /toPerformanceCsv\(visibleReviews, \{ includeManager: canManagePerformance \}/);
   assert.match(source, /showManagerAssessment/);
+  assert.match(source, /getSelfAssessmentDisplayState/);
+  assert.match(source, /rd2-self-complete-state/);
   assert.match(flowGuide, /canManage = false/);
   assert.match(flowGuide, /主管分數維持隱藏，退回說明與附件會顯示給員工補充/);
   assert.match(source, /manager\.attachments/);
