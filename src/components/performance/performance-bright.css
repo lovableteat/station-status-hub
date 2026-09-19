@@ -415,21 +415,21 @@
   font-size: 12px;
 }
 .rd2-bright .rd2-category {
-  --category-fill: #122f51;
+  --category-fill: var(--rd2-panel);
   --card-accent: #81aff8;
   --card-accent-solid: #2563eb;
   border-top: 4px solid var(--card-accent);
   padding-top: 0;
 }
 .rd2-bright .rd2-category[data-category="OKR"] {
-  --category-fill: #12403a;
+  --category-fill: var(--rd2-panel);
   --card-accent: #8decc3;
-  --card-accent-solid: #0f766e;
+  --card-accent-solid: #2563eb;
 }
 .rd2-bright .rd2-category[data-category="KPI"] {
-  --category-fill: #3d2f14;
+  --category-fill: var(--rd2-panel);
   --card-accent: #f0b45e;
-  --card-accent-solid: #9a5a0b;
+  --card-accent-solid: #2563eb;
 }
 .rd2-bright .rd2-category-heading {
   margin: 0 -20px 16px;
@@ -975,7 +975,7 @@
     grid-template-columns: 1fr;
   }
   .rd2-bright .rd2-category-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 1100px) {
@@ -1186,26 +1186,26 @@
 
 .rd2-bright .rd2-review-score-part,
 .rd2-bright .rd2-review-category {
-  --review-accent: #a78bfa;
-  --review-accent-strong: #7c5ce1;
-  --review-fill: #2c2548;
-  --review-soft: #211d36;
+  --review-accent: #81aff8;
+  --review-accent-strong: #2563eb;
+  --review-fill: var(--rd2-panel);
+  --review-soft: var(--rd2-panel-soft);
 }
 
 .rd2-bright .rd2-review-score-part[data-category="OKR"],
 .rd2-bright .rd2-review-category[data-category="OKR"] {
-  --review-accent: #6ee7b7;
+  --review-accent: #8decc3;
   --review-accent-strong: #159a72;
-  --review-fill: #163b38;
-  --review-soft: #142f30;
+  --review-fill: var(--rd2-panel);
+  --review-soft: var(--rd2-panel-soft);
 }
 
 .rd2-bright .rd2-review-score-part[data-category="KPI"],
 .rd2-bright .rd2-review-category[data-category="KPI"] {
-  --review-accent: #f7c66a;
+  --review-accent: #f0b45e;
   --review-accent-strong: #c47a18;
-  --review-fill: #403317;
-  --review-soft: #322919;
+  --review-fill: var(--rd2-panel);
+  --review-soft: var(--rd2-panel-soft);
 }
 
 .rd2-bright .rd2-review-score-part {
@@ -1516,3 +1516,28 @@
 @media(max-width:700px) { .rd2-work-purpose { grid-template-columns:1fr; } .rd2-department-metrics { grid-template-columns:repeat(2,1fr); } }
 
 .rd2-section-report-dialog { max-height: 85dvh; overflow-y: auto; }
+
+.rd2-records-summary[hidden] { display: none; }
+.rd2-workspace.rd2-record-dialog { grid-template-columns: minmax(0, 1fr); min-height: 0; width: calc(100vw - 24px); max-width: 960px; max-height: 90dvh; overflow-y: auto; }
+.rd2-record-dialog > :first-child { padding-right: 44px; }
+.rd2-record-dialog .rd2-detail { margin: 0; }
+.rd2-bright .rd2-self-complete-state h2 { font-size: 24px; }
+.rd2-bright .rd2-category-heading { min-height: auto; }
+
+@media (max-width: 700px) {
+  .rd2-bright .rd2-records-table { overflow-x: visible; }
+  .rd2-bright .rd2-records-table table { min-width: 0; width: 100%; }
+  .rd2-records-table:has(td[data-label]) thead {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
+  }
+  .rd2-records-table tr:has(td[data-label]) { display: block; padding: 12px; border: 1px solid var(--rd2-border); border-radius: 12px; margin-bottom: 12px; }
+  .rd2-bright .rd2-records-table td[data-label] { display: grid; width: 100%; grid-template-columns: 100px minmax(0, 1fr); gap: 4px 12px; white-space: normal; overflow-wrap: anywhere; padding: 8px 0; border: 0; }
+  .rd2-records-table .rd2-row-actions { flex-wrap: wrap; justify-content: flex-start; min-width: 0; }
+  .rd2-records-table td[data-label]::before { content: attr(data-label); color: var(--rd2-muted); grid-column: 1; grid-row: 1 / span 2; }
+  .rd2-records-table td[data-label] > * { grid-column: 2; }
+  .rd2-records-table .rd2-status { justify-self: start; }
+  .rd2-bright :is(input:not([type="checkbox"]), textarea, select) { font-size: 16px; }
+  .rd2-bright button, .rd2-bright .performance-content .interactive-lift { min-height: 44px; }
+  .rd2-bright .rd2-category { padding-inline: 12px; }
+  .rd2-bright .rd2-category-heading { margin-inline: -12px; padding-inline: 12px; }
+}

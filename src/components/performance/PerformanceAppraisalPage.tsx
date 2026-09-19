@@ -17,6 +17,7 @@ import {
 import { useUser } from "@/components/auth/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -391,6 +392,7 @@ export function PerformanceAppraisalPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const detailTrigger = useRef<HTMLButtonElement | null>(null);
   const [editorRevision, setEditorRevision] = useState(0);
   const savedId = useRef<{ key: string; id: string } | null>(null);
   const requestNumber = useRef(0);
@@ -943,8 +945,8 @@ export function PerformanceAppraisalPage() {
               </Button>
             </section>
           )}
-        {tab === "self" && <PerformanceTaskGuide mode="self" status={editorReview?.status} />}
-        {tab === "self" && !loading && !demo && (
+        {tab === "self" && selfAssessmentDisplayState === 'editable' && <PerformanceTaskGuide mode="self" status={editorReview?.status} />}
+        {tab === "self" && selfAssessmentDisplayState === 'editable' && !loading && !demo && (
           <section className="rd2-self-org-card" data-state={selfContext?.assigned ? "assigned" : "missing"}>
             <header>
               <span className="rd2-self-org-icon"><Network /></span>
@@ -1104,6 +1106,7 @@ export function PerformanceAppraisalPage() {
                   </div>
                 ) : (
                   <AssessmentEditor
+                    draftKey={`${userId}:${cycle}:${tab}:${editorRecordId || 'new'}`}
                     key={`${userId}:${cycle}:${tab}:${editorRecordId || "new"}:${editorRevision}:${initial.manager.roleGroup}`}
                     initial={initial}
                     mode={tab}
@@ -1166,11 +1169,11 @@ export function PerformanceAppraisalPage() {
                 </Button>
                 <Button onClick={() => navigate("self")}>
                   <Plus data-icon="inline-start" />
-                  新增自評
+                  我的自評
                 </Button>
               </div>
             </header>
-            <div className="rd2-records-summary">
+            <div className="rd2-records-summary" hidden={!canManagePerformance}>
               <div className="rd2-stat-row">
                 <StatTile
                   label="本期考核"
@@ -1319,7 +1322,7 @@ export function PerformanceAppraisalPage() {
                 <tbody>
                   {visibleReviews.map((review) => (
                     <tr key={review.id}>
-                      <td>
+                      <td data-label="員工／工號">
                         <strong>{review.employeeName}</strong>
                         <small>
                           {readSelfAssessment(review.selfFeedback)
@@ -1329,12 +1332,12 @@ export function PerformanceAppraisalPage() {
                             "未填工號"}
                         </small>
                       </td>
-                      <td>
+                      <td data-label="部門／職級">
                         {review.department}
                         <small>{review.role}</small>
                       </td>
-                      <td>{review.reviewerName}</td>
-                      <td>
+                      <td data-label="考核人">{review.reviewerName}</td>
+                      <td data-label="狀態">
                         <span
                           className={`rd2-status rd2-status-${review.status}`}
                         >
@@ -1342,7 +1345,7 @@ export function PerformanceAppraisalPage() {
                         </span>
                       </td>
                       {canManagePerformance && (
-                        <td>
+                        <td data-label="員工加權自評">
                           {(() => {
                             const self = readSelfAssessment(review.selfFeedback);
                             const weighted = calculateWeightedSelfScores(self.grade, self.sections);
@@ -1350,22 +1353,23 @@ export function PerformanceAppraisalPage() {
                           })()}
                         </td>
                       )}
-                      {canManagePerformance && <td>{review.score ?? "—"}</td>}
-                      <td>
+                      {canManagePerformance && <td data-label="主管加權評分">{review.score ?? "—"}</td>}
+                      <td data-label="操作">
                         <div className="rd2-row-actions">
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() =>
+                            onClick={(event) => {
+                              detailTrigger.current = event.currentTarget;
                               setDetailId(
                                 detailId === review.id ? null : review.id,
-                              )
-                            }
+                              );
+                            }}
                           >
                             查看
                           </Button>
                           {matchesUser(review, user) &&
-                            review.status !== "approved" && (
+                            review.status !== "approved" && review.status !== "submitted" && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1404,7 +1408,7 @@ export function PerformanceAppraisalPage() {
                   ))}
                   {!visibleReviews.length && (
                     <tr>
-                      <td colSpan={canManagePerformance ? 6 : 5} className="rd2-empty">
+                      <td colSpan={canManagePerformance ? 7 : 5} className="rd2-empty">
                         {loading
                           ? "正在讀取考核…"
                           : "目前篩選條件沒有符合的考核"}
@@ -1414,18 +1418,18 @@ export function PerformanceAppraisalPage() {
                 </tbody>
               </table>
             </div>
-            {detail && (
-              <section className="rd2-detail-region">
-                <Button variant="ghost" onClick={() => setDetailId(null)}>
-                  <X data-icon="inline-start" />
-                  關閉考核內容
-                </Button>
+            <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetailId(null); }}>
+              {detail && <DialogContent className="performance-workspace rd2-workspace rd2-bright rd2-record-dialog" onCloseAutoFocus={event => { event.preventDefault(); detailTrigger.current?.focus(); }}>
+                <DialogHeader>
+                  <DialogTitle>考核內容 · {detail.employeeName}</DialogTitle>
+                  <DialogDescription>查看本期實績與逐項回覆；此視窗不會修改資料。</DialogDescription>
+                </DialogHeader>
                 <ReviewDetail
                   review={detail}
                   showManagerAssessment={canManagePerformance}
                 />
-              </section>
-            )}
+              </DialogContent>}
+            </Dialog>
           </section>
         )}
       </main>

@@ -1,7 +1,9 @@
 import { AssessmentAttachments } from "./AssessmentAttachments";
+import { readAssessmentDraft, keepAssessmentDraft, forgetAssessmentDraft } from './assessmentDrafts.mjs';
 import { useEffect, useRef, useState } from "react";
 import { Link2, Plus, Send, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -45,7 +47,6 @@ import type {
   EmployeeOption,
   EvidenceImage,
   ReviewAttachment,
-  ManagerAssessment,
 } from "./assessmentTypes";
 
 async function prepareImage(file: File): Promise<EvidenceImage> {
@@ -260,6 +261,7 @@ function Evidence({
 }
 
 interface Props {
+  draftKey?: string;
   initial: AssessmentForm;
   mode: AssessmentMode;
   readonly?: boolean;
@@ -278,6 +280,7 @@ interface Props {
 }
 
 export function AssessmentEditor({
+  draftKey,
   initial,
   mode,
   readonly = false,
@@ -291,7 +294,12 @@ export function AssessmentEditor({
   demo,
   onSave,
 }: Props) {
-  const [form, setForm] = useState<AssessmentForm>(initial);
+  const source = initial.sourceUpdatedAt
+    ? `${initial.sourceUpdatedAt}:${initial.manager.roleGroup}`
+    : JSON.stringify(initial);
+  const [form, setForm] = useState<AssessmentForm>(() =>
+    (!readonly && draftKey && readAssessmentDraft(draftKey, source)) || initial);
+  const errorRef = useRef<HTMLParagraphElement>(null);
   const focusCategory = focusEntry?.category;
   const focusEntryId = focusEntry?.entryId;
   useEffect(() => {
@@ -304,14 +312,22 @@ export function AssessmentEditor({
   const [saving, setSaving] = useState(false);
   const [imageJobs, setImageJobs] = useState(0);
   const [submitStatus, setSubmitStatus] = useState("");
+  const [returnTarget, setReturnTarget] = useState<{ category: Category; entryId: string } | null>(null);
   const latest = useRef(form);
-  const pending = useRef(false);
+  const pending = useRef(form !== initial);
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.focus();
+      errorRef.current?.scrollIntoView({ block: 'center' });
+    }
+  }, [error]);
   const submitting = useRef(false);
   const change = (update: (previous: AssessmentForm) => AssessmentForm) => {
     if (readonly || submitting.current) return;
     const next = update(latest.current);
     latest.current = next;
     pending.current = true;
+    if (draftKey) keepAssessmentDraft(draftKey, source, next);
     setForm(next);
     setError("");
     setSubmitStatus("");
@@ -377,6 +393,7 @@ export function AssessmentEditor({
       latest.current = confirmed;
       setForm(confirmed);
       pending.current = false;
+      if (draftKey) forgetAssessmentDraft(draftKey);
       setSubmitStatus(demo ? "示範提交完成" : action === "return" ? "已退回補充，通知已送達員工通知中心。" : "提交成功");
     } catch (cause) {
       setError(
@@ -412,6 +429,7 @@ export function AssessmentEditor({
             : "逐類對照員工的 IDP、OKR、KPI 自評，填寫主管分數與評語，再完成當責量表。"}
         </p>
       </header>
+      {!readonly && draftKey && <p className="rd2-hint" role="status">切換頁面會暫存本次輸入；尚未送出。關閉或重新整理網站前，請先完成送出。</p>}
       <fieldset disabled={readonly || saving} className="rd2-card rd2-identity">
         <div className="rd2-form-section-title">
           <strong>01 · 確認基本資料</strong>
@@ -1086,16 +1104,7 @@ export function AssessmentEditor({
                           onError={setError}
                           onChange={(feedback, selected, attachments) => updateEntryFeedback(category, entry.id, feedback, selected, attachments)}
                           onReturn={() => {
-                            change(previous => ({ ...previous, manager: { ...previous.manager, entryReviews:
-                              Object.fromEntries(CATEGORIES.map(key => [key, Object.fromEntries(
-                                getAssessmentEntries(previous.self.sections[key]).map(item => [item.id, {
-                                  feedback: previous.manager.entryReviews[key][item.id]?.feedback || '',
-                                  returnRequested: key === category && item.id === entry.id,
-                                  attachments: previous.manager.entryReviews[key][item.id]?.attachments || [],
-                                }]),
-                              )])) as ManagerAssessment['entryReviews'],
-                            } }));
-                            void submit('return');
+                            setReturnTarget({ category, entryId: entry.id });
                           }}
                         />}
                       />
@@ -1287,7 +1296,7 @@ export function AssessmentEditor({
       {!readonly && (
         <footer className="rd2-form-footer">
           {error && (
-            <p className="rd2-error" role="alert">
+            <p className="rd2-error" role="alert" tabIndex={-1} ref={errorRef}>
               {error}
             </p>
           )}
@@ -1329,6 +1338,24 @@ export function AssessmentEditor({
           </div>
         </footer>
       )}
+      <AlertDialog open={!!returnTarget} onOpenChange={open => { if (!open) setReturnTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>退回此筆及其他已勾選的實績？</AlertDialogTitle>
+            <AlertDialogDescription>所有逐項回覆將一併送給員工；不會取消其他已勾選的項目。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">取消</AlertDialogCancel>
+            <AlertDialogAction type="button" onClick={() => {
+              if (!returnTarget) return;
+              const { category, entryId } = returnTarget;
+              const current = latest.current.manager.entryReviews[category][entryId];
+              updateEntryFeedback(category, entryId, current?.feedback || '', true, current?.attachments || []);
+              void submit('return');
+            }}>確認退回</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }
