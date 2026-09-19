@@ -71,12 +71,12 @@ export function MainWorkspaceHeader({
     </>
   );
   const brandPositionClassName =
-    "absolute left-[max(0.625rem,env(safe-area-inset-left))] top-1/2 z-10 flex min-w-0 max-w-[calc(100%-4.5rem)] -translate-y-1/2 items-center gap-2.5 text-left sm:gap-3 sm:max-w-[min(75vw,360px)]";
+    "absolute left-[max(0.625rem,env(safe-area-inset-left))] top-1/2 z-10 flex min-w-0 max-w-[calc(100%-4.5rem)] -translate-y-1/2 items-center gap-2.5 text-left sm:gap-3 sm:max-w-[min(75vw,360px)] xl:static xl:translate-y-0 xl:max-w-none";
 
   return (
     <header data-mobile-app-header="true" className="platform-color-field relative sticky top-0 z-50 shrink-0 border-b border-primary/15 shadow-[0_18px_48px_-42px_hsl(var(--primary)/0.55)] backdrop-blur-xl">
       <div className="mx-auto grid min-h-[var(--mobile-header-height)] w-full max-w-[1920px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-3 px-2.5 py-1.5 sm:min-h-[72px] sm:gap-x-3 sm:px-4 sm:py-3 xl:grid-cols-[minmax(180px,0.9fr)_minmax(0,2.3fr)_auto] xl:gap-x-4 xl:px-5 2xl:px-6">
-        <span aria-hidden="true" data-platform-grid-placeholder="brand" className="invisible h-9 min-w-0 sm:h-11" />
+        <span aria-hidden="true" data-platform-grid-placeholder="brand" className="invisible h-9 min-w-0 sm:h-11 xl:hidden" />
 
         {onBrandClick ? (
           <button
@@ -116,12 +116,12 @@ export function MainWorkspaceHeader({
         <span
           aria-hidden="true"
           data-platform-grid-placeholder="controls"
-          className="invisible h-9 min-w-[200px] sm:h-11 xl:min-w-[380px] 2xl:min-w-[520px]"
+          className="invisible h-9 min-w-[200px] sm:h-11 xl:hidden"
         />
 
         <div
           data-platform-controls="top-right"
-          className="absolute right-[max(0.625rem,env(safe-area-inset-right))] top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center justify-end gap-1.5 sm:gap-2 xl:gap-3"
+          className="absolute right-[max(0.625rem,env(safe-area-inset-right))] top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center justify-end gap-1.5 sm:gap-2 xl:gap-3 xl:static xl:translate-y-0"
         >
           {showNotifications && <NotificationIndicator />}
 

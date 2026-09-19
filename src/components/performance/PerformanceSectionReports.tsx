@@ -1,8 +1,11 @@
 import { SECTION_REPORT_FIELDS, readSectionReportContent, writeSectionReportContent } from "./sectionReportContent.mjs";
+import { confirmSectionReportSave } from './sectionReportPersistence.mjs';
+import { readAssessmentDraft, keepAssessmentDraft, forgetAssessmentDraft } from './assessmentDrafts.mjs';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Plus, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -67,6 +70,32 @@ export function PerformanceSectionReports({
   const [content, setContent] = useState(readSectionReportContent());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const draftScope = (mode: string, report: SectionReport | null) => `section:${userId}:${cycle}:${mode}:${report?.id || 'new'}`;
+  const editorDraftKey = editor ? draftScope(editor.mode, editor.report) : '';
+  const dirty = !!editor && (editor.mode === 'compose'
+    ? writeSectionReportContent(content) !== writeSectionReportContent(readSectionReportContent(editor.report?.summary || ''))
+    : text !== (editor.report?.director_feedback || ''));
+  const closeEditor = () => {
+    if (saving) return;
+    if (dirty) setConfirmDiscard(true);
+    else {
+      forgetAssessmentDraft(editorDraftKey);
+      setEditor(null);
+    }
+  };
+  useEffect(() => {
+    if (editor && dirty) keepAssessmentDraft(editorDraftKey, editor.report?.updated_at || 'new', { content, text });
+  }, [editor, dirty, editorDraftKey, content, text]);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!dirty && !saving) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty, saving]);
   const request = useRef(0);
   const alive = useRef(true);
   useEffect(() => {
@@ -126,7 +155,6 @@ export function PerformanceSectionReports({
       if (version === request.current) {
         setRows([]);
         setOwn(null);
-        setEditor(null);
         setError("無法讀取課長彙整，請確認連線及資料保護狀態後重新整理。");
       }
     } finally {
@@ -148,12 +176,13 @@ export function PerformanceSectionReports({
     };
   }, [load]);
   const open = (mode: "compose" | "review", report: SectionReport | null) => {
+    const draft = readAssessmentDraft(draftScope(mode, report), report?.updated_at || 'new');
     setEditor({ mode, report });
-    setContent(readSectionReportContent(report?.summary || ""));
+    setContent(draft?.content || readSectionReportContent(report?.summary || ""));
     setText(
-      mode === "compose"
+      draft?.text ?? (mode === "compose"
         ? report?.summary || ""
-        : report?.director_feedback || "",
+        : report?.director_feedback || ""),
     );
     setSaveError("");
   };
@@ -174,22 +203,12 @@ export function PerformanceSectionReports({
     setSaving(true);
     setSaveError("");
     try {
-      const result =
-        editor.mode === "compose"
-          ? await privacyDb.rpc("save_performance_section_report", {
-              p_cycle_id: cycle,
-              p_summary: writeSectionReportContent(content),
-              p_submit: action === "submit",
-              p_expected_updated_at: editor.report?.updated_at || null,
-            })
-          : await privacyDb.rpc("review_performance_section_report", {
-              p_id: editor.report?.id,
-              p_action: action,
-              p_feedback: text,
-              p_expected_updated_at: editor.report?.updated_at,
-            });
+      await confirmSectionReportSave(privacyDb, {
+        mode: editor.mode, action, cycle, userId, report: editor.report,
+        summary: writeSectionReportContent(content), feedback: text,
+      });
       if (!alive.current) return;
-      if (result.error) throw result.error;
+      forgetAssessmentDraft(editorDraftKey);
       setEditor(null);
       setNotice(
         action === "submit"
@@ -206,7 +225,7 @@ export function PerformanceSectionReports({
       setSaveError(
         (cause as { code?: string }).code === "40001"
           ? "這份彙整已被更新，請關閉視窗並重新整理後再處理。"
-          : "未能儲存，請確認目前主管歸屬、資料保護與送審狀態後重試。",
+          : "尚未確認儲存結果，輸入仍保留。請先重新確認紀錄狀態，避免重複送出；並檢查連線、主管歸屬與資料保護狀態。",
       );
     } finally {
       if (alive.current) setSaving(false);
@@ -401,7 +420,7 @@ export function PerformanceSectionReports({
       <Dialog
         open={!!editor}
         onOpenChange={(value) => {
-          if (!value && !saving) setEditor(null);
+          if (!value) closeEditor();
         }}
       >
         <DialogContent className="rd2-section-report-dialog">
@@ -441,7 +460,7 @@ export function PerformanceSectionReports({
               <Button
                 variant="outline"
                 disabled={saving}
-                onClick={() => setEditor(null)}
+                onClick={closeEditor}
               >
                 取消
               </Button>
@@ -482,6 +501,18 @@ export function PerformanceSectionReports({
           </FieldGroup>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>放棄未儲存的內容？</AlertDialogTitle>
+            <AlertDialogDescription>本次彙整或回覆尚未儲存。選擇繼續編輯可保留輸入。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>繼續編輯</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { forgetAssessmentDraft(editorDraftKey); setEditor(null); }}>放棄並關閉</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

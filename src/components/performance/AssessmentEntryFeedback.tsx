@@ -16,7 +16,7 @@ export function AssessmentReturnHistory({ manager }: { manager: ManagerAssessmen
   if (!manager.returnHistory.length) return null;
   return <section id="rd2-return-feedback" className="rd2-return-history" aria-label="逐筆退回紀錄">
     <h3>實績退回紀錄（{manager.returnHistory.length} 次）</h3>
-    <p className="rd2-hint">每次原因均保留；點「前往實績」可查看並補充該筆內容。</p>
+    <p className="rd2-hint">每次原因均保留；點「前往實績」可定位該筆內容。需要補充時請回到員工自評。</p>
     {missingEntry && <p role="status">這筆實績已移除；退回原因及當時內容仍保留在紀錄中。</p>}
     {[...manager.returnHistory].reverse().map((event, index) => <details key={event.id} open={index === 0}>
       <summary>{new Date(event.returnedAt).toLocaleString('zh-TW')} · {event.reviewerName} · {event.entries.length} 筆</summary>
@@ -66,7 +66,7 @@ export function AssessmentEntryFeedback({ category, entry, index, manager, edita
           aria-label={`退回 ${label}`} onClick={onReturn}>退回此筆</Button>
       </div>
     </>}
-    {history.length > 0 && <details open={!editable}>
+    {history.length > 0 && <details>
       <summary>這筆實績的退回紀錄（{history.length} 次）</summary>
       {[...history].reverse().map(item => <div key={item.id} className="rd2-return-history-item">
         <small>{new Date(item.returnedAt).toLocaleString('zh-TW')} · {item.reviewerName}</small>
