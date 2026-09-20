@@ -159,6 +159,7 @@ main.tsx
 3. 更新 Supabase Database type 與對應 hooks。
 4. 用最小權限測試讀取、寫入、更新、刪除和跨使用者隔離。
 5. 不要在正式環境直接 reset、刪除整個 schema 或重播歷史 migration。
+6. 正式登入、OAuth state 過期、migration history 不一致與單檔套用的處理方式，以 [`supabase-production-migration-runbook.md`](./supabase-production-migration-runbook.md) 為唯一操作手冊；不得臨時 repair 正式 history。
 
 ## 6. 各工作區如何下手
 
@@ -299,7 +300,7 @@ RWD 的目標是「工作現場拿起手機就能完成工作」，不是只讓�
 3. 執行 production build。
 4. 將 `dist` 發布到 GitHub Pages。
 
-前端 base path 是 `/station-status-hub/`。部署檢查至少包含 build 成功、Pages 200、登入頁可開啟、主要 workspace 可載入，以及沒有把 secrets 打進 bundle 或 log。
+前端 base path 是 `/station-status-hub/`。部署檢查至少包含 build 成功、Pages 200、登入頁可開啟、主要 workspace 可載入，以及沒有把 secrets 打進 bundle 或 log。Pages workflow 不會套用 Supabase migration；資料庫變更必須另外依照 [`supabase-production-migration-runbook.md`](./supabase-production-migration-runbook.md) 執行、查詢並記錄驗證結果。
 
 ## 11. 安全與 Git 工作規則
 
