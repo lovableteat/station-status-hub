@@ -801,27 +801,36 @@
   border-radius: 8px;
   background: var(--rd2-panel-soft);
 }
-.rd2-review-attachment-list a {
+.rd2-review-attachment-list .rd2-attachment-download {
   display: flex;
   flex: 1;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   min-width: 0;
+  height: auto;
+  padding: 4px;
   color: var(--rd2-ink);
   text-decoration: none;
+  text-align: left;
 }
-.rd2-review-attachment-list a:hover span {
+.rd2-review-attachment-list .rd2-attachment-download:hover span {
   text-decoration: underline;
 }
 .rd2-review-attachment-list span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .rd2-review-attachment-list small {
   flex-shrink: 0;
   color: var(--rd2-muted);
+}
+.rd2-review-attachment-list em {
+  flex-shrink: 0;
+  color: var(--rd2-accent);
+  font-size: 12px;
+  font-style: normal;
 }
 .rd2-return-feedback {
   border-color: hsl(38 92% 55% / 0.7);
@@ -1797,6 +1806,19 @@
 .rd2-section-report > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .rd2-section-report .rd2-prewrap { overflow-wrap: anywhere; margin: 12px 0; }
 .rd2-section-report-feedback { border-left: 3px solid var(--rd2-accent); padding: 8px 14px; background: var(--rd2-soft); margin: 12px 0; }
+.rd2-section-report-history {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--rd2-border-soft);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--rd2-panel-soft) 72%, transparent);
+}
+.rd2-section-report-history h4 { margin: 0; color: var(--rd2-ink); font-size: 14px; }
+.rd2-section-report-history details + details { border-top: 1px solid var(--rd2-border-soft); }
+.rd2-section-report-history summary { padding: 8px 0; cursor: pointer; color: var(--rd2-accent); font-weight: 700; }
+.rd2-section-report-history .rd2-prewrap { margin: 4px 0 10px; }
 @media (max-width: 640px) { .rd2-section-report-filters { grid-template-columns: 1fr; } }
 .rd2-orgchart-node[data-context] { border-style: dashed; opacity: .8; }
 .rd2-orgchart-node-top { display: flex; align-items: start; gap: 8px; justify-content: space-between; margin-bottom: 8px; }

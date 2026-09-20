@@ -290,9 +290,17 @@ function ReviewDetail({
                     加權 {weightedManager.categories[category].weighted} 分
                   </span>
                 )}
-                <p className="rd2-prewrap">
-                  {manager.categoryReviews[category].feedback || "尚無此類評語"}
-                </p>
+                {manager.categoryReviews[category].feedback ? (
+                  <p className="rd2-prewrap">{manager.categoryReviews[category].feedback}</p>
+                ) : (
+                  <p className="rd2-hint">
+                    {Object.values(manager.entryReviews[category]).some(
+                      (entry) => entry.feedback || entry.attachments.length,
+                    )
+                      ? "逐項回覆已列在各筆實績下方。"
+                      : "尚未填寫類別總評。"}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -1124,6 +1132,7 @@ export function PerformanceAppraisalPage() {
                       tab === "self" && editorReview?.status === "in-progress"
                     }
                     showEntryFeedback={tab === 'self'}
+                    showDraftWarning={tab !== "manager" || editorReview?.status === "submitted"}
                     focusEntry={params.get('performanceEntry') ? { category: params.get('performanceCategory') || '', entryId: params.get('performanceEntry')! } : undefined}
                     employees={
                       tab === "manager" && canManagePerformance ? employeeOptions : []

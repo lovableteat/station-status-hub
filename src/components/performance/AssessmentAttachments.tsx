@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Upload, X } from "lucide-react";
+import { Download, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_MANAGER_ATTACHMENTS, MAX_MANAGER_ATTACHMENT_BYTES, MAX_MANAGER_ATTACHMENT_CHARACTERS } from "./assessmentAttachmentPolicy.mjs";
 import type { ReviewAttachment } from "./assessmentTypes";
@@ -56,10 +56,39 @@ export function AssessmentAttachments({
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [downloadingId, setDownloadingId] = useState("");
+  const [downloadNotice, setDownloadNotice] = useState("");
   const totalCharacters = attachments.reduce(
     (total, attachment) => total + attachment.dataUrl.length,
     0,
   );
+  const download = (attachment: ReviewAttachment) => {
+    setDownloadingId(attachment.id);
+    setDownloadNotice("");
+    requestAnimationFrame(() => {
+      try {
+        const match = attachment.dataUrl.match(/^data:([^;,]+);base64,(.+)$/i);
+        if (!match) throw new Error("附件內容格式不正確，請主管重新附檔。");
+        const binary = atob(match[2]);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1)
+          bytes[index] = binary.charCodeAt(index);
+        const url = URL.createObjectURL(new Blob([bytes], { type: match[1] }));
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = attachment.name;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setDownloadNotice(`「${attachment.name}」下載已開始。`);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "附件下載失敗，請重試。");
+      } finally {
+        setDownloadingId("");
+      }
+    });
+  };
   return (
     <div className="rd2-review-attachments">
       {!readonly && (
@@ -118,10 +147,20 @@ export function AssessmentAttachments({
         <ul className="rd2-review-attachment-list">
           {attachments.map((attachment) => (
             <li key={attachment.id}>
-              <a href={attachment.dataUrl} download={attachment.name}>
+              <Button
+                type="button"
+                variant="ghost"
+                className="rd2-attachment-download"
+                title={attachment.name}
+                aria-label={`下載附件 ${attachment.name}`}
+                disabled={downloadingId === attachment.id}
+                onClick={() => download(attachment)}
+              >
+                <Download aria-hidden="true" />
                 <span>{attachment.name}</span>
                 <small>{formatFileSize(attachment.size)}</small>
-              </a>
+                <em>{downloadingId === attachment.id ? "下載中…" : "下載"}</em>
+              </Button>
               {!readonly && (
                 <Button
                   type="button"
@@ -140,6 +179,7 @@ export function AssessmentAttachments({
           ))}
         </ul>
       )}
+      {downloadNotice && <p className="rd2-hint" role="status">{downloadNotice}</p>}
       {error && <p role="alert">{error}</p>}
     </div>
   );
