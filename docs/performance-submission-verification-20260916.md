@@ -1,5 +1,7 @@
 # 績效送退件復驗 — 2026-09-16
 
+最新狀態：2026-09-20
+
 本次改動將自評操作簡化為「提交」，主管保留「退回補充／提交」。已移除本機草稿還原、寫入及儲存至工作區按鈕。
 
 ## 查明的原因
@@ -32,3 +34,11 @@ node tests/performanceSubmission.integration.mjs <PGlite package directory>
 ```
 
 真正同時修改造成的版本衝突仍會拒絕覆蓋；錯誤時保留本頁輸入，不再清除或改寫主管已提交的資料。
+
+## 2026-09-20 正式環境更新
+
+- 已套用 [`20260920120000_complete_performance_feedback_workflow.sql`](../supabase/migrations/20260920120000_complete_performance_feedback_workflow.sql)，補齊部長逐項回覆附件、回覆歷程、送回後重送清除本次回覆，以及原子化審核 RPC。
+- 遠端查詢確認新增欄位、RPC、重送 trigger 與附件 validator 均已生效；空附件可接受，非物件及不安全附件資料會拒絕。
+- 相關測試 56 項通過；最終 scoped regression 10 項通過，production build 與 ESLint 通過。
+- 前端修復提交為 `e034550d`，migration transaction 補強提交為 `6bee6a1e`，均已推送至 `main`；GitHub Pages run `35499403820` 成功。
+- 正式套用與 OAuth 過期復原步驟已集中到 [`supabase-production-migration-runbook.md`](./supabase-production-migration-runbook.md)。直接單檔套用沒有修改既有 migration history，後續若整理 history 必須另行規劃與核對。
