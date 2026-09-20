@@ -1,3 +1,5 @@
+begin;
+
 alter table workspace.performance_section_reports
   add column if not exists director_attachments jsonb not null default '[]'::jsonb,
   add column if not exists feedback_history jsonb not null default '[]'::jsonb;
@@ -171,3 +173,5 @@ before update on workspace.performance_section_reports
 for each row execute function workspace.clear_section_report_current_feedback_on_resubmit();
 
 notify pgrst, 'reload schema';
+
+commit;
