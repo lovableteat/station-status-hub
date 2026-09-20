@@ -66,7 +66,7 @@ export function AssessmentEntryFeedback({ category, entry, index, manager, edita
           aria-label={`退回 ${label}`} onClick={onReturn}>退回此筆</Button>
       </div>
     </>}
-    {history.length > 0 && <details>
+    {editable && history.length > 0 && <details>
       <summary>這筆實績的退回紀錄（{history.length} 次）</summary>
       {[...history].reverse().map(item => <div key={item.id} className="rd2-return-history-item">
         <small>{new Date(item.returnedAt).toLocaleString('zh-TW')} · {item.reviewerName}</small>

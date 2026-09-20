@@ -423,6 +423,7 @@ export function CollaborationCenter() {
       cycleId &&
       reviewId
     ) {
+      setOpen(false);
       window.location.assign(buildPerformanceReturnActionUrl({
         currentUrl: window.location.href,
         reviewId,

@@ -270,6 +270,7 @@ interface Props {
   submitBlockedMessage?: string;
   showReturnFeedback?: boolean;
   showEntryFeedback?: boolean;
+  showDraftWarning?: boolean;
   focusEntry?: { category: string; entryId: string };
   employees: EmployeeOption[];
   demo: boolean;
@@ -289,6 +290,7 @@ export function AssessmentEditor({
   submitBlockedMessage,
   showReturnFeedback = false,
   showEntryFeedback = false,
+  showDraftWarning = true,
   focusEntry,
   employees,
   demo,
@@ -429,7 +431,7 @@ export function AssessmentEditor({
             : "逐類對照員工的 IDP、OKR、KPI 自評，填寫主管分數與評語，再完成當責量表。"}
         </p>
       </header>
-      {!readonly && draftKey && <p className="rd2-hint" role="status">切換頁面會暫存本次輸入；尚未送出。關閉或重新整理網站前，請先完成送出。</p>}
+      {!readonly && draftKey && showDraftWarning && !submitStatus && <p className="rd2-hint" role="status">切換頁面會暫存本次輸入；尚未送出。關閉或重新整理網站前，請先完成送出。</p>}
       <fieldset disabled={readonly || saving} className="rd2-card rd2-identity">
         <div className="rd2-form-section-title">
           <strong>01 · 確認基本資料</strong>
@@ -626,7 +628,7 @@ export function AssessmentEditor({
       {mode === "self" && (
         <>
           <AssessmentReturnHistory manager={form.manager} />
-          {showReturnFeedback &&
+          {showReturnFeedback && !form.manager.returnHistory.length &&
             (form.manager.feedback || form.manager.attachments.length > 0) && (
             <section id={form.manager.returnHistory.length ? undefined : "rd2-return-feedback"} className="rd2-card rd2-return-feedback" aria-label="主管退回內容">
               <div className="rd2-form-section-title">
