@@ -23,6 +23,20 @@ test("completed review details distinguish category summaries from per-entry rep
   assert.match(feedback, /editable && history\.length > 0/);
 });
 
+test("returned feedback is marked consistently across individual and department histories", async () => {
+  const [entryFeedback, sectionReports, styles] = await Promise.all([
+    readSource("src/components/performance/AssessmentEntryFeedback.tsx"),
+    readSource("src/components/performance/PerformanceSectionReports.tsx"),
+    readSource("src/components/performance/performance.css"),
+  ]);
+  assert.match(entryFeedback, /data-return-state="returned"/);
+  assert.match(entryFeedback, /主管逐項退回回應/);
+  assert.match(sectionReports, /data-action=\{event\.action\}/);
+  assert.match(sectionReports, /data-action=\{report\.status === "returned" \? "return" : "approve"\}/);
+  assert.match(styles, /\[data-return-state="returned"\]/);
+  assert.match(styles, /\[data-action="return"\]/);
+});
+
 test("section summaries preserve director reply history and attachments", async () => {
   const [component, persistence, migration] = await Promise.all([
     readSource("src/components/performance/PerformanceSectionReports.tsx"),

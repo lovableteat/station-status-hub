@@ -55,7 +55,7 @@ function SectionReportFeedbackTimeline({ report }: { report: SectionReport }) {
     <section className="rd2-section-report-history" aria-label="部長回覆歷程">
       <h4>部長回覆歷程</h4>
       {history.length ? history.slice().reverse().map((event, index) => (
-        <details key={event.id} open={index === 0}>
+        <details key={event.id} open={index === 0} data-action={event.action}>
           <summary>
             {event.action === "return" ? "退回補充" : "確認彙整"}
             {event.reviewedAt ? ` · ${new Date(event.reviewedAt).toLocaleString("zh-TW")}` : ""}
@@ -65,7 +65,7 @@ function SectionReportFeedbackTimeline({ report }: { report: SectionReport }) {
           <AssessmentAttachments attachments={event.attachments} readonly />
         </details>
       )) : (
-        <div>
+        <div data-action={report.status === "returned" ? "return" : "approve"}>
           {report.director_feedback && <p className="rd2-prewrap">{report.director_feedback}</p>}
           <AssessmentAttachments attachments={report.director_attachments || []} readonly />
         </div>
