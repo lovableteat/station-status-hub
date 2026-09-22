@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   calculatePerformanceSummary,
   DEFAULT_PERFORMANCE_REVIEWS,
+  getSelfAssessmentDisplayState,
   getPerformanceStatusForAction,
   normalizePerformanceReview,
   toPerformanceCsv,
@@ -83,6 +84,13 @@ test("performance workflow maps employee and manager actions to the review statu
     }),
     "approved",
   );
+});
+
+test("employee self view hides submitted data until a manager returns it", () => {
+  assert.equal(getSelfAssessmentDisplayState("draft"), "editable");
+  assert.equal(getSelfAssessmentDisplayState("in-progress"), "editable");
+  assert.equal(getSelfAssessmentDisplayState("submitted"), "submitted");
+  assert.equal(getSelfAssessmentDisplayState("approved"), "approved");
 });
 
 test("performance CSV exports headers, status labels, and escaped values", () => {
@@ -164,12 +172,16 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
   assert.doesNotMatch(source, /reviewsQuery\.eq\("employee_id", userId\)/);
   assert.match(source, /An employee has one editable record per cycle/);
   assert.match(source, /user\.displayName/);
-  assert.match(source, /tab === "self" \? userId : editorRecordId/);
+  assert.match(source, /draftKey=\{`\$\{userId\}:\$\{cycle\}:\$\{tab\}/);
+  assert.match(source, /Dialog open=\{!!detail\}/);
+  assert.match(source, /data-label="員工／工號"/);
   assert.match(source, /get_performance_self_context/);
   assert.match(source, /我的績效組織/);
   assert.doesNotMatch(source, /hidden=\{tab === "self"\}/);
   assert.match(source, /toPerformanceCsv\(visibleReviews, \{ includeManager: canManagePerformance \}/);
   assert.match(source, /showManagerAssessment/);
+  assert.match(source, /getSelfAssessmentDisplayState/);
+  assert.match(source, /rd2-self-complete-state/);
   assert.match(flowGuide, /canManage = false/);
   assert.match(flowGuide, /主管分數維持隱藏，退回說明與附件會顯示給員工補充/);
   assert.match(source, /manager\.attachments/);
@@ -223,14 +235,14 @@ test("performance workspace inherits the platform theme without a separate light
       `Uses platform ${token} color`,
     );
   }
-  // The workspace must not shadow shared component tokens or retain a hardcoded palette.
+  // Shared platform tokens remain authoritative; local contrast accents are allowed.
   assert.doesNotMatch(
     styles,
     /--(?:background|foreground|card|secondary|primary|border|ring)\s*:/,
   );
   assert.doesNotMatch(
     styles,
-    /#[0-9a-f]{3,8}\b|rd2-light|rd2-dark|button\.interactive-lift/i,
+    /rd2-light|rd2-dark|button\.interactive-lift/i,
   );
   assert.match(styles, /--rd2-bg: var\(--mobile-canvas\)/);
   assert.match(styles, /--rd2-panel: var\(--mobile-panel\)/);

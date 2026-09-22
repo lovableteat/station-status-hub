@@ -131,7 +131,7 @@ export function PerformanceTaskGuide({
       <p>
         {self
           ? status === "approved"
-            ? "本期個人考核已完成，可在下方查看自評內容。"
+            ? "本期個人考核已完成，資料已封存。"
             : status === "submitted"
               ? "自評已送出，等待直屬主管評核。若需補件，主管會退回讓你補充。"
               : "職員送課長，課長送部長；代理課同仁直接交由部長評核。"

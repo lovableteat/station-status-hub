@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   BookOpen,
   BellRing,
+  CheckCircle2,
   ClipboardCheck,
   Download,
   FileText,
@@ -16,6 +17,7 @@ import {
 import { useUser } from "@/components/auth/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +37,7 @@ import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGuide";
 import { submitAssessmentRecord } from "./assessmentPersistence.mjs";
 import { AssessmentEntryList } from "./AssessmentEntryList";
+import { AssessmentEntryFeedback, AssessmentReturnHistory } from './AssessmentEntryFeedback';
 import { PerformanceOrganization } from "./PerformanceOrganization";
 import { PerformanceSectionReports } from "./PerformanceSectionReports";
 import { PerformancePrivacyPanel } from "./PerformancePrivacyPanel";
@@ -60,6 +63,7 @@ import {
   DEFAULT_PERFORMANCE_REVIEWS,
   PERFORMANCE_CYCLES,
   PERFORMANCE_STATUS,
+  getSelfAssessmentDisplayState,
   normalizePerformanceReview,
   toPerformanceCsv,
 } from "./performanceData.mjs";
@@ -255,7 +259,8 @@ function ReviewDetail({
             </span>
           </header>
           <div className="rd2-review-category-body">
-            <AssessmentEntryList category={category} section={self.sections[category]} readonly feedback={showManagerAssessment ? manager.categoryReviews[category].entryFeedback : undefined} onChange={() => {}} />
+            <AssessmentEntryList category={category} section={self.sections[category]} readonly onChange={() => {}}
+              renderFeedback={(entry, index) => <AssessmentEntryFeedback category={category} entry={entry} index={index} manager={manager} showFeedback={true} />} />
             <div className="rd2-images">
               {self.sections[category].images.map((image) => (
                 <a key={image.id} href={image.dataUrl} download={image.name}>
@@ -285,9 +290,17 @@ function ReviewDetail({
                     加權 {weightedManager.categories[category].weighted} 分
                   </span>
                 )}
-                <p className="rd2-prewrap">
-                  {manager.categoryReviews[category].feedback || "尚無此類評語"}
-                </p>
+                {manager.categoryReviews[category].feedback ? (
+                  <p className="rd2-prewrap">{manager.categoryReviews[category].feedback}</p>
+                ) : (
+                  <p className="rd2-hint">
+                    {Object.values(manager.entryReviews[category]).some(
+                      (entry) => entry.feedback || entry.attachments.length,
+                    )
+                      ? "逐項回覆已列在各筆實績下方。"
+                      : "尚未填寫類別總評。"}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -299,6 +312,7 @@ function ReviewDetail({
           <p className="rd2-prewrap">{self.legacyText}</p>
         </section>
       )}
+      <AssessmentReturnHistory manager={manager} />
       {!!review.goals.length && (
         <section className="rd2-review-secondary-section">
           <h4>既有目標與進度</h4>
@@ -386,6 +400,7 @@ export function PerformanceAppraisalPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const detailTrigger = useRef<HTMLButtonElement | null>(null);
   const [editorRevision, setEditorRevision] = useState(0);
   const savedId = useRef<{ key: string; id: string } | null>(null);
   const requestNumber = useRef(0);
@@ -495,6 +510,7 @@ export function PerformanceAppraisalPage() {
           }) => ({
             id: employee.employee_id,
             label: employee.display_name || employee.username,
+            username: employee.username,
             orgLevel: employee.org_level,
           }),
         ),
@@ -735,6 +751,8 @@ export function PerformanceAppraisalPage() {
     const previous = reviews.find(
       (review) => review.id === (editorRecordId || ""),
     );
+    if (previous && form.sourceUpdatedAt !== previous.updatedAt)
+      throw new Error('考核已有較新版本，請重新開啟後再儲存；目前輸入仍保留。');
     if (
       mode === "manager" &&
       (!previous || matchesUser(previous, user))
@@ -823,8 +841,12 @@ export function PerformanceAppraisalPage() {
   const returnDetails = editorReview
     ? readManagerAssessment(editorReview.managerFeedback)
     : null;
+  const selfAssessmentDisplayState =
+    tab === "self" && editorReview
+      ? getSelfAssessmentDisplayState(editorReview.status)
+      : "editable";
   const hasReturnDetails = Boolean(
-    returnDetails?.feedback || returnDetails?.attachments.length,
+    returnDetails?.feedback || returnDetails?.attachments.length || returnDetails?.returnHistory.length,
   );
 
   return (
@@ -931,8 +953,8 @@ export function PerformanceAppraisalPage() {
               </Button>
             </section>
           )}
-        {tab === "self" && <PerformanceTaskGuide mode="self" status={editorReview?.status} />}
-        {tab === "self" && !loading && !demo && (
+        {tab === "self" && selfAssessmentDisplayState === 'editable' && <PerformanceTaskGuide mode="self" status={editorReview?.status} />}
+        {tab === "self" && selfAssessmentDisplayState === 'editable' && !loading && !demo && (
           <section className="rd2-self-org-card" data-state={selfContext?.assigned ? "assigned" : "missing"}>
             <header>
               <span className="rd2-self-org-icon"><Network /></span>
@@ -1054,7 +1076,36 @@ export function PerformanceAppraisalPage() {
                   )}
                 </div>}
                 <div>
-                {tab === "manager" && !editorReview ? (
+                {tab === "self" && selfAssessmentDisplayState !== "editable" ? (
+                  <section
+                    className="rd2-self-complete-state"
+                    data-state={selfAssessmentDisplayState}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span className="rd2-self-complete-icon" aria-hidden="true">
+                      <CheckCircle2 />
+                    </span>
+                    <div>
+                      <h2>
+                        {selfAssessmentDisplayState === "approved"
+                          ? "本期自評已完成"
+                          : "自評已送出"}
+                      </h2>
+                      <p>
+                        {selfAssessmentDisplayState === "approved"
+                          ? "主管已完成評核，本期自評資料已封存。"
+                          : "已送交直屬主管，等待主管評核；若需補充，主管會退回並通知你。"}
+                      </p>
+                      {editorReview?.updatedAt && (
+                        <small>
+                          {selfAssessmentDisplayState === "approved" ? "完成時間" : "送出時間"}：
+                          {new Date(editorReview.updatedAt).toLocaleString("zh-TW")}
+                        </small>
+                      )}
+                    </div>
+                  </section>
+                ) : tab === "manager" && !editorReview ? (
                   <div
                     className="rd2-empty rd2-manager-selection-required"
                     role="status"
@@ -1063,6 +1114,7 @@ export function PerformanceAppraisalPage() {
                   </div>
                 ) : (
                   <AssessmentEditor
+                    draftKey={`${userId}:${cycle}:${tab}:${editorRecordId || 'new'}`}
                     key={`${userId}:${cycle}:${tab}:${editorRecordId || "new"}:${editorRevision}:${initial.manager.roleGroup}`}
                     initial={initial}
                     mode={tab}
@@ -1079,6 +1131,9 @@ export function PerformanceAppraisalPage() {
                     showReturnFeedback={
                       tab === "self" && editorReview?.status === "in-progress"
                     }
+                    showEntryFeedback={tab === 'self'}
+                    showDraftWarning={tab !== "manager" || editorReview?.status === "submitted"}
+                    focusEntry={params.get('performanceEntry') ? { category: params.get('performanceCategory') || '', entryId: params.get('performanceEntry')! } : undefined}
                     employees={
                       tab === "manager" && canManagePerformance ? employeeOptions : []
                     }
@@ -1123,11 +1178,11 @@ export function PerformanceAppraisalPage() {
                 </Button>
                 <Button onClick={() => navigate("self")}>
                   <Plus data-icon="inline-start" />
-                  新增自評
+                  我的自評
                 </Button>
               </div>
             </header>
-            <div className="rd2-records-summary">
+            <div className="rd2-records-summary" hidden={!canManagePerformance}>
               <div className="rd2-stat-row">
                 <StatTile
                   label="本期考核"
@@ -1276,7 +1331,7 @@ export function PerformanceAppraisalPage() {
                 <tbody>
                   {visibleReviews.map((review) => (
                     <tr key={review.id}>
-                      <td>
+                      <td data-label="員工／工號">
                         <strong>{review.employeeName}</strong>
                         <small>
                           {readSelfAssessment(review.selfFeedback)
@@ -1286,12 +1341,12 @@ export function PerformanceAppraisalPage() {
                             "未填工號"}
                         </small>
                       </td>
-                      <td>
+                      <td data-label="部門／職級">
                         {review.department}
                         <small>{review.role}</small>
                       </td>
-                      <td>{review.reviewerName}</td>
-                      <td>
+                      <td data-label="考核人">{review.reviewerName}</td>
+                      <td data-label="狀態">
                         <span
                           className={`rd2-status rd2-status-${review.status}`}
                         >
@@ -1299,7 +1354,7 @@ export function PerformanceAppraisalPage() {
                         </span>
                       </td>
                       {canManagePerformance && (
-                        <td>
+                        <td data-label="員工加權自評">
                           {(() => {
                             const self = readSelfAssessment(review.selfFeedback);
                             const weighted = calculateWeightedSelfScores(self.grade, self.sections);
@@ -1307,22 +1362,23 @@ export function PerformanceAppraisalPage() {
                           })()}
                         </td>
                       )}
-                      {canManagePerformance && <td>{review.score ?? "—"}</td>}
-                      <td>
+                      {canManagePerformance && <td data-label="主管加權評分">{review.score ?? "—"}</td>}
+                      <td data-label="操作">
                         <div className="rd2-row-actions">
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() =>
+                            onClick={(event) => {
+                              detailTrigger.current = event.currentTarget;
                               setDetailId(
                                 detailId === review.id ? null : review.id,
-                              )
-                            }
+                              );
+                            }}
                           >
                             查看
                           </Button>
                           {matchesUser(review, user) &&
-                            review.status !== "approved" && (
+                            review.status !== "approved" && review.status !== "submitted" && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1361,7 +1417,7 @@ export function PerformanceAppraisalPage() {
                   ))}
                   {!visibleReviews.length && (
                     <tr>
-                      <td colSpan={canManagePerformance ? 6 : 5} className="rd2-empty">
+                      <td colSpan={canManagePerformance ? 7 : 5} className="rd2-empty">
                         {loading
                           ? "正在讀取考核…"
                           : "目前篩選條件沒有符合的考核"}
@@ -1371,18 +1427,18 @@ export function PerformanceAppraisalPage() {
                 </tbody>
               </table>
             </div>
-            {detail && (
-              <section className="rd2-detail-region">
-                <Button variant="ghost" onClick={() => setDetailId(null)}>
-                  <X data-icon="inline-start" />
-                  關閉考核內容
-                </Button>
+            <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetailId(null); }}>
+              {detail && <DialogContent className="performance-workspace rd2-workspace rd2-bright rd2-record-dialog" onCloseAutoFocus={event => { event.preventDefault(); detailTrigger.current?.focus(); }}>
+                <DialogHeader>
+                  <DialogTitle>考核內容 · {detail.employeeName}</DialogTitle>
+                  <DialogDescription>查看本期實績與逐項回覆；此視窗不會修改資料。</DialogDescription>
+                </DialogHeader>
                 <ReviewDetail
                   review={detail}
                   showManagerAssessment={canManagePerformance}
                 />
-              </section>
-            )}
+              </DialogContent>}
+            </Dialog>
           </section>
         )}
       </main>

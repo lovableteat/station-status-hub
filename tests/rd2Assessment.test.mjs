@@ -134,8 +134,10 @@ test("manager aligns three category scores, requires seven accountability rating
   assert.equal(readManagerAssessment(record.managerFeedback).answers.q15, 5);
   assert.equal(readManagerAssessment(record.managerFeedback).answers.q21, 4);
   assert.equal(readManagerAssessment(record.managerFeedback).answers.q1, null);
-  assert.match(validateAssessment(form, "manager", "return"), /回饋/);
+  assert.match(validateAssessment(form, "manager", "return"), /勾選/);
   form.manager.feedback = "請補充數據";
+  assert.match(validateAssessment(form, "manager", "return"), /勾選/, 'overall feedback cannot replace an entry-specific return');
+  form.manager.entryReviews.IDP['legacy-entry'] = { feedback: '請補充數據', returnRequested: true };
   assert.equal(build(form, "manager", "return").status, "in-progress");
   form.manager.feedback = "";
   form.manager.attachments = [

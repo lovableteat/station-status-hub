@@ -1,8 +1,12 @@
 import { SECTION_REPORT_FIELDS, readSectionReportContent, writeSectionReportContent } from "./sectionReportContent.mjs";
+import { confirmSectionReportSave } from './sectionReportPersistence.mjs';
+import { getSectionReportRoleCopy, readSectionReportFeedbackHistory } from "./sectionReportFeedback.mjs";
+import { readAssessmentDraft, keepAssessmentDraft, forgetAssessmentDraft } from './assessmentDrafts.mjs';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Plus, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -13,6 +17,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { AssessmentAttachments } from "./AssessmentAttachments";
+import type { ReviewAttachment } from "./assessmentTypes";
 import { privacyDb } from "./usePerformancePrivacy";
 import type { OrganizationMember } from "./PerformanceOrganization";
 import { watchPermissionRefresh } from "@/lib/permissionRefresh.mjs";
@@ -35,9 +41,37 @@ interface SectionReport {
   summary: string;
   status: keyof typeof STATUS;
   director_feedback: string;
+  director_attachments?: ReviewAttachment[];
+  feedback_history?: unknown;
   total_members: number;
   completed_members: number;
   updated_at: string;
+}
+
+function SectionReportFeedbackTimeline({ report }: { report: SectionReport }) {
+  const history = readSectionReportFeedbackHistory(report.feedback_history);
+  if (!history.length && !report.director_feedback && !report.director_attachments?.length) return null;
+  return (
+    <section className="rd2-section-report-history" aria-label="部長回覆歷程">
+      <h4>部長回覆歷程</h4>
+      {history.length ? history.slice().reverse().map((event, index) => (
+        <details key={event.id} open={index === 0} data-action={event.action}>
+          <summary>
+            {event.action === "return" ? "退回補充" : "確認彙整"}
+            {event.reviewedAt ? ` · ${new Date(event.reviewedAt).toLocaleString("zh-TW")}` : ""}
+            {event.reviewerName ? ` · ${event.reviewerName}` : ""}
+          </summary>
+          {event.feedback && <p className="rd2-prewrap">{event.feedback}</p>}
+          <AssessmentAttachments attachments={event.attachments} readonly />
+        </details>
+      )) : (
+        <div data-action={report.status === "returned" ? "return" : "approve"}>
+          {report.director_feedback && <p className="rd2-prewrap">{report.director_feedback}</p>}
+          <AssessmentAttachments attachments={report.director_attachments || []} readonly />
+        </div>
+      )}
+    </section>
+  );
 }
 
 export function PerformanceSectionReports({
@@ -64,9 +98,37 @@ export function PerformanceSectionReports({
     report: SectionReport | null;
   } | null>(null);
   const [text, setText] = useState("");
+  const [attachments, setAttachments] = useState<ReviewAttachment[]>([]);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [content, setContent] = useState(readSectionReportContent());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const draftScope = (mode: string, report: SectionReport | null) => `section:${userId}:${cycle}:${mode}:${report?.id || 'new'}`;
+  const editorDraftKey = editor ? draftScope(editor.mode, editor.report) : '';
+  const dirty = !!editor && (editor.mode === 'compose'
+    ? writeSectionReportContent(content) !== writeSectionReportContent(readSectionReportContent(editor.report?.summary || ''))
+    : !!text.trim() || attachments.length > 0);
+  const closeEditor = () => {
+    if (saving) return;
+    if (dirty) setConfirmDiscard(true);
+    else {
+      forgetAssessmentDraft(editorDraftKey);
+      setEditor(null);
+    }
+  };
+  useEffect(() => {
+    if (editor && dirty) keepAssessmentDraft(editorDraftKey, editor.report?.updated_at || 'new', { content, text, attachments });
+  }, [editor, dirty, editorDraftKey, content, text, attachments]);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!dirty && !saving) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty, saving]);
   const request = useRef(0);
   const alive = useRef(true);
   useEffect(() => {
@@ -126,7 +188,6 @@ export function PerformanceSectionReports({
       if (version === request.current) {
         setRows([]);
         setOwn(null);
-        setEditor(null);
         setError("無法讀取課長彙整，請確認連線及資料保護狀態後重新整理。");
       }
     } finally {
@@ -148,17 +209,17 @@ export function PerformanceSectionReports({
     };
   }, [load]);
   const open = (mode: "compose" | "review", report: SectionReport | null) => {
+    const draft = readAssessmentDraft(draftScope(mode, report), report?.updated_at || 'new');
     setEditor({ mode, report });
-    setContent(readSectionReportContent(report?.summary || ""));
+    setContent(draft?.content || readSectionReportContent(report?.summary || ""));
     setText(
-      mode === "compose"
-        ? report?.summary || ""
-        : report?.director_feedback || "",
+      draft?.text ?? "",
     );
+    setAttachments(draft?.attachments || []);
     setSaveError("");
   };
   const submit = async (action: "draft" | "submit" | "approve" | "return") => {
-    if (!editor || saving || !ready) return;
+    if (!editor || saving || attachmentBusy || !ready) return;
     if ((action === "submit" && !content.achievements.trim()) || (action === "return" && !text.trim())) {
       setSaveError(
         action === "return"
@@ -174,22 +235,12 @@ export function PerformanceSectionReports({
     setSaving(true);
     setSaveError("");
     try {
-      const result =
-        editor.mode === "compose"
-          ? await privacyDb.rpc("save_performance_section_report", {
-              p_cycle_id: cycle,
-              p_summary: writeSectionReportContent(content),
-              p_submit: action === "submit",
-              p_expected_updated_at: editor.report?.updated_at || null,
-            })
-          : await privacyDb.rpc("review_performance_section_report", {
-              p_id: editor.report?.id,
-              p_action: action,
-              p_feedback: text,
-              p_expected_updated_at: editor.report?.updated_at,
-            });
+      await confirmSectionReportSave(privacyDb, {
+        mode: editor.mode, action, cycle, userId, report: editor.report,
+        summary: writeSectionReportContent(content), feedback: text, attachments,
+      });
       if (!alive.current) return;
-      if (result.error) throw result.error;
+      forgetAssessmentDraft(editorDraftKey);
       setEditor(null);
       setNotice(
         action === "submit"
@@ -206,7 +257,7 @@ export function PerformanceSectionReports({
       setSaveError(
         (cause as { code?: string }).code === "40001"
           ? "這份彙整已被更新，請關閉視窗並重新整理後再處理。"
-          : "未能儲存，請確認目前主管歸屬、資料保護與送審狀態後重試。",
+          : "尚未確認儲存結果，輸入仍保留。請先重新確認紀錄狀態，避免重複送出；並檢查連線、主管歸屬與資料保護狀態。",
       );
     } finally {
       if (alive.current) setSaving(false);
@@ -224,6 +275,7 @@ export function PerformanceSectionReports({
     own?.org_level === "section_chief" &&
     !!own.manager_id &&
     !rows.some((r) => r.chief_id === userId);
+  const roleCopy = getSectionReportRoleCopy(own?.org_level);
   return (
     <section className="rd2-department-overview">
       <header className="rd2-section-header">
@@ -254,13 +306,13 @@ export function PerformanceSectionReports({
         </div>
       </header>
       <div className="rd2-work-purpose">
-        <div><span>個人評核</span><h3>評核直屬課長／同仁</h3><p>查看個人自評、給分與回饋；部長代理的課別同仁也在這裡處理。</p><Button variant="outline" onClick={onEvaluate}>前往主管評分</Button></div>
+        <div><span>個人評核</span><h3>{roleCopy.heading}</h3><p>{roleCopy.description}</p><Button variant="outline" onClick={onEvaluate}>前往主管評分</Button></div>
         <div data-current="true"><span>目前頁面 · 各課成果</span><h3>掌握進度、回覆課長</h3><p>課長整理成果、問題與資源需求；部長查看彙整並回覆。個人成績不在這頁展開。</p></div>
       </div>
       <div className="rd2-department-metrics" aria-label="本期彙整處理進度">
         {[['可查看彙整', rows.length], ['待部長回覆', rows.filter(r => r.status === 'submitted').length], ['待課長補充', rows.filter(r => r.status === 'returned').length], ['已確認', rows.filter(r => r.status === 'approved').length]].map(([label,value],index) => <div key={String(label)} data-tone={index}><span>{label}</span><strong>{loading || !ready || error ? '—' : value}</strong></div>)}
       </div>
-      {!loading && ready && !error && !rows.length && <div className="rd2-overview-guidance" role="status"><h3>{own?.org_level === 'section_chief' ? '從本課成果開始' : '本期尚無可查看的課別彙整'}</h3><p>{own?.org_level === 'section_chief' ? '按「新增本期彙整」，填寫成果、問題與需要部長協助的事項，送出後部長才會收到。' : '課長送出後，這裡會顯示各課成果與待回覆事項。未送出的草稿或尚未解鎖的彙整不會顯示。'}</p><p>課長本人的考核請到「主管評分」處理；管理員身分不會取得考核成績。</p></div>}
+      {!loading && ready && !error && !rows.length && <div className="rd2-overview-guidance" role="status"><h3>{own?.org_level === 'section_chief' ? '從本課成果開始' : '本期尚無可查看的課別彙整'}</h3><p>{own?.org_level === 'section_chief' ? '按「新增本期彙整」，填寫成果、問題與需要部長協助的事項，送出後部長才會收到。' : '課長送出後，這裡會顯示各課成果與待回覆事項。未送出的草稿或尚未解鎖的彙整不會顯示。'}</p><p>{roleCopy.selfHint} 管理員身分不會取得考核成績。</p></div>}
       {notice && (
         <p role="status" className="rd2-hint">
           {notice}
@@ -363,12 +415,7 @@ export function PerformanceSectionReports({
               </p>
               <div className="rd2-report-progress"><progress aria-label={report.section + ' 彙整時考核完成進度'} max={Math.max(1,report.total_members)} value={Math.min(report.total_members, report.completed_members)} /><span>彙整快照 · {new Date(report.updated_at).toLocaleDateString('zh-TW')}，非即時個人成績</span></div>
               <div className="rd2-report-content">{SECTION_REPORT_FIELDS.map(field => <section key={field.key}><h4>{field.label}</h4><p className="rd2-prewrap">{readSectionReportContent(report.summary)[field.key] || '未提供'}</p></section>)}</div>
-              {report.director_feedback && (
-                <div className="rd2-section-report-feedback">
-                  <strong>部長回覆</strong>
-                  <p className="rd2-prewrap">{report.director_feedback}</p>
-                </div>
-              )}
+              <SectionReportFeedbackTimeline report={report} />
               <div className="rd2-actions">
                 {report.chief_id === userId &&
                   ["draft", "returned"].includes(report.status) && (
@@ -401,7 +448,7 @@ export function PerformanceSectionReports({
       <Dialog
         open={!!editor}
         onOpenChange={(value) => {
-          if (!value && !saving) setEditor(null);
+          if (!value) closeEditor();
         }}
       >
         <DialogContent className="rd2-section-report-dialog">
@@ -416,11 +463,12 @@ export function PerformanceSectionReports({
             </DialogDescription>
           </DialogHeader>
           <FieldGroup>
+            {editor?.report && <SectionReportFeedbackTimeline report={editor.report} />}
             {editor?.mode === "compose" ? SECTION_REPORT_FIELDS.map(field => <Field key={field.key}><FieldLabel htmlFor={`report-${field.key}`}>{field.label}{field.key === "achievements" ? " *" : ""}</FieldLabel><Textarea id={`report-${field.key}`} rows={4} disabled={saving} value={content[field.key]} placeholder={field.placeholder} onChange={event => setContent(previous => ({ ...previous, [field.key]: event.target.value }))} /></Field>) : <>
             {editor?.report && <div className="rd2-report-content">{SECTION_REPORT_FIELDS.map(field => <section key={field.key}><h4>{field.label}</h4><p className="rd2-prewrap">{readSectionReportContent(editor.report.summary)[field.key] || "未提供"}</p></section>)}</div>}
             <Field>
               <FieldLabel htmlFor="section-report-content">
-                部長回覆
+                本次部長回覆
               </FieldLabel>
               <Textarea
                 id="section-report-content"
@@ -431,6 +479,16 @@ export function PerformanceSectionReports({
                 onChange={(e) => setText(e.target.value)}
               />
             </Field>
+            <AssessmentAttachments
+              attachments={attachments}
+              readonly={false}
+              disabled={saving}
+              buttonLabel="附加本次回覆檔案"
+              label="部長彙整回覆附件"
+              onBusy={setAttachmentBusy}
+              onError={setSaveError}
+              onChange={setAttachments}
+            />
             </>}
             {saveError && (
               <p className="rd2-error" role="alert">
@@ -440,8 +498,8 @@ export function PerformanceSectionReports({
             <div className="rd2-actions">
               <Button
                 variant="outline"
-                disabled={saving}
-                onClick={() => setEditor(null)}
+                disabled={saving || attachmentBusy}
+                onClick={closeEditor}
               >
                 取消
               </Button>
@@ -449,13 +507,13 @@ export function PerformanceSectionReports({
                 <>
                   <Button
                     variant="outline"
-                    disabled={saving}
+                    disabled={saving || attachmentBusy}
                     onClick={() => void submit("draft")}
                   >
                     儲存草稿
                   </Button>
                   <Button
-                    disabled={saving}
+                    disabled={saving || attachmentBusy}
                     onClick={() => void submit("submit")}
                   >
                     送交部長
@@ -465,13 +523,13 @@ export function PerformanceSectionReports({
                 <>
                   <Button
                     variant="outline"
-                    disabled={saving}
+                    disabled={saving || attachmentBusy}
                     onClick={() => void submit("return")}
                   >
                     退回課長補充
                   </Button>
                   <Button
-                    disabled={saving}
+                    disabled={saving || attachmentBusy}
                     onClick={() => void submit("approve")}
                   >
                     確認彙整
@@ -482,6 +540,18 @@ export function PerformanceSectionReports({
           </FieldGroup>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>放棄未儲存的內容？</AlertDialogTitle>
+            <AlertDialogDescription>本次彙整或回覆尚未儲存。選擇繼續編輯可保留輸入。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>繼續編輯</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { forgetAssessmentDraft(editorDraftKey); setEditor(null); }}>放棄並關閉</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

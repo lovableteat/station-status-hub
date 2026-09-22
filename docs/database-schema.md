@@ -26,3 +26,9 @@ The migration grants `anon`, `authenticated`, and `service_role` access to the s
 Production schema selection is controlled by the GitHub variable `VITE_SUPABASE_SCHEMA`; Edge Functions use the Supabase secret `APP_DB_SCHEMA`. Both are set to `workspace` after the hosted migration has been verified. The keep-alive workflow independently uses the GitHub variable `SUPABASE_DB_SCHEMA` for its REST profile.
 
 Do not move or recreate `auth`, `storage`, or `realtime` objects. New application migrations must create or move tables into `workspace` and must keep their RLS, grants, realtime publication membership, and function search paths aligned with this document.
+
+## Production migration procedure
+
+The current production login, expired OAuth recovery, safe single-file fallback for migration-history mismatches, verification, and logout procedure is maintained in [`supabase-production-migration-runbook.md`](./supabase-production-migration-runbook.md). GitHub Pages deployment does not apply database migrations.
+
+On 2026-09-20, [`20260920120000_complete_performance_feedback_workflow.sql`](../supabase/migrations/20260920120000_complete_performance_feedback_workflow.sql) was applied directly to the linked production project after the normal dry-run was blocked by pre-existing remote/local migration-history differences. The migration is transaction-wrapped and idempotent. Remote checks confirmed its columns, RPC, trigger, and attachment validator. This direct single-file execution did not reconcile migration history; any history cleanup remains a separate planned operation and must not be performed ad hoc during a feature deployment.
