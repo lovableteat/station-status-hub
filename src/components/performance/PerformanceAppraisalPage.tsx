@@ -1114,7 +1114,7 @@ export function PerformanceAppraisalPage() {
                   </div>
                 ) : (
                   <AssessmentEditor
-                    draftKey={`${userId}:${cycle}:${tab}:${editorRecordId || 'new'}`}
+                    draftKey={`${userId}:${cycle}:${tab}:${tab === "self" ? "self" : editorRecordId || "new"}`}
                     key={`${userId}:${cycle}:${tab}:${editorRecordId || "new"}:${editorRevision}:${initial.manager.roleGroup}`}
                     initial={initial}
                     mode={tab}

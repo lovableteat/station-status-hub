@@ -800,7 +800,61 @@
 }
 .rd2-review-attachments {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--rd2-border-soft);
+  border-radius: 10px;
+  background: var(--rd2-panel-soft);
+}
+.rd2-attachment-toolbar,
+.rd2-link-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.rd2-attachment-toolbar {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rd2-border-soft);
+}
+.rd2-attachment-toolbar > button {
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding-inline: 14px;
+}
+.rd2-attachment-copy,
+.rd2-link-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: var(--rd2-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.rd2-attachment-copy strong,
+.rd2-link-copy strong {
+  color: var(--rd2-ink);
+  font-size: 13px;
+}
+.rd2-link-toolbar {
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--rd2-border-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--rd2-panel) 78%, transparent);
+}
+.rd2-link-copy {
+  flex: 0 0 170px;
+}
+.rd2-link-input {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+}
+.rd2-link-input input {
+  flex: 1;
+  min-width: 0;
 }
 .rd2-review-attachment-list {
   display: grid;
@@ -853,6 +907,23 @@
 .rd2-return-feedback {
   border-color: hsl(38 92% 55% / 0.7);
   background: linear-gradient(135deg, hsl(38 92% 55% / 0.12), var(--rd2-panel));
+}
+.rd2-draft-notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: baseline;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--rd2-accent);
+  border-radius: 0 8px 8px 0;
+  background: var(--rd2-panel-soft);
+  color: var(--rd2-muted);
+  font-size: 12px;
+}
+.rd2-draft-notice strong {
+  color: var(--rd2-ink);
+  font-size: 13px;
 }
 .rd2-return-feedback > .rd2-prewrap {
   margin: 12px 0;
@@ -1915,5 +1986,20 @@
   }
   .rd2-link-input input {
     flex: 1 1 100%;
+  }
+  .rd2-attachment-toolbar,
+  .rd2-link-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .rd2-attachment-toolbar > button,
+  .rd2-link-input,
+  .rd2-link-copy {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+  .rd2-attachment-toolbar > button,
+  .rd2-link-input > button {
+    justify-content: center;
   }
 }
