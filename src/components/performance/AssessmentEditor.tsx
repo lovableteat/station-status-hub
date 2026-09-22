@@ -296,9 +296,7 @@ export function AssessmentEditor({
   demo,
   onSave,
 }: Props) {
-  const source = initial.sourceUpdatedAt
-    ? `${initial.sourceUpdatedAt}:${initial.manager.roleGroup}`
-    : JSON.stringify(initial);
+  const source = initial.sourceUpdatedAt || (initial.recordId?.startsWith("performance-") ? "new" : initial.recordId);
   const [form, setForm] = useState<AssessmentForm>(() =>
     (!readonly && draftKey && readAssessmentDraft(draftKey, source)) || initial);
   const errorRef = useRef<HTMLParagraphElement>(null);
@@ -431,7 +429,7 @@ export function AssessmentEditor({
             : "逐類對照員工的 IDP、OKR、KPI 自評，填寫主管分數與評語，再完成當責量表。"}
         </p>
       </header>
-      {!readonly && draftKey && showDraftWarning && !submitStatus && <p className="rd2-hint" role="status">切換頁面會暫存本次輸入；尚未送出。關閉或重新整理網站前，請先完成送出。</p>}
+      {!readonly && draftKey && showDraftWarning && !submitStatus && <p className="rd2-draft-notice" role="status"><strong>未送出內容會暫存於本分頁</strong><span>切換頁面或重新整理後可繼續編輯；按「提交」成功後會自動清除。</span></p>}
       <fieldset disabled={readonly || saving} className="rd2-card rd2-identity">
         <div className="rd2-form-section-title">
           <strong>01 · 確認基本資料</strong>

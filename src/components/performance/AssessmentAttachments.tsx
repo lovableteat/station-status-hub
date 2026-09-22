@@ -93,7 +93,7 @@ export function AssessmentAttachments({
     <div className="rd2-review-attachments">
       {!readonly && (
         <>
-          <div className="rd2-evidence-actions">
+          <div className="rd2-attachment-toolbar">
             <Button
               type="button"
               variant="outline"
@@ -104,9 +104,10 @@ export function AssessmentAttachments({
               <Upload data-icon="inline-start" />
               {busy ? "處理附件中…" : buttonLabel}
             </Button>
-            <span className="rd2-hint">
-              最多 4 個檔案，單檔 4 MB、合計約 4.5 MB。
-            </span>
+            <div className="rd2-attachment-copy">
+              <strong>補充檔案</strong>
+              <span>最多 4 個檔案，單檔 4 MB、合計約 4.5 MB</span>
+            </div>
           </div>
           <input
             ref={inputRef}
@@ -180,7 +181,7 @@ export function AssessmentAttachments({
         </ul>
       )}
       {downloadNotice && <p className="rd2-hint" role="status">{downloadNotice}</p>}
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert" className="rd2-error">{error}</p>}
     </div>
   );
 }
