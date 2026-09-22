@@ -118,17 +118,19 @@ npm run test:pcb
 - 前端由 `UserProvider`、`PermissionsProvider`、`TestProjectProvider`、`UnifiedDataProvider` 與 `UserPresenceProvider` 統一管理登入、權限、專案和協作狀態。
 - Supabase 是正式資料來源，涵蓋 Auth、Postgres、RLS、Realtime、Storage 與 Edge Functions；localStorage 只用於必要的快速顯示或離線兜底。
 - Migration 放在 [`supabase/migrations`](./supabase/migrations)，正式環境不可 reset、刪除 schema 或任意重播歷史 migration。
+- 正式環境登入、OAuth 過期復原、migration history 不一致時的單檔安全套用與驗證，統一依照 [`docs/supabase-production-migration-runbook.md`](./docs/supabase-production-migration-runbook.md)。
 - 應用資料表統一歸檔在 `workspace` schema；Supabase 管理的 `auth`、`storage`、`realtime` schema 不修改。Hosted Supabase 的 API Exposed schemas 必須加入 `workspace`，再套用對應 migration。
 - 權限新增或調整時，必須同步檢查入口顯示、workspace access、細部 module 權限、RLS/RPC 與手機導覽。
 - API 金鑰只顯示遮罩值；建立、測試、停用與刪除流程不得把明文寫入前端 log 或文件。
 
 ## 部署方式
 
-`main` 分支推送後，[GitHub Actions](./.github/workflows/main.yml) 會使用 Node.js 20 安裝依賴、建立 production bundle，並部署到 GitHub Pages。`VITE_SUPABASE_URL` 與 `VITE_SUPABASE_ANON_KEY` 由 GitHub Secrets 提供，`VITE_REALTIME_COLLABORATION_V2` 由 GitHub Variables 提供，不存放在儲存庫。
+`main` 分支推送後，[GitHub Actions](./.github/workflows/main.yml) 會使用 Node.js 20 安裝依賴、建立 production bundle，並部署到 GitHub Pages。`VITE_SUPABASE_URL` 與 `VITE_SUPABASE_ANON_KEY` 由 GitHub Secrets 提供，`VITE_REALTIME_COLLABORATION_V2` 由 GitHub Variables 提供，不存放在儲存庫。這個 workflow 不會套用資料庫 migration；正式資料庫變更需另外依照 [Supabase 正式環境遷移操作手冊](./docs/supabase-production-migration-runbook.md) 執行與驗證。
 
 提交前請確認 `git status`，只加入本次正式程式、測試、migration 與文件。`.preview-current/`、`tmp/`、`supabase/.temp/`、本機轉檔產物和未經審核的大型模型不可一併提交。
 
 ## 深入文件
 
 - [`docs/architecture.md`](./docs/architecture.md)：完整架構、工作區資料流、RWD、PCB、Supabase、測試與排錯指南。
+- [`docs/supabase-production-migration-runbook.md`](./docs/supabase-production-migration-runbook.md)：正式 Supabase 登入、OAuth 過期復原、安全遷移、驗證與登出流程。
 - [`docs/codex-handoff-2026-08-10.md`](./docs/codex-handoff-2026-08-10.md)：近期交付內容、驗證結果與儲存庫狀態。

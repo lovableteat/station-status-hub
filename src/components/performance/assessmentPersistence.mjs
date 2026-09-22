@@ -1,4 +1,5 @@
 import { normalizePerformanceReview } from "./performanceData.mjs";
+import { readManagerAssessment, serializeManagerAssessment } from "./rd2Assessment.mjs";
 
 const canonical = (value) =>
   Array.isArray(value)
@@ -110,5 +111,12 @@ export async function submitAssessmentRecord(db, review, { mode, action, expecte
       (action === "return" && !result.data.notification_id)) {
     throw new Error("提交結果尚未確認，本頁輸入仍保留。請再按提交重試。");
   }
-  return normalizePerformanceReview(result.data.review);
+  const confirmed = normalizePerformanceReview(result.data.review);
+  if (mode === 'self' && review.managerFeedback) {
+    // The submission receipt redacts manager data. Keep only responses already
+    // received by this employee; never restore private ratings or category notes.
+    const { feedback, attachments, entryReviews, returnHistory } = readManagerAssessment(review.managerFeedback);
+    confirmed.managerFeedback = serializeManagerAssessment({ feedback, attachments, entryReviews, returnHistory });
+  }
+  return confirmed;
 }

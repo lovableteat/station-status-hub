@@ -260,6 +260,30 @@ try {
     await actor(3); response=await submit(managerPayload,'manager','return',response.review.updated_at);
     check(!!response.notification_id,true,'repeat full submit/return cycle '+(round+1));
   }
+  // Exercise chief/director summaries under the same latest privacy policies.
+  const reports = async () => (await query("select workspace.get_performance_section_reports('2026-q3') as rows"))[0].rows;
+  const saveSummary = (text, version = null) => query("select workspace.save_performance_section_report('2026-q3',$1,true,$2)", [text, version]);
+  await actor(5);
+  await assert.rejects(() => saveSummary('forged employee summary')); checks++;
+  await actor(3);
+  await saveSummary('本課測試成果');
+  let summary = (await reports())[0];
+  check(summary.status, 'submitted', 'chief submits summary with latest privacy policies');
+  await actor(4);
+  check((await reports()).some(row => row.id === summary.id), false, 'another chief cannot read this summary');
+  await actor(2);
+  check((await reports()).some(row => row.id === summary.id), true, 'assigned director can read submitted summary');
+  await query("select workspace.review_performance_section_report($1,'return','請補量化成果',$2)", [summary.id, summary.updated_at]);
+  await actor(3);
+  const returnedSummary = (await reports())[0];
+  check(returnedSummary.status, 'returned', 'director return reaches chief');
+  check(returnedSummary.director_feedback, '請補量化成果', 'chief sees director return reason');
+  await assert.rejects(() => saveSummary('stale overwrite', summary.updated_at)); checks++;
+  await saveSummary('補充後本課成果', returnedSummary.updated_at);
+  summary = (await reports())[0];
+  await actor(2);
+  await query("select workspace.review_performance_section_report($1,'approve','確認完成',$2)", [summary.id, summary.updated_at]);
+  check((await reports()).find(row => row.id === summary.id).status, 'approved', 'director approves resubmitted summary');
   console.log(`\n${checks} actual PostgreSQL workflow checks passed.`);
 } catch(error) {
   console.error(error.message,error.detail||'',error.where||'');

@@ -30,6 +30,14 @@ export const PERFORMANCE_STATUS = {
   approved: { label: "已完成", tone: "emerald" },
 };
 
+export function getSelfAssessmentDisplayState(status) {
+  return status === "submitted"
+    ? "submitted"
+    : status === "approved"
+      ? "approved"
+      : "editable";
+}
+
 export function getPerformanceStatusForAction({
   mode,
   action,

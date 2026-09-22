@@ -1,12 +1,15 @@
 import { AssessmentAttachments } from "./AssessmentAttachments";
+import { readAssessmentDraft, keepAssessmentDraft, forgetAssessmentDraft } from './assessmentDrafts.mjs';
 import { useEffect, useRef, useState } from "react";
 import { Link2, Plus, Send, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AssessmentEntryList } from "./AssessmentEntryList";
+import { AssessmentEntryFeedback, AssessmentReturnHistory } from './AssessmentEntryFeedback';
 import {
   commitAssessmentEntries,
   getAssessmentEntries,
@@ -17,9 +20,6 @@ import {
   LEVELS,
   MAX_EVIDENCE_CHARACTERS,
   MAX_IMAGES_PER_CATEGORY,
-  MAX_MANAGER_ATTACHMENTS,
-  MAX_MANAGER_ATTACHMENT_BYTES,
-  MAX_MANAGER_ATTACHMENT_CHARACTERS,
   TEAMS,
   calculateWeightedManagerScores,
   calculateWeightedSelfScores,
@@ -28,6 +28,7 @@ import {
   getLevelWeights,
   safeEvidenceUrl,
   validateAssessment,
+  selectedReturnEntries,
 } from "./rd2Assessment.mjs";
 import {
   JOB_GRADES,
@@ -260,6 +261,7 @@ function Evidence({
 }
 
 interface Props {
+  draftKey?: string;
   initial: AssessmentForm;
   mode: AssessmentMode;
   readonly?: boolean;
@@ -267,6 +269,9 @@ interface Props {
   canSubmit: boolean;
   submitBlockedMessage?: string;
   showReturnFeedback?: boolean;
+  showEntryFeedback?: boolean;
+  showDraftWarning?: boolean;
+  focusEntry?: { category: string; entryId: string };
   employees: EmployeeOption[];
   demo: boolean;
   onSave: (
@@ -276,6 +281,7 @@ interface Props {
 }
 
 export function AssessmentEditor({
+  draftKey,
   initial,
   mode,
   readonly = false,
@@ -283,23 +289,47 @@ export function AssessmentEditor({
   canSubmit,
   submitBlockedMessage,
   showReturnFeedback = false,
+  showEntryFeedback = false,
+  showDraftWarning = true,
+  focusEntry,
   employees,
   demo,
   onSave,
 }: Props) {
-  const [form, setForm] = useState<AssessmentForm>(initial);
+  const source = initial.sourceUpdatedAt
+    ? `${initial.sourceUpdatedAt}:${initial.manager.roleGroup}`
+    : JSON.stringify(initial);
+  const [form, setForm] = useState<AssessmentForm>(() =>
+    (!readonly && draftKey && readAssessmentDraft(draftKey, source)) || initial);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const focusCategory = focusEntry?.category;
+  const focusEntryId = focusEntry?.entryId;
+  useEffect(() => {
+    if (!focusCategory || !focusEntryId || !CATEGORIES.includes(focusCategory)) return;
+    const target = document.getElementById(`rd2-entry-${focusCategory}-${focusEntryId}`);
+    target?.scrollIntoView({ block: 'center' });
+    target?.focus({ preventScroll: true });
+  }, [focusCategory, focusEntryId]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [imageJobs, setImageJobs] = useState(0);
   const [submitStatus, setSubmitStatus] = useState("");
+  const [returnTarget, setReturnTarget] = useState<{ category: Category; entryId: string } | null>(null);
   const latest = useRef(form);
-  const pending = useRef(false);
+  const pending = useRef(form !== initial);
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.focus();
+      errorRef.current?.scrollIntoView({ block: 'center' });
+    }
+  }, [error]);
   const submitting = useRef(false);
   const change = (update: (previous: AssessmentForm) => AssessmentForm) => {
     if (readonly || submitting.current) return;
     const next = update(latest.current);
     latest.current = next;
     pending.current = true;
+    if (draftKey) keepAssessmentDraft(draftKey, source, next);
     setForm(next);
     setError("");
     setSubmitStatus("");
@@ -344,6 +374,11 @@ export function AssessmentEditor({
     employees.find((employee) => employee.id === form.employeeId)?.orgLevel,
   );
   const questions = getAccountabilityQuestions(form.manager.roleGroup);
+  const updateEntryFeedback = (category: Category, entryId: string, feedback: string, returnRequested: boolean, attachments: ReviewAttachment[]) =>
+    change(previous => ({ ...previous, manager: { ...previous.manager, entryReviews: {
+      ...previous.manager.entryReviews,
+      [category]: { ...previous.manager.entryReviews[category], [entryId]: { feedback, returnRequested, attachments } },
+    } } }));
   const submit = async (action: AssessmentAction) => {
     if (submitting.current || readonly || !canSubmit || imageJobs) return;
     if (mode === "self") change(commitAssessmentEntries);
@@ -360,6 +395,7 @@ export function AssessmentEditor({
       latest.current = confirmed;
       setForm(confirmed);
       pending.current = false;
+      if (draftKey) forgetAssessmentDraft(draftKey);
       setSubmitStatus(demo ? "示範提交完成" : action === "return" ? "已退回補充，通知已送達員工通知中心。" : "提交成功");
     } catch (cause) {
       setError(
@@ -395,6 +431,7 @@ export function AssessmentEditor({
             : "逐類對照員工的 IDP、OKR、KPI 自評，填寫主管分數與評語，再完成當責量表。"}
         </p>
       </header>
+      {!readonly && draftKey && showDraftWarning && !submitStatus && <p className="rd2-hint" role="status">切換頁面會暫存本次輸入；尚未送出。關閉或重新整理網站前，請先完成送出。</p>}
       <fieldset disabled={readonly || saving} className="rd2-card rd2-identity">
         <div className="rd2-form-section-title">
           <strong>01 · 確認基本資料</strong>
@@ -590,9 +627,10 @@ export function AssessmentEditor({
       </fieldset>
       {mode === "self" && (
         <>
-          {showReturnFeedback &&
+          <AssessmentReturnHistory manager={form.manager} />
+          {showReturnFeedback && !form.manager.returnHistory.length &&
             (form.manager.feedback || form.manager.attachments.length > 0) && (
-            <section id="rd2-return-feedback" className="rd2-card rd2-return-feedback" aria-label="主管退回內容">
+            <section id={form.manager.returnHistory.length ? undefined : "rd2-return-feedback"} className="rd2-card rd2-return-feedback" aria-label="主管退回內容">
               <div className="rd2-form-section-title">
                 <strong>主管退回回饋與附件</strong>
                 <span>請依主管說明補充內容，再重新送出自評。</span>
@@ -733,6 +771,7 @@ export function AssessmentEditor({
                       section={form.self.sections[category]}
                       readonly={readonly || saving}
                       onBusy={(busy) => setImageJobs(count => count + (busy ? 1 : -1))}
+                      renderFeedback={(entry, index) => <AssessmentEntryFeedback category={category} entry={entry} index={index} manager={form.manager} showFeedback={showEntryFeedback} />}
                       onChange={(update) => updateSection(category, update)}
                     />
                     <div className="rd2-self-score">
@@ -1017,6 +1056,7 @@ export function AssessmentEditor({
       )}
       {mode === "manager" && (
         <>
+          <AssessmentReturnHistory manager={form.manager} />
           <div className="rd2-form-section-title">
             <strong>02 · 對照員工自評</strong>
             <span role="status">
@@ -1045,7 +1085,7 @@ export function AssessmentEditor({
                       政策權重 {managerResult?.weight ?? "—"}%
                     </span>
                   </div>
-                  <div className="rd2-manager-compare-grid">
+                  <div className="rd2-manager-compare-grid rd2-manager-entry-layout">
                     <section className="rd2-manager-self-panel" aria-label={`${category} 員工自評`}>
                       <div className="rd2-manager-panel-heading">
                         <strong>員工自評內容</strong>
@@ -1058,9 +1098,17 @@ export function AssessmentEditor({
                         category={category}
                         section={section}
                         readonly
-                        feedback={categoryReview.entryFeedback}
-                        onFeedback={readonly || saving ? undefined : (entryId, text) => change(previous => ({ ...previous, manager: { ...previous.manager, categoryReviews: { ...previous.manager.categoryReviews, [category]: { ...previous.manager.categoryReviews[category], entryFeedback: { ...previous.manager.categoryReviews[category].entryFeedback, [entryId]: text } } } } }))}
                         onChange={() => {}}
+                        renderFeedback={(entry, index) => <AssessmentEntryFeedback
+                          category={category} entry={entry} index={index} manager={form.manager}
+                          editable disabled={readonly || saving || !canSubmit || !!imageJobs}
+                          onBusy={busy => setImageJobs(count => count + (busy ? 1 : -1))}
+                          onError={setError}
+                          onChange={(feedback, selected, attachments) => updateEntryFeedback(category, entry.id, feedback, selected, attachments)}
+                          onReturn={() => {
+                            setReturnTarget({ category, entryId: entry.id });
+                          }}
+                        />}
                       />
                       {!!section.images.length && (
                         <div className="rd2-images">
@@ -1112,32 +1160,8 @@ export function AssessmentEditor({
                           </span>
                         </div>
                       </Field>
-                      <Field>
-                        <FieldLabel htmlFor={`manager-${category}-feedback`}>
-                          主管評語／Comment
-                        </FieldLabel>
-                        <Textarea
-                          id={`manager-${category}-feedback`}
-                          rows={4}
-                          value={categoryReview.feedback}
-                          placeholder={`針對 ${category} 成果留下肯定、改善建議或工作指示`}
-                          onChange={(event) =>
-                            change((previous) => ({
-                              ...previous,
-                              manager: {
-                                ...previous.manager,
-                                categoryReviews: {
-                                  ...previous.manager.categoryReviews,
-                                  [category]: {
-                                    ...previous.manager.categoryReviews[category],
-                                    feedback: event.target.value,
-                                  },
-                                },
-                              },
-                            }))
-                          }
-                        />
-                      </Field>
+                      <p className="rd2-hint">評語請填在各筆實績下方；此處分數仍以整個類別計算。</p>
+                      {categoryReview.feedback && <details><summary>舊版類別評語（保留）</summary><p className="rd2-prewrap">{categoryReview.feedback}</p></details>}
                     </section>
                   </div>
                 </fieldset>
@@ -1274,7 +1298,7 @@ export function AssessmentEditor({
       {!readonly && (
         <footer className="rd2-form-footer">
           {error && (
-            <p className="rd2-error" role="alert">
+            <p className="rd2-error" role="alert" tabIndex={-1} ref={errorRef}>
               {error}
             </p>
           )}
@@ -1301,7 +1325,7 @@ export function AssessmentEditor({
                 className="rd2-return-action"
                 onClick={() => void submit("return")}
               >
-                退回補充
+                退回勾選實績（{selectedReturnEntries(form).length}）
               </Button>
             )}
             <Button
@@ -1316,6 +1340,24 @@ export function AssessmentEditor({
           </div>
         </footer>
       )}
+      <AlertDialog open={!!returnTarget} onOpenChange={open => { if (!open) setReturnTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>退回此筆及其他已勾選的實績？</AlertDialogTitle>
+            <AlertDialogDescription>所有逐項回覆將一併送給員工；不會取消其他已勾選的項目。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">取消</AlertDialogCancel>
+            <AlertDialogAction type="button" onClick={() => {
+              if (!returnTarget) return;
+              const { category, entryId } = returnTarget;
+              const current = latest.current.manager.entryReviews[category][entryId];
+              updateEntryFeedback(category, entryId, current?.feedback || '', true, current?.attachments || []);
+              void submit('return');
+            }}>確認退回</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }

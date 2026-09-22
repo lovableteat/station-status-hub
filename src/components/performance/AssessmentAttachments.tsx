@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Upload, X } from "lucide-react";
+import { Download, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MAX_MANAGER_ATTACHMENTS, MAX_MANAGER_ATTACHMENT_BYTES, MAX_MANAGER_ATTACHMENT_CHARACTERS } from "./assessmentAttachmentPolicy.mjs";
 import type { ReviewAttachment } from "./assessmentTypes";
@@ -34,10 +34,10 @@ async function prepareReviewAttachment(file: File): Promise<ReviewAttachment> {
     dataUrl,
   };
 }
-
 export function AssessmentAttachments({
   attachments,
   readonly,
+  disabled = false,
   label = "主管退回附件",
   buttonLabel = "附加退回檔案",
   onChange,
@@ -48,16 +48,47 @@ export function AssessmentAttachments({
   label?: string;
   buttonLabel?: string;
   readonly: boolean;
+  disabled?: boolean;
   onChange?: (attachments: ReviewAttachment[]) => void;
   onBusy?: (busy: boolean) => void;
   onError?: (message: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [downloadingId, setDownloadingId] = useState("");
+  const [downloadNotice, setDownloadNotice] = useState("");
   const totalCharacters = attachments.reduce(
     (total, attachment) => total + attachment.dataUrl.length,
     0,
   );
+  const download = (attachment: ReviewAttachment) => {
+    setDownloadingId(attachment.id);
+    setDownloadNotice("");
+    requestAnimationFrame(() => {
+      try {
+        const match = attachment.dataUrl.match(/^data:([^;,]+);base64,(.+)$/i);
+        if (!match) throw new Error("附件內容格式不正確，請主管重新附檔。");
+        const binary = atob(match[2]);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1)
+          bytes[index] = binary.charCodeAt(index);
+        const url = URL.createObjectURL(new Blob([bytes], { type: match[1] }));
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = attachment.name;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setDownloadNotice(`「${attachment.name}」下載已開始。`);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "附件下載失敗，請重試。");
+      } finally {
+        setDownloadingId("");
+      }
+    });
+  };
   return (
     <div className="rd2-review-attachments">
       {!readonly && (
@@ -67,7 +98,7 @@ export function AssessmentAttachments({
               type="button"
               variant="outline"
               size="sm"
-              disabled={busy || attachments.length >= MAX_MANAGER_ATTACHMENTS}
+              disabled={disabled || busy || attachments.length >= MAX_MANAGER_ATTACHMENTS}
               onClick={() => inputRef.current?.click()}
             >
               <Upload data-icon="inline-start" />
@@ -83,12 +114,13 @@ export function AssessmentAttachments({
             className="sr-only"
             aria-label={label}
             accept={REVIEW_ATTACHMENT_ACCEPT}
-            disabled={busy}
+            disabled={disabled || busy}
             onChange={async (event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
               if (!file) return;
               setBusy(true);
+              setError('');
               onBusy?.(true);
               try {
                 const attachment = await prepareReviewAttachment(file);
@@ -100,9 +132,9 @@ export function AssessmentAttachments({
                 onChange?.([...attachments, attachment]);
                 onError?.("");
               } catch (cause) {
-                onError?.(
-                  cause instanceof Error ? cause.message : "附件處理失敗，請重試。",
-                );
+                const message = cause instanceof Error ? cause.message : "附件處理失敗，請重試。";
+                setError(message);
+                onError?.(message);
               } finally {
                 setBusy(false);
                 onBusy?.(false);
@@ -115,16 +147,26 @@ export function AssessmentAttachments({
         <ul className="rd2-review-attachment-list">
           {attachments.map((attachment) => (
             <li key={attachment.id}>
-              <a href={attachment.dataUrl} download={attachment.name}>
+              <Button
+                type="button"
+                variant="ghost"
+                className="rd2-attachment-download"
+                title={attachment.name}
+                aria-label={`下載附件 ${attachment.name}`}
+                disabled={downloadingId === attachment.id}
+                onClick={() => download(attachment)}
+              >
+                <Download aria-hidden="true" />
                 <span>{attachment.name}</span>
                 <small>{formatFileSize(attachment.size)}</small>
-              </a>
+                <em>{downloadingId === attachment.id ? "下載中…" : "下載"}</em>
+              </Button>
               {!readonly && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  disabled={busy}
+                  disabled={disabled || busy}
                   aria-label={`移除附件 ${attachment.name}`}
                   onClick={() =>
                     onChange?.(attachments.filter((item) => item.id !== attachment.id))
@@ -137,7 +179,8 @@ export function AssessmentAttachments({
           ))}
         </ul>
       )}
+      {downloadNotice && <p className="rd2-hint" role="status">{downloadNotice}</p>}
+      {error && <p role="alert">{error}</p>}
     </div>
   );
 }
-

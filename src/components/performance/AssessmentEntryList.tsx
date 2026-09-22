@@ -1,6 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { AssessmentAttachments } from "./AssessmentAttachments";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Check, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +21,7 @@ export function AssessmentEntryList({
   section,
   readonly,
   onChange,
+  renderFeedback,
   onBusy,
   feedback,
   onFeedback,
@@ -31,6 +32,7 @@ export function AssessmentEntryList({
   category: Category;
   section: AssessmentSection;
   readonly: boolean;
+  renderFeedback?: (entry: AssessmentEntry, index: number) => ReactNode;
   onChange: (
     update: (previous: AssessmentSection) => AssessmentSection,
   ) => void;
@@ -100,7 +102,7 @@ export function AssessmentEntryList({
       {entries.length ? (
         <ol className="rd2-entry-list" aria-label={`${category} 已新增實績`}>
           {entries.map((entry, index) => (
-            <li key={entry.id} className="rd2-entry-item">
+            <li key={entry.id} id={`rd2-entry-${category}-${entry.id}`} tabIndex={-1} className="rd2-entry-item">
               <div className="rd2-entry-heading">
                 <strong>實績 {index + 1}</strong>
                 {!readonly && (
@@ -177,7 +179,7 @@ export function AssessmentEntryList({
               {!readonly && <div className="rd2-evidence-actions"><Input aria-label={`${category} 實績 ${index+1} 證明連結`} placeholder="本筆實績的 HTTPS 證明連結（選填）" value={linkDrafts[entry.id] || ""} onChange={event=>setLinkDrafts(previous=>({...previous,[entry.id]:event.target.value}))}/><Button type="button" variant="outline" size="sm" onClick={()=>{
                 try {const url=new URL(linkDrafts[entry.id] || "");if(url.protocol!=="https:")throw new Error();onChange(previous=>withAssessmentEntries(previous,getAssessmentEntries(previous).map(item=>item.id===entry.id?{...item,links:[...new Set([...(item.links || []),url.href])]}:item)));setLinkDrafts(previous=>({...previous,[entry.id]:""}));setAttachmentError("");}catch{setAttachmentError("請輸入有效的 HTTPS 證明連結。");}
               }}>加入本筆連結</Button></div>}
-              {onFeedback ? <Field><FieldLabel htmlFor={`${category}-${entry.id}-feedback`}>本筆實績回饋</FieldLabel><Textarea id={`${category}-${entry.id}-feedback`} rows={3} maxLength={10000} value={feedback?.[entry.id] || ""} placeholder="針對這筆實績留下建議或補充要求" onChange={event => onFeedback(entry.id, event.target.value)} /></Field> : feedback?.[entry.id] ? <div className="rd2-entry-feedback"><strong>本筆實績回饋</strong><p className="rd2-prewrap">{feedback[entry.id]}</p></div> : null}
+              {renderFeedback ? renderFeedback(entry, index) : onFeedback ? <Field><FieldLabel htmlFor={`${category}-${entry.id}-feedback`}>本筆實績回饋</FieldLabel><Textarea id={`${category}-${entry.id}-feedback`} rows={3} maxLength={10000} value={feedback?.[entry.id] || ""} placeholder="針對這筆實績留下建議或補充要求" onChange={event => onFeedback(entry.id, event.target.value)} /></Field> : feedback?.[entry.id] ? <div className="rd2-entry-feedback"><strong>本筆實績回饋</strong><p className="rd2-prewrap">{feedback[entry.id]}</p></div> : null}
             </li>
           ))}
         </ol>

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -634,6 +634,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               <DialogContent id="admin-create-user-dialog" className="max-w-2xl border border-[#356985] bg-[#10263a] text-slate-100">
                 <DialogHeader>
                   <DialogTitle>新增系統用戶</DialogTitle>
+                  <DialogDescription>建立登入帳號並設定基本角色；建立後接著配置工作區權限。</DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-5">
