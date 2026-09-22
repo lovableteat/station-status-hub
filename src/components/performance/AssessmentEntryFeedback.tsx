@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useState } from 'react';
 import { AssessmentAttachments as ManagerAttachments } from './AssessmentAttachments';
-import type { AssessmentEntry, Category, ManagerAssessment, ReviewAttachment } from './assessmentTypes';
+import type { AssessmentEntry, AssessmentSection, Category, ManagerAssessment, ReviewAttachment } from './assessmentTypes';
 
 function focusAssessmentEntry(category: Category, entryId: string) {
   const target = document.getElementById(`rd2-entry-${category}-${entryId}`);
@@ -11,23 +11,69 @@ function focusAssessmentEntry(category: Category, entryId: string) {
   return Boolean(target);
 }
 
-export function AssessmentReturnHistory({ manager }: { manager: ManagerAssessment }) {
+export function AssessmentReturnHistory({ manager, sections }: { manager: ManagerAssessment; sections?: Record<Category, AssessmentSection> }) {
   const [missingEntry, setMissingEntry] = useState(false);
   if (!manager.returnHistory.length) return null;
-  return <section id="rd2-return-feedback" className="rd2-return-history" data-return-state="returned" aria-label="逐筆退回紀錄">
-    <h3>實績退回紀錄（{manager.returnHistory.length} 次）</h3>
-    <p className="rd2-hint">每次原因均保留；點「前往實績」可定位該筆內容。需要補充時請回到員工自評。</p>
-    {missingEntry && <p role="status">這筆實績已移除；退回原因及當時內容仍保留在紀錄中。</p>}
-    {[...manager.returnHistory].reverse().map((event, index) => <details key={event.id} open={index === 0}>
-      <summary>{new Date(event.returnedAt).toLocaleString('zh-TW')} · {event.reviewerName} · {event.entries.length} 筆</summary>
-      {event.entries.map(item => <div key={`${item.category}-${item.entryId}`} className="rd2-return-history-item">
-        <strong>{item.category} · 退回原因</strong>
-        <p className="rd2-prewrap">{item.feedback}</p>
-        <ManagerAttachments attachments={item.attachments} readonly />
-        <details><summary>退回當時的實績內容</summary><p className="rd2-prewrap">{item.text}</p></details>
-        <Button type="button" size="sm" variant="outline" onClick={() => setMissingEntry(!focusAssessmentEntry(item.category, item.entryId))}>前往實績</Button>
-      </div>)}
-    </details>)}
+  const events = [...manager.returnHistory].reverse();
+  const latestByItem = new Map<string, (typeof events[number]['entries'][number]) & { returnedAt: string; reviewerName: string; eventId: string }>();
+  const itemCounts = new Map<string, number>();
+  for (const event of manager.returnHistory) {
+    for (const item of event.entries) {
+      const key = `${item.category}:${item.entryId}`;
+      itemCounts.set(key, (itemCounts.get(key) || 0) + 1);
+    }
+  }
+  for (const event of events) {
+    for (const item of event.entries) {
+      const key = `${item.category}:${item.entryId}`;
+      if (!latestByItem.has(key)) latestByItem.set(key, { ...item, returnedAt: event.returnedAt, reviewerName: event.reviewerName, eventId: event.id });
+    }
+  }
+  const latestItems = [...latestByItem.entries()];
+  const latestEvent = events[0];
+  return <section id="rd2-return-feedback" className="rd2-return-history" data-return-state="returned" aria-label="主管退回回應">
+    <header className="rd2-return-history-header">
+      <div>
+        <div className="rd2-return-kicker"><span>需要補充</span><strong>{latestItems.length} 個項目</strong></div>
+        <h3>主管退回回應</h3>
+        <p className="rd2-hint">請依每個項目的原因補充自評，完成後再送出。</p>
+      </div>
+      <div className="rd2-return-latest">
+        <span>最近一次退回</span>
+        <strong>{new Date(latestEvent.returnedAt).toLocaleString('zh-TW')}</strong>
+        <small>{latestEvent.reviewerName}</small>
+      </div>
+    </header>
+    {missingEntry && <p className="rd2-return-missing" role="status">這筆實績已移除；退回原因仍保留，請直接在下方補充或新增實績。</p>}
+    <div className="rd2-return-item-list">
+      {latestItems.map(([key, item]) => <article key={`${key}-${item.eventId}`} className="rd2-return-item-card">
+        <div className="rd2-return-item-heading">
+          <span className="rd2-return-category">{item.category} · 實績 {Math.max(1, (sections?.[item.category].entries || []).findIndex(entry => entry.id === item.entryId) + 1)}</span>
+          <span className="rd2-return-item-count">第 {itemCounts.get(key) || 1} 次退回</span>
+        </div>
+        <h4>這筆實績需要補充</h4>
+        <div className="rd2-return-reason">
+          <span>主管回應</span>
+          <p className="rd2-prewrap">{item.feedback}</p>
+        </div>
+        <details className="rd2-return-more">
+          <summary>查看退回當時的內容{item.attachments.length ? ` · 附件 ${item.attachments.length}` : ''}</summary>
+          <p className="rd2-prewrap">{item.text || '退回當時沒有保留文字內容。'}</p>
+          <ManagerAttachments attachments={item.attachments} readonly />
+        </details>
+        <Button type="button" size="sm" variant="outline" onClick={() => setMissingEntry(!focusAssessmentEntry(item.category, item.entryId))}>前往這筆實績</Button>
+      </article>)}
+    </div>
+    {events.length > 1 && <details className="rd2-return-archive">
+      <summary>查看過往退回紀錄 · 共 {events.length} 次</summary>
+      <ol>
+        {events.slice(1).map(event => <li key={event.id}>
+          <strong>{new Date(event.returnedAt).toLocaleString('zh-TW')}</strong>
+          <span>{event.reviewerName} · {event.entries.length} 個項目</span>
+          <ul>{event.entries.map(item => <li key={`${event.id}-${item.category}-${item.entryId}`}><b>{item.category}</b>：{item.feedback}</li>)}</ul>
+        </li>)}
+      </ol>
+    </details>}
   </section>;
 }
 
