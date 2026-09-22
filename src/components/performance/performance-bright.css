@@ -501,7 +501,23 @@
 }
 .rd2-bright .rd2-entry-item {
   background: var(--rd2-panel);
-  border-left: 3px solid var(--card-accent);
+  border: 1px solid color-mix(in srgb, var(--card-accent) 55%, #304760);
+  border-left: 4px solid var(--card-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card-accent) 12%, transparent);
+}
+.rd2-bright .rd2-entry-item .rd2-review-attachments {
+  border-color: color-mix(in srgb, var(--card-accent) 52%, #304760);
+  background: color-mix(in srgb, var(--card-accent) 6%, var(--rd2-panel));
+}
+.rd2-bright .rd2-entry-item .rd2-attachment-toolbar {
+  border-bottom-color: color-mix(in srgb, var(--card-accent) 42%, #304760);
+}
+.rd2-bright .rd2-entry-item .rd2-link-toolbar {
+  border-color: color-mix(in srgb, var(--card-accent) 45%, #304760);
+  background: color-mix(in srgb, var(--card-accent) 8%, var(--rd2-panel));
+}
+.rd2-bright .rd2-entry-item .rd2-review-attachment-list li {
+  border-color: color-mix(in srgb, var(--card-accent) 40%, #304760);
 }
 .rd2-bright .rd2-guidance-tag[data-category="IDP"] {
   color: #81aff8;
