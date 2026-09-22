@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Archive,
   Boxes,
   Camera,
   CircuitBoard,
@@ -32,6 +33,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { cn } from "@/lib/utils";
+import { MyAssessmentBackupsDialog } from "@/components/performance/MyAssessmentBackupsDialog";
 
 const AdminPanel = React.lazy(() =>
   import("@/components/admin/AdminPanel").then((module) => ({ default: module.AdminPanel }))
@@ -271,6 +273,7 @@ const Index = () => {
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [assessmentBackupsOpen, setAssessmentBackupsOpen] = useState(false);
   const stationMainRef = useRef<HTMLElement | null>(null);
 
   const { logout, user } = useUser();
@@ -679,7 +682,10 @@ const Index = () => {
       <UpdateIndicator isUpdating={isUpdating} />
       {!isDemoMode && <CollaborationCenter />}
       {!isDemoMode ? (
-        <PersonalProfileDialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen} />
+        <>
+          <PersonalProfileDialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen} />
+          <MyAssessmentBackupsDialog open={assessmentBackupsOpen} onOpenChange={setAssessmentBackupsOpen} />
+        </>
       ) : null}
 
       <MainWorkspaceHeader
@@ -695,6 +701,13 @@ const Index = () => {
         showOnlineUsers={!isDemoMode}
         showNotifications={!isDemoMode}
         userMenuItems={isDemoMode ? [] : [
+          {
+            id: "assessment-backups",
+            label: "我的自評備份",
+            icon: <Archive className="h-4 w-4" />,
+            emphasized: true,
+            onSelect: () => setAssessmentBackupsOpen(true),
+          },
           {
             id: "personal-profile",
             label: "編輯大頭貼",
