@@ -625,7 +625,7 @@ export function AssessmentEditor({
       </fieldset>
       {mode === "self" && (
         <>
-          <AssessmentReturnHistory manager={form.manager} />
+          <AssessmentReturnHistory manager={form.manager} sections={form.self.sections} />
           {showReturnFeedback && !form.manager.returnHistory.length &&
             (form.manager.feedback || form.manager.attachments.length > 0) && (
             <section id={form.manager.returnHistory.length ? undefined : "rd2-return-feedback"} className="rd2-card rd2-return-feedback" aria-label="主管退回內容">
@@ -1054,7 +1054,7 @@ export function AssessmentEditor({
       )}
       {mode === "manager" && (
         <>
-          <AssessmentReturnHistory manager={form.manager} />
+          <AssessmentReturnHistory manager={form.manager} sections={form.self.sections} />
           <div className="rd2-form-section-title">
             <strong>02 · 對照員工自評</strong>
             <span role="status">
