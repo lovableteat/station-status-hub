@@ -6,6 +6,8 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Download,
+  FileCode2,
+  FileSpreadsheet,
   FileText,
   Network,
   Plus,
@@ -67,6 +69,10 @@ import {
   normalizePerformanceReview,
   toPerformanceCsv,
 } from "./performanceData.mjs";
+import {
+  downloadPerformanceExcel,
+  downloadPerformanceHtml,
+} from "./performanceExport";
 import type {
   AssessmentAction,
   AssessmentForm,
@@ -645,6 +651,13 @@ export function PerformanceAppraisalPage() {
       ),
     [reviews, cycle, status, scope, query, user, tab],
   );
+  const managerExportReviews = useMemo(
+    () =>
+      reviews.filter(
+        (review) => review.cycleId === cycle && !matchesUser(review, user),
+      ),
+    [reviews, cycle, user],
+  );
 
   const recordSummary = useMemo(() => {
     const counts: Record<string, number> = {
@@ -694,6 +707,7 @@ export function PerformanceAppraisalPage() {
   const [managerView, setManagerView] = useState<"records" | "score">(
     "records",
   );
+  const [exporting, setExporting] = useState(false);
   const [pendingDelete, setPendingDelete] =
     useState<PerformanceReview | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -820,6 +834,26 @@ export function PerformanceAppraisalPage() {
     anchor.download = `performance-${cycle}.csv`;
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const exportManagerFile = async (format: "xlsx" | "html") => {
+    if (!canManagePerformance || !managerExportReviews.length || exporting) return;
+    setExporting(true);
+    try {
+      if (format === "xlsx") await downloadPerformanceExcel(managerExportReviews, cycle);
+      else downloadPerformanceHtml(managerExportReviews, cycle);
+      toast({
+        title: format === "xlsx" ? "Excel 已匯出" : "HTML 已匯出",
+        description: `已匯出 ${managerExportReviews.length} 位組員的 ${cycle} 考核資料；報表不包含主管退回資訊。`,
+      });
+    } catch {
+      toast({
+        title: "匯出失敗",
+        description: "目前無法建立檔案，請確認瀏覽器允許下載後再試一次。",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(false);
+    }
   };
   const detail = reviews.find((review) => review.id === detailId);
   const initial = createAssessmentForm(
@@ -1168,14 +1202,35 @@ export function PerformanceAppraisalPage() {
                   <RefreshCw data-icon="inline-start" />
                   重新整理
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={exportCsv}
-                  disabled={!visibleReviews.length}
-                >
-                  <Download data-icon="inline-start" />
-                  匯出報表
-                </Button>
+                {canManagePerformance ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => void exportManagerFile("xlsx")}
+                      disabled={!managerExportReviews.length || exporting}
+                    >
+                      <FileSpreadsheet data-icon="inline-start" />
+                      {exporting ? "匯出中…" : "匯出 Excel"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => void exportManagerFile("html")}
+                      disabled={!managerExportReviews.length || exporting}
+                    >
+                      <FileCode2 data-icon="inline-start" />
+                      匯出 HTML
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={exportCsv}
+                    disabled={!visibleReviews.length}
+                  >
+                    <Download data-icon="inline-start" />
+                    匯出報表
+                  </Button>
+                )}
                 <Button onClick={() => navigate("self")}>
                   <Plus data-icon="inline-start" />
                   我的自評
