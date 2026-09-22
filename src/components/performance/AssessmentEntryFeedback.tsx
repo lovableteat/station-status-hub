@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { AssessmentAttachments as ManagerAttachments } from './AssessmentAttachments';
 import type { AssessmentEntry, AssessmentSection, Category, ManagerAssessment, ReviewAttachment } from './assessmentTypes';
 
+type ReturnEntry = ManagerAssessment['returnHistory'][number]['entries'][number];
+type LatestReturnEntry = ReturnEntry & { returnedAt: string; reviewerName: string; eventId: string };
+
 function focusAssessmentEntry(category: Category, entryId: string) {
   const target = document.getElementById(`rd2-entry-${category}-${entryId}`);
   target?.scrollIntoView({ block: 'center', behavior: 'auto' });
@@ -15,7 +18,7 @@ export function AssessmentReturnHistory({ manager, sections }: { manager: Manage
   const [missingEntry, setMissingEntry] = useState(false);
   if (!manager.returnHistory.length) return null;
   const events = [...manager.returnHistory].reverse();
-  const latestByItem = new Map<string, (typeof events[number]['entries'][number]) & { returnedAt: string; reviewerName: string; eventId: string }>();
+  const latestByItem = new Map<string, LatestReturnEntry>();
   const itemCounts = new Map<string, number>();
   for (const event of manager.returnHistory) {
     for (const item of event.entries) {
@@ -31,6 +34,12 @@ export function AssessmentReturnHistory({ manager, sections }: { manager: Manage
   }
   const latestItems = [...latestByItem.entries()];
   const latestEvent = events[0];
+  const itemLabel = (item: ReturnEntry) => `${item.category} · 實績 ${Math.max(1, (sections?.[item.category].entries || []).findIndex(entry => entry.id === item.entryId) + 1)}`;
+  const firstFeedbackByText = new Map<string, string>();
+  for (const [key, item] of latestItems) {
+    const feedback = item.feedback.trim();
+    if (feedback && !firstFeedbackByText.has(feedback)) firstFeedbackByText.set(feedback, key);
+  }
   return <section id="rd2-return-feedback" className="rd2-return-history" data-return-state="returned" aria-label="主管退回回應">
     <header className="rd2-return-history-header">
       <div>
@@ -48,13 +57,17 @@ export function AssessmentReturnHistory({ manager, sections }: { manager: Manage
     <div className="rd2-return-item-list">
       {latestItems.map(([key, item]) => <article key={`${key}-${item.eventId}`} className="rd2-return-item-card">
         <div className="rd2-return-item-heading">
-          <span className="rd2-return-category">{item.category} · 實績 {Math.max(1, (sections?.[item.category].entries || []).findIndex(entry => entry.id === item.entryId) + 1)}</span>
+          <span className="rd2-return-category">{itemLabel(item)}</span>
           <span className="rd2-return-item-count">第 {itemCounts.get(key) || 1} 次退回</span>
         </div>
         <h4>這筆實績需要補充</h4>
         <div className="rd2-return-reason">
           <span>主管回應</span>
-          <p className="rd2-prewrap">{item.feedback}</p>
+          {firstFeedbackByText.get(item.feedback.trim()) === key ? (
+            <p className="rd2-prewrap">{item.feedback}</p>
+          ) : (
+            <p className="rd2-return-reason-repeat">與 {itemLabel(latestByItem.get(firstFeedbackByText.get(item.feedback.trim()) || '') || item)} 相同</p>
+          )}
         </div>
         <details className="rd2-return-more">
           <summary>查看退回當時的內容{item.attachments.length ? ` · 附件 ${item.attachments.length}` : ''}</summary>
@@ -89,11 +102,14 @@ export function AssessmentEntryFeedback({ category, entry, index, manager, edita
   const history = manager.returnHistory.flatMap(event => event.entries
     .filter(item => item.category === category && item.entryId === entry.id)
     .map(item => ({ ...item, id: event.id, returnedAt: event.returnedAt, reviewerName: event.reviewerName })));
-  if (!editable && !history.length && !(showFeedback && (value.feedback || value.attachments.length))) return null;
+  // Returned feedback is already shown once in the return summary above the
+  // form. Do not render the same response again beneath every achievement.
+  if (!editable && history.length) return null;
+  if (!editable && !(showFeedback && (value.feedback || value.attachments.length))) return null;
   const label = `${category} 實績 ${index + 1}`;
   return <div className="rd2-entry-feedback">
-    {!editable && showFeedback && (value.feedback || value.attachments.length > 0) && <div className="rd2-entry-response" data-return-state={history.length ? "returned" : undefined}>
-      <strong>{history.length ? "主管逐項退回回應" : "主管逐項回應"}</strong>
+    {!editable && showFeedback && (value.feedback || value.attachments.length > 0) && <div className="rd2-entry-response">
+      <strong>主管逐項回應</strong>
       {value.feedback && <p className="rd2-prewrap">{value.feedback}</p>}
       <ManagerAttachments attachments={value.attachments} readonly />
     </div>}
@@ -112,13 +128,5 @@ export function AssessmentEntryFeedback({ category, entry, index, manager, edita
           aria-label={`退回 ${label}`} onClick={onReturn}>退回此筆</Button>
       </div>
     </>}
-    {editable && history.length > 0 && <details data-return-state="returned">
-      <summary>這筆實績的退回紀錄（{history.length} 次）</summary>
-      {[...history].reverse().map(item => <div key={item.id} className="rd2-return-history-item">
-        <small>{new Date(item.returnedAt).toLocaleString('zh-TW')} · {item.reviewerName}</small>
-        <p className="rd2-prewrap">{item.feedback}</p>
-        <ManagerAttachments attachments={item.attachments} readonly />
-      </div>)}
-    </details>}
   </div>;
 }
