@@ -12,6 +12,7 @@ import { PERFORMANCE_STATUS } from "./performanceData.mjs";
 type ExportRow = [string, string, string, string, string, string, string, string, string, string];
 type ExcelJsRow = import("exceljs").Row;
 type ExcelJsCell = import("exceljs").Cell;
+type ExcelValue = string | number;
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -97,7 +98,8 @@ function reviewRows(review: PerformanceReview): ExportRow[] {
     rows.push([category, "分數與主管評語", "", `自評加權：${text(weightedSelfScore)}\n主管加權：${text(weightedManagerScore)}`, text(section.selfScore), text(managerCategory.score), managerCategory.feedback, section.links.join("\n"), attachmentNames(section.entries?.flatMap((entry) => entry.attachments || []) || []), imageNames(section.images)]);
   }
 
-  if (manager.feedback) rows.push(["主管評核", "整體主管評語", "", manager.feedback, "", "", "", "", "", ""]);
+  const overallFeedback = manager.feedback.split("\n\n【逐筆實績補充要求】\n")[0].trim();
+  if (overallFeedback) rows.push(["主管評核", "整體主管評語", "", overallFeedback, "", "", "", "", "", ""]);
   if (manager.roleGroup || manager.standardsVersion) rows.push(["主管評核", "當責評分版本", "", `${manager.roleGroup || ""}${manager.standardsVersion ? ` · ${manager.standardsVersion}` : ""}`, "", "", "", "", "", ""]);
   for (const question of ACCOUNTABILITY_QUESTIONS) {
     const answer = manager.answers[question.id];
@@ -107,53 +109,39 @@ function reviewRows(review: PerformanceReview): ExportRow[] {
 }
 
 const columns = ["類別", "資料類型", "項次", "內容", "員工自評分數", "主管評分", "主管評語", "證明連結", "自評附件檔名", "自評圖片檔名"];
-
-const EXCEL_COLUMN_WIDTHS = [14, 20, 8, 82, 16, 14, 36, 36, 30, 26];
-const EXCEL_BORDER = "FFD6E0EB";
-const EXCEL_HEADER = "FF1D4D78";
-const EXCEL_SECTION = "FFEAF3FA";
-const EXCEL_SUMMARY = "FFFFF4D6";
-const EXCEL_MANAGER = "FFF3E8F1";
+const EXCEL_COLUMN_WIDTHS = [12.78, 65.44, 83.44, 14.78, 12.78, 32.78, 36.78, 28.78, 24.78];
+const EXCEL_META_HEADERS = ["類別", "資料類型", "內容", "", "", "", "", "", ""];
+const EXCEL_DETAIL_HEADERS = ["大類", "實績", "主管評語", "員工自評分數", "主管評分", "主管評語", "證明連結", "自評附件檔名", "自評圖片檔名"];
+// Match the two header fills in the supplied 績效考核.xlsx (Johnny!A1:I1 and A15:I15).
+const EXCEL_META_HEADER = "FFFFFF00";
+const EXCEL_DETAIL_HEADER = "FF1F4E79";
+const EXCEL_BORDER = "FFE0E0E0";
 
 function excelFill(argb: string) {
   return { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb } };
 }
 
-function estimateRowHeight(values: string[]) {
+function estimateRowHeight(values: ExcelValue[]) {
   const lineCounts = values.map((value, index) => {
     const width = EXCEL_COLUMN_WIDTHS[index] || 18;
     return text(value)
       .split(/\r?\n/)
-      .reduce((total, line) => total + Math.max(1, Math.ceil([...line].length / Math.max(8, width * 1.35))), 0);
+      .reduce((total, line) => total + Math.max(1, Math.ceil([...line].length / Math.max(8, width * 0.5))), 0);
   });
   const lines = Math.max(1, ...lineCounts);
-  return Math.min(360, Math.max(24, lines * 16 + 8));
+  return Math.min(390, Math.max(24, lines * 17 + 8));
 }
 
-function stylePerformanceRow(row: ExcelJsRow, values: string[], rowIndex: number) {
-  const category = values[0];
-  const type = values[1];
-  const fill = category === "主管評核"
-    ? EXCEL_MANAGER
-    : type === "分數與主管評語"
-      ? EXCEL_SUMMARY
-      : type === "類別摘要" || category === "基本資料"
-        ? EXCEL_SECTION
-        : rowIndex % 2 === 0
-          ? "FFF8FBFD"
-          : "FFFFFFFF";
-
+function stylePerformanceRow(row: ExcelJsRow, values: ExcelValue[]) {
   row.height = estimateRowHeight(values);
   row.eachCell({ includeEmpty: true }, (cell: ExcelJsCell, column: number) => {
     cell.font = {
       name: "Microsoft JhengHei",
-      size: type === "類別摘要" ? 11 : 10.5,
-      bold: column <= 2 || type === "類別摘要" || type === "分數與主管評語",
-      color: { argb: "FF1B2B3A" },
+      size: 12,
+      color: { argb: "FF111111" },
     };
-    cell.fill = excelFill(fill);
     cell.alignment = {
-      horizontal: [1, 2, 3, 5, 6].includes(column) ? "center" : "left",
+      horizontal: [1, 4, 5].includes(column) ? "center" : "left",
       vertical: "top",
       wrapText: true,
     };
@@ -163,10 +151,96 @@ function stylePerformanceRow(row: ExcelJsRow, values: string[], rowIndex: number
       left: { style: "thin", color: { argb: EXCEL_BORDER } },
       right: { style: "thin", color: { argb: EXCEL_BORDER } },
     };
-    if (column === 8 && text(values[column - 1]).startsWith("http")) {
+    if (column === 7 && text(values[column - 1]).startsWith("http")) {
       cell.font = { ...cell.font, color: { argb: "FF0563C1" }, underline: true };
     }
   });
+}
+
+function styleHeaderRow(row: ExcelJsRow, color: string, textColor: string) {
+  const isBasicHeader = color === EXCEL_META_HEADER;
+  row.height = isBasicHeader ? 24 : 30;
+  row.eachCell({ includeEmpty: true }, (cell: ExcelJsCell) => {
+    cell.fill = excelFill(color);
+    cell.font = { name: "Microsoft JhengHei", size: isBasicHeader ? 12 : 11, bold: !isBasicHeader, color: { argb: textColor } };
+    cell.alignment = { horizontal: isBasicHeader ? "left" : "center", vertical: "middle", wrapText: true };
+    cell.border = {
+      top: { style: "thin", color: { argb: EXCEL_BORDER } },
+      bottom: { style: "thin", color: { argb: EXCEL_BORDER } },
+      left: { style: "thin", color: { argb: EXCEL_BORDER } },
+      right: { style: "thin", color: { argb: EXCEL_BORDER } },
+    };
+  });
+}
+
+function basicInfoRows(review: PerformanceReview): Array<[string, ExcelValue]> {
+  const self = readSelfAssessment(review.selfFeedback);
+  const manager = readManagerAssessment(review.managerFeedback);
+  const weightedSelf = calculateWeightedSelfScores(self.grade, self.sections);
+  return [
+    ["員工", review.employeeName],
+    ["工號", self.employeeNumber || manager.employeeNumber],
+    ["部門", review.department],
+    ["職務／職級", review.role],
+    ["考核人", review.reviewerName],
+    ["狀態", PERFORMANCE_STATUS[review.status]?.label || review.status],
+    ["截止日期", review.dueDate],
+    ["更新時間", dateLabel(review.updatedAt)],
+    ["團隊", self.team],
+    ["職務角色", self.level],
+    ["數字職等", self.grade ? Number(self.grade) : ""],
+    ["員工加權自評", weightedSelf?.complete ? weightedSelf.total : ""],
+    ["主管加權評分", review.score ?? ""],
+  ];
+}
+
+function detailRows(review: PerformanceReview): ExcelValue[][] {
+  const self = readSelfAssessment(review.selfFeedback);
+  const manager = readManagerAssessment(review.managerFeedback);
+  const rows: ExcelValue[][] = [];
+  for (const category of CATEGORIES) {
+    const section = self.sections[category];
+    const categoryReview = manager.categoryReviews[category];
+    const entries = section.entries?.filter((entry) => entry.text.trim()) || [];
+    const contents = entries.length ? entries : section.text.trim() ? [{ id: "", text: section.text, links: section.links, attachments: [] }] : [];
+    contents.forEach((entry, index) => {
+      if (!entry.text.trim() && index > 0) return;
+      const entryReview = manager.entryReviews[category]?.[entry.id];
+      const returnedFeedback = manager.returnHistory.some((record) =>
+        record.entries.some((returned) => returned.category === category && returned.entryId === entry.id && returned.feedback === entryReview?.feedback));
+      rows.push([
+        category,
+        entry.text,
+        entryReview?.returnRequested || returnedFeedback ? "" : entryReview?.feedback || "",
+        index === 0 ? section.selfScore ?? "" : "",
+        index === 0 ? categoryReview.score ?? "" : "",
+        index === 0 ? categoryReview.feedback : "",
+        [...(entry.links || []), ...(index === 0 ? section.links : [])].filter((link, position, all) => all.indexOf(link) === position).join("\n"),
+        attachmentNames(entry.attachments || []),
+        index === 0 ? imageNames(section.images) : "",
+      ]);
+    });
+  }
+  if (self.legacyText.trim()) rows.push(["自評", self.legacyText, "", "", "", "", "", "", ""]);
+  const overallFeedback = manager.feedback.split("\n\n【逐筆實績補充要求】\n")[0].trim();
+  if (overallFeedback) rows.push(["主管評核", "整體主管評語", overallFeedback, "", "", "", "", "", ""]);
+  for (const question of ACCOUNTABILITY_QUESTIONS) {
+    const answer = manager.answers[question.id];
+    if (answer != null) rows.push(["主管評核", question.text, "", "", answer, "", "", "", ""]);
+  }
+  return rows;
+}
+
+function splitDetailRow(values: ExcelValue[]): ExcelValue[][] {
+  const achievement = Array.from(text(values[1]));
+  const feedback = Array.from(text(values[2]));
+  const chunks = Math.max(1, Math.ceil(achievement.length / 500), Math.ceil(feedback.length / 500));
+  return Array.from({ length: chunks }, (_, index) => [
+    index === 0 ? values[0] : `${values[0]}（續）`,
+    achievement.slice(index * 500, (index + 1) * 500).join(""),
+    feedback.slice(index * 500, (index + 1) * 500).join(""),
+    ...(index === 0 ? values.slice(3) : ["", "", "", "", "", ""]),
+  ]);
 }
 
 function download(blob: Blob, filename: string) {
@@ -181,7 +255,7 @@ function download(blob: Blob, filename: string) {
 }
 
 export async function downloadPerformanceExcel(reviews: PerformanceReview[], cycle: string) {
-  const ExcelJS = await import("exceljs");
+  const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "工作整合平台";
   workbook.created = new Date();
@@ -207,31 +281,25 @@ export async function downloadPerformanceExcel(reviews: PerformanceReview[], cyc
         key: `column${index + 1}`,
       }));
 
-      const headerRow = worksheet.addRow(columns);
-      headerRow.height = 32;
-      headerRow.eachCell({ includeEmpty: true }, (cell: ExcelJsCell) => {
-        cell.font = { name: "Microsoft JhengHei", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
-        cell.fill = excelFill(EXCEL_HEADER);
-        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-        cell.border = {
-          top: { style: "thin", color: { argb: "FF9FC1D9" } },
-          bottom: { style: "thin", color: { argb: "FF9FC1D9" } },
-          left: { style: "thin", color: { argb: "FF9FC1D9" } },
-          right: { style: "thin", color: { argb: "FF9FC1D9" } },
-        };
-      });
-
-      reviewRows(review).forEach((values, index) => {
+      styleHeaderRow(worksheet.addRow(EXCEL_META_HEADERS), EXCEL_META_HEADER, "FF000000");
+      basicInfoRows(review).forEach(([label, value]) => {
+        const values: ExcelValue[] = ["基本資料", label, value, "", "", "", "", "", ""];
         const row = worksheet.addRow(values);
-        stylePerformanceRow(row, values, index);
+        stylePerformanceRow(row, values);
+      });
+      styleHeaderRow(worksheet.addRow(EXCEL_DETAIL_HEADERS), EXCEL_DETAIL_HEADER, "FFFFFFFF");
+      detailRows(review).forEach((values) => {
+        splitDetailRow(values).forEach((part) => {
+          const row = worksheet.addRow(part);
+          stylePerformanceRow(row, part);
+        });
       });
 
-      worksheet.views = [{ state: "frozen", ySplit: 1, xSplit: 3 }];
       worksheet.autoFilter = {
-        from: { row: 1, column: 1 },
-        to: { row: 1, column: columns.length },
+        from: { row: 15, column: 1 },
+        to: { row: worksheet.rowCount, column: EXCEL_DETAIL_HEADERS.length },
       };
-      worksheet.pageSetup.printTitlesRow = "1:1";
+      worksheet.pageSetup.printTitlesRow = "15:15";
     });
   const output = await workbook.xlsx.writeBuffer();
   download(new Blob([output], { type: XLSX_MIME }), `${safeFileName(`績效考核-${cycle}`)}.xlsx`);
