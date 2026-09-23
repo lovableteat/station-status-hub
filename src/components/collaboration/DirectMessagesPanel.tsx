@@ -4,13 +4,14 @@ import {
   useRef,
   useState,
   type ClipboardEvent as ReactClipboardEvent,
+  type DragEvent as ReactDragEvent,
 } from "react";
 import {
   ArrowLeft,
   Check,
   ClipboardCopy,
   CornerUpLeft,
-  Download,
+  ExternalLink,
   Film,
   FileText,
   ImagePlus,
@@ -273,6 +274,7 @@ export function DirectMessagesPanel({
   const [selectedMediaFiles, setSelectedMediaFiles] = useState<SelectedMediaFile[]>([]);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [isSendingMedia, setIsSendingMedia] = useState(false);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const [deletingThreadIds, setDeletingThreadIds] = useState<Set<string>>(() => new Set());
   const deletingThreadIdsRef = useRef(new Set<string>());
@@ -367,6 +369,7 @@ export function DirectMessagesPanel({
       current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
       return [];
     });
+    setIsDraggingFiles(false);
     setMediaError(null);
     setDraft(selectedThreadId ? threadDraftsRef.current[selectedThreadId] ?? "" : "");
     setReplyingTo(null);
@@ -443,6 +446,20 @@ export function DirectMessagesPanel({
   const selectMediaFiles = (files: FileList | null) => {
     appendMediaFiles(Array.from(files ?? []));
     if (mediaInputRef.current) mediaInputRef.current.value = "";
+  };
+
+  const handleComposerDrag = (event: ReactDragEvent<HTMLFormElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDraggingFiles(true);
+  };
+
+  const handleComposerDrop = (event: ReactDragEvent<HTMLFormElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    setIsDraggingFiles(false);
+    if (!isSendingMedia) appendMediaFiles(Array.from(event.dataTransfer.files));
   };
 
   const handleComposerPaste = (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
@@ -668,11 +685,8 @@ export function DirectMessagesPanel({
                 const previousMessage = visibleMessages[index - 1]?.message;
                 const showDay = !previousMessage
                   || new Date(previousMessage.createdAt).toDateString() !== new Date(message.createdAt).toDateString();
-                const messageIndex = messages.findIndex((candidate) => candidate.id === message.id);
-                const isLastOwn =
-                  own && !messages.slice(messageIndex + 1).some((candidate) => candidate.senderId === user?.userId);
                 const read =
-                  isLastOwn &&
+                  own &&
                   message.delivery === "sent" &&
                   readByOtherAt &&
                   Date.parse(readByOtherAt) >= Date.parse(message.createdAt);
@@ -817,7 +831,11 @@ export function DirectMessagesPanel({
                           <span>{formatMessageTime(message.createdAt)}</span>
                           {message.editedAt ? <span> · 已編輯</span> : null}
                           {message.delivery === "sending" ? <span> · 傳送中</span> : null}
-                          {message.delivery === "sent" && own ? <span> · {read ? "已讀" : "已送出"}</span> : null}
+                          {message.delivery === "sent" && own ? (
+                            <span className={read ? "font-bold text-emerald-300" : undefined} title={read ? `對方已於 ${new Date(readByOtherAt).toLocaleString("zh-TW")} 閱讀` : "訊息已送出，等待對方閱讀"}>
+                              {" · "}{read ? "對方已讀" : "已送出"}
+                            </span>
+                          ) : null}
                           {message.delivery === "failed" ? (
                             <button
                               type="button"
@@ -840,7 +858,19 @@ export function DirectMessagesPanel({
           )}
         </ScrollArea>
 
-        <form onSubmit={submitMessage} className="border-t border-white/8 bg-[linear-gradient(180deg,rgba(8,18,29,0.95),rgba(8,18,29,1))] px-2.5 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 sm:p-3">
+        <form
+          onSubmit={submitMessage}
+          onDragOver={handleComposerDrag}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDraggingFiles(false);
+          }}
+          onDrop={handleComposerDrop}
+          className={cn(
+            "border-t border-white/8 bg-[linear-gradient(180deg,rgba(8,18,29,0.95),rgba(8,18,29,1))] px-2.5 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 sm:p-3",
+            isDraggingFiles && "ring-2 ring-inset ring-cyan-300 bg-cyan-300/10",
+          )}
+        >
+          {isDraggingFiles ? <p className="mb-2 text-center text-xs font-bold text-cyan-200">放開即可加入附件，確認後再送出</p> : null}
           {replyingTo ? (
             <div className="mb-2 flex items-center gap-2 rounded-xl border border-violet-200/20 bg-violet-300/[0.08] px-3 py-2">
               <CornerUpLeft className="h-4 w-4 shrink-0 text-violet-200" />
@@ -982,7 +1012,7 @@ export function DirectMessagesPanel({
             </Button>
           </div>
           <div className="mt-1.5 flex items-center justify-between px-1 text-[9px] font-medium text-slate-600">
-            <span>Ctrl+V 貼上截圖 · Enter 送出 · Shift + Enter 換行</span>
+            <span>拖入檔案或 Ctrl+V 貼上截圖 · Enter 送出 · Shift + Enter 換行</span>
             {draft.length > 4_400 ? <span>{draft.length} / 4800</span> : null}
           </div>
         </form>
@@ -992,14 +1022,13 @@ export function DirectMessagesPanel({
               <div className="min-w-0 flex-1 truncate text-sm font-bold text-white">{previewAttachment.fileName}</div>
               <a
                 href={previewAttachment.url}
-                download={previewAttachment.fileName}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-200/15 bg-cyan-300/[0.08] text-cyan-100 hover:bg-cyan-300/15"
-                aria-label="下載原始檔案"
-                title="下載"
+                aria-label="在新分頁開啟原始圖片"
+                title="在新分頁開啟"
               >
-                <Download className="h-4 w-4" />
+                <ExternalLink className="h-4 w-4" />
               </a>
               <button
                 type="button"
@@ -1011,11 +1040,19 @@ export function DirectMessagesPanel({
               </button>
             </div>
             <div className="flex min-h-0 flex-1 items-center justify-center p-4">
-              <img
-                src={previewAttachment.url}
-                alt={previewAttachment.fileName}
-                className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
-              />
+              <button
+                type="button"
+                onClick={() => setPreviewAttachment(null)}
+                aria-label="點圖片關閉預覽"
+                title="點一下關閉預覽"
+                className="flex max-h-full max-w-full cursor-zoom-out items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+              >
+                <img
+                  src={previewAttachment.url}
+                  alt={previewAttachment.fileName}
+                  className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+                />
+              </button>
             </div>
           </div>
         ) : null}

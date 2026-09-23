@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   CHAT_MEDIA_ACCEPT,
@@ -85,4 +86,14 @@ test("mixed messages preserve media behavior and label documents correctly", () 
     "傳送了文件",
   );
   assert.equal(getDirectMessagePreviewLabel("", files), "傳送了 4 個附件");
+});
+
+test("chat composer accepts dropped files and image preview closes or opens a new tab", async () => {
+  const source = await readFile(new URL("../src/components/collaboration/DirectMessagesPanel.tsx", import.meta.url), "utf8");
+  assert.match(source, /onDrop=\{handleComposerDrop\}/);
+  assert.match(source, /appendMediaFiles\(Array\.from\(event\.dataTransfer\.files\)\)/);
+  assert.match(source, /onClick=\{\(\) => setPreviewAttachment\(null\)\}/);
+  assert.match(source, /aria-label="在新分頁開啟原始圖片"/);
+  assert.doesNotMatch(source, /download=\{previewAttachment\.fileName\}/);
+  assert.match(source, /對方已讀/);
 });
