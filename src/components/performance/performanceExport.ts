@@ -10,6 +10,8 @@ import {
 import { PERFORMANCE_STATUS } from "./performanceData.mjs";
 
 type ExportRow = [string, string, string, string, string, string, string, string, string, string];
+type ExcelJsRow = import("exceljs").Row;
+type ExcelJsCell = import("exceljs").Cell;
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -106,6 +108,67 @@ function reviewRows(review: PerformanceReview): ExportRow[] {
 
 const columns = ["類別", "資料類型", "項次", "內容", "員工自評分數", "主管評分", "主管評語", "證明連結", "自評附件檔名", "自評圖片檔名"];
 
+const EXCEL_COLUMN_WIDTHS = [14, 20, 8, 82, 16, 14, 36, 36, 30, 26];
+const EXCEL_BORDER = "FFD6E0EB";
+const EXCEL_HEADER = "FF1D4D78";
+const EXCEL_SECTION = "FFEAF3FA";
+const EXCEL_SUMMARY = "FFFFF4D6";
+const EXCEL_MANAGER = "FFF3E8F1";
+
+function excelFill(argb: string) {
+  return { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb } };
+}
+
+function estimateRowHeight(values: string[]) {
+  const lineCounts = values.map((value, index) => {
+    const width = EXCEL_COLUMN_WIDTHS[index] || 18;
+    return text(value)
+      .split(/\r?\n/)
+      .reduce((total, line) => total + Math.max(1, Math.ceil([...line].length / Math.max(8, width * 1.35))), 0);
+  });
+  const lines = Math.max(1, ...lineCounts);
+  return Math.min(360, Math.max(24, lines * 16 + 8));
+}
+
+function stylePerformanceRow(row: ExcelJsRow, values: string[], rowIndex: number) {
+  const category = values[0];
+  const type = values[1];
+  const fill = category === "主管評核"
+    ? EXCEL_MANAGER
+    : type === "分數與主管評語"
+      ? EXCEL_SUMMARY
+      : type === "類別摘要" || category === "基本資料"
+        ? EXCEL_SECTION
+        : rowIndex % 2 === 0
+          ? "FFF8FBFD"
+          : "FFFFFFFF";
+
+  row.height = estimateRowHeight(values);
+  row.eachCell({ includeEmpty: true }, (cell: ExcelJsCell, column: number) => {
+    cell.font = {
+      name: "Microsoft JhengHei",
+      size: type === "類別摘要" ? 11 : 10.5,
+      bold: column <= 2 || type === "類別摘要" || type === "分數與主管評語",
+      color: { argb: "FF1B2B3A" },
+    };
+    cell.fill = excelFill(fill);
+    cell.alignment = {
+      horizontal: [1, 2, 3, 5, 6].includes(column) ? "center" : "left",
+      vertical: "top",
+      wrapText: true,
+    };
+    cell.border = {
+      top: { style: "thin", color: { argb: EXCEL_BORDER } },
+      bottom: { style: "thin", color: { argb: EXCEL_BORDER } },
+      left: { style: "thin", color: { argb: EXCEL_BORDER } },
+      right: { style: "thin", color: { argb: EXCEL_BORDER } },
+    };
+    if (column === 8 && text(values[column - 1]).startsWith("http")) {
+      cell.font = { ...cell.font, color: { argb: "FF0563C1" }, underline: true };
+    }
+  });
+}
+
 function download(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -118,21 +181,59 @@ function download(blob: Blob, filename: string) {
 }
 
 export async function downloadPerformanceExcel(reviews: PerformanceReview[], cycle: string) {
-  const xlsx = await import("xlsx");
-  const workbook = xlsx.utils.book_new();
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "工作整合平台";
+  workbook.created = new Date();
+  workbook.modified = new Date();
+  workbook.title = `績效考核-${cycle}`;
+  workbook.subject = "組員績效考核資料";
   const used = new Set<string>();
   [...reviews]
     .sort((a, b) => a.employeeName.localeCompare(b.employeeName, "zh-Hant"))
     .forEach((review) => {
-      const worksheet = xlsx.utils.aoa_to_sheet([columns, ...reviewRows(review)]);
-      worksheet["!cols"] = [
-        { wch: 12 }, { wch: 18 }, { wch: 8 }, { wch: 52 }, { wch: 14 },
-        { wch: 12 }, { wch: 32 }, { wch: 36 }, { wch: 28 }, { wch: 24 },
-      ];
-      worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
-      xlsx.utils.book_append_sheet(workbook, worksheet, safeSheetName(review.employeeName, used));
+      const worksheet = workbook.addWorksheet(safeSheetName(review.employeeName, used), {
+        properties: { defaultRowHeight: 22 },
+        pageSetup: {
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          orientation: "landscape",
+          paperSize: 9,
+        },
+      });
+      worksheet.columns = EXCEL_COLUMN_WIDTHS.map((width, index) => ({
+        width,
+        key: `column${index + 1}`,
+      }));
+
+      const headerRow = worksheet.addRow(columns);
+      headerRow.height = 32;
+      headerRow.eachCell({ includeEmpty: true }, (cell: ExcelJsCell) => {
+        cell.font = { name: "Microsoft JhengHei", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = excelFill(EXCEL_HEADER);
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FF9FC1D9" } },
+          bottom: { style: "thin", color: { argb: "FF9FC1D9" } },
+          left: { style: "thin", color: { argb: "FF9FC1D9" } },
+          right: { style: "thin", color: { argb: "FF9FC1D9" } },
+        };
+      });
+
+      reviewRows(review).forEach((values, index) => {
+        const row = worksheet.addRow(values);
+        stylePerformanceRow(row, values, index);
+      });
+
+      worksheet.views = [{ state: "frozen", ySplit: 1, xSplit: 3 }];
+      worksheet.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: 1, column: columns.length },
+      };
+      worksheet.pageSetup.printTitlesRow = "1:1";
     });
-  const output = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
+  const output = await workbook.xlsx.writeBuffer();
   download(new Blob([output], { type: XLSX_MIME }), `${safeFileName(`績效考核-${cycle}`)}.xlsx`);
 }
 
