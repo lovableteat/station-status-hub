@@ -57,6 +57,10 @@ export function MainWorkspaceHeader({
   showNotifications = true,
   userMenuItems = [],
 }: MainWorkspaceHeaderProps) {
+  const compactItems = items.slice(0, 3);
+  const activeCompactItem = items.find((item) => item.id === activeItem && !compactItems.some((visible) => visible.id === item.id));
+  if (activeCompactItem) compactItems.push(activeCompactItem);
+  const overflowItems = items.filter((item) => !compactItems.some((visible) => visible.id === item.id));
   const brand = (
     <>
       <PlatformLogoMark className="interactive-lift h-9 w-9 text-primary sm:h-11 sm:w-11" />
@@ -71,12 +75,12 @@ export function MainWorkspaceHeader({
     </>
   );
   const brandPositionClassName =
-    "absolute left-[max(0.625rem,env(safe-area-inset-left))] top-1/2 z-10 flex min-w-0 max-w-[calc(100%-4.5rem)] -translate-y-1/2 items-center gap-2.5 text-left sm:gap-3 sm:max-w-[min(75vw,360px)] xl:static xl:translate-y-0 xl:max-w-none";
+    "absolute left-[max(0.625rem,env(safe-area-inset-left))] top-1/2 z-10 flex min-w-0 max-w-[calc(100%-4.5rem)] -translate-y-1/2 items-center gap-2.5 text-left sm:gap-3 sm:max-w-[min(75vw,360px)] lg:static lg:max-w-[210px] lg:translate-y-0 2xl:max-w-none";
 
   return (
     <header data-mobile-app-header="true" className="platform-color-field relative sticky top-0 z-50 shrink-0 border-b border-primary/15 shadow-[0_18px_48px_-42px_hsl(var(--primary)/0.55)] backdrop-blur-xl">
-      <div className="mx-auto grid min-h-[var(--mobile-header-height)] w-full max-w-[1920px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-3 px-2.5 py-1.5 sm:min-h-[72px] sm:gap-x-3 sm:px-4 sm:py-3 xl:grid-cols-[minmax(180px,0.9fr)_minmax(0,2.3fr)_auto] xl:gap-x-4 xl:px-5 2xl:px-6">
-        <span aria-hidden="true" data-platform-grid-placeholder="brand" className="invisible h-9 min-w-0 sm:h-11 xl:hidden" />
+      <div className="mx-auto grid min-h-[var(--mobile-header-height)] w-full max-w-[1920px] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-3 px-2.5 py-1.5 sm:min-h-[72px] sm:gap-x-3 sm:px-4 sm:py-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:gap-x-3 xl:px-5 2xl:px-6">
+        <span aria-hidden="true" data-platform-grid-placeholder="brand" className="invisible h-9 min-w-0 sm:h-11 lg:hidden" />
 
         {onBrandClick ? (
           <button
@@ -91,7 +95,7 @@ export function MainWorkspaceHeader({
           <div data-platform-brand="top-left" className={brandPositionClassName}>{brand}</div>
         )}
 
-        <nav aria-label="工作區導覽" className="glass-strip order-3 col-span-2 hidden w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex lg:w-fit lg:max-w-full lg:justify-self-center xl:order-none xl:col-span-1">
+        <nav aria-label="工作區導覽" className="glass-strip hidden min-w-0 max-w-full items-center justify-self-center overflow-x-auto rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden 2xl:flex">
           {items.map((item) => {
             const isActive = item.id === activeItem;
 
@@ -101,7 +105,7 @@ export function MainWorkspaceHeader({
                 type="button"
                 onClick={() => onSelect(item.id)}
                 className={cn(
-                  "interactive-lift min-w-fit shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 xl:px-1.5 xl:text-xs 2xl:px-4 2xl:text-sm",
+                  "interactive-lift min-w-fit shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 2xl:px-4",
                   isActive
                     ? "bg-primary text-primary-foreground shadow-[0_18px_34px_-24px_hsl(var(--primary)/0.85)]"
                     : "text-foreground/80 hover:bg-primary/10 hover:text-foreground"
@@ -113,15 +117,47 @@ export function MainWorkspaceHeader({
           })}
         </nav>
 
+        <nav aria-label="工作區導覽" className="glass-strip hidden min-w-0 max-w-full items-center justify-self-center rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] lg:flex 2xl:hidden">
+          {compactItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onSelect(item.id)}
+              className={cn(
+                "interactive-lift shrink-0 whitespace-nowrap rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors xl:px-3 xl:text-sm",
+                item.id === activeItem ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-primary/10 hover:text-foreground",
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+          {overflowItems.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="flex shrink-0 items-center gap-1 rounded-xl px-2 py-2.5 text-xs font-semibold text-foreground/80 hover:bg-primary/10 hover:text-foreground xl:px-3 xl:text-sm">
+                  更多 <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-40 rounded-xl border-primary/15 bg-[hsl(223_34%_11%/0.98)] p-1 text-foreground">
+                {overflowItems.map((item) => (
+                  <DropdownMenuItem key={item.id} onClick={() => onSelect(item.id)} className="rounded-lg px-3 py-2 text-sm focus:bg-primary/10 focus:text-foreground">
+                    {item.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </nav>
+
         <span
           aria-hidden="true"
           data-platform-grid-placeholder="controls"
-          className="invisible h-9 min-w-[200px] sm:h-11 xl:hidden"
+          className="invisible h-9 min-w-[200px] sm:h-11 lg:hidden"
         />
 
         <div
           data-platform-controls="top-right"
-          className="absolute right-[max(0.625rem,env(safe-area-inset-right))] top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center justify-end gap-1.5 sm:gap-2 xl:gap-3 xl:static xl:translate-y-0"
+          className="absolute right-[max(0.625rem,env(safe-area-inset-right))] top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center justify-end gap-1.5 sm:gap-2 lg:static lg:translate-y-0 2xl:gap-3"
         >
           {showNotifications && <NotificationIndicator />}
 

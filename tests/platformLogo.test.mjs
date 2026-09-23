@@ -66,13 +66,12 @@ test("workspace header pins the control group to the viewport right edge", () =>
   );
 });
 
-test("workspace header reserves the full right control width before the extra-wide breakpoint", () => {
+test("workspace header gives controls their own grid column on desktop", () => {
   const header = read("src/components/layout/MainWorkspaceHeader.tsx");
 
-  assert.match(
-    header,
-    /data-platform-grid-placeholder="controls"[\s\S]{0,160}xl:min-w-\[380px\]/,
-  );
+  assert.match(header, /lg:grid-cols-\[auto_minmax\(0,1fr\)_auto\]/);
+  assert.match(header, /data-platform-controls="top-right"/);
+  assert.match(header, /lg:static lg:translate-y-0/);
 });
 
 test("header controls use distinct semantic color families", () => {

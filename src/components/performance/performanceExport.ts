@@ -223,24 +223,15 @@ function detailRows(review: PerformanceReview): ExcelValue[][] {
   }
   if (self.legacyText.trim()) rows.push(["自評", self.legacyText, "", "", "", "", "", "", ""]);
   const overallFeedback = manager.feedback.split("\n\n【逐筆實績補充要求】\n")[0].trim();
-  if (overallFeedback) rows.push(["主管評核", "整體主管評語", overallFeedback, "", "", "", "", "", ""]);
+  if (overallFeedback) {
+    if (rows.length) rows[0][5] = [rows[0][5], `整體評核：${overallFeedback}`].filter(Boolean).join("\n\n");
+    else rows.push(["主管評核", "", "", "", "", overallFeedback, "", "", ""]);
+  }
   for (const question of ACCOUNTABILITY_QUESTIONS) {
     const answer = manager.answers[question.id];
-    if (answer != null) rows.push(["主管評核", question.text, "", "", answer, "", "", "", ""]);
+    if (answer != null) rows.push(["當責量表", question.text, "", "", answer, "", "", "", ""]);
   }
   return rows;
-}
-
-function splitDetailRow(values: ExcelValue[]): ExcelValue[][] {
-  const achievement = Array.from(text(values[1]));
-  const feedback = Array.from(text(values[2]));
-  const chunks = Math.max(1, Math.ceil(achievement.length / 500), Math.ceil(feedback.length / 500));
-  return Array.from({ length: chunks }, (_, index) => [
-    index === 0 ? values[0] : `${values[0]}（續）`,
-    achievement.slice(index * 500, (index + 1) * 500).join(""),
-    feedback.slice(index * 500, (index + 1) * 500).join(""),
-    ...(index === 0 ? values.slice(3) : ["", "", "", "", "", ""]),
-  ]);
 }
 
 function download(blob: Blob, filename: string) {
@@ -289,10 +280,8 @@ export async function downloadPerformanceExcel(reviews: PerformanceReview[], cyc
       });
       styleHeaderRow(worksheet.addRow(EXCEL_DETAIL_HEADERS), EXCEL_DETAIL_HEADER, "FFFFFFFF");
       detailRows(review).forEach((values) => {
-        splitDetailRow(values).forEach((part) => {
-          const row = worksheet.addRow(part);
-          stylePerformanceRow(row, part);
-        });
+        const row = worksheet.addRow(values);
+        stylePerformanceRow(row, values);
       });
 
       worksheet.autoFilter = {

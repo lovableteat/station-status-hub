@@ -15,7 +15,7 @@ test("mobile header exposes a bundled website QR and a thumb-friendly workspace 
   ]);
 
   assert.match(header, /<WebsiteQrButton \/>/);
-  assert.match(header, /hidden w-full[\s\S]*lg:flex/);
+  assert.match(header, /hidden min-w-0 max-w-full[\s\S]*lg:flex 2xl:hidden/);
   assert.match(qr, /platform-mobile-qr\.svg/);
   assert.match(qr, /https:\/\/lovableteat\.github\.io\/station-status-hub\//);
   assert.match(qr, /複製連結/);
@@ -102,7 +102,7 @@ test("direct chat becomes full-screen on phones and respects the keyboard safe a
   assert.match(center, /fixed inset-0 flex h-\[100dvh\] w-screen/);
   assert.match(center, /bottom-\[calc\(var\(--mobile-shell-bottom\)\+0\.5rem\)\]/);
   assert.match(panel, /env\(safe-area-inset-bottom\)/);
-  assert.match(panel, /aria-label="加入圖片或影片"/);
+  assert.match(panel, /aria-label="加入附件"/);
   assert.match(panel, /accept=\{CHAT_MEDIA_ACCEPT\}/);
   assert.match(panel, /multiple/);
   assert.match(panel, /h-11 w-11 rounded-2xl[^"]*sm:h-10 sm:w-10/);

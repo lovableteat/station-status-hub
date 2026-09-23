@@ -35,3 +35,11 @@ test("online users control stays aligned with the fixed header control height", 
     /showOnlineUsers && <div className="hidden md:block"><OnlineUsersIndicator\s*\/><\/div>/,
   );
 });
+
+test("desktop navigation stays on one row and moves overflow into More", async () => {
+  const source = await readFile(headerSourceUrl, "utf8");
+  assert.match(source, /lg:grid-cols-\[auto_minmax\(0,1fr\)_auto\]/);
+  assert.match(source, /overflowItems\.map/);
+  assert.match(source, /compactItems\.push\(activeCompactItem\)/);
+  assert.doesNotMatch(source, /order-3 col-span-2/);
+});

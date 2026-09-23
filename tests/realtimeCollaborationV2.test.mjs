@@ -504,7 +504,7 @@ test("direct chat exposes modern search, pinning, drafts, replies, emoji and med
   assert.match(panel, /QUICK_EMOJI\.map/);
   assert.match(panel, /Enter 送出 · Shift \+ Enter 換行/);
   assert.match(panel, /setPreviewAttachment\(attachment\)/);
-  assert.match(panel, /aria-label="下載原始檔案"/);
+  assert.match(panel, /aria-label="在新分頁開啟原始圖片"/);
   assert.match(panel, /formatDirectMessageDay\(message\.createdAt\)/);
   assert.match(center, /w-\[min\(430px,calc\(100vw-1rem\)\)\]/);
   assert.match(experience, /export function parseDirectMessageBody/);
