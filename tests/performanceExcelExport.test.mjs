@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import ExcelJS from "exceljs";
-import { downloadPerformanceExcel } from "../src/components/performance/performanceExport.ts";
+import { downloadPerformanceExcel, downloadPerformanceHtml } from "../src/components/performance/performanceExport.ts";
 import { DEFAULT_PERFORMANCE_REVIEWS } from "../src/components/performance/performanceData.mjs";
 import {
   ACCOUNTABILITY_QUESTIONS,
   serializeManagerAssessment,
   serializeSelfAssessment,
 } from "../src/components/performance/rd2Assessment.mjs";
+import { RATING_SCALE } from "../src/components/performance/rd2Standards.mjs";
 
 test("manager Excel keeps long KPI in one row and uses the existing supervisor comment column", async () => {
   const originalCreateObjectURL = URL.createObjectURL;
@@ -55,7 +56,19 @@ test("manager Excel keeps long KPI in one row and uses the existing supervisor c
     assert.match(kpiRows[0][6], /整體主管評語/);
     assert.ok(rows.every((row) => !String(row[1]).includes("（續）")));
     assert.ok(rows.every((row) => row[2] !== "整體主管評語"));
-    assert.ok(rows.some((row) => row[1] === "當責量表" && row[5] === 4));
+    assert.ok(rows.every((row) => row[1] !== "當責量表"));
+    const accountabilityHeader = rows.find((row) => row[1] === "評分（1–5 分）");
+    assert.ok(accountabilityHeader);
+    assert.equal(accountabilityHeader[2], "當責題目");
+    const accountabilityRow = rows.find((row) => row[2] === ACCOUNTABILITY_QUESTIONS[0].text);
+    assert.ok(accountabilityRow);
+    assert.equal(accountabilityRow[1], RATING_SCALE.find((item) => item.value === 4).label);
+
+    await downloadPerformanceHtml([review], "2026-q3");
+    const html = await exportedBlob.text();
+    assert.match(html, /主管當責評分/);
+    assert.match(html, /<table class="accountability-table"><thead>[\s\S]*?<tbody><tr><td>4分（做得不錯）<\/td><td>/);
+    assert.doesNotMatch(html, /<td>當責量表<\/td>/);
   } finally {
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
