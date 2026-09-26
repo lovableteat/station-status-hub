@@ -139,7 +139,7 @@ export function MyAssessmentBackupsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl overflow-hidden p-0">
-        <DialogHeader className="border-b border-primary/10 bg-primary/[0.04] px-6 py-5">
+        <DialogHeader className="border-b border-border bg-accent/35 px-6 py-5">
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Archive className="h-5 w-5 text-primary" />
             我的自評備份
@@ -150,7 +150,7 @@ export function MyAssessmentBackupsDialog({
         </DialogHeader>
 
         <div className="grid gap-4 px-6 py-5">
-          <div className="flex items-start gap-3 rounded-2xl border border-primary/15 bg-primary/[0.06] px-4 py-3 text-sm text-muted-foreground">
+          <div className="flex items-start gap-3 rounded-2xl border border-border bg-accent/45 px-4 py-3 text-sm text-muted-foreground">
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
             <p className="leading-6">備份只保存自評、實績與附件資料，不會保存或顯示主管分數與主管回饋。</p>
           </div>
