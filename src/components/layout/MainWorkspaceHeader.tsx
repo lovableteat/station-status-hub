@@ -107,8 +107,8 @@ export function MainWorkspaceHeader({
                 className={cn(
                   "interactive-lift min-w-fit shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 2xl:px-4",
                   isActive
-                    ? "bg-accent text-accent-foreground shadow-[0_18px_34px_-24px_hsl(var(--primary)/0.28)]"
-                    : "text-foreground/80 hover:bg-primary/10 hover:text-foreground"
+                    ? "bg-accent text-accent-foreground shadow-[0_18px_34px_-24px_hsl(0_0%_0%/0.5)]"
+                    : "text-foreground/80 hover:bg-accent hover:text-foreground"
                 )}
               >
                 {item.label}
@@ -125,7 +125,7 @@ export function MainWorkspaceHeader({
               onClick={() => onSelect(item.id)}
               className={cn(
                 "interactive-lift shrink-0 whitespace-nowrap rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors xl:px-3 xl:text-sm",
-                item.id === activeItem ? "bg-accent text-accent-foreground" : "text-foreground/80 hover:bg-primary/10 hover:text-foreground",
+                item.id === activeItem ? "bg-accent text-accent-foreground" : "text-foreground/80 hover:bg-accent hover:text-foreground",
               )}
             >
               {item.label}
@@ -134,13 +134,13 @@ export function MainWorkspaceHeader({
           {overflowItems.length > 0 ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" className="flex shrink-0 items-center gap-1 rounded-xl px-2 py-2.5 text-xs font-semibold text-foreground/80 hover:bg-primary/10 hover:text-foreground xl:px-3 xl:text-sm">
+                <button type="button" className="flex shrink-0 items-center gap-1 rounded-xl px-2 py-2.5 text-xs font-semibold text-foreground/80 hover:bg-accent hover:text-foreground xl:px-3 xl:text-sm">
                   更多 <ChevronDown className="h-3.5 w-3.5" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-40 rounded-xl border-primary/15 bg-[hsl(223_34%_11%/0.98)] p-1 text-foreground">
                 {overflowItems.map((item) => (
-                  <DropdownMenuItem key={item.id} onClick={() => onSelect(item.id)} className="rounded-lg px-3 py-2 text-sm focus:bg-primary/10 focus:text-foreground">
+                  <DropdownMenuItem key={item.id} onClick={() => onSelect(item.id)} className="rounded-lg px-3 py-2 text-sm focus:bg-accent focus:text-foreground">
                     {item.label}
                   </DropdownMenuItem>
                 ))}
@@ -170,14 +170,14 @@ export function MainWorkspaceHeader({
               <button
                 type="button"
                 title={userMenuItems.length > 0 ? "開啟帳號選單，可編輯大頭貼" : "開啟帳號選單"}
-                className="interactive-lift flex h-10 w-[140px] shrink-0 items-center gap-2 rounded-xl border border-indigo-200/30 bg-indigo-300/10 px-3 text-left text-indigo-50 transition-colors hover:bg-indigo-300/18 hover:shadow-[0_16px_28px_-24px_rgba(99,102,241,0.6)] max-sm:w-10 max-sm:justify-center max-sm:px-0 sm:h-12 sm:rounded-2xl sm:gap-3"
+                className="interactive-lift flex h-10 w-[140px] shrink-0 items-center gap-2 rounded-xl border border-border bg-card px-3 text-left text-foreground transition-colors hover:bg-accent hover:shadow-[0_16px_28px_-24px_rgba(0,0,0,0.6)] max-sm:w-10 max-sm:justify-center max-sm:px-0 sm:h-12 sm:rounded-2xl sm:gap-3"
               >
                 <span className="relative shrink-0">
                   <UserAvatar
                     avatarPath={userAvatarPath}
                     displayName={userName ?? "Operator"}
                     className="h-8 w-8 border border-primary/20 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)]"
-                    fallbackClassName="bg-primary/15 text-xs text-primary sm:text-sm"
+                    fallbackClassName="bg-accent text-xs text-primary sm:text-sm"
                   />
                   {userMenuItems.length > 0 ? (
                     <span
@@ -214,11 +214,11 @@ export function MainWorkspaceHeader({
                   {userRoleLabel ?? "使用者"}
                 </div>
               </div>
-              <DropdownMenuSeparator className="bg-primary/10" />
+              <DropdownMenuSeparator className="bg-border" />
               {onOpenWorkspaceHome && (
                 <DropdownMenuItem
                   onClick={onOpenWorkspaceHome}
-                  className="rounded-xl px-3 py-2 text-sm text-foreground focus:bg-primary/10 focus:text-foreground"
+                  className="rounded-xl px-3 py-2 text-sm text-foreground focus:bg-accent focus:text-foreground"
                 >
                   工作區首頁
                 </DropdownMenuItem>
@@ -228,8 +228,8 @@ export function MainWorkspaceHeader({
                   key={item.id}
                   onClick={item.onSelect}
                   className={cn(
-                    "rounded-xl px-3 py-2 text-sm text-foreground focus:bg-primary/10 focus:text-foreground",
-                    item.emphasized && "my-1 bg-primary/10 font-semibold text-primary focus:bg-primary/20 focus:text-primary",
+                    "rounded-xl px-3 py-2 text-sm text-foreground focus:bg-accent focus:text-foreground",
+                    item.emphasized && "my-1 bg-accent font-semibold text-primary focus:bg-muted focus:text-primary",
                   )}
                 >
                   {item.icon ? <span className="mr-2 shrink-0">{item.icon}</span> : null}
@@ -237,7 +237,7 @@ export function MainWorkspaceHeader({
                 </DropdownMenuItem>
               ))}
               {(onOpenWorkspaceHome || userMenuItems.length > 0) && (
-                <DropdownMenuSeparator className="bg-primary/10" />
+                <DropdownMenuSeparator className="bg-border" />
               )}
               <DropdownMenuItem
                 onClick={onLogout}

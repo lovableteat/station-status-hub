@@ -95,7 +95,7 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md overflow-hidden p-0">
-        <DialogHeader className="border-b border-primary/10 bg-primary/[0.04] px-6 py-5">
+        <DialogHeader className="border-b border-border bg-accent/35 px-6 py-5">
           <DialogTitle className="flex items-center gap-2 text-xl">
             <UserRound className="h-5 w-5 text-primary" />
             編輯大頭貼
@@ -104,10 +104,10 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
         </DialogHeader>
 
         <div className="grid gap-5 px-6 py-5">
-          <div className="flex items-center gap-4 rounded-2xl border border-primary/15 bg-background/30 p-4">
-            <Avatar className="h-20 w-20 border-2 border-primary/25 bg-primary/10 shadow-[0_18px_38px_-24px_hsl(var(--primary)/0.65)]">
+          <div className="flex items-center gap-4 rounded-2xl border border-border bg-background/30 p-4">
+            <Avatar className="h-20 w-20 border-2 border-primary/25 bg-accent shadow-[0_18px_38px_-24px_hsl(0_0%_0%/0.65)]">
               {avatarUrl ? <AvatarImage src={avatarUrl} alt={`${displayName}的頭像預覽`} className="object-cover" /> : null}
-              <AvatarFallback className="bg-primary/10 text-xl font-black text-primary">
+              <AvatarFallback className="bg-accent text-xl font-black text-primary">
                 {displayName.slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
@@ -136,7 +136,7 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
               variant="outline"
               disabled={saving}
               onClick={() => fileInputRef.current?.click()}
-              className="rounded-xl border-primary/30 bg-primary/10 font-semibold text-primary hover:bg-primary/20 hover:text-primary"
+              className="rounded-xl border-border bg-accent font-semibold text-primary hover:bg-muted hover:text-primary"
             >
               <ImagePlus className="mr-2 h-4 w-4" />
               {selectedFile ? "重新選擇大頭貼" : "選擇大頭貼圖片"}
@@ -162,11 +162,11 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
           ) : null}
         </div>
 
-        <DialogFooter className="border-t border-primary/10 bg-background/20 px-6 py-4">
+        <DialogFooter className="border-t border-border bg-background/20 px-6 py-4">
           <Button type="button" variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button type="button" disabled={!selectedFile || saving} onClick={() => void saveAvatar()}>
+          <Button type="button" disabled={!selectedFile || saving} onClick={() => void saveAvatar()} className="disabled:bg-muted disabled:text-muted-foreground">
             {saving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
             儲存大頭貼
           </Button>

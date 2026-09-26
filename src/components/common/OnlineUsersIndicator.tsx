@@ -17,7 +17,7 @@ export function OnlineUsersIndicator() {
       aria-label={`查看在線成員，目前 ${totalOnlineSessions} 個連線、${totalOnlineUsers} 個帳號在線`}
       className={cn(
         "interactive-lift flex h-12 w-[140px] shrink-0 items-center justify-center gap-2 rounded-2xl border px-3 transition-all duration-200 max-xl:w-12 max-xl:px-0",
-        "border-emerald-200/30 bg-emerald-300/10 text-emerald-100 shadow-[0_16px_28px_-24px_rgba(16,185,129,0.65)] backdrop-blur-sm hover:border-emerald-200/50 hover:bg-emerald-300/18",
+        "border-border bg-card text-foreground shadow-[0_16px_28px_-24px_rgba(0,0,0,0.65)] backdrop-blur-sm hover:border-primary/35 hover:bg-accent",
       )}
     >
       <span className="relative">
