@@ -183,8 +183,8 @@ All colors MUST be HSL for proper theming support.
   --secondary-foreground: 240 7% 93%;
   --muted: 248 7% 18%;
   --muted-foreground: 249 4% 68%;
-  --accent: 174 28% 13%;
-  --accent-foreground: 171 51% 72%;
+  --accent: 255 6% 16%;
+  --accent-foreground: 240 7% 93%;
   --destructive: 353 35% 62%;
   --destructive-foreground: 180 10% 7%;
   --border: 248 7% 22%;
@@ -229,8 +229,8 @@ All colors MUST be HSL for proper theming support.
   --sidebar-foreground: 240 7% 93%;
   --sidebar-primary: 171 51% 59%;
   --sidebar-primary-foreground: 180 10% 7%;
-  --sidebar-accent: 174 28% 13%;
-  --sidebar-accent-foreground: 171 51% 72%;
+  --sidebar-accent: 255 6% 16%;
+  --sidebar-accent-foreground: 240 7% 93%;
   --sidebar-border: 248 7% 22%;
   --sidebar-ring: 171 51% 59%;
 }
@@ -323,11 +323,9 @@ All colors MUST be HSL for proper theming support.
     font-family: "Noto Sans TC", "Segoe UI", sans-serif;
     text-rendering: optimizeLegibility;
     background-image:
-      radial-gradient(circle at 12% 8%, hsl(var(--platform-blue) / 0.2), transparent 30rem),
-      radial-gradient(circle at 78% 9%, hsl(var(--platform-teal) / 0.13), transparent 30rem),
-      radial-gradient(circle at 84% 92%, hsl(var(--platform-violet) / 0.12), transparent 34rem),
-      radial-gradient(circle at 15% 92%, hsl(var(--platform-amber) / 0.07), transparent 30rem),
-      linear-gradient(180deg, hsl(222 46% 8%), hsl(222 54% 5%));
+      radial-gradient(circle at 12% 8%, hsl(250 5% 48% / 0.06), transparent 30rem),
+      radial-gradient(circle at 84% 92%, hsl(250 5% 48% / 0.035), transparent 34rem),
+      linear-gradient(180deg, hsl(252 7% 8%), hsl(240 6% 5%));
     background-attachment: fixed;
   }
 
@@ -591,20 +589,20 @@ All colors MUST be HSL for proper theming support.
 
   .platform-color-field {
     background:
-      radial-gradient(circle at 12% 0%, hsl(var(--platform-blue) / 0.2), transparent 22rem),
-      radial-gradient(circle at 48% -20%, hsl(var(--platform-teal) / 0.12), transparent 24rem),
-      radial-gradient(circle at 86% 12%, hsl(var(--platform-violet) / 0.14), transparent 22rem),
-      linear-gradient(180deg, hsl(222 42% 11% / 0.98), hsl(223 42% 9% / 0.95));
+      radial-gradient(circle at 12% 0%, hsl(250 5% 48% / 0.07), transparent 22rem),
+      radial-gradient(circle at 48% -20%, hsl(250 5% 48% / 0.04), transparent 24rem),
+      radial-gradient(circle at 86% 12%, hsl(250 5% 48% / 0.05), transparent 22rem),
+      linear-gradient(180deg, hsl(252 7% 10% / 0.98), hsl(240 6% 7% / 0.95));
   }
 
   .surface-accent {
     --surface-accent-color: var(--platform-blue);
     position: relative;
     isolation: isolate;
-    border-color: hsl(var(--surface-accent-color) / 0.22);
+    border-color: hsl(var(--border) / 0.75);
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.06),
-      0 18px 46px -34px hsl(var(--surface-accent-color) / 0.42);
+      0 18px 46px -34px hsl(0 0% 0% / 0.68);
   }
 
   .surface-accent::before {
@@ -615,8 +613,8 @@ All colors MUST be HSL for proper theming support.
     border-radius: inherit;
     pointer-events: none;
     background:
-      radial-gradient(circle at 18% 0%, hsl(var(--surface-accent-color) / 0.16), transparent 24rem),
-      radial-gradient(circle at 92% 8%, hsl(var(--surface-accent-color) / 0.1), transparent 18rem);
+      radial-gradient(circle at 18% 0%, hsl(250 5% 48% / 0.06), transparent 24rem),
+      radial-gradient(circle at 92% 8%, hsl(250 5% 48% / 0.035), transparent 18rem);
     opacity: 0.98;
   }
 
@@ -653,14 +651,13 @@ All colors MUST be HSL for proper theming support.
     --workspace-dialog-tone: var(--platform-blue);
     border-color: hsl(var(--workspace-dialog-tone) / 0.34);
     background:
-      radial-gradient(circle at 12% 0%, hsl(var(--workspace-dialog-tone) / 0.16), transparent 24rem),
-      radial-gradient(circle at 92% 8%, hsl(var(--platform-teal) / 0.08), transparent 20rem),
-      linear-gradient(180deg, hsl(220 38% 15%), hsl(222 48% 9%));
+      radial-gradient(circle at 12% 0%, hsl(250 5% 48% / 0.06), transparent 24rem),
+      linear-gradient(180deg, hsl(252 7% 14%), hsl(240 6% 9%));
     color: hsl(var(--foreground));
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.07),
-      0 28px 90px -34px hsl(var(--workspace-dialog-tone) / 0.42),
-      0 36px 120px -42px hsl(222 72% 2% / 0.94);
+      0 28px 90px -34px hsl(0 0% 0% / 0.55),
+      0 36px 120px -42px hsl(0 0% 0% / 0.94);
   }
 
   .workspace-dialog-surface:focus-visible {
@@ -689,8 +686,8 @@ All colors MUST be HSL for proper theming support.
     --workspace-section-tone: var(--platform-blue);
     border: 1px solid hsl(var(--workspace-section-tone) / 0.28);
     background:
-      radial-gradient(circle at 92% 0%, hsl(var(--workspace-section-tone) / 0.14), transparent 18rem),
-      hsl(220 42% 12%);
+      radial-gradient(circle at 92% 0%, hsl(250 5% 48% / 0.045), transparent 18rem),
+      hsl(252 7% 12%);
     box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.045);
   }
 
@@ -737,10 +734,8 @@ All colors MUST be HSL for proper theming support.
     --input: 205 45% 30%;
     --ring: 191 79% 57%;
     background:
-      radial-gradient(circle at 10% 0%, hsl(var(--platform-blue) / 0.16), transparent 26rem),
-      radial-gradient(circle at 82% 8%, hsl(var(--platform-teal) / 0.1), transparent 30rem),
-      radial-gradient(circle at 88% 90%, hsl(var(--platform-violet) / 0.08), transparent 32rem),
-      #06111f;
+      radial-gradient(circle at 10% 0%, hsl(250 5% 48% / 0.06), transparent 26rem),
+      #0b0b0d;
     color: #f3f8fc;
     font-size: 15px;
   }
@@ -880,10 +875,8 @@ All colors MUST be HSL for proper theming support.
 
   .glass-strip {
     background:
-      radial-gradient(circle at 10% 0%, hsl(var(--platform-blue) / 0.16), transparent 18rem),
-      radial-gradient(circle at 62% 0%, hsl(var(--platform-teal) / 0.09), transparent 18rem),
-      radial-gradient(circle at 95% 50%, hsl(var(--platform-violet) / 0.1), transparent 16rem),
-      linear-gradient(180deg, hsl(222 34% 16% / 0.82), hsl(222 30% 12% / 0.78));
+      radial-gradient(circle at 10% 0%, hsl(250 5% 48% / 0.06), transparent 18rem),
+      linear-gradient(180deg, hsl(252 7% 16% / 0.82), hsl(240 6% 12% / 0.78));
     backdrop-filter: blur(18px);
   }
 
@@ -1272,7 +1265,7 @@ All colors MUST be HSL for proper theming support.
     border-color: hsl(var(--sidebar-ring) / 0.45) !important;
     background: hsl(var(--sidebar-accent)) !important;
     color: hsl(var(--sidebar-accent-foreground)) !important;
-    box-shadow: 0 10px 22px -16px rgb(30 85 76 / 0.55);
+    box-shadow: 0 10px 22px -16px rgb(0 0 0 / 0.55);
   }
 
   [data-mobile-workspace-dock="true"] {
@@ -1318,7 +1311,7 @@ All colors MUST be HSL for proper theming support.
     border-color: hsl(var(--sidebar-ring) / 0.45) !important;
     background: hsl(var(--sidebar-accent)) !important;
     color: hsl(var(--sidebar-accent-foreground)) !important;
-    box-shadow: 0 10px 22px -16px rgb(30 85 76 / 0.55), 0 0 0 1px hsl(var(--sidebar-ring) / 0.12);
+    box-shadow: 0 10px 22px -16px rgb(0 0 0 / 0.55), 0 0 0 1px hsl(var(--sidebar-ring) / 0.12);
   }
 
   [data-mobile-ai-command-bar="true"] {
