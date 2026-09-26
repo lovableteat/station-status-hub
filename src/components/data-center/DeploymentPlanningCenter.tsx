@@ -219,11 +219,11 @@ const LAYER_OPTIONS: Array<{
   icon: LucideIcon;
   color: string;
 }> = [
-  { id: "overview", label: "營運總覽", description: "機櫃配置與狀態", icon: LayoutDashboard, color: "#38bdf8" },
-  { id: "health", label: "健康狀態", description: "異常、警告與離線", icon: Activity, color: "#34d399" },
-  { id: "power", label: "電力路徑", description: "PDU A/B 與負載", icon: Zap, color: "#fbbf24" },
-  { id: "network", label: "網路拓撲", description: "Fabric 與 uplink", icon: Network, color: "#22d3ee" },
-  { id: "cooling", label: "冷卻分布", description: "冷通道與溫度", icon: Snowflake, color: "#60a5fa" },
+  { id: "overview", label: "營運總覽", description: "機櫃配置與狀態", icon: LayoutDashboard, color: "#66b59d" },
+  { id: "health", label: "健康狀態", description: "異常、警告與離線", icon: Activity, color: "#68a889" },
+  { id: "power", label: "電力路徑", description: "PDU A/B 與負載", icon: Zap, color: "#d4aa5e" },
+  { id: "network", label: "網路拓撲", description: "Fabric 與 uplink", icon: Network, color: "#8dc4b2" },
+  { id: "cooling", label: "冷卻分布", description: "冷通道與溫度", icon: Snowflake, color: "#a9b4aa" },
 ];
 
 function readInitialSites() {
@@ -1247,7 +1247,7 @@ function RackInspector({
                   aria-label="增加一台 L10 1U 機台"
                    disabled={!canEdit || selectedL10Slots.length >= l10Capacity}
                    onClick={() => onL10CountChange(selectedL10Slots.length + 1)}
-                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl bg-blue-500 text-white hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:bg-blue-950 disabled:text-blue-100/45"
+                  className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl bg-blue-500 text-[#192522] hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:bg-blue-950 disabled:text-blue-100/45"
                 >
                   <Plus className="h-4 w-4" />
                 </button>

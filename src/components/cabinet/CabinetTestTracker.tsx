@@ -163,11 +163,11 @@ export function CabinetTestTracker() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Completed':
-        return <Badge className="bg-green-100 text-green-800">已完成</Badge>;
+        return <Badge className="bg-green-400/15 text-green-200">已完成</Badge>;
       case 'In Progress':
-        return <Badge className="bg-blue-100 text-blue-800">進行中</Badge>;
+        return <Badge className="bg-blue-400/15 text-blue-200">進行中</Badge>;
       case 'Pending':
-        return <Badge className="bg-yellow-100 text-yellow-800">待處理</Badge>;
+        return <Badge className="bg-yellow-400/15 text-yellow-200">待處理</Badge>;
       case 'Not Start':
         return <Badge variant="outline">未開始</Badge>;
       default:

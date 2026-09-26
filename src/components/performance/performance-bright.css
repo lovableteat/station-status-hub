@@ -22,9 +22,9 @@
   gap: 20px;
 }
 .rd2-bright .performance-content {
-  --rd2-kpi: #b45309;
-  --rd2-okr: #0f766e;
-  --rd2-idp: #2563eb;
+  --rd2-kpi: #d4aa5e;
+  --rd2-okr: #68a889;
+  --rd2-idp: #a9b4aa;
   background: var(--rd2-bg);
   color: var(--rd2-ink);
   color-scheme: dark;
@@ -45,7 +45,7 @@
   background: #243e60;
 }
 .rd2-bright .rd2-sidebar nav button[aria-current="page"] {
-  color: #fff;
+  color: #192522;
   background: #2563eb;
 }
 .rd2-bright .rd2-brand svg {
@@ -74,7 +74,7 @@
 .rd2-bright .performance-content .bg-gradient-primary {
   background: #2563eb;
   border-color: #2563eb;
-  color: #fff;
+  color: #192522;
 }
 .rd2-bright .performance-content .bg-gradient-primary:hover {
   background: #1d4ed8;
@@ -453,7 +453,7 @@
 .rd2-bright .rd2-category .bg-gradient-primary {
   background: var(--card-accent-solid, #2563eb);
   border-color: var(--card-accent-solid, #2563eb);
-  color: #fff;
+  color: #192522;
 }
 .rd2-bright .rd2-category textarea {
   min-height: 185px;
@@ -688,7 +688,7 @@
   place-items: center;
   border-radius: 13px;
   background: #fbbf24;
-  color: #422006;
+  color: hsl(var(--primary-foreground));
 }
 
 .rd2-bright .rd2-return-alert-icon svg {
@@ -716,13 +716,13 @@
   flex-shrink: 0;
   border: 1px solid #fde68a;
   background: #fbbf24;
-  color: #422006;
+  color: hsl(var(--primary-foreground));
   font-weight: 800;
 }
 
 .rd2-bright .rd2-return-alert button:hover {
   background: #fde68a;
-  color: #3f1d05;
+  color: hsl(var(--primary-foreground));
 }
 
 @media (max-width: 680px) {

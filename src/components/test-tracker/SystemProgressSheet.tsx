@@ -179,7 +179,7 @@ function statusSaveButtonClass(status: string) {
   if (status === "Done") return "bg-emerald-400 text-[#04130e] hover:bg-emerald-300";
   if (status === "On-going") return "bg-amber-300 text-[#1b1202] hover:bg-amber-200";
   if (status === "Error") return "bg-rose-400 text-white hover:bg-rose-300";
-  return "bg-blue-500 text-white hover:bg-blue-400";
+  return "bg-blue-500 text-[#192522] hover:bg-blue-400";
 }
 
 export function SystemProgressSheet({

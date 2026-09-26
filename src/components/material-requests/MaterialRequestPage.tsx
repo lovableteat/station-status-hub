@@ -1981,7 +1981,7 @@ function ExcelFilterPopover({
                     <Checkbox
                       checked={allOptionsChecked ? true : (draftSelectedValues !== null && draftSelectedValues.length > 0 ? "indeterminate" : false)}
                       onCheckedChange={(value) => toggleAllOptions(value === true)}
-                      className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
+                      className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-[#192522]"
                     />
                     <span className="min-w-0 flex-1 truncate">(全選)</span>
                     <span className="text-sm text-slate-300">
@@ -1998,7 +1998,7 @@ function ExcelFilterPopover({
                       <Checkbox
                         checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
                         onCheckedChange={(value) => toggleVisibleSelection(value === true)}
-                        className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
+                        className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-[#192522]"
                       />
                       <span className="min-w-0 flex-1 truncate">(選取所有搜尋結果)</span>
                       <span className="text-sm text-cyan-200">{visibleCheckedCount}/{filteredOptions.length}</span>
@@ -2008,7 +2008,7 @@ function ExcelFilterPopover({
                       <Checkbox
                         checked={mergeSearchSelection}
                         onCheckedChange={(value) => setMergeSearchSelection(value === true)}
-                        className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
+                        className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-[#192522]"
                       />
                       <span>[新增目前的選取範圍至篩選]</span>
                     </label>
@@ -2039,7 +2039,7 @@ function ExcelFilterPopover({
                           <Checkbox
                             checked={checked}
                             onCheckedChange={(value) => toggleValue(option.value, value === true)}
-                            className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
+                            className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-[#192522]"
                           />
                           <span
                             className={cn(
@@ -2830,21 +2830,21 @@ function SummaryTile({
   tone: "blue" | "green" | "amber" | "cyan";
 }) {
   const colors = {
-    blue: "border-blue-200 bg-blue-50 text-blue-700",
-    green: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    amber: "border-amber-200 bg-amber-50 text-amber-700",
-    cyan: "border-cyan-200 bg-cyan-50 text-cyan-700",
+    blue: "border-blue-300/40 bg-blue-400/15 text-blue-200",
+    green: "border-emerald-300/40 bg-emerald-400/15 text-emerald-200",
+    amber: "border-amber-300/40 bg-amber-400/15 text-amber-200",
+    cyan: "border-cyan-300/40 bg-cyan-400/15 text-cyan-200",
   }[tone];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-          <p className="mt-2 text-3xl font-black tracking-tight text-slate-900">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+          <p className="mt-2 text-3xl font-black tracking-tight text-foreground">
             {value.toLocaleString()}
           </p>
-          <p className="mt-1 text-xs text-slate-500">{note}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{note}</p>
         </div>
         <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl border", colors)}>
           <Icon className="h-5 w-5" />
@@ -3737,11 +3737,11 @@ function MaterialRecordDialog({
 
         <DialogFooter className="gap-2">
           {readOnly ? (
-            <Button type="button" onClick={() => onModeChange("edit")} className="bg-blue-600 text-white hover:bg-blue-500">
+            <Button type="button" onClick={() => onModeChange("edit")} className="bg-blue-600 text-[#192522] hover:bg-blue-500">
               <Pencil className="mr-2 h-4 w-4" />修改這筆
             </Button>
           ) : (
-            <Button type="button" onClick={handleSave} disabled={!form.refGroup.trim() || !form.name.trim()} className="bg-blue-600 text-white hover:bg-blue-500">
+            <Button type="button" onClick={handleSave} disabled={!form.refGroup.trim() || !form.name.trim()} className="bg-blue-600 text-[#192522] hover:bg-blue-500">
               儲存資料
             </Button>
           )}

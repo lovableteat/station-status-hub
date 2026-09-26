@@ -34,20 +34,20 @@ export function PlatformLogoMark({ className, size = "md" }: PlatformLogoMarkPro
       />
       <path
         d="M16 12.5h10a4 4 0 1 1 0 8h-4a4 4 0 1 0 0 8h4a4 4 0 1 1 0 8H16"
-        stroke="#54E4F5"
+        stroke="#9bd8c4"
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="3"
       />
       <path
         d="M12.5 12.5h.01M35.5 20.5h.01M12.5 36.5h.01"
-        stroke="#4C8DFF"
+        stroke="#66b59d"
         strokeLinecap="round"
         strokeWidth="4"
       />
       <path
         d="M12.5 12.5h2.5M35.5 20.5h-2.5M12.5 36.5H15"
-        stroke="#4C8DFF"
+        stroke="#66b59d"
         strokeLinecap="round"
         strokeWidth="1.5"
       />

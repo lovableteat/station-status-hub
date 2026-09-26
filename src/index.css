@@ -168,6 +168,73 @@ All colors MUST be HSL for proper theming support.
   }
 }
 
+/* Shared charcoal palette for every existing desktop and mobile surface. */
+:root,
+.dark {
+  --background: 150 3% 15%;
+  --foreground: 60 10% 94%;
+  --card: 210 6% 20%;
+  --card-foreground: 60 10% 94%;
+  --popover: 205 6% 24%;
+  --popover-foreground: 60 10% 94%;
+  --primary: 162 35% 55%;
+  --primary-foreground: 160 12% 10%;
+  --secondary: 205 5% 22%;
+  --secondary-foreground: 60 10% 94%;
+  --muted: 200 4% 26%;
+  --muted-foreground: 100 3% 76%;
+  --accent: 205 5% 26%;
+  --accent-foreground: 162 37% 78%;
+  --destructive: 0 51% 66%;
+  --destructive-foreground: 0 0% 10%;
+  --border: 204 5% 38%;
+  --input: 204 5% 38%;
+  --ring: 162 44% 68%;
+
+  --platform-blue: 162 35% 55%;
+  --platform-teal: 162 35% 55%;
+  --platform-green: 149 28% 53%;
+  --platform-amber: 39 58% 60%;
+  --platform-violet: 162 28% 70%;
+  --platform-rose: 0 51% 66%;
+
+  --success: 149 28% 53%;
+  --success-foreground: 160 12% 10%;
+  --warning: 39 58% 60%;
+  --warning-foreground: 40 15% 10%;
+  --danger: 0 51% 66%;
+  --danger-foreground: 0 0% 10%;
+  --info: 162 35% 64%;
+  --info-foreground: 160 12% 10%;
+  --station-idle: 205 5% 28%;
+  --station-working: 162 35% 55%;
+  --station-warning: 39 58% 60%;
+  --station-error: 0 51% 66%;
+  --station-complete: 149 28% 53%;
+  --chart-1: 162 35% 55%;
+  --chart-2: 149 28% 53%;
+  --chart-3: 100 3% 68%;
+  --chart-4: 39 58% 60%;
+  --chart-5: 0 51% 66%;
+
+  --gradient-primary: linear-gradient(135deg, hsl(162 35% 55%), hsl(162 34% 63%));
+  --gradient-success: linear-gradient(135deg, hsl(149 28% 53%), hsl(149 27% 61%));
+  --gradient-warning: linear-gradient(135deg, hsl(39 58% 60%), hsl(39 57% 67%));
+  --gradient-danger: linear-gradient(135deg, hsl(0 51% 66%), hsl(0 50% 72%));
+  --shadow-glow: 0 22px 48px -28px hsl(162 35% 55% / 0.42), 0 0 24px hsl(162 35% 55% / 0.1);
+  --today-line: hsl(162 35% 55%);
+  --today-glow: 0 0 18px hsl(162 35% 55% / 0.3);
+
+  --sidebar-background: 150 3% 15%;
+  --sidebar-foreground: 60 10% 94%;
+  --sidebar-primary: 162 35% 55%;
+  --sidebar-primary-foreground: 160 12% 10%;
+  --sidebar-accent: 205 5% 26%;
+  --sidebar-accent-foreground: 162 37% 78%;
+  --sidebar-border: 204 5% 38%;
+  --sidebar-ring: 162 44% 68%;
+}
+
 @media (min-width: 1280px) and (max-height: 820px) {
   [data-testid="workspace-entrance"] {
     padding-top: 0.5rem;

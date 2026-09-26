@@ -622,7 +622,7 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
                   </Button>
                   <Button
                     type="button"
-                    className="h-11 rounded-xl bg-blue-500 text-white hover:bg-blue-400"
+                    className="h-11 rounded-xl bg-blue-500 text-[#192522] hover:bg-blue-400"
                     onClick={() => handleEdit(issue)}
                   >
                     <Edit className="mr-2 h-4 w-4" />

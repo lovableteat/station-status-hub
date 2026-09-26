@@ -221,7 +221,7 @@ export function NotificationCard({
                   size="sm"
                   onClick={handleDelete}
                   disabled={isLoading}
-                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+                  className="h-7 w-7 p-0 text-red-200 hover:text-red-100 hover:bg-red-400/15 transition-colors"
                   title="刪除通知"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -255,7 +255,7 @@ export function NotificationCard({
                     <DropdownMenuItem 
                       onClick={handleDelete}
                       disabled={isLoading}
-                      className="text-red-600 focus:text-red-600 hover:bg-red-50 transition-colors"
+                      className="text-red-200 focus:text-red-200 hover:bg-red-400/15 transition-colors"
                     >
                       <Trash2 className="h-3 w-3 mr-2" />
                       刪除通知

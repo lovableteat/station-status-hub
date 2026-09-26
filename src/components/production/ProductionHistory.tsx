@@ -280,9 +280,9 @@ export function ProductionHistory() {
                     <div 
                       key={bottleneck.station_name}
                       className={`p-4 rounded-lg border ${
-                        severity === 'high' ? 'bg-red-50 border-red-200' :
-                        severity === 'medium' ? 'bg-yellow-50 border-yellow-200' :
-                        'bg-green-50 border-green-200'
+                        severity === 'high' ? 'bg-red-500/10 border-red-400/40' :
+                        severity === 'medium' ? 'bg-yellow-500/10 border-yellow-400/40' :
+                        'bg-green-500/10 border-green-400/40'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -361,7 +361,7 @@ export function ProductionHistory() {
                   {records
                     .filter(r => r.is_rework || r.notes?.includes('返工'))
                     .map((record) => (
-                      <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg bg-yellow-50">
+                      <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg bg-yellow-500/10">
                         <div className="flex items-center gap-3">
                           <RefreshCw className="h-4 w-4 text-yellow-600" />
                           <div>
