@@ -4,12 +4,12 @@ const HEX_COLOR = /#(?:[\da-f]{8}|[\da-f]{6}|[\da-f]{4}|[\da-f]{3})(?![\da-f])/g
 const COLOR_FUNCTION = /\b(rgba?|hsla?)\(/gi;
 
 const SURFACES = [
-  [0.07, [37, 39, 41]],
-  [0.1, [42, 45, 47]],
-  [0.14, [48, 51, 54]],
-  [0.19, [53, 57, 59]],
-  [0.27, [57, 61, 64]],
-  [0.43, [69, 73, 76]],
+  [0.07, [11, 11, 13]],
+  [0.1, [16, 16, 18]],
+  [0.14, [21, 20, 24]],
+  [0.19, [26, 25, 30]],
+  [0.27, [33, 31, 36]],
+  [0.43, [43, 42, 48]],
 ];
 
 const COLOR_PROPERTY = /^(?:--|.*(?:color|background|border|outline|shadow|fill|stroke|caret|accent|column-rule|text-decoration))/;
@@ -64,33 +64,35 @@ export function charcoalRgb(red, green, blue, property = "color") {
 
   // State colors keep their meaning while losing the old neon saturation.
   if (hue >= 345 || hue < 18) {
-    if (role === "text") return [239, 170, 170];
-    return lightness < 0.42 ? [69, 47, 50] : [212, 123, 123];
+    if (role === "text") return [233, 170, 176];
+    return lightness < 0.42 ? [48, 31, 37] : [192, 123, 131];
   }
   if (hue >= 18 && hue < 75) {
-    if (role === "text") return [239, 201, 139];
-    return lightness < 0.42 ? [70, 59, 43] : [212, 170, 94];
+    if (role === "text") return [232, 192, 139];
+    return lightness < 0.42 ? [52, 40, 28] : [201, 155, 94];
   }
   if (hue >= 75 && hue < 145) {
-    if (role === "text") return [166, 211, 183];
-    return lightness < 0.42 ? [47, 68, 56] : [104, 168, 137];
+    if (role === "text") return [170, 208, 186];
+    return lightness < 0.42 ? [29, 50, 40] : [109, 164, 138];
   }
 
   if (role === "border" && lightness < 0.43) {
-    return saturation > 0.6 && lightness > 0.23 ? [102, 181, 157] : [92, 98, 102];
+    return saturation > 0.6 && lightness > 0.23 ? [95, 199, 183] : [58, 57, 65];
   }
   if (lightness < 0.43) {
-    if (role === "accent" && lightness > 0.21) return [48, 86, 74];
-    if (saturation > 0.55 && lightness > 0.21) return [48, 79, 69];
+    if (role === "accent" && lightness > 0.21) return [24, 48, 44];
+    if (saturation > 0.55 && lightness > 0.21) return [26, 45, 43];
     return (SURFACES.find(([limit]) => lightness <= limit) ?? SURFACES.at(-1))[1];
   }
   if (role === "text" && saturation < 0.46) {
-    return lightness > 0.8 ? [242, 242, 239] : [194, 196, 193];
+    return lightness > 0.8 ? [242, 242, 239] : [185, 184, 189];
   }
-  if (role === "border" && saturation < 0.46) return [92, 98, 102];
+  if (role === "border" && saturation < 0.46) return [58, 57, 65];
 
-  const jadeLightness = Math.max(0.55, Math.min(0.82, lightness + 0.03));
-  return hslToRgb(162, 0.35, jadeLightness);
+  const jadeLightness = role === "text"
+    ? Math.max(0.62, Math.min(0.76, lightness + 0.04))
+    : Math.max(0.54, Math.min(0.59, lightness));
+  return hslToRgb(171, 0.5, jadeLightness);
 }
 
 function hexToChannels(hex) {

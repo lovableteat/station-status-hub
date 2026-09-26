@@ -130,7 +130,7 @@ export function LoginPage() {
                 onClick={() => switchView(item)}
                 className={cn(
                   "flex h-10 items-center justify-center gap-2 rounded-lg text-sm font-bold transition-colors",
-                  view === item ? "bg-cyan-300 text-[#071421]" : "text-slate-400 hover:text-white",
+                  view === item ? "bg-accent text-accent-foreground" : "text-slate-400 hover:text-white",
                 )}
               >
                 {item === "login" ? <KeyRound className="h-4 w-4" /> : <UserRoundPlus className="h-4 w-4" />}

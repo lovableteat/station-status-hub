@@ -20,11 +20,11 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
             isAiSurface
               ? style
               : {
-                  backgroundColor: "hsl(var(--secondary) / 0.82)",
+                  backgroundColor: "hsl(var(--secondary))",
                   color: "hsl(var(--foreground))",
                   WebkitTextFillColor: "hsl(var(--foreground))",
                   boxShadow:
-                    "inset 0 0 0 1000px hsl(var(--secondary) / 0.82), inset 0 1px 0 hsl(0 0% 100% / 0.05), 0 16px 36px -30px hsl(220 50% 2% / 0.94)",
+                    "inset 0 0 0 1000px hsl(var(--secondary)), inset 0 1px 0 hsl(0 0% 100% / 0.05), 0 16px 36px -30px hsl(220 50% 2% / 0.94)",
                   ...style,
                 }
           }

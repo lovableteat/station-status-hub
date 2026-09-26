@@ -107,7 +107,7 @@ export function MainWorkspaceHeader({
                 className={cn(
                   "interactive-lift min-w-fit shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 2xl:px-4",
                   isActive
-                    ? "bg-primary text-primary-foreground shadow-[0_18px_34px_-24px_hsl(var(--primary)/0.85)]"
+                    ? "bg-accent text-accent-foreground shadow-[0_18px_34px_-24px_hsl(var(--primary)/0.28)]"
                     : "text-foreground/80 hover:bg-primary/10 hover:text-foreground"
                 )}
               >
@@ -125,7 +125,7 @@ export function MainWorkspaceHeader({
               onClick={() => onSelect(item.id)}
               className={cn(
                 "interactive-lift shrink-0 whitespace-nowrap rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors xl:px-3 xl:text-sm",
-                item.id === activeItem ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-primary/10 hover:text-foreground",
+                item.id === activeItem ? "bg-accent text-accent-foreground" : "text-foreground/80 hover:bg-primary/10 hover:text-foreground",
               )}
             >
               {item.label}

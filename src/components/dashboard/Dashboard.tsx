@@ -437,9 +437,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 >
                   <defs>
                     <linearGradient id="dashboard-output-area" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#66b59d" stopOpacity="0.3" />
-                      <stop offset="72%" stopColor="#66b59d" stopOpacity="0.06" />
-                      <stop offset="100%" stopColor="#66b59d" stopOpacity="0" />
+                      <stop offset="0%" stopColor="#61cbbb" stopOpacity="0.3" />
+                      <stop offset="72%" stopColor="#61cbbb" stopOpacity="0.06" />
+                      <stop offset="100%" stopColor="#61cbbb" stopOpacity="0" />
                     </linearGradient>
                   </defs>
                   {chartAxisTicks.map((tick, index) => (
@@ -449,7 +449,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                       x2="100"
                       y1={index * 25}
                       y2={index * 25}
-                      stroke="#5c6266"
+                      stroke="#3a3941"
                       strokeDasharray="3 6"
                       strokeOpacity="0.72"
                       vectorEffect="non-scaling-stroke"
@@ -459,7 +459,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   <polyline
                     points={trendPointString}
                     fill="none"
-                    stroke="#66b59d"
+                    stroke="#61cbbb"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth="3"

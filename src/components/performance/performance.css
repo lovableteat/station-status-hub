@@ -87,8 +87,8 @@
   background: hsl(var(--sidebar-accent));
 }
 .rd2-sidebar nav button[aria-current="page"] {
-  background: hsl(var(--sidebar-primary));
-  color: hsl(var(--sidebar-primary-foreground));
+  background: hsl(var(--sidebar-accent));
+  color: hsl(var(--sidebar-accent-foreground));
 }
 .rd2-workspace .performance-content {
   min-width: 0;

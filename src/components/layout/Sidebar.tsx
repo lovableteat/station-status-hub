@@ -157,7 +157,7 @@ export function Sidebar({
                     "rounded-lg border text-sm font-medium transition-colors",
                     isCompact ? "mx-auto grid h-10 w-10 place-items-center p-0" : "h-11 w-full justify-start px-3",
                     isActive
-                      ? "border-[#4c8dff]/65 bg-[#4c8dff] text-[#06111f] hover:bg-[#6ba2ff] hover:text-[#06111f]"
+                      ? "border-primary/45 bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                       : "border-transparent text-[#b9cddd] hover:border-[#2a526f] hover:bg-[#10263a] hover:text-[#f3f8fc]"
                   )}
                   onClick={() => onModuleChange(item.id)}

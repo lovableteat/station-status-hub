@@ -219,11 +219,11 @@ const LAYER_OPTIONS: Array<{
   icon: LucideIcon;
   color: string;
 }> = [
-  { id: "overview", label: "營運總覽", description: "機櫃配置與狀態", icon: LayoutDashboard, color: "#66b59d" },
-  { id: "health", label: "健康狀態", description: "異常、警告與離線", icon: Activity, color: "#68a889" },
-  { id: "power", label: "電力路徑", description: "PDU A/B 與負載", icon: Zap, color: "#d4aa5e" },
-  { id: "network", label: "網路拓撲", description: "Fabric 與 uplink", icon: Network, color: "#8dc4b2" },
-  { id: "cooling", label: "冷卻分布", description: "冷通道與溫度", icon: Snowflake, color: "#a9b4aa" },
+  { id: "overview", label: "營運總覽", description: "機櫃配置與狀態", icon: LayoutDashboard, color: "#61cbbb" },
+  { id: "health", label: "健康狀態", description: "異常、警告與離線", icon: Activity, color: "#6da48a" },
+  { id: "power", label: "電力路徑", description: "PDU A/B 與負載", icon: Zap, color: "#c99b5e" },
+  { id: "network", label: "網路拓撲", description: "Fabric 與 uplink", icon: Network, color: "#80bca9" },
+  { id: "cooling", label: "冷卻分布", description: "冷通道與溫度", icon: Snowflake, color: "#9eaba3" },
 ];
 
 function readInitialSites() {

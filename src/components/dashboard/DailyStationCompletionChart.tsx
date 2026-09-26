@@ -34,8 +34,8 @@ export function DailyStationCompletionChart() {
 
   // 站點顏色映射
   const stationColors = [
-    '#66b59d', '#a2c4b5', '#8e9f95', '#d4aa5e',
-    '#c49774', '#a9b5ae', '#72a38d', '#b89f80'
+    '#61cbbb', '#94b6a7', '#829389', '#c99b5e',
+    '#b48969', '#9eaba3', '#679780', '#ab9275'
   ];
 
   const chartData = useMemo(() => {

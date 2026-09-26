@@ -44,7 +44,7 @@ const SECONDARY_WORKSPACES = [
 ] as const;
 
 const activeDockClasses =
-  "border-emerald-200/60 bg-[linear-gradient(180deg,#66b59d_0%,#7ac4ac_100%)] text-[#192522] shadow-[0_10px_22px_-16px_rgba(102,181,157,0.65)]";
+  "border-primary/45 bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_10px_22px_-16px_rgba(30,85,76,0.55)]";
 
 export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: MobileWorkspaceDockProps) {
   const [moreOpen, setMoreOpen] = useState(false);

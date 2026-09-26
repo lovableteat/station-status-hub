@@ -171,68 +171,68 @@ All colors MUST be HSL for proper theming support.
 /* Shared charcoal palette for every existing desktop and mobile surface. */
 :root,
 .dark {
-  --background: 150 3% 15%;
-  --foreground: 60 10% 94%;
-  --card: 210 6% 20%;
-  --card-foreground: 60 10% 94%;
-  --popover: 205 6% 24%;
-  --popover-foreground: 60 10% 94%;
-  --primary: 162 35% 55%;
-  --primary-foreground: 160 12% 10%;
-  --secondary: 205 5% 22%;
-  --secondary-foreground: 60 10% 94%;
-  --muted: 200 4% 26%;
-  --muted-foreground: 100 3% 76%;
-  --accent: 205 5% 26%;
-  --accent-foreground: 162 37% 78%;
-  --destructive: 0 51% 66%;
-  --destructive-foreground: 0 0% 10%;
-  --border: 204 5% 38%;
-  --input: 204 5% 38%;
-  --ring: 162 44% 68%;
+  --background: 240 8% 5%;
+  --foreground: 240 7% 93%;
+  --card: 252 9% 11%;
+  --card-foreground: 240 7% 93%;
+  --popover: 252 7% 14%;
+  --popover-foreground: 240 7% 93%;
+  --primary: 171 51% 59%;
+  --primary-foreground: 180 10% 7%;
+  --secondary: 252 7% 14%;
+  --secondary-foreground: 240 7% 93%;
+  --muted: 248 7% 18%;
+  --muted-foreground: 249 4% 68%;
+  --accent: 174 28% 13%;
+  --accent-foreground: 171 51% 72%;
+  --destructive: 353 35% 62%;
+  --destructive-foreground: 180 10% 7%;
+  --border: 248 7% 22%;
+  --input: 248 7% 22%;
+  --ring: 171 51% 59%;
 
-  --platform-blue: 162 35% 55%;
-  --platform-teal: 162 35% 55%;
-  --platform-green: 149 28% 53%;
-  --platform-amber: 39 58% 60%;
-  --platform-violet: 162 28% 70%;
-  --platform-rose: 0 51% 66%;
+  --platform-blue: 171 51% 59%;
+  --platform-teal: 171 51% 59%;
+  --platform-green: 152 23% 54%;
+  --platform-amber: 34 50% 58%;
+  --platform-violet: 171 27% 69%;
+  --platform-rose: 353 35% 62%;
 
-  --success: 149 28% 53%;
-  --success-foreground: 160 12% 10%;
-  --warning: 39 58% 60%;
+  --success: 152 23% 54%;
+  --success-foreground: 180 10% 7%;
+  --warning: 34 50% 58%;
   --warning-foreground: 40 15% 10%;
-  --danger: 0 51% 66%;
-  --danger-foreground: 0 0% 10%;
-  --info: 162 35% 64%;
-  --info-foreground: 160 12% 10%;
-  --station-idle: 205 5% 28%;
-  --station-working: 162 35% 55%;
-  --station-warning: 39 58% 60%;
-  --station-error: 0 51% 66%;
-  --station-complete: 149 28% 53%;
-  --chart-1: 162 35% 55%;
-  --chart-2: 149 28% 53%;
-  --chart-3: 100 3% 68%;
-  --chart-4: 39 58% 60%;
-  --chart-5: 0 51% 66%;
+  --danger: 353 35% 62%;
+  --danger-foreground: 180 10% 7%;
+  --info: 171 51% 66%;
+  --info-foreground: 180 10% 7%;
+  --station-idle: 248 7% 25%;
+  --station-working: 171 51% 59%;
+  --station-warning: 34 50% 58%;
+  --station-error: 353 35% 62%;
+  --station-complete: 152 23% 54%;
+  --chart-1: 171 51% 59%;
+  --chart-2: 152 23% 54%;
+  --chart-3: 249 4% 68%;
+  --chart-4: 34 50% 58%;
+  --chart-5: 353 35% 62%;
 
-  --gradient-primary: linear-gradient(135deg, hsl(162 35% 55%), hsl(162 34% 63%));
-  --gradient-success: linear-gradient(135deg, hsl(149 28% 53%), hsl(149 27% 61%));
-  --gradient-warning: linear-gradient(135deg, hsl(39 58% 60%), hsl(39 57% 67%));
-  --gradient-danger: linear-gradient(135deg, hsl(0 51% 66%), hsl(0 50% 72%));
-  --shadow-glow: 0 22px 48px -28px hsl(162 35% 55% / 0.42), 0 0 24px hsl(162 35% 55% / 0.1);
-  --today-line: hsl(162 35% 55%);
-  --today-glow: 0 0 18px hsl(162 35% 55% / 0.3);
+  --gradient-primary: linear-gradient(135deg, hsl(171 51% 56%), hsl(171 51% 63%));
+  --gradient-success: linear-gradient(135deg, hsl(152 23% 51%), hsl(152 23% 58%));
+  --gradient-warning: linear-gradient(135deg, hsl(34 50% 55%), hsl(34 50% 62%));
+  --gradient-danger: linear-gradient(135deg, hsl(353 35% 59%), hsl(353 35% 66%));
+  --shadow-glow: 0 22px 48px -28px hsl(171 51% 59% / 0.25), 0 0 24px hsl(171 51% 59% / 0.06);
+  --today-line: hsl(171 51% 59%);
+  --today-glow: 0 0 18px hsl(171 51% 59% / 0.2);
 
-  --sidebar-background: 150 3% 15%;
-  --sidebar-foreground: 60 10% 94%;
-  --sidebar-primary: 162 35% 55%;
-  --sidebar-primary-foreground: 160 12% 10%;
-  --sidebar-accent: 205 5% 26%;
-  --sidebar-accent-foreground: 162 37% 78%;
-  --sidebar-border: 204 5% 38%;
-  --sidebar-ring: 162 44% 68%;
+  --sidebar-background: 240 6% 7%;
+  --sidebar-foreground: 240 7% 93%;
+  --sidebar-primary: 171 51% 59%;
+  --sidebar-primary-foreground: 180 10% 7%;
+  --sidebar-accent: 174 28% 13%;
+  --sidebar-accent-foreground: 171 51% 72%;
+  --sidebar-border: 248 7% 22%;
+  --sidebar-ring: 171 51% 59%;
 }
 
 @media (min-width: 1280px) and (max-height: 820px) {
@@ -378,12 +378,12 @@ All colors MUST be HSL for proper theming support.
     appearance: none;
     -webkit-appearance: none;
     color-scheme: dark;
-    background: hsl(var(--secondary) / 0.82) !important;
+    background: hsl(var(--secondary)) !important;
     background-image: none !important;
     color: hsl(var(--foreground));
     caret-color: hsl(var(--foreground));
     -webkit-text-fill-color: hsl(var(--foreground));
-    box-shadow: inset 0 0 0 1000px hsl(var(--secondary) / 0.82);
+    box-shadow: inset 0 0 0 1000px hsl(var(--secondary));
   }
 
   input[type="file"] {
@@ -485,7 +485,7 @@ All colors MUST be HSL for proper theming support.
   ):-webkit-autofill:focus {
     -webkit-text-fill-color: hsl(var(--foreground));
     box-shadow:
-      inset 0 0 0 1000px hsl(var(--secondary) / 0.92),
+      inset 0 0 0 1000px hsl(var(--secondary)),
       inset 0 1px 0 hsl(0 0% 100% / 0.05),
       0 16px 36px -30px hsl(220 50% 2% / 0.94);
     transition: background-color 99999s ease-in-out 0s;
@@ -1269,10 +1269,10 @@ All colors MUST be HSL for proper theming support.
   }
 
   [data-mobile-maintenance-module][aria-current="page"] {
-    border-color: color-mix(in srgb, var(--mobile-module-text) 72%, white) !important;
-    background: var(--mobile-module-active) !important;
-    color: #061927 !important;
-    box-shadow: 0 10px 22px -16px rgb(96 165 250 / 0.85);
+    border-color: hsl(var(--sidebar-ring) / 0.45) !important;
+    background: hsl(var(--sidebar-accent)) !important;
+    color: hsl(var(--sidebar-accent-foreground)) !important;
+    box-shadow: 0 10px 22px -16px rgb(30 85 76 / 0.55);
   }
 
   [data-mobile-workspace-dock="true"] {
@@ -1315,10 +1315,10 @@ All colors MUST be HSL for proper theming support.
   }
 
   [data-mobile-dock-item="true"][aria-current="page"] {
-    border-color: rgb(170 211 255 / 0.72) !important;
-    background: linear-gradient(180deg, #568bd5 0%, #3f73b9 100%) !important;
-    color: #f8fbff !important;
-    box-shadow: 0 10px 22px -16px rgb(96 165 250 / 0.95), 0 0 0 1px rgb(103 148 223 / 0.2);
+    border-color: hsl(var(--sidebar-ring) / 0.45) !important;
+    background: hsl(var(--sidebar-accent)) !important;
+    color: hsl(var(--sidebar-accent-foreground)) !important;
+    box-shadow: 0 10px 22px -16px rgb(30 85 76 / 0.55), 0 0 0 1px hsl(var(--sidebar-ring) / 0.12);
   }
 
   [data-mobile-ai-command-bar="true"] {
