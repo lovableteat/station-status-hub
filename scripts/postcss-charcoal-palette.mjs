@@ -73,15 +73,15 @@ export function charcoalRgb(red, green, blue, property = "color") {
   }
   if (hue >= 75 && hue < 145) {
     if (role === "text") return [170, 208, 186];
-    return lightness < 0.42 ? [29, 50, 40] : [109, 164, 138];
+    return lightness < 0.42 ? [33, 32, 36] : [109, 164, 138];
   }
 
   if (role === "border" && lightness < 0.43) {
     return saturation > 0.6 && lightness > 0.23 ? [95, 199, 183] : [58, 57, 65];
   }
   if (lightness < 0.43) {
-    if (role === "accent" && lightness > 0.21) return [24, 48, 44];
-    if (saturation > 0.55 && lightness > 0.21) return [26, 45, 43];
+    if (role === "accent" && lightness > 0.21) return [33, 32, 36];
+    if (saturation > 0.55 && lightness > 0.21) return [33, 32, 36];
     return (SURFACES.find(([limit]) => lightness <= limit) ?? SURFACES.at(-1))[1];
   }
   if (role === "text" && saturation < 0.46) {

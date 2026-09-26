@@ -110,10 +110,10 @@ export function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#07101e] px-4 py-10 text-slate-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(61,139,214,0.22),transparent_30%),radial-gradient(circle_at_85%_86%,rgba(45,196,185,0.13),transparent_28%),linear-gradient(145deg,#07101e,#0b1728_55%,#07111f)]" />
-      <div className="absolute inset-0 opacity-[0.14] [background-image:linear-gradient(rgba(125,211,252,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(125,211,252,.12)_1px,transparent_1px)] [background-size:44px_44px]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(145,143,150,0.10),transparent_30%),radial-gradient(circle_at_85%_86%,rgba(145,143,150,0.06),transparent_28%),linear-gradient(145deg,#0b0b0d,#141317_55%,#0b0b0d)]" />
+      <div className="absolute inset-0 opacity-[0.14] [background-image:linear-gradient(rgba(185,184,189,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(185,184,189,.12)_1px,transparent_1px)] [background-size:44px_44px]" />
 
-      <Card className="relative w-full max-w-[460px] overflow-hidden border-cyan-200/15 bg-[#101c2f]/95 text-slate-100 shadow-[0_35px_100px_-45px_rgba(56,189,248,0.5)] backdrop-blur-xl">
+      <Card className="relative w-full max-w-[460px] overflow-hidden border-cyan-200/15 bg-[#101c2f]/95 text-slate-100 shadow-[0_35px_100px_-45px_rgba(0,0,0,0.75)] backdrop-blur-xl">
         <CardHeader className="space-y-4 border-b border-white/8 pb-5 text-center">
           <PlatformLogoMark className="mx-auto text-cyan-100" size="lg" />
           <div className="space-y-2">
