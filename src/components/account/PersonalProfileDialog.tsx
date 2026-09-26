@@ -166,7 +166,7 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
           <Button type="button" variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button type="button" disabled={!selectedFile || saving} onClick={() => void saveAvatar()} className="disabled:bg-muted disabled:text-muted-foreground">
+          <Button type="button" disabled={!selectedFile || saving} onClick={() => void saveAvatar()} className="disabled:!bg-none disabled:bg-muted disabled:text-muted-foreground disabled:!opacity-75 disabled:shadow-none">
             {saving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
             儲存大頭貼
           </Button>
