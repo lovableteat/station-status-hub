@@ -308,7 +308,7 @@ export function MobileProgressInput({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs h-8 bg-green-50 hover:bg-green-100 text-green-700"
+                      className="text-xs h-8 bg-green-400/15 hover:bg-green-400/25 text-green-200"
                       onClick={() => handleQuickAction(item.id, 'complete')}
                     >
                       <Check className="h-3 w-3" />
@@ -316,7 +316,7 @@ export function MobileProgressInput({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs h-8 bg-red-50 hover:bg-red-100 text-red-700"
+                      className="text-xs h-8 bg-red-400/15 hover:bg-red-400/25 text-red-200"
                       onClick={() => handleQuickAction(item.id, 'issue')}
                     >
                       <X className="h-3 w-3" />

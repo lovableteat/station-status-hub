@@ -252,7 +252,7 @@ export default function ManualTimeTracker({
         </Button>
       ) : isRunning ? (
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="bg-green-50 border-green-200 text-green-700">
+          <Badge variant="outline" className="bg-green-400/15 border-green-400/40 text-green-200">
             <Clock className="h-3 w-3 mr-1" />
             進行中
           </Badge>
@@ -269,7 +269,7 @@ export default function ManualTimeTracker({
         </div>
       ) : isCompleted ? (
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="bg-blue-50 border-blue-200 text-blue-700">
+          <Badge variant="outline" className="bg-blue-400/15 border-blue-400/40 text-blue-200">
             完成
           </Badge>
           {duration && (

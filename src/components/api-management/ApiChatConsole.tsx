@@ -2966,7 +2966,7 @@ export function ApiChatConsole({
                   onClick={() => void handleSend()}
                   disabled={!canSend}
                   aria-label="送出查詢"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-500 p-0 font-bold text-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] transition-all duration-200 hover:bg-blue-400 active:scale-[0.98] disabled:border-slate-700 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none sm:h-12 sm:w-12"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-500 p-0 font-bold text-[#192522] shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] transition-all duration-200 hover:bg-blue-400 active:scale-[0.98] disabled:border-slate-700 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none sm:h-12 sm:w-12"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
@@ -3063,7 +3063,7 @@ export function ApiChatConsole({
                     setMobileSidebarOpen(false);
                   }}
                   className={cn(
-                    "mt-5 h-12 rounded-xl bg-blue-500 font-black text-white shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] hover:bg-blue-400",
+                    "mt-5 h-12 rounded-xl bg-blue-500 font-black text-[#192522] shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] hover:bg-blue-400",
                     sidebarCollapsed ? "w-full justify-center px-0" : "w-full justify-start px-4 text-base"
                   )}
                   aria-label="建立新對話"

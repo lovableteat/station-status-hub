@@ -96,12 +96,12 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
 
   const getChangeTypeColor = (changeType: string) => {
     switch (changeType) {
-      case 'start_timer': return 'bg-green-100 text-green-800 border-green-200';
-      case 'complete_timer': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'insert': return 'bg-green-100 text-green-800 border-green-200';
-      case 'update': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'delete': return 'bg-red-100 text-red-800 border-red-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'start_timer': return 'bg-green-400/15 text-green-200 border-green-400/40';
+      case 'complete_timer': return 'bg-blue-400/15 text-blue-200 border-blue-400/40';
+      case 'insert': return 'bg-green-400/15 text-green-200 border-green-400/40';
+      case 'update': return 'bg-blue-400/15 text-blue-200 border-blue-400/40';
+      case 'delete': return 'bg-red-400/15 text-red-200 border-red-400/40';
+      default: return 'bg-muted text-muted-foreground border-border';
     }
   };
 

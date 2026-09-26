@@ -310,7 +310,7 @@ export function NotificationConversationView({
                       {reply.content}
                     </div>
                     {reply.status === 'confirmed' && reply.confirmed_at && (
-                      <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
+                      <div className="text-xs text-green-200 bg-green-400/15 p-2 rounded">
                         ✓ 已於 {formatTime(reply.confirmed_at)} 由 {reply.confirmed_by_name || '管理員'} 確認完成
                       </div>
                     )}

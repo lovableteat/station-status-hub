@@ -13,22 +13,19 @@ import { WEIGHT_GROUPS } from "./rd2Standards.mjs";
 
 /**
  * Categorical hues for the KPI / OKR / IDP identity, in fixed order.
- * Validated against the #081C2D panel surface with the dataviz six-checks
- * (lightness band, chroma, CVD separation, normal-vision floor, contrast):
- * all pass. Do not cycle or re-order these - colour follows the category,
- * never its rank. Every segment is also directly labelled, so identity is
- * never carried by colour alone.
+ * Keep these category colors stable; the chart directly labels each segment,
+ * so category identity is not conveyed by color alone.
  */
 const CATEGORY_COLORS = {
-  KPI: "var(--rd2-kpi, #4085F5)",
-  OKR: "var(--rd2-okr, #1AA167)",
-  IDP: "var(--rd2-idp, #7D5AE8)",
+  KPI: "var(--rd2-kpi, #d4aa5e)",
+  OKR: "var(--rd2-okr, #68a889)",
+  IDP: "var(--rd2-idp, #a9b4aa)",
 } as const;
 
 const CATEGORY_ORDER = ["KPI", "OKR", "IDP"] as const;
 
 /** Panel surface - doubles as the 2px spacer stroke between stacked fills. */
-const SURFACE = "var(--rd2-panel, #081c2d)";
+const SURFACE = "var(--rd2-panel, #303336)";
 
 
 interface WeightRow {
@@ -117,7 +114,7 @@ export function WeightDistributionChart() {
               width={104}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: "#9fb4c9", fontSize: 12 }}
+              tick={{ fill: "#c2c4c1", fontSize: 12 }}
             />
             <Tooltip
               cursor={{ fill: "rgb(255 255 255 / 0.04)" }}
@@ -144,7 +141,7 @@ export function WeightDistributionChart() {
                   dataKey={key}
                   position="center"
                   formatter={(value: number) => (value >= 15 ? `${value}%` : "")}
-                  fill="#f2f4f8"
+                  fill="#f2f2ef"
                   fontSize={12}
                   fontWeight={700}
                 />
@@ -158,10 +155,10 @@ export function WeightDistributionChart() {
 }
 
 const STATUS_STYLE: Record<string, { label: string; color: string }> = {
-  draft: { label: "草稿", color: "#94a3b8" },
-  "in-progress": { label: "填寫中", color: "#4085F5" },
-  submitted: { label: "待主管評分", color: "#FBBD23" },
-  approved: { label: "已完成", color: "#1AA167" },
+  draft: { label: "草稿", color: "#a9b4aa" },
+  "in-progress": { label: "填寫中", color: "#66b59d" },
+  submitted: { label: "待主管評分", color: "#d4aa5e" },
+  approved: { label: "已完成", color: "#68a889" },
 };
 
 interface StatusRow {

@@ -177,13 +177,13 @@ export function FacebookStyleNotifications() {
   const getToastBgColor = (type: 'info' | 'success' | 'warning' | 'error') => {
     switch (type) {
       case 'success':
-        return 'bg-green-50 border-green-200';
+        return 'bg-card border-green-400/60';
       case 'warning':
-        return 'bg-yellow-50 border-yellow-200';
+        return 'bg-card border-yellow-400/60';
       case 'error':
-        return 'bg-red-50 border-red-200';
+        return 'bg-card border-red-400/60';
       default:
-        return 'bg-blue-50 border-blue-200';
+        return 'bg-card border-blue-400/60';
     }
   };
 
@@ -204,14 +204,14 @@ export function FacebookStyleNotifications() {
                 {getToastIcon(toast.type)}
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-sm text-gray-900">{toast.title}</h4>
-                <p className="text-sm text-gray-600 mt-1">{toast.message}</p>
+                <h4 className="font-semibold text-sm text-foreground">{toast.title}</h4>
+                <p className="text-sm text-muted-foreground mt-1">{toast.message}</p>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => dismissToast(toast.id)}
-                className="h-6 w-6 p-0 hover:bg-gray-200"
+                className="h-6 w-6 p-0 hover:bg-muted"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -226,7 +226,7 @@ export function FacebookStyleNotifications() {
           {notifications.map((notification) => (
             <Card
               key={notification.id}
-              className="p-4 bg-white shadow-lg border-l-4 border-l-green-500 animate-scale-in"
+              className="p-4 bg-card shadow-lg border-l-4 border-l-green-500 animate-scale-in"
             >
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 mt-1">
@@ -234,14 +234,14 @@ export function FacebookStyleNotifications() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <h4 className="font-semibold text-sm text-gray-900">
+                    <h4 className="font-semibold text-sm text-foreground">
                       {notification.title}
                     </h4>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {formatTime(notification.created_at)}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1 leading-relaxed">
+                  <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
                     {notification.message}
                   </p>
                 </div>
@@ -249,7 +249,7 @@ export function FacebookStyleNotifications() {
                   variant="ghost"
                   size="sm"
                   onClick={() => dismissNotification(notification.id)}
-                  className="h-6 w-6 p-0 hover:bg-gray-100"
+                  className="h-6 w-6 p-0 hover:bg-muted"
                 >
                   <X className="h-4 w-4" />
                 </Button>

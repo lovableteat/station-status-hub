@@ -285,7 +285,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                 const allocation = allocations.find((a: any) => a.systemId === system.id);
                 return !allocation; // 只顯示未分配的系統
               }).length} 台可選)</Label>
-              <div className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded border">
+              <div className="text-xs text-yellow-200 bg-yellow-400/15 p-2 rounded border border-yellow-400/40">
                 注意：已分配到機櫃的機台將不會顯示在此清單中，以避免重複分配
               </div>
               <div className="grid gap-2 max-h-64 overflow-y-auto border rounded-md p-2">
