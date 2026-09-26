@@ -17,15 +17,15 @@ import { WEIGHT_GROUPS } from "./rd2Standards.mjs";
  * so category identity is not conveyed by color alone.
  */
 const CATEGORY_COLORS = {
-  KPI: "var(--rd2-kpi, #d4aa5e)",
-  OKR: "var(--rd2-okr, #68a889)",
-  IDP: "var(--rd2-idp, #a9b4aa)",
+  KPI: "var(--rd2-kpi, #c99b5e)",
+  OKR: "var(--rd2-okr, #6da48a)",
+  IDP: "var(--rd2-idp, #9eaba3)",
 } as const;
 
 const CATEGORY_ORDER = ["KPI", "OKR", "IDP"] as const;
 
 /** Panel surface - doubles as the 2px spacer stroke between stacked fills. */
-const SURFACE = "var(--rd2-panel, #303336)";
+const SURFACE = "var(--rd2-panel, #1a191e)";
 
 
 interface WeightRow {
@@ -156,9 +156,9 @@ export function WeightDistributionChart() {
 
 const STATUS_STYLE: Record<string, { label: string; color: string }> = {
   draft: { label: "草稿", color: "#a9b4aa" },
-  "in-progress": { label: "填寫中", color: "#66b59d" },
-  submitted: { label: "待主管評分", color: "#d4aa5e" },
-  approved: { label: "已完成", color: "#68a889" },
+  "in-progress": { label: "填寫中", color: "#61cbbb" },
+  submitted: { label: "待主管評分", color: "#c99b5e" },
+  approved: { label: "已完成", color: "#6da48a" },
 };
 
 interface StatusRow {

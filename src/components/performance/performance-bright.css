@@ -22,9 +22,9 @@
   gap: 20px;
 }
 .rd2-bright .performance-content {
-  --rd2-kpi: #d4aa5e;
-  --rd2-okr: #68a889;
-  --rd2-idp: #a9b4aa;
+  --rd2-kpi: #c99b5e;
+  --rd2-okr: #6da48a;
+  --rd2-idp: #9eaba3;
   background: var(--rd2-bg);
   color: var(--rd2-ink);
   color-scheme: dark;
@@ -45,8 +45,8 @@
   background: #243e60;
 }
 .rd2-bright .rd2-sidebar nav button[aria-current="page"] {
-  color: #192522;
-  background: #2563eb;
+  color: hsl(var(--sidebar-accent-foreground));
+  background: hsl(var(--sidebar-accent));
 }
 .rd2-bright .rd2-brand svg {
   color: #81aff8;

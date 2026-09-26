@@ -18,7 +18,7 @@ export function TestPassChart() {
             labelLine={false}
             label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
             outerRadius={80}
-            fill="#66b59d"
+            fill="#61cbbb"
             dataKey="value"
           >
             {data.map((entry, index) => (

@@ -151,25 +151,19 @@
 }
 
 .admin-sidebar-item.is-active {
-  border-color: rgb(116 167 255 / 70%);
-  color: #192522;
-  background:
-    linear-gradient(135deg, rgb(79 140 255 / 100%), rgb(104 122 255 / 96%)),
-    radial-gradient(circle at 100% 0%, rgb(64 217 199 / 34%), transparent 8rem);
+  border-color: hsl(var(--sidebar-ring) / 0.45);
+  color: hsl(var(--sidebar-accent-foreground));
+  background: hsl(var(--sidebar-accent));
 }
 
 .admin-sidebar nav .admin-sidebar-item:nth-child(2).is-active {
-  border-color: rgb(74 222 128 / 72%);
-  background:
-    linear-gradient(135deg, rgb(18 132 116 / 100%), rgb(48 187 132 / 96%)),
-    radial-gradient(circle at 100% 0%, rgb(251 191 36 / 30%), transparent 8rem);
+  border-color: hsl(var(--sidebar-ring) / 0.45);
+  background: hsl(var(--sidebar-accent));
 }
 
 .admin-sidebar nav .admin-sidebar-item:nth-child(3).is-active {
-  border-color: rgb(196 181 253 / 75%);
-  background:
-    linear-gradient(135deg, rgb(124 92 218 / 100%), rgb(213 91 151 / 94%)),
-    radial-gradient(circle at 100% 0%, rgb(251 191 36 / 24%), transparent 8rem);
+  border-color: hsl(var(--sidebar-ring) / 0.45);
+  background: hsl(var(--sidebar-accent));
 }
 
 .admin-sidebar-item > span {

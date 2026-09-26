@@ -7,9 +7,9 @@ import charcoalPalette, { recolorCssValue } from "../../scripts/postcss-charcoal
 test("generated utility colors keep their opacity while changing to the charcoal palette", () => {
   assert.equal(
     recolorCssValue("rgb(37 99 235 / var(--tw-bg-opacity))", "background-color"),
-    "rgb(105 183 159 / var(--tw-bg-opacity))",
+    "rgb(79 196 179 / var(--tw-bg-opacity))",
   );
-  assert.equal(recolorCssValue("#2a526f", "border-color"), "#5c6266");
+  assert.equal(recolorCssValue("#2a526f", "border-color"), "#3a3941");
   assert.equal(recolorCssValue("hsl(var(--primary) / 0.2)", "background"), "hsl(var(--primary) / 0.2)");
 });
 
@@ -18,9 +18,9 @@ test("a declaration is recolored once and pale interface text stays neutral", as
     `.admin-workspace { --admin-accent-blue: #4f8cff; color: #e8f3fb; }`,
     { from: undefined },
   );
-  assert.match(result.css, /--admin-accent-blue: #93cbba/);
+  assert.match(result.css, /--admin-accent-blue: #62cbbb/);
   assert.match(result.css, /color: #f2f2ef/);
-  assert.doesNotMatch(result.css, /#d4aa5e/);
+  assert.doesNotMatch(result.css, /#c99b5e/);
 });
 
 test("hover, open dialog, and mobile rules receive the same palette without changing print output", async () => {
@@ -43,7 +43,7 @@ test("warning and error retain distinct semantic colors", () => {
   assert.notEqual(warning, error);
   assert.notEqual(warning, accent);
   assert.notEqual(error, accent);
-  assert.equal(recolorCssValue("#f78ea0", "color"), "#efaaaa");
+  assert.equal(recolorCssValue("#f78ea0", "color"), "#e9aab0");
 });
 
 test("solid action and destructive fills keep readable text across hover states", async () => {
