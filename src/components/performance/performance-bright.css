@@ -956,7 +956,7 @@
   background: #122f51;
 }
 .rd2-bright .recharts-cartesian-axis-tick text {
-  fill: #50647b;
+  fill: var(--rd2-ink);
 }
 .rd2-bright .rd2-question-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));

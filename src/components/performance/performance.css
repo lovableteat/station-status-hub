@@ -1534,7 +1534,7 @@
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--rd2-ink);
 }
@@ -1545,7 +1545,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--rd2-muted);
 }
@@ -1716,7 +1716,7 @@
 }
 .rd2-table-details summary {
   padding: 6px 0;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--rd2-muted);
   cursor: pointer;
