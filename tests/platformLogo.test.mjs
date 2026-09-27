@@ -30,7 +30,7 @@ test("workspace header pins the shared brand to the top-left without changing th
   assert.match(header, /top-1\/2[^\"]*-translate-y-1\/2/);
 });
 
-test("brand positioning context stays viewport-wide when header content is max-width constrained", () => {
+test("desktop header content spans the viewport so brand and controls reach its edges", () => {
   const header = read("src/components/layout/MainWorkspaceHeader.tsx");
 
   assert.match(
@@ -41,6 +41,7 @@ test("brand positioning context stays viewport-wide when header content is max-w
     header,
     /<div className="mx-auto grid min-h-\[var\(--mobile-header-height\)\]/
   );
+  assert.doesNotMatch(header, /max-w-\[1920px\]/);
   assert.doesNotMatch(
     header,
     /<div className="relative mx-auto grid min-h-\[var\(--mobile-header-height\)\]/

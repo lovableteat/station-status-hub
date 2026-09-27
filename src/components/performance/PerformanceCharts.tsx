@@ -114,7 +114,7 @@ export function WeightDistributionChart() {
               width={104}
               tickLine={false}
               axisLine={false}
-              tick={{ fill: "#c2c4c1", fontSize: 12 }}
+              tick={{ fontSize: 14, fontWeight: 700 }}
             />
             <Tooltip
               cursor={{ fill: "rgb(255 255 255 / 0.04)" }}
@@ -142,7 +142,7 @@ export function WeightDistributionChart() {
                   position="center"
                   formatter={(value: number) => (value >= 15 ? `${value}%` : "")}
                   fill="#f2f2ef"
-                  fontSize={12}
+                  fontSize={14}
                   fontWeight={700}
                 />
               </Bar>
