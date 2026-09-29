@@ -71,6 +71,37 @@ export async function saveAssessmentRecord(db, review, previous) {
   return normalizePerformanceReview(data);
 }
 
+// A draft writes only employee-owned columns. In particular, an employee must
+// never replace the supervisor's feedback with the redacted copy in their form.
+export async function saveSelfAssessmentDraft(db, review, previous) {
+  if (previous && !['draft', 'in-progress'].includes(previous.status)) {
+    throw new Error('這份考核已送出或完成，不能儲存草稿。');
+  }
+  const fields = {
+    employee_name: review.employeeName,
+    department: review.department,
+    role: review.role,
+    due_date: review.dueDate || null,
+    goals: review.goals,
+    self_feedback: review.selfFeedback,
+  };
+  const query = previous
+    ? db.from('performance_reviews').update(fields).eq('id', previous.id).eq('updated_at', previous.updatedAt)
+    : db.from('performance_reviews').insert({
+        id: review.id,
+        cycle_id: review.cycleId,
+        employee_id: review.employeeId,
+        ...fields,
+        status: 'draft',
+      });
+  const { data, error } = await query.select('*').single();
+  if (error || data?.id !== review.id || data.status !== (previous?.status || 'draft') ||
+      data.self_feedback !== fields.self_feedback || !data.updated_at) {
+    throw new Error('草稿尚未確認儲存，請檢查連線或重新開啟考核；本頁輸入仍保留。');
+  }
+  return normalizePerformanceReview(data);
+}
+
 // Keep one request ID while retrying identical form content after a lost response.
 // This is memory only; no assessment content is written to localStorage.
 const pendingRequests = new Map();

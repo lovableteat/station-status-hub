@@ -13,7 +13,7 @@ function readStored(key) {
   try {
     const raw = window.sessionStorage.getItem(storageKey(key));
     const parsed = raw ? JSON.parse(raw) : null;
-    return parsed?.version === 2 && parsed.form ? parsed : null;
+    return parsed?.version === 2 && parsed.value ? parsed : null;
   } catch {
     return null;
   }

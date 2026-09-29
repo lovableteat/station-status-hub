@@ -58,7 +58,7 @@ test("performance workflow maps employee and manager actions to the review statu
       action: "draft",
       currentStatus: "draft",
     }),
-    "in-progress",
+    "draft",
   );
   assert.equal(
     getPerformanceStatusForAction({
