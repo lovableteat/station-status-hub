@@ -394,7 +394,9 @@ export function AssessmentEditor({
       setForm(confirmed);
       pending.current = false;
       if (draftKey) forgetAssessmentDraft(draftKey);
-      setSubmitStatus(demo ? "示範提交完成" : action === "return" ? "已退回補充，通知已送達員工通知中心。" : "提交成功");
+      setSubmitStatus(action === "draft"
+        ? demo ? "示範草稿已儲存於本機" : "草稿已儲存到工作區，尚未送交主管"
+        : demo ? "示範提交完成" : action === "return" ? "已退回補充，通知已送達員工通知中心。" : "提交成功");
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -429,7 +431,10 @@ export function AssessmentEditor({
             : "逐類對照員工的 IDP、OKR、KPI 自評，填寫主管分數與評語，再完成當責量表。"}
         </p>
       </header>
-      {!readonly && draftKey && showDraftWarning && !submitStatus && <p className="rd2-draft-notice" role="status"><strong>未送出內容會暫存於本分頁</strong><span>切換頁面或重新整理後可繼續編輯；按「提交」成功後會自動清除。</span></p>}
+      {!readonly && draftKey && showDraftWarning && !submitStatus && <p className="rd2-draft-notice" role="status">
+        <strong>{mode === "self" ? "編輯中會暫存於本分頁" : "主管評分編輯中會暫存於本分頁"}</strong>
+        <span>{mode === "self" ? "按「儲存草稿」可在下次登入後續填；按「提交」才會送交主管。" : "切換頁面或重新整理後可續填；確認評分後按「提交」。"}</span>
+      </p>}
       <fieldset disabled={readonly || saving} className="rd2-card rd2-identity">
         <div className="rd2-form-section-title">
           <strong>01 · 確認基本資料</strong>
@@ -1146,13 +1151,23 @@ export function AssessmentEditor({
           )}
           <p className="rd2-submit-explainer">
             {mode === "self"
-              ? "確認三類實績與佐證後，按「提交」送交直屬主管。離開前請完成提交。"
+              ? "尚未填完可先儲存草稿；確認三類實績與佐證後，再按「提交」送交直屬主管。"
               : "送出主管評分後，這份個人考核即完成；課務彙整請另至「部門績效總覽」處理。"}
           </p>
           <p className="rd2-draft-status" role="status">
             {submitStatus}
           </p>
           <div className="rd2-actions">
+            {mode === "self" && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!canSubmit || saving || !!imageJobs}
+                onClick={() => void submit("draft")}
+              >
+                {saving ? "儲存中…" : "儲存草稿"}
+              </Button>
+            )}
             {mode === "manager" && (
               <Button
                 type="button"

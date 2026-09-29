@@ -380,7 +380,7 @@ export function buildAssessmentReview({
       mode === "self"
         ? action === "submit"
           ? "submitted"
-          : "in-progress"
+          : previous?.status || "draft"
         : action === "submit"
           ? "approved"
           : action === "return"

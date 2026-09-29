@@ -43,7 +43,7 @@ export function getPerformanceStatusForAction({
   action,
   currentStatus = "draft",
 }) {
-  if (mode === "self") return action === "submit" ? "submitted" : "in-progress";
+  if (mode === "self") return action === "submit" ? "submitted" : currentStatus;
   if (mode === "manager") {
     if (action === "return") return "in-progress";
     if (action === "submit") return "approved";

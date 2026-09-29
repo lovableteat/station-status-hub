@@ -37,7 +37,7 @@ import { AssessmentEditor } from "./AssessmentEditor";
 import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGuide";
-import { submitAssessmentRecord } from "./assessmentPersistence.mjs";
+import { saveSelfAssessmentDraft, submitAssessmentRecord } from "./assessmentPersistence.mjs";
 import { AssessmentEntryList } from "./AssessmentEntryList";
 import { AssessmentEntryFeedback, AssessmentReturnHistory } from './AssessmentEntryFeedback';
 import { PerformanceOrganization } from "./PerformanceOrganization";
@@ -583,6 +583,7 @@ export function PerformanceAppraisalPage() {
           (review) =>
             review.cycleId === cycle &&
             review.id === selectedId &&
+            (tab !== "manager" || review.status !== "draft") &&
             (tab !== "self" || matchesUser(review, user)),
         ) || null
       );
@@ -607,7 +608,7 @@ export function PerformanceAppraisalPage() {
       options.set(option.id, { ...option, label });
     };
 
-    const managedReviews = reviews.filter((review) => !matchesUser(review, user));
+    const managedReviews = reviews.filter((review) => !matchesUser(review, user) && review.status !== "draft");
     const managedEmployeeIds = new Set(
       managedReviews.map((review) => review.employeeId).filter(Boolean),
     );
@@ -634,7 +635,7 @@ export function PerformanceAppraisalPage() {
       reviews.filter(
         (review) =>
           review.cycleId === cycle &&
-          (tab !== "manager" || !matchesUser(review, user)) &&
+          (tab !== "manager" || (!matchesUser(review, user) && review.status !== "draft")) &&
           (!status || review.status === status) &&
           (scope !== "mine" || matchesUser(review, user)) &&
           (!query.trim() ||
@@ -654,7 +655,7 @@ export function PerformanceAppraisalPage() {
   const managerExportReviews = useMemo(
     () =>
       reviews.filter(
-        (review) => review.cycleId === cycle && !matchesUser(review, user),
+        (review) => review.cycleId === cycle && !matchesUser(review, user) && review.status !== "draft",
       ),
     [reviews, cycle, user],
   );
@@ -791,11 +792,13 @@ export function PerformanceAppraisalPage() {
     }) as PerformanceReview;
     let confirmed = nextReview;
     if (!demo)
-      confirmed = (await submitAssessmentRecord(performanceDb, nextReview, {
-        mode,
-        action,
-        expectedUpdatedAt: form.sourceUpdatedAt || null,
-      })) as PerformanceReview;
+      confirmed = action === "draft" && mode === "self"
+        ? (await saveSelfAssessmentDraft(performanceDb, nextReview, previous)) as PerformanceReview
+        : (await submitAssessmentRecord(performanceDb, nextReview, {
+            mode,
+            action,
+            expectedUpdatedAt: form.sourceUpdatedAt || null,
+          })) as PerformanceReview;
     if (accessVersion !== accessGeneration.current) throw new Error("資料存取權限已更新，請重新開啟考核確認儲存結果。");
     const nextRows = [
       confirmed,
@@ -807,7 +810,7 @@ export function PerformanceAppraisalPage() {
     toast({
       title:
         action === "draft"
-          ? "考核已儲存"
+          ? "草稿已儲存"
           : action === "return"
             ? "已退回補充"
             : mode === "self"
@@ -818,6 +821,8 @@ export function PerformanceAppraisalPage() {
           ? `已通知 ${confirmed.employeeName} 回來查看回饋並補充。`
           : demo
             ? "本機示範模式，不會寫入正式資料。"
+          : action === "draft"
+            ? "已儲存到工作區，下次登入可繼續編輯；尚未送交主管。"
             : "已確認提交成功。",
     });
     return createAssessmentForm(confirmed) as AssessmentForm;
