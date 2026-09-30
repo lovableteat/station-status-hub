@@ -404,6 +404,7 @@ export function PerformanceAppraisalPage() {
     (demo && administrator) ||
     (canEdit && isPerformanceManager && isAssignedOrganizationManager);
   const canAccessOrganization = administrator || canManagePerformance;
+  const candidateManager = canEdit && isPerformanceManager;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -413,8 +414,9 @@ export function PerformanceAppraisalPage() {
   const requestNumber = useRef(0);
   const accessGeneration = useRef(0);
   const loadedAccessScope = useRef<string | null>(null);
+  const loadedProfile = useRef("");
   const [privacyRevision, setPrivacyRevision] = useState(0);
-  const privacy = usePerformancePrivacy(canManagePerformance && !demo, userId, () => {
+  const privacy = usePerformancePrivacy(candidateManager && !demo, userId, () => {
     ++requestNumber.current;
     ++accessGeneration.current;
     loadedAccessScope.current = null;
@@ -470,8 +472,9 @@ export function PerformanceAppraisalPage() {
       { replace: true },
     );
   const accessScope = `${userId}:${canManagePerformance}:${privacyRevision}`;
+  const profileIdentity = `${userId}:${user?.username}:${user?.displayName}:${canEdit}:${isPerformanceManager}`;
   const recordsPending = loadedAccessScope.current !== accessScope ||
-    (!demo && canManagePerformance && !privacy.ready);
+    (!demo && candidateManager && !privacy.ready);
   const load = useCallback(async (background = false) => {
     const request = ++requestNumber.current;
     if (!background) setLoading(true);
@@ -482,9 +485,10 @@ export function PerformanceAppraisalPage() {
     if (loadedAccessScope.current !== accessScope) {
       setReviews(demo ? readCache(cacheKey, true, user, canManagePerformance, administrator) : []);
     }
-    if (!demo && canManagePerformance && !privacy.ready) { setReviews([]); setLoading(false); return; }
+    if (!demo && candidateManager && !privacy.ready) { setReviews([]); setLoading(false); return; }
     if (demo) {
       loadedAccessScope.current = accessScope;
+      loadedProfile.current = profileIdentity;
       setLoading(false);
       return;
     }
@@ -501,7 +505,7 @@ export function PerformanceAppraisalPage() {
       // administrators receive no assessment-data bypass.
       const [{ data, error }, employeeResult, selfContextResult] = await Promise.all([
         reviewsQuery,
-        canAccessOrganization
+        (administrator || candidateManager)
           ? performanceDb.rpc("get_performance_organization")
           : Promise.resolve({ data: [] }),
         performanceDb.rpc("get_performance_self_context"),
@@ -514,8 +518,12 @@ export function PerformanceAppraisalPage() {
         normalizePerformanceReview,
       ) as PerformanceReview[];
       // RLS supplies rows authorized by both hierarchy and password grants.
-      const accessible = rows.filter((review) => canManagePerformance || matchesUser(review, user));
-      loadedAccessScope.current = accessScope;
+      const context = selfContextResult.data?.[0];
+      const resolvedManager = !!(candidateManager && context?.performance_role === "manager" &&
+        (context.org_level === "director" || context.org_level === "section_chief"));
+      const accessible = rows.filter((review) => resolvedManager || matchesUser(review, user));
+      loadedAccessScope.current = `${userId}:${resolvedManager}:${privacyRevision}`;
+      loadedProfile.current = profileIdentity;
       setReviews(accessible);
 
       setEmployees(
@@ -533,7 +541,6 @@ export function PerformanceAppraisalPage() {
           }),
         ),
       );
-      const context = selfContextResult.data?.[0];
       setSelfContext(context ? {
         employeeId: context.employee_id,
         username: context.username,
@@ -559,15 +566,17 @@ export function PerformanceAppraisalPage() {
     } finally {
       if (request === requestNumber.current) setLoading(false);
     }
-  }, [cacheKey, demo, user, canManagePerformance, administrator, canAccessOrganization, privacy.ready, accessScope]);
+  }, [cacheKey, demo, user, canManagePerformance, administrator, privacy.ready, accessScope, candidateManager, profileIdentity, userId, privacyRevision]);
   useEffect(() => {
-    void load();
+    // The self-context response already establishes manager access. Do not
+    // repeat the same three reads merely because that state reached React.
+    if (loadedAccessScope.current !== accessScope || loadedProfile.current !== profileIdentity) void load();
     return () => {
       // Cancel every outstanding request, including later background refreshes.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       ++requestNumber.current;
     };
-  }, [load, privacyRevision]);
+  }, [load, privacyRevision, accessScope, profileIdentity]);
   useEffect(() => {
     if (demo) return;
     try {
