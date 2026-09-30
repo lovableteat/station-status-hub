@@ -169,7 +169,7 @@ export function MainWorkspaceHeader({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                title={userMenuItems.length > 0 ? "開啟帳號選單，可編輯大頭貼" : "開啟帳號選單"}
+                title="開啟帳號選單"
                 className="interactive-lift flex h-10 w-[140px] shrink-0 items-center gap-2 rounded-xl border border-border bg-card px-3 text-left text-foreground transition-colors hover:bg-accent hover:shadow-[0_16px_28px_-24px_rgba(0,0,0,0.6)] max-sm:w-10 max-sm:justify-center max-sm:px-0 sm:h-12 sm:rounded-2xl sm:gap-3"
               >
                 <span className="relative shrink-0">
