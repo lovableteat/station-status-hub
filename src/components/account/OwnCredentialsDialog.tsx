@@ -94,7 +94,7 @@ export function OwnCredentialsDialog({ open, onOpenChange }: OwnCredentialsDialo
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!saving) onOpenChange(nextOpen); }}>
-      <DialogContent className="max-w-md overflow-hidden p-0">
+      <DialogContent className="z-[100] max-w-md overflow-hidden p-0">
         <DialogHeader className="border-b border-border bg-accent/35 px-5 py-5 sm:px-6">
           <DialogTitle className="flex items-center gap-2 text-xl">
             <KeyRound className="h-5 w-5 text-primary" />
