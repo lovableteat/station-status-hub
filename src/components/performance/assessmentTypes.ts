@@ -89,6 +89,7 @@ export interface PerformanceReview {
 export interface AssessmentForm {
   recordId: string;
   sourceUpdatedAt: string;
+  sourceContentVersion?: string;
   employeeId: string;
   employeeName: string;
   department: string;

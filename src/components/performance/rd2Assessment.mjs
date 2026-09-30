@@ -296,12 +296,22 @@ export function validateAssessment(form, mode, action) {
   }
   return "";
 }
+export function assessmentContentVersion(review) {
+  if (!review) return "";
+  const stable = (value) => Array.isArray(value) ? value.map(stable)
+    : value && typeof value === "object"
+      ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])]))
+      : value;
+  const { employeeName, updatedAt, ...content } = review;
+  return JSON.stringify(stable(content));
+}
 export function createAssessmentForm(review, user = {}) {
   const self = readSelfAssessment(review?.selfFeedback);
   const manager = readManagerAssessment(review?.managerFeedback);
   if (!self.employeeNumber) self.employeeNumber = manager.employeeNumber;
   return {
     sourceUpdatedAt: review?.updatedAt || "",
+    sourceContentVersion: assessmentContentVersion(review),
     recordId: review?.id || `performance-${crypto.randomUUID()}`,
     employeeId: review?.employeeId || user.userId || "",
     employeeName:
@@ -359,7 +369,7 @@ export function buildAssessmentReview({
     cycleId: previous?.cycleId || cycleId,
     employeeId:
       previous?.employeeId || form.employeeId || form.self.employeeNumber,
-    employeeName: previous?.employeeName || form.employeeName.trim(),
+    employeeName: form.employeeName.trim() || previous?.employeeName,
     department:
       mode === "self"
         ? form.department ||

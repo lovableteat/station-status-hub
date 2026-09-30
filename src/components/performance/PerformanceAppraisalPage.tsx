@@ -57,6 +57,7 @@ import {
   CATEGORIES,
   buildAssessmentReview,
   createAssessmentForm,
+  assessmentContentVersion,
   readManagerAssessment,
   readSelfAssessment,
   validateAssessment,
@@ -766,7 +767,8 @@ export function PerformanceAppraisalPage() {
     const previous = reviews.find(
       (review) => review.id === (editorRecordId || ""),
     );
-    if (previous && form.sourceUpdatedAt !== previous.updatedAt)
+    if (previous && form.sourceUpdatedAt !== previous.updatedAt &&
+        form.sourceContentVersion !== assessmentContentVersion(previous))
       throw new Error('考核已有較新版本，請重新開啟後再儲存；目前輸入仍保留。');
     if (
       mode === "manager" &&
@@ -797,7 +799,7 @@ export function PerformanceAppraisalPage() {
         : (await submitAssessmentRecord(performanceDb, nextReview, {
             mode,
             action,
-            expectedUpdatedAt: form.sourceUpdatedAt || null,
+            expectedUpdatedAt: previous?.updatedAt || form.sourceUpdatedAt || null,
           })) as PerformanceReview;
     if (accessVersion !== accessGeneration.current) throw new Error("資料存取權限已更新，請重新開啟考核確認儲存結果。");
     const nextRows = [
