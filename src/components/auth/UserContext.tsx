@@ -63,6 +63,7 @@ interface UserContextType {
   ) => Promise<RegistrationResult>;
   updateAvatar: (file: File | null) => Promise<AvatarMutationResult>;
   updateOwnCredentials: (input: {
+    displayName: string;
     username: string;
     currentPassword: string;
     newPassword: string;
@@ -546,6 +547,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [sessionMode, user]);
 
   const updateOwnCredentials = useCallback(async (input: {
+    displayName: string;
     username: string;
     currentPassword: string;
     newPassword: string;
@@ -562,6 +564,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.functions.invoke<{
       success?: boolean;
       username?: string;
+      displayName?: string;
       error?: string;
     }>("account-self-service", { body: input });
     if (error || !data?.success || !data.username) {
@@ -582,11 +585,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
         "Account unavailable": "目前帳號無法修改，請重新登入後再試。",
         "Current password incorrect": "目前密碼不正確。",
         "Current password required": "請輸入目前密碼。",
+        "Invalid display name": "顯示名稱需為 1 至 100 個字元。",
         "Invalid username": "帳號名稱需為 1 至 50 個字元。",
         "Invalid new password": "新密碼需為 6 至 200 個字元。",
         "New password unchanged": "新密碼不可與目前密碼相同。",
         "Username taken": "這個帳號名稱已有人使用。",
-        "No changes": "請修改帳號名稱或輸入新密碼。",
+        "No changes": "請修改顯示名稱、登入帳號或輸入新密碼。",
         "Account changed elsewhere": "帳號資料剛被更新，請重新整理後再試。",
         "Account sync failed": "帳號更新未完成，請稍後重試。",
       };
@@ -598,7 +602,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const nextUser = {
         ...current,
         username: data.username,
-        displayName: current.displayName === current.username ? data.username : current.displayName,
+        displayName: data.displayName ?? current.displayName,
       };
       storeUser(nextUser);
       return nextUser;
@@ -628,12 +632,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
           filter: `id=eq.${user.userId}`,
         },
         (payload) => {
-          const updated = payload.new as { status?: string; avatar_path?: string | null };
+          const updated = payload.new as { status?: string; avatar_path?: string | null; username?: string; display_name?: string | null };
           if (updated.status && updated.status !== "active") logout();
-          if ("avatar_path" in updated) {
+          if ("avatar_path" in updated || "username" in updated || "display_name" in updated) {
             setUser((current) => {
               if (!current || current.userId !== user.userId) return current;
-              const nextUser = { ...current, avatarPath: updated.avatar_path ?? null };
+              const nextUser = {
+                ...current,
+                ...("avatar_path" in updated ? { avatarPath: updated.avatar_path ?? null } : {}),
+                ...(updated.username ? { username: updated.username } : {}),
+                ...("display_name" in updated ? { displayName: updated.display_name || updated.username || current.username } : {}),
+              };
               storeUser(nextUser);
               return nextUser;
             });

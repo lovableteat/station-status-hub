@@ -61,12 +61,20 @@ serve(async (request) => {
     });
     const { data: account, error: accountError } = await admin
       .from("system_users")
-      .select("id,username,password_hash,auth_user_id,status")
+      .select("id,username,display_name,password_hash,auth_user_id,status")
       .eq("auth_user_id", verified.user.id)
       .eq("status", "active")
       .maybeSingle();
     if (accountError || !account) {
       return respond({ success: false, error: "Account unavailable" }, 403);
+    }
+
+    // Older clients omit displayName; preserve their existing profile name.
+    const displayName = body?.displayName === undefined
+      ? account.display_name ?? account.username
+      : typeof body.displayName === "string" ? body.displayName.trim() : "";
+    if (!displayName || displayName.length > 100) {
+      return respond({ success: false, error: "Invalid display name" }, 400);
     }
 
     const { data: passwordMatches, error: passwordError } = await admin
@@ -79,7 +87,7 @@ serve(async (request) => {
     if (passwordMatches !== true) {
       return respond({ success: false, error: "Current password incorrect" }, 401);
     }
-    if (username === account.username && !newPassword) {
+    if (username === account.username && displayName === (account.display_name ?? account.username) && !newPassword) {
       return respond({ success: false, error: "No changes" }, 400);
     }
 
@@ -97,13 +105,17 @@ serve(async (request) => {
 
     // Compare both original values so an administrator's concurrent edit is
     // never silently overwritten by this request.
-    const { data: updated, error: updateError } = await admin
+    let updateQuery = admin
       .from("system_users")
-      .update({ username, password_hash: nextHash })
+      .update({ username, display_name: displayName, password_hash: nextHash })
       .eq("id", account.id)
       .eq("username", account.username)
-      .eq("password_hash", account.password_hash)
-      .select("id,username")
+      .eq("password_hash", account.password_hash);
+    updateQuery = account.display_name === null
+      ? updateQuery.is("display_name", null)
+      : updateQuery.eq("display_name", account.display_name);
+    const { data: updated, error: updateError } = await updateQuery
+      .select("id,username,display_name")
       .maybeSingle();
     if (updateError) {
       if (updateError.code === "23505") {
@@ -117,7 +129,7 @@ serve(async (request) => {
     }
 
     const attributes: { password?: string; app_metadata: Record<string, unknown> } = {
-      app_metadata: { ...verified.user.app_metadata, username },
+      app_metadata: { ...verified.user.app_metadata, username, display_name: displayName },
     };
     if (newPassword) attributes.password = newPassword;
     const { error: authError } = await admin.auth.admin.updateUserById(
@@ -129,10 +141,11 @@ serve(async (request) => {
       // when the Auth identity update fails, so the old credentials still work.
       const { data: rolledBack, error: rollbackError } = await admin
         .from("system_users")
-        .update({ username: account.username, password_hash: account.password_hash })
+        .update({ username: account.username, display_name: account.display_name, password_hash: account.password_hash })
         .eq("id", account.id)
         .eq("username", username)
         .eq("password_hash", nextHash)
+        .eq("display_name", displayName)
         .select("id")
         .maybeSingle();
       console.error("Unable to synchronize own Auth identity", authError);
@@ -142,7 +155,7 @@ serve(async (request) => {
       return respond({ success: false, error: "Account sync failed" }, 503);
     }
 
-    return respond({ success: true, username: updated.username });
+    return respond({ success: true, username: updated.username, displayName: updated.display_name });
   } catch (error) {
     console.error("Unexpected account-self-service error", error);
     return respond({ success: false, error: "Account service unavailable" }, 503);
