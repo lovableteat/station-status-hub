@@ -412,10 +412,12 @@ export function PerformanceAppraisalPage() {
   const savedId = useRef<{ key: string; id: string } | null>(null);
   const requestNumber = useRef(0);
   const accessGeneration = useRef(0);
+  const loadedAccessScope = useRef<string | null>(null);
   const [privacyRevision, setPrivacyRevision] = useState(0);
   const privacy = usePerformancePrivacy(canManagePerformance && !demo, userId, () => {
     ++requestNumber.current;
     ++accessGeneration.current;
+    loadedAccessScope.current = null;
     setReviews([]); setDetailId(null);
     setPendingDelete(null);
     setEditorRevision((revision) => revision + 1);
@@ -467,14 +469,22 @@ export function PerformanceAppraisalPage() {
       },
       { replace: true },
     );
+  const accessScope = `${userId}:${canManagePerformance}:${privacyRevision}`;
+  const recordsPending = loadedAccessScope.current !== accessScope ||
+    (!demo && canManagePerformance && !privacy.ready);
   const load = useCallback(async (background = false) => {
     const request = ++requestNumber.current;
     if (!background) setLoading(true);
     if (!background && !demo) setSelfContextLoaded(false);
     setLoadError("");
-    if (!background) setReviews(demo ? readCache(cacheKey, true, user, canManagePerformance, administrator) : []);
+    // A refresh in the same verified scope keeps the last result visible.
+    // Account, manager scope and privacy changes still invalidate it immediately.
+    if (loadedAccessScope.current !== accessScope) {
+      setReviews(demo ? readCache(cacheKey, true, user, canManagePerformance, administrator) : []);
+    }
     if (!demo && canManagePerformance && !privacy.ready) { setReviews([]); setLoading(false); return; }
     if (demo) {
+      loadedAccessScope.current = accessScope;
       setLoading(false);
       return;
     }
@@ -505,6 +515,7 @@ export function PerformanceAppraisalPage() {
       ) as PerformanceReview[];
       // RLS supplies rows authorized by both hierarchy and password grants.
       const accessible = rows.filter((review) => canManagePerformance || matchesUser(review, user));
+      loadedAccessScope.current = accessScope;
       setReviews(accessible);
 
       setEmployees(
@@ -540,6 +551,7 @@ export function PerformanceAppraisalPage() {
       setSelfContextLoaded(true);
     } catch {
       if (request === requestNumber.current) {
+        loadedAccessScope.current = null;
         setReviews([]); setDetailId(null);
         setSelfContext(null); setSelfContextLoaded(true);
         setLoadError("無法讀取工作區考核，請重新整理。考核內容會在權限確認後顯示。");
@@ -547,7 +559,7 @@ export function PerformanceAppraisalPage() {
     } finally {
       if (request === requestNumber.current) setLoading(false);
     }
-  }, [cacheKey, demo, user, canManagePerformance, administrator, canAccessOrganization, privacy.ready]);
+  }, [cacheKey, demo, user, canManagePerformance, administrator, canAccessOrganization, privacy.ready, accessScope]);
   useEffect(() => {
     void load();
     return () => {
@@ -1194,7 +1206,7 @@ export function PerformanceAppraisalPage() {
               <div>
                 <h2>考核紀錄</h2>
                 <p>
-                  {visibleReviews.length} 筆 ·{" "}
+                  {recordsPending ? (loadError ? "無法讀取考核" : "正在讀取考核…") : `${visibleReviews.length} 筆`} ·{" "}
                   {canManagePerformance
                     ? "自評、主管評分與既有目標"
                     : "我的自評與既有目標"}
@@ -1248,45 +1260,45 @@ export function PerformanceAppraisalPage() {
               <div className="rd2-stat-row">
                 <StatTile
                   label="本期考核"
-                  value={recordSummary.total}
-                  suffix=" 筆"
+                  value={recordsPending ? "--" : recordSummary.total}
+                  suffix={recordsPending ? "" : " 筆"}
                   tone="info"
                   hint="符合目前篩選條件"
                 />
                 <StatTile
                   label="已完成"
-                  value={recordSummary.approved}
-                  suffix=" 筆"
+                  value={recordsPending ? "--" : recordSummary.approved}
+                  suffix={recordsPending ? "" : " 筆"}
                   tone="good"
                   hint="主管已確認"
                 />
                 <StatTile
                   label="待主管評分"
-                  value={recordSummary.awaiting}
-                  suffix=" 筆"
+                  value={recordsPending ? "--" : recordSummary.awaiting}
+                  suffix={recordsPending ? "" : " 筆"}
                   tone="warning"
                   hint="員工已送出自評"
                 />
                 {canManagePerformance && (
                   <StatTile
                     label="平均主管加權評分"
-                    value={recordSummary.averageScore ?? "--"}
-                    suffix={recordSummary.averageScore === null ? "" : " 分"}
+                    value={recordsPending ? "--" : recordSummary.averageScore ?? "--"}
+                    suffix={recordsPending || recordSummary.averageScore === null ? "" : " 分"}
                     tone="score"
                     hint="僅計入已評分者"
                   />
                 )}
                 {tab !== "manager" && <StatTile
                   label="平均目標進度"
-                  value={recordSummary.averageProgress ?? "--"}
-                  suffix={recordSummary.averageProgress === null ? "" : "%"}
+                  value={recordsPending ? "--" : recordSummary.averageProgress ?? "--"}
+                  suffix={recordsPending || recordSummary.averageProgress === null ? "" : "%"}
                   tone="progress"
                   hint="所有目標平均"
                 />}
               </div>
               <details className="rd2-card rd2-records-chart">
                 <summary>查看考核狀態分佈</summary>
-                <StatusBreakdownChart counts={recordSummary.counts} />
+                {recordsPending ? <p role="status">正在讀取考核…</p> : <StatusBreakdownChart counts={recordSummary.counts} />}
               </details>
             </div>
             <div className="rd2-filter-bar" aria-label="考核篩選">
@@ -1391,7 +1403,7 @@ export function PerformanceAppraisalPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleReviews.map((review) => (
+                  {(recordsPending ? [] : visibleReviews).map((review) => (
                     <tr key={review.id}>
                       <td data-label="員工／工號">
                         <strong>{review.employeeName}</strong>
@@ -1477,11 +1489,11 @@ export function PerformanceAppraisalPage() {
                       </td>
                     </tr>
                   ))}
-                  {!visibleReviews.length && (
+                  {(recordsPending || !visibleReviews.length) && (
                     <tr>
                       <td colSpan={canManagePerformance ? 7 : 5} className="rd2-empty">
-                        {loading
-                          ? "正在讀取考核…"
+                        {loading || recordsPending
+                          ? (loadError ? "無法讀取考核，請重新整理。" : "正在讀取考核…")
                           : "目前篩選條件沒有符合的考核"}
                       </td>
                     </tr>
