@@ -595,7 +595,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     setUser((current) => {
       if (!current || current.userId !== user.userId) return current;
-      const nextUser = { ...current, username: data.username as string };
+      const nextUser = {
+        ...current,
+        username: data.username,
+        displayName: current.displayName === current.username ? data.username : current.displayName,
+      };
       storeUser(nextUser);
       return nextUser;
     });
