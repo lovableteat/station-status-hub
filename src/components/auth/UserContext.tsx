@@ -47,6 +47,11 @@ export interface AvatarMutationResult {
   error?: string;
 }
 
+export interface OwnCredentialsResult {
+  success: boolean;
+  error?: string;
+}
+
 interface UserContextType {
   user: User | null;
   login: (userId: string, username: string, role: string, displayName: string) => void;
@@ -57,6 +62,11 @@ interface UserContextType {
     password: string,
   ) => Promise<RegistrationResult>;
   updateAvatar: (file: File | null) => Promise<AvatarMutationResult>;
+  updateOwnCredentials: (input: {
+    username: string;
+    currentPassword: string;
+    newPassword: string;
+  }) => Promise<OwnCredentialsResult>;
   logout: () => void;
   isLoggedIn: boolean;
   isInitializing: boolean;
@@ -535,6 +545,63 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return { success: true };
   }, [sessionMode, user]);
 
+  const updateOwnCredentials = useCallback(async (input: {
+    username: string;
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<OwnCredentialsResult> => {
+    if (!user?.userId || sessionMode !== "authenticated") {
+      return { success: false, error: "請重新登入後再修改帳號或密碼。" };
+    }
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session) {
+      return { success: false, error: "登入已過期，請重新登入後再試。" };
+    }
+
+    const { data, error } = await supabase.functions.invoke<{
+      success?: boolean;
+      username?: string;
+      error?: string;
+    }>("account-self-service", { body: input });
+    if (error || !data?.success || !data.username) {
+      let code = data?.error;
+      if (!code && error && typeof error === "object" && "context" in error) {
+        const response = (error as { context?: Response }).context;
+        if (response && typeof response.clone === "function") {
+          try {
+            const payload = await response.clone().json() as { error?: string };
+            code = payload.error;
+          } catch {
+            // A network or gateway error may have no JSON response.
+          }
+        }
+      }
+      const messages: Record<string, string> = {
+        Unauthorized: "登入已過期，請重新登入後再試。",
+        "Account unavailable": "目前帳號無法修改，請重新登入後再試。",
+        "Current password incorrect": "目前密碼不正確。",
+        "Current password required": "請輸入目前密碼。",
+        "Invalid username": "帳號名稱需為 1 至 50 個字元。",
+        "Invalid new password": "新密碼需為 6 至 200 個字元。",
+        "New password unchanged": "新密碼不可與目前密碼相同。",
+        "Username taken": "這個帳號名稱已有人使用。",
+        "No changes": "請修改帳號名稱或輸入新密碼。",
+        "Account changed elsewhere": "帳號資料剛被更新，請重新整理後再試。",
+        "Account sync failed": "帳號更新未完成，請稍後重試。",
+      };
+      return { success: false, error: code ? messages[code] || "帳號服務暫時無法使用，請稍後再試。" : "帳號服務暫時無法使用，請稍後再試。" };
+    }
+
+    setUser((current) => {
+      if (!current || current.userId !== user.userId) return current;
+      const nextUser = { ...current, username: data.username as string };
+      storeUser(nextUser);
+      return nextUser;
+    });
+    return { success: true };
+  }, [sessionMode, user?.userId]);
+
   const logout = useCallback(() => {
     setUser(null);
     setSessionMode("signed-out");
@@ -587,6 +654,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         authenticate,
         registerAccount,
         updateAvatar,
+        updateOwnCredentials,
         logout,
         isLoggedIn: user !== null,
         isInitializing,
@@ -596,7 +664,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         reauthRequired,
       };
     },
-    [authenticate, isInitializing, login, logout, reauthRequired, registerAccount, sessionMode, updateAvatar, user],
+    [authenticate, isInitializing, login, logout, reauthRequired, registerAccount, sessionMode, updateAvatar, updateOwnCredentials, user],
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

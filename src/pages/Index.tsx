@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FileText,
   FolderKanban,
+  KeyRound,
   LayoutDashboard,
   MessageSquareText,
   ServerCog,
@@ -18,6 +19,7 @@ import {
 
 import { useUser } from "@/components/auth/UserContext";
 import { PersonalProfileDialog } from "@/components/account/PersonalProfileDialog";
+import { OwnCredentialsDialog } from "@/components/account/OwnCredentialsDialog";
 import { CollaborationCenter } from "@/components/collaboration/CollaborationCenter";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
 import { MainWorkspaceHeader } from "@/components/layout/MainWorkspaceHeader";
@@ -273,6 +275,7 @@ const Index = () => {
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
   const [assessmentBackupsOpen, setAssessmentBackupsOpen] = useState(false);
   const stationMainRef = useRef<HTMLElement | null>(null);
 
@@ -684,6 +687,7 @@ const Index = () => {
       {!isDemoMode ? (
         <>
           <PersonalProfileDialog open={profileDialogOpen} onOpenChange={setProfileDialogOpen} />
+          <OwnCredentialsDialog open={credentialsDialogOpen} onOpenChange={setCredentialsDialogOpen} />
           <MyAssessmentBackupsDialog open={assessmentBackupsOpen} onOpenChange={setAssessmentBackupsOpen} />
         </>
       ) : null}
@@ -714,6 +718,13 @@ const Index = () => {
             icon: <Camera className="h-4 w-4" />,
             emphasized: true,
             onSelect: () => setProfileDialogOpen(true),
+          },
+          {
+            id: "own-credentials",
+            label: "帳號與密碼",
+            icon: <KeyRound className="h-4 w-4" />,
+            emphasized: true,
+            onSelect: () => setCredentialsDialogOpen(true),
           },
         ]}
       />

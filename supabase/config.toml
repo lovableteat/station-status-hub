@@ -28,3 +28,6 @@ verify_jwt = false
 
 [functions.account-admin-sync]
 verify_jwt = true
+
+[functions.account-self-service]
+verify_jwt = true
