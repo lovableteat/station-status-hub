@@ -298,7 +298,10 @@ export function AssessmentEditor({
 }: Props) {
   const source = initial.sourceUpdatedAt || (initial.recordId?.startsWith("performance-") ? "new" : initial.recordId);
   const [form, setForm] = useState<AssessmentForm>(() =>
-    (!readonly && draftKey && readAssessmentDraft(draftKey, source)) || initial);
+    (() => {
+      const draft = !readonly && draftKey ? readAssessmentDraft(draftKey, source) : null;
+      return draft ? { ...draft, employeeName: initial.employeeName } : initial;
+    })());
   const errorRef = useRef<HTMLParagraphElement>(null);
   const focusCategory = focusEntry?.category;
   const focusEntryId = focusEntry?.entryId;
@@ -315,6 +318,19 @@ export function AssessmentEditor({
   const [returnTarget, setReturnTarget] = useState<{ category: Category; entryId: string } | null>(null);
   const latest = useRef(form);
   const pending = useRef(form !== initial);
+  useEffect(() => {
+    if (mode !== "self") return;
+    setForm((current) => {
+      if (current.employeeName === initial.employeeName && current.sourceUpdatedAt === initial.sourceUpdatedAt) return current;
+      const sameContent = current.sourceContentVersion && current.sourceContentVersion === initial.sourceContentVersion;
+      const next = { ...current, employeeName: initial.employeeName,
+        ...(sameContent ? { sourceUpdatedAt: initial.sourceUpdatedAt } : {}),
+      };
+      latest.current = next;
+      if (draftKey && pending.current) keepAssessmentDraft(draftKey, source, next);
+      return next;
+    });
+  }, [mode, initial.employeeName, initial.sourceUpdatedAt, initial.sourceContentVersion, draftKey, source]);
   useEffect(() => {
     if (error) {
       errorRef.current?.focus();

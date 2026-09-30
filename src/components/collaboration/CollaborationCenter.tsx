@@ -254,8 +254,8 @@ export function CollaborationCenter() {
     setDirectoryLoading(false);
   }, [isRealtimeAuthenticated, user?.userId]);
 
-  useEffect(() => { if (open) void loadNotifications(); }, [open, loadNotifications]);
-  useEffect(() => { void loadMemberDirectory(); }, [loadMemberDirectory]);
+  useEffect(() => { if (open) { void loadNotifications(); void loadMemberDirectory(); } }, [open, loadNotifications, loadMemberDirectory]);
+  useEffect(() => { void loadMemberDirectory(); }, [loadMemberDirectory, user?.displayName, user?.username]);
 
   useEffect(() => {
     const openCenter = (event: Event) => {

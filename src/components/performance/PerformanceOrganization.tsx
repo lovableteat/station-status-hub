@@ -153,7 +153,7 @@ export function PerformanceOrganization({
   }, [allowed]);
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, user?.displayName, user?.username]);
   const byId = useMemo(
     () => new Map(members.map((member) => [member.employee_id, member])),
     [members],

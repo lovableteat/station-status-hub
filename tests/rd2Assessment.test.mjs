@@ -9,6 +9,7 @@ import {
   SELF_PREFIX,
   buildAssessmentReview,
   createAssessmentForm,
+  assessmentContentVersion,
   draftKey,
   getKpiReference,
   getLevelWeights,
@@ -439,4 +440,21 @@ test("retry accepts a database-assigned reviewer without changing submitted cont
     ? { error: { code: "23505" }, data: null }
     : { data: { ...payload, reviewer_name: "verified-chief", privacy_scope_ids: ["chief-id"] }, error: null });
   assert.equal((await saveAssessmentRecord(chain, review, null)).reviewerName, "verified-chief");
+});
+
+ test("resubmission uses the renamed employee label without changing assessment content", () => {
+  const form = createAssessmentForm(null, { userId: "employee-id", displayName: "New name" });
+  const previous = { id: "review-id", employeeId: "employee-id", employeeName: "Old name", goals: [] };
+  const review = buildAssessmentReview({ form, previous, mode: "self", action: "submit", cycleId: "2026-q3", now: "2026-09-30" });
+  assert.equal(review.employeeName, "New name");
+  assert.equal(review.employeeId, "employee-id");
+  assert.deepEqual(readSelfAssessment(review.selfFeedback).sections, form.self.sections);
+});
+
+test("name and timestamp refreshes do not conflict, but actual assessment edits do", () => {
+  const baseline = { employeeId: "stable-id", employeeName: "Old", updatedAt: "v1", status: "submitted", selfFeedback: "same", score: 80, goals: [] };
+  assert.equal(assessmentContentVersion(baseline), assessmentContentVersion({ ...baseline, employeeName: "New", updatedAt: "v2" }));
+  for (const changed of [{ selfFeedback: "edited" }, { score: 90 }, { status: "in-progress" }, { goals: [{ title: "changed" }] }]) {
+    assert.notEqual(assessmentContentVersion(baseline), assessmentContentVersion({ ...baseline, ...changed }));
+  }
 });
