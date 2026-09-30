@@ -21,6 +21,7 @@ interface OwnCredentialsDialogProps {
 
 export function OwnCredentialsDialog({ open, onOpenChange }: OwnCredentialsDialogProps) {
   const { user, updateOwnCredentials } = useUser();
+  const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -30,19 +31,25 @@ export function OwnCredentialsDialog({ open, onOpenChange }: OwnCredentialsDialo
   const [error, setError] = useState("");
 
   useEffect(() => {
+    setDisplayName(open ? user?.displayName ?? "" : "");
     setUsername(open ? user?.username ?? "" : "");
     setCurrentPassword("");
     setNewPassword("");
     setConfirmedPassword("");
     setShowPasswords(false);
     setError("");
-  }, [open, user?.username]);
+  }, [open, user?.username, user?.displayName]);
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (saving) return;
 
     const nextUsername = username.trim();
+    const nextDisplayName = displayName.trim();
+    if (!nextDisplayName || nextDisplayName.length > 100) {
+      setError("顯示名稱需為 1 至 100 個字元。");
+      return;
+    }
     if (!nextUsername || nextUsername.length > 50) {
       setError("帳號名稱需為 1 至 50 個字元。");
       return;
@@ -51,8 +58,8 @@ export function OwnCredentialsDialog({ open, onOpenChange }: OwnCredentialsDialo
       setError("請輸入目前密碼，以確認是本人操作。");
       return;
     }
-    if (nextUsername === user?.username && !newPassword) {
-      setError("請修改帳號名稱或輸入新密碼。");
+    if (nextUsername === user?.username && nextDisplayName === user?.displayName && !newPassword) {
+      setError("請修改顯示名稱、登入帳號或輸入新密碼。");
       return;
     }
     if (newPassword && (newPassword.length < 6 || newPassword.length > 200)) {
@@ -73,6 +80,7 @@ export function OwnCredentialsDialog({ open, onOpenChange }: OwnCredentialsDialo
     try {
       const result = await updateOwnCredentials({
         username: nextUsername,
+        displayName: nextDisplayName,
         currentPassword,
         newPassword,
       });
@@ -94,19 +102,32 @@ export function OwnCredentialsDialog({ open, onOpenChange }: OwnCredentialsDialo
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!saving) onOpenChange(nextOpen); }}>
-      <DialogContent className="z-[100] max-w-md overflow-hidden p-0">
+      <DialogContent className="z-[100] max-w-md overflow-y-auto p-0">
         <DialogHeader className="border-b border-border bg-accent/35 px-5 py-5 sm:px-6">
           <DialogTitle className="flex items-center gap-2 text-xl">
             <KeyRound className="h-5 w-5 text-primary" />
             帳號與密碼
           </DialogTitle>
           <DialogDescription className="leading-6">
-            修改自己的登入帳號或密碼。儲存前需輸入目前密碼確認身分。
+            修改自己的顯示名稱、登入帳號或密碼。儲存前需輸入目前密碼確認身分。
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={(event) => void save(event)}>
           <div className="grid gap-4 px-5 py-5 sm:px-6">
+            <div className="grid gap-2">
+              <label htmlFor="own-account-display-name" className="text-sm font-semibold text-foreground">顯示名稱</label>
+              <Input
+                id="own-account-display-name"
+                name="display-name"
+                autoComplete="nickname"
+                maxLength={100}
+                value={displayName}
+                disabled={saving}
+                onChange={(event) => { setDisplayName(event.target.value); setError(""); }}
+              />
+              <p className="text-xs text-muted-foreground">用於右上角帳號選單與聊天室。</p>
+            </div>
             <div className="grid gap-2">
               <label htmlFor="own-account-username" className="text-sm font-semibold text-foreground">登入帳號</label>
               <Input
