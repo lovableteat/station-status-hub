@@ -22,9 +22,9 @@
   gap: 20px;
 }
 .rd2-bright .performance-content {
-  --rd2-kpi: #c99b5e;
-  --rd2-okr: #6da48a;
-  --rd2-idp: #9eaba3;
+  --rd2-idp: oklch(70% 0.15 300);
+  --rd2-okr: oklch(72% 0.12 225);
+  --rd2-kpi: oklch(68% 0.16 10);
   background: var(--rd2-bg);
   color: var(--rd2-ink);
   color-scheme: dark;
@@ -416,20 +416,20 @@
 }
 .rd2-bright .rd2-category {
   --category-fill: var(--rd2-panel);
-  --card-accent: #81aff8;
-  --card-accent-solid: #2563eb;
+  --card-accent: var(--rd2-idp);
+  --card-accent-solid: var(--rd2-idp);
   border-top: 4px solid var(--card-accent);
   padding-top: 0;
 }
 .rd2-bright .rd2-category[data-category="OKR"] {
   --category-fill: var(--rd2-panel);
-  --card-accent: #8decc3;
-  --card-accent-solid: #2563eb;
+  --card-accent: var(--rd2-okr);
+  --card-accent-solid: var(--rd2-okr);
 }
 .rd2-bright .rd2-category[data-category="KPI"] {
   --category-fill: var(--rd2-panel);
-  --card-accent: #f0b45e;
-  --card-accent-solid: #2563eb;
+  --card-accent: var(--rd2-kpi);
+  --card-accent-solid: var(--rd2-kpi);
 }
 .rd2-bright .rd2-category-heading {
   margin: 0 -20px 16px;
@@ -520,16 +520,16 @@
   border-color: color-mix(in srgb, var(--card-accent) 40%, #304760);
 }
 .rd2-bright .rd2-guidance-tag[data-category="IDP"] {
-  color: #81aff8;
-  background: #122f51;
+  color: var(--rd2-idp);
+  background: color-mix(in srgb, var(--rd2-idp) 14%, var(--rd2-panel));
 }
 .rd2-bright .rd2-guidance-tag[data-category="OKR"] {
-  color: #5fd0ea;
-  background: #12403a;
+  color: var(--rd2-okr);
+  background: color-mix(in srgb, var(--rd2-okr) 14%, var(--rd2-panel));
 }
 .rd2-bright .rd2-guidance-tag[data-category="KPI"] {
-  color: #f0b45e;
-  background: #3d2f14;
+  color: var(--rd2-kpi);
+  background: color-mix(in srgb, var(--rd2-kpi) 14%, var(--rd2-panel));
 }
 .rd2-bright .rd2-level-item {
   border-left: 3px solid #2563eb;
@@ -1202,24 +1202,24 @@
 
 .rd2-bright .rd2-review-score-part,
 .rd2-bright .rd2-review-category {
-  --review-accent: #81aff8;
-  --review-accent-strong: #2563eb;
+  --review-accent: var(--rd2-idp);
+  --review-accent-strong: color-mix(in oklch, var(--rd2-idp) 72%, black);
   --review-fill: var(--rd2-panel);
   --review-soft: var(--rd2-panel-soft);
 }
 
 .rd2-bright .rd2-review-score-part[data-category="OKR"],
 .rd2-bright .rd2-review-category[data-category="OKR"] {
-  --review-accent: #8decc3;
-  --review-accent-strong: #159a72;
+  --review-accent: var(--rd2-okr);
+  --review-accent-strong: color-mix(in oklch, var(--rd2-okr) 72%, black);
   --review-fill: var(--rd2-panel);
   --review-soft: var(--rd2-panel-soft);
 }
 
 .rd2-bright .rd2-review-score-part[data-category="KPI"],
 .rd2-bright .rd2-review-category[data-category="KPI"] {
-  --review-accent: #f0b45e;
-  --review-accent-strong: #c47a18;
+  --review-accent: var(--rd2-kpi);
+  --review-accent-strong: color-mix(in oklch, var(--rd2-kpi) 72%, black);
   --review-fill: var(--rd2-panel);
   --review-soft: var(--rd2-panel-soft);
 }
