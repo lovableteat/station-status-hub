@@ -779,51 +779,55 @@ export function AssessmentEditor({
                       onChange={(update) => updateSection(category, update)}
                     />
                     <div className="rd2-self-score">
-                      <label
-                        className="rd2-self-score-title"
-                        htmlFor={`${category}-self-score`}
-                      >
-                        我給自己的分數
-                      </label>
-                      <div className="rd2-self-score-input">
-                        <Input
-                          id={`${category}-self-score`}
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={1}
-                          inputMode="numeric"
-                          placeholder="0–100"
-                          disabled={readonly || saving}
-                          value={
-                            form.self.sections[category].selfScore ?? ""
-                          }
-                          onChange={(event) => {
-                            const raw = event.target.value;
-                            updateSection(category, (section) => ({
-                              ...section,
-                              selfScore:
-                                raw === "" ? null : Number(raw),
-                            }));
-                          }}
-                        />
-                        <span>分</span>
+                      <div className="rd2-self-score-control">
+                        <label
+                          className="rd2-self-score-title"
+                          htmlFor={`${category}-self-score`}
+                        >
+                          我給自己的分數
+                        </label>
+                        <div className="rd2-self-score-input">
+                          <Input
+                            id={`${category}-self-score`}
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={1}
+                            inputMode="numeric"
+                            placeholder="0–100"
+                            disabled={readonly || saving}
+                            value={
+                              form.self.sections[category].selfScore ?? ""
+                            }
+                            onChange={(event) => {
+                              const raw = event.target.value;
+                              updateSection(category, (section) => ({
+                                ...section,
+                                selfScore:
+                                  raw === "" ? null : Number(raw),
+                              }));
+                            }}
+                          />
+                          <span>分</span>
+                        </div>
                       </div>
-                      {weightedSelf && (
-                        <p className="rd2-weighted-line" aria-live="polite">
-                          <span>
-                            原始分數 × 政策權重 {weights?.[category]}%
-                          </span>
-                          <strong>
-                            = {weightedSelf.categories[category].weighted == null
-                              ? "—"
-                              : formatScore(weightedSelf.categories[category].weighted)} 加權分
-                          </strong>
+                      <div className="rd2-self-score-summary">
+                        {weightedSelf && (
+                          <p className="rd2-weighted-line" aria-live="polite">
+                            <span>
+                              原始分數 × 政策權重 {weights?.[category]}%
+                            </span>
+                            <strong>
+                              = {weightedSelf.categories[category].weighted == null
+                                ? "—"
+                                : formatScore(weightedSelf.categories[category].weighted)} 加權分
+                            </strong>
+                          </p>
+                        )}
+                        <p className="rd2-hint">
+                          0–100 分，填你認為這一項的表現。送交主管時會乘上政策權重；主管評分仍會另外保留。
                         </p>
-                      )}
-                      <p className="rd2-hint">
-                        0–100 分，填你認為這一項的表現。送交主管時會乘上政策權重；主管評分仍會另外保留。
-                      </p>
+                      </div>
                     </div>
                     <p className="rd2-hint">附件請加在上方對應的實績卡片，主管會在同一筆查看。</p>
                     {(form.self.sections[category].images.length > 0 || form.self.sections[category].links.length > 0) && <p className="rd2-hint">既有類別證明（未指定實績，原資料保留）</p>}

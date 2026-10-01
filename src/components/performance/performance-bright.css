@@ -523,6 +523,22 @@
 .rd2-bright .rd2-entry-item .rd2-review-attachment-list li {
   border-color: color-mix(in srgb, var(--card-accent) 40%, #304760);
 }
+.rd2-bright .rd2-entry-item .rd2-entry-evidence {
+  border-color: color-mix(in srgb, var(--card-accent) 30%, #304760);
+  background: color-mix(in srgb, var(--card-accent) 4%, var(--rd2-panel));
+}
+.rd2-bright .rd2-entry-item .rd2-entry-evidence-panel {
+  border-color: color-mix(in srgb, var(--card-accent) 22%, #304760);
+  background: color-mix(in srgb, var(--card-accent) 5%, var(--rd2-panel-soft));
+}
+.rd2-bright .rd2-entry-item .rd2-entry-evidence-panel .rd2-review-attachments,
+.rd2-bright .rd2-entry-item .rd2-entry-evidence-panel .rd2-link-toolbar {
+  border: 0;
+  background: transparent;
+}
+.rd2-bright .rd2-entry-item .rd2-entry-evidence-panel .rd2-attachment-toolbar {
+  border-bottom: 0;
+}
 .rd2-bright .rd2-guidance-tag[data-category="IDP"] {
   color: var(--rd2-idp);
   background: color-mix(in srgb, var(--rd2-idp) 14%, var(--rd2-panel));
@@ -1377,7 +1393,7 @@
   letter-spacing: 0.03em;
 }
 
-.rd2-bright .rd2-review-category .rd2-entry-item > p {
+.rd2-bright .rd2-review-category .rd2-entry-content > p {
   color: #f0f5fb;
   font-size: 14px;
   line-height: 1.75;
