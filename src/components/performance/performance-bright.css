@@ -148,6 +148,10 @@
   background: var(--rd2-panel);
   border-color: var(--rd2-border-soft);
 }
+.rd2-bright .rd2-guidance-item[data-category] {
+  border-color: color-mix(in srgb, var(--card-accent) 38%, var(--rd2-border-soft));
+  border-top-color: var(--card-accent);
+}
 .rd2-bright .rd2-card > h3::before {
   display: none;
 }
