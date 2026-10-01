@@ -1,5 +1,5 @@
 import { AssessmentAttachments } from "./AssessmentAttachments";
-import { readAssessmentDraft, keepAssessmentDraft, forgetAssessmentDraft } from './assessmentDrafts.mjs';
+import { cancelAssessmentDraftWrite, readAssessmentDraft, keepAssessmentDraft, forgetAssessmentDraft } from './assessmentDrafts.mjs';
 import { useEffect, useRef, useState } from "react";
 import { Link2, Send, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -326,7 +326,7 @@ export function AssessmentEditor({
         ...(sameContent ? { sourceUpdatedAt: initial.sourceUpdatedAt } : {}),
       };
       latest.current = next;
-      if (draftKey && pending.current) keepAssessmentDraft(draftKey, source, next);
+      if (draftKey && pending.current) keepAssessmentDraft(draftKey, source, next, { defer: true });
       return next;
     });
   }, [mode, initial.employeeName, initial.sourceUpdatedAt, initial.sourceContentVersion, draftKey, source]);
@@ -342,7 +342,7 @@ export function AssessmentEditor({
     const next = update(latest.current);
     latest.current = next;
     pending.current = true;
-    if (draftKey) keepAssessmentDraft(draftKey, source, next);
+    if (draftKey) keepAssessmentDraft(draftKey, source, next, { defer: true });
     setForm(next);
     setError("");
     setSubmitStatus("");
@@ -394,7 +394,13 @@ export function AssessmentEditor({
     } } }));
   const submit = async (action: AssessmentAction) => {
     if (submitting.current || readonly || !canSubmit || imageJobs) return;
-    if (mode === "self") change(commitAssessmentEntries);
+    if (mode === "self") {
+      const committed = commitAssessmentEntries(latest.current);
+      latest.current = committed;
+      pending.current = true;
+      if (draftKey) keepAssessmentDraft(draftKey, source, committed, { defer: true });
+      setForm(committed);
+    }
     const validation = validateAssessment(latest.current, mode, action);
     if (validation) {
       setError(validation);
@@ -402,6 +408,7 @@ export function AssessmentEditor({
     }
     submitting.current = true;
     setSaving(true);
+    if (draftKey) cancelAssessmentDraftWrite(draftKey);
     setError("");
     try {
       const confirmed = await onSave(latest.current, action);
@@ -413,6 +420,7 @@ export function AssessmentEditor({
         ? demo ? "示範草稿已儲存於本機" : "草稿已儲存到工作區，尚未送交主管"
         : demo ? "示範提交完成" : action === "return" ? "已退回補充，通知已送達員工通知中心。" : "提交成功");
     } catch (cause) {
+      if (draftKey) keepAssessmentDraft(draftKey, source, latest.current, { defer: true });
       setError(
         cause instanceof Error
           ? cause.message

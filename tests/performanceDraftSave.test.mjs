@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import * as persistence from '../src/components/performance/assessmentPersistence.mjs';
+import * as drafts from '../src/components/performance/assessmentDrafts.mjs';
 
 test('a self-assessment draft saves only employee fields and keeps its draft status', async () => {
   assert.equal(typeof persistence.saveSelfAssessmentDraft, 'function');
@@ -79,6 +80,32 @@ test('session drafts survive a fresh page module and remain scoped to the source
     assert.deepEqual(reloaded.readAssessmentDraft('employee:2026-q3:self', 'version-1'), { text: '已填一半' });
     assert.equal(reloaded.readAssessmentDraft('employee:2026-q3:self', 'newer-version'), undefined);
   } finally {
+    globalThis.window = priorWindow;
+  }
+});
+
+test('large editor drafts stay available immediately while browser storage waits for idle time', async () => {
+  const data = new Map();
+  const priorWindow = globalThis.window;
+  let idleWrite;
+  globalThis.window = {
+    sessionStorage: {
+      getItem: key => data.get(key) ?? null,
+      setItem: (key, value) => data.set(key, value),
+      removeItem: key => data.delete(key),
+    },
+    requestIdleCallback(callback) { idleWrite = callback; return 7; },
+    cancelIdleCallback() {},
+  };
+  try {
+    drafts.keepAssessmentDraft('idle-editor', 'version-1', { text: '含大型附件的表單' }, { defer: true });
+    assert.deepEqual(drafts.readAssessmentDraft('idle-editor', 'version-1'), { text: '含大型附件的表單' });
+    assert.equal(data.size, 0);
+    await new Promise(resolve => setTimeout(resolve, 375));
+    idleWrite();
+    assert.equal(data.size, 1);
+  } finally {
+    drafts.forgetAssessmentDraft('idle-editor');
     globalThis.window = priorWindow;
   }
 });
