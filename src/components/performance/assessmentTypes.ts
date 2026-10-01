@@ -74,6 +74,8 @@ export interface PerformanceGoal {
   weight: number;
 }
 export interface PerformanceReview {
+  /** False for the lightweight list projection; never submit it as a form. */
+  contentLoaded?: boolean;
   id: string;
   cycleId: string;
   employeeId: string;

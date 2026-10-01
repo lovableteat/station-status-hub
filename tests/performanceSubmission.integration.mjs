@@ -190,6 +190,11 @@ try {
   await db.exec(`create trigger zzzz_preserve_performance_name_version
     before update on workspace.performance_reviews for each row
     execute function workspace.preserve_performance_name_version()`);
+  const legacyVersion = (await query("select updated_at from workspace.performance_reviews where id='legacy'"))[0].updated_at;
+  await db.exec(await migration('20261001203000_add_lightweight_assessment_index'));
+  const legacyIndex = (await query("select updated_at,review_index from workspace.performance_reviews where id='legacy'"))[0];
+  check(legacyIndex.updated_at,legacyVersion,'index backfill preserves existing content version');
+  check(Object.keys(legacyIndex.review_index).sort(),['managerFeedback','selfFeedback'],'index backfills existing rows');
   await db.exec("delete from workspace.performance_reviews where id='legacy'");
   const reviewId = 'performance-10000000-0000-4000-8000-000000000005';
   const baseReview = { id:reviewId, cycle_id:'2026-q3', employee_id:id(5), employee_name:'測試員工',
@@ -302,6 +307,19 @@ try {
   check(compact.review.status,'submitted','employee submits with compact receipt');
   check(compact.review.score,null,'compact employee receipt conceals private score');
   check('self_feedback' in compact.review,false,'receipt does not echo employee attachments');
+  const structuredSelf = 'RD2_SELF_V1\n'+JSON.stringify({employeeNumber:'LA5',grade:'23',sections:{IDP:{selfScore:95,entries:[{text:'完整實績',attachments:[{dataUrl:'data:application/octet-stream;base64,'+'x'.repeat(4_000_000)}]}]},OKR:{selfScore:90},KPI:{selfScore:85}}});
+  compact = await submit({...baseReview,receipt_only:true,self_feedback:structuredSelf},'self','submit',compact.review.updated_at);
+  const indexed = (await query('select self_feedback,review_index from workspace.performance_reviews where id=$1',[reviewId]))[0];
+  check(indexed.self_feedback,structuredSelf,'lightweight index leaves original evidence intact');
+  check(JSON.stringify(indexed.review_index).length<500,true,'4 MB evidence has an index smaller than 500 bytes');
+  check(JSON.stringify(indexed.review_index).includes('data:'),false,'index excludes attachments');
+  const indexedSelf=JSON.parse(indexed.review_index.selfFeedback.split('\n')[1]);
+  check([indexedSelf.employeeNumber,indexedSelf.grade,indexedSelf.sections.IDP.selfScore],['LA5','23',95],'index preserves list identity and weighted-score inputs');
+  await query("update workspace.performance_reviews set review_index='{}' where id=$1",[reviewId]);
+  check((await query('select review_index from workspace.performance_reviews where id=$1',[reviewId]))[0].review_index,indexed.review_index,'client cannot forge derived assessment index');
+  await actor(6);
+  check((await query('select review_index from workspace.performance_reviews where id=$1',[reviewId])).length,0,'employee index query respects existing RLS');
+  await actor(5);
   await assert.rejects(()=>query("update workspace.performance_reviews set score=1 where id=$1",[reviewId])); checks++;
   const renamed = (await query("update workspace.performance_reviews set employee_name='改名測試', updated_at=clock_timestamp() where id=$1 returning updated_at",[reviewId]))[0];
   check(new Date(renamed.updated_at).toISOString(),new Date(compact.review.updated_at).toISOString(),'name-only edit retains content version');

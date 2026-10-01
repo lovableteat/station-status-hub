@@ -238,6 +238,7 @@ export function normalizePerformanceReview(value) {
   const goals = Array.isArray(review.goals) ? review.goals : [];
 
   return {
+    contentLoaded: review.contentLoaded !== false,
     id: String(review.id || `performance-${Date.now()}`),
     cycleId: String(review.cycleId || review.cycle_id || "2026-q3"),
     employeeId: String(review.employeeId || review.employee_id || ""),

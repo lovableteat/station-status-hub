@@ -39,7 +39,7 @@ import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGuide";
 import { saveSelfAssessmentDraft, submitAssessmentRecord } from "./assessmentPersistence.mjs";
-import { refreshAssessmentReviews } from './assessmentRefresh.mjs';
+import { refreshAssessmentReviews, loadAssessmentReviewContents, withAssessmentReadDeadline, clearAssessmentContentCache } from './assessmentRefresh.mjs';
 import { AssessmentEntryList } from "./AssessmentEntryList";
 import { AssessmentEntryFeedback, AssessmentReturnHistory } from './AssessmentEntryFeedback';
 import { EvidenceLink } from './EvidenceLink';
@@ -410,21 +410,29 @@ export function PerformanceAppraisalPage() {
   const candidateManager = canEdit && isPerformanceManager;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [contentError, setContentError] = useState('');
+  const [rosterError, setRosterError] = useState('');
+  const [contentRetry, setContentRetry] = useState(0);
+  const userSnapshot = useRef(user);
+  userSnapshot.current = user;
   const [detailId, setDetailId] = useState<string | null>(null);
   const detailTrigger = useRef<HTMLButtonElement | null>(null);
   const [editorRevision, setEditorRevision] = useState(0);
   const savedId = useRef<{ key: string; id: string } | null>(null);
   const requestNumber = useRef(0);
   const reviewsSnapshot = useRef(reviews);
-  const activeLoad = useRef<{ scope: string; request: number } | null>(null);
+  const activeLoad = useRef<{ scope: string; request: number; controller: AbortController } | null>(null);
   const submissionPending = useRef(false);
   useEffect(() => { reviewsSnapshot.current = reviews; }, [reviews]);
   const accessGeneration = useRef(0);
   const loadedAccessScope = useRef<string | null>(null);
   const loadedProfile = useRef("");
   const [privacyRevision, setPrivacyRevision] = useState(0);
-  const privacy = usePerformancePrivacy(candidateManager && !demo, userId, () => {
+  const privacy = usePerformancePrivacy(canManagePerformance && !demo, userId, () => {
+    clearAssessmentContentCache(performanceDb);
     ++requestNumber.current;
+    activeLoad.current?.controller.abort();
+    activeLoad.current = null;
     ++accessGeneration.current;
     loadedAccessScope.current = null;
     setReviews([]); setDetailId(null);
@@ -481,20 +489,22 @@ export function PerformanceAppraisalPage() {
   const accessScope = `${userId}:${canManagePerformance}:${privacyRevision}`;
   const profileIdentity = `${userId}:${user?.username}:${user?.displayName}:${canEdit}:${isPerformanceManager}`;
   const recordsPending = loadedAccessScope.current !== accessScope ||
-    (!demo && candidateManager && !privacy.ready);
+    (!demo && canManagePerformance && !privacy.ready);
   const load = useCallback(async (background = false) => {
-    if (background && (activeLoad.current?.scope === accessScope || submissionPending.current)) return;
+    if (activeLoad.current?.scope === accessScope || (background && submissionPending.current)) return;
     const request = ++requestNumber.current;
-    activeLoad.current = { scope: accessScope, request };
+    activeLoad.current?.controller.abort();
+    const controller = new AbortController();
+    activeLoad.current = { scope: accessScope, request, controller };
     if (!background) setLoading(true);
-    if (!background && !demo) setSelfContextLoaded(false);
+    if (!background && !demo && loadedAccessScope.current !== accessScope) setSelfContextLoaded(false);
     setLoadError("");
     // A refresh in the same verified scope keeps the last result visible.
     // Account, manager scope and privacy changes still invalidate it immediately.
     if (loadedAccessScope.current !== accessScope) {
-      setReviews(demo ? readCache(cacheKey, true, user, canManagePerformance, administrator) : []);
+      setReviews(demo ? readCache(cacheKey, true, userSnapshot.current, canManagePerformance, administrator) : []);
     }
-    if (!demo && candidateManager && !privacy.ready) { setReviews([]); setLoading(false); activeLoad.current = null; return; }
+    if (!demo && canManagePerformance && !privacy.ready) { setReviews([]); setLoading(false); activeLoad.current = null; return; }
     if (demo) {
       loadedAccessScope.current = accessScope;
       loadedProfile.current = profileIdentity;
@@ -503,52 +513,50 @@ export function PerformanceAppraisalPage() {
       return;
     }
     try {
+      const loadRoster = () => {
+        void withAssessmentReadDeadline(performanceDb.rpc('get_performance_organization').abortSignal(controller.signal),
+          15000, () => controller.abort()).then(result => {
+          if (request !== requestNumber.current) return;
+          if (result.error) throw result.error;
+          const nextEmployees = (result.data || []).map((employee: {employee_id:string;display_name:string;username:string;org_level:string}) => ({
+            id:employee.employee_id,label:employee.display_name || employee.username,username:employee.username,orgLevel:employee.org_level,
+          }));
+          setEmployees(current => JSON.stringify(current) === JSON.stringify(nextEmployees) ? current : nextEmployees);
+          setRosterError('');
+        }).catch(() => {
+          if (request === requestNumber.current) { setEmployees([]); setRosterError('無法讀取組織名單，請重新整理。'); }
+        });
+      };
+      const rosterStarted = administrator || canManagePerformance;
+      if (rosterStarted) loadRoster();
       const reviewsQuery = refreshAssessmentReviews(performanceDb,
         loadedAccessScope.current === accessScope ? reviewsSnapshot.current : [],
-        () => request === requestNumber.current);
+        () => request === requestNumber.current, controller.signal, userId);
       // RLS already limits employees to their own rows. Do not add a second
       // client-side identity filter here: older records may have been created
       // with the account username instead of the auth UUID. Filtering by one
       // representation would hide that record and make the editor look new.
       // RLS applies direct organizational scope and password checks. Site
       // administrators receive no assessment-data bypass.
-      const [rows, employeeResult, selfContextResult] = await Promise.all([
+      const [rows, selfContextResult] = await withAssessmentReadDeadline(Promise.all([
         reviewsQuery,
-        (administrator || candidateManager)
-          ? performanceDb.rpc("get_performance_organization")
-          : Promise.resolve({ data: [] }),
-        performanceDb.rpc("get_performance_self_context"),
-      ]);
+        performanceDb.rpc("get_performance_self_context").abortSignal(controller.signal),
+      ]), 15000, () => controller.abort());
       if (request !== requestNumber.current) return;
-      if (employeeResult.error) throw employeeResult.error;
       if (selfContextResult.error) throw selfContextResult.error;
       // RLS supplies rows authorized by both hierarchy and password grants.
       const context = selfContextResult.data?.[0];
       const resolvedManager = !!(candidateManager && context?.performance_role === "manager" &&
         (context.org_level === "director" || context.org_level === "section_chief"));
-      const accessible = rows.filter((review) => resolvedManager || matchesUser(review, user));
+      const accessible = rows.filter((review) => resolvedManager || matchesUser(review, userSnapshot.current));
       loadedAccessScope.current = `${userId}:${resolvedManager}:${privacyRevision}`;
       loadedProfile.current = profileIdentity;
       reviewsSnapshot.current = accessible;
       setReviews(current => current.length === accessible.length &&
         current.every((row, index) => row === accessible[index]) ? current : accessible);
-
-      const nextEmployees = (employeeResult.data || []).map(
-          (employee: {
-            employee_id: string;
-            display_name: string;
-            username: string;
-            org_level: string;
-          }) => ({
-            id: employee.employee_id,
-            label: employee.display_name || employee.username,
-            username: employee.username,
-            orgLevel: employee.org_level,
-          }),
-        );
+      if (resolvedManager && !rosterStarted) loadRoster();
       // Keep unchanged roster/context identities stable so the editor does not
       // parse large attachment JSON again after a metadata-only refresh.
-      setEmployees(current => JSON.stringify(current) === JSON.stringify(nextEmployees) ? current : nextEmployees);
       const nextContext = context ? {
         employeeId: context.employee_id,
         username: context.username,
@@ -576,17 +584,21 @@ export function PerformanceAppraisalPage() {
       if (activeLoad.current?.request === request) activeLoad.current = null;
       if (request === requestNumber.current) setLoading(false);
     }
-  }, [cacheKey, demo, user, canManagePerformance, administrator, privacy.ready, accessScope, candidateManager, profileIdentity, userId, privacyRevision]);
+  }, [cacheKey, demo, canManagePerformance, administrator, privacy.ready, accessScope, candidateManager, profileIdentity, userId, privacyRevision]);
   useEffect(() => {
     // The self-context response already establishes manager access. Do not
     // repeat the same three reads merely because that state reached React.
     if (loadedAccessScope.current !== accessScope || loadedProfile.current !== profileIdentity) void load();
+  }, [load, privacyRevision, accessScope, profileIdentity]);
+  useEffect(() => {
     return () => {
       // Cancel every outstanding request, including later background refreshes.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       ++requestNumber.current;
+      activeLoad.current?.controller.abort();
+      activeLoad.current = null;
     };
-  }, [load, privacyRevision, accessScope, profileIdentity]);
+  }, [accessScope, profileIdentity]);
   useEffect(() => {
     if (demo) return;
     try {
@@ -791,6 +803,7 @@ export function PerformanceAppraisalPage() {
     const mode = tab as AssessmentMode;
     if (mode === "manager" && !canManagePerformance)
       throw new Error("只有管理員指定的績效主管才能送出主管評分。");
+    if (mode === 'manager' && rosterError) throw new Error(rosterError);
     if (mode === "self" && !demo && selfContext?.assigned !== true)
       throw new Error("管理員尚未將你的帳號加入績效組織，目前不能儲存或送出。");
     if (mode === "self" && !matchesUser(form, user))
@@ -800,6 +813,7 @@ export function PerformanceAppraisalPage() {
     const previous = reviews.find(
       (review) => review.id === (editorRecordId || ""),
     );
+    if (previous?.contentLoaded === false) throw new Error('請先完成考核內容讀取後再送出。');
     if (previous && form.sourceUpdatedAt !== previous.updatedAt &&
         form.sourceContentVersion !== assessmentContentVersion(previous))
       throw new Error('考核已有較新版本，請重新開啟後再儲存；目前輸入仍保留。');
@@ -827,6 +841,8 @@ export function PerformanceAppraisalPage() {
     }) as PerformanceReview;
     let confirmed = nextReview;
     ++requestNumber.current;
+    activeLoad.current?.controller.abort();
+    activeLoad.current = null;
     submissionPending.current = true;
     try {
       if (!demo)
@@ -872,10 +888,16 @@ export function PerformanceAppraisalPage() {
     });
     return createAssessmentForm(confirmed) as AssessmentForm;
   };
-  const exportCsv = () => {
+  const exportCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+    const generation = accessGeneration.current;
+    const complete = await withAssessmentReadDeadline(loadAssessmentReviewContents(performanceDb, visibleReviews,
+      () => generation === accessGeneration.current), 60000);
     const url = URL.createObjectURL(
       // Manager-only fields are exported only for the assigned supervisor.
-      new Blob(["\uFEFF", toPerformanceCsv(visibleReviews, { includeManager: canManagePerformance })], {
+      new Blob(["\uFEFF", toPerformanceCsv(complete, { includeManager: canManagePerformance })], {
         type: "text/csv;charset=utf-8;",
       }),
     );
@@ -884,14 +906,20 @@ export function PerformanceAppraisalPage() {
     anchor.download = `performance-${cycle}.csv`;
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      toast({ title: '匯出失敗', description: '無法確認完整考核資料，請重新整理後重試。', variant: 'destructive' });
+    } finally { setExporting(false); }
   };
   const exportManagerFile = async (format: "xlsx" | "html") => {
     const selectedReviews = managerExportReviews.filter((review) => exportSelection.includes(review.id));
     if (!canManagePerformance || !selectedReviews.length || exporting) return;
     setExporting(true);
     try {
-      if (format === "xlsx") await downloadPerformanceExcel(selectedReviews, cycle);
-      else downloadPerformanceHtml(selectedReviews, cycle);
+      const generation = accessGeneration.current;
+      const complete = await withAssessmentReadDeadline(loadAssessmentReviewContents(performanceDb, selectedReviews,
+        () => generation === accessGeneration.current), 60000);
+      if (format === "xlsx") await downloadPerformanceExcel(complete, cycle);
+      else downloadPerformanceHtml(complete, cycle);
       toast({
         title: format === "xlsx" ? "Excel 已匯出" : "HTML 已匯出",
         description: `已匯出 ${selectedReviews.length} 位組員的 ${cycle} 考核資料，包含整體回覆與工作指示。`,
@@ -908,6 +936,28 @@ export function PerformanceAppraisalPage() {
     }
   };
   const detail = reviews.find((review) => review.id === detailId);
+  const contentTarget = detail || (tab === 'self' || (tab === 'manager' && managerView === 'score') ? editorReview : null);
+  const contentPending = contentTarget?.contentLoaded === false;
+  useEffect(() => {
+    setContentError('');
+    if (!contentTarget || contentTarget.contentLoaded !== false || recordsPending || demo) return;
+    const target = contentTarget;
+    const controller = new AbortController();
+    const generation = accessGeneration.current;
+    let current = true;
+    void withAssessmentReadDeadline(loadAssessmentReviewContents(performanceDb, [target],
+      () => current && generation === accessGeneration.current, controller.signal, userId), 15000, () => controller.abort())
+      .then(([complete]) => {
+        if (!current || generation !== accessGeneration.current) return;
+        const next = reviewsSnapshot.current.map(row => row.id === target.id &&
+          (row.updatedAt === target.updatedAt || row.updatedAt === complete.updatedAt) ? complete : row);
+        reviewsSnapshot.current = next;
+        setReviews(next);
+      }).catch(() => {
+        if (current && generation === accessGeneration.current) setContentError('無法讀取考核內容，請重試。');
+      });
+    return () => { current = false; controller.abort(); };
+  }, [contentTarget, recordsPending, accessScope, contentRetry, demo]);
   const initial = useMemo(() => {
     const next = createAssessmentForm(
       editorReview,
@@ -1012,6 +1062,7 @@ export function PerformanceAppraisalPage() {
             </Button>
           </div>
         )}
+        {canManagePerformance && rosterError && <div className="rd2-error" role="alert">{rosterError}<Button variant="outline" onClick={() => void load()}>重新整理</Button></div>}
         {tab === "policy" && (
           <>
             <PerformanceFlowGuide
@@ -1116,8 +1167,12 @@ export function PerformanceAppraisalPage() {
           <>
             {tab === "manager" && !canManagePerformance ? (
               <p role="alert">需要由管理員指定為績效主管才能進行主管評分。</p>
-            ) : loading || (canManagePerformance && !privacy.ready && !demo) ? (
+            ) : loadError || privacy.error ? (
+              <div role="alert">{loadError || privacy.error}<Button variant="outline" onClick={() => { void privacy.refresh(); void load(); }}>重新整理</Button></div>
+            ) : recordsPending || (contentPending && !contentError) || (canManagePerformance && !privacy.ready && !demo) ? (
               <p role="status">正在讀取考核…</p>
+            ) : contentPending && contentError ? (
+              <div role="alert">{contentError}<Button variant="outline" onClick={() => setContentRetry(value => value + 1)}>重新整理</Button></div>
             ) : editorId && !editorReview ? (
               <p role="alert">
                 找不到這份考核，或目前無權限檢視。請從考核紀錄重新選擇。
@@ -1274,7 +1329,7 @@ export function PerformanceAppraisalPage() {
                   <Button
                     variant="outline"
                     onClick={exportCsv}
-                    disabled={!visibleReviews.length}
+                    disabled={!visibleReviews.length || exporting}
                   >
                     <Download data-icon="inline-start" />
                     匯出報表
@@ -1537,10 +1592,13 @@ export function PerformanceAppraisalPage() {
                   <DialogTitle>考核內容 · {detail.employeeName}</DialogTitle>
                   <DialogDescription>查看本期實績與逐項回覆；此視窗不會修改資料。</DialogDescription>
                 </DialogHeader>
-                <ReviewDetail
+                {detail.contentLoaded === false ? <div role={contentError ? 'alert' : 'status'}>
+                  {contentError || '正在讀取考核…'}
+                  {contentError && <Button variant="outline" onClick={() => setContentRetry(value => value + 1)}>重新整理</Button>}
+                </div> : <ReviewDetail
                   review={detail}
                   showManagerAssessment={canManagePerformance}
-                />
+                />}
               </DialogContent>}
             </Dialog>
             <Dialog open={exportOpen} onOpenChange={setExportOpen}>
