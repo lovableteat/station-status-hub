@@ -890,22 +890,26 @@ export function PerformanceAppraisalPage() {
     }
   };
   const detail = reviews.find((review) => review.id === detailId);
-  const initial = createAssessmentForm(
-    editorReview,
-    tab === "self" ? user || {} : {},
-  ) as AssessmentForm;
-  if (tab === "self" && selfContext?.assigned) {
-    initial.employeeId = selfContext.employeeId;
-    initial.employeeName = selfContext.displayName;
-    initial.department = [selfContext.department, selfContext.section].filter(Boolean).join(" / ");
-    initial.role = selfContext.jobTitle || ({ director: "部長", section_chief: "課長", member: "一般成員" } as const)[selfContext.orgLevel];
-    initial.reviewerName = selfContext.managerName;
-  }
-  const assessedEmployee = employees.find((employee) => employee.id === initial.employeeId)
-    || employees.find((employee) => employee.label === initial.employeeName);
-  if (tab === "manager" && assessedEmployee?.orgLevel) initial.manager.roleGroup = getAccountabilityRole(assessedEmployee.orgLevel);
-  if (!editorReview)
-    initial.dueDate = `${cycle.slice(0, 4)}-${cycle.endsWith("q2") ? "06-30" : "09-30"}`;
+  const initial = useMemo(() => {
+    const next = createAssessmentForm(
+      editorReview,
+      tab === "self" ? user || {} : {},
+    ) as AssessmentForm;
+    if (tab === "self" && selfContext?.assigned) {
+      next.employeeId = selfContext.employeeId;
+      next.employeeName = selfContext.displayName;
+      next.department = [selfContext.department, selfContext.section].filter(Boolean).join(" / ");
+      next.role = selfContext.jobTitle || ({ director: "部長", section_chief: "課長", member: "一般成員" } as const)[selfContext.orgLevel];
+      next.reviewerName = selfContext.managerName;
+    }
+    const assessedEmployee = employees.find((employee) => employee.id === next.employeeId)
+      || employees.find((employee) => employee.label === next.employeeName);
+    if (tab === "manager" && assessedEmployee?.orgLevel)
+      next.manager.roleGroup = getAccountabilityRole(assessedEmployee.orgLevel);
+    if (!editorReview)
+      next.dueDate = `${cycle.slice(0, 4)}-${cycle.endsWith("q2") ? "06-30" : "09-30"}`;
+    return next;
+  }, [cycle, editorReview, employees, selfContext, tab, user]);
   const returnDetails = editorReview
     ? readManagerAssessment(editorReview.managerFeedback)
     : null;
