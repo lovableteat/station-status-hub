@@ -1,46 +1,35 @@
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Check, Copy, MessageSquareText } from 'lucide-react';
 import { useState } from 'react';
 import { AssessmentAttachments as ManagerAttachments } from './AssessmentAttachments';
-import type { AssessmentEntry, AssessmentSection, Category, ManagerAssessment, ReviewAttachment } from './assessmentTypes';
+import type { AssessmentEntry, Category, ManagerAssessment, ReviewAttachment } from './assessmentTypes';
 
-type ReturnEntry = ManagerAssessment['returnHistory'][number]['entries'][number];
-type LatestReturnEntry = ReturnEntry & { returnedAt: string; reviewerName: string; eventId: string };
-
-function focusAssessmentEntry(category: Category, entryId: string) {
-  const target = document.getElementById(`rd2-entry-${category}-${entryId}`);
-  target?.scrollIntoView({ block: 'center', behavior: 'auto' });
-  target?.focus({ preventScroll: true });
-  return Boolean(target);
+async function copyReply(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const field = document.createElement('textarea');
+  field.value = text;
+  field.style.position = 'fixed';
+  field.style.opacity = '0';
+  document.body.appendChild(field);
+  field.select();
+  document.execCommand('copy');
+  field.remove();
 }
 
-export function AssessmentReturnHistory({ manager, sections }: { manager: ManagerAssessment; sections?: Record<Category, AssessmentSection> }) {
-  const [missingEntry, setMissingEntry] = useState(false);
+export function AssessmentReturnHistory({ manager }: { manager: ManagerAssessment }) {
   if (!manager.returnHistory.length) return null;
   const events = [...manager.returnHistory].reverse();
-  const latestByItem = new Map<string, LatestReturnEntry>();
-  const itemCounts = new Map<string, number>();
-  for (const event of manager.returnHistory) {
-    for (const item of event.entries) {
-      const key = `${item.category}:${item.entryId}`;
-      itemCounts.set(key, (itemCounts.get(key) || 0) + 1);
-    }
-  }
-  for (const event of events) {
-    for (const item of event.entries) {
-      const key = `${item.category}:${item.entryId}`;
-      if (!latestByItem.has(key)) latestByItem.set(key, { ...item, returnedAt: event.returnedAt, reviewerName: event.reviewerName, eventId: event.id });
-    }
-  }
-  const latestItems = [...latestByItem.entries()];
   const latestEvent = events[0];
-  const itemLabel = (item: ReturnEntry) => `${item.category} · 實績 ${Math.max(1, (sections?.[item.category].entries || []).findIndex(entry => entry.id === item.entryId) + 1)}`;
   const overallFeedback = latestEvent.overallFeedback || manager.feedback;
   const workInstructions = latestEvent.workInstructions || manager.workInstructions;
   return <section id="rd2-return-feedback" className="rd2-return-history" data-return-state="returned" aria-label="主管退回回應">
     <header className="rd2-return-history-header">
       <div>
-        <div className="rd2-return-kicker"><span>需要補充</span><strong>{latestItems.length} 個項目</strong></div>
+        <div className="rd2-return-kicker"><span>需要補充</span><strong>{latestEvent.entries.length} 個項目</strong></div>
         <h3>主管退回回應</h3>
         <p className="rd2-hint">請依每個項目的原因補充自評，完成後再送出。</p>
       </div>
@@ -60,26 +49,7 @@ export function AssessmentReturnHistory({ manager, sections }: { manager: Manage
         <p className="rd2-prewrap">{workInstructions || '本次未填寫後續工作指示。'}</p>
       </section>
     </div>
-    {missingEntry && <p className="rd2-return-missing" role="status">這筆實績已移除；退回原因仍保留，請直接在下方補充或新增實績。</p>}
-    <div className="rd2-return-item-list">
-      {latestItems.map(([key, item]) => <article key={`${key}-${item.eventId}`} className="rd2-return-item-card">
-        <div className="rd2-return-item-heading">
-          <span className="rd2-return-category">{itemLabel(item)}</span>
-          <span className="rd2-return-item-count">第 {itemCounts.get(key) || 1} 次退回</span>
-        </div>
-        <h4>這筆實績需要補充</h4>
-        <div className="rd2-return-reason">
-          <span>主管回應</span>
-          <p className="rd2-prewrap">{item.feedback}</p>
-        </div>
-        <details className="rd2-return-more">
-          <summary>查看退回當時的內容{item.attachments.length ? ` · 附件 ${item.attachments.length}` : ''}</summary>
-          <p className="rd2-prewrap">{item.text || '退回當時沒有保留文字內容。'}</p>
-          <ManagerAttachments attachments={item.attachments} readonly />
-        </details>
-        <Button type="button" size="sm" variant="outline" onClick={() => setMissingEntry(!focusAssessmentEntry(item.category, item.entryId))}>前往這筆實績</Button>
-      </article>)}
-    </div>
+    <p className="rd2-return-inline-hint">逐筆回覆請由下方對應實績的「主管回覆」查看。</p>
     {events.length > 1 && <details className="rd2-return-archive">
       <summary>查看過往退回紀錄 · 共 {events.length} 次</summary>
       <ol>
@@ -103,21 +73,44 @@ export function AssessmentEntryFeedback({ category, entry, index, manager, edita
   onBusy?: (busy: boolean) => void;
   onError?: (message: string) => void;
 }) {
+  const [copyStatus, setCopyStatus] = useState('');
   const value = manager.entryReviews[category][entry.id] || { feedback: '', returnRequested: false, attachments: [] };
   const history = manager.returnHistory.flatMap(event => event.entries
     .filter(item => item.category === category && item.entryId === entry.id)
     .map(item => ({ ...item, id: event.id, returnedAt: event.returnedAt, reviewerName: event.reviewerName })));
-  // Returned feedback is already shown once in the return summary above the
-  // form. Do not render the same response again beneath every achievement.
-  if (!editable && history.length) return null;
-  if (!editable && !(showFeedback && (value.feedback || value.attachments.length))) return null;
+  const latestReturn = history.at(-1);
+  const visibleFeedback = latestReturn?.feedback || value.feedback;
+  const visibleAttachments = latestReturn?.attachments?.length ? latestReturn.attachments : value.attachments;
+  if (!editable && !(showFeedback && (visibleFeedback || visibleAttachments.length))) return null;
   const label = `${category} 實績 ${index + 1}`;
+  if (!editable) return <div className="rd2-entry-feedback rd2-entry-feedback-inline">
+    <details className="rd2-inline-supervisor-reply">
+      <summary aria-label={`查看 ${label} 主管回覆`}>
+        <MessageSquareText aria-hidden="true" />
+        主管回覆
+      </summary>
+      <div className="rd2-inline-supervisor-reply-body">
+        <div className="rd2-inline-supervisor-reply-heading">
+          <strong>{label} · 主管回覆</strong>
+          {visibleFeedback && <Button type="button" size="sm" variant="ghost" onClick={async () => {
+            try {
+              await copyReply(visibleFeedback);
+              setCopyStatus('已複製');
+              window.setTimeout(() => setCopyStatus(''), 1800);
+            } catch {
+              setCopyStatus('請選取文字複製');
+            }
+          }}>
+            {copyStatus === '已複製' ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+            {copyStatus || '複製回覆'}
+          </Button>}
+        </div>
+        {visibleFeedback && <p className="rd2-prewrap">{visibleFeedback}</p>}
+        <ManagerAttachments attachments={visibleAttachments} readonly />
+      </div>
+    </details>
+  </div>;
   return <div className="rd2-entry-feedback">
-    {!editable && showFeedback && (value.feedback || value.attachments.length > 0) && <div className="rd2-entry-response">
-      <strong>主管逐項回應</strong>
-      {value.feedback && <p className="rd2-prewrap">{value.feedback}</p>}
-      <ManagerAttachments attachments={value.attachments} readonly />
-    </div>}
     {editable && <>
       <label htmlFor={`feedback-${category}-${entry.id}`}>{label} · 主管評語／退回原因</label>
       <Textarea id={`feedback-${category}-${entry.id}`} rows={3} value={value.feedback} disabled={disabled}

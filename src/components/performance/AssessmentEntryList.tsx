@@ -165,6 +165,7 @@ export function AssessmentEntryList({
               ) : (
                 <p className="rd2-prewrap">{entry.text || "尚未填寫內容"}</p>
               )}
+              {renderFeedback ? renderFeedback(entry, index) : onFeedback ? <Field><FieldLabel htmlFor={`${category}-${entry.id}-feedback`}>本筆實績回饋</FieldLabel><Textarea id={`${category}-${entry.id}-feedback`} rows={3} maxLength={10000} value={feedback?.[entry.id] || ""} placeholder="針對這筆實績留下建議或補充要求" onChange={event => onFeedback(entry.id, event.target.value)} /></Field> : feedback?.[entry.id] ? <div className="rd2-entry-feedback"><strong>本筆實績回饋</strong><p className="rd2-prewrap">{feedback[entry.id]}</p></div> : null}
               <AssessmentAttachments
                 attachments={entry.attachments || []}
                 readonly={readonly}
@@ -178,7 +179,6 @@ export function AssessmentEntryList({
               {!readonly && <div className="rd2-link-toolbar"><div className="rd2-link-copy"><strong>證明連結</strong><span>貼上 HTTPS 連結，主管可直接開啟查看</span></div><div className="rd2-link-input"><Input aria-label={`${category} 實績 ${index+1} 證明連結`} placeholder="https://…（選填）" value={linkDrafts[entry.id] || ""} onChange={event=>setLinkDrafts(previous=>({...previous,[entry.id]:event.target.value}))}/><Button type="button" variant="outline" size="sm" onClick={()=>{
                 try {const url=new URL(linkDrafts[entry.id] || "");if(url.protocol!=="https:")throw new Error();onChange(previous=>withAssessmentEntries(previous,getAssessmentEntries(previous).map(item=>item.id===entry.id?{...item,links:[...new Set([...(item.links || []),url.href])]}:item)));setLinkDrafts(previous=>({...previous,[entry.id]:""}));setAttachmentError("");}catch{setAttachmentError("請輸入有效的 HTTPS 證明連結。");}
               }}>加入連結</Button></div></div>}
-              {renderFeedback ? renderFeedback(entry, index) : onFeedback ? <Field><FieldLabel htmlFor={`${category}-${entry.id}-feedback`}>本筆實績回饋</FieldLabel><Textarea id={`${category}-${entry.id}-feedback`} rows={3} maxLength={10000} value={feedback?.[entry.id] || ""} placeholder="針對這筆實績留下建議或補充要求" onChange={event => onFeedback(entry.id, event.target.value)} /></Field> : feedback?.[entry.id] ? <div className="rd2-entry-feedback"><strong>本筆實績回饋</strong><p className="rd2-prewrap">{feedback[entry.id]}</p></div> : null}
             </li>
           ))}
         </ol>
