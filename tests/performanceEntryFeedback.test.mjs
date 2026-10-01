@@ -100,3 +100,16 @@ test('employee feedback uses an inline disclosure with copy support instead of a
   assert.ok(entryList.indexOf('renderFeedback(entry, index)') < entryList.indexOf('<AssessmentAttachments'));
   assert.match(styles, /\.rd2-inline-supervisor-reply-body[\s\S]*user-select:\s*text/);
 });
+
+test('achievement evidence uses one compact disclosure and responsive panels', async () => {
+  const [entryList, styles] = await Promise.all([
+    readFile(new URL('../src/components/performance/AssessmentEntryList.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/performance/performance.css', import.meta.url), 'utf8'),
+  ]);
+  assert.match(entryList, /<details className="rd2-entry-evidence">/);
+  assert.match(entryList, /\$\{attachmentCount\} 個附件 · \$\{linkCount\} 個連結/);
+  assert.ok(entryList.indexOf('<AssessmentAttachments') > entryList.indexOf('rd2-entry-evidence-body'));
+  assert.ok(entryList.indexOf('rd2-link-toolbar') > entryList.indexOf('rd2-entry-evidence-body'));
+  assert.match(styles, /\.rd2-entry-evidence-body\s*\{[\s\S]*grid-template-columns:\s*repeat\(2/);
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.rd2-entry-evidence-body\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
+});
