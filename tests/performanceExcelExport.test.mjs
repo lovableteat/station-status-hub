@@ -38,6 +38,7 @@ test("manager Excel keeps long KPI in one row and uses the existing supervisor c
       }),
       managerFeedback: serializeManagerAssessment({
         feedback: "整體主管評語",
+        workInstructions: "下一期完成自動化驗證",
         entryReviews: { KPI: { "kpi-1": { feedback: "逐項主管評語" } } },
         categoryReviews: { KPI: { feedback: "類別主管評語", score: 88 } },
         answers: { [ACCOUNTABILITY_QUESTIONS[0].id]: 4 },
@@ -53,7 +54,10 @@ test("manager Excel keeps long KPI in one row and uses the existing supervisor c
     assert.equal(kpiRows[0][2], longAchievement);
     assert.equal(kpiRows[0][3], "逐項主管評語");
     assert.match(kpiRows[0][6], /類別主管評語/);
-    assert.match(kpiRows[0][6], /整體主管評語/);
+    const overallRow = rows.find((row) => row[1] === "主管總結" && row[2] === "整體回覆");
+    const instructionRow = rows.find((row) => row[1] === "主管總結" && row[2] === "工作指示");
+    assert.equal(overallRow?.[3], "整體主管評語");
+    assert.equal(instructionRow?.[3], "下一期完成自動化驗證");
     assert.ok(rows.every((row) => !String(row[1]).includes("（續）")));
     assert.ok(rows.every((row) => row[2] !== "整體主管評語"));
     assert.ok(rows.every((row) => row[1] !== "當責量表"));
@@ -67,6 +71,8 @@ test("manager Excel keeps long KPI in one row and uses the existing supervisor c
     await downloadPerformanceHtml([review], "2026-q3");
     const html = await exportedBlob.text();
     assert.match(html, /主管當責評分/);
+    assert.match(html, /整體主管評語/);
+    assert.match(html, /下一期完成自動化驗證/);
     assert.match(html, /<table class="accountability-table"><thead>[\s\S]*?<tbody><tr><td>4分（做得不錯）<\/td><td>/);
     assert.doesNotMatch(html, /<td>當責量表<\/td>/);
   } finally {

@@ -35,11 +35,8 @@ export function AssessmentReturnHistory({ manager, sections }: { manager: Manage
   const latestItems = [...latestByItem.entries()];
   const latestEvent = events[0];
   const itemLabel = (item: ReturnEntry) => `${item.category} · 實績 ${Math.max(1, (sections?.[item.category].entries || []).findIndex(entry => entry.id === item.entryId) + 1)}`;
-  const firstFeedbackByText = new Map<string, string>();
-  for (const [key, item] of latestItems) {
-    const feedback = item.feedback.trim();
-    if (feedback && !firstFeedbackByText.has(feedback)) firstFeedbackByText.set(feedback, key);
-  }
+  const overallFeedback = latestEvent.overallFeedback || manager.feedback;
+  const workInstructions = latestEvent.workInstructions || manager.workInstructions;
   return <section id="rd2-return-feedback" className="rd2-return-history" data-return-state="returned" aria-label="主管退回回應">
     <header className="rd2-return-history-header">
       <div>
@@ -53,6 +50,16 @@ export function AssessmentReturnHistory({ manager, sections }: { manager: Manage
         <small>{latestEvent.reviewerName}</small>
       </div>
     </header>
+    <div className="rd2-return-overview" aria-label="本次主管整體回覆">
+      <section>
+        <span>主管整體回覆</span>
+        <p className="rd2-prewrap">{overallFeedback || '本次未填寫整體回覆。'}</p>
+      </section>
+      <section>
+        <span>後續工作指示</span>
+        <p className="rd2-prewrap">{workInstructions || '本次未填寫後續工作指示。'}</p>
+      </section>
+    </div>
     {missingEntry && <p className="rd2-return-missing" role="status">這筆實績已移除；退回原因仍保留，請直接在下方補充或新增實績。</p>}
     <div className="rd2-return-item-list">
       {latestItems.map(([key, item]) => <article key={`${key}-${item.eventId}`} className="rd2-return-item-card">
@@ -63,11 +70,7 @@ export function AssessmentReturnHistory({ manager, sections }: { manager: Manage
         <h4>這筆實績需要補充</h4>
         <div className="rd2-return-reason">
           <span>主管回應</span>
-          {firstFeedbackByText.get(item.feedback.trim()) === key ? (
-            <p className="rd2-prewrap">{item.feedback}</p>
-          ) : (
-            <p className="rd2-return-reason-repeat">與 {itemLabel(latestByItem.get(firstFeedbackByText.get(item.feedback.trim()) || '') || item)} 相同</p>
-          )}
+          <p className="rd2-prewrap">{item.feedback}</p>
         </div>
         <details className="rd2-return-more">
           <summary>查看退回當時的內容{item.attachments.length ? ` · 附件 ${item.attachments.length}` : ''}</summary>
@@ -83,6 +86,8 @@ export function AssessmentReturnHistory({ manager, sections }: { manager: Manage
         {events.slice(1).map(event => <li key={event.id}>
           <strong>{new Date(event.returnedAt).toLocaleString('zh-TW')}</strong>
           <span>{event.reviewerName} · {event.entries.length} 個項目</span>
+          {event.overallFeedback && <p><b>整體回覆：</b>{event.overallFeedback}</p>}
+          {event.workInstructions && <p><b>工作指示：</b>{event.workInstructions}</p>}
           <ul>{event.entries.map(item => <li key={`${event.id}-${item.category}-${item.entryId}`}><b>{item.category}</b>：{item.feedback}</li>)}</ul>
         </li>)}
       </ol>

@@ -54,7 +54,7 @@ function imageNames(images: Array<{ name?: string }> = []) {
 
 const EXCEL_COLUMN_WIDTHS = [12.78, 65.44, 83.44, 14.78, 12.78, 32.78, 36.78, 28.78, 24.78];
 const EXCEL_META_HEADERS = ["類別", "資料類型", "內容", "", "", "", "", "", ""];
-const EXCEL_DETAIL_HEADERS = ["大類", "實績", "主管評語", "員工自評分數", "主管評分", "主管評語", "證明連結", "自評附件檔名", "自評圖片檔名"];
+const EXCEL_DETAIL_HEADERS = ["大類", "資料項目", "內容／逐項主管回覆", "員工自評分數", "主管評分", "類別主管評語", "證明連結", "自評附件檔名", "自評圖片檔名"];
 // Match the two header fills in the supplied 績效考核.xlsx (Johnny!A1:I1 and A15:I15).
 const EXCEL_META_HEADER = "FFFFFF00";
 const EXCEL_DETAIL_HEADER = "FF1F4E79";
@@ -166,11 +166,10 @@ function detailRows(review: PerformanceReview): ExcelValue[][] {
     }
   }
   if (self.legacyText.trim()) rows.push(["自評", self.legacyText, "", "", "", "", "", "", ""]);
-  const overallFeedback = manager.feedback.split("\n\n【逐筆實績補充要求】\n")[0].trim();
-  if (overallFeedback) {
-    if (rows.length) rows[0][5] = [rows[0][5], `整體評核：${overallFeedback}`].filter(Boolean).join("\n\n");
-    else rows.push(["主管評核", "", "", "", "", overallFeedback, "", "", ""]);
-  }
+  if (manager.feedback.trim())
+    rows.push(["主管總結", "整體回覆", manager.feedback.trim(), "", "", "", "", "", ""]);
+  if (manager.workInstructions.trim())
+    rows.push(["主管總結", "工作指示", manager.workInstructions.trim(), "", "", "", "", "", ""]);
   return rows;
 }
 
@@ -271,7 +270,16 @@ function linkHtml(value: string) {
   return value
     .split("\n")
     .filter(Boolean)
-    .map((url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`)
+    .map((url) => {
+      let source = "外部網站";
+      try {
+        const host = new URL(url).hostname.replace(/^www\./, "");
+        source = host.includes("sharepoint") ? "SharePoint" : host;
+      } catch {
+        /* Keep the safe fallback label. */
+      }
+      return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(url)}">開啟證明連結 · ${escapeHtml(source)}</a>`;
+    })
     .join("<br>");
 }
 
@@ -295,6 +303,6 @@ export function downloadPerformanceHtml(reviews: PerformanceReview[], cycle: str
       return `<section class="member"><h2>${escapeHtml(review.employeeName)}</h2><p class="meta">${escapeHtml(review.department)} · ${escapeHtml(review.role)} · ${escapeHtml(cycle)}</p><table><tbody>${rows}</tbody></table>${accountabilityHtml}</section>`;
     })
     .join("");
-  const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>績效考核 ${escapeHtml(cycle)}</title><style>body{margin:0;padding:32px;background:#0b1424;color:#e8f0ff;font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif}h1{margin:0 0 8px;color:#8ab4ff}h2{margin:0;color:#9ed0ff}.meta{color:#98aaca}.member{margin:0 0 32px;padding:20px;border:1px solid #365a86;border-left:5px solid #6ea1ff;border-radius:14px;background:#151f32;overflow:auto}.accountability{margin-top:24px}.accountability h3{margin:0;color:#9ed0ff}table{border-collapse:collapse;width:100%;min-width:1050px;margin-top:16px}.accountability-table{min-width:680px;margin-top:8px}th,td{padding:9px 10px;border:1px solid #365a86;text-align:left;vertical-align:top;white-space:pre-wrap;line-height:1.5;overflow-wrap:anywhere}.basic-header th{background:#ffff00;color:#111;font-weight:400}.detail-header th,.accountability-table th{background:#1f4e79;color:#fff;white-space:normal}.basic-header th:empty{color:transparent}tbody td{background:#f7f8fa;color:#111}a{color:#0563c1}</style></head><body><h1>績效考核資料</h1><p>匯出週期：${escapeHtml(cycle)}；本報表不包含主管退回紀錄、退回原因或退回附件。</p>${sections || "<p>目前沒有可匯出的組員資料。</p>"}</body></html>`;
+  const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>績效考核 ${escapeHtml(cycle)}</title><style>body{margin:0;padding:32px;background:#0b1424;color:#e8f0ff;font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif}h1{margin:0 0 8px;color:#8ab4ff}h2{margin:0;color:#9ed0ff}.meta{color:#98aaca}.member{margin:0 0 32px;padding:20px;border:1px solid #365a86;border-left:5px solid #6ea1ff;border-radius:14px;background:#151f32;overflow:auto}.accountability{margin-top:24px}.accountability h3{margin:0;color:#9ed0ff}table{border-collapse:collapse;width:100%;min-width:1050px;margin-top:16px}.accountability-table{min-width:680px;margin-top:8px}th,td{padding:9px 10px;border:1px solid #365a86;text-align:left;vertical-align:top;white-space:pre-wrap;line-height:1.5;overflow-wrap:anywhere}.basic-header th{background:#ffff00;color:#111;font-weight:400}.detail-header th,.accountability-table th{background:#1f4e79;color:#fff;white-space:normal}.basic-header th:empty{color:transparent}tbody td{background:#f7f8fa;color:#111}a{display:inline-block;color:#0563c1;font-weight:700;overflow-wrap:anywhere}</style></head><body><h1>績效考核資料</h1><p>匯出週期：${escapeHtml(cycle)}；包含主管整體回覆與工作指示，不包含主管退回紀錄、退回原因或退回附件。</p>${sections || "<p>目前沒有可匯出的組員資料。</p>"}</body></html>`;
   download(new Blob([html], { type: "text/html;charset=utf-8" }), `${safeFileName(`績效考核-${cycle}`)}.html`);
 }

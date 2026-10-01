@@ -10,6 +10,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AssessmentEntryList } from "./AssessmentEntryList";
 import { AssessmentEntryFeedback, AssessmentReturnHistory } from './AssessmentEntryFeedback';
+import { EvidenceLink } from './EvidenceLink';
 import {
   commitAssessmentEntries,
   getAssessmentEntries,
@@ -235,9 +236,7 @@ function Evidence({
       )}
       {section.links.map((url) => (
         <div className="rd2-evidence-link" key={url}>
-          <a href={url} target="_blank" rel="noopener noreferrer">
-            {url}
-          </a>
+          <EvidenceLink url={url} />
           {!readonly && (
             <Button
               type="button"
@@ -438,7 +437,7 @@ export function AssessmentEditor({
           {readonly
             ? "考核內容"
             : mode === "self"
-              ? "員工自評填寫區（STAR）"
+              ? "員工自評填寫區"
               : "主管對照評分區"}
         </h2>
         <p>
@@ -648,14 +647,14 @@ export function AssessmentEditor({
         <>
           <AssessmentReturnHistory manager={form.manager} sections={form.self.sections} />
           {showReturnFeedback && !form.manager.returnHistory.length &&
-            (form.manager.feedback || form.manager.attachments.length > 0) && (
+            (form.manager.feedback || form.manager.workInstructions || form.manager.attachments.length > 0) && (
             <section id={form.manager.returnHistory.length ? undefined : "rd2-return-feedback"} className="rd2-card rd2-return-feedback" aria-label="主管退回內容">
               <div className="rd2-form-section-title">
-                <strong>主管退回回饋與附件</strong>
+                <strong>主管整體回覆與工作指示</strong>
                 <span>請依主管說明補充內容，再重新送出自評。</span>
               </div>
-              {form.manager.feedback && (
-                <p className="rd2-prewrap">{form.manager.feedback}</p>
+              {(form.manager.feedback || form.manager.workInstructions) && (
+                <div className="rd2-return-overview"><section><span>主管整體回覆</span><p className="rd2-prewrap">{form.manager.feedback || "本次未填寫整體回覆。"}</p></section><section><span>後續工作指示</span><p className="rd2-prewrap">{form.manager.workInstructions || "本次未填寫後續工作指示。"}</p></section></div>
               )}
               <AssessmentAttachments
                 attachments={form.manager.attachments}
@@ -666,20 +665,6 @@ export function AssessmentEditor({
           <div className="rd2-form-section-title">
             <strong>02 · 填寫本期實績</strong>
             <span>每寫一條按「新增實績」，內容會依序列在下方。</span>
-          </div>
-          <div className="rd2-star-strip" aria-label="STAR 撰寫提示">
-            <span>
-              <b>S</b>情境 · 當時遇到什麼？
-            </span>
-            <span>
-              <b>T</b>任務 · 你負責什麼？
-            </span>
-            <span>
-              <b>A</b>行動 · 你如何處理？
-            </span>
-            <span>
-              <b>R</b>結果 · 達成哪些成果？
-            </span>
           </div>
           <div className="rd2-category-grid">
             {CATEGORIES.map((value) => {
@@ -978,7 +963,7 @@ export function AssessmentEditor({
                       )}
                       {section.links.map((url) => (
                         <p className="rd2-evidence-link" key={url}>
-                          <a href={url} target="_blank" rel="noopener noreferrer">{url}</a>
+                          <EvidenceLink url={url} />
                         </p>
                       ))}
                     </section>
@@ -1043,16 +1028,16 @@ export function AssessmentEditor({
             className="rd2-card rd2-feedback-card"
           >
             <div className="rd2-form-section-title">
-              <strong>03 · 整體回饋與工作指示</strong>
-              <span>這裡可留下整體評語、改善要求或下一期工作指示。</span>
+              <strong>03 · 整體回覆與工作指示</strong>
+              <span>整體回覆與後續工作分開填寫，退回與匯出時都會完整保留。</span>
             </div>
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="rd2-feedback">整體評語／Comment</FieldLabel>
+                <FieldLabel htmlFor="rd2-feedback">主管整體回覆</FieldLabel>
                 <Textarea
                   id="rd2-feedback"
                   rows={5}
-                  placeholder="例如：本期成果肯定、需要改善的項目、下一步任務或期限"
+                  placeholder="填寫對本期表現的整體回覆"
                   value={form.manager.feedback}
                   onChange={(event) =>
                     change((previous) => ({
@@ -1060,6 +1045,24 @@ export function AssessmentEditor({
                       manager: {
                         ...previous.manager,
                         feedback: event.target.value,
+                      },
+                    }))
+                  }
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="rd2-work-instructions">後續工作指示</FieldLabel>
+                <Textarea
+                  id="rd2-work-instructions"
+                  rows={5}
+                  placeholder="填寫改善要求、下一期工作重點或期限"
+                  value={form.manager.workInstructions || ""}
+                  onChange={(event) =>
+                    change((previous) => ({
+                      ...previous,
+                      manager: {
+                        ...previous.manager,
+                        workInstructions: event.target.value,
                       },
                     }))
                   }
@@ -1211,7 +1214,7 @@ export function AssessmentEditor({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>退回此筆及其他已勾選的實績？</AlertDialogTitle>
-            <AlertDialogDescription>所有逐項回覆將一併送給員工；不會取消其他已勾選的項目。</AlertDialogDescription>
+            <AlertDialogDescription>主管整體回覆、工作指示與所有逐項回覆會一併送給員工；不會取消其他已勾選的項目。</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel type="button">取消</AlertDialogCancel>
