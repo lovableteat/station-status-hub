@@ -13,6 +13,8 @@ const SAFE_ATTACHMENT_EXTENSIONS = new Set([
   "csv",
   "txt",
   "zip",
+  "msg",
+  "eml",
   "jpg",
   "jpeg",
   "png",
@@ -28,7 +30,7 @@ export const safeManagerAttachments = (value) =>
         Number.isFinite(Number(attachment?.size)) &&
         Number(attachment.size) >= 0 &&
         Number(attachment.size) <= MAX_MANAGER_ATTACHMENT_BYTES &&
-        /^data:(?:application\/(?:pdf|msword|vnd\.[^;,]+|zip|x-zip-compressed|octet-stream)|text\/(?:plain|csv)|image\/(?:jpeg|png|webp));base64,/i.test(
+        /^data:(?:application\/(?:pdf|msword|vnd\.[^;,]+|x-msg|eml|zip|x-zip-compressed|octet-stream)|message\/rfc822|text\/(?:plain|csv)|image\/(?:jpeg|png|webp));base64,/i.test(
           str(attachment?.dataUrl),
         )
       );

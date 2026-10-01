@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readSelfAssessment, serializeSelfAssessment, readManagerAssessment, serializeManagerAssessment, createAssessmentForm, buildAssessmentReview } from '../src/components/performance/rd2Assessment.mjs';
 import { getAssessmentEntries, withAssessmentEntries } from '../src/components/performance/assessmentEntries.mjs';
+import { safeManagerAttachments } from '../src/components/performance/assessmentAttachmentPolicy.mjs';
 const file={id:'file-1',name:'proof.pdf',mimeType:'application/pdf',size:3,dataUrl:'data:application/pdf;base64,YWJj'};
 test('attachments stay with stable entry IDs after edits, deletion and cloud serialization',()=>{
  const self=readSelfAssessment();
@@ -27,4 +28,11 @@ test('entry feedback is isolated by category and ID; returns include only text, 
 test('unsafe per-entry attachments cannot persist as executable URLs',()=>{
  const self=readSelfAssessment();self.sections.IDP.entries=[{id:'x',text:'x',attachments:[{...file,dataUrl:'javascript:alert(1)'}]}];
  assert.deepEqual(readSelfAssessment(serializeSelfAssessment(self)).sections.IDP.entries[0].attachments,[]);
+});
+test('Outlook MSG and EML attachments survive the safety filter',()=>{
+ const msg={...file,id:'msg',name:'主管回覆.msg',mimeType:'application/vnd.ms-outlook',dataUrl:'data:application/vnd.ms-outlook;base64,YWJj'};
+ const eml={...file,id:'eml',name:'通知.eml',mimeType:'message/rfc822',dataUrl:'data:message/rfc822;base64,YWJj'};
+ const fallback={...file,id:'fallback',name:'封存郵件.msg',mimeType:'application/octet-stream',dataUrl:'data:application/octet-stream;base64,YWJj'};
+ assert.deepEqual(safeManagerAttachments([msg,eml,fallback]),[msg,eml,fallback]);
+ assert.deepEqual(safeManagerAttachments([{...eml,name:'危險.html',mimeType:'text/html',dataUrl:'data:text/html;base64,YWJj'}]),[]);
 });
