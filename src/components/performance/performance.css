@@ -14,6 +14,9 @@
   --rd2-border-soft: hsl(205 45% 30% / 0.5);
   --rd2-accent: hsl(var(--primary));
   --rd2-soft: hsl(var(--secondary));
+  --rd2-idp: #af8cff;
+  --rd2-okr: #5ac8fa;
+  --rd2-kpi: #ff6b8a;
   --rd2-return-border: #e6b94f;
   --rd2-return-surface: #302712;
   --rd2-return-ink: #ffe8a6;
@@ -546,9 +549,13 @@
   min-height: 96px;
 }
 
-.rd2-category[data-category="KPI"] { --card-accent: #4085f5; }
-.rd2-category[data-category="OKR"] { --card-accent: #1aa167; }
-.rd2-category[data-category="IDP"] { --card-accent: #7d5ae8; }
+.rd2-category[data-category="IDP"] { --card-accent: var(--rd2-idp); }
+.rd2-category[data-category="OKR"] { --card-accent: var(--rd2-okr); }
+.rd2-category[data-category="KPI"] { --card-accent: var(--rd2-kpi); }
+.rd2-category[data-category] {
+  border-color: color-mix(in srgb, var(--card-accent) 38%, var(--rd2-border-soft));
+  border-top-color: var(--card-accent);
+}
 .rd2-category[data-category] .rd2-category-heading h3 {
   color: var(--card-accent);
 }
@@ -576,9 +583,9 @@
   border-top: 4px solid var(--card-accent);
   margin-bottom: 0;
 }
-.rd2-manager-category[data-category="IDP"] { --card-accent: #8b6cf0; }
-.rd2-manager-category[data-category="OKR"] { --card-accent: #35bd7b; }
-.rd2-manager-category[data-category="KPI"] { --card-accent: #4f8df7; }
+.rd2-manager-category[data-category="IDP"] { --card-accent: var(--rd2-idp); }
+.rd2-manager-category[data-category="OKR"] { --card-accent: var(--rd2-okr); }
+.rd2-manager-category[data-category="KPI"] { --card-accent: var(--rd2-kpi); }
 .rd2-manager-category-heading,
 .rd2-manager-panel-heading,
 .rd2-manager-score-row,
@@ -716,9 +723,9 @@
   gap: 16px;
   min-width: 0;
   padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--rd2-ink) 17%, transparent);
+  border: 1px solid color-mix(in srgb, var(--card-accent, var(--rd2-ink)) 24%, var(--rd2-border-soft));
   border-radius: 12px;
-  background: color-mix(in srgb, var(--rd2-ink) 3%, var(--rd2-panel));
+  background: color-mix(in srgb, var(--card-accent, var(--rd2-ink)) 4%, var(--rd2-panel));
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .025);
 }
 .rd2-entry-heading { margin-bottom: 0; font-size: 13px; }
@@ -1589,16 +1596,16 @@
   letter-spacing: 0.02em;
 }
 .rd2-guidance-tag[data-category="KPI"] {
-  background: #122f51;
-  color: #81aff8;
+  background: #3b1824;
+  color: var(--rd2-kpi);
 }
 .rd2-guidance-tag[data-category="OKR"] {
-  background: #154042;
-  color: #8decc3;
+  background: #142f3c;
+  color: var(--rd2-okr);
 }
 .rd2-guidance-tag[data-category="IDP"] {
-  background: #1b244e;
-  color: #a48aef;
+  background: #2b1f43;
+  color: var(--rd2-idp);
 }
 .rd2-workspace .rd2-card-lead {
   margin: 0;
@@ -1772,9 +1779,9 @@
 }
 
 /* --- Guidance cards echo their category hue --- */
-.rd2-guidance-item[data-category="KPI"] { --card-accent: #4085f5; }
-.rd2-guidance-item[data-category="OKR"] { --card-accent: #1aa167; }
-.rd2-guidance-item[data-category="IDP"] { --card-accent: #7d5ae8; }
+.rd2-guidance-item[data-category="IDP"] { --card-accent: var(--rd2-idp); }
+.rd2-guidance-item[data-category="OKR"] { --card-accent: var(--rd2-okr); }
+.rd2-guidance-item[data-category="KPI"] { --card-accent: var(--rd2-kpi); }
 .rd2-guidance-item[data-category] {
   border-top: 3px solid var(--card-accent);
 }
