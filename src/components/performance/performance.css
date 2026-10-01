@@ -14,13 +14,14 @@
   --rd2-border-soft: hsl(205 45% 30% / 0.5);
   --rd2-accent: hsl(var(--primary));
   --rd2-soft: hsl(var(--secondary));
-  --rd2-idp: #af8cff;
-  --rd2-okr: #5ac8fa;
-  --rd2-kpi: #ff6b8a;
-  --rd2-return-border: #e6b94f;
-  --rd2-return-surface: #302712;
-  --rd2-return-ink: #ffe8a6;
-  --rd2-return-muted: #f3c96b;
+  /* Preserve the four semantic hues through the global charcoal palette pass. */
+  --rd2-idp: oklch(70% 0.15 300);
+  --rd2-okr: oklch(72% 0.12 225);
+  --rd2-kpi: oklch(68% 0.16 10);
+  --rd2-return-border: oklch(72% 0.12 80);
+  --rd2-return-surface: oklch(22% 0.035 80);
+  --rd2-return-ink: oklch(90% 0.08 80);
+  --rd2-return-muted: oklch(80% 0.10 80);
   --rd2-radius: 14px;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
@@ -1596,15 +1597,15 @@
   letter-spacing: 0.02em;
 }
 .rd2-guidance-tag[data-category="KPI"] {
-  background: #3b1824;
+  background: color-mix(in srgb, var(--rd2-kpi) 14%, var(--rd2-panel));
   color: var(--rd2-kpi);
 }
 .rd2-guidance-tag[data-category="OKR"] {
-  background: #142f3c;
+  background: color-mix(in srgb, var(--rd2-okr) 14%, var(--rd2-panel));
   color: var(--rd2-okr);
 }
 .rd2-guidance-tag[data-category="IDP"] {
-  background: #2b1f43;
+  background: color-mix(in srgb, var(--rd2-idp) 14%, var(--rd2-panel));
   color: var(--rd2-idp);
 }
 .rd2-workspace .rd2-card-lead {
