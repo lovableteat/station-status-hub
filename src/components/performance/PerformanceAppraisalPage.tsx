@@ -530,10 +530,10 @@ export function PerformanceAppraisalPage() {
       loadedAccessScope.current = `${userId}:${resolvedManager}:${privacyRevision}`;
       loadedProfile.current = profileIdentity;
       reviewsSnapshot.current = accessible;
-      setReviews(accessible);
+      setReviews(current => current.length === accessible.length &&
+        current.every((row, index) => row === accessible[index]) ? current : accessible);
 
-      setEmployees(
-        (employeeResult.data || []).map(
+      const nextEmployees = (employeeResult.data || []).map(
           (employee: {
             employee_id: string;
             display_name: string;
@@ -545,9 +545,11 @@ export function PerformanceAppraisalPage() {
             username: employee.username,
             orgLevel: employee.org_level,
           }),
-        ),
-      );
-      setSelfContext(context ? {
+        );
+      // Keep unchanged roster/context identities stable so the editor does not
+      // parse large attachment JSON again after a metadata-only refresh.
+      setEmployees(current => JSON.stringify(current) === JSON.stringify(nextEmployees) ? current : nextEmployees);
+      const nextContext = context ? {
         employeeId: context.employee_id,
         username: context.username,
         displayName: context.display_name,
@@ -560,7 +562,8 @@ export function PerformanceAppraisalPage() {
         orgLevel: context.org_level,
         performanceRole: context.performance_role,
         assigned: context.assigned,
-      } : null);
+      } : null;
+      setSelfContext(current => JSON.stringify(current) === JSON.stringify(nextContext) ? current : nextContext);
       setSelfContextLoaded(true);
     } catch {
       if (request === requestNumber.current) {
@@ -925,9 +928,9 @@ export function PerformanceAppraisalPage() {
       next.dueDate = `${cycle.slice(0, 4)}-${cycle.endsWith("q2") ? "06-30" : "09-30"}`;
     return next;
   }, [cycle, editorReview, employees, selfContext, tab, user]);
-  const returnDetails = editorReview
+  const returnDetails = useMemo(() => editorReview
     ? readManagerAssessment(editorReview.managerFeedback)
-    : null;
+    : null, [editorReview]);
   const selfAssessmentDisplayState =
     tab === "self" && editorReview
       ? getSelfAssessmentDisplayState(editorReview.status)
