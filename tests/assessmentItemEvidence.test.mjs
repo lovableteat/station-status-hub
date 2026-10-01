@@ -14,11 +14,15 @@ test('attachments stay with stable entry IDs after edits, deletion and cloud ser
 });
 test('entry feedback is isolated by category and ID; returns include only text, never category scores',()=>{
  const form=createAssessmentForm();form.manager.categoryReviews.KPI={score:93,feedback:'private category note',entryFeedback:{first:'Add test evidence',removed:'Must not return'}};
+ form.manager.feedback='Overall response';
  form.self.sections.KPI=withAssessmentEntries(form.self.sections.KPI,[{id:'first',text:'Validation',attachments:[file]}]);
  const manager=readManagerAssessment(serializeManagerAssessment(form.manager));assert.equal(manager.categoryReviews.KPI.entryFeedback.first,'Add test evidence');assert.equal(manager.entryReviews.KPI.first.feedback,'Add test evidence');
  const review=buildAssessmentReview({form,mode:'manager',action:'return',cycleId:'cycle',id:'review',now:'2026-09-10'});
- const returned=readManagerAssessment(review.managerFeedback).feedback;
- assert.match(returned,/KPI 實績 1/);assert.match(returned,/Add test evidence/);assert.doesNotMatch(returned,/93|private category note|Must not return/);
+ const returned=readManagerAssessment(review.managerFeedback);
+ assert.equal(returned.feedback,'Overall response');
+ assert.equal(returned.returnHistory[0].entries[0].feedback,'Add test evidence');
+ assert.equal(returned.returnHistory[0].entries[0].text,'Validation');
+ assert.doesNotMatch(JSON.stringify(returned.returnHistory),/93|private category note|Must not return/);
 });
 test('unsafe per-entry attachments cannot persist as executable URLs',()=>{
  const self=readSelfAssessment();self.sections.IDP.entries=[{id:'x',text:'x',attachments:[{...file,dataUrl:'javascript:alert(1)'}]}];

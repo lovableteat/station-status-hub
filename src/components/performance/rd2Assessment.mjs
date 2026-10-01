@@ -45,6 +45,8 @@ export const MAX_IMAGES_PER_CATEGORY = 2;
 export { MAX_MANAGER_ATTACHMENTS, MAX_MANAGER_ATTACHMENT_BYTES, MAX_MANAGER_ATTACHMENT_CHARACTERS } from "./assessmentAttachmentPolicy.mjs";
 import { safeManagerAttachments, MAX_MANAGER_ATTACHMENT_CHARACTERS } from "./assessmentAttachmentPolicy.mjs";
 const str = (value) => (typeof value === "string" ? value : "");
+const LEGACY_RETURN_MARKER = "\n\n【逐筆實績補充要求】\n";
+const withoutLegacyReturnSummary = (value) => str(value).split(LEGACY_RETURN_MARKER)[0].trim();
 const validRating = (value) =>
   Number.isInteger(value) && value >= 1 && value <= 5 ? value : null;
 /** Employee's own 0-100 figure for a category; anything else is dropped. */
@@ -139,6 +141,8 @@ const readReturnHistory = (value) => (Array.isArray(value) ? value : [])
   .filter(item => item && typeof item.id === 'string' && typeof item.returnedAt === 'string')
   .map(item => ({
     id: item.id, returnedAt: item.returnedAt, reviewerName: str(item.reviewerName),
+    overallFeedback: withoutLegacyReturnSummary(item.overallFeedback),
+    workInstructions: str(item.workInstructions).trim(),
     entries: (Array.isArray(item.entries) ? item.entries : [])
       .filter(entry => CATEGORIES.includes(entry?.category) && typeof entry.entryId === 'string')
       .map(entry => ({ category: entry.category, entryId: entry.entryId, text: str(entry.text), feedback: str(entry.feedback), attachments: safeManagerAttachments(entry.attachments) })),
@@ -156,7 +160,8 @@ export function readManagerAssessment(raw = "") {
     try {
       const parsed = JSON.parse(raw.slice(MANAGER_PREFIX.length));
       return {
-        feedback: str(parsed.feedback),
+        feedback: withoutLegacyReturnSummary(parsed.feedback),
+        workInstructions: str(parsed.workInstructions),
         attachments: safeManagerAttachments(parsed.attachments),
         entryReviews: readEntryReviews(parsed.entryReviews, parsed.categoryReviews),
         returnHistory: readReturnHistory(parsed.returnHistory),
@@ -189,7 +194,8 @@ export function readManagerAssessment(raw = "") {
     }
   }
   return {
-    feedback: str(raw),
+    feedback: withoutLegacyReturnSummary(raw),
+    workInstructions: "",
     attachments: [],
     entryReviews: readEntryReviews(),
     returnHistory: [],
@@ -293,6 +299,7 @@ export function validateAssessment(form, mode, action) {
     const entries = selectedReturnEntries(form);
     if (!entries.length) return "請勾選要退回的實績，並填寫該筆退回原因。";
     if (entries.some(entry => !entry.feedback)) return "請填寫每筆退回實績的原因。";
+    if (!str(form.manager.feedback).trim()) return "請先填寫主管整體回覆，再退回勾選實績。";
   }
   return "";
 }
@@ -346,18 +353,16 @@ export function buildAssessmentReview({
   if (mode === 'manager' && action === 'return') {
     const entries = selectedReturnEntries(form);
     if (!entries.length || entries.some(entry => !entry.feedback)) throw new Error('請選擇實績並填寫每筆退回原因。');
+    if (!str(manager.feedback).trim()) throw new Error('請先填寫主管整體回覆，再退回勾選實績。');
     manager.returnHistory = [...manager.returnHistory, {
-      id: crypto.randomUUID(), returnedAt: now, reviewerName, entries,
+      id: crypto.randomUUID(), returnedAt: now, reviewerName,
+      overallFeedback: str(manager.feedback).trim(),
+      workInstructions: str(manager.workInstructions).trim(),
+      entries,
     }];
     manager.entryReviews = Object.fromEntries(CATEGORIES.map(category => [category,
       Object.fromEntries(Object.entries(manager.entryReviews?.[category] || {}).map(([id, item]) => [id, { ...item, returnRequested: false }])),
     ]));
-    const marker = "\n\n【逐筆實績補充要求】\n";
-    const comments = entries.map(entry => {
-      const index = getAssessmentEntries(form.self.sections[entry.category]).findIndex(item => item.id === entry.entryId);
-      return `${entry.category} 實績 ${index + 1}：${entry.text.slice(0,80)}\n${entry.feedback}`;
-    });
-    manager.feedback = manager.feedback.split(marker)[0] + (comments.length ? marker + comments.join("\n\n") : "");
   }
   const weightedManager = calculateWeightedManagerScores(
     form.self.grade,

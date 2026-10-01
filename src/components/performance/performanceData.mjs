@@ -341,7 +341,8 @@ export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
       ...ACCOUNTABILITY_QUESTIONS.map(
         (question) => `${question.role} Q${question.number} ${question.text}`,
       ),
-      "主管回饋",
+      "主管整體回覆",
+      "工作指示",
     );
   }
   const rows = (reviews || []).map((review) => {
@@ -397,6 +398,7 @@ export function toPerformanceCsv(reviews, { includeManager = true } = {}) {
           (question) => manager.answers[question.id] ?? "",
         ),
         manager.feedback,
+        manager.workInstructions,
       );
     }
     return row;

@@ -185,7 +185,10 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
   assert.match(flowGuide, /canManage = false/);
   assert.match(flowGuide, /主管分數維持隱藏，退回說明與附件會顯示給員工補充/);
   assert.match(source, /manager\.attachments/);
-  assert.match(editor, /主管退回回饋與附件/);
+  assert.match(editor, /主管整體回覆與工作指示/);
+  assert.match(source, /選擇匯出人員/);
+  assert.match(source, /exportSelection/);
+  assert.doesNotMatch(editor, /S（情境）|T（任務）|A（行動）|R（結果）/);
 });
 
 test("performance employee RLS accepts legacy account identifiers", async () => {

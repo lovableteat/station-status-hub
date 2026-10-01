@@ -737,7 +737,11 @@
 .rd2-return-latest small { color: var(--rd2-return-muted); }
 .rd2-return-history summary, .rd2-entry-feedback summary { cursor: pointer; padding-block: 8px; overflow-wrap: anywhere; }
 .rd2-return-missing { margin: 14px 0 0; padding: 9px 11px; border: 1px solid hsl(38 92% 55% / .55); border-radius: 8px; background: hsl(38 92% 55% / .1); color: var(--rd2-return-ink); }
-.rd2-return-item-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 14px; }
+.rd2-return-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.rd2-return-overview section { min-width: 0; padding: 13px 14px; border: 1px solid hsl(42 45% 56% / .36); border-radius: 10px; background: hsl(42 45% 56% / .12); }
+.rd2-return-overview span { display: block; margin-bottom: 5px; color: var(--rd2-return-muted); font-size: 12px; font-weight: 800; }
+.rd2-return-overview p { margin: 0; color: var(--rd2-return-ink); }
+.rd2-return-item-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 14px; }
 .rd2-return-item-card { display: grid; gap: 9px; min-width: 0; padding: 14px; border: 1px solid hsl(42 45% 56% / .36); border-radius: 10px; background: hsl(42 30% 10% / .42); }
 .rd2-return-item-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .rd2-return-category { padding: 3px 8px; border-radius: 5px; background: hsl(42 72% 70% / .18); color: var(--rd2-return-ink); font-size: 12px; font-weight: 800; letter-spacing: .05em; }
@@ -766,7 +770,7 @@
   .rd2-return-history { padding: 13px; }
   .rd2-return-history-header { display: grid; gap: 10px; }
   .rd2-return-latest { min-width: 0; text-align: left; }
-  .rd2-return-item-list { grid-template-columns: 1fr; }
+  .rd2-return-overview { grid-template-columns: 1fr; }
 }
 .rd2-entry-response { display: grid; gap: 8px; }
 .rd2-entry-response[data-return-state="returned"],
@@ -1005,6 +1009,39 @@
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
+}
+.rd2-readable-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--rd2-accent) 42%, var(--rd2-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--rd2-accent) 10%, var(--rd2-panel-soft));
+  text-decoration: none !important;
+}
+.rd2-readable-link svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.rd2-readable-link span { font-weight: 750; white-space: nowrap; }
+.rd2-readable-link small { min-width: 0; color: var(--rd2-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd2-readable-link:hover { border-color: var(--rd2-accent); background: color-mix(in srgb, var(--rd2-accent) 16%, var(--rd2-panel-soft)); }
+.rd2-readable-link:active { transform: scale(.985); }
+.rd2-review-subheading { margin-top: 18px !important; padding-top: 16px; border-top: 1px solid var(--rd2-border-soft); }
+.rd2-export-dialog { max-width: 680px; color: hsl(var(--foreground)); }
+.rd2-export-selection-actions { display: flex; align-items: center; gap: 8px; }
+.rd2-export-selection-actions span { margin-left: auto; color: hsl(var(--muted-foreground)); font-size: 13px; }
+.rd2-export-person-list { display: grid; gap: 8px; max-height: min(52dvh, 520px); overflow-y: auto; padding: 2px; }
+.rd2-export-person { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 10px 12px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--secondary) / .55); cursor: pointer; }
+.rd2-export-person[data-selected="true"] { border-color: hsl(var(--primary) / .7); background: hsl(var(--primary) / .11); }
+.rd2-export-person > span { display: grid; min-width: 0; }
+.rd2-export-person strong { color: hsl(var(--foreground)); }
+.rd2-export-person small { color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
+.rd2-export-dialog-footer { gap: 8px; }
+@media (max-width: 640px) {
+  .rd2-readable-link { width: 100%; }
+  .rd2-readable-link small { margin-left: auto; }
+  .rd2-export-dialog-footer > button { width: 100%; }
 }
 .rd2-workspace a {
   color: var(--rd2-accent);

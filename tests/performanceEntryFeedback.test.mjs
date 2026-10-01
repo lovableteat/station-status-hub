@@ -6,6 +6,7 @@ import { buildPerformanceReturnNotification } from '../src/components/performanc
 const formForTest = () => {
   const form = createAssessmentForm(null, { userId: 'employee', displayName: '測試員工' });
   form.self.sections.IDP.entries = [{ id: 'a', text: '第一筆實績' }, { id: 'b', text: '第二筆實績' }];
+  form.manager.feedback = '主管整體回覆';
   form.manager.entryReviews = { IDP: { a: { feedback: '補上成果數字', returnRequested: true }, b: { feedback: '成果明確', returnRequested: false } }, OKR: {}, KPI: {} };
   return form;
 };
@@ -35,6 +36,8 @@ test('entry feedback keeps its own attachments and snapshots them on return', ()
 });
 test('each return appends immutable snapshots and self resubmission preserves them', () => {
   let form = formForTest();
+  form.manager.feedback = '本期整體回覆';
+  form.manager.workInstructions = '下週完成驗證';
   const initial = build(form, null, 'draft', 'self');
   const first = build(form, initial);
   const manager = readManagerAssessment(first.managerFeedback);
@@ -42,6 +45,8 @@ test('each return appends immutable snapshots and self resubmission preserves th
   assert.equal(manager.returnHistory[0].entries.length, 1);
   assert.equal(manager.returnHistory[0].entries[0].entryId, 'a');
   assert.equal(manager.returnHistory[0].entries[0].text, '第一筆實績');
+  assert.equal(manager.returnHistory[0].overallFeedback, '本期整體回覆');
+  assert.equal(manager.returnHistory[0].workInstructions, '下週完成驗證');
   assert.equal(manager.entryReviews.IDP.a.returnRequested, false);
   form = createAssessmentForm(first);
   form.manager.entryReviews.IDP.a = { feedback: '補充驗證方法', returnRequested: true };

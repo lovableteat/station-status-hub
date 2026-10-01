@@ -15,6 +15,7 @@ import type {
   AssessmentSection,
   Category,
 } from "./assessmentTypes";
+import { EvidenceLink } from "./EvidenceLink";
 
 export function AssessmentEntryList({
   category,
@@ -57,9 +58,7 @@ export function AssessmentEntryList({
             ref={input}
             id={`rd2-${category}`}
             rows={5}
-            placeholder={
-              "寫下一條實績，再按「新增實績」\nS（情境）：…\nT（任務）：…\nA（行動）：…\nR（結果）：…"
-            }
+            placeholder="請填寫本項實績內容"
             value={section.draftText || ""}
             onChange={(event) =>
               onChange((previous) => ({
@@ -175,7 +174,7 @@ export function AssessmentEntryList({
                 onError={setAttachmentError}
                 onChange={(attachments) => onChange(previous => withAssessmentEntries(previous, getAssessmentEntries(previous).map(item => item.id === entry.id ? { ...item, attachments } : item)))}
               />
-              {(entry.links || []).map(url => <div className="rd2-evidence-link" key={url}><a href={url} target="_blank" rel="noopener noreferrer">{url}</a>{!readonly && <Button type="button" variant="ghost" size="sm" aria-label={`移除 ${category} 實績 ${index+1} 證明連結`} onClick={()=>onChange(previous=>withAssessmentEntries(previous,getAssessmentEntries(previous).map(item=>item.id===entry.id?{...item,links:item.links.filter(value=>value!==url)}:item)))}>移除</Button>}</div>)}
+              {(entry.links || []).map(url => <div className="rd2-evidence-link" key={url}><EvidenceLink url={url} />{!readonly && <Button type="button" variant="ghost" size="sm" aria-label={`移除 ${category} 實績 ${index+1} 證明連結`} onClick={()=>onChange(previous=>withAssessmentEntries(previous,getAssessmentEntries(previous).map(item=>item.id===entry.id?{...item,links:item.links.filter(value=>value!==url)}:item)))}>移除</Button>}</div>)}
               {!readonly && <div className="rd2-link-toolbar"><div className="rd2-link-copy"><strong>證明連結</strong><span>貼上 HTTPS 連結，主管可直接開啟查看</span></div><div className="rd2-link-input"><Input aria-label={`${category} 實績 ${index+1} 證明連結`} placeholder="https://…（選填）" value={linkDrafts[entry.id] || ""} onChange={event=>setLinkDrafts(previous=>({...previous,[entry.id]:event.target.value}))}/><Button type="button" variant="outline" size="sm" onClick={()=>{
                 try {const url=new URL(linkDrafts[entry.id] || "");if(url.protocol!=="https:")throw new Error();onChange(previous=>withAssessmentEntries(previous,getAssessmentEntries(previous).map(item=>item.id===entry.id?{...item,links:[...new Set([...(item.links || []),url.href])]}:item)));setLinkDrafts(previous=>({...previous,[entry.id]:""}));setAttachmentError("");}catch{setAttachmentError("請輸入有效的 HTTPS 證明連結。");}
               }}>加入連結</Button></div></div>}

@@ -40,6 +40,7 @@ export interface SelfAssessment {
 export interface ManagerAssessment {
   employeeNumber: string;
   feedback: string;
+  workInstructions: string;
   attachments: ReviewAttachment[];
   entryReviews: Record<Category, Record<string, AssessmentEntryReview>>;
   returnHistory: AssessmentReturn[];
@@ -61,6 +62,8 @@ export interface AssessmentReturn {
   id: string;
   returnedAt: string;
   reviewerName: string;
+  overallFeedback: string;
+  workInstructions: string;
   entries: { category: Category; entryId: string; text: string; feedback: string; attachments: ReviewAttachment[] }[];
 }
 export interface PerformanceGoal {

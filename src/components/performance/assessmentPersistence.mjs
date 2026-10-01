@@ -146,8 +146,8 @@ export async function submitAssessmentRecord(db, review, { mode, action, expecte
   if (mode === 'self' && review.managerFeedback) {
     // The submission receipt redacts manager data. Keep only responses already
     // received by this employee; never restore private ratings or category notes.
-    const { feedback, attachments, entryReviews, returnHistory } = readManagerAssessment(review.managerFeedback);
-    confirmed.managerFeedback = serializeManagerAssessment({ feedback, attachments, entryReviews, returnHistory });
+    const { feedback, workInstructions, attachments, entryReviews, returnHistory } = readManagerAssessment(review.managerFeedback);
+    confirmed.managerFeedback = serializeManagerAssessment({ feedback, workInstructions, attachments, entryReviews, returnHistory });
   }
   return confirmed;
 }

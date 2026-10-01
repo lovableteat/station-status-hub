@@ -151,6 +151,8 @@ test("manager aligns three category scores, requires seven accountability rating
         "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,YWJj",
     },
   ];
+  assert.match(validateAssessment(form, "manager", "return"), /整體回覆/);
+  form.manager.feedback = "請依整體說明補充";
   assert.equal(validateAssessment(form, "manager", "return"), "");
   form.score = "101";
   assert.match(validateAssessment(form, "manager", "draft"), /0–100/);

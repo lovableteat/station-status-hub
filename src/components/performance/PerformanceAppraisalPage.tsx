@@ -19,7 +19,8 @@ import {
 import { useUser } from "@/components/auth/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,7 @@ import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGui
 import { saveSelfAssessmentDraft, submitAssessmentRecord } from "./assessmentPersistence.mjs";
 import { AssessmentEntryList } from "./AssessmentEntryList";
 import { AssessmentEntryFeedback, AssessmentReturnHistory } from './AssessmentEntryFeedback';
+import { EvidenceLink } from './EvidenceLink';
 import { PerformanceOrganization } from "./PerformanceOrganization";
 import { PerformanceSectionReports } from "./PerformanceSectionReports";
 import { PerformancePrivacyPanel } from "./PerformancePrivacyPanel";
@@ -279,9 +281,7 @@ function ReviewDetail({
               <div className="rd2-review-evidence-links">
                 <strong>證明連結</strong>
                 {self.sections[category].links.map((url) => (
-                  <a key={url} href={url} target="_blank" rel="noopener noreferrer">
-                    {url}
-                  </a>
+                  <EvidenceLink key={url} url={url} />
                 ))}
               </div>
             )}
@@ -351,8 +351,10 @@ function ReviewDetail({
             ))}
           </section>
           <section className="rd2-review-secondary-section" data-tone="feedback">
-            <h4>主管整體回饋與工作指示</h4>
-            <p className="rd2-prewrap">{manager.feedback || "尚無回饋"}</p>
+            <h4>主管整體回覆</h4>
+            <p className="rd2-prewrap">{manager.feedback || "尚無整體回覆"}</p>
+            <h4 className="rd2-review-subheading">後續工作指示</h4>
+            <p className="rd2-prewrap">{manager.workInstructions || "尚無工作指示"}</p>
             {!!manager.attachments.length && (
               <ul className="rd2-review-attachment-list">
                 {manager.attachments.map((attachment) => (
@@ -731,6 +733,8 @@ export function PerformanceAppraisalPage() {
     "records",
   );
   const [exporting, setExporting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportSelection, setExportSelection] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] =
     useState<PerformanceReview | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -864,15 +868,17 @@ export function PerformanceAppraisalPage() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const exportManagerFile = async (format: "xlsx" | "html") => {
-    if (!canManagePerformance || !managerExportReviews.length || exporting) return;
+    const selectedReviews = managerExportReviews.filter((review) => exportSelection.includes(review.id));
+    if (!canManagePerformance || !selectedReviews.length || exporting) return;
     setExporting(true);
     try {
-      if (format === "xlsx") await downloadPerformanceExcel(managerExportReviews, cycle);
-      else downloadPerformanceHtml(managerExportReviews, cycle);
+      if (format === "xlsx") await downloadPerformanceExcel(selectedReviews, cycle);
+      else downloadPerformanceHtml(selectedReviews, cycle);
       toast({
         title: format === "xlsx" ? "Excel 已匯出" : "HTML 已匯出",
-        description: `已匯出 ${managerExportReviews.length} 位組員的 ${cycle} 考核資料；報表不包含主管退回資訊。`,
+        description: `已匯出 ${selectedReviews.length} 位組員的 ${cycle} 考核資料，包含整體回覆與工作指示。`,
       });
+      setExportOpen(false);
     } catch {
       toast({
         title: "匯出失敗",
@@ -1231,24 +1237,17 @@ export function PerformanceAppraisalPage() {
                   重新整理
                 </Button>
                 {canManagePerformance ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={() => void exportManagerFile("xlsx")}
-                      disabled={!managerExportReviews.length || exporting}
-                    >
-                      <FileSpreadsheet data-icon="inline-start" />
-                      {exporting ? "匯出中…" : "匯出 Excel"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => void exportManagerFile("html")}
-                      disabled={!managerExportReviews.length || exporting}
-                    >
-                      <FileCode2 data-icon="inline-start" />
-                      匯出 HTML
-                    </Button>
-                  </>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setExportSelection(managerExportReviews.map((review) => review.id));
+                      setExportOpen(true);
+                    }}
+                    disabled={!managerExportReviews.length || exporting}
+                  >
+                    <Download data-icon="inline-start" />
+                    {exporting ? "匯出中…" : "匯出資料"}
+                  </Button>
                 ) : (
                   <Button
                     variant="outline"
@@ -1521,6 +1520,37 @@ export function PerformanceAppraisalPage() {
                   showManagerAssessment={canManagePerformance}
                 />
               </DialogContent>}
+            </Dialog>
+            <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+              <DialogContent className="performance-workspace rd2-bright rd2-export-dialog">
+                <DialogHeader>
+                  <DialogTitle>選擇匯出人員</DialogTitle>
+                  <DialogDescription>可匯出全部組員，也可只勾選本次需要的人員。Excel 與 HTML 都會使用相同名單。</DialogDescription>
+                </DialogHeader>
+                <div className="rd2-export-selection-actions">
+                  <Button type="button" size="sm" variant="outline" onClick={() => setExportSelection(managerExportReviews.map((review) => review.id))}>全選</Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setExportSelection([])}>清除</Button>
+                  <span>{exportSelection.length}／{managerExportReviews.length} 人</span>
+                </div>
+                <div className="rd2-export-person-list" role="group" aria-label="匯出人員">
+                  {managerExportReviews.map((review) => {
+                    const checked = exportSelection.includes(review.id);
+                    const employeeNumber = readSelfAssessment(review.selfFeedback).employeeNumber || readManagerAssessment(review.managerFeedback).employeeNumber;
+                    return <label key={review.id} className="rd2-export-person" data-selected={checked || undefined}>
+                      <Checkbox checked={checked} onCheckedChange={(next) => setExportSelection((current) => next === true ? [...new Set([...current, review.id])] : current.filter((id) => id !== review.id))} />
+                      <span><strong>{review.employeeName}</strong><small>{employeeNumber || '未填工號'} · {review.department || '未填部門'}</small></span>
+                    </label>;
+                  })}
+                </div>
+                <DialogFooter className="rd2-export-dialog-footer">
+                  <Button type="button" variant="outline" onClick={() => void exportManagerFile("html")} disabled={!exportSelection.length || exporting}>
+                    <FileCode2 data-icon="inline-start" />匯出 HTML
+                  </Button>
+                  <Button type="button" onClick={() => void exportManagerFile("xlsx")} disabled={!exportSelection.length || exporting}>
+                    <FileSpreadsheet data-icon="inline-start" />{exporting ? '匯出中…' : '匯出 Excel'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
             </Dialog>
           </section>
         )}
