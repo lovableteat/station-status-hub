@@ -78,6 +78,7 @@ test("review attachments provide explicit download feedback and readable filenam
   assert.match(component, /下載中/);
   assert.match(component, /下載已開始/);
   assert.match(component, /title=\{attachment\.name\}/);
+  assert.match(component, /if \(readonly && attachments\.length === 0\) return null/);
   assert.match(styles, /\.rd2-review-attachment-list span\s*\{[^}]*overflow-wrap:\s*anywhere/s);
 });
 
