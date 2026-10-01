@@ -1614,6 +1614,198 @@
   color: var(--rd2-muted);
 }
 
+/* ---- Reusable policy handbook ------------------------------------------ */
+.rd2-policy-writing-guide {
+  border-top: 3px solid var(--rd2-accent);
+}
+.rd2-writing-principles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 18px;
+}
+.rd2-writing-principles article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px 13px;
+  border: 1px solid var(--rd2-border-soft);
+  border-radius: 10px;
+  background: var(--rd2-panel-soft);
+}
+.rd2-writing-principles strong {
+  color: var(--rd2-ink);
+  font-size: 13px;
+}
+.rd2-writing-principles span {
+  color: var(--rd2-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.rd2-guidance-question {
+  display: block;
+  min-height: 44px;
+  margin-bottom: 7px;
+  color: var(--card-accent, var(--rd2-ink));
+  font-size: 13px;
+  line-height: 1.6;
+}
+.rd2-guidance-item .rd2-guidance-include,
+.rd2-guidance-item .rd2-guidance-avoid {
+  margin-top: 9px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card-accent) 7%, var(--rd2-panel));
+  color: var(--rd2-ink);
+}
+.rd2-guidance-item .rd2-guidance-avoid {
+  border: 1px solid color-mix(in srgb, var(--rd2-muted) 24%, transparent);
+  background: var(--rd2-panel);
+  color: var(--rd2-muted);
+}
+.rd2-guidance-item > details {
+  margin-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--card-accent) 24%, transparent);
+}
+.rd2-guidance-item > details > summary,
+.rd2-policy-examples > summary {
+  padding: 9px 0 3px;
+  color: var(--card-accent, var(--rd2-accent));
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+}
+.rd2-policy-tool-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+.rd2-policy-template,
+.rd2-policy-checklist {
+  min-width: 0;
+  padding: 15px 16px;
+  border: 1px solid var(--rd2-border-soft);
+  border-radius: 10px;
+  background: var(--rd2-panel-soft);
+}
+.rd2-policy-template h4,
+.rd2-policy-checklist h4 {
+  margin: 0 0 7px;
+  color: var(--rd2-ink);
+}
+.rd2-policy-template > p {
+  margin: 0;
+  color: var(--rd2-muted);
+  font-size: 12px;
+}
+.rd2-policy-template blockquote {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--rd2-accent);
+  border-radius: 0 8px 8px 0;
+  background: var(--rd2-panel);
+  color: var(--rd2-ink);
+  cursor: text;
+  user-select: text;
+}
+.rd2-policy-checklist ol {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--rd2-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.rd2-policy-checklist li::marker {
+  color: var(--rd2-accent);
+  font-weight: 800;
+}
+.rd2-policy-examples {
+  margin-top: 14px;
+  padding-top: 4px;
+  border-top: 1px solid var(--rd2-border-soft);
+}
+.rd2-policy-example-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+.rd2-policy-example-grid article {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--rd2-border-soft);
+  border-radius: 10px;
+  background: var(--rd2-panel-soft);
+}
+.rd2-policy-example-grid h4 {
+  margin: 0 0 10px;
+}
+.rd2-policy-example-grid p {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  color: var(--rd2-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.rd2-policy-example-grid p strong {
+  color: var(--rd2-ink);
+  font-size: 11px;
+}
+.rd2-score-band-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  margin: 4px 0 8px;
+}
+.rd2-score-band-grid article {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 8px;
+  border: 1px solid var(--rd2-border-soft);
+  border-radius: 8px;
+  background: var(--rd2-panel-soft);
+  text-align: center;
+}
+.rd2-score-band-grid strong {
+  color: var(--rd2-accent);
+  font-size: 15px;
+}
+.rd2-score-band-grid span {
+  color: var(--rd2-ink);
+  font-size: 12px;
+  font-weight: 750;
+}
+.rd2-score-band-grid small {
+  color: var(--rd2-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+@media (max-width: 1000px) {
+  .rd2-writing-principles,
+  .rd2-score-band-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .rd2-writing-principles,
+  .rd2-policy-tool-grid,
+  .rd2-policy-example-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rd2-writing-principles {
+    gap: 8px;
+  }
+  .rd2-guidance-question {
+    min-height: 0;
+  }
+}
+
 /* ---- Charts ------------------------------------------------------------- */
 .rd2-chart {
   margin: 4px 0 0;
