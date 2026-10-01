@@ -725,7 +725,7 @@
 .rd2-entry-feedback > label { font-size: 13px; font-weight: 600; }
 .rd2-entry-feedback .rd2-entry-actions { justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .rd2-entry-feedback input[type="checkbox"] { width: 18px; height: 18px; vertical-align: middle; margin-right: 6px; }
-.rd2-entry-feedback-inline { display: block; margin: 10px 0 0; padding: 0; border: 0; }
+.rd2-entry-feedback-inline { display: block; margin: 10px 0 16px; padding: 0; border: 0; }
 .rd2-inline-supervisor-reply > summary {
   display: inline-flex;
   align-items: center;
@@ -760,6 +760,7 @@
 .rd2-inline-supervisor-reply-heading button { min-height: 34px; color: var(--rd2-return-ink); }
 .rd2-inline-supervisor-reply-body > p { color: var(--rd2-ink); cursor: text; user-select: text; }
 @media (max-width: 640px) {
+  .rd2-entry-feedback-inline { margin-bottom: 12px; }
   .rd2-inline-supervisor-reply-heading { align-items: flex-start; }
   .rd2-inline-supervisor-reply-heading button { flex: 0 0 auto; }
 }
