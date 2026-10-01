@@ -89,6 +89,11 @@ export function AssessmentAttachments({
       }
     });
   };
+
+  // A read-only attachment block has no action or information when the list is
+  // empty. Rendering its decorated wrapper creates a misleading empty field.
+  if (readonly && attachments.length === 0) return null;
+
   return (
     <div className="rd2-review-attachments">
       {!readonly && (
