@@ -114,7 +114,15 @@ export async function submitAssessmentRecord(db, review, { mode, action, expecte
     ...(mode === "self" ? { self_feedback: review.selfFeedback }
       : { manager_feedback: review.managerFeedback, score: review.score }),
   };
-  const key = JSON.stringify([payload, mode, action, expectedUpdatedAt]);
+  const content = mode === 'self' ? review.selfFeedback : review.managerFeedback;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(content));
+  const contentHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  // Retain only the small metadata and digest for retry identity, not twenty
+  // copies of base64 attachments in this module's long-lived request map.
+  const identity = { ...payload };
+  delete identity.self_feedback;
+  delete identity.manager_feedback;
+  const key = JSON.stringify([identity, contentHash, mode, action, expectedUpdatedAt]);
   let requestId = pendingRequests.get(key);
   if (!requestId) {
     requestId = crypto.randomUUID();
@@ -145,10 +153,7 @@ export async function submitAssessmentRecord(db, review, { mode, action, expecte
   }
   const receipt = result.data;
   if (receipt.receipt_kind === 'compact-v1') {
-    const content = mode === 'self' ? review.selfFeedback : review.managerFeedback;
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(content));
-    const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-    if (receipt.request_id !== requestId || receipt.content_hash !== hash || !receipt.review.updated_at ||
+    if (receipt.request_id !== requestId || receipt.content_hash !== contentHash || !receipt.review.updated_at ||
         (mode === 'manager' && (receipt.review.score == null ? null : Number(receipt.review.score)) !==
           (review.score == null ? null : Number(review.score)))) {
       throw new Error('提交內容尚未確認，本頁輸入仍保留。請再按提交重試。');
