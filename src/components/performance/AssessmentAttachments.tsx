@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { MAX_MANAGER_ATTACHMENTS, MAX_MANAGER_ATTACHMENT_BYTES, MAX_MANAGER_ATTACHMENT_CHARACTERS } from "./assessmentAttachmentPolicy.mjs";
 import type { ReviewAttachment } from "./assessmentTypes";
 const REVIEW_ATTACHMENT_ACCEPT =
-  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.zip,.jpg,.jpeg,.png,.webp";
+  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.zip,.msg,.eml,.jpg,.jpeg,.png,.webp";
 
 const formatFileSize = (size: number) =>
   size < 1024 * 1024
@@ -17,7 +17,7 @@ async function prepareReviewAttachment(file: File): Promise<ReviewAttachment> {
     value.slice(1),
   );
   if (!extension || !allowed.includes(extension))
-    throw new Error("附件支援 PDF、Word、Excel、PowerPoint、文字、ZIP 與圖片檔。");
+    throw new Error("附件支援 Outlook 郵件、PDF、Word、Excel、PowerPoint、文字、ZIP 與圖片檔。");
   if (file.size > MAX_MANAGER_ATTACHMENT_BYTES)
     throw new Error("單一附件不可超過 4 MB。");
   const dataUrl = await new Promise<string>((resolve, reject) => {
