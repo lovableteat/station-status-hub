@@ -39,6 +39,7 @@ import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGuide";
 import { saveSelfAssessmentDraft, submitAssessmentRecord } from "./assessmentPersistence.mjs";
+import { refreshAssessmentReviews } from './assessmentRefresh.mjs';
 import { AssessmentEntryList } from "./AssessmentEntryList";
 import { AssessmentEntryFeedback, AssessmentReturnHistory } from './AssessmentEntryFeedback';
 import { EvidenceLink } from './EvidenceLink';
@@ -414,6 +415,10 @@ export function PerformanceAppraisalPage() {
   const [editorRevision, setEditorRevision] = useState(0);
   const savedId = useRef<{ key: string; id: string } | null>(null);
   const requestNumber = useRef(0);
+  const reviewsSnapshot = useRef(reviews);
+  const activeLoad = useRef<{ scope: string; request: number } | null>(null);
+  const submissionPending = useRef(false);
+  useEffect(() => { reviewsSnapshot.current = reviews; }, [reviews]);
   const accessGeneration = useRef(0);
   const loadedAccessScope = useRef<string | null>(null);
   const loadedProfile = useRef("");
@@ -478,7 +483,9 @@ export function PerformanceAppraisalPage() {
   const recordsPending = loadedAccessScope.current !== accessScope ||
     (!demo && candidateManager && !privacy.ready);
   const load = useCallback(async (background = false) => {
+    if (background && (activeLoad.current?.scope === accessScope || submissionPending.current)) return;
     const request = ++requestNumber.current;
+    activeLoad.current = { scope: accessScope, request };
     if (!background) setLoading(true);
     if (!background && !demo) setSelfContextLoaded(false);
     setLoadError("");
@@ -487,25 +494,25 @@ export function PerformanceAppraisalPage() {
     if (loadedAccessScope.current !== accessScope) {
       setReviews(demo ? readCache(cacheKey, true, user, canManagePerformance, administrator) : []);
     }
-    if (!demo && candidateManager && !privacy.ready) { setReviews([]); setLoading(false); return; }
+    if (!demo && candidateManager && !privacy.ready) { setReviews([]); setLoading(false); activeLoad.current = null; return; }
     if (demo) {
       loadedAccessScope.current = accessScope;
       loadedProfile.current = profileIdentity;
       setLoading(false);
+      activeLoad.current = null;
       return;
     }
     try {
-      const reviewsQuery = performanceDb
-        .from("performance_reviews")
-        .select("*")
-        .order("updated_at", { ascending: false });
+      const reviewsQuery = refreshAssessmentReviews(performanceDb,
+        loadedAccessScope.current === accessScope ? reviewsSnapshot.current : [],
+        () => request === requestNumber.current);
       // RLS already limits employees to their own rows. Do not add a second
       // client-side identity filter here: older records may have been created
       // with the account username instead of the auth UUID. Filtering by one
       // representation would hide that record and make the editor look new.
       // RLS applies direct organizational scope and password checks. Site
       // administrators receive no assessment-data bypass.
-      const [{ data, error }, employeeResult, selfContextResult] = await Promise.all([
+      const [rows, employeeResult, selfContextResult] = await Promise.all([
         reviewsQuery,
         (administrator || candidateManager)
           ? performanceDb.rpc("get_performance_organization")
@@ -513,12 +520,8 @@ export function PerformanceAppraisalPage() {
         performanceDb.rpc("get_performance_self_context"),
       ]);
       if (request !== requestNumber.current) return;
-      if (error) throw error;
       if (employeeResult.error) throw employeeResult.error;
       if (selfContextResult.error) throw selfContextResult.error;
-      const rows = (data || []).map(
-        normalizePerformanceReview,
-      ) as PerformanceReview[];
       // RLS supplies rows authorized by both hierarchy and password grants.
       const context = selfContextResult.data?.[0];
       const resolvedManager = !!(candidateManager && context?.performance_role === "manager" &&
@@ -526,6 +529,7 @@ export function PerformanceAppraisalPage() {
       const accessible = rows.filter((review) => resolvedManager || matchesUser(review, user));
       loadedAccessScope.current = `${userId}:${resolvedManager}:${privacyRevision}`;
       loadedProfile.current = profileIdentity;
+      reviewsSnapshot.current = accessible;
       setReviews(accessible);
 
       setEmployees(
@@ -566,6 +570,7 @@ export function PerformanceAppraisalPage() {
         setLoadError("無法讀取工作區考核，請重新整理。考核內容會在權限確認後顯示。");
       }
     } finally {
+      if (activeLoad.current?.request === request) activeLoad.current = null;
       if (request === requestNumber.current) setLoading(false);
     }
   }, [cacheKey, demo, user, canManagePerformance, administrator, privacy.ready, accessScope, candidateManager, profileIdentity, userId, privacyRevision]);
@@ -818,21 +823,31 @@ export function PerformanceAppraisalPage() {
       now: new Date().toISOString(),
     }) as PerformanceReview;
     let confirmed = nextReview;
-    if (!demo)
-      confirmed = action === "draft" && mode === "self"
-        ? (await saveSelfAssessmentDraft(performanceDb, nextReview, previous)) as PerformanceReview
-        : (await submitAssessmentRecord(performanceDb, nextReview, {
-            mode,
-            action,
-            expectedUpdatedAt: previous?.updatedAt || form.sourceUpdatedAt || null,
-          })) as PerformanceReview;
+    ++requestNumber.current;
+    submissionPending.current = true;
+    try {
+      if (!demo)
+        confirmed = action === "draft" && mode === "self"
+          ? (await saveSelfAssessmentDraft(performanceDb, nextReview, previous)) as PerformanceReview
+          : (await submitAssessmentRecord(performanceDb, nextReview, {
+              mode,
+              action,
+              expectedUpdatedAt: previous?.updatedAt || form.sourceUpdatedAt || null,
+            })) as PerformanceReview;
+    } finally {
+      submissionPending.current = false;
+      // A read started before/during the write cannot replace its receipt.
+      ++requestNumber.current;
+      setLoading(false);
+    }
     if (accessVersion !== accessGeneration.current) throw new Error("資料存取權限已更新，請重新開啟考核確認儲存結果。");
     const nextRows = [
       confirmed,
-      ...reviews.filter((review) => review.id !== confirmed.id),
+      ...reviewsSnapshot.current.filter((review) => review.id !== confirmed.id),
     ];
     if (demo) localStorage.setItem(cacheKey, JSON.stringify(nextRows));
 
+    reviewsSnapshot.current = nextRows;
     setReviews(nextRows);
     toast({
       title:

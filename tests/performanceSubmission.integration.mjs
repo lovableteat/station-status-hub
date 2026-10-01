@@ -186,6 +186,10 @@ try {
   await db.exec(await migration("20260916100000_atomic_performance_return_notifications"));
   await db.exec(await migration("20260916133000_fix_performance_return_notification_reference_type"));
   await db.exec(await migration("20260916170000_verified_assessment_submission"));
+  await db.exec(await migration("20261001190000_reduce_performance_submission_load"));
+  await db.exec(`create trigger zzzz_preserve_performance_name_version
+    before update on workspace.performance_reviews for each row
+    execute function workspace.preserve_performance_name_version()`);
   await db.exec("delete from workspace.performance_reviews where id='legacy'");
   const reviewId = 'performance-10000000-0000-4000-8000-000000000005';
   const baseReview = { id:reviewId, cycle_id:'2026-q3', employee_id:id(5), employee_name:'測試員工',
@@ -284,6 +288,27 @@ try {
   await actor(2);
   await query("select workspace.review_performance_section_report($1,'approve','確認完成',$2)", [summary.id, summary.updated_at]);
   check((await reports()).find(row => row.id === summary.id).status, 'approved', 'director approves resubmitted summary');
+  // Compact acknowledgements verify the actual saved bytes, with no attachment
+  // echo. Exercise both supervisor and employee paths under their real roles.
+  await actor(3);
+  const compactPayload = {...managerPayload,receipt_only:true,manager_feedback:'整體回饋與證據 '+ 'x'.repeat(4_000_000)};
+  let compact = await submit(compactPayload,'manager','return',response.review.updated_at);
+  check(compact.receipt_kind,'compact-v1','database returns compact committed receipt');
+  check('manager_feedback' in compact.review,false,'receipt does not echo supervisor attachments');
+  check(JSON.stringify(compact).length < 2000,true,'4 MB submission response stays below 2 KB');
+  check(compact.content_hash,(await query("select encode(sha256(convert_to($1,'UTF8')),'hex') as hash",[compactPayload.manager_feedback]))[0].hash,'receipt hashes persisted supervisor feedback');
+  await actor(5);
+  compact = await submit({...baseReview,receipt_only:true,self_feedback:'員工證據 '+ 'x'.repeat(4_000_000)},'self','submit',compact.review.updated_at);
+  check(compact.review.status,'submitted','employee submits with compact receipt');
+  check(compact.review.score,null,'compact employee receipt conceals private score');
+  check('self_feedback' in compact.review,false,'receipt does not echo employee attachments');
+  await assert.rejects(()=>query("update workspace.performance_reviews set score=1 where id=$1",[reviewId])); checks++;
+  const renamed = (await query("update workspace.performance_reviews set employee_name='改名測試', updated_at=clock_timestamp() where id=$1 returning updated_at",[reviewId]))[0];
+  check(new Date(renamed.updated_at).toISOString(),new Date(compact.review.updated_at).toISOString(),'name-only edit retains content version');
+  await root();
+  await db.exec('alter table workspace.performance_reviews add column future_content text');
+  const contentEdit = (await query("update workspace.performance_reviews set future_content='new', updated_at=clock_timestamp() where id=$1 returning updated_at",[reviewId]))[0];
+  check(contentEdit.updated_at > renamed.updated_at,true,'future content column still advances version');
   console.log(`\n${checks} actual PostgreSQL workflow checks passed.`);
 } catch(error) {
   console.error(error.message,error.detail||'',error.where||'');
