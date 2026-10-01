@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { createAssessmentForm, buildAssessmentReview, readManagerAssessment, serializeManagerAssessment, validateAssessment } from '../src/components/performance/rd2Assessment.mjs';
 import { buildPerformanceReturnNotification } from '../src/components/performance/performanceNotifications.mjs';
@@ -85,4 +86,17 @@ test('retry uses the same event UUID and a single-entry notification links to th
   assert.match(first.action_url, /performanceEntry=a/);
   assert.match(first.action_url, /performanceCategory=IDP/);
   assert.doesNotMatch(JSON.stringify(first), /補上成果數字|第一筆實績/);
+});
+
+test('employee feedback uses an inline disclosure with copy support instead of a dialog', async () => {
+  const [feedbackComponent, entryList, styles] = await Promise.all([
+    readFile(new URL('../src/components/performance/AssessmentEntryFeedback.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/performance/AssessmentEntryList.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/performance/performance.css', import.meta.url), 'utf8'),
+  ]);
+  assert.match(feedbackComponent, /className="rd2-inline-supervisor-reply"/);
+  assert.match(feedbackComponent, /複製回覆/);
+  assert.doesNotMatch(feedbackComponent, /Dialog|Popover/);
+  assert.ok(entryList.indexOf('renderFeedback(entry, index)') < entryList.indexOf('<AssessmentAttachments'));
+  assert.match(styles, /\.rd2-inline-supervisor-reply-body[\s\S]*user-select:\s*text/);
 });
