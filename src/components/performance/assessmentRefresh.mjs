@@ -2,31 +2,85 @@ import { normalizePerformanceReview } from './performanceData.mjs';
 
 // The manifest is RLS-filtered on every refresh, including access revocations.
 // Never download embedded attachments just to discover that nothing changed.
-const manifestColumns = 'id,updated_at,employee_id,employee_name,reviewer_name,status';
+const manifestColumns = 'id,cycle_id,updated_at,employee_id,employee_name,department,role,reviewer_name,status,score,due_date,goals,review_index';
 const unchanged = (row, cached) => cached &&
   row.updated_at === cached.updatedAt && row.employee_id === cached.employeeId &&
   row.employee_name === cached.employeeName && row.reviewer_name === cached.reviewerName &&
   row.status === cached.status;
 
-export async function refreshAssessmentReviews(db, cached = [], isCurrent = () => true) {
-  const manifest = await db.from('performance_reviews').select(manifestColumns)
-    .order('updated_at', { ascending: false });
+// Memory only, bounded to 16 MB. A fresh RLS manifest must authorize a row and
+// match its content version before a subsequent page mount can reuse it.
+const contentCaches = new WeakMap();
+export function clearAssessmentContentCache(db) { contentCaches.delete(db); }
+function rememberContents(db, scope, rows) {
+  if (!scope) return;
+  const cache = contentCaches.get(db) || new Map();
+  for (const row of rows) {
+    const key = `${scope}:${row.id}`;
+    cache.delete(key);
+    const bytes = 2 * (row.selfFeedback.length + row.managerFeedback.length);
+    if (bytes <= 16_000_000) cache.set(key, {row,bytes});
+  }
+  let bytes = [...cache.values()].reduce((sum,value) => sum+value.bytes,0);
+  for (const [key,value] of cache) {
+    if (bytes <= 16_000_000) break;
+    bytes -= value.bytes; cache.delete(key);
+  }
+  contentCaches.set(db,cache);
+}
+
+export async function refreshAssessmentReviews(db, cached = [], isCurrent = () => true, signal, scope) {
+  let query = db.from('performance_reviews').select(manifestColumns).order('updated_at', { ascending: false });
+  if (signal) query = query.abortSignal(signal);
+  const manifest = await query;
   if (manifest.error) throw manifest.error;
   const existing = new Map(cached.map(row => [row.id, row]));
-  const changed = (manifest.data || []).filter(row => !unchanged(row, existing.get(row.id)));
-  const fresh = new Map();
-  // Bound individual responses rather than downloading every employee's files
-  // in a single request. Requests are sequential to limit shared DB pressure.
-  for (let start = 0; start < changed.length; start += 10) {
-    if (!isCurrent()) return [];
-    const result = await db.from('performance_reviews').select('*')
-      .in('id', changed.slice(start, start + 10).map(row => row.id));
-    if (result.error) throw result.error;
-    for (const row of result.data || []) fresh.set(row.id, normalizePerformanceReview(row));
-  }
+  if (!isCurrent()) return [];
   return (manifest.data || []).flatMap(row => {
-    const value = unchanged(row, existing.get(row.id)) ? existing.get(row.id) : fresh.get(row.id);
-    // A row revoked/deleted between manifest and content reads stays absent.
-    return value ? [value] : [];
+    const previous = existing.get(row.id) || (scope && contentCaches.get(db)?.get(`${scope}:${row.id}`)?.row);
+    const value = unchanged(row, previous) ? previous : normalizePerformanceReview({
+      ...row, self_feedback: row.review_index?.selfFeedback || '',
+      manager_feedback: row.review_index?.managerFeedback || '', contentLoaded: false,
+    });
+    return [value];
   });
+}
+
+// Only an opened editor/detail or an explicit export reads the full payload.
+// Every read still goes through the original review table and its RLS.
+export async function loadAssessmentReviewContents(db, rows, isCurrent = () => true, signal, scope) {
+  const complete = [];
+  for (const row of rows) {
+    if (!isCurrent()) throw new Error('考核存取狀態已更新，請重新開啟。');
+    if (row.contentLoaded !== false) { complete.push(row); continue; }
+    let query = db.from('performance_reviews').select('*').eq('id', row.id).single();
+    if (signal) query = query.abortSignal(signal);
+    const result = await query;
+    if (result.error || !result.data || result.data.id !== row.id) throw result.error || new Error('無法讀取考核內容。');
+    complete.push(normalizePerformanceReview(result.data));
+  }
+  if (!isCurrent()) throw new Error('考核存取狀態已更新，請重新開啟。');
+  rememberContents(db,scope,complete);
+  return complete;
+}
+
+export async function withAssessmentReadDeadline(read, timeoutMs = 15000, abort = () => {}) {
+  let timer;
+  try {
+    return await Promise.race([read, new Promise((_, reject) => {
+      timer = setTimeout(() => { abort(); reject(new Error('考核讀取逾時，請重試。')); }, timeoutMs);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
+export async function refreshSectionReportContents(db, cycle, cached = []) {
+  const manifest = await db.from('performance_section_reports').select('id,updated_at,chief_name,director_name').eq('cycle_id', cycle);
+  if (manifest.error) throw manifest.error;
+  const existing = new Map(cached.map(row => [row.id, row]));
+  if ((manifest.data || []).every(row => existing.get(row.id)?.updated_at === row.updated_at && existing.get(row.id)?.chief_name === row.chief_name && existing.get(row.id)?.director_name === row.director_name)) {
+    return (manifest.data || []).map(row => existing.get(row.id));
+  }
+  const result = await db.rpc('get_performance_section_reports', {p_cycle_id:cycle});
+  if (result.error) throw result.error;
+  return result.data || [];
 }

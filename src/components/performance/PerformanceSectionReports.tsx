@@ -22,6 +22,8 @@ import type { ReviewAttachment } from "./assessmentTypes";
 import { privacyDb } from "./usePerformancePrivacy";
 import type { OrganizationMember } from "./PerformanceOrganization";
 import { watchPermissionRefresh } from "@/lib/permissionRefresh.mjs";
+import { refreshSectionReportContents, withAssessmentReadDeadline } from './assessmentRefresh.mjs';
+import { supabase } from '@/integrations/supabase/client';
 
 const STATUS = {
   draft: "彙整草稿",
@@ -130,6 +132,9 @@ export function PerformanceSectionReports({
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty, saving]);
   const request = useRef(0);
+  const activeRequest = useRef<number | null>(null);
+  const rowsSnapshot = useRef(rows);
+  useEffect(() => { rowsSnapshot.current = rows; }, [rows]);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -151,31 +156,35 @@ export function PerformanceSectionReports({
       },
       { replace: true },
     );
-  const load = useCallback(async () => {
+  const load = useCallback(async (background = false) => {
+    if (activeRequest.current !== null) return;
     const version = ++request.current;
-    setLoading(true);
+    activeRequest.current = version;
+    if (!background) setLoading(true);
     setError("");
     if (!ready) {
       setRows([]);
       setOwn(null);
       setEditor(null);
       setLoading(false);
+      activeRequest.current = null;
       return;
     }
     try {
-      const [reports, organization] = await Promise.all([
-        privacyDb.rpc("get_performance_section_reports", { p_cycle_id: cycle }),
+      const [reports, organization] = await withAssessmentReadDeadline(Promise.all([
+        refreshSectionReportContents(supabase, cycle, rowsSnapshot.current),
         privacyDb.rpc("get_performance_organization"),
-      ]);
+      ]));
       if (version !== request.current) return;
-      if (reports.error || organization.error) throw new Error("load");
-      const next = (reports.data || []) as SectionReport[];
+      if (organization.error) throw new Error("load");
+      const next = reports as SectionReport[];
       const member =
         ((organization.data || []) as OrganizationMember[]).find(
           (m) => m.employee_id === userId,
         ) || null;
-      setRows(next);
-      setOwn(member);
+      rowsSnapshot.current = next;
+      setRows(current => current.length === next.length && current.every((row,index) => row === next[index]) ? current : next);
+      setOwn(current => JSON.stringify(current) === JSON.stringify(member) ? current : member);
       setEditor((current) => {
         if (!current) return null;
         if (current.mode === "compose" && member?.org_level !== "section_chief")
@@ -191,6 +200,7 @@ export function PerformanceSectionReports({
         setError("無法讀取課長彙整，請確認連線及資料保護狀態後重新整理。");
       }
     } finally {
+      if (activeRequest.current === version) activeRequest.current = null;
       if (version === request.current) setLoading(false);
     }
   }, [cycle, ready, userId]);
@@ -199,12 +209,14 @@ export function PerformanceSectionReports({
     const stop = watchPermissionRefresh({
       windowTarget: window,
       documentTarget: document,
-      refresh: () => void load(),
+      refresh: () => void load(true),
     });
     return () => {
       // The counter intentionally includes loads started after this effect.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       ++request.current;
+      activeRequest.current = null;
+      rowsSnapshot.current = [];
       stop();
     };
   }, [load]);

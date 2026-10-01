@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { watchPermissionRefresh } from "@/lib/permissionRefresh.mjs";
+import { withAssessmentReadDeadline } from './assessmentRefresh.mjs';
 
 export interface PerformanceLock {
   owner_id: string;
@@ -25,13 +26,15 @@ export function usePerformancePrivacy(
   const [ready, setReady] = useState(!enabled);
   const signature = useRef("");
   const generation = useRef(0);
+  const activeRequest = useRef<number | null>(null);
   const invalidateRef = useRef(invalidate);
   invalidateRef.current = invalidate;
   const refresh = useCallback(async () => {
-    if (!enabled || !accountId) return;
+    if (!enabled || !accountId || activeRequest.current !== null) return;
     const request = ++generation.current;
+    activeRequest.current = request;
     try {
-      const result = await privacyDb.rpc("get_performance_group_locks");
+      const result = await withAssessmentReadDeadline(privacyDb.rpc("get_performance_group_locks"));
       if (request !== generation.current) return;
       if (result.error) throw result.error;
       const next = (result.data || []) as PerformanceLock[];
@@ -52,11 +55,14 @@ export function usePerformancePrivacy(
         "暫時無法確認考核資料保護狀態，請重新整理。若持續發生，請聯絡系統維護人員。",
       );
       invalidateRef.current();
+    } finally {
+      if (activeRequest.current === request) activeRequest.current = null;
     }
   }, [enabled, accountId]);
   useEffect(() => {
     signature.current = "";
     setLocks([]);
+    setError('');
     setReady(!enabled);
     if (!enabled) return;
     void refresh();
@@ -69,6 +75,7 @@ export function usePerformancePrivacy(
       // Invalidate every outstanding RPC, not merely the one started here.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       ++generation.current;
+      activeRequest.current = null;
       cleanup();
     };
   }, [enabled, refresh]);
@@ -89,6 +96,7 @@ export function usePerformancePrivacy(
   }, [locks, refresh]);
   const clear = () => {
     ++generation.current;
+    activeRequest.current = null;
     signature.current = "";
     setReady(false);
     invalidateRef.current();
