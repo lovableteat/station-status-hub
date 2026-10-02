@@ -34,4 +34,6 @@ jobs:
         run: |
           "$AUDIT_QA_DIR/node_modules/.bin/playwright" install --with-deps chromium
           node tests/auditHistory.browser.cjs
+      - name: Permissions dialog layout and isolated interactions
+        run: node tests/auditPermissionsDialog.browser.cjs
       - run: npm run build
