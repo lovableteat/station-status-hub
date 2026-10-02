@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 
 interface MaintenancePageHeaderProps {
   actions?: ReactNode;
+  wrapActionsOnMobile?: boolean;
   className?: string;
   description?: string;
   icon?: ComponentType<{ className?: string }>;
@@ -12,6 +13,7 @@ interface MaintenancePageHeaderProps {
 
 export function MaintenancePageHeader({
   actions,
+  wrapActionsOnMobile = false,
   className,
   description,
   icon: Icon,
@@ -21,6 +23,7 @@ export function MaintenancePageHeader({
     <header
       className={cn(
         "flex min-h-11 items-center justify-between gap-2 sm:min-h-12 sm:gap-3",
+        wrapActionsOnMobile && "max-sm:flex-wrap",
         className
       )}
     >
@@ -39,7 +42,12 @@ export function MaintenancePageHeader({
           )}
         </div>
       </div>
-      {actions && <div data-maintenance-page-actions="true" className="flex max-w-[52%] shrink-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:w-auto sm:max-w-none sm:flex-wrap sm:gap-2">{actions}</div>}
+      {actions && <div data-maintenance-page-actions="true" className={cn(
+        "flex shrink-0 items-center gap-1.5 sm:w-auto sm:max-w-none sm:flex-wrap sm:gap-2",
+        wrapActionsOnMobile
+          ? "max-w-full flex-wrap"
+          : "max-w-[52%] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      )}>{actions}</div>}
     </header>
   );
 }
