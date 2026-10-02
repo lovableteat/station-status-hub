@@ -19,6 +19,33 @@ const formats = [
   ["xls", "application/vnd.ms-excel"],
   ["xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
 ];
+const engineeringFormats = [
+  ["rar", "application/vnd.rar", ["", "application/octet-stream", "application/x-rar-compressed"]],
+  ["brd", "application/octet-stream", ["", "application/octet-stream"]],
+  ["stp", "application/octet-stream", ["", "application/octet-stream", "model/step", "application/step"]],
+  ["mps", "application/octet-stream", ["", "application/octet-stream"]],
+];
+for (const [extension, mime, browserTypes] of engineeringFormats) {
+  test(`${extension}: selectable, validated and stored with a matching extension`, () => {
+    for (const type of browserTypes) {
+      const file = { name: `設計檔.${extension.toUpperCase()}`, size: 4096, type };
+      assert.equal(validateDirectMessageFiles([file]).error, null);
+      assert.equal(getDirectMessageMimeType(file), mime);
+      assert.equal(getDirectMessageMediaKind(file), "document");
+      assert.equal(createDirectMessageMediaPath("thread", "user", "client", file, 0), `thread/user/client/0.${extension}`);
+      assert.ok(CHAT_MEDIA_ACCEPT.includes(`.${extension}`));
+      assert.ok(validateDirectMessageFiles([{ ...file, name: `${file.name}.exe` }]).error);
+      assert.ok(validateDirectMessageFiles([{ ...file, type: "application/x-msdownload" }]).error);
+    }
+  });
+}
+test("MP4 with a generic Windows MIME uploads as video, while oversized files explain the limit", () => {
+  const file = { name: "demo.MP4", type: "application/octet-stream", size: 50 * 1024 * 1024 };
+  assert.equal(validateDirectMessageFiles([file]).error, null);
+  assert.equal(getDirectMessageMimeType(file), "video/mp4");
+  assert.equal(getDirectMessageMediaKind(file), "video");
+  assert.match(validateDirectMessageFiles([{ ...file, size: file.size + 1 }]).error, /影片.*50 MB/);
+});
 for (const [extension, mime] of formats) {
   test(`${extension}: native and Windows generic MIME use the same upload metadata and safe path`, () => {
     for (const type of [

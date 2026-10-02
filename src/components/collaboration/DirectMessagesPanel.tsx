@@ -579,7 +579,7 @@ export function DirectMessagesPanel({
               {selectedThread?.otherDisplayName || "未命名對話"}
             </div>
             <div className="mt-1 text-xs text-slate-400">
-              {typingUsers.length > 0 ? "對方正在輸入…" : "可傳送圖片、影片、PowerPoint 與 Excel。"}
+              {typingUsers.length > 0 ? "對方正在輸入…" : "可傳送圖片、影片、Office 與工程檔案。"}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -958,7 +958,7 @@ export function DirectMessagesPanel({
               variant="outline"
               size="icon"
               aria-label="加入附件"
-              title="加入圖片、影片、PowerPoint 或 Excel（最多 4 個；圖片 12 MB，影片與文件 50 MB）"
+              title="加入圖片、影片、PPT、Excel、RAR、BRD、STP 或 MPS（最多 4 個；圖片 12 MB，其餘 50 MB）"
               disabled={isSendingMedia || selectedMediaFiles.length >= 4}
               onClick={() => mediaInputRef.current?.click()}
               className="h-11 w-11 shrink-0 rounded-2xl border-white/10 bg-white/[0.04] text-cyan-200 hover:bg-cyan-300/10"

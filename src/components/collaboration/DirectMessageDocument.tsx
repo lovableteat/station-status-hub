@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Download,
+  FileText,
   FileSpreadsheet,
   LoaderCircle,
   Presentation,
@@ -18,7 +19,9 @@ export function DirectMessageDocument({
   const [error, setError] = useState(false);
   const Icon = /\.xlsx?$/i.test(attachment.fileName)
     ? FileSpreadsheet
-    : Presentation;
+    : /\.pptx?$/i.test(attachment.fileName)
+      ? Presentation
+      : FileText;
   const download = async () => {
     if (downloading || !attachment.storagePath) return;
     setDownloading(true);

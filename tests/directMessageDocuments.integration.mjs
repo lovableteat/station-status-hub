@@ -53,6 +53,10 @@ const formats = [
   ],
   ["xls", "application/vnd.ms-excel"],
   ["xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  ["rar", "application/vnd.rar"],
+  ["brd", "application/octet-stream"],
+  ["stp", "application/octet-stream"],
+  ["mps", "application/octet-stream"],
 ];
 const attachment = (client, ext, mime, overrides = {}) => ({
   storage_path: `${id(10)}/${id(1)}/${id(client)}/0.${ext}`,
@@ -128,6 +132,7 @@ try {
   } else {
     await db.exec(await read("20260903170000_direct_chat_office_documents"));
   }
+  await db.exec(await read("20261002120000_direct_chat_engineering_files"));
   const bucket = (
     await query("select * from storage.buckets where id='chat-media'")
   )[0];
@@ -139,7 +144,16 @@ try {
   check(
     formats.every(([, mime]) => bucket.allowed_mime_types.includes(mime)),
     true,
-    "all four Office formats enabled",
+    "Office and engineering formats enabled",
+  );
+  await actor(1);
+  await rejects(
+    () => query(
+      "insert into storage.objects(bucket_id,name,metadata) values ('chat-media',$1,'{}'::jsonb)",
+      [`${id(10)}/${id(1)}/${id(19)}/0.exe`],
+    ),
+    /row-level security/,
+    "executable path cannot enter chat storage",
   );
   for (const [i, [ext, mime]] of formats.entries()) {
     const item = attachment(20 + i, ext, mime);
@@ -245,6 +259,25 @@ try {
       `invalid document metadata ${i + 1} rejected`,
     );
   }
+  for (const [i, [ext, mime, overrides]] of [
+    ["rar", "application/vnd.rar", { mime_type: "application/octet-stream" }],
+    ["brd", "application/octet-stream", { file_name: "payload.exe" }],
+    ["stp", "application/octet-stream", { storage_path: `${id(10)}/${id(1)}/${id(102)}/0.mps` }],
+  ].entries()) {
+    const item = attachment(100 + i, ext, mime, overrides);
+    await upload(item);
+    await rejects(
+      () => send(100 + i, [item]),
+      /Invalid document attachment/,
+      `engineering format ${i + 1} cannot be mislabeled`,
+    );
+  }
+  const disguisedVideo = attachment(103, "mp4", "video/mp4", {
+    media_kind: "video",
+    file_name: "payload.exe",
+  });
+  await upload(disguisedVideo);
+  await rejects(() => send(103, [disguisedVideo]), /Invalid video attachment/, "MP4 filename must match video type");
   const mismatch = attachment(60, ...formats[3]);
   await upload({ ...mismatch, file_size: 10 });
   await rejects(

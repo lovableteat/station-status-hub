@@ -37,7 +37,7 @@ function describeDirectMessageFailure(error: unknown, fallback: string) {
   if (!detail) return fallback;
   if (/bucket.*not found|not found.*bucket/i.test(detail)) return "聊天室附件空間尚未建立，請重新整理後再試。";
   if (/row-level security|unauthorized|permission|policy/i.test(detail)) return "附件上傳權限尚未同步，請重新登入後再試。";
-  if (/mime|content.?type/i.test(detail)) return "這個檔案格式未被聊天室接受，請確認為支援的圖片、影片、PPT／PPTX 或 XLS／XLSX。";
+  if (/mime|content.?type/i.test(detail)) return "這個檔案格式未被聊天室接受，請確認為支援的圖片、影片、Office、RAR、BRD、STP 或 MPS。";
   if (/payload|too large|maximum.*size|exceeded/i.test(detail)) return "檔案超過聊天室上傳限制：圖片 12 MB，影片與文件 50 MB。";
   return fallback;
 }
