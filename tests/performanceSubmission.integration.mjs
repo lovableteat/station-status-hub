@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { notificationContainsRating } from "./support/notificationPrivacy.mjs";
 const packageDir = path.resolve(
   process.argv[2] || "node_modules/@electric-sql/pglite",
 );
@@ -218,7 +219,7 @@ try {
   check(notices.length,1,'employee receives exactly one return notice through real RLS');
   check(notices[0].reference_id,null,'text review ID is never forced into UUID reference column');
   check(notices[0].metadata.review_id,reviewId,'notice links to exact text review ID');
-  check(/score|manager_feedback|88/.test(JSON.stringify(notices[0])),false,'notice contains no ratings');
+  check(notificationContainsRating(notices[0], managerPayload.score),false,'notice contains no ratings');
   await actor(6);
   check((await query('select * from workspace.user_notifications')).length,0,'another employee cannot see the return notice');
   await actor(1);
