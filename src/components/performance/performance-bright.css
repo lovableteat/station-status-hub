@@ -1609,6 +1609,7 @@
   --rd2-return-highlight: oklch(88% .17 91);
   --rd2-return-highlight-ink: oklch(20% .02 91);
 }
+.rd2-bright #rd2-return-feedback { scroll-margin-block-start: 6rem; }
 .rd2-bright .rd2-return-history {
   padding: 1.25rem; border: 1px solid #706038; border-top: 4px solid var(--rd2-return-highlight);
   border-radius: 16px; background: #1c1c1e; color: #f2f2f7;
