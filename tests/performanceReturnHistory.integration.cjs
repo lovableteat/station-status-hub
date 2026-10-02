@@ -43,4 +43,11 @@ assert.ok(reply.includes('第一次退回原因'));
 assert.ok(reply.includes('歷史佐證.eml'));
 assert.equal(render(AssessmentEntryFeedback,{...replyProps,showFeedback:false}),'','no history leaks into unauthorized views');
 assert.equal(render(AssessmentEntryFeedback,{...replyProps,entry:{id:'other',text:'其他實績'}}),'','entry histories never mix');
+const editing = render(AssessmentEntryFeedback,{...replyProps,editable:true,
+  manager:{...manager,returnHistory:[],entryReviews:{...manager.entryReviews,IDP:{a:{feedback:'尚未提交的修改',returnRequested:false,attachments:[]}}}},savedManager:manager});
+assert.ok(editing.includes('查看 IDP 實績 1 退回紀錄'));
+assert.ok(editing.includes('第二次退回原因'),'the manager history comes from saved data, not editable comments');
+assert.ok(editing.includes('尚未提交的修改'),'unsent comments still remain in the editable field');
+const snapshotOnly = render(AssessmentEntryFeedback,{...replyProps,historyOnly:true,manager:{...manager,entryReviews:{...manager.entryReviews,IDP:{a:{feedback:'尚未提交',attachments:[{...attachment,name:'未退回的附件.eml'}]}}}}});
+assert.ok(!snapshotOnly.includes('未退回的附件.eml'),'historical reply never substitutes a different current attachment');
 console.log('PASS full historical snapshots, first return, attachments, missing legacy values, immutable data and per-entry visibility');
