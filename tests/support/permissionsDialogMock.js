@@ -18,6 +18,6 @@ export const supabase = {
 export async function mutateAuthAccount(userId, payload) {
   if (window.auditPermissions.failSave) return {success: false, error: 'Isolated save failure'};
   window.auditPermissions.writes.push({userId, payload});
-  window.auditPermissions.settings = payload.profile.permissions;
+  if (payload.profile.permissions) window.auditPermissions.settings = payload.profile.permissions;
   return {success: true};
 }
