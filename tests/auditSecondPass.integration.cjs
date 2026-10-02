@@ -14,12 +14,44 @@ async function mount({run,normalizeApply=false,user='audit-user',windowTarget}={
  const row={id:'A',project_key:'a',name:'AUDIT_LOCAL',category:'test',description:'',document,updated_at:v(0),updated_by:'other'};
  run=run??(q=>ok(q.method==='select'?[row]:{...row,...q.payload,updated_at:v(1)}));
  const {useSharedDataCenterProjects}=load('src/components/data-center/useSharedDataCenterProjects.ts');
- let state,doc,edit,account=user;
- function Probe(){const [current,setCurrent]=React.useState(document);doc=current;edit=setCurrent;state=useSharedDataCenterProjects({userId:account,canEdit:true,currentDocument:current,onApplyDocument:d=>setCurrent(normalizeApply?{schemaVersion:1,sites:permute(d.sites),facilityPlans:permute(d.facilityPlans),modelOverrides:permute(d.modelOverrides)}:d)});return null;}
+ let state,doc,edit,account=user,editable=true;
+ function Probe(){const [current,setCurrent]=React.useState(document);doc=current;edit=setCurrent;state=useSharedDataCenterProjects({userId:account,canEdit:editable,currentDocument:current,onApplyDocument:d=>setCurrent(normalizeApply?{schemaVersion:1,sites:permute(d.sites),facilityPlans:permute(d.facilityPlans),modelOverrides:permute(d.modelOverrides)}:d)});return null;}
  let root;await act(async()=>{root=create(React.createElement(Probe));});await flush(10);
- return {win,db,load,row,document,get state(){return state;},get doc(){return doc;},edit:d=>act(async()=>edit(d)),run:fn=>{run=fn;},account:async id=>{account=id;await act(async()=>root.update(React.createElement(Probe)));await flush(10);},unmount:()=>act(async()=>root.unmount())};
+ return {win,db,load,row,document,get state(){return state;},get doc(){return doc;},edit:d=>act(async()=>edit(d)),run:fn=>{run=fn;},account:async id=>{account=id;await act(async()=>root.update(React.createElement(Probe)));await flush(10);},role:async value=>{editable=value;await act(async()=>root.update(React.createElement(Probe)));await flush(10);},unmount:()=>act(async()=>root.unmount())};
 }
 const draft=(d,label)=>({...d,sites:d.sites.map(s=>({...s,label}))});
+
+test('a completed old-account create returns its actual resource but cannot select or mutate the new account workspace',async()=>{
+ const h=await mount(),pending=deferred();let request;try{
+  h.run(q=>{if(q.method==='insert'){request=q;return pending.promise;}return ok([{...h.row,id:'B',name:'Account B'}]);});let creating;await act(async()=>{creating=h.state.createProject('A-created','audit','');});await flush();await h.account('account-B');
+  const created={...h.row,id:'CREATED-OLD',name:'A-created',created_by:'audit-user'};let result;await act(async()=>{pending.resolve(ok(created));result=await creating;});await flush();
+  assert.equal(result.id,'CREATED-OLD','successful old insert is not falsely reported rolled back');assert.equal(request.payload.created_by,'audit-user');assert.equal(h.state.selectedProjectId,'B');assert.equal(h.state.projects.map(p=>p.id).join(','),'B');assert.equal(h.state.syncState,'synced');assert.equal(h.db.reads.some(q=>q.method==='delete'),false);
+ }finally{await h.unmount();}
+});
+
+test('a completed old-account archive cannot replace the new account directory',async()=>{
+ const h=await mount(),pending=deferred();try{
+  h.run(q=>q.method==='select'?ok([h.row,{...h.row,id:'A-other'}]):pending.promise);await act(async()=>h.state.retry());await flush();let archiving;await act(async()=>{archiving=h.state.archiveProject('A');});await flush();
+  h.run(()=>ok([{...h.row,id:'B'},{...h.row,id:'B-other'}]));await h.account('account-B');await act(async()=>{pending.resolve(ok(null));await archiving;});await flush();assert.equal(h.state.selectedProjectId,'B');assert.equal(h.state.projects.map(p=>p.id).join(','),'B,B-other');
+ }finally{await h.unmount();}
+});
+
+test('held Data-center mutation callbacks deny revoked edit permission or replacement account before issuing requests',async()=>{
+ const h=await mount();try{
+  const create=h.state.createProject,update=h.state.updateProject,archive=h.state.archiveProject;
+  const before=h.db.reads.filter(q=>q.method!=='select').length;await h.role(false);
+  await assert.rejects(()=>create('denied','',''));await assert.rejects(()=>update('A','denied','',''));await assert.rejects(()=>archive('A'));
+  await h.role(true);await h.account('replacement');await assert.rejects(()=>create('denied','',''));assert.equal(h.db.reads.filter(q=>q.method!=='select').length,before);
+ }finally{await h.unmount();}
+});
+
+test('typing while a Data-center create is pending retains the current draft and selection',async()=>{
+ const h=await mount(),pending=deferred();try{
+  h.run(q=>q.method==='insert'?pending.promise:ok([h.row]));let creating;await act(async()=>{creating=h.state.createProject('new','','');});await h.edit(draft(h.doc,'unsent-typing'));
+  await act(async()=>{pending.resolve(ok({...h.row,id:'CREATED',name:'new'}));await creating;});await flush();
+  assert.equal(h.state.selectedProjectId,'A');assert.equal(h.doc.sites[0].label,'unsent-typing');assert.ok(h.state.projects.some(p=>p.id==='CREATED'));
+ }finally{await h.unmount();}
+});
 
 test('Data-center journal and future deliveries cannot replace a newer snapshot with a provably older commit',async()=>{
  const h=await mount(),pending=deferred();try{
