@@ -1,3 +1,4 @@
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 import {
   createContext,
   useCallback,
@@ -18,6 +19,7 @@ import {
   isSupabaseServiceRestrictedError,
 } from "@/integrations/supabase/serviceErrors";
 import type { Tables, TablesUpdate } from "@/integrations/supabase/types";
+import { withReadDeadline } from "@/lib/readDeadline";
 
 const ACTIVE_PROJECT_STORAGE_KEY = "station-status-hub:active-test-project:v2";
 
@@ -104,7 +106,7 @@ function updateProjectQuery(projectId: string) {
 
   const url = new URL(window.location.href);
   url.searchParams.set("project", projectId);
-  window.history.replaceState({}, "", url);
+  replaceWorkspaceHistory(url);
 }
 
 export function TestProjectProvider({ children }: { children: ReactNode }) {
@@ -120,6 +122,13 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isSwitchingProject, setIsSwitchingProject] = useState(false);
   const switchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeProjectIdRef = useRef<string | null>(null);
+  const selectionRevisionRef = useRef(0);
+  const loadSequenceRef = useRef(0);
+  const loadedUserRef = useRef<string | null>(null);
+  const userId = user?.userId ?? null;
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
 
   const projects = useMemo(
     () => allProjects.filter((project) => project.status !== "archived" && !project.is_archived),
@@ -157,6 +166,9 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
   );
 
   const setActiveProjectId = useCallback((projectId: string) => {
+    if (activeProjectIdRef.current === projectId) return;
+    selectionRevisionRef.current += 1;
+    activeProjectIdRef.current = projectId;
     setIsSwitchingProject(true);
     setActiveProjectIdState(projectId);
 
@@ -172,7 +184,7 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
     switchTimerRef.current = setTimeout(() => setIsSwitchingProject(false), 420);
   }, []);
 
-  const refreshProjectSummaries = useCallback(async () => {
+  const refreshProjectSummaries = useCallback(async (isCurrent: () => boolean) => {
     const { data, error } = await supabase.rpc("get_test_project_summaries");
 
     if (error) {
@@ -224,7 +236,7 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
           ensureSummary(issue.project_id).open_issue_count += 1;
         }
       });
-      setProjectSummaries(fallbackSummaries);
+      if (isCurrent()) setProjectSummaries(fallbackSummaries);
       return;
     }
 
@@ -239,11 +251,16 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
         },
       ])
     );
-    setProjectSummaries(summaryMap);
+    if (isCurrent()) setProjectSummaries(summaryMap);
   }, []);
 
   const refreshProjects = useCallback(async () => {
-    if (!user) {
+    const sequence = ++loadSequenceRef.current;
+    const selectionRevision = selectionRevisionRef.current;
+    const isCurrent = () => sequence === loadSequenceRef.current && userIdRef.current === userId;
+    if (!userId) {
+      activeProjectIdRef.current = null;
+      loadedUserRef.current = null;
       setAllProjects([]);
       setProjectSummaries({});
       setActiveProjectIdState(null);
@@ -251,19 +268,21 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setIsLoadingProjects(true);
+    // Background revalidation must not tear down the active module/subscriptions.
+    if (loadedUserRef.current !== userId) setIsLoadingProjects(true);
 
     try {
-      const { data, error } = await fetchAllPages((from, to) =>
+      const { data, error } = await withReadDeadline((signal) => fetchAllPages((from, to) =>
         supabase
           .from("test_projects")
           .select("*")
           .order("updated_at", { ascending: false })
           .order("id")
-          .range(from, to)
-      );
+          .range(from, to).abortSignal(signal)
+      ));
 
       if (error) throw error;
+      if (!isCurrent()) return;
 
       const normalizedProjects = (data ?? []).map(normalizeProject);
       const activeProjects = normalizedProjects.filter(
@@ -271,11 +290,18 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       );
       setAllProjects(normalizedProjects);
 
-      const nextActiveProjectId = resolvePreferredProjectId(
+      const preferredProjectId = resolvePreferredProjectId(
         activeProjects,
-        activeProjectIdState
+        activeProjectIdRef.current
       );
+      // A snapshot started before a user selection/create may not contain it yet.
+      const nextActiveProjectId = selectionRevision !== selectionRevisionRef.current
+        ? activeProjectIdRef.current
+        : preferredProjectId;
+      activeProjectIdRef.current = nextActiveProjectId;
       setActiveProjectIdState(nextActiveProjectId);
+      loadedUserRef.current = userId;
+      setIsLoadingProjects(false);
 
       if (typeof window !== "undefined") {
         if (nextActiveProjectId) {
@@ -286,8 +312,12 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      await refreshProjectSummaries();
+      // Summary fallback can scan large tables; it does not gate project readiness.
+      void refreshProjectSummaries(isCurrent).catch((error) => {
+        if (isCurrent()) console.warn("Project summary refresh failed:", error);
+      });
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Failed to load maintenance projects:", error);
       const serviceRestricted = isSupabaseServiceRestrictedError(error);
       toast({
@@ -298,14 +328,13 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
         variant: "destructive",
       });
     } finally {
-      setIsLoadingProjects(false);
+      if (isCurrent()) setIsLoadingProjects(false);
     }
   }, [
-    activeProjectIdState,
     refreshProjectSummaries,
     resolvePreferredProjectId,
     toast,
-    user,
+    userId,
   ]);
 
   const createProject = useCallback(
@@ -348,8 +377,9 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
           createdProject = normalizeProject(updatedProject);
         }
 
-        await refreshProjects();
+        setAllProjects((current) => [createdProject, ...current.filter((project) => project.id !== createdProject.id)]);
         setActiveProjectId(createdProject.id);
+        void refreshProjects();
 
         toast({
           title: "專案已建立",
@@ -490,21 +520,45 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refreshProjects();
 
-    if (!user) return;
+    if (!userId) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let refreshing = false;
+    let pending = false;
+    const revalidate = async () => {
+      timer = null;
+      if (!active) return;
+      if (refreshing) { pending = true; return; }
+      refreshing = true;
+      do {
+        pending = false;
+        await refreshProjects();
+      } while (active && pending);
+      refreshing = false;
+    };
+    const scheduleRefresh = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void revalidate(), 150);
+    };
 
     const channel = supabase
       .channel("maintenance_project_changes")
       .on(
         "postgres_changes",
         { event: "*", schema: "workspace", table: "test_projects" },
-        refreshProjects
+        scheduleRefresh
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") scheduleRefresh();
+      });
 
     return () => {
+      active = false;
+      loadSequenceRef.current += 1;
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
-  }, [refreshProjects, user]);
+  }, [refreshProjects, userId]);
 
   useEffect(
     () => () => {

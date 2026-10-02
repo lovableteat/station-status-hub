@@ -1,3 +1,4 @@
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useUser } from "@/components/auth/UserContext";
@@ -22,7 +23,7 @@ function updateFlowVersionQuery(versionId: string | null) {
   const url = new URL(window.location.href);
   if (versionId) url.searchParams.set("flowVersion", versionId);
   else url.searchParams.delete("flowVersion");
-  window.history.replaceState({}, "", url);
+  replaceWorkspaceHistory(url);
 }
 
 export function useFlowVersions() {

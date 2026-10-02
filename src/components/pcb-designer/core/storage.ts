@@ -166,6 +166,30 @@ export class PcbLocalRepository {
     this.storage = storage;
   }
 
+  loadRecovery(ownerId: string, clientId?: string): { state: PcbSaveState; savedRevision: string } | null {
+    try {
+      const raw = this.storage.getItem(`${PCB_STORAGE_KEY}:draft:${ownerId}${clientId ? `:${clientId}` : ""}`);
+      const draft = raw ? JSON.parse(raw) : null;
+      if (draft?.version === PAYLOAD_VERSION && typeof draft.savedRevision === "string" && isPcbSaveState(draft.state)) {
+        return { state: normalizePcbSaveState(draft.state), savedRevision: draft.savedRevision };
+      }
+    } catch { /* A corrupt recovery copy must not block the editor. */ }
+    return null;
+  }
+
+  saveRecovery(ownerId: string, state: PcbSaveState, savedRevision: string, clientId?: string): boolean {
+    try {
+      this.storage.setItem(`${PCB_STORAGE_KEY}:draft:${ownerId}${clientId ? `:${clientId}` : ""}`, JSON.stringify({
+        version: PAYLOAD_VERSION, state, savedRevision,
+      }));
+      return true;
+    } catch { return false; }
+  }
+
+  clearRecovery(ownerId: string, clientId?: string): void {
+    try { this.storage.setItem(`${PCB_STORAGE_KEY}:draft:${ownerId}${clientId ? `:${clientId}` : ""}`, ""); } catch { /* Retain in-memory state. */ }
+  }
+
   load(): PcbSaveState {
     try {
       const raw = this.storage.getItem(PCB_STORAGE_KEY);

@@ -74,7 +74,7 @@ export function Sidebar({
       <nav
         aria-label="維修中心功能"
         data-mobile-maintenance-nav="true"
-        className="sticky top-[var(--mobile-header-height)] z-30 grid w-full shrink-0 grid-cols-2 gap-1 rounded-xl border border-cyan-200/20 bg-[#071522]/96 p-1 shadow-[0_14px_34px_-28px_rgba(34,211,238,0.75)] backdrop-blur-xl sm:top-[72px]"
+        className="sticky top-[var(--mobile-header-height)] z-30 grid w-full shrink-0 grid-cols-2 gap-1 rounded-xl border border-cyan-200/20 bg-[#071522]/96 p-1 shadow-[0_14px_34px_-28px_rgba(34,211,238,0.75)] backdrop-blur-xl sm:top-[72px] [@media(max-width:1023px)_and_(max-height:500px)]:static"
       >
         {navigationItems.map((item) => {
           if (!canViewNavigationItem(item.id)) return null;

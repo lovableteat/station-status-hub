@@ -102,6 +102,8 @@ import {
   INITIAL_SITE_PLANS,
   createRackFromModel,
 } from "./dataCenterSeed";
+import { WorkspaceRuntimeBoundary } from "@/components/common/WorkspaceRuntimeBoundary";
+import { parseDataCenterDocument } from "./projectDocument";
 import { DEFAULT_FACILITY_PLAN } from "./dataCenterTypes";
 import {
   isL10CompatibleWithRack,
@@ -615,8 +617,9 @@ interface SceneNavigatorProps {
 }
 
 function getDataCenterProjectStats(project: DataCenterProjectSummary) {
-  const sites = project.document.sites ?? [];
-  const facilities = Object.values(project.document.facilityPlans ?? {});
+  const document = parseDataCenterDocument(project.document);
+  const sites = document?.sites ?? [];
+  const facilities = Object.values(document?.facilityPlans ?? {});
   return {
     siteCount: sites.length,
     rackCount: sites.reduce((sum, site) => sum + site.racks.length, 0),
@@ -961,6 +964,7 @@ interface RackInspectorProps {
   onRackDeviceRemove: (deviceId: string) => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  scrollMode?: "contained" | "page";
 }
 
 function RackInspector({
@@ -987,6 +991,7 @@ function RackInspector({
   onRackDeviceRemove,
   collapsed = false,
   onToggleCollapse,
+  scrollMode = "contained",
 }: RackInspectorProps) {
   const health = getRackHealth(rack);
   const sortedDevices = [...rack.devices].sort((left, right) => right.slotStart - left.slotStart);
@@ -2816,7 +2821,7 @@ export function DeploymentPlanningCenter() {
 
     const nextSelectedModel =
       result.models[result.fallbackModelId] ??
-      Object.values(result.models).find((model) => model.kind === deletedModel?.kind);
+      Object.values(result.models as Record<string, RackModelDefinition>).find((model) => model.kind === deletedModel?.kind);
     if (nextSelectedModel) setSelectedModelId(nextSelectedModel.id);
 
     toast({
@@ -3867,6 +3872,7 @@ export function DeploymentPlanningCenter() {
           onChange={handleImportFile}
         />
 
+        {sharedProjects.errorMessage && <div role="alert" className="flex shrink-0 items-center gap-3 border-b border-amber-300/30 bg-amber-950/70 px-4 py-2 text-sm text-amber-100"><span className="flex-1">{sharedProjects.errorMessage}</span><Button size="sm" variant="outline" onClick={sharedProjects.retry}>重新讀取</Button></div>}
         <header data-mobile-data-center-header="true" className="relative z-20 flex min-h-12 shrink-0 items-center gap-2 border-b border-cyan-300/14 bg-[linear-gradient(90deg,#071420,#081928_48%,#07131e)] px-2 py-1.5 sm:flex-wrap sm:gap-3 sm:px-5 sm:py-3 lg:h-[68px] lg:flex-nowrap lg:px-6 lg:py-0">
           <div className="flex min-w-0 items-center gap-3">
             <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-300/15 text-cyan-100 sm:h-11 sm:w-11 sm:rounded-xl">
@@ -4011,7 +4017,7 @@ export function DeploymentPlanningCenter() {
 
           <main className="relative min-w-0 overflow-hidden rounded-[24px] border border-[#10283d] bg-black shadow-[0_24px_70px_rgba(2,8,23,0.36)]">
             {workspaceMode === "3d" ? (
-              <DataCenter3DPlanner
+              <WorkspaceRuntimeBoundary label="Data Center 3D" onFallback={() => setWorkspaceMode("2d")}><DataCenter3DPlanner
                 racks={selectedSite.racks}
                 models={models}
                 selectedRackId={selectedRackId}
@@ -4024,7 +4030,7 @@ export function DeploymentPlanningCenter() {
                 canEdit={canEdit}
                 onUpdateRackDeviceHealth={handleRackDeviceHealthChange}
                 onUpdateL10ModuleHealth={handleL10ModuleHealthChange}
-              />
+              /></WorkspaceRuntimeBoundary>
             ) : (
               <DataCenter2DPlanner
                 racks={selectedSite.racks}
@@ -4240,7 +4246,7 @@ export function DeploymentPlanningCenter() {
         ) : (
         <div className="relative flex min-h-0 flex-1 bg-black">
           {workspaceMode === "3d" ? (
-            <DataCenter3DPlanner
+            <WorkspaceRuntimeBoundary label="Data Center 3D" onFallback={() => setWorkspaceMode("2d")}><DataCenter3DPlanner
               racks={selectedSite.racks}
               models={models}
               selectedRackId={selectedRackId}
@@ -4253,7 +4259,7 @@ export function DeploymentPlanningCenter() {
               canEdit={canEdit}
               onUpdateRackDeviceHealth={handleRackDeviceHealthChange}
               onUpdateL10ModuleHealth={handleL10ModuleHealthChange}
-            />
+            /></WorkspaceRuntimeBoundary>
           ) : (
             <DataCenter2DPlanner
               racks={selectedSite.racks}
@@ -4514,7 +4520,7 @@ export function DeploymentPlanningCenter() {
                         <div className="text-[11px] text-slate-500">更新 {new Date(previewProject.updatedAt).toLocaleString("zh-TW")}</div>
                       </div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {previewProject.document.sites.map((site) => (
+                        {(parseDataCenterDocument(previewProject.document)?.sites ?? []).map((site) => (
                           <div key={site.id} className="rounded-xl border border-emerald-300/15 bg-emerald-400/[0.055] px-3 py-3">
                             <div className="font-bold text-slate-100">{site.label}</div>
                             <div className="mt-1 text-xs text-slate-400">{site.racks.length} 座機櫃 · {site.phase}</div>

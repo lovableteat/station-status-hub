@@ -117,17 +117,17 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
       </DialogTrigger>
       <DialogContent
         data-admin-dialog="user-editor"
-        className="max-w-xl border border-cyan-200/35 bg-[#0d263a] text-slate-100 shadow-[0_28px_90px_-45px_rgba(34,211,238,0.8)]"
+        className="admin-user-edit-dialog min-w-0 max-w-xl border border-cyan-200/35 bg-[#0d263a] text-slate-100 shadow-[0_28px_90px_-45px_rgba(34,211,238,0.8)]"
       >
-        <DialogHeader>
+        <DialogHeader className="pr-12">
           <DialogTitle>編輯用戶</DialogTitle>
         </DialogHeader>
-        <div className="space-y-5">
+        <div className="admin-user-edit-body min-w-0 space-y-5">
           <div className="rounded-2xl border border-primary/15 bg-primary/10 p-4 text-sm text-muted-foreground">
             這裡可修改帳號基本資料，若要重設密碼，直接輸入新的密碼後儲存即可。系統不會顯示舊密碼，也不保留任何明文密碼。
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 [&>div]:min-w-0">
             <div className="space-y-2">
               <Label>用戶名</Label>
               <Input
@@ -190,17 +190,17 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
             />
           </div>
 
-          <div className="flex justify-between">
-            <Button variant="destructive" onClick={handleDelete}>
+          <div className="admin-user-edit-actions flex flex-wrap justify-between gap-3">
+            <Button variant="destructive" className="min-h-11" onClick={handleDelete}>
               <Trash className="h-3 w-3 mr-2" />
               刪除用戶
             </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setIsOpen(false)}>
+            <div className="flex min-w-0 flex-1 justify-end gap-2">
+              <Button variant="outline" className="min-h-11" onClick={() => setIsOpen(false)}>
                 <X className="h-3 w-3 mr-2" />
                 取消
               </Button>
-              <Button onClick={handleSave}>
+              <Button className="min-h-11" onClick={handleSave}>
                 <Save className="h-3 w-3 mr-2" />
                 儲存
               </Button>

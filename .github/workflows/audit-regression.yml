@@ -1,0 +1,43 @@
+name: Audit regression (isolated)
+on:
+  push:
+    branches: [repair/audit-20261002-realtime-drafts]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VITE_SUPABASE_URL: http://127.0.0.1:54321
+      VITE_SUPABASE_ANON_KEY: isolated-test-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - name: Set isolated QA directory
+        run: echo "AUDIT_QA_DIR=$RUNNER_TEMP/station-audit-qa" >> "$GITHUB_ENV"
+      - name: Install isolated QA dependencies
+        run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock react@18.3.1 react-test-renderer@18.3.1 @electric-sql/pglite@0.5.8 playwright@1.58.2
+      - name: Deferred requests, live events, drafts and permissions
+        run: node --test tests/audit*.integration.cjs
+      - name: Mobile workspace and query contracts
+        run: node --test tests/mobileCoreWorkspaces.test.mjs tests/mobileFirstAdaptiveShell.test.mjs tests/apiChatModelControl.test.mjs tests/apiChatPromptLibraryLayout.test.mjs tests/apiChatPromptHelpers.test.mjs tests/apiChatMaintenanceSource.test.mjs
+      - name: Real PostgreSQL workflow and RLS
+        run: |
+          node tests/performanceOrganization.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
+          node tests/performanceSubmission.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
+      - name: Browser history cancellation
+        run: |
+          "$AUDIT_QA_DIR/node_modules/.bin/playwright" install --with-deps chromium
+          node tests/auditHistory.browser.cjs
+      - name: Permissions dialog layout and isolated interactions
+        run: node tests/auditPermissionsDialog.browser.cjs
+      - name: Short landscape maintenance navigation and touch scrolling
+        run: node tests/auditShortLandscape.browser.cjs
+      - run: npm run build

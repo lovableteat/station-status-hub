@@ -83,6 +83,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useWorkspaceMutationScope, WorkspaceMutationScopeChangedError } from "@/hooks/useWorkspaceMutationScope";
 
 import {
   type MaterialDataset,
@@ -2152,9 +2154,11 @@ function ResizableHeader({
 }
 
 function InlineVirtualAlternativeEditor({
+  canEdit,
   value,
   onSave,
 }: {
+  canEdit: boolean;
   value: string;
   onSave: (value: string) => void;
 }) {
@@ -2201,7 +2205,7 @@ function InlineVirtualAlternativeEditor({
   };
 
   const confirmSave = () => {
-    if (pendingValue == null) return;
+    if (!canEdit || pendingValue == null) return;
     onSave(pendingValue);
     setConfirmOpen(false);
     setPendingValue(null);
@@ -2226,6 +2230,7 @@ function InlineVirtualAlternativeEditor({
     <>
       <button
         type="button"
+        disabled={!canEdit}
         onClick={() => setEditing(true)}
         className="group flex w-full items-center justify-between gap-2 rounded border border-teal-400/20 bg-teal-400/[0.07] px-3 py-2 text-left hover:bg-teal-400/15"
         title="直接修改 TX"
@@ -2333,11 +2338,13 @@ function TrackingHistoryCell({
 }
 
 function TrackingHistoryDialog({
+  canEdit,
   open,
   record,
   onOpenChange,
   onSave,
 }: {
+  canEdit: boolean;
   open: boolean;
   record: MaterialRecord | null;
   onOpenChange: (open: boolean) => void;
@@ -2443,7 +2450,7 @@ function TrackingHistoryDialog({
   };
 
   const handleSave = () => {
-    if (!record || !status.trim()) return;
+    if (!canEdit || !record || !status.trim()) return;
 
     onSave(record, {
       id: createTrackingHistoryId(),
@@ -2460,7 +2467,7 @@ function TrackingHistoryDialog({
   };
 
   const handleMarkCompleted = () => {
-    if (!record) return;
+    if (!canEdit || !record) return;
 
     onSave(record, {
       id: createTrackingHistoryId(),
@@ -2504,7 +2511,7 @@ function TrackingHistoryDialog({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={handleMarkCompleted}
+                      onClick={handleMarkCompleted} disabled={!canEdit}
                       className="h-10 border-emerald-400/30 bg-emerald-400/15 px-4 text-sm font-bold text-emerald-100 hover:bg-emerald-400/25 hover:text-emerald-50"
                     >
                       <CircleCheck className="mr-2 h-4 w-4" />
@@ -2635,7 +2642,7 @@ function TrackingHistoryDialog({
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="border-slate-400/20 bg-transparent text-slate-300 hover:bg-slate-400/10 hover:text-slate-100">
                       取消
                     </Button>
-                    <Button type="button" onClick={handleSave} disabled={!status.trim()} className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400">
+                    <Button type="button" onClick={handleSave} disabled={!canEdit || !status.trim()} className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400">
                       儲存這次追蹤
                     </Button>
                     </div>
@@ -3350,6 +3357,7 @@ function BomPageTrackerDialog({
 }
 
 function BomManagerDialog({
+  canEdit,
   activeBomId,
   bomWorkspaces,
   open,
@@ -3358,6 +3366,7 @@ function BomManagerDialog({
   onOpenPageTracker,
   onSelect,
 }: {
+  canEdit: boolean;
   activeBomId: string;
   bomWorkspaces: BomWorkspace[];
   open: boolean;
@@ -3534,7 +3543,7 @@ function BomManagerDialog({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => onOpenPageTracker(workspace.id)}
+                      disabled={!canEdit} onClick={() => onOpenPageTracker(workspace.id)}
                       className="h-9 border-emerald-400/25 bg-emerald-400/10 px-3 text-[13px] font-bold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100"
                     >
                       頁數設定
@@ -3554,7 +3563,7 @@ function BomManagerDialog({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => onDelete(workspace.id)}
+                      disabled={!canEdit} onClick={() => onDelete(workspace.id)}
                       className="h-9 border-rose-400/25 bg-rose-400/10 px-3 text-[13px] font-bold text-rose-200 hover:bg-rose-400/20 hover:text-rose-100"
                     >
                       刪除
@@ -3572,6 +3581,7 @@ function BomManagerDialog({
 }
 
 function MaterialRecordDialog({
+  canEdit,
   open,
   mode,
   record,
@@ -3579,6 +3589,7 @@ function MaterialRecordDialog({
   onModeChange,
   onSave,
 }: {
+  canEdit: boolean;
   open: boolean;
   mode: EditorMode;
   record: MaterialWorkbookRecord;
@@ -3587,7 +3598,8 @@ function MaterialRecordDialog({
   onSave: (record: MaterialWorkbookRecord) => void;
 }) {
   const [form, setForm] = useState(record);
-  const readOnly = mode === "view";
+  const { toast } = useToast();
+  const readOnly = mode === "view" || !canEdit;
   const latestTrackingEntry = getLatestTrackingEntry(form);
 
   useEffect(() => {
@@ -3600,6 +3612,10 @@ function MaterialRecordDialog({
 
   const handleSave = () => {
     if (!form.refGroup.trim() || !form.name.trim()) return;
+    if (!isValidBomUsage(form.qty)) {
+      toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
+      return;
+    }
     onSave({ ...form, level: 2 });
   };
 
@@ -3737,7 +3753,7 @@ function MaterialRecordDialog({
 
         <DialogFooter className="gap-2">
           {readOnly ? (
-            <Button type="button" onClick={() => onModeChange("edit")} className="bg-blue-600 text-[#192522] hover:bg-blue-500">
+            <Button type="button" disabled={!canEdit} onClick={() => onModeChange("edit")} className="bg-blue-600 text-[#192522] hover:bg-blue-500">
               <Pencil className="mr-2 h-4 w-4" />修改這筆
             </Button>
           ) : (
@@ -3753,11 +3769,13 @@ function MaterialRecordDialog({
 }
 
 function AlternativeRows({
+  canEdit,
   group,
   onCopy,
   onView,
   onEdit,
 }: {
+  canEdit: boolean;
   group: MaterialGroup;
   onCopy: (value: string) => void;
   onView: (record: MaterialRecord) => void;
@@ -3875,7 +3893,7 @@ function AlternativeRows({
                         <Button type="button" variant="outline" size="sm" onClick={() => onView(record)} className="h-10 w-full justify-center border-cyan-400/25 bg-cyan-400/10 text-sm text-cyan-200 hover:bg-cyan-400/20 hover:text-white">
                           <Eye className="mr-1.5 h-4 w-4" />詳細
                         </Button>
-                        <Button type="button" variant="outline" size="sm" onClick={() => onEdit(record)} className="h-10 w-full justify-center border-blue-400/25 bg-blue-400/10 text-sm text-blue-200 hover:bg-blue-400/20 hover:text-white">
+                        <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => onEdit(record)} className="h-10 w-full justify-center border-blue-400/25 bg-blue-400/10 text-sm text-blue-200 hover:bg-blue-400/20 hover:text-white">
                           <Pencil className="mr-1.5 h-4 w-4" />修改
                         </Button>
                       </div>
@@ -3892,6 +3910,7 @@ function AlternativeRows({
 }
 
 function CompactAlternativeRows({
+  canEdit,
   group,
   records,
   primaryRecord,
@@ -3905,6 +3924,7 @@ function CompactAlternativeRows({
   onOpenTracking,
   onToggleMarked,
 }: {
+  canEdit: boolean;
   group: MaterialGroup;
   records: MaterialRecord[];
   primaryRecord: MaterialRecord;
@@ -4036,7 +4056,7 @@ function CompactAlternativeRows({
             </td>
 
             <td className="border-r border-blue-400/10 px-3 py-2">
-              <InlineVirtualAlternativeEditor value={record.virtualAlternative ?? ""} onSave={(value) => onSaveVirtual(record, value)} />
+              <InlineVirtualAlternativeEditor canEdit={canEdit} value={record.virtualAlternative ?? ""} onSave={(value) => onSaveVirtual(record, value)} />
             </td>
 
             <td className="border-r border-blue-400/10 px-3 py-2">
@@ -4060,7 +4080,7 @@ function CompactAlternativeRows({
                 <button type="button" onClick={() => onView(record)} className="rounded-lg border border-cyan-400/25 bg-cyan-400/10 p-2 text-cyan-300 hover:bg-cyan-400/20" title="詳細資訊">
                   <Eye className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={() => onEdit(record)} className="rounded-lg border border-blue-400/25 bg-blue-400/10 p-2 text-blue-300 hover:bg-blue-400/20" title="修改">
+                <button type="button" disabled={!canEdit} onClick={() => onEdit(record)} className="rounded-lg border border-blue-400/25 bg-blue-400/10 p-2 text-blue-300 hover:bg-blue-400/20" title="修改">
                   <Pencil className="h-4 w-4" />
                 </button>
               </div>
@@ -4307,6 +4327,18 @@ export function MaterialRequestPage() {
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
   const { user } = useUser();
+  const { canEditModule } = usePermissions();
+  const canEdit = canEditModule("material-requests");
+  const {capture: captureBomWrite, isCurrent: isBomWriteCurrent, assertCurrent: assertBomWriteCurrent}
+    = useWorkspaceMutationScope(user?.userId ?? null, canEdit);
+  const bomAccountRef = useRef({accountId: user?.userId, generation: 0});
+  if (bomAccountRef.current.accountId !== user?.userId) {
+    bomAccountRef.current = {accountId: user?.userId, generation: bomAccountRef.current.generation + 1};
+    workspaceSyncRequestRef.current += 1;
+    workspaceLoadingRequestRef.current += 1;
+    progressiveWorkspaceLoadsRef.current.clear();
+  }
+  useEffect(() => {setIsImporting(false);}, [canEdit, user?.userId]);
   const isCompactLayout = useIsCompactLayout();
   const presenceEditingRecordId = editorOpen && editorMode !== "view"
     ? editorRecord.id
@@ -4319,7 +4351,7 @@ export function MaterialRequestPage() {
     presenceEditingRecordId,
   );
   const isCollaborativeReady = collaborationStatus === "remote";
-  const canManageBomPageTracker = !["checking", "reconnecting", "error"].includes(collaborationStatus);
+  const canManageBomPageTracker = canEdit && !["checking", "reconnecting", "error"].includes(collaborationStatus);
   const collaborationStatusMeta = useMemo(
     () => getCollaborationStatusMeta(collaborationStatus),
     [collaborationStatus],
@@ -4397,15 +4429,21 @@ export function MaterialRequestPage() {
   }, [isCompactLayout, pageSize]);
 
   const applyLoadedWorkspaces = useCallback((storedWorkspaces: BomWorkspace[], preferredBomId?: string) => {
+    if (user?.userId !== bomAccountRef.current.accountId) return;
     if (storedWorkspaces.length === 0) {
       const loadingWorkspace = createDefaultBomWorkspace();
       setBomWorkspaces([loadingWorkspace]);
       setActiveBomId(loadingWorkspace.id);
+      const generation = bomAccountRef.current.generation;
+      let writeScope;
+      try {writeScope = captureBomWrite();} catch { /* View-only accounts may read the local default. */ }
       void loadDefaultBomWorkspace().then((fallbackWorkspace) => {
+        if (generation !== bomAccountRef.current.generation) return;
         setBomWorkspaces((current) => current.length === 1 && current[0].id === loadingWorkspace.id
           ? [fallbackWorkspace]
           : current);
-        return saveBomWorkspace(fallbackWorkspace);
+        const approvedScope = writeScope;
+        if (approvedScope && isBomWriteCurrent(approvedScope)) return saveBomWorkspace(fallbackWorkspace, () => assertBomWriteCurrent(approvedScope));
       }).catch(() => undefined);
       return;
     }
@@ -4426,7 +4464,7 @@ export function MaterialRequestPage() {
         ? candidateBomId
         : storedWorkspaces[0].id;
     });
-  }, []);
+  }, [assertBomWriteCurrent, captureBomWrite, isBomWriteCurrent, user?.userId]);
 
   const reloadBomWorkspaces = useCallback(async (
     preferredBomId?: string,
@@ -4441,6 +4479,7 @@ export function MaterialRequestPage() {
       requestId?: number;
     } = {},
   ) => {
+    if (user?.userId !== bomAccountRef.current.accountId) return [];
     const {
       onPreviewReady,
       progressive = false,
@@ -4491,7 +4530,7 @@ export function MaterialRequestPage() {
     } finally {
       if (progressive) progressiveWorkspaceLoadsRef.current.delete(workspaceId);
     }
-  }, [applyLoadedWorkspaces]);
+  }, [applyLoadedWorkspaces, user?.userId]);
 
   const retryBomSync = useCallback(async (showFeedback = false) => {
     setCollaborationStatus("reconnecting");
@@ -5082,6 +5121,7 @@ export function MaterialRequestPage() {
   const handleWorkbookImport = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     if (files.length === 0) return;
+    if (!canEdit) {event.target.value = ""; return;}
     if (!isCollaborativeReady) {
       event.target.value = "";
       showCollaborativeUnavailableToast();
@@ -5094,17 +5134,21 @@ export function MaterialRequestPage() {
     }
 
     setIsImporting(true);
+    let writeScope;
     try {
+      writeScope = captureBomWrite();
       let lastWorkspaceId = activeBomId;
       let totalRecords = 0;
       const workspaceMap = new Map(bomWorkspaces.map((workspace) => [workspace.id, workspace]));
 
       for (const file of files) {
         const payload = await parseMaterialWorkbookFile(file);
+        assertBomWriteCurrent(writeScope);
         const workspaceId = createBomId(file.name);
         const existingWorkspace = workspaceMap.get(workspaceId);
         const workspace = mergeImportedWorkspace(existingWorkspace, workspaceId, payload);
-        await saveBomWorkspace(workspace);
+        await saveBomWorkspace(workspace, () => assertBomWriteCurrent(writeScope));
+        if (!isBomWriteCurrent(writeScope)) return;
         void logMaterialWorkspaceAction({
           action: "import",
           actor: user,
@@ -5123,6 +5167,7 @@ export function MaterialRequestPage() {
       }
 
       await reloadBomWorkspaces(lastWorkspaceId);
+      if (!isBomWriteCurrent(writeScope)) return;
       setActiveBomId(lastWorkspaceId);
       setExpandedKey(null);
       setPage(1);
@@ -5131,18 +5176,20 @@ export function MaterialRequestPage() {
         description: `共 ${totalRecords.toLocaleString()} 筆廠商料明細，可從 BOM 切換器管理。`,
       });
     } catch (error) {
+      if (writeScope && !isBomWriteCurrent(writeScope)) return;
       toast({
         title: "Excel 讀取失敗",
         description: error instanceof Error ? error.message : "請確認欄位格式。",
         variant: "destructive",
       });
     } finally {
-      setIsImporting(false);
+      if (!writeScope || isBomWriteCurrent(writeScope)) setIsImporting(false);
       event.target.value = "";
     }
   };
 
   const openCreate = (group?: MaterialGroup) => {
+    if (!canEdit) return;
     if (!isCollaborativeReady) {
       showCollaborativeUnavailableToast();
       return;
@@ -5157,6 +5204,7 @@ export function MaterialRequestPage() {
   };
 
   const openRecord = (record: MaterialRecord, mode: EditorMode) => {
+    if (mode !== "view" && !canEdit) return;
     if (mode !== "view" && !isCollaborativeReady) {
       showCollaborativeUnavailableToast();
       return;
@@ -5171,6 +5219,7 @@ export function MaterialRequestPage() {
   };
 
   const openTrackingDialog = (record: MaterialRecord) => {
+    if (!canEdit) return;
     setTrackingRecord(record);
     setTrackingDialogOpen(true);
   };
@@ -5186,6 +5235,8 @@ export function MaterialRequestPage() {
   };
 
   const saveRecordToActiveBom = (record: MaterialWorkbookRecord) => {
+    let writeScope;
+    try {writeScope = captureBomWrite();} catch (error) {return Promise.reject(error);}
     if (!isCollaborativeReady) {
       return Promise.reject(new Error("Collaborative BOM storage unavailable"));
     }
@@ -5210,8 +5261,9 @@ export function MaterialRequestPage() {
     recentLocalRecordIdsRef.current.set(record.id, Date.now());
     replaceBomWorkspace(nextWorkspace);
 
-    return saveBomWorkspaceRecord(nextWorkspace, record)
+    return saveBomWorkspaceRecord(nextWorkspace, record, () => assertBomWriteCurrent(writeScope))
       .then((recordMeta) => {
+        assertBomWriteCurrent(writeScope);
         setBomWorkspaces((current) => current.map((workspace) => workspace.id === nextWorkspace.id
           ? {
               ...workspace,
@@ -5234,23 +5286,31 @@ export function MaterialRequestPage() {
         return recordMeta;
       })
       .catch(async (error) => {
+        if (!isBomWriteCurrent(writeScope)) throw error;
         await reloadBomWorkspaces(activeBomId).catch(() => undefined);
         throw error;
       });
   };
 
   const handleSaveRecord = async (record: MaterialWorkbookRecord) => {
+    if (!isValidBomUsage(record.qty)) {
+      toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
+      return;
+    }
     try {
+      const writeScope = captureBomWrite();
       await saveRecordToActiveBom({
         ...record,
         requestUrl: normalizeRequestUrl(record.requestUrl ?? ""),
       });
+      if (!isBomWriteCurrent(writeScope)) return;
       setEditorOpen(false);
       toast({
         title: editorMode === "create" ? "料件已新增" : "料件已更新",
         description: `${record.manufacturer || "未指定廠商"} ${record.manufacturerPartNumber || record.name}`,
       });
     } catch (error) {
+      if (error instanceof WorkspaceMutationScopeChangedError) return;
       toast({
         title: error instanceof BomRecordConflictError ? "偵測到版本衝突" : "同步更新失敗",
         description: error instanceof BomRecordConflictError
@@ -5262,6 +5322,9 @@ export function MaterialRequestPage() {
   };
 
   const saveVirtualAlternative = (record: MaterialRecord, value: string) => {
+    if (!canEdit) return;
+    let writeScope;
+    try {writeScope = captureBomWrite();} catch {return;}
     if (!isCollaborativeReady) {
       showCollaborativeUnavailableToast();
       return;
@@ -5271,6 +5334,7 @@ export function MaterialRequestPage() {
       return;
     }
     void saveRecordToActiveBom({ ...toWorkbookRecord(record), virtualAlternative: value }).catch(() => {
+      if (!isBomWriteCurrent(writeScope)) return;
       toast({
         title: "資料更新失敗",
         description: "TX 尚未同步到共用資料，已重新載入最新版本。",
@@ -5280,6 +5344,9 @@ export function MaterialRequestPage() {
   };
 
   const saveTrackingHistory = (record: MaterialRecord, entry: MaterialTrackingHistoryEntry) => {
+    if (!canEdit) return;
+    let writeScope;
+    try {writeScope = captureBomWrite();} catch {return;}
     if (!isCollaborativeReady) {
       showCollaborativeUnavailableToast();
       return;
@@ -5296,11 +5363,13 @@ export function MaterialRequestPage() {
       requestTicket: entry.requestTicket?.trim() || record.requestTicket || "",
       requestUrl: normalizeRequestUrl(entry.requestUrl?.trim() || record.requestUrl || ""),
     }).then(() => {
+      if (!isBomWriteCurrent(writeScope)) return;
       toast({
         title: "狀態追蹤已更新",
         description: `${record.name || record.displayRef} · ${entry.status}`,
       });
     }).catch(() => {
+      if (!isBomWriteCurrent(writeScope)) return;
       toast({
         title: "狀態追蹤更新失敗",
         description: "這筆追蹤還沒同步到共用資料，已重新載入最新版本。",
@@ -5310,6 +5379,7 @@ export function MaterialRequestPage() {
   };
 
   const saveBomPageTracker = async (workspaceId: string, pageTracker: BomPageTracker) => {
+    const writeScope = captureBomWrite();
     const workspace = bomWorkspaces.find((item) => item.id === workspaceId);
     if (!workspace) {
       throw new Error(`Workspace ${workspaceId} not found.`);
@@ -5323,7 +5393,8 @@ export function MaterialRequestPage() {
     replaceBomWorkspace(nextWorkspace);
 
     try {
-      await saveBomWorkspacePageTracker(workspaceId, pageTracker);
+      await saveBomWorkspacePageTracker(workspaceId, pageTracker, () => assertBomWriteCurrent(writeScope));
+      if (!isBomWriteCurrent(writeScope)) return;
       void logMaterialWorkspaceAction({
         action: "page_tracker.update",
         actor: user,
@@ -5339,6 +5410,7 @@ export function MaterialRequestPage() {
         description: `${workspace.name} · ${pageTrackerSummary.currentPage > 0 ? `目前第 ${pageTrackerSummary.currentPage} / ${pageTrackerSummary.totalPages} 頁 · ` : ""}已完成 ${pageTrackerSummary.completedPages} 頁`,
       });
     } catch (error) {
+      if (!isBomWriteCurrent(writeScope)) throw error;
       await reloadBomWorkspaces(activeBomId).catch(() => undefined);
       toast({
         title: "頁數追蹤更新失敗",
@@ -5386,6 +5458,8 @@ export function MaterialRequestPage() {
   };
 
   const deleteBomWorkspaceById = async (targetBomId: string) => {
+    let writeScope;
+    try {writeScope = captureBomWrite();} catch {return;}
     if (!isCollaborativeReady) {
       showCollaborativeUnavailableToast();
       return;
@@ -5398,6 +5472,7 @@ export function MaterialRequestPage() {
       ? createDefaultBomWorkspace()
       : await loadDefaultBomWorkspace();
     const nextWorkspaces = remaining.length > 0 ? remaining : [fallbackWorkspace];
+    if (!isBomWriteCurrent(writeScope)) return;
 
     setBomWorkspaces(nextWorkspaces);
     if (activeBomId === targetBomId) {
@@ -5405,7 +5480,8 @@ export function MaterialRequestPage() {
     }
 
     try {
-      await removeBomWorkspace(targetBomId);
+      await removeBomWorkspace(targetBomId, () => assertBomWriteCurrent(writeScope));
+      if (!isBomWriteCurrent(writeScope)) return;
       void logMaterialWorkspaceAction({
         action: "delete",
         actor: user,
@@ -5416,14 +5492,17 @@ export function MaterialRequestPage() {
         },
       });
       if (remaining.length === 0) {
-        await saveBomWorkspace(fallbackWorkspace);
+        await saveBomWorkspace(fallbackWorkspace, () => assertBomWriteCurrent(writeScope));
+        if (!isBomWriteCurrent(writeScope)) return;
       }
       await reloadBomWorkspaces(nextWorkspaces[0].id);
+      if (!isBomWriteCurrent(writeScope)) return;
       toast({
         title: "BOM 已刪除",
         description: remaining.length === 0 ? "已自動建立新的預設備援 BOM。" : `剩餘 ${remaining.length} 個 BOM。`,
       });
     } catch {
+      if (!isBomWriteCurrent(writeScope)) return;
       await reloadBomWorkspaces(activeBomId).catch(() => undefined);
       toast({
         title: "刪除 BOM 失敗",
@@ -5666,6 +5745,8 @@ export function MaterialRequestPage() {
   };
 
   const applyTableColorTheme = async () => {
+    let writeScope;
+    try {writeScope = captureBomWrite();} catch {return;}
     const nextTheme = normalizeBomTableColorTheme(tableColorDraft);
 
     setBomWorkspaces((current) => current.map((workspace) => (
@@ -5676,12 +5757,14 @@ export function MaterialRequestPage() {
     setTableColorDialogOpen(false);
 
     try {
-      await saveBomWorkspaceTableColorTheme(activeWorkspace.id, nextTheme);
+      await saveBomWorkspaceTableColorTheme(activeWorkspace.id, nextTheme, () => assertBomWriteCurrent(writeScope));
+      if (!isBomWriteCurrent(writeScope)) return;
       toast({
         title: "表格配色已更新",
         description: `已套用到 BOM「${activeWorkspace.name}」，其他人開啟同一份 BOM 也會看到相同配色。`,
       });
     } catch {
+      if (!isBomWriteCurrent(writeScope)) return;
       toast({
         variant: "destructive",
         title: "表格配色儲存失敗",
@@ -5732,9 +5815,9 @@ export function MaterialRequestPage() {
         }}
       />
       <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
-      <BomManagerDialog activeBomId={activeBomId} bomWorkspaces={orderedBomWorkspaces} open={bomManagerOpen} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
-      <MaterialRecordDialog open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
-      <TrackingHistoryDialog open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
+      <BomManagerDialog canEdit={canEdit} activeBomId={activeBomId} bomWorkspaces={orderedBomWorkspaces} open={bomManagerOpen} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
+      <MaterialRecordDialog canEdit={canEdit} open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
+      <TrackingHistoryDialog canEdit={canEdit} open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
       <MaterialExportDialog
         activeFormat={activeExportFormat}
         onExport={(format) => { void runExport(format); }}
@@ -5786,7 +5869,7 @@ export function MaterialRequestPage() {
             <Button
               type="button"
               onClick={() => openCreate()}
-              disabled={!isCollaborativeReady || !isFullDatasetLoaded}
+              disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded}
               aria-label="新增料號"
               className="h-11 w-11 rounded-xl bg-[linear-gradient(135deg,#bef264,#67e8f9)] p-0 text-[#062230] disabled:opacity-50"
             >
@@ -5849,12 +5932,12 @@ export function MaterialRequestPage() {
                 <SelectTrigger aria-label="料號排序" className="col-span-2 h-11 rounded-xl border-slate-600/70 bg-[#071522] text-sm text-slate-100"><SelectValue /></SelectTrigger>
                 <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">{Object.entries(SORT_MODE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
               </Select>
-              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
+              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
               <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
               <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
               <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
               <Button type="button" variant="outline" onClick={() => setBomManagerOpen(true)} className="h-11 border-cyan-300/30 bg-cyan-400/10 text-cyan-100"><Layers3 className="mr-2 h-4 w-4" />切換 BOM</Button>
-              <Button type="button" variant="outline" onClick={() => setPendingDeleteBomId(activeBomId)} disabled={!isCollaborativeReady} className="h-11 border-rose-300/30 bg-rose-400/10 text-rose-100">刪除 BOM</Button>
+              <Button type="button" variant="outline" onClick={() => setPendingDeleteBomId(activeBomId)} disabled={!canEdit || !isCollaborativeReady} className="h-11 border-rose-300/30 bg-rose-400/10 text-rose-100">刪除 BOM</Button>
             </div>
           </details>
         </div>
@@ -5915,10 +5998,10 @@ export function MaterialRequestPage() {
             <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-9 min-w-[108px] border-violet-300/45 bg-violet-400/20 px-3 text-xs font-black text-violet-50 hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white">
               <CircleHelp className="mr-1.5 h-3.5 w-3.5" />上傳說明
             </Button>
-            <Button type="button" onClick={() => openCreate()} disabled={!isCollaborativeReady || !isFullDatasetLoaded} className="h-9 min-w-[108px] border border-cyan-100/60 bg-cyan-300 px-3 text-xs font-black text-[#052536] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:border-cyan-900/50 disabled:bg-cyan-950/35 disabled:text-cyan-100/60">
+            <Button type="button" onClick={() => openCreate()} disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 min-w-[108px] border border-cyan-100/60 bg-cyan-300 px-3 text-xs font-black text-[#052536] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:border-cyan-900/50 disabled:bg-cyan-950/35 disabled:text-cyan-100/60">
               <Plus className="mr-1.5 h-3.5 w-3.5" />新增料件
             </Button>
-            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 min-w-[108px] border-emerald-300/45 bg-emerald-400/20 px-3 text-xs font-black text-emerald-50 hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">
+            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 min-w-[108px] border-emerald-300/45 bg-emerald-400/20 px-3 text-xs font-black text-emerald-50 hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">
               <Upload className="mr-1.5 h-3.5 w-3.5" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
             <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 min-w-[132px] border-amber-300/50 bg-amber-400/20 px-3 text-xs font-black text-amber-50 hover:border-amber-200/75 hover:bg-amber-400/30 hover:text-white disabled:cursor-wait disabled:opacity-60">
@@ -6005,7 +6088,7 @@ export function MaterialRequestPage() {
 
           <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap">
             <span className="min-w-0 truncate text-[11px] text-slate-400" title={`${activeWorkspace.payload.sheetName} · ${formatTimestamp(activeWorkspace.updatedAt)}`}>{activeWorkspace.payload.sheetName} · {formatTimestamp(activeWorkspace.updatedAt)}</span>
-            <Button type="button" variant="outline" size="sm" onClick={() => setPendingDeleteBomId(activeBomId)} disabled={!isCollaborativeReady} className="h-9 shrink-0 border-rose-300/38 bg-rose-500/14 px-2.5 text-xs font-black text-rose-100 hover:border-rose-200/65 hover:bg-rose-500/25 hover:text-white disabled:cursor-not-allowed disabled:border-rose-950/40 disabled:bg-rose-950/20 disabled:text-rose-100/45">刪除 BOM</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPendingDeleteBomId(activeBomId)} disabled={!canEdit || !isCollaborativeReady} className="h-9 shrink-0 border-rose-300/38 bg-rose-500/14 px-2.5 text-xs font-black text-rose-100 hover:border-rose-200/65 hover:bg-rose-500/25 hover:text-white disabled:cursor-not-allowed disabled:border-rose-950/40 disabled:bg-rose-950/20 disabled:text-rose-100/45">刪除 BOM</Button>
           </div>
         </div>
 
@@ -6678,7 +6761,7 @@ export function MaterialRequestPage() {
                         </div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
-                        {virtualAlternativeRecord && <InlineVirtualAlternativeEditor value={virtualAlternativeRecord.virtualAlternative ?? ""} onSave={(value) => saveVirtualAlternative(virtualAlternativeRecord, value)} />}
+                        {virtualAlternativeRecord && <InlineVirtualAlternativeEditor canEdit={canEdit} value={virtualAlternativeRecord.virtualAlternative ?? ""} onSave={(value) => saveVirtualAlternative(virtualAlternativeRecord, value)} />}
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
                         <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded border border-violet-300/30 bg-violet-400/15 px-2.5 py-1 text-sm font-bold text-violet-200">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
@@ -6706,7 +6789,7 @@ export function MaterialRequestPage() {
                       </td>
                     </tr>
                     {expanded && (
-                      <CompactAlternativeRows
+                      <CompactAlternativeRows canEdit={canEdit}
                         group={group}
                         records={matchingRecords}
                         primaryRecord={primaryAlternative}
@@ -6740,3 +6823,4 @@ export function MaterialRequestPage() {
     </div>
   );
 }
+import { isValidBomUsage } from "@/lib/inputValidation";
