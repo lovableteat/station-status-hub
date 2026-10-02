@@ -1102,7 +1102,7 @@ export function PerformanceAppraisalPage() {
                 onClick={() =>
                   document
                     .getElementById("rd2-return-feedback")
-                    ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                    ?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
                 }
               >
                 查看退回內容
