@@ -4442,7 +4442,8 @@ export function MaterialRequestPage() {
         setBomWorkspaces((current) => current.length === 1 && current[0].id === loadingWorkspace.id
           ? [fallbackWorkspace]
           : current);
-        if (writeScope && isBomWriteCurrent(writeScope)) return saveBomWorkspace(fallbackWorkspace);
+        const approvedScope = writeScope;
+        if (approvedScope && isBomWriteCurrent(approvedScope)) return saveBomWorkspace(fallbackWorkspace, () => assertBomWriteCurrent(approvedScope));
       }).catch(() => undefined);
       return;
     }
@@ -4463,7 +4464,7 @@ export function MaterialRequestPage() {
         ? candidateBomId
         : storedWorkspaces[0].id;
     });
-  }, [captureBomWrite, isBomWriteCurrent, user?.userId]);
+  }, [assertBomWriteCurrent, captureBomWrite, isBomWriteCurrent, user?.userId]);
 
   const reloadBomWorkspaces = useCallback(async (
     preferredBomId?: string,
@@ -5146,7 +5147,7 @@ export function MaterialRequestPage() {
         const workspaceId = createBomId(file.name);
         const existingWorkspace = workspaceMap.get(workspaceId);
         const workspace = mergeImportedWorkspace(existingWorkspace, workspaceId, payload);
-        await saveBomWorkspace(workspace);
+        await saveBomWorkspace(workspace, () => assertBomWriteCurrent(writeScope));
         if (!isBomWriteCurrent(writeScope)) return;
         void logMaterialWorkspaceAction({
           action: "import",
@@ -5260,7 +5261,7 @@ export function MaterialRequestPage() {
     recentLocalRecordIdsRef.current.set(record.id, Date.now());
     replaceBomWorkspace(nextWorkspace);
 
-    return saveBomWorkspaceRecord(nextWorkspace, record)
+    return saveBomWorkspaceRecord(nextWorkspace, record, () => assertBomWriteCurrent(writeScope))
       .then((recordMeta) => {
         assertBomWriteCurrent(writeScope);
         setBomWorkspaces((current) => current.map((workspace) => workspace.id === nextWorkspace.id
@@ -5392,7 +5393,7 @@ export function MaterialRequestPage() {
     replaceBomWorkspace(nextWorkspace);
 
     try {
-      await saveBomWorkspacePageTracker(workspaceId, pageTracker);
+      await saveBomWorkspacePageTracker(workspaceId, pageTracker, () => assertBomWriteCurrent(writeScope));
       if (!isBomWriteCurrent(writeScope)) return;
       void logMaterialWorkspaceAction({
         action: "page_tracker.update",
@@ -5479,7 +5480,7 @@ export function MaterialRequestPage() {
     }
 
     try {
-      await removeBomWorkspace(targetBomId);
+      await removeBomWorkspace(targetBomId, () => assertBomWriteCurrent(writeScope));
       if (!isBomWriteCurrent(writeScope)) return;
       void logMaterialWorkspaceAction({
         action: "delete",
@@ -5491,7 +5492,7 @@ export function MaterialRequestPage() {
         },
       });
       if (remaining.length === 0) {
-        await saveBomWorkspace(fallbackWorkspace);
+        await saveBomWorkspace(fallbackWorkspace, () => assertBomWriteCurrent(writeScope));
         if (!isBomWriteCurrent(writeScope)) return;
       }
       await reloadBomWorkspaces(nextWorkspaces[0].id);
@@ -5756,7 +5757,7 @@ export function MaterialRequestPage() {
     setTableColorDialogOpen(false);
 
     try {
-      await saveBomWorkspaceTableColorTheme(activeWorkspace.id, nextTheme);
+      await saveBomWorkspaceTableColorTheme(activeWorkspace.id, nextTheme, () => assertBomWriteCurrent(writeScope));
       if (!isBomWriteCurrent(writeScope)) return;
       toast({
         title: "表格配色已更新",
