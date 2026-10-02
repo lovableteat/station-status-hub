@@ -1163,6 +1163,25 @@
   gap: 3px;
 }
 
+.admin-user-edit-dialog .admin-user-edit-actions > div {
+  min-width: 0;
+}
+
+@media (max-width: 639px) {
+  .admin-user-edit-dialog .admin-user-edit-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-user-edit-dialog .admin-user-edit-actions > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-user-edit-dialog .admin-user-edit-actions button {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
 .admin-permission-toggle-list {
   grid-column: 1 / -1;
   display: grid;
