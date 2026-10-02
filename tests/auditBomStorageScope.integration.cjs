@@ -25,6 +25,14 @@ test('actual BOM storage stops subsequent record batches and finalization after 
   assert.equal(batches,1,'second and third 200-row batches must not start');assert.equal(f.db.reads.filter(q=>q.table==='material_bom_workspaces'&&q.method==='upsert').length,1,'no final metadata rewrite');
  }finally{await f.stop();}
 });
+
+test('actual BOM storage stops after a pending existing-record lookup under the replacement account',async()=>{
+ const pending=deferred(),f=await fixture(q=>q.table==='material_bom_records'&&q.method==='select'?pending.promise:ok({updated_at:'saved'}));try{
+  const saving=f.storage.saveBomWorkspace(f.workspace,f.guard);await flush();await f.switch();pending.resolve(ok([]));await assert.rejects(()=>saving);
+  assert.equal(f.db.reads.filter(q=>q.table==='material_bom_records'&&q.method!=='select').length,0,'no record write starts after the stale SELECT receipt');
+  assert.equal(f.db.reads.filter(q=>q.table==='material_bom_workspaces'&&q.method==='upsert').length,1,'already-issued original metadata write remains; no replacement-account finalization');
+ }finally{await f.stop();}
+});
 test('actual BOM removal cannot send preference cleanup under the replacement account',async()=>{
  const pending=deferred(),f=await fixture(q=>q.table==='material_bom_workspaces'?pending.promise:ok(null));try{
   const removing=f.storage.removeBomWorkspace('fixture',f.guard);await flush();await f.switch();pending.resolve(ok(null));await assert.rejects(()=>removing);assert.equal(f.db.reads.length,1);
