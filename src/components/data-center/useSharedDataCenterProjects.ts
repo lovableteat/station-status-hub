@@ -81,6 +81,8 @@ export function useSharedDataCenterProjects({
   onApplyDocument,
 }: UseSharedDataCenterProjectsOptions) {
   const [projects, setProjects] = useState<DataCenterProjectSummary[]>([]);
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [syncState, setSyncState] = useState<DataCenterProjectSyncState>("loading");
   const [errorMessage, setErrorMessage] = useState("");
@@ -412,7 +414,8 @@ export function useSharedDataCenterProjects({
   }, [isDirty, preserveDraft]);
 
   const selectProject = useCallback((projectId: string) => {
-    const project = projects.find((item) => item.id === projectId);
+    if (accountRef.current !== userId) return;
+    const project = projectsRef.current.find((item) => item.id === projectId);
     if (!project) return;
     if (projectId === selectedProjectIdRef.current) return;
     if (isDirty()) {
@@ -425,10 +428,14 @@ export function useSharedDataCenterProjects({
     window.localStorage.setItem(`${SELECTED_PROJECT_KEY}:${userId}`, projectId);
     lastSavedRef.current = "";
     applyProject(project);
-  }, [applyProject, isDirty, preserveDraft, projects, userId]);
+  }, [applyProject, isDirty, preserveDraft, userId]);
 
   const createProject = useCallback(async (name: string, category: string, description: string) => {
-    if (!canEdit || !userId) throw new Error("沒有新增 Data Center 專案的權限");
+    if (!canEditRef.current || !userId || accountRef.current !== userId) throw new Error("沒有新增 Data Center 專案的權限");
+    const generation = generationRef.current;
+    const selection = selectedProjectIdRef.current;
+    const sentDocument = currentDocumentRef.current;
+    const serialized = semanticJson(sentDocument);
     const { data, error } = await supabase
       .from("data_center_projects")
       .insert({
@@ -436,7 +443,7 @@ export function useSharedDataCenterProjects({
         name: name.trim(),
         category: category.trim() || "未分類",
         description: description.trim(),
-        document: currentDocument as unknown as Json,
+        document: sentDocument as unknown as Json,
         created_by: userId,
         updated_by: userId,
       })
@@ -444,21 +451,25 @@ export function useSharedDataCenterProjects({
       .single();
     if (error) throw error;
     const project = mapProject(data);
+    // The insert really completed for its original account. Return that receipt,
+    // but never attach it to another account or replace a newer selection/draft.
+    if (generation !== generationRef.current || accountRef.current !== userId || !canEditRef.current) return project;
+    setProjects((items) => [...items.filter((item) => item.id !== project.id), project]);
+    if (selection !== selectedProjectIdRef.current || serialized !== semanticJson(currentDocumentRef.current)) return project;
     preserveDraft();
-    setProjects((items) => [...items, project]);
     setSelectedProjectId(project.id);
     selectedProjectIdRef.current = project.id;
     versionRef.current = project.updatedAt;
     draftBaseRef.current = project.updatedAt;
     window.localStorage.setItem(`${SELECTED_PROJECT_KEY}:${userId}`, project.id);
-    lastSavedRef.current = semanticJson(currentDocument);
+    lastSavedRef.current = serialized;
     readyRef.current = true;
     setSyncState("synced");
     return project;
-  }, [canEdit, currentDocument, preserveDraft, userId]);
+  }, [preserveDraft, userId]);
 
   const updateProject = useCallback(async (projectId: string, name: string, category: string, description: string) => {
-    if (!canEdit || !userId) throw new Error("沒有修改 Data Center 專案的權限");
+    if (!canEditRef.current || !userId || accountRef.current !== userId) throw new Error("沒有修改 Data Center 專案的權限");
     const generation = generationRef.current;
     const { data, error } = await supabase
       .from("data_center_projects")
@@ -466,7 +477,7 @@ export function useSharedDataCenterProjects({
       .eq("id", projectId)
       .select("id,project_key,name,category,description,document,updated_at,updated_by").single();
     if (error) throw error;
-    if (generation !== generationRef.current) return;
+    if (generation !== generationRef.current || accountRef.current !== userId || !canEditRef.current) return;
     const project = mapProject(data);
     setProjects((items) => items.map((item) => item.id === projectId ? project : item));
     if (selectedProjectIdRef.current === projectId && semanticJson(parseDocument(project.document)) === lastSavedRef.current) {
@@ -474,20 +485,22 @@ export function useSharedDataCenterProjects({
       if (readyRef.current) draftBaseRef.current = project.updatedAt;
       setSaveRevision((value) => value + 1);
     }
-  }, [canEdit, userId]);
+  }, [userId]);
 
   const archiveProject = useCallback(async (projectId: string) => {
-    if (!canEdit || !userId) throw new Error("沒有刪除 Data Center 專案的權限");
-    if (projects.length <= 1) throw new Error("至少需要保留一個 Data Center 專案");
+    if (!canEditRef.current || !userId || accountRef.current !== userId) throw new Error("沒有刪除 Data Center 專案的權限");
+    if (projectsRef.current.length <= 1) throw new Error("至少需要保留一個 Data Center 專案");
+    const generation = generationRef.current;
     const { error } = await supabase
       .from("data_center_projects")
       .update({ archived_at: new Date().toISOString(), updated_by: userId })
       .eq("id", projectId);
     if (error) throw error;
-    const remaining = projects.filter((item) => item.id !== projectId);
+    if (generation !== generationRef.current || accountRef.current !== userId || !canEditRef.current) return;
+    const remaining = projectsRef.current.filter((item) => item.id !== projectId);
     setProjects(remaining);
-    if (selectedProjectIdRef.current === projectId) selectProject(remaining[0].id);
-  }, [canEdit, projects, selectProject, userId]);
+    if (selectedProjectIdRef.current === projectId && remaining[0]) selectProject(remaining[0].id);
+  }, [selectProject, userId]);
 
   return {
     projects,
