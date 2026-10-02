@@ -1,9 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Check, Copy, MessageSquareText } from 'lucide-react';
+import { Check, ChevronDown, Copy, History, MessageSquareText } from 'lucide-react';
 import { useState } from 'react';
 import { AssessmentAttachments as ManagerAttachments } from './AssessmentAttachments';
-import type { AssessmentEntry, Category, ManagerAssessment, ReviewAttachment } from './assessmentTypes';
+import type { AssessmentEntry, AssessmentSection, Category, ManagerAssessment, ReviewAttachment } from './assessmentTypes';
 
 async function copyReply(text: string) {
   if (navigator.clipboard?.writeText) {
@@ -20,12 +20,31 @@ async function copyReply(text: string) {
   field.remove();
 }
 
-export function AssessmentReturnHistory({ manager }: { manager: ManagerAssessment }) {
+function CopyReplyButton({ text, label = '複製回覆' }: { text: string; label?: string }) {
+  const [copyStatus, setCopyStatus] = useState('');
+  if (!text) return null;
+  return <Button type="button" size="sm" variant="ghost" onClick={async () => {
+    try {
+      await copyReply(text);
+      setCopyStatus('已複製');
+      window.setTimeout(() => setCopyStatus(''), 1800);
+    } catch { setCopyStatus('請選取文字複製'); }
+  }}>
+    {copyStatus === '已複製' ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+    {copyStatus || label}
+  </Button>;
+}
+
+export function AssessmentReturnHistory({ manager, sections }: { manager: ManagerAssessment; sections?: Record<Category, AssessmentSection> }) {
   if (!manager.returnHistory.length) return null;
   const events = [...manager.returnHistory].reverse();
   const latestEvent = events[0];
   const overallFeedback = latestEvent.overallFeedback || manager.feedback;
   const workInstructions = latestEvent.workInstructions || manager.workInstructions;
+  const entryLabel = (item: typeof latestEvent.entries[number]) => {
+    const position = sections?.[item.category]?.entries?.findIndex(entry => entry.id === item.entryId) ?? -1;
+    return position >= 0 ? `${item.category} · 實績 ${position + 1}` : `${item.category} · 退回實績`;
+  };
   return <section id="rd2-return-feedback" className="rd2-return-history" data-return-state="returned" aria-label="主管退回回應">
     <header className="rd2-return-history-header">
       <div>
@@ -50,18 +69,38 @@ export function AssessmentReturnHistory({ manager }: { manager: ManagerAssessmen
       </section>
     </div>
     <p className="rd2-return-inline-hint">逐筆回覆請由下方對應實績的「主管回覆」查看。</p>
-    {events.length > 1 && <details className="rd2-return-archive">
-      <summary>查看過往退回紀錄 · 共 {events.length} 次</summary>
-      <ol>
-        {events.slice(1).map(event => <li key={event.id}>
-          <strong>{new Date(event.returnedAt).toLocaleString('zh-TW')}</strong>
-          <span>{event.reviewerName} · {event.entries.length} 個項目</span>
-          {event.overallFeedback && <p><b>整體回覆：</b>{event.overallFeedback}</p>}
-          {event.workInstructions && <p><b>工作指示：</b>{event.workInstructions}</p>}
-          <ul>{event.entries.map(item => <li key={`${event.id}-${item.category}-${item.entryId}`}><b>{item.category}</b>：{item.feedback}</li>)}</ul>
+    <details className="rd2-return-archive">
+      <summary><History aria-hidden="true" /><strong>查看退回歷史紀錄</strong><span>共 {events.length} 次</span><ChevronDown aria-hidden="true" className="rd2-disclosure-chevron" /></summary>
+      <ol className="rd2-return-event-list">
+        {events.map((event, index) => <li key={event.id}>
+          <details className="rd2-return-event" open={index === 0}>
+            <summary>
+              <strong>第 {events.length - index} 次退回{index === 0 ? ' · 最近一次' : ''}</strong>
+              <span>{new Date(event.returnedAt).toLocaleString('zh-TW')} · {event.reviewerName} · {event.entries.length} 個項目</span>
+              <ChevronDown aria-hidden="true" className="rd2-disclosure-chevron" />
+            </summary>
+            <div className="rd2-return-event-body">
+              <div className="rd2-return-event-toolbar"><CopyReplyButton label="複製這次紀錄" text={[
+                `第 ${events.length - index} 次退回`, new Date(event.returnedAt).toLocaleString('zh-TW'), event.reviewerName,
+                event.overallFeedback && `主管整體回覆：\n${event.overallFeedback}`,
+                event.workInstructions && `後續工作指示：\n${event.workInstructions}`,
+                ...event.entries.map(item => `${entryLabel(item)}\n退回原因：${item.feedback || '當時未保存退回原因。'}${item.text ? `\n退回當時的實績：\n${item.text}` : ''}`),
+              ].filter(Boolean).join('\n\n')} /></div>
+              <div className="rd2-return-event-overview">
+                <section><strong>主管整體回覆</strong><p className="rd2-prewrap">{event.overallFeedback || '當時未保存整體回覆。'}</p></section>
+                <section><strong>後續工作指示</strong><p className="rd2-prewrap">{event.workInstructions || '當時未保存後續工作指示。'}</p></section>
+              </div>
+              <ul className="rd2-return-snapshot-list">{event.entries.map(item => <li key={`${event.id}-${item.category}-${item.entryId}`}>
+                <strong>{entryLabel(item)}</strong>
+                <p className="rd2-prewrap">{item.feedback || '當時未保存退回原因。'}</p>
+                <ManagerAttachments attachments={item.attachments} readonly />
+                {item.text && <details className="rd2-return-original"><summary>退回當時的實績</summary><p className="rd2-prewrap">{item.text}</p></details>}
+              </li>)}</ul>
+            </div>
+          </details>
         </li>)}
       </ol>
-    </details>}
+    </details>
   </section>;
 }
 
@@ -73,7 +112,6 @@ export function AssessmentEntryFeedback({ category, entry, index, manager, edita
   onBusy?: (busy: boolean) => void;
   onError?: (message: string) => void;
 }) {
-  const [copyStatus, setCopyStatus] = useState('');
   const value = manager.entryReviews[category][entry.id] || { feedback: '', returnRequested: false, attachments: [] };
   const history = manager.returnHistory.flatMap(event => event.entries
     .filter(item => item.category === category && item.entryId === entry.id)
@@ -81,7 +119,7 @@ export function AssessmentEntryFeedback({ category, entry, index, manager, edita
   const latestReturn = history.at(-1);
   const visibleFeedback = latestReturn?.feedback || value.feedback;
   const visibleAttachments = latestReturn?.attachments?.length ? latestReturn.attachments : value.attachments;
-  if (!editable && !(showFeedback && (visibleFeedback || visibleAttachments.length))) return null;
+  if (!editable && !(showFeedback && (visibleFeedback || visibleAttachments.length || history.length))) return null;
   const label = `${category} 實績 ${index + 1}`;
   if (!editable) return <div className="rd2-entry-feedback rd2-entry-feedback-inline">
     <details className="rd2-inline-supervisor-reply">
@@ -92,21 +130,19 @@ export function AssessmentEntryFeedback({ category, entry, index, manager, edita
       <div className="rd2-inline-supervisor-reply-body">
         <div className="rd2-inline-supervisor-reply-heading">
           <strong>{label} · 主管回覆</strong>
-          {visibleFeedback && <Button type="button" size="sm" variant="ghost" onClick={async () => {
-            try {
-              await copyReply(visibleFeedback);
-              setCopyStatus('已複製');
-              window.setTimeout(() => setCopyStatus(''), 1800);
-            } catch {
-              setCopyStatus('請選取文字複製');
-            }
-          }}>
-            {copyStatus === '已複製' ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-            {copyStatus || '複製回覆'}
-          </Button>}
+          <CopyReplyButton text={visibleFeedback} />
         </div>
         {visibleFeedback && <p className="rd2-prewrap">{visibleFeedback}</p>}
         <ManagerAttachments attachments={visibleAttachments} readonly />
+        {history.length > 1 && <details className="rd2-inline-reply-history">
+          <summary>查看過往回覆 · {history.length - 1} 次</summary>
+          <ol>{history.slice(0, -1).reverse().map(event => <li key={event.id}>
+            <strong>{new Date(event.returnedAt).toLocaleString('zh-TW')} · {event.reviewerName}</strong>
+            <p className="rd2-prewrap">{event.feedback || '當時未保存退回原因。'}</p>
+            <CopyReplyButton text={event.feedback} />
+            <ManagerAttachments attachments={event.attachments} readonly />
+          </li>)}</ol>
+        </details>}
       </div>
     </details>
   </div>;

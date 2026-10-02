@@ -1,7 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { AssessmentAttachments } from "./AssessmentAttachments";
 import { useRef, useState, type ReactNode } from "react";
-import { Check, Link2, Paperclip, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Lightbulb, Link2, Paperclip, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -54,7 +54,10 @@ export function AssessmentEntryList({
       {!readonly && (
         <Field>
           <FieldLabel htmlFor={`rd2-${category}`}>{category} 實績 *</FieldLabel>
-          <p id={`rd2-${category}-writing-hint`} className="rd2-hint rd2-writing-hint">每筆濃縮為 1–3 句、約 100 字，主管能快速看懂做法與成果。請量化並突顯你的優點。</p>
+          <div id={`rd2-${category}-writing-hint`} className="rd2-writing-hint">
+            <Lightbulb aria-hidden="true" />
+            <p><strong>每筆濃縮為 1–3 句、約 100 字</strong><span>主管能快速看懂做法與成果。請量化並突顯你的優點。</span></p>
+          </div>
           <Textarea
             ref={input}
             id={`rd2-${category}`}
