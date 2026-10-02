@@ -20,7 +20,7 @@ const formats = [
   ["xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
 ];
 const engineeringFormats = [
-  ["rar", "application/vnd.rar", ["", "application/octet-stream", "application/x-rar-compressed"]],
+  ["rar", "application/vnd.rar", ["", "application/octet-stream", "application/x-rar-compressed", "application/x-compressed"]],
   ["brd", "application/octet-stream", ["", "application/octet-stream"]],
   ["stp", "application/octet-stream", ["", "application/octet-stream", "model/step", "application/step"]],
   ["mps", "application/octet-stream", ["", "application/octet-stream"]],
