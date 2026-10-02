@@ -4,12 +4,17 @@ export const CHAT_MEDIA_ACCEPT = [
   "image/webp",
   "image/gif",
   "video/mp4",
+  ".mp4",
   "video/webm",
   "video/quicktime",
   ".ppt",
   ".pptx",
   ".xls",
   ".xlsx",
+  ".rar",
+  ".brd",
+  ".stp",
+  ".mps",
   "application/vnd.ms-powerpoint",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.ms-excel",
@@ -29,6 +34,12 @@ const OFFICE_MIME_TYPES = new Map([
   ],
   ["xls", "application/vnd.ms-excel"],
   ["xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+]);
+const ENGINEERING_FILE_TYPES = new Map([
+  ["rar", { mime: "application/vnd.rar", browserMimes: ["", "application/octet-stream", "application/x-rar-compressed", "application/vnd.rar"] }],
+  ["brd", { mime: "application/octet-stream", browserMimes: ["", "application/octet-stream"] }],
+  ["stp", { mime: "application/octet-stream", browserMimes: ["", "application/octet-stream", "model/step", "application/step"] }],
+  ["mps", { mime: "application/octet-stream", browserMimes: ["", "application/octet-stream"] }],
 ]);
 // Windows and drag sources may supply no MIME or a generic container MIME.
 const GENERIC_OFFICE_MIMES = new Set([
@@ -73,6 +84,8 @@ const MIME_CONFIG = new Map([
     mime,
     { extension, mediaKind: "document", maxBytes: CHAT_DOCUMENT_MAX_BYTES },
   ]),
+  ["application/vnd.rar", { extension: "rar", mediaKind: "document", maxBytes: CHAT_DOCUMENT_MAX_BYTES }],
+  ["application/octet-stream", { extension: null, mediaKind: "document", maxBytes: CHAT_DOCUMENT_MAX_BYTES }],
 ]);
 
 export function getDirectMessageMimeType(file) {
@@ -86,8 +99,15 @@ export function getDirectMessageMimeType(file) {
     return type === officeMime || GENERIC_OFFICE_MIMES.has(type)
       ? officeMime
       : null;
+  const engineeringType = ENGINEERING_FILE_TYPES.get(extension);
+  if (engineeringType)
+    return engineeringType.browserMimes.includes(type) ? engineeringType.mime : null;
+  if (extension === "mp4" && (type === "" || type === "application/octet-stream"))
+    return "video/mp4";
   const config = MIME_CONFIG.get(type);
-  return config && config.mediaKind !== "document" ? type : null;
+  return config && config.mediaKind !== "document"
+    && (extension === config.extension || (type === "image/jpeg" && extension === "jpeg"))
+    ? type : null;
 }
 
 export function getDirectMessageMediaKind(file) {
@@ -137,7 +157,7 @@ export function validateDirectMessageFiles(files) {
     if (!config) {
       return {
         error:
-          "支援圖片、影片、PowerPoint（PPT、PPTX）與 Excel（XLS、XLSX），請確認檔案格式。",
+          "支援圖片、影片、PowerPoint（PPT、PPTX）、Excel（XLS、XLSX）、RAR、BRD、STP 與 MPS，請確認檔案格式。",
         files: [],
       };
     }
@@ -166,7 +186,10 @@ export function createDirectMessageMediaPath(
   file,
   index,
 ) {
-  const extension = MIME_CONFIG.get(getDirectMessageMimeType(file))?.extension;
+  const type = getDirectMessageMimeType(file);
+  const extension = type === "application/octet-stream"
+    ? String(file?.name ?? "").split(".").at(-1)?.toLowerCase()
+    : MIME_CONFIG.get(type)?.extension;
   if (!extension) throw new Error("Unsupported direct-message media type");
   return `${threadId}/${userId}/${clientId}/${index}.${extension}`;
 }
