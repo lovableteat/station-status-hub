@@ -321,7 +321,7 @@ function ReviewDetail({
           <p className="rd2-prewrap">{self.legacyText}</p>
         </section>
       )}
-      <AssessmentReturnHistory manager={manager} sections={self.sections} />
+      <AssessmentReturnHistory manager={manager} sections={self.sections} viewer={showManagerAssessment ? 'manager' : 'employee'} />
       {!!review.goals.length && (
         <section className="rd2-review-secondary-section">
           <h4>既有目標與進度</h4>

@@ -48,6 +48,7 @@ import type {
   EmployeeOption,
   EvidenceImage,
   ReviewAttachment,
+  ManagerAssessment,
 } from "./assessmentTypes";
 
 async function prepareImage(file: File): Promise<EvidenceImage> {
@@ -300,6 +301,10 @@ export function AssessmentEditor({
   exporting = false,
 }: Props) {
   const source = initial.sourceUpdatedAt || (initial.recordId?.startsWith("performance-") ? "new" : initial.recordId);
+  // Saved return history is a receipt, not part of the editable local draft.
+  // A restored draft or unsent changes must not hide a newer confirmed return.
+  const [savedManager, setSavedManager] = useState<ManagerAssessment>(initial.manager);
+  useEffect(() => { setSavedManager(initial.manager); }, [initial.manager]);
   const [form, setForm] = useState<AssessmentForm>(() =>
     (() => {
       const draft = !readonly && draftKey ? readAssessmentDraft(draftKey, source) : null;
@@ -416,6 +421,7 @@ export function AssessmentEditor({
     setError("");
     try {
       const confirmed = await onSave(latest.current, action);
+      setSavedManager(confirmed.manager);
       latest.current = confirmed;
       setForm(confirmed);
       pending.current = false;
@@ -662,7 +668,7 @@ export function AssessmentEditor({
       </fieldset>
       {mode === "self" && (
         <>
-          <AssessmentReturnHistory manager={form.manager} sections={form.self.sections} />
+          <AssessmentReturnHistory manager={savedManager} sections={form.self.sections} />
           {showReturnFeedback && !form.manager.returnHistory.length &&
             (form.manager.feedback || form.manager.workInstructions || form.manager.attachments.length > 0) && (
             <section id={form.manager.returnHistory.length ? undefined : "rd2-return-feedback"} className="rd2-card rd2-return-feedback" aria-label="主管退回內容">
@@ -919,7 +925,7 @@ export function AssessmentEditor({
       )}
       {mode === "manager" && (
         <>
-          <AssessmentReturnHistory manager={form.manager} sections={form.self.sections} />
+          <AssessmentReturnHistory manager={savedManager} sections={form.self.sections} viewer="manager" />
           <div className="rd2-form-section-title">
             <strong>02 · 對照員工自評</strong>
             <span role="status">
@@ -964,6 +970,7 @@ export function AssessmentEditor({
                         onChange={() => {}}
                         renderFeedback={(entry, index) => <AssessmentEntryFeedback
                           category={category} entry={entry} index={index} manager={form.manager}
+                          savedManager={savedManager}
                           editable disabled={readonly || saving || !canSubmit || !!imageJobs}
                           onBusy={busy => setImageJobs(count => count + (busy ? 1 : -1))}
                           onError={setError}

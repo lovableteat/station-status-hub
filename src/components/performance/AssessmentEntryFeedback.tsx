@@ -35,7 +35,7 @@ function CopyReplyButton({ text, label = '複製回覆' }: { text: string; label
   </Button>;
 }
 
-export function AssessmentReturnHistory({ manager, sections }: { manager: ManagerAssessment; sections?: Record<Category, AssessmentSection> }) {
+export function AssessmentReturnHistory({ manager, sections, viewer = 'employee' }: { manager: ManagerAssessment; sections?: Record<Category, AssessmentSection>; viewer?: 'employee' | 'manager' }) {
   if (!manager.returnHistory.length) return null;
   const events = [...manager.returnHistory].reverse();
   const latestEvent = events[0];
@@ -49,8 +49,8 @@ export function AssessmentReturnHistory({ manager, sections }: { manager: Manage
     <header className="rd2-return-history-header">
       <div>
         <div className="rd2-return-kicker"><span>需要補充</span><strong>{latestEvent.entries.length} 個項目</strong></div>
-        <h3>主管退回回應</h3>
-        <p className="rd2-hint">請依每個項目的原因補充自評，完成後再送出。</p>
+        <h3>{viewer === 'manager' ? '已送出的退回紀錄' : '主管退回回應'}</h3>
+        <p className="rd2-hint">{viewer === 'manager' ? '這裡顯示已確認送出的內容；修改下方評語不會改動歷史紀錄。' : '請依每個項目的原因補充自評，完成後再送出。'}</p>
       </div>
       <div className="rd2-return-latest">
         <span>最近一次退回</span>
@@ -68,7 +68,7 @@ export function AssessmentReturnHistory({ manager, sections }: { manager: Manage
         <p className="rd2-prewrap">{workInstructions || '本次未填寫後續工作指示。'}</p>
       </section>
     </div>
-    <p className="rd2-return-inline-hint">逐筆回覆請由下方對應實績的「主管回覆」查看。</p>
+    <p className="rd2-return-inline-hint">{viewer === 'manager' ? '每筆實績旁的「退回紀錄」可查看該筆最近一次及過往退回內容。' : '逐筆回覆請由下方對應實績的「主管回覆」查看。'}</p>
     <details className="rd2-return-archive">
       <summary><History aria-hidden="true" /><strong>查看退回歷史紀錄</strong><span>共 {events.length} 次</span><ChevronDown aria-hidden="true" className="rd2-disclosure-chevron" /></summary>
       <ol className="rd2-return-event-list">
@@ -104,8 +104,9 @@ export function AssessmentReturnHistory({ manager, sections }: { manager: Manage
   </section>;
 }
 
-export function AssessmentEntryFeedback({ category, entry, index, manager, editable = false, showFeedback = false, disabled = false, onChange, onReturn, onBusy, onError }: {
+export function AssessmentEntryFeedback({ category, entry, index, manager, savedManager, historyOnly = false, editable = false, showFeedback = false, disabled = false, onChange, onReturn, onBusy, onError }: {
   category: Category; entry: AssessmentEntry; index: number; manager: ManagerAssessment;
+  savedManager?: ManagerAssessment; historyOnly?: boolean;
   editable?: boolean; showFeedback?: boolean; disabled?: boolean;
   onChange?: (feedback: string, returnRequested: boolean, attachments: ReviewAttachment[]) => void;
   onReturn?: () => void;
@@ -117,21 +118,23 @@ export function AssessmentEntryFeedback({ category, entry, index, manager, edita
     .filter(item => item.category === category && item.entryId === entry.id)
     .map(item => ({ ...item, id: event.id, returnedAt: event.returnedAt, reviewerName: event.reviewerName })));
   const latestReturn = history.at(-1);
-  const visibleFeedback = latestReturn?.feedback || value.feedback;
-  const visibleAttachments = latestReturn?.attachments?.length ? latestReturn.attachments : value.attachments;
+  const visibleFeedback = historyOnly ? latestReturn?.feedback || '' : latestReturn?.feedback || value.feedback;
+  const visibleAttachments = historyOnly ? latestReturn?.attachments || [] : latestReturn?.attachments?.length ? latestReturn.attachments : value.attachments;
+  if (historyOnly && !history.length) return null;
   if (!editable && !(showFeedback && (visibleFeedback || visibleAttachments.length || history.length))) return null;
   const label = `${category} 實績 ${index + 1}`;
   if (!editable) return <div className="rd2-entry-feedback rd2-entry-feedback-inline">
     <details className="rd2-inline-supervisor-reply">
-      <summary aria-label={`查看 ${label} 主管回覆`}>
+      <summary aria-label={`查看 ${label} ${historyOnly ? '退回紀錄' : '主管回覆'}`}>
         <MessageSquareText aria-hidden="true" />
-        主管回覆
+        {historyOnly ? `退回紀錄 · ${history.length} 次` : '主管回覆'}
       </summary>
       <div className="rd2-inline-supervisor-reply-body">
         <div className="rd2-inline-supervisor-reply-heading">
-          <strong>{label} · 主管回覆</strong>
+          <strong>{label} · {historyOnly ? '最近一次退回' : '主管回覆'}</strong>
           <CopyReplyButton text={visibleFeedback} />
         </div>
+        {historyOnly && latestReturn && <p className="rd2-hint">{new Date(latestReturn.returnedAt).toLocaleString('zh-TW')} · {latestReturn.reviewerName}</p>}
         {visibleFeedback && <p className="rd2-prewrap">{visibleFeedback}</p>}
         <ManagerAttachments attachments={visibleAttachments} readonly />
         {history.length > 1 && <details className="rd2-inline-reply-history">
@@ -147,6 +150,7 @@ export function AssessmentEntryFeedback({ category, entry, index, manager, edita
     </details>
   </div>;
   return <div className="rd2-entry-feedback">
+    <AssessmentEntryFeedback category={category} entry={entry} index={index} manager={savedManager || manager} historyOnly showFeedback />
     {editable && <>
       <label htmlFor={`feedback-${category}-${entry.id}`}>{label} · 主管評語／退回原因</label>
       <Textarea id={`feedback-${category}-${entry.id}`} rows={3} value={value.feedback} disabled={disabled}
