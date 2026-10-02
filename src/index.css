@@ -970,6 +970,17 @@ All colors MUST be HSL for proper theming support.
   }
 }
 
+@media (max-width: 1023px) and (max-height: 500px) {
+  /* Keep short maintenance pages on the document scroller. */
+  body:has(.maintenance-workspace) {
+    overflow-x: clip;
+  }
+
+  .maintenance-workspace main {
+    overscroll-behavior-y: auto;
+  }
+}
+
 @media (max-width: 767px) {
   :root {
     --mobile-header-height: 76px;
