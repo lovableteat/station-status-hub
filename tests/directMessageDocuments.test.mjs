@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import * as directMessageMedia from "../src/components/collaboration/directMessageMedia.mjs";
 import {
   CHAT_MEDIA_ACCEPT,
   validateDirectMessageFiles,
@@ -39,6 +40,16 @@ for (const [extension, mime, browserTypes] of engineeringFormats) {
     }
   });
 }
+test("Windows RAR keeps its bytes but uploads with the canonical MIME type", async () => {
+  assert.equal(typeof directMessageMedia.createDirectMessageUploadFile, "function");
+  const file = new File(["RAR test bytes"], "sample.rar", {
+    type: "application/x-compressed",
+  });
+  const uploadFile = directMessageMedia.createDirectMessageUploadFile(file);
+  assert.equal(uploadFile.type, "application/vnd.rar");
+  assert.equal(uploadFile.name, file.name);
+  assert.equal(await uploadFile.text(), await file.text());
+});
 test("MP4 with a generic Windows MIME uploads as video, while oversized files explain the limit", () => {
   const file = { name: "demo.MP4", type: "application/octet-stream", size: 50 * 1024 * 1024 };
   assert.equal(validateDirectMessageFiles([file]).error, null);

@@ -6,6 +6,7 @@ import {
   replaceVisibleDirectMessages,
 } from "@/components/collaboration/directMessageState.mjs";
 import {
+  createDirectMessageUploadFile,
   createDirectMessageMediaPath,
   getDirectMessageMediaKind,
   getDirectMessageMimeType,
@@ -528,7 +529,7 @@ export function useDirectMessages(threadId: string | null, { isVisible = true }:
 
         const { error: uploadError } = await supabase.storage.from(CHAT_MEDIA_BUCKET).upload(
           storagePath,
-          file,
+          createDirectMessageUploadFile(file),
           { contentType: mimeType, cacheControl: "3600", upsert: false },
         );
         if (uploadError) {

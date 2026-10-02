@@ -114,6 +114,14 @@ export function getDirectMessageMediaKind(file) {
   return MIME_CONFIG.get(getDirectMessageMimeType(file))?.mediaKind ?? null;
 }
 
+export function createDirectMessageUploadFile(file) {
+  const mimeType = getDirectMessageMimeType(file);
+  if (!mimeType) throw new Error("Unsupported direct-message media type");
+  return file.type === mimeType
+    ? file
+    : new File([file], file.name, { type: mimeType, lastModified: file.lastModified });
+}
+
 export function getDirectMessageClipboardImageFiles(items) {
   return Array.from(items ?? []).flatMap((item) => {
     if (
