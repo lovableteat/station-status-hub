@@ -50,6 +50,8 @@ npm run lint
 
 CI correction: the initial PR-only query missed push run `37016532187` at head `3ab3a95`. GitHub's annotation confirms a pre-job workflow validation failure: job-level `env` cannot resolve `runner.temp` (line 12), so no test or build ran. Set the QA path in a step via `RUNNER_TEMP` and `GITHUB_ENV` instead. Subsequent CI evidence must query all event types for the exact head, including failed runs with zero jobs/check-runs; an empty PR-only result is not evidence of no CI failure.
 
+The isolated audit job also listens to pushes on the exact repair branch so corrected workflows can be verified without a merge, deployment, permission change, or production environment. This trigger is limited to `repair/audit-20261002-realtime-drafts`; the production workflow remains unchanged.
+
 ## Remaining verification limits
 
 No real 20-user end-to-end/concurrency load, production latency measurement, production realtime transport interruption, or authenticated cross-role browser session was performed. Browser QA used localhost with mocked backend; the chat fixture also supplied a mock identity provider outside application source. Real realtime socket connections were intentionally unavailable there; console connection-refused messages are recorded, not treated as transport success. PostgreSQL access checks are isolated and do not establish the deployed database/schema state. Data-center asset import and damaged binary models were not comprehensively exercised. Draft recovery depends on available local storage. Numeric validation is in the client, not a new database constraint. Keep all `AUDIT_TEST_20261002` production audit rows for later authorized regression.
