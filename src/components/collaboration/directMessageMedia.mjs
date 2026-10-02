@@ -36,7 +36,7 @@ const OFFICE_MIME_TYPES = new Map([
   ["xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
 ]);
 const ENGINEERING_FILE_TYPES = new Map([
-  ["rar", { mime: "application/vnd.rar", browserMimes: ["", "application/octet-stream", "application/x-rar-compressed", "application/vnd.rar"] }],
+  ["rar", { mime: "application/vnd.rar", browserMimes: ["", "application/octet-stream", "application/x-rar-compressed", "application/x-compressed", "application/vnd.rar"] }],
   ["brd", { mime: "application/octet-stream", browserMimes: ["", "application/octet-stream"] }],
   ["stp", { mime: "application/octet-stream", browserMimes: ["", "application/octet-stream", "model/step", "application/step"] }],
   ["mps", { mime: "application/octet-stream", browserMimes: ["", "application/octet-stream"] }],
