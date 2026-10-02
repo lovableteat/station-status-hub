@@ -5,6 +5,7 @@ import {
   type PcbRemoteClient,
 } from "../core/remoteSync.ts";
 import { PcbLocalRepository, type StorageLike } from "../core/storage.ts";
+import { pcbRecoveryClient } from "../core/recoveryClient.ts";
 import type { PcbSaveState } from "../types.ts";
 
 export type { PcbPersistenceStatus, PcbRemoteClient } from "../core/remoteSync.ts";
@@ -22,6 +23,7 @@ export interface UsePcbPersistenceOptions {
   allowRemoteSync?: boolean;
   editor?: PcbEditorIdentity | null;
   initialSavedRevision?: string;
+  recoveryClientId?: string;
 }
 
 export interface PcbPersistenceControl {
@@ -55,6 +57,7 @@ export function usePcbPersistence({
   allowRemoteSync = false,
   editor,
   initialSavedRevision,
+  recoveryClientId = pcbRecoveryClient(),
 }: UsePcbPersistenceOptions): PcbPersistenceControl {
   const repository = useMemo(() => new PcbLocalRepository(storage ?? browserStorage()), [storage]);
   const client = allowRemoteSync ? remoteClient ?? null : null;
@@ -76,12 +79,12 @@ export function usePcbPersistence({
 
   useEffect(() => {
     if (hasUnsavedChanges) {
-      recoverySavedRef.current = repository.saveRecovery(ownerId, state, savedRevision);
+      recoverySavedRef.current = repository.saveRecovery(ownerId, state, savedRevision, recoveryClientId);
     } else {
-      repository.clearRecovery(ownerId);
+      repository.clearRecovery(ownerId, recoveryClientId);
       recoverySavedRef.current = true;
     }
-  }, [hasUnsavedChanges, ownerId, repository, savedRevision, state]);
+  }, [hasUnsavedChanges, ownerId, recoveryClientId, repository, savedRevision, state]);
 
   useEffect(() => {
     activeRef.current = true;

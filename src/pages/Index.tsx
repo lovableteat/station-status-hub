@@ -180,7 +180,7 @@ function pushWorkspaceLocation(
   Object.entries(params ?? {}).forEach(([key, value]) => {
     if (value) url.searchParams.set(key, value);
   });
-  window.history.pushState({}, "", url);
+  pushWorkspaceHistory(url);
   return true;
 }
 
@@ -281,7 +281,6 @@ const Index = () => {
   const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
   const [assessmentBackupsOpen, setAssessmentBackupsOpen] = useState(false);
   const stationMainRef = useRef<HTMLElement | null>(null);
-  const currentLocationRef = useRef(typeof window === "undefined" ? "" : window.location.href);
 
   const { logout, user } = useUser();
   const { updateCurrentModule } = useUserPresence();
@@ -491,24 +490,15 @@ const Index = () => {
       url.searchParams.delete("module");
     }
 
-    window.history.replaceState({}, "", url);
-    currentLocationRef.current = url.href;
+    replaceWorkspaceHistory(url);
   }, [activeAdminModule, activeStationModule, activeWorkspace]);
 
   useEffect(() => {
-    const handlePopState = () => {
-      if (!window.dispatchEvent(new Event("workspace-before-navigate", { cancelable: true }))) {
-        window.history.replaceState({}, "", currentLocationRef.current);
-        return;
-      }
-      currentLocationRef.current = window.location.href;
+    return watchWorkspaceHistory(() => {
       setActiveWorkspace(getInitialWorkspace());
       setActiveStationModule(getInitialStationModule());
       setActiveAdminModule(getInitialAdminModule());
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    });
   }, []);
 
   useEffect(() => {
@@ -780,3 +770,4 @@ const Index = () => {
 };
 
 export default Index;
+import { pushWorkspaceHistory, replaceWorkspaceHistory, watchWorkspaceHistory } from "@/lib/workspaceHistory";

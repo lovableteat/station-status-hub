@@ -244,11 +244,12 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const getWorkspaceAccess = useCallback(
     (module: string) => {
+      if (!accountActive) return "none" as const;
       if (isAdmin) return "edit" as const;
       const workspaceId = MODULE_WORKSPACE_MAP[module];
       return workspaceId ? workspacePermissions[workspaceId] : "none";
     },
-    [isAdmin, workspacePermissions]
+    [accountActive, isAdmin, workspacePermissions]
   );
 
   const value = useMemo<PermissionsContextValue>(

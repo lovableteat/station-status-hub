@@ -27,6 +27,7 @@ import {
 } from "./usePcbPersistence.ts";
 import { loadPcbRemote, mergePcbRemoteState } from "../core/remoteSync.ts";
 import { usePcbProjectLock } from "./usePcbProjectLock.ts";
+import { pcbRecoveryClient } from "../core/recoveryClient.ts";
 
 export interface UsePcbWorkspaceOptions {
   canEdit: boolean;
@@ -34,6 +35,7 @@ export interface UsePcbWorkspaceOptions {
   remoteClient?: PcbRemoteClient | null;
   editor?: PcbEditorIdentity | null;
   clientId?: string;
+  recoveryClientId?: string;
 }
 
 function browserStorage(): StorageLike {
@@ -49,12 +51,13 @@ export function usePcbWorkspace({
   remoteClient,
   editor: editorIdentity,
   clientId = "pcb-local-client",
+  recoveryClientId = pcbRecoveryClient(),
 }: UsePcbWorkspaceOptions) {
   const repository = useMemo(
     () => new PcbLocalRepository(storage ?? browserStorage()),
     [storage],
   );
-  const recovery = useMemo(() => repository.loadRecovery(editorIdentity?.userId ?? "local"), [repository, editorIdentity?.userId]);
+  const recovery = useMemo(() => repository.loadRecovery(editorIdentity?.userId ?? "local", recoveryClientId), [repository, editorIdentity?.userId, recoveryClientId]);
   const [state, dispatch] = useReducer(
     reduceWorkspaceState,
     undefined,
@@ -85,6 +88,7 @@ export function usePcbWorkspace({
     allowRemoteSync: effectiveCanEdit && Boolean(remoteClient) && remoteReady,
     editor: editorIdentity,
     initialSavedRevision: recovery?.savedRevision,
+    recoveryClientId,
   });
   const { markClean } = persistence;
   hasUnsavedChangesRef.current = persistence.hasUnsavedChanges;
