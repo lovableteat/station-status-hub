@@ -35,6 +35,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { AssessmentEditor } from "./AssessmentEditor";
+import { createSelfAssessmentExport } from './selfAssessmentExport.mjs';
 import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGuide";
@@ -936,6 +937,20 @@ export function PerformanceAppraisalPage() {
     }
   };
   const detail = reviews.find((review) => review.id === detailId);
+  const exportSelfFile = async (format: 'xlsx' | 'html', form?: AssessmentForm) => {
+    if (exporting || recordsPending || loadError || (editorReview?.contentLoaded === false)) return;
+    if (form && !matchesUser(form, user)) return;
+    if (!form && (!editorReview || !matchesUser(editorReview, user))) return;
+    setExporting(true);
+    try {
+      const snapshot = createSelfAssessmentExport(form, editorReview, cycle);
+      if (format === 'xlsx') await downloadPerformanceExcel([snapshot], cycle, {selfOnly:true});
+      else downloadPerformanceHtml([snapshot], cycle, {selfOnly:true});
+      toast({title:format === 'xlsx' ? '自評 Excel 已匯出' : '自評 HTML 已匯出', description:'已匯出本人的自評內容，未變更儲存或提交狀態。'});
+    } catch {
+      toast({title:'匯出失敗',description:'無法建立自評檔案，請重試。',variant:'destructive'});
+    } finally { setExporting(false); }
+  };
   const contentTarget = detail || (tab === 'self' || (tab === 'manager' && managerView === 'score') ? editorReview : null);
   const contentPending = contentTarget?.contentLoaded === false;
   useEffect(() => {
@@ -1248,6 +1263,10 @@ export function PerformanceAppraisalPage() {
                           {new Date(editorReview.updatedAt).toLocaleString("zh-TW")}
                         </small>
                       )}
+                      <div className="rd2-self-export-actions">
+                        <Button type="button" variant="outline" disabled={exporting} onClick={() => void exportSelfFile('xlsx')}><FileSpreadsheet />{exporting ? '匯出中…' : '匯出 Excel'}</Button>
+                        <Button type="button" variant="outline" disabled={exporting} onClick={() => void exportSelfFile('html')}><FileCode2 />匯出 HTML</Button>
+                      </div>
                     </div>
                   </section>
                 ) : tab === "manager" && !editorReview ? (
@@ -1284,6 +1303,8 @@ export function PerformanceAppraisalPage() {
                     }
                     demo={demo}
                     onSave={save}
+                    onExport={tab === 'self' ? exportSelfFile : undefined}
+                    exporting={exporting}
                   />
                 )}
                 </div>

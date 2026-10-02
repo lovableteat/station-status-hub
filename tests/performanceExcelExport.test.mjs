@@ -81,3 +81,57 @@ test("manager Excel keeps long KPI in one row and uses the existing supervisor c
     globalThis.document = originalDocument;
   }
 });
+
+test('employee exports current self assessment with readable headers and no supervisor data', async () => {
+  const {createSelfAssessmentExport} = await import('../src/components/performance/selfAssessmentExport.mjs');
+  const {createAssessmentForm,readSelfAssessment} = await import('../src/components/performance/rd2Assessment.mjs');
+  const originalCreate = URL.createObjectURL, originalRevoke = URL.revokeObjectURL, originalDocument = globalThis.document;
+  let blob, filename;
+  URL.createObjectURL = value => {blob=value;return 'blob:self-test';};
+  URL.revokeObjectURL = () => {};
+  globalThis.document = {createElement:()=>({set download(value){filename=value;},click(){},remove(){}}),body:{appendChild(){}}};
+  try {
+    const previous={...DEFAULT_PERFORMANCE_REVIEWS[0],employeeName:'自評匯出測試',score:99,
+      selfFeedback:serializeSelfAssessment({grade:'23',sections:{IDP:{selfScore:95,entries:[{id:'self-1',text:'原始實績',links:['https://example.com/evidence'],attachments:[{id:'mail-1',name:'驗證郵件.eml',size:4,type:'message/rfc822',dataUrl:'data:message/rfc822;base64,dGVzdA=='}]}]}}}),
+      managerFeedback:serializeManagerAssessment({feedback:'PRIVATE_OVERALL',workInstructions:'PRIVATE_INSTRUCTION',categoryReviews:{IDP:{feedback:'PRIVATE_CATEGORY',score:98}},entryReviews:{IDP:{'self-1':{feedback:'PRIVATE_ENTRY'}}},answers:{[ACCOUNTABILITY_QUESTIONS[0].id]:5}})};
+    const form=createAssessmentForm(previous);
+    form.self.sections.IDP.entries[0].text='目前編輯內容 <script>alert(1)</script> '+ '成果'.repeat(160);
+    const snapshot=createSelfAssessmentExport(form,previous,'2026-q3');
+    assert.equal(snapshot.score,null);
+    assert.equal(snapshot.managerFeedback,'');
+    assert.equal(readSelfAssessment(snapshot.selfFeedback).sections.IDP.entries[0].text,form.self.sections.IDP.entries[0].text);
+    assert.equal(readSelfAssessment(previous.selfFeedback).sections.IDP.entries[0].text,'原始實績');
+    assert.equal(previous.score,99);
+    await downloadPerformanceExcel([snapshot],'2026-q3',{selfOnly:true});
+    assert.match(filename,/^員工自評-自評匯出測試/);
+    const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(await blob.arrayBuffer());
+    const sheet=workbook.worksheets[0], rows=sheet.getSheetValues().filter(Boolean);
+    const header=rows.find(row=>row[1]==='大類');
+    assert.deepEqual(header.slice(1),['大類','實績內容','員工自評分數','證明連結','自評附件檔名','自評圖片檔名']);
+    const idp=rows.find(row=>row[1]==='IDP');
+    assert.equal(idp[2],form.self.sections.IDP.entries[0].text);
+    assert.equal(idp[3],95);
+    assert.equal(idp[4],'https://example.com/evidence');
+    assert.match(idp[5],/驗證郵件.eml/);
+    assert.doesNotMatch(JSON.stringify(rows),/PRIVATE_|主管加權評分|主管當責/);
+    assert.equal(sheet.getRow(1).getCell(1).fill.fgColor.argb,'FFFFFF00');
+    const headerIndex=sheet.getSheetValues().findIndex(row=>row?.[1]==='大類');
+    assert.equal(sheet.getRow(headerIndex).getCell(1).fill.fgColor.argb,'FF1F4E79');
+    assert.equal(sheet.getRow(headerIndex+1).getCell(2).alignment.wrapText,true);
+    downloadPerformanceHtml([previous],'2026-q3',{selfOnly:true});
+    const html=await blob.text();
+    assert.match(html,/員工自評資料/);
+    assert.match(html,/原始實績/);
+    assert.match(html,/<a href="https:\/\/example.com\/evidence"/);
+    assert.doesNotMatch(html,/PRIVATE_|主管加權評分|主管當責/);
+    downloadPerformanceHtml([snapshot],'2026-q3',{selfOnly:true});
+    const editedHtml=await blob.text();
+    assert.match(editedHtml,/&lt;script&gt;/);
+    assert.doesNotMatch(editedHtml,/<script>/);
+    for(const status of ['draft','in-progress','submitted','approved']){
+      const saved=createSelfAssessmentExport(undefined,{...previous,status},'2026-q3');
+      assert.equal(saved.status,status);
+      assert.equal(saved.managerFeedback,'');
+    }
+  } finally {URL.createObjectURL=originalCreate;URL.revokeObjectURL=originalRevoke;globalThis.document=originalDocument;}
+});

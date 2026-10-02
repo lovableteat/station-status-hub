@@ -13,6 +13,9 @@ import { PERFORMANCE_STATUS } from "./performanceData.mjs";
 type ExcelJsRow = import("exceljs").Row;
 type ExcelJsCell = import("exceljs").Cell;
 type ExcelValue = string | number;
+type ExportOptions = { selfOnly?: boolean };
+const SELF_COLUMNS = [0, 1, 3, 6, 7, 8];
+const SELF_HEADERS = ['大類', '實績內容', '員工自評分數', '證明連結', '自評附件檔名', '自評圖片檔名'];
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -64,9 +67,9 @@ function excelFill(argb: string) {
   return { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb } };
 }
 
-function estimateRowHeight(values: ExcelValue[]) {
+function estimateRowHeight(values: ExcelValue[], widths = EXCEL_COLUMN_WIDTHS) {
   const lineCounts = values.map((value, index) => {
-    const width = EXCEL_COLUMN_WIDTHS[index] || 18;
+    const width = widths[index] || 18;
     return text(value)
       .split(/\r?\n/)
       .reduce((total, line) => total + Math.max(1, Math.ceil([...line].length / Math.max(8, width * 0.5))), 0);
@@ -75,8 +78,8 @@ function estimateRowHeight(values: ExcelValue[]) {
   return Math.min(390, Math.max(24, lines * 17 + 8));
 }
 
-function stylePerformanceRow(row: ExcelJsRow, values: ExcelValue[]) {
-  row.height = estimateRowHeight(values);
+function stylePerformanceRow(row: ExcelJsRow, values: ExcelValue[], widths = EXCEL_COLUMN_WIDTHS, selfOnly = false) {
+  row.height = estimateRowHeight(values, widths);
   row.eachCell({ includeEmpty: true }, (cell: ExcelJsCell, column: number) => {
     cell.font = {
       name: "Microsoft JhengHei",
@@ -84,7 +87,7 @@ function stylePerformanceRow(row: ExcelJsRow, values: ExcelValue[]) {
       color: { argb: "FF111111" },
     };
     cell.alignment = {
-      horizontal: [1, 4, 5].includes(column) ? "center" : "left",
+      horizontal: (selfOnly ? [1, 3] : [1, 4, 5]).includes(column) ? "center" : "left",
       vertical: "top",
       wrapText: true,
     };
@@ -94,7 +97,7 @@ function stylePerformanceRow(row: ExcelJsRow, values: ExcelValue[]) {
       left: { style: "thin", color: { argb: EXCEL_BORDER } },
       right: { style: "thin", color: { argb: EXCEL_BORDER } },
     };
-    if (column === 7 && text(values[column - 1]).startsWith("http")) {
+    if (column === (selfOnly ? 4 : 7) && text(values[column - 1]).startsWith("http")) {
       cell.font = { ...cell.font, color: { argb: "FF0563C1" }, underline: true };
     }
   });
@@ -194,14 +197,18 @@ function download(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export async function downloadPerformanceExcel(reviews: PerformanceReview[], cycle: string) {
+export async function downloadPerformanceExcel(reviews: PerformanceReview[], cycle: string, options: ExportOptions = {}) {
+  const selfOnly = options.selfOnly === true;
+  const headers = selfOnly ? SELF_HEADERS : EXCEL_DETAIL_HEADERS;
+  const widths = selfOnly ? [12.78, 65.44, 32.78, 36.78, 28.78, 24.78] : EXCEL_COLUMN_WIDTHS;
+  const title = selfOnly ? '員工自評' : '績效考核';
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "工作整合平台";
   workbook.created = new Date();
   workbook.modified = new Date();
-  workbook.title = `績效考核-${cycle}`;
-  workbook.subject = "組員績效考核資料";
+  workbook.title = `${title}-${cycle}`;
+  workbook.subject = selfOnly ? "員工自評資料" : "組員績效考核資料";
   const used = new Set<string>();
   [...reviews]
     .sort((a, b) => a.employeeName.localeCompare(b.employeeName, "zh-Hant"))
@@ -216,33 +223,34 @@ export async function downloadPerformanceExcel(reviews: PerformanceReview[], cyc
           paperSize: 9,
         },
       });
-      worksheet.columns = EXCEL_COLUMN_WIDTHS.map((width, index) => ({
+      worksheet.columns = widths.map((width, index) => ({
         width,
         key: `column${index + 1}`,
       }));
 
-      styleHeaderRow(worksheet.addRow(EXCEL_META_HEADERS), EXCEL_META_HEADER, "FF000000");
-      basicInfoRows(review).forEach(([label, value]) => {
-        const values: ExcelValue[] = ["基本資料", label, value, "", "", "", "", "", ""];
+      styleHeaderRow(worksheet.addRow(EXCEL_META_HEADERS.slice(0, headers.length)), EXCEL_META_HEADER, "FF000000");
+      basicInfoRows(review).filter(([label]) => !selfOnly || label !== '主管加權評分').forEach(([label, value]) => {
+        const values: ExcelValue[] = ["基本資料", label, value, ...Array(headers.length - 3).fill('')];
         const row = worksheet.addRow(values);
-        stylePerformanceRow(row, values);
+        stylePerformanceRow(row, values, widths, selfOnly);
       });
-      styleHeaderRow(worksheet.addRow(EXCEL_DETAIL_HEADERS), EXCEL_DETAIL_HEADER, "FFFFFFFF");
-      const details = detailRows(review);
+      const headerRow = worksheet.addRow(headers);
+      styleHeaderRow(headerRow, EXCEL_DETAIL_HEADER, "FFFFFFFF");
+      const details = selfOnly ? detailRows({...review, managerFeedback: '', score: null}).map(row => SELF_COLUMNS.map(index => row[index])) : detailRows(review);
       details.forEach((values) => {
         const row = worksheet.addRow(values);
-        stylePerformanceRow(row, values);
+        stylePerformanceRow(row, values, widths, selfOnly);
       });
 
       if (details.length) {
         worksheet.autoFilter = {
-          from: { row: 15, column: 1 },
-          to: { row: 15 + details.length, column: EXCEL_DETAIL_HEADERS.length },
+          from: { row: headerRow.number, column: 1 },
+          to: { row: headerRow.number + details.length, column: headers.length },
         };
       }
-      worksheet.pageSetup.printTitlesRow = "15:15";
+      worksheet.pageSetup.printTitlesRow = `${headerRow.number}:${headerRow.number}`;
 
-      const ratings = accountabilityRows(review);
+      const ratings = selfOnly ? [] : accountabilityRows(review);
       if (ratings.length) {
         worksheet.addRow([]);
         styleHeaderRow(worksheet.addRow(["評分（1–5 分）", "當責題目"]), EXCEL_DETAIL_HEADER, "FFFFFFFF");
@@ -253,7 +261,7 @@ export async function downloadPerformanceExcel(reviews: PerformanceReview[], cyc
       }
     });
   const output = await workbook.xlsx.writeBuffer();
-  download(new Blob([output], { type: XLSX_MIME }), `${safeFileName(`績效考核-${cycle}`)}.xlsx`);
+  download(new Blob([output], { type: XLSX_MIME }), `${safeFileName(`${title}-${selfOnly ? reviews[0]?.employeeName + '-' : ''}${cycle}`)}.xlsx`);
 }
 
 function escapeHtml(value: unknown) {
@@ -283,18 +291,20 @@ function linkHtml(value: string) {
     .join("<br>");
 }
 
-export function downloadPerformanceHtml(reviews: PerformanceReview[], cycle: string) {
+export function downloadPerformanceHtml(reviews: PerformanceReview[], cycle: string, options: ExportOptions = {}) {
+  const selfOnly = options.selfOnly === true;
+  const headers = selfOnly ? SELF_HEADERS : EXCEL_DETAIL_HEADERS;
   const sections = [...reviews]
     .sort((a, b) => a.employeeName.localeCompare(b.employeeName, "zh-Hant"))
     .map((review) => {
-      const basicRows = basicInfoRows(review).map(([label, value]) => ["基本資料", label, value, "", "", "", "", "", ""]);
-      const detail = detailRows(review);
-      const accountability = accountabilityRows(review);
-      const rowHtml = (values: ExcelValue[]) => `<tr>${values.map((value, index) => `<td>${index === 7 ? linkHtml(text(value)) : escapeHtml(value)}</td>`).join("")}</tr>`;
+      const basicRows = basicInfoRows(review).filter(([label]) => !selfOnly || label !== '主管加權評分').map(([label, value]) => ["基本資料", label, value, ...Array(headers.length - 3).fill('')]);
+      const detail = selfOnly ? detailRows({...review, managerFeedback: '', score: null}).map(row => SELF_COLUMNS.map(index => row[index])) : detailRows(review);
+      const accountability = selfOnly ? [] : accountabilityRows(review);
+      const rowHtml = (values: ExcelValue[]) => `<tr>${values.map((value, index) => `<td>${index === (selfOnly ? 3 : 6) ? linkHtml(text(value)) : escapeHtml(value)}</td>`).join("")}</tr>`;
       const rows = [
-        `<tr class="basic-header">${EXCEL_META_HEADERS.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr>`,
+        `<tr class="basic-header">${EXCEL_META_HEADERS.slice(0, headers.length).map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr>`,
         ...basicRows.map(rowHtml),
-        `<tr class="detail-header">${EXCEL_DETAIL_HEADERS.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr>`,
+        `<tr class="detail-header">${headers.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr>`,
         ...detail.map(rowHtml),
       ].join("");
       const accountabilityHtml = accountability.length
@@ -303,6 +313,6 @@ export function downloadPerformanceHtml(reviews: PerformanceReview[], cycle: str
       return `<section class="member"><h2>${escapeHtml(review.employeeName)}</h2><p class="meta">${escapeHtml(review.department)} · ${escapeHtml(review.role)} · ${escapeHtml(cycle)}</p><table><tbody>${rows}</tbody></table>${accountabilityHtml}</section>`;
     })
     .join("");
-  const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>績效考核 ${escapeHtml(cycle)}</title><style>body{margin:0;padding:32px;background:#0b1424;color:#e8f0ff;font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif}h1{margin:0 0 8px;color:#8ab4ff}h2{margin:0;color:#9ed0ff}.meta{color:#98aaca}.member{margin:0 0 32px;padding:20px;border:1px solid #365a86;border-left:5px solid #6ea1ff;border-radius:14px;background:#151f32;overflow:auto}.accountability{margin-top:24px}.accountability h3{margin:0;color:#9ed0ff}table{border-collapse:collapse;width:100%;min-width:1050px;margin-top:16px}.accountability-table{min-width:680px;margin-top:8px}th,td{padding:9px 10px;border:1px solid #365a86;text-align:left;vertical-align:top;white-space:pre-wrap;line-height:1.5;overflow-wrap:anywhere}.basic-header th{background:#ffff00;color:#111;font-weight:400}.detail-header th,.accountability-table th{background:#1f4e79;color:#fff;white-space:normal}.basic-header th:empty{color:transparent}tbody td{background:#f7f8fa;color:#111}a{display:inline-block;color:#0563c1;font-weight:700;overflow-wrap:anywhere}</style></head><body><h1>績效考核資料</h1><p>匯出週期：${escapeHtml(cycle)}；包含主管整體回覆與工作指示，不包含主管退回紀錄、退回原因或退回附件。</p>${sections || "<p>目前沒有可匯出的組員資料。</p>"}</body></html>`;
-  download(new Blob([html], { type: "text/html;charset=utf-8" }), `${safeFileName(`績效考核-${cycle}`)}.html`);
+  const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>績效考核 ${escapeHtml(cycle)}</title><style>body{margin:0;padding:32px;background:#0b1424;color:#e8f0ff;font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif}h1{margin:0 0 8px;color:#8ab4ff}h2{margin:0;color:#9ed0ff}.meta{color:#98aaca}.member{margin:0 0 32px;padding:20px;border:1px solid #365a86;border-left:5px solid #6ea1ff;border-radius:14px;background:#151f32;overflow:auto}.accountability{margin-top:24px}.accountability h3{margin:0;color:#9ed0ff}table{border-collapse:collapse;width:100%;min-width:1050px;margin-top:16px}.accountability-table{min-width:680px;margin-top:8px}th,td{padding:9px 10px;border:1px solid #365a86;text-align:left;vertical-align:top;white-space:pre-wrap;line-height:1.5;overflow-wrap:anywhere}.basic-header th{background:#ffff00;color:#111;font-weight:400}.detail-header th,.accountability-table th{background:#1f4e79;color:#fff;white-space:normal}.basic-header th:empty{color:transparent}tbody td{background:#f7f8fa;color:#111}a{display:inline-block;color:#0563c1;font-weight:700;overflow-wrap:anywhere}</style></head><body><h1>${selfOnly ? "員工自評資料" : "績效考核資料"}</h1><p>匯出週期：${escapeHtml(cycle)}；${selfOnly ? "包含本人自評內容、自評分數、證明連結與佐證檔名。" : "包含主管整體回覆與工作指示，不包含主管退回紀錄、退回原因或退回附件。"}</p>${sections || "<p>目前沒有可匯出的組員資料。</p>"}</body></html>`;
+  download(new Blob([html], { type: "text/html;charset=utf-8" }), `${safeFileName(`${selfOnly ? "員工自評-" + reviews[0]?.employeeName : "績效考核"}-${cycle}`)}.html`);
 }
