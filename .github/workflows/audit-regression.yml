@@ -9,7 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      AUDIT_QA_DIR: ${{ runner.temp }}/station-audit-qa
       VITE_SUPABASE_URL: http://127.0.0.1:54321
       VITE_SUPABASE_ANON_KEY: isolated-test-key
     steps:
@@ -19,6 +18,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --legacy-peer-deps
+      - name: Set isolated QA directory
+        run: echo "AUDIT_QA_DIR=$RUNNER_TEMP/station-audit-qa" >> "$GITHUB_ENV"
       - name: Install isolated QA dependencies
         run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock react@18.3.1 react-test-renderer@18.3.1 @electric-sql/pglite@0.5.8
       - name: Deferred requests, live events, drafts and permissions
