@@ -181,9 +181,11 @@ function openRenderCacheDatabase() {
 async function runRenderCacheRequest<T>(
   mode: IDBTransactionMode,
   action: (store: IDBObjectStore) => IDBRequest<T>,
+  assertWrite?: () => void,
 ) {
   const database = await openRenderCacheDatabase();
   if (!database) return null;
+  if (mode === "readwrite") assertWrite?.();
 
   return new Promise<T | null>((resolve, reject) => {
     const transaction = database.transaction(RENDER_CACHE_STORE_NAME, mode);
@@ -204,7 +206,7 @@ async function readRenderCacheEntry() {
   }
 }
 
-async function writeRenderCacheResult(result: BomWorkspaceLoadResult) {
+async function writeRenderCacheResult(result: BomWorkspaceLoadResult, assertWrite?: () => void) {
   try {
     const existingEntry = await readRenderCacheEntry();
     const cachedById = new Map(
@@ -247,13 +249,13 @@ async function writeRenderCacheResult(result: BomWorkspaceLoadResult) {
       id: "latest",
       result: { ...result, workspaces },
     };
-    await runRenderCacheRequest<IDBValidKey>("readwrite", (store) => store.put(entry));
+    await runRenderCacheRequest<IDBValidKey>("readwrite", (store) => store.put(entry), assertWrite);
   } catch {
     // The cache is optional. Storage quota failures must never affect production data.
   }
 }
 
-async function patchCachedWorkspace(workspace: BomWorkspace) {
+async function patchCachedWorkspace(workspace: BomWorkspace, assertWrite?: () => void) {
   const entry = await readRenderCacheEntry();
   if (!entry) return;
 
@@ -261,12 +263,13 @@ async function patchCachedWorkspace(workspace: BomWorkspace) {
   const workspaces = exists
     ? entry.result.workspaces.map((candidate) => candidate.id === workspace.id ? workspace : candidate)
     : [workspace, ...entry.result.workspaces];
-  await writeRenderCacheResult({ ...entry.result, workspaces: sortWorkspaces(workspaces) });
+  await writeRenderCacheResult({ ...entry.result, workspaces: sortWorkspaces(workspaces) }, assertWrite);
 }
 
 async function patchCachedWorkspaceFields(
   workspaceId: string,
   update: (workspace: BomWorkspace) => BomWorkspace,
+  assertWrite?: () => void,
 ) {
   const entry = await readRenderCacheEntry();
   if (!entry) return;
@@ -275,16 +278,16 @@ async function patchCachedWorkspaceFields(
     workspaces: entry.result.workspaces.map((workspace) => (
       workspace.id === workspaceId ? update(workspace) : workspace
     )),
-  });
+  }, assertWrite);
 }
 
-async function removeCachedWorkspace(workspaceId: string) {
+async function removeCachedWorkspace(workspaceId: string, assertWrite?: () => void) {
   const entry = await readRenderCacheEntry();
   if (!entry) return;
   await writeRenderCacheResult({
     ...entry.result,
     workspaces: entry.result.workspaces.filter((workspace) => workspace.id !== workspaceId),
-  });
+  }, assertWrite);
 }
 
 function getTableColorThemeRowKey(workspaceId: string) {
@@ -441,9 +444,9 @@ async function saveLegacyBomWorkspace(workspace: BomWorkspace) {
   }
 }
 
-async function removeLegacyBomWorkspace(id: string) {
+async function removeLegacyBomWorkspace(id: string, assertWrite?: () => void) {
   try {
-    await runLegacyRequest<undefined>("readwrite", (store) => store.delete(id));
+    await runLegacyRequest<undefined>("readwrite", (store) => {assertWrite?.(); return store.delete(id);});
   } catch {
     // Ignore legacy cleanup failures so collaborative storage keeps working.
   }
@@ -772,8 +775,9 @@ async function upsertWorkspaceRow(workspace: BomWorkspace) {
   return data as BomWorkspaceRow;
 }
 
-async function upsertRecordRows(recordRows: BomRecordRow[]) {
+async function upsertRecordRows(recordRows: BomRecordRow[], assertWrite: () => void = () => {}) {
   for (let index = 0; index < recordRows.length; index += RECORD_BATCH_SIZE) {
+    assertWrite();
     const batch = recordRows.slice(index, index + RECORD_BATCH_SIZE);
     const { error } = await supabaseClient
       .from(RECORD_TABLE)
@@ -783,8 +787,9 @@ async function upsertRecordRows(recordRows: BomRecordRow[]) {
   }
 }
 
-async function deleteRecordIds(workspaceId: string, recordIds: string[]) {
+async function deleteRecordIds(workspaceId: string, recordIds: string[], assertWrite: () => void = () => {}) {
   for (let index = 0; index < recordIds.length; index += RECORD_BATCH_SIZE) {
+    assertWrite();
     const batch = recordIds.slice(index, index + RECORD_BATCH_SIZE);
     const { error } = await supabaseClient
       .from(RECORD_TABLE)
@@ -989,16 +994,20 @@ export async function loadBomWorkspaceById(workspaceId: string) {
   };
 }
 
-export async function saveBomWorkspace(workspace: BomWorkspace) {
+export async function saveBomWorkspace(workspace: BomWorkspace, assertWrite: () => void = () => {}) {
+  assertWrite();
   await upsertWorkspaceRow(workspace);
+  assertWrite();
   const { data: existingRows, error: existingRowsError } = await supabaseClient
     .from(RECORD_TABLE)
     .select("record_id")
     .eq("workspace_id", workspace.id);
 
   if (existingRowsError) throw existingRowsError;
+  assertWrite();
 
-  await upsertRecordRows(toRecordRows(workspace));
+  await upsertRecordRows(toRecordRows(workspace), assertWrite);
+  assertWrite();
 
   const nextRecordIds = new Set(workspace.payload.records.map((record) => record.id));
   const obsoleteRecordIds = ((existingRows ?? []) as Array<{ record_id: string }>).flatMap((row) =>
@@ -1006,24 +1015,33 @@ export async function saveBomWorkspace(workspace: BomWorkspace) {
   );
 
   if (obsoleteRecordIds.length > 0) {
-    await deleteRecordIds(workspace.id, obsoleteRecordIds);
+    await deleteRecordIds(workspace.id, obsoleteRecordIds, assertWrite);
+    assertWrite();
   }
 
   if (workspace.pageTracker) {
+    assertWrite();
     await saveRemotePageTracker(workspace.id, workspace.pageTracker);
+    assertWrite();
   }
 
   if (workspace.tableColorTheme) {
+    assertWrite();
     await saveRemoteTableColorTheme(workspace.id, workspace.tableColorTheme);
+    assertWrite();
   }
 
   const savedWorkspaceRow = await upsertWorkspaceRow(workspace);
-  await removeLegacyBomWorkspace(workspace.id);
-  void patchCachedWorkspace({ ...workspace, updatedAt: savedWorkspaceRow.updated_at });
+  assertWrite();
+  await removeLegacyBomWorkspace(workspace.id, assertWrite);
+  assertWrite();
+  void patchCachedWorkspace({ ...workspace, updatedAt: savedWorkspaceRow.updated_at }, assertWrite);
 }
 
-export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: MaterialWorkbookRecord) {
+export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: MaterialWorkbookRecord, assertWrite: () => void = () => {}) {
+  assertWrite();
   const savedWorkspaceRow = await upsertWorkspaceRow(workspace);
+  assertWrite();
 
   const orderIndex = workspace.payload.records.findIndex((item) => item.id === record.id);
   if (orderIndex < 0) {
@@ -1042,6 +1060,7 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
       .maybeSingle();
 
     if (currentRowError) throw currentRowError;
+    assertWrite();
     expectedUpdatedAt = currentRow?.updated_at;
   }
 
@@ -1057,11 +1076,13 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
 
     if (error) throw error;
     if (!data) throw new BomRecordConflictError(record.id);
+    assertWrite();
 
     const recordMeta = {
       updatedAt: data.updated_at as string,
     } satisfies BomRecordSyncMeta;
-    await removeLegacyBomWorkspace(workspace.id);
+    await removeLegacyBomWorkspace(workspace.id, assertWrite);
+    assertWrite();
     void patchCachedWorkspace({
       ...workspace,
       recordMeta: {
@@ -1069,7 +1090,7 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
         [record.id]: recordMeta,
       },
       updatedAt: savedWorkspaceRow.updated_at,
-    });
+    }, assertWrite);
     return recordMeta;
   }
 
@@ -1093,7 +1114,9 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
   const recordMeta = {
     updatedAt: data.updated_at as string,
   } satisfies BomRecordSyncMeta;
-  await removeLegacyBomWorkspace(workspace.id);
+  assertWrite();
+  await removeLegacyBomWorkspace(workspace.id, assertWrite);
+  assertWrite();
   void patchCachedWorkspace({
     ...workspace,
     recordMeta: {
@@ -1101,35 +1124,43 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
       [record.id]: recordMeta,
     },
     updatedAt: savedWorkspaceRow.updated_at,
-  });
+  }, assertWrite);
   return recordMeta;
 }
 
-export async function saveBomWorkspacePageTracker(workspaceId: string, pageTracker: BomPageTracker) {
+export async function saveBomWorkspacePageTracker(workspaceId: string, pageTracker: BomPageTracker, assertWrite: () => void = () => {}) {
+  assertWrite();
   await saveRemotePageTracker(workspaceId, pageTracker);
-  void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, pageTracker }));
+  assertWrite();
+  void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, pageTracker }), assertWrite);
 }
 
-export async function saveBomWorkspaceTableColorTheme(workspaceId: string, tableColorTheme: BomTableColorTheme) {
+export async function saveBomWorkspaceTableColorTheme(workspaceId: string, tableColorTheme: BomTableColorTheme, assertWrite: () => void = () => {}) {
+  assertWrite();
   await saveRemoteTableColorTheme(workspaceId, tableColorTheme);
-  void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, tableColorTheme }));
+  assertWrite();
+  void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, tableColorTheme }), assertWrite);
 }
 
-export async function removeBomWorkspace(id: string) {
+export async function removeBomWorkspace(id: string, assertWrite: () => void = () => {}) {
+  assertWrite();
   const { error } = await supabaseClient
     .from(WORKSPACE_TABLE)
     .delete()
     .eq("id", id);
 
   if (error) throw error;
+  assertWrite();
 
   await Promise.allSettled([
     removePreferenceBackedWorkspace(id),
     removeRemotePageTracker(id),
     removeRemoteTableColorTheme(id),
   ]);
-  await removeLegacyBomWorkspace(id);
-  void removeCachedWorkspace(id);
+  assertWrite();
+  await removeLegacyBomWorkspace(id, assertWrite);
+  assertWrite();
+  void removeCachedWorkspace(id, assertWrite);
 }
 
 export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChange) => void) {
