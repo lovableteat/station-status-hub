@@ -411,6 +411,7 @@ export function IssueCreateDialog({ initialValues, onIssueCreated, trigger }: Is
           title: newIssue.title,
           description: newIssue.description,
           priority: newIssue.priority,
+          priority_manual: true,
           status: newIssue.status,
           assigned_to: newIssue.assigned_to || null,
           system_id: (newIssue.system_id && newIssue.system_id !== "none") ? newIssue.system_id : null,

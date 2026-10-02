@@ -23,7 +23,9 @@ test('entry feedback is isolated by category and ID; returns include only text, 
  assert.equal(returned.feedback,'Overall response');
  assert.equal(returned.returnHistory[0].entries[0].feedback,'Add test evidence');
  assert.equal(returned.returnHistory[0].entries[0].text,'Validation');
- assert.doesNotMatch(JSON.stringify(returned.returnHistory),/93|private category note|Must not return/);
+ // A random return UUID can contain "93"; test the returned content and score keys.
+ assert.doesNotMatch(JSON.stringify(returned.returnHistory.map(({id,...content})=>content)),/93|private category note|Must not return/);
+ assert.doesNotMatch(JSON.stringify(returned.returnHistory),/"(?:score|categoryScores)"\s*:/);
 });
 test('unsafe per-entry attachments cannot persist as executable URLs',()=>{
  const self=readSelfAssessment();self.sections.IDP.entries=[{id:'x',text:'x',attachments:[{...file,dataUrl:'javascript:alert(1)'}]}];

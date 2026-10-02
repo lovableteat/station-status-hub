@@ -106,6 +106,7 @@ export function UserPermissionsDialog({
   const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
   const [isReading, setIsReading] = useState(true);
   const loadRequest = useRef({ id: 0 });
+  const returnFocus = useRef<HTMLElement | null>(null);
   const canConfigure = loadedUserId === userId && !isReading && !isLoading;
   const { toast } = useToast();
   const { user } = useUser();
@@ -380,6 +381,16 @@ export function UserPermissionsDialog({
       <DialogContent
         data-admin-dialog="permissions"
         data-permission-model="live-workspace-matrix"
+        onOpenAutoFocus={() => {
+          returnFocus.current = document.activeElement instanceof HTMLElement
+            ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (returnFocus.current?.isConnected) {
+            event.preventDefault();
+            returnFocus.current.focus();
+          }
+        }}
         className="admin-permissions-dialog overflow-hidden border border-cyan-200/35 bg-[#081a2a] p-0 text-slate-100 shadow-[0_28px_100px_-45px_rgba(34,211,238,0.8)]"
       >
         <div className="admin-permissions-header border-b border-cyan-200/12 bg-[#0d2235] px-4 py-3 sm:px-5">
@@ -429,9 +440,10 @@ export function UserPermissionsDialog({
           </div>
         </div>
 
+        <div className="admin-permissions-scroll min-h-0 overflow-y-auto p-3 sm:p-4">
         <section
           data-admin-zone="performance-manager-assignment"
-          className="mx-3 mt-3 rounded-xl border border-amber-200/20 bg-amber-400/5 p-3 sm:mx-4"
+          className="admin-permissions-manager mb-3 rounded-xl border border-amber-200/20 bg-amber-400/5 p-3"
         >
           <Label className="flex cursor-pointer items-start gap-3">
             <Checkbox
@@ -453,7 +465,6 @@ export function UserPermissionsDialog({
           </Label>
         </section>
 
-        <div className="admin-permissions-scroll min-h-0 overflow-y-auto p-3 sm:p-4">
           <div className="admin-permissions-layout grid gap-3">
             <section data-admin-zone="workspace-permissions" className="admin-permission-pane">
               <div className="admin-permission-pane-header">
@@ -475,6 +486,7 @@ export function UserPermissionsDialog({
                       </div>
 
                       <RadioGroup
+                        aria-label={workspace.label}
                         value={workspace.level}
                         disabled={!canConfigure}
                         onValueChange={(value) =>
@@ -600,8 +612,9 @@ export function UserPermissionsDialog({
                                           title={permission.label}
                                           className={`admin-permission-toggle ${checked ? "is-selected" : ""} ${disabled ? "is-disabled" : ""}`}
                                         >
-                                          <Checkbox
-                                            id={permission.key}
+                                    <Checkbox
+                                      id={permission.key}
+                                      aria-label={permission.label}
                                             checked={checked}
                                             disabled={disabled || !canConfigure}
                                             onCheckedChange={(checkedValue) =>
@@ -611,7 +624,7 @@ export function UserPermissionsDialog({
                                               )
                                             }
                                           />
-                                          <span>{isEditPermission ? "管理" : "檢視"}</span>
+                                          <span>{permission.label}</span>
                                         </Label>
                                       );
                                     })}

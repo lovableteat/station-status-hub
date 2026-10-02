@@ -27,6 +27,7 @@ import {
 } from "./usePcbPersistence.ts";
 import { loadPcbRemote, mergePcbRemoteState } from "../core/remoteSync.ts";
 import { usePcbProjectLock } from "./usePcbProjectLock.ts";
+import { pcbRecoveryClient } from "../core/recoveryClient.ts";
 
 export interface UsePcbWorkspaceOptions {
   canEdit: boolean;
@@ -34,6 +35,7 @@ export interface UsePcbWorkspaceOptions {
   remoteClient?: PcbRemoteClient | null;
   editor?: PcbEditorIdentity | null;
   clientId?: string;
+  recoveryClientId?: string;
 }
 
 function browserStorage(): StorageLike {
@@ -49,15 +51,17 @@ export function usePcbWorkspace({
   remoteClient,
   editor: editorIdentity,
   clientId = "pcb-local-client",
+  recoveryClientId = pcbRecoveryClient(),
 }: UsePcbWorkspaceOptions) {
   const repository = useMemo(
     () => new PcbLocalRepository(storage ?? browserStorage()),
     [storage],
   );
+  const recovery = useMemo(() => repository.loadRecovery(editorIdentity?.userId ?? "local", recoveryClientId), [repository, editorIdentity?.userId, recoveryClientId]);
   const [state, dispatch] = useReducer(
     reduceWorkspaceState,
     undefined,
-    () => createWorkspaceState(repository.load(), canEdit && !remoteClient),
+    () => createWorkspaceState(recovery?.state ?? repository.load(), canEdit && !remoteClient),
   );
   const stateRef = useRef(state.data);
   const viewStateRef = useRef(state);
@@ -83,6 +87,8 @@ export function usePcbWorkspace({
     remoteClient,
     allowRemoteSync: effectiveCanEdit && Boolean(remoteClient) && remoteReady,
     editor: editorIdentity,
+    initialSavedRevision: recovery?.savedRevision,
+    recoveryClientId,
   });
   const { markClean } = persistence;
   hasUnsavedChangesRef.current = persistence.hasUnsavedChanges;
@@ -104,6 +110,12 @@ export function usePcbWorkspace({
       const remoteState = await loadPcbRemote(remoteClient);
       loading = false;
       if (!active) return;
+      // Recheck after await: a user can edit while background refresh is pending.
+      // A restored dirty recovery draft must also survive initial hydration.
+      if (hasUnsavedChangesRef.current) {
+        if (initial) setRemoteReady(true);
+        return;
+      }
       const localState = stateRef.current;
       const localView = viewStateRef.current;
       if (remoteState) {

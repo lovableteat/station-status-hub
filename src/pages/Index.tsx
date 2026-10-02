@@ -22,6 +22,7 @@ import { PersonalProfileDialog } from "@/components/account/PersonalProfileDialo
 import { OwnCredentialsDialog } from "@/components/account/OwnCredentialsDialog";
 import { CollaborationCenter } from "@/components/collaboration/CollaborationCenter";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
+import { WorkspaceRuntimeBoundary } from "@/components/common/WorkspaceRuntimeBoundary";
 import { MainWorkspaceHeader } from "@/components/layout/MainWorkspaceHeader";
 import { MobileWorkspaceDock } from "@/components/layout/MobileWorkspaceDock";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
@@ -165,7 +166,8 @@ function pushWorkspaceLocation(
   module?: string,
   params?: Record<string, string>
 ) {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") return true;
+  if (!window.dispatchEvent(new Event("workspace-before-navigate", { cancelable: true }))) return false;
   const url = new URL(window.location.href);
   MODULE_QUERY_KEYS.forEach((key) => url.searchParams.delete(key));
 
@@ -178,7 +180,8 @@ function pushWorkspaceLocation(
   Object.entries(params ?? {}).forEach(([key, value]) => {
     if (value) url.searchParams.set(key, value);
   });
-  window.history.pushState({}, "", url);
+  pushWorkspaceHistory(url);
+  return true;
 }
 
 function getRoleLabel(role?: string) {
@@ -446,7 +449,7 @@ const Index = () => {
         ? { ...event.detail?.params, trackerView: "board" }
         : event.detail?.params;
 
-      pushWorkspaceLocation(targetWorkspace, normalizedModule, normalizedParams);
+      if (!pushWorkspaceLocation(targetWorkspace, normalizedModule, normalizedParams)) return;
 
       setActiveWorkspace(targetWorkspace);
 
@@ -487,18 +490,15 @@ const Index = () => {
       url.searchParams.delete("module");
     }
 
-    window.history.replaceState({}, "", url);
+    replaceWorkspaceHistory(url);
   }, [activeAdminModule, activeStationModule, activeWorkspace]);
 
   useEffect(() => {
-    const handlePopState = () => {
+    return watchWorkspaceHistory(() => {
       setActiveWorkspace(getInitialWorkspace());
       setActiveStationModule(getInitialStationModule());
       setActiveAdminModule(getInitialAdminModule());
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    });
   }, []);
 
   useEffect(() => {
@@ -508,7 +508,7 @@ const Index = () => {
 
   const handleWorkspaceChange = (workspace: string) => {
     if (workspace === "workspace-home") {
-      pushWorkspaceLocation(null);
+      if (!pushWorkspaceLocation(null)) return;
       setActiveWorkspace(null);
       return;
     }
@@ -522,7 +522,7 @@ const Index = () => {
           : nextWorkspace === "ai-chat"
             ? "ai-chat"
             : undefined;
-    pushWorkspaceLocation(nextWorkspace, nextModule);
+    if (!pushWorkspaceLocation(nextWorkspace, nextModule)) return;
     setActiveWorkspace(nextWorkspace);
   };
 
@@ -531,7 +531,7 @@ const Index = () => {
     const normalizedParams = module === "monitor"
       ? { ...params, trackerView: "board" }
       : params;
-    pushWorkspaceLocation("station-status", normalizedModule, normalizedParams);
+    if (!pushWorkspaceLocation("station-status", normalizedModule, normalizedParams)) return;
     setActiveWorkspace("station-status");
     setActiveStationModule(normalizedModule as StationModuleId);
     if (isCompactLayout) {
@@ -597,7 +597,9 @@ const Index = () => {
       case "data-center":
         return (
           <PermissionGuard module="data">
-            <DeploymentPlanningCenter />
+            <WorkspaceRuntimeBoundary label="Data-center">
+              <DeploymentPlanningCenter />
+            </WorkspaceRuntimeBoundary>
           </PermissionGuard>
         );
       case "pcb-designer":
@@ -768,3 +770,4 @@ const Index = () => {
 };
 
 export default Index;
+import { pushWorkspaceHistory, replaceWorkspaceHistory, watchWorkspaceHistory } from "@/lib/workspaceHistory";

@@ -7,7 +7,9 @@ const SUPABASE_PUBLISHABLE_KEY = (
   import.meta.env.VITE_SUPABASE_ANON_KEY
   ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 ) as string | undefined;
-const SUPABASE_SCHEMA = (import.meta.env.VITE_SUPABASE_SCHEMA ?? "workspace") as keyof Database;
+// __InternalSupabase is metadata, not a queryable schema. Including it in this
+// type poisons all query inference and hides useful compile-time diagnostics.
+const SUPABASE_SCHEMA = (import.meta.env.VITE_SUPABASE_SCHEMA ?? "workspace") as keyof Omit<Database, "__InternalSupabase">;
 
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   throw new Error(
@@ -43,7 +45,7 @@ const authStorageKey = createTabAuthStorageKey();
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database, typeof SUPABASE_SCHEMA>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   db: {
     schema: SUPABASE_SCHEMA,
   },
@@ -63,5 +65,5 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     // Supabase otherwise waits forever for the browser Auth Web Lock. A stale
     // lock in another tab must reject so the application can recover safely.
     lock: createBoundedAuthLock(),
-  }
+  } as NonNullable<Parameters<typeof createClient<Database, typeof SUPABASE_SCHEMA>>[2]>["auth"] & { lockAcquireTimeout: number },
 });

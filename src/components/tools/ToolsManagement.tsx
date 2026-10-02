@@ -1,3 +1,4 @@
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 import { useEffect, useMemo, useState } from "react";
 import DOMPurify from "dompurify";
 import {
@@ -324,7 +325,7 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
   useEffect(() => {
     const url = new URL(window.location.href);
     url.searchParams.set("assetView", tab);
-    window.history.replaceState({}, "", url);
+    replaceWorkspaceHistory(url);
   }, [tab]);
 
   const assets = useMemo<Asset[]>(() => [
@@ -383,7 +384,7 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
     setSelectedAsset(requestedAsset);
     const url = new URL(window.location.href);
     url.searchParams.delete("assetId");
-    window.history.replaceState({}, "", url);
+    replaceWorkspaceHistory(url);
   }, [assets, loading]);
 
   const normalizedSearch = search.trim().toLowerCase();

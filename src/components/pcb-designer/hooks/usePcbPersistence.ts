@@ -5,6 +5,7 @@ import {
   type PcbRemoteClient,
 } from "../core/remoteSync.ts";
 import { PcbLocalRepository, type StorageLike } from "../core/storage.ts";
+import { pcbRecoveryClient } from "../core/recoveryClient.ts";
 import type { PcbSaveState } from "../types.ts";
 
 export type { PcbPersistenceStatus, PcbRemoteClient } from "../core/remoteSync.ts";
@@ -21,6 +22,8 @@ export interface UsePcbPersistenceOptions {
   remoteClient?: PcbRemoteClient | null;
   allowRemoteSync?: boolean;
   editor?: PcbEditorIdentity | null;
+  initialSavedRevision?: string;
+  recoveryClientId?: string;
 }
 
 export interface PcbPersistenceControl {
@@ -53,6 +56,8 @@ export function usePcbPersistence({
   remoteClient,
   allowRemoteSync = false,
   editor,
+  initialSavedRevision,
+  recoveryClientId = pcbRecoveryClient(),
 }: UsePcbPersistenceOptions): PcbPersistenceControl {
   const repository = useMemo(() => new PcbLocalRepository(storage ?? browserStorage()), [storage]);
   const client = allowRemoteSync ? remoteClient ?? null : null;
@@ -61,7 +66,7 @@ export function usePcbPersistence({
   const activeRef = useRef(true);
   const requestRef = useRef(0);
   const saveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
-  const [savedRevision, setSavedRevision] = useState(state.updatedAt);
+  const [savedRevision, setSavedRevision] = useState(initialSavedRevision ?? state.updatedAt);
   const [status, setStatus] = useState<PcbPersistenceStatus>(client ? "synced" : "local");
   const [lastSavedEditor, setLastSavedEditor] = useState<string | null>(null);
   const [lastSavedProjectId, setLastSavedProjectId] = useState<string | null>(null);
@@ -69,6 +74,17 @@ export function usePcbPersistence({
   stateRef.current = state;
   repositoryRef.current = repository;
   const hasUnsavedChanges = state.updatedAt !== savedRevision;
+  const ownerId = editor?.userId ?? "local";
+  const recoverySavedRef = useRef(true);
+
+  useEffect(() => {
+    if (hasUnsavedChanges) {
+      recoverySavedRef.current = repository.saveRecovery(ownerId, state, savedRevision, recoveryClientId);
+    } else {
+      repository.clearRecovery(ownerId, recoveryClientId);
+      recoverySavedRef.current = true;
+    }
+  }, [hasUnsavedChanges, ownerId, recoveryClientId, repository, savedRevision, state]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -90,7 +106,17 @@ export function usePcbPersistence({
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warnBeforeUnload);
-    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+    const guardNavigation = (event: Event) => {
+      const message = recoverySavedRef.current
+        ? "PCB 有尚未儲存的修改。草稿會保留在此裝置，返回後可繼續編輯。確定離開？"
+        : "PCB 有尚未儲存的修改，且此裝置無法保留草稿。離開會遺失修改，確定離開？";
+      if (!window.confirm(message)) event.preventDefault();
+    };
+    window.addEventListener("workspace-before-navigate", guardNavigation);
+    return () => {
+      window.removeEventListener("beforeunload", warnBeforeUnload);
+      window.removeEventListener("workspace-before-navigate", guardNavigation);
+    };
   }, [hasUnsavedChanges]);
 
   const markClean = useCallback((revision?: string) => {

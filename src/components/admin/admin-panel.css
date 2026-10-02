@@ -890,13 +890,15 @@
   line-height: 1.5;
 }
 
-.admin-permissions-dialog {
+.admin-permissions-dialog[data-admin-dialog="permissions"] {
   display: grid;
   width: min(1160px, calc(100vw - 24px));
   max-width: 1160px;
   max-height: min(780px, calc(100dvh - 24px));
   grid-template-rows: auto minmax(0, 1fr) auto;
   container-type: inline-size;
+  gap: 0;
+  padding: 0;
 }
 
 .admin-permissions-header,
@@ -945,7 +947,8 @@
 }
 
 .admin-permissions-scroll {
-  max-height: min(640px, calc(100dvh - 170px));
+  min-height: 0;
+  min-width: 0;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
@@ -1047,7 +1050,7 @@
 .admin-permission-level {
   display: flex;
   min-width: 0;
-  min-height: 32px;
+  min-height: 44px;
   cursor: pointer;
   align-items: center;
   justify-content: center;
@@ -1122,7 +1125,7 @@
 .admin-permission-group-row {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(110px, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
   border-bottom: 1px solid rgb(74 129 163 / 22%);
@@ -1160,6 +1163,51 @@
   gap: 3px;
 }
 
+.admin-user-edit-dialog .admin-user-edit-actions > div {
+  min-width: 0;
+}
+
+@media (max-width: 639px) {
+  .admin-user-edit-dialog .admin-user-edit-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-user-edit-dialog .admin-user-edit-actions > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-user-edit-dialog .admin-user-edit-actions button {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+.admin-permission-toggle-list {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.admin-permissions-manager label {
+  min-width: 0;
+  min-height: 44px;
+  line-height: 1.5;
+}
+
+.admin-permission-level:focus-within,
+.admin-permission-toggle:focus-within,
+.admin-permissions-manager label:focus-within {
+  outline: 2px solid #67e8f9;
+  outline-offset: 2px;
+}
+
+.admin-permissions-presets button,
+.admin-permission-group-shortcuts button,
+.admin-permissions-footer button {
+  min-height: 44px;
+}
+
 .admin-permission-group-shortcuts button {
   height: 28px;
   padding-inline: 6px;
@@ -1169,7 +1217,7 @@
 
 .admin-permission-toggle {
   display: flex;
-  min-height: 30px;
+  min-height: 44px;
   cursor: pointer;
   align-items: center;
   gap: 5px;
@@ -1441,7 +1489,7 @@
     display: block;
   }
 
-  .admin-permissions-dialog {
+  .admin-permissions-dialog[data-admin-dialog="permissions"] {
     width: calc(100vw - 8px);
     max-height: calc(100dvh - 8px);
     border-radius: 16px;
@@ -1486,7 +1534,6 @@
   }
 
   .admin-permissions-scroll {
-    max-height: calc(100dvh - 176px);
     padding: 6px;
     scrollbar-gutter: auto;
   }
@@ -1520,7 +1567,7 @@
   }
 
   .admin-permission-level {
-    min-height: 38px;
+    min-height: 44px;
     font-size: 0.76rem;
   }
 
@@ -1555,7 +1602,7 @@
   }
 
   .admin-permission-toggle {
-    min-height: 38px;
+    min-height: 44px;
     justify-content: center;
   }
 
