@@ -1,3 +1,4 @@
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -210,7 +211,7 @@ export function ProductionMonitor({
     const url = new URL(window.location.href);
     if (attentionFilter) url.searchParams.set("attention", "1");
     else url.searchParams.delete("attention");
-    window.history.replaceState({}, "", url);
+    replaceWorkspaceHistory(url);
   }, [attentionFilter, attentionFilterOverride]);
 
   const sortedStations = useMemo(

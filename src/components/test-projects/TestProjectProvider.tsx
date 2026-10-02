@@ -1,3 +1,4 @@
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 import {
   createContext,
   useCallback,
@@ -105,7 +106,7 @@ function updateProjectQuery(projectId: string) {
 
   const url = new URL(window.location.href);
   url.searchParams.set("project", projectId);
-  window.history.replaceState({}, "", url);
+  replaceWorkspaceHistory(url);
 }
 
 export function TestProjectProvider({ children }: { children: ReactNode }) {

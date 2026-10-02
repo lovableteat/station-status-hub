@@ -106,10 +106,6 @@ export function MobileSystemCard({
             <button 
               className="text-primary hover:underline cursor-pointer text-left"
               onClick={() => {
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('system', system.system_name);
-                window.history.pushState({}, '', currentUrl.toString());
-                
                 const event = new CustomEvent('navigate', { 
                   detail: { module: 'monitor', params: { system: system.system_name } } 
                 });

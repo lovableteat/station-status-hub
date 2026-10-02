@@ -850,7 +850,7 @@ const buildArchiveHtml = ({
 
           renderState(nextStateId);
           if (window.location.hash !== "#" + nextModule) {
-            history.replaceState(null, "", "#" + nextModule);
+            history.replaceState(history.state, "", "#" + nextModule);
           }
         }
 

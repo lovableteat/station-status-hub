@@ -21,6 +21,16 @@ async function mount({run,normalizeApply=false,user='audit-user',windowTarget}={
 }
 const draft=(d,label)=>({...d,sites:d.sites.map(s=>({...s,label}))});
 
+test('Data-center journal and future deliveries cannot replace a newer snapshot with a provably older commit',async()=>{
+ const h=await mount(),pending=deferred();try{
+  h.run(()=>pending.promise);await act(async()=>h.state.retry());await flush(5);
+  const event={eventType:'UPDATE',old:{},new:{...h.row,document:draft(h.document,'older-commit'),updated_at:v(1)},commit_timestamp:'2026-10-02T01:01:01Z'};
+  await act(async()=>h.db.channels[0].emit('data_center_projects',event));await flush();await act(async()=>pending.resolve(ok([{...h.row,document:draft(h.document,'newer-snapshot'),updated_at:v(2)}])));await flush();assert.equal(h.doc.sites[0].label,'newer-snapshot');
+  await act(async()=>h.db.channels[0].emit('data_center_projects',{...event,commit_timestamp:'2026-10-02T01:01:30Z'}));await flush();assert.equal(h.doc.sites[0].label,'newer-snapshot');
+  await act(async()=>h.db.channels[0].emit('data_center_projects',{...event,commit_timestamp:v(3)}));await flush();assert.equal(h.doc.sites[0].label,'older-commit','later commit with old transaction start remains authoritative');
+ }finally{await h.unmount();}
+});
+
 test('Chinese search, null/date ordering and PCB JSON/CSV exports retain scoped data and quoted text',()=>{
  const load=loader(),{filterAndSortTrackerSystems}=load('src/components/test-tracker/testTrackerFilters.ts');
  const rows=[{id:'null',system_name:'機台 10',serial_number:null,assigned_engineer:null,created_at:null},{id:'old',system_name:'機台 2',assigned_engineer:'工程師陳',created_at:'2026-10-02T00:00:00Z'},{id:'offset',system_name:'機台 3',created_at:'2026-10-02T08:00:01+08:00'},{id:'invalid',system_name:'備用',created_at:'invalid'}];

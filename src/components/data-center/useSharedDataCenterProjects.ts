@@ -4,7 +4,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { withReadDeadline } from "@/lib/readDeadline";
 import { semanticJson } from "@/lib/semanticJson";
-import { acceptRowChange, type RealtimeRow, type RowChange } from "@/lib/realtimeRows";
+import { acceptRowChange, seedSnapshotClocks, type RealtimeRow, type RowChange } from "@/lib/realtimeRows";
 import { isUninitializedDataCenterDocument, parseDataCenterDocument as parseDocument } from "./projectDocument";
 import type { FacilityPlan, SitePlan } from "./dataCenterTypes";
 
@@ -97,7 +97,7 @@ export function useSharedDataCenterProjects({
   const versionRef = useRef("");
   const draftBaseRef = useRef("");
   const eventRevisionRef = useRef(0);
-  const eventRowsRef = useRef(new Map<string, { revision: number; project: DataCenterProjectSummary | null }>());
+  const eventRowsRef = useRef(new Map<string, { revision: number; project: DataCenterProjectSummary | null; timestamp?: string }>());
   const eventClocksRef = useRef(new Map<string, string>());
   const readSequenceRef = useRef(0);
   const readsInFlightRef = useRef(0);
@@ -207,8 +207,13 @@ export function useSharedDataCenterProjects({
       }
 
       const byId = new Map<string, DataCenterProjectSummary>(data.map((row) => { const project = mapProject(row); return [project.id, project] as const; }));
+      seedSnapshotClocks(eventClocksRef.current, data);
       for (const [id, event] of eventRowsRef.current) {
         if (event.revision <= eventRevision) continue;
+        if (!acceptRowChange(eventClocksRef.current, {
+          eventType: event.project ? "UPDATE" : "DELETE", new: event.project ? { id } : {},
+          old: { id }, commit_timestamp: event.timestamp,
+        })) continue;
         if (event.project) byId.set(id, event.project); else byId.delete(id);
       }
       const nextProjects = [...byId.values()];
@@ -299,12 +304,12 @@ export function useSharedDataCenterProjects({
           if (!active || !acceptRowChange(eventClocksRef.current, payload as unknown as RowChange<RealtimeRow>)) return;
           if (payload.eventType === "DELETE") {
             const id = (payload.old as { id?: string }).id;
-            if (id) eventRowsRef.current.set(id, { revision: ++eventRevisionRef.current, project: null });
+            if (id) eventRowsRef.current.set(id, { revision: ++eventRevisionRef.current, project: null, timestamp: payload.commit_timestamp });
             recover();
             return;
           }
           const next = mapProject(payload.new as Parameters<typeof mapProject>[0]);
-          eventRowsRef.current.set(next.id, { revision: ++eventRevisionRef.current, project: next });
+          eventRowsRef.current.set(next.id, { revision: ++eventRevisionRef.current, project: next, timestamp: payload.commit_timestamp || next.updatedAt });
           setProjects((items) => {
             if (items.some((item) => item.id === next.id && semanticJson(item) === semanticJson(next))) return items;
             const exists = items.some((item) => item.id === next.id);
