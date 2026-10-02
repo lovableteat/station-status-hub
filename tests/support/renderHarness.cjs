@@ -19,10 +19,11 @@ function browser() {
   const events = new EventTarget();
   setMaxListeners(0, events); // 20 simulated browser clients share this test event target.
   const storage = new Map();
-  const localStorage = {getItem: key => storage.get(key) ?? null, setItem: (key,value) => storage.set(key,value)};
+  const localStorage = {getItem: key => storage.get(key) ?? null, setItem: (key,value) => storage.set(key,value), removeItem:key=>storage.delete(key)};
   const location = new URL('http://localhost/?workspace=station-status&project=A');
+  const session = new Map();
   return Object.assign(events, {
-    location, localStorage, confirm: () => false,
+    location, localStorage, sessionStorage: {getItem:key=>session.get(key)??null,setItem:(key,value)=>session.set(key,value)}, confirm: () => false,
     history: {replaceState: (_,__,url) => { location.href = String(url); }, pushState: (_,__,url) => { location.href = String(url); }},
     setTimeout, clearTimeout, setInterval, clearInterval,
     matchMedia: () => ({matches:true, addEventListener(){}, removeEventListener(){}}),

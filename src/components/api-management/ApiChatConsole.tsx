@@ -51,6 +51,7 @@ import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
+import { semanticJson } from "@/lib/semanticJson";
 
 import {
   buildProviderChatRequest,
@@ -940,6 +941,8 @@ export function ApiChatConsole({
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const composerDragDepthRef = useRef(0);
   const hasHydratedConversationRef = useRef(false);
+  const conversationHydratingRef = useRef(false);
+  const lastSyncedConversationsRef = useRef("");
   const conversationRemoteReadyRef = useRef(false);
   const conversationSyncGenerationRef = useRef(0);
   const conversationSyncQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1044,6 +1047,8 @@ export function ApiChatConsole({
     const generation = conversationSyncGenerationRef.current + 1;
     conversationSyncGenerationRef.current = generation;
     hasHydratedConversationRef.current = false;
+    conversationHydratingRef.current = false;
+    lastSyncedConversationsRef.current = "";
     conversationRemoteReadyRef.current = false;
     setConversationsLoaded(false);
     setConversationCloudState("loading");
@@ -1098,7 +1103,9 @@ export function ApiChatConsole({
         if (error) throw error;
         if (!mounted || conversationSyncGenerationRef.current !== generation) return;
 
-        setSavedConversations(((data ?? []) as PrivateConversationRow[]).map(mapPrivateConversationRow));
+        const conversations = ((data ?? []) as PrivateConversationRow[]).map(mapPrivateConversationRow);
+        lastSyncedConversationsRef.current = semanticJson(serializePrivateConversations(conversations));
+        setSavedConversations(conversations);
         conversationRemoteReadyRef.current = true;
         setConversationCloudState("synced");
       } catch (error) {
@@ -1145,6 +1152,7 @@ export function ApiChatConsole({
     );
 
     if (activeConversation) {
+      conversationHydratingRef.current = true;
       setMessages(activeConversation.messages);
       setDraftMessage(activeConversation.draftMessage);
       setConnectionState(null);
@@ -1167,12 +1175,15 @@ export function ApiChatConsole({
 
     const generation = conversationSyncGenerationRef.current;
     const payload = serializePrivateConversations(savedConversations);
+    const serialized = semanticJson(payload);
+    if (serialized === lastSyncedConversationsRef.current || conversationHydratingRef.current) return;
     setConversationCloudState("saving");
 
     const timer = window.setTimeout(() => {
       conversationSyncQueueRef.current = conversationSyncQueueRef.current
         .catch(() => undefined)
         .then(async () => {
+          if (conversationSyncGenerationRef.current !== generation) return;
           const { error } = await supabase.rpc("sync_ai_workspace_conversations", {
             p_owner_id: ownerId,
             p_items: payload,
@@ -1180,6 +1191,7 @@ export function ApiChatConsole({
           if (error) throw error;
 
           if (conversationSyncGenerationRef.current === generation) {
+            lastSyncedConversationsRef.current = serialized;
             setConversationCloudState("synced");
           }
         })
@@ -1339,19 +1351,22 @@ export function ApiChatConsole({
 
   useEffect(() => {
     if (!isChatOnly || !conversationsLoaded || !hasHydratedConversationRef.current) return;
+    if (conversationHydratingRef.current) { conversationHydratingRef.current = false; return; }
 
     if (!hasConversationContent) {
-      setSavedConversations((current) =>
-        current.filter((item) => item.id !== AUTO_SAVED_CONVERSATION_ID)
-      );
+      setSavedConversations((current) => current.some((item) => item.id === AUTO_SAVED_CONVERSATION_ID)
+        ? current.filter((item) => item.id !== AUTO_SAVED_CONVERSATION_ID) : current);
       return;
     }
 
     const snapshot = createCurrentConversationSnapshot(AUTO_SAVED_CONVERSATION_ID);
-    setSavedConversations((current) => [
-      snapshot,
-      ...current.filter((item) => item.id !== AUTO_SAVED_CONVERSATION_ID).slice(0, 23),
-    ]);
+    setSavedConversations((current) => {
+      const previous = current.find((item) => item.id === AUTO_SAVED_CONVERSATION_ID);
+      // Opening an unchanged conversation is not a save and must retain its timestamp.
+      if (previous && semanticJson({ messages: previous.messages, draft: previous.draftMessage })
+        === semanticJson({ messages: snapshot.messages, draft: snapshot.draftMessage })) return current;
+      return [snapshot, ...current.filter((item) => item.id !== AUTO_SAVED_CONVERSATION_ID).slice(0, 23)];
+    });
   }, [
     activeKeyLabel,
     conversationsLoaded,

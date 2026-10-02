@@ -264,10 +264,10 @@ function useUnifiedDataSource() {
 
       const merge = <T extends RealtimeRow>(key: string, rows: T[], flow?: string | null) =>
         reconcileSnapshot(rows, (pendingChangesRef.current.get(key) ?? []) as RowChange<T>[], activeProjectId, flow);
-      setSystems(merge("systems", nextSystems));
-      setStations(merge("stations", nextStations, flowVersionId));
-      setTestItems(merge("items", nextItems, flowVersionId));
-      setStationContents(merge("contents", nextContents, flowVersionId));
+      setSystems(merge("systems", nextSystems).sort((a, b) => a.system_name.localeCompare(b.system_name) || a.id.localeCompare(b.id)));
+      setStations(merge("stations", nextStations, flowVersionId).sort((a, b) => a.station_order - b.station_order || a.id.localeCompare(b.id)));
+      setTestItems(merge("items", nextItems, flowVersionId).sort((a, b) => a.item_order - b.item_order || a.id.localeCompare(b.id)));
+      setStationContents(merge("contents", nextContents, flowVersionId).sort((a, b) => a.order_num - b.order_num || a.id.localeCompare(b.id)));
       setProgress(merge("progress", nextProgress));
       loadedProjectRef.current = scope;
     } catch (error) {
@@ -378,7 +378,7 @@ function useUnifiedDataSource() {
     (payload: unknown) => {
       handleProjectScopedRealtime(
         payload as ProjectRealtimePayload<UnifiedSystem>,
-        setSystems, "systems"
+        setSystems, "systems", (left, right) => left.system_name.localeCompare(right.system_name) || left.id.localeCompare(right.id)
       );
     },
     [handleProjectScopedRealtime]
@@ -389,7 +389,7 @@ function useUnifiedDataSource() {
       handleProjectScopedRealtime(
         payload as ProjectRealtimePayload<UnifiedStation>,
         setStations, "stations",
-        (left, right) => left.station_order - right.station_order
+        (left, right) => left.station_order - right.station_order || left.id.localeCompare(right.id)
       );
     },
     [handleProjectScopedRealtime]
@@ -400,7 +400,7 @@ function useUnifiedDataSource() {
       handleProjectScopedRealtime(
         payload as ProjectRealtimePayload<UnifiedTestItem>,
         setTestItems, "items",
-        (left, right) => left.item_order - right.item_order
+        (left, right) => left.item_order - right.item_order || left.id.localeCompare(right.id)
       );
     },
     [handleProjectScopedRealtime]
@@ -411,7 +411,7 @@ function useUnifiedDataSource() {
       handleProjectScopedRealtime(
         payload as ProjectRealtimePayload<StationContent>,
         setStationContents, "contents",
-        (left, right) => left.order_num - right.order_num
+        (left, right) => left.order_num - right.order_num || left.id.localeCompare(right.id)
       );
     },
     [handleProjectScopedRealtime]
@@ -489,7 +489,12 @@ function useUnifiedDataSource() {
     let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
     const recover = () => {
       if (recoveryTimer) clearTimeout(recoveryTimer);
-      recoveryTimer = setTimeout(() => { if (active) void loadAllData(); }, 150);
+      recoveryTimer = setTimeout(() => {
+        if (!active) return;
+        // A reconnect/focus burst must not start overlapping full snapshots.
+        if (loadingSnapshotRef.current) { recover(); return; }
+        void loadAllData();
+      }, 150);
     };
     const projectFilter = `project_id=eq.${activeProjectId}`;
     const channel = supabase

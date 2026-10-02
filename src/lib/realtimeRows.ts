@@ -18,7 +18,7 @@ export function acceptRowChange<T extends RealtimeRow>(clocks: Map<string, strin
   const timestamp = change.commit_timestamp ?? row.updated_at;
   if (!row.id || !timestamp) return true;
   const previous = clocks.get(row.id);
-  if (previous && timestamp < previous) return false;
+  if (previous && Date.parse(timestamp) < Date.parse(previous)) return false;
   clocks.set(row.id, timestamp);
   return true;
 }
@@ -37,7 +37,9 @@ export function applyRowChange<T extends RealtimeRow>(
   if (flowVersionId && record.flow_version_id && record.flow_version_id !== flowVersionId) {
     return rows.filter((row) => row.id !== record.id);
   }
-  if (existing?.updated_at && record.updated_at && record.updated_at < existing.updated_at) return rows;
+  // updated_at can be the transaction-start time; commit order is authoritative.
+  if (!change.commit_timestamp && existing?.updated_at && record.updated_at
+    && Date.parse(record.updated_at) < Date.parse(existing.updated_at)) return rows;
   const next = { ...existing, ...record } as T;
   if (existing && JSON.stringify(existing) === JSON.stringify(next)) return rows;
   return existing ? rows.map((row) => row.id === next.id ? next : row) : [...rows, next];
@@ -48,5 +50,7 @@ export function reconcileSnapshot<T extends RealtimeRow>(
   snapshot: T[], changes: RowChange<T>[], projectId: string, flowVersionId?: string | null,
 ): T[] {
   const unique = [...new Map(snapshot.map((row) => [row.id, row])).values()];
-  return changes.reduce((rows, change) => applyRowChange(rows, change, projectId, flowVersionId), unique);
+  const clocks = new Map<string, string>();
+  return changes.reduce((rows, change) => acceptRowChange(clocks, change)
+    ? applyRowChange(rows, change, projectId, flowVersionId) : rows, unique);
 }
