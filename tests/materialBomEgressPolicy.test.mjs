@@ -123,7 +123,7 @@ test("permanent BOM permission and schema errors do not loop", async () => {
 test("partial BOM previews remain read-only until the full workspace arrives", async () => {
   const pageSource = await readFile(pageUrl, "utf8");
   assert.match(pageSource, /const isPreviewDataset = !isFullDatasetLoaded/);
-  assert.match(pageSource, /disabled=\{!isCollaborativeReady \|\| !isFullDatasetLoaded\}/);
+  assert.match(pageSource, /disabled=\{!canEdit \|\| !isCollaborativeReady \|\| !isFullDatasetLoaded\}/);
   assert.match(pageSource, /if \(!isFullDatasetLoaded\) \{\s*showDatasetSyncingToast\(\);/);
 });
 
