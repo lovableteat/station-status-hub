@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CircleHelp,
@@ -141,12 +141,15 @@ export function SystemEditDialog({
   variant = "icon",
 }: SystemEditDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const openingDefaultsRef = useRef({ systemName, assignedEngineer, model, serialNumber });
+  openingDefaultsRef.current = { systemName, assignedEngineer, model, serialNumber };
   const isOpen = open ?? internalOpen;
   const setIsOpen = (nextOpen: boolean) => {
     if (open === undefined) setInternalOpen(nextOpen);
     onOpenChange?.(nextOpen);
   };
-  const [editValues, setEditValues] = useState({
+  const editedFieldsRef = useRef<Set<string>>(new Set());
+  const [editValues, setEditValuesState] = useState({
     system_name: systemName,
     assigned_engineer: assignedEngineer,
     model: model || "GB300",
@@ -161,6 +164,17 @@ export function SystemEditDialog({
     exclude_from_dashboard: false,
     team: "",
   });
+  // Basic fields are usable while dynamic metadata loads. Track only fields the
+  // user changed so a late response can hydrate the remaining fields safely.
+  const setEditValues: typeof setEditValuesState = (action) => {
+    setEditValuesState((current) => {
+      const next = typeof action === "function" ? action(current) : action;
+      Object.keys(next).forEach((key) => {
+        if (next[key as keyof typeof next] !== current[key as keyof typeof current]) editedFieldsRef.current.add(key);
+      });
+      return next;
+    });
+  };
   const [projectId, setProjectId] = useState("");
   const [addressFields, setAddressFields] = useState<AddressField[]>([]);
   const [addressValues, setAddressValues] = useState<Record<string, string>>({});
@@ -317,7 +331,7 @@ export function SystemEditDialog({
 
         if (!isActive) return;
         setProjectId(data.project_id);
-        setEditValues({
+        const loadedValues = {
           system_name: data.system_name,
           assigned_engineer: data.assigned_engineer || "",
           model: data.model || "GB300",
@@ -331,7 +345,11 @@ export function SystemEditDialog({
           cuda_version: data.cuda_version || "",
           exclude_from_dashboard: data.exclude_from_dashboard || false,
           team: data.team || "",
-        });
+        };
+        setEditValuesState((current) => Object.fromEntries(
+          Object.entries(loadedValues).map(([key, value]) =>
+            [key, editedFieldsRef.current.has(key) ? current[key as keyof typeof current] : value]),
+        ) as typeof current);
         setAddressLoadError("");
         setAddressFields(fieldResult.data ?? []);
         setAddressValues(
@@ -369,6 +387,14 @@ export function SystemEditDialog({
     };
 
     if (isOpen) {
+      const { systemName, assignedEngineer, model, serialNumber } = openingDefaultsRef.current;
+      editedFieldsRef.current.clear();
+      setEditValuesState({
+        system_name: systemName, assigned_engineer: assignedEngineer, model: model || "GB300",
+        serial_number: serialNumber || "", cabinet: "", os_mac_address: "", bmc_address: "",
+        old_bmc_address: "", bom_90: "", ubuntu_version: "", cuda_version: "",
+        exclude_from_dashboard: false, team: "",
+      });
       setLoadedSystemId(null);
       setCompatibilityMode(false);
       setLegacySoftwareFields([]);

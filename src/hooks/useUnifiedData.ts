@@ -22,6 +22,8 @@ import {
 
 import { fetchAllPages } from "./fetchAllPages";
 import { useStationStatus } from "./useStationStatus";
+import { acceptRowChange, applyRowChange, reconcileSnapshot, type RowChange, type RealtimeRow } from "@/lib/realtimeRows";
+import { withReadDeadline } from "@/lib/readDeadline";
 
 interface UnifiedSystem {
   id: string;
@@ -116,11 +118,12 @@ interface ProjectRealtimePayload<T extends ProjectRealtimeRecord> {
   eventType: "DELETE" | "INSERT" | "UPDATE";
   new: Partial<T>;
   old: Partial<T>;
+  commit_timestamp?: string;
 }
 
 function useUnifiedDataSource() {
   const { user } = useUser();
-  const { activeProject, activeProjectId, isLoadingProjects } = useTestProject();
+  const { activeProject, activeProjectId } = useTestProject();
   const [systems, setSystems] = useState<UnifiedSystem[]>([]);
   const [stations, setStations] = useState<UnifiedStation[]>([]);
   const [testItems, setTestItems] = useState<UnifiedTestItem[]>([]);
@@ -131,12 +134,28 @@ function useUnifiedDataSource() {
   const { toast } = useToast();
   const loadSequenceRef = useRef(0);
   const loadedProjectRef = useRef<string | null>(null);
+  const userId = user?.userId ?? null;
+  const flowVersionId = activeProject?.active_flow_version_id ?? null;
+  const scope = `${userId}:${activeProjectId}:${flowVersionId}`;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const pendingChangesRef = useRef<Map<string, RowChange<RealtimeRow>[]>>(new Map());
+  const loadingSnapshotRef = useRef(false);
+  const eventClocksRef = useRef<Map<string, Map<string, string>>>(new Map());
+  const eventScopeRef = useRef(scope);
+  if (eventScopeRef.current !== scope) {
+    eventScopeRef.current = scope;
+    eventClocksRef.current.clear();
+  }
 
   const stationStatuses = useStationStatus(systems, stations, progress);
 
   const loadAllData = useCallback(async () => {
     const loadSequence = ++loadSequenceRef.current;
-    if (!user || !activeProjectId) {
+    const isCurrent = () => loadSequence === loadSequenceRef.current && scope === scopeRef.current;
+    pendingChangesRef.current.clear();
+    loadingSnapshotRef.current = true;
+    if (!userId || !activeProjectId) {
       loadedProjectRef.current = null;
       setSystems([]);
       setStations([]);
@@ -145,10 +164,11 @@ function useUnifiedDataSource() {
       setStationContents([]);
       setIsLoading(false);
       setIsUpdating(false);
+      loadingSnapshotRef.current = false;
       return;
     }
 
-    const isInitialProjectLoad = loadedProjectRef.current !== activeProjectId;
+    const isInitialProjectLoad = loadedProjectRef.current !== scope;
     if (isInitialProjectLoad) {
       setIsLoading(true);
       setSystems([]);
@@ -161,8 +181,8 @@ function useUnifiedDataSource() {
     }
 
     try {
-      const activeFlowVersionId = activeProject?.active_flow_version_id ?? null;
-      const fetchStations = (includeFlowVersion: boolean) => fetchAllPages((from, to) => {
+      const activeFlowVersionId = flowVersionId;
+      const fetchStations = (includeFlowVersion: boolean) => withReadDeadline((signal) => fetchAllPages((from, to) => {
         let query = supabase
           .from("test_flow_stations")
           .select("*")
@@ -170,9 +190,9 @@ function useUnifiedDataSource() {
         if (includeFlowVersion && activeFlowVersionId) {
           query = query.eq("flow_version_id", activeFlowVersionId);
         }
-        return query.order("station_order").order("id").range(from, to);
-      });
-      const fetchItems = (includeFlowVersion: boolean) => fetchAllPages((from, to) => {
+        return query.order("station_order").order("id").range(from, to).abortSignal(signal);
+      }));
+      const fetchItems = (includeFlowVersion: boolean) => withReadDeadline((signal) => fetchAllPages((from, to) => {
         let query = supabase
           .from("test_flow_items")
           .select("*")
@@ -180,9 +200,9 @@ function useUnifiedDataSource() {
         if (includeFlowVersion && activeFlowVersionId) {
           query = query.eq("flow_version_id", activeFlowVersionId);
         }
-        return query.order("item_order").order("id").range(from, to);
-      });
-      const fetchContents = (includeFlowVersion: boolean) => fetchAllPages((from, to) => {
+        return query.order("item_order").order("id").range(from, to).abortSignal(signal);
+      }));
+      const fetchContents = (includeFlowVersion: boolean) => withReadDeadline((signal) => fetchAllPages((from, to) => {
         let query = supabase
           .from("station_contents")
           .select("*")
@@ -190,26 +210,26 @@ function useUnifiedDataSource() {
         if (includeFlowVersion && activeFlowVersionId) {
           query = query.eq("flow_version_id", activeFlowVersionId);
         }
-        return query.order("order_num").order("id").range(from, to);
-      });
+        return query.order("order_num").order("id").range(from, to).abortSignal(signal);
+      }));
 
       const [systemsRes, initialStationsRes, initialItemsRes, initialContentsRes, progressRes] = await Promise.all([
-        fetchAllPages((from, to) => supabase
+        withReadDeadline((signal) => fetchAllPages((from, to) => supabase
           .from("test_systems")
           .select("*")
           .eq("project_id", activeProjectId)
           .order("system_name")
           .order("id")
-          .range(from, to)),
+          .range(from, to).abortSignal(signal))),
         fetchStations(Boolean(activeFlowVersionId)),
         fetchItems(Boolean(activeFlowVersionId)),
         fetchContents(Boolean(activeFlowVersionId)),
-        fetchAllPages((from, to) => supabase
+        withReadDeadline((signal) => fetchAllPages((from, to) => supabase
           .from("test_progress")
           .select("*")
           .eq("project_id", activeProjectId)
           .order("id")
-          .range(from, to)),
+          .range(from, to).abortSignal(signal))),
       ]);
       let stationsRes = initialStationsRes;
       let itemsRes = initialItemsRes;
@@ -234,7 +254,7 @@ function useUnifiedDataSource() {
       if (contentsRes.error) throw contentsRes.error;
       if (progressRes.error) throw progressRes.error;
 
-      if (loadSequence !== loadSequenceRef.current) return;
+      if (!isCurrent()) return;
 
       const nextSystems = (systemsRes.data ?? []) as UnifiedSystem[];
       const nextStations = (stationsRes.data ?? []) as UnifiedStation[];
@@ -242,13 +262,16 @@ function useUnifiedDataSource() {
       const nextContents = (contentsRes.data ?? []) as StationContent[];
       const nextProgress = (progressRes.data ?? []) as UnifiedProgress[];
 
-      setSystems(nextSystems);
-      setStations(nextStations);
-      setTestItems(nextItems);
-      setStationContents(nextContents);
-      setProgress(nextProgress);
-      loadedProjectRef.current = activeProjectId;
+      const merge = <T extends RealtimeRow>(key: string, rows: T[], flow?: string | null) =>
+        reconcileSnapshot(rows, (pendingChangesRef.current.get(key) ?? []) as RowChange<T>[], activeProjectId, flow);
+      setSystems(merge("systems", nextSystems));
+      setStations(merge("stations", nextStations, flowVersionId));
+      setTestItems(merge("items", nextItems, flowVersionId));
+      setStationContents(merge("contents", nextContents, flowVersionId));
+      setProgress(merge("progress", nextProgress));
+      loadedProjectRef.current = scope;
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Failed to load project-scoped station data:", error);
       const serviceRestricted = isSupabaseServiceRestrictedError(error);
       toast({
@@ -259,31 +282,50 @@ function useUnifiedDataSource() {
         variant: "destructive",
       });
     } finally {
-      if (loadSequence === loadSequenceRef.current) {
+      if (isCurrent()) {
+        loadingSnapshotRef.current = false;
+        pendingChangesRef.current.clear();
         setIsLoading(false);
         setIsUpdating(false);
       }
     }
-  }, [activeProject?.active_flow_version_id, activeProjectId, toast, user]);
+  }, [activeProjectId, flowVersionId, scope, toast, userId]);
 
   const refreshProgress = useCallback(
     async (systemId?: string) => {
       if (!activeProjectId) return false;
+      const requestScope = scope;
+      const snapshotSequence = loadSequenceRef.current;
+      const changes: RowChange<UnifiedProgress>[] = [];
+      const key = `progress-refresh:${systemId ?? "all"}`;
+      pendingChangesRef.current.set(key, changes);
 
-      const { data, error } = await fetchAllPages((from, to) => {
+      let result: { data: UnifiedProgress[]; error: unknown };
+      try {
+        result = await withReadDeadline((signal) => fetchAllPages((from, to) => {
         let query = supabase
           .from("test_progress")
           .select("*")
           .eq("project_id", activeProjectId);
         if (systemId) query = query.eq("system_id", systemId);
-        return query.order("id").range(from, to);
-      });
+          return query.order("id").range(from, to).abortSignal(signal);
+        }));
+      } catch (error) {
+        if (pendingChangesRef.current.get(key) === changes) pendingChangesRef.current.delete(key);
+        console.warn("Progress refresh failed:", error);
+        return false;
+      }
+      const { data, error } = result;
+      if (scopeRef.current !== requestScope || snapshotSequence !== loadSequenceRef.current ||
+          pendingChangesRef.current.get(key) !== changes) return false;
+      pendingChangesRef.current.delete(key);
       if (error) {
         console.error("Failed to refresh project-scoped progress:", error);
         return false;
       }
 
-      const nextProgress = data as UnifiedProgress[];
+      const nextProgress = reconcileSnapshot(data as UnifiedProgress[], changes, activeProjectId)
+        .filter((entry) => !systemId || entry.system_id === systemId);
       setProgress((current) =>
         systemId
           ? [
@@ -294,58 +336,49 @@ function useUnifiedDataSource() {
       );
       return true;
     },
-    [activeProjectId]
+    [activeProjectId, scope]
   );
 
   const handleProjectScopedRealtime = useCallback(
     <T extends ProjectRealtimeRecord>(
       payload: ProjectRealtimePayload<T>,
       setter: Dispatch<SetStateAction<T[]>>,
+      key: string,
       sortFn?: (left: T, right: T) => number
     ) => {
+      if (scopeRef.current !== scope || !activeProjectId) return;
       const recordProjectId = payload.new?.project_id ?? payload.old?.project_id;
       const isCurrentProject = recordProjectId === activeProjectId;
 
       if (!isCurrentProject && payload.eventType !== "DELETE") return;
+      const clocks = eventClocksRef.current.get(key) ?? new Map<string, string>();
+      eventClocksRef.current.set(key, clocks);
+      if (!acceptRowChange(clocks, payload)) return;
 
-      setIsUpdating(true);
-
-      try {
-        setter((previous) => {
-          if (payload.eventType === "DELETE") {
-            return previous.filter((item) => item.id !== payload.old.id);
-          }
-
-          if (!isCurrentProject) {
-            return previous;
-          }
-
-          if (payload.eventType === "INSERT") {
-            const next = [...previous, payload.new as T];
-            return sortFn ? next.sort(sortFn) : next;
-          }
-
-          if (payload.eventType === "UPDATE") {
-            const next = previous.map((item) =>
-              item.id === payload.new.id ? { ...item, ...payload.new } : item
-            );
-            return sortFn ? next.sort(sortFn) : next;
-          }
-
-          return previous;
-        });
-      } finally {
-        setTimeout(() => setIsUpdating(false), 500);
+      if (loadingSnapshotRef.current) {
+        const changes = pendingChangesRef.current.get(key) ?? [];
+        changes.push(payload);
+        pendingChangesRef.current.set(key, changes);
       }
+      if (key === "progress") {
+        pendingChangesRef.current.forEach((changes, name) => {
+          if (name.startsWith("progress-refresh:")) changes.push(payload);
+        });
+      }
+      setter((previous) => {
+        const next = applyRowChange(previous, payload, activeProjectId,
+          ["stations", "items", "contents"].includes(key) ? flowVersionId : null);
+        return sortFn && next !== previous ? next.sort(sortFn) : next;
+      });
     },
-    [activeProjectId]
+    [activeProjectId, flowVersionId, scope]
   );
 
   const updateSystems = useCallback(
     (payload: unknown) => {
       handleProjectScopedRealtime(
         payload as ProjectRealtimePayload<UnifiedSystem>,
-        setSystems
+        setSystems, "systems"
       );
     },
     [handleProjectScopedRealtime]
@@ -355,7 +388,7 @@ function useUnifiedDataSource() {
     (payload: unknown) => {
       handleProjectScopedRealtime(
         payload as ProjectRealtimePayload<UnifiedStation>,
-        setStations,
+        setStations, "stations",
         (left, right) => left.station_order - right.station_order
       );
     },
@@ -366,7 +399,7 @@ function useUnifiedDataSource() {
     (payload: unknown) => {
       handleProjectScopedRealtime(
         payload as ProjectRealtimePayload<UnifiedTestItem>,
-        setTestItems,
+        setTestItems, "items",
         (left, right) => left.item_order - right.item_order
       );
     },
@@ -377,7 +410,7 @@ function useUnifiedDataSource() {
     (payload: unknown) => {
       handleProjectScopedRealtime(
         payload as ProjectRealtimePayload<StationContent>,
-        setStationContents,
+        setStationContents, "contents",
         (left, right) => left.order_num - right.order_num
       );
     },
@@ -388,7 +421,7 @@ function useUnifiedDataSource() {
     (payload: unknown) => {
       handleProjectScopedRealtime(
         payload as ProjectRealtimePayload<UnifiedProgress>,
-        setProgress
+        setProgress, "progress"
       );
     },
     [handleProjectScopedRealtime]
@@ -448,52 +481,63 @@ function useUnifiedDataSource() {
   );
 
   useEffect(() => {
-    if (isLoadingProjects) {
-      return;
-    }
-
     loadAllData();
 
-    if (!user || !activeProjectId) return;
+    if (!userId || !activeProjectId) return;
 
+    let active = true;
+    let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+    const recover = () => {
+      if (recoveryTimer) clearTimeout(recoveryTimer);
+      recoveryTimer = setTimeout(() => { if (active) void loadAllData(); }, 150);
+    };
     const projectFilter = `project_id=eq.${activeProjectId}`;
     const channel = supabase
       .channel(`unified_data_changes:${activeProjectId}`)
       .on(
         "postgres_changes",
         { event: "*", filter: projectFilter, schema: "workspace", table: "test_systems" },
-        updateSystems
+        (payload) => { if (active) updateSystems(payload); }
       )
       .on(
         "postgres_changes",
         { event: "*", filter: projectFilter, schema: "workspace", table: "test_progress" },
-        updateProgressRecords
+        (payload) => { if (active) updateProgressRecords(payload); }
       )
       .on(
         "postgres_changes",
         { event: "*", filter: projectFilter, schema: "workspace", table: "test_flow_stations" },
-        updateStations
+        (payload) => { if (active) updateStations(payload); }
       )
       .on(
         "postgres_changes",
         { event: "*", filter: projectFilter, schema: "workspace", table: "test_flow_items" },
-        updateTestItems
+        (payload) => { if (active) updateTestItems(payload); }
       )
       .on(
         "postgres_changes",
         { event: "*", filter: projectFilter, schema: "workspace", table: "station_contents" },
-        updateStationContents
+        (payload) => { if (active) updateStationContents(payload); }
       )
-      .subscribe();
+      .subscribe((status) => {
+        // Reconcile the subscribe gap and missed events after SDK reconnection.
+        if (status === "SUBSCRIBED") recover();
+      });
+    window.addEventListener("online", recover);
+    window.addEventListener("focus", recover);
 
     return () => {
+      active = false;
+      loadSequenceRef.current += 1;
+      if (recoveryTimer) clearTimeout(recoveryTimer);
+      window.removeEventListener("online", recover);
+      window.removeEventListener("focus", recover);
       supabase.removeChannel(channel);
     };
   }, [
-    isLoadingProjects,
     activeProjectId,
     loadAllData,
-    user,
+    userId,
     updateProgressRecords,
     updateStationContents,
     updateStations,

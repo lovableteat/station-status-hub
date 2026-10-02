@@ -54,10 +54,11 @@ export function usePcbWorkspace({
     () => new PcbLocalRepository(storage ?? browserStorage()),
     [storage],
   );
+  const recovery = useMemo(() => repository.loadRecovery(editorIdentity?.userId ?? "local"), [repository, editorIdentity?.userId]);
   const [state, dispatch] = useReducer(
     reduceWorkspaceState,
     undefined,
-    () => createWorkspaceState(repository.load(), canEdit && !remoteClient),
+    () => createWorkspaceState(recovery?.state ?? repository.load(), canEdit && !remoteClient),
   );
   const stateRef = useRef(state.data);
   const viewStateRef = useRef(state);
@@ -83,6 +84,7 @@ export function usePcbWorkspace({
     remoteClient,
     allowRemoteSync: effectiveCanEdit && Boolean(remoteClient) && remoteReady,
     editor: editorIdentity,
+    initialSavedRevision: recovery?.savedRevision,
   });
   const { markClean } = persistence;
   hasUnsavedChangesRef.current = persistence.hasUnsavedChanges;
@@ -104,6 +106,12 @@ export function usePcbWorkspace({
       const remoteState = await loadPcbRemote(remoteClient);
       loading = false;
       if (!active) return;
+      // Recheck after await: a user can edit while background refresh is pending.
+      // A restored dirty recovery draft must also survive initial hydration.
+      if (hasUnsavedChangesRef.current) {
+        if (initial) setRemoteReady(true);
+        return;
+      }
       const localState = stateRef.current;
       const localView = viewStateRef.current;
       if (remoteState) {
