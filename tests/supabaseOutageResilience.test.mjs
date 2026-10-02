@@ -56,8 +56,8 @@ test("station data uses one shared provider and skips backend traffic while sign
 
   assert.match(unifiedData, /export function UnifiedDataProvider/);
   assert.match(unifiedData, /createContext/);
-  assert.match(unifiedData, /if \(!user \|\| !activeProjectId\)/);
-  assert.match(projectProvider, /if \(!user\)/);
+  assert.match(unifiedData, /if \(!userId \|\| !activeProjectId\)/);
+  assert.match(projectProvider, /if \(!userId\)/);
   assert.match(projectProvider, /isSupabaseServiceRestrictedError\(error\)/);
   assert.match(unifiedData, /isSupabaseServiceRestrictedError\(error\)/);
   assert.match(app, /<UnifiedDataProvider>/);

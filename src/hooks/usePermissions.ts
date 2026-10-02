@@ -47,7 +47,11 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const [permissionSettings, setPermissionSettings] =
     useState<UserPermissionSettings>({});
   const [effectiveRole, setEffectiveRole] = useState<string | null>(null);
-  const [accountActive, setAccountActive] = useState(false);
+  const [storedAccountActive, setAccountActive] = useState(false);
+  const [permissionsUserId, setPermissionsUserId] = useState<string | null>(null);
+  const accountActive = storedAccountActive && permissionsUserId === user?.userId;
+  const userIdRef = useRef(user?.userId);
+  userIdRef.current = user?.userId;
   const [loading, setLoading] = useState(true);
   const requestIdRef = useRef(0);
 
@@ -56,11 +60,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     setPermissionSettings({});
     setEffectiveRole(null);
     setAccountActive(false);
+    setPermissionsUserId(null);
   }, []);
 
   const reloadPermissions = useCallback(async ({ background = false } = {}) => {
     const userId = user?.userId;
+    if (userId !== userIdRef.current) return;
     const requestId = ++requestIdRef.current;
+    const isCurrent = () => requestId === requestIdRef.current && userId === userIdRef.current;
 
     if (!userId) {
       resetPermissions();
@@ -73,6 +80,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       setPermissionSettings({});
       setEffectiveRole("admin");
       setAccountActive(true);
+      setPermissionsUserId(userId);
       setLoading(false);
       return;
     }
@@ -95,7 +103,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
       if (userResult.error) throw userResult.error;
       if (!userResult.data) throw new Error("找不到目前登入帳號");
-      if (requestId !== requestIdRef.current) return;
+      if (!isCurrent()) return;
 
       const settings =
         userResult.data.permissions &&
@@ -116,18 +124,20 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       setPermissionSettings(settings);
       setEffectiveRole(userResult.data.role);
       setAccountActive(userResult.data.status === "active");
+      setPermissionsUserId(userId);
     } catch (error) {
-      if (requestId !== requestIdRef.current) return;
+      if (!isCurrent()) return;
       console.error("Failed to load current database permissions:", error);
       // Fail closed. A revoked permission must never be restored from stale browser storage.
       resetPermissions();
     } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, [resetPermissions, user?.userId]);
 
   useEffect(() => {
     void reloadPermissions();
+    return () => { requestIdRef.current += 1; };
   }, [reloadPermissions]);
 
   useEffect(() => {

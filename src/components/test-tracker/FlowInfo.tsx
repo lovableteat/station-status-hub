@@ -488,6 +488,9 @@ export function FlowInfo() {
 
   const saveStation = async () => {
     if (!canEdit || !selectedStation || !activeProjectId || !editingVersionId) return;
+    if (!isValidDuration(stationDraft.estimated_hours)) {
+      return toast({ title: "預估小時須為有限且不小於 0 的數字", variant: "destructive" });
+    }
     const { error } = await supabase
       .from("test_flow_stations")
       .update({
@@ -744,6 +747,9 @@ export function FlowInfo() {
 
   const saveItem = async () => {
     if (!canEdit || !selectedItem || !activeProjectId || !editingVersionId) return;
+    if (!isValidDuration(itemDraft.estimated_minutes, 1)) {
+      return toast({ title: "測項分鐘須為有限且不小於 1 的數字", variant: "destructive" });
+    }
     const { error } = await supabase
       .from("test_flow_items")
       .update({
@@ -1569,3 +1575,4 @@ export function FlowInfo() {
     </div>
   );
 }
+import { isValidDuration } from "@/lib/inputValidation";

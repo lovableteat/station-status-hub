@@ -3587,6 +3587,7 @@ function MaterialRecordDialog({
   onSave: (record: MaterialWorkbookRecord) => void;
 }) {
   const [form, setForm] = useState(record);
+  const { toast } = useToast();
   const readOnly = mode === "view";
   const latestTrackingEntry = getLatestTrackingEntry(form);
 
@@ -3600,6 +3601,10 @@ function MaterialRecordDialog({
 
   const handleSave = () => {
     if (!form.refGroup.trim() || !form.name.trim()) return;
+    if (!isValidBomUsage(form.qty)) {
+      toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
+      return;
+    }
     onSave({ ...form, level: 2 });
   };
 
@@ -5240,6 +5245,10 @@ export function MaterialRequestPage() {
   };
 
   const handleSaveRecord = async (record: MaterialWorkbookRecord) => {
+    if (!isValidBomUsage(record.qty)) {
+      toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
+      return;
+    }
     try {
       await saveRecordToActiveBom({
         ...record,
@@ -6740,3 +6749,4 @@ export function MaterialRequestPage() {
     </div>
   );
 }
+import { isValidBomUsage } from "@/lib/inputValidation";

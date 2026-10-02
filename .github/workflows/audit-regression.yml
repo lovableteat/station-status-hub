@@ -1,0 +1,30 @@
+name: Audit regression (isolated)
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AUDIT_QA_DIR: ${{ runner.temp }}/station-audit-qa
+      VITE_SUPABASE_URL: http://127.0.0.1:54321
+      VITE_SUPABASE_ANON_KEY: isolated-test-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - name: Install isolated QA dependencies
+        run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock react@18.3.1 react-test-renderer@18.3.1 @electric-sql/pglite@0.5.8
+      - name: Deferred requests, live events, drafts and permissions
+        run: node --test tests/audit*.integration.cjs
+      - name: Real PostgreSQL workflow and RLS
+        run: |
+          node tests/performanceOrganization.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
+          node tests/performanceSubmission.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
+      - run: npm run build
