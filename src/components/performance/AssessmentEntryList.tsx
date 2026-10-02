@@ -54,9 +54,11 @@ export function AssessmentEntryList({
       {!readonly && (
         <Field>
           <FieldLabel htmlFor={`rd2-${category}`}>{category} 實績 *</FieldLabel>
+          <p id={`rd2-${category}-writing-hint`} className="rd2-hint rd2-writing-hint">每筆濃縮為 1–3 句、約 100 字，主管能快速看懂做法與成果。請量化並突顯你的優點。</p>
           <Textarea
             ref={input}
             id={`rd2-${category}`}
+            aria-describedby={`rd2-${category}-writing-hint`}
             rows={5}
             placeholder="請填寫本項實績內容"
             value={section.draftText || ""}

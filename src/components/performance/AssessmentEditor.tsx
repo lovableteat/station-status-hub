@@ -260,6 +260,8 @@ function Evidence({
 }
 
 interface Props {
+  onExport?: (format: 'xlsx' | 'html', form: AssessmentForm) => Promise<void>;
+  exporting?: boolean;
   draftKey?: string;
   initial: AssessmentForm;
   mode: AssessmentMode;
@@ -294,6 +296,8 @@ export function AssessmentEditor({
   employees,
   demo,
   onSave,
+  onExport,
+  exporting = false,
 }: Props) {
   const source = initial.sourceUpdatedAt || (initial.recordId?.startsWith("performance-") ? "new" : initial.recordId);
   const [form, setForm] = useState<AssessmentForm>(() =>
@@ -454,6 +458,11 @@ export function AssessmentEditor({
             : "逐類對照員工的 IDP、OKR、KPI 自評，填寫主管分數與評語，再完成當責量表。"}
         </p>
       </header>
+      {mode === 'self' && onExport && <div className="rd2-self-export-actions" aria-label="匯出本人自評">
+        <Button type="button" variant="outline" disabled={saving || imageJobs > 0 || exporting} onClick={() => void onExport('xlsx', latest.current)}>{exporting ? '匯出中…' : '匯出 Excel'}</Button>
+        <Button type="button" variant="outline" disabled={saving || imageJobs > 0 || exporting} onClick={() => void onExport('html', latest.current)}>匯出 HTML</Button>
+        <p className="rd2-hint">匯出目前已加入的實績，不會儲存或提交。</p>
+      </div>}
       {!readonly && draftKey && showDraftWarning && !submitStatus && <p className="rd2-draft-notice" role="status">
         <strong>{mode === "self" ? "編輯中會暫存於本分頁" : "主管評分編輯中會暫存於本分頁"}</strong>
         <span>{mode === "self" ? "按「儲存草稿」可在下次登入後續填；按「提交」才會送交主管。" : "切換頁面或重新整理後可續填；確認評分後按「提交」。"}</span>

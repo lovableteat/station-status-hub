@@ -1582,3 +1582,17 @@
   .rd2-bright .rd2-category { padding-inline: 12px; }
   .rd2-bright .rd2-category-heading { margin-inline: -12px; padding-inline: 12px; }
 }
+
+/* Self export is a local action; keep both formats reachable on mobile. */
+.rd2-self-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+.rd2-self-export-actions .rd2-hint { flex-basis: 100%; margin: 0; }
+.rd2-writing-hint { margin: 0 0 8px; line-height: 1.6; }
+@media (max-width: 600px) {
+  .rd2-self-export-actions > button { flex: 1 1 120px; min-height: 44px; }
+}
