@@ -193,6 +193,7 @@ try {
     execute function workspace.preserve_performance_name_version()`);
   const legacyVersion = (await query("select updated_at from workspace.performance_reviews where id='legacy'"))[0].updated_at;
   await db.exec(await migration('20261001203000_add_lightweight_assessment_index'));
+  await db.exec(await migration('20261002160000_enforce_explicit_permission_revocation'));
   const legacyIndex = (await query("select updated_at,review_index from workspace.performance_reviews where id='legacy'"))[0];
   check(legacyIndex.updated_at,legacyVersion,'index backfill preserves existing content version');
   check(Object.keys(legacyIndex.review_index).sort(),['managerFeedback','selfFeedback'],'index backfills existing rows');
@@ -328,6 +329,24 @@ try {
   await db.exec('alter table workspace.performance_reviews add column future_content text');
   const contentEdit = (await query("update workspace.performance_reviews set future_content='new', updated_at=clock_timestamp() where id=$1 returning updated_at",[reviewId]))[0];
   check(contentEdit.updated_at > renamed.updated_at,true,'future content column still advances version');
+  // Final-schema revocation uses the real hierarchy, group secrets/unlock
+  // functions, current RLS, and submission RPC installed above.
+  await query("update workspace.system_users set permissions=jsonb_set(permissions,'{performanceManager}','false') where id=$1",[id(3)]);
+  await actor(3);
+  check((await query('select id from workspace.performance_reviews where id=$1',[reviewId])).length,0,'final-schema revoked chief cannot read subordinate');
+  check((await query("update workspace.performance_reviews set manager_feedback='denied' where id=$1 returning id",[reviewId])).length,0,'final-schema revoked chief cannot update subordinate');
+  await assert.rejects(()=>submit(managerPayload,'manager','return',contentEdit.updated_at));checks++;
+  await root();
+  await query("update workspace.system_users set permissions=jsonb_set(permissions,'{performanceManager}','false') where id=$1",[id(2)]);
+  await actor(2);
+  check((await query("select workspace.can_read_performance_section_report($1,$2,'approved',array[]::uuid[]) as allowed",[id(3),id(2)]))[0].allowed,false,'final-schema revoked director cannot read chief report');
+  await assert.rejects(()=>query("select workspace.review_performance_section_report($1,'return','denied',$2)",[summary.id,summary.updated_at]));checks++;
+  await actor(1);
+  check((await query('select id from workspace.performance_reviews where id=$1',[reviewId])).length,0,'final-schema unrelated site admin has no assessment bypass');
+  await actor(5);
+  check((await query('select id from workspace.performance_reviews where id=$1',[reviewId])).length,1,'final-schema employee self read survives supervisor revocation');
+  await root();await query("update workspace.system_users set permissions=jsonb_set(permissions,'{performanceManager}','true') where id=$1",[id(3)]);
+  await actor(3);check((await query('select id from workspace.performance_reviews where id=$1',[reviewId])).length,1,'final-schema legitimately reassigned chief access restored');
   console.log(`\n${checks} actual PostgreSQL workflow checks passed.`);
 } catch(error) {
   console.error(error.message,error.detail||'',error.where||'');
