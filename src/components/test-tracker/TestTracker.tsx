@@ -1,3 +1,4 @@
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -178,7 +179,7 @@ function ProgressSparkline({ values }: { values: number[] }) {
 function updateTrackerViewQuery(view: TrackerView) {
   const url = new URL(window.location.href);
   url.searchParams.set("trackerView", view);
-  window.history.replaceState({}, "", url);
+  replaceWorkspaceHistory(url);
 }
 
 export function TestTracker() {
@@ -347,7 +348,7 @@ export function TestTracker() {
     setQuery("system", systemFilter);
     setQuery("excludeStatus", excludeCompleted ? "completed" : "");
     setQuery("attention", attentionFilter ? "1" : "");
-    window.history.replaceState({}, "", url);
+    replaceWorkspaceHistory(url);
   }, [
     attentionFilter,
     engineerFilter,

@@ -1,3 +1,4 @@
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
 import {
@@ -92,7 +93,7 @@ function stripHtml(value?: string | null) {
 function updateFlowViewQuery(view: FlowView) {
   const url = new URL(window.location.href);
   url.searchParams.set("flowView", view);
-  window.history.replaceState({}, "", url);
+  replaceWorkspaceHistory(url);
 }
 
 export function FlowInfo() {
@@ -243,7 +244,7 @@ export function FlowInfo() {
         setSelectedStationId(requested.id);
         const url = new URL(window.location.href);
         url.searchParams.delete("station");
-        window.history.replaceState({}, "", url);
+        replaceWorkspaceHistory(url);
       } else {
         setSelectedStationId((current) =>
           snapshot.stations.some((station) => station.id === current)

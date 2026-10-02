@@ -262,8 +262,11 @@ function useUnifiedDataSource() {
       const nextContents = (contentsRes.data ?? []) as StationContent[];
       const nextProgress = (progressRes.data ?? []) as UnifiedProgress[];
 
-      const merge = <T extends RealtimeRow>(key: string, rows: T[], flow?: string | null) =>
-        reconcileSnapshot(rows, (pendingChangesRef.current.get(key) ?? []) as RowChange<T>[], activeProjectId, flow);
+      const merge = <T extends RealtimeRow>(key: string, rows: T[], flow?: string | null) => {
+        const clocks = eventClocksRef.current.get(key) ?? new Map<string, string>();
+        eventClocksRef.current.set(key, clocks);
+        return reconcileSnapshot(rows, (pendingChangesRef.current.get(key) ?? []) as RowChange<T>[], activeProjectId, flow, clocks);
+      };
       setSystems(merge("systems", nextSystems).sort((a, b) => a.system_name.localeCompare(b.system_name) || a.id.localeCompare(b.id)));
       setStations(merge("stations", nextStations, flowVersionId).sort((a, b) => a.station_order - b.station_order || a.id.localeCompare(b.id)));
       setTestItems(merge("items", nextItems, flowVersionId).sort((a, b) => a.item_order - b.item_order || a.id.localeCompare(b.id)));
@@ -324,7 +327,9 @@ function useUnifiedDataSource() {
         return false;
       }
 
-      const nextProgress = reconcileSnapshot(data as UnifiedProgress[], changes, activeProjectId)
+      const clocks = eventClocksRef.current.get("progress") ?? new Map<string, string>();
+      eventClocksRef.current.set("progress", clocks);
+      const nextProgress = reconcileSnapshot(data as UnifiedProgress[], changes, activeProjectId, null, clocks)
         .filter((entry) => !systemId || entry.system_id === systemId);
       setProgress((current) =>
         systemId
