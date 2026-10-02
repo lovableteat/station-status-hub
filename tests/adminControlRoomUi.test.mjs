@@ -92,7 +92,7 @@ test("admin dialogs and API console use the restrained maintenance color system"
   assert.match(styles, /\.admin-api-table-scroll/);
   assert.match(styles, /\.admin-api-hero-main\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*space-between;/s);
   assert.match(styles, /\.admin-api-hero-copy p\s*\{[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/s);
-  assert.match(styles, /\.admin-permissions-dialog\s*\{[^}]*width:\s*min\(1160px, calc\(100vw - 24px\)\);[^}]*max-height:\s*min\(780px, calc\(100dvh - 24px\)\);/s);
+  assert.match(styles, /\.admin-permissions-dialog\[data-admin-dialog="permissions"\]\s*\{[^}]*width:\s*min\(1160px, calc\(100vw - 24px\)\);[^}]*max-height:\s*min\(780px, calc\(100dvh - 24px\)\);/s);
   assert.match(styles, /\.admin-permissions-layout/);
   assert.match(styles, /@container \(min-width: 900px\)/);
   assert.match(apiKeys, /admin-api-table-scroll/);
