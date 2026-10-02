@@ -2381,12 +2381,12 @@ export function ApiChatConsole({
         <Button
           type="button"
           variant="outline"
-          className="relative h-11 w-11 shrink-0 rounded-xl border-blue-300/35 bg-blue-400/12 p-0 text-sm font-black text-blue-50 shadow-none hover:border-blue-200/70 hover:bg-blue-400/22 hover:text-white sm:h-12 sm:w-auto sm:px-4"
+          className={cn("relative h-11 w-11 shrink-0 rounded-xl border-blue-300/35 bg-blue-400/12 p-0 text-sm font-black text-blue-50 shadow-none hover:border-blue-200/70 hover:bg-blue-400/22 hover:text-white", isChatOnly ? "lg:h-12 lg:w-auto lg:px-4" : "sm:h-12 sm:w-auto sm:px-4")}
           aria-label="開啟共享提示詞庫"
         >
-          <LibraryBig className="h-5 w-5 text-cyan-200 sm:mr-2 sm:h-4 sm:w-4" />
-          <span className="hidden sm:inline">提示詞庫</span>
-          <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full border border-blue-200/25 bg-slate-950/80 px-1 text-[9px] leading-4 tabular-nums text-blue-100 sm:static sm:ml-2 sm:px-2 sm:py-0.5 sm:text-[11px] sm:leading-normal">
+          <LibraryBig className={cn("h-5 w-5 text-cyan-200", isChatOnly ? "lg:mr-2 lg:h-4 lg:w-4" : "sm:mr-2 sm:h-4 sm:w-4")} />
+          <span className={cn("hidden", isChatOnly ? "lg:inline" : "sm:inline")}>提示詞庫</span>
+          <span className={cn("absolute right-0.5 top-0.5 min-w-4 rounded-full border border-blue-200/25 bg-slate-950/80 px-1 text-[9px] leading-4 tabular-nums text-blue-100", isChatOnly ? "lg:static lg:ml-2 lg:px-2 lg:py-0.5 lg:text-[11px] lg:leading-normal" : "sm:static sm:ml-2 sm:px-2 sm:py-0.5 sm:text-[11px] sm:leading-normal")}>
             {savedPrompts.length}
           </span>
         </Button>
@@ -2696,6 +2696,8 @@ export function ApiChatConsole({
         </div>
       </div>
 
+      {/* Compact layouts scroll source context with messages, leaving the composer outside. */}
+      <div className={cn("flex min-h-0 flex-1 flex-col", isChatOnly && "overflow-y-auto lg:overflow-visible")}>
       {isChatOnly ? (
         <div className="shrink-0 border-b border-blue-300/15 bg-[#111e31] px-1.5 py-1 sm:px-3 sm:py-2 lg:px-6 lg:py-3">
           <MaintenanceSourceSelector
@@ -2720,7 +2722,7 @@ export function ApiChatConsole({
         </div>
       ) : null}
 
-      <div className={cn("flex min-h-0 flex-1 flex-col", isChatOnly ? "gap-0" : "mt-4 gap-4")}>
+      <div className={cn("flex min-h-0 flex-col", isChatOnly ? "shrink-0 gap-0 lg:flex-1" : "flex-1 mt-4 gap-4")}>
         {connectionState ? (
           <ConnectionBanner result={connectionState} onDismiss={() => setConnectionState(null)} />
         ) : null}
@@ -2770,13 +2772,15 @@ export function ApiChatConsole({
             <div ref={messagesEndRef} aria-hidden="true" className="h-0 shrink-0" />
           </div>
         </div>
+      </div>
+      </div>
 
         <div
           className={cn(
             "border-cyan-300/12",
             isChatOnly
-              ? "shrink-0 border-t border-slate-700/60 bg-[#0d1625] px-1.5 py-1.5 sm:px-4 sm:py-4 md:px-6"
-              : "rounded-[28px] border bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-3.5 shadow-[0_24px_52px_rgba(2,8,23,0.26),inset_0_1px_0_rgba(255,255,255,0.03)]"
+              ? "shrink-0 border-t border-slate-700/60 bg-[#0d1625] px-1.5 py-1.5 lg:px-6 lg:py-4"
+              : "mt-4 rounded-[28px] border bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-3.5 shadow-[0_24px_52px_rgba(2,8,23,0.26),inset_0_1px_0_rgba(255,255,255,0.03)]"
           )}
         >
           <input
@@ -2791,7 +2795,7 @@ export function ApiChatConsole({
             }}
           />
 
-          <div className="mb-2.5 hidden flex-wrap items-center justify-between gap-2 sm:flex">
+          <div className={cn("mb-2.5 hidden flex-wrap items-center justify-between gap-2", isChatOnly ? "lg:flex" : "sm:flex")}>
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium text-slate-300">
               <span className="hidden rounded-lg border border-cyan-300/18 bg-cyan-400/8 px-2.5 py-1.5 font-bold text-cyan-100 sm:inline">
                 輸入 <kbd className="mx-1 rounded border border-cyan-200/25 bg-slate-950/40 px-1.5 py-0.5 font-mono text-xs">/</kbd> 快速套用
@@ -2870,7 +2874,8 @@ export function ApiChatConsole({
             onDragLeave={handleComposerDragLeave}
             onDrop={handleComposerDrop}
             className={cn(
-              "rounded-xl border px-1.5 py-1.5 shadow-[0_18px_45px_-24px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 focus-within:ring-2 sm:rounded-[20px] sm:px-3 sm:py-3",
+              "rounded-xl border px-1.5 py-1.5 shadow-[0_18px_45px_-24px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 focus-within:ring-2",
+              isChatOnly ? "lg:rounded-[20px] lg:px-3 lg:py-3" : "sm:rounded-[20px] sm:px-3 sm:py-3",
               isDragOverComposer
                 ? "border-cyan-300/70 bg-[linear-gradient(180deg,#21466a_0%,#183450_100%)] ring-2 ring-cyan-300/25"
                 : "border-blue-300/35 bg-[linear-gradient(180deg,#1b2d49_0%,#14233a_100%)] focus-within:border-blue-300/70 focus-within:ring-blue-400/20"
@@ -2885,14 +2890,14 @@ export function ApiChatConsole({
                   onClick={() => imageInputRef.current?.click()}
                   disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
                   aria-label="上傳 PDF、PPT、Excel、Word 或圖片"
-                  className="h-11 min-w-11 rounded-xl border border-blue-300/35 bg-blue-400/15 px-3 text-blue-100 shadow-none hover:border-blue-300/70 hover:bg-blue-400/25 disabled:opacity-50 sm:h-12 sm:px-4"
+                  className={cn("h-11 min-w-11 rounded-xl border border-blue-300/35 bg-blue-400/15 px-3 text-blue-100 shadow-none hover:border-blue-300/70 hover:bg-blue-400/25 disabled:opacity-50", isChatOnly ? "lg:h-12 lg:px-4" : "sm:h-12 sm:px-4")}
                 >
                   <Paperclip className="h-5 w-5 shrink-0" />
-                  <span className="ml-2 hidden text-sm font-bold sm:inline">上傳檔案</span>
+                  <span className={cn("ml-2 hidden text-sm font-bold", isChatOnly ? "lg:inline" : "sm:inline")}>上傳檔案</span>
                 </Button>
               </div>
 
-              <div className="relative min-w-0 flex-1 rounded-xl border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(30,41,59,0.72))] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:rounded-[16px] sm:px-4 sm:py-3">
+              <div className={cn("relative min-w-0 flex-1 rounded-xl border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(30,41,59,0.72))] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]", isChatOnly ? "lg:rounded-[16px] lg:px-4 lg:py-3" : "sm:rounded-[16px] sm:px-4 sm:py-3")}>
                 {slashMenuOpen ? (
                   <div
                     role="listbox"
@@ -2968,12 +2973,12 @@ export function ApiChatConsole({
                   onPaste={handleComposerPaste}
                   aria-label="輸入查詢內容"
                   placeholder="輸入問題"
-                  className="min-h-10 max-h-24 border-0 bg-transparent px-0 py-0 text-base leading-6 text-white shadow-none placeholder:text-slate-300 focus-visible:ring-0 sm:min-h-[74px] sm:max-h-28 sm:text-[17px] sm:leading-7"
+                  className={cn("min-h-10 max-h-24 border-0 bg-transparent px-0 py-0 text-base leading-6 text-white shadow-none placeholder:text-slate-300 focus-visible:ring-0", isChatOnly ? "lg:min-h-[74px] lg:max-h-28 lg:text-[17px] lg:leading-7" : "sm:min-h-[74px] sm:max-h-28 sm:text-[17px] sm:leading-7")}
                 />
               </div>
 
               <div className="flex shrink-0 items-center gap-2 self-stretch">
-                <div className="hidden h-12 max-w-[220px] items-center truncate rounded-xl border border-blue-300/25 bg-slate-950/45 px-3 text-sm font-bold text-slate-100 shadow-none sm:flex">
+                <div className={cn("hidden h-12 max-w-[220px] items-center truncate rounded-xl border border-blue-300/25 bg-slate-950/45 px-3 text-sm font-bold text-slate-100 shadow-none", isChatOnly ? "lg:flex" : "sm:flex")}>
                   {model || "Gemini"}
                 </div>
                 <Button
@@ -2981,7 +2986,7 @@ export function ApiChatConsole({
                   onClick={() => void handleSend()}
                   disabled={!canSend}
                   aria-label="送出查詢"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-500 p-0 font-bold text-[#192522] shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] transition-all duration-200 hover:bg-blue-400 active:scale-[0.98] disabled:border-slate-700 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none sm:h-12 sm:w-12"
+                  className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-500 p-0 font-bold text-[#192522] shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] transition-all duration-200 hover:bg-blue-400 active:scale-[0.98] disabled:border-slate-700 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none", isChatOnly ? "lg:h-12 lg:w-12" : "sm:h-12 sm:w-12")}
                 >
                   <Send className="h-4 w-4" />
                 </Button>
@@ -2996,7 +3001,6 @@ export function ApiChatConsole({
 
           </div>
         </div>
-      </div>
     </div>
   );
 

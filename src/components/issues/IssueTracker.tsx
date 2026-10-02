@@ -350,11 +350,12 @@ export function IssueTracker() {
       <MaintenancePageHeader
         icon={Bug}
         title="問題追蹤"
+        wrapActionsOnMobile
         description={`${activeProject?.name || "目前專案"} · ${filteredIssues.length} 筆符合條件`}
         actions={
           <>
-            <IssuePDFExportManager issues={issues} />
-            <IssueCreateDialog onIssueCreated={loadIssues} />
+            <div className="order-2 sm:order-1"><IssuePDFExportManager issues={issues} /></div>
+            <div className="order-1 sm:order-2"><IssueCreateDialog onIssueCreated={loadIssues} /></div>
           </>
         }
       />

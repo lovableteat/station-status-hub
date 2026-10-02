@@ -2990,6 +2990,28 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Drawer height follows the canvas; scroll the entire rail on short screens. */
+  .pcb-left-rail {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .pcb-left-rail > * {
+    flex-shrink: 0;
+  }
+
+  .pcb-left-rail .pcb-rail-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--pcb-panel);
+  }
+
+  .pcb-left-rail .pcb-rail-list {
+    flex: none;
+    overflow: visible;
+  }
+
   .pcb-left-drawer,
   .pcb-right-drawer {
     top: 0;
@@ -3020,6 +3042,20 @@
 
   .pcb-project-identity {
     flex-basis: 390px;
+  }
+}
+
+@media (max-width: 1023px) and (max-height: 500px) {
+  /* A landscape canvas can be shorter than a single rail action row. */
+  .pcb-left-drawer,
+  .pcb-drawer-scrim {
+    position: fixed;
+    top: calc(76px + env(safe-area-inset-top));
+    bottom: var(--mobile-shell-bottom);
+  }
+
+  .pcb-left-drawer {
+    width: min(344px, calc(100vw - 52px));
   }
 }
 
