@@ -19,8 +19,9 @@ test('latest effective permission policies enforce revocation, hierarchy, durabl
    grant usage on schema workspace,auth,public to authenticated;
    create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
    create function auth.role() returns text language sql stable as $$select current_setting('test.role',true)::text$$;
-   create table workspace.system_users(id uuid primary key,auth_user_id uuid,username text,display_name text,role text,status text,permissions jsonb);
-   create table workspace.user_page_permissions(user_id uuid,permission text,granted_by text);
+   create table workspace.system_users(id uuid primary key,auth_user_id uuid,username text,display_name text,role text,status text,permissions jsonb,approved_at timestamptz,approved_by uuid,updated_at timestamptz);
+   create type public.page_permission as enum ('admin_edit','data_center_edit');
+   create table workspace.user_page_permissions(user_id uuid,permission public.page_permission,granted_by text,unique(user_id,permission));
    create function workspace.current_system_user_id() returns uuid language sql stable security definer set search_path='' as $$select id from workspace.system_users where auth_user_id=auth.uid()$$;
    create table workspace.performance_org_members(employee_id uuid,manager_id uuid,performance_role text,org_level text,section text);
    create function workspace.performance_scopes_unlocked(uuid[]) returns boolean language sql stable as $$select coalesce(current_setting('test.unlocked',true),'true') <> 'false'$$;
@@ -49,7 +50,7 @@ test('latest effective permission policies enforce revocation, hierarchy, durabl
    create policy dc_update on workspace.data_center_projects for update to authenticated using(public.can_edit_data_center_projects()) with check(public.can_edit_data_center_projects());
    create policy dc_delete on workspace.data_center_projects for delete to authenticated using(public.can_edit_data_center_projects());`);
   await root();
-  for(let n=1;n<=9;n++)await db.query('insert into workspace.system_users values($1,$1,$2,$2,$3,\'active\',$4)',[id(n),`fixture-${n}`,n===8?'admin':n===9?'super_admin':'engineer',{workspaceAccess:{performance:'edit'},performanceManager:[1,3,6].includes(n)}]);
+  for(let n=1;n<=9;n++)await db.query('insert into workspace.system_users(id,auth_user_id,username,display_name,role,status,permissions) values($1,$1,$2,$2,$3,\'active\',$4)',[id(n),`fixture-${n}`,n===8?'admin':n===9?'super_admin':'engineer',{workspaceAccess:{performance:'edit'},performanceManager:[1,3,6].includes(n)}]);
   for(const [n,parent,level,section] of [[3,null,'director',''],[1,3,'section_chief','A'],[2,1,'member','A'],[4,3,'member','acting B'],[5,6,'member','C'],[6,3,'section_chief','C'],[7,6,'member','C']])await db.query('insert into workspace.performance_org_members values($1,$2,$3,$4,$5)',[id(n),parent?id(parent):null,level==='member'?'employee':'manager',level,section]);
   for(const n of [1,2,4,5,6,7])await db.query('insert into workspace.performance_reviews values($1,$2,\'assigned\',array[]::uuid[],\'PRIVATE FEEDBACK\')',[`review-${n}`,id(n)]);
   await db.exec("insert into workspace.data_center_projects values('DC','fixture');");
@@ -110,6 +111,53 @@ test('latest effective permission policies enforce revocation, hierarchy, durabl
   await actor(6);equal(await visible(),['review-5','review-6','review-7'],'unrelated chief restricted to own section');
   await actor(2);equal(await visible(),['review-2'],'employee self read unaffected');
   await root();await db.query("update workspace.system_users set status='inactive' where id=$1",[id(1)]);await actor(1);equal(await visible(),[],'inactive supervisor denied');
-  console.log(JSON.stringify({checks,effectivePolicies:['20260907130000','20261001190000','20261002160000'],privateGroupUnlock:'isolated controllable stub; true/false verified',database:'isolated PGlite, no production migration applied'}));
+  // Actual legacy RPC counterexample, followed by final public/workspace entrypoint checks.
+  await root();await db.query("update workspace.system_users set status='active' where id=$1",[id(1)]);
+  await db.exec(sql('20260828120000_repair_workspace_permission_saves'));
+  const grantAccess={'station-status':'none','material-requests':'none','data-center':'edit','user-management':'edit'};
+  const rpc=(schema,target)=>db.query(`select ${schema}.set_user_access_permissions($1,array['data_center_edit']::public.page_permission[],$2::jsonb,'fixture')`,[id(target),grantAccess]);
+  await settings(1,{workspaceAccess:{'user-management':'edit','data-center':'none'},pagePermissions:[]});
+  equal(await accounts(),{public_manage:false,manage:false},'before RPC repair: detail revoked actor denied by account helper');
+  await rpc('workspace',1);equal((await dc()).edit,true,'before RPC repair: actual legacy RPC still grants self DC edit');
+  await root();await db.exec(sql('20261002170000_align_account_permission_mutation_entrypoints'));
+  const snapshot=async()=>{await root();const rows=(await db.query('select * from workspace.system_users order by id')).rows;const pages=(await db.query('select * from workspace.user_page_permissions order by user_id,permission')).rows;await actor(1);return {rows,pages};};
+  for(const denied of [
+   {workspaceAccess:{'user-management':'edit','data-center':'none'},pagePermissions:[]},
+   {workspaceAccess:{'user-management':'none'},pagePermissions:['admin_edit']},
+   {workspaceAccess:{'user-management':'view'},pagePermissions:['admin_edit']},
+  ]){
+   await settings(1,denied);await root();await db.query("update workspace.system_users set status='pending' where id=$1",[id(2)]);await actor(1);
+   const before=await snapshot();
+   for(const schema of ['workspace','public']){
+    for(const target of [1,2]){await assert.rejects(()=>rpc(schema,target),e=>e.code==='42501');checks++;equal(await snapshot(),before,`${schema} denied RPC leaves self/other settings and legacy rows unchanged`);}
+    await assert.rejects(()=>db.query(`select ${schema}.approve_system_user($1)`,[id(2)]),e=>e.code==='42501');checks++;
+    equal(await snapshot(),before,`${schema} denied approval leaves status/audit/profile fields unchanged`);
+   }
+  }
+  for(const schema of ['workspace','public']){
+   await settings(1,{workspaceAccess:{'user-management':'edit'},pagePermissions:['admin_edit'],unknownSetting:{keep:true}});
+   await rpc(schema,1);equal((await dc()).edit,true,`${schema} legitimate admin can save workspace permission`);
+   await root();const saved=(await db.query('select permissions from workspace.system_users where id=$1',[id(1)])).rows[0].permissions;
+   equal(saved.pagePermissions,['data_center_edit'],`${schema} RPC atomically updates durable page permissions`);equal(saved.unknownSetting,{keep:true},`${schema} RPC preserves unrelated settings`);
+   await settings(1,{workspaceAccess:{'user-management':'edit'},pagePermissions:['admin_edit']});
+   await root();await db.query("update workspace.system_users set status='pending' where id=$1",[id(2)]);await actor(1);
+   equal((await db.query(`select ${schema}.approve_system_user($1) as approved`,[id(2)])).rows[0].approved,true,`${schema} legitimate account admin approves pending account`);
+   await root();equal((await db.query('select status,approved_by from workspace.system_users where id=$1',[id(2)])).rows[0],{status:'active',approved_by:id(1)},`${schema} approval records actor and active status`);
+  }
+  await settings(1,{workspaceAccess:{'user-management':'edit'},pagePermissions:['admin_edit']});
+  const beforeInvalid=await snapshot();
+  for(const malformed of [null,{}, {...grantAccess,'data-center':null}, {...grantAccess,unexpected:'edit'}]){
+   await assert.rejects(()=>db.query("select public.set_user_access_permissions($1,array['admin_edit']::public.page_permission[],$2::jsonb,'fixture')",[id(2),malformed]));checks++;
+   equal(await snapshot(),beforeInvalid,'invalid authorized payload cannot partially mutate accounts or legacy permissions');
+  }
+  await rpc('public',2);await root();equal((await db.query('select permissions from workspace.system_users where id=$1',[id(2)])).rows[0].permissions.workspaceAccess,grantAccess,'legitimate account administrator can configure another account');await actor(1);
+  await root();await db.query("update workspace.system_users set status='inactive' where id=$1",[id(1)]);await actor(1);
+  for(const schema of ['workspace','public']){await assert.rejects(()=>rpc(schema,2),e=>e.code==='42501');checks++;}
+  await root();await db.query("update workspace.system_users set status='active' where id=$1",[id(8)]);await actor(8);
+  await rpc('public',2);equal((await db.query('select workspace.can_manage_system_users() as allowed')).rows[0].allowed,true,'active global admin retains intended account mutation exception');
+  await root();await db.query("select set_config('test.uid','',false)");await db.exec('set role service_role');await rpc('public',2);checks++;
+  await root();await db.query("select set_config('test.role','',false),set_config('test.uid','',false)");await db.exec('set role authenticated');await assert.rejects(()=>rpc('workspace',2),e=>e.code==='42501');checks++;
+  await root();for(const schema of ['workspace','public']){equal((await db.query("select has_function_privilege('anon',$1,'execute') as allowed",[`${schema}.set_user_access_permissions(uuid,public.page_permission[],jsonb,text)`])).rows[0].allowed,false,`${schema} permission mutation not executable by anon`);equal((await db.query("select has_function_privilege('anon',$1,'execute') as allowed",[`${schema}.approve_system_user(uuid)`])).rows[0].allowed,false,`${schema} approval not executable by anon`);}
+  console.log(JSON.stringify({checks,effectivePolicies:['20260907130000','20261001190000','20261002160000','20261002170000'],privateGroupUnlock:'isolated controllable stub; true/false verified',database:'isolated PGlite, no production migration applied'}));
  }finally{await db.close();}
 });
