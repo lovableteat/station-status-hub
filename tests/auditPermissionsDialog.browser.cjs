@@ -111,14 +111,19 @@ const {chromium} = qa('playwright');
       await editor.waitForFunction(()=>auditPermissions.editorUpdates===1);
       assert.equal(await editor.evaluate(()=>auditPermissions.writes[0].payload.profile.displayName),'AUDIT_LOCAL_CHANGED');
       assert.equal(await editor.evaluate(()=>auditPermissions.writes[0].payload.profile.role),'engineer');assert.equal(await editor.evaluate(()=>auditPermissions.writes[0].payload.password),'');
+      await editor.locator('[role="dialog"]').waitFor({state:'hidden'});
       await editor.waitForFunction(()=>document.activeElement===document.querySelector('#fixture-editor button'));
       await editor.locator('#fixture-editor button').click();await actions.locator('button').nth(1).scrollIntoViewIfNeeded();await actions.locator('button').nth(1).click();
+      await editor.locator('[role="dialog"]').waitFor({state:'hidden'});
       await editor.waitForFunction(()=>document.activeElement===document.querySelector('#fixture-editor button'));
       assert.equal(await editor.evaluate(()=>auditPermissions.writes.length),1,'cancel issues no additional account mutation');
       assert.deepEqual(await editor.evaluate(()=>auditPermissions.editorDeletes),[],'real/fixture delete never invoked');
       await editor.locator('#fixture-editor button').click();
+      await editor.locator('[role="dialog"][data-state="open"]').waitFor();
       await editor.waitForFunction(()=>document.querySelector('[role="dialog"]')?.contains(document.activeElement));
-      await editor.keyboard.press('Escape');await editor.waitForFunction(()=>document.activeElement===document.querySelector('#fixture-editor button'));
+      // Focus can mount before the dismissable layer's document listeners.
+      await editor.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      await editor.keyboard.press('Escape');await editor.locator('[role="dialog"]').waitFor({state:'hidden'});await editor.waitForFunction(()=>document.activeElement===document.querySelector('#fixture-editor button'));
       editorResults.push({width,height,layout:true,save:true,cancel:true,escapeFocus:true});await editor.close();
     }
     const page = await browser.newPage({viewport:{width:1180,height:757}});

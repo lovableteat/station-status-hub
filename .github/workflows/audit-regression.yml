@@ -38,4 +38,6 @@ jobs:
           node tests/auditHistory.browser.cjs
       - name: Permissions dialog layout and isolated interactions
         run: node tests/auditPermissionsDialog.browser.cjs
+      - name: Short landscape maintenance navigation and touch scrolling
+        run: node tests/auditShortLandscape.browser.cjs
       - run: npm run build
