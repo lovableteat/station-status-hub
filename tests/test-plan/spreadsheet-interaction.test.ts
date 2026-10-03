@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import ExcelJS from "exceljs";
 import XLSX from "xlsx";
 
 import * as spreadsheetInteraction from "../../src/components/test-plan/spreadsheetInteraction.ts";
@@ -22,14 +23,27 @@ test("formats spreadsheet numbers with General precision and custom formats", ()
   assert.equal(formatSpreadsheetNumber(0.125, "0.0%", (format, value) => `${format}:${value}`), "0.0%:0.125");
 });
 
-test("formats spreadsheet dates, decimals, and percentages with real SSF", () => {
+test("formats spreadsheet dates, decimals, and percentages with real SSF", async () => {
   assert.equal(
     typeof spreadsheetInteraction.formatSpreadsheetScalar,
     "function",
     "spreadsheet scalar formatting must support Date values",
   );
   const formatScalar = spreadsheetInteraction.formatSpreadsheetScalar;
-  assert.equal(formatScalar(new Date(2026, 0, 2), "yyyy-mm-dd", XLSX.SSF.format), "2026-01-02");
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Dates");
+  worksheet.getCell("A1").value = 46024 + ((3 * 60 * 60) + (4 * 60) + 5) / 86400;
+  worksheet.getCell("A1").numFmt = "yyyy-mm-dd hh:mm:ss";
+  const bytes = await workbook.xlsx.writeBuffer();
+  const reloaded = new ExcelJS.Workbook();
+  await reloaded.xlsx.load(bytes);
+  const spreadsheetDate = reloaded.getWorksheet("Dates")?.getCell("A1").value;
+  assert.ok(spreadsheetDate instanceof Date);
+  assert.equal(formatScalar(spreadsheetDate, "yyyy-mm-dd", (format, value) => {
+    assert.equal(format, "yyyy-mm-dd");
+    assert.equal(value, spreadsheetDate, "ExcelJS dates must reach SheetJS without timezone shifting");
+    return XLSX.SSF.format(format, value);
+  }), "2026-01-02");
   assert.equal(formatScalar(50.400000000000006, "0.00", XLSX.SSF.format), "50.40");
   assert.equal(formatScalar(0.125, "0.0%", XLSX.SSF.format), "12.5%");
 });
