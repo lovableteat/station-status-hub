@@ -107,7 +107,7 @@ test("metadata repair is additive, conflict safe, and leaves operational rows un
   assert.match(sql, /notify pgrst, 'reload schema'/i);
 });
 
-test("admin account list explicitly selects only safe system-user columns", async () => {
+test("admin account list explicitly selects only approved system-user columns", async () => {
   const source = await readFile(adminPanelUrl, "utf8");
   const systemUserLoad = source.match(
     /const loadSystemUsers[\s\S]*?if \(data\) setSystemUsers\(data\);/,
@@ -122,13 +122,21 @@ test("admin account list explicitly selects only safe system-user columns", asyn
   const selectedColumns = projection.split(",");
   assert.deepEqual(selectedColumns, [
     "id",
-    "auth_user_id",
     "username",
     "display_name",
-    "permissions",
     "role",
     "status",
-  ], "the browser roster must stay inside the production seven-column grant");
-  assert.match(systemUserLoad, /\.order\(['"]username['"],\s*\{\s*ascending:\s*true\s*\}\)/);
-  assert.doesNotMatch(systemUserLoad, /created_at|last_seen_at|avatar_path|created_by/);
+    "permissions",
+    "created_by",
+    "created_at",
+    "updated_at",
+    "registration_requested_at",
+    "approved_at",
+    "approved_by",
+    "auth_user_id",
+    "auth_migrated_at",
+    "last_seen_at",
+    "avatar_path",
+  ], "the browser roster must preserve the established production 16-column grant");
+  assert.match(systemUserLoad, /\.order\(['"]created_at['"],\s*\{\s*ascending:\s*false\s*\}\)/);
 });

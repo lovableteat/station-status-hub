@@ -522,12 +522,14 @@ grant execute on function workspace.authorize_system_user_admin_sync(uuid)
 grant execute on function workspace.approve_system_user(uuid)
   to authenticated, service_role;
 
--- Production exposes only the seven fields required to render and manage the
--- account roster. Reassert the exact column ACL so historical migrations or a
--- fresh environment cannot widen the browser-visible account record.
+-- Preserve the production roster's established 16-column read contract while
+-- removing every authenticated write privilege and keeping password_hash and
+-- all other account fields outside the browser-visible record.
 revoke all on table workspace.system_users from authenticated;
 grant select (
-  id, auth_user_id, username, display_name, permissions, role, status
+  id, username, display_name, role, status, permissions, created_by, created_at,
+  updated_at, registration_requested_at, approved_at, approved_by, auth_user_id,
+  auth_migrated_at, last_seen_at, avatar_path
 ) on workspace.system_users to authenticated;
 
 alter table workspace.user_page_permissions enable row level security;

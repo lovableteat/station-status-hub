@@ -149,7 +149,9 @@ grant execute on function workspace.can_manage_system_users() to authenticated, 
 alter table workspace.system_users enable row level security;
 revoke all on table workspace.system_users from public, anon, authenticated;
 grant select (
-  id, auth_user_id, username, display_name, permissions, role, status
+  id, username, display_name, role, status, permissions, created_by, created_at,
+  updated_at, registration_requested_at, approved_at, approved_by, auth_user_id,
+  auth_migrated_at, last_seen_at, avatar_path
 ) on workspace.system_users to authenticated;
 grant all on table workspace.system_users to service_role;
 create policy system_users_authenticated_read

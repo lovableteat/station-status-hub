@@ -154,20 +154,59 @@ test('PostgreSQL 17.4 runs SQL1→SQL2→SQL3 and closes account mutation races'
     assert.match(missingPrerequisite.stderr, /SQL3 requires SQL2/);
     psql("insert into supabase_migrations.schema_migrations(version, name) values ('20261002170000', 'align_account_permission_mutation_entrypoints')");
 
-    const safeRoster = psql(authenticated(actorA, `
-      select string_agg(
-        id::text || ':' || username || ':' || coalesce(display_name, '') || ':' || role || ':' || status,
-        ',' order by username
-      )
-      from workspace.system_users;
+    const approvedRoster = psql(authenticated(actorA, `
+      select row_to_json(roster)::text
+      from (
+        select id, username, display_name, role, status, permissions, created_by,
+          created_at, updated_at, registration_requested_at, approved_at,
+          approved_by, auth_user_id, auth_migrated_at, last_seen_at, avatar_path
+        from workspace.system_users
+        order by username
+        limit 1
+      ) roster;
     `), true).split(/\r?\n/).at(-1);
-    assert.match(safeRoster, /actor-a:Actor A:engineer:active/);
-    assert.match(safeRoster, /ordinary-b:Ordinary B:engineer:active/);
+    assert.match(approvedRoster, /"username":"actor-a"/);
+    assert.match(approvedRoster, /"created_at":/);
+    assert.match(approvedRoster, /"avatar_path":/);
 
-    const forbiddenRosterColumn = await session(authenticated(actorA,
-      'select created_at from workspace.system_users limit 1;'));
-    assert.notEqual(forbiddenRosterColumn.code, 0, 'the browser role must not read fields outside safe-seven');
-    assert.match(forbiddenRosterColumn.stderr, /permission denied/i);
+    const accountAcl = psql(`select
+      has_column_privilege('authenticated', 'workspace.system_users', 'created_at', 'select'),
+      has_column_privilege('authenticated', 'workspace.system_users', 'password_hash', 'select'),
+      has_column_privilege('anon', 'workspace.system_users', 'id', 'select'),
+      has_table_privilege('authenticated', 'workspace.system_users', 'insert'),
+      has_table_privilege('authenticated', 'workspace.system_users', 'update'),
+      has_table_privilege('authenticated', 'workspace.system_users', 'delete'),
+      has_table_privilege('authenticated', 'workspace.system_users', 'references');
+    `, true);
+    assert.equal(
+      accountAcl,
+      't|f|f|f|f|f|f',
+      'effective ACL preserves the approved roster read while denying anon, password, and direct writes',
+    );
+
+    const passwordRead = await session(authenticated(actorA,
+      'select password_hash from workspace.system_users limit 1;'));
+    assert.notEqual(passwordRead.code, 0, 'the browser role must not read password hashes');
+    assert.match(passwordRead.stderr, /permission denied/i);
+
+    const directRosterWrite = await session(authenticated(actorA, `
+      update workspace.system_users set display_name='forbidden direct write'
+      where id='${actorB}'::uuid;
+    `));
+    assert.notEqual(directRosterWrite.code, 0, 'the browser role must not update readable roster columns');
+    assert.match(directRosterWrite.stderr, /permission denied/i);
+
+    const directRosterInsert = await session(authenticated(actorA, `
+      insert into workspace.system_users (id, username, display_name)
+      values ('00000000-0000-4000-8000-000000000099', 'forbidden-insert', 'Forbidden Insert');
+    `));
+    assert.notEqual(directRosterInsert.code, 0, 'the browser role must not insert account rows');
+    assert.match(directRosterInsert.stderr, /permission denied/i);
+
+    const directRosterDelete = await session(authenticated(actorA,
+      `delete from workspace.system_users where id='${actorB}'::uuid;`));
+    assert.notEqual(directRosterDelete.code, 0, 'the browser role must not delete account rows');
+    assert.match(directRosterDelete.stderr, /permission denied/i);
 
     const profileSave = psql(authenticated(actorA, `select workspace.update_system_user_admin_profile(
       '${actorB}'::uuid, null, null, null, null, 'Saved through guarded profile RPC'
@@ -364,7 +403,7 @@ ${rpc(actorB, 'true')}
       multiSessionAccountAccess: true,
       deterministicCrossUserLocks: true,
       effectiveAclMatrix: true,
-      restrictedRosterLoad: true,
+      approvedSixteenColumnRosterLoad: true,
       guardedAdminSaveFlows: true,
       intermediateSql2StateChecked: true,
       migrationOrderGuardsChecked: true,
