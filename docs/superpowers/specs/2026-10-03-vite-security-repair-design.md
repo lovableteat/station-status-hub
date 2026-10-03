@@ -29,9 +29,10 @@ The root package manifest will contain these exact versions:
 - `vite`: `6.4.3`
 - `@vitejs/plugin-react-swc`: `3.7.2`
 - `lovable-tagger`: `1.1.10`
+- `picomatch`: `4.0.7`
 - `overrides.rollup`: `4.59.0`
 
-The npm lockfile must resolve the same versions and record SHA-512 integrity for each installed package. `npm ls` must report a valid peer graph. The existing official SheetJS 0.20.3 tarball pin must remain unchanged.
+The npm lockfile must resolve the same versions and record SHA-512 integrity for each installed package. The root `picomatch` pin ensures `fdir` resolves its compatible optional peer while npm keeps picomatch 2 nested for Tailwind's existing consumers. A full-depth `npm ls fdir picomatch --all` must report a valid graph. The existing official SheetJS 0.20.3 tarball pin must remain unchanged.
 
 ## Configuration Compatibility
 
