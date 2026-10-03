@@ -52,6 +52,8 @@ test("approval and account profile mutations lock before fresh authorization", a
 test("legacy account Edge path rejects permission payloads and uses guarded RPCs", async () => {
   const edge = await read("../supabase/functions/account-admin-sync/index.ts");
 
+  assert.match(edge, /npm:@supabase\/supabase-js@2\.100\.0/);
+  assert.doesNotMatch(edge, /esm\.sh\/@supabase\/supabase-js@2["']/);
   assert.match(edge, /Object\.prototype\.hasOwnProperty\.call\([^,]+,\s*["']permissions["']\)/);
   assert.match(edge, /Permission changes require the atomic permission RPC/);
   assert.doesNotMatch(edge, /updateData\.permissions\s*=/);
@@ -64,6 +66,40 @@ test("legacy account Edge path rejects permission payloads and uses guarded RPCs
   ]) {
     assert.match(edge, new RegExp(`caller\\.rpc\\(\\s*["']${rpc}["']`));
   }
+});
+
+test("admin account writers never fall back to restricted table mutations", async () => {
+  const [panel, editor, sync] = await Promise.all([
+    read("../src/components/admin/AdminPanel.tsx"),
+    read("../src/components/admin/UserEditDialog.tsx"),
+    read("../src/components/admin/authAccountSync.ts"),
+  ]);
+
+  for (const source of [panel, editor]) {
+    assert.doesNotMatch(source, /\.from\(['"]system_users['"]\)[\s\S]{0,180}\.(?:insert|update|delete)\(/);
+    assert.doesNotMatch(source, /rpc\(['"]hash_password['"]/);
+  }
+  assert.match(panel, /action:\s*"create"/);
+  assert.match(panel, /action:\s*"update"/);
+  assert.match(panel, /action:\s*"delete"/);
+  assert.match(editor, /mutateAuthAccount\(userId/);
+  assert.doesNotMatch(sync, /Realtime account synchronization is disabled/);
+});
+
+test("SQL3 preserves the production seven-column account roster boundary", async () => {
+  const sql = await read(
+    "../supabase/migrations/20261003075222_close_permission_table_boundary.sql",
+  );
+
+  assert.match(sql, /revoke all on table workspace\.system_users from authenticated/i);
+  assert.match(
+    sql,
+    /grant select\s*\(\s*id,\s*auth_user_id,\s*username,\s*display_name,\s*permissions,\s*role,\s*status\s*\)\s*on workspace\.system_users to authenticated/i,
+  );
+  assert.doesNotMatch(
+    sql,
+    /grant select\s*\([^)]*(?:password_hash|created_at|last_seen_at|avatar_path)[^)]*\)\s*on workspace\.system_users to authenticated/i,
+  );
 });
 
 test("durable permission fallback is absent-only and malformed values fail closed", async () => {

@@ -154,6 +154,32 @@ test('PostgreSQL 17.4 runs SQL1→SQL2→SQL3 and closes account mutation races'
     assert.match(missingPrerequisite.stderr, /SQL3 requires SQL2/);
     psql("insert into supabase_migrations.schema_migrations(version, name) values ('20261002170000', 'align_account_permission_mutation_entrypoints')");
 
+    const safeRoster = psql(authenticated(actorA, `
+      select string_agg(
+        id::text || ':' || username || ':' || coalesce(display_name, '') || ':' || role || ':' || status,
+        ',' order by username
+      )
+      from workspace.system_users;
+    `), true).split(/\r?\n/).at(-1);
+    assert.match(safeRoster, /actor-a:Actor A:engineer:active/);
+    assert.match(safeRoster, /ordinary-b:Ordinary B:engineer:active/);
+
+    const forbiddenRosterColumn = await session(authenticated(actorA,
+      'select created_at from workspace.system_users limit 1;'));
+    assert.notEqual(forbiddenRosterColumn.code, 0, 'the browser role must not read fields outside safe-seven');
+    assert.match(forbiddenRosterColumn.stderr, /permission denied/i);
+
+    const profileSave = psql(authenticated(actorA, `select workspace.update_system_user_admin_profile(
+      '${actorB}'::uuid, null, null, null, null, 'Saved through guarded profile RPC'
+    );`), true);
+    assert.match(profileSave, /Saved through guarded profile RPC/);
+    psql(authenticated(actorA, rpc(actorB, 'true')));
+    assert.equal(
+      psql(`select display_name || '|' || (permissions->>'performanceManager') from workspace.system_users where id='${actorB}'`, true),
+      'Saved through guarded profile RPC|true',
+      'profile and permission admin saves succeed without browser table writes',
+    );
+
     let locked;
     const lockedSignal = new Promise(resolve => { locked = resolve; });
     const revoker = session(`
@@ -338,6 +364,8 @@ ${rpc(actorB, 'true')}
       multiSessionAccountAccess: true,
       deterministicCrossUserLocks: true,
       effectiveAclMatrix: true,
+      restrictedRosterLoad: true,
+      guardedAdminSaveFlows: true,
       intermediateSql2StateChecked: true,
       migrationOrderGuardsChecked: true,
       failClosedContainmentChecked: true,

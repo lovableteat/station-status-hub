@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.100.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,6 +8,16 @@ const corsHeaders = {
 };
 
 const supabaseSchema = Deno.env.get("APP_DB_SCHEMA") ?? "workspace";
+
+const createWorkspaceClient = (
+  supabaseUrl: string,
+  supabaseKey: string,
+  authorization = "",
+) => createClient(supabaseUrl, supabaseKey, {
+  db: { schema: supabaseSchema },
+  global: authorization ? { headers: { Authorization: authorization } } : undefined,
+  auth: { persistSession: false, autoRefreshToken: false },
+});
 
 const respond = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -21,7 +31,7 @@ const accountEmail = (systemUserId: string) =>
 const allowedRoles = new Set(["viewer", "engineer", "admin", "super_admin"]);
 const allowedStatuses = new Set(["active", "inactive"]);
 
-type AdminClient = ReturnType<typeof createClient>;
+type AdminClient = ReturnType<typeof createWorkspaceClient>;
 type AccountAction = "create" | "update" | "sync" | "delete";
 const TEST_PLAN_STORAGE_BUCKET = "test-plan-files";
 const STORAGE_REMOVE_BATCH_SIZE = 100;
@@ -256,11 +266,7 @@ serve(async (request) => {
       return respond({ success: false, error: "Unauthorized" }, 401);
     }
 
-    const caller = createClient(supabaseUrl, anonKey, {
-      db: { schema: supabaseSchema },
-      global: { headers: { Authorization: authorization } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    const caller = createWorkspaceClient(supabaseUrl, anonKey, authorization);
     const body = await request.json().catch(() => ({}));
     const targetUserId = typeof body?.userId === "string" ? body.userId : "";
     const requestedAction = typeof body?.action === "string" ? body.action : "sync";
@@ -287,10 +293,7 @@ serve(async (request) => {
       return respond({ success: false, error: "Invalid request" }, 400);
     }
 
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
-      db: { schema: supabaseSchema },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    const admin = createWorkspaceClient(supabaseUrl, serviceRoleKey);
     if (action === "create") {
       if (!password) return respond({ success: false, error: "Password is required" }, 400);
       const { data: passwordHash, error: hashError } = await admin.rpc("hash_password", {
