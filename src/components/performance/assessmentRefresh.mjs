@@ -74,10 +74,12 @@ export async function withAssessmentReadDeadline(read, timeoutMs = 15000, abort 
 }
 
 export async function refreshSectionReportContents(db, cycle, cached = []) {
-  const manifest = await db.from('performance_section_reports').select('id,updated_at,chief_name,director_name').eq('cycle_id', cycle);
+  // Names are joined by get_performance_section_reports; they are not stored
+  // columns and therefore cannot be selected from the report table manifest.
+  const manifest = await db.from('performance_section_reports').select('id,updated_at').eq('cycle_id', cycle);
   if (manifest.error) throw manifest.error;
   const existing = new Map(cached.map(row => [row.id, row]));
-  if ((manifest.data || []).every(row => existing.get(row.id)?.updated_at === row.updated_at && existing.get(row.id)?.chief_name === row.chief_name && existing.get(row.id)?.director_name === row.director_name)) {
+  if ((manifest.data || []).every(row => existing.get(row.id)?.updated_at === row.updated_at)) {
     return (manifest.data || []).map(row => existing.get(row.id));
   }
   const result = await db.rpc('get_performance_section_reports', {p_cycle_id:cycle});
