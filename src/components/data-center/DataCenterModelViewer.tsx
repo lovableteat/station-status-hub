@@ -101,7 +101,7 @@ function InspectionCameraRig({
       zoomToCursor
       screenSpacePanning
       target={view.target}
-      onChange={invalidate}
+      onChange={() => invalidate()}
     />
   );
 }
@@ -197,7 +197,8 @@ function GlbInspectionModel({
 
   const prepared = useMemo(() => {
     const clone = gltf.scene.clone(true);
-    clone.rotation.set(...getModelAxisRotation(definition.upAxis));
+    const rotation = getModelAxisRotation(definition.upAxis);
+    clone.rotation.set(rotation[0], rotation[1], rotation[2]);
     clone.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(clone);
     const fit = getUniformModelFit(bounds, definition.dimensions, {

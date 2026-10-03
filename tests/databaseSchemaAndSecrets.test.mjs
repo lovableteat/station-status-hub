@@ -23,8 +23,9 @@ test("browser Supabase client defaults to the archived workspace schema", () => 
 test("repository ignores local environment files", () => {
   const gitignore = read(".gitignore");
 
-  assert.match(gitignore, /(^|\n)\.env\*(?:\n|$)/);
-  assert.match(gitignore, /(^|\n)!\.env\.example(?:\n|$)/);
+  const rules = gitignore.split(/\r?\n/);
+  assert.ok(rules.includes(".env*"));
+  assert.ok(rules.includes("!.env.example"));
 });
 
 test("workspace schema migration archives application tables and grants API roles", () => {

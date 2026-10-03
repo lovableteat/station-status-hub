@@ -189,7 +189,8 @@ test("shared dialogs and admin content stay inside responsive viewport bounds", 
     read("../src/components/admin/UserPermissionsDialog.tsx"),
   ]);
 
-  assert.match(header, /max-w-\[1920px\]/);
+  assert.match(header, /w-full min-w-0 grid-cols-\[minmax\(0,1fr\)_auto\]/);
+  assert.match(header, /min-w-0 max-w-full[^"\n]*overflow-x-auto/);
   assert.match(styles, /\.admin-shell\s*\{[^}]*max-width:\s*none;[^}]*margin-inline:\s*0;/s);
   assert.match(dialog, /max-h-\[calc\(100dvh-1rem\)\]/);
   assert.match(dialog, /w-\[calc\(100vw-1rem\)\]/);

@@ -14,6 +14,7 @@ import { NotificationConversationView } from "@/components/issues/NotificationCo
 import { NotificationCard } from "@/components/common/NotificationCard";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { cn } from "@/lib/utils";
+import { normalizeNotificationMetadata } from "@/lib/notificationMetadata";
 import { useToast } from "@/hooks/use-toast";
 
 interface RealtimeNotification {
@@ -87,7 +88,7 @@ export function RealtimeNotifications() {
 
       if (error) throw error;
       
-      const uniqueNotifications = data || [];
+      const uniqueNotifications = (data || []).map(normalizeNotificationMetadata);
       
       setUserNotifications(uniqueNotifications);
       setUnreadCount(uniqueNotifications.filter(n => !n.is_read).length);

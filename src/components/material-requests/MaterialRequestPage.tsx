@@ -456,7 +456,7 @@ function MaterialIdentityHover({
   manufacturer: string;
   mpnValues: string[];
   name: string;
-  qty: number;
+  qty: MaterialGroup["qty"];
   refValues: string[];
 }) {
   const cleanValues = (values: string[]) => Array.from(new Set(
@@ -1044,7 +1044,7 @@ function getGroupItemValue(group: MaterialGroup, fallbackIndex: number) {
 function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, workspaceId: string, payload: MaterialWorkbookPayload): BomWorkspace {
   const existingRecords = new Map((existingWorkspace?.payload.records ?? []).map((record) => [record.id, record]));
   const importedRecordIds = new Set<string>();
-  const mergedRecords = payload.records.map((record) => {
+  const mergedRecords: MaterialWorkbookRecord[] = payload.records.map((record) => {
     importedRecordIds.add(record.id);
     const existingRecord = existingRecords.get(record.id);
     const importedHasTrackingData = hasImportedTrackingData(record);
@@ -6424,7 +6424,7 @@ export function MaterialRequestPage() {
                     {itemValue}
                   </button>
                   <button type="button" onClick={() => openRecord(mainRecord, "view")} className="min-w-0 flex-1 text-left">
-                    <p className="line-clamp-2 text-sm font-black leading-5 text-white">{group.name || mainRecord.description || "未命名料件"}</p>
+                    <p className="line-clamp-2 text-sm font-black leading-5 text-white">{group.name || mainRecord.name || "未命名料件"}</p>
                     <p className="mt-0.5 truncate text-xs font-semibold text-cyan-200">{getDisplayMpn(mainRecord) || "尚未填寫 MPN"}</p>
                     <p className="truncate text-[11px] text-slate-400">{mainRecord.manufacturer || "未指定廠商"}</p>
                   </button>

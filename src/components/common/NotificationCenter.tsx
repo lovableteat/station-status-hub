@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { normalizeNotificationMetadata } from "@/lib/notificationMetadata";
 import { NotificationReplyDialog } from './NotificationReplyDialog';
 import { useNotificationReplies } from '@/hooks/useNotificationReplies';
 
@@ -79,7 +80,7 @@ export function NotificationCenter() {
 
         if (error) throw error;
 
-        setNotifications(data || []);
+        setNotifications((data || []).map(normalizeNotificationMetadata));
         setUnreadCount(data?.filter(n => !n.is_read).length || 0);
       } catch (error) {
         console.error('Error fetching notifications:', error);

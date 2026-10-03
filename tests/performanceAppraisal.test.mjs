@@ -178,7 +178,8 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
   assert.match(source, /get_performance_self_context/);
   assert.match(source, /我的績效組織/);
   assert.doesNotMatch(source, /hidden=\{tab === "self"\}/);
-  assert.match(source, /toPerformanceCsv\(visibleReviews, \{ includeManager: canManagePerformance \}/);
+  assert.match(source, /loadAssessmentReviewContents\(performanceDb, visibleReviews,/);
+  assert.match(source, /toPerformanceCsv\(complete, \{ includeManager: canManagePerformance \}/);
   assert.match(source, /showManagerAssessment/);
   assert.match(source, /getSelfAssessmentDisplayState/);
   assert.match(source, /rd2-self-complete-state/);
