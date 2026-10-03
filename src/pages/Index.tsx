@@ -293,15 +293,8 @@ const Index = () => {
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("demo") === "admin";
 
-  useEffect(() => {
-    if (activeWorkspace === "material-requests" || !canViewModule("material-requests")) return;
-
-    const timeoutId = window.setTimeout(() => {
-      void loadMaterialRequestPage();
-    }, 800);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [activeWorkspace, canViewModule]);
+  // Load BOM only when selected. A timer preload competed with the active
+  // workspace's first render and downloaded spreadsheet code for unrelated pages.
 
   const workspaceCatalog = useMemo(
     () => [
