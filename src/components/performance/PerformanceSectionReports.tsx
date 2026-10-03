@@ -22,7 +22,7 @@ import type { ReviewAttachment } from "./assessmentTypes";
 import { privacyDb } from "./usePerformancePrivacy";
 import type { OrganizationMember } from "./PerformanceOrganization";
 import { watchPermissionRefresh } from "@/lib/permissionRefresh.mjs";
-import { refreshSectionReportContents, withAssessmentReadDeadline } from './assessmentRefresh.mjs';
+import { refreshSectionReportContents, synchronizeSectionReportNames, withAssessmentReadDeadline } from './assessmentRefresh.mjs';
 import { supabase } from '@/integrations/supabase/client';
 
 const STATUS = {
@@ -177,7 +177,10 @@ export function PerformanceSectionReports({
       ]));
       if (version !== request.current) return;
       if (organization.error) throw new Error("load");
-      const next = reports as SectionReport[];
+      const next = synchronizeSectionReportNames(
+        reports,
+        organization.data || [],
+      ) as SectionReport[];
       const member =
         ((organization.data || []) as OrganizationMember[]).find(
           (m) => m.employee_id === userId,

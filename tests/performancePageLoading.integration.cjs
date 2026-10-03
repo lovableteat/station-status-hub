@@ -16,7 +16,7 @@ const win={addEventListener:(name,fn)=>{if(!listeners.has(name))listeners.set(na
 const doc={visibilityState:'visible',addEventListener:win.addEventListener,removeEventListener:win.removeEventListener};
 const self='RD2_SELF_V1\n'+JSON.stringify({employeeNumber:'LA5',grade:'23',sections:{IDP:{selfScore:95,entries:[{id:'e1',text:'完整實績'}]},OKR:{selfScore:90},KPI:{selfScore:85}}});
 const row={id:'review',cycle_id:'2026-q3',employee_id:'employee',employee_name:'員工',reviewer_name:'主管',status:'draft',updated_at:'v1',self_feedback:self,review_index:{selfFeedback:'RD2_SELF_V1\n'+JSON.stringify({employeeNumber:'LA5',grade:'23',sections:{IDP:{selfScore:95},OKR:{selfScore:90},KPI:{selfScore:85}}})}};
-const builder=(run)=>({then:(ok,err)=>Promise.resolve().then(run).then(ok,err),abortSignal(){return this;}});
+const builder=(run)=>({then:(ok,err)=>Promise.resolve().then(run).then(ok,err),order(){return this;},range(){return this;},abortSignal(){return this;}});
 const db={from:()=>({select:columns=>({order:()=>builder(()=>{calls.push(columns);return hangManifest?new Promise(resolve=>manifestResolve=resolve):{data:[row]};}),eq:()=>({single:()=>builder(()=>{calls.push('*');return new Promise(resolve=>fullResolve=resolve);})})})}),rpc:name=>builder(()=>{
  calls.push(name);
  if(name==='get_performance_self_context')return {data:[{employee_id:user.userId,display_name:user.displayName,username:user.username,performance_role:contextRole==='member'?'employee':'manager',org_level:contextRole,assigned:true}]};

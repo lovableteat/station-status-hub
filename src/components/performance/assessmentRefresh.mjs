@@ -6,7 +6,24 @@ const manifestColumns = 'id,cycle_id,updated_at,employee_id,employee_name,depart
 const unchanged = (row, cached) => cached &&
   row.updated_at === cached.updatedAt && row.employee_id === cached.employeeId &&
   row.employee_name === cached.employeeName && row.reviewer_name === cached.reviewerName &&
-  row.status === cached.status;
+  row.department === cached.department && row.role === cached.role && row.status === cached.status;
+const manifestPageSize = 1000;
+
+async function readManifest(buildQuery, signal) {
+  const rows = [];
+  for (let from = 0; ; from += manifestPageSize) {
+    let query = buildQuery()
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, from + manifestPageSize - 1);
+    if (signal) query = query.abortSignal(signal);
+    const result = await query;
+    if (result.error) throw result.error;
+    const page = result.data || [];
+    rows.push(...page);
+    if (page.length < manifestPageSize) return rows;
+  }
+}
 
 // Memory only, bounded to 16 MB. A fresh RLS manifest must authorize a row and
 // match its content version before a subsequent page mount can reuse it.
@@ -30,13 +47,10 @@ function rememberContents(db, scope, rows) {
 }
 
 export async function refreshAssessmentReviews(db, cached = [], isCurrent = () => true, signal, scope) {
-  let query = db.from('performance_reviews').select(manifestColumns).order('updated_at', { ascending: false });
-  if (signal) query = query.abortSignal(signal);
-  const manifest = await query;
-  if (manifest.error) throw manifest.error;
+  const manifest = await readManifest(() => db.from('performance_reviews').select(manifestColumns), signal);
   const existing = new Map(cached.map(row => [row.id, row]));
   if (!isCurrent()) return [];
-  return (manifest.data || []).flatMap(row => {
+  return manifest.flatMap(row => {
     const previous = existing.get(row.id) || (scope && contentCaches.get(db)?.get(`${scope}:${row.id}`)?.row);
     const value = unchanged(row, previous) ? previous : normalizePerformanceReview({
       ...row, self_feedback: row.review_index?.selfFeedback || '',
@@ -76,13 +90,22 @@ export async function withAssessmentReadDeadline(read, timeoutMs = 15000, abort 
 export async function refreshSectionReportContents(db, cycle, cached = []) {
   // Names are joined by get_performance_section_reports; they are not stored
   // columns and therefore cannot be selected from the report table manifest.
-  const manifest = await db.from('performance_section_reports').select('id,updated_at').eq('cycle_id', cycle);
-  if (manifest.error) throw manifest.error;
+  const manifest = await readManifest(() => db.from('performance_section_reports').select('id,updated_at').eq('cycle_id', cycle));
   const existing = new Map(cached.map(row => [row.id, row]));
-  if ((manifest.data || []).every(row => existing.get(row.id)?.updated_at === row.updated_at)) {
-    return (manifest.data || []).map(row => existing.get(row.id));
+  if (manifest.every(row => existing.get(row.id)?.updated_at === row.updated_at)) {
+    return manifest.map(row => existing.get(row.id));
   }
   const result = await db.rpc('get_performance_section_reports', {p_cycle_id:cycle});
   if (result.error) throw result.error;
   return result.data || [];
+}
+
+export function synchronizeSectionReportNames(reports, organization) {
+  const names = new Map((organization || []).map(member => [member.employee_id, member.display_name]));
+  return (reports || []).map(report => {
+    const chiefName = names.get(report.chief_id) || report.chief_name;
+    const directorName = names.get(report.director_id) || report.director_name;
+    if (chiefName === report.chief_name && directorName === report.director_name) return report;
+    return {...report, chief_name: chiefName, director_name: directorName};
+  });
 }
