@@ -6,14 +6,18 @@ Target only production project `rfppeuzuoxtqkpbwehbq`. Never substitute the
 test project. These steps preserve account and operational rows; no production
 execution is part of the candidate branch.
 
-Fresh read-only evidence captured 2026-10-03 07:59-08:00 UTC showed the project
-healthy and the latest recorded migration at `20261001203000`. Neither
+Fresh read-only evidence captured 2026-10-03 07:59-08:00 UTC and completed in a
+single scoped snapshot at 10:03:23 UTC showed the project healthy and the latest
+recorded migration at `20261001203000`. Neither
 `20261002160000` nor `20261002170000` was present. The legacy permission table
 had RLS enabled but one permissive `ALL TO PUBLIC` policy and full table ACLs
 for `anon`, `authenticated`, and `service_role`. `system_users` retained its
-authenticated-only seven-column `SELECT` boundary (`id`, `auth_user_id`,
-`username`, `display_name`, `permissions`, `role`, `status`) and no client table
-writes.
+authenticated-only 16-column roster `SELECT` boundary (`id`, `username`,
+`display_name`, `role`, `status`, `permissions`, `created_by`, `created_at`,
+`updated_at`, `registration_requested_at`, `approved_at`, `approved_by`,
+`auth_user_id`, `auth_migrated_at`, `last_seen_at`, `avatar_path`). `password_hash`
+was not readable, `anon` had no readable columns, and neither client role had
+account-column insert, update, or references privileges.
 
 ## Required preflight
 
@@ -33,7 +37,7 @@ writes.
    a targeted forward-recovery script from the capture before execution. Never
    call this capture a full backup or restore the vulnerable grants automatically.
 
-Stop if the migration head, safe seven-column account grant, function owner,
+Stop if the migration head, exact 16-column account roster grant, function owner,
 ACL, policy, or aggregate evidence differs unexpectedly.
 
 ## Fixed rollout order
@@ -53,8 +57,9 @@ ACL, policy, or aggregate evidence differs unexpectedly.
    - the account create/update/delete/sync RPCs deny `PUBLIC`, `anon`, and
      `service_role`, allow `authenticated`, and expose no broad table write;
    - both approval wrappers use the SQL3 post-lock implementation;
-   - `system_users` is still authenticated-only safe seven-column `SELECT` with
-     no table-level client access;
+   - `system_users` still exposes exactly the established authenticated-only
+     16-column roster `SELECT`, excludes `password_hash`, exposes no columns to
+     `anon`, and permits no direct client writes;
    - aggregate counts match the preflight.
 6. Deploy `account-admin-sync` from this exact reviewed head and independently
    verify the deployed function version/hash. A repository edit or GitHub Pages

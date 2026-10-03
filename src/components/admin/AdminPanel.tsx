@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Search, Plus, UserPlus, Shield, LogOut, Users, Lock, Menu, CircleHelp, UserCheck, Hourglass, Camera } from "lucide-react";
+import { Search, Plus, UserPlus, Shield, LogOut, Users, Clock3, Lock, Menu, CircleHelp, UserCheck, Hourglass, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUser } from "@/components/auth/UserContext";
@@ -21,6 +21,7 @@ import { AdminCollaborationPanel } from "@/components/collaboration/AdminCollabo
 import { MaintenanceMetricStrip } from "@/components/maintenance/MaintenanceMetricStrip";
 import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
 import { AdminSidebar } from "./AdminSidebar";
+import { formatAdminUserTimestamp } from "./adminUserTime.mjs";
 import { UserEditDialog } from "./UserEditDialog";
 import { EngineerEditDialog } from "./EngineerEditDialog";
 import { UserPermissionsDialog } from "./UserPermissionsDialog";
@@ -43,20 +44,28 @@ interface Engineer {
 
 interface SystemUser {
   id: string;
-  auth_user_id: string | null;
   username: string;
-  display_name: string | null;
-  permissions: unknown;
   role: string;
   status: string;
+  permissions: unknown;
+  created_by: string;
+  created_at: string;
+  display_name?: string;
+  auth_user_id?: string | null;
+  auth_migrated_at?: string | null;
+  registration_requested_at?: string | null;
+  approved_at?: string | null;
+  approved_by?: string | null;
+  last_seen_at: string | null;
+  avatar_path?: string | null;
 }
 
 type AdminTab = "users" | "collaboration" | "api-management";
 
 const SHOW_ENGINEER_ADMIN = false;
 const SHOW_EXTENDED_ADMIN_COPY = false;
-// Keep the projection literal so PostgREST can check these safe columns.
-const SYSTEM_USER_SAFE_COLUMNS = "id,auth_user_id,username,display_name,permissions,role,status";
+// Keep the projection literal so PostgREST can check the approved roster columns.
+const SYSTEM_USER_SAFE_COLUMNS = "id,username,display_name,role,status,permissions,created_by,created_at,updated_at,registration_requested_at,approved_at,approved_by,auth_user_id,auth_migrated_at,last_seen_at,avatar_path";
 
 export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) {
   const [engineers, setEngineers] = useState<Engineer[]>([]);
@@ -132,7 +141,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       const { data, error } = await supabase
         .from('system_users')
         .select(SYSTEM_USER_SAFE_COLUMNS)
-        .order('username', { ascending: true });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       if (data) setSystemUsers(data);
@@ -408,6 +417,21 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         ? "border-amber-200/45 bg-amber-300/18 text-amber-50"
       : "border-slate-200/20 bg-slate-200/10 text-slate-300";
 
+  const formatCreatedAt = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "未提供";
+    }
+
+    return date.toLocaleString("zh-TW", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const getWorkspaceBadges = (permissionSettings: unknown) => {
     const workspaceAccess = readWorkspaceAccess(permissionSettings);
 
@@ -450,6 +474,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       [
         systemUser.username,
         systemUser.display_name,
+        systemUser.created_by,
         getRoleLabel(systemUser.role),
         ...workspaceBadges.map((workspace) => workspace.label),
       ]
@@ -705,7 +730,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   const workspaceBadges = getWorkspaceBadges(systemUser.permissions);
                   const isProtected = isProtectedSystemUser(systemUser);
                   const isCurrentUser = systemUser.id === user?.userId;
-                  const permissionsSummary = "網站與工作區權限";
+                  const creatorLabel = systemUser.created_by === "self-registration"
+                    ? "使用者自行註冊"
+                    : systemUser.created_by || "系統";
+                  const lastLoginLabel = formatAdminUserTimestamp(systemUser.last_seen_at, "尚未登入");
+                  const permissionsSummary = `網站與工作區權限 · 建立者：${creatorLabel}`;
 
                   return (
                     <article
@@ -716,7 +745,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         <div className="flex min-w-0 items-center gap-3">
                           <div className="shrink-0">
                             <UserAvatar
-                              avatarPath={isCurrentUser ? user?.avatarPath : undefined}
+                              avatarPath={isCurrentUser ? user?.avatarPath : systemUser.avatar_path}
                               displayName={systemUser.display_name || systemUser.username}
                               className="h-11 w-11 rounded-xl border border-sky-300/20 bg-sky-400/10"
                               fallbackClassName="rounded-xl bg-sky-400/10 text-sm text-sky-100"
@@ -744,7 +773,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                                   <div className="space-y-2">
                                     <div className="text-sm font-semibold">帳號管理說明</div>
                                     <p className="text-sm leading-6 text-slate-300">
-                                      卡片集中顯示帳號狀態與工作區權限；停用、權限調整與密碼重設可從右側按鈕操作。
+                                      卡片集中顯示建立資訊與工作區權限；停用、權限調整與密碼重設可從右側按鈕操作。
                                     </p>
                                   </div>
                                 </HoverCardContent>
@@ -773,6 +802,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               ) : null}
                             </div>
                             <p className="mt-1 truncate text-xs text-slate-500">@{systemUser.username}</p>
+                            <p data-mobile-user-last-login="true" className="mt-1.5 hidden items-center gap-1.5 text-xs text-slate-300 max-sm:flex">
+                              <Clock3 className="h-3.5 w-3.5 text-cyan-200/70" aria-hidden="true" />
+                              最後登入：{lastLoginLabel}
+                            </p>
                           </div>
                         </div>
 
@@ -851,15 +884,24 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         </div>
                       </div>
 
-                      <div className="admin-account-metadata grid gap-3 py-4 sm:grid-cols-2">
+                      <div className="admin-account-metadata grid gap-3 py-4 sm:grid-cols-3">
                         <div className="min-w-0 border-white/[0.07] sm:border-r sm:pr-4">
                           <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">登入帳號</div>
                           <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">{systemUser.username}</div>
                         </div>
+                        <div className="min-w-0 border-white/[0.07] sm:border-r sm:px-4">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                            <Clock3 className="h-3 w-3" aria-hidden="true" />
+                            最後登入
+                          </div>
+                          <div className={`mt-1.5 truncate text-sm font-semibold ${lastLoginLabel === "尚未登入" ? "text-slate-500" : "text-slate-200"}`}>
+                            {lastLoginLabel}
+                          </div>
+                        </div>
                         <div className="min-w-0 sm:pl-4">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">登入身分</div>
-                          <div className={`mt-1.5 truncate text-sm font-semibold ${systemUser.auth_user_id ? "text-emerald-100" : "text-amber-100"}`}>
-                            {systemUser.auth_user_id ? "即時身分已連結" : "首次登入後連結"}
+                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">建立時間</div>
+                          <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">
+                            {formatCreatedAt(systemUser.created_at)}
                           </div>
                         </div>
                       </div>

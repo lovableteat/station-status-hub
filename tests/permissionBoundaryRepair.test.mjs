@@ -86,20 +86,26 @@ test("admin account writers never fall back to restricted table mutations", asyn
   assert.doesNotMatch(sync, /Realtime account synchronization is disabled/);
 });
 
-test("SQL3 preserves the production seven-column account roster boundary", async () => {
+test("SQL3 preserves the production 16-column account roster boundary", async () => {
   const sql = await read(
     "../supabase/migrations/20261003075222_close_permission_table_boundary.sql",
   );
 
   assert.match(sql, /revoke all on table workspace\.system_users from authenticated/i);
-  assert.match(
-    sql,
-    /grant select\s*\(\s*id,\s*auth_user_id,\s*username,\s*display_name,\s*permissions,\s*role,\s*status\s*\)\s*on workspace\.system_users to authenticated/i,
+  const grant = sql.match(
+    /grant select\s*\(([^)]*)\)\s*on workspace\.system_users to authenticated/i,
+  )?.[1];
+  assert.ok(grant, "expected an explicit system-user column grant");
+  assert.deepEqual(
+    grant.split(",").map((column) => column.trim()),
+    [
+      "id", "username", "display_name", "role", "status", "permissions",
+      "created_by", "created_at", "updated_at", "registration_requested_at",
+      "approved_at", "approved_by", "auth_user_id", "auth_migrated_at",
+      "last_seen_at", "avatar_path",
+    ],
   );
-  assert.doesNotMatch(
-    sql,
-    /grant select\s*\([^)]*(?:password_hash|created_at|last_seen_at|avatar_path)[^)]*\)\s*on workspace\.system_users to authenticated/i,
-  );
+  assert.doesNotMatch(grant, /password_hash/i);
 });
 
 test("durable permission fallback is absent-only and malformed values fail closed", async () => {
