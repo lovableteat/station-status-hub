@@ -13,7 +13,10 @@ test("global notifications keep mobile header actions and the desktop chat dock 
 
   assert.match(sonnerSource, /position="top-right"/);
   assert.match(sonnerSource, /safe-area-inset-top/);
-  assert.match(sonnerSource, /mobileOffset=/);
+  assert.match(sonnerSource, /offset=\{20\}/);
+  assert.match(sonnerSource, /!top-\[calc\(env\(safe-area-inset-top\)\+5rem\)\]/);
+  assert.match(sonnerSource, /max-sm:!top-\[max\(6px,env\(safe-area-inset-top\)\)\]/);
+  assert.doesNotMatch(sonnerSource, /mobileOffset=/);
   assert.match(sonnerSource, /max-sm:!left-2 max-sm:!right-2 max-sm:!w-auto/);
   assert.match(sonnerSource, /max-sm:!w-\[min\(250px,calc\(100vw-7\.5rem\)\)\]/);
 

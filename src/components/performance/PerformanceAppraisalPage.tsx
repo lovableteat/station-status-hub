@@ -304,7 +304,10 @@ function ReviewDetail({
                 ) : (
                   <p className="rd2-hint">
                     {Object.values(manager.entryReviews[category]).some(
-                      (entry) => entry.feedback || entry.attachments.length,
+                      (entry) => entry && typeof entry === "object" && (
+                        ("feedback" in entry && Boolean(entry.feedback)) ||
+                        ("attachments" in entry && Array.isArray(entry.attachments) && entry.attachments.length > 0)
+                      ),
                     )
                       ? "逐項回覆已列在各筆實績下方。"
                       : "尚未填寫類別總評。"}

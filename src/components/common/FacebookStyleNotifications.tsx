@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useUser } from "@/components/auth/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { normalizeNotificationMetadata } from "@/lib/notificationMetadata";
 
 interface FacebookNotification {
   id: string;
@@ -46,7 +47,7 @@ export function FacebookStyleNotifications() {
           .limit(3);
 
         if (error) throw error;
-        setNotifications(data || []);
+        setNotifications((data || []).map(normalizeNotificationMetadata));
       } catch (error) {
         console.error('Error fetching notifications:', error);
       }

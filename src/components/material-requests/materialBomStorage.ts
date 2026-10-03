@@ -358,7 +358,7 @@ function normalizeTableColorTheme(raw: unknown) {
   } satisfies BomTableColorTheme;
 }
 
-function parsePreferenceWorkspace(raw: unknown, fallbackUpdatedAt: string) {
+function parsePreferenceWorkspace(raw: unknown, fallbackUpdatedAt: string): BomWorkspace | null {
   if (!raw || typeof raw !== "object") return null;
 
   const candidate = (

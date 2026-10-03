@@ -1,7 +1,7 @@
 name: Audit regression (isolated)
 on:
   push:
-    branches: [repair/audit-20261002-realtime-drafts]
+    branches: [repair/audit-20261002-realtime-drafts, repair/quality-baseline-20261003]
   pull_request:
     branches: [main]
 permissions:
@@ -26,6 +26,10 @@ jobs:
         run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock react@18.3.1 react-test-renderer@18.3.1 @electric-sql/pglite@0.5.8 playwright@1.58.2
       - name: Deferred requests, live events, drafts and permissions
         run: node --test tests/audit*.integration.cjs
+      - name: Application and build configuration types
+        run: npm run typecheck
+      - name: Complete unit and source contracts
+        run: npm test
       - name: Mobile workspace and query contracts
         run: node --test tests/mobileCoreWorkspaces.test.mjs tests/mobileFirstAdaptiveShell.test.mjs tests/apiChatModelControl.test.mjs tests/apiChatPromptLibraryLayout.test.mjs tests/apiChatPromptHelpers.test.mjs tests/apiChatMaintenanceSource.test.mjs
       - name: Real PostgreSQL workflow and RLS

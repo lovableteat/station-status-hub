@@ -137,7 +137,7 @@ export function MobileProgressInput({
           stationId,
           status: "Done",
           systemId,
-          updates: updateData,
+          updates: { ...updateData },
         });
       } else if (currentProgress) {
         const { error } = await supabase
@@ -213,7 +213,7 @@ export function MobileProgressInput({
           stationId,
           status,
           systemId,
-          updates: updateData,
+          updates: { ...updateData },
         });
       } else if (currentProgress) {
         const { error } = await supabase

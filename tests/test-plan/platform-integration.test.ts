@@ -150,7 +150,7 @@ test("scopes every Test_Plan space and storage key to the active maintenance pro
   assert.match(migration, /test_plan_spaces_project_id_fkey/i);
   assert.match(migration, /test_plan_spaces_project_owner_name_uidx/i);
   assert.match(migration, /Legacy Imported Project/i);
-  assert.match(migration, /spaces\.project_id::text\s*=\s*\(storage\.foldername\(name\)\)\[2\]/i);
+  assert.match(migration, /spaces\.project_id::text\s*=\s*\(storage\.foldername\(storage\.objects\.name\)\)\[2\]/i);
   assert.match(adapter, /\.from\("test_plan_spaces"\)[\s\S]{0,180}\.eq\("project_id", projectId\)/);
   assert.match(hook, /useTestProject/);
   assert.match(hook, /repository\.loadWorkspace\([\s\S]{0,100}activeProjectId/);

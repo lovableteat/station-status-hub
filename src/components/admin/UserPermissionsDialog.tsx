@@ -215,9 +215,8 @@ export function UserPermissionsDialog({
   };
 
   const applyGlobalPreset = (level: WorkspaceAccessLevel) => {
-    const nextWorkspaceAccess = Object.fromEntries(
-      WORKSPACE_IDS.map((workspaceId) => [workspaceId, level]),
-    ) as WorkspaceAccessMap;
+    const nextWorkspaceAccess: WorkspaceAccessMap = { ...workspaceAccess };
+    for (const workspaceId of WORKSPACE_IDS) nextWorkspaceAccess[workspaceId] = level;
 
     setWorkspaceAccess(nextWorkspaceAccess);
 

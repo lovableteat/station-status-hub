@@ -45,6 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchAllPages } from "@/hooks/fetchAllPages";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 
 import { IssueAnalyticsPanel } from "./IssueAnalyticsPanel";
@@ -195,7 +196,7 @@ export function IssueTracker() {
     }
 
     const issueIds = (data ?? []).map((issue) => issue.id);
-    const attachmentRows: NonNullable<Issue["attachments"]> = [];
+    const attachmentRows: Tables<"issue_attachments">[] = [];
     let attachmentError: { message: string } | null = null;
     for (let index = 0; index < issueIds.length; index += 200) {
       const issueIdChunk = issueIds.slice(index, index + 200);
