@@ -91,10 +91,10 @@ test('hung reads stop waiting and abort; successful reads clear their deadline',
   await new Promise(resolve=>setTimeout(resolve,30));
   assert.equal(aborted,1);
 });
-test('unchanged section-report refresh omits attachments and removes revoked reports', async () => {
+test('section-report manifest only selects persisted columns and omits attachments', async () => {
   const cached = [{id:'allowed',updated_at:'v1',director_attachments:['large']},{id:'revoked',updated_at:'v1'}];
   let rpcCalls=0;
-  const db = {from:()=>({select:columns=>{assert.equal(columns,'id,updated_at,chief_name,director_name');return {eq:async()=>({data:[{id:'allowed',updated_at:'v1'}]})};}}),rpc:async()=>{rpcCalls++;return {data:cached};}};
+  const db = {from:()=>({select:columns=>{assert.equal(columns,'id,updated_at');return {eq:async()=>({data:[{id:'allowed',updated_at:'v1'}]})};}}),rpc:async()=>{rpcCalls++;return {data:cached};}};
   const result = await refreshSectionReportContents(db,'2026-q3',cached);
   assert.deepEqual(result,[cached[0]]);
   assert.equal(result[0],cached[0]);
