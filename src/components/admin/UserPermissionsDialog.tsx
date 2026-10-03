@@ -31,7 +31,6 @@ import {
   WORKSPACE_IDS,
   WORKSPACE_LABELS,
 } from "@/lib/workspacePermissions";
-import { mutateAuthAccount } from "./authAccountSync";
 
 interface UserPermissionsDialogProps {
   isOpen: boolean;
@@ -301,56 +300,14 @@ export function UserPermissionsDialog({
         workspaceAccess["station-status"],
       );
 
-      const { data: account, error: accountError } = await supabase
-        .from("system_users")
-        .select("permissions")
-        .eq("id", userId)
-        .maybeSingle();
-      if (accountError) throw accountError;
-
-      const currentSettings = account?.permissions
-        && typeof account.permissions === "object"
-        && !Array.isArray(account.permissions)
-        ? account.permissions as Record<string, unknown>
-        : {};
-      const mergedSettings = {
-        ...currentSettings,
-        workspaceAccess,
-        pagePermissions: synchronizedPermissions,
-        performanceManager,
-      };
-
-      // The verified service uses the server-only key after it has confirmed
-      // the caller can manage accounts. It remains safe when a hosted legacy
-      // RPC cannot update workspace.system_users under the new RLS policy.
-      const accountSync = await mutateAuthAccount(userId, {
-        action: "update",
-        profile: { permissions: mergedSettings },
-        forceVerifiedService: true,
+      const { error } = await supabase.rpc("set_user_access_permissions", {
+        p_user_id: userId,
+        p_permissions: synchronizedPermissions,
+        p_workspace_access: { ...workspaceAccess },
+        p_granted_by: user?.username ?? "admin",
+        p_performance_manager: performanceManager,
       });
-      if (!accountSync.success) {
-        throw new Error(accountSync.error || "工作區權限同步失敗");
-      }
-
-      // Keep the legacy table in sync when its policy permits it. The durable
-      // copy above remains authoritative, so a database already protected by
-      // the new RLS policy cannot turn a successful save into a false error.
-      const { error: removeError } = await supabase
-        .from("user_page_permissions")
-        .delete()
-        .eq("user_id", userId);
-      if (!removeError && synchronizedPermissions.length > 0) {
-        const { error: insertError } = await supabase
-          .from("user_page_permissions")
-          .insert(synchronizedPermissions.map((permission) => ({
-            user_id: userId,
-            permission,
-            granted_by: user?.username ?? "admin",
-          })));
-        if (insertError) console.warn("Legacy page permission sync skipped", insertError);
-      } else if (removeError) {
-        console.warn("Legacy page permission sync skipped", removeError);
-      }
+      if (error) throw error;
 
       window.dispatchEvent(
         new CustomEvent("station-permissions-updated", {

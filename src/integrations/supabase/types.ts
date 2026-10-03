@@ -3720,6 +3720,10 @@ type BaseDatabase = {
         Args: { p_user_id: string }
         Returns: boolean
       }
+      authorize_system_user_admin_sync: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       authenticate_user: {
         Args: { password_input: string; username_input: string }
         Returns: {
@@ -3732,6 +3736,20 @@ type BaseDatabase = {
       }
       can_edit_data_center_projects: { Args: never; Returns: boolean }
       can_view_data_center_projects: { Args: never; Returns: boolean }
+      create_system_user_admin_profile: {
+        Args: {
+          p_display_name: string
+          p_password_hash: string
+          p_role: string
+          p_status: string
+          p_username: string
+        }
+        Returns: Json
+      }
+      delete_system_user_admin_profile: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
       load_pcb_designer_workspace: {
         Args: { p_user_id: string }
         Returns: Json
@@ -3934,13 +3952,33 @@ type BaseDatabase = {
         Returns: undefined
       }
       set_user_access_permissions: {
-        Args: {
-          p_granted_by?: string
-          p_permissions: Database["public"]["Enums"]["page_permission"][]
-          p_user_id: string
-          p_workspace_access: Json
-        }
+        Args:
+          | {
+              p_granted_by?: string
+              p_performance_manager?: never
+              p_permissions: Database["public"]["Enums"]["page_permission"][]
+              p_user_id: string
+              p_workspace_access: Json
+            }
+          | {
+              p_granted_by: string
+              p_performance_manager: boolean
+              p_permissions: Database["public"]["Enums"]["page_permission"][]
+              p_user_id: string
+              p_workspace_access: Json
+            }
         Returns: undefined
+      }
+      update_system_user_admin_profile: {
+        Args: {
+          p_display_name?: string | null
+          p_password_hash?: string | null
+          p_role?: string | null
+          p_status?: string | null
+          p_user_id: string
+          p_username?: string | null
+        }
+        Returns: Json
       }
       sync_ai_workspace_conversations: {
         Args: { p_items: Json; p_owner_id: string }

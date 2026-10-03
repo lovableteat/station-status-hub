@@ -46,8 +46,8 @@ interface SystemUser {
   id: string;
   username: string;
   role: string;
-  permissions: unknown;
   status: string;
+  permissions: unknown;
   created_by: string;
   created_at: string;
   display_name?: string;
@@ -55,6 +55,7 @@ interface SystemUser {
   auth_migrated_at?: string | null;
   registration_requested_at?: string | null;
   approved_at?: string | null;
+  approved_by?: string | null;
   last_seen_at: string | null;
   avatar_path?: string | null;
 }
@@ -63,7 +64,7 @@ type AdminTab = "users" | "collaboration" | "api-management";
 
 const SHOW_ENGINEER_ADMIN = false;
 const SHOW_EXTENDED_ADMIN_COPY = false;
-// Keep the projection literal so PostgREST can check these safe columns.
+// Keep the projection literal so PostgREST can check the approved roster columns.
 const SYSTEM_USER_SAFE_COLUMNS = "id,username,display_name,role,status,permissions,created_by,created_at,updated_at,registration_requested_at,approved_at,approved_by,auth_user_id,auth_migrated_at,last_seen_at,avatar_path";
 
 export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) {
@@ -78,7 +79,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   const [isEngineerDialogOpen, setIsEngineerDialogOpen] = useState(false);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [newEngineer, setNewEngineer] = useState({ name: "", email: "", team: "ME" });
-  const [newUser, setNewUser] = useState({ username: "", password: "", role: "engineer", permissions: {}, displayName: "" });
+  const [newUser, setNewUser] = useState({ username: "", password: "", role: "engineer", displayName: "" });
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedUsername, setSelectedUsername] = useState<string>("");
@@ -108,7 +109,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   };
 
   const rejectUnauthenticatedAccountMutation = () => {
-    if (!REALTIME_COLLABORATION_V2_ENABLED || isRealtimeAuthenticated) return false;
+    if (isRealtimeAuthenticated) return false;
     toast({
       title: "需要重新驗證登入身分",
       description: "即時工作階段已過期，請重新登入後再進行帳戶管理。",
@@ -218,43 +219,18 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     }
 
     try {
-      let createdUserId: string | undefined;
-      if (REALTIME_COLLABORATION_V2_ENABLED) {
-        const result = await mutateAuthAccount("", {
-          action: "create",
-          password: newUser.password,
-          profile: {
-            username: newUser.username,
-            role: newUser.role,
-            status: "active",
-            displayName: newUser.displayName,
-            permissions: newUser.permissions,
-          },
-        });
-        if (!result.success) throw new Error(result.error || "帳號與登入身分建立失敗");
-        createdUserId = result.userId;
-      } else {
-        // Legacy deployment path remains available until the rollout flag is enabled.
-        const { data: hashedPassword, error: hashError } = await supabase.rpc('hash_password', {
-          password: newUser.password
-        });
-        if (hashError) throw new Error('密碼加密失敗');
-
-        const { data: createdUser, error } = await supabase
-          .from('system_users')
-          .insert([{
-            username: newUser.username,
-            password_hash: hashedPassword,
-            role: newUser.role,
-            permissions: newUser.permissions,
-            display_name: newUser.displayName,
-            created_by: user?.username || 'admin'
-          }])
-          .select('id')
-          .single();
-        if (error) throw error;
-        createdUserId = createdUser.id;
-      }
+      const result = await mutateAuthAccount("", {
+        action: "create",
+        password: newUser.password,
+        profile: {
+          username: newUser.username,
+          role: newUser.role,
+          status: "active",
+          displayName: newUser.displayName,
+        },
+      });
+      if (!result.success) throw new Error(result.error || "帳號與登入身分建立失敗");
+      const createdUserId = result.userId;
 
       toast({
         title: "新增成功",
@@ -267,7 +243,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         setSelectedUsername(newUser.username);
         setPermissionsDialogOpen(true);
       }
-      setNewUser({ username: "", password: "", role: "engineer", permissions: {}, displayName: "" });
+      setNewUser({ username: "", password: "", role: "engineer", displayName: "" });
       loadSystemUsers();
     } catch (error: unknown) {
       console.error('Error adding user:', error);
@@ -309,19 +285,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-      if (REALTIME_COLLABORATION_V2_ENABLED) {
-        const result = await mutateAuthAccount(id, {
-          action: "update",
-          profile: { status: newStatus },
-        });
-        if (!result.success) throw new Error(result.error || "帳號狀態同步失敗");
-      } else {
-        const { error } = await supabase
-          .from('system_users')
-          .update({ status: newStatus })
-          .eq('id', id);
-        if (error) throw error;
-      }
+      const result = await mutateAuthAccount(id, {
+        action: "update",
+        profile: { status: newStatus },
+      });
+      if (!result.success) throw new Error(result.error || "帳號狀態同步失敗");
 
       toast({
         title: "狀態更新成功",
@@ -365,16 +333,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     if (rejectUserMutation() || rejectUnauthenticatedAccountMutation()) return;
 
     try {
-      if (REALTIME_COLLABORATION_V2_ENABLED) {
-        const result = await mutateAuthAccount(userId, { action: "delete" });
-        if (!result.success) throw new Error(result.error || "帳號刪除同步失敗");
-      } else {
-        const { error } = await supabase
-          .from('system_users')
-          .delete()
-          .eq('id', userId);
-        if (error) throw error;
-      }
+      const result = await mutateAuthAccount(userId, { action: "delete" });
+      if (!result.success) throw new Error(result.error || "帳號刪除同步失敗");
 
       toast({
         title: "刪除成功",

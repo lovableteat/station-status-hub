@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.100.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,6 +8,16 @@ const corsHeaders = {
 };
 
 const supabaseSchema = Deno.env.get("APP_DB_SCHEMA") ?? "workspace";
+
+const createWorkspaceClient = (
+  supabaseUrl: string,
+  supabaseKey: string,
+  authorization = "",
+) => createClient(supabaseUrl, supabaseKey, {
+  db: { schema: supabaseSchema },
+  global: authorization ? { headers: { Authorization: authorization } } : undefined,
+  auth: { persistSession: false, autoRefreshToken: false },
+});
 
 const respond = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -21,7 +31,7 @@ const accountEmail = (systemUserId: string) =>
 const allowedRoles = new Set(["viewer", "engineer", "admin", "super_admin"]);
 const allowedStatuses = new Set(["active", "inactive"]);
 
-type AdminClient = ReturnType<typeof createClient>;
+type AdminClient = ReturnType<typeof createWorkspaceClient>;
 type AccountAction = "create" | "update" | "sync" | "delete";
 const TEST_PLAN_STORAGE_BUCKET = "test-plan-files";
 const STORAGE_REMOVE_BATCH_SIZE = 100;
@@ -33,8 +43,6 @@ interface SystemUserRecord {
   display_name: string | null;
   status: string;
   auth_user_id: string | null;
-  password_hash?: string;
-  permissions?: unknown;
 }
 
 interface ProfileInput {
@@ -42,7 +50,6 @@ interface ProfileInput {
   role?: string;
   status?: string;
   displayName?: string;
-  permissions?: unknown;
 }
 
 interface AccountCleanupRecord {
@@ -59,6 +66,13 @@ function isMissingAuthUserError(error: unknown) {
       typeof candidate.message === "string"
       && /not found|does not exist/i.test(candidate.message)
     );
+}
+
+function isAdministratorPermissionError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; message?: unknown };
+  return candidate.code === "42501"
+    || candidate.message === "Administrator permission required";
 }
 
 async function recordCleanupError(
@@ -156,8 +170,6 @@ function readProfile(value: unknown): ProfileInput {
     role: typeof input.role === "string" ? input.role : undefined,
     status: typeof input.status === "string" ? input.status : undefined,
     displayName: typeof input.displayName === "string" ? input.displayName.trim() : undefined,
-    permissions:
-      input.permissions && typeof input.permissions === "object" ? input.permissions : undefined,
   };
 }
 
@@ -254,27 +266,7 @@ serve(async (request) => {
       return respond({ success: false, error: "Unauthorized" }, 401);
     }
 
-    const caller = createClient(supabaseUrl, anonKey, {
-      db: { schema: supabaseSchema },
-      global: { headers: { Authorization: authorization } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const [callerResult, permissionResult] = await Promise.all([
-      caller.rpc("get_current_system_user"),
-      caller.rpc("can_manage_system_users"),
-    ]);
-    const { data: callerRows, error: callerError } = callerResult;
-    const { data: canManageUsers, error: permissionError } = permissionResult;
-    const callerProfile = Array.isArray(callerRows) ? callerRows[0] : null;
-    if (
-      callerError ||
-      permissionError ||
-      !callerProfile ||
-      canManageUsers !== true
-    ) {
-      return respond({ success: false, error: "Administrator permission required" }, 403);
-    }
-
+    const caller = createWorkspaceClient(supabaseUrl, anonKey, authorization);
     const body = await request.json().catch(() => ({}));
     const targetUserId = typeof body?.userId === "string" ? body.userId : "";
     const requestedAction = typeof body?.action === "string" ? body.action : "sync";
@@ -282,6 +274,16 @@ serve(async (request) => {
       ? requestedAction as AccountAction
       : "sync";
     const password = typeof body?.password === "string" ? body.password : "";
+    if (
+      body?.profile
+      && typeof body.profile === "object"
+      && Object.prototype.hasOwnProperty.call(body.profile, "permissions")
+    ) {
+      return respond({
+        success: false,
+        error: "Permission changes require the atomic permission RPC",
+      }, 400);
+    }
     const profile = readProfile(body?.profile);
     const profileError = validateProfile(profile, action === "create");
     if (profileError || password.length > 200 || (password && password.length < 6)) {
@@ -291,15 +293,7 @@ serve(async (request) => {
       return respond({ success: false, error: "Invalid request" }, 400);
     }
 
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
-      db: { schema: supabaseSchema },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    await drainQueuedAccountCleanups(
-      admin,
-      action === "delete" ? targetUserId : "",
-    );
-
+    const admin = createWorkspaceClient(supabaseUrl, serviceRoleKey);
     if (action === "create") {
       if (!password) return respond({ success: false, error: "Password is required" }, 400);
       const { data: passwordHash, error: hashError } = await admin.rpc("hash_password", {
@@ -309,44 +303,49 @@ serve(async (request) => {
         return respond({ success: false, error: "Password hashing failed" }, 503);
       }
 
-      const { data: createdUser, error: createError } = await admin
-        .from("system_users")
-        .insert({
-          username: profile.username,
-          password_hash: passwordHash,
-          role: profile.role,
-          permissions: profile.permissions ?? {},
-          display_name: profile.displayName,
-          status: profile.status ?? "active",
-          created_by: callerProfile.username,
-        })
-        .select("id,username,role,display_name,status,auth_user_id")
-        .single();
+      const { data: createdUser, error: createError } = await caller.rpc(
+        "create_system_user_admin_profile",
+        {
+          p_username: profile.username,
+          p_password_hash: passwordHash,
+          p_role: profile.role,
+          p_status: profile.status ?? "active",
+          p_display_name: profile.displayName,
+        },
+      );
       if (createError || !createdUser) {
+        if (isAdministratorPermissionError(createError)) {
+          return respond({ success: false, error: "Administrator permission required" }, 403);
+        }
         return respond({ success: false, error: "System account creation failed" }, 409);
       }
 
+      await drainQueuedAccountCleanups(admin);
       try {
-        const authResult = await synchronizeAuthIdentity(admin, createdUser, password);
-        return respond({ success: true, userId: createdUser.id, ...authResult });
+        const createdTarget = createdUser as SystemUserRecord;
+        const authResult = await synchronizeAuthIdentity(admin, createdTarget, password);
+        return respond({ success: true, userId: createdTarget.id, ...authResult });
       } catch (error) {
-        await admin.from("system_users").delete().eq("id", createdUser.id);
         console.error("Unable to create synchronized account", error);
-        return respond({ success: false, error: "Synchronized account creation failed" }, 503);
+        return respond({
+          success: false,
+          error: "Account profile saved; Auth sync is pending",
+        }, 503);
       }
     }
 
-    const { data: target, error: targetError } = await admin
-      .from("system_users")
-      .select("id,username,role,display_name,status,auth_user_id,password_hash,permissions")
-      .eq("id", targetUserId)
-      .maybeSingle();
-    if (targetError) {
-      return respond({ success: false, error: "Account lookup failed" }, 503);
-    }
-
     if (action === "delete") {
-      if (!target) {
+      const { data: deleted, error: deleteSystemError } = await caller.rpc(
+        "delete_system_user_admin_profile",
+        { p_user_id: targetUserId },
+      );
+      if (deleteSystemError) {
+        if (isAdministratorPermissionError(deleteSystemError)) {
+          return respond({ success: false, error: "Administrator permission required" }, 403);
+        }
+        return respond({ success: false, error: "System account delete failed" }, 503);
+      }
+      if (deleted !== true) {
         try {
           const cleaned = await cleanupQueuedAccount(admin, targetUserId);
           return cleaned
@@ -357,14 +356,7 @@ serve(async (request) => {
           return respond({ success: false, error: "Account cleanup is still queued" }, 503);
         }
       }
-
-      const { error: deleteSystemError } = await admin
-        .from("system_users")
-        .delete()
-        .eq("id", targetUserId);
-      if (deleteSystemError) {
-        return respond({ success: false, error: "System account delete failed" }, 503);
-      }
+      await drainQueuedAccountCleanups(admin, targetUserId);
       try {
         await cleanupQueuedAccount(admin, targetUserId);
         return respond({ success: true });
@@ -380,57 +372,69 @@ serve(async (request) => {
       }
     }
 
-    if (!target) return respond({ success: false, error: "Account not found" }, 404);
-
     if (action === "update") {
-      const updateData: Record<string, unknown> = {};
-      if (profile.username !== undefined) updateData.username = profile.username;
-      if (profile.role !== undefined) updateData.role = profile.role;
-      if (profile.status !== undefined) updateData.status = profile.status;
-      if (profile.displayName !== undefined) updateData.display_name = profile.displayName;
-      if (profile.permissions !== undefined) updateData.permissions = profile.permissions;
+      let passwordHash: string | null = null;
       if (password) {
-        const { data: passwordHash, error: hashError } = await admin.rpc("hash_password", {
+        const { data: hashedPassword, error: hashError } = await admin.rpc("hash_password", {
           password,
         });
-        if (hashError || typeof passwordHash !== "string") {
+        if (hashError || typeof hashedPassword !== "string") {
           return respond({ success: false, error: "Password hashing failed" }, 503);
         }
-        updateData.password_hash = passwordHash;
+        passwordHash = hashedPassword;
       }
 
-      const { data: updatedTarget, error: updateError } = await admin
-        .from("system_users")
-        .update(updateData)
-        .eq("id", targetUserId)
-        .select("id,username,role,display_name,status,auth_user_id")
-        .single();
+      const { data: updatedTarget, error: updateError } = await caller.rpc(
+        "update_system_user_admin_profile",
+        {
+          p_user_id: targetUserId,
+          p_username: profile.username ?? null,
+          p_password_hash: passwordHash,
+          p_role: profile.role ?? null,
+          p_status: profile.status ?? null,
+          p_display_name: profile.displayName ?? null,
+        },
+      );
       if (updateError || !updatedTarget) {
+        if (isAdministratorPermissionError(updateError)) {
+          return respond({ success: false, error: "Administrator permission required" }, 403);
+        }
         return respond({ success: false, error: "System account update failed" }, 503);
       }
 
+      await drainQueuedAccountCleanups(admin);
       try {
-        const authResult = await synchronizeAuthIdentity(admin, updatedTarget, password);
+        const updatedRecord = updatedTarget as SystemUserRecord;
+        const authResult = await synchronizeAuthIdentity(admin, updatedRecord, password);
         return respond({ success: true, ...authResult });
       } catch (error) {
-        await admin
-          .from("system_users")
-          .update({
-            username: target.username,
-            role: target.role,
-            display_name: target.display_name,
-            status: target.status,
-            password_hash: target.password_hash,
-            permissions: target.permissions,
-          })
-          .eq("id", target.id);
         console.error("Unable to update synchronized account", error);
-        return respond({ success: false, error: "Synchronized account update failed" }, 503);
+        return respond({
+          success: false,
+          error: "Account profile saved; Auth sync is pending",
+        }, 503);
       }
     }
 
+    const { data: target, error: authorizationError } = await caller.rpc(
+      "authorize_system_user_admin_sync",
+      { p_user_id: targetUserId },
+    );
+    if (authorizationError) {
+      if (isAdministratorPermissionError(authorizationError)) {
+        return respond({ success: false, error: "Administrator permission required" }, 403);
+      }
+      return respond({ success: false, error: "Account lookup failed" }, 503);
+    }
+    if (!target) return respond({ success: false, error: "Account not found" }, 404);
+
+    await drainQueuedAccountCleanups(admin);
     try {
-      const authResult = await synchronizeAuthIdentity(admin, target, password);
+      const authResult = await synchronizeAuthIdentity(
+        admin,
+        target as SystemUserRecord,
+        password,
+      );
       return respond({ success: true, ...authResult });
     } catch (error) {
       console.error("Unable to synchronize account", error);
