@@ -17,6 +17,10 @@ const accountAdminSync = fs.readFileSync(
   "supabase/functions/account-admin-sync/index.ts",
   "utf8",
 );
+const permissionBoundaryMigration = fs.readFileSync(
+  "supabase/migrations/20261003075222_close_permission_table_boundary.sql",
+  "utf8",
+);
 
 test("self-registration creates a pending account with a real display name", () => {
   assert.match(login, /正確姓名/);
@@ -33,8 +37,9 @@ test("an administrator must explicitly approve pending accounts", () => {
   assert.match(approvalPermissionMigration, /CREATE OR REPLACE FUNCTION public\.can_manage_system_users/);
   assert.match(approvalPermissionMigration, /page_permission\.permission = 'admin_edit'/);
   assert.match(approvalPermissionMigration, /NOT public\.can_manage_system_users\(\)/);
-  assert.match(accountAdminSync, /caller\.rpc\("can_manage_system_users"\)/);
-  assert.match(accountAdminSync, /canManageUsers !== true/);
+  assert.match(accountAdminSync, /caller\.rpc\(\s*"(?:create|update|delete)_system_user_admin_profile"/);
+  assert.match(permissionBoundaryMigration, /create or replace function workspace\.approve_system_user[\s\S]+for update/i);
+  assert.match(permissionBoundaryMigration, /not workspace\.can_manage_system_users\(\)/i);
 });
 
 test("the auth upgrade signs out once without reloading the page", () => {

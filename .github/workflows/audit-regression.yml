@@ -32,7 +32,13 @@ jobs:
         run: npm test
       - name: Mobile workspace and query contracts
         run: node --test tests/mobileCoreWorkspaces.test.mjs tests/mobileFirstAdaptiveShell.test.mjs tests/apiChatModelControl.test.mjs tests/apiChatPromptLibraryLayout.test.mjs tests/apiChatPromptHelpers.test.mjs tests/apiChatMaintenanceSource.test.mjs
-      - name: Real PostgreSQL workflow and RLS
+      - name: PostgreSQL 17.4 permission boundary and revocation races
+        run: npm run test:permission:postgres
+      - name: Deno 2.1.4 Edge type and endpoint contracts
+        run: |
+          docker run --rm -v "$PWD:/app" -w /app/supabase/functions/account-admin-sync denoland/deno:2.1.4@sha256:3bf75873714baa410dcf7fabaf76d806d20f0ac8a7579df11577b4ed97416e34 deno check --frozen index.ts
+          docker run --rm -v "$PWD:/app" -w /app denoland/deno:2.1.4@sha256:3bf75873714baa410dcf7fabaf76d806d20f0ac8a7579df11577b4ed97416e34 deno run --allow-run --allow-net --allow-read --allow-env tests/edge/accountAdminSync.synthetic.ts
+      - name: PGlite performance workflow and RLS
         run: |
           node tests/performanceOrganization.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
           node tests/performanceSubmission.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"

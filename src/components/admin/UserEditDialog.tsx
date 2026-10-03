@@ -6,8 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Edit, Save, X, Trash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { REALTIME_COLLABORATION_V2_ENABLED } from "@/lib/realtimeCollaborationConfig";
 import { useUser } from "@/components/auth/UserContext";
 import { mutateAuthAccount } from "./authAccountSync";
 
@@ -35,58 +33,23 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
 
   const handleSave = async () => {
     try {
-      if (REALTIME_COLLABORATION_V2_ENABLED) {
-        const result = await mutateAuthAccount(userId, {
-          action: "update",
-          password: editValues.password,
-          profile: {
-            username: editValues.username,
-            role: editValues.role,
-            status: editValues.status,
-            displayName: editValues.displayName,
-          },
-        });
-        if (!result.success) throw new Error(result.error || "帳號與登入身分同步失敗");
-
-        toast({
-          title: "更新成功",
-          description: result.deferred
-            ? "帳號資料已更新；首次正式登入時會安全建立即時身分"
-            : "用戶資料與登入身分已同步更新",
-        });
-        setIsOpen(false);
-        onUpdate();
-        return;
-      }
-
-      const updateData: Record<string, string> = {
-        username: editValues.username,
-        role: editValues.role,
-        status: editValues.status,
-        display_name: editValues.displayName
-      };
-
-      // Only update password if provided - use secure hashing
-      if (editValues.password) {
-        const { data: hashedPassword, error: hashError } = await supabase.rpc('hash_password', {
-          password: editValues.password
-        });
-        if (hashError) {
-          throw new Error('Failed to hash password');
-        }
-        updateData.password_hash = hashedPassword;
-      }
-
-      const { error } = await supabase
-        .from('system_users')
-        .update(updateData)
-        .eq('id', userId);
-
-      if (error) throw error;
+      const result = await mutateAuthAccount(userId, {
+        action: "update",
+        password: editValues.password,
+        profile: {
+          username: editValues.username,
+          role: editValues.role,
+          status: editValues.status,
+          displayName: editValues.displayName,
+        },
+      });
+      if (!result.success) throw new Error(result.error || "帳號與登入身分同步失敗");
 
       toast({
         title: "更新成功",
-        description: "用戶資料已更新",
+        description: result.deferred
+          ? "帳號資料已更新；首次正式登入時會安全建立即時身分"
+          : "用戶資料與登入身分已同步更新",
       });
 
       setIsOpen(false);
