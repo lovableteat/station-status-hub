@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "test": "node scripts/run-unit-tests.mjs",
+    "test:permission:postgres": "node --test tests/permissionBoundary.postgres.cjs",
     "model:convert": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/convert-step-with-freecad.ps1",
     "model:convert:xcaf": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/convert-step-with-occt.ps1",
     "model:convert:wasm": "node --max-old-space-size=24576 scripts/convert-large-step-to-glb.mjs",

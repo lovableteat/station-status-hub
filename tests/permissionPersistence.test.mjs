@@ -30,17 +30,19 @@ test("workspace permission saves retain atomic writes behind an administrator-on
   assert.match(sql, /NOTIFY pgrst, 'reload schema'/i);
 });
 
-test("admin dialog stores a complete permission snapshot through the verified service", async () => {
+test("admin dialog stores a complete permission snapshot through one atomic RPC", async () => {
   const source = await read("../src/components/admin/UserPermissionsDialog.tsx");
-  assert.match(source, /import \{ mutateAuthAccount \} from "\.\/authAccountSync"/);
   assert.match(source, /readStoredPagePermissions/);
-  assert.match(source, /profile: \{ permissions: mergedSettings \}/);
-  assert.match(source, /pagePermissions: synchronizedPermissions/);
-  assert.match(source, /performanceManager/);
+  assert.match(source, /supabase\.rpc\("set_user_access_permissions"/);
+  assert.match(source, /p_permissions: synchronizedPermissions/);
+  assert.match(source, /p_workspace_access: \{ \.\.\.workspaceAccess \}/);
+  assert.match(source, /p_performance_manager: performanceManager/);
+  assert.match(source, /p_granted_by: user\?\.username \?\? "admin"/);
   assert.match(source, /performance-manager-assignment/);
   assert.match(source, /synchronizeWorkspacePermissions\(prev, "performance", "edit"\)/);
-  assert.match(source, /forceVerifiedService: true/);
-  assert.match(source, /Legacy page permission sync skipped/);
+  assert.doesNotMatch(source, /mutateAuthAccount/);
+  assert.doesNotMatch(source, /\.from\("user_page_permissions"\)[\s\S]{0,120}\.delete\(\)/);
+  assert.doesNotMatch(source, /\.from\("user_page_permissions"\)[\s\S]{0,120}\.insert\(/);
   assert.match(source, /function getSaveErrorMessage/);
   assert.match(source, /description: getSaveErrorMessage\(error\)/);
   assert.doesNotMatch(source, /已以本機方式儲存/);

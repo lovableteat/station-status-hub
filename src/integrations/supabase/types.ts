@@ -3934,12 +3934,21 @@ type BaseDatabase = {
         Returns: undefined
       }
       set_user_access_permissions: {
-        Args: {
-          p_granted_by?: string
-          p_permissions: Database["public"]["Enums"]["page_permission"][]
-          p_user_id: string
-          p_workspace_access: Json
-        }
+        Args:
+          | {
+              p_granted_by?: string
+              p_performance_manager?: never
+              p_permissions: Database["public"]["Enums"]["page_permission"][]
+              p_user_id: string
+              p_workspace_access: Json
+            }
+          | {
+              p_granted_by: string
+              p_performance_manager: boolean
+              p_permissions: Database["public"]["Enums"]["page_permission"][]
+              p_user_id: string
+              p_workspace_access: Json
+            }
         Returns: undefined
       }
       sync_ai_workspace_conversations: {
