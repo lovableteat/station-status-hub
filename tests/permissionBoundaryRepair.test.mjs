@@ -24,6 +24,58 @@ test("permission boundary migration locks before a fresh authorization decision"
   assert.match(fiveArg, /p_performance_manager is null/i);
 });
 
+test("approval and account profile mutations lock before fresh authorization", async () => {
+  const sql = await read(
+    "../supabase/migrations/20261003075222_close_permission_table_boundary.sql",
+  );
+
+  for (const functionName of [
+    "approve_system_user",
+    "create_system_user_admin_profile",
+    "update_system_user_admin_profile",
+    "delete_system_user_admin_profile",
+    "authorize_system_user_admin_sync",
+  ]) {
+    const body = sql.match(
+      new RegExp(`create or replace function workspace\\.${functionName}\\([\\s\\S]+?\\$\\$;`, "i"),
+    )?.[0] ?? "";
+    assert.match(body, /for update/i, `${functionName} must take a row lock`);
+    assert.match(body, /workspace\.can_manage_system_users\(\)/i);
+    assert.ok(
+      body.toLowerCase().indexOf("for update")
+        < body.toLowerCase().lastIndexOf("workspace.can_manage_system_users()"),
+      `${functionName} must authorize after locking`,
+    );
+  }
+});
+
+test("legacy account Edge path rejects permission payloads and uses guarded RPCs", async () => {
+  const edge = await read("../supabase/functions/account-admin-sync/index.ts");
+
+  assert.match(edge, /Object\.prototype\.hasOwnProperty\.call\([^,]+,\s*["']permissions["']\)/);
+  assert.match(edge, /Permission changes require the atomic permission RPC/);
+  assert.doesNotMatch(edge, /updateData\.permissions\s*=/);
+  assert.doesNotMatch(edge, /permissions:\s*target\.permissions/);
+  for (const rpc of [
+    "create_system_user_admin_profile",
+    "update_system_user_admin_profile",
+    "delete_system_user_admin_profile",
+    "authorize_system_user_admin_sync",
+  ]) {
+    assert.match(edge, new RegExp(`caller\\.rpc\\(\\s*["']${rpc}["']`));
+  }
+});
+
+test("durable permission fallback is absent-only and malformed values fail closed", async () => {
+  const sql1 = await read(
+    "../supabase/migrations/20261002160000_enforce_explicit_permission_revocation.sql",
+  );
+
+  assert.match(sql1, /when not \(coalesce\(account\.permissions, '\{\}'::jsonb\) \? 'pagePermissions'\)[\s\S]+from workspace\.user_page_permissions/i);
+  assert.match(sql1, /when jsonb_typeof\(account\.permissions -> 'pagePermissions'\) = 'array'/i);
+  assert.match(sql1, /else false/i);
+});
+
 test("permission boundary keeps compatibility aliases and closes default ACLs", async () => {
   const sql = await read(
     "../supabase/migrations/20261003075222_close_permission_table_boundary.sql",
@@ -46,6 +98,18 @@ test("permission boundary keeps compatibility aliases and closes default ACLs", 
       ),
     );
   }
+});
+
+test("migration ordering fails closed instead of letting SQL2 downgrade SQL3", async () => {
+  const sql2 = await read(
+    "../supabase/migrations/20261002170000_align_account_permission_mutation_entrypoints.sql",
+  );
+  const sql3 = await read(
+    "../supabase/migrations/20261003075222_close_permission_table_boundary.sql",
+  );
+
+  assert.match(sql2, /20261003075222[\s\S]+SQL2 cannot run after SQL3/i);
+  assert.match(sql3, /20261002170000[\s\S]+SQL3 requires SQL2/i);
 });
 
 test("permission table is read-only to authenticated clients with a narrow policy", async () => {
@@ -81,8 +145,17 @@ test("operational rollback remains fail-closed", async () => {
   );
 
   assert.match(rollback, /from public, anon, authenticated/i);
+  for (const rpc of [
+    "create_system_user_admin_profile",
+    "update_system_user_admin_profile",
+    "delete_system_user_admin_profile",
+    "authorize_system_user_admin_sync",
+    "approve_system_user",
+  ]) {
+    assert.match(rollback, new RegExp(`revoke all on function (?:workspace|public)\\.${rpc}`, "i"));
+  }
   assert.match(rollback, /grant select on table workspace\.user_page_permissions to authenticated/i);
   assert.doesNotMatch(rollback, /grant\s+(?:all|insert|update|delete)[^;]*user_page_permissions[^;]*authenticated/i);
   assert.match(runbook, /20261002160000[\s\S]+20261002170000[\s\S]+20261003075222[\s\S]+Deploy the frontend/i);
-  assert.match(runbook, /metadata and aggregate snapshot, not a backup/i);
+  assert.match(runbook, /scoped recovery capture[\s\S]+not[\s\S]+full backup/i);
 });

@@ -7,7 +7,9 @@ without touching hosted data during development.
 rows in a deterministic order, re-authorizes after waiting, and writes both
 permission representations transactionally. Authenticated clients receive
 read-only access to the legacy permission table. The React dialog calls only
-the atomic RPC.
+the atomic RPC. Account profile/role/status/approval writers use authenticated
+transactional RPCs with the same post-lock authorization rule; Edge retains the
+service role only for Auth and storage synchronization.
 
 ## Constraints
 
@@ -38,6 +40,19 @@ the atomic RPC.
 - [x] Explicitly revoke default function execution and grant only intended
       roles for every overload.
 - [x] Keep the migration transactional and reload the PostgREST schema cache.
+- [x] Guard SQL2/SQL3 ordering so a later SQL2 cannot silently replace SQL3's
+      hardened wrapper.
+
+### Task 2a: Account activation and Edge boundary
+
+- [x] Reject legacy Edge `profile.permissions` payloads and remove that field
+      from the current frontend contract.
+- [x] Route account create/update/delete/sync authorization through narrow
+      authenticated RPCs; do not broaden `system_users` grants.
+- [x] Harden `approve_system_user` with ordered actor/target locks and a fresh
+      post-wait authorization decision.
+- [x] Remove stale failure compensation for permissions, role, status, and
+      password hash; report Auth synchronization as pending instead.
 
 ### Task 3: Frontend atomic save
 
@@ -50,10 +65,12 @@ the atomic RPC.
 
 - [x] Add a preflight script that captures definitions, owners, ACLs, policies,
       dependencies, migration history, and aggregate counts without secrets.
-- [x] Add a fixed-order rollout runbook for SQL 1 -> SQL 2 -> SQL 3 -> frontend.
-- [x] Add a fail-closed rollback script that never restores direct client writes.
-- [x] State that metadata snapshots are not full backups and require a separate
-      restore-readiness confirmation.
+- [x] Add a fixed-order rollout runbook for SQL 1 -> SQL 2 -> SQL 3 -> verified
+      Edge deployment -> frontend.
+- [x] Add fail-closed containment for permission, account-profile, and approval
+      RPCs, plus the separate legacy-Edge disablement requirement.
+- [x] Capture the complete ordered DDL/ACL write set as scoped recovery evidence;
+      do not mislabel it a full backup or auto-restore vulnerable grants.
 
 ### Task 5: Verification and handoff
 

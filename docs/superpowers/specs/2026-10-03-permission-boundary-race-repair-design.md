@@ -24,6 +24,10 @@ or modify a hosted Supabase project.
    not a substitute for removing unnecessary table privileges.
 4. PostgreSQL grants `EXECUTE` on newly created functions to `PUBLIC` by
    default. Every RPC overload therefore needs an explicit ACL.
+5. The legacy account Edge function accepts `profile.permissions` and performs
+   service-role create/update/delete operations after a separate authorization
+   query. Role/status changes and approval therefore have the same queued
+   revocation race, while failure compensation can restore stale authority.
 
 ## Chosen approach
 
@@ -44,6 +48,15 @@ table access, grant only `SELECT`, and replace existing policies with one
 authenticated policy allowing an active user to read their own rows or a
 currently authorized manager to read managed rows. The service role retains
 full access. Browser writes use only the five-argument RPC.
+
+Account create/update/delete and Auth synchronization authorization use narrow
+`workspace` RPCs callable only by `authenticated`. They take the same ordered
+actor/target locks, re-authorize after waiting, and commit role/status/profile
+changes before Edge performs Auth/storage side effects. Edge rejects any
+`profile.permissions` member and never compensates by writing stale permissions,
+role, status, or password hashes. A failed Auth sync leaves the authorized
+profile commit intact and reports sync as pending. `approve_system_user` uses the
+same post-lock authorization protocol.
 
 ## Lock and authorization protocol
 
@@ -68,8 +81,12 @@ errors into every caller while still leaving the direct-table boundary open.
   a fallback only when the durable property is absent, never when it is present
   and empty.
 - No account, permission, or operational row is rewritten during migration.
-- Account identity, login, avatar, organization writers, and Realtime behavior
-  are outside this change.
+- Login, avatar, organization writers, and Realtime behavior remain unchanged.
+  Auth synchronization remains service mediated, but its database mutation and
+  authorization boundary is transactional and caller-account based.
+- Independent devices do not receive separate application authority. Both may
+  operate through the same valid account session, and revocation is enforced on
+  each device's next server-authorized mutation.
 - Existing `system_users` column privileges must not be broadened. The exact
   hosted ACL remains a rollout preflight assertion rather than a guessed local
   rewrite.
@@ -81,8 +98,9 @@ errors into every caller while still leaving the direct-table boundary open.
 - Existing PGlite integration checks exercise migration behavior and fallback
   semantics, but are not accepted as concurrency proof.
 - A disposable real PostgreSQL container runs independent sessions for queued
-  revocation/self-save, cross-user lock ordering, authorization, RLS, and
-  effective function ACL matrices.
+  revocation/self-save, queued approval, queued role/status mutation, barriered
+  cross-user lock ordering, two sessions for one account, authorization, RLS,
+  migration-order guards, containment, and effective ACL matrices.
 - Full unit tests, application and Node TypeScript checks, build, and the
   existing lint baseline run before review.
 
@@ -90,14 +108,19 @@ errors into every caller while still leaving the direct-table boundary open.
 
 Production order is fixed: capture a metadata/aggregate preflight, apply
 `20261002160000`, then `20261002170000`, then this migration, verify the SQL
-boundary, and only then deploy the RPC-using frontend. A frontend must never be
-deployed before its five-argument RPC exists.
+boundary, then deploy and independently verify the exact `account-admin-sync`
+Edge version, and only then deploy the matching RPC-using frontend. A repository
+or Pages deployment does not deploy Edge code. A frontend must never be deployed
+before its five-argument RPC exists.
 
 Rollback is deliberately fail-closed. Roll back the frontend first. The
-database rollback artifact may restore the prior four-argument implementation
-but must retain the restricted table grants and policy; it must not recreate
-the permissive client write boundary. Exact hosted definitions, owners, ACLs,
-dependencies, policies, and aggregate counts are captured immediately before
-execution for forensic restoration. That snapshot is not a full database
-backup, and full production restore readiness must be confirmed separately by
-the operator.
+database containment artifact revokes authenticated permission, profile, sync,
+delete, and approval RPC access while retaining only service-role permission
+recovery; it must not recreate the permissive client write boundary. A legacy
+deployed Edge version that still writes with the service role must be disabled
+or replaced separately. Exact hosted definitions, owners, ACLs,
+  dependencies, policies, migration state, and aggregate counts are captured
+  immediately before execution as a scoped recovery artifact. The migrations
+  execute DDL/ACL changes only; business-row DML appears only inside future RPC
+  bodies. The capture is not a full database backup, and targeted recovery must
+  be a reviewed forward fix that does not restore the vulnerable access boundary.

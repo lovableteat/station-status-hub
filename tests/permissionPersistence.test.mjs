@@ -48,13 +48,11 @@ test("admin dialog stores a complete permission snapshot through one atomic RPC"
   assert.doesNotMatch(source, /已以本機方式儲存/);
 });
 
-test("verified account service can finish a legacy permission save", async () => {
+test("account synchronization cannot bypass the atomic permission RPC", async () => {
   const source = await read("../src/components/admin/authAccountSync.ts");
-  assert.match(source, /forceVerifiedService\?: boolean/);
-  assert.match(
-    source,
-    /!REALTIME_COLLABORATION_V2_ENABLED && !options\.forceVerifiedService/,
-  );
+  assert.doesNotMatch(source, /forceVerifiedService/);
+  assert.doesNotMatch(source, /permissions\?: unknown/);
+  assert.match(source, /if \(!REALTIME_COLLABORATION_V2_ENABLED\)/);
 });
 
 test("stored page permissions remain authoritative when legacy rows cannot be updated", async () => {

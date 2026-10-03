@@ -219,7 +219,7 @@ test("queues durable file cleanup before an administrator deletes an account", a
     accountSync.indexOf('if (action === "delete")'),
   );
   const systemDeleteIndex = deleteFlow.search(
-    /\.from\("system_users"\)[\s\S]{0,100}\.delete\(\)/,
+    /caller\.rpc\(\s*"delete_system_user_admin_profile"/,
   );
   assert.ok(
     systemDeleteIndex >= 0
