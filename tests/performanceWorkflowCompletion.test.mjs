@@ -9,7 +9,7 @@ test("submitted forms stop showing the unsent draft warning", async () => {
     readSource("src/components/performance/AssessmentEditor.tsx"),
     readSource("src/components/performance/PerformanceAppraisalPage.tsx"),
   ]);
-  assert.match(editor, /showDraftWarning\s*&&\s*!submitStatus\s*&&\s*<p className="rd2-hint" role="status">/);
+  assert.match(editor, /!readonly\s*&&\s*draftKey\s*&&\s*showDraftWarning\s*&&\s*!submitStatus\s*&&\s*<p className="rd2-draft-notice" role="status">/);
   assert.match(page, /showDraftWarning=\{tab !== "manager" \|\| editorReview\?\.status === "submitted"\}/);
 });
 
@@ -20,7 +20,9 @@ test("completed review details distinguish category summaries from per-entry rep
   ]);
   assert.doesNotMatch(page, /尚無此類評語/);
   assert.match(page, /逐項回覆已列在各筆實績下方/);
-  assert.match(feedback, /editable && history\.length > 0/);
+  assert.match(feedback, /historyOnly && !history\.length/);
+  assert.match(feedback, /manager=\{savedManager \|\| manager\} historyOnly showFeedback/);
+  assert.match(feedback, /historyOnly \? latestReturn\?\.feedback/);
 });
 
 test("returned feedback is marked consistently across individual and department histories", async () => {
@@ -30,7 +32,8 @@ test("returned feedback is marked consistently across individual and department 
     readSource("src/components/performance/performance.css"),
   ]);
   assert.match(entryFeedback, /data-return-state="returned"/);
-  assert.match(entryFeedback, /主管逐項退回回應/);
+  assert.match(entryFeedback, /主管退回回應/);
+  assert.match(entryFeedback, /item\.category === category && item\.entryId === entry\.id/);
   assert.match(sectionReports, /data-action=\{event\.action\}/);
   assert.match(sectionReports, /data-action=\{report\.status === "returned" \? "return" : "approve"\}/);
   assert.match(styles, /\[data-return-state="returned"\]/);

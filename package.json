@@ -8,6 +8,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "test": "node scripts/run-unit-tests.mjs",
     "model:convert": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/convert-step-with-freecad.ps1",
     "model:convert:xcaf": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/convert-step-with-occt.ps1",
     "model:convert:wasm": "node --max-old-space-size=24576 scripts/convert-large-step-to-glb.mjs",

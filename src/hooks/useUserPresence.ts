@@ -100,7 +100,7 @@ function containsSession(
 
 function compatibleStatus(state: PresenceConnectionState): CompatibleConnectionStatus {
   if (state === "synced") return "online";
-  if (["connecting", "subscribed", "tracking", "reconnecting"].includes(state)) {
+  if (state === "connecting" || state === "subscribed" || state === "tracking" || state === "reconnecting") {
     return "connecting";
   }
   return state;

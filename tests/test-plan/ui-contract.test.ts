@@ -92,7 +92,8 @@ test("edits uploaded spreadsheets in place without forcing a download workflow",
   assert.match(workbook, /getSpreadsheetInsertionIndex/);
   assert.match(editor, /向下插入列/);
   assert.match(editor, /向右插入欄/);
-  assert.match(editor, /revealSelection\(\{ anchor: insertedSelection, focus: insertedSelection \}\)/);
+  assert.match(editor, /revealSelection\(insertedSelection\)/);
+  assert.doesNotMatch(editor, /anchor: insertedSelection|focus: insertedSelection/);
   assert.match(inspector, /onEditSpreadsheet/);
   assert.match(styles, /\.test-plan-sheet-grid-wrap/);
   assert.match(styles, /\.test-plan-sheet-grid-wrap\.is-formatted/);

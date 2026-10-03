@@ -115,7 +115,7 @@ function readChatPreferences(userId: string) {
         ? parsed.pinnedThreadIds.filter((value: unknown): value is string => typeof value === "string")
         : [],
       drafts: parsed.drafts && typeof parsed.drafts === "object"
-        ? Object.fromEntries(Object.entries(parsed.drafts).filter(([, value]) => typeof value === "string"))
+        ? Object.fromEntries(Object.entries(parsed.drafts).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
         : {},
     };
   } catch {

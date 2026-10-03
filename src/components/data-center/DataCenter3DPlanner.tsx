@@ -356,7 +356,8 @@ const GlbRackModel = memo(function GlbRackModel({
   const prepared = useMemo(() => {
     const clone = gltf.scene.clone(true);
     const ownedMaterials: THREE.Material[] = [];
-    clone.rotation.set(...getModelAxisRotation(definition.upAxis));
+    const rotation = getModelAxisRotation(definition.upAxis);
+    clone.rotation.set(rotation[0], rotation[1], rotation[2]);
     clone.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(clone);
     const fit = getUniformModelFit(bounds, dimensions, {
@@ -597,7 +598,8 @@ function InstancedDetailedL10Model({
     const ownedMaterials: THREE.Material[] = [];
     const parts: InstancedL10Part[] = [];
 
-    model.rotation.set(...getModelAxisRotation(definition.upAxis));
+    const rotation = getModelAxisRotation(definition.upAxis);
+    model.rotation.set(rotation[0], rotation[1], rotation[2]);
     model.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(model);
     const fit = getUniformModelFit(bounds, definition.dimensions, {
@@ -606,7 +608,7 @@ function InstancedDetailedL10Model({
 
     model.position.fromArray(fit.position);
     normalizedRoot.position.z = fit.depthOffsetMeters;
-    normalizedRoot.scale.set(...fit.scale);
+    normalizedRoot.scale.set(fit.scale[0], fit.scale[1], fit.scale[2]);
     normalizedRoot.add(model);
     normalizedRoot.updateMatrixWorld(true);
 
@@ -1351,7 +1353,7 @@ function CameraRig({
   const desiredTarget = useRef(new THREE.Vector3(0, 0.8, 0));
   const animating = useRef(false);
   const lastAppliedRequestId = useRef<number | null>(null);
-  const interactionRestoreTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const interactionRestoreTimer = useRef<number | null>(null);
   const orbitRack =
     racks.find((rack) => rack.id === selectedRackId)
     ?? racks[0];
@@ -1448,8 +1450,8 @@ function CameraRig({
       );
 
       if (overviewFrame) {
-        desiredPosition.current.set(...overviewFrame.position);
-        desiredTarget.current.set(...overviewFrame.target);
+        desiredPosition.current.set(overviewFrame.position[0], overviewFrame.position[1], overviewFrame.position[2]);
+        desiredTarget.current.set(overviewFrame.target[0], overviewFrame.target[1], overviewFrame.target[2]);
       } else {
         const emptySceneSpan = Math.min(span, 24);
         desiredPosition.current.set(
@@ -1514,7 +1516,7 @@ function CameraRig({
       maxPolarAngle={Math.PI - 0.02}
       onStart={beginInteraction}
       onEnd={restoreDetailAfterInteraction}
-      onChange={invalidate}
+      onChange={() => invalidate()}
       touches={{
         ONE: THREE.TOUCH.ROTATE,
         TWO: THREE.TOUCH.DOLLY_PAN,
