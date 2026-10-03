@@ -9,10 +9,13 @@ returns boolean language sql stable security definer set search_path = '' as $$
   select exists (
     select 1 from workspace.system_users account
     where account.auth_user_id = auth.uid() and account.status = 'active'
-      and case when jsonb_typeof(account.permissions -> 'pagePermissions') = 'array'
-        then (account.permissions -> 'pagePermissions') @> jsonb_build_array(p_permission)
-        else exists (select 1 from workspace.user_page_permissions legacy
+      and case
+        when not (coalesce(account.permissions, '{}'::jsonb) ? 'pagePermissions')
+        then exists (select 1 from workspace.user_page_permissions legacy
           where legacy.user_id = account.id and legacy.permission::text = p_permission)
+        when jsonb_typeof(account.permissions -> 'pagePermissions') = 'array'
+        then (account.permissions -> 'pagePermissions') @> jsonb_build_array(p_permission)
+        else false
       end
   );
 $$;
@@ -24,10 +27,17 @@ returns boolean language sql stable security definer set search_path = '' as $$
     select 1 from workspace.system_users account
     where account.auth_user_id = auth.uid() and account.status = 'active'
       and (account.role in ('admin', 'super_admin') or
-        case when (account.permissions -> 'workspaceAccess') ? 'data-center'
-          then coalesce(account.permissions #>> '{workspaceAccess,data-center}', '') in ('view', 'edit')
-          else workspace.current_user_has_stored_page_permission('data_center_edit')
+        case
+          when not (coalesce(account.permissions, '{}'::jsonb) ? 'workspaceAccess')
+            or (
+              jsonb_typeof(account.permissions -> 'workspaceAccess') = 'object'
+              and not ((account.permissions -> 'workspaceAccess') ? 'data-center')
+            )
+          then workspace.current_user_has_stored_page_permission('data_center_edit')
             or workspace.current_user_has_stored_page_permission('data_center_view')
+          when jsonb_typeof(account.permissions -> 'workspaceAccess') = 'object'
+          then coalesce(account.permissions #>> '{workspaceAccess,data-center}', '') in ('view', 'edit')
+          else false
         end)
   );
 $$;
@@ -47,9 +57,16 @@ returns boolean language sql stable security definer set search_path = '' as $$
     select 1 from workspace.system_users account
     where account.auth_user_id = auth.uid() and account.status = 'active'
       and (account.role in ('admin', 'super_admin') or
-        case when (account.permissions -> 'workspaceAccess') ? 'data-center'
+        case
+          when not (coalesce(account.permissions, '{}'::jsonb) ? 'workspaceAccess')
+            or (
+              jsonb_typeof(account.permissions -> 'workspaceAccess') = 'object'
+              and not ((account.permissions -> 'workspaceAccess') ? 'data-center')
+            )
+          then workspace.current_user_has_stored_page_permission('data_center_edit')
+          when jsonb_typeof(account.permissions -> 'workspaceAccess') = 'object'
           then coalesce(account.permissions #>> '{workspaceAccess,data-center}', '') = 'edit'
-          else workspace.current_user_has_stored_page_permission('data_center_edit')
+          else false
         end)
   );
 $$;
@@ -69,9 +86,17 @@ returns boolean language sql stable security definer set search_path = '' as $$
     select 1 from workspace.system_users account
     where account.auth_user_id = auth.uid() and account.status = 'active'
       and (account.role in ('admin', 'super_admin') or (
-        case when (account.permissions -> 'workspaceAccess') ? 'user-management'
+        case
+          when not (coalesce(account.permissions, '{}'::jsonb) ? 'workspaceAccess')
+            or (
+              jsonb_typeof(account.permissions -> 'workspaceAccess') = 'object'
+              and not ((account.permissions -> 'workspaceAccess') ? 'user-management')
+            )
+          then true
+          when jsonb_typeof(account.permissions -> 'workspaceAccess') = 'object'
           then coalesce(account.permissions #>> '{workspaceAccess,user-management}', '') = 'edit'
-          else true end
+          else false
+        end
         and workspace.current_user_has_stored_page_permission('admin_edit')
       ))
   );

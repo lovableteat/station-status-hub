@@ -2,6 +2,24 @@
 -- account administration. Preserve role exceptions and service-only permissions RPC.
 begin;
 
+do $$
+declare
+  v_sql3_applied boolean := false;
+begin
+  if to_regclass('supabase_migrations.schema_migrations') is not null then
+    execute $query$
+      select exists (
+        select 1 from supabase_migrations.schema_migrations
+        where version = '20261003075222'
+      )
+    $query$ into v_sql3_applied;
+    if v_sql3_applied then
+      raise exception 'SQL2 cannot run after SQL3; preserve 20261002160000 -> 20261002170000 -> 20261003075222';
+    end if;
+  end if;
+end;
+$$;
+
 CREATE OR REPLACE FUNCTION workspace.set_user_access_permissions(
   p_user_id uuid,
   p_permissions public.page_permission[],

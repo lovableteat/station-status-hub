@@ -165,7 +165,7 @@ test("presence reports real sync state without fake users or page refreshes", as
   assert.match(realtimePolicy, /extension IN \('broadcast', 'presence'\)/);
 });
 
-test("admin account lifecycle updates system and Auth identities as one operation", async () => {
+test("admin account lifecycle authorizes database mutations before Auth synchronization", async () => {
   const [adminFunction, adminPanel, userEditor, accountSync] = await Promise.all([
     readSource("supabase/functions/account-admin-sync/index.ts"),
     readSource("src/components/admin/AdminPanel.tsx"),
@@ -175,7 +175,12 @@ test("admin account lifecycle updates system and Auth identities as one operatio
 
   assert.match(adminFunction, /"create" \| "update" \| "sync" \| "delete"/);
   assert.match(adminFunction, /synchronizeAuthIdentity/);
-  assert.match(adminFunction, /password_hash: target\.password_hash/);
+  assert.match(adminFunction, /caller\.rpc\(\s*"create_system_user_admin_profile"/);
+  assert.match(adminFunction, /caller\.rpc\(\s*"update_system_user_admin_profile"/);
+  assert.match(adminFunction, /caller\.rpc\(\s*"delete_system_user_admin_profile"/);
+  assert.match(adminFunction, /Account profile saved; Auth sync is pending/);
+  assert.doesNotMatch(adminFunction, /permissions:\s*target\.permissions/);
+  assert.doesNotMatch(adminFunction, /password_hash:\s*target\.password_hash/);
   assert.match(adminFunction, /admin\.auth\.admin\.deleteUser/);
   assert.match(adminFunction, /auth\.station-status\.example\.com/);
   assert.match(adminPanel, /action: "create"/);

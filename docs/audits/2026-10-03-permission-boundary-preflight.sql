@@ -1,6 +1,7 @@
 -- Read-only, bounded preflight for the permission-boundary rollout.
 -- Run against the intended project and archive the complete output privately.
--- This metadata snapshot is not a full database backup.
+-- This is the scoped recovery capture for the exact SQL1→SQL2→SQL3 write set.
+-- It is not a full database backup and contains no row-level secrets.
 begin transaction read only;
 
 select current_database() as database_name,
@@ -67,9 +68,17 @@ where n.nspname in ('public', 'workspace')
   and p.proname in (
     'set_user_access_permissions',
     'can_manage_system_users',
+    'can_view_data_center_projects',
+    'can_edit_data_center_projects',
+    'can_manage_performance_record',
+    'can_read_performance_section_report',
     'current_system_user_id',
     'current_user_has_stored_page_permission',
-    'approve_system_user'
+    'approve_system_user',
+    'create_system_user_admin_profile',
+    'update_system_user_admin_profile',
+    'delete_system_user_admin_profile',
+    'authorize_system_user_admin_sync'
   )
 order by p.proname, n.nspname, identity_arguments;
 
@@ -90,9 +99,17 @@ where source_ns.nspname in ('public', 'workspace')
   and source_proc.proname in (
     'set_user_access_permissions',
     'can_manage_system_users',
+    'can_view_data_center_projects',
+    'can_edit_data_center_projects',
+    'can_manage_performance_record',
+    'can_read_performance_section_report',
     'current_system_user_id',
     'current_user_has_stored_page_permission',
-    'approve_system_user'
+    'approve_system_user',
+    'create_system_user_admin_profile',
+    'update_system_user_admin_profile',
+    'delete_system_user_admin_profile',
+    'authorize_system_user_admin_sync'
   )
 order by source_schema, source_function, source_arguments,
          referenced_schema, referenced_function, referenced_arguments;

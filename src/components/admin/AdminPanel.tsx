@@ -228,7 +228,6 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             role: newUser.role,
             status: "active",
             displayName: newUser.displayName,
-            permissions: newUser.permissions,
           },
         });
         if (!result.success) throw new Error(result.error || "帳號與登入身分建立失敗");

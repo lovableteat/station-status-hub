@@ -32,7 +32,9 @@ jobs:
         run: npm test
       - name: Mobile workspace and query contracts
         run: node --test tests/mobileCoreWorkspaces.test.mjs tests/mobileFirstAdaptiveShell.test.mjs tests/apiChatModelControl.test.mjs tests/apiChatPromptLibraryLayout.test.mjs tests/apiChatPromptHelpers.test.mjs tests/apiChatMaintenanceSource.test.mjs
-      - name: Real PostgreSQL workflow and RLS
+      - name: PostgreSQL 17.4 permission boundary and revocation races
+        run: npm run test:permission:postgres
+      - name: PGlite performance workflow and RLS
         run: |
           node tests/performanceOrganization.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
           node tests/performanceSubmission.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"

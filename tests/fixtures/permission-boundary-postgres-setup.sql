@@ -1,17 +1,25 @@
 create schema auth;
 create schema workspace;
+create schema supabase_migrations;
 create role anon nologin;
 create role authenticated nologin;
 create role service_role nologin bypassrls;
 
 grant usage on schema public, auth, workspace to anon, authenticated, service_role;
 
+create table supabase_migrations.schema_migrations (
+  version text primary key,
+  name text
+);
+insert into supabase_migrations.schema_migrations(version, name)
+values ('20261001203000', 'production_fixture_head');
+
 create function auth.uid()
 returns uuid
 language sql
 stable
 as $$
-  select nullif(current_setting('test.uid', true), '')::uuid;
+  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
 $$;
 
 create function auth.role()
@@ -19,7 +27,7 @@ returns text
 language sql
 stable
 as $$
-  select nullif(current_setting('test.role', true), '');
+  select nullif(current_setting('request.jwt.claim.role', true), '');
 $$;
 
 create type public.page_permission as enum (
@@ -29,16 +37,23 @@ create type public.page_permission as enum (
 );
 
 create table workspace.system_users (
-  id uuid primary key,
+  id uuid primary key default gen_random_uuid(),
   auth_user_id uuid unique,
-  username text not null,
-  display_name text not null,
-  role text not null,
-  status text not null,
-  permissions jsonb not null default '{}'::jsonb,
+  username varchar(50) not null unique,
+  display_name text,
+  password_hash varchar(255) not null default 'fixture-hash',
+  role varchar(20) not null default 'engineer',
+  status varchar(20) default 'active',
+  permissions jsonb default '{}'::jsonb,
+  created_by varchar(50),
+  created_at timestamptz not null default now(),
+  registration_requested_at timestamptz,
   approved_at timestamptz,
   approved_by uuid,
-  updated_at timestamptz
+  auth_migrated_at timestamptz,
+  last_seen_at timestamptz,
+  avatar_path text,
+  updated_at timestamptz not null default now()
 );
 
 create table workspace.user_page_permissions (
@@ -48,6 +63,37 @@ create table workspace.user_page_permissions (
   granted_by text,
   unique (user_id, permission)
 );
+
+create table workspace.performance_org_members (
+  employee_id uuid primary key references workspace.system_users(id),
+  manager_id uuid,
+  performance_role text,
+  org_level text,
+  section text not null default ''
+);
+
+create function workspace.resolve_performance_employee(p_employee_id text)
+returns uuid language sql stable set search_path = '' as $$
+  select case
+    when p_employee_id ~* '^[0-9a-f-]{36}$' then p_employee_id::uuid
+    else null::uuid
+  end;
+$$;
+
+create function workspace.current_user_is_performance_manager()
+returns boolean language sql stable set search_path = '' as $$
+  select false;
+$$;
+
+create function workspace.current_user_can_workspace(p_workspace text, p_level text)
+returns boolean language sql stable set search_path = '' as $$
+  select false;
+$$;
+
+create function workspace.performance_scopes_unlocked(p_scopes uuid[])
+returns boolean language sql stable set search_path = '' as $$
+  select true;
+$$;
 
 alter table workspace.user_page_permissions enable row level security;
 grant all on table workspace.user_page_permissions to public, anon, authenticated, service_role;
