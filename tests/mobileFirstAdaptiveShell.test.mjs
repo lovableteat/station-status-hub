@@ -60,7 +60,8 @@ test("administration and maintenance expose compact phone summaries", async () =
   ]);
 
   assert.match(admin, /data-mobile-user-summary="true"/);
-  assert.match(admin, /data-mobile-user-last-login="true"/);
+  assert.match(admin, /admin-account-metadata grid gap-3 py-4 sm:grid-cols-2/);
+  assert.doesNotMatch(admin, /data-mobile-user-last-login="true"/);
   assert.match(scope, /data-mobile-project-primary-actions="true"/);
   assert.match(metrics, /data-mobile-metric-strip="true"/);
   assert.match(metrics, /grid-cols-2/);

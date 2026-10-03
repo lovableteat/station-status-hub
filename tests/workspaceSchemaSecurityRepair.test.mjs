@@ -120,18 +120,15 @@ test("admin account list explicitly selects only safe system-user columns", asyn
   const projection = source.match(/const SYSTEM_USER_SAFE_COLUMNS = "([^"]+)";/)?.[1];
   assert.ok(projection, "expected a literal, typechecked safe projection");
   const selectedColumns = projection.split(",");
-  assert.ok(!selectedColumns.includes("password_hash"));
-  assert.ok(!selectedColumns.includes("*"));
-  for (const column of [
+  assert.deepEqual(selectedColumns, [
     "id",
+    "auth_user_id",
     "username",
     "display_name",
+    "permissions",
     "role",
     "status",
-    "permissions",
-    "auth_user_id",
-    "last_seen_at",
-  ]) {
-    assert.ok(selectedColumns.includes(column), `missing safe column ${column}`);
-  }
+  ], "the browser roster must stay inside the production seven-column grant");
+  assert.match(systemUserLoad, /\.order\(['"]username['"],\s*\{\s*ascending:\s*true\s*\}\)/);
+  assert.doesNotMatch(systemUserLoad, /created_at|last_seen_at|avatar_path|created_by/);
 });

@@ -20,18 +20,14 @@ test("admin user timestamps format timezone-qualified timestamptz values and fal
   assert.equal(formatAdminUserTimestamp("2025-01-02T03:04:05", "尚未登入"), "尚未登入");
 });
 
-test("admin account cards distinguish last login from creation time and keep permission summaries truncatable", async () => {
+test("admin account cards stay inside the safe roster fields and keep permission summaries truncatable", async () => {
   const source = await read("../src/components/admin/AdminPanel.tsx");
 
-  assert.match(source, /last_seen_at:\s*string\s*\|\s*null/);
-  assert.match(source, /最後登入/);
-  assert.match(source, /const lastLoginLabel = formatAdminUserTimestamp\(systemUser\.last_seen_at, "尚未登入"\)/);
-  assert.match(source, /lastLoginLabel === "尚未登入" \? "text-slate-500" : "text-slate-200"/);
-  assert.match(source, /<Clock3 className="h-3 w-3" aria-hidden="true"\s*\/?>\s*最後登入/s);
-  assert.match(source, /建立時間/);
-  assert.doesNotMatch(source, /建立時間<\/div>\s*<div[^>]*>\s*<Clock3/s);
+  assert.doesNotMatch(source, /systemUser\.(?:last_seen_at|created_at|created_by|avatar_path)/);
+  assert.match(source, /登入身分/);
+  assert.match(source, /systemUser\.auth_user_id \? "即時身分已連結" : "首次登入後連結"/);
 
-  assert.match(source, /const permissionsSummary = `網站與工作區權限 · 建立者：\$\{creatorLabel\}`/);
+  assert.match(source, /const permissionsSummary = "網站與工作區權限"/);
   assert.match(source, /<Lock className="h-3\.5 w-3\.5 shrink-0 text-cyan-200\/75" aria-hidden="true" \/>/);
   assert.match(source, /className="min-w-0 truncate text-xs font-semibold text-slate-400"/);
   assert.match(source, /title=\{permissionsSummary\}/);
@@ -121,7 +117,8 @@ test("admin dialogs and API console use the restrained maintenance color system"
   );
 
   assert.match(permissions, /supabase\.rpc\("set_user_access_permissions"/);
-  assert.match(userEditor, /\.from\('system_users'\)\s*\.update/);
+  assert.match(userEditor, /mutateAuthAccount\(userId, \{/);
+  assert.doesNotMatch(userEditor, /\.from\(["']system_users["']\)\s*\.update/);
   assert.match(apiKeys, /openCreateDialog/);
   assert.match(apiKeys, /toggleKeyStatus/);
   assert.match(apiKeys, /deleteKey/);

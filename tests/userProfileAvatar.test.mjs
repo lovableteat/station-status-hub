@@ -79,7 +79,7 @@ test("admin account card exposes the current user's avatar editor", async () => 
   const source = await readSource("src/components/admin/AdminPanel.tsx");
 
   assert.match(source, /<PersonalProfileDialog open=\{profileDialogOpen\}/);
-  assert.match(source, /<UserAvatar[\s\S]*avatarPath=\{isCurrentUser \? user\?\.avatarPath : systemUser\.avatar_path\}/);
+  assert.match(source, /<UserAvatar[\s\S]*avatarPath=\{isCurrentUser \? user\?\.avatarPath : undefined\}/);
   assert.match(source, /const isCurrentUser = systemUser\.id === user\?\.userId/);
   assert.match(source, /編輯大頭貼/);
   assert.match(source, /onClick=\{\(\) => setProfileDialogOpen\(true\)\}/);

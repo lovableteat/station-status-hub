@@ -52,7 +52,8 @@ test("account synchronization cannot bypass the atomic permission RPC", async ()
   const source = await read("../src/components/admin/authAccountSync.ts");
   assert.doesNotMatch(source, /forceVerifiedService/);
   assert.doesNotMatch(source, /permissions\?: unknown/);
-  assert.match(source, /if \(!REALTIME_COLLABORATION_V2_ENABLED\)/);
+  assert.doesNotMatch(source, /REALTIME_COLLABORATION_V2_ENABLED/);
+  assert.match(source, /supabase\.auth\.getSession\(\)/);
 });
 
 test("stored page permissions remain authoritative when legacy rows cannot be updated", async () => {

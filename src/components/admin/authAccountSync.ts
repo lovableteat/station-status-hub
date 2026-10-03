@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { REALTIME_COLLABORATION_V2_ENABLED } from "@/lib/realtimeCollaborationConfig";
 
 export interface AdminAccountProfile {
   username?: string;
@@ -30,7 +29,7 @@ const ACCOUNT_SYNC_ERROR_MESSAGES: Record<string, string> = {
   "Invalid username": "帳號格式不正確，請重新輸入。",
   "Invalid display name": "顯示名稱格式不正確，請重新輸入。",
   "System account creation failed": "帳號名稱可能已存在，請更換帳號後再試。",
-  "Synchronized account creation failed": "帳號資料未變更；登入身分建立失敗，請稍後再試。",
+  "Account profile saved; Auth sync is pending": "帳號資料已安全儲存，但登入身分同步尚待重試。",
   "Account sync is unavailable": "帳戶同步服務暫時無法使用，請稍後再試。",
 };
 
@@ -58,10 +57,6 @@ export async function mutateAuthAccount(
   userId: string,
   options: AdminAccountMutationOptions = {},
 ): Promise<AdminAccountMutationResult> {
-  if (!REALTIME_COLLABORATION_V2_ENABLED) {
-    return { success: false, error: "Realtime account synchronization is disabled" };
-  }
-
   const {
     data: { session },
     error: sessionError,

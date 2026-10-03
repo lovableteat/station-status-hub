@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Search, Plus, UserPlus, Shield, LogOut, Users, Clock3, Lock, Menu, CircleHelp, UserCheck, Hourglass, Camera } from "lucide-react";
+import { Search, Plus, UserPlus, Shield, LogOut, Users, Lock, Menu, CircleHelp, UserCheck, Hourglass, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUser } from "@/components/auth/UserContext";
@@ -21,7 +21,6 @@ import { AdminCollaborationPanel } from "@/components/collaboration/AdminCollabo
 import { MaintenanceMetricStrip } from "@/components/maintenance/MaintenanceMetricStrip";
 import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
 import { AdminSidebar } from "./AdminSidebar";
-import { formatAdminUserTimestamp } from "./adminUserTime.mjs";
 import { UserEditDialog } from "./UserEditDialog";
 import { EngineerEditDialog } from "./EngineerEditDialog";
 import { UserPermissionsDialog } from "./UserPermissionsDialog";
@@ -44,19 +43,12 @@ interface Engineer {
 
 interface SystemUser {
   id: string;
+  auth_user_id: string | null;
   username: string;
-  role: string;
+  display_name: string | null;
   permissions: unknown;
+  role: string;
   status: string;
-  created_by: string;
-  created_at: string;
-  display_name?: string;
-  auth_user_id?: string | null;
-  auth_migrated_at?: string | null;
-  registration_requested_at?: string | null;
-  approved_at?: string | null;
-  last_seen_at: string | null;
-  avatar_path?: string | null;
 }
 
 type AdminTab = "users" | "collaboration" | "api-management";
@@ -64,7 +56,7 @@ type AdminTab = "users" | "collaboration" | "api-management";
 const SHOW_ENGINEER_ADMIN = false;
 const SHOW_EXTENDED_ADMIN_COPY = false;
 // Keep the projection literal so PostgREST can check these safe columns.
-const SYSTEM_USER_SAFE_COLUMNS = "id,username,display_name,role,status,permissions,created_by,created_at,updated_at,registration_requested_at,approved_at,approved_by,auth_user_id,auth_migrated_at,last_seen_at,avatar_path";
+const SYSTEM_USER_SAFE_COLUMNS = "id,auth_user_id,username,display_name,permissions,role,status";
 
 export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) {
   const [engineers, setEngineers] = useState<Engineer[]>([]);
@@ -78,7 +70,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   const [isEngineerDialogOpen, setIsEngineerDialogOpen] = useState(false);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [newEngineer, setNewEngineer] = useState({ name: "", email: "", team: "ME" });
-  const [newUser, setNewUser] = useState({ username: "", password: "", role: "engineer", permissions: {}, displayName: "" });
+  const [newUser, setNewUser] = useState({ username: "", password: "", role: "engineer", displayName: "" });
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedUsername, setSelectedUsername] = useState<string>("");
@@ -108,7 +100,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   };
 
   const rejectUnauthenticatedAccountMutation = () => {
-    if (!REALTIME_COLLABORATION_V2_ENABLED || isRealtimeAuthenticated) return false;
+    if (isRealtimeAuthenticated) return false;
     toast({
       title: "需要重新驗證登入身分",
       description: "即時工作階段已過期，請重新登入後再進行帳戶管理。",
@@ -140,7 +132,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       const { data, error } = await supabase
         .from('system_users')
         .select(SYSTEM_USER_SAFE_COLUMNS)
-        .order('created_at', { ascending: false });
+        .order('username', { ascending: true });
 
       if (error) throw error;
       if (data) setSystemUsers(data);
@@ -218,42 +210,18 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     }
 
     try {
-      let createdUserId: string | undefined;
-      if (REALTIME_COLLABORATION_V2_ENABLED) {
-        const result = await mutateAuthAccount("", {
-          action: "create",
-          password: newUser.password,
-          profile: {
-            username: newUser.username,
-            role: newUser.role,
-            status: "active",
-            displayName: newUser.displayName,
-          },
-        });
-        if (!result.success) throw new Error(result.error || "帳號與登入身分建立失敗");
-        createdUserId = result.userId;
-      } else {
-        // Legacy deployment path remains available until the rollout flag is enabled.
-        const { data: hashedPassword, error: hashError } = await supabase.rpc('hash_password', {
-          password: newUser.password
-        });
-        if (hashError) throw new Error('密碼加密失敗');
-
-        const { data: createdUser, error } = await supabase
-          .from('system_users')
-          .insert([{
-            username: newUser.username,
-            password_hash: hashedPassword,
-            role: newUser.role,
-            permissions: newUser.permissions,
-            display_name: newUser.displayName,
-            created_by: user?.username || 'admin'
-          }])
-          .select('id')
-          .single();
-        if (error) throw error;
-        createdUserId = createdUser.id;
-      }
+      const result = await mutateAuthAccount("", {
+        action: "create",
+        password: newUser.password,
+        profile: {
+          username: newUser.username,
+          role: newUser.role,
+          status: "active",
+          displayName: newUser.displayName,
+        },
+      });
+      if (!result.success) throw new Error(result.error || "帳號與登入身分建立失敗");
+      const createdUserId = result.userId;
 
       toast({
         title: "新增成功",
@@ -266,7 +234,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         setSelectedUsername(newUser.username);
         setPermissionsDialogOpen(true);
       }
-      setNewUser({ username: "", password: "", role: "engineer", permissions: {}, displayName: "" });
+      setNewUser({ username: "", password: "", role: "engineer", displayName: "" });
       loadSystemUsers();
     } catch (error: unknown) {
       console.error('Error adding user:', error);
@@ -308,19 +276,11 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-      if (REALTIME_COLLABORATION_V2_ENABLED) {
-        const result = await mutateAuthAccount(id, {
-          action: "update",
-          profile: { status: newStatus },
-        });
-        if (!result.success) throw new Error(result.error || "帳號狀態同步失敗");
-      } else {
-        const { error } = await supabase
-          .from('system_users')
-          .update({ status: newStatus })
-          .eq('id', id);
-        if (error) throw error;
-      }
+      const result = await mutateAuthAccount(id, {
+        action: "update",
+        profile: { status: newStatus },
+      });
+      if (!result.success) throw new Error(result.error || "帳號狀態同步失敗");
 
       toast({
         title: "狀態更新成功",
@@ -364,16 +324,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     if (rejectUserMutation() || rejectUnauthenticatedAccountMutation()) return;
 
     try {
-      if (REALTIME_COLLABORATION_V2_ENABLED) {
-        const result = await mutateAuthAccount(userId, { action: "delete" });
-        if (!result.success) throw new Error(result.error || "帳號刪除同步失敗");
-      } else {
-        const { error } = await supabase
-          .from('system_users')
-          .delete()
-          .eq('id', userId);
-        if (error) throw error;
-      }
+      const result = await mutateAuthAccount(userId, { action: "delete" });
+      if (!result.success) throw new Error(result.error || "帳號刪除同步失敗");
 
       toast({
         title: "刪除成功",
@@ -456,21 +408,6 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         ? "border-amber-200/45 bg-amber-300/18 text-amber-50"
       : "border-slate-200/20 bg-slate-200/10 text-slate-300";
 
-  const formatCreatedAt = (value: string) => {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return "未提供";
-    }
-
-    return date.toLocaleString("zh-TW", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   const getWorkspaceBadges = (permissionSettings: unknown) => {
     const workspaceAccess = readWorkspaceAccess(permissionSettings);
 
@@ -513,7 +450,6 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       [
         systemUser.username,
         systemUser.display_name,
-        systemUser.created_by,
         getRoleLabel(systemUser.role),
         ...workspaceBadges.map((workspace) => workspace.label),
       ]
@@ -769,11 +705,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                   const workspaceBadges = getWorkspaceBadges(systemUser.permissions);
                   const isProtected = isProtectedSystemUser(systemUser);
                   const isCurrentUser = systemUser.id === user?.userId;
-                  const creatorLabel = systemUser.created_by === "self-registration"
-                    ? "使用者自行註冊"
-                    : systemUser.created_by || "系統";
-                  const lastLoginLabel = formatAdminUserTimestamp(systemUser.last_seen_at, "尚未登入");
-                  const permissionsSummary = `網站與工作區權限 · 建立者：${creatorLabel}`;
+                  const permissionsSummary = "網站與工作區權限";
 
                   return (
                     <article
@@ -784,7 +716,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         <div className="flex min-w-0 items-center gap-3">
                           <div className="shrink-0">
                             <UserAvatar
-                              avatarPath={isCurrentUser ? user?.avatarPath : systemUser.avatar_path}
+                              avatarPath={isCurrentUser ? user?.avatarPath : undefined}
                               displayName={systemUser.display_name || systemUser.username}
                               className="h-11 w-11 rounded-xl border border-sky-300/20 bg-sky-400/10"
                               fallbackClassName="rounded-xl bg-sky-400/10 text-sm text-sky-100"
@@ -812,7 +744,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                                   <div className="space-y-2">
                                     <div className="text-sm font-semibold">帳號管理說明</div>
                                     <p className="text-sm leading-6 text-slate-300">
-                                      卡片集中顯示建立資訊與工作區權限；停用、權限調整與密碼重設可從右側按鈕操作。
+                                      卡片集中顯示帳號狀態與工作區權限；停用、權限調整與密碼重設可從右側按鈕操作。
                                     </p>
                                   </div>
                                 </HoverCardContent>
@@ -841,10 +773,6 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                               ) : null}
                             </div>
                             <p className="mt-1 truncate text-xs text-slate-500">@{systemUser.username}</p>
-                            <p data-mobile-user-last-login="true" className="mt-1.5 hidden items-center gap-1.5 text-xs text-slate-300 max-sm:flex">
-                              <Clock3 className="h-3.5 w-3.5 text-cyan-200/70" aria-hidden="true" />
-                              最後登入：{lastLoginLabel}
-                            </p>
                           </div>
                         </div>
 
@@ -923,24 +851,15 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                         </div>
                       </div>
 
-                      <div className="admin-account-metadata grid gap-3 py-4 sm:grid-cols-3">
+                      <div className="admin-account-metadata grid gap-3 py-4 sm:grid-cols-2">
                         <div className="min-w-0 border-white/[0.07] sm:border-r sm:pr-4">
                           <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">登入帳號</div>
                           <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">{systemUser.username}</div>
                         </div>
-                        <div className="min-w-0 border-white/[0.07] sm:border-r sm:px-4">
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                            <Clock3 className="h-3 w-3" aria-hidden="true" />
-                            最後登入
-                          </div>
-                          <div className={`mt-1.5 truncate text-sm font-semibold ${lastLoginLabel === "尚未登入" ? "text-slate-500" : "text-slate-200"}`}>
-                            {lastLoginLabel}
-                          </div>
-                        </div>
                         <div className="min-w-0 sm:pl-4">
-                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">建立時間</div>
-                          <div className="mt-1.5 truncate text-sm font-semibold text-slate-200">
-                            {formatCreatedAt(systemUser.created_at)}
+                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">登入身分</div>
+                          <div className={`mt-1.5 truncate text-sm font-semibold ${systemUser.auth_user_id ? "text-emerald-100" : "text-amber-100"}`}>
+                            {systemUser.auth_user_id ? "即時身分已連結" : "首次登入後連結"}
                           </div>
                         </div>
                       </div>
