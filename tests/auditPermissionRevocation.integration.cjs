@@ -19,7 +19,13 @@ test('latest effective permission policies enforce revocation, hierarchy, durabl
    grant usage on schema workspace,auth,public to authenticated;
    create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
    create function auth.role() returns text language sql stable as $$select current_setting('test.role',true)::text$$;
-   create table workspace.system_users(id uuid primary key,auth_user_id uuid,username text,display_name text,role text,status text,permissions jsonb,approved_at timestamptz,approved_by uuid,updated_at timestamptz);
+   create table workspace.system_users(
+    id uuid primary key,auth_user_id uuid,username text,display_name text,
+    password_hash text,role text,status text,permissions jsonb,created_by text,
+    created_at timestamptz,updated_at timestamptz,registration_requested_at timestamptz,
+    approved_at timestamptz,approved_by uuid,auth_migrated_at timestamptz,
+    last_seen_at timestamptz,avatar_path text
+   );
    create type public.page_permission as enum ('admin_edit','data_center_edit');
    create table workspace.user_page_permissions(user_id uuid,permission public.page_permission,granted_by text,unique(user_id,permission));
    create function workspace.current_system_user_id() returns uuid language sql stable security definer set search_path='' as $$select id from workspace.system_users where auth_user_id=auth.uid()$$;
