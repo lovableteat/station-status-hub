@@ -403,10 +403,11 @@ test("ships a complete custom-login PCB workspace migration and verified permiss
   assert.match(completeStorageMigrationSource, /permissions -> 'pcbDesignerWorkspace'/i);
   assert.match(completeStorageMigrationSource, /NOTIFY pgrst, 'reload schema'/i);
   assert.match(dialogSource, /readStoredPagePermissions/);
-  assert.match(dialogSource, /pagePermissions: synchronizedPermissions/);
-  assert.match(dialogSource, /profile: \{ permissions: mergedSettings \}/);
-  assert.match(dialogSource, /forceVerifiedService: true/);
-  assert.match(dialogSource, /Legacy page permission sync skipped/);
+  assert.match(dialogSource, /supabase\.rpc\("set_user_access_permissions"/);
+  assert.match(dialogSource, /p_permissions: synchronizedPermissions/);
+  assert.match(dialogSource, /p_workspace_access: \{ \.\.\.workspaceAccess \}/);
+  assert.match(dialogSource, /p_performance_manager: performanceManager/);
+  assert.doesNotMatch(dialogSource, /Legacy page permission sync skipped/);
 });
 
 test("promotes PCB projects to a shared, conflict-safe team catalog", () => {

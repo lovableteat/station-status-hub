@@ -120,6 +120,7 @@ test('latest effective permission policies enforce revocation, hierarchy, durabl
   equal(await accounts(),{public_manage:false,manage:false},'before RPC repair: detail revoked actor denied by account helper');
   await rpc('workspace',1);equal((await dc()).edit,true,'before RPC repair: actual legacy RPC still grants self DC edit');
   await root();await db.exec(sql('20261002170000_align_account_permission_mutation_entrypoints'));
+  await db.exec(sql('20261003075222_close_permission_table_boundary'));
   const snapshot=async()=>{await root();const rows=(await db.query('select * from workspace.system_users order by id')).rows;const pages=(await db.query('select * from workspace.user_page_permissions order by user_id,permission')).rows;await actor(1);return {rows,pages};};
   for(const denied of [
    {workspaceAccess:{'user-management':'edit','data-center':'none'},pagePermissions:[]},
@@ -144,6 +145,11 @@ test('latest effective permission policies enforce revocation, hierarchy, durabl
    equal((await db.query(`select ${schema}.approve_system_user($1) as approved`,[id(2)])).rows[0].approved,true,`${schema} legitimate account admin approves pending account`);
    await root();equal((await db.query('select status,approved_by from workspace.system_users where id=$1',[id(2)])).rows[0],{status:'active',approved_by:id(1)},`${schema} approval records actor and active status`);
   }
+  const rpc5=(schema,target,manager)=>db.query(`select ${schema}.set_user_access_permissions($1,array['data_center_edit']::public.page_permission[],$2::jsonb,'fixture',$3)`,[id(target),grantAccess,manager]);
+  await settings(1,{workspaceAccess:{'user-management':'edit'},pagePermissions:['admin_edit'],performanceManager:false});
+  await rpc5('public',2,true);await root();equal((await db.query('select permissions from workspace.system_users where id=$1',[id(2)])).rows[0].permissions.performanceManager,true,'five-argument RPC atomically assigns performance manager');
+  await actor(1);await rpc('workspace',2);await root();equal((await db.query('select permissions from workspace.system_users where id=$1',[id(2)])).rows[0].permissions.performanceManager,true,'four-argument compatibility RPC preserves performance manager');
+  await actor(1);await rpc5('workspace',2,false);await root();equal((await db.query('select permissions from workspace.system_users where id=$1',[id(2)])).rows[0].permissions.performanceManager,false,'five-argument RPC atomically revokes performance manager');
   await settings(1,{workspaceAccess:{'user-management':'edit'},pagePermissions:['admin_edit']});
   const beforeInvalid=await snapshot();
   for(const malformed of [null,{}, {...grantAccess,'data-center':null}, {...grantAccess,unexpected:'edit'}]){
@@ -157,7 +163,24 @@ test('latest effective permission policies enforce revocation, hierarchy, durabl
   await rpc('public',2);equal((await db.query('select workspace.can_manage_system_users() as allowed')).rows[0].allowed,true,'active global admin retains intended account mutation exception');
   await root();await db.query("select set_config('test.uid','',false)");await db.exec('set role service_role');await rpc('public',2);checks++;
   await root();await db.query("select set_config('test.role','',false),set_config('test.uid','',false)");await db.exec('set role authenticated');await assert.rejects(()=>rpc('workspace',2),e=>e.code==='42501');checks++;
-  await root();for(const schema of ['workspace','public']){equal((await db.query("select has_function_privilege('anon',$1,'execute') as allowed",[`${schema}.set_user_access_permissions(uuid,public.page_permission[],jsonb,text)`])).rows[0].allowed,false,`${schema} permission mutation not executable by anon`);equal((await db.query("select has_function_privilege('anon',$1,'execute') as allowed",[`${schema}.approve_system_user(uuid)`])).rows[0].allowed,false,`${schema} approval not executable by anon`);}
-  console.log(JSON.stringify({checks,effectivePolicies:['20260907130000','20261001190000','20261002160000','20261002170000'],privateGroupUnlock:'isolated controllable stub; true/false verified',database:'isolated PGlite, no production migration applied'}));
+  await root();for(const schema of ['workspace','public']){
+   for(const signature of [
+    `${schema}.set_user_access_permissions(uuid,public.page_permission[],jsonb,text)`,
+    `${schema}.set_user_access_permissions(uuid,public.page_permission[],jsonb,text,boolean)`,
+   ]){
+    equal((await db.query("select has_function_privilege('anon',$1,'execute') as allowed",[signature])).rows[0].allowed,false,`${signature} not executable by anon`);
+    equal((await db.query("select has_function_privilege('authenticated',$1,'execute') as allowed",[signature])).rows[0].allowed,true,`${signature} executable by authenticated`);
+    equal((await db.query("select has_function_privilege('service_role',$1,'execute') as allowed",[signature])).rows[0].allowed,true,`${signature} executable by service role`);
+   }
+   equal((await db.query("select has_function_privilege('anon',$1,'execute') as allowed",[`${schema}.approve_system_user(uuid)`])).rows[0].allowed,false,`${schema} approval not executable by anon`);
+  }
+  for(const [role,privilege,allowed] of [
+   ['anon','select',false],['anon','insert',false],['authenticated','select',true],
+   ['authenticated','insert',false],['authenticated','update',false],['authenticated','delete',false],
+   ['service_role','select',true],['service_role','insert',true],['service_role','update',true],['service_role','delete',true],
+  ]) equal((await db.query('select has_table_privilege($1,$2,$3) as allowed',[role,'workspace.user_page_permissions',privilege])).rows[0].allowed,allowed,`${role} ${privilege} table privilege`);
+  await settings(1,{workspaceAccess:{'user-management':'none'},pagePermissions:[]});
+  equal((await db.query('select user_id from workspace.user_page_permissions order by user_id')).rows.map(row=>row.user_id),[id(1)],'non-manager reads only own legacy permission rows');
+  console.log(JSON.stringify({checks,effectivePolicies:['20260907130000','20261001190000','20261002160000','20261002170000','20261003075222'],privateGroupUnlock:'isolated controllable stub; true/false verified',database:'isolated PGlite, no production migration applied'}));
  }finally{await db.close();}
 });
