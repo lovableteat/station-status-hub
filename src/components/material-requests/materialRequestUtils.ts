@@ -762,7 +762,7 @@ function getFieldAddress(
   return columnIndex == null ? null : xlsx.utils.encode_cell({ r: rowIndex, c: columnIndex });
 }
 
-interface StyledWorksheetCell extends CellObject {
+interface StyledWorksheetCell extends Omit<CellObject, "l"> {
   l?: {
     Target?: string;
     target?: string;

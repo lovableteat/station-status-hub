@@ -50,7 +50,11 @@ test("all completion paths use the database guard and show the exact unresolved 
   assert.match(sheet, /finishTimer[\s\S]*saveItem\(item,\s*nextDraft/);
   assert.match(sheet, /completeStation[\s\S]*saveItem\(/);
 
-  for (const source of [systemCompleteButton, mobileProgressInput, manualTimeTracker, timeRecordManager]) {
+  assert.match(systemCompleteButton, /supabase\.rpc\(\s*"complete_test_system"/);
+  assert.match(systemCompleteButton, /p_project_id: activeProjectId/);
+  assert.match(systemCompleteButton, /p_system_id: systemId/);
+  assert.match(systemCompleteButton, /unresolvedIssueToast/);
+  for (const source of [mobileProgressInput, manualTimeTracker, timeRecordManager]) {
     assert.match(source, /saveGuardedTestProgress/);
     assert.match(source, /unresolvedIssueToast/);
   }
@@ -66,9 +70,9 @@ test("station table distinguishes blocked progress from unfinished progress", ()
   assert.match(table, /tone=\{blocked \? "danger" : "auto"\}/);
   assert.match(table, /systemBlockedLookup/);
   assert.match(table, /Blocked \{systemBlockedCount\}/);
-  assert.match(tracker, /createSystemBlockedLookup/);
-  assert.match(tracker, /tone=\{blocked \? "danger" : "auto"\}/);
-  assert.match(tracker, /Blocked \{blocked\}/);
+  assert.match(table, /createSystemBlockedLookup\(items,\s*progress,\s*linkedIssues\)/);
+  assert.match(table, /tone=\{blocked \? "danger" : "auto"\}/);
+  assert.match(table, /Blocked \{blocked\}/);
 });
 
 test("linked issues are limited to unresolved records and fetched across every hosted API page", () => {

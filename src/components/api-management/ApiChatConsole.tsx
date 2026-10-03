@@ -482,12 +482,12 @@ function serializePrivateConversations(conversations: SavedConversation[]): Json
       state: message.state,
       attachments: [],
       images: [],
-      citations: message.citations,
+      citations: message.citations?.map((citation) => ({ ...citation })),
     })),
     provider: conversation.provider,
     model: conversation.model,
     keyLabel: conversation.keyLabel,
-  })) as Json;
+  }));
 }
 
 function readFileAsDataUrl(file: File) {

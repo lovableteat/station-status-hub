@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { SegmentedProgress } from "./SegmentedProgress";
 import { TimeRecordManager } from "./TimeRecordManager";
@@ -350,7 +351,7 @@ export function SystemProgressSheet({
     item: TrackerItem,
     override?: ItemDraft,
     shouldRefresh = true,
-    extraUpdates: Record<string, unknown> = {},
+    extraUpdates: Record<string, Json> = {},
   ) => {
     if (!system || !activeProjectId) return false;
     const draft = override ?? drafts[item.id];
@@ -365,7 +366,7 @@ export function SystemProgressSheet({
     }
     const existing = progressByItemId.get(item.id);
     const now = new Date().toISOString();
-    const updates: Record<string, unknown> = { ...draft, ...extraUpdates };
+    const updates: Record<string, Json> = { ...draft, ...extraUpdates };
 
     if (draft.status === "On-going") {
       updates.started_at = existing?.completed_at ? now : existing?.started_at || now;

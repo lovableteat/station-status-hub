@@ -117,7 +117,11 @@ test("admin account list explicitly selects only safe system-user columns", asyn
   assert.doesNotMatch(systemUserLoad, /\.select\(['"]\*['"]\)/);
   assert.match(systemUserLoad, /SYSTEM_USER_SAFE_COLUMNS/);
   assert.doesNotMatch(systemUserLoad, /password_hash/);
-  assert.match(source, /const SYSTEM_USER_SAFE_COLUMNS = \[/);
+  const projection = source.match(/const SYSTEM_USER_SAFE_COLUMNS = "([^"]+)";/)?.[1];
+  assert.ok(projection, "expected a literal, typechecked safe projection");
+  const selectedColumns = projection.split(",");
+  assert.ok(!selectedColumns.includes("password_hash"));
+  assert.ok(!selectedColumns.includes("*"));
   for (const column of [
     "id",
     "username",
@@ -128,6 +132,6 @@ test("admin account list explicitly selects only safe system-user columns", asyn
     "auth_user_id",
     "last_seen_at",
   ]) {
-    assert.match(source, new RegExp(`['"]${column}['"]`));
+    assert.ok(selectedColumns.includes(column), `missing safe column ${column}`);
   }
 });

@@ -63,24 +63,8 @@ type AdminTab = "users" | "collaboration" | "api-management";
 
 const SHOW_ENGINEER_ADMIN = false;
 const SHOW_EXTENDED_ADMIN_COPY = false;
-const SYSTEM_USER_SAFE_COLUMNS = [
-  "id",
-  "username",
-  "display_name",
-  "role",
-  "status",
-  "permissions",
-  "created_by",
-  "created_at",
-  "updated_at",
-  "registration_requested_at",
-  "approved_at",
-  "approved_by",
-  "auth_user_id",
-  "auth_migrated_at",
-  "last_seen_at",
-  "avatar_path",
-].join(",");
+// Keep the projection literal so PostgREST can check these safe columns.
+const SYSTEM_USER_SAFE_COLUMNS = "id,username,display_name,role,status,permissions,created_by,created_at,updated_at,registration_requested_at,approved_at,approved_by,auth_user_id,auth_migrated_at,last_seen_at,avatar_path";
 
 export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) {
   const [engineers, setEngineers] = useState<Engineer[]>([]);

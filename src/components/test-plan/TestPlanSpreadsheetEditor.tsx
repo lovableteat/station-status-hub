@@ -897,7 +897,7 @@ export function TestPlanSpreadsheetEditor({
       structureDirtyRef.current = true;
       setDirty(true);
       setRevision((current) => current + 1);
-      revealSelection({ anchor: insertedSelection, focus: insertedSelection });
+      revealSelection(insertedSelection);
       setError("");
     } catch (caught) {
       const operation = axis === "row" ? "列" : "欄";

@@ -899,7 +899,7 @@ export function TestTracker() {
         open={Boolean(cloneSourceSystem)}
         sourceSystem={cloneSourceSystem}
         onOpenChange={(open) => !open && setCloneSourceSystem(null)}
-        onCloned={loadData}
+        onCloned={async () => { await loadData(); }}
       />
 
       <PDFExportDialog

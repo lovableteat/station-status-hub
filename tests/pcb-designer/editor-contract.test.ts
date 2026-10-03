@@ -417,7 +417,8 @@ test("uses filtered colors in 2D and keeps physical PCB faces distinct in both 3
   assert.match(canvas3dSource, /attach=["']material-2["'] color=\{boardTopColor\}/);
   assert.match(canvas3dSource, /attach=["']material-3["'] color=\{boardBottomColor\}/);
   assert.match(softwareCanvas3dSource, /getBoardPolygon\(project\.board\)/);
-  assert.match(softwareCanvas3dSource, /sign === 1 \? project\.board\.layerColors\.top : project\.board\.layerColors\.bottom/);
+  assert.match(softwareCanvas3dSource, /faceSign = camera\.eye\.y >= 0 \? 1 : -1/);
+  assert.match(softwareCanvas3dSource, /faceSign === 1 \? project\.board\.layerColors\.top : project\.board\.layerColors\.bottom/);
   assert.match(softwareCanvas3dSource, /view\.pitch >= 0 \? ["']Top 面["'] : ["']Bottom 面["']/);
 });
 

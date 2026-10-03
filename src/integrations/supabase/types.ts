@@ -3687,6 +3687,16 @@ type BaseDatabase = {
       }
     }
     Functions: {
+      send_admin_announcement: {
+        Args: {
+          p_sender_id: string
+          p_recipient_ids?: string[] | null
+          p_title?: string
+          p_message?: string
+          p_metadata?: Json
+        }
+        Returns: Json
+      }
       complete_test_system: {
         Args: {
           p_assigned_to?: string | null
