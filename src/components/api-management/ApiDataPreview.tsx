@@ -34,6 +34,7 @@ import {
   redactSensitiveText,
 } from "./aiProviderCatalog";
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
+import { trackedProviderFetch } from "./aiUsageTelemetry";
 
 const previewEndpoints = API_ENDPOINTS.filter((endpoint) => endpoint.previewable);
 
@@ -220,10 +221,18 @@ export function ApiDataPreview({ selectedApiKey, selectedModel }: ApiDataPreview
     setProviderTestResult(null);
 
     try {
-      const response = await fetch(providerRequest.url, {
-        method: providerRequest.method,
-        headers: providerRequest.headers,
-        body: providerRequest.body ? JSON.stringify(providerRequest.body) : undefined,
+      const response = await trackedProviderFetch({
+        apiKeyId: selectedApiKey?.id ?? null,
+        provider: selectedMetadata.provider,
+        model: selectedMetadata.model,
+        source: "api-test",
+        attemptNumber: 1,
+        url: providerRequest.url,
+        init: {
+          method: providerRequest.method,
+          headers: providerRequest.headers,
+          body: providerRequest.body ? JSON.stringify(providerRequest.body) : undefined,
+        },
       });
 
       const result = await response.json().catch(() => null);
@@ -341,8 +350,8 @@ export function ApiDataPreview({ selectedApiKey, selectedModel }: ApiDataPreview
                     <Input
                       type="password"
                       value={apiKey}
-                      onChange={(event) => setApiKey(event.target.value)}
-                      placeholder={`可直接貼上要測試的 ${selectedMetadata.provider} API Key`}
+                      readOnly
+                      placeholder={`使用已選取的 ${selectedMetadata.provider} API Key`}
                       className="h-11 border-cyan-300/18 bg-[#111d33] pl-10 text-slate-50 placeholder:text-slate-400"
                     />
                   </div>
