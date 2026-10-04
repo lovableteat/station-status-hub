@@ -36,6 +36,16 @@ test("AI workspace conversation history loads from account cloud storage across 
   assert.match(source, /換電腦登入也能繼續使用/);
 });
 
+test("restoring a supported conversation restores its historical key and model target", async () => {
+  const source = await readSource("src/components/api-management/ApiChatConsole.tsx");
+
+  assert.match(source, /target\.record\.key_name === conversation\.keyLabel/);
+  assert.match(source, /target\.model === conversation\.model/);
+  assert.match(source, /onSelectApiKeyTarget\?\.\(historicalTarget\.id\)/);
+  assert.match(source, /setModel\(conversation\.model\)/);
+  assert.match(source, /\{item\.model\}/);
+});
+
 test("legacy browser-shared history is removed and cloud sync never reloads the page", async () => {
   const source = await readSource("src/components/api-management/ApiChatConsole.tsx");
 

@@ -4,7 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 
 import { ApiChatConsole } from "./ApiChatConsole";
-import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
+import { GEMINI_FREE_MODEL_PROFILES } from "./aiProviderCatalog";
+import {
+  ApiKeyRecord,
+  buildApiKeyModelTargets,
+  normalizeApiKeyPermissions,
+} from "./apiKeyHelpers";
 
 function looksLikeImageModel(model?: string | null) {
   return /image|nano banana/i.test(model ?? "");
@@ -39,7 +44,7 @@ function sortAvailableApiKeys(records: ApiKeyRecord[]) {
 export function ApiChatWorkspacePage() {
   const { activeProjectId, allProjects } = useTestProject();
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
-  const [selectedApiKeyId, setSelectedApiKeyId] = useState<null | string>(null);
+  const [selectedApiKeyTargetId, setSelectedApiKeyTargetId] = useState<null | string>(null);
 
   useEffect(() => {
     const loadApiKeys = async () => {
@@ -86,20 +91,34 @@ export function ApiChatWorkspacePage() {
     };
   }, []);
 
+  const apiKeyTargets = useMemo(
+    () =>
+      buildApiKeyModelTargets(
+        apiKeys,
+        GEMINI_FREE_MODEL_PROFILES.map((profile) => profile.id),
+      ),
+    [apiKeys],
+  );
+
   useEffect(() => {
-    if (!apiKeys.length) {
-      setSelectedApiKeyId(null);
+    if (!apiKeyTargets.length) {
+      setSelectedApiKeyTargetId(null);
       return;
     }
 
-    setSelectedApiKeyId((current) =>
-      current && apiKeys.some((item) => item.id === current) ? current : apiKeys[0].id
+    setSelectedApiKeyTargetId((current) =>
+      current && apiKeyTargets.some((target) => target.id === current)
+        ? current
+        : apiKeyTargets[0].id
     );
-  }, [apiKeys]);
+  }, [apiKeyTargets]);
 
-  const selectedApiKey = useMemo(
-    () => apiKeys.find((item) => item.id === selectedApiKeyId) ?? apiKeys[0] ?? null,
-    [apiKeys, selectedApiKeyId]
+  const selectedTarget = useMemo(
+    () =>
+      apiKeyTargets.find((target) => target.id === selectedApiKeyTargetId) ??
+      apiKeyTargets[0] ??
+      null,
+    [apiKeyTargets, selectedApiKeyTargetId],
   );
   const maintenanceProjects = useMemo(
     () => allProjects
@@ -114,10 +133,12 @@ export function ApiChatWorkspacePage() {
       className="h-full min-h-0 w-full min-w-0 px-1 py-1 sm:px-3 sm:py-3 lg:px-5 lg:py-4"
     >
       <ApiChatConsole
-        selectedApiKey={selectedApiKey}
+        selectedApiKey={selectedTarget?.record ?? null}
+        selectedModel={selectedTarget?.model ?? null}
         availableApiKeys={apiKeys}
-        selectedApiKeyId={selectedApiKeyId}
-        onSelectApiKey={setSelectedApiKeyId}
+        availableApiKeyTargets={apiKeyTargets}
+        selectedApiKeyTargetId={selectedApiKeyTargetId}
+        onSelectApiKeyTarget={setSelectedApiKeyTargetId}
         mode="chat-only"
         maintenanceProjects={maintenanceProjects}
         currentMaintenanceProjectId={activeProjectId}
