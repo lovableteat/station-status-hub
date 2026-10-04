@@ -26,6 +26,13 @@ export interface ApiKeyRecord {
   created_at: string;
 }
 
+export interface ApiKeyModelTarget {
+  id: string;
+  keyId: string;
+  model: string;
+  record: ApiKeyRecord;
+}
+
 export const defaultApiKeyMetadata: ApiKeyMetadata = {
   provider: "",
   model: "",
@@ -54,6 +61,30 @@ export function normalizeApiKeyPermissions(value: Json | null | undefined): ApiK
       editable: rawMetadata.editable === undefined ? true : Boolean(rawMetadata.editable),
     },
   };
+}
+
+export function buildApiKeyModelTargetId(keyId: string, model: string) {
+  return `${keyId}::${model}`;
+}
+
+export function buildApiKeyModelTargets(
+  records: readonly ApiKeyRecord[],
+  geminiModels: readonly string[],
+): ApiKeyModelTarget[] {
+  return records.flatMap((record) => {
+    const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
+    const isGemini = metadata.provider.trim().toLowerCase() === "gemini";
+    const models = isGemini ? geminiModels : [metadata.model];
+
+    return Array.from(new Set(models.map((model) => model.trim())))
+      .filter(Boolean)
+      .map((model) => ({
+        id: buildApiKeyModelTargetId(record.id, model),
+        keyId: record.id,
+        model,
+        record,
+      }));
+  });
 }
 
 export function buildApiKeyPermissions(

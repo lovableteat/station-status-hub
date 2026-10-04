@@ -25,7 +25,9 @@ test("Gemini key editor exposes the approved model choices with honest project q
 
   assert.match(source, /GEMINI_FREE_MODEL_PROFILES\.map/);
   assert.match(source, /getGeminiFreeModelProfile/);
-  assert.match(source, /剩餘額：未同步 Google/);
+  assert.match(source, /Google 專案共享配額快照/);
+  assert.match(source, /本系統模型別用量尚未開始統計/);
+  assert.doesNotMatch(source, /剩餘額：未同步 Google/);
   assert.match(source, /不同 API Key 可能共用同一專案/);
   assert.match(source, /2026-10-04 Google AI Studio 免費專案截圖/);
   assert.match(source, /RPD 於太平洋時間午夜重設/);
@@ -38,7 +40,6 @@ test("non-Gemini providers are routed through the shared chat adapter", async ()
   assert.match(source, /parseProviderChatResponse/);
   assert.match(source, /此服務商目前不支援直接讀取下列文件/);
   assert.doesNotMatch(source, /setProvider\(conversation\.provider/);
-  assert.doesNotMatch(source, /setModel\(conversation\.model/);
   assert.doesNotMatch(source, /目前對話模式先支援 Gemini provider/);
   assert.doesNotMatch(source, /目前測試模式先支援 Gemini provider/);
 });

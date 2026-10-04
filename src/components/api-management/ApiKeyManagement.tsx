@@ -47,10 +47,14 @@ import {
   formatGeminiQuotaSummary,
   getGeminiFreeModelProfile,
 } from "./aiProviderCatalog";
-import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
+import {
+  ApiKeyRecord,
+  buildApiKeyModelTargets,
+  normalizeApiKeyPermissions,
+} from "./apiKeyHelpers";
 
 interface ApiKeyManagementProps {
-  onTestKey?: (record: ApiKeyRecord) => void;
+  onTestKey?: (record: ApiKeyRecord, model: string) => void;
 }
 
 function maskApiKey(value: string, visible: boolean) {
@@ -114,21 +118,17 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
     };
   }, [apiKeys]);
 
-  const geminiAssignments = useMemo(
-    () =>
-      apiKeys.flatMap((record) => {
-        const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
-        if (metadata.provider.trim().toLowerCase() !== "gemini") return [];
+  const geminiTargets = useMemo(() => {
+    const geminiRecords = apiKeys.filter((record) => {
+      const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
+      return metadata.provider.trim().toLowerCase() === "gemini";
+    });
 
-        return [
-          {
-            keyName: record.key_name,
-            model: metadata.model.trim(),
-          },
-        ];
-      }),
-    [apiKeys],
-  );
+    return buildApiKeyModelTargets(
+      geminiRecords,
+      GEMINI_FREE_MODEL_PROFILES.map((profile) => profile.id),
+    );
+  }, [apiKeys]);
 
   const toggleKeyVisibility = (keyId: string) => {
     setVisibleKeys((current) => {
@@ -271,85 +271,136 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
       </div>
 
       <Card
-        data-admin-zone="gemini-free-model-policy"
+        data-admin-zone="gemini-model-operations"
         className="admin-api-panel admin-api-gemini-policy"
       >
         <CardHeader className="admin-api-gemini-header">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle className="text-xl font-black text-slate-50">
-                Gemini 模型與免費專案配額
+                Gemini 三模型操作
               </CardTitle>
               <Badge variant="outline" className="admin-api-gemini-selectable">
-                3 個可選模型
+                {geminiTargets.length} 個操作項
               </Badge>
             </div>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              額度來源為 2026-10-04 Google AI Studio 免費專案截圖；目前儲存模型會標在對應卡片。
+              每個操作項都直接使用所顯示的既有 Gemini API Key；選用測試不會改寫金鑰的儲存模型。
             </p>
           </div>
           <div className="admin-api-gemini-remaining">
-            剩餘額：未同步 Google
+            Google 專案共享配額快照
           </div>
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <div className="admin-api-gemini-grid">
-            {GEMINI_FREE_MODEL_PROFILES.map((profile) => {
-              const assignments = geminiAssignments.filter(
-                (assignment) => assignment.model === profile.id,
-              );
-              const isDefault = profile.id === GEMINI_DEFAULT_MODEL;
+          {geminiTargets.length ? (
+            <div className="admin-api-gemini-grid">
+              {geminiTargets.map((target) => {
+                const profile = getGeminiFreeModelProfile(target.model);
+                if (!profile) return null;
 
-              return (
-                <section
-                  key={profile.id}
-                  className={`admin-api-gemini-model-card${assignments.length > 0 ? " is-current" : ""}`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <Badge
-                      variant="outline"
-                      className={
-                        isDefault
-                          ? "admin-api-gemini-default"
-                          : "admin-api-gemini-manual"
-                      }
-                    >
-                      {isDefault ? "日常預設" : "可選模型"}
-                    </Badge>
-                    {assignments.length > 0 ? (
-                      <Badge variant="outline" className="admin-api-gemini-current">
-                        目前儲存模型
+                const storedModel = normalizeApiKeyPermissions(
+                  target.record.permissions,
+                ).metadata.model.trim();
+                const isCurrent = storedModel === target.model;
+                const isDefault = target.model === GEMINI_DEFAULT_MODEL;
+
+                return (
+                  <section
+                    key={target.id}
+                    className={`admin-api-gemini-model-card${isCurrent ? " is-current" : ""}`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Badge
+                        variant="outline"
+                        className={
+                          isDefault
+                            ? "admin-api-gemini-default"
+                            : "admin-api-gemini-manual"
+                        }
+                      >
+                        {isDefault ? "日常預設" : "手動選用"}
                       </Badge>
-                    ) : null}
-                  </div>
+                      {isCurrent ? (
+                        <Badge variant="outline" className="admin-api-gemini-current">
+                          目前儲存模型
+                        </Badge>
+                      ) : null}
+                    </div>
 
-                  <h3 className="mt-4 text-base font-black text-slate-50">{profile.label}</h3>
-                  <code className="mt-1 block text-xs text-cyan-100">{profile.id}</code>
-                  <p className="mt-4 text-sm font-bold text-slate-100">
-                    {formatGeminiQuotaSummary(profile)}
-                  </p>
-                  <p className="mt-2 text-xs font-semibold text-amber-200">
-                    剩餘額：未同步 Google
-                  </p>
+                    <h3 className="mt-4 text-base font-black text-slate-50">
+                      {profile.label}
+                    </h3>
+                    <code className="mt-1 block text-xs text-cyan-100">
+                      {target.model}
+                    </code>
+                    <p className="mt-4 text-sm font-bold text-slate-100">
+                      {formatGeminiQuotaSummary(profile)}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold text-amber-200">
+                      本系統用量：尚未開始按模型統計
+                    </p>
 
-                  {assignments.length > 0 ? (
-                    <p className="admin-api-gemini-key-names mt-3 text-xs leading-5">
-                      使用此模型的金鑰：
-                      {assignments.map((assignment) => assignment.keyName).join("、")}
-                    </p>
-                  ) : (
-                    <p className="admin-api-gemini-key-names mt-3 text-xs leading-5">
-                      尚無金鑰儲存此模型
-                    </p>
-                  )}
-                </section>
-              );
-            })}
-          </div>
+                    <div className="admin-api-gemini-key mt-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                        關聯 Gemini API Key
+                      </p>
+                      <p className="mt-2 text-sm font-bold text-slate-100">
+                        {target.record.key_name}
+                      </p>
+                      <div className="mt-2 flex items-start gap-2">
+                        <code className="admin-api-code admin-api-key-value min-w-0 flex-1">
+                          {maskApiKey(target.record.api_key, visibleKeys.has(target.id))}
+                        </code>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => toggleKeyVisibility(target.id)}
+                          className="admin-api-key-tool h-8 w-8 shrink-0"
+                          aria-label={visibleKeys.has(target.id) ? "隱藏金鑰" : "顯示金鑰"}
+                        >
+                          {visibleKeys.has(target.id) ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => void copyToClipboard(target.record.api_key)}
+                          className="admin-api-key-tool h-8 w-8 shrink-0"
+                          aria-label={`複製 ${target.record.key_name}`}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={() => onTestKey?.(target.record, target.model)}
+                      disabled={!target.record.is_active}
+                      className="mt-4 w-full bg-cyan-300 font-black text-slate-950 hover:bg-cyan-200"
+                    >
+                      <Play className="mr-2 h-4 w-4" />
+                      選用並前往測試
+                    </Button>
+                  </section>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="admin-api-card-muted px-5 py-6 text-sm leading-6 text-slate-300">
+              尚無可用的 Gemini API Key。新增或啟用既有 key 後，三個模型操作項會顯示在這裡。
+            </div>
+          )}
 
           <p className="admin-api-gemini-note text-xs leading-5">
-            配額按 Google 專案共用，不同 API Key 可能共用同一專案。金鑰名稱、遮罩內容、眼睛顯示與複製操作保留在下方同名金鑰列。
+            三個模型是不同的 API model，但共用同一筆既有 key record；Google 配額屬專案共享範圍，不會因同專案增加 key 而增加額度。
           </p>
         </CardContent>
       </Card>
@@ -510,7 +561,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                   {formatGeminiQuotaSummary(geminiProfile)}
                                 </p>
                                 <p className="mt-1 text-xs font-semibold text-amber-200">
-                                  剩餘額：未同步 Google
+                                  Google 專案共享配額快照；本系統模型別用量尚未開始統計
                                 </p>
                               </>
                             ) : null}
@@ -555,7 +606,8 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                               type="button"
                               variant="ghost"
                               size="sm"
-                              onClick={() => onTestKey?.(apiKey)}
+                              onClick={() => onTestKey?.(apiKey, storedModel)}
+                              disabled={!storedModel}
                               className="admin-api-action admin-api-action-test"
                             >
                               <Play className="mr-1.5 h-4 w-4" />
