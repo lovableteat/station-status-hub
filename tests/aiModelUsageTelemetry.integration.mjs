@@ -14,7 +14,14 @@ const { PGlite } = await import(
 const db = await PGlite.create();
 const migration = await fs.readFile(
   new URL(
-    "../supabase/migrations/20261004173000_add_ai_model_usage_telemetry.sql",
+    "../supabase/migrations/20261004174305_add_ai_model_usage_telemetry.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const actorIndexMigration = await fs.readFile(
+  new URL(
+    "../supabase/migrations/20261004174455_index_ai_model_usage_actor.sql",
     import.meta.url,
   ),
   "utf8",
@@ -98,6 +105,7 @@ try {
   );
 
   await db.exec(migration);
+  await db.exec(actorIndexMigration);
   await actor(1);
 
   await rejects(

@@ -2747,7 +2747,7 @@ export function ApiChatConsole({
           )}
           {activeGeminiProfile ? (
             <p className="mt-1 text-right text-[11px] leading-4 text-slate-400">
-              {formatGeminiQuotaSummary(activeGeminiProfile)} · Google 專案共享配額快照
+              {formatGeminiQuotaSummary(activeGeminiProfile)} · 同一 Google 專案共用；上限資料確認於 2026-10-04
             </p>
           ) : null}
         </div>

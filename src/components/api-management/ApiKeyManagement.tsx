@@ -335,7 +335,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
             </p>
           </div>
           <div className="admin-api-gemini-remaining">
-            Google 專案共享配額快照
+            同一 Google 專案共用；上限資料確認於 2026-10-04
           </div>
         </CardHeader>
 
@@ -395,7 +395,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                         本系統已觀測：近 60 秒 {usage?.minuteAttempts ?? 0} 次；本太平洋日 {usage?.pacificDayAttempts ?? 0} 次
                       </p>
                       <p className="mt-1 text-amber-200">
-                        估算可用範圍：RPM {rpmRange.min}–{rpmRange.max}；RPD {rpdRange.min}–{rpdRange.max}
+                        依本系統紀錄估算尚可使用：每分鐘 {rpmRange.min}–{rpmRange.max} 次；今天 {rpdRange.min}–{rpdRange.max} 次
                       </p>
                       <p className="mt-1 text-slate-300">
                         成功 {usage?.succeededAttempts ?? 0}、失敗 {usage?.failedAttempts ?? 0}、429 {usage?.rateLimitedAttempts ?? 0}、逾時 {usage?.timeoutAttempts ?? 0}、未完成 {usage?.inFlightAttempts ?? 0}
@@ -404,10 +404,10 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                         追蹤起點：{formatDateTime(usageSummary.trackingStartedAt, "後端追蹤尚未啟用")}；不含其他網站或 API Key 的 Google 專案用量，並非官方剩餘額。
                       </p>
                       <p className="mt-1 text-slate-400">
-                        近 60 秒滾動窗口：{usageWindowCompleteness.minute ? "完整" : "不完整"}；太平洋日窗口：{usageWindowCompleteness.pacificDay ? "完整" : "不完整"}。RPD 依 America/Los_Angeles 午夜重設。
+                        每分鐘統計：{usageWindowCompleteness.minute ? "完整" : "仍在累積"}；每日統計：{usageWindowCompleteness.pacificDay ? "完整" : "仍在累積"}。每日次數於美國太平洋時間午夜重設。
                       </p>
                       <p className="mt-1 text-slate-400">
-                        輸入 TPM 未由本系統可靠計量，請以 Google AI Studio 為準。
+                        每分鐘輸入 token 數尚無法由本系統可靠計量，請以 Google AI Studio 為準。
                       </p>
                     </div>
 
@@ -630,7 +630,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                   {formatGeminiQuotaSummary(geminiProfile)}
                                 </p>
                                 <p className="mt-1 text-xs font-semibold text-amber-200">
-                                  Google 專案共享配額快照；本系統模型別用量尚未開始統計
+                                  同一 Google 專案共用；上限資料確認於 2026-10-04
                                 </p>
                               </>
                             ) : null}
