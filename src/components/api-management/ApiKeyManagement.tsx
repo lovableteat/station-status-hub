@@ -41,6 +41,12 @@ import {
 } from "@/components/ui/table";
 
 import { CreateApiKeyDialog } from "./CreateApiKeyDialog";
+import {
+  GEMINI_DEFAULT_MODEL,
+  GEMINI_FREE_MODEL_PROFILES,
+  formatGeminiQuotaSummary,
+  getGeminiFreeModelProfile,
+} from "./aiProviderCatalog";
 import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
 
 interface ApiKeyManagementProps {
@@ -107,6 +113,22 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
       usageCount: apiKeys.reduce((sum, item) => sum + (item.usage_count ?? 0), 0),
     };
   }, [apiKeys]);
+
+  const geminiAssignments = useMemo(
+    () =>
+      apiKeys.flatMap((record) => {
+        const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
+        if (metadata.provider.trim().toLowerCase() !== "gemini") return [];
+
+        return [
+          {
+            keyName: record.key_name,
+            model: metadata.model.trim(),
+          },
+        ];
+      }),
+    [apiKeys],
+  );
 
   const toggleKeyVisibility = (keyId: string) => {
     setVisibleKeys((current) => {
@@ -241,10 +263,96 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
               Usage Count
             </p>
             <p className="mt-3 text-3xl font-black text-slate-50">{stats.usageCount}</p>
-            <p className="mt-2 text-sm text-slate-300">所有 API 金鑰累積呼叫次數。</p>
+            <p className="mt-2 text-sm text-slate-300">
+              累積呼叫次數，不代表每日已用或剩餘配額。
+            </p>
           </CardContent>
         </Card>
       </div>
+
+      <Card
+        data-admin-zone="gemini-free-model-policy"
+        className="admin-api-panel admin-api-gemini-policy"
+      >
+        <CardHeader className="admin-api-gemini-header">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-xl font-black text-slate-50">
+                Gemini 模型與免費專案配額
+              </CardTitle>
+              <Badge variant="outline" className="admin-api-gemini-selectable">
+                3 個可選模型
+              </Badge>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              額度來源為 2026-10-04 Google AI Studio 免費專案截圖；目前儲存模型會標在對應卡片。
+            </p>
+          </div>
+          <div className="admin-api-gemini-remaining">
+            剩餘額：未同步 Google
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="admin-api-gemini-grid">
+            {GEMINI_FREE_MODEL_PROFILES.map((profile) => {
+              const assignments = geminiAssignments.filter(
+                (assignment) => assignment.model === profile.id,
+              );
+              const isDefault = profile.id === GEMINI_DEFAULT_MODEL;
+
+              return (
+                <section
+                  key={profile.id}
+                  className={`admin-api-gemini-model-card${assignments.length > 0 ? " is-current" : ""}`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Badge
+                      variant="outline"
+                      className={
+                        isDefault
+                          ? "admin-api-gemini-default"
+                          : "admin-api-gemini-manual"
+                      }
+                    >
+                      {isDefault ? "日常預設" : "可選模型"}
+                    </Badge>
+                    {assignments.length > 0 ? (
+                      <Badge variant="outline" className="admin-api-gemini-current">
+                        目前儲存模型
+                      </Badge>
+                    ) : null}
+                  </div>
+
+                  <h3 className="mt-4 text-base font-black text-slate-50">{profile.label}</h3>
+                  <code className="mt-1 block text-xs text-cyan-100">{profile.id}</code>
+                  <p className="mt-4 text-sm font-bold text-slate-100">
+                    {formatGeminiQuotaSummary(profile)}
+                  </p>
+                  <p className="mt-2 text-xs font-semibold text-amber-200">
+                    剩餘額：未同步 Google
+                  </p>
+
+                  {assignments.length > 0 ? (
+                    <p className="admin-api-gemini-key-names mt-3 text-xs leading-5">
+                      使用此模型的金鑰：
+                      {assignments.map((assignment) => assignment.keyName).join("、")}
+                    </p>
+                  ) : (
+                    <p className="admin-api-gemini-key-names mt-3 text-xs leading-5">
+                      尚無金鑰儲存此模型
+                    </p>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+
+          <p className="admin-api-gemini-note text-xs leading-5">
+            配額按 Google 專案共用，不同 API Key 可能共用同一專案。金鑰名稱、遮罩內容、眼睛顯示與複製操作保留在下方同名金鑰列。
+          </p>
+        </CardContent>
+      </Card>
 
       <Card data-admin-zone="api-key-list" className="admin-api-panel admin-api-key-panel">
         <CardHeader className="admin-api-key-header flex flex-col gap-4 pb-5 lg:flex-row lg:items-center lg:justify-between">
@@ -313,6 +421,12 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                   <TableBody>
                   {apiKeys.map((apiKey) => {
                     const permissions = normalizeApiKeyPermissions(apiKey.permissions);
+                    const provider = permissions.metadata.provider.trim().toLowerCase();
+                    const storedModel = permissions.metadata.model.trim();
+                    const geminiProfile =
+                      provider === "gemini"
+                        ? getGeminiFreeModelProfile(storedModel)
+                        : undefined;
                     return (
                       <TableRow
                         key={apiKey.id}
@@ -381,9 +495,25 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
 
                         <TableCell className="align-top">{getStatusBadge(apiKey)}</TableCell>
 
-                        <TableCell className="align-top">
-                          <div className="admin-api-model text-sm">
-                            {permissions.metadata.model || "-"}
+                        <TableCell className="min-w-[220px] align-top">
+                          <div
+                            className="admin-api-model text-sm"
+                            data-current-gemini-model={provider === "gemini" ? "true" : undefined}
+                          >
+                            {provider === "gemini" ? (
+                              <span className="admin-api-model-label">目前儲存模型</span>
+                            ) : null}
+                            <code className="block">{storedModel || "-"}</code>
+                            {geminiProfile ? (
+                              <>
+                                <p className="mt-2 text-xs leading-5 text-slate-300">
+                                  {formatGeminiQuotaSummary(geminiProfile)}
+                                </p>
+                                <p className="mt-1 text-xs font-semibold text-amber-200">
+                                  剩餘額：未同步 Google
+                                </p>
+                              </>
+                            ) : null}
                           </div>
                         </TableCell>
 
