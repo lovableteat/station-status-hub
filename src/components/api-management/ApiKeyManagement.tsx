@@ -561,7 +561,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                   {formatGeminiQuotaSummary(geminiProfile)}
                                 </p>
                                 <p className="mt-1 text-xs font-semibold text-amber-200">
-                                  剩餘額：未同步 Google
+                                  Google 專案共享配額快照；本系統模型別用量尚未開始統計
                                 </p>
                               </>
                             ) : null}
