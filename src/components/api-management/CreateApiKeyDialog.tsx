@@ -48,8 +48,12 @@ import { cn } from "@/lib/utils";
 
 import {
   AI_PROVIDER_PRESETS,
+  GEMINI_FREE_MODEL_PROFILES,
   buildProviderModelRequest,
+  formatGeminiQuotaSummary,
   getAiProviderPreset,
+  getGeminiFreeModelOptions,
+  getGeminiFreeModelProfile,
   getProviderErrorMessage,
   parseProviderModels,
   resolveAiProviderPreset,
@@ -179,6 +183,10 @@ export function CreateApiKeyDialog({
     () => (selectedProviderId ? getAiProviderPreset(selectedProviderId) : null),
     [selectedProviderId],
   );
+  const activeGeminiProfile =
+    activePreset?.id === "gemini"
+      ? getGeminiFreeModelProfile(formData.model)
+      : undefined;
 
   useEffect(() => {
     if (open) {
@@ -300,17 +308,29 @@ export function CreateApiKeyDialog({
         throw new Error("服務商已回應，但沒有找到可用的對話模型。可在進階設定手動輸入模型。");
       }
 
-      const preferredModel = models.includes(formData.model)
+      const approvedGeminiModels =
+        activePreset.id === "gemini"
+          ? getGeminiFreeModelOptions(models).map((profile) => profile.id)
+          : [];
+      const availableModels =
+        activePreset.id === "gemini" ? approvedGeminiModels : models;
+      if (availableModels.length === 0) {
+        throw new Error(
+          "這個專案沒有回傳已核准的 Gemini 免費模型；不會自動改用其他可能付費的模型。",
+        );
+      }
+
+      const preferredModel = availableModels.includes(formData.model)
         ? formData.model
-        : models.includes(activePreset.defaultModel)
+        : availableModels.includes(activePreset.defaultModel)
           ? activePreset.defaultModel
-          : models[0];
-      setModelOptions(models);
+          : availableModels[0];
+      setModelOptions(availableModels);
       setField("model", preferredModel);
       lastVerificationFingerprintRef.current = fingerprint;
       setVerification({
         status: "success",
-        message: `連線成功，找到 ${models.length} 個可用模型。`,
+        message: `連線成功，找到 ${availableModels.length} 個可用模型。`,
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
@@ -574,7 +594,35 @@ export function CreateApiKeyDialog({
               <Label htmlFor="model" className="text-sm font-black text-slate-100">
                 3. 使用模型
               </Label>
-              {modelOptions.length > 0 ? (
+              {activePreset.id === "gemini" ? (
+                <Select value={formData.model} onValueChange={(value) => setField("model", value)}>
+                  <SelectTrigger id="model" className="h-12 border-cyan-300/22 bg-[#101e32] text-slate-100">
+                    <SelectValue placeholder="選擇模型" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72 border-cyan-300/20 bg-[#101e32] text-slate-100">
+                    {GEMINI_FREE_MODEL_PROFILES.map((profile) => {
+                      const unavailable =
+                        verification.status === "success" && !modelOptions.includes(profile.id);
+                      return (
+                        <SelectItem key={profile.id} value={profile.id} disabled={unavailable}>
+                          <span className="flex flex-col gap-0.5 py-1">
+                            <span>{profile.label}</span>
+                            <span className="text-xs text-slate-400">
+                              {formatGeminiQuotaSummary(profile)}
+                              {unavailable ? " · 此專案未回傳" : ""}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                    {formData.model && !activeGeminiProfile ? (
+                      <SelectItem value={formData.model}>
+                        {formData.model}（既有設定）
+                      </SelectItem>
+                    ) : null}
+                  </SelectContent>
+                </Select>
+              ) : modelOptions.length > 0 ? (
                 <Select value={formData.model} onValueChange={(value) => setField("model", value)}>
                   <SelectTrigger id="model" className="h-11 border-cyan-300/22 bg-[#101e32] text-slate-100">
                     <SelectValue placeholder="選擇模型" />
@@ -594,6 +642,16 @@ export function CreateApiKeyDialog({
                   className="h-11 border-cyan-300/22 bg-[#101e32] text-slate-100 placeholder:text-slate-400"
                 />
               )}
+              {activeGeminiProfile ? (
+                <div className="rounded-2xl border border-amber-300/20 bg-amber-400/8 px-4 py-3 text-xs leading-5 text-slate-300">
+                  <p className="font-bold text-amber-100">
+                    {formatGeminiQuotaSummary(activeGeminiProfile)} · 剩餘額：未同步 Google
+                  </p>
+                  <p className="mt-1">
+                    來源：2026-10-04 Google AI Studio 免費專案截圖。配額按專案共用，不同 API Key 可能共用同一專案；RPD 於太平洋時間午夜重設，實際剩餘請以 AI Studio 為準。
+                  </p>
+                </div>
+              ) : null}
             </section>
           ) : null}
 

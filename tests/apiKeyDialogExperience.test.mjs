@@ -20,6 +20,17 @@ test("API key dialog is provider-first and progressively discloses advanced fiel
   assert.doesNotMatch(source, /自動產生/);
 });
 
+test("Gemini key editor exposes the approved model choices with honest project quota copy", async () => {
+  const source = await read("../src/components/api-management/CreateApiKeyDialog.tsx");
+
+  assert.match(source, /GEMINI_FREE_MODEL_PROFILES\.map/);
+  assert.match(source, /getGeminiFreeModelProfile/);
+  assert.match(source, /剩餘額：未同步 Google/);
+  assert.match(source, /不同 API Key 可能共用同一專案/);
+  assert.match(source, /2026-10-04 Google AI Studio 免費專案截圖/);
+  assert.match(source, /RPD 於太平洋時間午夜重設/);
+});
+
 test("non-Gemini providers are routed through the shared chat adapter", async () => {
   const source = await read("../src/components/api-management/ApiChatConsole.tsx");
 

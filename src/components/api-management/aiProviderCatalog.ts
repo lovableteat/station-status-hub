@@ -41,6 +41,58 @@ export interface ProviderChatResult {
   images: ProviderMessageImage[];
 }
 
+export interface GeminiFreeModelProfile {
+  id: string;
+  label: string;
+  rpm: number;
+  inputTpm: number;
+  rpd: number;
+  sourceDate: string;
+}
+
+export const GEMINI_DEFAULT_MODEL = "gemini-3.5-flash-lite";
+
+export const GEMINI_FREE_MODEL_PROFILES = [
+  {
+    id: GEMINI_DEFAULT_MODEL,
+    label: "Gemini 3.5 Flash-Lite",
+    rpm: 15,
+    inputTpm: 250_000,
+    rpd: 500,
+    sourceDate: "2026-10-04",
+  },
+  {
+    id: "gemini-3.8-flash",
+    label: "Gemini 3.8 Flash",
+    rpm: 5,
+    inputTpm: 250_000,
+    rpd: 20,
+    sourceDate: "2026-10-04",
+  },
+  {
+    id: "gemini-2.5-flash",
+    label: "Gemini 2.5 Flash",
+    rpm: 5,
+    inputTpm: 250_000,
+    rpd: 20,
+    sourceDate: "2026-10-04",
+  },
+] as const satisfies readonly GeminiFreeModelProfile[];
+
+export function getGeminiFreeModelProfile(model: string | null | undefined) {
+  const normalizedModel = model?.trim() ?? "";
+  return GEMINI_FREE_MODEL_PROFILES.find((profile) => profile.id === normalizedModel);
+}
+
+export function getGeminiFreeModelOptions(discoveredModels: readonly string[]) {
+  const discovered = new Set(discoveredModels.map((model) => model.trim()));
+  return GEMINI_FREE_MODEL_PROFILES.filter((profile) => discovered.has(profile.id));
+}
+
+export function formatGeminiQuotaSummary(profile: GeminiFreeModelProfile) {
+  return `${profile.rpm} RPM · ${profile.inputTpm / 1000}K 輸入 TPM · ${profile.rpd} RPD`;
+}
+
 export const AI_PROVIDER_PRESETS: readonly AiProviderPreset[] = [
   {
     id: "gemini",
@@ -50,7 +102,7 @@ export const AI_PROVIDER_PRESETS: readonly AiProviderPreset[] = [
     providerValue: "gemini",
     protocol: "gemini",
     baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-    defaultModel: "gemini-2.5-flash",
+    defaultModel: GEMINI_DEFAULT_MODEL,
     keyPlaceholder: "貼上 Gemini API Key",
   },
   {
