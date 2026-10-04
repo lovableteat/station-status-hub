@@ -656,6 +656,13 @@
   box-shadow: inset 3px 0 0 rgb(94 234 212 / 82%);
 }
 
+.admin-api-gemini-key {
+  border: 1px solid rgb(103 232 249 / 20%);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgb(2 15 24 / 58%);
+}
+
 .admin-api-gemini-selectable,
 .admin-api-gemini-manual {
   border-color: rgb(125 211 252 / 42%);
