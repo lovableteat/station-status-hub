@@ -52,6 +52,14 @@ import {
   buildApiKeyModelTargets,
   normalizeApiKeyPermissions,
 } from "./apiKeyHelpers";
+import { AI_USAGE_RECORDED_EVENT } from "./aiUsageTelemetry";
+import {
+  AiModelUsageSummary,
+  buildAiUsageTargetKey,
+  buildObservedQuotaRange,
+  getUsageWindowCompleteness,
+  parseAiModelUsageSummary,
+} from "./aiUsageSummary";
 
 interface ApiKeyManagementProps {
   onTestKey?: (record: ApiKeyRecord, model: string) => void;
@@ -79,6 +87,9 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ApiKeyRecord | null>(null);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
+  const [usageSummary, setUsageSummary] = useState<AiModelUsageSummary>(() =>
+    parseAiModelUsageSummary(null),
+  );
   const { canEditModule } = usePermissions();
   const canEditApiManagement = canEditModule("api-management");
 
@@ -102,6 +113,30 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
   useEffect(() => {
     void loadApiKeys();
   }, []);
+
+  useEffect(() => {
+    const apiKeyIds = apiKeys.map((record) => record.id);
+    if (!apiKeyIds.length) {
+      setUsageSummary(parseAiModelUsageSummary(null));
+      return;
+    }
+
+    const loadUsageSummary = async () => {
+      const { data, error } = await supabase.rpc("get_ai_model_usage_summary", {
+        p_api_key_ids: apiKeyIds,
+      });
+      if (error) {
+        console.error("Error loading AI usage summary:", error);
+        return;
+      }
+      setUsageSummary(parseAiModelUsageSummary(data));
+    };
+    const handleUsageRecorded = () => void loadUsageSummary();
+
+    void loadUsageSummary();
+    window.addEventListener(AI_USAGE_RECORDED_EVENT, handleUsageRecorded);
+    return () => window.removeEventListener(AI_USAGE_RECORDED_EVENT, handleUsageRecorded);
+  }, [apiKeys]);
 
   const stats = useMemo(() => {
     const now = Date.now();
@@ -129,6 +164,17 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
       GEMINI_FREE_MODEL_PROFILES.map((profile) => profile.id),
     );
   }, [apiKeys]);
+
+  const usageByTarget = useMemo(
+    () => new Map(
+      usageSummary.targets.map((target) => [
+        buildAiUsageTargetKey(target.apiKeyId, target.model),
+        target,
+      ]),
+    ),
+    [usageSummary.targets],
+  );
+  const usageWindowCompleteness = getUsageWindowCompleteness(usageSummary);
 
   const toggleKeyVisibility = (keyId: string) => {
     setVisibleKeys((current) => {
@@ -289,7 +335,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
             </p>
           </div>
           <div className="admin-api-gemini-remaining">
-            Google 專案共享配額快照
+            同一 Google 專案共用；上限資料確認於 2026-10-04
           </div>
         </CardHeader>
 
@@ -305,6 +351,12 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                 ).metadata.model.trim();
                 const isCurrent = storedModel === target.model;
                 const isDefault = target.model === GEMINI_DEFAULT_MODEL;
+                const usage = usageByTarget.get(target.id);
+                const rpmRange = buildObservedQuotaRange(usage?.minuteAttempts ?? 0, profile.rpm);
+                const rpdRange = buildObservedQuotaRange(
+                  usage?.pacificDayAttempts ?? 0,
+                  profile.rpd,
+                );
 
                 return (
                   <section
@@ -338,9 +390,32 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                     <p className="mt-4 text-sm font-bold text-slate-100">
                       {formatGeminiQuotaSummary(profile)}
                     </p>
-                    <p className="mt-2 text-xs font-semibold text-amber-200">
-                      本系統用量：尚未開始按模型統計
-                    </p>
+                    <div className="mt-3 rounded-xl border border-cyan-200/15 bg-slate-950/35 p-3 text-xs leading-5 text-slate-200">
+                      <p className="font-bold text-cyan-100">
+                        本系統已觀測：近 60 秒 {usage?.minuteAttempts ?? 0} 次；本太平洋日 {usage?.pacificDayAttempts ?? 0} 次
+                      </p>
+                      {usageSummary.trackingStartedAt ? (
+                        <p className="mt-1 text-amber-200">
+                          依本系統紀錄估算尚可使用：每分鐘 {rpmRange.min}–{rpmRange.max} 次；今天 {rpdRange.min}–{rpdRange.max} 次
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-amber-200">
+                          等待新版首次呼叫，尚無可估算資料
+                        </p>
+                      )}
+                      <p className="mt-1 text-slate-300">
+                        成功 {usage?.succeededAttempts ?? 0}、失敗 {usage?.failedAttempts ?? 0}、429 {usage?.rateLimitedAttempts ?? 0}、逾時 {usage?.timeoutAttempts ?? 0}、未完成 {usage?.inFlightAttempts ?? 0}
+                      </p>
+                      <p className="mt-1 text-slate-400">
+                        追蹤起點：{formatDateTime(usageSummary.trackingStartedAt, "後端追蹤尚未啟用")}；不含其他網站或 API Key 的 Google 專案用量，並非官方剩餘額。
+                      </p>
+                      <p className="mt-1 text-slate-400">
+                        每分鐘統計：{usageWindowCompleteness.minute ? "完整" : "仍在累積"}；每日統計：{usageWindowCompleteness.pacificDay ? "完整" : "仍在累積"}。每日次數於美國太平洋時間午夜重設。
+                      </p>
+                      <p className="mt-1 text-slate-400">
+                        每分鐘輸入 token 數尚無法由本系統可靠計量，請以 Google AI Studio 為準。
+                      </p>
+                    </div>
 
                     <div className="admin-api-gemini-key mt-4">
                       <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
@@ -400,7 +475,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
           )}
 
           <p className="admin-api-gemini-note text-xs leading-5">
-            三個模型是不同的 API model，但共用同一筆既有 key record；Google 配額屬專案共享範圍，不會因同專案增加 key 而增加額度。
+            三個模型是不同的 API model，但共用同一筆既有 key record；Google 配額屬專案共享範圍。本頁按 key＋model 計數，未可靠映射 Google project，因此不合併推定跨 key 的官方專案總量。
           </p>
         </CardContent>
       </Card>
@@ -561,7 +636,7 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                                   {formatGeminiQuotaSummary(geminiProfile)}
                                 </p>
                                 <p className="mt-1 text-xs font-semibold text-amber-200">
-                                  Google 專案共享配額快照；本系統模型別用量尚未開始統計
+                                  同一 Google 專案共用；上限資料確認於 2026-10-04
                                 </p>
                               </>
                             ) : null}

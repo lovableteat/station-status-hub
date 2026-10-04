@@ -80,6 +80,7 @@ import {
   ApiKeyRecord,
   normalizeApiKeyPermissions,
 } from "./apiKeyHelpers";
+import { trackedProviderFetch } from "./aiUsageTelemetry";
 import { MaintenanceCitationList } from "./MaintenanceCitationList";
 import { MaintenanceSourceSelector } from "./MaintenanceSourceSelector";
 import { MarkdownMessage } from "./MarkdownMessage";
@@ -270,6 +271,7 @@ interface GeminiResponsePart {
 interface ProviderRequestTarget {
   id: string;
   apiKey: string;
+  apiKeyId: string | null;
   baseUrl: string;
   cooldownUntil: number;
   isSelected: boolean;
@@ -1269,6 +1271,7 @@ export function ApiChatConsole({
         ? {
             id: selectedApiKeyTargetId ?? selectedApiKey?.id ?? "manual-current",
             apiKey: apiKey.trim(),
+            apiKeyId: selectedApiKey?.id ?? null,
             baseUrl: baseUrl.trim(),
             cooldownUntil:
               keyCooldowns[selectedApiKeyTargetId ?? selectedApiKey?.id ?? "manual-current"] ?? 0,
@@ -1307,6 +1310,7 @@ export function ApiChatConsole({
         return {
           id: target.id,
           apiKey: record.api_key.trim(),
+          apiKeyId: record.id,
           baseUrl: metadata.baseUrl.trim(),
           cooldownUntil: keyCooldowns[target.id] ?? 0,
           isSelected: target.id === selectedApiKeyTargetId,
@@ -1480,18 +1484,6 @@ export function ApiChatConsole({
     return providerMessages;
   };
 
-  const markApiKeyUsage = async (target: ProviderRequestTarget) => {
-    if (target.id === "manual-current" || !target.apiKey.trim()) return;
-
-    const { error } = await supabase.rpc("validate_and_update_api_key", {
-      key_to_check: target.apiKey.trim(),
-    });
-
-    if (error) {
-      console.error("Failed to update API key usage:", error);
-    }
-  };
-
   const runProviderRequest = async (
     history: ChatMessage[],
     bannerTitle: string,
@@ -1527,12 +1519,18 @@ export function ApiChatConsole({
 
       for (let attemptIndex = 0; attemptIndex < maxAttemptsForTarget; attemptIndex += 1) {
         try {
-          await markApiKeyUsage(target);
-
-          const response = await fetch(requestUrlForTarget, {
-            method: providerRequest.method,
-            headers: providerRequest.headers,
-            body: providerRequest.body ? JSON.stringify(providerRequest.body) : undefined,
+          const response = await trackedProviderFetch({
+            apiKeyId: target.apiKeyId,
+            provider: target.provider,
+            model: target.model,
+            source: "ai-chat",
+            attemptNumber: attemptIndex + 1,
+            url: requestUrlForTarget,
+            init: {
+              method: providerRequest.method,
+              headers: providerRequest.headers,
+              body: providerRequest.body ? JSON.stringify(providerRequest.body) : undefined,
+            },
           });
 
           const result = await response.json().catch(() => null);
@@ -2749,7 +2747,7 @@ export function ApiChatConsole({
           )}
           {activeGeminiProfile ? (
             <p className="mt-1 text-right text-[11px] leading-4 text-slate-400">
-              {formatGeminiQuotaSummary(activeGeminiProfile)} · Google 專案共享配額快照
+              {formatGeminiQuotaSummary(activeGeminiProfile)} · 同一 Google 專案共用；上限資料確認於 2026-10-04
             </p>
           ) : null}
         </div>

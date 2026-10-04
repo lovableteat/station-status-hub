@@ -90,7 +90,7 @@ export function getGeminiFreeModelOptions(discoveredModels: readonly string[]) {
 }
 
 export function formatGeminiQuotaSummary(profile: GeminiFreeModelProfile) {
-  return `${profile.rpm} RPM · ${profile.inputTpm / 1000}K 輸入 TPM · ${profile.rpd} RPD`;
+  return `每分鐘最多 ${profile.rpm} 次 · 每分鐘最多輸入 ${profile.inputTpm.toLocaleString("en-US")} tokens · 每天最多 ${profile.rpd} 次`;
 }
 
 export const AI_PROVIDER_PRESETS: readonly AiProviderPreset[] = [

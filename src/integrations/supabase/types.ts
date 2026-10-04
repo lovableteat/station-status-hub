@@ -89,6 +89,66 @@ type BaseDatabase = {
         }
         Relationships: []
       }
+      ai_model_usage_events: {
+        Row: {
+          actor_user_id: string | null
+          api_key_id: string
+          attempt_number: number
+          duration_ms: number | null
+          event_id: string
+          finished_at: string | null
+          http_status: number | null
+          model: string
+          outcome: string
+          provider: string
+          source: string
+          started_at: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          api_key_id: string
+          attempt_number: number
+          duration_ms?: number | null
+          event_id: string
+          finished_at?: string | null
+          http_status?: number | null
+          model: string
+          outcome?: string
+          provider: string
+          source: string
+          started_at?: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          api_key_id?: string
+          attempt_number?: number
+          duration_ms?: number | null
+          event_id?: string
+          finished_at?: string | null
+          http_status?: number | null
+          model?: string
+          outcome?: string
+          provider?: string
+          source?: string
+          started_at?: string
+        }
+        Relationships: []
+      }
+      ai_model_usage_tracking_state: {
+        Row: {
+          singleton: boolean
+          tracking_started_at: string
+        }
+        Insert: {
+          singleton?: boolean
+          tracking_started_at?: string
+        }
+        Update: {
+          singleton?: boolean
+          tracking_started_at?: string
+        }
+        Relationships: []
+      }
       ai_workspace_conversations: {
         Row: {
           conversation_key: string
@@ -3983,6 +4043,30 @@ type BaseDatabase = {
       sync_ai_workspace_conversations: {
         Args: { p_items: Json; p_owner_id: string }
         Returns: number
+      }
+      finish_ai_model_usage_attempt: {
+        Args: {
+          p_duration_ms?: number | null
+          p_event_id: string
+          p_http_status?: number | null
+          p_outcome: string
+        }
+        Returns: Json
+      }
+      get_ai_model_usage_summary: {
+        Args: { p_api_key_ids: string[] }
+        Returns: Json
+      }
+      start_ai_model_usage_attempt: {
+        Args: {
+          p_api_key_id: string
+          p_attempt_number: number
+          p_event_id: string
+          p_model: string
+          p_provider: string
+          p_source: string
+        }
+        Returns: Json
       }
       validate_and_update_api_key: {
         Args: { key_to_check: string }
