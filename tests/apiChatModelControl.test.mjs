@@ -11,3 +11,13 @@ test("AI chat header renders one consolidated model control", async () => {
   assert.doesNotMatch(source, /sm:grid-cols-\[minmax\(280px,1fr\)_280px\]/);
   assert.match(source, /aria-label="選擇 API 金鑰與模型"/);
 });
+
+test("Gemini chat defaults to Flash-Lite and never falls back across models", async () => {
+  const source = await read("../src/components/api-management/ApiChatConsole.tsx");
+
+  assert.match(source, /GEMINI_DEFAULT_MODEL/);
+  assert.match(source, /getGeminiFreeModelProfile/);
+  assert.match(source, /sameModel/);
+  assert.match(source, /metadata\.model\.trim\(\) === model\.trim\(\)/);
+  assert.match(source, /剩餘額：未同步 Google/);
+});
