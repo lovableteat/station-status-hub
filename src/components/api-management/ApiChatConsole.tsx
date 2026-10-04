@@ -75,7 +75,11 @@ import {
   insertClipboardText,
   splitContentByAttachmentMarkers,
 } from "./apiChatPromptHelpers";
-import { ApiKeyRecord, normalizeApiKeyPermissions } from "./apiKeyHelpers";
+import {
+  ApiKeyModelTarget,
+  ApiKeyRecord,
+  normalizeApiKeyPermissions,
+} from "./apiKeyHelpers";
 import { MaintenanceCitationList } from "./MaintenanceCitationList";
 import { MaintenanceSourceSelector } from "./MaintenanceSourceSelector";
 import { MarkdownMessage } from "./MarkdownMessage";
@@ -99,9 +103,11 @@ import {
 
 interface ApiChatConsoleProps {
   selectedApiKey?: ApiKeyRecord | null;
+  selectedModel?: null | string;
   availableApiKeys?: ApiKeyRecord[];
-  selectedApiKeyId?: null | string;
-  onSelectApiKey?: (id: string) => void;
+  availableApiKeyTargets?: ApiKeyModelTarget[];
+  selectedApiKeyTargetId?: null | string;
+  onSelectApiKeyTarget?: (id: string) => void;
   mode?: "full" | "chat-only";
   maintenanceProjects?: MaintenanceProjectOption[];
   currentMaintenanceProjectId?: null | string;
@@ -890,9 +896,11 @@ function MessageCard({ message }: { message: ChatMessage }) {
 
 export function ApiChatConsole({
   selectedApiKey,
+  selectedModel,
   availableApiKeys = [],
-  selectedApiKeyId,
-  onSelectApiKey,
+  availableApiKeyTargets = [],
+  selectedApiKeyTargetId,
+  onSelectApiKeyTarget,
   mode = "full",
   maintenanceProjects = [],
   currentMaintenanceProjectId = null,
@@ -949,7 +957,7 @@ export function ApiChatConsole({
   const conversationRemoteReadyRef = useRef(false);
   const conversationSyncGenerationRef = useRef(0);
   const conversationSyncQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const previousSelectedApiKeyIdRef = useRef<null | string>(null);
+  const previousSelectedApiKeyTargetIdRef = useRef<null | string>(null);
   const { user } = useUser();
 
   useEffect(() => {
@@ -999,21 +1007,31 @@ export function ApiChatConsole({
       : null;
   }, [selectedApiKey]);
 
+  const findConversationTarget = useCallback(
+    (conversation: SavedConversation) =>
+      availableApiKeyTargets.find(
+        (target) =>
+          target.record.key_name === conversation.keyLabel &&
+          target.model === conversation.model,
+      ),
+    [availableApiKeyTargets],
+  );
+
   useEffect(() => {
     if (!selectedApiKey) return;
 
-    const nextApiKeyId = selectedApiKey.id;
-    const previousApiKeyId = previousSelectedApiKeyIdRef.current;
-    const switchedApiKey = Boolean(previousApiKeyId && previousApiKeyId !== nextApiKeyId);
+    const nextTargetId = selectedApiKeyTargetId ?? selectedApiKey.id;
+    const previousTargetId = previousSelectedApiKeyTargetIdRef.current;
+    const switchedTarget = Boolean(previousTargetId && previousTargetId !== nextTargetId);
 
     setApiKey(selectedApiKey.api_key);
     setProvider(selectedMetadata?.provider || "gemini");
-    setModel(selectedMetadata?.model || GEMINI_DEFAULT_MODEL);
+    setModel(selectedModel?.trim() || selectedMetadata?.model || GEMINI_DEFAULT_MODEL);
     setBaseUrl(selectedMetadata?.baseUrl || "https://generativelanguage.googleapis.com/v1beta");
 
-    previousSelectedApiKeyIdRef.current = nextApiKeyId;
+    previousSelectedApiKeyTargetIdRef.current = nextTargetId;
 
-    if (!switchedApiKey) return;
+    if (!switchedTarget || conversationHydratingRef.current) return;
 
     setMessages([]);
     setDraftMessage("");
@@ -1022,9 +1040,11 @@ export function ApiChatConsole({
     toast.success("已切換 API Key，已開始新對話");
   }, [
     selectedApiKey,
+    selectedApiKeyTargetId,
     selectedMetadata?.baseUrl,
     selectedMetadata?.model,
     selectedMetadata?.provider,
+    selectedModel,
   ]);
 
   useEffect(() => {
@@ -1155,6 +1175,14 @@ export function ApiChatConsole({
     );
 
     if (activeConversation) {
+      const historicalTarget = findConversationTarget(activeConversation);
+      if (historicalTarget) {
+        if (historicalTarget.id !== selectedApiKeyTargetId) {
+          conversationHydratingRef.current = true;
+        }
+        onSelectApiKeyTarget?.(historicalTarget.id);
+        setModel(activeConversation.model);
+      }
       conversationHydratingRef.current = true;
       setMessages(activeConversation.messages);
       setDraftMessage(activeConversation.draftMessage);
@@ -1162,7 +1190,14 @@ export function ApiChatConsole({
     }
 
     hasHydratedConversationRef.current = true;
-  }, [conversationsLoaded, isChatOnly, savedConversations]);
+  }, [
+    conversationsLoaded,
+    findConversationTarget,
+    isChatOnly,
+    onSelectApiKeyTarget,
+    savedConversations,
+    selectedApiKeyTargetId,
+  ]);
 
   useEffect(() => {
     const ownerId = user?.userId;
@@ -1232,10 +1267,11 @@ export function ApiChatConsole({
     const manualTarget: ProviderRequestTarget | null =
       apiKey.trim() && provider.trim() && model.trim() && baseUrl.trim()
         ? {
-            id: selectedApiKey?.id ?? "manual-current",
+            id: selectedApiKeyTargetId ?? selectedApiKey?.id ?? "manual-current",
             apiKey: apiKey.trim(),
             baseUrl: baseUrl.trim(),
-            cooldownUntil: keyCooldowns[selectedApiKey?.id ?? "manual-current"] ?? 0,
+            cooldownUntil:
+              keyCooldowns[selectedApiKeyTargetId ?? selectedApiKey?.id ?? "manual-current"] ?? 0,
             isSelected: true,
             keyLabel: activeKeyLabel,
             lastUsedAt: selectedApiKey?.last_used_at ?? null,
@@ -1245,12 +1281,13 @@ export function ApiChatConsole({
           }
         : null;
 
-    const knownTargets = availableApiKeys
-      .map((record) => {
+    const knownTargets = availableApiKeyTargets
+      .map((target) => {
+        const record = target.record;
         const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
         const candidatePreset = resolveAiProviderPreset(metadata.provider);
         const sameProvider = candidatePreset.id === activeProviderPreset.id;
-        const sameModel = metadata.model.trim() === model.trim();
+        const sameModel = target.model === model.trim();
         const sameCustomRoute =
           candidatePreset.id !== "openai-compatible" ||
           (metadata.provider.trim().toLowerCase() === normalizedProvider &&
@@ -1261,21 +1298,21 @@ export function ApiChatConsole({
           !sameProvider ||
           !sameModel ||
           !sameCustomRoute ||
-          !metadata.model.trim() ||
+          !target.model.trim() ||
           !metadata.baseUrl.trim()
         ) {
           return null;
         }
 
         return {
-          id: record.id,
+          id: target.id,
           apiKey: record.api_key.trim(),
           baseUrl: metadata.baseUrl.trim(),
-          cooldownUntil: keyCooldowns[record.id] ?? 0,
-          isSelected: record.id === (selectedApiKeyId ?? selectedApiKey?.id ?? null),
+          cooldownUntil: keyCooldowns[target.id] ?? 0,
+          isSelected: target.id === selectedApiKeyTargetId,
           keyLabel: record.key_name,
           lastUsedAt: record.last_used_at,
-          model: metadata.model.trim(),
+          model: target.model,
           provider: metadata.provider.trim(),
           usageCount: record.usage_count ?? 0,
         } satisfies ProviderRequestTarget;
@@ -1315,7 +1352,7 @@ export function ApiChatConsole({
     activeProviderPreset.id,
     activeKeyLabel,
     apiKey,
-    availableApiKeys,
+    availableApiKeyTargets,
     baseUrl,
     keyCooldowns,
     model,
@@ -1324,7 +1361,7 @@ export function ApiChatConsole({
     selectedApiKey?.id,
     selectedApiKey?.last_used_at,
     selectedApiKey?.usage_count,
-    selectedApiKeyId,
+    selectedApiKeyTargetId,
   ]);
 
   const canSend = Boolean(
@@ -1875,6 +1912,14 @@ export function ApiChatConsole({
   };
 
   const restoreConversation = (conversation: SavedConversation) => {
+    const historicalTarget = findConversationTarget(conversation);
+    if (historicalTarget) {
+      if (historicalTarget.id !== selectedApiKeyTargetId) {
+        conversationHydratingRef.current = true;
+      }
+      onSelectApiKeyTarget?.(historicalTarget.id);
+      setModel(conversation.model);
+    }
     setMessages(conversation.messages);
     setDraftMessage(conversation.draftMessage);
     setConnectionState(null);
@@ -2659,8 +2704,8 @@ export function ApiChatConsole({
           {isChatOnly ? (
             <div className="flex items-center gap-2">
               <Select
-                value={selectedApiKeyId ?? selectedApiKey?.id ?? ""}
-                onValueChange={(value) => onSelectApiKey?.(value)}
+                value={selectedApiKeyTargetId ?? ""}
+                onValueChange={(value) => onSelectApiKeyTarget?.(value)}
               >
                 <SelectTrigger
                   aria-label="選擇 API 金鑰與模型"
@@ -2669,11 +2714,11 @@ export function ApiChatConsole({
                   <SelectValue placeholder="選擇模型" />
                 </SelectTrigger>
                 <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
-                  {availableApiKeys.map((apiKey) => {
-                    const metadata = normalizeApiKeyPermissions(apiKey.permissions).metadata;
+                  {availableApiKeyTargets.map((target) => {
+                    const metadata = normalizeApiKeyPermissions(target.record.permissions).metadata;
                     return (
-                      <SelectItem key={apiKey.id} value={apiKey.id}>
-                        {apiKey.key_name} · {metadata.provider || "-"} / {metadata.model || "-"}
+                      <SelectItem key={target.id} value={target.id}>
+                        {target.record.key_name} · {metadata.provider || "-"} / {target.model}
                       </SelectItem>
                     );
                   })}
@@ -2704,7 +2749,7 @@ export function ApiChatConsole({
           )}
           {activeGeminiProfile ? (
             <p className="mt-1 text-right text-[11px] leading-4 text-slate-400">
-              {formatGeminiQuotaSummary(activeGeminiProfile)} · 剩餘額：未同步 Google
+              {formatGeminiQuotaSummary(activeGeminiProfile)} · Google 專案共享配額快照
             </p>
           ) : null}
         </div>
@@ -3227,8 +3272,8 @@ export function ApiChatConsole({
                 <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-cyan-300 px-1 text-[9px] font-black leading-4 tabular-nums text-slate-950">{savedConversations.length}</span>
               </Button>
               <Select
-                value={selectedApiKeyId ?? selectedApiKey?.id ?? ""}
-                onValueChange={(value) => onSelectApiKey?.(value)}
+                value={selectedApiKeyTargetId ?? ""}
+                onValueChange={(value) => onSelectApiKeyTarget?.(value)}
               >
                 <SelectTrigger
                   aria-label="選擇 API 金鑰與模型"
@@ -3237,11 +3282,11 @@ export function ApiChatConsole({
                   <SelectValue placeholder="選擇模型" />
                 </SelectTrigger>
                 <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
-                  {availableApiKeys.map((apiKey) => {
-                    const metadata = normalizeApiKeyPermissions(apiKey.permissions).metadata;
+                  {availableApiKeyTargets.map((target) => {
+                    const metadata = normalizeApiKeyPermissions(target.record.permissions).metadata;
                     return (
-                      <SelectItem key={apiKey.id} value={apiKey.id}>
-                        {apiKey.key_name} · {metadata.provider || "-"} / {metadata.model || "-"}
+                      <SelectItem key={target.id} value={target.id}>
+                        {target.record.key_name} · {metadata.provider || "-"} / {target.model}
                       </SelectItem>
                     );
                   })}
