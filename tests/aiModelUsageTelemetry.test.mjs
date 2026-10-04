@@ -6,7 +6,7 @@ import ts from "typescript";
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
 test("usage migration stores one idempotent event per real attempt behind RPC-only access", async () => {
-  const sql = await read("../supabase/migrations/20261004173000_add_ai_model_usage_telemetry.sql");
+  const sql = await read("../supabase/migrations/20261004174305_add_ai_model_usage_telemetry.sql");
 
   assert.match(sql, /create table workspace\.ai_model_usage_events/i);
   assert.match(sql, /event_id uuid primary key/i);
@@ -34,7 +34,7 @@ test("usage migration stores one idempotent event per real attempt behind RPC-on
 });
 
 test("usage summary uses rolling minute and Google Pacific day without exposing actors", async () => {
-  const sql = await read("../supabase/migrations/20261004173000_add_ai_model_usage_telemetry.sql");
+  const sql = await read("../supabase/migrations/20261004174305_add_ai_model_usage_telemetry.sql");
 
   assert.match(sql, /clock_timestamp\(\) - interval '60 seconds'/i);
   assert.match(sql, /America\/Los_Angeles/i);
@@ -45,6 +45,12 @@ test("usage summary uses rolling minute and Google Pacific day without exposing 
   assert.doesNotMatch(sql, /jsonb_build_object\([\s\S]*?'actor_user_id'/i);
   assert.match(sql, /revoke all on function workspace\.get_ai_model_usage_summary/i);
   assert.match(sql, /grant execute on function workspace\.get_ai_model_usage_summary[^;]+to authenticated, service_role/i);
+});
+
+test("usage event actor foreign key has a covering index", async () => {
+  const sql = await read("../supabase/migrations/20261004174455_index_ai_model_usage_actor.sql");
+
+  assert.match(sql, /on workspace\.ai_model_usage_events \(actor_user_id\)/i);
 });
 
 test("both chat and API tests use the same tracked fetch without sending a secret to telemetry", async () => {
@@ -115,11 +121,11 @@ test("Gemini operation cards show observed usage, tracking start, and project-sc
 
   assert.match(source, /get_ai_model_usage_summary/);
   assert.match(source, /本系統已觀測/);
-  assert.match(source, /估算可用範圍/);
+  assert.match(source, /依本系統紀錄估算尚可使用/);
   assert.match(source, /追蹤起點/);
   assert.match(source, /不含其他網站或 API Key/);
-  assert.match(source, /近 60 秒滾動窗口/);
-  assert.match(source, /America\/Los_Angeles 午夜重設/);
-  assert.match(source, /輸入 TPM 未由本系統可靠計量/);
+  assert.match(source, /每分鐘統計/);
+  assert.match(source, /美國太平洋時間午夜重設/);
+  assert.match(source, /每分鐘輸入 token 數尚無法由本系統可靠計量/);
   assert.doesNotMatch(source, /本系統用量：尚未開始按模型統計/);
 });

@@ -23,7 +23,11 @@ test("API key overview exposes three operational Gemini targets with their share
   assert.match(source, /onTestKey\?\.\(target\.record, target\.model\)/);
   assert.match(source, /選用並前往測試/);
   assert.match(source, /本系統已觀測/);
-  assert.match(source, /估算可用範圍/);
+  assert.match(source, /依本系統紀錄估算尚可使用/);
+  assert.match(source, /同一 Google 專案共用/);
+  assert.match(source, /上限資料確認於 2026-10-04/);
+  assert.doesNotMatch(source, /配額快照/);
+  assert.doesNotMatch(source, /RPM|RPD|輸入 TPM/);
   assert.doesNotMatch(source, /剩餘額：未同步 Google/);
 
   assert.match(source, /maskApiKey\(apiKey\.api_key, visibleKeys\.has\(apiKey\.id\)\)/);
