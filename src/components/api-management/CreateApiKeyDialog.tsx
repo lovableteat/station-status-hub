@@ -645,7 +645,7 @@ export function CreateApiKeyDialog({
               {activeGeminiProfile ? (
                 <div className="rounded-2xl border border-amber-300/20 bg-amber-400/8 px-4 py-3 text-xs leading-5 text-slate-300">
                   <p className="font-bold text-amber-100">
-                    {formatGeminiQuotaSummary(activeGeminiProfile)} · 剩餘額：未同步 Google
+                    {formatGeminiQuotaSummary(activeGeminiProfile)} · Google 專案共享配額快照；本系統模型別用量尚未開始統計
                   </p>
                   <p className="mt-1">
                     來源：2026-10-04 Google AI Studio 免費專案截圖。配額按專案共用，不同 API Key 可能共用同一專案；RPD 於太平洋時間午夜重設，實際剩餘請以 AI Studio 為準。
