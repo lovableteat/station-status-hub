@@ -20,13 +20,48 @@ const providerModule = await import(
 
 const {
   AI_PROVIDER_PRESETS,
+  GEMINI_DEFAULT_MODEL,
+  GEMINI_FREE_MODEL_PROFILES,
   buildProviderChatRequest,
   buildProviderModelRequest,
+  getGeminiFreeModelOptions,
+  getGeminiFreeModelProfile,
   parseProviderChatResponse,
   parseProviderModels,
   redactSensitiveText,
   resolveAiProviderPreset,
 } = providerModule;
+
+test("Gemini free-project policy uses Flash-Lite by default and records screenshot limits", () => {
+  assert.equal(GEMINI_DEFAULT_MODEL, "gemini-3.5-flash-lite");
+  assert.equal(resolveAiProviderPreset("gemini").defaultModel, GEMINI_DEFAULT_MODEL);
+  assert.deepEqual(
+    GEMINI_FREE_MODEL_PROFILES.map(({ id, rpm, inputTpm, rpd }) => ({
+      id,
+      rpm,
+      inputTpm,
+      rpd,
+    })),
+    [
+      { id: "gemini-3.5-flash-lite", rpm: 15, inputTpm: 250_000, rpd: 500 },
+      { id: "gemini-3.8-flash", rpm: 5, inputTpm: 250_000, rpd: 20 },
+      { id: "gemini-2.5-flash", rpm: 5, inputTpm: 250_000, rpd: 20 },
+    ],
+  );
+  assert.equal(getGeminiFreeModelProfile(" gemini-3.8-flash ").sourceDate, "2026-10-04");
+});
+
+test("Gemini free-project options keep only approved discovered models in policy order", () => {
+  assert.deepEqual(
+    getGeminiFreeModelOptions([
+      "gemini-2.5-pro",
+      "gemini-2.5-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.8-flash",
+    ]).map((profile) => profile.id),
+    ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-2.5-flash"],
+  );
+});
 
 test("catalog exposes simple defaults for four provider choices", () => {
   assert.deepEqual(
