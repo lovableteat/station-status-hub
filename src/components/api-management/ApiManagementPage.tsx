@@ -14,9 +14,11 @@ import type { ApiKeyRecord } from "./apiKeyHelpers";
 export function ApiManagementPage() {
   const [activeTab, setActiveTab] = useState("keys");
   const [selectedApiKey, setSelectedApiKey] = useState<ApiKeyRecord | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
-  const handleTestKey = (record: ApiKeyRecord) => {
+  const handleTestKey = (record: ApiKeyRecord, model: string) => {
     setSelectedApiKey(record);
+    setSelectedModel(model);
     setActiveTab("preview");
   };
 
@@ -78,7 +80,10 @@ export function ApiManagementPage() {
         </TabsContent>
 
         <TabsContent value="preview" className="mt-0">
-          <ApiDataPreview selectedApiKey={selectedApiKey} />
+          <ApiDataPreview
+            selectedApiKey={selectedApiKey}
+            selectedModel={selectedModel}
+          />
         </TabsContent>
 
         <TabsContent value="docs" className="mt-0">

@@ -39,6 +39,7 @@ const previewEndpoints = API_ENDPOINTS.filter((endpoint) => endpoint.previewable
 
 interface ApiDataPreviewProps {
   selectedApiKey?: ApiKeyRecord | null;
+  selectedModel?: null | string;
 }
 
 interface ProviderTestResult {
@@ -113,7 +114,7 @@ function ProviderResultBanner({
   );
 }
 
-export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
+export function ApiDataPreview({ selectedApiKey, selectedModel }: ApiDataPreviewProps) {
   const [apiKey, setApiKey] = useState("");
   const [selectedEndpointKey, setSelectedEndpointKey] = useState(
     previewEndpoints[0]?.key ?? "stats",
@@ -130,10 +131,14 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
     useState<ProviderTestResult | null>(null);
 
   const selectedMetadata = useMemo(() => {
-    return selectedApiKey
-      ? normalizeApiKeyPermissions(selectedApiKey.permissions).metadata
-      : null;
-  }, [selectedApiKey]);
+    if (!selectedApiKey) return null;
+
+    const metadata = normalizeApiKeyPermissions(selectedApiKey.permissions).metadata;
+    return {
+      ...metadata,
+      model: selectedModel?.trim() || metadata.model,
+    };
+  }, [selectedApiKey, selectedModel]);
 
   const hasProviderConfiguration = useMemo(() => {
     return (
@@ -150,7 +155,7 @@ export function ApiDataPreview({ selectedApiKey }: ApiDataPreviewProps) {
     setActiveRequest(null);
     setProviderResponse("");
     setProviderTestResult(null);
-  }, [selectedApiKey]);
+  }, [selectedApiKey, selectedModel]);
 
   const selectedEndpoint = useMemo(
     () =>

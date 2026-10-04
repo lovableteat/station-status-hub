@@ -44,3 +44,70 @@ test("editing an API key preserves unknown permissions and metadata", () => {
   assert.equal(result.metadata.provider, "openai");
   assert.equal(result.metadata.model, "gpt-5.2");
 });
+
+test("one Gemini key expands into independent model targets without copying the record", () => {
+  const record = {
+    id: "key-1",
+    key_name: "Gemini API Key",
+    api_key: "secret-value",
+    description: null,
+    permissions: {
+      metadata: {
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+        editable: true,
+      },
+    },
+    is_active: true,
+    expires_at: null,
+    last_used_at: null,
+    usage_count: 298,
+    created_at: "2026-10-04T00:00:00.000Z",
+  };
+  const models = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash",
+    "gemini-2.5-flash",
+  ];
+
+  const targets = helpers.buildApiKeyModelTargets([record], models);
+
+  assert.deepEqual(targets.map((target) => target.model), models);
+  assert.deepEqual(
+    targets.map((target) => target.id),
+    models.map((model) => `key-1::${model}`),
+  );
+  targets.forEach((target) => assert.strictEqual(target.record, record));
+});
+
+test("non-Gemini keys keep one stored-model target", () => {
+  const record = {
+    id: "key-openai",
+    key_name: "OpenAI",
+    api_key: "secret-value",
+    description: null,
+    permissions: {
+      metadata: {
+        provider: "openai",
+        model: "gpt-5.2",
+        baseUrl: "https://api.openai.com/v1",
+        editable: true,
+      },
+    },
+    is_active: true,
+    expires_at: null,
+    last_used_at: null,
+    usage_count: 1,
+    created_at: "2026-10-04T00:00:00.000Z",
+  };
+
+  const targets = helpers.buildApiKeyModelTargets(
+    [record],
+    ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-2.5-flash"],
+  );
+
+  assert.equal(targets.length, 1);
+  assert.equal(targets[0].model, "gpt-5.2");
+  assert.strictEqual(targets[0].record, record);
+});
