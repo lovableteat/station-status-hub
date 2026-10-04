@@ -611,9 +611,95 @@
   background: #061720;
 }
 
+.admin-api-gemini-policy {
+  border-color: rgb(103 232 249 / 34%);
+  background: #081c29;
+}
+
+.admin-api-gemini-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+}
+
+.admin-api-gemini-remaining {
+  flex: 0 0 auto;
+  border: 1px solid rgb(251 191 36 / 42%);
+  border-radius: 999px;
+  padding: 7px 11px;
+  color: #fde68a;
+  background: rgb(217 119 6 / 13%);
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.admin-api-gemini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+}
+
+.admin-api-gemini-model-card {
+  min-width: 0;
+  border: 1px solid rgb(42 82 111 / 92%);
+  border-radius: 11px;
+  padding: 14px;
+  background: #071522;
+}
+
+.admin-api-gemini-model-card.is-current {
+  border-color: rgb(94 234 212 / 58%);
+  background: #082128;
+  box-shadow: inset 3px 0 0 rgb(94 234 212 / 82%);
+}
+
+.admin-api-gemini-selectable,
+.admin-api-gemini-manual {
+  border-color: rgb(125 211 252 / 42%);
+  color: #bae6fd;
+  background: rgb(14 165 233 / 12%);
+}
+
+.admin-api-gemini-default,
+.admin-api-gemini-current {
+  border-color: rgb(94 234 212 / 48%);
+  color: #99f6e4;
+  background: rgb(13 148 136 / 15%);
+}
+
+.admin-api-gemini-key-names,
+.admin-api-gemini-note {
+  color: #9fb8c2;
+}
+
+.admin-api-model-label {
+  display: inline-flex;
+  margin-bottom: 6px;
+  border: 1px solid rgb(94 234 212 / 42%);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: #99f6e4;
+  background: rgb(13 148 136 / 14%);
+  font-size: 0.65rem;
+  font-weight: 850;
+}
+
 .admin-api-table-header-row {
   border-color: rgb(103 232 249 / 24%);
   background: #102838;
+}
+
+@media (max-width: 639px) {
+  .admin-api-gemini-header {
+    flex-direction: column;
+  }
+
+  .admin-api-gemini-remaining {
+    white-space: normal;
+  }
 }
 
 .admin-api-table-header-row th {
