@@ -53,6 +53,15 @@ test("usage event actor foreign key has a covering index", async () => {
   assert.match(sql, /on workspace\.ai_model_usage_events \(actor_user_id\)/i);
 });
 
+test("tracking coverage begins with the first recorded provider attempt", async () => {
+  const sql = await read("../supabase/migrations/20261004175822_start_ai_usage_coverage_on_first_attempt.sql");
+
+  assert.match(sql, /alter column tracking_started_at drop not null/i);
+  assert.match(sql, /select min\(events\.started_at\)/i);
+  assert.match(sql, /coalesce\(state\.tracking_started_at, new\.started_at\)/i);
+  assert.match(sql, /after insert on workspace\.ai_model_usage_events/i);
+});
+
 test("both chat and API tests use the same tracked fetch without sending a secret to telemetry", async () => {
   const [telemetry, chat, preview] = await Promise.all([
     read("../src/components/api-management/aiUsageTelemetry.ts"),
@@ -122,6 +131,7 @@ test("Gemini operation cards show observed usage, tracking start, and project-sc
   assert.match(source, /get_ai_model_usage_summary/);
   assert.match(source, /本系統已觀測/);
   assert.match(source, /依本系統紀錄估算尚可使用/);
+  assert.match(source, /等待新版首次呼叫，尚無可估算資料/);
   assert.match(source, /追蹤起點/);
   assert.match(source, /不含其他網站或 API Key/);
   assert.match(source, /每分鐘統計/);

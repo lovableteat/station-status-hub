@@ -24,6 +24,7 @@ test("API key overview exposes three operational Gemini targets with their share
   assert.match(source, /選用並前往測試/);
   assert.match(source, /本系統已觀測/);
   assert.match(source, /依本系統紀錄估算尚可使用/);
+  assert.match(source, /等待新版首次呼叫，尚無可估算資料/);
   assert.match(source, /同一 Google 專案共用/);
   assert.match(source, /上限資料確認於 2026-10-04/);
   assert.doesNotMatch(source, /配額快照/);
