@@ -54,7 +54,10 @@ import { cn } from "@/lib/utils";
 import { semanticJson } from "@/lib/semanticJson";
 
 import {
+  GEMINI_DEFAULT_MODEL,
   buildProviderChatRequest,
+  formatGeminiQuotaSummary,
+  getGeminiFreeModelProfile,
   getProviderErrorMessage,
   parseProviderChatResponse,
   redactSensitiveText,
@@ -896,7 +899,7 @@ export function ApiChatConsole({
 }: ApiChatConsoleProps) {
   const [apiKey, setApiKey] = useState("");
   const [provider, setProvider] = useState("gemini");
-  const [model, setModel] = useState("gemini-2.5-flash");
+  const [model, setModel] = useState(GEMINI_DEFAULT_MODEL);
   const [baseUrl, setBaseUrl] = useState("https://generativelanguage.googleapis.com/v1beta");
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_QUERY_SYSTEM_PROMPT);
   const [draftMessage, setDraftMessage] = useState("");
@@ -1005,7 +1008,7 @@ export function ApiChatConsole({
 
     setApiKey(selectedApiKey.api_key);
     setProvider(selectedMetadata?.provider || "gemini");
-    setModel(selectedMetadata?.model || "gemini-2.5-flash");
+    setModel(selectedMetadata?.model || GEMINI_DEFAULT_MODEL);
     setBaseUrl(selectedMetadata?.baseUrl || "https://generativelanguage.googleapis.com/v1beta");
 
     previousSelectedApiKeyIdRef.current = nextApiKeyId;
@@ -1208,6 +1211,10 @@ export function ApiChatConsole({
 
   const normalizedProvider = provider.trim().toLowerCase();
   const activeProviderPreset = resolveAiProviderPreset(normalizedProvider);
+  const activeGeminiProfile =
+    activeProviderPreset.id === "gemini"
+      ? getGeminiFreeModelProfile(model)
+      : undefined;
   const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 AI Key";
 
   const requestUrl = useMemo(() => {
@@ -1243,6 +1250,7 @@ export function ApiChatConsole({
         const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
         const candidatePreset = resolveAiProviderPreset(metadata.provider);
         const sameProvider = candidatePreset.id === activeProviderPreset.id;
+        const sameModel = metadata.model.trim() === model.trim();
         const sameCustomRoute =
           candidatePreset.id !== "openai-compatible" ||
           (metadata.provider.trim().toLowerCase() === normalizedProvider &&
@@ -1251,6 +1259,7 @@ export function ApiChatConsole({
         if (
           !record.api_key.trim() ||
           !sameProvider ||
+          !sameModel ||
           !sameCustomRoute ||
           !metadata.model.trim() ||
           !metadata.baseUrl.trim()
@@ -2693,6 +2702,11 @@ export function ApiChatConsole({
               ) : null}
             </div>
           )}
+          {activeGeminiProfile ? (
+            <p className="mt-1 text-right text-[11px] leading-4 text-slate-400">
+              {formatGeminiQuotaSummary(activeGeminiProfile)} · 剩餘額：未同步 Google
+            </p>
+          ) : null}
         </div>
       </div>
 
