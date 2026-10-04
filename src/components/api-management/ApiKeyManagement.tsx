@@ -394,9 +394,15 @@ export function ApiKeyManagement({ onTestKey }: ApiKeyManagementProps) {
                       <p className="font-bold text-cyan-100">
                         本系統已觀測：近 60 秒 {usage?.minuteAttempts ?? 0} 次；本太平洋日 {usage?.pacificDayAttempts ?? 0} 次
                       </p>
-                      <p className="mt-1 text-amber-200">
-                        依本系統紀錄估算尚可使用：每分鐘 {rpmRange.min}–{rpmRange.max} 次；今天 {rpdRange.min}–{rpdRange.max} 次
-                      </p>
+                      {usageSummary.trackingStartedAt ? (
+                        <p className="mt-1 text-amber-200">
+                          依本系統紀錄估算尚可使用：每分鐘 {rpmRange.min}–{rpmRange.max} 次；今天 {rpdRange.min}–{rpdRange.max} 次
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-amber-200">
+                          等待新版首次呼叫，尚無可估算資料
+                        </p>
+                      )}
                       <p className="mt-1 text-slate-300">
                         成功 {usage?.succeededAttempts ?? 0}、失敗 {usage?.failedAttempts ?? 0}、429 {usage?.rateLimitedAttempts ?? 0}、逾時 {usage?.timeoutAttempts ?? 0}、未完成 {usage?.inFlightAttempts ?? 0}
                       </p>

@@ -26,6 +26,13 @@ const actorIndexMigration = await fs.readFile(
   ),
   "utf8",
 );
+const coverageMigration = await fs.readFile(
+  new URL(
+    "../supabase/migrations/20261004175822_start_ai_usage_coverage_on_first_attempt.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const query = async (sql, params = []) => (await db.query(sql, params)).rows;
 let checks = 0;
@@ -106,7 +113,17 @@ try {
 
   await db.exec(migration);
   await db.exec(actorIndexMigration);
+  await db.exec(coverageMigration);
   await actor(1);
+
+  const beforeFirstAttempt = (
+    await query("select workspace.get_ai_model_usage_summary(array[$1]::uuid[]) as result", [id(100)])
+  )[0].result;
+  check(
+    beforeFirstAttempt.tracking_started_at,
+    null,
+    "tracking coverage is pending before the first provider attempt",
+  );
 
   await rejects(
     () => query("select count(*) from workspace.ai_model_usage_events"),
