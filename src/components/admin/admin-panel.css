@@ -1725,3 +1725,26 @@
     transition: none;
   }
 }
+
+/* Workspace chrome shares the platform foundation; status accents remain semantic. */
+.admin-workspace {
+  --admin-accent-blue: hsl(var(--primary));
+  --admin-accent-teal: hsl(var(--platform-teal));
+  --admin-accent-green: hsl(var(--success));
+  --admin-accent-amber: hsl(var(--warning));
+  --admin-accent-violet: hsl(var(--platform-violet));
+  --admin-accent-rose: hsl(var(--destructive));
+  background: hsl(var(--background)); color: hsl(var(--foreground));
+}
+.admin-workspace :is(.admin-sidebar, .admin-command, .admin-user-section, .admin-user-hero, .admin-account-card, .admin-api-key-card, [data-admin-zone='filters'], [data-admin-zone='accounts']) {
+  background: hsl(var(--card)); border-color: hsl(var(--border)); border-radius: var(--app-radius-card); box-shadow: none;
+}
+.admin-workspace :is(.admin-sidebar-heading, .admin-api-key-header) { background: hsl(var(--card)); border-color: hsl(var(--border)); }
+.admin-workspace :is(.admin-user-hero, .admin-api-key-header)::after { display: none; }
+.admin-workspace .admin-account-card:hover { background: hsl(var(--secondary)); border-color: hsl(var(--input)); }
+.admin-workspace .admin-sidebar-item { color: hsl(var(--muted-foreground)); border-radius: var(--app-radius-control); }
+.admin-workspace .admin-sidebar nav .admin-sidebar-item.is-active { color: hsl(var(--foreground)); background: hsl(var(--secondary)); border-color: hsl(var(--border)); }
+.admin-workspace .admin-sidebar-item:hover { background: hsl(var(--accent)); border-color: hsl(var(--border)); }
+.admin-workspace :is(.admin-primary-action, .admin-primary-action:hover) { color: hsl(var(--primary-foreground)); background: hsl(var(--primary)); border-color: transparent; box-shadow: none; }
+.admin-workspace .admin-section-icon { background: hsl(var(--secondary)); color: hsl(var(--primary)); border-color: hsl(var(--border)); box-shadow: none; }
+.admin-shell, .admin-content { gap: 1rem; }

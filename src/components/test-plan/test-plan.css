@@ -1,7 +1,7 @@
 .test-plan-workspace {
-  --test-plan-border: #244964;
-  --test-plan-panel: #071522;
-  --test-plan-panel-soft: #0c2336;
+  --test-plan-border: hsl(var(--border));
+  --test-plan-panel: hsl(var(--card));
+  --test-plan-panel-soft: hsl(var(--secondary));
   display: flex;
   height: 100%;
   min-height: 100%;
@@ -1823,3 +1823,15 @@
     transition: none;
   }
 }
+
+/* File management uses the same neutral surface and control families. */
+.test-plan-workspace { background: hsl(var(--background)); color: hsl(var(--foreground)); gap: 1rem; }
+.test-plan-workspace :is(.test-plan-header, .test-plan-overview-card, .test-plan-space-rail, .test-plan-main, .test-plan-inspector, .test-plan-entry-card) {
+  background: hsl(var(--card)); border-color: hsl(var(--border)); border-radius: var(--app-radius-card); box-shadow: none;
+}
+.test-plan-workspace :is(.test-plan-header p, .test-plan-overview-muted, .test-plan-inspector-heading span, .test-plan-entry-card small) { color: hsl(var(--muted-foreground)); }
+.test-plan-workspace :is(.test-plan-title-icon, .test-plan-empty-icon) { color: hsl(var(--primary)); background: hsl(var(--secondary)); border-color: hsl(var(--border)); box-shadow: none; }
+.test-plan-workspace .test-plan-folder-tree-row.is-active { background: hsl(var(--primary) / .12); border-color: hsl(var(--primary) / .4); }
+.test-plan-workspace .test-plan-entry-card.is-selected { border-color: hsl(var(--primary)); background: hsl(var(--secondary)); }
+.test-plan-sheet-dialog { background: hsl(var(--popover)); color: hsl(var(--foreground)); border-color: hsl(var(--border)); border-radius: var(--app-radius-dialog); }
+.test-plan-sheet-heading { background: hsl(var(--popover)); border-color: hsl(var(--border)); }

@@ -406,7 +406,7 @@ export function ProjectScopeBar() {
             <span className="hidden text-xs sm:inline sm:text-sm">專案中心</span>
           </Button>
         </SheetTrigger>
-        <SheetContent className="maintenance-project-sheet w-full overflow-hidden border-[#2a526f] bg-[#071522] p-0 sm:max-w-[720px]">
+        <SheetContent className="maintenance-project-sheet w-full gap-0 overflow-hidden border-[#2a526f] bg-[#071522] p-0 sm:max-w-[720px]">
           <SheetHeader className="border-b border-[#2a526f]/70 px-5 py-4 text-left">
             <div className="flex items-center justify-between gap-4 pr-8">
               <div>

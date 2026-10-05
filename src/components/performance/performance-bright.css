@@ -1706,3 +1706,61 @@ details[open] > summary > .rd2-disclosure-chevron { transform: rotate(180deg); }
   .performance-workspace .rd2-result-table-scroll table[data-empty="false"] td { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; text-align: left; padding: 0; border: 0; }
   .performance-workspace .rd2-result-table-scroll td[data-label]::before { content: attr(data-label); color: #b7b7c2; font-size: 12px; font-weight: 400; }
 }
+
+/* Performance surfaces share the platform's radius and grayscale hierarchy.
+   Semantic category and supervisor colors remain separate from action blue. */
+.performance-workspace.rd2-workspace, .rd2-workspace.rd2-record-dialog {
+  --rd2-bg: hsl(var(--background)); --rd2-panel: hsl(var(--card));
+  --rd2-panel-soft: hsl(var(--secondary)); --rd2-ink: hsl(var(--foreground));
+  --rd2-muted: hsl(var(--muted-foreground)); --rd2-border: hsl(var(--border));
+  --rd2-border-soft: hsl(var(--border)); --rd2-radius: var(--app-radius-card);
+  --rd2-accent: hsl(var(--primary)); --rd2-sidebar: hsl(var(--sidebar-background));
+  background: var(--rd2-bg); gap: 1.5rem; font-family: inherit;
+}
+.rd2-workspace.rd2-bright .performance-content { border: 0; border-radius: var(--app-radius-card); padding: 1.75rem; font-size: .9375rem; background: var(--rd2-bg); }
+.rd2-workspace.rd2-bright .rd2-sidebar { border-color: var(--rd2-border); border-radius: var(--app-radius-card); background: var(--rd2-panel); padding: 1rem; }
+.rd2-workspace.rd2-bright .rd2-sidebar nav { gap: .375rem; }
+.rd2-workspace.rd2-bright .rd2-sidebar nav button { border-radius: var(--app-radius-control); min-height: 44px; padding: .75rem; color: var(--rd2-muted); background: transparent; box-shadow: none; }
+.rd2-workspace.rd2-bright .rd2-sidebar nav button[aria-current='page'] { color: var(--rd2-ink); background: var(--rd2-panel-soft); }
+.rd2-workspace.rd2-bright :is(.rd2-card, .rd2-category, .rd2-section-report, .rd2-work-purpose > div, .rd2-department-progress-card, .rd2-department-result-card) { border-color: var(--rd2-border); border-radius: var(--app-radius-card); background: var(--rd2-panel); box-shadow: none; }
+.rd2-workspace.rd2-bright .rd2-card { padding: 1.5rem; }
+.rd2-workspace.rd2-bright :is(.rd2-category-grid, .rd2-section-report-list, .rd2-work-purpose) { gap: var(--app-space-section); }
+.rd2-workspace.rd2-bright :is(.rd2-entry-list, .rd2-entry-content) { gap: 1.25rem; }
+.rd2-workspace.rd2-bright .rd2-entry-list > li { border: 1px solid var(--rd2-border); border-radius: var(--app-radius-card); padding: 1.25rem; background: var(--rd2-panel); box-shadow: none; }
+.rd2-workspace.rd2-bright .rd2-category-heading { background: transparent; border-bottom: 1px solid var(--rd2-border); border-radius: 0; padding-block: 1.125rem; }
+.rd2-workspace.rd2-bright .rd2-category[data-category] { border-top: 3px solid var(--card-accent); padding: 1.25rem; }
+.rd2-workspace.rd2-bright .rd2-category-heading { margin-inline: -1.25rem; padding-inline: 1.25rem; }
+.rd2-workspace.rd2-bright .rd2-work-purpose > div { border-top: 1px solid var(--rd2-border); }
+.rd2-workspace.rd2-bright .performance-content .app-button { border-radius: var(--app-radius-control); min-height: 40px; font-weight: 600; }
+.rd2-workspace.rd2-bright .performance-content .app-button[data-variant='default'] { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); border-color: transparent; }
+.rd2-workspace.rd2-bright .performance-content .app-button[data-variant='outline'], .rd2-workspace.rd2-bright .performance-content .app-button[data-variant='secondary'] { background: var(--rd2-panel-soft); color: var(--rd2-ink); border-color: var(--rd2-border); }
+.rd2-workspace.rd2-bright .performance-content .app-button[data-variant='ghost'] { background: transparent; color: var(--rd2-muted); border-color: transparent; }
+.rd2-workspace.rd2-bright .performance-content .app-button[data-variant='destructive'] { background: hsl(var(--destructive)); color: hsl(var(--destructive-foreground)); border-color: transparent; }
+.rd2-workspace.rd2-bright .performance-content .app-button:hover { filter: brightness(1.08); }
+.rd2-workspace.rd2-bright .performance-content :is(input:not([type='checkbox']):not([type='radio']), textarea, select) { border-radius: var(--app-radius-control); border-color: var(--rd2-border); color: var(--rd2-ink); }
+.rd2-workspace.rd2-bright :is(.rd2-proof-links, .rd2-proof-link-form, .rd2-attachments, .rd2-attachment-list) { border-color: var(--rd2-border); border-radius: var(--app-radius-control); background: var(--rd2-panel-soft); }
+.rd2-workspace.rd2-bright :is(.rd2-page-header, .rd2-section-header, .rd2-section-heading) { gap: 1rem; margin-bottom: 1.5rem; }
+.rd2-workspace.rd2-bright :is(.rd2-page-header h1, .rd2-section-header h2, .rd2-section-heading h2) { color: var(--rd2-ink); font-size: 1.75rem; line-height: 1.3; letter-spacing: -.025em; }
+.rd2-workspace.rd2-bright :is(button, summary, input, textarea, select):focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+.rd2-workspace.rd2-bright .rd2-hint { color: var(--rd2-muted); font-size: .875rem; line-height: 1.65; }
+.rd2-workspace.rd2-bright .rd2-actions { gap: .75rem; }
+@media (max-width: 767px) {
+  .performance-workspace.rd2-workspace { padding: 1rem .75rem 1.5rem; gap: 1rem; }
+  .rd2-workspace.rd2-bright .performance-content { padding: .5rem 0 1.25rem; }
+  .rd2-workspace.rd2-bright .rd2-card { padding: 1rem; }
+  .rd2-workspace.rd2-bright :is(.rd2-category, .rd2-entry-list > li) { padding: 1rem; }
+  .rd2-workspace.rd2-bright .rd2-category-heading { margin-inline: -1rem; padding-inline: 1rem; }
+  .rd2-workspace.rd2-bright .performance-content :is(button, summary) { min-height: 44px; }
+  .rd2-workspace.rd2-bright :is(.rd2-page-header h1, .rd2-section-header h2, .rd2-section-heading h2) { font-size: 1.5rem; }
+  .rd2-workspace.rd2-bright .rd2-category-grid { gap: 1.25rem; }
+}
+@media (max-width: 1023px) {
+  .performance-workspace.rd2-workspace.rd2-bright { grid-template-columns: minmax(0, 1fr); }
+  .rd2-workspace.rd2-bright .rd2-sidebar { padding: .5rem; margin-bottom: 0; }
+  .rd2-workspace.rd2-bright .rd2-sidebar .rd2-brand { display: none; }
+  .rd2-workspace.rd2-bright .rd2-sidebar nav { flex-direction: row; overflow-x: auto; gap: .375rem; }
+  .rd2-workspace.rd2-bright .rd2-sidebar nav { scrollbar-width: none; }
+  .rd2-workspace.rd2-bright .rd2-sidebar nav::-webkit-scrollbar { display: none; }
+  .rd2-workspace.rd2-bright .rd2-sidebar nav button { flex: 0 0 auto; white-space: nowrap; }
+  .rd2-workspace.rd2-bright .performance-content { padding: 1rem 0 1.25rem; }
+}
