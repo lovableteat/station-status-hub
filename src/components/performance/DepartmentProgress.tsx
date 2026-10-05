@@ -29,7 +29,7 @@ export function DepartmentProgress({ rows }: { rows: DepartmentProgressRow[] }) 
   return (
     <section className="rd2-department-progress" aria-label="各課即時考核進度">
       <h3>各課即時考核進度</h3>
-      <p className="rd2-hint">個人評核完成後，進度會顯示在這裡；課長另外送出課別彙整後，部長才會收到成果與協助需求。</p>
+      <p className="rd2-hint">已完成的主管評核成績顯示在上方，尚未完成與退回補充的人數可在這裡查看。</p>
       <div className="rd2-department-progress-list">
         {rows.map(row => (
           <article key={row.chief_id} className="rd2-department-progress-card">
