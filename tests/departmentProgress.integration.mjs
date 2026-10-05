@@ -50,10 +50,47 @@ try {
   await actor(12); assert.deepEqual(await read(),[],'account without manager organization gets no counts');
   await actor(1); await q("select set_config('test.unlocked','false',false)");
   await assert.rejects(read,/Unlock/,'locked director cannot read counts');
+  await db.exec('reset role');
+  await db.exec(`alter table workspace.performance_reviews add self_feedback text, add reviewer_name text, add privacy_scope_ids uuid[];
+    create function workspace.performance_org_ancestors(uuid) returns uuid[] language sql stable as $$ select array[]::uuid[] $$;
+    create or replace function workspace.performance_scopes_unlocked(uuid[]) returns boolean language sql stable as $$
+      select current_setting('test.unlocked',true)='true' and not coalesce(current_setting('test.locked',true)=any($1::text[]),false) $$;`);
+  await db.exec(await fs.readFile(new URL('../supabase/migrations/20261005135104_add_director_completed_score_results.sql',import.meta.url),'utf8'));
+  await q('update workspace.performance_reviews set self_feedback=$1, manager_feedback=$2, reviewer_name=$3, privacy_scope_ids=$4',[
+    'RD2_SELF_V1\n'+JSON.stringify({employeeNumber:'E004',grade:'29',attachments:['PRIVATE FILE'],sections:{IDP:{selfScore:100}}}),
+    'RD2_MANAGER_V1\n'+JSON.stringify({feedback:'PRIVATE FEEDBACK',categoryReviews:{IDP:{score:90},OKR:{score:80},KPI:{score:70}}}),
+    '課長甲',[id(2)]
+  ]);
+  await actor(1);
+  const scores = async () => (await q("select workspace.get_performance_department_results('2026-q3') as data"))[0].data;
+  let results=await scores();
+  assert.equal(results.length,2);
+  const result=results.find(r=>r.chief_id===id(2)).results[0];
+  assert.equal(result.employee_name,'人員4','uses current display name');
+  assert.equal(result.total_score,95,'uses saved manager total, never employee score or assumed weight');
+  assert.deepEqual(result.category_scores,{IDP:90,OKR:80,KPI:70});
+  assert.equal(result.job_grade,'29'); assert.equal(result.employee_number,'E004');
+  assert.doesNotMatch(JSON.stringify(results),/PRIVATE|selfScore|self_feedback|manager_feedback|user9/,'minimal payload excludes raw assessment and other departments');
+  await q("select set_config('test.locked',$1,false)",[id(2)]);
+  results=await scores();
+  assert.equal(results.find(r=>r.chief_id===id(2)).results.length,0,'record scope is required');
+  assert.equal(results.find(r=>r.chief_id===id(2)).locked_results,1,'locked result is distinguished from empty');
+  await q("select set_config('test.locked','',false)");
+  await actor(2); assert.deepEqual((await scores()).map(r=>r.chief_id),[id(2)]);
+  await actor(7); assert.deepEqual((await scores()).map(r=>r.chief_id),[id(8)]);
+  await actor(4); assert.deepEqual(await scores(),[]);
+  await actor(1);
+  await db.exec('reset role');
+  await q("insert into workspace.performance_reviews(id,employee_id,cycle_id,status,updated_at) values('new-return',$1,'2026-q3','in-progress','2026-10-05')",[id(4)]);
+  await actor(1); assert.equal((await scores()).find(r=>r.chief_id===id(2)).results.length,0,'new returned review hides older completed result');
+  await q("select set_config('test.unlocked','false',false)");
+  await assert.rejects(scores,/Unlock/);
   await db.exec('reset role'); await q("update workspace.system_users set status='inactive' where id=$1",[id(1)]);
   await actor(1); await assert.rejects(read,/access required/,'inactive account is denied');
+  await assert.rejects(scores,/access required/);
   await db.exec('reset role; set role anon'); await assert.rejects(read,/permission denied/,'anonymous callers have no execution grant');
+  await assert.rejects(scores,/permission denied/);
   await db.exec('reset role');
   assert.equal((await q('select status from workspace.performance_section_reports'))[0].status,'draft','read does not submit a report');
-  console.log('PASS director/chief scope, live progress, latest identity, cycle, draft privacy, lock, inactive and anonymous access');
+  console.log('PASS director/chief completed scores, canonical totals, current names, latest review, cycle, minimal payload, group locks, inactive and anonymous access; existing progress');
 } finally { await db.close(); }
