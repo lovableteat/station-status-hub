@@ -81,6 +81,7 @@ import {
   normalizeApiKeyPermissions,
 } from "./apiKeyHelpers";
 import { trackedProviderFetch } from "./aiUsageTelemetry";
+import { AiQuotaStatus } from "./AiQuotaStatus";
 import { MaintenanceCitationList } from "./MaintenanceCitationList";
 import { MaintenanceSourceSelector } from "./MaintenanceSourceSelector";
 import { MarkdownMessage } from "./MarkdownMessage";
@@ -2755,6 +2756,7 @@ export function ApiChatConsole({
 
       {/* Compact layouts scroll source context with messages, leaving the composer outside. */}
       <div className={cn("flex min-h-0 flex-1 flex-col", isChatOnly && "overflow-y-auto lg:overflow-visible")}>
+      <AiQuotaStatus apiKeyId={selectedApiKey?.id ?? null} provider={provider} model={model} />
       {isChatOnly ? (
         <div className="shrink-0 border-b border-blue-300/15 bg-[#111e31] px-1.5 py-1 sm:px-3 sm:py-2 lg:px-6 lg:py-3">
           <MaintenanceSourceSelector
