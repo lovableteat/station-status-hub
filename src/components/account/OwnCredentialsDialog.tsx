@@ -102,8 +102,8 @@ export function OwnCredentialsDialog({ open, onOpenChange }: OwnCredentialsDialo
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!saving) onOpenChange(nextOpen); }}>
-      <DialogContent className="z-[100] max-w-md overflow-y-auto p-0">
-        <DialogHeader className="border-b border-border bg-accent/35 px-5 py-5 sm:px-6">
+      <DialogContent className="z-[100] max-w-lg gap-0 overflow-y-auto p-0 sm:gap-0 sm:p-0">
+        <DialogHeader className="border-b border-border px-5 py-5 sm:px-6">
           <DialogTitle className="flex items-center gap-2 text-xl">
             <KeyRound className="h-5 w-5 text-primary" />
             帳號與密碼

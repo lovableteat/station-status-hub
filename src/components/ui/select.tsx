@@ -15,6 +15,7 @@ const SelectTrigger = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Trigger
+    data-ui="select-trigger"
     ref={ref}
     className={cn(
       "interactive-lift flex h-11 w-full items-center justify-between rounded-2xl border border-input/95 bg-secondary/72 px-4 py-2.5 text-sm text-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.05),0_16px_36px_-30px_hsl(220_50%_2%/0.94)] ring-offset-background backdrop-blur placeholder:text-muted-foreground transition-all duration-200 hover:border-primary/35 hover:bg-secondary/92 focus:border-primary/70 focus:bg-secondary/95 focus:outline-none focus:ring-2 focus:ring-ring/35 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
@@ -72,6 +73,7 @@ const SelectContent = React.forwardRef<
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
+      data-ui="select-menu"
       className={cn(
         "panel-surface-floating relative z-50 max-h-96 min-w-[10rem] overflow-hidden rounded-2xl bg-popover/95 text-popover-foreground backdrop-blur data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         position === "popper" &&

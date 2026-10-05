@@ -501,7 +501,7 @@ export function SystemProgressSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-hidden border-[#2a526f] bg-[#071522] p-0 sm:max-w-[700px]">
+      <SheetContent className="w-full gap-0 overflow-hidden border-[#2a526f] bg-[#071522] p-0 sm:max-w-[700px]">
         <SheetHeader className="border-b border-[#2a526f]/70 px-5 py-4 text-left">
           <div className="flex items-start gap-3 pr-8">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cyan-300/30 bg-cyan-300/10 text-cyan-100">

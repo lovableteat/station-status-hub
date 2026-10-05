@@ -1,10 +1,10 @@
 .pcb-designer-workspace {
-  --pcb-page: #06111f;
-  --pcb-panel: #0b1b2d;
-  --pcb-panel-raised: #10263a;
-  --pcb-border: #2a526f;
-  --pcb-border-strong: #356985;
-  --pcb-cyan: #39c6e8;
+  --pcb-page: hsl(var(--background));
+  --pcb-panel: hsl(var(--card));
+  --pcb-panel-raised: hsl(var(--secondary));
+  --pcb-border: hsl(var(--border));
+  --pcb-border-strong: hsl(var(--input));
+  --pcb-cyan: hsl(var(--primary));
   display: flex;
   min-height: 0;
   width: 100%;
@@ -3519,4 +3519,22 @@
   .pcb-step-dialog-content { grid-template-columns: 1fr; overflow-y: auto; max-height: 70vh; }
   .pcb-step-preview-stage { min-height: 240px; }
   .pcb-step-dialog { max-width: calc(100vw - 24px); }
+}
+
+/* UI chrome only: PCB layer, canvas and model colors retain their domain meaning. */
+.pcb-designer-workspace {
+  --pcb-page: hsl(var(--background)); --pcb-panel: hsl(var(--card));
+  --pcb-panel-raised: hsl(var(--secondary)); --pcb-border: hsl(var(--border));
+  --pcb-border-strong: hsl(var(--input)); --pcb-cyan: hsl(var(--primary));
+  --pcb-muted: hsl(var(--muted-foreground));
+  background: hsl(var(--background)); color: hsl(var(--foreground)); box-shadow: none;
+}
+.pcb-designer-workspace :is(.pcb-project-bar, .pcb-rail-context, .pcb-rail-context.is-template-context, .pcb-template-card) {
+  background: hsl(var(--card)); border-color: hsl(var(--border)); border-radius: var(--app-radius-card); box-shadow: none;
+}
+.pcb-dialog, .pcb-dialog[data-dialog-tone], .pcb-component-dialog, .pcb-step-dialog {
+  background: hsl(var(--popover)); color: hsl(var(--foreground)); border-color: hsl(var(--border)); border-radius: var(--app-radius-dialog); box-shadow: var(--app-floating-shadow);
+}
+.pcb-component-dialog-header, .pcb-component-form-section > header, .pcb-component-form-section[data-section-tone] > header, .pcb-step-preview-toolbar {
+  background: hsl(var(--popover)); border-color: hsl(var(--border));
 }

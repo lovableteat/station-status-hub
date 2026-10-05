@@ -5,20 +5,20 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "interactive-lift inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold tracking-[0.01em] ring-offset-background transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-0 disabled:pointer-events-none disabled:opacity-45 active:scale-[0.985] active:shadow-none touch-manipulation select-none will-change-transform [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "app-button interactive-lift inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold ring-offset-background transition-[background-color,color,border-color,opacity] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:opacity-75 touch-manipulation select-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "border border-primary/35 bg-gradient-primary text-primary-foreground shadow-[0_18px_34px_-18px_hsl(var(--primary)/0.88)] hover:border-primary/60 hover:brightness-110 hover:shadow-glow",
+          "border border-transparent bg-primary text-primary-foreground hover:bg-primary/90",
         destructive:
-          "border border-destructive/35 bg-gradient-danger text-destructive-foreground shadow-[0_18px_34px_-18px_hsl(var(--destructive)/0.85)] hover:border-destructive/55 hover:brightness-110",
+          "border border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline:
-          "border border-border/85 bg-secondary/70 text-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.03)] backdrop-blur hover:border-primary/50 hover:bg-primary/10 hover:text-primary hover:shadow-[0_14px_28px_-22px_hsl(var(--primary)/0.75)]",
+          "border border-border bg-secondary text-foreground hover:bg-accent hover:border-muted-foreground/50",
         secondary:
-          "border border-border/75 bg-secondary/85 text-secondary-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.03)] hover:border-primary/35 hover:bg-secondary hover:shadow-[0_14px_24px_-24px_hsl(var(--primary)/0.55)]",
+          "border border-transparent bg-secondary text-secondary-foreground hover:bg-accent",
         ghost:
-          "text-foreground/90 hover:bg-accent/85 hover:text-accent-foreground hover:shadow-[0_12px_24px_-22px_hsl(var(--primary)/0.6)]",
+          "text-foreground hover:bg-accent hover:text-accent-foreground",
         link: "rounded-md px-1 text-primary underline-offset-4 hover:text-primary/80 hover:underline",
       },
       size: {
@@ -47,6 +47,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
+        data-ui="button"
+        data-variant={variant || "default"}
+        data-size={size || "default"}
         ref={ref}
         {...props}
       />

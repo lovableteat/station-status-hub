@@ -13,6 +13,7 @@ const HoverCardContent = React.forwardRef<
 >(({ className, align = "center", sideOffset = 4, ...props }, ref) => (
   <HoverCardPrimitive.Portal>
     <HoverCardPrimitive.Content
+      data-ui="popover"
       ref={ref}
       align={align}
       sideOffset={sideOffset}

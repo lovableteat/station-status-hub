@@ -1528,3 +1528,167 @@ All colors MUST be HSL for proper theming support.
     }
   }
 }
+
+/* Shared Apple dark foundation. Keep visual tokens in one place for every portal. */
+:root, .dark, .maintenance-workspace {
+  --background: 240 5% 5%;
+  --foreground: 240 10% 96%;
+  --card: 240 3% 11%;
+  --card-foreground: 240 10% 96%;
+  --popover: 240 3% 15%;
+  --popover-foreground: 240 10% 96%;
+  --primary: 211 100% 65%;
+  --primary-foreground: 240 6% 7%;
+  --secondary: 240 3% 17%;
+  --secondary-foreground: 240 10% 96%;
+  --muted: 240 3% 17%;
+  --muted-foreground: 240 5% 72%;
+  --accent: 240 3% 22%;
+  --accent-foreground: 240 10% 96%;
+  --border: 240 3% 25%;
+  --input: 240 3% 30%;
+  --ring: 211 100% 65%;
+  --destructive: 3 90% 69%;
+  --destructive-foreground: 240 6% 7%;
+  --success: 142 62% 61%;
+  --warning: 38 88% 67%;
+  --danger: 3 90% 69%;
+  --info: 211 100% 70%;
+  --platform-blue: 211 100% 65%;
+  --platform-teal: 190 62% 66%;
+  --platform-green: 142 62% 61%;
+  --platform-amber: 38 88% 67%;
+  --platform-violet: 270 63% 76%;
+  --platform-rose: 3 90% 69%;
+  --sidebar-background: 240 4% 8%;
+  --sidebar-foreground: 240 10% 96%;
+  --sidebar-primary: 211 100% 65%;
+  --sidebar-primary-foreground: 240 6% 7%;
+  --sidebar-accent: 240 3% 19%;
+  --sidebar-accent-foreground: 240 10% 96%;
+  --sidebar-border: 240 3% 25%;
+  --sidebar-ring: 211 100% 65%;
+  --radius: 1rem;
+  --app-radius-control: .75rem;
+  --app-radius-card: 1rem;
+  --app-radius-menu: 1rem;
+  --app-radius-dialog: 1.5rem;
+  --app-space-section: 1.5rem;
+  --app-floating-shadow: 0 20px 64px hsl(0 0% 0% / .45);
+  --mobile-canvas: hsl(var(--background));
+  --mobile-panel: hsl(var(--card));
+  --mobile-panel-raised: hsl(var(--secondary));
+  --mobile-border: hsl(var(--border));
+  --mobile-text: hsl(var(--foreground));
+  --mobile-muted: hsl(var(--muted-foreground));
+  --mobile-active: hsl(var(--primary));
+  --gradient-primary: linear-gradient(hsl(var(--primary)), hsl(var(--primary)));
+  --gradient-danger: linear-gradient(hsl(var(--destructive)), hsl(var(--destructive)));
+  --shadow-glow: none;
+}
+html { color-scheme: dark; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', sans-serif;
+  font-optical-sizing: auto;
+  background: hsl(var(--background));
+  line-height: 1.6;
+}
+.platform-color-field, .glass-strip { background: hsl(var(--card)); box-shadow: none; }
+.maintenance-workspace { background: hsl(var(--background)); }
+.maintenance-project-bar, .maintenance-panel, .maintenance-panel-raised, .maintenance-toolbar { border-color: hsl(var(--border)); background: hsl(var(--card)); border-radius: var(--app-radius-card); }
+.workspace-dialog-section { border-color: hsl(var(--border)); background: hsl(var(--card)); border-radius: var(--app-radius-card); box-shadow: none; }
+/* Bridge older utility surfaces to the same tokens, including portaled content. */
+:is([class~='bg-[#06111f]'], [class~='bg-[#09111f]'], [class~='bg-[#0b1322]']) { background-color: hsl(var(--background)); }
+:is([class~='bg-[#071522]'], [class~='bg-[#0b1b2d]'], [class~='bg-[#081C2D]'], [class~='bg-[#0b1423]'], [class~='bg-[#071827]'], [class~='bg-[#0a1627]'], [class~='bg-[#0C2235]'], [class~='bg-[#0c1929]'], [class~='bg-[#0a2032]'], [class~='bg-[#081827]']) { background-color: hsl(var(--card)); }
+:is([class~='bg-[#10263a]'], [class~='bg-[#10283d]'], [class~='bg-[#101e32]'], [class~='bg-[#0d1729]'], [class~='bg-[#111d33]'], [class~='bg-[#111f36]'], [class~='bg-[#16324b]'], [class~='bg-[#17364f]'], [class~='bg-[#10192e]'], [class~='bg-[#101d33]'], [class~='bg-[#0a1c2e]'], [class~='bg-[#07182d]'], [class~='bg-[#091d2e]'], [class~='bg-[#0b1628]'], [class~='bg-[#0c2032]'], [class~='bg-[#081725]']) { background-color: hsl(var(--secondary)); }
+:is([class~='border-[#2a526f]'], [class~='border-[#244964]'], [class~='border-[#356985]']) { border-color: hsl(var(--border)); }
+.workspace-entrance-header { background: hsl(var(--background)); border: 0; border-radius: 0; padding-inline: 0; margin-bottom: 1.5rem; }
+.workspace-entrance-header h1 { font-size: clamp(1.5rem, 2vw, 2rem); font-weight: 650; line-height: 1.3; letter-spacing: -.025em; }
+.workspace-entrance-card { border-radius: var(--app-radius-card); }
+.workspace-entrance-card h2 { font-weight: 650; }
+.workspace-card-icon { border-radius: var(--app-radius-control); box-shadow: none; }
+.panel-surface, .panel-surface-soft, .surface-accent {
+  border-color: hsl(var(--border)); background: hsl(var(--card));
+  border-radius: var(--app-radius-card); box-shadow: none;
+  backdrop-filter: none;
+}
+.surface-accent::before { background: none; }
+.panel-surface-floating, .workspace-dialog-surface {
+  background: hsl(var(--popover)); color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border)); box-shadow: var(--app-floating-shadow);
+  backdrop-filter: none;
+}
+[data-ui='scrim'] { background: hsl(0 0% 0% / .68); backdrop-filter: none; }
+[data-ui='dialog'], [data-ui='alert-dialog'] {
+  border-radius: var(--app-radius-dialog); scroll-padding-block: 1.5rem;
+}
+.app-dialog-header { padding-right: 3rem; }
+.app-dialog-header p { line-height: 1.65; color: hsl(var(--muted-foreground)); }
+.app-dialog-footer { padding-top: 1rem; border-top: 1px solid hsl(var(--border)); }
+[data-ui='dialog-close'] { width: 2.75rem; height: 2.75rem; border-radius: 50%; background: hsl(var(--secondary)); color: hsl(var(--muted-foreground)); border: 0; }
+[data-ui='dialog-close']:hover { color: hsl(var(--foreground)); }
+[data-ui='dialog-close']:active { opacity: .76; }
+[data-ui='sheet'] { overflow-y: auto; overscroll-behavior: contain; }
+[data-ui='sheet'][data-sheet-side='right'] { border-radius: 1.5rem 0 0 1.5rem; }
+[data-ui='sheet'][data-sheet-side='left'] { border-radius: 0 1.5rem 1.5rem 0; }
+[data-ui='sheet'][data-sheet-side='bottom'], [data-ui='mobile-sheet'], [data-ui='drawer'] { border-radius: 1.5rem 1.5rem 0 0; }
+[data-ui='sheet'][data-sheet-side='top'] { border-radius: 0 0 1.5rem 1.5rem; }
+[data-ui='menu'], [data-ui='popover'], [data-ui='select-menu'] {
+  border-radius: var(--app-radius-menu); background: hsl(var(--popover));
+  border-color: hsl(var(--border)); box-shadow: var(--app-floating-shadow);
+}
+[data-ui='menu'] [role='menuitem'], [data-ui='select-menu'] [role='option'] { min-height: 2.5rem; border-radius: .625rem; }
+[data-ui='tooltip'] { border-radius: .625rem; background: hsl(var(--popover)); border-color: hsl(var(--border)); backdrop-filter: none; }
+[data-ui='toast'], [data-sonner-toast] { border-radius: var(--app-radius-menu); box-shadow: var(--app-floating-shadow); }
+[data-ui='toast']:not(.destructive) { background: hsl(var(--popover)); border-color: hsl(var(--border)); }
+[data-ui='button'] { border-radius: var(--app-radius-control); box-shadow: none; }
+[data-ui='input'], [data-ui='textarea'] { border-radius: var(--app-radius-control); backdrop-filter: none; }
+[data-ui='select-trigger'] { border-radius: var(--app-radius-control); background: hsl(var(--secondary)); box-shadow: none; backdrop-filter: none; }
+:is([data-ui='input'], [data-ui='textarea'], [data-ui='select-trigger']):focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+[data-ui='input']:not([data-ai-surface='true']), [data-ui='textarea']:not([data-ai-surface='true']) { box-shadow: none !important; }
+.interactive-lift { will-change: auto; }
+.interactive-lift:hover, .interactive-lift:active { transform: none; }
+.interactive-lift:active { opacity: .76; transition-duration: 0ms; }
+[data-mobile-app-header='true'] { border-color: hsl(var(--border)); background: hsl(var(--background) / .94); backdrop-filter: blur(12px); box-shadow: none; }
+[data-mobile-app-header='true'] nav { border-color: hsl(var(--border)); background: hsl(var(--secondary)); }
+[data-mobile-app-header='true'] nav button { border-radius: .625rem; min-height: 2.5rem; }
+[data-platform-controls='top-right'] > button, [data-platform-controls='top-right'] > span > button { border-color: hsl(var(--border)); background: hsl(var(--card)); border-radius: var(--app-radius-control); }
+[data-platform-brand='top-left'] > svg { color: hsl(var(--primary)); background: none; box-shadow: none; }
+[data-mobile-workspace-dock='true'] { background: hsl(var(--card) / .95); border-color: hsl(var(--border)); box-shadow: none; backdrop-filter: blur(12px); }
+[data-mobile-dock-item='true'] { border: 0; border-radius: .75rem; color: hsl(var(--muted-foreground)); background: transparent; box-shadow: none; font-weight: 500; }
+[data-mobile-dock-item='true'][aria-current='page'] { color: hsl(var(--primary)); background: hsl(var(--primary) / .09); box-shadow: none; }
+[data-mobile-dock-icon='true'] { background: transparent; box-shadow: none; color: inherit; }
+[data-mobile-more-sheet='true'] { background: hsl(var(--popover)); border-color: hsl(var(--border)); }
+[data-mobile-more-sheet='true'] > div:first-child { width: 2.5rem; height: .25rem; background: hsl(var(--muted-foreground) / .5); }
+[data-mobile-more-header='true'] h2 { font-size: 1.375rem; font-weight: 650; }
+[data-mobile-more-header='true'] p { color: hsl(var(--muted-foreground)); font-size: .875rem; }
+[data-mobile-more-item='true'] { background: hsl(var(--card)); border-color: hsl(var(--border)); }
+[data-mobile-more-item='true'] > span:first-child { background: hsl(var(--secondary)); color: hsl(var(--primary)); }
+[data-mobile-more-item='true'][data-mobile-more-id] > span:first-child { border-color: transparent; background: hsl(var(--secondary)); color: hsl(var(--primary)); }
+[data-mobile-more-item='true'][aria-current='page'] { background: hsl(var(--primary) / .12); border-color: hsl(var(--primary) / .35); }
+.workspace-entrance-mobile-group, .workspace-entrance-mobile-list { border-radius: var(--app-radius-card); box-shadow: none; border-color: hsl(var(--border)); }
+.workspace-entrance-mobile-row { border-color: hsl(var(--border)); }
+.workspace-entrance-mobile-row:active { background: hsl(var(--accent)); transform: none; }
+.workspace-entrance-mobile-row[data-workspace-id] .workspace-entrance-mobile-icon { border: 0; border-radius: .75rem; background: hsl(var(--secondary)); }
+.workspace-entrance-mobile-row[data-workspace-id] > span:nth-child(2) > span:last-child, .workspace-entrance-mobile-chevron { color: hsl(var(--muted-foreground)); }
+.workspace-entrance-mobile-row > span:nth-child(2) > span:first-child { font-weight: 600; letter-spacing: -.01em; }
+.workspace-entrance-mobile-row > span:nth-child(2) > span:last-child { font-weight: 450; }
+[data-mobile-maintenance-module] { background: hsl(var(--card)); color: hsl(var(--muted-foreground)); border-color: hsl(var(--border)); }
+[data-mobile-maintenance-module][aria-current='page'] { background: hsl(var(--primary) / .12); color: hsl(var(--primary)); border-color: hsl(var(--primary) / .4); box-shadow: none; }
+*::-webkit-scrollbar-track { background: hsl(var(--background)); }
+*::-webkit-scrollbar-thumb, *::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / .4); background-clip: padding-box; }
+@media (max-width: 767px) {
+  :root { --mobile-header-height: 64px; --mobile-dock-height: 64px; --mobile-page-gutter: 16px; }
+  [data-mobile-app-header='true'] > div { padding-block: .5rem; }
+  [data-platform-brand='top-left'] { max-width: calc(100% - 7.5rem); gap: .625rem; }
+  [data-platform-brand='top-left'] > svg { width: 2rem; height: 2rem; }
+  [data-platform-brand='top-left'] > div > div:first-child { font-size: 1rem; line-height: 1.35; font-weight: 650; letter-spacing: -.02em; }
+  [data-ui='dialog'], [data-ui='alert-dialog'] { max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); width: calc(100vw - 1.5rem); }
+  .app-dialog-header { padding-right: 2.75rem; }
+  .app-dialog-footer { gap: .75rem; }
+  [data-ui='button']:not([data-variant='link']), [data-ui='menu'] [role='menuitem'], [data-ui='select-menu'] [role='option'] { min-height: 44px; }
+  [data-ui='button'][data-size='icon'] { min-width: 44px; }
+  [data-ui='input'], [data-ui='textarea'] { font-size: 1rem; }
+}
+@media (prefers-reduced-transparency: reduce) { [data-mobile-app-header='true'], [data-mobile-workspace-dock='true'] { background: hsl(var(--card)); backdrop-filter: none; } }
+@media (prefers-contrast: more) { :root, .dark { --muted-foreground: 240 5% 84%; --border: 240 3% 45%; } }

@@ -116,6 +116,7 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
               <button
                 type="button"
                 aria-label="關閉更多工作區"
+                data-ui="dialog-close"
                 className="absolute right-5 top-2 hidden h-12 w-12 items-center justify-center rounded-2xl border border-slate-600/70 bg-slate-800 text-slate-200 max-sm:flex"
               >
                 <X className="h-5 w-5" />
