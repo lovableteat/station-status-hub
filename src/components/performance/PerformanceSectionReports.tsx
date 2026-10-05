@@ -24,6 +24,7 @@ import type { OrganizationMember } from "./PerformanceOrganization";
 import { watchPermissionRefresh } from "@/lib/permissionRefresh.mjs";
 import { refreshSectionReportContents, withAssessmentReadDeadline } from './assessmentRefresh.mjs';
 import { supabase } from '@/integrations/supabase/client';
+import { DepartmentProgress, DEPARTMENT_REPORT_STATUS, filterDepartmentProgress, type DepartmentProgressRow } from './DepartmentProgress';
 
 const STATUS = {
   draft: "彙整草稿",
@@ -91,6 +92,7 @@ export function PerformanceSectionReports({
   const search = params.get("sectionReportSearch") || "";
   const status = params.get("sectionReportStatus") || "";
   const [rows, setRows] = useState<SectionReport[]>([]);
+  const [progress, setProgress] = useState<DepartmentProgressRow[]>([]);
   const [own, setOwn] = useState<OrganizationMember | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -164,6 +166,7 @@ export function PerformanceSectionReports({
     setError("");
     if (!ready) {
       setRows([]);
+      setProgress([]);
       setOwn(null);
       setEditor(null);
       setLoading(false);
@@ -171,12 +174,15 @@ export function PerformanceSectionReports({
       return;
     }
     try {
-      const [reports, organization] = await withAssessmentReadDeadline(Promise.all([
+      const [reports, organization, departmentProgress] = await withAssessmentReadDeadline(Promise.all([
         refreshSectionReportContents(supabase, cycle, rowsSnapshot.current),
         privacyDb.rpc("get_performance_organization"),
+        privacyDb.rpc("get_performance_department_progress", { p_cycle_id: cycle }),
       ]));
       if (version !== request.current) return;
       if (organization.error) throw new Error("load");
+      if (departmentProgress.error || !Array.isArray(departmentProgress.data)) throw new Error("progress");
+      setProgress(departmentProgress.data as DepartmentProgressRow[]);
       const next = reports as SectionReport[];
       const member =
         ((organization.data || []) as OrganizationMember[]).find(
@@ -196,6 +202,7 @@ export function PerformanceSectionReports({
     } catch {
       if (version === request.current) {
         setRows([]);
+        setProgress([]);
         setOwn(null);
         setError("無法讀取課長彙整，請確認連線及資料保護狀態後重新整理。");
       }
@@ -288,6 +295,7 @@ export function PerformanceSectionReports({
     !!own.manager_id &&
     !rows.some((r) => r.chief_id === userId);
   const roleCopy = getSectionReportRoleCopy(own?.org_level);
+  const filteredProgress = filterDepartmentProgress(progress, search, status);
   return (
     <section className="rd2-department-overview">
       <header className="rd2-section-header">
@@ -322,9 +330,9 @@ export function PerformanceSectionReports({
         <div data-current="true"><span>目前頁面 · 各課成果</span><h3>掌握進度、回覆課長</h3><p>課長整理成果、問題與資源需求；部長查看彙整並回覆。個人成績不在這頁展開。</p></div>
       </div>
       <div className="rd2-department-metrics" aria-label="本期彙整處理進度">
-        {[['可查看彙整', rows.length], ['待部長回覆', rows.filter(r => r.status === 'submitted').length], ['待課長補充', rows.filter(r => r.status === 'returned').length], ['已確認', rows.filter(r => r.status === 'approved').length]].map(([label,value],index) => <div key={String(label)} data-tone={index}><span>{label}</span><strong>{loading || !ready || error ? '—' : value}</strong></div>)}
+        {[['各課總人數', progress.reduce((n, r) => n + r.total_members, 0)], ['已完成評核', progress.reduce((n, r) => n + r.completed_members, 0)], ['待主管評核', progress.reduce((n, r) => n + r.awaiting_members, 0)], ['已送交彙整', rows.filter(r => r.status !== 'draft').length]].map(([label,value],index) => <div key={String(label)} data-tone={index}><span>{label}</span><strong>{loading || !ready || error ? '—' : value}</strong></div>)}
       </div>
-      {!loading && ready && !error && !rows.length && <div className="rd2-overview-guidance" role="status"><h3>{own?.org_level === 'section_chief' ? '從本課成果開始' : '本期尚無可查看的課別彙整'}</h3><p>{own?.org_level === 'section_chief' ? '按「新增本期彙整」，填寫成果、問題與需要部長協助的事項，送出後部長才會收到。' : '課長送出後，這裡會顯示各課成果與待回覆事項。未送出的草稿或尚未解鎖的彙整不會顯示。'}</p><p>{roleCopy.selfHint} 管理員身分不會取得考核成績。</p></div>}
+      {!loading && ready && !error && !rows.length && <div className="rd2-overview-guidance" role="status"><h3>{own?.org_level === 'section_chief' ? '從本課成果開始' : '各課考核進度已彙整，成果彙整尚未送交'}</h3><p>{own?.org_level === 'section_chief' ? '按「新增本期彙整」，填寫成果、問題與需要部長協助的事項，送出後部長才會收到。' : '下方會顯示各課即時考核進度。完成個人評核不等於送出課別成果彙整；課長送出後，成果與待回覆事項會出現在這裡。'}</p><p>{roleCopy.selfHint} 管理員身分不會取得考核成績。</p></div>}
       {notice && (
         <p role="status" className="rd2-hint">
           {notice}
@@ -359,7 +367,7 @@ export function PerformanceSectionReports({
               onChange={(e) => update({ sectionReportStatus: e.target.value })}
             >
               <option value="">全部狀態</option>
-              {Object.entries(STATUS).map(([key, label]) => (
+              {Object.entries(DEPARTMENT_REPORT_STATUS).map(([key, label]) => (
                 <option key={key} value={key}>
                   {label}
                 </option>
@@ -387,7 +395,7 @@ export function PerformanceSectionReports({
                 onClick={() => update({ sectionReportStatus: null })}
                 aria-label="清除送審狀態"
               >
-                送審狀態：{STATUS[status as keyof typeof STATUS] || status}
+                送審狀態：{DEPARTMENT_REPORT_STATUS[status] || status}
                 <X />
               </Button>
             )}
@@ -405,8 +413,10 @@ export function PerformanceSectionReports({
         <p className="rd2-hint">
           {loading
             ? "正在讀取…"
-            : `顯示 ${filtered.length} / ${rows.length} 份可查看彙整`}
+            : `顯示 ${filteredProgress.length} / ${progress.length} 課進度 · ${filtered.length} / ${rows.length} 份可查看彙整`}
         </p>
+        {!loading && ready && !error && <DepartmentProgress rows={filteredProgress} />}
+        <h3>課長送交的成果彙整</h3>
         <div className="rd2-section-report-list">
           {filtered.map((report) => (
             <article
@@ -452,8 +462,8 @@ export function PerformanceSectionReports({
               </div>
             </article>
           ))}
-          {!loading && !filtered.length && (
-            <p className="rd2-empty">目前篩選條件沒有符合的彙整</p>
+          {!loading && ready && !error && !filtered.length && (
+            <p className="rd2-empty">{search || status ? '目前篩選條件沒有符合的彙整' : '尚無已送交的成果彙整；各課考核進度會自動顯示在上方。'}</p>
           )}
         </div>
       </div>
