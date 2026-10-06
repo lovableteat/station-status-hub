@@ -1764,3 +1764,22 @@ details[open] > summary > .rd2-disclosure-chevron { transform: rotate(180deg); }
   .rd2-workspace.rd2-bright .rd2-sidebar nav button { flex: 0 0 auto; white-space: nowrap; }
   .rd2-workspace.rd2-bright .performance-content { padding: 1rem 0 1.25rem; }
 }
+/* Department-wide read access stays compact; full attachments load on demand. */
+.performance-workspace .rd2-department-assessments { display: grid; gap: 20px; margin-block: 24px; padding: 24px; background: var(--rd2-panel); border: 1px solid var(--rd2-border); border-radius: var(--app-radius-card); min-width: 0; }
+.performance-workspace .rd2-assessment-filters { display: grid; grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr); gap: 16px; }
+.performance-workspace .rd2-assessment-filters label { display: grid; gap: 8px; min-width: 0; }
+.performance-workspace .rd2-assessment-table-scroll { max-width: 100%; overflow-x: auto; }
+.performance-workspace .rd2-assessment-table-scroll table { width: 100%; border-collapse: collapse; }
+.performance-workspace .rd2-assessment-table-scroll th, .performance-workspace .rd2-assessment-table-scroll td { padding: 16px; text-align: left; border-bottom: 1px solid var(--rd2-border); white-space: nowrap; }
+.performance-workspace .rd2-assessment-table-scroll thead { background: var(--rd2-panel-soft); color: var(--rd2-muted); }
+.performance-workspace .rd2-assessment-table-scroll small { display: block; margin-top: 6px; color: var(--rd2-muted); font-weight: 400; }
+.performance-workspace .rd2-department-assessment-detail { display: grid; gap: 20px; border-top: 1px solid var(--rd2-border); padding-top: 24px; min-width: 0; scroll-margin-top: 96px; }
+.performance-workspace .rd2-department-assessment-detail > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.performance-workspace .rd2-department-assessment-detail .rd2-review-detail-header { background: var(--rd2-panel-soft); border-color: var(--rd2-border); }
+.performance-workspace .rd2-department-assessment-detail .rd2-review-score-total { background: var(--rd2-panel-soft); border: 1px solid var(--rd2-border); border-radius: var(--app-radius-card); box-shadow: none; }
+.performance-workspace .rd2-department-assessment-detail :is(.rd2-review-detail-eyebrow,.rd2-review-detail-header p,.rd2-review-score-total > span,.rd2-review-score-total small,.rd2-review-score-total p) { color: var(--rd2-muted); }
+@media (max-width: 767px) {
+  .performance-workspace .rd2-department-assessments { padding: 16px; }
+  .performance-workspace .rd2-assessment-filters { grid-template-columns: minmax(0, 1fr); }
+  .performance-workspace .rd2-assessment-table-scroll th, .performance-workspace .rd2-assessment-table-scroll td { padding: 14px; }
+}

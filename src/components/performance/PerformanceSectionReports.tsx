@@ -26,6 +26,7 @@ import { refreshSectionReportContents, withAssessmentReadDeadline } from './asse
 import { supabase } from '@/integrations/supabase/client';
 import { DepartmentProgress, DEPARTMENT_REPORT_STATUS, filterDepartmentProgress, type DepartmentProgressRow } from './DepartmentProgress';
 import { DepartmentResults, type DepartmentResultGroup } from './DepartmentResults';
+import { DepartmentAssessments, type DepartmentAssessmentRow } from './DepartmentAssessments';
 
 const STATUS = {
   draft: "彙整草稿",
@@ -96,6 +97,7 @@ export function PerformanceSectionReports({
   const [progress, setProgress] = useState<DepartmentProgressRow[]>([]);
   const [results, setResults] = useState<DepartmentResultGroup[]>([]);
   const [own, setOwn] = useState<OrganizationMember | null>(null);
+  const [assessments, setAssessments] = useState<DepartmentAssessmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -171,22 +173,26 @@ export function PerformanceSectionReports({
       setProgress([]);
       setResults([]);
       setOwn(null);
+      setAssessments([]);
       setEditor(null);
       setLoading(false);
       activeRequest.current = null;
       return;
     }
     try {
-      const [reports, organization, departmentProgress, departmentResults] = await withAssessmentReadDeadline(Promise.all([
+      const [reports, organization, departmentProgress, departmentResults, departmentAssessments] = await withAssessmentReadDeadline(Promise.all([
         refreshSectionReportContents(supabase, cycle, rowsSnapshot.current),
         privacyDb.rpc("get_performance_organization"),
         privacyDb.rpc("get_performance_department_progress", { p_cycle_id: cycle }),
         privacyDb.rpc("get_performance_department_results", { p_cycle_id: cycle }),
+        privacyDb.rpc("get_performance_department_assessments", { p_cycle_id: cycle }),
       ]));
       if (version !== request.current) return;
       if (organization.error) throw new Error("load");
       if (departmentProgress.error || !Array.isArray(departmentProgress.data)) throw new Error("progress");
       if (departmentResults.error || !Array.isArray(departmentResults.data)) throw new Error("results");
+      if (departmentAssessments.error || !Array.isArray(departmentAssessments.data)) throw new Error("assessments");
+      setAssessments(departmentAssessments.data as DepartmentAssessmentRow[]);
       setProgress(departmentProgress.data as DepartmentProgressRow[]);
       setResults(departmentResults.data as DepartmentResultGroup[]);
       const next = reports as SectionReport[];
@@ -211,6 +217,7 @@ export function PerformanceSectionReports({
         setProgress([]);
         setResults([]);
         setOwn(null);
+        setAssessments([]);
         setError("無法讀取課長彙整，請確認連線及資料保護狀態後重新整理。");
       }
     } finally {
@@ -311,7 +318,7 @@ export function PerformanceSectionReports({
         <div>
           <h2>部門績效總覽</h2>
           <p>
-            查看各課已完成的評核成績、考核進度與成果彙整。
+            查看部門所有同仁已儲存的填寫內容、主管評分與回覆，以及各課考核進度與成果彙整。
           </p>
         </div>
         <div className="rd2-actions">
@@ -336,7 +343,7 @@ export function PerformanceSectionReports({
       </header>
       <div className="rd2-work-purpose">
         <div><span>個人評核</span><h3>{roleCopy.heading}</h3><p>{roleCopy.description}</p><Button variant="outline" onClick={onEvaluate}>前往主管評分</Button></div>
-        <div data-current="true"><span>目前頁面 · 各課成績</span><h3>查看成績、掌握進度</h3><p>課長完成評核後，各課同仁的主管分數、加權總分與等第會顯示在下方；成果彙整可另外審閱與回覆。</p></div>
+        <div data-current="true"><span>目前頁面 · 部門資料</span><h3>查看填寫內容、成績與進度</h3><p>從下方人員清單查看已儲存的自評、主管回覆及評分，包含草稿、待審核、退回及已完成資料；各課完成成績與成果彙整另列於後方。</p></div>
       </div>
       <div className="rd2-department-metrics" aria-label="本期彙整處理進度">
         {[['各課總人數', progress.reduce((n, r) => n + r.total_members, 0)], ['已完成評核', progress.reduce((n, r) => n + r.completed_members, 0)], ['待主管評核', progress.reduce((n, r) => n + r.awaiting_members, 0)], ['已送交彙整', rows.filter(r => r.status !== 'draft').length]].map(([label,value],index) => <div key={String(label)} data-tone={index}><span>{label}</span><strong>{loading || !ready || error ? '—' : value}</strong></div>)}
@@ -356,6 +363,7 @@ export function PerformanceSectionReports({
           正在確認資料保護狀態，解鎖後可查看授權範圍內的彙整。
         </p>
       )}
+      <DepartmentAssessments rows={assessments} cycle={cycle} ready={ready && !error} loading={loading} />
       <div className="rd2-card">
         <div className="rd2-section-report-filters">
           <Field>

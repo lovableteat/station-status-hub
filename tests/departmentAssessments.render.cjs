@@ -1,0 +1,28 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const {React,create,loader,act,flush,deferred,child}=require('./support/renderHarness.cjs');
+const person=(id,values={})=>({employee_id:id,employee_name:`同仁${id}`,username:`E${id}`,department:'研發部',section:'工程課',reviewer_name:'課長',locked:false,review_id:id,status:'draft',updated_at:'v1',score:null,...values});
+test('department roster loads details only on demand, uses URL filters and hides content after lock',async t=>{
+  const params=new URLSearchParams('workspace=performance');let reads=0;let delay=null;
+  const db={rpc:async()=>{reads++;return delay?delay.promise:{data:{id:'1',cycle_id:'2026-q3',employee_name:'同仁1'},error:null};}};
+  const load=loader({mocks:{'react-router-dom':{useSearchParams:()=>[params,(callback)=>{const next=callback(params);params.forEach((_,k)=>params.delete(k));next.forEach((v,k)=>params.set(k,v));}]},'./usePerformancePrivacy':{privacyDb:db},'./ReviewDetail':{ReviewDetail:child}}});
+  const {DepartmentAssessments}=load('src/components/performance/DepartmentAssessments.tsx');
+  const rows=[person('1'),person('2',{status:'submitted'}),person('3',{review_id:null,status:null}),person('4',{locked:true,review_id:null,status:null})];
+  let root;const view=ready=>React.createElement(DepartmentAssessments,{rows,cycle:'2026-q3',ready,loading:false});
+  t.after(()=>root?.unmount());
+  await act(async()=>{root=create(view(true));});await flush();
+  assert.equal(reads,0,'mount does not download any full assessment/attachment');
+  assert.match(JSON.stringify(root.toJSON()),/草稿|待主管審核|尚未填寫|需解鎖/);
+  const buttons=()=>root.root.findAll(node=>node.type===child&&typeof node.props.onClick==='function'&&JSON.stringify(node.props.children).includes('查看內容'));
+  await act(async()=>buttons()[0].props.onClick());await flush();assert.equal(reads,1);
+  assert.equal(root.root.find(node=>node.type===child&&!!node.props.review).props.review.employeeName,'同仁1');
+  params.set('departmentAssessmentSearch','同仁2');await act(async()=>root.update(view(true)));await flush();
+  assert.equal(root.root.findAll(node=>node.type===child&&!!node.props.review).length,0,'filter removes expanded detail');
+  params.delete('departmentAssessmentSearch');await act(async()=>root.update(view(true)));await flush();
+  delay=deferred();await act(async()=>buttons()[1].props.onClick());
+  await act(async()=>root.update(view(false)));await flush();
+  await act(async()=>delay.resolve({data:{id:'2',employee_name:'SHOULD NOT APPEAR'},error:null}));await flush();
+  assert.doesNotMatch(JSON.stringify(root.toJSON()),/SHOULD NOT APPEAR|同仁1|同仁2/,'lock invalidates pending detail and visible roster');
+  assert.equal(root.root.findAllByType('th').length,6,'locked empty table retains headings');
+  assert.equal(params.get('workspace'),'performance');
+});
