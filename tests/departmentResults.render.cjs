@@ -19,7 +19,7 @@ test('overview loads scores without a prose report, shares URL filters and clear
   const params=new URLSearchParams(); const reads=[];
   const progress=[{chief_id:'a',chief_name:'課長甲',department:'研發部',section:'產品課',report_status:'not_submitted',total_members:1,completed_members:1,awaiting_members:0},{chief_id:'b',chief_name:'課長乙',department:'研發部',section:'工程課',report_status:'submitted',total_members:1,completed_members:1,awaiting_members:0}];
   const groups=progress.map((group,index)=>({...group,locked_results:0,results:[{review_id:String(index),employee_name:`同仁${index}`,total_score:90,category_scores:{IDP:90,OKR:90,KPI:90}}]}));
-  const db={rpc:async name=>{reads.push(name);return {error:null,data:name==='get_performance_department_results'?groups:name==='get_performance_department_progress'?progress:[{employee_id:'director',org_level:'director'}]};}};
+  const db={rpc:async name=>{reads.push(name);return {error:null,data:name==='get_performance_department_assessments'?[]:name==='get_performance_department_results'?groups:name==='get_performance_department_progress'?progress:[{employee_id:'director',org_level:'director'}]};}};
   const load=loader({mocks:{
     'react-router-dom':{useSearchParams:()=>[params,()=>{}]},
     './usePerformancePrivacy':{privacyDb:db},
