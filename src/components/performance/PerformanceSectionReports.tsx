@@ -98,6 +98,7 @@ export function PerformanceSectionReports({
   const [results, setResults] = useState<DepartmentResultGroup[]>([]);
   const [own, setOwn] = useState<OrganizationMember | null>(null);
   const [assessments, setAssessments] = useState<DepartmentAssessmentRow[]>([]);
+  const [detailRevealVersion, setDetailRevealVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -363,7 +364,7 @@ export function PerformanceSectionReports({
           正在確認資料保護狀態，解鎖後可查看授權範圍內的彙整。
         </p>
       )}
-      <DepartmentAssessments rows={assessments} cycle={cycle} ready={ready && !error} loading={loading} />
+      <DepartmentAssessments rows={assessments} cycle={cycle} ready={ready && !error} loading={loading} revealVersion={detailRevealVersion} />
       <div className="rd2-card">
         <div className="rd2-section-report-filters">
           <Field>
@@ -431,7 +432,10 @@ export function PerformanceSectionReports({
             ? "正在讀取…"
             : `顯示 ${filteredProgress.length} / ${progress.length} 課進度 · ${filtered.length} / ${rows.length} 份可查看彙整`}
         </p>
-        {!loading && ready && !error && <><DepartmentResults groups={filteredResults} /><DepartmentProgress rows={filteredProgress} /></>}
+        {!loading && ready && !error && <><DepartmentResults groups={filteredResults} onViewReview={reviewId => {
+          update({ departmentAssessmentReview: reviewId, departmentAssessmentSearch: null, departmentAssessmentStatus: null });
+          setDetailRevealVersion(version => version + 1);
+        }} /><DepartmentProgress rows={filteredProgress} /></>}
         <h3>課長送交的成果彙整</h3>
         <div className="rd2-section-report-list">
           {filtered.map((report) => (

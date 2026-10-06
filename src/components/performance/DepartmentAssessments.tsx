@@ -22,14 +22,14 @@ export interface DepartmentAssessmentRow {
   score: number | null;
 }
 const STATUSES: Record<string, string> = { ...Object.fromEntries(Object.entries(PERFORMANCE_STATUS as Record<string,{label:string}>).map(([key,value]) => [key,value.label])), not_started: '尚未填寫', locked: '需解鎖' };
-export function DepartmentAssessments({ rows, cycle, ready, loading }: {
-  rows: DepartmentAssessmentRow[]; cycle: string; ready: boolean; loading: boolean;
+export function DepartmentAssessments({ rows, cycle, ready, loading, revealVersion = 0 }: {
+  rows: DepartmentAssessmentRow[]; cycle: string; ready: boolean; loading: boolean; revealVersion?: number;
 }) {
   const [params, setParams] = useSearchParams();
   const search = params.get('departmentAssessmentSearch') || '';
   const requestedStatus = params.get('departmentAssessmentStatus') || '';
   const status = STATUSES[requestedStatus] ? requestedStatus : '';
-  const [selected, setSelected] = useState<string | null>(null);
+  const selected = params.get('departmentAssessmentReview');
   const [detail, setDetail] = useState<PerformanceReview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -40,9 +40,9 @@ export function DepartmentAssessments({ rows, cycle, ready, loading }: {
   const selectedRow = selected ? visible.find(row => row.review_id === selected && !row.locked) : undefined;
   const revision = selectedRow?.updated_at;
   useEffect(() => {
-    if (selected && !selectedRow) setSelected(null);
+    if (selected && !selectedRow && !loading) update({departmentAssessmentReview:null});
     else if (selectedRow) detailRegion.current?.scrollIntoView({block:'start',behavior:'instant'});
-  }, [selected, selectedRow?.review_id]);
+  }, [selected, selectedRow?.review_id, loading, revealVersion]);
   useEffect(() => {
     const version = ++generation.current;
     setDetail(null); setError('');
@@ -65,6 +65,7 @@ export function DepartmentAssessments({ rows, cycle, ready, loading }: {
     Object.entries(values).forEach(([key,value]) => value ? next.set(key,value) : next.delete(key));
     return next;
   }, {replace:true});
+  const closeDetail = () => update({departmentAssessmentReview:null});
   return <section className="rd2-department-assessments" aria-label="部門所有人填寫資料">
     <header><h3>部門所有人填寫資料</h3><p className="rd2-hint">包含所屬各課同仁、課長及直屬同仁已儲存的自評、主管評分與回覆。點「查看內容」在本頁展開；尚未儲存的輸入不會顯示。</p></header>
     <div className="rd2-assessment-filters">
@@ -82,12 +83,12 @@ export function DepartmentAssessments({ rows, cycle, ready, loading }: {
         <tbody>{visible.map(row => <tr key={row.employee_id}>
           <th scope="row">{row.employee_name}<small>{row.username}</small></th><td>{row.department}<small>{row.section || '直屬同仁'}</small></td><td>{row.reviewer_name || '—'}</td>
           <td>{STATUSES[row.locked ? 'locked' : row.status || 'not_started'] || row.status}</td><td>{row.score == null ? '—' : row.score}</td>
-          <td>{row.locked ? <span className="rd2-hint">請先解鎖所屬群組</span> : row.review_id ? <Button variant="outline" size="sm" aria-expanded={selected === row.review_id} aria-controls="department-assessment-detail" onClick={() => setSelected(current => current === row.review_id ? null : row.review_id)}>{selected === row.review_id ? '收合內容' : '查看內容'}</Button> : '尚無已儲存內容'}</td>
+          <td>{row.locked ? <span className="rd2-hint">請先解鎖所屬群組</span> : row.review_id ? <Button variant="outline" size="sm" aria-expanded={selected === row.review_id} aria-controls="department-assessment-detail" onClick={() => update({departmentAssessmentReview:selected === row.review_id ? null : row.review_id})}>{selected === row.review_id ? '收合內容' : '查看內容'}</Button> : '尚無已儲存內容'}</td>
         </tr>)}{!visible.length && <tr><td colSpan={6} className="rd2-result-empty">{loading ? '正在讀取部門資料…' : !ready ? '解鎖後即可查看部門資料' : '目前篩選條件沒有符合的同仁'}</td></tr>}</tbody>
       </table>
     </div>
     {selectedRow && <div ref={detailRegion} id="department-assessment-detail" className="rd2-department-assessment-detail" aria-live="polite">
-      <header><h3>{selectedRow.employee_name} · 考核內容</h3><Button variant="outline" onClick={() => setSelected(null)}>收合內容</Button></header>
+      <header><h3>{selectedRow.employee_name} · 審核實績與回覆</h3><Button variant="outline" onClick={closeDetail}>收合內容</Button></header>
       {busy && <p role="status">正在讀取考核內容…</p>}{error && <p className="rd2-error" role="alert">{error}</p>}
       {!busy && !error && detail && <ReviewDetail review={detail} showManagerAssessment />}
     </div>}
