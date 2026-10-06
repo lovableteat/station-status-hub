@@ -1772,6 +1772,12 @@ details[open] > summary > .rd2-disclosure-chevron { transform: rotate(180deg); }
 .performance-workspace .rd2-department-assessments { display: grid; gap: 20px; margin-block: 24px; padding: 24px; background: var(--rd2-panel); border: 1px solid var(--rd2-border); border-radius: var(--app-radius-card); min-width: 0; }
 .performance-workspace .rd2-assessment-filters { display: grid; grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr); gap: 16px; }
 .performance-workspace .rd2-assessment-filters label { display: grid; gap: 8px; min-width: 0; }
+.performance-workspace .rd2-assessment-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.performance-workspace .rd2-assessment-header > div { flex: 1 1 280px; }
+.performance-workspace .rd2-department-export { display: grid; gap: 16px; padding: 20px; border: 1px solid var(--rd2-border); border-radius: var(--app-radius-card); background: var(--rd2-panel-soft); scroll-margin-top: 96px; }
+.performance-workspace .rd2-department-export[hidden] { display: none; }
+.performance-workspace .rd2-export-selection { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.performance-workspace .rd2-export-selection input { width: 18px; height: 18px; accent-color: var(--rd2-accent); }
 .performance-workspace .rd2-assessment-table-scroll { max-width: 100%; overflow-x: auto; }
 .performance-workspace .rd2-assessment-table-scroll table { width: 100%; border-collapse: collapse; }
 .performance-workspace .rd2-assessment-table-scroll th, .performance-workspace .rd2-assessment-table-scroll td { padding: 16px; text-align: left; border-bottom: 1px solid var(--rd2-border); white-space: nowrap; }
@@ -1785,5 +1791,6 @@ details[open] > summary > .rd2-disclosure-chevron { transform: rotate(180deg); }
 @media (max-width: 767px) {
   .performance-workspace .rd2-department-assessments { padding: 16px; }
   .performance-workspace .rd2-assessment-filters { grid-template-columns: minmax(0, 1fr); }
+  .performance-workspace .rd2-department-export { padding: 16px; }
   .performance-workspace .rd2-assessment-table-scroll th, .performance-workspace .rd2-assessment-table-scroll td { padding: 14px; }
 }

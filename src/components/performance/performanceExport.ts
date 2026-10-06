@@ -13,7 +13,7 @@ import { PERFORMANCE_STATUS } from "./performanceData.mjs";
 type ExcelJsRow = import("exceljs").Row;
 type ExcelJsCell = import("exceljs").Cell;
 type ExcelValue = string | number;
-type ExportOptions = { selfOnly?: boolean };
+type ExportOptions = { selfOnly?: boolean; canDownload?: () => boolean };
 const SELF_COLUMNS = [0, 1, 3, 6, 7, 8];
 const SELF_HEADERS = ['大類', '實績內容', '員工自評分數', '證明連結', '自評附件檔名', '自評圖片檔名'];
 
@@ -203,6 +203,7 @@ export async function downloadPerformanceExcel(reviews: PerformanceReview[], cyc
   const widths = selfOnly ? [12.78, 65.44, 32.78, 36.78, 28.78, 24.78] : EXCEL_COLUMN_WIDTHS;
   const title = selfOnly ? '員工自評' : '績效考核';
   const ExcelJS = (await import("exceljs")).default;
+  if (options.canDownload && !options.canDownload()) throw new Error('資料保護狀態已更新。');
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "工作整合平台";
   workbook.created = new Date();
@@ -261,6 +262,7 @@ export async function downloadPerformanceExcel(reviews: PerformanceReview[], cyc
       }
     });
   const output = await workbook.xlsx.writeBuffer();
+  if (options.canDownload && !options.canDownload()) throw new Error('資料保護狀態已更新。');
   download(new Blob([output], { type: XLSX_MIME }), `${safeFileName(`${title}-${selfOnly ? reviews[0]?.employeeName + '-' : ''}${cycle}`)}.xlsx`);
 }
 
@@ -292,6 +294,7 @@ function linkHtml(value: string) {
 }
 
 export function downloadPerformanceHtml(reviews: PerformanceReview[], cycle: string, options: ExportOptions = {}) {
+  if (options.canDownload && !options.canDownload()) throw new Error('資料保護狀態已更新。');
   const selfOnly = options.selfOnly === true;
   const headers = selfOnly ? SELF_HEADERS : EXCEL_DETAIL_HEADERS;
   const sections = [...reviews]

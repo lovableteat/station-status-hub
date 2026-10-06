@@ -11,6 +11,18 @@ import {
 } from "../src/components/performance/rd2Assessment.mjs";
 import { RATING_SCALE } from "../src/components/performance/rd2Standards.mjs";
 
+test('export checks access again after asynchronous Excel generation', async () => {
+  const originalCreate = URL.createObjectURL;
+  let downloads=0, checks=0;
+  URL.createObjectURL=()=>{downloads++;return 'blob:unexpected';};
+  try {
+    await assert.rejects(downloadPerformanceExcel([DEFAULT_PERFORMANCE_REVIEWS[0]],'2026-q3',{canDownload:()=>++checks===1}));
+    assert.equal(checks,2); assert.equal(downloads,0);
+    assert.throws(()=>downloadPerformanceHtml([DEFAULT_PERFORMANCE_REVIEWS[0]],'2026-q3',{canDownload:()=>false}));
+    assert.equal(downloads,0);
+  } finally { URL.createObjectURL=originalCreate; }
+});
+
 test("manager Excel keeps long KPI in one row and uses the existing supervisor comment column", async () => {
   const originalCreateObjectURL = URL.createObjectURL;
   const originalRevokeObjectURL = URL.revokeObjectURL;
