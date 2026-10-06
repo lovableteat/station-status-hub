@@ -13,7 +13,7 @@ test('department roster loads details only on demand, uses URL filters and hides
   await act(async()=>{root=create(view(true));});await flush();
   assert.equal(reads,0,'mount does not download any full assessment/attachment');
   assert.match(JSON.stringify(root.toJSON()),/草稿|待主管審核|尚未填寫|需解鎖/);
-  const buttons=()=>root.root.findAll(node=>node.type===child&&typeof node.props.onClick==='function'&&JSON.stringify(node.props.children).includes('查看內容'));
+  const buttons=()=>root.root.findAll(node=>node.type===child&&typeof node.props.onClick==='function'&&node.props.children==='查看內容');
   await act(async()=>buttons()[0].props.onClick());await flush();assert.equal(reads,1);
   assert.equal(root.root.find(node=>node.type===child&&!!node.props.review).props.review.employeeName,'同仁1');
   params.set('departmentAssessmentSearch','同仁2');await act(async()=>root.update(view(true)));await flush();
@@ -40,4 +40,48 @@ test('read-only detail retains original STAR wording and supervisor overall repl
   assert.match(content,/主管已審核：改善成果具體。/);assert.match(content,/下期請擴大使用範圍。/);
   assert.equal(root.root.findAllByType('textarea').length,0);
   assert.equal(root.root.findAllByType('input').length,0,'no employee or manager editing controls');
+});
+
+test('department export opens inline, selects only saved/unlocked people and downloads selected full content', async t => {
+  const params = new URLSearchParams('workspace=performance');
+  const reads = [], downloads = [];
+  const db = { rpc: async (name,args) => {
+    reads.push([name,args]);
+    return {data:{id:args.p_review_id,cycle_id:'2026-q3',employee_name:`同仁${args.p_review_id}`,self_feedback:'原始 STAR',manager_feedback:'整體主管回覆'},error:null};
+  }};
+  const load = loader({mocks:{'react-router-dom':{useSearchParams:()=>[params,()=>{}]},'./usePerformancePrivacy':{privacyDb:db},'./ReviewDetail':{ReviewDetail:child},
+    './performanceExport':{downloadPerformanceExcel:async(...args)=>downloads.push(args),downloadPerformanceHtml:(...args)=>downloads.push(args)}}});
+  const {DepartmentAssessments} = load('src/components/performance/DepartmentAssessments.tsx');
+  const rows = [person('1'),person('2'),person('3',{locked:true}),person('4',{review_id:null})];
+  let root; t.after(()=>root?.unmount());
+  const view = version => React.createElement(DepartmentAssessments,{rows,cycle:'2026-q3',ready:true,loading:false,exportRevealVersion:version});
+  await act(async()=>{root=create(view(0));}); await flush();
+  assert.equal(reads.length,0);
+  await act(async()=>root.update(view(1))); await flush();
+  assert.equal(root.root.findByProps({id:'department-export-tools'}).props.hidden,false,'page header opens inline export toolbar');
+  const checkbox = name => root.root.findByProps({'aria-label':`匯出 同仁${name}`});
+  assert.equal(checkbox('3').props.disabled,true); assert.equal(checkbox('4').props.disabled,true);
+  await act(async()=>checkbox('2').props.onChange({target:{checked:false}}));
+  const excel = root.root.find(node=>node.type===child&&Array.isArray(node.props.children)&&node.props.children.includes('匯出 Excel'));
+  await act(async()=>excel.props.onClick()); await flush();
+  assert.equal(reads.length,1); assert.equal(reads[0][0],'get_performance_department_assessment');
+  assert.equal(reads[0][1].p_review_id,'1');
+  assert.equal(downloads.length,1); assert.equal(downloads[0][0].length,1);
+  assert.equal(downloads[0][0][0].selfFeedback,'原始 STAR'); assert.equal(downloads[0][0][0].managerFeedback,'整體主管回覆');
+  assert.match(JSON.stringify(root.toJSON()),/已匯出 1 人的 Excel/);
+});
+
+test('locking during department export prevents download of a pending read', async t => {
+  const pending = deferred(); let downloads=0;
+  const load = loader({mocks:{'react-router-dom':{useSearchParams:()=>[new URLSearchParams(),()=>{}]},'./usePerformancePrivacy':{privacyDb:{rpc:()=>pending.promise}},'./ReviewDetail':{ReviewDetail:child},
+    './performanceExport':{downloadPerformanceExcel:async()=>downloads++,downloadPerformanceHtml:()=>downloads++}}});
+  const {DepartmentAssessments} = load('src/components/performance/DepartmentAssessments.tsx');
+  let root; t.after(()=>root?.unmount());
+  const view = ready => React.createElement(DepartmentAssessments,{rows:[person('1')],cycle:'2026-q3',ready,loading:false,exportRevealVersion:1});
+  await act(async()=>{root=create(view(true));}); await flush();
+  let exporting;
+  await act(async()=>{const button=root.root.find(node=>node.type===child&&node.props.children==='匯出 HTML'); exporting=button.props.onClick();});
+  await act(async()=>root.update(view(false))); await flush();
+  await act(async()=>pending.resolve({data:{id:'1',cycle_id:'2026-q3',self_feedback:'敏感資料'},error:null})); await flush();
+  assert.equal(downloads,0); assert.match(JSON.stringify(root.toJSON()),/匯出未完成/);
 });

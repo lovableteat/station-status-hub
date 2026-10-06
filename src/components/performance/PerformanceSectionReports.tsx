@@ -4,7 +4,7 @@ import { getSectionReportRoleCopy, readSectionReportFeedbackHistory } from "./se
 import { readAssessmentDraft, keepAssessmentDraft, forgetAssessmentDraft } from './assessmentDrafts.mjs';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, RefreshCw, X } from "lucide-react";
+import { Download, Plus, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Input } from "@/components/ui/input";
@@ -99,6 +99,7 @@ export function PerformanceSectionReports({
   const [own, setOwn] = useState<OrganizationMember | null>(null);
   const [assessments, setAssessments] = useState<DepartmentAssessmentRow[]>([]);
   const [detailRevealVersion, setDetailRevealVersion] = useState(0);
+  const [exportRevealVersion, setExportRevealVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -323,6 +324,9 @@ export function PerformanceSectionReports({
           </p>
         </div>
         <div className="rd2-actions">
+          <Button onClick={() => setExportRevealVersion(value => value + 1)} disabled={loading || !ready || !!error}>
+            <Download />匯出資料
+          </Button>
           {canCreate && (
             <Button
               onClick={() => open("compose", null)}
@@ -364,7 +368,7 @@ export function PerformanceSectionReports({
           正在確認資料保護狀態，解鎖後可查看授權範圍內的彙整。
         </p>
       )}
-      <DepartmentAssessments rows={assessments} cycle={cycle} ready={ready && !error} loading={loading} revealVersion={detailRevealVersion} />
+      <DepartmentAssessments rows={assessments} cycle={cycle} ready={ready && !error} loading={loading} revealVersion={detailRevealVersion} exportRevealVersion={exportRevealVersion} />
       <div className="rd2-card">
         <div className="rd2-section-report-filters">
           <Field>
