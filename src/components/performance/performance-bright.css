@@ -1109,6 +1109,10 @@
     grid-template-columns: 1fr;
   }
 }
+@media (max-width: 640px) {
+  .performance-workspace .rd2-result-table-scroll table[data-empty='false'] td[data-label='審核實績'] { grid-column: 1 / -1; }
+  .performance-workspace.rd2-workspace.rd2-bright .performance-content :is(.rd2-department-assessments,.rd2-result-table-scroll) .app-button { min-height: 44px; }
+}
 
 /* Review dossier: colour separates the three assessment dimensions so a
    reviewer can scan a long record without repeatedly rereading headings. */

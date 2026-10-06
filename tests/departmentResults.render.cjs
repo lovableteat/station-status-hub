@@ -15,6 +15,17 @@ test('completed scores preserve stored total and zero, reject missing/invalid sc
   assert.equal(root.root.findAllByType('th').length,7,'empty result keeps all column headings');
   assert.match(JSON.stringify(root.toJSON()),/目前沒有符合條件的已完成評核成績/);
 });
+
+test('completed score table opens the matching audited STAR record', t => {
+  const {DepartmentResults}=loader()('src/components/performance/DepartmentResults.tsx');
+  const opened=[];
+  const root=create(React.createElement(DepartmentResults,{groups:[{chief_id:'chief',chief_name:'課長',section:'工程課',locked_results:0,results:[{review_id:'review-approved',employee_name:'已評核同仁',total_score:95,category_scores:{IDP:90,OKR:95,KPI:95}}]}],onViewReview:id=>opened.push(id)}));
+  t.after(()=>root.unmount());
+  const button=root.root.find(node=>node.type===child&&node.props.children==='查看實績／STAR');
+  button.props.onClick();
+  assert.deepEqual(opened,['review-approved']);
+  assert.equal(root.root.findAllByType('th').length,9,'eight headings and the employee row heading');
+});
 test('overview loads scores without a prose report, shares URL filters and clears scores on lock', async t => {
   const params=new URLSearchParams(); const reads=[];
   const progress=[{chief_id:'a',chief_name:'課長甲',department:'研發部',section:'產品課',report_status:'not_submitted',total_members:1,completed_members:1,awaiting_members:0},{chief_id:'b',chief_name:'課長乙',department:'研發部',section:'工程課',report_status:'submitted',total_members:1,completed_members:1,awaiting_members:0}];
