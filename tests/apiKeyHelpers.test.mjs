@@ -111,3 +111,9 @@ test("non-Gemini keys keep one stored-model target", () => {
   assert.equal(targets[0].model, "gpt-5.2");
   assert.strictEqual(targets[0].record, record);
 });
+
+test("expired and disabled keys are not offered as usable model targets", () => {
+  const key = { id: 'expired', key_name: 'Gemini', api_key: 'fake', permissions: { metadata: { provider: 'gemini', model: 'gemini-2.5-flash' } }, is_active: true, expires_at: '2000-01-01T00:00:00Z' };
+  assert.deepEqual(helpers.buildApiKeyModelTargets([key], ['gemini-2.5-flash']), []);
+  assert.deepEqual(helpers.buildApiKeyModelTargets([{ ...key, is_active: false, expires_at: null }], ['gemini-2.5-flash']), []);
+});
