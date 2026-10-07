@@ -51,7 +51,8 @@ test("the 3D camera supports close inspection without entering the selected rack
   );
   assert.match(plannerSource, /const rackRadius = Math\.hypot\(rackWidth, rackHeight, rackDepth\) \/ 2;/);
   assert.match(plannerSource, /Math\.max\(5, fitDistance \* 1\.32\)/);
-  assert.match(workspaceSource, /onClick=\{\(\) => requestCamera\("focus"\)\}/);
+  assert.match(workspaceSource, /onSelect=\{\(\) => requestCamera\(value\)\}/);
+  assert.match(workspaceSource, /\["focus", "聚焦機櫃"\]/);
 });
 
 test("manual orbit keeps every viewing angle until the user requests a camera preset", () => {

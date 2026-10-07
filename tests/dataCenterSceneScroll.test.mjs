@@ -13,6 +13,6 @@ const source = fs.readFileSync(
 test("mobile scene overview gives the entire navigator one scroll region", () => {
   assert.match(source, /scrollMode\?:\s*"contained"\s*\|\s*"page"/);
   assert.match(source, /data-testid="mobile-scene-scroll-region"/);
-  assert.match(source, /<SceneNavigator\s+\{\.\.\.navigatorProps\}\s+scrollMode="page"\s*\/>/);
+  assert.match(source, /<SceneNavigator\s+\{\.\.\.navigatorProps\}\s+scrollMode="page"\s+hideHeader\s*\/>/);
   assert.match(source, /overflow-y-auto overscroll-contain/);
 });
