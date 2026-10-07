@@ -47,8 +47,8 @@ test("mobile Data-center fills the dynamic viewport and exposes primary controls
   assert.match(workspaceSource, /id:\s*"plan"/);
   assert.match(workspaceSource, /data-action=\{action\.id\}/);
   assert.match(workspaceSource, /setMobileLeftOpen\(false\)/);
-  assert.match(workspaceSource, /<DialogTitle>場景總覽<\/DialogTitle>/);
-  assert.match(workspaceSource, /<DialogTitle>機櫃設定<\/DialogTitle>/);
+  assert.match(workspaceSource, /<DialogTitle>專案與站點<\/DialogTitle>/);
+  assert.match(workspaceSource, /<DialogTitle>機櫃與設備<\/DialogTitle>/);
   assert.doesNotMatch(workspaceSource, /<Sheet/);
 });
 
@@ -77,7 +77,7 @@ test("3D navigation keeps the same CAD geometry while reducing render cost", () 
 });
 
 test("the model detail viewer keeps its header and controls inside a phone viewport", () => {
-  assert.match(viewerSource, /className="min-w-0 h-\[min\(94svh,920px\)\]/);
+  assert.match(viewerSource, /className="dc-dialog dc-dialog--preview min-w-0 h-\[min\(94svh,920px\)\]/);
   assert.match(viewerSource, /<header className="flex min-h-\[76px\] min-w-0/);
   assert.match(viewerSource, /<aside className="order-2 min-w-0/);
   assert.match(viewerSource, /className="flex w-full min-w-0 gap-2 overflow-x-auto/);

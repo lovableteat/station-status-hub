@@ -14,7 +14,7 @@ const workspaceSource = await readFile(
 test("facility settings delegates visual placement to the main 2D planner", () => {
   assert.doesNotMatch(plannerSource, /embedded\?: boolean/);
   assert.doesNotMatch(workspaceSource, /data-testid="facility-wiring-preview-shell"/);
-  assert.match(workspaceSource, /廠房與佈線設定/);
+  assert.match(workspaceSource, /<DialogTitle[^>]*>[\s\S]*?場地與通道[\s\S]*?<\/DialogTitle>/);
   assert.match(workspaceSource, /前往 2D 規劃/);
   assert.match(
     workspaceSource,

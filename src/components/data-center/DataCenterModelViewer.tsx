@@ -402,7 +402,7 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideCloseButton
-        className="min-w-0 h-[min(94svh,920px)] w-[min(96vw,1440px)] max-w-none gap-0 overflow-hidden border border-cyan-300/25 bg-[#030b13] p-0 text-slate-100 shadow-[0_36px_120px_rgba(0,0,0,0.72)] data-[state=closed]:!animate-none data-[state=open]:!animate-none sm:rounded-3xl"
+        className="dc-dialog dc-dialog--preview min-w-0 h-[min(94svh,920px)] w-[min(96vw,1440px)] max-w-none gap-0 overflow-hidden border border-cyan-300/25 bg-[#030b13] p-0 text-slate-100 shadow-[0_36px_120px_rgba(0,0,0,0.72)] data-[state=closed]:!animate-none data-[state=open]:!animate-none sm:rounded-3xl"
       >
         <header className="flex min-h-[76px] min-w-0 shrink-0 items-center justify-between gap-4 border-b border-[#1f4766] bg-[#081a2a] px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -426,7 +426,7 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
           </button>
         </header>
 
-        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[240px_minmax(0,1fr)] lg:grid-rows-1">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[240px_minmax(0,1fr)] lg:grid-rows-1">
           <aside className="order-2 min-w-0 max-h-[36svh] overflow-y-auto border-t border-[#1f4766] bg-[#071522] p-3 lg:order-1 lg:max-h-none lg:border-r lg:border-t-0 lg:p-5">
             <div className="flex w-full min-w-0 gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-x-visible">
               {([[
@@ -509,9 +509,10 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
                   ) : null}
                 </div>
 
-                <label className="mt-3 flex h-10 items-center gap-2 rounded-xl border border-[#2a526f] bg-[#0b1b2d] px-3 focus-within:border-cyan-300/55">
+                <label className="mt-3 flex min-h-11 items-center gap-2 rounded-xl border border-[#2a526f] bg-[#0b1b2d] px-3 focus-within:border-cyan-300/55">
                   <Search className="h-4 w-4 shrink-0 text-cyan-300" />
                   <input
+                    aria-label="搜尋零件名稱"
                     value={partSearch}
                     onChange={(event) => setPartSearch(event.target.value)}
                     placeholder="搜尋零件名稱"

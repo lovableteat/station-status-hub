@@ -96,6 +96,7 @@ interface DataCenter2DPlannerProps {
   onAddPowerFeed: () => void;
   onOpenModels: () => void;
   onOpenFacilitySettings: () => void;
+  onOpenRackDetails: () => void;
   onView3D: () => void;
 }
 
@@ -180,6 +181,7 @@ export function DataCenter2DPlanner({
   onAddPowerFeed,
   onOpenModels,
   onOpenFacilitySettings,
+  onOpenRackDetails,
   onView3D,
 }: DataCenter2DPlannerProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -407,14 +409,15 @@ export function DataCenter2DPlanner({
     : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#07111c]">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-cyan-300/15 bg-[#0a1a29] px-3 py-3 sm:px-5">
+    <div className="dc-2d-workspace flex h-full min-h-0 flex-1 flex-col bg-[#07111c]">
+      <div className="dc-2d-toolbar flex shrink-0 flex-wrap items-center gap-2 border-b border-cyan-300/15 bg-[#0a1a29] px-3 py-3 sm:px-5">
         <div className="mr-auto min-w-0">
           <div className="flex items-center gap-2 text-sm font-black text-white">
-            <Grid2X2 className="h-4 w-4 text-cyan-200" /> 2D 廠房規劃
+            <Grid2X2 className="h-4 w-4 text-cyan-200" /> 2D 配置規劃
           </div>
           <p className="mt-1 hidden text-[11px] text-slate-400 sm:block">拖曳機櫃、通道與 PDU；切回 3D 會立即顯示相同配置。</p>
         </div>
+        <div className="dc-2d-actions">
         <Button type="button" onClick={onAddRack} disabled={!canEdit} className="h-9 bg-cyan-300 text-[#04131f] hover:bg-cyan-200">
           <Plus className="mr-2 h-4 w-4" /> 新增機櫃
         </Button>
@@ -432,14 +435,15 @@ export function DataCenter2DPlanner({
           新增通道
         </Button>
         <Button type="button" variant="outline" onClick={onAddPowerFeed} disabled={!canEdit} className="h-9 border-amber-300/20 bg-amber-400/8 text-amber-50 hover:bg-amber-400/15">
-          <Cable className="mr-2 h-4 w-4" /> PDU
+          <Cable className="mr-2 h-4 w-4" /> 新增電源
         </Button>
         <Button type="button" variant="outline" onClick={onOpenFacilitySettings} className="h-9 border-white/12 bg-white/[0.04] text-slate-100 hover:bg-white/[0.08]">
           <PencilRuler className="mr-2 h-4 w-4" /> 尺寸設定
         </Button>
-        <Button type="button" onClick={onView3D} className="h-9 bg-cyan-300 text-[#04131f] hover:bg-cyan-200">
+        <Button type="button" onClick={onView3D} className="dc-2d-return h-9 bg-cyan-300 text-[#04131f] hover:bg-cyan-200">
           <Eye className="mr-2 h-4 w-4" /> 查看 3D
         </Button>
+        </div>
       </div>
 
       <div
@@ -1044,7 +1048,7 @@ export function DataCenter2DPlanner({
                     <Trash2 className="mr-2 h-4 w-4" /> 刪除通道
                   </Button>
                 </AlertDialogTrigger>
-                <AlertDialogContent className="border-cyan-300/18 bg-[#081725] text-slate-100">
+                <AlertDialogContent className="dc-confirmation border-cyan-300/18 bg-[#081725] text-slate-100">
                   <AlertDialogHeader>
                     <AlertDialogTitle>刪除「{selectedAisle.label}」？</AlertDialogTitle>
                     <AlertDialogDescription className="leading-6 text-slate-300">
@@ -1103,11 +1107,12 @@ export function DataCenter2DPlanner({
         ) : null}
 
         {selectedRack && selectedModel && !selectedAisle ? (
-          <div className="absolute bottom-4 left-4 right-4 flex flex-wrap items-center gap-3 rounded-2xl border border-cyan-300/20 bg-[#071522]/94 p-3 shadow-2xl backdrop-blur-xl sm:left-auto sm:max-w-xl">
+          <div className="dc-2d-selection absolute bottom-4 left-4 right-4 flex flex-wrap items-center gap-3 rounded-2xl border border-cyan-300/20 bg-[#071522]/94 p-3 shadow-2xl backdrop-blur-xl sm:left-auto sm:max-w-xl">
             <div className="min-w-0 flex-1">
               <div className="text-sm font-black text-white">{selectedRack.cabinet} · {selectedModel.name}</div>
               <div className="mt-1 text-[11px] tabular-nums text-slate-400">X {selectedRack.positionX.toFixed(2)}m · Z {selectedRack.positionZ.toFixed(2)}m · {selectedRack.rotation}°</div>
             </div>
+            <Button type="button" variant="outline" onClick={onOpenRackDetails} aria-label={`查看 ${selectedRack.cabinet} 的設備設定`} className="h-9 border-cyan-300/25 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/20"><Box className="mr-2 h-4 w-4" />設備</Button>
             <Button type="button" variant="outline" onClick={() => onRotateRack(selectedRack.id)} disabled={!canEdit} className="h-9 border-cyan-300/20 bg-cyan-400/8 text-cyan-50 hover:bg-cyan-400/15">
               <RotateCw className="mr-2 h-4 w-4" /> 旋轉 90°
             </Button>
@@ -1123,7 +1128,7 @@ export function DataCenter2DPlanner({
                   <Trash2 className="mr-2 h-4 w-4" /> 刪除機櫃
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent className="border-cyan-300/18 bg-[#081725] text-slate-100">
+              <AlertDialogContent className="dc-confirmation border-cyan-300/18 bg-[#081725] text-slate-100">
                 <AlertDialogHeader>
                   <AlertDialogTitle>確定刪除「{selectedRack.cabinet}」？</AlertDialogTitle>
                   <AlertDialogDescription className="leading-6 text-slate-300">

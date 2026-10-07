@@ -102,7 +102,7 @@ export function FacilityAisleCreationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(88dvh,760px)] w-[min(94vw,720px)] max-w-none flex-col gap-0 overflow-hidden border-cyan-300/20 bg-[#071522] p-0 text-slate-100 sm:max-w-[720px]">
+      <DialogContent className="dc-dialog dc-dialog--aisle flex max-h-[min(88dvh,760px)] w-[min(94vw,720px)] max-w-none flex-col gap-0 overflow-hidden border-cyan-300/20 bg-[#071522] p-0 text-slate-100 sm:max-w-[720px]">
         <DialogHeader className="border-b border-white/10 px-6 py-5 pr-14 text-left">
           <DialogTitle className="flex items-center gap-2 text-white">
             <LayoutTemplate className="h-5 w-5 text-cyan-300" />
