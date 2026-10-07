@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ClipboardEvent as ReactClipboardEvent,
   DragEvent as ReactDragEvent,
@@ -52,13 +52,13 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { semanticJson } from "@/lib/semanticJson";
+import { withReadDeadline } from "@/lib/readDeadline";
 
 import {
   GEMINI_DEFAULT_MODEL,
   buildProviderChatRequest,
   formatGeminiQuotaSummary,
   getGeminiFreeModelProfile,
-  getProviderErrorMessage,
   parseProviderChatResponse,
   redactSensitiveText,
   resolveAiProviderPreset,
@@ -81,6 +81,7 @@ import {
   normalizeApiKeyPermissions,
 } from "./apiKeyHelpers";
 import { trackedProviderFetch } from "./aiUsageTelemetry";
+import { AiRequestFailure, classifyAiFailure, readAiCooldowns, requestAiWithRecovery, writeAiCooldowns } from './aiRequestRecovery';
 import { AiQuotaStatus } from "./AiQuotaStatus";
 import { MaintenanceCitationList } from "./MaintenanceCitationList";
 import { MaintenanceSourceSelector } from "./MaintenanceSourceSelector";
@@ -215,11 +216,6 @@ const DEFAULT_IMAGE_OCR_PROMPT =
 const MAX_PROVIDER_HISTORY_MESSAGES = 32;
 const MAX_UPLOAD_ATTACHMENT_COUNT = 8;
 const MAX_UPLOAD_FILE_BYTES = 100 * 1024 * 1024;
-const RETRYABLE_GEMINI_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
-const GEMINI_DEMAND_ERROR_PATTERN =
-  /high demand|resource exhausted|quota|rate limit|too many requests|temporarily unavailable|overloaded|service unavailable/i;
-const GEMINI_RETRY_DELAYS_MS = [900, 1800];
-const GEMINI_KEY_COOLDOWN_MS = 90 * 1000;
 const SHARED_PROMPT_TEMPLATES = [
   {
     title: "每日異常摘要",
@@ -283,16 +279,6 @@ interface ProviderRequestTarget {
   usageCount: number;
 }
 
-interface ProviderAttemptFailure {
-  demandRelated: boolean;
-  endpoint: string;
-  keyLabel: string;
-  message: string;
-  model: string;
-  retryable: boolean;
-  status?: number;
-  targetId: string;
-}
 
 function looksLikeImageModel(model: string) {
   return /image|nano banana/i.test(model);
@@ -304,21 +290,6 @@ function getTimeValue(value: null | string | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function isDemandRelatedProviderFailure(status: number | undefined, message: string) {
-  return status === 429 || status === 503 || GEMINI_DEMAND_ERROR_PATTERN.test(message);
-}
-
-function isRetryableProviderFailure(status: number | undefined, message: string) {
-  return (
-    (typeof status === "number" && RETRYABLE_GEMINI_STATUS_CODES.has(status)) ||
-    isDemandRelatedProviderFailure(status, message) ||
-    /failed to fetch|networkerror|network request failed|timeout/i.test(message)
-  );
-}
 
 function createMessage(
   role: ChatMessage["role"],
@@ -705,7 +676,7 @@ function SectionTitle({
   );
 }
 
-function QueryLoadingCard() {
+function QueryLoadingCard({ message }: { message: string }) {
   return (
     <div className="flex gap-3">
       <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/18 bg-emerald-400/10 text-emerald-100">
@@ -713,7 +684,7 @@ function QueryLoadingCard() {
       </div>
       <div className="max-w-[88%] overflow-hidden rounded-[24px] border border-emerald-400/12 bg-[linear-gradient(180deg,#09110f_0%,#05080a_100%)] px-5 py-4 text-slate-200 shadow-[0_16px_36px_rgba(0,0,0,0.28)]">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-bold text-emerald-100">查詢中</span>
+          <span role="status" className="text-sm font-bold text-slate-100">{message || '查詢中…'}</span>
           <div className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-300/90 animate-pulse [animation-delay:180ms]" />
@@ -897,15 +868,19 @@ function MessageCard({ message }: { message: ChatMessage }) {
   );
 }
 
+const EMPTY_API_KEYS: ApiKeyRecord[] = [];
+const EMPTY_API_TARGETS: ApiKeyModelTarget[] = [];
+const EMPTY_MAINTENANCE_PROJECTS: MaintenanceProjectOption[] = [];
+
 export function ApiChatConsole({
   selectedApiKey,
   selectedModel,
-  availableApiKeys = [],
-  availableApiKeyTargets = [],
+  availableApiKeys = EMPTY_API_KEYS,
+  availableApiKeyTargets = EMPTY_API_TARGETS,
   selectedApiKeyTargetId,
   onSelectApiKeyTarget,
   mode = "full",
-  maintenanceProjects = [],
+  maintenanceProjects = EMPTY_MAINTENANCE_PROJECTS,
   currentMaintenanceProjectId = null,
 }: ApiChatConsoleProps) {
   const [apiKey, setApiKey] = useState("");
@@ -937,7 +912,10 @@ export function ApiChatConsole({
   const [uploadedAttachments, setUploadedAttachments] = useState<UploadedAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
-  const [keyCooldowns, setKeyCooldowns] = useState<Record<string, number>>({});
+  const [keyCooldowns, setKeyCooldowns] = useState<Record<string, number>>(() => readAiCooldowns(typeof window === 'undefined' ? undefined : window.sessionStorage));
+  const [requestProgress, setRequestProgress] = useState('');
+  const sendInFlight = useRef(false);
+  useEffect(() => { writeAiCooldowns(keyCooldowns,typeof window === 'undefined' ? undefined : window.sessionStorage); }, [keyCooldowns]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
@@ -1292,15 +1270,21 @@ export function ApiChatConsole({
         const candidatePreset = resolveAiProviderPreset(metadata.provider);
         const sameProvider = candidatePreset.id === activeProviderPreset.id;
         const sameModel = target.model === model.trim();
+        const safeGeminiFallback = candidatePreset.id === 'gemini' && !looksLikeImageModel(model) && !looksLikeImageModel(target.model)
+          && record.api_key.trim() === apiKey.trim()
+          && metadata.baseUrl.trim().replace(/\/+$/, '') === baseUrl.trim().replace(/\/+$/, '');
         const sameCustomRoute =
           candidatePreset.id !== "openai-compatible" ||
           (metadata.provider.trim().toLowerCase() === normalizedProvider &&
             metadata.baseUrl.trim().replace(/\/+$/, "").toLowerCase() ===
               baseUrl.trim().replace(/\/+$/, "").toLowerCase());
         if (
+          !record.is_active ||
           !record.api_key.trim() ||
           !sameProvider ||
-          !sameModel ||
+          (candidatePreset.id === 'gemini' && !safeGeminiFallback && record.id !== selectedApiKey?.id) ||
+          (!sameModel && !safeGeminiFallback) ||
+          (record.expires_at && Date.parse(record.expires_at) <= Date.now()) ||
           !sameCustomRoute ||
           !target.model.trim() ||
           !metadata.baseUrl.trim()
@@ -1341,6 +1325,10 @@ export function ApiChatConsole({
       const leftPreferredModel = left.model === model.trim() ? 0 : 1;
       const rightPreferredModel = right.model === model.trim() ? 0 : 1;
       if (leftPreferredModel !== rightPreferredModel) return leftPreferredModel - rightPreferredModel;
+
+      const leftLite = left.model === GEMINI_DEFAULT_MODEL ? 0 : 1;
+      const rightLite = right.model === GEMINI_DEFAULT_MODEL ? 0 : 1;
+      if (leftLite !== rightLite) return leftLite - rightLite;
 
       if (left.isSelected !== right.isSelected) return left.isSelected ? -1 : 1;
 
@@ -1438,7 +1426,7 @@ export function ApiChatConsole({
   ) => {
     const targetPreset = resolveAiProviderPreset(targetProvider);
     const providerMessages: ProviderChatMessage[] = [];
-    const providerHistory = history.slice(-MAX_PROVIDER_HISTORY_MESSAGES);
+    const providerHistory = history.filter(message => message.state !== 'error').slice(-MAX_PROVIDER_HISTORY_MESSAGES);
     const unsupportedDocuments = providerHistory.flatMap((message) =>
       (message.attachments ?? [])
         .filter((attachment) => attachment.kind === "file")
@@ -1446,8 +1434,9 @@ export function ApiChatConsole({
     );
 
     if (targetPreset.protocol !== "gemini" && unsupportedDocuments.length > 0) {
-      throw new Error(
+      throw new AiRequestFailure(
         `此服務商目前不支援直接讀取下列文件：${unsupportedDocuments.join("、")}。請改用 Gemini，或移除文件後再送出。`,
+        'invalid',
       );
     }
 
@@ -1491,180 +1480,55 @@ export function ApiChatConsole({
     showSuccessBanner = true,
     ephemeralSystemContext?: string,
   ) => {
-    const availableTargets = providerTargets.filter(
-      (target) =>
-        target.apiKey.trim() &&
-        target.model.trim() &&
-        target.baseUrl.trim()
-    );
-    const targetsToTry = (availableTargets.length ? availableTargets : []).slice(0, 5);
-    const attemptedLabels: string[] = [];
-    let lastFailure: ProviderAttemptFailure | null = null;
-
-    if (!targetsToTry.length) {
-      throw new Error("目前沒有可用的 AI API Key 或模型設定");
-    }
-
-    for (const [targetIndex, target] of targetsToTry.entries()) {
-      const startedAt = Date.now();
-      const providerRequest = buildProviderChatRequest({
-        provider: target.provider,
-        apiKey: target.apiKey,
-        baseUrl: target.baseUrl,
-        model: target.model,
-        messages: buildProviderMessages(history, target.provider, ephemeralSystemContext),
-      });
-      const requestUrlForTarget = providerRequest.url;
-      const allowRetryOnSameTarget = target.cooldownUntil <= Date.now();
-      const maxAttemptsForTarget = allowRetryOnSameTarget ? GEMINI_RETRY_DELAYS_MS.length + 1 : 1;
-
-      for (let attemptIndex = 0; attemptIndex < maxAttemptsForTarget; attemptIndex += 1) {
-        try {
+    const availableTargets = providerTargets.filter(target => target.apiKey.trim() && target.model.trim() && target.baseUrl.trim());
+    let lastEndpoint = requestUrl;
+    let lastModel = model;
+    const startedAt = Date.now();
+    setConnectionState(null);
+    try {
+      const recovered = await requestAiWithRecovery({
+        targets: availableTargets,
+        hasAttachments: history.some(message => !!message.attachments?.length),
+        onProgress: setRequestProgress,
+        onFailure: (target, _failure, until) => {
+          if (until) setKeyCooldowns(current => ({ ...current, [target.id]: until }));
+        },
+        execute: async (target, attemptNumber, timeoutMs) => {
+          const providerRequest = buildProviderChatRequest({
+            provider: target.provider, apiKey: target.apiKey, baseUrl: target.baseUrl, model: target.model,
+            messages: buildProviderMessages(history, target.provider, ephemeralSystemContext),
+          });
+          lastEndpoint = providerRequest.url; lastModel = target.model;
           const response = await trackedProviderFetch({
-            apiKeyId: target.apiKeyId,
-            provider: target.provider,
-            model: target.model,
-            source: "ai-chat",
-            attemptNumber: attemptIndex + 1,
-            url: requestUrlForTarget,
-            init: {
-              method: providerRequest.method,
-              headers: providerRequest.headers,
-              body: providerRequest.body ? JSON.stringify(providerRequest.body) : undefined,
-            },
+            apiKeyId: target.apiKeyId, provider: target.provider, model: target.model, source: "ai-chat",
+            attemptNumber, timeoutMs, url: providerRequest.url,
+            init: { method: providerRequest.method, headers: providerRequest.headers, body: providerRequest.body ? JSON.stringify(providerRequest.body) : undefined },
           });
-
           const result = await response.json().catch(() => null);
-          const durationMs = Date.now() - startedAt;
-
-          if (!response.ok) {
-            const errorMessage = getProviderErrorMessage(
-              result,
-              response.status,
-              [target.apiKey],
-            );
-            throw {
-              demandRelated: isDemandRelatedProviderFailure(response.status, errorMessage),
-              endpoint: requestUrlForTarget,
-              keyLabel: target.keyLabel,
-              message: errorMessage,
-              model: target.model,
-              retryable: isRetryableProviderFailure(response.status, errorMessage),
-              status: response.status,
-              targetId: target.id,
-            } satisfies ProviderAttemptFailure;
-          }
-
-          const parsed = parseProviderChatResponse(target.provider, result);
-          const parsedImages = parsed.images.map((image, index) => ({
-            id: `inline-${index}`,
-            src: `data:${image.mimeType};base64,${image.data}`,
-            mimeType: image.mimeType,
-          }));
-          const fallbackText = redactSensitiveText(
-            parsed.text || (parsedImages.length === 0 ? JSON.stringify(result, null, 2) : ""),
-            [target.apiKey],
-          );
-          const usedFallbackTarget = targetIndex > 0 || attemptIndex > 0;
-
-          setKeyCooldowns((current) => {
-            if (!current[target.id]) return current;
-            const next = { ...current };
-            delete next[target.id];
-            return next;
-          });
-
-          if (showSuccessBanner) {
-            setConnectionState({
-              status: "success",
-              title: `${bannerTitle}成功`,
-              message: usedFallbackTarget
-                ? `主要模型繁忙，系統已自動切換到 ${target.keyLabel} / ${target.model} 並完成查詢。`
-                : parsedImages.length > 0
-                  ? "API 已正常回應，並回傳可直接顯示的圖片結果。"
-                  : "API 已正常回應，你可以直接繼續查詢。",
-              endpoint: requestUrlForTarget,
-              provider: target.provider || "AI",
-              model: target.model || "-",
-              durationMs,
-            });
-          }
-
-          return {
-            text: fallbackText,
-            images: parsedImages,
-          };
-        } catch (error) {
-          const failure =
-            error &&
-            typeof error === "object" &&
-            "message" in error &&
-            "targetId" in error
-              ? (error as ProviderAttemptFailure)
-              : ({
-                  demandRelated: false,
-                  endpoint: requestUrlForTarget,
-                  keyLabel: target.keyLabel,
-                  message:
-                    error instanceof Error ? error.message : "AI API 呼叫失敗，請稍後再試",
-                  model: target.model,
-                  retryable: isRetryableProviderFailure(
-                    undefined,
-                    error instanceof Error ? error.message : ""
-                  ),
-                  targetId: target.id,
-                } satisfies ProviderAttemptFailure);
-
-          attemptedLabels.push(`${failure.keyLabel} / ${failure.model}`);
-          lastFailure = failure;
-
-          if (failure.demandRelated) {
-            setKeyCooldowns((current) => ({
-              ...current,
-              [failure.targetId]: Date.now() + GEMINI_KEY_COOLDOWN_MS,
-            }));
-          }
-
-          const isLastTryForTarget = attemptIndex >= maxAttemptsForTarget - 1;
-          const hasNextTarget = targetIndex < targetsToTry.length - 1;
-
-          if (!failure.retryable) {
-            break;
-          }
-
-          if (!isLastTryForTarget) {
-            await sleep(GEMINI_RETRY_DELAYS_MS[attemptIndex] ?? GEMINI_RETRY_DELAYS_MS.at(-1) ?? 1800);
-            continue;
-          }
-
-          if (failure.demandRelated && hasNextTarget) {
-            break;
-          }
-        }
-      }
-    }
-
-    const attemptedSummary = attemptedLabels.length
-      ? `已嘗試 ${Array.from(new Set(attemptedLabels)).join("、")}`
-      : "尚未找到可用的查詢路由";
-    const userFacingMessage = lastFailure?.demandRelated
-      ? `目前 ${activeProviderPreset.shortLabel} 查詢量過高，${attemptedSummary}，請稍後再試或新增更多可輪替的 API Key。`
-      : lastFailure?.message || "資料查詢失敗";
-
-    setConnectionState({
-      status: "error",
-      title: `${bannerTitle}失敗`,
-      message: userFacingMessage,
-      endpoint: lastFailure?.endpoint || requestUrl,
-      provider: provider || "AI",
-      model: model || "-",
-      durationMs: 0,
-    });
-
-    throw new Error(userFacingMessage);
+          if (!response.ok) throw classifyAiFailure(response.status,result,response.headers.get('Retry-After'));
+          const parsed = parseProviderChatResponse(target.provider,result);
+          const parsedImages = parsed.images.map((image,index) => ({id:`inline-${index}`,src:`data:${image.mimeType};base64,${image.data}`,mimeType:image.mimeType}));
+          return { text: redactSensitiveText(parsed.text || (parsedImages.length ? '' : JSON.stringify(result,null,2)),[target.apiKey]), images:parsedImages };
+        },
+      });
+      const {result,target,durationMs,attempt} = recovered;
+      setKeyCooldowns(current => { const next={...current}; delete next[target.id]; return next; });
+      const changedModel = target.model !== model.trim();
+      if (showSuccessBanner || changedModel || attempt>1) setConnectionState({
+        status:'success',title:`${bannerTitle}成功`,
+        message:changedModel ? `原模型暫時無法回應，已自動改用 ${target.model} 完成；本次實際使用的模型顯示於此。`
+          : attempt>1 ? '連線已自動恢復，查詢完成。' : 'API 已正常回應，可以繼續查詢。',
+        endpoint:lastEndpoint,provider:target.provider,model:target.model,durationMs,
+      });
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI 查詢失敗，請稍後重試。';
+      setConnectionState({status:'error',title:`${bannerTitle}失敗`,message,endpoint:lastEndpoint,provider,model:lastModel,durationMs:Date.now()-startedAt});
+      throw error;
+    } finally { setRequestProgress(''); }
   };
-
   const handleSend = async () => {
+    if (sendInFlight.current || loading) return;
     const typedContent = draftMessage.trim();
     const content = typedContent || (uploadedAttachments.length ? DEFAULT_IMAGE_OCR_PROMPT : "");
 
@@ -1676,7 +1540,8 @@ export function ApiChatConsole({
     const userAttachments = [...uploadedAttachments];
     const userMessage = createMessage("user", content, "normal", [], userAttachments);
     const nextHistory = [...messages, userMessage];
-
+    sendInFlight.current = true;
+    setRequestProgress('正在準備查詢…');
     setMessages(nextHistory);
     setDraftMessage("");
     setUploadedAttachments([]);
@@ -1693,8 +1558,12 @@ export function ApiChatConsole({
         }
         setMaintenanceRetrievalError(null);
         setMaintenanceResultCount(null);
+        setRequestProgress('正在讀取機台維修來源…');
         citations = await searchMaintenanceKnowledge(
-          supabase as unknown as MaintenanceRpcClient,
+          { rpc: (name, args) => withReadDeadline(signal => {
+            const query = (supabase as unknown as MaintenanceRpcClient).rpc(name, args);
+            return query.abortSignal?.(signal) ?? query;
+          }, 15_000) },
           { query: typedContent, projectIds: maintenanceScope.selectedProjectIds },
         );
         setMaintenanceResultCount(citations.length);
@@ -1738,11 +1607,14 @@ export function ApiChatConsole({
       ]);
       toast.error(retrievingMaintenance ? "維修資料檢索失敗" : "資料查詢失敗");
     } finally {
+      sendInFlight.current = false;
       setLoading(false);
     }
   };
 
   const handleConnectionTest = async () => {
+    if (sendInFlight.current || loading) return;
+    sendInFlight.current = true;
     setLoading(true);
 
     try {
@@ -1766,6 +1638,7 @@ export function ApiChatConsole({
       setMessages([createMessage("assistant", `API 測試失敗：${errorMessage}`, "error")]);
       toast.error("API 測試失敗");
     } finally {
+      sendInFlight.current = false;
       setLoading(false);
     }
   };
@@ -2826,7 +2699,7 @@ export function ApiChatConsole({
                 messages.map((message) => <MessageCard key={message.id} message={message} />)
               )}
 
-              {loading ? <QueryLoadingCard /> : null}
+              {loading ? <QueryLoadingCard message={requestProgress} /> : null}
             </div>
             <div ref={messagesEndRef} aria-hidden="true" className="h-0 shrink-0" />
           </div>

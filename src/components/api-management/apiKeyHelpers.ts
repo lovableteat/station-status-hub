@@ -71,7 +71,7 @@ export function buildApiKeyModelTargets(
   records: readonly ApiKeyRecord[],
   geminiModels: readonly string[],
 ): ApiKeyModelTarget[] {
-  return records.flatMap((record) => {
+  return records.filter(record => record.is_active && (!record.expires_at || Date.parse(record.expires_at) > Date.now())).flatMap((record) => {
     const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
     const isGemini = metadata.provider.trim().toLowerCase() === "gemini";
     const models = isGemini ? geminiModels : [metadata.model];
