@@ -13,7 +13,7 @@ import { PERFORMANCE_STATUS } from "./performanceData.mjs";
 type ExcelJsRow = import("exceljs").Row;
 type ExcelJsCell = import("exceljs").Cell;
 type ExcelValue = string | number;
-type ExportOptions = { selfOnly?: boolean; canDownload?: () => boolean };
+type ExportOptions = { selfOnly?: boolean; includeOverview?: boolean; canDownload?: () => boolean };
 const SELF_COLUMNS = [0, 1, 3, 6, 7, 8];
 const SELF_HEADERS = ['大類', '實績內容', '員工自評分數', '證明連結', '自評附件檔名', '自評圖片檔名'];
 
@@ -34,14 +34,14 @@ function safeFileName(value: string) {
 }
 
 function safeSheetName(value: string, used: Set<string>) {
-  const base = (value.replace(/[\\/*?:\x5B\]]/g, "_").trim() || "未命名員工").slice(0, 31);
+  const base = (value.replace(/[\\/*?:\x5B\]]/g, "_").trim().replace(/^'+|'+$/g, '') || "未命名員工").slice(0, 31).replace(/'+$/g, '');
   let name = base;
   let suffix = 2;
-  while (used.has(name)) {
+  while (used.has(name.toLowerCase())) {
     const ending = `-${suffix++}`;
     name = `${base.slice(0, 31 - ending.length)}${ending}`;
   }
-  used.add(name);
+  used.add(name.toLowerCase());
   return name;
 }
 
@@ -62,6 +62,53 @@ const EXCEL_DETAIL_HEADERS = ["大類", "資料項目", "內容／逐項主管�
 const EXCEL_META_HEADER = "FFFFFF00";
 const EXCEL_DETAIL_HEADER = "FF1F4E79";
 const EXCEL_BORDER = "FFE0E0E0";
+const OVERVIEW_SHEET_NAME = '人員總覽';
+const OVERVIEW_WIDTHS = [32, 16, 24, 22, 24, 16, 16, 22, 22, 16, 14, 18, 18];
+
+function internalSheetLink(sheetName: string) {
+  return `#'${sheetName.replaceAll("'", "''")}'!A1`;
+}
+
+function styleNavigationLink(cell: ExcelJsCell) {
+  cell.font = { name: 'Microsoft JhengHei', size: 12, color: { argb: 'FF0563C1' }, underline: true };
+}
+
+// Excel dates have no timezone. Keep the same local wall clock as the detail sheet.
+function overviewDate(value: string, withTime = false): Date | string {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  if (!withTime && /^\d{4}-\d{2}-\d{2}$/.test(value)) return parsed;
+  return new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60_000);
+}
+
+function addOverviewSheet(workbook: import('exceljs').Workbook, reviews: PerformanceReview[], cycle: string) {
+  const sheet = workbook.addWorksheet(OVERVIEW_SHEET_NAME, {
+    properties: { defaultRowHeight: 28 },
+    views: [{ state: 'frozen', xSplit: 2, ySplit: 4, topLeftCell: 'C5', activeCell: 'A5', showGridLines: false }],
+    pageSetup: { fitToPage: true, fitToWidth: 1, fitToHeight: 0, orientation: 'landscape', paperSize: 9 },
+  });
+  sheet.columns = OVERVIEW_WIDTHS.map(width => ({ width }));
+  sheet.mergeCells(1, 1, 1, OVERVIEW_WIDTHS.length);
+  sheet.getCell('A1').value = '部門績效考核人員總覽';
+  sheet.getCell('A1').font = { name: 'Microsoft JhengHei', size: 18, bold: true, color: { argb: 'FF1F4E79' } };
+  sheet.getRow(1).height = 34;
+  sheet.mergeCells(2, 1, 2, OVERVIEW_WIDTHS.length);
+  sheet.getCell('A2').value = `考核週期：${cycle} | 匯出人數：${reviews.length} 人 | 點擊員工姓名查看 STAR、主管評分與回覆；個人頁可點「回到首頁」返回。`;
+  sheet.getCell('A2').font = { name: 'Microsoft JhengHei', size: 12, color: { argb: 'FF444444' } };
+  sheet.getCell('A2').alignment = { wrapText: true, vertical: 'middle' };
+  sheet.getRow(2).height = 28;
+  sheet.getRow(3).height = 10;
+  const header = sheet.getRow(4);
+  header.values = basicInfoRows(reviews[0] || { selfFeedback: '', managerFeedback: '' } as PerformanceReview).map(([label]) => label);
+  styleHeaderRow(header, EXCEL_META_HEADER, 'FF000000');
+  header.height = 32;
+  header.eachCell(cell => { cell.font = { ...cell.font, bold: true }; });
+  sheet.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + reviews.length, column: OVERVIEW_WIDTHS.length } };
+  sheet.pageSetup.printTitlesRow = '4:4';
+  sheet.pageSetup.printArea = `A1:M${Math.max(4, reviews.length + 4)}`;
+  return sheet;
+}
 
 function excelFill(argb: string) {
   return { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb } };
@@ -199,6 +246,7 @@ function download(blob: Blob, filename: string) {
 
 export async function downloadPerformanceExcel(reviews: PerformanceReview[], cycle: string, options: ExportOptions = {}) {
   const selfOnly = options.selfOnly === true;
+  const includeOverview = options.includeOverview === true && !selfOnly;
   const headers = selfOnly ? SELF_HEADERS : EXCEL_DETAIL_HEADERS;
   const widths = selfOnly ? [12.78, 65.44, 32.78, 36.78, 28.78, 24.78] : EXCEL_COLUMN_WIDTHS;
   const title = selfOnly ? '員工自評' : '績效考核';
@@ -211,9 +259,13 @@ export async function downloadPerformanceExcel(reviews: PerformanceReview[], cyc
   workbook.title = `${title}-${cycle}`;
   workbook.subject = selfOnly ? "員工自評資料" : "組員績效考核資料";
   const used = new Set<string>();
-  [...reviews]
-    .sort((a, b) => a.employeeName.localeCompare(b.employeeName, "zh-Hant"))
-    .forEach((review) => {
+  const sortedReviews = [...reviews].sort((a, b) => a.employeeName.localeCompare(b.employeeName, "zh-Hant"));
+  const overview = includeOverview ? addOverviewSheet(workbook, sortedReviews, cycle) : null;
+  if (overview) {
+    used.add(OVERVIEW_SHEET_NAME.toLowerCase());
+    workbook.views = [{ x: 0, y: 0, width: 16000, height: 10000, firstSheet: 0, activeTab: 0, visibility: 'visible' }];
+  }
+  sortedReviews.forEach((review) => {
       const worksheet = workbook.addWorksheet(safeSheetName(review.employeeName, used), {
         properties: { defaultRowHeight: 22 },
         pageSetup: {
@@ -228,6 +280,34 @@ export async function downloadPerformanceExcel(reviews: PerformanceReview[], cyc
         width,
         key: `column${index + 1}`,
       }));
+
+      if (overview) {
+        const values = basicInfoRows(review).map(([, value]) => value);
+        const row = overview.addRow(values);
+        stylePerformanceRow(row, values, OVERVIEW_WIDTHS);
+        row.height = Math.max(36, row.height);
+        row.eachCell(cell => {
+          cell.alignment = { ...cell.alignment, horizontal: 'left', vertical: 'middle' };
+          if (row.number % 2 === 0) cell.fill = excelFill('FFF3F6FA');
+        });
+        row.getCell(1).value = { text: review.employeeName, hyperlink: internalSheetLink(worksheet.name), tooltip: '查看此人的 STAR、主管評分與回覆' };
+        styleNavigationLink(row.getCell(1));
+        row.getCell(7).value = overviewDate(review.dueDate);
+        row.getCell(7).numFmt = 'yyyy-mm-dd';
+        row.getCell(8).value = overviewDate(review.updatedAt, true);
+        row.getCell(8).numFmt = 'yyyy-mm-dd hh:mm';
+        row.getCell(11).numFmt = '0';
+        row.getCell(12).numFmt = '0.##';
+        row.getCell(13).numFmt = '0.##';
+        const navigation = worksheet.addRow(['回到首頁']);
+        navigation.height = 28;
+        navigation.getCell(1).value = { text: '回到首頁', hyperlink: internalSheetLink(overview.name), tooltip: '返回人員總覽' };
+        styleNavigationLink(navigation.getCell(1));
+        worksheet.mergeCells(1, 2, 1, headers.length);
+        navigation.getCell(2).value = `${review.employeeName} | ${cycle}`;
+        navigation.getCell(2).font = { name: 'Microsoft JhengHei', size: 12, bold: true };
+        worksheet.views = [{ state: 'frozen', ySplit: 1, topLeftCell: 'A2', showGridLines: false }];
+      }
 
       styleHeaderRow(worksheet.addRow(EXCEL_META_HEADERS.slice(0, headers.length)), EXCEL_META_HEADER, "FF000000");
       basicInfoRows(review).filter(([label]) => !selfOnly || label !== '主管加權評分').forEach(([label, value]) => {
