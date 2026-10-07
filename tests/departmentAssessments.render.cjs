@@ -67,6 +67,7 @@ test('department export opens inline, selects only saved/unlocked people and dow
   assert.equal(reads.length,1); assert.equal(reads[0][0],'get_performance_department_assessment');
   assert.equal(reads[0][1].p_review_id,'1');
   assert.equal(downloads.length,1); assert.equal(downloads[0][0].length,1);
+  assert.equal(downloads[0][2].includeOverview,true,'director Excel includes the personnel homepage');
   assert.equal(downloads[0][0][0].selfFeedback,'原始 STAR'); assert.equal(downloads[0][0][0].managerFeedback,'整體主管回覆');
   assert.match(JSON.stringify(root.toJSON()),/已匯出 1 人的 Excel/);
 });

@@ -80,7 +80,7 @@ export function DepartmentAssessments({ rows, cycle, ready, loading, revealVersi
       const exporter = await import('./performanceExport');
       if (!current()) throw new Error('資料保護狀態已更新，請重新選擇匯出人員。');
       setExportMessage(`正在建立 ${complete.length} 人的匯出檔案…`);
-      if (format === 'xlsx') await exporter.downloadPerformanceExcel(complete, cycle, { canDownload: current });
+      if (format === 'xlsx') await exporter.downloadPerformanceExcel(complete, cycle, { includeOverview: true, canDownload: current });
       else exporter.downloadPerformanceHtml(complete, cycle, { canDownload: current });
       if (current()) setExportMessage(`已匯出 ${complete.length} 人的 ${format === 'xlsx' ? 'Excel' : 'HTML'}，包含實績、分數、整體回覆與工作指示。`);
     } catch {
@@ -123,7 +123,7 @@ export function DepartmentAssessments({ rows, cycle, ready, loading, revealVersi
     <div ref={exportRegion} id="department-export-tools" className="rd2-department-export" hidden={!exportOpen} aria-label="部門考核匯出">
       <div><h4>匯出部門考核資料</h4><p className="rd2-hint">勾選下方人員，匯出本期完整 STAR 實績、自評與主管分數、逐項與整體回覆、工作指示、證明連結及附件檔名。尚未儲存或未解鎖的資料無法匯出。</p></div>
       <div className="rd2-actions"><Button onClick={() => void exportFile('xlsx')} disabled={exporting || loading || !ready || !exportRows.length}><Download />{exporting ? '匯出中…' : '匯出 Excel'}</Button><Button variant="outline" onClick={() => void exportFile('html')} disabled={exporting || loading || !ready || !exportRows.length}>匯出 HTML</Button><span>已勾選 {exportRows.length} / {exportable.length} 人</span></div>
-      <p className="rd2-hint">僅匯出目前篩選範圍內已勾選的人員；每人各一張 Excel 工作表。</p>
+      <p className="rd2-hint">僅匯出目前篩選範圍內已勾選的人員。Excel 首頁為人員總覽，點姓名可跳到該人的 STAR、評分與主管回覆；個人頁可點「回到首頁」返回。</p>
       {exportMessage && <p role="status" className="rd2-hint">{exportMessage}</p>}{exportError && <p role="alert" className="rd2-error">{exportError}</p>}
     </div>
     <div className="rd2-assessment-filters">
