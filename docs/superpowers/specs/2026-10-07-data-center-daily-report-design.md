@@ -35,4 +35,6 @@ frontend-design、design-taste-frontend 的保留改版原則、impeccable produ
 - 本機設定對齊正式站的 `VITE_REALTIME_COLLABORATION_V2=true`，依既有 lockfile 以 `npm ci --legacy-peer-deps` 同步本機依賴；未改登入或全站程式。
 - 只刪除本次建立且精確核對身分與內容的一筆 QA 回報。VR200／Test 場景 updated_at 仍分別是 2026-09-01 03:09:41／03:05:39 UTC。
 
-部署與正式站尺寸目視結果在完成推送後補記；實機中文鍵盤、IME 與裝置 safe-area 尚不屬於已取得的證據。
+- 實作 commit `f8de59e434d9c5e062c69b1fadeb830e3fea3f3e` 已 fast-forward 至 main 並推送；GitHub Pages run `37644725698` 的 build／deploy 均成功（https://github.com/lovableteat/station-status-hub/actions/runs/37644725698）。
+- Supabase migration history 核對為 `20261007145956 / data_center_daily_work_reports`；本機 SQL 檔名同步此已套用版本，未重新執行建表或改寫遠端 migration history。
+- 部署後直接開啟正式每日回報網址，但舊測試分頁的原生確認框仍阻擋登入互動。最後的 1440／1024／390 正式站尺寸目視尚未完成，不以 source／React 測試冒充；已請使用者取消該提示。實機中文鍵盤、IME 與裝置 safe-area 同樣未驗證。
