@@ -68,18 +68,17 @@ test("Data Center uses a window-based navigation dock and a brighter model catal
   assert.match(workspaceSource, /data-model-catalog="bright-catalog"/);
 });
 
-test("Data Center navigation and catalog keep aligned semantic color groups", async () => {
-  const workspaceSource = await readFile(
-    new URL("../src/components/data-center/DeploymentPlanningCenter.tsx", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(workspaceSource, /lg:grid-cols-\[188px_minmax\(0,1fr\)_360px\]/);
-  assert.match(workspaceSource, /h-12 w-12 place-items-center justify-self-center/);
-  assert.match(workspaceSource, /border-l-sky-300/);
-  assert.match(workspaceSource, /border-l-emerald-300/);
-  assert.match(workspaceSource, /border-l-amber-300/);
-  assert.match(workspaceSource, /border-l-violet-300/);
-  assert.match(workspaceSource, /border-l-orange-300/);
-  assert.match(workspaceSource, /border-l-cyan-300/);
+test("Data Center navigation keeps readable sizing, selected state and the existing palette", async () => {
+  const [workspaceSource, styles] = await Promise.all([
+    readFile(new URL("../src/components/data-center/DeploymentPlanningCenter.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/data-center/data-center.css", import.meta.url), "utf8"),
+  ]);
+  assert.ok(workspaceSource.includes("lg:grid-cols-[224px_minmax(0,1fr)_360px]"));
+  assert.ok(workspaceSource.includes("h-11 w-11 place-items-center justify-self-center"));
+  assert.ok(workspaceSource.includes('aria-current='));
+  assert.ok(workspaceSource.includes('label: "每日工作回報"'));
+  assert.ok(styles.includes('.dc-nav-button[aria-current="page"]'));
+  assert.ok(styles.includes('hsl(var(--primary)'));
+  assert.ok(styles.includes('prefers-reduced-motion: reduce'));
+  assert.doesNotMatch(styles, /#[\da-f]{3,8}\b/i);
 });

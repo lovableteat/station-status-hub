@@ -833,6 +833,44 @@ type BaseDatabase = {
           },
         ]
       }
+      data_center_work_reports: {
+        Row: {
+          id: string
+          project_id: string
+          author_id: string
+          site_id: string
+          report_date: string
+          status: string
+          summary: string
+          next_steps: string
+          blockers: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          author_id: string
+          site_id: string
+          report_date: string
+          status?: string
+          summary: string
+          next_steps?: string
+          blockers?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          status?: string
+          summary?: string
+          next_steps?: string
+          blockers?: string
+        }
+        Relationships: [
+          { foreignKeyName: "data_center_work_reports_project_id_fkey"; columns: ["project_id"]; isOneToOne: false; referencedRelation: "data_center_projects"; referencedColumns: ["id"] },
+          { foreignKeyName: "data_center_work_reports_author_id_fkey"; columns: ["author_id"]; isOneToOne: false; referencedRelation: "system_users"; referencedColumns: ["id"] },
+        ]
+      }
       engineers: {
         Row: {
           created_at: string | null

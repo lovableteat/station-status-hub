@@ -18,6 +18,7 @@ import {
   CircleGauge,
   Cloud,
   CloudOff,
+  ClipboardCheck,
   Cpu,
   Eye,
   EyeOff,
@@ -83,8 +84,11 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/components/auth/UserContext";
 import { cn } from "@/lib/utils";
+import { pushWorkspaceHistory, replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 
 import { DataCenter3DPlanner } from "./DataCenter3DPlanner";
+import { DataCenterDailyReports } from "./DataCenterDailyReports";
+import "./data-center.css";
 import { DataCenter2DPlanner } from "./DataCenter2DPlanner";
 import { DataCenterModelViewer } from "./DataCenterModelViewer";
 import {
@@ -828,7 +832,6 @@ function SceneNavigator({
             </SelectContent>
           </Select>
         </label>
-
         <section data-testid="data-center-layer-control" data-section-tone="view-layers" className="rounded-xl border border-[#214669] bg-[#0c2235] p-2.5">
           <div className="mb-1.5 flex items-center justify-between">
             <div>
@@ -887,6 +890,7 @@ function SceneNavigator({
             className="h-9 rounded-lg border-[#214669] bg-[#10283d] pl-9 text-xs text-white placeholder:text-slate-400"
           />
         </label>
+        {searchTerm && <div className="flex flex-wrap items-center gap-2 text-xs text-slate-100"><button type="button" onClick={() => onSearchChange("")} className="flex items-center gap-2 rounded-lg border border-white/20 px-2 py-1.5" aria-label="清除機櫃搜尋">搜尋：{searchTerm}<X className="h-3.5 w-3.5" /></button><button type="button" onClick={() => onSearchChange("")} className="px-2 py-1.5 underline">全部清除</button></div>}
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
@@ -932,6 +936,7 @@ function SceneNavigator({
                   </button>
                 );
               })}
+              {!filteredRacks.length && <div className="px-3 py-6 text-center text-sm text-slate-300">目前篩選條件沒有符合的機櫃</div>}
             </div>
           </section>
         </div>
@@ -2577,7 +2582,8 @@ export function DeploymentPlanningCenter() {
   const [selectedSiteId, setSelectedSiteId] = useState(sites[0].id);
   const [selectedRackId, setSelectedRackId] = useState(sites[0].racks[0].id);
   const [activeLayer, setActiveLayer] = useState<DataCenterLayer>("overview");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(() => new URLSearchParams(window.location.search).get("dcRackSearch") ?? "");
+  const [showDailyReports, setShowDailyReports] = useState(() => new URLSearchParams(window.location.search).get("dcView") === "reports");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [showSceneTools, setShowSceneTools] = useState(true);
@@ -2616,6 +2622,28 @@ export function DeploymentPlanningCenter() {
     useState<DataCenterProjectSummary | null>(null);
   const [projectDialogMode, setProjectDialogMode] = useState<"create" | "edit">("create");
   const [projectDraft, setProjectDraft] = useState({ name: "", category: "未分類", description: "" });
+
+  useEffect(() => {
+    const restoreView = () => {
+      const params = new URLSearchParams(window.location.search);
+      setShowDailyReports(params.get("dcView") === "reports");
+      setSearchTerm(params.get("dcRackSearch") ?? "");
+    };
+    window.addEventListener("popstate", restoreView);
+    return () => window.removeEventListener("popstate", restoreView);
+  }, []);
+  const changeView = (reports: boolean) => {
+    setShowDailyReports(reports);
+    const url = new URL(window.location.href);
+    if (reports) url.searchParams.set("dcView", "reports"); else url.searchParams.delete("dcView");
+    pushWorkspaceHistory(url);
+  };
+  const changeRackSearch = (value: string) => {
+    setSearchTerm(value);
+    const url = new URL(window.location.href);
+    if (value) url.searchParams.set("dcRackSearch", value); else url.searchParams.delete("dcRackSearch");
+    replaceWorkspaceHistory(url);
+  };
 
   const sharedDocument = useMemo<DataCenterProjectDocument>(() => ({
     schemaVersion: 1,
@@ -3814,7 +3842,7 @@ export function DeploymentPlanningCenter() {
     activeLayer,
     onLayerChange: setActiveLayer,
     searchTerm,
-    onSearchChange: setSearchTerm,
+    onSearchChange: changeRackSearch,
   };
 
   const inspectorProps: RackInspectorProps = {
@@ -3846,24 +3874,30 @@ export function DeploymentPlanningCenter() {
       ? "lg:grid-cols-[72px_minmax(0,1fr)_68px]"
       : "lg:grid-cols-[72px_minmax(0,1fr)_360px]"
     : rightCollapsed
-      ? "lg:grid-cols-[188px_minmax(0,1fr)_68px]"
-      : "lg:grid-cols-[188px_minmax(0,1fr)_360px]";
+      ? "lg:grid-cols-[224px_minmax(0,1fr)_68px]"
+      : "lg:grid-cols-[224px_minmax(0,1fr)_360px]";
 
   const compactDesktopGridClass = showSceneTools && showRackDetails
     ? desktopGridClass
     : showSceneTools
       ? leftCollapsed
         ? "lg:grid-cols-[72px_minmax(0,1fr)]"
-        : "lg:grid-cols-[188px_minmax(0,1fr)]"
+        : "lg:grid-cols-[224px_minmax(0,1fr)]"
       : showRackDetails
         ? rightCollapsed
           ? "lg:grid-cols-[minmax(0,1fr)_68px]"
           : "lg:grid-cols-[minmax(0,1fr)_360px]"
         : "lg:grid-cols-[minmax(0,1fr)]";
 
+  const reportPanel = <DataCenterDailyReports key={`${user?.userId}:${sharedProjects.selectedProjectId}`}
+    projectId={sharedProjects.selectedProjectId} projectName={sharedProjects.selectedProject?.name ?? ""}
+    sites={sites} selectedSiteId={selectedSiteId} user={isRealtimeAuthenticated ? user : null} canEdit={canEdit && isRealtimeAuthenticated}
+    onBack={() => changeView(false)} onProjects={openProjectManager} />;
+  const syncLabel = sharedProjects.syncState === "synced" ? "已同步" : sharedProjects.syncState === "saving" ? "同步中" : sharedProjects.syncState === "loading" ? "載入中" : sharedProjects.syncState === "error" ? "同步異常" : "本機保護模式";
+
   return (
     <TooltipProvider delayDuration={180}>
-      <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden overscroll-none bg-[#02060b] text-slate-100">
+      <div className="data-center-workspace flex h-full min-h-0 min-w-0 flex-col overflow-hidden overscroll-none bg-[#02060b] text-slate-100">
         <input
           ref={fileInputRef}
           type="file"
@@ -3881,10 +3915,10 @@ export function DeploymentPlanningCenter() {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="truncate text-sm font-black tracking-[-0.025em] text-white sm:text-[22px]">Data Center Digital Twin</h1>
-                <Badge className="hidden border-emerald-300/20 bg-emerald-400/10 text-[10px] font-bold text-emerald-100 shadow-none sm:inline-flex">LIVE</Badge>
+                <h1 className="truncate text-base font-semibold tracking-[-0.025em] text-white sm:text-[22px]">Data Center<span className="hidden sm:inline"> Digital Twin</span></h1>
+                <Badge data-dc-sync-state={sharedProjects.syncState} className="hidden border-emerald-300/20 bg-emerald-400/10 text-xs font-semibold text-emerald-100 shadow-none sm:inline-flex" role="status">{syncLabel}</Badge>
               </div>
-              <p className="mt-1 hidden truncate text-[11px] font-semibold text-cyan-100/70 sm:block">Physical rack operations · millimeter calibrated</p>
+              <p className="mt-1 hidden truncate text-xs text-slate-300 sm:block">{sharedProjects.selectedProject?.name ?? "正在取得共用專案"} · {selectedSite.label}</p>
             </div>
           </div>
 
@@ -3937,6 +3971,7 @@ export function DeploymentPlanningCenter() {
               <Button
                 type="button"
                 onClick={() => {
+                  changeView(false);
                   setWorkspaceMode("2d");
                 }}
                 className={cn(
@@ -3952,20 +3987,21 @@ export function DeploymentPlanningCenter() {
             ) : null}
             </div>
           </div>
+          {!isDesktopLayout && <Button type="button" variant="outline" className="dc-mobile-report-entry ml-auto shrink-0" onClick={() => changeView(!showDailyReports)}><ClipboardCheck className="h-4 w-4" />{showDailyReports ? "返回場景" : "工作回報"}</Button>}
         </header>
 
         {isDesktopLayout ? (
-        <div className={cn("grid min-h-0 flex-1 gap-3 bg-[#02060b] p-3 transition-[grid-template-columns] duration-300 ease-out", compactDesktopGridClass)}>
+        <div className={cn("dc-desktop-layout grid min-h-0 flex-1 gap-3 bg-[#02060b] p-3", compactDesktopGridClass)}>
           {showSceneTools ? (
             <aside
               data-testid="data-center-navigation-dock"
-              className="flex min-w-0 flex-col overflow-hidden rounded-[22px] border border-slate-700/80 bg-[linear-gradient(180deg,#111d2e,#09131f)] p-2.5 shadow-[0_24px_70px_rgba(2,8,23,0.46)]"
+              className="dc-navigation-dock flex min-w-0 flex-col overflow-y-auto rounded-xl border border-slate-700/80 bg-card p-3"
             >
               <div className={cn("flex h-14 items-center border-b border-slate-700/70 pb-2", leftCollapsed ? "justify-center" : "justify-between px-1")}>
                 {!leftCollapsed ? (
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-black tracking-[-0.01em] text-white">Data Center 控制台</div>
-                    <div className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">場景、分類與設備集中管理</div>
+                    <div className="text-sm font-semibold text-white">Data Center</div>
+                    <div className="mt-1 text-xs text-slate-400">場景與工作進度</div>
                   </div>
                 ) : null}
                 <button
@@ -3978,12 +4014,13 @@ export function DeploymentPlanningCenter() {
                 </button>
               </div>
 
-              <nav aria-label="Data Center 功能選單" className="mt-2.5 grid gap-2.5">
+              <nav aria-label="Data Center 功能選單" className="dc-nav mt-3 grid gap-1">
                 {[
-                  { id: "scene", label: "場景總覽", icon: Layers3, tone: "border-l-sky-300 hover:border-sky-300/60 hover:bg-sky-400/10", iconTone: "bg-sky-400/15 text-sky-200 ring-sky-300/20", onClick: () => setMobileLeftOpen(true) },
-                  { id: "projects", label: "專案與分類", icon: FileBox, tone: "border-l-blue-300 hover:border-blue-300/60 hover:bg-blue-400/10", iconTone: "bg-blue-400/15 text-blue-200 ring-blue-300/20", onClick: openProjectManager },
-                  { id: "facility", label: "廠房與通道", icon: PencilRuler, tone: "border-l-emerald-300 hover:border-emerald-300/60 hover:bg-emerald-400/10", iconTone: "bg-emerald-400/15 text-emerald-200 ring-emerald-300/20", onClick: () => setFacilityPlannerOpen(true) },
-                  { id: "models", label: "模型與設備", icon: Boxes, tone: "border-l-amber-300 hover:border-amber-300/60 hover:bg-amber-400/10", iconTone: "bg-amber-400/15 text-amber-200 ring-amber-300/20", onClick: () => openModelLibrary("rack") },
+                  { id: "scene", label: "場景總覽", icon: Layers3, onClick: () => { changeView(false); setMobileLeftOpen(true); } },
+                  { id: "reports", label: "每日工作回報", icon: ClipboardCheck, onClick: () => changeView(true) },
+                  { id: "projects", label: "專案與分類", icon: FileBox, onClick: openProjectManager },
+                  { id: "facility", label: "廠房與通道", icon: PencilRuler, onClick: () => setFacilityPlannerOpen(true) },
+                  { id: "models", label: "模型與設備", icon: Boxes, onClick: () => openModelLibrary("rack") },
                   { id: "rack", label: "機櫃設定", icon: Server, tone: "border-l-violet-300 hover:border-violet-300/60 hover:bg-violet-400/10", iconTone: "bg-violet-400/15 text-violet-200 ring-violet-300/20", onClick: () => setMobileRightOpen(true) },
                   { id: "plan", label: workspaceMode === "2d" ? "2D 規劃中" : "2D 規劃", icon: Map, tone: workspaceMode === "2d" ? "border-orange-300/70 border-l-orange-300 bg-orange-300/12 shadow-[0_10px_28px_-22px_rgba(251,146,60,0.9)]" : "border-l-orange-300 hover:border-orange-300/60 hover:bg-orange-400/10", iconTone: workspaceMode === "2d" ? "bg-orange-300 text-orange-950 ring-orange-200/40" : "bg-orange-400/15 text-orange-200 ring-orange-300/20", onClick: () => setWorkspaceMode("2d") },
                 ].map((item) => {
@@ -3995,27 +4032,35 @@ export function DeploymentPlanningCenter() {
                       data-action={item.id}
                       aria-label={item.label}
                       title={leftCollapsed ? item.label : undefined}
-                      onClick={item.onClick}
+                      aria-current={item.id === "reports" && showDailyReports || item.id === "scene" && !showDailyReports ? "page" : undefined}
+                      onClick={() => { if (item.id === "plan") changeView(false); item.onClick(); }}
                       className={cn(
-                        "grid cursor-pointer border border-slate-700/80 border-l-[3px] bg-[#101d2d] text-slate-100 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200",
+                        "dc-nav-button grid cursor-pointer border border-transparent text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200",
                         leftCollapsed
-                          ? "h-12 w-12 place-items-center justify-self-center rounded-[15px]"
-                          : "h-[66px] w-full grid-cols-[42px_minmax(0,1fr)] items-center gap-3 rounded-[17px] px-3 text-left",
-                        item.tone,
+                          ? "h-11 w-11 place-items-center justify-self-center rounded-lg"
+                          : "h-12 w-full grid-cols-[20px_minmax(0,1fr)] items-center gap-3 rounded-lg px-3 text-left",
                       )}
                     >
-                      <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl ring-1", item.iconTone)}>
+                      <span className={cn("flex items-center justify-center", item.id === "models" || item.id === "plan" ? "text-amber-200" : "text-primary")}>
                         <ItemIcon className="h-[18px] w-[18px] shrink-0" />
                       </span>
-                      {!leftCollapsed ? <span className="truncate text-xs font-black leading-5">{item.label}</span> : null}
+                      {!leftCollapsed ? <span className="text-sm font-medium leading-5">{item.label}</span> : null}
                     </button>
                   );
                 })}
               </nav>
+              {!leftCollapsed && <section className="dc-scene-context mt-auto" aria-label="目前場景摘要">
+                <h2>目前專案</h2><button type="button" onClick={openProjectManager}>{sharedProjects.selectedProject?.name ?? "尚未選擇專案"}<ChevronRight className="h-4 w-4" /></button>
+                <button type="button" className="dc-scene-site" aria-label={`切換站點，目前 ${selectedSite.label}`} onClick={() => setMobileLeftOpen(true)}>{selectedSite.label}<ChevronRight className="h-4 w-4" /></button>
+                <dl><div><dt>機櫃／設備</dt><dd>{selectedSite.racks.length} 座／{totalL10} 個</dd></div><div><dt>需要注意</dt><dd>{alertCount} 座機櫃</dd></div><div><dt>目前選取</dt><dd>{selectedRack.cabinet}</dd></div></dl>
+                <p className="dc-scene-explanation">場景僅顯示本站配置；空白地板保留供後續規劃。</p>
+              </section>}
             </aside>
           ) : null}
 
-          <main className="relative min-w-0 overflow-hidden rounded-[24px] border border-[#10283d] bg-black shadow-[0_24px_70px_rgba(2,8,23,0.36)]">
+          <main className="dc-main relative min-w-0 overflow-hidden rounded-xl border border-[#10283d] bg-black">
+            {showDailyReports && reportPanel}
+            <div className="dc-scene-content" hidden={showDailyReports}>
             {workspaceMode === "3d" ? (
               <WorkspaceRuntimeBoundary label="Data Center 3D" onFallback={() => setWorkspaceMode("2d")}><DataCenter3DPlanner
                 racks={selectedSite.racks}
@@ -4059,7 +4104,7 @@ export function DeploymentPlanningCenter() {
               />
             )}
 
-            <div className={cn("absolute left-4 top-4 z-20 flex max-w-[calc(100%-32px)] flex-wrap items-center gap-2", workspaceMode !== "3d" && "hidden")}>
+            <div data-testid="data-center-scene-meta" className={cn("absolute left-4 top-4 z-20 flex max-w-[calc(100%-32px)] flex-wrap items-center gap-2", workspaceMode !== "3d" && "hidden")}>
               <div className="flex h-11 items-center gap-2 rounded-xl border border-white/12 bg-black/72 px-3 shadow-xl backdrop-blur-xl">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: `${activeLayerOption.color}1f`, color: activeLayerOption.color }}>
                   <activeLayerOption.icon className="h-4 w-4" />
@@ -4237,6 +4282,7 @@ export function DeploymentPlanningCenter() {
                 </>
               )}
             </div>
+            </div>
           </main>
 
           {showRackDetails ? <aside className="min-w-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081c2d] shadow-[0_24px_70px_rgba(2,8,23,0.42)]">
@@ -4245,6 +4291,8 @@ export function DeploymentPlanningCenter() {
         </div>
         ) : (
         <div className="relative flex min-h-0 flex-1 bg-black">
+          {showDailyReports && reportPanel}
+          <div className="dc-mobile-scene" hidden={showDailyReports}>
           {workspaceMode === "3d" ? (
             <WorkspaceRuntimeBoundary label="Data Center 3D" onFallback={() => setWorkspaceMode("2d")}><DataCenter3DPlanner
               racks={selectedSite.racks}
@@ -4352,6 +4400,7 @@ export function DeploymentPlanningCenter() {
               );
             })}
           </nav>
+          </div>
         </div>
         )}
 
