@@ -16,10 +16,10 @@ async function fixture(fetch, available = targets, win = browser(), options = {}
   };
   const load = loader({window:win,mocks:{
     '@/integrations/supabase/client':{supabase:db}, '@/components/auth/UserContext':{useUser:()=>({user:{userId:'qa'}})},
-    'sonner':{toast:{success(){},error(){}}}, './AiQuotaStatus':{AiQuotaStatus:child}, './MarkdownMessage':{MarkdownMessage:child},
+    'sonner':{toast:{success(){},error(){},info(){}}}, './AiQuotaStatus':{AiQuotaStatus:child}, './MarkdownMessage':{MarkdownMessage:child},
     '@/components/ui/textarea':{Textarea:React.forwardRef((props,ref)=>React.createElement('stub',{...props,ref}))},
-    './MaintenanceCitationList':{MaintenanceCitationList:child}, './MaintenanceSourceSelector':{MaintenanceSourceSelector:child}, './pptxAttachment':{},
-  },globals:{fetch,Response,Error,requestAnimationFrame:callback=>setTimeout(callback,0), ...options.globals}});
+    './MaintenanceCitationList':{MaintenanceCitationList:child}, './MaintenanceSourceSelector':{MaintenanceSourceSelector:child}, './pptxAttachment':{isPptxFile:()=>false},
+  },globals:{fetch,Response,Error,TextEncoder,TextDecoder,requestAnimationFrame:callback=>setTimeout(callback,0), ...options.globals}});
   const {ApiChatConsole}=load('src/components/api-management/ApiChatConsole.tsx');
   let root;
   await act(async()=>{root=create(React.createElement(ApiChatConsole,{mode:'chat-only',selectedApiKey:record,selectedModel:'gemini-3.8-flash',selectedApiKeyTargetId:targets[0].id,availableApiKeyTargets:available,...options.props}));});
@@ -93,5 +93,68 @@ test('stalled maintenance retrieval aborts, releases sending and never calls an 
     assert.equal(f.send().props.disabled,false);
     pending.resolve({data:[],error:null});await flush();
     assert.equal(providerCalls,0);
+  } finally {await act(async()=>f.root.unmount());}
+});
+
+test('PDF upload normalizes Windows MIME, blocks early send, retains valid files and reaches the provider intact',async()=>{
+  const reading=deferred(), requests=[];
+  class Reader {
+    readAsDataURL(file) { void reading.promise.then(async()=>{
+      this.result=`data:application/octet-stream;base64,${Buffer.from(await file.arrayBuffer()).toString('base64')}`;
+      this.onload();
+    }); }
+    abort(){this.onabort?.();}
+  }
+  const f=await fixture(async(url,init)=>{requests.push(JSON.parse(init.body));return answer();},targets,browser(),{globals:{FileReader:Reader}});
+  try {
+    await f.draft('請分析 PDF');
+    const valid=new File(['%PDF-1.7\nSample PDF\n%%EOF'],'中文報告.PDF',{type:''});
+    const invalid=new File(['renamed text'],'不是PDF.pdf',{type:'application/pdf'});
+    const fileInput=f.root.root.find(node=>node.type==='input'&&node.props.type==='file');
+    await act(async()=>{fileInput.props.onChange({currentTarget:{files:[valid,invalid],value:'files'}});});
+    await flush();
+    assert.equal(f.send().props.disabled,true);
+    assert.match(text(f.root),/正在讀取附件/);
+    await act(async()=>{f.send().props.onClick();});
+    assert.equal(requests.length,0,'keyboard/double click cannot send before PDF has finished reading');
+    await act(async()=>{reading.resolve();});await flush();
+    assert.match(text(f.root),/中文報告.PDF/);
+    assert.equal(f.send().props.disabled,false);
+    await act(async()=>{f.send().props.onClick();});await flush();
+    assert.equal(requests.length,1);
+    const document=requests[0].contents[0].parts.find(part=>part.inlineData)?.inlineData;
+    assert.equal(document.mimeType,'application/pdf');
+    assert.equal(Buffer.from(document.data,'base64').toString(),'%PDF-1.7\nSample PDF\n%%EOF');
+    assert.match(text(f.root),/Recovered answer/);
+  } finally {await act(async()=>f.root.unmount());}
+});
+
+test('stalled PDF reading aborts and restores sending instead of locking the composer',async()=>{
+  let aborted=false, calls=0;
+  class Reader { readAsDataURL(){} abort(){aborted=true;this.onabort?.();} }
+  const f=await fixture(async()=>{calls++;return answer();},targets,browser(),{globals:{FileReader:Reader,setTimeout:(fn,ms)=>setTimeout(fn,ms===30_000?25:ms)}});
+  try {
+    await f.draft('保留原來的問題');
+    const file=new File(['%PDF-1.7\n%%EOF'],'卡住.pdf');
+    await act(async()=>{f.root.root.find(node=>node.type==='input'&&node.props.type==='file').props.onChange({currentTarget:{files:[file],value:'file'}});});
+    await flush(40);
+    assert.equal(aborted,true);
+    assert.equal(f.send().props.disabled,false);
+    assert.equal(calls,0);
+    assert.match(text(f.root),/保留原來的問題/);
+  } finally {await act(async()=>f.root.unmount());}
+});
+
+test('PDF finishing after a model target starts a new conversation cannot attach to the new conversation',async()=>{
+  const reading=deferred();
+  class Reader { readAsDataURL(){void reading.promise.then(()=>{this.result='data:application/octet-stream;base64,JVBERi0xLjc=';this.onload();});} abort(){this.onabort?.();} }
+  const f=await fixture(answer,targets,browser(),{globals:{FileReader:Reader}});
+  try {
+    await act(async()=>{f.root.root.find(node=>node.type==='input'&&node.props.type==='file').props.onChange({currentTarget:{files:[new File(['%PDF-1.7\n%%EOF'],'舊對話.pdf')],value:'file'}});});
+    await flush();
+    await act(async()=>{const component=f.root.root;f.root.update(React.createElement(component.type,{...component.props,selectedApiKeyTargetId:targets[1].id,selectedModel:targets[1].model}));});
+    await flush();
+    await act(async()=>{reading.resolve();});await flush();
+    assert.doesNotMatch(text(f.root),/舊對話.pdf/);
   } finally {await act(async()=>f.root.unmount());}
 });

@@ -27,6 +27,7 @@ export interface ProviderChatMessage {
   role: "assistant" | "system" | "user";
   text: string;
   images?: ProviderMessageImage[];
+  documents?: Array<ProviderMessageImage & { name: string }>;
 }
 
 export interface ProviderHttpRequest {
@@ -254,33 +255,45 @@ function createGeminiParts(message: ProviderChatMessage) {
         mimeType: image.mimeType,
       },
     })),
+    ...(message.documents ?? []).flatMap(document => [
+      { text: `附件：${document.name}` },
+      { inlineData: { data: document.data, mimeType: document.mimeType } },
+    ]),
   ];
 }
 
 function createOpenAiContent(message: ProviderChatMessage) {
-  if (!message.images?.length) return message.text;
+  if (!message.images?.length && !message.documents?.length) return message.text;
 
   return [
     ...(message.text ? [{ type: "text", text: message.text }] : []),
-    ...message.images.map((image) => ({
+    ...(message.images ?? []).map((image) => ({
       type: "image_url",
       image_url: { url: `data:${image.mimeType};base64,${image.data}` },
+    })),
+    ...(message.documents ?? []).map(document => ({
+      type: 'file',
+      file: { filename: document.name, file_data: `data:${document.mimeType};base64,${document.data}` },
     })),
   ];
 }
 
 function createAnthropicContent(message: ProviderChatMessage) {
-  if (!message.images?.length) return message.text;
+  if (!message.images?.length && !message.documents?.length) return message.text;
 
   return [
     ...(message.text ? [{ type: "text", text: message.text }] : []),
-    ...message.images.map((image) => ({
+    ...(message.images ?? []).map((image) => ({
       type: "image",
       source: {
         type: "base64",
         data: image.data,
         media_type: image.mimeType,
       },
+    })),
+    ...(message.documents ?? []).map(document => ({
+      type: 'document', title: document.name,
+      source: { type: 'base64', data: document.data, media_type: document.mimeType },
     })),
   ];
 }
@@ -298,6 +311,16 @@ export function buildProviderChatRequest(input: {
     ...createAuthHeaders(preset.protocol, input.apiKey),
     "Content-Type": "application/json",
   };
+
+  const documents = input.messages.flatMap(message => message.documents ?? []);
+  if (documents.some(document => document.mimeType !== 'application/pdf') && preset.protocol !== 'gemini')
+    throw new Error('此服務商目前只支援 PDF 文件；其他文件請改用 Gemini。');
+  if (documents.length && preset.id === 'openai-compatible')
+    throw new Error('自訂服務尚未確認支援 PDF，請使用 Gemini、OpenAI 或 Claude 的 PDF 模型。');
+  const pdfBytes = documents.filter(document => document.mimeType === 'application/pdf')
+    .map(document => Math.floor(document.data.length * 3 / 4) - (document.data.endsWith('==') ? 2 : document.data.endsWith('=') ? 1 : 0));
+  if (pdfBytes.some(size => size > 50 * 1024 * 1024) || (preset.id === 'openai' && pdfBytes.reduce((sum, size) => sum + size, 0) >= 50 * 1024 * 1024))
+    throw new Error('PDF 超過此服務商的 50MB 上限，請分割或壓縮文件後重試。');
 
   if (preset.protocol === "gemini") {
     const systemText = input.messages
@@ -321,7 +344,7 @@ export function buildProviderChatRequest(input: {
       method: "POST",
       url: `${baseUrl}/models/${input.model.trim()}:generateContent`,
       headers,
-      body,
+      body: validateInlineRequestSize(body, 100),
     };
   }
 
@@ -347,7 +370,7 @@ export function buildProviderChatRequest(input: {
       method: "POST",
       url: `${baseUrl}/messages`,
       headers,
-      body,
+      body: validateInlineRequestSize(body, 32),
     };
   }
 
@@ -363,6 +386,13 @@ export function buildProviderChatRequest(input: {
       })),
     },
   };
+}
+
+function validateInlineRequestSize(body: Record<string, unknown>, megabytes: number) {
+  // Include base64 expansion, prior attachments and prompt text in the limit.
+  if (new TextEncoder().encode(JSON.stringify(body)).byteLength > megabytes * 1024 * 1024)
+    throw new Error(`附件與對話內容合計超過 ${megabytes}MB，請減少附件或開啟新對話後重新上傳。`);
+  return body;
 }
 
 export function parseProviderChatResponse(
