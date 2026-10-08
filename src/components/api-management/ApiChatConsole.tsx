@@ -103,6 +103,7 @@ import {
   isPptxFile,
   type PptxInlineImage,
 } from "./pptxAttachment";
+import { isPdfFile, validatePdfFile } from './pdfAttachment';
 
 interface ApiChatConsoleProps {
   selectedApiKey?: ApiKeyRecord | null;
@@ -349,6 +350,7 @@ function getFileExtension(name: string) {
 }
 
 function isSupportedAttachment(file: File) {
+  if (isPdfFile(file)) return true;
   if (file.type.startsWith("image/")) return true;
   return SUPPORTED_ATTACHMENT_EXTENSIONS.has(getFileExtension(file.name));
 }
@@ -476,14 +478,26 @@ function serializePrivateConversations(conversations: SavedConversation[]): Json
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () =>
-      typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("圖片讀取失敗"));
-    reader.onerror = () => reject(new Error("圖片讀取失敗"));
-    reader.readAsDataURL(file);
+    const timer = setTimeout(() => {
+      reject(new Error(`${file.name} 讀取逾時，請重新選擇或縮小檔案。`));
+      reader.abort();
+    }, 30_000);
+    reader.onload = () => {
+      clearTimeout(timer);
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error(`${file.name} 讀取失敗。`));
+    };
+    reader.onerror = reader.onabort = () => {
+      clearTimeout(timer);
+      reject(new Error(`${file.name} 讀取失敗，請重新選擇檔案。`));
+    };
+    try { reader.readAsDataURL(file); }
+    catch (error) { clearTimeout(timer); reject(error); }
   });
 }
 
 async function createUploadedAttachmentFromFile(file: File): Promise<UploadedAttachment> {
+  await validatePdfFile(file);
   if (isPptxFile(file)) {
     const extracted = await extractPptxContent(file);
     const textBytes = new TextEncoder().encode(extracted.text);
@@ -505,7 +519,7 @@ async function createUploadedAttachmentFromFile(file: File): Promise<UploadedAtt
     throw new Error("附件讀取失敗");
   }
 
-  const mimeType = dataUrlMatch[1] || file.type || "application/octet-stream";
+  const mimeType = isPdfFile(file) ? 'application/pdf' : dataUrlMatch[1] || file.type || "application/octet-stream";
   const kind = mimeType.startsWith("image/") ? "image" : "file";
 
   return {
@@ -910,6 +924,9 @@ export function ApiChatConsole({
   const [libraryApplyContent, setLibraryApplyContent] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [uploadedAttachments, setUploadedAttachments] = useState<UploadedAttachment[]>([]);
+  const [readingAttachments, setReadingAttachments] = useState(false);
+  const attachmentReadInFlight = useRef(false);
+  const attachmentReadGeneration = useRef(0);
   const [loading, setLoading] = useState(false);
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
   const [keyCooldowns, setKeyCooldowns] = useState<Record<string, number>>(() => readAiCooldowns(typeof window === 'undefined' ? undefined : window.sessionStorage));
@@ -1016,6 +1033,7 @@ export function ApiChatConsole({
 
     setMessages([]);
     setDraftMessage("");
+    ++attachmentReadGeneration.current;
     setUploadedAttachments([]);
     setConnectionState(null);
     toast.success("已切換 API Key，已開始新對話");
@@ -1059,6 +1077,7 @@ export function ApiChatConsole({
     setSavedConversations([]);
     setMessages([]);
     setDraftMessage("");
+    ++attachmentReadGeneration.current;
     setUploadedAttachments([]);
 
     if (typeof window !== "undefined") {
@@ -1364,6 +1383,7 @@ export function ApiChatConsole({
       baseUrl.trim() &&
       (draftMessage.trim() || uploadedAttachments.length > 0) &&
       !loading
+      && !readingAttachments
   );
 
   const hasConversationContent =
@@ -1429,7 +1449,7 @@ export function ApiChatConsole({
     const providerHistory = history.filter(message => message.state !== 'error').slice(-MAX_PROVIDER_HISTORY_MESSAGES);
     const unsupportedDocuments = providerHistory.flatMap((message) =>
       (message.attachments ?? [])
-        .filter((attachment) => attachment.kind === "file")
+        .filter((attachment) => attachment.kind === "file" && attachment.mimeType !== 'application/pdf')
         .map((attachment) => attachment.name),
     );
 
@@ -1450,24 +1470,22 @@ export function ApiChatConsole({
 
     providerHistory.forEach((message) => {
       const attachments = message.role === "user" ? message.attachments ?? [] : [];
-      const supportedAttachments =
-        targetPreset.protocol === "gemini"
-          ? attachments
-          : attachments.filter((attachment) => attachment.kind === "image");
-
       providerMessages.push({
         role: message.role,
         text: message.content,
-        images: supportedAttachments.flatMap((attachment) => [
-          {
+        images: attachments.flatMap((attachment) => [
+          ...(attachment.kind === 'image' ? [{
             data: attachment.inlineData,
             mimeType: attachment.mimeType,
-          },
+          }] : []),
           ...(attachment.supplementalImages ?? []).map((image) => ({
             data: image.data,
             mimeType: image.mimeType,
           })),
         ]),
+        documents: attachments.filter(attachment => attachment.kind === 'file').map(attachment => ({
+          data: attachment.inlineData, mimeType: attachment.mimeType, name: attachment.name,
+        })),
       });
     });
 
@@ -1494,10 +1512,15 @@ export function ApiChatConsole({
           if (until) setKeyCooldowns(current => ({ ...current, [target.id]: until }));
         },
         execute: async (target, attemptNumber, timeoutMs) => {
-          const providerRequest = buildProviderChatRequest({
-            provider: target.provider, apiKey: target.apiKey, baseUrl: target.baseUrl, model: target.model,
-            messages: buildProviderMessages(history, target.provider, ephemeralSystemContext),
-          });
+          let providerRequest;
+          try {
+            providerRequest = buildProviderChatRequest({
+              provider: target.provider, apiKey: target.apiKey, baseUrl: target.baseUrl, model: target.model,
+              messages: buildProviderMessages(history, target.provider, ephemeralSystemContext),
+            });
+          } catch (error) {
+            throw error instanceof AiRequestFailure ? error : new AiRequestFailure(error instanceof Error ? error.message : '附件無法送出，請檢查文件格式。', 'invalid');
+          }
           lastEndpoint = providerRequest.url; lastModel = target.model;
           const response = await trackedProviderFetch({
             apiKeyId: target.apiKeyId, provider: target.provider, model: target.model, source: "ai-chat",
@@ -1528,7 +1551,7 @@ export function ApiChatConsole({
     } finally { setRequestProgress(''); }
   };
   const handleSend = async () => {
-    if (sendInFlight.current || loading) return;
+    if (sendInFlight.current || loading || attachmentReadInFlight.current) return;
     const typedContent = draftMessage.trim();
     const content = typedContent || (uploadedAttachments.length ? DEFAULT_IMAGE_OCR_PROMPT : "");
 
@@ -1544,6 +1567,7 @@ export function ApiChatConsole({
     setRequestProgress('正在準備查詢…');
     setMessages(nextHistory);
     setDraftMessage("");
+    ++attachmentReadGeneration.current;
     setUploadedAttachments([]);
     setLoading(true);
 
@@ -1675,6 +1699,7 @@ export function ApiChatConsole({
     const archived = persistCurrentConversation();
     setMessages([]);
     setDraftMessage("");
+    ++attachmentReadGeneration.current;
     setUploadedAttachments([]);
     setConnectionState(null);
     setNewConversationDialogOpen(false);
@@ -1817,6 +1842,10 @@ export function ApiChatConsole({
   };
 
   const appendUploadedFiles = async (files: File[]) => {
+    if (attachmentReadInFlight.current) {
+      toast.info('正在讀取附件，請等待完成後再加入檔案。');
+      return [] as UploadedAttachment[];
+    }
     if (!files.length) return [] as UploadedAttachment[];
     const availableSlots = MAX_UPLOAD_ATTACHMENT_COUNT - uploadedAttachments.length;
 
@@ -1841,9 +1870,17 @@ export function ApiChatConsole({
     });
 
     if (!validFiles.length) return [] as UploadedAttachment[];
-
+    attachmentReadInFlight.current = true;
+    const generation = attachmentReadGeneration.current;
+    setReadingAttachments(true);
     try {
-      const attachments = await Promise.all(validFiles.map(createUploadedAttachmentFromFile));
+      const results = await Promise.allSettled(validFiles.map(createUploadedAttachmentFromFile));
+      if (generation !== attachmentReadGeneration.current) return [] as UploadedAttachment[];
+      const attachments = results.flatMap(result => {
+        if (result.status === 'fulfilled') return [result.value];
+        toast.error(result.reason instanceof Error ? result.reason.message : '附件讀取失敗');
+        return [];
+      });
       const seen = new Set(uploadedAttachments.map(buildAttachmentFingerprint));
       const deduped = attachments.filter((attachment) => {
         const fingerprint = buildAttachmentFingerprint(attachment);
@@ -1858,6 +1895,9 @@ export function ApiChatConsole({
       console.error(error);
       toast.error(error instanceof Error ? error.message : "附件讀取失敗");
       return [] as UploadedAttachment[];
+    } finally {
+      attachmentReadInFlight.current = false;
+      setReadingAttachments(false);
     }
   };
 
@@ -2715,6 +2755,7 @@ export function ApiChatConsole({
               : "mt-4 rounded-[28px] border bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-3.5 shadow-[0_24px_52px_rgba(2,8,23,0.26),inset_0_1px_0_rgba(255,255,255,0.03)]"
           )}
         >
+          {readingAttachments && <p role="status" className="mb-2 text-sm text-blue-100">正在讀取附件，完成後即可送出查詢。</p>}
           <input
             ref={imageInputRef}
             type="file"
@@ -2820,12 +2861,12 @@ export function ApiChatConsole({
                   type="button"
                   variant="ghost"
                   onClick={() => imageInputRef.current?.click()}
-                  disabled={loading || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
+                  disabled={loading || readingAttachments || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
                   aria-label="上傳 PDF、PPT、Excel、Word 或圖片"
                   className={cn("h-11 min-w-11 rounded-xl border border-blue-300/35 bg-blue-400/15 px-3 text-blue-100 shadow-none hover:border-blue-300/70 hover:bg-blue-400/25 disabled:opacity-50", isChatOnly ? "lg:h-12 lg:px-4" : "sm:h-12 sm:px-4")}
                 >
                   <Paperclip className="h-5 w-5 shrink-0" />
-                  <span className={cn("ml-2 hidden text-sm font-bold", isChatOnly ? "lg:inline" : "sm:inline")}>上傳檔案</span>
+                  <span className={cn("ml-2 hidden text-sm font-bold", isChatOnly ? "lg:inline" : "sm:inline")}>{readingAttachments ? '讀取附件中…' : '上傳檔案'}</span>
                 </Button>
               </div>
 
