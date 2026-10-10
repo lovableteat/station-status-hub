@@ -1,7 +1,8 @@
 import { AssessmentAttachments } from "./AssessmentAttachments";
 import { cancelAssessmentDraftWrite, readAssessmentDraft, keepAssessmentDraft, forgetAssessmentDraft } from './assessmentDrafts.mjs';
 import { useEffect, useRef, useState } from "react";
-import { Link2, Send, Upload, X } from "lucide-react";
+import { FileArchive, Link2, Send, Upload, X } from "lucide-react";
+import { PerformanceCopyPanel } from './PerformanceCopyPanel';
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Input } from "@/components/ui/input";
@@ -261,8 +262,10 @@ function Evidence({
 }
 
 interface Props {
-  onExport?: (format: 'xlsx' | 'html', form: AssessmentForm) => Promise<void>;
+  onExport?: (format: 'xlsx' | 'html' | 'zip', form: AssessmentForm) => Promise<void>;
+  getCopyText?: (form: AssessmentForm) => string;
   exporting?: boolean;
+  exportStatus?: string;
   draftKey?: string;
   initial: AssessmentForm;
   mode: AssessmentMode;
@@ -298,7 +301,9 @@ export function AssessmentEditor({
   demo,
   onSave,
   onExport,
+  getCopyText,
   exporting = false,
+  exportStatus = '',
 }: Props) {
   const source = initial.sourceUpdatedAt || (initial.recordId?.startsWith("performance-") ? "new" : initial.recordId);
   // Saved return history is a receipt, not part of the editable local draft.
@@ -465,10 +470,13 @@ export function AssessmentEditor({
         </p>
       </header>
       {mode === 'self' && onExport && <div className="rd2-self-export-actions" aria-label="匯出本人自評">
+        <Button type="button" disabled={saving || imageJobs > 0 || exporting} onClick={() => void onExport('zip', latest.current)}><FileArchive />{exporting ? '匯出中…' : '匯出完整 ZIP'}</Button>
         <Button type="button" variant="outline" disabled={saving || imageJobs > 0 || exporting} onClick={() => void onExport('xlsx', latest.current)}>{exporting ? '匯出中…' : '匯出 Excel'}</Button>
         <Button type="button" variant="outline" disabled={saving || imageJobs > 0 || exporting} onClick={() => void onExport('html', latest.current)}>匯出 HTML</Button>
-        <p className="rd2-hint">匯出目前已加入的實績，不會儲存或提交。</p>
+        <p className="rd2-hint">ZIP 包含 Excel、HTML、整合文字與佐證檔案，只需上傳一個檔案。匯出不會儲存或提交。</p>
+        {exporting && exportStatus && <p className="rd2-hint" role="status">{exportStatus}</p>}
       </div>}
+      {mode === 'self' && getCopyText && <PerformanceCopyPanel contextKey={`${draftKey || ''}:${source}`} disabled={saving || imageJobs > 0 || exporting} getText={() => getCopyText(latest.current)} />}
       {!readonly && draftKey && showDraftWarning && !submitStatus && <p className="rd2-draft-notice" role="status">
         <strong>{mode === "self" ? "編輯中會暫存於本分頁" : "主管評分編輯中會暫存於本分頁"}</strong>
         <span>{mode === "self" ? "按「儲存草稿」可在下次登入後續填；按「提交」才會送交主管。" : "切換頁面或重新整理後可續填；確認評分後按「提交」。"}</span>

@@ -9,11 +9,12 @@ import {
 } from "./rd2Assessment.mjs";
 import { RATING_SCALE } from "./rd2Standards.mjs";
 import { PERFORMANCE_STATUS } from "./performanceData.mjs";
+import { buildPerformanceCopyText } from './performanceCopyText.ts';
 
 type ExcelJsRow = import("exceljs").Row;
 type ExcelJsCell = import("exceljs").Cell;
 type ExcelValue = string | number;
-type ExportOptions = { selfOnly?: boolean; includeOverview?: boolean; canDownload?: () => boolean };
+export type ExportOptions = { selfOnly?: boolean; includeOverview?: boolean; canDownload?: () => boolean; onProgress?: (message: string) => void };
 const SELF_COLUMNS = [0, 1, 3, 6, 7, 8];
 const SELF_HEADERS = ['大類', '實績內容', '員工自評分數', '證明連結', '自評附件檔名', '自評圖片檔名'];
 
@@ -244,7 +245,7 @@ function download(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export async function downloadPerformanceExcel(reviews: PerformanceReview[], cycle: string, options: ExportOptions = {}) {
+export async function buildPerformanceExcel(reviews: PerformanceReview[], cycle: string, options: ExportOptions = {}): Promise<Blob> {
   const selfOnly = options.selfOnly === true;
   const includeOverview = options.includeOverview === true && !selfOnly;
   const headers = selfOnly ? SELF_HEADERS : EXCEL_DETAIL_HEADERS;
@@ -343,17 +344,26 @@ export async function downloadPerformanceExcel(reviews: PerformanceReview[], cyc
     });
   const output = await workbook.xlsx.writeBuffer();
   if (options.canDownload && !options.canDownload()) throw new Error('資料保護狀態已更新。');
-  download(new Blob([output], { type: XLSX_MIME }), `${safeFileName(`${title}-${selfOnly ? reviews[0]?.employeeName + '-' : ''}${cycle}`)}.xlsx`);
+  return new Blob([output], { type: XLSX_MIME });
 }
 
-function escapeHtml(value: unknown) {
+export async function downloadPerformanceExcel(reviews: PerformanceReview[], cycle: string, options: ExportOptions = {}) {
+  const output = await buildPerformanceExcel(reviews, cycle, options);
+  const title = options.selfOnly ? '員工自評' : '績效考核';
+  download(output, `${safeFileName(`${title}-${options.selfOnly ? reviews[0]?.employeeName + '-' : ''}${cycle}`)}.xlsx`);
+}
+
+function escapePlainHtml(value: unknown) {
   return text(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;")
-    .replaceAll("\n", "<br>");
+    .replaceAll("'", "&#39;");
+}
+
+function escapeHtml(value: unknown) {
+  return escapePlainHtml(value).replaceAll("\n", "<br>");
 }
 
 function linkHtml(value: string) {
@@ -373,13 +383,13 @@ function linkHtml(value: string) {
     .join("<br>");
 }
 
-export function downloadPerformanceHtml(reviews: PerformanceReview[], cycle: string, options: ExportOptions = {}) {
+export function buildPerformanceHtml(reviews: PerformanceReview[], cycle: string, options: ExportOptions = {}): string {
   if (options.canDownload && !options.canDownload()) throw new Error('資料保護狀態已更新。');
   const selfOnly = options.selfOnly === true;
   const headers = selfOnly ? SELF_HEADERS : EXCEL_DETAIL_HEADERS;
   const sections = [...reviews]
     .sort((a, b) => a.employeeName.localeCompare(b.employeeName, "zh-Hant"))
-    .map((review) => {
+    .map((review, index) => {
       const basicRows = basicInfoRows(review).filter(([label]) => !selfOnly || label !== '主管加權評分').map(([label, value]) => ["基本資料", label, value, ...Array(headers.length - 3).fill('')]);
       const detail = selfOnly ? detailRows({...review, managerFeedback: '', score: null}).map(row => SELF_COLUMNS.map(index => row[index])) : detailRows(review);
       const accountability = selfOnly ? [] : accountabilityRows(review);
@@ -393,9 +403,26 @@ export function downloadPerformanceHtml(reviews: PerformanceReview[], cycle: str
       const accountabilityHtml = accountability.length
         ? `<div class="accountability"><h3>主管當責評分</h3><table class="accountability-table"><thead><tr><th>評分（1–5 分）</th><th>當責題目</th></tr></thead><tbody>${accountability.map(([rating, question]) => `<tr><td>${escapeHtml(rating)}</td><td>${escapeHtml(question)}</td></tr>`).join("")}</tbody></table></div>`
         : "";
-      return `<section class="member"><h2>${escapeHtml(review.employeeName)}</h2><p class="meta">${escapeHtml(review.department)} · ${escapeHtml(review.role)} · ${escapeHtml(cycle)}</p><table><tbody>${rows}</tbody></table>${accountabilityHtml}</section>`;
+      const pasteId = `performance-paste-${index}`;
+      const copyHtml = `<div class="copy-tools"><button type="button" data-copy-target="${pasteId}">一鍵複製全部實績</button><span id="${pasteId}-status" role="status" aria-live="polite">將 IDP、OKR、KPI 整合後貼到單一欄位。</span></div><details class="copy-text" id="${pasteId}-details"><summary>整合自評文字</summary><textarea readonly id="${pasteId}" aria-label="${escapePlainHtml(review.employeeName)}整合自評文字">${escapePlainHtml(buildPerformanceCopyText({ ...review, cycleId: cycle }))}</textarea></details>`;
+      return `<section class="member"><h2>${escapeHtml(review.employeeName)}</h2><p class="meta">${escapeHtml(review.department)} · ${escapeHtml(review.role)} · ${escapeHtml(cycle)}</p>${copyHtml}<table><tbody>${rows}</tbody></table>${accountabilityHtml}</section>`;
     })
     .join("");
-  const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>績效考核 ${escapeHtml(cycle)}</title><style>body{margin:0;padding:32px;background:#0b1424;color:#e8f0ff;font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif}h1{margin:0 0 8px;color:#8ab4ff}h2{margin:0;color:#9ed0ff}.meta{color:#98aaca}.member{margin:0 0 32px;padding:20px;border:1px solid #365a86;border-left:5px solid #6ea1ff;border-radius:14px;background:#151f32;overflow:auto}.accountability{margin-top:24px}.accountability h3{margin:0;color:#9ed0ff}table{border-collapse:collapse;width:100%;min-width:1050px;margin-top:16px}.accountability-table{min-width:680px;margin-top:8px}th,td{padding:9px 10px;border:1px solid #365a86;text-align:left;vertical-align:top;white-space:pre-wrap;line-height:1.5;overflow-wrap:anywhere}.basic-header th{background:#ffff00;color:#111;font-weight:400}.detail-header th,.accountability-table th{background:#1f4e79;color:#fff;white-space:normal}.basic-header th:empty{color:transparent}tbody td{background:#f7f8fa;color:#111}a{display:inline-block;color:#0563c1;font-weight:700;overflow-wrap:anywhere}</style></head><body><h1>${selfOnly ? "員工自評資料" : "績效考核資料"}</h1><p>匯出週期：${escapeHtml(cycle)}；${selfOnly ? "包含本人自評內容、自評分數、證明連結與佐證檔名。" : "包含主管整體回覆與工作指示，不包含主管退回紀錄、退回原因或退回附件。"}</p>${sections || "<p>目前沒有可匯出的組員資料。</p>"}</body></html>`;
-  download(new Blob([html], { type: "text/html;charset=utf-8" }), `${safeFileName(`${selfOnly ? "員工自評-" + reviews[0]?.employeeName : "績效考核"}-${cycle}`)}.html`);
+  const copyScript = `<script type="text/javascript">document.querySelectorAll('[data-copy-target]').forEach(function(button){button.addEventListener('click',async function(){var id=button.getAttribute('data-copy-target');var field=document.getElementById(id);var status=document.getElementById(id+'-status');var details=document.getElementById(id+'-details');button.disabled=true;try{if(!navigator.clipboard||!navigator.clipboard.writeText)throw new Error('clipboard');await navigator.clipboard.writeText(field.value);status.textContent='已複製全部自評實績。';}catch(error){details.open=true;field.focus();field.select();var copied=false;try{copied=typeof document.execCommand==='function'&&document.execCommand('copy');}catch(ignored){}status.textContent=copied?'已複製全部自評實績。':'請選取下方文字，按 Ctrl+C 或 ⌘+C 複製。';}finally{button.disabled=false;}});});</script>`;
+  const html = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>績效考核 ${escapeHtml(cycle)}</title><style>body{margin:0;padding:32px;background:#0b1424;color:#e8f0ff;font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif}h1{margin:0 0 8px;color:#8ab4ff}h2{margin:0;color:#9ed0ff}.meta{color:#98aaca}.member{margin:0 0 32px;padding:20px;border:1px solid #365a86;border-left:5px solid #6ea1ff;border-radius:14px;background:#151f32;overflow:auto}.accountability{margin-top:24px}.accountability h3{margin:0;color:#9ed0ff}.copy-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:20px 0 12px}.copy-tools button{padding:10px 16px;min-height:44px;border:1px solid #6ea1ff;border-radius:10px;background:#1f4e79;color:#fff;font:inherit;cursor:pointer}.copy-tools button:disabled{opacity:.6;cursor:wait}.copy-tools span{font-size:14px;color:#bbcce5}.copy-text{margin:12px 0 20px}.copy-text summary{cursor:pointer;padding:8px 0;color:#9ed0ff}.copy-text textarea{box-sizing:border-box;width:100%;min-height:260px;margin-top:12px;padding:16px;border:1px solid #567398;border-radius:12px;background:#f7f8fa;color:#111;font:inherit;line-height:1.6;resize:vertical}button:focus-visible,summary:focus-visible,textarea:focus-visible{outline:3px solid #8ab4ff;outline-offset:3px}table{border-collapse:collapse;width:100%;min-width:1050px;margin-top:16px}.accountability-table{min-width:680px;margin-top:8px}th,td{padding:9px 10px;border:1px solid #365a86;text-align:left;vertical-align:top;white-space:pre-wrap;line-height:1.5;overflow-wrap:anywhere}.basic-header th{background:#ffff00;color:#111;font-weight:400}.detail-header th,.accountability-table th{background:#1f4e79;color:#fff;white-space:normal}.basic-header th:empty{color:transparent}tbody td{background:#f7f8fa;color:#111}a{display:inline-block;color:#0563c1;font-weight:700;overflow-wrap:anywhere}</style></head><body><h1>${selfOnly ? "員工自評資料" : "績效考核資料"}</h1><p>匯出週期：${escapeHtml(cycle)}；${selfOnly ? "包含本人自評內容、自評分數、證明連結與佐證檔名。" : "包含主管整體回覆與工作指示，不包含主管退回紀錄、退回原因或退回附件。"}</p>${sections || "<p>目前沒有可匯出的組員資料。</p>"}${copyScript}</body></html>`;
+  return html;
+}
+
+export function downloadPerformanceHtml(reviews: PerformanceReview[], cycle: string, options: ExportOptions = {}) {
+  const html = buildPerformanceHtml(reviews, cycle, options);
+  download(new Blob([html], { type: "text/html;charset=utf-8" }), `${safeFileName(`${options.selfOnly ? "員工自評-" + reviews[0]?.employeeName : "績效考核"}-${cycle}`)}.html`);
+}
+
+/** Package only the supplied, fully loaded reviews; never fetch external evidence links. */
+export async function downloadPerformanceZip(reviews: PerformanceReview[], cycle: string, options: ExportOptions = {}) {
+  const { buildPerformanceArchive } = await import('./performanceExportArchive.ts');
+  const output = await buildPerformanceArchive(reviews, cycle, options);
+  if (options.canDownload && !options.canDownload()) throw new Error('資料保護狀態已更新。');
+  const title = options.selfOnly ? `員工自評-${reviews[0]?.employeeName || '本人'}` : '績效考核';
+  download(output, `${safeFileName(`${title}-${cycle}`)}.zip`);
 }
