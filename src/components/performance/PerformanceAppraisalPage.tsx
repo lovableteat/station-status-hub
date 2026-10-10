@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Download,
+  FileArchive,
   FileCode2,
   FileSpreadsheet,
   FileText,
@@ -36,6 +37,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { createSelfAssessmentExport } from './selfAssessmentExport.mjs';
+import { buildPerformanceCopyText } from './performanceCopyText';
+import { PerformanceCopyPanel } from './PerformanceCopyPanel';
 import { AssessmentPolicy } from "./AssessmentPolicy";
 import { StatTile, StatusBreakdownChart } from "./PerformanceCharts";
 import { PerformanceFlowGuide, PerformanceTaskGuide } from "./PerformanceFlowGuide";
@@ -70,6 +73,7 @@ import {
 import {
   downloadPerformanceExcel,
   downloadPerformanceHtml,
+  downloadPerformanceZip,
 } from "./performanceExport";
 import type {
   AssessmentAction,
@@ -541,6 +545,8 @@ export function PerformanceAppraisalPage() {
     "records",
   );
   const [exporting, setExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState('');
+  const exportInFlight = useRef(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportSelection, setExportSelection] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] =
@@ -698,45 +704,62 @@ export function PerformanceAppraisalPage() {
       toast({ title: '匯出失敗', description: '無法確認完整考核資料，請重新整理後重試。', variant: 'destructive' });
     } finally { setExporting(false); }
   };
-  const exportManagerFile = async (format: "xlsx" | "html") => {
+  const exportManagerFile = async (format: "xlsx" | "html" | "zip") => {
     const selectedReviews = managerExportReviews.filter((review) => exportSelection.includes(review.id));
-    if (!canManagePerformance || !selectedReviews.length || exporting) return;
+    if (!canManagePerformance || !selectedReviews.length || exporting || exportInFlight.current) return;
+    exportInFlight.current = true;
     setExporting(true);
+    setExportStatus('正在讀取完整考核資料…');
     try {
       const generation = accessGeneration.current;
+      const current = () => generation === accessGeneration.current;
       const complete = await withAssessmentReadDeadline(loadAssessmentReviewContents(performanceDb, selectedReviews,
-        () => generation === accessGeneration.current), 60000);
-      if (format === "xlsx") await downloadPerformanceExcel(complete, cycle);
-      else downloadPerformanceHtml(complete, cycle);
+        current), 60000);
+      const options = { canDownload: current, onProgress: (message: string) => { if (current()) setExportStatus(message); } };
+      if (format === 'zip') await downloadPerformanceZip(complete, cycle, { ...options, includeOverview: true });
+      else if (format === "xlsx") await downloadPerformanceExcel(complete, cycle, options);
+      else downloadPerformanceHtml(complete, cycle, options);
       toast({
-        title: format === "xlsx" ? "Excel 已匯出" : "HTML 已匯出",
+        title: format === 'zip' ? '完整 ZIP 已匯出' : format === "xlsx" ? "Excel 已匯出" : "HTML 已匯出",
         description: `已匯出 ${selectedReviews.length} 位組員的 ${cycle} 考核資料，包含整體回覆與工作指示。`,
       });
       setExportOpen(false);
-    } catch {
+    } catch (error) {
       toast({
         title: "匯出失敗",
-        description: "目前無法建立檔案，請確認瀏覽器允許下載後再試一次。",
+        description: error instanceof Error ? error.message : "目前無法建立檔案，請確認瀏覽器允許下載後再試一次。",
         variant: "destructive",
       });
     } finally {
+      exportInFlight.current = false;
       setExporting(false);
+      setExportStatus('');
     }
   };
   const detail = reviews.find((review) => review.id === detailId);
-  const exportSelfFile = async (format: 'xlsx' | 'html', form?: AssessmentForm) => {
-    if (exporting || recordsPending || loadError || (editorReview?.contentLoaded === false)) return;
+  const selfCopyText = (form?: AssessmentForm) => {
+    if (recordsPending || loadError || editorReview?.contentLoaded === false) throw new Error('請等考核內容讀取完成後再複製。');
+    if (form ? !matchesUser(form, user) : !editorReview || !matchesUser(editorReview, user)) throw new Error('目前無法複製這份自評。');
+    return buildPerformanceCopyText(createSelfAssessmentExport(form, editorReview, cycle));
+  };
+  const exportSelfFile = async (format: 'xlsx' | 'html' | 'zip', form?: AssessmentForm) => {
+    if (exporting || exportInFlight.current || recordsPending || loadError || (editorReview?.contentLoaded === false)) return;
     if (form && !matchesUser(form, user)) return;
     if (!form && (!editorReview || !matchesUser(editorReview, user))) return;
-    setExporting(true);
+    exportInFlight.current = true;
+    setExporting(true); setExportStatus('正在整理自評資料…');
     try {
+      const generation = accessGeneration.current;
+      const current = () => generation === accessGeneration.current;
       const snapshot = createSelfAssessmentExport(form, editorReview, cycle);
-      if (format === 'xlsx') await downloadPerformanceExcel([snapshot], cycle, {selfOnly:true});
-      else downloadPerformanceHtml([snapshot], cycle, {selfOnly:true});
-      toast({title:format === 'xlsx' ? '自評 Excel 已匯出' : '自評 HTML 已匯出', description:'已匯出本人的自評內容，未變更儲存或提交狀態。'});
-    } catch {
-      toast({title:'匯出失敗',description:'無法建立自評檔案，請重試。',variant:'destructive'});
-    } finally { setExporting(false); }
+      const options = { selfOnly: true, canDownload: current, onProgress: (message: string) => { if (current()) setExportStatus(message); } };
+      if (format === 'zip') await downloadPerformanceZip([snapshot], cycle, options);
+      else if (format === 'xlsx') await downloadPerformanceExcel([snapshot], cycle, options);
+      else downloadPerformanceHtml([snapshot], cycle, options);
+      toast({title:format === 'zip' ? '自評完整 ZIP 已匯出' : format === 'xlsx' ? '自評 Excel 已匯出' : '自評 HTML 已匯出', description:'已匯出本人的自評內容，未變更儲存或提交狀態。'});
+    } catch (error) {
+      toast({title:'匯出失敗',description:error instanceof Error ? error.message : '無法建立自評檔案，請重試。',variant:'destructive'});
+    } finally { exportInFlight.current = false; setExporting(false); setExportStatus(''); }
   };
   const contentTarget = detail || (tab === 'self' || (tab === 'manager' && managerView === 'score') ? editorReview : null);
   const contentPending = contentTarget?.contentLoaded === false;
@@ -1051,9 +1074,13 @@ export function PerformanceAppraisalPage() {
                         </small>
                       )}
                       <div className="rd2-self-export-actions">
+                        <Button type="button" disabled={exporting} onClick={() => void exportSelfFile('zip')}><FileArchive />{exporting ? '匯出中…' : '匯出完整 ZIP'}</Button>
                         <Button type="button" variant="outline" disabled={exporting} onClick={() => void exportSelfFile('xlsx')}><FileSpreadsheet />{exporting ? '匯出中…' : '匯出 Excel'}</Button>
                         <Button type="button" variant="outline" disabled={exporting} onClick={() => void exportSelfFile('html')}><FileCode2 />匯出 HTML</Button>
+                        <p className="rd2-hint">ZIP 包含 Excel、HTML、整合文字與佐證檔案，只需上傳一個檔案。</p>
+                        {exporting && exportStatus && <p className="rd2-hint" role="status">{exportStatus}</p>}
                       </div>
+                      <PerformanceCopyPanel contextKey={`${accessScope}:${cycle}:${editorReview?.id}:${editorReview?.updatedAt}`} disabled={exporting || recordsPending || !!loadError || editorReview?.contentLoaded === false} getText={() => selfCopyText()} />
                     </div>
                   </section>
                 ) : tab === "manager" && !editorReview ? (
@@ -1091,7 +1118,9 @@ export function PerformanceAppraisalPage() {
                     demo={demo}
                     onSave={save}
                     onExport={tab === 'self' ? exportSelfFile : undefined}
+                    getCopyText={tab === 'self' ? selfCopyText : undefined}
                     exporting={exporting}
+                    exportStatus={exportStatus}
                   />
                 )}
                 </div>
@@ -1413,11 +1442,11 @@ export function PerformanceAppraisalPage() {
               <DialogContent className="performance-workspace rd2-bright rd2-export-dialog">
                 <DialogHeader>
                   <DialogTitle>選擇匯出人員</DialogTitle>
-                  <DialogDescription>可匯出全部組員，也可只勾選本次需要的人員。Excel 與 HTML 都會使用相同名單。</DialogDescription>
+                  <DialogDescription>勾選本次需要的人員。完整 ZIP 會將 Excel、HTML、整合文字與佐證檔案打包成一個檔案。</DialogDescription>
                 </DialogHeader>
                 <div className="rd2-export-selection-actions">
-                  <Button type="button" size="sm" variant="outline" onClick={() => setExportSelection(managerExportReviews.map((review) => review.id))}>全選</Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setExportSelection([])}>清除</Button>
+                  <Button type="button" size="sm" variant="outline" disabled={exporting} onClick={() => setExportSelection(managerExportReviews.map((review) => review.id))}>全選</Button>
+                  <Button type="button" size="sm" variant="ghost" disabled={exporting} onClick={() => setExportSelection([])}>清除</Button>
                   <span>{exportSelection.length}／{managerExportReviews.length} 人</span>
                 </div>
                 <div className="rd2-export-person-list" role="group" aria-label="匯出人員">
@@ -1425,17 +1454,21 @@ export function PerformanceAppraisalPage() {
                     const checked = exportSelection.includes(review.id);
                     const employeeNumber = readSelfAssessment(review.selfFeedback).employeeNumber || readManagerAssessment(review.managerFeedback).employeeNumber;
                     return <label key={review.id} className="rd2-export-person" data-selected={checked || undefined}>
-                      <Checkbox checked={checked} onCheckedChange={(next) => setExportSelection((current) => next === true ? [...new Set([...current, review.id])] : current.filter((id) => id !== review.id))} />
+                      <Checkbox checked={checked} disabled={exporting} onCheckedChange={(next) => setExportSelection((current) => next === true ? [...new Set([...current, review.id])] : current.filter((id) => id !== review.id))} />
                       <span><strong>{review.employeeName}</strong><small>{employeeNumber || '未填工號'} · {review.department || '未填部門'}</small></span>
                     </label>;
                   })}
                 </div>
+                {exporting && exportStatus && <p role="status" className="rd2-hint">{exportStatus}</p>}
                 <DialogFooter className="rd2-export-dialog-footer">
                   <Button type="button" variant="outline" onClick={() => void exportManagerFile("html")} disabled={!exportSelection.length || exporting}>
                     <FileCode2 data-icon="inline-start" />匯出 HTML
                   </Button>
-                  <Button type="button" onClick={() => void exportManagerFile("xlsx")} disabled={!exportSelection.length || exporting}>
+                  <Button type="button" variant="outline" onClick={() => void exportManagerFile("xlsx")} disabled={!exportSelection.length || exporting}>
                     <FileSpreadsheet data-icon="inline-start" />{exporting ? '匯出中…' : '匯出 Excel'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => void exportManagerFile('zip')} disabled={!exportSelection.length || exporting}>
+                    <FileArchive data-icon="inline-start" />{exporting ? '匯出中…' : '匯出完整 ZIP'}
                   </Button>
                 </DialogFooter>
               </DialogContent>

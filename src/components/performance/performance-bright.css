@@ -1596,6 +1596,18 @@
   margin: 16px 0;
 }
 .rd2-self-export-actions .rd2-hint { flex-basis: 100%; margin: 0; }
+.rd2-copy-panel { display: grid; gap: 12px; margin: 16px 0 24px; min-width: 0; }
+.rd2-copy-panel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.rd2-copy-panel-actions > button { min-height: 44px; }
+.rd2-copy-status { margin: 0; color: var(--rd2-text, #f2f2f7); font-size: .9375rem; line-height: 1.6; }
+.rd2-copy-preview { display: grid; gap: 12px; padding: 20px; border: 1px solid var(--rd2-border); border-radius: var(--app-radius-card); background: var(--rd2-panel-soft); min-width: 0; }
+.rd2-copy-preview label { font-weight: 600; color: var(--rd2-text, #f2f2f7); }
+.rd2-copy-preview p { margin: 0; color: var(--rd2-muted, #c7c7cc); font-size: .9375rem; line-height: 1.6; }
+.rd2-copy-preview textarea { width: 100%; min-height: 18rem; line-height: 1.75; font-size: 1rem; padding: 16px; resize: vertical; }
+@media (max-width: 640px) {
+  .rd2-copy-panel-actions > button { flex: 1 1 180px; }
+  .rd2-copy-preview { padding: 16px; }
+}
 .rd2-bright .rd2-writing-hint {
   display: flex; align-items: flex-start; gap: .75rem; margin: 0 0 .75rem;
   padding: .875rem 1rem; border-radius: 10px;

@@ -147,3 +147,20 @@ test('employee exports current self assessment with readable headers and no supe
     }
   } finally {URL.createObjectURL=originalCreate;URL.revokeObjectURL=originalRevoke;globalThis.document=originalDocument;}
 });
+
+test('a local export includes the last unadded achievement without changing the editing form', async () => {
+  const { createSelfAssessmentExport } = await import('../src/components/performance/selfAssessmentExport.mjs');
+  const { createAssessmentForm, readSelfAssessment } = await import('../src/components/performance/rd2Assessment.mjs');
+  const previous = { ...DEFAULT_PERFORMANCE_REVIEWS[0], selfFeedback: serializeSelfAssessment({
+    sections: { IDP: { entries: [{ id: 'saved', text: '已加入的實績' }] } },
+  }) };
+  const form = createAssessmentForm(previous);
+  form.self.sections.IDP.draftText = '還没按新增的最後實績';
+  const before = structuredClone(form);
+  const snapshot = createSelfAssessmentExport(form, previous, '2026-q3');
+  assert.deepEqual(readSelfAssessment(snapshot.selfFeedback).sections.IDP.entries.map(entry => entry.text), ['已加入的實績', '還没按新增的最後實績']);
+  assert.equal(readSelfAssessment(snapshot.selfFeedback).sections.IDP.draftText, '');
+  assert.deepEqual(form, before);
+  assert.equal(snapshot.status, previous.status);
+  assert.equal(snapshot.managerFeedback, '');
+});

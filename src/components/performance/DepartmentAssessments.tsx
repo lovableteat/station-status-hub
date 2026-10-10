@@ -7,7 +7,7 @@ import { withAssessmentReadDeadline } from './assessmentRefresh.mjs';
 import { normalizePerformanceReview, PERFORMANCE_STATUS } from './performanceData.mjs';
 import type { PerformanceReview } from './assessmentTypes';
 import { ReviewDetail } from './ReviewDetail';
-import { Download } from 'lucide-react';
+import { Download, FileArchive } from 'lucide-react';
 import { loadDepartmentExportReviews } from './departmentAssessmentExport.mjs';
 
 export interface DepartmentAssessmentRow {
@@ -39,6 +39,7 @@ export function DepartmentAssessments({ rows, cycle, ready, loading, revealVersi
   const detailRegion = useRef<HTMLDivElement | null>(null);
   const exportRegion = useRef<HTMLDivElement | null>(null);
   const exportRequest = useRef(0);
+  const exportInFlight = useRef(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
@@ -69,8 +70,9 @@ export function DepartmentAssessments({ rows, cycle, ready, loading, revealVersi
     setExportOpen(value => !value);
     if (!exportOpen) setSelection(exportable.map(row => row.review_id!));
   };
-  const exportFile = async (format: 'xlsx' | 'html') => {
-    if (exporting || loading || !ready || !exportRows.length) return;
+  const exportFile = async (format: 'xlsx' | 'html' | 'zip') => {
+    if (exporting || exportInFlight.current || loading || !ready || !exportRows.length) return;
+    exportInFlight.current = true;
     const request = ++exportRequest.current;
     const current = () => request === exportRequest.current && accessKey === exportAccess.current;
     setExporting(true); setExportError(''); setExportMessage(`正在讀取 0 / ${exportRows.length} 人…`);
@@ -80,15 +82,17 @@ export function DepartmentAssessments({ rows, cycle, ready, loading, revealVersi
       const exporter = await import('./performanceExport');
       if (!current()) throw new Error('資料保護狀態已更新，請重新選擇匯出人員。');
       setExportMessage(`正在建立 ${complete.length} 人的匯出檔案…`);
-      if (format === 'xlsx') await exporter.downloadPerformanceExcel(complete, cycle, { includeOverview: true, canDownload: current });
+      if (format === 'zip') await exporter.downloadPerformanceZip(complete, cycle, { includeOverview: true, canDownload: current,
+        onProgress: (message: string) => { if (current()) setExportMessage(message); } });
+      else if (format === 'xlsx') await exporter.downloadPerformanceExcel(complete, cycle, { includeOverview: true, canDownload: current });
       else exporter.downloadPerformanceHtml(complete, cycle, { canDownload: current });
-      if (current()) setExportMessage(`已匯出 ${complete.length} 人的 ${format === 'xlsx' ? 'Excel' : 'HTML'}，包含實績、分數、整體回覆與工作指示。`);
-    } catch {
+      if (current()) setExportMessage(`已匯出 ${complete.length} 人的 ${format === 'zip' ? '完整 ZIP（Excel、HTML、整合文字與佐證檔案）' : format === 'xlsx' ? 'Excel' : 'HTML'}，包含實績、分數、整體回覆與工作指示。`);
+    } catch (error) {
       if (request === exportRequest.current) {
         setExportMessage('');
-        setExportError('匯出未完成，未下載部分資料。請確認所屬群組已解鎖後重新整理，再試一次。');
+        setExportError(error instanceof Error ? error.message : '匯出未完成，未下載部分資料。請確認所屬群組已解鎖後重新整理，再試一次。');
       }
-    } finally { if (request === exportRequest.current) setExporting(false); }
+    } finally { exportInFlight.current = false; if (request === exportRequest.current) setExporting(false); }
   };
   const revision = selectedRow?.updated_at;
   useEffect(() => {
@@ -122,7 +126,8 @@ export function DepartmentAssessments({ rows, cycle, ready, loading, revealVersi
     <header className="rd2-assessment-header"><div><h3>部門所有人填寫資料</h3><p className="rd2-hint">包含所屬各課同仁、課長及直屬同仁已儲存的自評、主管評分與回覆。點「查看內容」在本頁展開；尚未儲存的輸入不會顯示。</p></div><Button variant="outline" onClick={openExport} disabled={!ready || loading || exporting} aria-expanded={exportOpen} aria-controls="department-export-tools"><Download />匯出資料</Button></header>
     <div ref={exportRegion} id="department-export-tools" className="rd2-department-export" hidden={!exportOpen} aria-label="部門考核匯出">
       <div><h4>匯出部門考核資料</h4><p className="rd2-hint">勾選下方人員，匯出本期完整 STAR 實績、自評與主管分數、逐項與整體回覆、工作指示、證明連結及附件檔名。尚未儲存或未解鎖的資料無法匯出。</p></div>
-      <div className="rd2-actions"><Button onClick={() => void exportFile('xlsx')} disabled={exporting || loading || !ready || !exportRows.length}><Download />{exporting ? '匯出中…' : '匯出 Excel'}</Button><Button variant="outline" onClick={() => void exportFile('html')} disabled={exporting || loading || !ready || !exportRows.length}>匯出 HTML</Button><span>已勾選 {exportRows.length} / {exportable.length} 人</span></div>
+      <div className="rd2-actions"><Button variant="outline" onClick={() => void exportFile('zip')} disabled={exporting || loading || !ready || !exportRows.length}><FileArchive />{exporting ? '匯出中…' : '匯出完整 ZIP'}</Button><Button variant="outline" onClick={() => void exportFile('xlsx')} disabled={exporting || loading || !ready || !exportRows.length}><Download />匯出 Excel</Button><Button variant="outline" onClick={() => void exportFile('html')} disabled={exporting || loading || !ready || !exportRows.length}>匯出 HTML</Button><span>已勾選 {exportRows.length} / {exportable.length} 人</span></div>
+      <p className="rd2-hint">只可上傳一個檔案時，使用「匯出完整 ZIP」一次打包報表、整合文字與實際佐證檔案。</p>
       <p className="rd2-hint">僅匯出目前篩選範圍內已勾選的人員。Excel 首頁為人員總覽，點姓名可跳到該人的 STAR、評分與主管回覆；個人頁可點「回到首頁」返回。</p>
       {exportMessage && <p role="status" className="rd2-hint">{exportMessage}</p>}{exportError && <p role="alert" className="rd2-error">{exportError}</p>}
     </div>
