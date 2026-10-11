@@ -59,6 +59,10 @@ body:has([data-chat-dock="detached"]) .dc-2d-workspace { padding-bottom: 56px; }
 .dc-dialog--facility { --dc-dialog-width: 760px; }
 .dc-dialog--aisle { --dc-dialog-width: 720px; }
 .dc-dialog--preview { --dc-dialog-width: 1440px; }
+.dc-preview-section + .dc-preview-section { margin-top: 16px; }
+.dc-preview-section-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 12px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+.dc-preview-section-title svg { flex-shrink: 0; }
+.dc-preview-part-name { min-width: 0; overflow-wrap: anywhere; }
 .dc-dialog .app-dialog-header { flex-shrink: 0; gap: 6px; padding: 20px 64px 20px 24px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--card)); }
 .dc-dialog .app-dialog-header h2, .dc-dialog--preview header h2 { font-size: 20px; line-height: 1.4; font-weight: 600; letter-spacing: -.02em; }
 .dc-dialog .app-dialog-header p { display: block; font-size: 14px; line-height: 1.6; color: hsl(var(--muted-foreground)); }

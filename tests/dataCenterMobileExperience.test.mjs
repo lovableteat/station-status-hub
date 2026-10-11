@@ -80,8 +80,8 @@ test("the model detail viewer keeps its header and controls inside a phone viewp
   assert.match(viewerSource, /className="dc-dialog dc-dialog--preview min-w-0 h-\[min\(94svh,920px\)\]/);
   assert.match(viewerSource, /<header className="flex min-h-\[76px\] min-w-0/);
   assert.match(viewerSource, /<aside className="order-2 min-w-0/);
-  assert.match(viewerSource, /className="flex w-full min-w-0 gap-2 overflow-x-auto/);
-  assert.doesNotMatch(viewerSource, /min-w-max gap-2 overflow-x-auto/);
+  assert.match(viewerSource, /className="grid min-w-0 grid-cols-3 gap-2"/);
+  assert.doesNotMatch(viewerSource, /min-w-24/);
 });
 
 test("rack inspector exposes individually selectable rack units", () => {

@@ -35,3 +35,20 @@
 - 截圖、操作結果、恢復前後快照與比對證據保存在 Git 外的 `model-library-ui-2026-10-11` 視覺驗證目錄；不含密碼或 session token。不將配置快照納入公開儲存庫。
 - 尚未檢查完整儲存庫測試、其他工作區與實體手機；正式站後續驗證只進行唯讀瀏覽與選取，不再次安裝／變更配置。
 - 正式站首輪驗證後再精簡資料密度：廠牌／版本並列，尺寸保持整行，減少資訊上下留白。在一般 1280×720 桌機，首次開啟就能直接點到預覽與編輯，不必先捲右側；沒有修改任何操作 callbacks。
+
+## 追加：模型細節側欄分類
+
+使用者補充要求模型細節分類更明確。比較只加分隔線、分頁切換、可見的分類標題後，採用可見標題：不用增加切換步驟，也能辨識不同工具的目的。
+
+- 「顯示模式」只放實體／透視／線框；「剖面檢視」保留開關及緊接的剖面位置；「視角控制」放重設視角；「零件結構」保留搜尋及零件可見性；「模型規格」放尺寸、原始檔及用途。
+- 使用既有 secondary 背景與 border 的完整標題列，16px 組間距、8px 組內距；不更換網站配色、字體或新增依賴。
+- 桌機側欄 280px、16px padding；手機維持模型畫布在上、可捲動工具在下，規格不再隱藏。零件名稱可換行，不依檔名猜測零件分類。
+- 僅修改 DataCenterModelViewer JSX、作用域 CSS 與既有 viewer/mobile 回歸。保留 callbacks、模型幾何、相機、剖面及零件處理，不改配置資料或權限。
+
+### 執行清單
+
+- [x] 先新增各分類 region／heading、尺寸與名稱換行契約，執行 `node --test tests/dataCenterModelViewerParts.test.mjs tests/dataCenterMobileExperience.test.mjs` 確認舊碼失敗。
+- [x] 以 `<section className="dc-preview-section" aria-label="顯示模式">` 等既有標準元素重排工具，標題使用 `<h3>`；CSS 使用 `.dc-preview-section + .dc-preview-section` 區隔，保留原有所有 onClick／onChange。
+- [x] 執行 Data Center／facility 全部測試 145/145、範圍 ESLint、typecheck、build、diff check、layout detector（零命中）；桌機實際切換模式、剖面位置 50%→51%、搜尋空結果、單一零件隱藏及全部顯示。390×844 手機可捲到完整模型規格；320×740 無橫向溢出，模式控制 44px。
+- [x] 獨立版面與機械掃描兩路完成，最終原始碼審查無待修項目；1024×600 實際可捲到規格，瀏覽器警告／錯誤為零。
+- 發布門檻：提交／推送 main，確認 Pages 與正式畫面，再核對配置未改動。發布證據與操作截圖保存於 Git 外的 `model-library-ui-2026-10-11` 目錄，不公開配置或登入資訊。

@@ -80,3 +80,26 @@ test("model viewer uses one deterministic camera fit instead of refitting loadin
   assert.match(viewerSource, /data-\[state=open\]:!animate-none/);
   assert.match(viewerSource, /h-\[min\(94svh,920px\)\]/);
 });
+
+test("model detail controls have visible named groups for each task", () => {
+  for (const label of ["顯示模式", "剖面檢視", "視角控制", "零件結構", "模型規格"]) {
+    const section = viewerSource.match(new RegExp(`<section className="dc-preview-section" aria-label="${label}">([\\s\\S]*?)<\\/section>`));
+    assert.ok(section, `${label} must be a named section`);
+    assert.match(section[1], new RegExp(`<h3 className="dc-preview-section-title">[\\s\\S]*?${label}<\\/h3>`));
+  }
+  const modes = viewerSource.match(/aria-label="顯示模式">([\s\S]*?)<\/section>/)[1];
+  assert.match(modes, /實體/);
+  assert.match(modes, /透視/);
+  assert.match(modes, /線框/);
+  assert.doesNotMatch(modes, /重設視角|sectionEnabled/);
+});
+
+test("model detail categories preserve narrow-screen data access and readable names", async () => {
+  const css = await readFile(new URL("../src/components/data-center/data-center.css", import.meta.url), "utf8");
+  assert.match(viewerSource, /lg:grid-cols-\[280px_minmax\(0,1fr\)\]/);
+  assert.match(viewerSource, /<span className="dc-preview-part-name">\{partName\}<\/span>/);
+  assert.doesNotMatch(viewerSource, /hidden space-y-3[^\n]+lg:block/);
+  assert.match(css, /\.dc-preview-section-title \{[^}]*background: hsl\(var\(--secondary\)\)/);
+  assert.match(css, /\.dc-preview-section \+ \.dc-preview-section \{[^}]*margin-top: 16px/);
+  assert.match(css, /\.dc-preview-part-name \{[^}]*overflow-wrap: anywhere/);
+});
