@@ -5,6 +5,18 @@ import test from "node:test";
 const sourceUrl = new URL("../src/components/material-requests/MaterialRequestPage.tsx", import.meta.url);
 const source = await readFile(sourceUrl, "utf8");
 
+test("template download uses the shared accessible button colors and preserves the native download", () => {
+  const guide = source.match(/function UploadGuideDialog\([\s\S]*?\r?\n}\r?\n/)?.[0] ?? "";
+  const button = guide.match(/<Button\b([^>]*)>\s*<a href=\{templateUrl\} download="料號替代料_上傳範本\.xlsx">/)?.[1];
+
+  assert.ok(button, "template download must remain a native link inside Button");
+  assert.match(button, /\basChild\b/);
+  assert.doesNotMatch(button, /\b(?:bg|text|hover:bg)-(?:cyan|slate)-\d/);
+  assert.match(button, /\bshrink-0\b/);
+  assert.match(guide, /import\.meta\.env\.BASE_URL\}material-upload-template\.xlsx/);
+  assert.match(guide, /<Download\b/);
+});
+
 test("material search controls are contained by the material table card", () => {
   const cardStart = source.indexOf('data-testid="material-table-card"');
   const headingStart = source.indexOf("<h2", cardStart);
