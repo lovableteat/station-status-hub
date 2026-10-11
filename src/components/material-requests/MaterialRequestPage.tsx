@@ -2863,7 +2863,7 @@ function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 <h3 className="text-lg font-bold text-cyan-200">1. 先用標準範本整理</h3>
                 <p className="mt-1 leading-6 text-slate-400">如果你手上的 BOM 很亂，先用範本重排一次最省事。範本裡有欄位示例，照著填，網站辨識率最高。</p>
               </div>
-              <Button asChild className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400">
+              <Button asChild className="shrink-0 font-bold">
                 <a href={templateUrl} download="料號替代料_上傳範本.xlsx">
                   <Download className="mr-2 h-4 w-4" />下載上傳範本
                 </a>
