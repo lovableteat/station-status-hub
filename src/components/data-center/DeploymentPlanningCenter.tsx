@@ -2090,7 +2090,7 @@ function ModelLibrary({
                   <dl className="dc-model-facts">
                     <div><dt>廠牌</dt><dd>{selectedModel.manufacturer || "未提供"}</dd></div>
                     <div><dt>版本</dt><dd>{selectedModel.revision || "未提供"}</dd></div>
-                    <div><dt>尺寸（寬 × 深 × 高）</dt><dd>{formatDimensions(selectedModel.dimensions)}</dd></div>
+                    <div className="dc-model-dimensions"><dt>尺寸（寬 × 深 × 高）</dt><dd>{formatDimensions(selectedModel.dimensions)}</dd></div>
                     <div><dt>類型</dt><dd>{selectedModel.kind === "rack" ? "機櫃外框" : `${getEquipmentCategoryLabel(getEquipmentCategory(selectedModel))} · ${selectedModel.rackUnits ?? 1}U`}</dd></div>
                   </dl>
                   {selectedModel.kind === "l10" && selectedModel.compatibilityNote ? (

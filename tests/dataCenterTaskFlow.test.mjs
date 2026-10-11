@@ -114,6 +114,9 @@ test("model search exposes active conditions and direct actions outside the scro
   assert.match(css, /\.dc-model-detail \{[^}]*position: sticky/);
   assert.match(css, /\.dc-model-scroll \{ container-type: size/);
   assert.match(css, /\.dc-model-detail \{[^}]*max-height: calc\(100cqh - 48px\);[^}]*overflow-y: auto/);
+  assert.match(css, /\.dc-model-facts \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(library, /className="dc-model-dimensions"/);
+  assert.match(css, /\.dc-model-dimensions \{ grid-column: 1 \/ -1/);
   assert.match(css, /\.dc-model-row\[aria-pressed="true"\] \{ @apply border-cyan-300/);
 });
 

@@ -97,7 +97,8 @@ body:has([data-chat-dock="detached"]) .dc-2d-workspace { padding-bottom: 56px; }
 .dc-model-detail-heading p { margin-bottom: 4px; color: hsl(var(--muted-foreground)); font-size: 13px; }
 .dc-model-detail-heading h3 { font-size: 18px; overflow-wrap: anywhere; }
 .dc-model-detail-heading > span { @apply text-cyan-200; display: block; margin-top: 8px; font-size: 13px; }
-.dc-model-facts { display: grid; gap: 12px; margin-block: 24px; }
+.dc-model-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-block: 16px; }
+.dc-model-dimensions { grid-column: 1 / -1; }
 .dc-model-facts dt { color: hsl(var(--muted-foreground)); font-size: 13px; }
 .dc-model-facts dd { margin-top: 4px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .dc-model-management { display: grid; gap: 8px; padding-top: 16px; border-top: 1px solid hsl(var(--border)); }
@@ -117,7 +118,6 @@ body:has([data-chat-dock="detached"]) .dc-2d-workspace { padding-bottom: 56px; }
 @media (max-width: 899px) {
   .dc-model-browser { grid-template-columns: minmax(0, 1fr); }
   .dc-model-detail { position: static; max-height: none; overflow: visible; border-left: 0; border-top: 1px solid hsl(var(--border)); padding: 24px 0 0; }
-  .dc-model-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block: 16px; }
   .dc-model-actions { align-items: stretch; flex-direction: column; gap: 8px; }
   .dc-model-action-controls > button { flex: 1; }
 }
