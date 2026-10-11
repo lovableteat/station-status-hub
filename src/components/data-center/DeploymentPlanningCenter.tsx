@@ -1813,7 +1813,6 @@ function ModelLibrary({
   const [modelSearch, setModelSearch] = useState("");
   const [equipmentCategory, setEquipmentCategory] = useState<"all" | RackEquipmentCategory>("all");
   const [installRackUnit, setInstallRackUnit] = useState(1);
-  const selectedModelActionsRef = useRef<HTMLDivElement>(null);
   const [editDraft, setEditDraft] = useState<{
     name: string;
     manufacturer: string;
@@ -1921,52 +1920,43 @@ function ModelLibrary({
     >
       <DialogContent
         data-model-catalog="bright-catalog"
-        className="dc-dialog dc-dialog--models flex h-[min(76dvh,640px)] w-[min(96vw,1120px)] max-w-none flex-col gap-0 overflow-hidden rounded-2xl border border-slate-600/75 bg-[#08131f] p-0 text-slate-100 shadow-[0_38px_120px_-38px_rgba(2,8,23,0.95)] sm:h-[min(90dvh,860px)] sm:max-w-[1120px] sm:rounded-[28px]"
+        className="dc-dialog dc-dialog--models overflow-hidden"
       >
-        <DialogHeader className="shrink-0 border-b border-slate-700/80 bg-[linear-gradient(135deg,#12283d,#0b1827)] px-3 py-3 pr-12 text-left sm:px-6 sm:py-5 sm:pr-14">
+        <DialogHeader className="text-left">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-amber-300/35 bg-amber-300/12 text-amber-200 shadow-[0_12px_30px_-18px_rgba(251,191,36,0.75)] sm:h-11 sm:w-11 sm:rounded-[14px]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-300/35 bg-amber-300/10 text-amber-200">
               <Boxes className="h-5 w-5" />
             </div>
             <div>
-              <DialogTitle className="text-base font-black tracking-[-0.025em] text-white sm:text-xl">模型與設備庫</DialogTitle>
-              <DialogDescription className="mt-0.5 text-sm leading-5 text-slate-300">
-                管理機櫃外框與櫃內設備，並安裝到 {selectedRack.cabinet} 的指定 U 位。
+              <DialogTitle>模型與設備庫</DialogTitle>
+              <DialogDescription>
+                選擇機櫃外框，或將櫃內設備安裝至 {selectedRack.cabinet}。
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="flex shrink-0 gap-2 border-b border-slate-700/70 bg-[#0a1624] px-3 py-2 sm:px-6 sm:py-3" role="tablist" aria-label="模型目錄工作模式">
-          {([
-            ["browse", "瀏覽與套用"],
-            ["import", "匯入新模型"],
-          ] as const).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={view === id}
-              onClick={() => setView(id)}
-              className={cn(
-                "h-9 cursor-pointer rounded-xl border px-4 text-xs font-black transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70",
-                view === id
-                  ? id === "browse"
-                    ? "border-cyan-300/60 bg-cyan-300 text-cyan-950 shadow-[0_8px_24px_-14px_rgba(103,232,249,0.9)]"
-                    : "border-amber-300/60 bg-amber-300 text-amber-950 shadow-[0_8px_24px_-14px_rgba(251,191,36,0.8)]"
-                  : "border-slate-700 bg-slate-800/45 text-slate-300 hover:border-slate-500 hover:bg-slate-700/55 hover:text-white"
-              )}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="dc-model-toolbar">
+          {view === "browse" ? (
+            <>
+              <p>先選模型，再確認資料與套用位置。</p>
+              <Button type="button" variant="outline" disabled={!canEdit} onClick={() => setView("import")}>
+                <Upload className="mr-2 h-4 w-4" /> 匯入新模型
+              </Button>
+            </>
+          ) : (
+            <Button type="button" variant="ghost" onClick={() => setView("browse")}>
+              <ChevronLeft className="mr-2 h-4 w-4" /> 返回模型目錄
+            </Button>
+          )}
         </div>
 
-        <ScrollArea className="min-h-0 flex-1 bg-[radial-gradient(circle_at_top_right,rgba(14,116,144,0.08),transparent_34%),#08131f]">
-          <div className="p-5 sm:p-6">
+        <ScrollArea key={view} className="dc-model-scroll min-h-0 flex-1">
+          <div className="dc-model-body">
             {view === "browse" ? (
-            <section>
-              <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-slate-700/80 bg-[#0c1928] p-1.5" role="tablist" aria-label="模型種類">
+            <div className="dc-model-browser">
+            <section aria-label="模型目錄">
+              <div className="dc-model-kinds" role="group" aria-label="模型種類">
                 {([
                   ["rack", `機櫃外框 ${rackModelCount}`],
                   ["l10", `櫃內設備 ${l10ModelCount}`],
@@ -1974,23 +1964,15 @@ function ModelLibrary({
                   <button
                     key={kind}
                     type="button"
-                    role="tab"
-                    aria-selected={catalogKind === kind}
+                    aria-pressed={catalogKind === kind}
                     onClick={() => selectCatalogKind(kind)}
-                    className={cn(
-                      "h-10 cursor-pointer rounded-lg text-sm font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
-                      catalogKind === kind
-                        ? kind === "rack"
-                          ? "border border-cyan-300/45 bg-cyan-300/15 text-cyan-100 shadow-inner"
-                          : "border border-violet-300/45 bg-violet-300/15 text-violet-100 shadow-inner"
-                        : "border border-transparent text-slate-400 hover:border-slate-600 hover:bg-slate-700/35 hover:text-white"
-                    )}
+                    className="dc-model-kind"
                   >
                     {label}
                   </button>
                 ))}
               </div>
-              <div className="mb-4 rounded-2xl border border-slate-700/80 bg-[#0c1928] p-3.5 shadow-[0_16px_38px_-30px_rgba(2,8,23,0.95)]">
+              <div className="dc-model-filters">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300/80" />
                   <Input
@@ -1998,23 +1980,18 @@ function ModelLibrary({
                     value={modelSearch}
                     onChange={(event) => setModelSearch(event.target.value)}
                     placeholder={catalogKind === "rack" ? "搜尋機櫃名稱、廠牌或版本" : "搜尋設備名稱、廠牌、類型或版本"}
-                    className="h-11 rounded-xl border-slate-600/80 bg-[#111f31] pl-9 text-sm text-white placeholder:text-slate-500 focus-visible:border-cyan-300/70 focus-visible:ring-cyan-300/20"
+                    className="h-11 pl-9"
                   />
                 </div>
                 {catalogKind === "l10" ? (
-                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="設備類別">
+                  <div className="dc-model-categories" role="group" aria-label="設備類別">
                     {EQUIPMENT_CATEGORY_OPTIONS.map((option) => (
                       <button
                         key={option.id}
                         type="button"
                         aria-pressed={equipmentCategory === option.id}
                         onClick={() => setEquipmentCategory(option.id as "all" | RackEquipmentCategory)}
-                        className={cn(
-                          "h-8 shrink-0 rounded-full border px-3 text-[11px] font-black transition-colors",
-                          equipmentCategory === option.id
-                            ? "border-violet-300/45 bg-violet-400/15 text-violet-100"
-                            : "border-slate-700 bg-[#101d2d] text-slate-400 hover:border-slate-500 hover:bg-slate-700/45 hover:text-white",
-                        )}
+                        className="dc-model-category"
                       >
                         {option.label}
                       </button>
@@ -2030,8 +2007,8 @@ function ModelLibrary({
                 ) : null}
               </div>
 
-              <h3 className="mb-3 text-sm font-semibold">模型清單 <span className="font-normal text-slate-300">{catalogModels.length} / {allCatalogModels.length} 筆</span></h3>
-              <div className="grid gap-3 md:grid-cols-2">
+              <h3 className="dc-model-list-heading">模型清單 <span>{catalogModels.length} / {allCatalogModels.length} 筆</span></h3>
+              <div className="dc-model-list">
                 {catalogModels.map((model) => {
                   const selected = model.id === selectedModel?.id;
                   const compatible =
@@ -2044,31 +2021,17 @@ function ModelLibrary({
                     <button
                       key={model.id}
                       type="button"
+                      aria-pressed={selected}
                       onClick={() => onSelectedModelChange(model.id)}
-                      className={cn(
-                        "min-h-[136px] w-full cursor-pointer rounded-2xl border px-4 py-4 text-left transition-all duration-200",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70",
-                        selected
-                          ? model.kind === "rack"
-                            ? "border-cyan-300/60 bg-cyan-300/10"
-                            : "border-violet-300/60 bg-violet-300/10"
-                          : "border-slate-700/85 bg-[#0d1b2a] hover:border-slate-500 hover:bg-[#122337]"
-                      )}
+                      className="dc-model-row"
                     >
                       <div className="flex items-start gap-3">
-                        <div className={cn(
-                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
-                          selected
-                            ? model.kind === "rack"
-                              ? "border-cyan-300/40 bg-cyan-300/15 text-cyan-100"
-                              : "border-violet-300/40 bg-violet-300/15 text-violet-100"
-                            : "border-slate-600/80 bg-slate-800/70 text-slate-300",
-                        )}>
+                        <div className="dc-model-icon">
                           {model.kind === "l10" ? (() => { const Icon = EQUIPMENT_CATEGORY_ICONS[getEquipmentCategory(model) as RackEquipmentCategory]; return <Icon className="h-5 w-5" />; })() : model.source === "step" ? <FileBox className="h-5 w-5" /> : <Box className="h-5 w-5" />}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-base font-bold text-white">{model.name}</span>
+                            <span className="dc-model-name">{model.name}</span>
                             <span className={cn(
                               "rounded-full px-2 py-0.5 text-[10px] font-bold",
                               model.isPlaceholder
@@ -2095,19 +2058,12 @@ function ModelLibrary({
                             ) : null}
                           </div>
                           <div className="mt-1 text-xs text-slate-300">{model.manufacturer} · {model.revision}</div>
-                          <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold">
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs">
                             {model.kind === "l10" ? <span className="rounded-full bg-blue-400/10 px-2 py-1 text-blue-100">{getEquipmentCategoryLabel(getEquipmentCategory(model))} · {model.rackUnits ?? 1}U</span> : null}
                             <span className="rounded-full bg-slate-400/10 px-2 py-1 tabular-nums text-slate-300">{formatDimensions(model.dimensions)}</span>
                           </div>
                         </div>
-                        <span className={cn(
-                          "mt-1 flex h-5 w-5 items-center justify-center rounded-full border",
-                          selected
-                            ? model.kind === "rack"
-                              ? "border-cyan-200 bg-cyan-300 text-cyan-950"
-                              : "border-violet-200 bg-violet-300 text-violet-950"
-                            : "border-slate-600 text-transparent",
-                        )}>
+                        <span className="dc-model-check" aria-hidden="true">
                           <Check className="h-3 w-3" />
                         </span>
                       </div>
@@ -2115,28 +2071,28 @@ function ModelLibrary({
                   );
                 })}
                 {catalogModels.length === 0 ? (
-                  <div className="col-span-full rounded-2xl border border-dashed border-slate-600 bg-[#0d1b2a] px-6 py-12 text-center">
+                  <div className="dc-model-empty">
                     <Search className="mx-auto h-6 w-6 text-slate-500" />
                     <div className="mt-3 text-sm font-black text-slate-200">目前篩選條件沒有符合的模型</div>
                     <p className="mt-1 text-xs text-slate-500">清除搜尋或改選其他設備類別。</p>
                   </div>
                 ) : null}
               </div>
-
+            </section>
+            <aside className="dc-model-detail" aria-label="選中模型資訊">
               {selectedModel ? (
-                <div ref={selectedModelActionsRef} className="mt-5 rounded-2xl border border-slate-700/80 bg-[#0b1826] p-4 sm:p-5">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm">
-                    <span className="font-semibold text-white">已選擇 {selectedModel.name}</span>
-                    <span className="text-xs text-slate-300">
-                      {selectedInstalledCount > 0
-                        ? `${selectedRack.cabinet} 已安裝 ${selectedInstalledCount} 台`
-                        : selectedIsAssigned
-                        ? `目前已套用至 ${selectedRack.cabinet}`
-                        : selectedIsCompatible
-                          ? `準備套用至 ${selectedRack.cabinet}`
-                          : `不能套用至 ${selectedRack.cabinet}`}
-                    </span>
+                <>
+                  <div className="dc-model-detail-heading">
+                    <p>已選擇模型</p>
+                    <h3>{selectedModel.name}</h3>
+                    <span>{selectedModel.isPlaceholder ? "暫代模型" : selectedModel.isCalibrated ? "尺寸已校正" : "尺寸待校正"}</span>
                   </div>
+                  <dl className="dc-model-facts">
+                    <div><dt>廠牌</dt><dd>{selectedModel.manufacturer || "未提供"}</dd></div>
+                    <div><dt>版本</dt><dd>{selectedModel.revision || "未提供"}</dd></div>
+                    <div><dt>尺寸（寬 × 深 × 高）</dt><dd>{formatDimensions(selectedModel.dimensions)}</dd></div>
+                    <div><dt>類型</dt><dd>{selectedModel.kind === "rack" ? "機櫃外框" : `${getEquipmentCategoryLabel(getEquipmentCategory(selectedModel))} · ${selectedModel.rackUnits ?? 1}U`}</dd></div>
+                  </dl>
                   {selectedModel.kind === "l10" && selectedModel.compatibilityNote ? (
                     <div
                       className={cn(
@@ -2149,12 +2105,12 @@ function ModelLibrary({
                       {selectedModel.compatibilityNote}
                     </div>
                   ) : null}
-                  <div className="mb-2 grid gap-2 sm:grid-cols-2">
+                  <div className="dc-model-management" role="group" aria-label="模型管理">
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() => onPreviewModel(selectedModel.id)}
-                      className="h-11 rounded-xl border-cyan-300/35 bg-cyan-400/[0.09] text-sm font-bold text-cyan-100 hover:border-cyan-200/60 hover:bg-cyan-400/[0.17]"
+                      className="w-full"
                     >
                       <Eye className="mr-2 h-4 w-4" /> 檢視模型細節
                     </Button>
@@ -2163,21 +2119,23 @@ function ModelLibrary({
                       variant="outline"
                       disabled={!canEdit}
                       onClick={beginEditingSelectedModel}
-                      className="h-11 rounded-xl border-violet-300/35 bg-violet-400/[0.09] text-sm font-bold text-violet-100 hover:border-violet-200/60 hover:bg-violet-400/[0.17]"
+                      className="w-full"
                     >
                       <PencilRuler className="mr-2 h-4 w-4" /> 編輯模型資料
                     </Button>
-                  </div>
+                  {selectedIsProtected ? (
+                    <p className="dc-model-protected"><ShieldCheck className="h-4 w-4 shrink-0" /> 內建核心模型，保留於模型庫中。</p>
+                  ) : (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button
                         type="button"
                         variant="outline"
                         disabled={!canEdit || selectedIsProtected}
-                        className="mb-2 h-11 w-full rounded-xl border-rose-300/25 bg-rose-400/[0.07] text-sm font-bold text-rose-100 hover:bg-rose-400/[0.14] disabled:border-white/10 disabled:bg-white/[0.025] disabled:text-slate-500"
+                        className="w-full text-destructive"
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
-                        {selectedIsProtected ? "內建核心模型不可刪除" : "刪除模型"}
+                        刪除模型
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent className="dc-confirmation border-cyan-300/18 bg-[#081725] text-slate-100">
@@ -2202,64 +2160,14 @@ function ModelLibrary({
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                  {catalogKind === "rack" ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <Button type="button" disabled={!canEdit || selectedIsAssigned} onClick={onAssignModel} className="h-12 rounded-xl bg-emerald-300 text-sm font-bold text-emerald-950 hover:bg-emerald-200 disabled:bg-emerald-950/50 disabled:text-emerald-100/40">
-                        <Check className="mr-2 h-4 w-4" /> 套用至 {selectedRack.cabinet}
-                      </Button>
-                      <Button type="button" disabled={!canEdit} onClick={onAddRack} variant="outline" className="h-12 rounded-xl border-amber-300/35 bg-amber-400/[0.09] text-sm font-bold text-amber-100 hover:border-amber-200/60 hover:bg-amber-400/[0.17]">
-                        <PackagePlus className="mr-2 h-4 w-4" /> 以此新增機櫃
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 rounded-2xl border border-violet-300/20 bg-violet-400/[0.05] p-3">
-                      <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)]">
-                        <Select
-                          value={String(installRackUnit)}
-                          onValueChange={(value) => setInstallRackUnit(Number(value))}
-                          disabled={!canEdit || availableInstallUnits.length === 0}
-                        >
-                          <SelectTrigger aria-label="設備安裝 U 位" className="h-11 border-slate-600/80 bg-[#111f31] font-black text-violet-100">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableInstallUnits.map((rackUnit) => (
-                              <SelectItem key={rackUnit} value={String(rackUnit)}>
-                                U{rackUnit}{(selectedModel.rackUnits ?? 1) > 1 ? `–U${rackUnit + (selectedModel.rackUnits ?? 1) - 1}` : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          type="button"
-                          disabled={!canEdit || !selectedIsCompatible || availableInstallUnits.length === 0}
-                          onClick={() => onInstallCatalogEquipment(selectedModel.id, installRackUnit)}
-                          className="h-11 rounded-xl bg-emerald-400 text-sm font-black text-emerald-950 hover:bg-emerald-300 disabled:bg-emerald-950/50 disabled:text-emerald-100/40"
-                        >
-                          <PackagePlus className="mr-2 h-4 w-4" /> 安裝到 {selectedRack.cabinet}
-                        </Button>
-                      </div>
-                      {availableInstallUnits.length === 0 ? (
-                        <p className="text-[11px] font-semibold text-amber-200">目前沒有足夠且不重疊的 U 位可安裝此設備。</p>
-                      ) : (
-                        <p className="text-[11px] text-slate-400">此設備佔 {selectedModel.rackUnits ?? 1}U，可安裝位置已排除主設備與其他櫃內設備。</p>
-                      )}
-                      {getEquipmentCategory(selectedModel) === "compute" ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={!canEdit || selectedIsAssigned || !selectedIsCompatible}
-                          onClick={onAssignL10Model}
-                          className="h-10 w-full rounded-xl border-violet-300/30 bg-violet-400/[0.08] text-xs font-black text-violet-100 hover:bg-violet-400/[0.16]"
-                        >
-                          <Cpu className="mr-2 h-4 w-4" /> 設為整櫃主運算設備
-                        </Button>
-                      ) : null}
-                    </div>
                   )}
-                </div>
-              ) : null}
-            </section>
+                  </div>
+                </>
+              ) : (
+                <div className="dc-model-empty-selection"><Box className="h-8 w-8" /><h3>尚未選擇模型</h3><p>從目前的模型清單選擇一項，查看資料與可用操作。</p></div>
+              )}
+            </aside>
+            </div>
             ) : view === "edit" && editDraft && selectedModel ? (
             <section className="space-y-5">
               <div className="flex items-start justify-between gap-4">
@@ -2519,12 +2427,64 @@ function ModelLibrary({
           </div>
         </ScrollArea>
 
-        <div className="shrink-0 border-t border-slate-700/80 bg-[#07111d] px-6 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300">
-            <span className="min-w-0 break-words">{view === "browse" ? selectedModel ? `目前選取：${selectedModel.name}` : catalogModels.length ? "請在清單中選擇模型" : "沒有符合的模型" : view === "edit" && selectedModel ? `正在編輯：${selectedModel.name}` : `準備匯入：${importKind === "rack" ? "機櫃外框" : `${getEquipmentCategoryLabel(importEquipmentCategory)}設備`}`}</span>
-            {view === "browse" && selectedModel ? <Button type="button" variant="outline" onClick={() => selectedModelActionsRef.current?.scrollIntoView({ block: "start" })}>套用／安裝操作<ChevronDown className="ml-2 h-4 w-4" /></Button> : null}
+        {view === "browse" ? (
+          <div className="dc-model-actions" aria-label="套用與安裝操作">
+            <div className="dc-model-target" role="status">
+              <strong>目標機櫃：{selectedRack.cabinet}</strong>
+              <p>{!canEdit ? "目前只有檢視權限" : !selectedModel ? "請先從清單選擇模型" : selectedInstalledCount > 0 ? `已安裝 ${selectedInstalledCount} 台此設備` : selectedIsAssigned ? "此模型已套用" : selectedIsCompatible ? `已選擇 ${selectedModel.name}` : "此設備與目標機櫃不相容"}</p>
+            </div>
+            {selectedModel ? catalogKind === "rack" ? (
+              <div className="dc-model-action-controls">
+                <Button type="button" disabled={!canEdit || selectedIsAssigned} onClick={onAssignModel} className="bg-cyan-300 text-cyan-950 hover:bg-cyan-200">
+                  <Check className="mr-2 h-4 w-4" /> {selectedIsAssigned ? "已套用" : `套用至 ${selectedRack.cabinet}`}
+                </Button>
+                <Button type="button" disabled={!canEdit} onClick={onAddRack} variant="outline" className="border-amber-300/35 bg-amber-400/10 text-amber-100 hover:bg-amber-400/15">
+                  <PackagePlus className="mr-2 h-4 w-4" /> 以此新增機櫃
+                </Button>
+              </div>
+            ) : (
+              <div className="dc-model-install">
+                <div className="dc-model-action-controls">
+                  <Select
+                    value={String(installRackUnit)}
+                    onValueChange={(value) => setInstallRackUnit(Number(value))}
+                    disabled={!canEdit || availableInstallUnits.length === 0}
+                  >
+                    <SelectTrigger aria-label="設備安裝 U 位" className="dc-model-unit">
+                      <SelectValue placeholder="無可用 U 位" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableInstallUnits.map((rackUnit) => (
+                        <SelectItem key={rackUnit} value={String(rackUnit)}>
+                          U{rackUnit}{(selectedModel.rackUnits ?? 1) > 1 ? `–U${rackUnit + (selectedModel.rackUnits ?? 1) - 1}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    disabled={!canEdit || !selectedIsCompatible || availableInstallUnits.length === 0}
+                    onClick={() => onInstallCatalogEquipment(selectedModel.id, installRackUnit)}
+                    className="bg-cyan-300 text-cyan-950 hover:bg-cyan-200"
+                  >
+                    <PackagePlus className="mr-2 h-4 w-4" /> 安裝到 {selectedRack.cabinet}
+                  </Button>
+                  {getEquipmentCategory(selectedModel) === "compute" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!canEdit || selectedIsAssigned || !selectedIsCompatible}
+                      onClick={onAssignL10Model}
+                    >
+                      <Cpu className="mr-2 h-4 w-4" /> 設為整櫃主運算設備
+                    </Button>
+                  ) : null}
+                </div>
+                <p>{availableInstallUnits.length === 0 ? "目前沒有足夠且不重疊的 U 位可安裝此設備。" : `此設備佔 ${selectedModel.rackUnits ?? 1}U，已排除主設備與其他設備占用的位置。`}</p>
+              </div>
+            ) : null}
           </div>
-        </div>
+        ) : null}
       </DialogContent>
     </Dialog>
   );
