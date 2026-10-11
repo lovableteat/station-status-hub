@@ -117,6 +117,14 @@ body:has([data-chat-dock="detached"]) .dc-2d-workspace { padding-bottom: 56px; }
 .dc-model-action-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .dc-model-install { min-width: 0; }
 .dc-dialog .dc-model-unit { width: 112px; }
+.dc-model-editor { display: grid; gap: 24px; }
+.dc-model-edit-section { min-width: 0; margin: 0; padding: 0; border: 0; }
+.dc-model-edit-section > legend { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 16px; font-weight: 600; line-height: 1.5; }
+.dc-model-edit-section > legend svg { flex-shrink: 0; }
+.dc-model-edit-fields { display: grid; gap: 16px; padding-top: 16px; }
+.dc-model-edit-fields label { display: grid; gap: 8px; min-width: 0; color: hsl(var(--foreground)); font-weight: 500; }
+.dc-dialog .dc-model-editor :is(input, button[role="combobox"]) { min-height: 44px; }
+.dc-model-edit-actions .dc-model-action-controls { flex-shrink: 0; }
 .dc-model-toolbar button, .dc-model-row, .dc-model-kind, .dc-model-category { touch-action: manipulation; }
 .dc-dialog :is(.dc-model-row, .dc-model-kind, .dc-model-category):focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
 @media (max-width: 899px) {

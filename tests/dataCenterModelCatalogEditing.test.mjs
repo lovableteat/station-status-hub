@@ -240,6 +240,47 @@ test("model library exposes edit and detail actions and persists catalog overrid
   assert.match(workspaceSource, /onPreviewModel/);
 });
 
+test("model editing groups identity, physical dimensions and installation separately", async () => {
+  const source = (await readFile(new URL("../src/components/data-center/DeploymentPlanningCenter.tsx", import.meta.url), "utf8")).replaceAll("\r\n", "\n");
+  const edit = source.slice(source.indexOf(') : view === "edit"'), source.indexOf(') : (\n            <div className="space-y-5">', source.indexOf(') : view === "edit"')));
+  const groups = [...edit.matchAll(/<fieldset className="dc-model-edit-section">([\s\S]*?)<\/fieldset>/g)].map((match) => match[1]);
+
+  assert.equal(groups.length, 3);
+  assert.match(groups[0], /<legend>[\s\S]*基本資料<\/legend>/);
+  assert.match(groups[0], /dc-model-edit-fields sm:grid-cols-2 md:grid-cols-3/);
+  for (const key of ["name", "manufacturer", "revision"]) assert.ok(groups[0].includes(`editDraft.${key}`));
+  assert.doesNotMatch(groups[0], /equipmentCategory|rackUnits/);
+  assert.match(groups[1], /<legend>[\s\S]*實體校正尺寸<\/legend>/);
+  assert.match(groups[1], /widthMm[\s\S]*depthMm[\s\S]*heightMm/);
+  assert.match(groups[1], /dc-model-edit-fields sm:grid-cols-3/);
+  assert.match(edit, /selectedModel.kind === "l10" \? \(\s*<fieldset className="dc-model-edit-section">/);
+  assert.match(groups[2], /<legend>[\s\S]*安裝規格<\/legend>/);
+  assert.match(groups[2], /equipmentCategory[\s\S]*rackUnits/);
+  assert.match(groups[2], /aria-label="設備類別"/);
+});
+
+test("model edit save and cancel stay outside the scrolling fields", async () => {
+  const source = await readFile(new URL("../src/components/data-center/DeploymentPlanningCenter.tsx", import.meta.url), "utf8");
+  const library = source.slice(source.indexOf("function ModelLibrary("), source.indexOf("function useDesktopDataCenterLayout("));
+  const footerIndex = library.indexOf('className="dc-model-actions dc-model-edit-actions"');
+  assert.ok(footerIndex > library.lastIndexOf("</ScrollArea>"));
+  const footer = library.slice(footerIndex, library.indexOf('{view === "browse" ? (', footerIndex));
+  assert.match(footer, /aria-label="模型編輯操作"/);
+  assert.match(footer, /onClick=\{\(\) => setView\("browse"\)\}/);
+  assert.match(footer, /disabled=\{!editDraft.name.trim\(\)\}/);
+  assert.match(footer, /onClick=\{saveSelectedModel\}/);
+  assert.match(footer, /儲存模型資料/);
+});
+
+test("model edit classification uses visible headers and consistent accessible controls", async () => {
+  const css = await readFile(new URL("../src/components/data-center/data-center.css", import.meta.url), "utf8");
+  assert.match(css, /\.dc-model-editor \{[^}]*gap: 24px/);
+  assert.match(css, /\.dc-model-edit-section > legend \{[^}]*background: hsl\(var\(--secondary\)\)/);
+  assert.match(css, /\.dc-model-edit-fields \{[^}]*gap: 16px/);
+  assert.match(css, /\.dc-model-edit-fields label \{[^}]*gap: 8px/);
+  assert.match(css, /\.dc-model-editor :is\(input, button\[role="combobox"\]\) \{[^}]*min-height: 44px/);
+});
+
 test("detail viewer provides orbit, x-ray, wireframe and section inspection", async () => {
   const viewerSource = await readFile(
     new URL("../src/components/data-center/DataCenterModelViewer.tsx", import.meta.url),
