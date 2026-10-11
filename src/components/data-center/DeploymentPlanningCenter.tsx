@@ -2169,10 +2169,10 @@ function ModelLibrary({
             </aside>
             </div>
             ) : view === "edit" && editDraft && selectedModel ? (
-            <section className="space-y-5">
+            <section className="dc-model-editor" aria-label="模型資料編輯">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="text-lg font-black text-white">編輯模型資料</div>
+                  <h3>編輯模型資料</h3>
                   <p className="mt-1 text-sm leading-6 text-slate-300">
                     編輯顯示名稱、廠牌、版本與校正尺寸；模型 ID 與 3D 資產不會被更動。
                   </p>
@@ -2182,73 +2182,46 @@ function ModelLibrary({
                 </Badge>
               </div>
 
-              <div className="rounded-2xl border border-[#214669] bg-[#0b1b2d] p-4 sm:p-5">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="space-y-1.5 sm:col-span-2">
-                    <span className="text-sm font-bold text-slate-100">模型名稱</span>
+              <fieldset className="dc-model-edit-section">
+                <legend><Box className="h-4 w-4" />基本資料</legend>
+                <div className="dc-model-edit-fields sm:grid-cols-2 md:grid-cols-3">
+                  <label className="sm:col-span-2 md:col-span-1">
+                    <span>模型名稱</span>
                     <Input
                       value={editDraft.name}
                       onChange={(event) => setEditDraft({ ...editDraft, name: event.target.value })}
-                      className="h-12 border-[#2a526f] bg-[#10263a] text-base font-semibold text-white"
+                      className="h-11"
                     />
                   </label>
-                  <label className="space-y-1.5">
-                    <span className="text-sm font-bold text-slate-100">廠牌</span>
+                  <label>
+                    <span>廠牌</span>
                     <Input
                       value={editDraft.manufacturer}
                       onChange={(event) => setEditDraft({ ...editDraft, manufacturer: event.target.value })}
-                      className="h-11 border-[#2a526f] bg-[#10263a] text-white"
+                      className="h-11"
                     />
                   </label>
-                  {selectedModel.kind === "l10" ? (
-                    <>
-                      <label className="space-y-1.5">
-                        <span className="text-sm font-bold text-slate-100">設備類別</span>
-                        <Select
-                          value={editDraft.equipmentCategory ?? "compute"}
-                          onValueChange={(value) => setEditDraft({ ...editDraft, equipmentCategory: value as RackEquipmentCategory })}
-                        >
-                          <SelectTrigger className="h-11 border-[#2a526f] bg-[#10263a] text-white"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {EQUIPMENT_CATEGORY_OPTIONS.filter((option) => option.id !== "all").map((option) => (
-                              <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </label>
-                      <label className="space-y-1.5">
-                        <span className="text-sm font-bold text-slate-100">占用高度</span>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={48}
-                          value={editDraft.rackUnits ?? 1}
-                          onChange={(event) => setEditDraft({ ...editDraft, rackUnits: Math.max(1, Math.min(48, Number(event.target.value) || 1)) })}
-                          className="h-11 border-[#2a526f] bg-[#10263a] text-white"
-                        />
-                      </label>
-                    </>
-                  ) : null}
-                  <label className="space-y-1.5">
-                    <span className="text-sm font-bold text-slate-100">版本</span>
+                  <label>
+                    <span>版本</span>
                     <Input
                       value={editDraft.revision}
                       onChange={(event) => setEditDraft({ ...editDraft, revision: event.target.value })}
-                      className="h-11 border-[#2a526f] bg-[#10263a] text-white"
+                      className="h-11"
                     />
                   </label>
                 </div>
+              </fieldset>
 
-                <div className="mt-5 border-t border-[#214669] pt-5">
-                  <div className="text-sm font-bold text-white">實體校正尺寸</div>
-                  <p className="mt-1 text-xs text-slate-400">單位為毫米，順序固定為寬、深、高。</p>
-                  <div className="mt-3 grid grid-cols-3 gap-2">
+              <fieldset className="dc-model-edit-section">
+                <legend><PencilRuler className="h-4 w-4" />實體校正尺寸</legend>
+                <p className="mt-3 text-sm text-muted-foreground">單位為毫米，順序固定為寬、深、高。</p>
+                <div className="dc-model-edit-fields sm:grid-cols-3">
                     {([[
                       "widthMm",
                       "寬 mm",
                     ], ["depthMm", "深 mm"], ["heightMm", "高 mm"]] as const).map(([key, label]) => (
-                      <label key={key} className="space-y-1.5">
-                        <span className="text-xs font-semibold text-cyan-100/75">{label}</span>
+                      <label key={key}>
+                        <span>{label}</span>
                         <Input
                           type="number"
                           min={1}
@@ -2260,22 +2233,45 @@ function ModelLibrary({
                               [key]: Math.max(1, Number(event.target.value) || 1),
                             },
                           })}
-                          className="h-11 border-[#2a526f] bg-[#10263a] px-2 tabular-nums text-white"
+                          className="h-11 tabular-nums"
                         />
                       </label>
                     ))}
-                  </div>
                 </div>
-              </div>
+              </fieldset>
 
-              <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
-                <Button type="button" variant="outline" onClick={() => setView("browse")} className="h-11 border-[#2a526f] bg-[#10263a] text-slate-100 hover:bg-[#17364f]">
-                  取消
-                </Button>
-                <Button type="button" disabled={!editDraft.name.trim()} onClick={saveSelectedModel} className="h-11 bg-blue-500 px-5 font-bold text-white hover:bg-blue-400">
-                  儲存模型資料
-                </Button>
-              </div>
+              {selectedModel.kind === "l10" ? (
+                <fieldset className="dc-model-edit-section">
+                  <legend><Server className="h-4 w-4" />安裝規格</legend>
+                  <div className="dc-model-edit-fields sm:grid-cols-2">
+                    <label>
+                      <span>設備類別</span>
+                      <Select
+                        value={editDraft.equipmentCategory ?? "compute"}
+                        onValueChange={(value) => setEditDraft({ ...editDraft, equipmentCategory: value as RackEquipmentCategory })}
+                      >
+                        <SelectTrigger aria-label="設備類別" className="h-11"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {EQUIPMENT_CATEGORY_OPTIONS.filter((option) => option.id !== "all").map((option) => (
+                            <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    <label>
+                      <span>占用高度（U）</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={48}
+                        value={editDraft.rackUnits ?? 1}
+                        onChange={(event) => setEditDraft({ ...editDraft, rackUnits: Math.max(1, Math.min(48, Number(event.target.value) || 1)) })}
+                        className="h-11"
+                      />
+                    </label>
+                  </div>
+                </fieldset>
+              ) : null}
             </section>
             ) : (
             <div className="space-y-5">
@@ -2426,6 +2422,22 @@ function ModelLibrary({
             )}
           </div>
         </ScrollArea>
+
+        {view === "edit" && editDraft && selectedModel ? (
+          <div className="dc-model-actions dc-model-edit-actions" role="group" aria-label="模型編輯操作">
+            <div className="dc-model-target">
+              <strong>正在編輯：{selectedModel.name}</strong>
+            </div>
+            <div className="dc-model-action-controls">
+              <Button type="button" variant="outline" onClick={() => setView("browse")} className="h-11">
+                取消
+              </Button>
+              <Button type="button" disabled={!editDraft.name.trim()} onClick={saveSelectedModel} className="h-11 bg-cyan-300 text-cyan-950 hover:bg-cyan-200">
+                儲存模型資料
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {view === "browse" ? (
           <div className="dc-model-actions" aria-label="套用與安裝操作">
