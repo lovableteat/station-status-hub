@@ -8,14 +8,16 @@
 .dc-task-guide ol { list-style: decimal; padding-left: 22px; margin: 12px 0; }
 .dc-task-guide li { margin: 6px 0; }
 .dc-task-guide strong { color: hsl(var(--foreground)); font-weight: 600; }
-.dc-nav-group { margin: 16px 8px 6px; color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 500; }
-.dc-nav > div:first-child .dc-nav-group { margin-top: 0; }
+.dc-nav { display: flex; flex-direction: column; gap: 16px; }
+.dc-nav-section { display: grid; gap: 4px; min-width: 0; }
+.dc-nav-section + .dc-nav-section { border-top: 1px solid hsl(var(--border)); padding-top: 12px; }
+.dc-nav-group { margin: 0 0 4px; padding: 8px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 14px; font-weight: 700; line-height: 1.4; }
 .dc-nav-detail { display: block; margin-top: 3px; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.5; }
 .dc-nav-button { transition: background-color 150ms ease, border-color 150ms ease; }
 .dc-nav-button:hover { background: hsl(var(--muted)); }
 .dc-nav-button[aria-current="page"] { background: hsl(var(--primary) / .12); border-color: hsl(var(--primary) / .35); }
-.dc-scene-context { padding: 20px 4px 4px; font-size: 12px; color: hsl(var(--muted-foreground)); }
-.dc-scene-context h2 { padding-top: 16px; border-top: 1px solid hsl(var(--border)); font-weight: 500; }
+.dc-scene-context { padding: 20px 0 4px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.dc-scene-context h2 { padding: 8px; margin-bottom: 4px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 14px; font-weight: 700; line-height: 1.4; }
 .dc-scene-context > button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 40px; font-size: 16px; font-weight: 600; color: hsl(var(--foreground)); }
 .dc-scene-context > button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
 .dc-scene-context > .dc-scene-site { font-size: 13px; font-weight: 400; color: hsl(var(--muted-foreground)); }
