@@ -426,9 +426,11 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
           </button>
         </header>
 
-        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[240px_minmax(0,1fr)] lg:grid-rows-1">
-          <aside className="order-2 min-w-0 max-h-[36svh] overflow-y-auto border-t border-[#1f4766] bg-[#071522] p-3 lg:order-1 lg:max-h-none lg:border-r lg:border-t-0 lg:p-5">
-            <div className="flex w-full min-w-0 gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-x-visible">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[280px_minmax(0,1fr)] lg:grid-rows-1">
+          <aside className="order-2 min-w-0 max-h-[36svh] overflow-y-auto border-t border-[#1f4766] bg-[#071522] p-4 lg:order-1 lg:max-h-none lg:border-r lg:border-t-0" aria-label="模型檢視工具">
+            <section className="dc-preview-section" aria-label="顯示模式">
+              <h3 className="dc-preview-section-title"><Layers3 className="h-4 w-4" />顯示模式</h3>
+              <div className="grid min-w-0 grid-cols-3 gap-2">
               {([[
                 "solid",
                 "實體",
@@ -440,7 +442,7 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
                   aria-pressed={mode === id}
                   onClick={() => setMode(id)}
                   className={cn(
-                    "flex h-11 min-w-24 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300",
+                    "flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl border px-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300",
                     mode === id
                       ? "border-cyan-300/55 bg-cyan-300 text-cyan-950"
                       : "border-[#2a526f] bg-[#10263a] text-cyan-50 hover:bg-[#17364f]"
@@ -449,12 +451,17 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
                   <Icon className="h-4 w-4" /> {label}
                 </button>
               ))}
+              </div>
+            </section>
+
+            <section className="dc-preview-section" aria-label="剖面檢視">
+              <h3 className="dc-preview-section-title"><ScanLine className="h-4 w-4" />剖面檢視</h3>
               <button
                 type="button"
                 aria-pressed={sectionEnabled}
                 onClick={() => setSectionEnabled((value) => !value)}
                 className={cn(
-                  "flex h-11 min-w-24 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300",
+                  "flex h-11 w-full min-w-0 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300",
                   sectionEnabled
                     ? "border-amber-300/55 bg-amber-300 text-amber-950"
                     : "border-[#2a526f] bg-[#10263a] text-amber-100 hover:bg-[#17364f]"
@@ -462,39 +469,42 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
               >
                 <ScanLine className="h-4 w-4" /> 剖面
               </button>
+              {sectionEnabled ? (
+                <label className="mt-3 block">
+                  <span className="flex items-center justify-between text-xs font-bold text-amber-100">
+                    剖面位置 <span className="tabular-nums">{sectionPercent}%</span>
+                  </span>
+                  <input
+                    aria-label="剖面位置"
+                    type="range"
+                    min={2}
+                    max={98}
+                    value={sectionPercent}
+                    onChange={(event) => setSectionPercent(Number(event.target.value))}
+                    className="mt-3 w-full accent-amber-300"
+                  />
+                </label>
+              ) : null}
+            </section>
+
+            <section className="dc-preview-section" aria-label="視角控制">
+              <h3 className="dc-preview-section-title"><Rotate3d className="h-4 w-4" />視角控制</h3>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setResetKey((value) => value + 1)}
-                className="h-11 min-w-24 rounded-xl border-[#2a526f] bg-[#10263a] text-blue-50 hover:bg-[#17364f]"
+                className="h-11 w-full min-w-0 rounded-xl border-[#2a526f] bg-[#10263a] text-blue-50 hover:bg-[#17364f]"
               >
                 <Focus className="mr-2 h-4 w-4" /> 重設視角
               </Button>
-            </div>
-
-            {sectionEnabled ? (
-              <label className="mt-4 block rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-3">
-                <span className="flex items-center justify-between text-xs font-bold text-amber-100">
-                  剖面位置 <span className="tabular-nums">{sectionPercent}%</span>
-                </span>
-                <input
-                  aria-label="剖面位置"
-                  type="range"
-                  min={2}
-                  max={98}
-                  value={sectionPercent}
-                  onChange={(event) => setSectionPercent(Number(event.target.value))}
-                  className="mt-3 w-full accent-amber-300"
-                />
-              </label>
-            ) : null}
+            </section>
 
             {assetUrl ? (
-              <section className="mt-4 border-t border-[#1f4766] pt-4" aria-label="零件結構">
+              <section className="dc-preview-section" aria-label="零件結構">
+                <h3 className="dc-preview-section-title"><Box className="h-4 w-4" />零件結構</h3>
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-black text-white">零件結構</div>
-                    <div className="mt-0.5 text-[11px] text-cyan-100/60">
+                    <div className="text-[11px] text-cyan-100/60">
                       {partNames.length ? `${partNames.length} 個可檢視零件` : "正在讀取零件名稱"}
                     </div>
                   </div>
@@ -538,14 +548,14 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
                           })
                         }
                         className={cn(
-                          "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors",
+                          "flex min-h-11 w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
                           hidden
                             ? "border-slate-700/70 bg-slate-900/45 text-slate-500"
                             : "border-cyan-300/15 bg-[#10263a] text-cyan-50 hover:border-cyan-300/35"
                         )}
                       >
                         {hidden ? <EyeOff className="h-3.5 w-3.5 shrink-0" /> : <Eye className="h-3.5 w-3.5 shrink-0 text-cyan-300" />}
-                        <span className="truncate">{partName}</span>
+                        <span className="dc-preview-part-name">{partName}</span>
                       </button>
                     );
                   })}
@@ -563,14 +573,14 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
               </section>
             ) : null}
 
-            <div className="mt-4 hidden space-y-3 border-t border-[#1f4766] pt-4 text-xs lg:block">
-              <div className="font-bold text-white">實際模型資料</div>
+            <section className="dc-preview-section" aria-label="模型規格">
+              <h3 className="dc-preview-section-title"><Box className="h-4 w-4" />模型規格</h3>
               <dl className="space-y-2 text-slate-300">
                 <div><dt className="text-cyan-100/60">尺寸（寬 × 深 × 高）</dt><dd className="mt-0.5 tabular-nums text-cyan-50">{model.dimensions.widthMm} × {model.dimensions.depthMm} × {model.dimensions.heightMm} mm</dd></div>
                 <div><dt className="text-cyan-100/60">原始檔</dt><dd className="mt-0.5 break-all text-cyan-50">{model.sourceFileName ?? "程序模型"}</dd></div>
-                <div><dt className="text-cyan-100/60">用途</dt><dd className="mt-0.5 text-cyan-50">{model.kind === "rack" ? "L11 外框，可容納 L10" : "水平安裝於 L11 的 1U 模組"}</dd></div>
+                <div><dt className="text-cyan-100/60">用途</dt><dd className="mt-0.5 text-cyan-50">{model.kind === "rack" ? "L11 外框，可容納 L10" : `水平安裝於 L11 的 ${model.rackUnits ?? 1}U 設備`}</dd></div>
               </dl>
-            </div>
+            </section>
           </aside>
 
           <main className="relative order-1 min-h-0 min-w-0 bg-black lg:order-2">
