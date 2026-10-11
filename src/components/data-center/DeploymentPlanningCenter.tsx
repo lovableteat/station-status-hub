@@ -3986,42 +3986,49 @@ export function DeploymentPlanningCenter() {
                 </button>
               </div>
 
-              <nav aria-label="Data Center 功能選單" className="dc-nav mt-3 grid gap-1">
+              <nav aria-label="Data Center 功能選單" className="dc-nav mt-3">
                 {[
-                  { id: "scene", group: "查看與回報", label: "機房總覽", detail: "查看 3D 配置與機櫃狀態", icon: Layers3, onClick: openSceneOverview },
-                  { id: "reports", label: "每日工作回報", detail: "記錄進度、阻礙與下一步", icon: ClipboardCheck, onClick: () => changeView(true) },
-                  { id: "projects", group: "配置工具", label: "專案與站點", detail: "選擇要工作的機房", icon: FileBox, onClick: () => setMobileLeftOpen(true) },
-                  { id: "plan", label: "2D 配置規劃", detail: "安排機櫃、通道與電源位置", icon: Map, onClick: () => setWorkspaceMode("2d") },
-                  { id: "rack", label: "機櫃與設備", detail: "查看選取機櫃與安裝 U 位", icon: Server, onClick: () => setMobileRightOpen(true) },
-                  { id: "models", label: "模型庫", detail: "瀏覽、匯入與套用模型", icon: Boxes, onClick: () => openModelLibrary("rack") },
-                  { id: "facility", label: "場地與通道", detail: "設定地板尺寸與通道", icon: PencilRuler, onClick: () => setFacilityPlannerOpen(true) },
-                ].map((item) => {
-                  const ItemIcon = item.icon;
-                  return (
-                    <div key={item.id} className="grid">
-                    {!leftCollapsed && item.group && <p className="dc-nav-group">{item.group}</p>}
-                    <button
-                      type="button"
-                      data-action={item.id}
-                      aria-label={item.label}
-                      title={leftCollapsed ? item.label : undefined}
-                      aria-current={item.id === "reports" && showDailyReports || item.id === "scene" && !showDailyReports && workspaceMode === "3d" || item.id === "plan" && !showDailyReports && workspaceMode === "2d" ? "page" : undefined}
-                      onClick={() => { if (item.id === "plan") changeView(false); item.onClick(); }}
-                      className={cn(
-                        "dc-nav-button grid cursor-pointer border border-transparent text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200",
-                        leftCollapsed
-                          ? "h-11 w-11 place-items-center justify-self-center rounded-lg"
-                          : "min-h-14 w-full grid-cols-[20px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 py-2 text-left",
-                      )}
-                    >
-                      <span className={cn("flex items-center justify-center", item.id === "models" || item.id === "plan" ? "text-amber-200" : "text-primary")}>
-                        <ItemIcon className="h-[18px] w-[18px] shrink-0" />
-                      </span>
-                      {!leftCollapsed ? <span><span className="block text-sm font-medium leading-5">{item.label}</span><span className="dc-nav-detail">{item.detail}</span></span> : null}
-                    </button>
-                    </div>
-                  );
-                })}
+                  { label: "查看與回報", items: [
+                    { id: "scene", label: "機房總覽", detail: "查看 3D 配置與機櫃狀態", icon: Layers3, onClick: openSceneOverview },
+                    { id: "reports", label: "每日工作回報", detail: "記錄進度、阻礙與下一步", icon: ClipboardCheck, onClick: () => changeView(true) },
+                  ] },
+                  { label: "配置工具", items: [
+                    { id: "projects", label: "專案與站點", detail: "選擇要工作的機房", icon: FileBox, onClick: () => setMobileLeftOpen(true) },
+                    { id: "plan", label: "2D 配置規劃", detail: "安排機櫃、通道與電源位置", icon: Map, onClick: () => setWorkspaceMode("2d") },
+                    { id: "rack", label: "機櫃與設備", detail: "查看選取機櫃與安裝 U 位", icon: Server, onClick: () => setMobileRightOpen(true) },
+                    { id: "models", label: "模型庫", detail: "瀏覽、匯入與套用模型", icon: Boxes, onClick: () => openModelLibrary("rack") },
+                    { id: "facility", label: "場地與通道", detail: "設定地板尺寸與通道", icon: PencilRuler, onClick: () => setFacilityPlannerOpen(true) },
+                  ] },
+                ].map((group) => (
+                  <div key={group.label} className="dc-nav-section" role="group" aria-label={group.label}>
+                    {!leftCollapsed && <h2 className="dc-nav-group">{group.label}</h2>}
+                    {group.items.map((item) => {
+                      const ItemIcon = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          data-action={item.id}
+                          aria-label={item.label}
+                          title={leftCollapsed ? item.label : undefined}
+                          aria-current={item.id === "reports" && showDailyReports || item.id === "scene" && !showDailyReports && workspaceMode === "3d" || item.id === "plan" && !showDailyReports && workspaceMode === "2d" ? "page" : undefined}
+                          onClick={() => { if (item.id === "plan") changeView(false); item.onClick(); }}
+                          className={cn(
+                            "dc-nav-button grid cursor-pointer border border-transparent text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200",
+                            leftCollapsed
+                              ? "h-11 w-11 place-items-center justify-self-center rounded-lg"
+                              : "min-h-14 w-full grid-cols-[20px_minmax(0,1fr)] items-center gap-3 rounded-lg px-2 py-2 text-left",
+                          )}
+                        >
+                          <span className={cn("flex items-center justify-center", item.id === "models" || item.id === "plan" ? "text-amber-200" : "text-primary")}>
+                            <ItemIcon className="h-[18px] w-[18px] shrink-0" />
+                          </span>
+                          {!leftCollapsed ? <span><span className="block text-sm font-medium leading-5">{item.label}</span><span className="dc-nav-detail">{item.detail}</span></span> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
               </nav>
               {!leftCollapsed && <section className="dc-scene-context mt-auto" aria-label="目前場景摘要">
                 <h2>目前專案</h2><button type="button" onClick={() => setMobileLeftOpen(true)}>{sharedProjects.selectedProject?.name ?? "尚未選擇專案"}<ChevronRight className="h-4 w-4" /></button>

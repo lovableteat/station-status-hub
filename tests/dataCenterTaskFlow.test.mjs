@@ -34,6 +34,17 @@ test("purpose and mobile control names are visible without hover", () => {
   assert.doesNotMatch(controls, /className="sr-only"/);
 });
 
+test("sidebar categories have labelled groups and visibly stronger headers", () => {
+  assert.match(source, /className="dc-nav-section" role="group" aria-label=\{group.label\}/);
+  assert.match(source, /!leftCollapsed && <h2 className="dc-nav-group">\{group.label\}<\/h2>/);
+  assert.match(source, /label: "查看與回報", items: \[/);
+  assert.match(source, /label: "配置工具", items: \[/);
+  assert.match(css, /\.dc-nav \{[^}]*gap: 16px/);
+  assert.match(css, /\.dc-nav-section \+ \.dc-nav-section \{[^}]*border-top: 1px solid hsl\(var\(--border\)\)/);
+  assert.match(css, /\.dc-nav-group \{[^}]*color: hsl\(var\(--foreground\)\)[^}]*font-size: 14px;[^}]*font-weight: 700/);
+  assert.match(css, /\.dc-nav-group \{[^}]*background: hsl\(var\(--secondary\)\)/);
+});
+
 test("settings dialogs expose one title and have scoped geometry", () => {
   assert.match(source, /<DialogTitle>專案與站點<\/DialogTitle>/);
   assert.match(source, /<SceneNavigator[^>]+hideHeader/);
