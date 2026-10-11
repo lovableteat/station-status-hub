@@ -186,7 +186,6 @@ interface MaterialColumnFilters {
   internal: ColumnFilterSelection;
   virtualAlternative: ColumnFilterSelection;
   trackingStatus: ColumnFilterSelection;
-  specification: ColumnFilterSelection;
 }
 
 type ColumnFilterKey = keyof MaterialColumnFilters;
@@ -198,7 +197,6 @@ const COLUMN_FILTER_LABELS: Record<ColumnFilterKey, string> = {
   internal: "內部料號",
   virtualAlternative: "TX",
   trackingStatus: "狀態追蹤",
-  specification: "規格",
 };
 
 interface CachedColumnValues {
@@ -215,7 +213,6 @@ const EMPTY_COLUMN_FILTERS: MaterialColumnFilters = {
   internal: null,
   virtualAlternative: null,
   trackingStatus: null,
-  specification: null,
 };
 
 const FILTER_KEYS = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
@@ -255,9 +252,9 @@ const BOM_PAGE_STATUS_OPTIONS: Array<{
     idleClassName: "border-violet-400/18 bg-violet-400/8 text-violet-200 hover:bg-violet-400/14",
   },
 ];
-const DEFAULT_COLUMN_WIDTHS = [96, 92, 260, 160, 260, 210, 190, 180, 250, 220, 130];
-const MIN_COLUMN_WIDTHS = [80, 76, 200, 120, 180, 170, 150, 140, 180, 180, 110];
-const MAX_COLUMN_WIDTHS = [148, 108, 520, 360, 520, 460, 420, 360, 520, 420, 260];
+const DEFAULT_COLUMN_WIDTHS = [96, 92, 260, 160, 260, 210, 190, 180, 220, 130];
+const MIN_COLUMN_WIDTHS = [80, 76, 200, 120, 180, 170, 150, 140, 180, 110];
+const MAX_COLUMN_WIDTHS = [148, 108, 520, 360, 520, 460, 420, 360, 420, 260];
 const DEFAULT_BOM_TABLE_COLOR_THEME: BomTableColorTheme = {
   primary: "#0F5D74",
   alternative: "#343B73",
@@ -699,11 +696,14 @@ function loadColumnWidths() {
 
   try {
     const parsed = JSON.parse(window.sessionStorage.getItem(COLUMN_WIDTHS_SESSION_KEY) ?? "null");
-    if (!Array.isArray(parsed) || parsed.length !== DEFAULT_COLUMN_WIDTHS.length) {
+    const widths = Array.isArray(parsed) && parsed.length === 11
+      ? parsed.filter((_, index) => index !== 8)
+      : parsed;
+    if (!Array.isArray(widths) || widths.length !== DEFAULT_COLUMN_WIDTHS.length) {
       return DEFAULT_COLUMN_WIDTHS;
     }
 
-    return parsed.map((width, index) => Number.isFinite(width)
+    return widths.map((width, index) => Number.isFinite(width)
       ? Math.min(MAX_COLUMN_WIDTHS[index], Math.max(MIN_COLUMN_WIDTHS[index], Number(width)))
       : DEFAULT_COLUMN_WIDTHS[index]);
   } catch {
@@ -1209,14 +1209,6 @@ function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
         ];
       });
     }
-    case "specification":
-      return [
-        group.partSpec,
-        group.partName,
-        group.schematicPart,
-        group.footprint,
-        ...group.records.map((record) => record.remark),
-      ];
     default:
       return [];
   }
@@ -1255,16 +1247,6 @@ function getRecordColumnValues(record: MaterialRecord, group: MaterialGroup, key
 
       return values;
     }
-    case "specification":
-      return [
-        group.partSpec,
-        group.partName,
-        group.schematicPart,
-        group.footprint,
-        record.partSpec,
-        record.partName,
-        record.remark,
-      ];
     default:
       return [];
   }
@@ -3790,7 +3772,7 @@ function AlternativeRows({
 
   return (
     <tr className="border-b border-blue-400/20 bg-[#07111f]">
-      <td colSpan={11} className="p-0">
+      <td colSpan={10} className="p-0">
         <div className="border-y border-blue-400/20 bg-[linear-gradient(180deg,rgba(37,99,235,0.08),rgba(7,17,31,0.96))] px-5 py-5 lg:px-7">
           <div className="mb-4 flex flex-col gap-3 border-b border-blue-400/15 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -4064,11 +4046,6 @@ function CompactAlternativeRows({
                 <StatusPill record={record} />
                 <ActionPill record={record} />
               </div>
-            </td>
-
-            <td className="border-r border-blue-400/10 px-3 py-2">
-              <p className="line-clamp-2 text-[15px] leading-6 text-slate-200">{record.partSpec || record.partName || "-"}</p>
-              {record.remark && <p className="mt-1 text-sm text-slate-500">{record.remark}</p>}
             </td>
 
             <td className="border-r border-blue-400/10 px-3 py-2" onClick={(event) => event.stopPropagation()}>
@@ -4700,7 +4677,15 @@ export function MaterialRequestPage() {
         setQuery(restoredQuery);
         setSearchDraft(restoredQuery);
         if (parsed.columnFilters && typeof parsed.columnFilters === "object") {
-          setColumnFilters({ ...EMPTY_COLUMN_FILTERS, ...parsed.columnFilters });
+          const restoredFilters = { ...EMPTY_COLUMN_FILTERS };
+          for (const key of FILTER_KEYS) {
+            const values = parsed.columnFilters[key];
+            const validValues = Array.isArray(values)
+              ? values.filter((value) => typeof value === "string")
+              : [];
+            restoredFilters[key] = validValues.length ? validValues : null;
+          }
+          setColumnFilters(restoredFilters);
         }
         if (parsed.availability && parsed.availability in AVAILABILITY_FILTER_LABELS) {
           setAvailability(parsed.availability);
@@ -4860,15 +4845,6 @@ export function MaterialRequestPage() {
             latestTrackingEntry?.note ?? "",
             latestTrackingEntry?.createdBy ?? "",
             latestTrackingEntry?.requestInfo ?? "",
-          ]),
-          specification: createCachedColumnValues([
-            group.partSpec,
-            group.partName,
-            group.schematicPart,
-            group.footprint,
-            record.partSpec,
-            record.partName,
-            record.remark,
           ]),
         });
       });
@@ -6484,7 +6460,6 @@ export function MaterialRequestPage() {
                   "內部料號 / 圖面",
                   "TX",
                   "狀態",
-                  "規格 / 備註",
                   "狀態追蹤",
                   "資料更新",
                 ].map((label, columnIndex) => (
@@ -6494,11 +6469,11 @@ export function MaterialRequestPage() {
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
                     onResize={(width) => resizeColumn(columnIndex, width)}
-                    className={columnIndex === 10
+                    className={columnIndex === 9
                       ? MATERIAL_STICKY_COLUMN_CLASSES.header
                       : undefined}
                   >
-                    <span data-testid={columnIndex === 10 ? "material-data-update-header" : undefined}>
+                    <span data-testid={columnIndex === 9 ? "material-data-update-header" : undefined}>
                       {label}
                     </span>
                   </ResizableHeader>
@@ -6525,7 +6500,6 @@ export function MaterialRequestPage() {
                     狀態摘要
                   </div>
                 </th>
-                <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover filterKey="specification" getOptions={getColumnFilterOptions} label="規格" selectedValues={columnFilters.specification} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, specification: values }))} /></th>
                 <th className="border-r border-blue-300/20 p-2"><ExcelFilterPopover filterKey="trackingStatus" getOptions={getColumnFilterOptions} label="狀態追蹤" selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} /></th>
                 <th className={MATERIAL_STICKY_COLUMN_CLASSES.filter}><button type="button" onClick={clearFilters} className="h-8 rounded border border-blue-300/25 bg-blue-400/10 px-2 text-xs font-bold text-blue-100 hover:bg-blue-400/20">清除</button></th>
               </tr>
@@ -6766,7 +6740,6 @@ export function MaterialRequestPage() {
                       <td className="border-r border-blue-400/10 px-4 py-3">
                         <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded border border-violet-300/30 bg-violet-400/15 px-2.5 py-1 text-sm font-bold text-violet-200">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
                       </td>
-                      <td className="border-r border-blue-400/10 px-4 py-3 text-[15px] leading-6 text-slate-400"><p className="line-clamp-2">{group.partSpec || group.partName || "-"}</p></td>
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
                         {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={openTrackingDialog} />}
                       </td>
