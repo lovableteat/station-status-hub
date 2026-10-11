@@ -111,3 +111,61 @@ test("tracking dialog separates current status, update form, history, and footer
   assert.match(source, /data-testid="tracking-dialog-footer"/);
   assert.match(source, /onPaste=\{handleImagePaste\}/);
 });
+
+const tableStart = source.indexOf('data-testid="material-table-scroll"');
+const tableBlock = source.slice(tableStart, source.indexOf("</table>", tableStart));
+const alternativeBlock = source.slice(source.indexOf("function CompactAlternativeRows("), source.indexOf("function BomTableColorDialog("));
+const readWidths = (name) => JSON.parse(source.match(new RegExp(`const ${name} = (\\[[^;]+\\]);`))[1]);
+
+test("material table removes specification from headers, filters, primary and alternative rows", () => {
+  assert.doesNotMatch(tableBlock, /規格 \/ 備註|filterKey="specification"|group\.partSpec/);
+  assert.doesNotMatch(alternativeBlock, /record\.partSpec|record\.remark/);
+  assert.equal((tableBlock.match(/<td\b/g) ?? []).length, 10);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 10);
+  assert.doesNotMatch(source, /specification: ColumnFilterSelection|specification: null|case "specification"/);
+});
+
+test("material column geometry and fixed actions match the remaining ten columns", () => {
+  assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [96, 92, 260, 160, 260, 210, 190, 180, 220, 130]);
+  assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [80, 76, 200, 120, 180, 170, 150, 140, 180, 110]);
+  assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [148, 108, 520, 360, 520, 460, 420, 360, 420, 260]);
+  assert.equal((tableBlock.match(/columnIndex === 9/g) ?? []).length, 2);
+  assert.doesNotMatch(source, /colSpan=\{11\}/);
+  assert.match(source, /colSpan=\{10\}/);
+});
+
+test("old eleven-column widths drop only the removed specification width", () => {
+  const loadBlock = source.slice(source.indexOf("function loadColumnWidths()"), source.indexOf("function clampBomTrackerPageCount("));
+  const load = new Function("window", "DEFAULT_COLUMN_WIDTHS", "MIN_COLUMN_WIDTHS", "MAX_COLUMN_WIDTHS", "COLUMN_WIDTHS_SESSION_KEY", `${loadBlock}; return loadColumnWidths();`);
+  const run = (stored) => load({ sessionStorage: { getItem: () => JSON.stringify(stored) } }, readWidths("DEFAULT_COLUMN_WIDTHS"), readWidths("MIN_COLUMN_WIDTHS"), readWidths("MAX_COLUMN_WIDTHS"), "fixture");
+  const legacy = [97, 93, 261, 161, 261, 211, 191, 181, 251, 221, 131];
+  const current = legacy.filter((_, index) => index !== 8);
+  assert.deepEqual(run(legacy), current);
+  assert.deepEqual(run(current), current);
+  assert.deepEqual(run(null), readWidths("DEFAULT_COLUMN_WIDTHS"));
+});
+
+test("restored material filters discard removed or invalid conditions without losing current filters", () => {
+  const start = source.indexOf('if (parsed.columnFilters && typeof parsed.columnFilters === "object")');
+  const block = source.slice(start, source.indexOf("if (parsed.availability", start));
+  const empty = { material: null, refDes: null, mpn: null, internal: null, virtualAlternative: null, trackingStatus: null };
+  let restored;
+  new Function("parsed", "EMPTY_COLUMN_FILTERS", "FILTER_KEYS", "setColumnFilters", block)(
+    { columnFilters: { material: ["IC", 42], trackingStatus: ["處理中"], specification: ["obsolete"], unknown: ["hidden"], internal: "invalid" } },
+    empty, Object.keys(empty), (value) => { restored = value; },
+  );
+  assert.deepEqual(restored, { ...empty, material: ["IC"], trackingStatus: ["處理中"] });
+  new Function("parsed", "EMPTY_COLUMN_FILTERS", "FILTER_KEYS", "setColumnFilters", block)(
+    { columnFilters: { material: ["IC"], internal: [42], virtualAlternative: [] } },
+    empty, Object.keys(empty), (value) => { restored = value; },
+  );
+  assert.deepEqual(restored, { ...empty, material: ["IC"] });
+});
+
+test("specification data remains available in the material form and exports", async () => {
+  assert.match(source, /htmlFor="material-spec" label="料件規格"/);
+  assert.match(source, /specification: record\.partSpec \|\| group\.partSpec \|\| group\.partName/);
+  const exportSource = await readFile(new URL("../src/components/material-requests/materialRequestExport.ts", import.meta.url), "utf8");
+  assert.match(exportSource, /規格 \/ 備註/);
+  assert.match(exportSource, /row\.specification/);
+});
