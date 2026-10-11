@@ -94,14 +94,27 @@ test("camera preset commands can reapply the current view", () => {
   assert.deepEqual(presets, ["overview", "overview"]);
 });
 
-test("model search exposes active conditions and a visible route to actions", () => {
+test("model search exposes active conditions and direct actions outside the scrolling results", () => {
   assert.match(source, /aria-label="搜尋模型"/);
   assert.match(source, /aria-label="清除模型搜尋"/);
   assert.match(source, /aria-label="清除設備類別"/);
   assert.match(source, /data-testid="data-center-model-filter-chips"/);
   assert.match(source, /目前篩選條件沒有符合的模型/);
-  assert.match(source, /selectedModelActionsRef\.current\?\.scrollIntoView/);
-  assert.match(source, /套用／安裝操作/);
+  assert.match(source, /className="dc-model-browser"/);
+  assert.match(source, /className="dc-model-detail" aria-label="選中模型資訊"/);
+  assert.match(source, /className="dc-model-actions" aria-label="套用與安裝操作"/);
+  assert.doesNotMatch(source, /selectedModelActionsRef/);
+  assert.doesNotMatch(source, /套用／安裝操作/);
+  const library = source.slice(source.indexOf("function ModelLibrary("), source.indexOf("export function DeploymentPlanningCenter("));
+  assert.ok(library.indexOf('className="dc-model-actions"') > library.lastIndexOf("</ScrollArea>"), "primary actions must stay outside the scroll body");
+  assert.match(library, /aria-pressed=\{selected\}/);
+  assert.match(library, /目前只有檢視權限/);
+  assert.match(css, /\.dc-model-browser \{[^}]*grid-template-columns: minmax\(0, 1fr\) 320px/);
+  assert.match(css, /\.dc-model-actions \{[^}]*flex-shrink: 0/);
+  assert.match(css, /\.dc-model-detail \{[^}]*position: sticky/);
+  assert.match(css, /\.dc-model-scroll \{ container-type: size/);
+  assert.match(css, /\.dc-model-detail \{[^}]*max-height: calc\(100cqh - 48px\);[^}]*overflow-y: auto/);
+  assert.match(css, /\.dc-model-row\[aria-pressed="true"\] \{ @apply border-cyan-300/);
 });
 
 test("mobile model preview uses remaining height for the model rather than empty grid space", () => {
