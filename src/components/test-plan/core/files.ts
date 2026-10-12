@@ -285,21 +285,23 @@ export function classifyTestPlanFile(fileName: string): TestPlanFileCategory {
 
 export function validateTestPlanUpload<T extends TestPlanUploadCandidate>(
   incoming: readonly T[],
+  maximumFiles = TEST_PLAN_MAX_BATCH_SIZE,
 ): TestPlanUploadValidation<T> {
   const valid: T[] = [];
   const errors: TestPlanUploadError[] = [];
-  const candidates = incoming.slice(0, TEST_PLAN_MAX_BATCH_SIZE);
+  const candidates = incoming.slice(0, maximumFiles);
   let acceptedBytes = 0;
 
   candidates.forEach((file) => {
+    const fileName = file.webkitRelativePath || file.name;
     const nameError = validateTestPlanFileName(file.name);
     if (nameError) {
-      errors.push(nameError);
+      errors.push({ ...nameError, fileName });
       return;
     }
     if (!Number.isFinite(file.size) || file.size < 0) {
       errors.push({
-        fileName: file.name,
+        fileName,
         code: "invalid-file",
         message: "檔案名稱或大小無效。",
       });
@@ -307,7 +309,7 @@ export function validateTestPlanUpload<T extends TestPlanUploadCandidate>(
     }
     if (file.size > TEST_PLAN_MAX_FILE_SIZE) {
       errors.push({
-        fileName: file.name,
+        fileName,
         code: "file-size",
         message: "單一檔案不可超過 500 MB。",
       });
@@ -315,7 +317,7 @@ export function validateTestPlanUpload<T extends TestPlanUploadCandidate>(
     }
     if (acceptedBytes + file.size > TEST_PLAN_MAX_BATCH_BYTES) {
       errors.push({
-        fileName: file.name,
+        fileName,
         code: "batch-size",
         message: "單次上傳總容量不可超過 1 GiB。",
       });
@@ -325,15 +327,49 @@ export function validateTestPlanUpload<T extends TestPlanUploadCandidate>(
     valid.push(file);
   });
 
-  if (incoming.length > TEST_PLAN_MAX_BATCH_SIZE) {
+  if (incoming.length > maximumFiles) {
     errors.push({
       fileName: "",
       code: "batch-limit",
-      message: `一次最多上傳 ${TEST_PLAN_MAX_BATCH_SIZE} 個檔案。`,
+      message: `一次最多上傳 ${maximumFiles} 個檔案。`,
     });
   }
 
   return { valid, errors };
+}
+
+export function validateTestPlanFolderPaths(files: readonly File[]): Map<File, string[]> {
+  const paths = new Map<File, string[]>();
+  const filePaths = new Set<string>();
+  const folderPaths = new Set<string>();
+  for (const file of files) {
+    const path = file.webkitRelativePath;
+    const segments = path?.split("/") ?? [];
+    if (
+      segments.length < 2
+      || /^[A-Za-z]:/u.test(path)
+      || path.includes("\\")
+      || segments.at(-1) !== file.name
+      || segments.some((segment, index) => !segment.trim()
+        || segment.trim() === "."
+        || segment.trim() === ".."
+        || segment.length > (index === segments.length - 1 ? 255 : 120)
+        || containsControlCharacter(segment))
+    ) {
+      throw new Error(`資料夾路徑無效：${path || file.name}`);
+    }
+    const key = path.toLowerCase();
+    if (filePaths.has(key)) throw new Error(`資料夾路徑衝突：${path}`);
+    filePaths.add(key);
+    for (let index = 1; index < segments.length; index += 1) {
+      folderPaths.add(segments.slice(0, index).join("/").toLowerCase());
+    }
+    paths.set(file, segments);
+  }
+  for (const path of filePaths) {
+    if (folderPaths.has(path)) throw new Error(`檔案與資料夾路徑衝突：${path}`);
+  }
+  return paths;
 }
 
 export function sanitizeTestPlanFileName(fileName: string): string {

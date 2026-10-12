@@ -62,6 +62,7 @@ function createRecordSet() {
 function createAdapter(options: {
   failInsertName?: string;
   failFirstRemove?: boolean;
+  failFolderName?: string;
 } = {}) {
   const records = createRecordSet();
   const operations: string[] = [];
@@ -108,8 +109,20 @@ function createAdapter(options: {
           .filter((file) => file.spaceId === spaceId)
           .forEach((file) => cleanupPaths.push(file.storagePath));
       },
-      async createFolder() {
-        throw new Error("not used");
+      async createFolder(input: Record<string, unknown>) {
+        operations.push(`create-folder:${String(input.parentId)}:${String(input.name)}`);
+        if (input.name === options.failFolderName) throw new Error("folder failed");
+        const folder = {
+          id: `folder-${records.folders.length + 1}`,
+          spaceId: String(input.spaceId),
+          parentId: input.parentId ? String(input.parentId) : null,
+          name: String(input.name),
+          createdBy: String(input.createdBy),
+          createdAt: "2026-07-29T00:00:00.000Z",
+          updatedAt: "2026-07-29T00:00:00.000Z",
+        };
+        records.folders.push(folder);
+        return folder;
       },
       async updateFolder(folderId: string, patch: Record<string, unknown>) {
         operations.push(`update-folder:${folderId}:${String(patch.parentId)}`);
@@ -442,4 +455,148 @@ test("deleting a non-active space cleans cascaded objects through the durable qu
     `remove:${fake.records.files[0].storagePath}`,
     `complete-cleanup:owner-1:${fake.records.files[0].storagePath}`,
   ]);
+});
+
+function folderFile(path: string, contents = "data") {
+  const file = new File([contents], path.split("/").at(-1) || "file.md");
+  Object.defineProperty(file, "webkitRelativePath", { value: path });
+  return file;
+}
+
+const folderUploadTarget = {
+  ownerId: "owner-1", projectId: "project-1", spaceId: "space-1", folderId: "folder-b", preservePaths: true,
+};
+
+test("folder upload preserves its root and nested paths beneath the selected folder, including over 20 files", async () => {
+  const fake = createAdapter();
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  const files = Array.from({ length: 25 }, (_, index) => folderFile(`Release/docs/file-${index}.md`));
+  files.push(folderFile("Release/pcb/file-0.md"));
+  const result = await repository.uploadFiles({ ...folderUploadTarget, files });
+  assert.equal(result.uploaded.length, 26);
+  assert.equal(result.failures.length, 0);
+  const root = fake.records.folders.find(folder => folder.name === "Release")!;
+  assert.equal(root.parentId, "folder-b");
+  const docs = fake.records.folders.find(folder => folder.name === "docs")!;
+  const pcb = fake.records.folders.find(folder => folder.name === "pcb")!;
+  assert.equal(docs.parentId, root.id);
+  assert.equal(pcb.parentId, root.id);
+  assert.ok(result.uploaded.slice(0, 25).every(file => file.folderId === docs.id));
+  assert.equal(result.uploaded.at(-1)?.folderId, pcb.id);
+});
+
+test("folder upload rejects unsafe or ambiguous relative paths before any reads or writes", async () => {
+  for (const path of ["Release/../file.md", "/Release/file.md", "C:/Release/file.md", "Release//file.md", "Release\\file.md", "Release/./file.md", "Release/\u0000/file.md", `${"x".repeat(121)}/file.md`, "file.md"]) {
+    const fake = createAdapter();
+    const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+    await assert.rejects(repository.uploadFiles({ ...folderUploadTarget, files: [folderFile("Release/good.md"), folderFile(path)] }), /路徑/);
+    assert.deepEqual(fake.operations, [], path);
+  }
+});
+
+test("folder upload rejects duplicate paths and file-folder collisions before writes", async () => {
+  for (const paths of [["Release/docs/a.md", "Release/docs/A.md"], ["Release/docs", "Release/docs/a.md"]]) {
+    const fake = createAdapter();
+    const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+    await assert.rejects(repository.uploadFiles({ ...folderUploadTarget, files: paths.map(path => folderFile(path)) }), /衝突/);
+    assert.deepEqual(fake.operations, []);
+  }
+});
+
+test("folder upload reuses existing hierarchy and refuses existing file and folder collisions", async () => {
+  const fake = createAdapter();
+  fake.records.folders[0].name = "Release";
+  fake.records.folders[1].name = "docs";
+  fake.records.folders.push({ ...fake.records.folders[1], id: "nested-folder", parentId: "folder-b", name: "nested" });
+  const before = structuredClone(fake.records.files[0]);
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  const result = await repository.uploadFiles({ ...folderUploadTarget, folderId: null, files: [folderFile("Release/docs/board.brd"), folderFile("Release/docs/new.md"), folderFile("Release/docs/nested")] });
+  assert.equal(result.uploaded.length, 1);
+  assert.equal(result.failures.length, 2);
+  assert.match(result.failures[0].message, /同名/);
+  assert.deepEqual(fake.records.files[0], before);
+  assert.equal(fake.operations.some(operation => operation.startsWith("create-folder:")), false);
+  assert.equal(fake.operations.some(operation => operation.startsWith("upload:board.brd:")), false);
+});
+
+test("folder upload reports exact failed paths, keeps successful files and retries only failures", async () => {
+  const fake = createAdapter({ failInsertName: "bad.md" });
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  const good = folderFile("Release/docs/good.md", "good");
+  const bad = folderFile("Release/docs/bad.md", "bad");
+  const progress: { completed: number; uploadedBytes: number }[] = [];
+  const result = await repository.uploadFiles({ ...folderUploadTarget, files: [good, bad], onProgress: value => progress.push(value) });
+  assert.equal(result.uploaded.length, 1);
+  assert.equal(result.failures[0].fileName, "Release/docs/bad.md");
+  assert.deepEqual(result.failedFiles, [bad]);
+  assert.equal(progress.at(-1)?.completed, 2);
+  assert.equal(progress.at(-1)?.uploadedBytes, good.size);
+  fake.adapter.createFile = async input => {
+    const file = { ...fake.records.files[0], ...input, id: "recovered" };
+    fake.records.files.push(file);
+    return file;
+  };
+  const retried = await repository.uploadFiles({ ...folderUploadTarget, files: result.failedFiles });
+  assert.equal(retried.uploaded.length, 1);
+  assert.equal(retried.failures.length, 0);
+  assert.equal(fake.operations.filter(operation => operation.startsWith("upload:good.md:")).length, 1);
+});
+
+test("folder creation failure does not flatten files or prevent an unrelated subtree upload", async () => {
+  const fake = createAdapter({ failFolderName: "broken" });
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  const result = await repository.uploadFiles({ ...folderUploadTarget, files: [folderFile("Release/broken/a.md"), folderFile("Release/good/b.md")] });
+  assert.equal(result.failures[0].fileName, "Release/broken/a.md");
+  assert.equal(result.uploaded.length, 1);
+  assert.equal(fake.operations.some(operation => operation.startsWith("upload:a.md:")), false);
+  const target = fake.records.folders.find(folder => folder.name === "good")!;
+  assert.equal(result.uploaded[0].folderId, target.id);
+});
+
+test("folder upload refuses a target folder from another space before writing", async () => {
+  const fake = createAdapter();
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  await assert.rejects(repository.uploadFiles({ ...folderUploadTarget, folderId: "missing", files: [folderFile("Release/a.md")] }), /目標資料夾/);
+  assert.equal(fake.operations.some(operation => operation.startsWith("create-") || operation.startsWith("upload:")), false);
+});
+
+test("folder upload reports blocked and oversized files without creating empty folders", async () => {
+  const fake = createAdapter();
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  const large = folderFile("Release/large.md");
+  Object.defineProperty(large, "size", { value: 500 * 1024 ** 2 + 1 });
+  const result = await repository.uploadFiles({ ...folderUploadTarget, files: [folderFile("Release/program.exe"), large] });
+  assert.equal(result.uploaded.length, 0);
+  assert.match(result.failures[0].message, /安全性/);
+  assert.match(result.failures[1].message, /500 MB/);
+  assert.equal(result.failedFiles.length, 2);
+  assert.deepEqual(fake.operations, []);
+});
+
+test("folder upload keeps the 1 GiB batch budget and identifies the exact rejected path among duplicate basenames", async () => {
+  const fake = createAdapter();
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  const files = ["Release/a/same.md", "Release/b/same.md", "Release/c/same.md"].map(path => {
+    const file = folderFile(path);
+    Object.defineProperty(file, "size", { value: 500 * 1024 ** 2 });
+    return file;
+  });
+  const result = await repository.uploadFiles({ ...folderUploadTarget, files });
+  assert.equal(result.uploaded.length, 2);
+  assert.equal(result.failures.length, 1);
+  assert.equal(result.failures[0].fileName, "Release/c/same.md");
+  assert.match(result.failures[0].message, /1 GiB/);
+  assert.deepEqual(result.failedFiles, [files[2]]);
+  for (const [index, name] of ["a", "b"].entries()) {
+    const folder = fake.records.folders.find(folder => folder.name === name)!;
+    assert.equal(result.uploaded[index].folderId, folder.id);
+    assert.notEqual(folder.parentId, "folder-b");
+  }
+  assert.equal(fake.records.folders.some(folder => folder.name === "c"), false);
+  const retry = await repository.uploadFiles({ ...folderUploadTarget, files: result.failedFiles });
+  assert.equal(retry.uploaded.length, 1);
+  assert.equal(retry.failures.length, 0);
+  assert.equal(fake.operations.filter(operation => operation.startsWith("upload:same.md:")).length, 3);
+  const retriedFolder = fake.records.folders.find(folder => folder.name === "c")!;
+  assert.equal(retry.uploaded[0].folderId, retriedFolder.id);
 });

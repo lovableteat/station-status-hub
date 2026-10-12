@@ -1909,6 +1909,14 @@
 .file-library-workspace .test-plan-empty h2 { font-size: 16px; font-weight: 650; color: hsl(var(--foreground)); }
 .file-library-workspace .test-plan-empty p { font-size: 13px; font-weight: 400; color: hsl(var(--muted-foreground)); }
 .file-library-dialog { border-color: hsl(var(--border)); border-radius: 18px; background: hsl(var(--popover)); color: hsl(var(--foreground)); box-shadow: 0 24px 80px rgb(0 0 0 / .4); }
+.file-library-upload-hint { margin: 0; padding-inline: 4px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.file-library-upload-errors { border: 1px solid hsl(var(--destructive) / .4); border-radius: 12px; padding: 12px; background: hsl(var(--card)); }
+.file-library-upload-error-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.file-library-upload-error-heading > strong { margin-right: auto; }
+.file-library-upload-errors p { margin-block: 6px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.file-library-upload-errors ul { max-height: 160px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.file-library-upload-errors li { display: grid; gap: 2px; padding-block: 6px; overflow-wrap: anywhere; font-size: 12px; }
+.file-library-upload-progress > span { min-width: 0; overflow-wrap: anywhere; }
 .file-library-dialog :is(input, textarea, [role=combobox], button) { border-radius: 10px; }
 .file-library-dialog :is(input, [role=combobox], button) { min-height: 44px; }
 .file-library-workspace :is(button, .test-plan-list-row, .test-plan-entry-card):focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }

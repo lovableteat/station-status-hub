@@ -67,11 +67,12 @@ test("users can manage their own avatar from personal settings", async () => {
   assert.match(dialog, /檔案上限 5 MB/);
   assert.match(dialog, /編輯大頭貼/);
   assert.match(index, /label: "編輯大頭貼"/);
-  assert.match(index, /emphasized: true/);
+  assert.match(index, /id: "personal-profile"[\s\S]*?label: "編輯大頭貼"/);
   assert.match(index, /userAvatarPath=\{user\?\.avatarPath\}/);
   assert.match(header, /<UserAvatar[\s\S]*avatarPath=\{userAvatarPath\}/);
-  assert.match(header, /開啟帳號選單，可編輯大頭貼/);
-  assert.match(header, /<Camera className="h-2\.5 w-2\.5"/);
+  assert.match(header, /aria-label="開啟帳號選單"/);
+  assert.match(header, /item\.icon/);
+  assert.doesNotMatch(header, /hasAvatarEditor|<Camera/);
   assert.match(loginFunction, /avatar_path/);
 });
 

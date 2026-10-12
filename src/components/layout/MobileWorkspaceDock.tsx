@@ -35,7 +35,7 @@ const PRIMARY_WORKSPACES = [
   { id: "workspace-home", label: "首頁", icon: House },
   { id: "station-status", label: "維修", icon: Gauge },
   { id: "material-requests", label: "料號", icon: PackageSearch },
-  { id: "ai-chat", label: "查詢", icon: Search },
+  { id: "ai-chat", label: "AI 問答", icon: Search },
 ] as const;
 
 const SECONDARY_WORKSPACES = [

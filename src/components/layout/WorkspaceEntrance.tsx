@@ -25,12 +25,12 @@ const workspaceToneMap: Record<
   }
 > = {
   "station-status": {
-    badge: "維修監控",
+    badge: "問題追蹤",
     iconWrap:
       "border-sky-300/22 bg-sky-400/10 text-sky-100 shadow-[0_18px_38px_-28px_rgba(96,165,250,0.85)]",
     panel:
       "surface-accent surface-accent--blue bg-[linear-gradient(180deg,rgba(16,31,56,0.94),rgba(8,18,34,0.98))] hover:border-sky-300/34",
-    description: "依專案追蹤每台機台的測試進度、站點瓶頸、問題工單與實際工時。",
+    description: "追蹤機台問題、處理狀態、負責人與實際工時。",
   },
   "file-uploads": {
     badge: "工程檔案",
@@ -98,7 +98,7 @@ const mobileWorkspaceTitleMap: Record<string, string> = {
   "station-status": "維修中心",
   "file-uploads": "檔案上傳",
   "data-center": "Data Center",
-  "ai-chat": "資料查詢",
+  "ai-chat": "AI 問答",
   performance: "績效考核",
 };
 

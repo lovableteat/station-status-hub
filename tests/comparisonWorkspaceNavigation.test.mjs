@@ -73,10 +73,10 @@ test("homepage AutoCheck and the requested previews use the shared repair illust
   assert.match(dock, /SECONDARY_WORKSPACES = \[[\s\S]*?id: "comparison", label: "比對系統"/);
   assert.match(dock, /SECONDARY_WORKSPACES\.filter\(\(item\) => availableIds\.has\(item.id\)\)/);
   assert.match(index, /title: id === "comparison" \? "AutoCheck" : label/);
-  for (const name of ["pcb", "analysis", "performance", "comparison"]) assert.match(preview, new RegExp(`assets/workspace/${name}\\.webp`));
+  for (const name of ["pcb", "analysis", "performance", "comparison"]) assert.match(preview, new RegExp(`assets/workspace/${name}(?:-v2)?\\.webp`));
   assert.match(preview, /workspace-preview--artwork/);
   assert.doesNotMatch(preview, /PcbWorkspacePreview|preview-ai-sources|preview-performance-categories/);
-  assert.match(permissions, /「比對系統」沿用資料查詢空間權限/);
+  assert.match(permissions, /「比對系統」沿用 AI 問答權限/);
 });
 
 test("comparison presence and filter audit use the public workspace label", async () => {

@@ -59,7 +59,7 @@ test("workspace audit names every current workspace and its list alignment targe
       "Data-center",
       "PCB Designer",
       "後台管理",
-      "資料查詢空間",
+      "AI 問答",
       "績效考核系統",
       "TestTracker.tsx",
       "ProductionMonitor.tsx",

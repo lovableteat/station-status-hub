@@ -5,7 +5,6 @@ import {
   Check,
   CirclePause,
   CirclePlay,
-  FolderKanban,
   Layers3,
   Pencil,
   Plus,
@@ -72,12 +71,12 @@ const STATUS_META: Record<
 > = {
   planning: {
     label: "規劃中",
-    className: "border-sky-300/35 bg-sky-400/12 text-sky-100",
+    className: "border-border bg-muted text-muted-foreground",
     icon: CalendarDays,
   },
   active: {
     label: "進行中",
-    className: "border-emerald-300/35 bg-emerald-400/12 text-emerald-100",
+    className: "border-primary/30 bg-primary/10 text-primary",
     icon: CirclePlay,
   },
   paused: {
@@ -87,7 +86,7 @@ const STATUS_META: Record<
   },
   completed: {
     label: "已完成",
-    className: "border-blue-300/35 bg-blue-400/12 text-blue-100",
+    className: "border-primary/30 bg-primary/10 text-primary",
     icon: Check,
   },
   archived: {
@@ -289,24 +288,17 @@ export function ProjectScopeBar() {
   return (
     <div
       data-ui="project-command-bar"
-      className="maintenance-project-bar relative z-10 grid min-h-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border p-1.5 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] lg:sticky lg:top-[72px] lg:flex lg:h-14 lg:gap-3 lg:rounded-lg lg:px-3 lg:py-2"
+      className="maintenance-project-bar relative z-10 grid min-h-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-border bg-card p-2 lg:sticky lg:top-[72px] lg:flex lg:gap-3 lg:px-3"
     >
-      <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary lg:flex">
-        <FolderKanban className="h-4 w-4" />
-      </div>
-
       <Select
         disabled={isLoadingProjects || projects.length === 0}
         value={activeProjectId ?? ""}
         onValueChange={setActiveProjectId}
       >
-        <SelectTrigger className="h-11 min-w-0 w-full flex-1 rounded-lg border border-cyan-200/20 bg-[#10263a] px-3 shadow-none lg:col-auto lg:h-10 lg:max-w-[310px]">
+        <SelectTrigger aria-label="切換目前專案" className="h-11 min-w-0 w-full flex-1 rounded-md border-border bg-background px-3 shadow-none lg:max-w-[260px]">
           <div className="min-w-0 text-left">
-            <div className="truncate text-sm font-semibold text-[#f3f8fc]">
+            <div className="truncate text-sm font-semibold text-foreground">
               {activeProject?.name || "選擇專案"}
-            </div>
-            <div className="truncate text-xs text-[#a9c0d1]">
-              {activeOwner?.display_name || activeOwner?.username || "未設定負責人"}
             </div>
           </div>
         </SelectTrigger>
@@ -327,24 +319,12 @@ export function ProjectScopeBar() {
           data-ui="project-metadata"
           className="hidden min-w-0 items-center gap-3 lg:flex"
         >
-          <Badge
-            variant="outline"
-            className={cn("h-8 shrink-0 rounded-lg px-2.5", activeStatusMeta.className)}
-          >
-            {activeStatusMeta.label}
-          </Badge>
-          <div className="hidden items-center gap-1 rounded-lg border border-[#294861]/80 bg-[#071827]/70 p-1 xl:flex">
-            <span className="rounded-md px-2.5 py-1 text-xs text-[#9fb8ca]">
-              機台 <strong className="font-mono text-[#f3f8fc]">{activeSummary?.machine_count ?? 0}</strong>
-            </span>
-            <span className="rounded-md border-l border-[#294861]/70 px-2.5 py-1 text-xs text-[#9fb8ca]">
-              待處理問題 <strong className="font-mono text-amber-100">{activeSummary?.open_issue_count ?? 0}</strong>
-            </span>
-            <span className="flex items-center gap-1.5 rounded-md border-l border-[#294861]/70 px-2.5 py-1 text-xs text-[#9fb8ca]">
-              <CalendarDays className="h-3.5 w-3.5" />
-              {formatDate(activeProject.planned_end_date)}
-            </span>
-          </div>
+          <span className="shrink-0 text-xs text-muted-foreground">{activeStatusMeta.label}</span>
+          <p className="hidden truncate text-xs text-muted-foreground xl:block">
+            {activeSummary?.machine_count ?? 0} 台機台 · {activeSummary?.open_issue_count ?? 0} 件未結問題
+          </p>
+          {activeOwner && <span className="hidden truncate text-xs text-muted-foreground 2xl:inline">{activeOwner.display_name || activeOwner.username}</span>}
+          {activeProject.planned_end_date && <span className="hidden whitespace-nowrap text-xs text-muted-foreground 2xl:inline">預計完成 {formatDate(activeProject.planned_end_date)}</span>}
         </div>
       )}
 
@@ -361,7 +341,7 @@ export function ProjectScopeBar() {
               <Button
                 type="button"
                 aria-label="新增機台"
-                className="h-11 w-11 shrink-0 rounded-lg border border-cyan-300/45 bg-cyan-400/18 px-0 text-cyan-50 shadow-none hover:border-cyan-200/65 hover:bg-cyan-400/28 hover:text-white sm:w-auto sm:px-3 lg:h-9"
+                className="h-11 w-11 shrink-0 rounded-md px-0 sm:w-auto sm:px-3 lg:h-9"
               >
                 <Plus className="h-4 w-4 sm:mr-2" />
                 <span className="hidden text-xs sm:inline sm:text-sm">新增機台</span>
@@ -376,7 +356,7 @@ export function ProjectScopeBar() {
               <Button
                 type="button"
                 variant="ghost"
-                className="hidden h-9 w-auto shrink-0 rounded-lg border border-violet-300/30 bg-violet-400/12 px-3 text-violet-100 hover:border-violet-200/50 hover:bg-violet-400/20 hover:text-white lg:flex"
+                className="hidden h-9 w-auto shrink-0 rounded-md px-3 lg:flex"
                 onClick={() => openEditForm(activeProject)}
               >
                 <Pencil className="h-4 w-4 sm:mr-2" />
@@ -399,7 +379,8 @@ export function ProjectScopeBar() {
       >
         <SheetTrigger asChild>
           <Button
-            className="h-11 w-11 shrink-0 rounded-lg border-amber-300/30 bg-amber-400/12 px-0 text-amber-100 hover:border-amber-200/50 hover:bg-amber-400/20 hover:text-white sm:w-auto sm:px-3 lg:h-9"
+            aria-label="專案中心"
+            className="h-11 w-11 shrink-0 rounded-md px-0 sm:w-auto sm:px-3 lg:h-9"
             variant="outline"
           >
             <Layers3 className="h-4 w-4 sm:mr-2" />

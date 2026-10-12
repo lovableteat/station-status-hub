@@ -152,7 +152,7 @@ test("restores, catalogs, and renders PCB Designer through the existing navigati
 });
 
 test("uses a repair-style PCB artwork in the responsive home grid without changing the workbench preview", () => {
-  assert.match(workspacePreviewSource, /assets\/workspace\/pcb\.webp/);
+  assert.match(workspacePreviewSource, /assets\/workspace\/pcb-v2\.webp/);
   assert.match(
     workspacePreviewSource,
     /["']pcb-designer["']:\s*\{ image: pcbArtwork/,

@@ -3,6 +3,7 @@ import {
   classifyTestPlanFile,
   getTestPlanFileExtension,
   validateTestPlanFileName,
+  validateTestPlanFolderPaths,
   validateTestPlanUpload,
 } from "./files.ts";
 import { isFolderDescendant } from "./tree.ts";
@@ -181,12 +182,14 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
       folderId,
       files,
       onProgress,
+      preservePaths = false,
     }: {
       ownerId: string;
       projectId: string | null;
       spaceId: string;
       folderId: string | null;
       files: readonly File[];
+      preservePaths?: boolean;
       onProgress?: (progress: {
         completed: number;
         total: number;
@@ -195,38 +198,67 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
         currentFileName: string;
       }) => void;
     }) {
-      const validation = validateTestPlanUpload(files);
+      const relativePaths = preservePaths ? validateTestPlanFolderPaths(files) : new Map<File, string[]>();
+      const validation = validateTestPlanUpload(files, preservePaths ? files.length : undefined);
       const uploaded: TestPlanFileRecord[] = [];
+      const failedFiles = files.filter(file => !validation.valid.includes(file));
       const failures = validation.errors.map((error) => ({
         fileName: error.fileName,
         message: error.message,
       }));
-      let completed = 0;
+      let completed = failedFiles.length;
       let uploadedBytes = 0;
       const totalBytes = validation.valid.reduce(
         (total, file) => total + file.size,
         0,
       );
 
+      const [knownFolders, knownFiles] = preservePaths && validation.valid.length > 0
+        ? await Promise.all([adapter.listFolders(spaceId), adapter.listFiles(spaceId)])
+        : [[], []];
+      if (preservePaths && validation.valid.length > 0 && folderId && !knownFolders.some(folder => folder.id === folderId && folder.spaceId === spaceId)) {
+        throw new Error("目標資料夾不存在或不屬於此空間，請重新整理後再試。");
+      }
+
       for (const file of validation.valid) {
+        const currentFileName = preservePaths ? file.webkitRelativePath : file.name;
         const storagePath = buildStoragePath(ownerId, projectId, spaceId, file.name);
         let objectUploaded = false;
         try {
+          let targetFolderId = folderId;
+          for (const name of relativePaths.get(file)?.slice(0, -1) ?? []) {
+            const sameName = (value: string) => value.toLowerCase() === name.toLowerCase();
+            if (knownFiles.some(existing => existing.folderId === targetFolderId && sameName(existing.originalName))) {
+              throw new Error(`已有同名檔案，無法建立資料夾：${name}`);
+            }
+            let folder = knownFolders.find(existing => existing.parentId === targetFolderId && sameName(existing.name));
+            if (!folder) {
+              folder = await adapter.createFolder({ spaceId, parentId: targetFolderId, name, createdBy: ownerId });
+              knownFolders.push(folder);
+            }
+            targetFolderId = folder.id;
+          }
+          if (preservePaths && (
+            knownFiles.some(existing => existing.folderId === targetFolderId && existing.originalName.toLowerCase() === file.name.toLowerCase())
+            || knownFolders.some(existing => existing.parentId === targetFolderId && existing.name.toLowerCase() === file.name.toLowerCase())
+          )) {
+            throw new Error("目標位置已有同名檔案或資料夾，已略過以避免覆寫。");
+          }
           await adapter.uploadObject(
             storagePath,
             file,
             (currentUploadedBytes) => onProgress?.({
               completed,
-              total: validation.valid.length,
+              total: files.length,
               uploadedBytes: uploadedBytes + currentUploadedBytes,
               totalBytes,
-              currentFileName: file.name,
+              currentFileName,
             }),
           );
           objectUploaded = true;
-          uploaded.push(await adapter.createFile({
+          const created = await adapter.createFile({
             spaceId,
-            folderId,
+            folderId: targetFolderId,
             originalName: file.name,
             storagePath,
             mimeType: file.type || null,
@@ -234,7 +266,10 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
             category: classifyTestPlanFile(file.name),
             fileSize: file.size,
             uploadedBy: ownerId,
-          }));
+          });
+          uploaded.push(created);
+          knownFiles.push(created);
+          uploadedBytes += file.size;
         } catch (error) {
           let cleanupQueueError: unknown = null;
           if (objectUploaded) {
@@ -249,7 +284,7 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
             }
           }
           failures.push({
-            fileName: file.name,
+            fileName: currentFileName,
             message: [
               error instanceof Error ? error.message : "上傳失敗。",
               cleanupQueueError
@@ -257,19 +292,19 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
                 : "",
             ].filter(Boolean).join(" "),
           });
+          failedFiles.push(file);
         } finally {
-          uploadedBytes += file.size;
           completed += 1;
           onProgress?.({
             completed,
-            total: validation.valid.length,
+            total: files.length,
             uploadedBytes,
             totalBytes,
-            currentFileName: file.name,
+            currentFileName,
           });
         }
       }
-      return { uploaded, failures };
+      return { uploaded, failures, failedFiles };
     },
     renameFile(fileId: string, originalName: string) {
       const name = originalName.trim();

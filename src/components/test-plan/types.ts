@@ -55,4 +55,5 @@ export interface TestPlanUploadCandidate {
   name: string;
   size: number;
   type?: string;
+  webkitRelativePath?: string;
 }

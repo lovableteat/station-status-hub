@@ -7,7 +7,7 @@ const headerSourceUrl = new URL(
   import.meta.url,
 );
 const indicatorSourceUrl = new URL(
-  "../src/components/common/OnlineUsersIndicator.tsx",
+  "../src/components/common/CollaborationIndicator.tsx",
   import.meta.url,
 );
 const indexSourceUrl = new URL("../src/pages/Index.tsx", import.meta.url);
@@ -18,21 +18,24 @@ test("online users indicator is rendered inside the workspace header", async () 
     readFile(indexSourceUrl, "utf8"),
   ]);
 
-  assert.match(headerSource, /<OnlineUsersIndicator\s*\/>/);
+  assert.match(headerSource, /<CollaborationIndicator showNotifications=\{showNotifications\} showOnlineUsers=\{showOnlineUsers\}/);
   assert.doesNotMatch(indexSource, /<OnlineUsersIndicator\s*\/>/);
 });
 
 test("online users control stays aligned with the fixed header control height", async () => {
-  const [headerSource, indicatorSource] = await Promise.all([
+  const [headerSource, indicatorSource, styles] = await Promise.all([
     readFile(headerSourceUrl, "utf8"),
     readFile(indicatorSourceUrl, "utf8"),
+    readFile(new URL("../src/index.css", import.meta.url), "utf8"),
   ]);
 
   assert.doesNotMatch(indicatorSource, /fixed bottom-4 right-4/);
-  assert.match(indicatorSource, /h-12 w-\[140px\]/);
+  assert.match(indicatorSource, /data-collaboration-entry="combined"/);
+  assert.match(styles, /--platform-control-height: 2\.75rem/);
+  assert.match(styles, /\[data-platform-controls='top-right'\] button/);
   assert.match(
     headerSource,
-    /showOnlineUsers && <div className="hidden md:block"><OnlineUsersIndicator\s*\/><\/div>/,
+    /showNotifications \|\| showOnlineUsers/,
   );
 });
 

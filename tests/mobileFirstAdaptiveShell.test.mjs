@@ -20,7 +20,8 @@ test("the shared handset shell reserves safe chrome for every workspace", async 
   assert.match(styles, /--mobile-shell-bottom:/);
   assert.match(styles, /font-size:\s*16px/);
   assert.match(index, /data-mobile-workspace-main="true"/);
-  assert.match(index, /availableItems=\{workspaceItems\}/);
+  assert.match(index, /availableItems=\{workspaceNavigationItems\}/);
+  assert.match(index, /workspaceItems\.filter\(\(item\) => item\.id !== "user-management"\)/);
   assert.doesNotMatch(index, /activeWorkspace !== "data-center" && activeWorkspace !== "pcb-designer"/);
   assert.match(header, /data-mobile-app-header="true"/);
   assert.match(header, /lg:grid-cols-\[auto_minmax\(0,1fr\)_auto\]/);
@@ -32,7 +33,8 @@ test("the shared handset shell reserves safe chrome for every workspace", async 
 test("chat uses one compact rectangular launcher above the shared dock", async () => {
   const source = await read("src/components/collaboration/CollaborationCenter.tsx");
 
-  assert.match(source, /data-chat-launcher="compact-rectangle"/);
+  assert.match(source, /data-chat-launcher="platform"/);
+  assert.match(source, /platform-chat-launcher/);
   assert.match(source, /var\(--mobile-shell-bottom\)/);
   assert.match(source, /h-11/);
   assert.match(source, /rounded-xl/);

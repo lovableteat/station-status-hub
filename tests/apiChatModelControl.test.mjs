@@ -40,11 +40,12 @@ test("selected Gemini target drives the real request without rewriting key metad
 
 test("Gemini model copy explains the shared project limit in plain language", async () => {
   const source = await read("../src/components/api-management/ApiChatConsole.tsx");
+  const quota = await read("../src/components/api-management/AiQuotaStatus.tsx");
 
   assert.match(source, /GEMINI_DEFAULT_MODEL/);
-  assert.match(source, /getGeminiFreeModelProfile/);
-  assert.match(source, /同一 Google 專案共用/);
-  assert.match(source, /上限資料確認於 2026-10-04/);
+  assert.match(quota, /getGeminiFreeModelProfile/);
+  assert.match(quota, /同一 Google 專案共用/);
+  assert.match(quota, /profile\.sourceDate/);
   assert.doesNotMatch(source, /RPM|RPD|輸入 TPM|配額快照/);
   assert.doesNotMatch(source, /剩餘額：未同步 Google/);
 });

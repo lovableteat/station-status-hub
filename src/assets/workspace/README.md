@@ -6,10 +6,10 @@ Eight original illustrations generated with the built-in `imagegen` tool for the
 | --- | --- |
 | `repair.webp` | 維修中心 |
 | `files.webp` | 檔案上傳 |
-| `parts.webp` | 料號申請 |
+| `parts-v2.webp` | 料號申請 |
 | `racks.webp` | Data-center |
-| `pcb.webp` | PCB Designer |
-| `analysis.webp` | 資料查詢空間 |
+| `pcb-v2.webp` | PCB Designer |
+| `analysis.webp` | AI 問答 |
 | `performance.webp` | 績效考核系統 |
 | `comparison.webp` | AutoCheck |
 
@@ -36,3 +36,12 @@ The four additions use `repair.webp` as a style reference only, preserving the s
 - **analysis.webp:** A machined graphite document tray with silver engineering/spreadsheet/image sheets and an inspection magnifying glass.
 - **performance.webp:** A graphite clipboard with embossed checklist and jade check marks, alongside three physical ascending machined columns; no scores or numbers.
 - **comparison.webp:** Two tangible circuit boards, one changed connector and a restrained amber component under an inspection lens; no A/B labels or arrows.
+
+## Content corrections (2026-10-13)
+
+The built-in `imagegen` tool regenerated the two requested subjects using `repair.webp` as a style reference only. Originals are preserved. Saved assets: `src/assets/workspace/parts-v2.webp` and `src/assets/workspace/pcb-v2.webp`, 768 × 512 WebP with alpha, quality 88.
+
+Final prompts retain the graphite/silver industrial materials, jade accents, three-quarter downward orthographic camera, soft upper-left lighting, coherent composition, transparent margins, no typography/logos/neon/UI mockup.
+
+- **parts-v2.webp:** Electronic BOM part request and alternate-part approval: a dark graphite clipboard holding a specification sheet with an ordered six-row bill-of-materials table, neutral bars and item markers, one green approved check; two matching IC packages in a divided machined tray, main and alternate linked by an embossed jade swap symbol. The BOM document is the main object; no populated circuit board or component pile.
+- **pcb-v2.webp:** PCB design, not assembled PCBA: bare notched dark-jade board, real drilled mounting holes, copper traces, plated vias and unpopulated IC/connector footprint pads. A thin translucent drafting layer above it shows the same outline/trace plan and corner edit handles; a precision stylus rests beside it. No mounted chips, heatsink, server motherboard or monitor.

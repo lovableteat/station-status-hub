@@ -258,6 +258,9 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
 
   const paginatedIssues = sortedIssues.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const totalPages = Math.ceil(issues.length / pageSize);
+  useEffect(() => {
+    setCurrentPage(page => Math.min(page, Math.max(1, Math.ceil(issues.length / pageSize))));
+  }, [issues.length, pageSize]);
 
   const handleEdit = (issue: Issue) => {
     setHasAttachmentChanges(false);
@@ -647,6 +650,7 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
               </article>
             );
           })}
+          {!issues.length && <div className="rounded-lg border border-border py-12 text-center text-sm text-muted-foreground">目前篩選條件沒有符合的問題</div>}
         </div>
 
         <div className="hidden max-h-[calc(100vh-350px)] overflow-auto lg:block">
@@ -696,6 +700,7 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
               </TableRow>
             </TableHeader>
             <TableBody>
+              {!issues.length && <TableRow><TableCell colSpan={columnOrder.length} className="py-12 text-center text-muted-foreground">目前篩選條件沒有符合的問題</TableCell></TableRow>}
               {paginatedIssues.map((issue) => (
                 <TableRow key={issue.id} className="h-14">
                   {columnOrder.map((key) => (
@@ -714,7 +719,7 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#2a526f] bg-[#0b1b2d] p-3">
           <div className="text-sm text-muted-foreground">
-            顯示 {(currentPage - 1) * pageSize + 1} 到 {Math.min(currentPage * pageSize, issues.length)} 筆，共 {issues.length} 筆
+            顯示 {issues.length ? (currentPage - 1) * pageSize + 1 : 0} 到 {Math.min(currentPage * pageSize, issues.length)} 筆，共 {issues.length} 筆
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="h-11 lg:h-9" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>上一頁</Button>

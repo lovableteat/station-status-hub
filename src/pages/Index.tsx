@@ -123,7 +123,7 @@ const stationModuleItems: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: "dashboard", label: "系統儀表板", icon: LayoutDashboard },
+  { id: "dashboard", label: "問題儀表板", icon: LayoutDashboard },
   { id: "test-tracker", label: "L10 測試追蹤", icon: ClipboardList },
   { id: "flow-info", label: "L10 流程設定", icon: FileText },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle },
@@ -165,6 +165,12 @@ const MODULE_QUERY_KEYS = [
   "excludeStatus",
   "flowVersion",
   "flowView",
+  "issueSearch",
+  "issueStation",
+  "issueStatus",
+  "issuePriority",
+  "issueOwner",
+  "issueFollowUp",
   "librarySearch",
   "librarySigned",
   "openIssue",
@@ -320,7 +326,7 @@ const Index = () => {
       {
         id: "station-status" as const,
         label: "維修中心",
-        description: "依專案追蹤每台 L10 從組裝到 NV_diag 的測試進度，掌握站點瓶頸、問題工單、實際工時與工具資產。",
+        description: "追蹤機台問題、處理狀態與負責人，集中管理測試紀錄、實際工時與工具資產。",
         icon: LayoutDashboard,
         visible: stationModuleItems.some((item) => canViewModule(item.id)),
       },
@@ -371,7 +377,7 @@ const Index = () => {
       },
       {
         id: "ai-chat" as const,
-        label: "資料查詢空間",
+        label: "AI 問答",
         description: "上傳或貼上 PDF、Office、圖片與長文字，透過多家 AI 模型查詢、比較和整理，並用共享提示詞快速執行常用任務。",
         icon: MessageSquareText,
         visible: canViewModule("ai-chat"),
@@ -756,7 +762,6 @@ const Index = () => {
         onSelect={handleWorkspaceChange}
         onLogout={logout}
         onBrandClick={() => handleWorkspaceChange("workspace-home")}
-        onOpenWorkspaceHome={() => handleWorkspaceChange("workspace-home")}
         userName={user?.displayName || user?.username}
         userAvatarPath={user?.avatarPath}
         userRoleLabel={getRoleLabel(user?.role)}
@@ -774,21 +779,18 @@ const Index = () => {
               id: "assessment-backups",
               label: "我的自評備份",
               icon: <Archive className="h-4 w-4" />,
-              emphasized: true,
               onSelect: () => setAssessmentBackupsOpen(true),
             },
             {
               id: "personal-profile",
               label: "編輯大頭貼",
               icon: <Camera className="h-4 w-4" />,
-              emphasized: true,
               onSelect: () => setProfileDialogOpen(true),
             },
             {
               id: "own-credentials",
               label: "帳號與密碼",
               icon: <KeyRound className="h-4 w-4" />,
-              emphasized: true,
               onSelect: () => setCredentialsDialogOpen(true),
             },
           ]),
