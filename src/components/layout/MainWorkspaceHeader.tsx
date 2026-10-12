@@ -91,7 +91,7 @@ export function MainWorkspaceHeader({
           <div data-platform-brand="top-left" className={brandPositionClassName}>{brand}</div>
         )}
 
-        <nav aria-label="工作區導覽" className="glass-strip hidden min-w-0 max-w-full items-center justify-self-center overflow-x-auto rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden 2xl:flex">
+        <nav data-platform-nav="true" aria-label="工作區導覽" className="glass-strip hidden min-w-0 max-w-full items-center justify-self-center overflow-x-auto rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden 2xl:flex">
           {items.map((item) => {
             const isActive = item.id === activeItem;
 
@@ -113,7 +113,7 @@ export function MainWorkspaceHeader({
           })}
         </nav>
 
-        <nav aria-label="工作區導覽" className="glass-strip hidden min-w-0 max-w-full items-center justify-self-center rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] lg:flex 2xl:hidden">
+        <nav data-platform-nav="true" aria-label="工作區導覽" className="glass-strip hidden min-w-0 max-w-full items-center justify-self-center rounded-2xl border border-primary/15 p-1 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)] lg:flex 2xl:hidden">
           {compactItems.map((item) => (
             <button
               key={item.id}
