@@ -117,7 +117,7 @@ export function LoginPage() {
         <CardHeader className="space-y-4 border-b border-white/8 pb-5 text-center">
           <PlatformLogoMark className="mx-auto text-cyan-100" size="lg" />
           <div className="space-y-2">
-            <CardTitle className="text-2xl font-black tracking-[-0.03em]">工作整合平台</CardTitle>
+            <CardTitle className="text-2xl font-black tracking-[-0.03em]">工作平台</CardTitle>
             <CardDescription className="text-sm leading-6 text-slate-400">
               {view === "login" ? "使用已核准的帳號登入工作區。" : "填寫正確姓名並建立帳號，送出後由管理員核准。"}
             </CardDescription>

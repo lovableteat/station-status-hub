@@ -1,10 +1,10 @@
 # 跨工作區篩選 UI 稽核
 
-日期：2026-08-22
+日期：2026-08-22（路由資訊更新：2026-10-12）
 
 ## 結論
 
-目前路由由 `src/pages/Index.tsx` 暴露首頁與七個工作區：機台維修紀錄中心、料號申請、Data-center、PCB Designer、後台管理、資料查詢空間、績效考核系統。本稽核檢視這些路由實際掛載的元件；舊檔案或沒有被目前路由引用的畫面不列為立即工作。
+目前路由由 `src/pages/Index.tsx` 暴露首頁與八個工作區：維修中心、檔案上傳、料號申請、Data-center、PCB Designer、後台管理、資料查詢空間、績效考核系統。本稽核檢視這些路由實際掛載的元件；舊檔案或沒有被目前路由引用的畫面不列為立即工作。
 
 凡是「使用者設定搜尋或條件後，畫面顯示一組較小的資料結果」的表格、卡片清單、檔案清單或 lane 都應立即對齊 `AGENTS.md`。這裡的「應立即對齊」是現行產品標準與後續實作清單，不代表 Task 8 已修改產品程式碼。沒有任何篩選能力的清單不必為了形式新增無用途的篩選列；一旦加入篩選，就必須直接採用完整標準。
 
@@ -16,7 +16,7 @@
 
 ## 應立即對齊的資料清單
 
-### 機台維修紀錄中心
+### 維修中心
 
 | 模組／資料結果 | 目前元件 | 現況與應對齊項目 |
 | --- | --- | --- |
@@ -24,10 +24,18 @@
 | 生產監控 lane | `src/components/production/ProductionMonitor.tsx` | **接近標準。** 持久列已位於 lane 上方，共用欄位順序為搜尋 → 站點 → 狀態 → 工程師；目前 working tree 也會解析 `attention=1`、同步 URL，並在同一列顯示可個別清除的「需關注機台」條件。其餘搜尋／下拉／異常／超時條件仍沒有持久 chip，也沒有涵蓋全部條件的「全部清除」；窄版只能收合次要工具，不能收合 active chips。
 | 問題列表 | `src/components/issues/IssueTracker.tsx`、`IssueTableView.tsx` | **接近標準。** 搜尋、優先級與狀態位於表格正上方，但沒有作用中 chip 或全部清除；`system` URL 值目前被當作搜尋初值，仍應保留為可辨識、可清除且同步 URL 的自動條件。零筆時應保留 `IssueTableView` 欄位 header，使用問題領域的等價空結果文字。
 | 工具、檔案、程式碼與指令資產清單 | `src/components/tools/ToolsManagement.tsx`、`CodeStorageManager.tsx`、`CommandLibrary.tsx` | **待對齊。** 頂層工具／檔案已有搜尋與類型 pills，但缺少一致的 active chips、全部清除，以及通用／目前工作區 scope 條件；程式碼與指令的內嵌清單也要遵守相同語意。分頁是資產種類導覽，不應偽裝成可清除的篩選條件。
-| 資料儲存的檔案與資料夾結果 | `src/components/test-plan/TestPlanWorkspace.tsx` | **接近標準。** 搜尋、格式與排序已緊接結果區，但沒有 active chips、個別清除與全部清除；排序、grid/list 與重新整理屬次要工具，行動版可以收合，搜尋／格式 active chips 不可收合。資料夾 breadcrumb 是位置上下文，不列入全部清除。
+
 | Dashboard 內可展開的機台／關注資料列 | `src/components/dashboard/Dashboard.tsx` | KPI、圖表與摘要卡本身不是資料清單；目前 working tree 已用 URL 將站點與排除已完成帶到 L10、將 `attention=1` 帶到生產監控牆，並以 system ID 開啟 L10。若這些區塊日後加入本地搜尋或篩選，仍必須套用持久列與空結果規則；自動條件則由目標頁在同一組篩選 UI 顯示。
 
 `src/components/test-projects/ProjectScopeBar.tsx` 是整個中心的專案上下文，不是列表篩選。全部清除不得把使用者踢出目前專案。
+
+### 檔案上傳
+
+此頁已自維修中心移至獨立入口 `workspace=file-uploads&module=test-plan`；舊 `workspace=station-status&module=test-plan` 連結會開啟新入口。專案、資料空間、檔案與原 `test-plan` 權限仍沿用，這次搬移未改變下列篩選契約的現況判定。
+
+| 模組／資料結果 | 目前元件 | 現況與應對齊項目 |
+| --- | --- | --- |
+| 檔案與資料夾結果 | `src/components/test-plan/TestPlanWorkspace.tsx` | **接近標準。** 搜尋、格式與排序已緊接結果區，但沒有 active chips、個別清除與全部清除；排序、grid/list 與重新整理屬次要工具，行動版可以收合，搜尋／格式 active chips 不可收合。資料夾 breadcrumb 是位置上下文，不列入全部清除。
 
 ### 其他工作區
 

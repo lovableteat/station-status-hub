@@ -57,7 +57,7 @@ const DETAIL_PERMISSION_SECTIONS: Array<{
 }> = [
   {
     workspaceId: "station-status",
-    title: "機台維修紀錄中心內頁",
+    title: "維修中心內頁",
     description: "控制儀表板、L10 列表與生產看板、測試流程、問題與工具等維修工作頁面。",
     groupKeys: ["dashboard", "test_tracker", "flow_info", "issues", "tools"],
   },
@@ -488,7 +488,7 @@ export function UserPermissionsDialog({
 
               <div className="admin-permission-storage-note">
                 <Shield className="h-4 w-4" />
-                <span>資料儲存權限會跟隨「機台維修紀錄中心」，不需重複設定。</span>
+                <span>「檔案上傳」沿用維修中心的資料儲存權限，不需重複設定。</span>
               </div>
 
               <div className="admin-permission-detail-list">

@@ -3,6 +3,7 @@ import {
   ChevronRight,
   CircuitBoard,
   Gauge,
+  FolderUp,
   House,
   MoreHorizontal,
   PackageSearch,
@@ -37,6 +38,7 @@ const PRIMARY_WORKSPACES = [
 ] as const;
 
 const SECONDARY_WORKSPACES = [
+  { id: "file-uploads", label: "檔案上傳", icon: FolderUp, description: "專案檔案、資料夾與文件預覽" },
   { id: "data-center", label: "Data Center", icon: ServerCog, description: "機櫃、設備與 2D／3D 場景" },
   { id: "pcb-designer", label: "PCB Designer", icon: CircuitBoard, description: "PCB 佈局、BOM 與 DRC" },
   { id: "user-management", label: "後台管理", icon: ShieldCheck, description: "帳號、權限與 API" },

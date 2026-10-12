@@ -53,7 +53,8 @@ test("workspace audit names every current workspace and its list alignment targe
     audit,
     [
       "應立即對齊",
-      "機台維修紀錄中心",
+      "維修中心",
+      "檔案上傳",
       "料號申請",
       "Data-center",
       "PCB Designer",

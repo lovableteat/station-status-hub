@@ -67,7 +67,8 @@ const moduleLabels: Record<string, string> = {
   monitor: "生產監控牆",
   issues: "問題追蹤",
   tools: "工具與資產",
-  "test-plan": "資料儲存",
+  "test-plan": "檔案上傳",
+  "file-uploads": "檔案上傳",
   users: "後台管理",
   "api-management": "API 管理",
   "material-requests": "料號申請",
@@ -95,7 +96,7 @@ function formatTime(value: string) {
   return date.toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function DirectMessageLauncher({
+export function DirectMessageLauncher({
   unreadCount,
   onOpen,
 }: {
@@ -110,17 +111,11 @@ function DirectMessageLauncher({
       aria-controls="direct-messages-panel"
       onClick={onOpen}
       title="開啟聊天室"
-      data-chat-launcher="compact-rectangle"
-      className="group pointer-events-auto relative ml-auto flex h-11 min-w-[92px] items-center justify-center gap-1.5 rounded-xl border border-cyan-50/80 bg-[linear-gradient(135deg,#a5f3fc_0%,#5eead4_58%,#bef264_100%)] px-2.5 text-[#08283a] shadow-[0_12px_28px_-16px_rgba(45,212,191,0.95),0_6px_16px_-14px_rgba(0,0,0,0.85)] ring-1 ring-white/30 transition-[transform,filter,box-shadow] duration-200 hover:-translate-y-0.5 hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#071421] sm:h-12 sm:min-w-[118px] sm:px-3"
+      data-chat-launcher="platform"
+      className="platform-chat-launcher group pointer-events-auto relative ml-auto flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span
-        aria-hidden="true"
-        className="absolute inset-1 rounded-lg border border-white/40 bg-white/10"
-      />
-      <span className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#0a2d45] text-cyan-100 shadow-[0_8px_18px_-10px_rgba(5,28,44,0.9)] transition-transform duration-200 group-hover:scale-105 sm:h-8 sm:w-8">
-        <MessageSquareText className="h-[18px] w-[18px]" />
-      </span>
-      <span className="relative z-10 text-xs font-black tracking-[0.02em] sm:text-sm">訊息</span>
+      <MessageSquareText className="size-5 text-primary" aria-hidden="true" />
+      <span className="text-sm font-semibold">訊息</span>
       {unreadCount > 0 ? (
         <span className="absolute -right-1.5 -top-1.5 flex min-h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#071421] bg-rose-500 px-1 text-[10px] font-bold leading-5 text-white shadow-[0_0_14px_rgba(244,63,94,0.65)]">
           {unreadCount > 99 ? "99+" : unreadCount}
@@ -336,7 +331,10 @@ export function CollaborationCenter() {
   }, [loading, notifications]);
 
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent("collaboration-unread-change", { detail: { count: unreadCount } }));
+    const publishUnread = () => window.dispatchEvent(new CustomEvent("collaboration-unread-change", { detail: { count: unreadCount } }));
+    window.addEventListener("collaboration-unread-request", publishUnread);
+    publishUnread();
+    return () => window.removeEventListener("collaboration-unread-request", publishUnread);
   }, [unreadCount]);
 
   const markAsRead = async (notification: NotificationRow) => {
@@ -651,7 +649,7 @@ export function CollaborationCenter() {
       {isRealtimeAuthenticated ? (
         <div
           data-chat-dock="detached"
-          className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-40 w-auto sm:w-[min(430px,calc(100vw-1rem))] lg:bottom-0 lg:right-0"
+          className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-40 w-auto sm:w-[min(430px,calc(100vw-1rem))] lg:bottom-4 lg:right-4"
         >
           <section
             id="direct-messages-panel"
@@ -660,30 +658,26 @@ export function CollaborationCenter() {
             data-floating-direct-messages="true"
             data-chat-surface="detached-card"
             className={cn(
-              "fixed inset-0 flex h-[100dvh] w-screen origin-bottom-right flex-col overflow-hidden border-0 border-cyan-100/40 bg-[#071421] pt-[env(safe-area-inset-top)] shadow-[0_30px_90px_-24px_rgba(0,0,0,0.92),0_12px_36px_-24px_rgba(45,212,191,0.72)] ring-1 ring-white/[0.06] transition-[opacity,transform,visibility] duration-200 ease-out sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[min(640px,calc(100dvh-6rem))] sm:w-full sm:rounded-[24px] sm:border sm:pt-0",
+              "fixed inset-0 flex h-[100dvh] w-screen origin-bottom-right flex-col overflow-hidden border-0 border-cyan-100/40 bg-card pt-[env(safe-area-inset-top)] shadow-[var(--app-floating-shadow)] ring-1 ring-white/[0.06] transition-[opacity,transform,visibility] duration-200 ease-out sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[min(640px,calc(100dvh-6rem))] sm:w-full sm:rounded-[24px] sm:border sm:pt-0",
               messageFloatOpen
                 ? "visible pointer-events-auto translate-y-0 scale-100 opacity-100"
                 : "invisible pointer-events-none translate-y-3 scale-[0.98] opacity-0",
             )}
           >
-            <header className="relative flex h-14 shrink-0 items-center justify-between overflow-hidden border-b border-cyan-100/25 bg-[linear-gradient(120deg,#17627a_0%,#166054_55%,#51427f_100%)] px-3.5 text-slate-50 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-[linear-gradient(90deg,#67e8f9,#bef264,#fbbf24,#c4b5fd)]">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[linear-gradient(145deg,#cffafe,#bef264)] text-[#0a3047] shadow-[0_8px_20px_-12px_rgba(103,232,249,0.9)]">
-                  <MessageSquareText className="h-4 w-4" />
-                  <span
-                    aria-hidden="true"
-                    className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#25516e] bg-emerald-400"
-                  />
+            <header className="platform-chat-header relative flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 text-foreground">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-secondary text-primary">
+                  <MessageSquareText className="size-5" />
                 </span>
                 <div className="min-w-0">
                   <div className="text-sm font-bold tracking-[0.01em]">聊天室</div>
-                  <p className="truncate text-[11px] font-medium text-cyan-50/75">選擇聯絡人開始私訊</p>
+                  <p className="truncate text-[11px] font-medium text-muted-foreground">選擇聯絡人開始私訊</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setMessageFloatOpen(false)}
-                className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-cyan-50 transition-colors hover:border-white/20 hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 sm:h-8 sm:w-8"
+                className="flex size-11 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="最小化聊天室"
               >
                 <Minus className="h-4 w-4" />

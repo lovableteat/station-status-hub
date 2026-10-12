@@ -62,7 +62,7 @@ export function MaintenanceSourceSelector({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <p className="truncate text-sm font-bold text-slate-100" title="機台維修紀錄中心">維修資料</p>
+            <p className="truncate text-sm font-bold text-slate-100" title="維修中心">維修資料</p>
             <Badge variant="outline" className="hidden border-emerald-300/25 bg-emerald-400/10 text-[10px] text-emerald-200 md:inline-flex">
               即時資料
             </Badge>

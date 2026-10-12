@@ -15,7 +15,7 @@ test("the workspace keeps direct messages exclusively in the bottom-right floati
 
   assert.match(indexSource, /<CollaborationCenter\s*\/>/);
   assert.doesNotMatch(indexSource, /<RealtimeNotifications\s*\/>/);
-  assert.match(headerSource, /<OnlineUsersIndicator\s*\/>/);
+  assert.match(headerSource, /<CollaborationIndicator/);
   assert.match(indicatorSource, /open-global-collaboration/);
   assert.doesNotMatch(indicatorSource, /<Popover/);
   assert.match(centerSource, /value="notifications"/);
@@ -25,9 +25,9 @@ test("the workspace keeps direct messages exclusively in the bottom-right floati
   assert.match(centerSource, /data-floating-direct-messages/);
   assert.match(centerSource, /aria-label="聊天室"/);
   assert.match(centerSource, /function DirectMessageLauncher/);
-  assert.match(centerSource, /data-chat-launcher="compact-rectangle"/);
-  assert.match(centerSource, /pointer-events-auto relative ml-auto flex h-11 min-w-\[92px\]/);
-  assert.match(centerSource, /sm:min-w-\[118px\]/);
+  assert.match(centerSource, /data-chat-launcher="platform"/);
+  assert.match(centerSource, /platform-chat-launcher/);
+  assert.match(centerSource, /bg-card/);
   assert.match(centerSource, /聊天室/);
   assert.match(centerSource, /title="開啟聊天室"/);
   assert.doesNotMatch(centerSource, /w-\[min\(310px,100%\)\]/);
@@ -37,13 +37,13 @@ test("the workspace keeps direct messages exclusively in the bottom-right floati
   assert.match(centerSource, /pointer-events-none fixed bottom-\[calc\(var\(--mobile-shell-bottom\)\+0\.5rem\)\] right-2/);
   assert.match(centerSource, /fixed inset-0 flex h-\[100dvh\] w-screen/);
   assert.match(centerSource, /sm:absolute sm:inset-auto sm:bottom-0 sm:right-0/);
-  assert.match(centerSource, /lg:bottom-0 lg:right-0/);
+  assert.match(centerSource, /lg:bottom-4 lg:right-4/);
   assert.doesNotMatch(centerSource, /lg:bottom-5 lg:right-5/);
   assert.doesNotMatch(centerSource, /sm:bottom-5 sm:right-5/);
   assert.match(centerSource, /data-chat-surface="detached-card"/);
   assert.match(centerSource, /rounded-\[24px\]/);
-  assert.match(centerSource, /bg-\[#071421\]/);
-  assert.match(centerSource, /bg-\[linear-gradient\(120deg,#17627a/);
+  assert.match(centerSource, /bg-card/);
+  assert.doesNotMatch(centerSource, /bg-\[linear-gradient\(120deg,#17627a/);
   assert.doesNotMatch(centerSource, /absolute bottom-11 right-0/);
   assert.doesNotMatch(centerSource, /fixed bottom-0 right-0/);
   assert.match(centerSource, /visible pointer-events-auto translate-y-0 scale-100 opacity-100/);
@@ -124,7 +124,7 @@ test("chat scroll anchors do not create a trailing blank message row", async () 
 
   assert.match(
     aiChat,
-    /\{loading \? <QueryLoadingCard \/> : null\}\s*<\/div>\s*<div ref=\{messagesEndRef\} aria-hidden="true" className="h-0 shrink-0" \/>/,
+    /\{loading \? <QueryLoadingCard(?: message=\{requestProgress\})? \/> : null\}\s*<\/div>\s*<div ref=\{messagesEndRef\} aria-hidden="true" className="h-0 shrink-0" \/>/,
   );
   assert.match(
     directChat,
@@ -132,10 +132,11 @@ test("chat scroll anchors do not create a trailing blank message row", async () 
   );
 });
 
-test("the header keeps one collaboration entry point through online presence", async () => {
+test("the header combines notifications and online members in one entry", async () => {
   const source = await readSource("src/components/layout/MainWorkspaceHeader.tsx");
 
-  assert.match(source, /<OnlineUsersIndicator\s*\/>/);
+  assert.match(source, /<CollaborationIndicator/);
+  assert.doesNotMatch(source, /<OnlineUsersIndicator|<NotificationIndicator/);
   assert.doesNotMatch(source, /BellRing/);
   assert.doesNotMatch(source, /notificationUnreadCount/);
 });
