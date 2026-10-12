@@ -10,6 +10,7 @@ import {
   Loader2,
   Pencil,
   Trash2,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ interface TestPlanInspectorProps {
   onEditSpreadsheet: (file: TestPlanFileRecord) => void;
   onMove: (entry: TestPlanEntry) => void;
   onRename: (entry: TestPlanEntry) => void;
+  onClose?: () => void;
 }
 
 function formatDate(value: string) {
@@ -150,6 +152,7 @@ export function TestPlanInspector({
   onEditSpreadsheet,
   onMove,
   onRename,
+  onClose,
 }: TestPlanInspectorProps) {
   if (!entry) {
     return (
@@ -182,6 +185,7 @@ export function TestPlanInspector({
           <strong title={name}>{name}</strong>
           <span>{entry.kind === "folder" ? "資料夾" : `${entry.extension.toUpperCase() || "FILE"} 檔案`}</span>
         </div>
+        {onClose && <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0" aria-label="返回檔案清單"><X /></Button>}
       </div>
 
       {entry.kind === "file" ? (

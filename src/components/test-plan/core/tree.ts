@@ -84,7 +84,7 @@ export function filterAndSortEntries(
     if (first.kind !== second.kind) return first.kind === "folder" ? -1 : 1;
     let comparison = 0;
     if (filters.sort === "newest") {
-      comparison = toTimestamp(second.createdAt) - toTimestamp(first.createdAt);
+      comparison = toTimestamp(second.updatedAt ?? second.createdAt) - toTimestamp(first.updatedAt ?? first.createdAt);
     } else if (filters.sort === "oldest") {
       comparison = toTimestamp(first.createdAt) - toTimestamp(second.createdAt);
     } else if (filters.sort === "largest") {

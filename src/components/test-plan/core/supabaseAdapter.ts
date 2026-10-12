@@ -214,31 +214,41 @@ async function uploadLargeObject(
 export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
   return {
     async listSpaces(projectId) {
-      const { data, error } = await supabase
-        .from("test_plan_spaces")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("updated_at", { ascending: false });
-      throwIfError(error);
-      return (data ?? []).map(mapSpace);
+      // No project filter on the standalone library. Existing space IDs and
+      // storage paths remain intact; RLS continues to authorize every row.
+      const records: TestPlanSpace[] = [];
+      for (let offset = 0; ; offset += 500) {
+        let query = supabase.from("test_plan_spaces").select("*")
+          .order("updated_at", { ascending: false }).order("id")
+          .range(offset, offset + 499);
+        if (projectId) query = query.eq("project_id", projectId);
+        const { data, error } = await query;
+        throwIfError(error);
+        records.push(...(data ?? []).map(mapSpace));
+        if (!data || data.length < 500) return records;
+      }
     },
     async listFolders(spaceId) {
-      const { data, error } = await supabase
-        .from("test_plan_folders")
-        .select("*")
-        .eq("space_id", spaceId)
-        .order("name", { ascending: true });
-      throwIfError(error);
-      return (data ?? []).map(mapFolder);
+      const records: TestPlanFolder[] = [];
+      for (let offset = 0; ; offset += 500) {
+        let query = supabase.from("test_plan_folders").select("*").order("id").range(offset, offset + 499);
+        if (spaceId) query = query.eq("space_id", spaceId);
+        const { data, error } = await query;
+        throwIfError(error);
+        records.push(...(data ?? []).map(mapFolder));
+        if (!data || data.length < 500) return records;
+      }
     },
     async listFiles(spaceId) {
-      const { data, error } = await supabase
-        .from("test_plan_files")
-        .select("*")
-        .eq("space_id", spaceId)
-        .order("updated_at", { ascending: false });
-      throwIfError(error);
-      return (data ?? []).map(mapFile);
+      const records: TestPlanFileRecord[] = [];
+      for (let offset = 0; ; offset += 500) {
+        let query = supabase.from("test_plan_files").select("*").order("id").range(offset, offset + 499);
+        if (spaceId) query = query.eq("space_id", spaceId);
+        const { data, error } = await query;
+        throwIfError(error);
+        records.push(...(data ?? []).map(mapFile));
+        if (!data || data.length < 500) return records;
+      }
     },
     async createSpace(input) {
       const payload: TablesInsert<"test_plan_spaces"> = {
@@ -264,22 +274,24 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
           : { description: patch.description }),
         ...(patch.color === undefined ? {} : { color: patch.color }),
       };
-      const { data, error } = await supabase
+      let query = supabase
         .from("test_plan_spaces")
         .update(payload)
-        .eq("id", spaceId)
-        .eq("project_id", projectId)
+        .eq("id", spaceId);
+      query = projectId === null ? query.is("project_id", null) : query.eq("project_id", projectId);
+      const { data, error } = await query
         .select()
         .single();
       throwIfError(error);
       return mapSpace(data);
     },
     async deleteSpace(spaceId, _ownerId, projectId) {
-      const { data, error } = await supabase
+      let query = supabase
         .from("test_plan_spaces")
         .delete()
-        .eq("id", spaceId)
-        .eq("project_id", projectId)
+        .eq("id", spaceId);
+      query = projectId === null ? query.is("project_id", null) : query.eq("project_id", projectId);
+      const { data, error } = await query
         .select("id")
         .maybeSingle();
       throwIfError(error);

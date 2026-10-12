@@ -15,10 +15,9 @@ test("renders a platform-sized Test_Plan engineering file workspace", async () =
   const styles = await source("src/components/test-plan/test-plan.css");
 
   assert.match(workspace, /資料儲存/);
-  assert.match(workspace, /電路板與工程資料/);
-  assert.match(workspace, /PPT/);
+  assert.match(workspace, /所有檔案/);
+  assert.doesNotMatch(workspace, /test-plan-format-strip|MaintenanceMetricStrip|<TestPlanOverview/);
   assert.match(workspace, /Excel/);
-  assert.match(workspace, /STEP/);
   assert.match(workspace, /BRD/);
   assert.match(styles, /\.test-plan-workspace/);
   assert.match(styles, /@media \(max-width: 1023px\)/);
@@ -206,10 +205,10 @@ test("finishes the daily Test_Plan workflow with a full space form, guided start
   assert.match(workspace, /資料空間建立失敗/);
   assert.match(workspace, /description: message/);
   assert.match(workspace, /建立資料夾/);
-  assert.match(workspace, /上傳工程檔案/);
+  assert.match(workspace, /上傳檔案/);
   assert.match(workspace, /selectedEntry/);
   assert.match(workspace, /TestPlanInspector/);
-  assert.match(workspace, /MaintenanceMetricStrip/);
+  assert.match(workspace, /selectedEntry && \(/);
 
   assert.match(inspector, /getTestPlanPreviewKind/);
   assert.match(inspector, /downloadFile/);
@@ -240,13 +239,15 @@ test("renders the lower engineering overview without inventing a second data sou
   assert.match(styles, /grid-template-columns:\s*1fr/);
 });
 
-test("places the engineering overview below the file shell and reuses inspector selection", async () => {
+test("prioritizes the file list and keeps removable filters directly above results", async () => {
   const workspace = await source("src/components/test-plan/TestPlanWorkspace.tsx");
 
-  assert.match(workspace, /import \{ TestPlanOverview \}/);
-  assert.match(workspace, /<TestPlanOverview/);
-  assert.match(workspace, /activeSpace=\{activeSpace\}/);
-  assert.match(workspace, /files=\{files\}/);
-  assert.match(workspace, /folders=\{folders\}/);
-  assert.match(workspace, /setSelectedEntryKey\(`file:\$\{file\.id\}`\)/);
+  assert.doesNotMatch(workspace, /<TestPlanOverview|<MaintenanceMetricStrip/);
+  assert.match(workspace, /useState<ViewMode>\("list"\)/);
+  assert.match(workspace, /清除搜尋條件/);
+  assert.match(workspace, /清除格式條件/);
+  assert.match(workspace, /全部清除/);
+  assert.ok(workspace.indexOf('className="file-library-filter-chips"') < workspace.indexOf('"test-plan-dropzone"'));
+  const headerIndex = workspace.indexOf('className="test-plan-list-head"');
+  assert.ok(headerIndex >= 0 && headerIndex < workspace.indexOf('{loading ? (', headerIndex));
 });

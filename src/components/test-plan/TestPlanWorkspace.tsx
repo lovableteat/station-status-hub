@@ -38,7 +38,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { MaintenanceMetricStrip } from "@/components/maintenance/MaintenanceMetricStrip";
 import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
 import {
   AlertDialog,
@@ -88,8 +87,8 @@ import {
   isFolderDescendant,
 } from "./core/tree";
 import { useTestPlanWorkspace } from "./hooks/useTestPlanWorkspace";
+import { useFileLibraryFilters } from "./useFileLibraryFilters";
 import { TestPlanInspector } from "./TestPlanInspector";
-import { TestPlanOverview } from "./TestPlanOverview";
 import { isEditableSpreadsheet } from "./core/spreadsheet";
 import { TestPlanSpreadsheetEditor } from "./TestPlanSpreadsheetEditor";
 import {
@@ -303,7 +302,7 @@ function TextActionDialog({
 
   return (
     <Dialog open={Boolean(action)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="border-[#2a526f] bg-[#0b1e30] text-[#f3f8fc]">
+      <DialogContent className="file-library-dialog">
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
@@ -373,7 +372,7 @@ function MoveDialog({
 
   return (
     <Dialog open={Boolean(action)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="border-[#2a526f] bg-[#0b1e30] text-[#f3f8fc]">
+      <DialogContent className="file-library-dialog">
         <DialogHeader>
           <DialogTitle>搬移「{action?.name}」</DialogTitle>
           <DialogDescription>選擇此項目的新資料夾位置。</DialogDescription>
@@ -490,7 +489,6 @@ export function TestPlanWorkspace() {
     activeSpace,
     folders,
     files,
-    activeProject,
     loading,
     busy,
     error,
@@ -515,12 +513,8 @@ export function TestPlanWorkspace() {
     replaceFileContents,
   } = workspace;
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<
-    TestPlanFileCategory | "all"
-  >("all");
-  const [sort, setSort] = useState<TestPlanSort>("newest");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const { query, setQuery, categoryFilter, setCategoryFilter, sort, setSort, clearFilters } = useFileLibraryFilters();
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [isDragging, setIsDragging] = useState(false);
   const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
   const [spaceDialog, setSpaceDialog] = useState<SpaceDialogState | null>(null);
@@ -534,9 +528,12 @@ export function TestPlanWorkspace() {
     new Set(),
   );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const requestedFolderRef = useRef<{spaceId: string; folderId: string} | null>(null);
 
   useEffect(() => {
-    setActiveFolderId(null);
+    const requested = requestedFolderRef.current;
+    setActiveFolderId(requested?.spaceId === activeSpaceId ? requested.folderId : null);
+    requestedFolderRef.current = null;
     setSelectedEntryKey(null);
     setSpreadsheetFile(null);
     setExpandedFolderIds(new Set());
@@ -575,7 +572,7 @@ export function TestPlanWorkspace() {
     const visibleFolders = isSearching
       ? folders
       : folders.filter((folder) => folder.parentId === activeFolderId);
-    const visibleFiles = isSearching
+    const visibleFiles = isSearching || (activeSpaceId === null && activeFolderId === null)
       ? files
       : files.filter((file) => file.folderId === activeFolderId);
     return filterAndSortEntries(visibleFolders, visibleFiles, {
@@ -583,11 +580,7 @@ export function TestPlanWorkspace() {
       category: categoryFilter,
       sort,
     });
-  }, [activeFolderId, categoryFilter, files, folders, query, sort]);
-  const activeStorageBytes = useMemo(
-    () => files.reduce((total, file) => total + file.fileSize, 0),
-    [files],
-  );
+  }, [activeFolderId, activeSpaceId, categoryFilter, files, folders, query, sort]);
   const selectedEntry = useMemo<TestPlanEntry | null>(() => {
     if (!selectedEntryKey) return null;
     const [kind, id] = selectedEntryKey.split(":");
@@ -735,7 +728,10 @@ export function TestPlanWorkspace() {
 
   const openEntry = (entry: TestPlanEntry) => {
     if (entry.kind === "folder") {
-      setActiveFolderId(entry.id);
+      if (entry.spaceId !== activeSpaceId) {
+        requestedFolderRef.current = {spaceId: entry.spaceId, folderId: entry.id};
+        void openSpace(entry.spaceId);
+      } else setActiveFolderId(entry.id);
       setSelectedEntryKey(null);
     } else {
       setSelectedEntryKey(`file:${entry.id}`);
@@ -744,6 +740,7 @@ export function TestPlanWorkspace() {
   };
 
   const selectEntry = (entry: TestPlanEntry) => {
+    if (entry.kind === "folder") { openEntry(entry); return; }
     setSelectedEntryKey(`${entry.kind}:${entry.id}`);
   };
 
@@ -792,14 +789,10 @@ export function TestPlanWorkspace() {
   );
 
   return (
-    <section className="test-plan-workspace">
+    <section className="test-plan-workspace file-library-workspace">
       <header className="test-plan-header">
         <MaintenancePageHeader
           title="檔案上傳"
-          wrapActionsOnMobile
-          description={activeProject
-            ? `${activeProject.name} 專案的電路板與工程資料：測試計畫、機構圖、PCB、韌體、程式碼、量測紀錄與 Office 檔案（各專案獨立儲存）`
-            : "請先選擇維修專案，再管理該專案的工程資料。"}
           icon={FolderKanban}
           actions={(
             <>
@@ -811,60 +804,23 @@ export function TestPlanWorkspace() {
               <Button
                 type="button"
                 variant="outline"
+                className="file-library-create-space"
+                aria-label="新增空間"
                 disabled={!canEdit || busy}
                 onClick={() => setSpaceDialog({ mode: "create", space: null })}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                新增空間
+                <span>新增空間</span>
               </Button>
-              {activeSpace && (
-                <Button
-                  type="button"
-                  disabled={!canEdit || busy}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  上傳工程檔案
-                </Button>
-              )}
+              <Button type="button" className="file-library-upload" disabled={!canEdit || busy} onClick={() => fileInputRef.current?.click()}>
+                <Upload data-icon="inline-start" /><span>上傳檔案</span>
+              </Button>
             </>
           )}
         />
-        <MaintenanceMetricStrip
-          metrics={[
-            { label: "資料空間", value: spaces.length, icon: FolderKanban, accent: "blue" },
-            { label: "資料夾", value: folders.length, icon: FolderOpen, accent: "cyan" },
-            { label: "工程檔案", value: files.length, icon: File, accent: "emerald" },
-            {
-              label: "本空間容量",
-              value: formatTestPlanFileSize(activeStorageBytes),
-              icon: Archive,
-              accent: "amber",
-            },
-          ]}
-        />
-        <div className="test-plan-format-strip" aria-label="支援格式">
-          <span>PPT／Excel／OpenDocument</span>
-          <span>STEP／STL／DWG／DXF</span>
-          <span>KiCad／BRD／Gerber</span>
-          <span>程式碼／設定／Log</span>
-          <span>韌體／FPGA／壓縮檔</span>
-          <span>其他安全工程檔</span>
-        </div>
       </header>
 
-      <div className="test-plan-mobile-controls">
-        <Button
-          type="button"
-          variant="outline"
-          aria-expanded={isSpaceDrawerOpen}
-          aria-controls="test-plan-space-drawer"
-          onClick={() => setIsSpaceDrawerOpen(true)}
-        >
-          <PanelLeftOpen className="mr-2 h-4 w-4" />
-          空間與資料夾
-        </Button>
-      </div>
+      <input ref={fileInputRef} className="sr-only" type="file" multiple onChange={handleFileSelection} />
       {isSpaceDrawerOpen && (
         <button
           type="button"
@@ -874,7 +830,7 @@ export function TestPlanWorkspace() {
         />
       )}
 
-      <div className="test-plan-shell">
+      <div className={cn("test-plan-shell", selectedEntry && "has-inspector")}>
         <aside
           id="test-plan-space-drawer"
           className={cn(
@@ -885,19 +841,8 @@ export function TestPlanWorkspace() {
         >
           <div className="test-plan-rail-heading">
             <div>
-              <span className="test-plan-eyebrow">MY SPACES</span>
               <strong>資料空間</strong>
             </div>
-            <Button
-              type="button"
-              size="icon"
-              className="h-9 w-9"
-              disabled={!canEdit || busy}
-              onClick={() => setSpaceDialog({ mode: "create", space: null })}
-            >
-              <Plus className="h-4 w-4" />
-              <span className="sr-only">建立空間</span>
-            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -911,6 +856,7 @@ export function TestPlanWorkspace() {
           </div>
 
           <div className="test-plan-space-list">
+            <button type="button" className={cn("file-library-all", activeSpaceId === null && "is-active")} disabled={busy} onClick={() => { setIsSpaceDrawerOpen(false); void openSpace(null); }}><FolderOpen /><span>所有檔案</span><span className="file-library-count">{activeSpaceId === null ? files.length : ""}</span></button>
             {spaces.map((space) => (
               <div
                 key={space.id}
@@ -933,9 +879,6 @@ export function TestPlanWorkspace() {
                   />
                   <span className="min-w-0">
                     <strong>{space.name}</strong>
-                    <small>
-                      {space.description || "工程資料與電路板檔案"}
-                    </small>
                   </span>
                 </button>
                 <DropdownMenu>
@@ -1017,7 +960,7 @@ export function TestPlanWorkspace() {
           )}
         </aside>
 
-        <main className={cn("test-plan-main", !activeSpace && "is-empty")}>
+        <main className={cn("test-plan-main", spaces.length === 0 && "is-empty")}>
           {!isAuthenticated && error ? (
             <div className="test-plan-empty" role="alert">
               <span className="test-plan-empty-icon">
@@ -1026,30 +969,21 @@ export function TestPlanWorkspace() {
               <h2>需要安全登入</h2>
               <p>{error}</p>
             </div>
-          ) : !activeSpace && !loading ? (
+          ) : error && spaces.length === 0 && !loading ? (
+            <div className="test-plan-empty" role="alert">
+              <h2>檔案載入失敗</h2>
+              <p>{error}</p>
+              <Button variant="outline" onClick={() => void refreshWorkspace(null)}>
+                <RefreshCw className="mr-2 h-4 w-4" />重試
+              </Button>
+            </div>
+          ) : spaces.length === 0 && !loading ? (
             <div className="test-plan-empty">
               <span className="test-plan-empty-icon">
                 <FolderKanban className="h-8 w-8" />
               </span>
               <h2>尚未建立空間</h2>
-              <p>用三個步驟建立板版與測試資料的單一可信來源。</p>
-              <div className="test-plan-quick-start">
-                <div>
-                  <span>1</span>
-                  <strong>建立空間</strong>
-                  <small>依專案、板版或測試階段建立獨立空間。</small>
-                </div>
-                <div>
-                  <span>2</span>
-                  <strong>建立資料夾</strong>
-                  <small>整理規格、測試、韌體、Gerber 與交付版本。</small>
-                </div>
-                <div>
-                  <span>3</span>
-                  <strong>上傳工程檔案</strong>
-                  <small>支援拖放 Office、CAD、PCB、Gerber、程式碼、韌體與量測紀錄。</small>
-                </div>
-              </div>
+              <p>建立資料空間，開始整理及上傳檔案。</p>
               <Button
                 disabled={!canEdit || busy}
                 onClick={() => setSpaceDialog({ mode: "create", space: null })}
@@ -1061,6 +995,18 @@ export function TestPlanWorkspace() {
           ) : (
             <>
               <div className="test-plan-toolbar">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="file-library-navigation-toggle"
+                  aria-label="空間與資料夾"
+                  aria-expanded={isSpaceDrawerOpen}
+                  aria-controls="test-plan-space-drawer"
+                  onClick={() => setIsSpaceDrawerOpen(true)}
+                >
+                  <PanelLeftOpen className="h-4 w-4" />
+                </Button>
                 <div className="test-plan-location">
                   <button
                     type="button"
@@ -1069,7 +1015,7 @@ export function TestPlanWorkspace() {
                       setSelectedEntryKey(null);
                     }}
                   >
-                    {activeSpace?.name}
+                    {activeSpace?.name ?? "所有檔案"}
                   </button>
                   {breadcrumbs.map((folder) => (
                     <span key={folder.id}>
@@ -1099,20 +1045,6 @@ export function TestPlanWorkspace() {
                     <Folder className="mr-2 h-4 w-4" />
                     新增資料夾
                   </Button>
-                  <Button
-                    disabled={!canEdit || busy || !activeSpace}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    上傳檔案
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    className="sr-only"
-                    type="file"
-                    multiple
-                    onChange={handleFileSelection}
-                  />
                 </div>
               </div>
 
@@ -1130,7 +1062,7 @@ export function TestPlanWorkspace() {
                   onValueChange={(value) =>
                     setCategoryFilter(value as TestPlanFileCategory | "all")}
                 >
-                  <SelectTrigger className="w-[150px]">
+                  <SelectTrigger className="w-[150px]" aria-label="檔案格式">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1145,7 +1077,7 @@ export function TestPlanWorkspace() {
                   value={sort}
                   onValueChange={(value) => setSort(value as TestPlanSort)}
                 >
-                  <SelectTrigger className="w-[145px]">
+                  <SelectTrigger className="w-[145px]" aria-label="排序方式">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1190,6 +1122,14 @@ export function TestPlanWorkspace() {
                 </Button>
               </div>
 
+              {(query.trim() || categoryFilter !== "all") && (
+                <div className="file-library-filter-chips" aria-label="目前篩選條件">
+                  {query.trim() && <Button variant="secondary" size="sm" onClick={() => setQuery("")} aria-label="清除搜尋條件">搜尋：{query}<X /></Button>}
+                  {categoryFilter !== "all" && <Button variant="secondary" size="sm" onClick={() => setCategoryFilter("all")} aria-label="清除格式條件">格式：{CATEGORY_LABELS[categoryFilter]}<X /></Button>}
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>全部清除</Button>
+                </div>
+              )}
+
               {error && (
                 <div className="test-plan-error" role="alert">
                   <strong>資料讀取失敗</strong>
@@ -1229,6 +1169,7 @@ export function TestPlanWorkspace() {
                   </div>
                 )}
 
+                {viewMode === "list" && <div className="test-plan-list-head"><span>名稱</span><span>格式</span><span>大小</span><span>更新時間</span><span className="sr-only">操作</span></div>}
                 {loading ? (
                   <div className="test-plan-loading">
                     <RefreshCw className="h-5 w-5 animate-spin" />
@@ -1237,7 +1178,7 @@ export function TestPlanWorkspace() {
                 ) : visibleEntries.length === 0 ? (
                   <div className="test-plan-empty is-compact">
                     <Archive className="h-8 w-8" />
-                    <h2>{query ? "找不到符合的項目" : "這個資料夾目前是空的"}</h2>
+                    <h2>{query || categoryFilter !== "all" ? "目前篩選條件沒有符合的檔案" : "這個資料夾目前是空的"}</h2>
                     <p>
                       {query
                         ? "請調整搜尋字詞或檔案類型。"
@@ -1258,6 +1199,7 @@ export function TestPlanWorkspace() {
                         onClick={() => selectEntry(entry)}
                         onDoubleClick={() => openEntry(entry)}
                         onKeyDown={(event) => {
+                          if (event.target !== event.currentTarget) return;
                           if (event.key === "Enter") openEntry(entry);
                         }}
                       >
@@ -1299,13 +1241,6 @@ export function TestPlanWorkspace() {
                   </div>
                 ) : (
                   <div className="test-plan-entry-list">
-                    <div className="test-plan-list-head">
-                      <span>名稱</span>
-                      <span>格式</span>
-                      <span>大小</span>
-                      <span>更新時間</span>
-                      <span />
-                    </div>
                     {visibleEntries.map((entry) => (
                       <article
                         key={`${entry.kind}:${entry.id}`}
@@ -1318,6 +1253,7 @@ export function TestPlanWorkspace() {
                         onClick={() => selectEntry(entry)}
                         onDoubleClick={() => openEntry(entry)}
                         onKeyDown={(event) => {
+                          if (event.target !== event.currentTarget) return;
                           if (event.key === "Enter") openEntry(entry);
                         }}
                       >
@@ -1331,9 +1267,8 @@ export function TestPlanWorkspace() {
                             />
                           )}
                           <strong>
-                            {entry.kind === "folder"
-                              ? entry.name
-                              : entry.originalName}
+                            {entry.kind === "folder" ? entry.name : entry.originalName}
+                            {activeSpaceId === null && <small>{spaces.find(space => space.id === entry.spaceId)?.name}</small>}
                           </strong>
                         </span>
                         <span>
@@ -1367,11 +1302,12 @@ export function TestPlanWorkspace() {
             </>
           )}
         </main>
-        {activeSpace && (
+        {selectedEntry && (
           <TestPlanInspector
             entry={selectedEntry}
             canEdit={canEdit}
             busy={busy}
+            onClose={() => setSelectedEntryKey(null)}
             downloadFile={downloadFile}
             onEditSpreadsheet={(file) => setSpreadsheetFile(file)}
             onDownload={(file) => void handleDownload(file)}
@@ -1402,16 +1338,6 @@ export function TestPlanWorkspace() {
           />
         )}
       </div>
-
-      {activeSpace && (
-        <TestPlanOverview
-          activeSpace={activeSpace}
-          activeFolderLabel={breadcrumbs.at(-1)?.name ?? "根目錄"}
-          files={files}
-          folders={folders}
-          onSelectFile={(file) => setSelectedEntryKey(`file:${file.id}`)}
-        />
-      )}
 
       {uploadProgress && (
         <div className="test-plan-upload-progress" role="status">
@@ -1478,7 +1404,7 @@ export function TestPlanWorkspace() {
       />
       <MoveDialog
         action={moveAction}
-        folders={folders}
+        folders={moveAction ? folders.filter(folder => folder.spaceId === (moveAction.kind === "file" ? files.find(file => file.id === moveAction.id)?.spaceId : folders.find(folder => folder.id === moveAction.id)?.spaceId)) : folders}
         busy={busy}
         onClose={() => setMoveAction(null)}
         onSubmit={handleMoveSubmit}
@@ -1487,7 +1413,7 @@ export function TestPlanWorkspace() {
         open={Boolean(deleteAction)}
         onOpenChange={(open) => !open && setDeleteAction(null)}
       >
-        <AlertDialogContent className="border-[#653b4a] bg-[#0b1e30] text-[#f3f8fc]">
+        <AlertDialogContent className="file-library-dialog">
           <AlertDialogHeader>
             <AlertDialogTitle>確定要刪除？</AlertDialogTitle>
             <AlertDialogDescription>

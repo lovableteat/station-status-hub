@@ -17,7 +17,7 @@ export function WorkspacePreview({ workspaceId }: { workspaceId: string }) {
         </>
       ) : workspaceId === "file-uploads" ? (
         <>
-          <div className="workspace-preview-caption"><FolderOpen /><span>專案工程檔案</span></div>
+          <div className="workspace-preview-caption"><FolderOpen /><span>工程檔案庫</span></div>
           <div className="preview-upload-files"><span><FileText />文件</span><span><FileSpreadsheet />試算表</span><span><Layers />圖檔</span></div>
           <div className="preview-upload-destination"><Upload /><span>上傳、分類與共享</span><FolderOpen /></div>
         </>

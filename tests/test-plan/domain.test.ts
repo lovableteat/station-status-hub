@@ -286,3 +286,16 @@ test("sorts recent Test Plan files deterministically and handles empty spaces", 
   );
   assert.deepEqual(overviewModule.getRecentTestPlanFiles([], 4), []);
 });
+
+test("uses global storage for new standalone spaces and retains legacy project segments", () => {
+  assert.equal(filesModule.buildStoragePath("owner", null, "space", "board.pdf", "object"), "owner/global/space/object.pdf");
+  assert.equal(filesModule.buildStoragePath("owner", "project", "space", "board.pdf", "object"), "owner/project/space/object.pdf");
+});
+
+test("recently updated sorting follows modification dates instead of creation dates", () => {
+  const files = [
+    {id: "new-created", originalName: "A.pdf", category: "document", createdAt: "2026-10-10", updatedAt: "2026-10-10"},
+    {id: "new-updated", originalName: "B.pdf", category: "document", createdAt: "2026-01-01", updatedAt: "2026-10-12"},
+  ];
+  assert.deepEqual(treeModule.filterAndSortEntries([], files, {query: "", category: "all", sort: "newest"}).map((f: {id:string}) => f.id), ["new-updated", "new-created"]);
+});

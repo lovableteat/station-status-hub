@@ -2233,7 +2233,7 @@ type BaseDatabase = {
           id: string
           name: string
           owner_id: string
-          project_id: string
+          project_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2243,7 +2243,7 @@ type BaseDatabase = {
           id?: string
           name: string
           owner_id: string
-          project_id: string
+          project_id: string | null
           updated_at?: string
         }
         Update: {
@@ -2253,7 +2253,7 @@ type BaseDatabase = {
           id?: string
           name?: string
           owner_id?: string
-          project_id?: string
+          project_id?: string | null
           updated_at?: string
         }
         Relationships: [
