@@ -21,6 +21,7 @@ __pycache__/
 .playwright-cli/
 output/
 tmp/codex-*/
+tmp/autocheck-runtime/
 tmp/parse-test/
 tmp/ref_location_*
 tmp/timer-*.pid

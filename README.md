@@ -1,16 +1,18 @@
 # 工作整合平台
 
-**Station Status Hub** 是提供測試站、硬體工程與管理團隊共同使用的整合工作平台。它把機台維修、BOM 與料號、Data Center、PCB 設計、權限管理、AI 資料查詢和績效考核收進同一套登入、權限、即時同步與響應式介面。
+**Station Status Hub** 是提供測試站、硬體工程與管理團隊共同使用的整合工作平台。它把機台維修、工程檔案、A／B 工程比對、BOM 與料號、Data Center、PCB 設計、權限管理、AI 資料查詢和績效考核收進同一套登入、權限、即時同步與響應式介面。
 
 [開啟線上版本](https://lovableteat.github.io/station-status-hub/) · [閱讀完整架構](./docs/architecture.md) · [查看最新交接](./docs/codex-handoff-2026-08-10.md)
 
 ## 平台內容
 
-平台目前有七個正式工作區，入口會依使用者權限顯示：
+平台目前有九個正式工作區，入口會依使用者權限顯示：
 
 | 工作區 | 主要用途 | Workspace ID |
 | --- | --- | --- |
 | 機台維修紀錄中心 | 儀表板、測試流程、產線監控、問題追蹤與工具管理 | `station-status` |
+| 檔案上傳 | 工程檔案、資料夾、文件與試算表預覽 | `file-uploads` |
+| 比對系統 | A／B netlist、BOM、線路圖差異、審查追蹤、Power Tree 與 I²C 檢查 | `comparison` |
 | 料號申請 | BOM、主料與替代料、供應商明細、申請、匯入匯出與多人同步 | `material-requests` |
 | Data Center | 機櫃與設備配置、2D 規劃、3D 數位孿生與場景管理 | `data-center` |
 | PCB Designer | PCB 專案、2D 編輯、3D 檢視、STEP 模型、元件庫、禁制區與切板 | `pcb-designer` |
@@ -18,7 +20,7 @@
 | 資料查詢空間 | AI 對話、附件、圖片與文件分析、知識搜尋和引用來源 | `ai-chat` |
 | 績效考核系統 | 考核週期、目標進度、主管回饋、評分、團隊檢視與報表 | `performance` |
 
-全站聊天室、私訊、在線狀態、公告中心、手機開啟 QR Code 與帳號資料是跨工作區共用能力，不是額外的第八個頁面。
+全站聊天室、私訊、在線狀態、公告中心、手機開啟 QR Code 與帳號資料是跨工作區共用能力。
 
 ## 系統架構
 
@@ -26,7 +28,7 @@
 flowchart LR
   Browser[桌面 / 平板 / 手機] --> Shell[Workspace Shell]
   Shell --> Router[Index workspace router]
-  Router --> Workspaces[七個工作區]
+  Router --> Workspaces[九個工作區]
   Shell --> Collaboration[聊天室 / 公告 / Presence]
   Workspaces --> Providers[Auth / Permissions / Project / Query providers]
   Collaboration --> Providers
@@ -40,7 +42,7 @@ flowchart LR
 ?workspace=pcb-designer&module=pcb-designer
 ```
 
-大型工作區以 lazy import 載入，避免首頁同時下載 3D、試算表與 AI 相關依賴。`src/lib/workspacePermissions.ts` 集中管理七個入口及細部頁面權限；資料安全則由 Supabase RLS、RPC 與 Storage policy 最終把關。
+大型工作區以 lazy import 載入，避免首頁同時下載 3D、試算表、Python runtime 與 AI 相關依賴。`src/lib/workspacePermissions.ts` 集中管理七組工作區授權及細部頁面權限；檔案上傳沿用維修中心的資料儲存權限，比對系統沿用資料查詢空間權限。雲端資料安全則由 Supabase RLS、RPC 與 Storage policy 最終把關。
 
 ## 專案地圖
 
@@ -51,6 +53,7 @@ station-status-hub/
 │  ├─ pages/Index.tsx                 # Workspace shell、URL 狀態與頁面分派
 │  ├─ components/layout/              # 頂部導覽、首頁入口與手機工作列
 │  ├─ components/maintenance/         # 機台維修工作區
+│  ├─ components/comparison/          # AutoCheck 工程比對與本機審查追蹤
 │  ├─ components/material-requests/   # 料號與 BOM 工作區
 │  ├─ components/data-center/         # Data Center 2D / 3D
 │  ├─ components/pcb-designer/        # PCB 畫面、同步與可測試 core
@@ -116,7 +119,7 @@ npm run test:pcb
 ## 資料與權限
 
 - 前端由 `UserProvider`、`PermissionsProvider`、`TestProjectProvider`、`UnifiedDataProvider` 與 `UserPresenceProvider` 統一管理登入、權限、專案和協作狀態。
-- Supabase 是正式資料來源，涵蓋 Auth、Postgres、RLS、Realtime、Storage 與 Edge Functions；localStorage 只用於必要的快速顯示或離線兜底。
+- Supabase 是雲端正式資料來源，涵蓋 Auth、Postgres、RLS、Realtime、Storage 與 Edge Functions；比對系統的上傳檔案由瀏覽器內的 Python Worker 處理，結果與回覆依帳號保存在本機，可透過 ZIP 備份移轉，不上傳原始工程資料。
 - Migration 放在 [`supabase/migrations`](./supabase/migrations)，正式環境不可 reset、刪除 schema 或任意重播歷史 migration。
 - 正式環境登入、OAuth 過期復原、migration history 不一致時的單檔安全套用與驗證，統一依照 [`docs/supabase-production-migration-runbook.md`](./docs/supabase-production-migration-runbook.md)。
 - 應用資料表統一歸檔在 `workspace` schema；Supabase 管理的 `auth`、`storage`、`realtime` schema 不修改。Hosted Supabase 的 API Exposed schemas 必須加入 `workspace`，再套用對應 migration。

@@ -69,6 +69,7 @@ const moduleLabels: Record<string, string> = {
   tools: "工具與資產",
   "test-plan": "檔案上傳",
   "file-uploads": "檔案上傳",
+  comparison: "比對系統",
   users: "後台管理",
   "api-management": "API 管理",
   "material-requests": "料號申請",

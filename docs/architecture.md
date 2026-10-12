@@ -4,7 +4,7 @@
 
 ## 1. 專案定位
 
-工作整合平台把測試站維修、料號與 BOM、Data Center、PCB Designer、後台管理、AI 資料查詢、績效考核和即時協作集中在同一個工作區。平台同時支援桌面、平板與手機，功能頁以 workspace 為單位切換，資料與權限由 Supabase 和前端 provider 統一管理。
+工作整合平台把測試站維修、工程檔案、A／B 工程比對、料號與 BOM、Data Center、PCB Designer、後台管理、AI 資料查詢、績效考核和即時協作集中在同一個平台。平台同時支援桌面、平板與手機，功能頁以 workspace 為單位切換，登入與權限由 Supabase 和前端 provider 統一管理；比對系統的工程輸入與結果留在本機瀏覽器。
 
 主要設計原則：
 
@@ -72,6 +72,8 @@ station-status-hub/
 | 功能 | 主要入口 | 核心程式位置 |
 | --- | --- | --- |
 | 機台維修紀錄中心 | `station-status` | `src/components/maintenance`、`src/components/test-tracker`、`src/components/issues` |
+| 檔案上傳 | `file-uploads` | `src/components/test-plan/TestPlanWorkspace.tsx` |
+| 比對系統 | `comparison` | `src/components/comparison/ComparisonWorkspace.tsx`、Python Web Worker |
 | 料號申請 / BOM | `material-requests` | `src/components/material-requests`、`src/components/bom` |
 | Data Center | `data-center` | `src/components/data-center`、`src/components/cabinet` |
 | PCB Designer | `pcb-designer` | `src/components/pcb-designer`、`src/components/pcb-designer/core` |
@@ -110,7 +112,9 @@ main.tsx
 
 | workspace | 常用 module | 功能說明 |
 | --- | --- | --- |
-| `station-status` | `dashboard`、`test-tracker`、`flow-info`、`monitor`、`issues`、`tools`、`test-plan` | 維修、測試流程、問題追蹤與工具管理 |
+| `station-status` | `dashboard`、`test-tracker`、`flow-info`、`monitor`、`issues`、`tools` | 維修、測試流程、問題追蹤與工具管理 |
+| `file-uploads` | `test-plan` | 工程檔案上傳、分類、資料夾與文件預覽；沿用維修中心資料儲存權限 |
+| `comparison` | `comparison` | A／B 比對、審查追蹤、Power Tree、I²C Map、位址庫；沿用資料查詢空間權限 |
 | `material-requests` | `material-requests` | 料號總表、BOM、替代料、申請與匯出 |
 | `data-center` | `data-center` | 機櫃、設備、部署規劃和 2D / 3D 視圖 |
 | `pcb-designer` | `pcb-designer` | PCB 專案、2D 編輯、3D 檢視、元件與 BOM |
@@ -119,6 +123,8 @@ main.tsx
 | `performance` | `performance` | 考核週期、目標進度、主管回饋、評分與報表 |
 
 切換工作區時，`pushWorkspaceLocation()` 會更新 query string、保留可分享的頁面狀態，並透過 workspace navigation event 通知 shell；不應使用整頁 reload 來完成一般切換。新增工作區或 module 時，要同步更新 `moduleWorkspaceMap`、權限規則、可見入口與回歸測試。績效頁沒有額外 module，直接以 `workspace=performance` 開啟。
+
+比對系統可由 `workspace=comparison&module=comparison` 直接進入，首頁與 render guard 都使用 `ai-chat` 授權，沒有另加資料庫權限 key。`comparisonTab` 保存五個功能頁；結果條件使用 `compareSearch`、`compareStatus`、`compareOwner`、`compareSeverity`、`compareCategory`、`comparePage`，位址庫使用 `librarySearch`、`librarySigned`。切換全站工作區時清除這些頁內條件，結果列表的「全部清除」保留 workspace、module 與功能頁上下文。
 
 ## 5. Provider 與資料流
 
@@ -151,6 +157,7 @@ main.tsx
 - 使用者 profile、頭像、presence、私訊與訊息媒體。
 - 後台 API 金鑰 metadata。金鑰內容需遵守既有遮罩和 server-side 使用邊界。
 - 績效考核資料、考核週期、目標 JSON、主管與員工回饋；前端在 migration 尚未部署時會先以 localStorage 維持可用，雲端表啟用後以 `performance_reviews` 為準。
+- 比對系統使用 Pyodide Web Worker 執行 AutoCheck Python 引擎，原始工程檔不傳往 Supabase 或 AI 服務。結果與審查回覆依登入帳號保存在本機瀏覽器，並以含 JSON 及報表的 ZIP 備份匯入／匯出移轉；這項本機資料不提供跨裝置即時同步。
 
 ### 5.4 Migration 工作規則
 

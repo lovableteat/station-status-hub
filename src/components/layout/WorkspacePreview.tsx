@@ -1,21 +1,26 @@
-import { ArrowRight, Bot, Check, ClipboardCheck, FileSpreadsheet, FileText, Layers, LockKeyhole, MessageSquareText, ShieldCheck, UsersRound } from "lucide-react";
-import { PcbWorkspacePreview } from "@/components/pcb-designer/PcbWorkspacePreview";
+import { Check, LockKeyhole, ShieldCheck, UsersRound } from "lucide-react";
 import repairArtwork from "@/assets/workspace/repair.webp";
 import filesArtwork from "@/assets/workspace/files.webp";
 import partsArtwork from "@/assets/workspace/parts.webp";
 import racksArtwork from "@/assets/workspace/racks.webp";
+import pcbArtwork from "@/assets/workspace/pcb.webp";
+import analysisArtwork from "@/assets/workspace/analysis.webp";
+import performanceArtwork from "@/assets/workspace/performance.webp";
+import comparisonArtwork from "@/assets/workspace/comparison.webp";
 
 const workspaceArtwork: Record<string, { image: string; title: string; caption: string }> = {
   "station-status": { image: repairArtwork, title: "機台測試", caption: "組裝 · 測試 · 驗證" },
   "file-uploads": { image: filesArtwork, title: "工程檔案庫", caption: "文件 · 試算表 · 圖檔" },
   "material-requests": { image: partsArtwork, title: "料件與替代料", caption: "BOM 協作" },
   "data-center": { image: racksArtwork, title: "機櫃配置", caption: "3D 場景規劃" },
+  "pcb-designer": { image: pcbArtwork, title: "板形、元件與走線", caption: "2D / 3D 電路設計" },
+  "ai-chat": { image: analysisArtwork, title: "文件分析與資料查詢", caption: "PDF · Office · 圖片" },
+  performance: { image: performanceArtwork, title: "目標與評核", caption: "IDP · OKR · KPI" },
+  comparison: { image: comparisonArtwork, title: "A／B 版工程比對", caption: "AutoCheck · 審查追蹤" },
 };
 
 // These are feature illustrations, never live counters or connection indicators.
 export function WorkspacePreview({ workspaceId }: { workspaceId: string }) {
-  if (workspaceId === "pcb-designer") return <PcbWorkspacePreview />;
-
   const artwork = workspaceArtwork[workspaceId];
   if (artwork) {
     return (
@@ -35,18 +40,6 @@ export function WorkspacePreview({ workspaceId }: { workspaceId: string }) {
         <>
           <div className="workspace-preview-caption"><ShieldCheck /><span>帳號與工作區權限</span></div>
           <div className="preview-access"><span className="preview-access-users"><UsersRound /><LockKeyhole /></span><div>{["檢視", "編輯", "管理"].map((label, index) => <div key={label}><span>{label}</span>{[0, 1, 2].map(level => <span key={level} className={level <= index ? "preview-access-grant" : "preview-access-empty"}>{level <= index ? <Check /> : "—"}</span>)}</div>)}</div></div>
-        </>
-      ) : workspaceId === "ai-chat" ? (
-        <>
-          <div className="workspace-preview-caption"><Bot /><span>文件分析與資料查詢</span></div>
-          <div className="preview-ai-sources"><span><FileText />PDF</span><span><FileSpreadsheet />Office</span><span><Layers />圖片</span></div>
-          <div className="preview-ai-answer"><MessageSquareText /><div><span>查詢 · 比較 · 摘要</span><i /><i /></div></div>
-        </>
-      ) : workspaceId === "performance" ? (
-        <>
-          <div className="workspace-preview-caption"><ClipboardCheck /><span>自評、評核與完整彙整</span></div>
-          <div className="preview-performance-categories">{["IDP", "OKR", "KPI"].map(category => <div key={category} className={`preview-performance-${category.toLowerCase()}`}><span>{category}</span><i /><i /></div>)}</div>
-          <div className="preview-performance-feedback"><MessageSquareText /><span>主管回饋</span><ArrowRight /><span>評分與匯出</span></div>
         </>
       ) : null}
     </div>

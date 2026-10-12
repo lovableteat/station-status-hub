@@ -151,11 +151,11 @@ test("restores, catalogs, and renders PCB Designer through the existing navigati
   assert.doesNotMatch(indexSource, /PcbDesignerWorkspace[\s\S]{0,500}<MainWorkspaceHeader/);
 });
 
-test("shares a code-native PCB illustration with the responsive home grid", () => {
-  assert.match(workspacePreviewSource, /PcbWorkspacePreview/);
+test("uses a repair-style PCB artwork in the responsive home grid without changing the workbench preview", () => {
+  assert.match(workspacePreviewSource, /assets\/workspace\/pcb\.webp/);
   assert.match(
     workspacePreviewSource,
-    /workspaceId === ["']pcb-designer["'][\s\S]{0,180}<PcbWorkspacePreview\s*\/>/,
+    /["']pcb-designer["']:\s*\{ image: pcbArtwork/,
   );
   assert.match(entranceSource, /xl:grid-cols-3/);
   assert.match(previewSource, /data-testid=["']pcb-workspace-preview["']/);

@@ -1,0 +1,130 @@
+"""Parser for the ERP "Product Structure Report" BOM export.
+
+Observed format (CATANIA PDB EVT/DVT, 2026-10):
+  * File extension .xls but content is an HTML table, charset BIG5.
+  * Columns: 項次 | 主件料號 | 品名 | 規格 | 組成用量 | 插件位置 | 承認狀態 | ...
+  * Tree depth encoded by '|' characters in 主件料號; '-S-' marks an alternate (second source)
+    of the item directly above it; '---' marks a real item.
+  * Sub-assemblies (e.g. VGCS50VB0010) have children one level deeper and may have their own
+    alternates at sub-assembly level (whose children are not listed).
+Also accepts a real .xlsx / .csv with the same column headers.
+"""
+from __future__ import annotations
+
+import io
+import re
+from pathlib import Path
+
+import pandas as pd
+
+from ..model import BomItem, Design, SourceFile
+from . import sha256_of
+
+COLS = {
+    "pn": ["主件料號", "料號", "Part Number", "PN"],
+    "desc": ["品名", "Description"],
+    "spec": ["規格", "Spec", "Manufacturer PN"],
+    "qty": ["組成用量", "Qty", "Quantity"],
+    "ref": ["插件位置", "Reference", "RefDes", "Designator"],
+}
+
+
+def _decode_html(raw: bytes) -> str:
+    m = re.search(rb"charset\s*=\s*([A-Za-z0-9_-]+)", raw[:2000])
+    encs = []
+    if m:
+        cs = m.group(1).decode("ascii", "ignore").lower()
+        encs.append("cp950" if cs in ("big5", "big-5", "x-big5") else cs)
+    encs += ["utf-8", "cp950"]
+    for e in encs:
+        try:
+            return raw.decode(e)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode("cp950", errors="replace")
+
+
+def _read_table(path: Path) -> pd.DataFrame:
+    raw = path.read_bytes()
+    head = raw[:512].lstrip().lower()
+    if head.startswith(b"<!doctype html") or head.startswith(b"<html") or b"<table" in raw[:4000].lower():
+        tables = pd.read_html(io.StringIO(_decode_html(raw)), header=None)
+        df = max(tables, key=len)
+    elif path.suffix.lower() == ".csv":
+        df = pd.read_csv(path, header=None, dtype=str, encoding_errors="replace")
+    else:
+        df = pd.read_excel(path, header=None, dtype=str)
+    # locate header row
+    for i in range(min(10, len(df))):
+        row = [str(x).strip() for x in df.iloc[i].tolist()]
+        if any(c in row for c in COLS["pn"]) and any(c in row for c in COLS["ref"]):
+            df.columns = row
+            return df.iloc[i + 1:].reset_index(drop=True)
+    raise ValueError(f"BOM header row not found in {path.name}")
+
+
+def _col(df: pd.DataFrame, key: str) -> str:
+    for c in COLS[key]:
+        if c in df.columns:
+            return c
+    raise ValueError(f"BOM column for '{key}' not found; have {list(df.columns)}")
+
+
+def _s(x) -> str:
+    return "" if pd.isna(x) else str(x).strip()
+
+
+def _qty(x: str) -> float | None:
+    m = re.match(r"\s*([\d.]+)", x or "")
+    return float(m.group(1)) if m else None
+
+
+def parse_bom(path: str | Path) -> tuple[list[BomItem], list[tuple[str, str]]]:
+    path = Path(path)
+    df = _read_table(path)
+    cpn, cdesc, cspec, cqty, cref = (_col(df, k) for k in ("pn", "desc", "spec", "qty", "ref"))
+    items: list[BomItem] = []
+    problems: list[tuple[str, str]] = []
+    stack: dict[int, BomItem] = {}  # depth -> last real item at that depth
+    for i, r in df.iterrows():
+        raw_pn = _s(r[cpn])
+        if not raw_pn:
+            continue
+        depth = raw_pn.count("|")
+        is_alt = "-S-" in raw_pn
+        pn = re.split(r"-S-|---", raw_pn)[-1].strip()
+        desc, spec = _s(r[cdesc]), _s(r[cspec])
+        if is_alt:
+            owner = stack.get(depth - 1)
+            if owner is not None:
+                owner.alternates.append((pn, desc, spec))
+            continue
+        refs = [x.strip() for x in re.split(r"[,\s;]+", _s(r[cref])) if x.strip()]
+        parent = stack.get(depth - 1)
+        it = BomItem(pn=pn, desc=desc, spec=spec, qty=_qty(_s(r[cqty])), refdes=refs, row=int(i) + 2)
+        if parent is not None and not parent.refdes and depth >= 3:
+            it.parent_pn = parent.pn
+            it.parent_alternates = parent.alternates  # same list object, filled as parsed
+        stack[depth] = it
+        for d in [d for d in stack if d > depth]:
+            del stack[d]
+        items.append(it)
+    # integrity
+    seen: dict[str, BomItem] = {}
+    for it in items:
+        if it.refdes and it.qty is not None and abs(it.qty - len(it.refdes)) > 1e-6:
+            problems.append(("BOM_QTY_MISMATCH",
+                             f"{it.pn} qty {it.qty:g} but {len(it.refdes)} RefDes listed (row {it.row})"))
+        for r in it.refdes:
+            if r in seen:
+                problems.append(("BOM_DUP_REFDES", f"{r} listed under {seen[r].pn} and {it.pn}"))
+            seen[r] = it
+    return items, problems
+
+
+def load_bom(design: Design, path: str | Path) -> None:
+    items, problems = parse_bom(path)
+    design.sources.append(SourceFile(role="bom", path=str(path), sha256=sha256_of(path)))
+    design.bom_items = items
+    design.bom = {r: it for it in items for r in it.refdes}
+    design.bom_problems = problems

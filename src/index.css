@@ -1788,3 +1788,37 @@ body {
 }
 @media (prefers-reduced-transparency: reduce) { [data-mobile-app-header='true'], [data-mobile-workspace-dock='true'] { background: hsl(var(--card)); backdrop-filter: none; } }
 @media (prefers-contrast: more) { :root, .dark { --muted-foreground: 240 5% 84%; --border: 240 3% 45%; } }
+
+/* Homepage wayfinding: three restrained families, immediate press feedback. */
+.workspace-entrance-card, .workspace-entrance-mobile-row { --entrance-accent: var(--platform-blue); }
+:is(.workspace-entrance-card, .workspace-entrance-mobile-row):is([data-workspace-id='material-requests'], [data-workspace-id='pcb-designer']) { --entrance-accent: var(--platform-teal); }
+:is(.workspace-entrance-card, .workspace-entrance-mobile-row):is([data-workspace-id='performance'], [data-workspace-id='user-management']) { --entrance-accent: var(--platform-amber); }
+.workspace-entrance-card {
+  background: linear-gradient(135deg, hsl(var(--entrance-accent) / .085), transparent 65%), hsl(var(--card));
+  border-color: hsl(var(--entrance-accent) / .22);
+  box-shadow: inset 0 1px hsl(0 0% 100% / .045);
+  transition: transform 160ms cubic-bezier(.16, 1, .3, 1), border-color 150ms ease-out, background-color 150ms ease-out;
+  touch-action: manipulation;
+}
+.workspace-entrance-card .workspace-card-icon,
+.workspace-entrance-mobile-row[data-workspace-id] .workspace-entrance-mobile-icon {
+  background: hsl(var(--entrance-accent) / .12); color: hsl(var(--entrance-accent));
+  border: 1px solid hsl(var(--entrance-accent) / .25); box-shadow: none;
+}
+.workspace-card-badge { color: hsl(var(--entrance-accent)); border-color: hsl(var(--entrance-accent) / .22); background: hsl(var(--entrance-accent) / .07); }
+.workspace-entrance-card .workspace-preview--artwork { border-color: hsl(var(--entrance-accent) / .16); background: hsl(var(--background) / .55); }
+.workspace-entrance-card .workspace-artwork-copy > span { color: hsl(var(--entrance-accent)); }
+.workspace-entrance-card .workspace-card-footer { border-color: hsl(var(--entrance-accent) / .16); }
+@media (hover: hover) and (pointer: fine) {
+  .workspace-entrance-card.interactive-lift:hover { transform: translateY(-2px); border-color: hsl(var(--entrance-accent) / .55); box-shadow: inset 0 1px hsl(0 0% 100% / .08); background-color: hsl(var(--secondary)); }
+  .workspace-entrance-card:hover .workspace-card-footer { color: hsl(var(--entrance-accent)); }
+}
+.workspace-entrance-card.interactive-lift:active { transform: translateY(1px) scale(.985); opacity: 1; background-color: hsl(var(--accent)); transition-duration: 70ms; box-shadow: inset 0 2px 4px hsl(0 0% 0% / .24); }
+.workspace-entrance-mobile-row { transition: transform 150ms cubic-bezier(.16, 1, .3, 1), background-color 150ms ease-out; touch-action: manipulation; }
+.workspace-entrance-mobile-row:active { transform: scale(.985); background: hsl(var(--entrance-accent) / .12); transition-duration: 70ms; }
+.workspace-entrance-card:focus-visible, .workspace-entrance-mobile-row:focus-visible { outline: 2px solid hsl(var(--entrance-accent)); outline-offset: 3px; }
+.workspace-entrance-mobile-row:focus-visible { outline-offset: -3px; }
+@media (prefers-reduced-motion: reduce) {
+  .workspace-entrance-card, .workspace-entrance-mobile-row { transition: none; }
+  .workspace-entrance-card.interactive-lift:hover, .workspace-entrance-card.interactive-lift:active, .workspace-entrance-mobile-row:active { transform: none; }
+}
