@@ -46,14 +46,15 @@ Files: `src/components/comparison/{ComparisonWorkspace.tsx,comparison.css,types.
 - [x] Focused tests, scoped lint, typecheck and production build.
 - [x] Real browser synthetic-input full flow and desktop/narrow-desktop/mobile visual verification.
 - [x] Review source privacy boundaries and prepare the scoped release; no database migration or production-data write.
-- [ ] Commit/push and confirm Pages deployment; release completion is reported after the live check.
+- [x] Commit/push and confirm Pages deployment; `b5404fc1` build/deploy succeeded in run `38277313317`; 40 engine hashes, the worker/bridge and four artwork assets match the live site.
 
 ## Verification snapshot
 
 - Original engine synthetic suite: 136 passed, 15 company-data tests skipped.
 - Actual Pyodide protocol suite: 4 passed, including reports, reply export, library signing, datasheet extraction, corrupted PDF fallback and formula-neutralization boundaries.
-- Comparison/navigation/PCB integration: 38 passed. Scoped lint, typecheck and production build passed.
-- Full website suite: 1142 passed, 7 failures reproduced in the untouched 78a702bf baseline, 1 opt-in runtime test skipped (executed separately above).
+- Comparison/navigation/PCB integration and chart keyboard boundaries: 40 passed. Scoped lint, typecheck and production build passed.
+- Full website suite before the two added keyboard checks: 1142 passed, 7 failures reproduced in the untouched 78a702bf baseline, 1 opt-in runtime test skipped (executed separately above).
 - Browser: 3 actual findings, 13 reports, persisted reply/history, ZIP export/import without overwrite, empty-result headers/chips, keyboard entrance, mobile dialog and four real IndexedDB account-isolation checks.
 - New homepage artwork: all eight WebP assets loaded; 4 added transparent assets total about 227 KiB. Desktop/narrow-desktop and 390px phone layout have no document overflow. No physical-device or company-board validation claimed.
 - Rollback trigger: the deployed homepage/guard/navigation fails or the worker/assets fail to load. Roll back only this feature commit; no persistent cloud data changes need reversal.
+- Keyboard follow-up: a real browser fixture reproduced the old SVG node's missing keyboard link; the updated component retains link semantics through SVG sanitization and both Enter/Space open the exact local PDF page. The shared diagram navigation also rejects non-integer/out-of-range pages. The live site currently requires a new login, so no authenticated production workflow is claimed.
