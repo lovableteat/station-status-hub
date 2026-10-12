@@ -373,10 +373,18 @@ const Index = () => {
     [workspaceCatalog]
   );
 
+  // Keep the authorized catalog for route validation; account settings use
+  // the account menu rather than the daily-work navigation.
+  const workspaceNavigationItems = useMemo(
+    () => workspaceItems.filter((item) => item.id !== "user-management"),
+    [workspaceItems]
+  );
+  const canOpenAdminWorkspace = workspaceItems.some((item) => item.id === "user-management");
+
   const entranceItems = useMemo(
     () =>
       workspaceCatalog
-        .filter((item) => item.visible)
+        .filter((item) => item.visible && item.id !== "user-management")
         .map(({ id, label, description, icon }) => ({
           id,
           title: label,
@@ -709,7 +717,7 @@ const Index = () => {
       ) : null}
 
       <MainWorkspaceHeader
-        items={workspaceItems}
+        items={workspaceNavigationItems}
         activeItem={activeWorkspace ?? "workspace-home"}
         onSelect={handleWorkspaceChange}
         onLogout={logout}
@@ -720,28 +728,36 @@ const Index = () => {
         userRoleLabel={getRoleLabel(user?.role)}
         showOnlineUsers={!isDemoMode}
         showNotifications={!isDemoMode}
-        userMenuItems={isDemoMode ? [] : [
-          {
-            id: "assessment-backups",
-            label: "我的自評備份",
-            icon: <Archive className="h-4 w-4" />,
-            emphasized: true,
-            onSelect: () => setAssessmentBackupsOpen(true),
-          },
-          {
-            id: "personal-profile",
-            label: "編輯大頭貼",
-            icon: <Camera className="h-4 w-4" />,
-            emphasized: true,
-            onSelect: () => setProfileDialogOpen(true),
-          },
-          {
-            id: "own-credentials",
-            label: "帳號與密碼",
-            icon: <KeyRound className="h-4 w-4" />,
-            emphasized: true,
-            onSelect: () => setCredentialsDialogOpen(true),
-          },
+        userMenuItems={[
+          ...(canOpenAdminWorkspace ? [{
+            id: "admin-workspace",
+            label: "後台管理",
+            icon: <ShieldCheck className="h-4 w-4" />,
+            onSelect: () => handleWorkspaceChange("user-management"),
+          }] : []),
+          ...(isDemoMode ? [] : [
+            {
+              id: "assessment-backups",
+              label: "我的自評備份",
+              icon: <Archive className="h-4 w-4" />,
+              emphasized: true,
+              onSelect: () => setAssessmentBackupsOpen(true),
+            },
+            {
+              id: "personal-profile",
+              label: "編輯大頭貼",
+              icon: <Camera className="h-4 w-4" />,
+              emphasized: true,
+              onSelect: () => setProfileDialogOpen(true),
+            },
+            {
+              id: "own-credentials",
+              label: "帳號與密碼",
+              icon: <KeyRound className="h-4 w-4" />,
+              emphasized: true,
+              onSelect: () => setCredentialsDialogOpen(true),
+            },
+          ]),
         ]}
       />
 
@@ -778,7 +794,7 @@ const Index = () => {
       </main>
       <MobileWorkspaceDock
         activeItem={activeWorkspace ?? "workspace-home"}
-        availableItems={workspaceItems}
+        availableItems={workspaceNavigationItems}
         onSelect={handleWorkspaceChange}
       />
     </div>
