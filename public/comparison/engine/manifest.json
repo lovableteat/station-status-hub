@@ -1,0 +1,167 @@
+{
+  "origin": "User-provided AutoCheck.zip",
+  "sourceSha256": "8d16f8077316b2765e2e310fbdd08a0245213663b64d6527b3414868fcebca69",
+  "files": [
+    {
+      "path": "autocheck/__init__.py",
+      "sha256": "87bc112dcbf08939857c60548cf643a397df8de117e14e2d90e721d295e4daf9"
+    },
+    {
+      "path": "autocheck/cli.py",
+      "sha256": "1f136b77ca1ca41f7faf764c51cc496f24e33eabdc91e50197ebdd905fecf0c8"
+    },
+    {
+      "path": "autocheck/config.py",
+      "sha256": "e7e2581739cfc1a9030b4d4e4afc531bdeabdc0fcf0510f4b82092e911775ea3"
+    },
+    {
+      "path": "autocheck/fakeschem.py",
+      "sha256": "471e2e151b4a25b6c3a404ada606c9a0ea81f3292b0996402c1c09406d4b4744"
+    },
+    {
+      "path": "autocheck/faultinject.py",
+      "sha256": "1deb92f288d740dac12b01fcb01e20bff67cd26138fc75da300739c02460a2d5"
+    },
+    {
+      "path": "autocheck/findings.py",
+      "sha256": "e0895dd08f5774c22f869bf1c40b245f5466ac4effc61eebce09ba3117bcb4a7"
+    },
+    {
+      "path": "autocheck/grouping.py",
+      "sha256": "659af4bb713de8ae8989d33f428cd2b9dea2d075c20252227673de5dbc58f7d3"
+    },
+    {
+      "path": "autocheck/i2c_lib.py",
+      "sha256": "857bf52d20e4b4d9a9dffda1c57cf6466deac07f8dcd715507301bc4840d2e24"
+    },
+    {
+      "path": "autocheck/loader.py",
+      "sha256": "01ff05706ec0856e1a3c7783caca34c8cfb4db96ba348c28e860c9ec2a3cfcc5"
+    },
+    {
+      "path": "autocheck/model.py",
+      "sha256": "0dd1b83fc5754c1eb2a3d1554229bae82f614550900d76eea4efca84a460a7dc"
+    },
+    {
+      "path": "autocheck/pipeline.py",
+      "sha256": "e91929799e89e43fcb12a926940310f1e5c907f0b1e6b26bec0f3c3a52ba7cf0"
+    },
+    {
+      "path": "autocheck/review.py",
+      "sha256": "96ae1870c2cf65c8dd1c72e0f53a3bed1b3f176342d9f938cd584a75e150e61b"
+    },
+    {
+      "path": "autocheck/ruleinject.py",
+      "sha256": "69800e81678d224e37332e2626324a414e9e85d58e875432fb46476a40a69d03"
+    },
+    {
+      "path": "autocheck/rules_zh.py",
+      "sha256": "79cb859a366ffda997acf65768bf9ea93e2a42e30dfb948d25245197d6f53793"
+    },
+    {
+      "path": "autocheck/tracking.py",
+      "sha256": "cd167dbf45054b4bd202cf76c6fb85a4558f5a43ef45b4d4c4d14e91bf4b5da7"
+    },
+    {
+      "path": "autocheck/ui_nav.py",
+      "sha256": "f86a46fa47a0b7bc5b926e051ed951f9f874ec5ecaf609f106057ecebb242762"
+    },
+    {
+      "path": "autocheck/ui_pick.py",
+      "sha256": "a4feae4d744808a0dd5e94ab75a34d28c5ed352a02ec4367d2ed07b1158ee51d"
+    },
+    {
+      "path": "autocheck/values.py",
+      "sha256": "6ff70a13d21e18afa5dbdd7dd41ba33cc0ac8fdf1132b46af7967dc870fc7662"
+    },
+    {
+      "path": "autocheck/checks/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "autocheck/checks/capv.py",
+      "sha256": "94ac1d3cfa97aaadfce268387bd5c23a21ef5a8109052e6e79fe0222693565a2"
+    },
+    {
+      "path": "autocheck/checks/diff.py",
+      "sha256": "2216ba57e87f6eb19fbd7bef0dc380aef35b3270602c4ea8e68d24eeba43a4b7"
+    },
+    {
+      "path": "autocheck/checks/drc.py",
+      "sha256": "41c8da44df2c3413cd7ca20c7e5f3c87a670efbf5270fa8b5629ac7fdfd64668"
+    },
+    {
+      "path": "autocheck/checks/i2c_map.py",
+      "sha256": "8c375da7c875ebf835611327b881d9f099c2dd8d3f117a23f41c2af04790e271"
+    },
+    {
+      "path": "autocheck/checks/netrules.py",
+      "sha256": "808585242b43ff453b64bd50adf94e14cae9f18429a7d154acdc241d0fcf35e6"
+    },
+    {
+      "path": "autocheck/checks/power_tree.py",
+      "sha256": "4b0d0b984d136ee6970d631289f9018c5f5e16e8f9fa226338d748776c8c13c9"
+    },
+    {
+      "path": "autocheck/parsers/__init__.py",
+      "sha256": "82f20681e9d55eba445fb8473db65308c1349d3bbd5fae947b8a2ba5690be604"
+    },
+    {
+      "path": "autocheck/parsers/allegro_pst.py",
+      "sha256": "e708fbba38756eace8655699a9d6047adb91d47c3fa1c319f1ef8d85ac1f4b9f"
+    },
+    {
+      "path": "autocheck/parsers/bom_erp.py",
+      "sha256": "ef3c47d8ffa2f07f7fd9e3f2e3bf28cf0faca290c596e572ed0e960fb83faa73"
+    },
+    {
+      "path": "autocheck/parsers/dsn.py",
+      "sha256": "e3d915a95d1d5bdfc8e682a3eacafa032e4db0c593f556c6671cda086994a031"
+    },
+    {
+      "path": "autocheck/report/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "autocheck/report/circuit_text.py",
+      "sha256": "c7db9731f1419233332ac9378a06f31277f65cebe037fde314ba184531d3b78a"
+    },
+    {
+      "path": "autocheck/report/data_out.py",
+      "sha256": "7d92c560f1c68425cb604243e93cf806ad2e4ac4a3e0674c19bc7384fa98e09b"
+    },
+    {
+      "path": "autocheck/report/i2c_map_diagram.py",
+      "sha256": "ce53af0f1da96b24518962b6e00db7076b82d8a4a1818aa001055fe0eb51b7a7"
+    },
+    {
+      "path": "autocheck/report/pdf_annotate.py",
+      "sha256": "a2539bbc4d1f58011008353af354d834fc3146410e0591cf69f2cb9da1f03bb3"
+    },
+    {
+      "path": "autocheck/report/pdf_report.py",
+      "sha256": "0adf0f2b206489fa867ee4aaf3bc8f3a6a9de784b93ed3a75625651386fcd7f3"
+    },
+    {
+      "path": "autocheck/report/power_tree_diagram.py",
+      "sha256": "7d0b2297dc22e2b6cfc31bb6bacee5fced4cef1955662e05ddae38ede5a6d6e5"
+    },
+    {
+      "path": "autocheck/report/xlsx_tracker.py",
+      "sha256": "9cec97bf420b5474468268ff4d36b1d39258e5d0be63524adf071288f3897535"
+    },
+    {
+      "path": "config/default.yaml",
+      "sha256": "40ed40eaec7a0fd673eb12bef9efe89e81fd7041c89f1c68939bd65b875c3755"
+    },
+    {
+      "path": "config/i2c_devices_user.yaml",
+      "sha256": "1d48bc1d0ea0d339cef894a8fcd0bea948094b2800332fd7258932728c5b4a21"
+    },
+    {
+      "path": "config/i2c_devices.yaml",
+      "sha256": "ec66808f77d63b919b7d00ba9a8bd12ca5d788858a1bcbfe1c2c78e8e452e3a8"
+    }
+  ],
+  "version": "0.2.0"
+}

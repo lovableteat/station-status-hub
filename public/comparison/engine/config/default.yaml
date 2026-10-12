@@ -1,0 +1,188 @@
+# AutoCheck rule configuration. Every threshold / list used by a check lives here so the tool
+# stays generic across boards. Copy this file per project and pass it with --config.
+# Lines marked "CONFIRMED" were stated by the design owner; "DEFAULT" are tool defaults pending review.
+
+rules_version: "0.2.0"
+
+parts:
+  # 2-pin non-polarized parts: swapping their two pins is electrically equivalent (diff noise rule)
+  symmetric_prefixes: [R, C, L, FB, F, RS, VS]
+  # part prefixes considered "active" (used by floating-pin and circuit-text features)
+  active_prefixes: [U, Q, J, CN, D, DS]
+  # copper-only parts that never appear in the BOM but always exist on the board (DEFAULT)
+  always_built_prefixes: [TP]
+  # mechanical / non-electrical BOM items that legitimately have no netlist entry   (DEFAULT)
+  mechanical_refdes_regex: '^(TIM|TTP|MEC|H|LBL|HS|SCREW|NUT|PCB)\d*$'
+
+ground:
+  main: GND
+  # nets treated as ground (0 V). Full-match regex.                                (DEFAULT)
+  regex: '^(?:[ADPSC]?GND\d*|GND_?[A-Z0-9]*|VSS)$'
+  # stuffed parts that tie two nets to the same potential (for ground-island + voltage propagation)
+  tie_prefixes: [FB, F]
+  # copper net-ties / short pins: never in the BOM, always present            (DEFAULT)
+  nettie_prefixes: [VS, NT]
+  nettie_name_regex: 'SHORT|NET_?TIE'
+  tie_max_ohm: 0.05          # R / RS at or below this value count as a tie (0R jumpers, mOhm shunts)
+
+capacitor:
+  # CONFIRMED (owner, 2026-10-08, rule A): MLCC rated voltage ~2 x working voltage, rounded to a
+  # common rating. Required = smallest standard rating >= factor x V x (1 - tolerance).
+  # e.g. 3.3 V -> 6.3 V, 5 V -> 10 V, 12 V -> 25 V, 48 V -> 100 V
+  mlcc_derating_factor: 2.0
+  mlcc_tolerance: 0.05
+  # common MLCC rated voltages (Murata 0G/0J/1A/1C/1E/1V/1H/2A..., YAGEO 4/5/6/7/8/0...)
+  standard_ratings: [2.5, 4, 6.3, 10, 16, 25, 35, 50, 63, 100, 200, 250, 500, 630, 1000, 2000, 3000]
+  # how to recognise an MLCC: BOM description regex (stuffed parts)
+  mlcc_bom_regex: '\bMLCC\b'
+  # for DNP caps (no BOM line) fall back to the netlist primitive name               (DEFAULT)
+  mlcc_primitive_regex: '^C_TX_C\d{4}'
+  # CONFIRMED: non-MLCC (polymer / electrolytic / tantalum) are reported as INFO ratio only
+  non_mlcc_report: info
+
+net_voltage:
+  # A voltage token in a net name (3V3, P12V, 4V85) is ignored when ANY token in the name
+  # is in this list (trailing digits ignored: DIV2 = DIV). Unresolved nets go to rail_map_todo.csv.
+  # Supply words (VCC/PVCC/VDD/BIAS...) are accepted only right after the voltage token:
+  # 'HSC1_4V85_VDD' -> 4.85 V, but 'PS_12V_STBY_PVCC' -> unresolved.
+  blacklist: [EN, ENA, PG, PGOOD, PWRGD, PGD, SS, FB, COMP, ILIM, ILM, RT, MODE,
+              SYNC, BOOT, BST, SW, PH, LX, LG, HG, UG, VALID, FLAG, SENSE, SNS, CS, ISNS, VSNS,
+              DIV, MON, IMON, VMON, TUNE, CONFIG, CFG, ALERT, RST, RESET, FAULT, FLT, OK, DET,
+              PRSNT, CTRL, GATE, GT, DRV, LDRV, HDRV, TMR, TIMER, OV, UV, UVLO, OVLO, ADC, SDA,
+              SCL, CLK, DATA, RC, RIC, EXTBIAS, HVBIAS, REF, VREF, TRIP, OCP, OVP, LOW, HIGH,
+              NC, SNN, N, P]
+  # propagate a known voltage across stuffed tie parts (0R, fuse, net-tie, bead)
+  propagate: true
+
+naming:
+  enabled: false             # company naming rule not yet enforced on this board family
+  auto_net_regex: '^N\d+$'   # tool-generated net names (unnamed wire). Always checked (DRC).
+  series_suffixes: [_R, _C]
+  diff_pair_suffixes: [[_DP, _DN], [_P, _N]]
+
+drc:
+  similar_names: true
+  floating_after_dnp: true
+  # nets / pins that are deliberately unconnected: single-pin and floating checks report INFO
+  intentional_nc_net_regex: '^(SNN|NC)_'
+  nc_pin_name_regex: '^(NC|N\.C\.|DNC|RSVD|RESERVED)(_?\d+)?$'
+
+pin_roles:
+  # Netlist rules (2026-10-09, HANDOVER 0u): what a pin IS, judged from its pstchip pin name.
+  # Full-match, case-insensitive regex. DEFAULT: tuned on the CATANIA symbols; edit when a library names pins
+  # differently. Nothing in the code knows a pin name; add / widen patterns here.
+  supply:     'VCC\w*|VDD\w*|AVDD\w*|DVDD\w*|V\+|VS|VAUX|BIAS|PVCC|VIO'      # IC logic supply (power domain)
+  ground:     'GND\w*|[ACDPS]GND\w*|PGND\d*|VSS\w*|VEE|V-'
+  open_drain: 'PG|PGOOD|PGD|PWRGD|POWER_?GOOD|PG/SS|PG/SYNCOUT|ALERT#?|SMBALERT#?|ALERT_?N|FLT#|FAULT#|SDA|SCL|SMBDAT|SMBCLK|CRITICAL|WARNING'
+  # names that are open-drain on supervisors / expanders but often push-pull-driven INPUTS elsewhere:
+  # a node with only these is reported as INFO (QA 2026-10-09)
+  open_drain_maybe: 'INT#|INT_?N|IRQ#|IRQ_?N|RESET#|RST#|RESET_?N|RST_?N'
+  strap:      'ADR\d*|ADDR\d*|A[0-7]|E[0-2]|STRAP\w*|CFG\d*|CONFIG\d*|MODE\d*|SEL\d*|BOOT_?SEL\d*'
+  # regulators / switches (B1 power tree)
+  reg_in:     'P?VIN\d*([_-][\w-]*)?|IN'
+  reg_out:    'V?OUT\d*|VO'
+  reg_sw:     'SW\d*([_-][\w-]*)?|LX\d*|PH'
+  reg_gate:   'GATE\d*|HDRV|HG|UG'
+  reg_en:     'EN|ENABLE|EN/UV|EN/UVLO|EN#/OVLO|CE'
+  reg_pg:     'PG|PGOOD|PGD|PWRGD|POWER_?GOOD|PG/SS|PG/SYNCOUT'
+  fet_gate:   'G|GATE\d*'
+  # analog / high-voltage sense pins: A3 never compares their level with the IC supply
+  analog:     'SENSE\w*|ISNS\w*|IN[+-]\d*|IN[+-]|VIN_K|DIODE|CS[+-]?|FB\d*|COMP|ILIM|ILM|CL|RT|SS|TIMER|ITIMER|DVDT|REF\d*|REXT/CEXT|CEXT|INVERTING/INPUT|NON_INVERTING/INPUT'
+  # pins whose role depends on the part, not the name (e.g. open-drain buffer outputs named Y). mpn / pin: regex
+  by_part:
+    - {mpn: '.*74\w*G0[67]\w*|TC7SZ0[67]\w*', pin: '\d?Y', role: open_drain}
+
+netrules:
+  # A1 / A2 / A3 (DEFAULT 2026-10-09, owner approved the rule list; thresholds pending review)
+  enabled: [STRAP, OPEN_DRAIN, PULLUP_DOMAIN]
+  ic_prefixes: [U]
+  resistor_prefixes: [R, RS]   # 2-pin resistors (values: 100KOHM / 10K / 4K7 / 4.7k / 1M styles). Arrays (RN) not handled
+  offboard_prefixes: [J, CN]   # an open-drain node that reaches these may have its pull-up on the other board
+  # resistors at or below this value between two signal nets are walked through (series / damping R), so
+  # HSC1_SMB_DATA -33.2R- I2C_SDA_SLAVE is one node. Never walked into a rail or ground.
+  series_max_ohm: 100
+  # A2 pull-up too strong: parallel pull-up < Rp(min) = (V - VOL) / IOL (I2C: IOL 3 mA, VOL 0.4 V)
+  od_vol_v: 0.4
+  od_iol_ma: 3.0
+  # A2: an open-drain node counts as pulled up when the DC level of its resistor network (driver released)
+  # reaches this voltage; a pull-up through a 1K isolation resistor still counts
+  od_high_min_v: 0.7
+  # A1: strap pins that are DESIGNED for a resistor divider (multi-level pins). mpn / pin regex, full match
+  strap_divider_allowed: []
+  # A3: input above receiver supply by more than this -> PULLUP_OVERVOLT
+  overvolt_margin_v: 0.3
+
+rail_domain:
+  # A3 back-power. Domain = when a rail has power. order: earlier = on longer (AON before STBY before MAIN).
+  # A pull-up rail earlier than the receiver's supply rail back-powers the receiver when its rail is off.
+  # The tool guesses domains from rail names (below) and writes rail_domain_<rev>.csv; the owner reviews it,
+  # sets confirmed = Y, and passes it back (--rail-domain / UI). Unconfirmed -> INFO, confirmed -> WARN.
+  order: [AON, STBY, MAIN]
+  guess:
+    - {domain: AON,  regex: '(^|_)(AON|ALWAYS_?ON)(_|$)'}
+    - {domain: STBY, regex: '(^|_)(STBY|STANDBY|SB|AUX|S5)(_|$)'}
+    - {domain: MAIN, regex: '(^|_)(RUN|MAIN|S0)(_|$)'}
+
+power_tree:
+  # B1: converters are ICs with a reg_in pin plus reg_out / reg_sw / reg_gate. SW is followed through an
+  # inductor, GATE through series R (<= netrules.series_max_ohm) to FET gates and out the FET's other pins.
+  # Rails are grouped through 0R / fuse / bead / net-tie / series R <= series_max_ohm / multi-pin mOhm shunts,
+  # never into ground, never between two different known voltages, never into a signal net.
+  inductor_prefixes: [L]
+  fet_prefixes: [Q]
+
+i2c:
+  # I2C map (2026-10-12, owner request, TEST STATE). Derives the I2C map from netlist + BOM + the device library
+  # and compares it with the transcribed I2C block diagram (i2c_map_declared*.csv, owner signs it off).
+  # SI items (bus capacitance, Rp min / max, rise time) are out of scope (owner decision 2026-10-12).
+  enabled: true
+  library: i2c_devices.yaml          # relative to this config folder; one entry per part family, datasheet URL each
+  user_library: i2c_devices_user.yaml   # entries RD signed from an uploaded datasheet (UI "I2C 位址庫" / autocheck i2c-accept);
+                                      # searched before the built-in file
+  datasheets_dir: datasheets          # relative to the AutoCheck folder: drop datasheet PDFs here (file name = MPN)
+  # I2C line pins on ICs (pin name, full match, case-insensitive). LM5066 SDAI / SDAO both count as SDA.
+  sda_pin: 'SDA|SDAI|SDAO|SMBDAT|SMB_?DATA|I2C_?SDA'
+  scl_pin: 'SCL|SMBCLK|SMB_?CLK|I2C_?SCL'
+  # Severity of every I2C rule. Owner 2026-10-12: all INFO while the feature is in test; change here any time.
+  severity:
+    I2C_ADDR_CONFLICT: INFO        # two built devices with the same 7-bit address in one address space
+    I2C_PU_DUPLICATE: INFO         # more than one built pull-up on one line of one segment
+    I2C_NO_PULLUP: INFO            # segment without any built pull-up and without an IC pin (A2 covers IC pins)
+    I2C_SDA_SPLIT: INFO            # a device's SDA pins (LM5066 SDAI / SDAO) not on one segment
+    I2C_ADDR_PIN_FLOAT: INFO       # address pin left open on a part that does not define open
+    I2C_ADDR_UNRESOLVED: INFO      # strap state unknown / conflicting, or state combination not in the table
+    I2C_ADDR_PART_DIFF: INFO       # symbol / BOM main / alternates decode to different addresses
+    I2C_LIB_MISSING: INFO          # I2C part not in the library (or no table yet): strap states only
+    I2C_DECLARED_MISMATCH: INFO    # I2C block diagram (declared csv) disagrees with the netlist
+    I2C_UNDECLARED_DEVICE: INFO    # built I2C device on the netlist but not on the I2C block diagram
+    I2C_SECOND_SOURCE_UNCHECKED: INFO  # BOM main / alternate / symbol of an I2C device not in the library: strap not checked for it
+
+annotate:
+  # schematic PDF annotation (v0.2). Boxes drawn for these severities; destinations/bookmarks for dest_severities
+  box_severities: [ERROR, WARN]
+  dest_severities: [ERROR, WARN, INFO]
+  # Jump to a box (Excel PDF column, 審查回覆「看圖」, index page links):
+  #   fitr (default): /FitR = the view_pt area centred on the box; the viewer scales it to fill its own window,
+  #                   so every screen / Windows scale / window size shows the same area (zoom differs per screen).
+  #                   Chrome: zoom = min(window w / rect w, window h / rect h), 1 pt = 4/3 px, max 500 %.
+  #                   A window wider (or taller) than view_pt's aspect leaves the spare room on the right (or bottom).
+  #   xyz:            /XYZ fixed zoom + window size assumed = view_pt (old behaviour, centred only on the test laptop).
+  jump: fitr
+  zoom: 2.0                  # xyz only: viewer zoom when jumping to a box
+  box_padding: 3.0           # points around the RefDes text
+  # page area (w, h, PDF points) shown around the box. 460 x 275 = what the test laptop showed at 200 %
+  # (1920x1200, Windows 125 %, Chrome maximised, thumbnails open), measured 2026-10-09. Bigger = more context.
+  view_pt: [460, 275]
+  # 「最佳觀看設定」提示，只有 jump: xyz 會顯示。fitr 不看這行，提示文字固定在 autocheck/review.py view_hint()
+  view_hint: 螢幕 1920 x 1200、Windows 顯示比例 125%、Chrome 視窗最大化、PDF 左側縮圖欄開著
+
+publish:
+  # where the annotated PDF is copied so a browser can open it over http (Streamlit static serving,
+  # .streamlit/config.toml: [server] enableStaticServing = true). Excel links = base_url/<run>/<pdf>#nameddest=<key>
+  static_dir: static         # relative to the AutoCheck folder
+  base_url: http://localhost:8501/app/static
+
+review:
+  # RD replies (web page 審查回覆): one SQLite file, keyed by run + tracking key, survives re-runs.
+  # Env AUTOCHECK_REVIEW_DB overrides (tests use it). Relative to the AutoCheck folder.
+  db: review/review.db

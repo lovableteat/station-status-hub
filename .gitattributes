@@ -1,0 +1,3 @@
+public/comparison/engine/** -text
+tests/comparison/fixtures/*.pdf binary
+tests/comparison/fixtures/**/*.pdf binary

@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FileText,
   FolderUp,
+  GitCompareArrows,
   KeyRound,
   LayoutDashboard,
   MessageSquareText,
@@ -45,6 +46,9 @@ const ApiChatWorkspacePage = React.lazy(() =>
   import("@/components/api-management/ApiChatWorkspacePage").then((module) => ({
     default: module.ApiChatWorkspacePage,
   }))
+);
+const ComparisonWorkspace = React.lazy(() =>
+  import("@/components/comparison/ComparisonWorkspace")
 );
 const DeploymentPlanningCenter = React.lazy(() =>
   import("@/components/data-center/DeploymentPlanningCenter").then((module) => ({
@@ -97,6 +101,7 @@ const ToolsManagement = React.lazy(() =>
 type WorkspaceId =
   | "station-status"
   | "file-uploads"
+  | "comparison"
   | "material-requests"
   | "data-center"
   | "pcb-designer"
@@ -134,6 +139,7 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
   tools: "station-status",
   "test-plan": "file-uploads",
   "file-uploads": "file-uploads",
+  "comparison": "comparison",
   users: "user-management",
   collaboration: "user-management",
   "api-management": "user-management",
@@ -148,10 +154,19 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
 const MODULE_QUERY_KEYS = [
   "attention",
   "assetView",
+  "comparisonTab",
+  "compareSearch",
+  "compareStatus",
+  "compareOwner",
+  "compareSeverity",
+  "compareCategory",
+  "comparePage",
   "engineer",
   "excludeStatus",
   "flowVersion",
   "flowView",
+  "librarySearch",
+  "librarySigned",
   "openIssue",
   "sort",
   "station",
@@ -206,6 +221,7 @@ function getInitialWorkspace(): WorkspaceId | null {
 
   // Existing shared links keep opening the same files after moving the page.
   if (module === "test-plan" || workspace === "file-uploads") return "file-uploads";
+  if (module === "comparison") return "comparison";
 
   if (module === "users" || module === "collaboration" || module === "api-management") {
     return "user-management";
@@ -221,6 +237,7 @@ function getInitialWorkspace(): WorkspaceId | null {
 
   if (
     workspace === "station-status" ||
+    workspace === "comparison" ||
     workspace === "material-requests" ||
     workspace === "data-center" ||
     workspace === "pcb-designer" ||
@@ -315,6 +332,13 @@ const Index = () => {
         visible: canViewModule("test-plan"),
       },
       {
+        id: "comparison" as const,
+        label: "比對系統",
+        description: "比較 A／B 版 netlist、BOM 與線路圖，追蹤差異、DRC、Power Tree 與 I²C 檢查結果。",
+        icon: GitCompareArrows,
+        visible: canViewModule("ai-chat"),
+      },
+      {
         id: "material-requests" as const,
         label: "料號申請",
         description: "查詢與維護 BOM 主料、替代料及申請狀態，支援圖片追蹤、多人協作與 Excel／HTML 主管報表。",
@@ -387,7 +411,7 @@ const Index = () => {
         .filter((item) => item.visible && item.id !== "user-management")
         .map(({ id, label, description, icon }) => ({
           id,
-          title: label,
+          title: id === "comparison" ? "AutoCheck" : label,
           description,
           icon,
         })),
@@ -498,6 +522,8 @@ const Index = () => {
       url.searchParams.set("module", "ai-chat");
     } else if (activeWorkspace === "file-uploads") {
       url.searchParams.set("module", "test-plan");
+    } else if (activeWorkspace === "comparison") {
+      url.searchParams.set("module", "comparison");
     } else {
       url.searchParams.delete("module");
     }
@@ -535,7 +561,9 @@ const Index = () => {
             ? "ai-chat"
             : nextWorkspace === "file-uploads"
               ? "test-plan"
-              : undefined;
+              : nextWorkspace === "comparison"
+                ? "comparison"
+                : undefined;
     if (!pushWorkspaceLocation(nextWorkspace, nextModule)) return;
     setActiveWorkspace(nextWorkspace);
   };
@@ -607,6 +635,12 @@ const Index = () => {
             <div className="file-upload-workspace flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5" data-file-upload-page="true">
               <TestPlanWorkspace />
             </div>
+          </PermissionGuard>
+        );
+      case "comparison":
+        return (
+          <PermissionGuard module="ai-chat">
+            <ComparisonWorkspace />
           </PermissionGuard>
         );
       case "material-requests":

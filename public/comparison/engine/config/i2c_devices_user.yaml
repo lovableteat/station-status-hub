@@ -1,0 +1,6 @@
+# I2C address entries added by RD from an uploaded datasheet (UI page "I2C 位址庫" or `autocheck i2c-accept`).
+# Searched BEFORE config/i2c_devices.yaml, so a signed entry overrides an empty built-in one (MP5926).
+# An entry without signed_by + signed_date is loaded as 未驗證: the address is shown with "(未驗證)" and never used
+# for a mismatch verdict. Same fields as i2c_devices.yaml, plus:
+#   src: "<pdf file name> p.<page> <table name>"   signed_by: RD name   signed_date: YYYY-MM-DD
+devices: []

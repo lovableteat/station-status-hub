@@ -426,7 +426,7 @@ export function UserPermissionsDialog({
               <div className="admin-permission-pane-header">
                 <div>
                   <h3>工作區權限</h3>
-                  <p>七個入口直接設定為未授權、檢視或管理。</p>
+                  <p>工作區可設定為未授權、檢視或管理。</p>
                 </div>
               </div>
 
@@ -488,7 +488,7 @@ export function UserPermissionsDialog({
 
               <div className="admin-permission-storage-note">
                 <Shield className="h-4 w-4" />
-                <span>「檔案上傳」沿用維修中心的資料儲存權限，不需重複設定。</span>
+                <span>「檔案上傳」沿用維修中心的資料儲存權限；「比對系統」沿用資料查詢空間權限，皆不需重複設定。</span>
               </div>
 
               <div className="admin-permission-detail-list">

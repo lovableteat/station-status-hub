@@ -1,0 +1,435 @@
+# I2C map device library (2026-10-12). One entry per part family; every entry cites the datasheet table it came from.
+# The tool never guesses an address: a part not in this file shows its strap states only (I2C_LIB_MISSING, INFO).
+#
+# Matching: `mpn` is a regex SEARCHED (case-insensitive) in the symbol VALUE and in the BOM main / alternate PN,
+# description and spec. TMP1075 and TMP1075N have different tables: the more specific entry must come FIRST
+# (first match wins per text).
+#
+# addr_pins: pin names on the symbol, MSB first (full-match, case-insensitive; a list of names = any of them).
+# Strap state of each pin, read from the netlist + BOM (DNP parts removed):
+#   0 = to ground (direct or through a built resistor)   1 = to a rail > 0 V (direct or through a built resistor)
+#   Z = nothing built on the pin (open)                  SDA / SCL = tied to the device's own SDA / SCL
+#   X = pull-up and pull-down both built (A1 STRAP_PU_PD_BOTH already reports it)   ? = rail of unknown voltage
+# Address: `base` (hex) + binary pins (only 0 / 1 allowed), or `table` (state string "s_msb s_.. s_lsb" -> hex).
+# float_ok: true when Z is a defined state (it is a key of `table`); false -> Z on a pin = I2C_ADDR_PIN_FLOAT.
+# float_as: the datasheet says an open pin reads as this state ("0"); Z is replaced before decoding.
+# fmax_khz: max SCL the part supports (label on the bus only, no check).
+# kind: device (default) | mux (channels = separate address spaces) | buffer (both sides = one address space,
+#       each side needs its own pull-up). mux: `channel_sda` / `channel_scl` regex with one group = channel id.
+#       buffer: `side_sda` / `side_scl` regex with one group = side id; upstream = the remaining SDA / SCL pins.
+# verified: false -> the table is copied from a pin-compatible part and NOT checked against this part's datasheet;
+#       the address is printed with "(未驗證)" and never used for a mismatch verdict.
+
+devices:
+  - name: LM5066I / LM5066 (TI hot-swap, PMBus)
+    mpn: 'LM5066'
+    addr_pins: [ADR2, ADR1, ADR0]
+    float_ok: true
+    fmax_khz: 400
+    src: https://www.ti.com/document-viewer/LM5066I/datasheet/detailed_description   # 8.5.7 Table 50; CAPABILITY B0h = 400 kb/s
+    table:
+      "Z Z Z": 0x40
+      "Z Z 0": 0x41
+      "Z Z 1": 0x42
+      "Z 0 Z": 0x43
+      "Z 0 0": 0x44
+      "Z 0 1": 0x45
+      "Z 1 Z": 0x46
+      "Z 1 0": 0x47
+      "Z 1 1": 0x10
+      "0 Z Z": 0x11
+      "0 Z 0": 0x12
+      "0 Z 1": 0x13
+      "0 0 Z": 0x14
+      "0 0 0": 0x15
+      "0 0 1": 0x16
+      "0 1 Z": 0x17
+      "0 1 0": 0x50
+      "0 1 1": 0x51
+      "1 Z Z": 0x52
+      "1 Z 0": 0x53
+      "1 Z 1": 0x54
+      "1 0 Z": 0x55
+      "1 0 0": 0x56
+      "1 0 1": 0x57
+      "1 1 Z": 0x58
+      "1 1 0": 0x59
+      "1 1 1": 0x5A
+
+  - name: MP5926 (MPS hot-swap, PMBus)
+    mpn: 'MP5926'
+    addr_pins: [ADR2, ADR1, ADR0]
+    float_ok: true
+    # TODO owner: MP5926 datasheet not public (no address table found 2026-10-12). Strap states are shown,
+    # address left blank until the table is filled in from the MPS datasheet.
+    src: ''
+    table: {}
+
+  - name: INA3221 (TI 3-ch current monitor)
+    mpn: 'INA3221'
+    addr_pins: [A0]
+    float_ok: false
+    fmax_khz: 400          # fast mode 400 kHz; high-speed 2.44 MHz needs the HS master code
+    src: https://www.ti.com/lit/gpn/ina3221   # Table 7-1 Address Pins and Target Addresses
+    table:
+      "0": 0x40
+      "1": 0x41
+      "SDA": 0x42
+      "SCL": 0x43
+
+  - name: TMP1075N (TI temp sensor, 4-address variant)
+    mpn: 'TMP1075N'
+    addr_pins: [A0]
+    float_ok: false
+    src: https://www.ti.com/document-viewer/TMP1075/datasheet/GUID-37C9942F-2A5E-405D-8844-EA786FB0FC88   # Table TMP1075N
+    table:
+      "0": 0x48
+      "1": 0x49
+      "SDA": 0x4A
+      "SCL": 0x4B
+
+  - name: TMP1075 (TI temp sensor, 32 addresses)
+    mpn: 'TMP1075'
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    src: https://www.ti.com/document-viewer/TMP1075/datasheet/GUID-37C9942F-2A5E-405D-8844-EA786FB0FC88   # Table Address Pins State
+    table:
+      "0 0 SDA": 0x40
+      "0 0 SCL": 0x41
+      "0 1 SDA": 0x42
+      "0 1 SCL": 0x43
+      "1 0 SDA": 0x44
+      "1 0 SCL": 0x45
+      "1 1 SDA": 0x46
+      "1 1 SCL": 0x47
+      "0 0 0": 0x48
+      "0 0 1": 0x49
+      "0 1 0": 0x4A
+      "0 1 1": 0x4B
+      "1 0 0": 0x4C
+      "1 0 1": 0x4D
+      "1 1 0": 0x4E
+      "1 1 1": 0x4F
+      "0 SDA SDA": 0x50
+      "0 SDA SCL": 0x51
+      "0 SCL SDA": 0x52
+      "0 SCL SCL": 0x53
+      "1 SDA SDA": 0x54
+      "1 SDA SCL": 0x55
+      "1 SCL SDA": 0x56
+      "1 SCL SCL": 0x57
+      "0 SDA 0": 0x58
+      "0 SDA 1": 0x59
+      "0 SCL 0": 0x5A
+      "0 SCL 1": 0x5B
+      "1 SDA 0": 0x5C
+      "1 SDA 1": 0x5D
+      "1 SCL 0": 0x5E
+      "1 SCL 1": 0x5F
+
+  - name: NCT75 (onsemi temp sensor, LM75 style)
+    mpn: 'NCT75'
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x48
+    fmax_khz: 400
+    src: https://www.onsemi.com/pdf/datasheet/nct75-d.pdf   # Serial bus address: 1001 A2 A1 A0; fSCL DC..400 kHz
+
+  - name: TCA9535 / PCA9535 / PCA9535A (16-bit I/O expander)
+    mpn: '[TP]CA9535'
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x20
+    fmax_khz: 400
+    src: https://ti.com/document-viewer/TCA9535/datasheet/GUID-2EFC60B4-0AD0-4B9A-A24C-6927C1D9738F   # Table 7-2; pins must not float (GUID-525CC99B)
+
+  - name: M24C02 (ST 2-Kbit EEPROM)
+    mpn: 'M24C0[12]'
+    addr_pins: [[E2, A2], [E1, A1], [E0, A0]]
+    float_ok: true
+    float_as: "0"          # "When not connected (left floating), these inputs are read as low (0)" (M24C02-R ds 2.3)
+    base: 0x50
+    fmax_khz: 400
+    src: https://www.st.com/resource/en/datasheet/m24c02-r.pdf   # device select 1010 E2 E1 E0; st.com/en/memories/m24c02-f.html 400 kHz
+
+  - name: 24AA52 / 24LCS52 (Microchip 2-Kbit EEPROM)
+    mpn: '24(AA|LCS)52'
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x50
+    fmax_khz: 400
+    src: https://mouser.com/datasheet/2/268/21166K-3443041.pdf   # control code 1010 A2 A1 A0; A pins tied to VSS / VCC
+
+  - name: TCA9548A / PCA9548A (8-ch I2C switch)
+    mpn: '[TP]CA9548'
+    kind: mux
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x70
+    fmax_khz: 400
+    channel_sda: 'SD(\d+)'
+    channel_scl: 'SC(\d+)'
+    src: https://www.ti.com/lit/gpn/tca9548a   # 1110 A2 A1 A0; A pins direct to VCC or GND; 0..400 kHz
+
+  - name: TCA9517 / PCA9517 (level-translating repeater)
+    mpn: '[TP]CA9517'
+    kind: buffer
+    addr_pins: []
+    side_sda: 'SDA([AB])'
+    side_scl: 'SCL([AB])'
+    src: https://www.ti.com/lit/gpn/tca9517   # SCLA/SDAA/SCLB/SDAB; each side of the repeater must have a pull-up
+
+  # ---------------------------------------------------------------- batch 2026-10-12 (official datasheets, see src)
+  # Regex note: text is the ERP description too ("0622-005Y000 TEMP. SENSOR NCT75MNR2G"), so no '^' anchors;
+  # (?<![A-Z0-9]) / (?![0-9]) stop TMP75 matching TMP175 / TMP75B and INA226 matching INA2261.
+  # temperature sensors
+  - name: TMP75B (TI temp sensor)
+    mpn: '(?<![A-Z0-9])TMP75B'
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x48
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tmp75b.pdf   # 7.3.3.2 Table 2; A pins "Connect to GND or VS"
+
+  - name: TMP75C (TI temp sensor)
+    mpn: '(?<![A-Z0-9])TMP75C'
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x48
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tmp75c.pdf   # 7.3.3.2 Table 2
+
+  - name: TMP75 (TI temp sensor)
+    mpn: '(?<![A-Z0-9])TMP75(?![BC0-9])'
+    addr_pins: [A2, A1, A0]
+    float_ok: false        # float is a TMP175-only option
+    base: 0x48
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tmp75.pdf   # 7.3.2.2 Serial Bus Address; "connect A0, A1, and A2 to either the GND or V+ pin"
+
+  - name: LM75B (NXP temp sensor)
+    mpn: '(?<![A-Z0-9])LM75B(D|DP|GD|TP)'     # NXP order codes only; TI LM75B table not read
+    addr_pins: [A2, A1, A0]
+    float_ok: false        # "not internally biased ... should not be left floating"
+    base: 0x48
+    fmax_khz: 400
+    src: https://www.nxp.com/docs/en/data-sheet/LM75B.pdf   # 7.3 Table 4
+
+  - name: TMP451 (TI remote temp sensor, fixed address)
+    mpn: '(?<![A-Z0-9])TMP451'
+    fixed: 0x4C            # "device address of 4Ch"; other addresses only as factory option on request
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tmp451.pdf   # 7.5.1.3 Serial Bus Address
+
+  - name: TMP431A / TMP431C / TMP432A (TI, fixed 0x4C)
+    mpn: '(?<![A-Z0-9])(TMP431[AC]|TMP432A)'
+    fixed: 0x4C
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tmp431.pdf   # 8.5.4 "The address of the TMP431A, 32A, and 31C is 4Ch"
+
+  - name: TMP431B / TMP431D / TMP432B (TI, fixed 0x4D)
+    mpn: '(?<![A-Z0-9])(TMP431[BD]|TMP432B)'
+    fixed: 0x4D
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tmp431.pdf   # 8.5.4 "The address of the TMP431B, 32B, and 31D is 4Dh"
+
+  - name: TMP464 / TMP468 (TI multi-channel temp sensor)
+    mpn: '(?<![A-Z0-9])TMP46[48]'
+    addr_pins: [ADD]
+    float_ok: false
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tmp464.pdf   # 7.5.1.3 Table 2 Slave Address Options (tmp468.pdf same table)
+    table:
+      "0": 0x48
+      "1": 0x49
+      "SDA": 0x4A
+      "SCL": 0x4B
+
+  - name: ADT7461A-2 (onsemi, fixed 0x4D)
+    mpn: 'ADT7461A[A-Z]*-2'
+    fixed: 0x4D
+    fmax_khz: 400
+    src: https://www.onsemi.com/download/data-sheet/pdf/adt7461a-d.pdf   # "An ADT7461A-2 is available with an SMBus address of 0x4D"
+
+  - name: ADT7461A (onsemi, fixed 0x4C)
+    mpn: '(?<![A-Z0-9])ADT7461A'
+    fixed: 0x4C
+    fmax_khz: 400
+    src: https://www.onsemi.com/download/data-sheet/pdf/adt7461a-d.pdf   # "The default SMBus address of the ADT7461A is 0x4C"
+
+  # EEPROM
+  - name: M24C64 (ST 64-Kbit EEPROM)
+    mpn: '(?<![A-Z0-9])M24C64'
+    addr_pins: [[E2, A2], [E1, A1], [E0, A0]]
+    float_ok: true
+    float_as: "0"          # "When not connected (left floating), these inputs are read as low (0, 0, 0)"
+    base: 0x50
+    fmax_khz: 400          # F range 400 kHz at 1.6 V, 1 MHz at >= 1.7 V; label uses the safe value
+    src: https://www.st.com/resource/en/datasheet/m24c64-r.pdf   # 2.3 Chip Enable, Table 5 device select
+
+  - name: AT24C01C / AT24C02C (Microchip EEPROM)
+    mpn: '(?<![A-Z0-9])AT24C0[12]C'
+    addr_pins: [A2, A1, A0]
+    float_ok: true
+    float_as: "0"          # "If these pins are left floating, the A0, A1 and A2 pins will be internally pulled down to GND"
+    base: 0x50
+    src: https://onlinedocs.microchip.com/oxy/GUID-84DB5234-25BE-4966-B7FA-22A50FA88666-en-US-2/GUID-7E42E7D5-C762-42B7-866D-4847DB075ABF.html   # 2.1 + 6.1.1 Table 6-1
+
+  - name: CAT24C02 (onsemi EEPROM)
+    mpn: '(?<![A-Z0-9])CAT24C0[12](?![0-9])'
+    addr_pins: [A2, A1, A0]
+    float_ok: true
+    float_as: "0"          # "When not driven, these pins are pulled LOW internally"
+    base: 0x50
+    fmax_khz: 400
+    src: https://www.onsemi.com/download/data-sheet/pdf/cat24c01-d.pdf   # Figure 3 Slave Address
+
+  # GPIO expanders (A pins tied to VCC / GND only, no float)
+  - name: TCA9555 / PCA9555 / PCAL9555A (16-bit I/O expander)
+    mpn: '(?<![A-Z0-9])(PCAL9555A|[TP]CA9555)'
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x20
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tca9555.pdf   # 9.5.3 Table 2; NXP PCA9555.pdf Fig 7, PCAL9555A.pdf 6.1
+
+  - name: PCAL9535A (NXP 16-bit I/O expander)
+    mpn: '(?<![A-Z0-9])PCAL9535A'
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x20
+    fmax_khz: 400
+    src: https://www.nxp.com/docs/en/data-sheet/PCAL9535A.pdf   # Fig 4, 6.1
+
+  - name: TCA9539 / PCA9539 (16-bit I/O expander, 0x74)
+    mpn: '(?<![A-Z0-9])[TP]CA9539'
+    addr_pins: [A1, A0]
+    float_ok: false
+    base: 0x74
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tca9539.pdf   # Table 2 Address Reference; NXP PCA9539_PCA9539R.pdf Fig 8
+
+  - name: TCA6416A / PCA6416A / PCAL6416A (16-bit I/O expander)
+    mpn: '(?<![A-Z0-9])(TCA|PCAL?)6416'
+    addr_pins: [ADDR]
+    float_ok: false
+    base: 0x20
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tca6416a.pdf   # Table 8-3; NXP PCA6416A.pdf Table 5, PCAL6416A.pdf Table 5
+
+  - name: TCA6408A (8-bit I/O expander)
+    mpn: '(?<![A-Z0-9])TCA6408'
+    addr_pins: [ADDR]
+    float_ok: false
+    base: 0x20
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tca6408a.pdf   # Table 8-3 (NXP PCA6408A not read)
+
+  - name: PCA9554A / TCA9554A (8-bit I/O expander, 0x38)
+    mpn: '(?<![A-Z0-9])[TP]CA9554A'
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x38
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/pca9554a.pdf   # 8.3.2.1 Table 8-2; NXP PCA9554_9554A.pdf Fig 10
+
+  - name: PCA9554 (8-bit I/O expander, 0x20)
+    mpn: '(?<![A-Z0-9])PCA9554(?!A)'          # TCA9554 datasheet not read
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x20
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/pca9554.pdf   # Table 8-2; NXP PCA9554_9554A.pdf Fig 9
+
+  - name: TCA9534 / PCA9534 (8-bit I/O expander, 0x20)
+    mpn: '(?<![A-Z0-9])[TP]CA9534(?!A)'       # PCA9534A (0x38 family) not read
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x20
+    fmax_khz: 400
+    src: https://www.ti.com/lit/ds/symlink/tca9534.pdf   # Table 2; NXP PCA9534.pdf Fig 7
+
+  # I2C switches / repeaters
+  - name: TCA9546A / PCA9546A (4-ch I2C switch)
+    mpn: '(?<![A-Z0-9])[TP]CA9546'
+    kind: mux
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x70
+    fmax_khz: 400
+    channel_sda: 'SD(\d+)'
+    channel_scl: 'SC(\d+)'
+    src: https://www.ti.com/lit/ds/symlink/tca9546a.pdf   # Fig 13 "1 1 1 0 A2 A1 A0"; NXP PCA9546A.pdf Fig 5
+
+  - name: TCA9545A / PCA9545A (4-ch I2C switch with interrupt)
+    mpn: '(?<![A-Z0-9])[TP]CA9545A'          # PCA9545B / C have other bases (obsolete), not matched
+    kind: mux
+    addr_pins: [A1, A0]
+    float_ok: false
+    base: 0x70
+    fmax_khz: 400
+    channel_sda: 'SD(\d+)'
+    channel_scl: 'SC(\d+)'
+    src: https://www.ti.com/lit/ds/symlink/tca9545a.pdf   # 8.6.1 Fig 14 "1 1 1 0 0 A1 A0"; NXP PCA9545A_45B_45C.pdf Fig 5
+
+  - name: TCA9544A / PCA9544A (4-ch I2C mux with interrupt)
+    mpn: '(?<![A-Z0-9])[TP]CA9544A'
+    kind: mux
+    addr_pins: [A2, A1, A0]
+    float_ok: false
+    base: 0x70
+    fmax_khz: 400
+    channel_sda: 'SD(\d+)'
+    channel_scl: 'SC(\d+)'
+    src: https://www.ti.com/lit/ds/symlink/tca9544a.pdf   # Fig 13 "1 1 1 0 A2 A1 A0"; NXP PCA9544A.pdf Fig 5
+
+  - name: TCA9617A / TCA9617B / PCA9617A (level-translating repeater, FM+)
+    mpn: '(?<![A-Z0-9])[TP]CA9617'
+    kind: buffer
+    addr_pins: []
+    fmax_khz: 1000
+    side_sda: 'SDA([AB])'
+    side_scl: 'SCL([AB])'
+    src: https://www.nxp.com/docs/en/data-sheet/PCA9617A.pdf   # Table 3 pins SCLA SDAA SDAB SCLB; ti.com/lit/ds/symlink/tca9617a.pdf
+
+  # current / power monitors: A1 A0 each GND / VS / SDA / SCL, one shared table (TI prints the same 16 rows)
+  - name: INA219 / INA226 / INA228 / INA230 / INA231 / INA233 / INA238 (TI power monitor)
+    mpn: '(?<![A-Z0-9])INA2(19|26|28|30|31|33|38)(?![0-9])'
+    addr_pins: [A1, A0]
+    float_ok: false
+    fmax_khz: 400          # fast mode; HS mode needs the HS master code
+    src: https://www.ti.com/lit/ds/symlink/ina226.pdf   # Table 6-2 Address Pins and Target Addresses (read 2026-10-12); ina219 Table 1, ina228 / ina238 Table 7-2 / 6-2, ina233 / ina230 / ina231 same table
+    table:
+      "0 0": 0x40
+      "0 1": 0x41
+      "0 SDA": 0x42
+      "0 SCL": 0x43
+      "1 0": 0x44
+      "1 1": 0x45
+      "1 SDA": 0x46
+      "1 SCL": 0x47
+      "SDA 0": 0x48
+      "SDA 1": 0x49
+      "SDA SDA": 0x4A
+      "SDA SCL": 0x4B
+      "SCL 0": 0x4C
+      "SCL 1": 0x4D
+      "SCL SDA": 0x4E
+      "SCL SCL": 0x4F
+
+  - name: LTC2945 (ADI power monitor, 3-state address pins)
+    mpn: '(?<![A-Z0-9])LTC2945'
+    addr_pins: [ADR1, ADR0]
+    float_ok: true         # NC is a defined state
+    fmax_khz: 400
+    src: https://www.analog.com/media/en/technical-documentation/data-sheets/ltc2945.pdf   # Table 2 Device Addressing (8-bit printed; 7-bit = >> 1)
+    table:
+      "1 0": 0x67
+      "Z 1": 0x68
+      "1 1": 0x69
+      "Z Z": 0x6A
+      "Z 0": 0x6B
+      "0 1": 0x6C
+      "1 Z": 0x6D
+      "0 Z": 0x6E
+      "0 0": 0x6F

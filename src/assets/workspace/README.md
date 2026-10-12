@@ -1,6 +1,6 @@
 # Workspace illustrations
 
-Four original illustrations generated with the built-in `imagegen` tool for the work platform. The final WebP assets preserve transparency; each is 768 × 512. The original generation files remain in the Codex generated-images directory.
+Eight original illustrations generated with the built-in `imagegen` tool for the work platform. The final WebP assets preserve transparency; each is 768 × 512. The original generation files remain in the Codex generated-images directory.
 
 | Asset | Homepage workspace |
 | --- | --- |
@@ -8,6 +8,10 @@ Four original illustrations generated with the built-in `imagegen` tool for the 
 | `files.webp` | 檔案上傳 |
 | `parts.webp` | 料號申請 |
 | `racks.webp` | Data-center |
+| `pcb.webp` | PCB Designer |
+| `analysis.webp` | 資料查詢空間 |
+| `performance.webp` | 績效考核系統 |
+| `comparison.webp` | AutoCheck |
 
 ## Final prompt set
 
@@ -23,3 +27,12 @@ The subject prompt appended for each asset:
 - **racks.webp:** Subject: a premium miniature data center installation. Three tall narrow dark graphite server racks in a single ordered row viewed at three-quarter angle, stepped depth revealing side panels and tiny vent perforations, refined silver rack rails, a few restrained jade status lights. A delicate flat translucent jade cold-aisle strip near their feet. Clear realistic server architecture, no surrounding room, no cables spreading outside composition.
 
 These images are feature illustrations, not representations of current equipment, inventory, file counts, or connection status.
+
+## Matching additions
+
+The four additions use `repair.webp` as a style reference only, preserving the same orthographic graphite/silver materials, jade accents, upper-left lighting, transparent landscape composition and no typography. The built-in tool generated each separately; originals remain untouched. Final assets are downscaled to 768 × 512 and encoded as WebP with alpha (quality 88).
+
+- **pcb.webp:** A precision circuit board with fine silver traces, processor and connectors, a separated translucent circuit layer and a silver design stylus.
+- **analysis.webp:** A machined graphite document tray with silver engineering/spreadsheet/image sheets and an inspection magnifying glass.
+- **performance.webp:** A graphite clipboard with embossed checklist and jade check marks, alongside three physical ascending machined columns; no scores or numbers.
+- **comparison.webp:** Two tangible circuit boards, one changed connector and a restrained amber component under an inspection lens; no A/B labels or arrows.

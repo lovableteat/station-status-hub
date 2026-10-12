@@ -1,0 +1,48 @@
+primitive 'C_TX_C0402';
+pin
+  '1':
+    PIN_NUMBER='(1)';
+  '2':
+    PIN_NUMBER='(2)';
+end_pin;
+body
+VALUE='1uF 6.3V';
+end_body;
+end_primitive;
+primitive 'TMP451';
+pin
+  'VDD':
+    PIN_NUMBER='(1)';
+  'GND':
+    PIN_NUMBER='(2)';
+  'SDA':
+    PIN_NUMBER='(3)';
+  'SCL':
+    PIN_NUMBER='(4)';
+end_pin;
+body
+VALUE='TMP451';
+end_body;
+end_primitive;
+primitive 'RES1';
+pin
+  '1':
+    PIN_NUMBER='(1)';
+  '2':
+    PIN_NUMBER='(2)';
+end_pin;
+body
+VALUE='2.2Kohm';
+end_body;
+end_primitive;
+primitive 'RES2';
+pin
+  '1':
+    PIN_NUMBER='(1)';
+  '2':
+    PIN_NUMBER='(2)';
+end_pin;
+body
+VALUE='2.2Kohm';
+end_body;
+end_primitive;

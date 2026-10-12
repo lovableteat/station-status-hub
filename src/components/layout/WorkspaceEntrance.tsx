@@ -38,6 +38,12 @@ const workspaceToneMap: Record<
     panel: "surface-accent surface-accent--blue hover:border-sky-300/34",
     description: "集中上傳、分類與共享工程檔案，保留資料夾與檔案預覽。",
   },
+  comparison: {
+    badge: "工程比對",
+    iconWrap: "border-primary/25 bg-primary/10 text-primary",
+    panel: "surface-accent surface-accent--blue hover:border-primary/40",
+    description: "比較 A／B 版工程資料，保留審查回覆與完整檢查結果。",
+  },
   "material-requests": {
     badge: "BOM 協作",
     iconWrap:
@@ -214,7 +220,7 @@ export function WorkspaceEntrance({
                   <h2 className="min-w-0 flex-1 text-[1.15rem] font-semibold leading-tight tracking-[-0.025em] text-white">
                     {item.title}
                   </h2>
-                  <span className="shrink-0 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-semibold text-slate-200">
+                  <span className="workspace-card-badge shrink-0 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-semibold text-slate-200">
                     {tone.badge}
                   </span>
                 </div>
