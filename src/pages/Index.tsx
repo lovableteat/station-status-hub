@@ -310,7 +310,7 @@ const Index = () => {
       {
         id: "file-uploads" as const,
         label: "檔案上傳",
-        description: "依專案上傳、分類與共享工程檔案，管理資料夾並預覽文件、試算表與圖檔。",
+        description: "集中上傳、分類與共享工程檔案，管理資料夾並預覽文件、試算表與圖檔。",
         icon: FolderUp,
         visible: canViewModule("test-plan"),
       },
@@ -597,8 +597,7 @@ const Index = () => {
         return (
           <PermissionGuard module="test-plan">
             <div className="file-upload-workspace flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5" data-file-upload-page="true">
-              <ProjectScopeBar />
-              {isSwitchingProject ? <MaintenanceLoading label="正在切換專案檔案" /> : <TestPlanWorkspace key={activeProjectId ?? "no-project"} />}
+              <TestPlanWorkspace />
             </div>
           </PermissionGuard>
         );
@@ -696,7 +695,7 @@ const Index = () => {
         activeWorkspace === "performance" && "performance-app-shell",
         activeWorkspace === "user-management" && "h-[100dvh] overflow-hidden",
         activeWorkspace === "station-status" && "lg:h-[100dvh] lg:overflow-hidden",
-        activeWorkspace === "file-uploads" && "lg:h-[100dvh] lg:overflow-hidden"
+        activeWorkspace === "file-uploads" && "h-[100dvh] overflow-hidden"
       )}
     >
       <UpdateIndicator isUpdating={isUpdating} />
@@ -760,7 +759,9 @@ const Index = () => {
               ? "min-h-0"
             : activeWorkspace === "user-management"
               ? "min-h-0 overflow-hidden"
-            : activeWorkspace === "station-status" || activeWorkspace === "file-uploads"
+            : activeWorkspace === "file-uploads"
+              ? "min-h-0 overflow-hidden"
+            : activeWorkspace === "station-status"
               ? "min-h-0 lg:overflow-hidden"
               : "min-h-0"
         )}

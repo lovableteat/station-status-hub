@@ -72,23 +72,23 @@ function createAdapter(options: {
     records,
     operations,
     adapter: {
-      async listSpaces(projectId: string) {
+      async listSpaces(projectId?: string | null) {
         operations.push(`list-spaces:${projectId}`);
-        return records.spaces.filter((space) => space.projectId === projectId);
+        return records.spaces.filter((space) => !projectId || space.projectId === projectId);
       },
-      async listFolders(spaceId: string) {
+      async listFolders(spaceId?: string) {
         operations.push(`list-folders:${spaceId}`);
-        return records.folders.filter((folder) => folder.spaceId === spaceId);
+        return records.folders.filter((folder) => !spaceId || folder.spaceId === spaceId);
       },
-      async listFiles(spaceId: string) {
+      async listFiles(spaceId?: string) {
         operations.push(`list-files:${spaceId}`);
-        return records.files.filter((file) => file.spaceId === spaceId);
+        return records.files.filter((file) => !spaceId || file.spaceId === spaceId);
       },
       async createSpace(input: Record<string, unknown>) {
         operations.push(`create-space:${input.ownerId}`);
         const space = {
           id: `space-${records.spaces.length + 1}`,
-          projectId: String(input.projectId),
+          projectId: input.projectId === null ? null : String(input.projectId),
           ownerId: String(input.ownerId),
           name: String(input.name),
           description: input.description ? String(input.description) : null,
@@ -240,6 +240,24 @@ test("creating the first personal space returns an immediately activatable recor
 
   assert.equal(space.ownerId, "owner-1");
   assert.equal(space.name, "Power board");
+});
+
+test("all-files library preserves nested legacy files from multiple projects without a write", async () => {
+  const fake = createAdapter();
+  fake.records.spaces.push({...fake.records.spaces[0], id: "space-2", projectId: "project-2"});
+  fake.records.files.push({...fake.records.files[0], id: "file-2", spaceId: "space-2", storagePath: "owner-1/project-2/space-2/original.brd"});
+  const before = structuredClone(fake.records);
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  const loaded = await repository.loadWorkspace("owner-1", null, null);
+  assert.equal(loaded.activeSpaceId, null);
+  assert.equal(loaded.spaces.length, 2);
+  assert.deepEqual(loaded.files.map((file: { id: string }) => file.id), ["file-1", "file-2"]);
+  assert.equal(loaded.folders.length, 2);
+  assert.deepEqual(fake.records, before);
+  assert.ok(fake.operations.every(operation => operation.startsWith("list-")));
+  const selected = await repository.loadWorkspace("owner-1", null, "space-2");
+  assert.equal(selected.activeSpaceId, "space-2");
+  assert.deepEqual(selected.files.map((file: { id: string }) => file.id), ["file-2"]);
 });
 
 test("cleans an uploaded object when metadata insertion fails and continues the batch", async () => {

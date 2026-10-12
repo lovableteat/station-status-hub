@@ -13,12 +13,12 @@ import type {
 } from "../types.ts";
 
 export interface TestPlanDataAdapter {
-  listSpaces(projectId: string): Promise<TestPlanSpace[]>;
-  listFolders(spaceId: string): Promise<TestPlanFolder[]>;
-  listFiles(spaceId: string): Promise<TestPlanFileRecord[]>;
+  listSpaces(projectId?: string | null): Promise<TestPlanSpace[]>;
+  listFolders(spaceId?: string): Promise<TestPlanFolder[]>;
+  listFiles(spaceId?: string): Promise<TestPlanFileRecord[]>;
   createSpace(input: {
     ownerId: string;
-    projectId: string;
+    projectId: string | null;
     name: string;
     description: string | null;
     color: string;
@@ -26,10 +26,10 @@ export interface TestPlanDataAdapter {
   updateSpace(
     spaceId: string,
     ownerId: string,
-    projectId: string,
+    projectId: string | null,
     patch: Partial<Pick<TestPlanSpace, "name" | "description" | "color">>,
   ): Promise<TestPlanSpace>;
-  deleteSpace(spaceId: string, ownerId: string, projectId: string): Promise<void>;
+  deleteSpace(spaceId: string, ownerId: string, projectId: string | null): Promise<void>;
   createFolder(input: {
     spaceId: string;
     parentId: string | null;
@@ -97,7 +97,7 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
   return {
     async loadWorkspace(
       ownerId: string,
-      projectId: string,
+      projectId: string | null,
       preferredSpaceId?: string | null,
     ) {
       try {
@@ -108,13 +108,15 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
       const spaces = await adapter.listSpaces(projectId);
       const activeSpaceId = spaces.some((space) => space.id === preferredSpaceId)
         ? preferredSpaceId!
-        : spaces[0]?.id ?? null;
+        : projectId === null ? null : spaces[0]?.id ?? null;
       const [folders, files] = activeSpaceId
         ? await Promise.all([
           adapter.listFolders(activeSpaceId),
           adapter.listFiles(activeSpaceId),
         ])
-        : [[], []];
+        : projectId === null
+          ? await Promise.all([adapter.listFolders(), adapter.listFiles()])
+          : [[], []];
       return { spaces, activeSpaceId, folders, files };
     },
     async loadSpace(spaceId: string) {
@@ -126,7 +128,7 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
     },
     createSpace(
       ownerId: string,
-      projectId: string,
+      projectId: string | null,
       input: { name: string; description?: string; color?: string },
     ) {
       return adapter.createSpace({
@@ -134,13 +136,13 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
         projectId,
         name: input.name.trim(),
         description: input.description?.trim() || null,
-        color: input.color ?? "#22d3ee",
+        color: input.color ?? "#4c8dff",
       });
     },
     updateSpace: (
       ownerId: string,
       spaceId: string,
-      projectId: string,
+      projectId: string | null,
       patch: Partial<Pick<TestPlanSpace, "name" | "description" | "color">>,
     ) => adapter.updateSpace(spaceId, ownerId, projectId, {
       ...patch,
@@ -181,7 +183,7 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
       onProgress,
     }: {
       ownerId: string;
-      projectId: string;
+      projectId: string | null;
       spaceId: string;
       folderId: string | null;
       files: readonly File[];
@@ -318,7 +320,7 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
     async deleteSpace(
       ownerId: string,
       spaceId: string,
-      projectId: string,
+      projectId: string | null,
     ) {
       await adapter.deleteSpace(spaceId, ownerId, projectId);
       await flushCleanupQueue(adapter, ownerId);

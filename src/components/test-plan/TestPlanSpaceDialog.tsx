@@ -73,12 +73,12 @@ export function TestPlanSpaceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-[#2a526f] bg-[#0b1e30] text-[#f3f8fc] sm:max-w-lg">
+      <DialogContent className="file-library-dialog sm:max-w-lg">
         <form className="space-y-5" onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>{mode === "create" ? "建立資料空間" : "編輯資料空間"}</DialogTitle>
             <DialogDescription>
-              用空間區分板版、專案或測試階段，之後仍可修改。
+              將文件依用途或團隊分類，之後仍可修改。
             </DialogDescription>
           </DialogHeader>
 
@@ -89,7 +89,7 @@ export function TestPlanSpaceDialog({
               autoFocus
               maxLength={120}
               value={name}
-              placeholder="例如：VR NLV72 EVT"
+              placeholder="例如：測試計畫、設計圖、共用文件"
               onChange={(event) => setName(event.target.value)}
             />
           </div>

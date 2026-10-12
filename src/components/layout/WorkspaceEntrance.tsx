@@ -36,7 +36,7 @@ const workspaceToneMap: Record<
     badge: "工程檔案",
     iconWrap: "border-sky-300/22 bg-sky-400/10 text-sky-100",
     panel: "surface-accent surface-accent--blue hover:border-sky-300/34",
-    description: "依專案上傳、分類與共享工程檔案，保留資料夾與檔案預覽。",
+    description: "集中上傳、分類與共享工程檔案，保留資料夾與檔案預覽。",
   },
   "material-requests": {
     badge: "BOM 協作",

@@ -136,9 +136,9 @@ test("latest Test_Plan sharing migration exposes spaces to permitted accounts wi
   );
 });
 
-test("scopes every Test_Plan space and storage key to the active maintenance project", async () => {
+test("opens the standalone file library while retaining existing project paths", async () => {
   const migration = await source(
-    "supabase/migrations/20260902100000_scope_test_plan_storage_to_projects.sql",
+    "supabase/migrations/20261012093208_standalone_file_upload_library.sql",
   );
   const adapter = await source(
     "src/components/test-plan/core/supabaseAdapter.ts",
@@ -148,14 +148,14 @@ test("scopes every Test_Plan space and storage key to the active maintenance pro
   );
   const files = await source("src/components/test-plan/core/files.ts");
 
-  assert.match(migration, /workspace\.test_plan_spaces[\s\S]{0,120}project_id uuid/i);
+  assert.match(migration, /project_id drop not null/i);
   assert.match(migration, /test_plan_spaces_project_id_fkey/i);
-  assert.match(migration, /test_plan_spaces_project_owner_name_uidx/i);
-  assert.match(migration, /Legacy Imported Project/i);
-  assert.match(migration, /spaces\.project_id::text\s*=\s*\(storage\.foldername\(storage\.objects\.name\)\)\[2\]/i);
-  assert.match(adapter, /\.from\("test_plan_spaces"\)[\s\S]{0,180}\.eq\("project_id", projectId\)/);
-  assert.match(hook, /useTestProject/);
-  assert.match(hook, /repository\.loadWorkspace\([\s\S]{0,100}activeProjectId/);
+  assert.match(migration, /on delete set null/i);
+  assert.match(migration, /coalesce\(spaces\.project_id::text, 'global'\)/i);
+  assert.doesNotMatch(migration, /update workspace\.test_plan_|delete from|update storage\.objects/i);
+  assert.match(adapter, /if \(projectId\) query = query\.eq\("project_id", projectId\)/);
+  assert.doesNotMatch(hook, /useTestProject|activeProjectId/);
+  assert.match(hook, /repository\.loadWorkspace\(\s*ownerId,\s*null,/);
   assert.match(files, /assertStorageSegment\(projectId, "專案識別碼"\)/);
 });
 
@@ -254,7 +254,7 @@ test("connects the repository to private Supabase storage through one guarded ho
   assert.match(adapter, /onProgress/);
   assert.match(
     adapter,
-    /\.from\(["']test_plan_spaces["']\)[\s\S]{0,180}\.delete\(\)[\s\S]{0,180}\.select\(["']id["']\)/,
+    /async deleteSpace\([\s\S]{0,700}\.delete\(\)[\s\S]{0,300}\.select\(["']id["']\)/,
   );
   assert.match(
     adapter,
