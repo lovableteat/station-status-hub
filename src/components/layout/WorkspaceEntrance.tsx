@@ -22,7 +22,6 @@ const workspaceToneMap: Record<
     iconWrap: string;
     panel: string;
     description: string;
-    features: [string, string, string];
   }
 > = {
   "station-status": {
@@ -32,14 +31,12 @@ const workspaceToneMap: Record<
     panel:
       "surface-accent surface-accent--blue bg-[linear-gradient(180deg,rgba(16,31,56,0.94),rgba(8,18,34,0.98))] hover:border-sky-300/34",
     description: "依專案追蹤每台機台的測試進度、站點瓶頸、問題工單與實際工時。",
-    features: ["測試進度", "生產監控", "問題與工時"],
   },
   "file-uploads": {
     badge: "工程檔案",
     iconWrap: "border-sky-300/22 bg-sky-400/10 text-sky-100",
     panel: "surface-accent surface-accent--blue hover:border-sky-300/34",
     description: "依專案上傳、分類與共享工程檔案，保留資料夾與檔案預覽。",
-    features: ["檔案上傳", "資料夾分類", "檔案預覽"],
   },
   "material-requests": {
     badge: "BOM 協作",
@@ -48,7 +45,6 @@ const workspaceToneMap: Record<
     panel:
       "surface-accent surface-accent--teal bg-[linear-gradient(180deg,rgba(10,35,53,0.96),rgba(7,20,34,0.98))] hover:border-cyan-300/34",
     description: "查詢與維護 BOM 主料、替代料和申請狀態，保留圖片與完整協作紀錄。",
-    features: ["BOM／替代料", "狀態追蹤", "主管報表"],
   },
   "data-center": {
     badge: "海外規劃",
@@ -57,7 +53,6 @@ const workspaceToneMap: Record<
     panel:
       "surface-accent surface-accent--violet bg-[linear-gradient(180deg,rgba(28,25,52,0.96),rgba(12,17,34,0.98))] hover:border-violet-300/34",
     description: "以 3D 數位孿生配置不同廠牌機櫃與設備，檢視冷熱通道、電力和負載。",
-    features: ["3D 機櫃", "冷熱通道", "電力與散熱"],
   },
   "pcb-designer": {
     badge: "電路設計",
@@ -66,7 +61,6 @@ const workspaceToneMap: Record<
     panel:
       "surface-accent surface-accent--green bg-[linear-gradient(180deg,rgba(8,41,34,0.96),rgba(7,20,30,0.98))] hover:border-emerald-300/34",
     description: "規劃板框、元件與走線，集中管理 PCB 專案和 BOM 資料。",
-    features: ["板框規劃", "元件配置", "設計規則"],
   },
   "user-management": {
     badge: "權限中樞",
@@ -75,7 +69,6 @@ const workspaceToneMap: Record<
     panel:
       "surface-accent surface-accent--amber bg-[linear-gradient(180deg,rgba(19,46,42,0.96),rgba(10,21,29,0.98))] hover:border-amber-300/34",
     description: "設定帳號、角色與各工作區的檢視或管理權限，集中維護 AI 服務金鑰。",
-    features: ["帳號與角色", "網站權限", "AI／API 金鑰"],
   },
   "ai-chat": {
     badge: "資料查詢",
@@ -84,7 +77,6 @@ const workspaceToneMap: Record<
     panel:
       "surface-accent surface-accent--rose bg-[linear-gradient(180deg,rgba(43,20,60,0.96),rgba(13,17,36,0.98))] hover:border-rose-300/34",
     description: "貼上或上傳文件、圖片與長文字，交由多家 AI 模型查詢、比較和整理。",
-    features: ["100 MB 文件", "圖文貼上", "/ 共享提示詞"],
   },
   performance: {
     badge: "人員發展",
@@ -93,7 +85,6 @@ const workspaceToneMap: Record<
     panel:
       "surface-accent surface-accent--amber bg-[linear-gradient(180deg,rgba(49,36,15,0.96),rgba(19,21,31,0.98))] hover:border-amber-300/35",
     description: "用考核週期整理目標、進度、主管回饋與評分，讓每個人的下一步清楚可追蹤。",
-    features: ["考核週期", "目標進度", "回饋與評分"],
   },
 };
 
@@ -132,16 +123,10 @@ export function WorkspaceEntrance({
       <div className="flex w-full flex-1 flex-col">
         <div className="workspace-entrance-header mb-3 flex flex-col gap-3 rounded-[1.35rem] border border-primary/15 bg-[linear-gradient(180deg,rgba(15,24,42,0.94),rgba(9,15,29,0.97))] px-4 py-3.5 sm:flex-row sm:items-end sm:justify-between sm:px-5">
           <div className="space-y-1.5">
-            <p className="hidden text-[11px] font-bold uppercase tracking-[0.24em] text-primary/75 md:block">
-              Workspace
-            </p>
             <h1 className="text-2xl font-black tracking-[-0.04em] text-foreground sm:text-3xl">
               <span className="md:hidden">我的工作區</span>
               <span className="hidden md:inline">選擇要進入的工作區</span>
             </h1>
-            <p className="hidden max-w-2xl text-sm leading-6 text-slate-300 md:block">
-              從專案維修、BOM 協作到資料分析，所有日常工作都從這裡開始。
-            </p>
           </div>
           <div className="hidden w-fit items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-slate-200 md:inline-flex">
             {items.length} 個入口
@@ -189,7 +174,7 @@ export function WorkspaceEntrance({
 
         <div
           className={cn(
-            "hidden flex-1 gap-3 md:grid 2xl:gap-4",
+            "hidden content-start gap-3 md:grid 2xl:gap-4",
             items.length >= 8 && "2xl:grid-cols-4",
             isFiveItemLayout && "xl:auto-rows-fr",
             gridClass,
@@ -217,49 +202,36 @@ export function WorkspaceEntrance({
                   layoutClass
                 )}
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="workspace-card-heading flex min-w-0 items-center gap-2.5">
                   <div
                     className={cn(
-                      "workspace-card-icon flex h-11 w-11 items-center justify-center rounded-xl border 2xl:h-12 2xl:w-12",
+                      "workspace-card-icon flex size-9 shrink-0 items-center justify-center rounded-xl border",
                       tone.iconWrap
                     )}
                   >
-                    <Icon className="h-6 w-6" />
+                    <Icon className="size-5" />
                   </div>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-200">
+                  <h2 className="min-w-0 flex-1 text-[1.15rem] font-semibold leading-tight tracking-[-0.025em] text-white">
+                    {item.title}
+                  </h2>
+                  <span className="shrink-0 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-semibold text-slate-200">
                     {tone.badge}
                   </span>
                 </div>
 
-                <div className="workspace-card-body mt-3 grid min-h-0 flex-1 gap-3  2xl:gap-4">
+                <div className="workspace-card-body mt-3 grid min-h-0 gap-3">
                   <div className="flex min-w-0 flex-col">
-                    <h2 className="text-[1.45rem] font-black tracking-[-0.035em] text-white 2xl:text-[1.6rem]">
-                      {item.title}
-                    </h2>
-                    <p className="workspace-card-description mt-1.5 max-w-[34rem] text-sm leading-6 text-slate-200">
+                    <p className="workspace-card-description max-w-[34rem] text-sm leading-6 text-slate-200">
                       {item.description || tone.description}
                     </p>
-                    <div className="workspace-card-features mt-3 flex flex-wrap gap-1.5">
-                      {tone.features.map((feature) => (
-                        <span
-                          key={feature}
-                          className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold text-slate-200"
-                        >
-                          {feature}
-                        </span>
-                      ))}
-                    </div>
                   </div>
                   <WorkspacePreview workspaceId={item.id} />
                 </div>
 
                 <div className="workspace-card-footer mt-3 flex items-center justify-between border-t border-white/8 pt-2 text-sm font-semibold text-slate-100 transition-colors group-hover:text-white">
-                  <span className="inline-flex h-9 items-center rounded-xl px-0">
+                  <span className="inline-flex h-7 items-center rounded-xl px-0">
                     進入工作區
                     <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
-                  </span>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 group-hover:text-slate-300">
-                    Open workspace
                   </span>
                 </div>
               </button>
