@@ -240,7 +240,10 @@ test("renders the lower engineering overview without inventing a second data sou
 });
 
 test("prioritizes the file list and keeps removable filters directly above results", async () => {
-  const workspace = await source("src/components/test-plan/TestPlanWorkspace.tsx");
+  const [workspace, styles] = await Promise.all([
+    source("src/components/test-plan/TestPlanWorkspace.tsx"),
+    source("src/components/test-plan/test-plan.css"),
+  ]);
 
   assert.doesNotMatch(workspace, /<TestPlanOverview|<MaintenanceMetricStrip/);
   assert.match(workspace, /useState<ViewMode>\("list"\)/);
@@ -250,4 +253,8 @@ test("prioritizes the file list and keeps removable filters directly above resul
   assert.ok(workspace.indexOf('className="file-library-filter-chips"') < workspace.indexOf('"test-plan-dropzone"'));
   const headerIndex = workspace.indexOf('className="test-plan-list-head"');
   assert.ok(headerIndex >= 0 && headerIndex < workspace.indexOf('{loading ? (', headerIndex));
+  assert.match(styles, /--file-library-surface:\s*hsl\(var\(--card\)\)/);
+  assert.match(styles, /--file-library-raised:\s*hsl\(var\(--secondary\)\)/);
+  assert.match(styles, /--file-library-accent:\s*hsl\(var\(--primary\)\)/);
+  assert.match(styles, /:is\(\.test-plan-space-rail, \.test-plan-main, \.test-plan-inspector\)[^{]*\{[^}]*background:\s*var\(--file-library-surface\)/s);
 });
