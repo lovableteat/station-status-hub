@@ -11,6 +11,7 @@ function setup() {
   const adapter = {
     listSpaces:async()=>[...spaces], listFiles:async(id)=>files.filter(f=>!id||f.spaceId===id), listFolders:async(id)=>folders.filter(f=>!id||f.spaceId===id),
     listCleanupPaths:async()=>[], createSpace:async(input)=>{log.push(['createSpace',input]);const s={...input,id:'global-space',createdAt:stamp,updatedAt:stamp};spaces.push(s);return s},
+    createFolder:async(input)=>{log.push(['createFolder',input]);const folder={...input,id:`folder-${folders.length}`,createdAt:stamp,updatedAt:stamp};folders.push(folder);return folder},
     uploadObject:async(path,file)=>{log.push(['upload',path]);blobs.set(path,file)},
     createFile:async(input)=>{log.push(['createFile',input]);const f={...input,id:`file-${files.length}`,createdAt:stamp,updatedAt:stamp};files.push(f);return f},
     downloadObject:async(path)=>{log.push(['download',path]);return blobs.get(path)},
@@ -81,5 +82,59 @@ test('search and type filters survive reload and Back, clear without removing wo
   win.location.href='http://localhost/?workspace=file-uploads&fileSearch=restored&fileType=document&fileSort=largest';
   await act(async()=>win.dispatchEvent(new Event('popstate')));
   assert.equal(state.query,'restored');assert.equal(state.categoryFilter,'document');assert.equal(state.sort,'largest');
+  await act(async()=>tree.unmount());
+});
+
+function folderFile(path) {
+  const file = new File(['data'], path.split('/').at(-1));
+  Object.defineProperty(file, 'webkitRelativePath', {value:path});
+  return file;
+}
+
+test('folder upload validates the whole selection before creating a common space', async()=>{
+  const f=setup();let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  await act(async()=>{await assert.rejects(f.state.uploadFiles(null,[folderFile('Release/a.md'),folderFile('Release/../b.md')],{preservePaths:true}),/路徑/)});
+  assert.deepEqual(f.log,[]);
+  await act(async()=>tree.unmount());
+});
+
+test('folder retry uses its original space and target even after navigating to all files', async()=>{
+  const f=setup();let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  await act(async()=>{await f.state.openSpace('old-space')});
+  await act(async()=>{await f.state.openSpace(null)});
+  let result;
+  await act(async()=>{result=await f.state.uploadFiles('nested',[folderFile('Release/a.md')],{preservePaths:true,spaceId:'old-space'})});
+  assert.equal(result.spaceId,'old-space');
+  assert.equal(f.log.find(entry=>entry[0]==='createFolder')[1].parentId,'nested');
+  assert.match(f.log.find(entry=>entry[0]==='upload')[1],/^owner\/old-project\/old-space\//);
+  assert.equal(f.log.some(entry=>entry[0]==='createSpace'),false);
+  await act(async()=>tree.unmount());
+});
+
+test('a post-upload refresh error returns committed successes so retry cannot duplicate them', async()=>{
+  const f=setup();let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  await act(async()=>{await f.state.openSpace('old-space')});
+  const originalCreate=f.adapter.createFile;
+  f.adapter.createFile=async input=>{const file=await originalCreate(input);f.adapter.listFiles=async()=>{throw new Error('refresh failed')};return file};
+  let result;
+  await act(async()=>{result=await f.state.uploadFiles('nested',[new File(['new'],'new.md')])});
+  assert.equal(result.uploaded.length,1);
+  assert.equal(result.failedFiles.length,0);
+  assert.match(f.state.error,/refresh failed/);
+  await act(async()=>tree.unmount());
+});
+
+test('retry after a common-space folder read failure reuses the space already created', async()=>{
+  const f=setup();let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  const originalList=f.adapter.listFolders;let offline=true;
+  f.adapter.listFolders=async id=>{if(id==='global-space'&&offline){offline=false;throw new Error('offline')};return originalList(id)};
+  const files=[folderFile('Release/a.md')];
+  await act(async()=>{await assert.rejects(f.state.uploadFiles(null,files,{preservePaths:true}),/offline/)});
+  await act(async()=>{await f.state.uploadFiles(null,files,{preservePaths:true})});
+  assert.equal(f.log.filter(entry=>entry[0]==='createSpace').length,1);
   await act(async()=>tree.unmount());
 });

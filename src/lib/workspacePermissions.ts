@@ -79,7 +79,7 @@ export const WORKSPACE_LABELS: Record<WorkspaceId, string> = {
   "data-center": "Data Center",
   "pcb-designer": "PCB Designer",
   "user-management": "後台管理",
-  "ai-chat": "資料查詢空間",
+  "ai-chat": "AI 問答",
   performance: "績效考核系統",
 };
 
@@ -377,7 +377,7 @@ function hasCompatiblePagePermission(
 ) {
   if (hasPagePermission(module, action, permissions)) return true;
 
-  // 資料查詢空間曾與 API 管理共用權限；未完成新版工作區設定前保留舊帳號入口。
+  // AI 問答曾與 API 管理共用權限；未完成新版工作區設定前保留舊帳號入口。
   return module === "ai-chat"
     ? hasPagePermission("api-management", action, permissions)
     : false;

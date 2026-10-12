@@ -12,20 +12,17 @@ const monitor = await readFile(
 );
 const index = await readFile(new URL("../src/pages/Index.tsx", import.meta.url), "utf8");
 
-test("station cards navigate to L10 with station and non-completed filters", () => {
-  assert.match(
-    dashboard,
-    /onNavigate\?\.\("test-tracker",\s*\{\s*station:\s*station\.id,\s*excludeStatus:\s*"completed"\s*\}\)/,
-  );
+test("dashboard metrics navigate to pending issue filters", () => {
+  assert.match(dashboard, /onNavigate\?\.\("issues", params\)/);
+  assert.match(dashboard, /issueStatus: "pending", issuePriority: "critical"/);
+  assert.match(dashboard, /issueStatus: "pending", issueOwner: "unassigned"/);
+  assert.match(dashboard, /issueStatus: "pending", issueFollowUp: "stale"/);
 });
 
-test("attention actions target the correct workspaces with automatic filters", () => {
-  assert.match(dashboard, /開啟生產看板/);
-  assert.match(
-    dashboard,
-    /onNavigate\?\.\("test-tracker",\s*\{\s*attention:\s*"1",\s*trackerView:\s*"board"\s*\}\)/,
-  );
-  assert.match(dashboard, /onNavigate\?\.\("test-tracker",\s*\{\s*system:\s*system\.id\s*\}\)/);
+test("issue actions open the selected issue or owner's pending list", () => {
+  assert.match(dashboard, /openIssues\(\{ openIssue: issue\.id \}\)/);
+  assert.match(dashboard, /issueOwner: row.owner \|\| "unassigned"/);
+  assert.doesNotMatch(dashboard, /onNavigate\?\.\("test-tracker"/);
 });
 
 test("production monitor shows and applies a clearable attention filter without changing KPI counts", () => {
@@ -37,7 +34,7 @@ test("production monitor shows and applies a clearable attention filter without 
 });
 
 test("workspace navigation preserves all automatic filter query keys", () => {
-  for (const key of ["attention", "excludeStatus", "sort", "status", "trackerSearch", "engineer"]) {
+  for (const key of ["attention", "excludeStatus", "sort", "status", "trackerSearch", "engineer", "issueSearch", "issueStation", "issueStatus", "issuePriority", "issueOwner", "issueFollowUp"]) {
     assert.match(index, new RegExp(`"${key}"`));
   }
 });

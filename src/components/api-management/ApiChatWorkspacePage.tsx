@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { useUser } from "@/components/auth/UserContext";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
+import { withReadDeadline } from "@/lib/readDeadline";
 
 import { ApiChatConsole } from "./ApiChatConsole";
 import { GEMINI_FREE_MODEL_PROFILES } from "./aiProviderCatalog";
@@ -42,20 +44,27 @@ function sortAvailableApiKeys(records: ApiKeyRecord[]) {
 }
 
 export function ApiChatWorkspacePage() {
+  const { user } = useUser();
   const { activeProjectId, allProjects } = useTestProject();
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
   const [selectedApiKeyTargetId, setSelectedApiKeyTargetId] = useState<null | string>(null);
 
   useEffect(() => {
+    let mounted = true;
+    let loadVersion = 0;
+    setApiKeys([]);
+    setSelectedApiKeyTargetId(null);
     const loadApiKeys = async () => {
+      const version = ++loadVersion;
       try {
-        const { data, error } = await supabase
+        const { data, error } = await withReadDeadline(signal => supabase
           .from("api_keys")
           .select("*")
           .eq("is_active", true)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false }).abortSignal(signal), 15_000);
 
         if (error) throw error;
+        if (!mounted || version !== loadVersion) return;
 
         const availableKeys = ((data ?? []) as ApiKeyRecord[]).filter((record) => {
           const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
@@ -69,7 +78,7 @@ export function ApiChatWorkspacePage() {
         setApiKeys(sortAvailableApiKeys(availableKeys));
       } catch (error) {
         console.error("Failed to load API chat keys:", error);
-        setApiKeys([]);
+        if (mounted && version === loadVersion) setApiKeys([]);
       }
     };
 
@@ -87,9 +96,10 @@ export function ApiChatWorkspacePage() {
       .subscribe();
 
     return () => {
+      mounted = false;
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [user?.userId]);
 
   const apiKeyTargets = useMemo(
     () =>

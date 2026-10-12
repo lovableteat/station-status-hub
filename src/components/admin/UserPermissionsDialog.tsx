@@ -488,7 +488,7 @@ export function UserPermissionsDialog({
 
               <div className="admin-permission-storage-note">
                 <Shield className="h-4 w-4" />
-                <span>「檔案上傳」沿用維修中心的資料儲存權限；「比對系統」沿用資料查詢空間權限，皆不需重複設定。</span>
+                <span>「檔案上傳」沿用維修中心的資料儲存權限；「比對系統」沿用 AI 問答權限，皆不需重複設定。</span>
               </div>
 
               <div className="admin-permission-detail-list">

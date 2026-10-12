@@ -1533,7 +1533,7 @@ All colors MUST be HSL for proper theming support.
   --card-foreground: 240 10% 96%;
   --popover: 240 3% 15%;
   --popover-foreground: 240 10% 96%;
-  --primary: 211 100% 65%;
+  --primary: 171 51% 59%;
   --primary-foreground: 240 6% 7%;
   --secondary: 240 3% 17%;
   --secondary-foreground: 240 10% 96%;
@@ -1543,7 +1543,7 @@ All colors MUST be HSL for proper theming support.
   --accent-foreground: 240 10% 96%;
   --border: 240 3% 25%;
   --input: 240 3% 30%;
-  --ring: 211 100% 65%;
+  --ring: 171 51% 59%;
   --destructive: 3 90% 69%;
   --destructive-foreground: 240 6% 7%;
   --success: 142 62% 61%;
@@ -1558,12 +1558,12 @@ All colors MUST be HSL for proper theming support.
   --platform-rose: 3 90% 69%;
   --sidebar-background: 240 4% 8%;
   --sidebar-foreground: 240 10% 96%;
-  --sidebar-primary: 211 100% 65%;
+  --sidebar-primary: 171 51% 59%;
   --sidebar-primary-foreground: 240 6% 7%;
   --sidebar-accent: 240 3% 19%;
   --sidebar-accent-foreground: 240 10% 96%;
   --sidebar-border: 240 3% 25%;
-  --sidebar-ring: 211 100% 65%;
+  --sidebar-ring: 171 51% 59%;
   --radius: 1rem;
   --app-radius-control: .75rem;
   --app-radius-card: 1rem;
@@ -1789,12 +1789,12 @@ body {
 @media (prefers-reduced-transparency: reduce) { [data-mobile-app-header='true'], [data-mobile-workspace-dock='true'] { background: hsl(var(--card)); backdrop-filter: none; } }
 @media (prefers-contrast: more) { :root, .dark { --muted-foreground: 240 5% 84%; --border: 240 3% 45%; } }
 
-/* Homepage wayfinding: three restrained families, immediate press feedback. */
-.workspace-entrance-card, .workspace-entrance-mobile-row { --entrance-accent: var(--platform-blue); }
-:is(.workspace-entrance-card, .workspace-entrance-mobile-row):is([data-workspace-id='material-requests'], [data-workspace-id='pcb-designer']) { --entrance-accent: var(--platform-teal); }
+/* Homepage wayfinding follows the jade controls, with distinct domain details. */
+.workspace-entrance-card, .workspace-entrance-mobile-row { --entrance-accent: var(--primary); }
+:is(.workspace-entrance-card, .workspace-entrance-mobile-row):is([data-workspace-id='material-requests'], [data-workspace-id='pcb-designer']) { --entrance-accent: var(--primary); }
 :is(.workspace-entrance-card, .workspace-entrance-mobile-row):is([data-workspace-id='performance'], [data-workspace-id='user-management']) { --entrance-accent: var(--platform-amber); }
 .workspace-entrance-card {
-  background: linear-gradient(135deg, hsl(var(--entrance-accent) / .085), transparent 65%), hsl(var(--card));
+  background: hsl(var(--card));
   border-color: hsl(var(--entrance-accent) / .22);
   box-shadow: inset 0 1px hsl(0 0% 100% / .045);
   transition: transform 160ms cubic-bezier(.16, 1, .3, 1), border-color 150ms ease-out, background-color 150ms ease-out;
@@ -1818,6 +1818,9 @@ body {
 .workspace-entrance-mobile-row:active { transform: scale(.985); background: hsl(var(--entrance-accent) / .12); transition-duration: 70ms; }
 .workspace-entrance-card:focus-visible, .workspace-entrance-mobile-row:focus-visible { outline: 2px solid hsl(var(--entrance-accent)); outline-offset: 3px; }
 .workspace-entrance-mobile-row:focus-visible { outline-offset: -3px; }
+[data-platform-account-menu='true'] [role='menuitem'] { min-height: 44px; border-radius: 6px; background: transparent; font-weight: 400; }
+[data-platform-account-menu='true'] [role='menuitem'][data-highlighted] { background: hsl(var(--accent)); }
+[data-platform-account-menu='true'] [role='menuitem'] svg { color: hsl(var(--muted-foreground)); }
 @media (prefers-reduced-motion: reduce) {
   .workspace-entrance-card, .workspace-entrance-mobile-row { transition: none; }
   .workspace-entrance-card.interactive-lift:hover, .workspace-entrance-card.interactive-lift:active, .workspace-entrance-mobile-row:active { transform: none; }

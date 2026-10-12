@@ -29,16 +29,16 @@ test("does not embed the platform introduction video in the app", () => {
 test("uses a dedicated phone workspace list without replacing the desktop grid", () => {
   assert.match(entranceSource, /data-testid="workspace-entrance-mobile-list"/);
   assert.match(entranceSource, /workspace-entrance-mobile-list[^\n]*md:hidden/);
-  assert.match(entranceSource, /hidden flex-1 gap-3 md:grid/);
+  assert.match(entranceSource, /hidden content-start gap-3 md:grid/);
   assert.match(entranceSource, /我的工作區/);
   assert.match(entranceSource, /data-workspace-id=\{item\.id\}/);
   assert.match(entranceSource, /workspace-entrance-mobile-chevron/);
-  assert.match(entranceSource, /"station-status": "機台維修"/);
+  assert.match(entranceSource, /"station-status": "維修中心"/);
   assert.match(entranceSource, /"data-center": "Data Center"/);
 });
 
 test("keeps the five-destination mobile dock and an accessible more sheet", () => {
-  for (const label of ["首頁", "維修", "料號", "查詢", "更多"]) {
+  for (const label of ["首頁", "維修", "料號", "AI 問答", "更多"]) {
     assert.match(dockSource, new RegExp(label));
   }
   assert.match(dockSource, /data-mobile-dock-item="true"/);

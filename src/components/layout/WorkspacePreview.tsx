@@ -1,15 +1,15 @@
 import { Check, LockKeyhole, ShieldCheck, UsersRound } from "lucide-react";
 import repairArtwork from "@/assets/workspace/repair.webp";
 import filesArtwork from "@/assets/workspace/files.webp";
-import partsArtwork from "@/assets/workspace/parts.webp";
+import partsArtwork from "@/assets/workspace/parts-v2.webp";
 import racksArtwork from "@/assets/workspace/racks.webp";
-import pcbArtwork from "@/assets/workspace/pcb.webp";
+import pcbArtwork from "@/assets/workspace/pcb-v2.webp";
 import analysisArtwork from "@/assets/workspace/analysis.webp";
 import performanceArtwork from "@/assets/workspace/performance.webp";
 import comparisonArtwork from "@/assets/workspace/comparison.webp";
 
 const workspaceArtwork: Record<string, { image: string; title: string; caption: string }> = {
-  "station-status": { image: repairArtwork, title: "機台測試", caption: "組裝 · 測試 · 驗證" },
+  "station-status": { image: repairArtwork, title: "維修與問題追蹤", caption: "問題 · 測試 · 驗證" },
   "file-uploads": { image: filesArtwork, title: "工程檔案庫", caption: "文件 · 試算表 · 圖檔" },
   "material-requests": { image: partsArtwork, title: "料件與替代料", caption: "BOM 協作" },
   "data-center": { image: racksArtwork, title: "機櫃配置", caption: "3D 場景規劃" },

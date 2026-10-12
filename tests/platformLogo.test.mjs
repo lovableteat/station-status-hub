@@ -75,13 +75,10 @@ test("workspace header gives controls their own grid column on desktop", () => {
   assert.match(header, /lg:static lg:translate-y-0/);
 });
 
-test("header controls use distinct semantic color families", () => {
+test("account controls use neutral surfaces and the selected workspace uses the house primary", () => {
   const header = read("src/components/layout/MainWorkspaceHeader.tsx");
-  const online = read("src/components/common/OnlineUsersIndicator.tsx");
-  const mobile = read("src/components/layout/WebsiteQrButton.tsx");
-
-  assert.match(online, /emerald-300\/10/);
-  assert.match(mobile, /cyan-300\/10/);
-  assert.match(header, /indigo-300\/10/);
-  assert.match(header, /rose-300\/10/);
+  assert.match(header, /border-border bg-card/);
+  assert.match(header, /bg-primary\/15 text-primary/);
+  assert.match(header, /data-platform-account-menu="true"/);
+  assert.doesNotMatch(header, /indigo-300|emphasized/);
 });

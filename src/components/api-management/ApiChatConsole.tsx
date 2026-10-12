@@ -57,8 +57,6 @@ import { withReadDeadline } from "@/lib/readDeadline";
 import {
   GEMINI_DEFAULT_MODEL,
   buildProviderChatRequest,
-  formatGeminiQuotaSummary,
-  getGeminiFreeModelProfile,
   parseProviderChatResponse,
   redactSensitiveText,
   resolveAiProviderPreset,
@@ -198,6 +196,16 @@ type ConversationCloudState = "loading" | "saving" | "synced" | "error";
 
 const LEGACY_SAVED_CONVERSATIONS_STORAGE_KEY = "api-chat:saved-conversations";
 const AUTO_SAVED_CONVERSATION_ID = "conversation-active-workspace";
+// Account-scoped memory survives workspace navigation without writing chat text to disk.
+const PENDING_ACCOUNT_CONVERSATIONS = new Map<string, { items: SavedConversation[]; deletedIds: string[]; activeId: string }>();
+let conversationSyncQueue: Promise<void> = Promise.resolve();
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', event => {
+    if (!PENDING_ACCOUNT_CONVERSATIONS.size) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+}
 const SHARED_PROMPT_CATEGORY = "ai_prompt";
 const SHARED_PROMPT_PLATFORM = "api-chat";
 const SHARED_PROMPT_PAGE_SIZE = 8;
@@ -397,9 +405,8 @@ function createSavedConversation(params: {
   model: string;
   keyLabel: string;
 }): SavedConversation {
-  const latestUserMessage =
-    [...params.messages].reverse().find((message) => message.role === "user")?.content.trim() || "";
-  const fallbackTitleSource = params.draftMessage.trim() || latestUserMessage || "新對話";
+  const firstUserMessage = params.messages.find((message) => message.role === "user")?.content.trim() || "";
+  const fallbackTitleSource = firstUserMessage || params.draftMessage.trim() || "新對話";
 
   return {
     id: `conversation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -905,6 +912,7 @@ export function ApiChatConsole({
   const [draftMessage, setDraftMessage] = useState("");
   const [savedPrompts, setSavedPrompts] = useState<SavedWorkspaceItem[]>([]);
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState(AUTO_SAVED_CONVERSATION_ID);
   const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
   const [savePromptDialogOpen, setSavePromptDialogOpen] = useState(false);
   const [libraryApplyDialogOpen, setLibraryApplyDialogOpen] = useState(false);
@@ -932,12 +940,27 @@ export function ApiChatConsole({
   const [keyCooldowns, setKeyCooldowns] = useState<Record<string, number>>(() => readAiCooldowns(typeof window === 'undefined' ? undefined : window.sessionStorage));
   const [requestProgress, setRequestProgress] = useState('');
   const sendInFlight = useRef(false);
+  const requestGenerationRef = useRef(0);
+  const invalidateConversationRequest = useCallback(() => {
+    ++requestGenerationRef.current;
+    sendInFlight.current = false;
+    setLoading(false);
+    setRequestProgress('');
+    ++attachmentReadGeneration.current;
+    attachmentReadInFlight.current = false;
+    setReadingAttachments(false);
+    setUploadedAttachments([]);
+    setMaintenanceRetrievalError(null);
+    setMaintenanceResultCount(null);
+  }, []);
   useEffect(() => { writeAiCooldowns(keyCooldowns,typeof window === 'undefined' ? undefined : window.sessionStorage); }, [keyCooldowns]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const [conversationCloudState, setConversationCloudState] = useState<ConversationCloudState>("loading");
+  const [conversationRetry, setConversationRetry] = useState(0);
+  const [conversationSaveRetry, setConversationSaveRetry] = useState(0);
   const [maintenanceSourceEnabled, setMaintenanceSourceEnabled] = useState(false);
   const [maintenanceScope, setMaintenanceScope] = useState<MaintenanceScopeState>(() =>
     createMaintenanceScope(currentMaintenanceProjectId, maintenanceProjects),
@@ -952,9 +975,11 @@ export function ApiChatConsole({
   const hasHydratedConversationRef = useRef(false);
   const conversationHydratingRef = useRef(false);
   const lastSyncedConversationsRef = useRef("");
+  const desiredConversationsRef = useRef("");
+  const conversationBaselineIdsRef = useRef<string[]>([]);
+  const pendingAccountConversationsRef = useRef(PENDING_ACCOUNT_CONVERSATIONS);
   const conversationRemoteReadyRef = useRef(false);
   const conversationSyncGenerationRef = useRef(0);
-  const conversationSyncQueueRef = useRef<Promise<void>>(Promise.resolve());
   const previousSelectedApiKeyTargetIdRef = useRef<null | string>(null);
   const { user } = useUser();
 
@@ -1016,7 +1041,13 @@ export function ApiChatConsole({
   );
 
   useEffect(() => {
-    if (!selectedApiKey) return;
+    if (!selectedApiKey) {
+      if (isChatOnly) {
+        setApiKey('');
+        previousSelectedApiKeyTargetIdRef.current = null;
+      }
+      return;
+    }
 
     const nextTargetId = selectedApiKeyTargetId ?? selectedApiKey.id;
     const previousTargetId = previousSelectedApiKeyTargetIdRef.current;
@@ -1031,12 +1062,9 @@ export function ApiChatConsole({
 
     if (!switchedTarget || conversationHydratingRef.current) return;
 
-    setMessages([]);
-    setDraftMessage("");
-    ++attachmentReadGeneration.current;
-    setUploadedAttachments([]);
+    invalidateConversationRequest();
     setConnectionState(null);
-    toast.success("已切換 API Key，已開始新對話");
+    toast.success("已切換 API 金鑰與模型");
   }, [
     selectedApiKey,
     selectedApiKeyTargetId,
@@ -1044,6 +1072,8 @@ export function ApiChatConsole({
     selectedMetadata?.model,
     selectedMetadata?.provider,
     selectedModel,
+    invalidateConversationRequest,
+    isChatOnly,
   ]);
 
   useEffect(() => {
@@ -1066,6 +1096,8 @@ export function ApiChatConsole({
     if (!isChatOnly) return;
     let mounted = true;
     const ownerId = user?.userId;
+    const requestGenerationCounter = requestGenerationRef;
+    const conversationGenerationCounter = conversationSyncGenerationRef;
     const generation = conversationSyncGenerationRef.current + 1;
     conversationSyncGenerationRef.current = generation;
     hasHydratedConversationRef.current = false;
@@ -1075,10 +1107,10 @@ export function ApiChatConsole({
     setConversationsLoaded(false);
     setConversationCloudState("loading");
     setSavedConversations([]);
+    setActiveConversationId(AUTO_SAVED_CONVERSATION_ID);
+    invalidateConversationRequest();
     setMessages([]);
     setDraftMessage("");
-    ++attachmentReadGeneration.current;
-    setUploadedAttachments([]);
 
     if (typeof window !== "undefined") {
       // The legacy key was shared by every account using this browser.
@@ -1116,19 +1148,28 @@ export function ApiChatConsole({
       }
 
       try {
-        const { data, error } = await supabase
+        const { data, error } = await withReadDeadline(signal => supabase
           .from("ai_workspace_conversations")
           .select("conversation_key,title,saved_at,draft_message,messages,provider,model,key_label")
           .eq("owner_id", ownerId)
           .order("saved_at", { ascending: false })
-          .limit(24);
+          .limit(24).abortSignal(signal), 15_000);
 
         if (error) throw error;
         if (!mounted || conversationSyncGenerationRef.current !== generation) return;
 
         const conversations = ((data ?? []) as PrivateConversationRow[]).map(mapPrivateConversationRow);
+        conversationBaselineIdsRef.current = conversations.map(item => item.id);
         lastSyncedConversationsRef.current = semanticJson(serializePrivateConversations(conversations));
-        setSavedConversations(conversations);
+        const pending = pendingAccountConversationsRef.current.get(ownerId);
+        const merged = pending ? conversations.filter(item => !pending.deletedIds.includes(item.id)) : conversations;
+        for (const item of pending?.items ?? []) {
+          const index = merged.findIndex(remote => remote.id === item.id);
+          if (index < 0 && merged.length < 24) merged.push(item);
+          else if (index >= 0 && item.savedAt >= merged[index].savedAt) merged[index] = item;
+        }
+        setSavedConversations([...merged].sort((left, right) => right.savedAt - left.savedAt));
+        setActiveConversationId(pending?.activeId ?? AUTO_SAVED_CONVERSATION_ID);
         conversationRemoteReadyRef.current = true;
         setConversationCloudState("synced");
       } catch (error) {
@@ -1137,7 +1178,7 @@ export function ApiChatConsole({
           setSavedConversations([]);
           setConversationCloudState("error");
           toast.error("個人對話同步失敗", {
-            description: "請檢查連線後重新進入資料查詢空間。",
+            description: "請檢查連線後重新進入 AI 問答。",
           });
         }
       } finally {
@@ -1163,16 +1204,18 @@ export function ApiChatConsole({
 
     return () => {
       mounted = false;
+      ++requestGenerationCounter.current;
+      ++conversationGenerationCounter.current;
       void supabase.removeChannel(channel);
     };
-  }, [isChatOnly, user?.userId]);
+  }, [conversationRetry, invalidateConversationRequest, isChatOnly, user?.userId]);
 
   useEffect(() => {
-    if (!isChatOnly || !conversationsLoaded || hasHydratedConversationRef.current) return;
+    if (!isChatOnly || !conversationsLoaded || !conversationRemoteReadyRef.current || hasHydratedConversationRef.current) return;
 
-    const activeConversation = savedConversations.find(
-      (item) => item.id === AUTO_SAVED_CONVERSATION_ID
-    );
+    const recoveredId = pendingAccountConversationsRef.current.get(user?.userId ?? '')?.activeId;
+    const activeConversation = savedConversations.find(item => item.id === (recoveredId ?? activeConversationId))
+      ?? (recoveredId ? undefined : savedConversations[0]);
 
     if (activeConversation) {
       const historicalTarget = findConversationTarget(activeConversation);
@@ -1184,6 +1227,7 @@ export function ApiChatConsole({
         setModel(activeConversation.model);
       }
       conversationHydratingRef.current = true;
+      setActiveConversationId(activeConversation.id);
       setMessages(activeConversation.messages);
       setDraftMessage(activeConversation.draftMessage);
       setConnectionState(null);
@@ -1192,11 +1236,13 @@ export function ApiChatConsole({
     hasHydratedConversationRef.current = true;
   }, [
     conversationsLoaded,
+    activeConversationId,
     findConversationTarget,
     isChatOnly,
     onSelectApiKeyTarget,
     savedConversations,
     selectedApiKeyTargetId,
+    user?.userId,
   ]);
 
   useEffect(() => {
@@ -1214,42 +1260,50 @@ export function ApiChatConsole({
     const generation = conversationSyncGenerationRef.current;
     const payload = serializePrivateConversations(savedConversations);
     const serialized = semanticJson(payload);
-    if (serialized === lastSyncedConversationsRef.current || conversationHydratingRef.current) return;
+    desiredConversationsRef.current = serialized;
+    const pending = pendingAccountConversationsRef.current.get(ownerId);
+    if (serialized === lastSyncedConversationsRef.current && !pending) return;
+    pendingAccountConversationsRef.current.set(ownerId, {
+      items: savedConversations,
+      activeId: activeConversationId,
+      deletedIds: Array.from(new Set([...conversationBaselineIdsRef.current, ...(pending?.items.map(item => item.id) ?? []), ...(pending?.deletedIds ?? [])]))
+        .filter(id => !savedConversations.some(item => item.id === id)),
+    });
     setConversationCloudState("saving");
 
     const timer = window.setTimeout(() => {
-      conversationSyncQueueRef.current = conversationSyncQueueRef.current
+      conversationSyncQueue = conversationSyncQueue
         .catch(() => undefined)
         .then(async () => {
-          if (conversationSyncGenerationRef.current !== generation) return;
-          const { error } = await supabase.rpc("sync_ai_workspace_conversations", {
-            p_owner_id: ownerId,
-            p_items: payload,
-          });
+          if (conversationSyncGenerationRef.current !== generation || desiredConversationsRef.current !== serialized) return;
+          const { error } = await withReadDeadline(signal => {
+            const query = supabase.rpc("sync_ai_workspace_conversations", { p_owner_id: ownerId, p_items: payload });
+            return query.abortSignal?.(signal) ?? query;
+          }, 15_000);
           if (error) throw error;
 
           if (conversationSyncGenerationRef.current === generation) {
             lastSyncedConversationsRef.current = serialized;
-            setConversationCloudState("synced");
+            if (desiredConversationsRef.current === serialized) {
+              pendingAccountConversationsRef.current.delete(ownerId);
+              conversationBaselineIdsRef.current = savedConversations.map(item => item.id);
+              setConversationCloudState("synced");
+            }
           }
         })
         .catch((error) => {
           console.error("Failed to sync private AI conversations:", error);
-          if (conversationSyncGenerationRef.current === generation) {
+          if (conversationSyncGenerationRef.current === generation && desiredConversationsRef.current === serialized) {
             setConversationCloudState("error");
           }
         });
     }, 900);
 
     return () => window.clearTimeout(timer);
-  }, [conversationsLoaded, isChatOnly, savedConversations, user?.userId]);
+  }, [activeConversationId, conversationSaveRetry, conversationsLoaded, isChatOnly, savedConversations, user?.userId]);
 
   const normalizedProvider = provider.trim().toLowerCase();
   const activeProviderPreset = resolveAiProviderPreset(normalizedProvider);
-  const activeGeminiProfile =
-    activeProviderPreset.id === "gemini"
-      ? getGeminiFreeModelProfile(model)
-      : undefined;
   const activeKeyLabel = selectedApiKey?.key_name || "尚未啟用 AI Key";
 
   const requestUrl = useMemo(() => {
@@ -1378,6 +1432,7 @@ export function ApiChatConsole({
 
   const canSend = Boolean(
     apiKey.trim() &&
+      (!isChatOnly || conversationRemoteReadyRef.current) &&
       provider.trim() &&
       model.trim() &&
       baseUrl.trim() &&
@@ -1401,33 +1456,32 @@ export function ApiChatConsole({
     return {
       ...snapshot,
       id: id ?? snapshot.id,
-      title:
-        id === AUTO_SAVED_CONVERSATION_ID
-          ? snapshot.title || "目前進行中的對話"
-          : snapshot.title,
+      title: savedConversations.find(item => item.id === id && item.messages.length)?.title || snapshot.title,
     };
-  }, [activeKeyLabel, draftMessage, messages, model, provider]);
+  }, [activeKeyLabel, draftMessage, messages, model, provider, savedConversations]);
 
   useEffect(() => {
     if (!isChatOnly || !conversationsLoaded || !hasHydratedConversationRef.current) return;
     if (conversationHydratingRef.current) { conversationHydratingRef.current = false; return; }
 
     if (!hasConversationContent) {
-      setSavedConversations((current) => current.some((item) => item.id === AUTO_SAVED_CONVERSATION_ID)
-        ? current.filter((item) => item.id !== AUTO_SAVED_CONVERSATION_ID) : current);
+      setSavedConversations(current => current.some(item => item.id === activeConversationId && !item.messages.length)
+        ? current.filter(item => item.id !== activeConversationId) : current);
       return;
     }
 
-    const snapshot = createCurrentConversationSnapshot(AUTO_SAVED_CONVERSATION_ID);
+    const snapshot = createCurrentConversationSnapshot(activeConversationId);
     setSavedConversations((current) => {
-      const previous = current.find((item) => item.id === AUTO_SAVED_CONVERSATION_ID);
+      const previous = current.find((item) => item.id === activeConversationId);
       // Opening an unchanged conversation is not a save and must retain its timestamp.
       if (previous && semanticJson({ messages: previous.messages, draft: previous.draftMessage })
         === semanticJson({ messages: snapshot.messages, draft: snapshot.draftMessage })) return current;
-      return [snapshot, ...current.filter((item) => item.id !== AUTO_SAVED_CONVERSATION_ID).slice(0, 23)];
+      if (!previous && current.length >= 24) return current;
+      return [snapshot, ...current.filter((item) => item.id !== activeConversationId)];
     });
   }, [
     activeKeyLabel,
+    activeConversationId,
     conversationsLoaded,
     createCurrentConversationSnapshot,
     draftMessage,
@@ -1497,7 +1551,9 @@ export function ApiChatConsole({
     bannerTitle: string,
     showSuccessBanner = true,
     ephemeralSystemContext?: string,
+    requestGeneration = requestGenerationRef.current,
   ) => {
+    const isCurrentRequest = () => requestGenerationRef.current === requestGeneration;
     const availableTargets = providerTargets.filter(target => target.apiKey.trim() && target.model.trim() && target.baseUrl.trim());
     let lastEndpoint = requestUrl;
     let lastModel = model;
@@ -1507,11 +1563,12 @@ export function ApiChatConsole({
       const recovered = await requestAiWithRecovery({
         targets: availableTargets,
         hasAttachments: history.some(message => !!message.attachments?.length),
-        onProgress: setRequestProgress,
+        onProgress: (progress) => { if (isCurrentRequest()) setRequestProgress(progress); },
         onFailure: (target, _failure, until) => {
-          if (until) setKeyCooldowns(current => ({ ...current, [target.id]: until }));
+          if (isCurrentRequest() && until) setKeyCooldowns(current => ({ ...current, [target.id]: until }));
         },
         execute: async (target, attemptNumber, timeoutMs) => {
+          if (!isCurrentRequest()) throw new AiRequestFailure('對話已切換，已停止後續請求。', 'invalid');
           let providerRequest;
           try {
             providerRequest = buildProviderChatRequest({
@@ -1528,6 +1585,7 @@ export function ApiChatConsole({
             init: { method: providerRequest.method, headers: providerRequest.headers, body: providerRequest.body ? JSON.stringify(providerRequest.body) : undefined },
           });
           const result = await response.json().catch(() => null);
+          if (!isCurrentRequest()) throw new AiRequestFailure('對話已切換，已停止後續請求。', 'invalid');
           if (!response.ok) throw classifyAiFailure(response.status,result,response.headers.get('Retry-After'));
           const parsed = parseProviderChatResponse(target.provider,result);
           const parsedImages = parsed.images.map((image,index) => ({id:`inline-${index}`,src:`data:${image.mimeType};base64,${image.data}`,mimeType:image.mimeType}));
@@ -1535,6 +1593,7 @@ export function ApiChatConsole({
         },
       });
       const {result,target,durationMs,attempt} = recovered;
+      if (!isCurrentRequest()) return result;
       setKeyCooldowns(current => { const next={...current}; delete next[target.id]; return next; });
       const changedModel = target.model !== model.trim();
       if (showSuccessBanner || changedModel || attempt>1) setConnectionState({
@@ -1546,12 +1605,12 @@ export function ApiChatConsole({
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'AI 查詢失敗，請稍後重試。';
-      setConnectionState({status:'error',title:`${bannerTitle}失敗`,message,endpoint:lastEndpoint,provider,model:lastModel,durationMs:Date.now()-startedAt});
+      if (isCurrentRequest()) setConnectionState({status:'error',title:`${bannerTitle}失敗`,message,endpoint:lastEndpoint,provider,model:lastModel,durationMs:Date.now()-startedAt});
       throw error;
-    } finally { setRequestProgress(''); }
+    } finally { if (isCurrentRequest()) setRequestProgress(''); }
   };
   const handleSend = async () => {
-    if (sendInFlight.current || loading || attachmentReadInFlight.current) return;
+    if (sendInFlight.current || loading || attachmentReadInFlight.current || !canSend) return;
     const typedContent = draftMessage.trim();
     const content = typedContent || (uploadedAttachments.length ? DEFAULT_IMAGE_OCR_PROMPT : "");
 
@@ -1563,6 +1622,7 @@ export function ApiChatConsole({
     const userAttachments = [...uploadedAttachments];
     const userMessage = createMessage("user", content, "normal", [], userAttachments);
     const nextHistory = [...messages, userMessage];
+    const requestGeneration = ++requestGenerationRef.current;
     sendInFlight.current = true;
     setRequestProgress('正在準備查詢…');
     setMessages(nextHistory);
@@ -1590,6 +1650,7 @@ export function ApiChatConsole({
           }, 15_000) },
           { query: typedContent, projectIds: maintenanceScope.selectedProjectIds },
         );
+        if (requestGenerationRef.current !== requestGeneration) return;
         setMaintenanceResultCount(citations.length);
         retrievingMaintenance = false;
 
@@ -1607,13 +1668,16 @@ export function ApiChatConsole({
         "資料查詢",
         false,
         ephemeralSystemContext,
+        requestGeneration,
       );
+      if (requestGenerationRef.current !== requestGeneration) return;
       setMessages((current) => [
         ...current,
         createMessage("assistant", reply.text, "normal", reply.images, [], citations),
       ]);
       toast.success(reply.images.length > 0 ? "結果已回傳並顯示" : "查詢完成");
     } catch (error) {
+      if (requestGenerationRef.current !== requestGeneration) return;
       const errorMessage = error instanceof Error ? error.message : "資料查詢失敗";
       if (retrievingMaintenance) {
         setMaintenanceRetrievalError(errorMessage);
@@ -1631,14 +1695,17 @@ export function ApiChatConsole({
       ]);
       toast.error(retrievingMaintenance ? "維修資料檢索失敗" : "資料查詢失敗");
     } finally {
-      sendInFlight.current = false;
-      setLoading(false);
+      if (requestGenerationRef.current === requestGeneration) {
+        sendInFlight.current = false;
+        setLoading(false);
+      }
     }
   };
 
   const handleConnectionTest = async () => {
     if (sendInFlight.current || loading) return;
     sendInFlight.current = true;
+    const requestGeneration = ++requestGenerationRef.current;
     setLoading(true);
 
     try {
@@ -1648,6 +1715,7 @@ export function ApiChatConsole({
         true
       );
 
+      if (requestGenerationRef.current !== requestGeneration) return;
       setMessages([
         createMessage(
           "assistant",
@@ -1658,12 +1726,15 @@ export function ApiChatConsole({
       ]);
       toast.success("API 測試成功");
     } catch (error) {
+      if (requestGenerationRef.current !== requestGeneration) return;
       const errorMessage = error instanceof Error ? error.message : "API 測試失敗";
       setMessages([createMessage("assistant", `API 測試失敗：${errorMessage}`, "error")]);
       toast.error("API 測試失敗");
     } finally {
-      sendInFlight.current = false;
-      setLoading(false);
+      if (requestGenerationRef.current === requestGeneration) {
+        sendInFlight.current = false;
+        setLoading(false);
+      }
     }
   };
 
@@ -1683,10 +1754,12 @@ export function ApiChatConsole({
   const persistCurrentConversation = () => {
     if (messages.length === 0 && draftMessage.trim().length === 0) return false;
 
-    setSavedConversations((current) => [
-      createCurrentConversationSnapshot(),
-      ...current.filter((item) => item.id !== AUTO_SAVED_CONVERSATION_ID),
-    ].slice(0, 24));
+    const snapshot = createCurrentConversationSnapshot(activeConversationId);
+    setSavedConversations((current) => {
+      const previous = current.find(item => item.id === activeConversationId);
+      if (previous && semanticJson({ messages: previous.messages, draft: previous.draftMessage }) === semanticJson({ messages: snapshot.messages, draft: snapshot.draftMessage })) return current;
+      return [snapshot, ...current.filter(item => item.id !== activeConversationId)];
+    });
 
     return true;
   };
@@ -1696,11 +1769,15 @@ export function ApiChatConsole({
   };
 
   const resetConversation = () => {
+    if (isChatOnly && savedConversations.length >= 24) {
+      toast.error('已達 24 筆對話上限，請先刪除不需要的對話。既有紀錄仍會保留。');
+      return;
+    }
     const archived = persistCurrentConversation();
+    invalidateConversationRequest();
+    setActiveConversationId(createCurrentConversationSnapshot().id);
     setMessages([]);
     setDraftMessage("");
-    ++attachmentReadGeneration.current;
-    setUploadedAttachments([]);
     setConnectionState(null);
     setNewConversationDialogOpen(false);
     toast.success(archived ? "已建立新對話，上一段內容已保留" : "已建立新對話");
@@ -1809,6 +1886,10 @@ export function ApiChatConsole({
   };
 
   const restoreConversation = (conversation: SavedConversation) => {
+    persistCurrentConversation();
+    invalidateConversationRequest();
+    conversationHydratingRef.current = true;
+    setActiveConversationId(conversation.id);
     const historicalTarget = findConversationTarget(conversation);
     if (historicalTarget) {
       if (historicalTarget.id !== selectedApiKeyTargetId) {
@@ -1838,6 +1919,13 @@ export function ApiChatConsole({
   };
 
   const removeSavedConversation = (id: string) => {
+    if (id === activeConversationId) {
+      invalidateConversationRequest();
+      setActiveConversationId(createCurrentConversationSnapshot().id);
+      setMessages([]);
+      setDraftMessage('');
+      setConnectionState(null);
+    }
     setSavedConversations((current) => current.filter((item) => item.id !== id));
   };
 
@@ -1896,8 +1984,10 @@ export function ApiChatConsole({
       toast.error(error instanceof Error ? error.message : "附件讀取失敗");
       return [] as UploadedAttachment[];
     } finally {
-      attachmentReadInFlight.current = false;
-      setReadingAttachments(false);
+      if (generation === attachmentReadGeneration.current) {
+        attachmentReadInFlight.current = false;
+        setReadingAttachments(false);
+      }
     }
   };
 
@@ -1967,6 +2057,7 @@ export function ApiChatConsole({
   };
 
   const handleComposerPaste = (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
+    const generation = attachmentReadGeneration.current;
     const directImageFiles = getClipboardImageFiles(event.clipboardData.items);
     const clipboardHtml = event.clipboardData.getData("text/html");
     const embeddedImageSources = directImageFiles.length
@@ -1988,6 +2079,8 @@ export function ApiChatConsole({
           embeddedImageSources.map((source, index) => createFileFromClipboardImageSource(source, index)),
         )).filter((file): file is File => Boolean(file));
 
+      if (generation !== attachmentReadGeneration.current) return;
+
       if (!sourceFiles.length) {
         if (pastedText) {
           setDraftMessage(insertClipboardText(draftMessage, pastedText, selectionStart, selectionEnd));
@@ -1998,6 +2091,7 @@ export function ApiChatConsole({
 
       const attachmentStartIndex = uploadedAttachments.length;
       const addedAttachments = await appendUploadedFiles(sourceFiles);
+      if (generation !== attachmentReadGeneration.current) return;
       const composedContent = composeClipboardContent(
         clipboardHtml,
         pastedText,
@@ -2149,7 +2243,7 @@ export function ApiChatConsole({
             <Button
               type="button"
               onClick={resetConversation}
-              className="h-12 rounded-xl bg-[linear-gradient(135deg,#38bdf8_0%,#6366f1_100%)] px-6 text-base font-bold text-white shadow-[0_18px_44px_-22px_rgba(56,189,248,0.65)] hover:brightness-110"
+              className="h-11 px-6"
             >
               確認建立
             </Button>
@@ -2265,7 +2359,7 @@ export function ApiChatConsole({
               type="button"
               onClick={saveCurrentPrompt}
               disabled={!promptDialogContent.trim() || savingPrompt}
-              className="h-12 rounded-xl bg-blue-400 px-6 text-base font-black text-slate-950 shadow-[0_16px_36px_-18px_rgba(96,165,250,0.85)] hover:bg-blue-300 disabled:cursor-wait disabled:opacity-50"
+              className="h-11 px-6"
             >
               <Bookmark className="mr-2 h-4 w-4" />
               {savingPrompt ? "儲存中..." : editingPromptId ? "儲存變更" : "儲存到提示詞庫"}
@@ -2325,7 +2419,7 @@ export function ApiChatConsole({
               type="button"
               onClick={applyLibraryItemToDraft}
               disabled={!libraryApplyContent.trim()}
-              className="h-12 rounded-xl bg-blue-400 px-6 text-base font-black text-slate-950 shadow-[0_16px_36px_-18px_rgba(96,165,250,0.85)] hover:bg-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-11 px-6"
             >
               放入 AI 輸入框（不送出）
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -2347,12 +2441,12 @@ export function ApiChatConsole({
         <Button
           type="button"
           variant="outline"
-          className={cn("relative h-11 w-11 shrink-0 rounded-xl border-blue-300/35 bg-blue-400/12 p-0 text-sm font-black text-blue-50 shadow-none hover:border-blue-200/70 hover:bg-blue-400/22 hover:text-white", isChatOnly ? "lg:h-12 lg:w-auto lg:px-4" : "sm:h-12 sm:w-auto sm:px-4")}
+          className="relative h-11 shrink-0 px-3 text-sm"
           aria-label="開啟共享提示詞庫"
         >
-          <LibraryBig className={cn("h-5 w-5 text-cyan-200", isChatOnly ? "lg:mr-2 lg:h-4 lg:w-4" : "sm:mr-2 sm:h-4 sm:w-4")} />
-          <span className={cn("hidden", isChatOnly ? "lg:inline" : "sm:inline")}>提示詞庫</span>
-          <span className={cn("absolute right-0.5 top-0.5 min-w-4 rounded-full border border-blue-200/25 bg-slate-950/80 px-1 text-[9px] leading-4 tabular-nums text-blue-100", isChatOnly ? "lg:static lg:ml-2 lg:px-2 lg:py-0.5 lg:text-[11px] lg:leading-normal" : "sm:static sm:ml-2 sm:px-2 sm:py-0.5 sm:text-[11px] sm:leading-normal")}>
+          <LibraryBig className="h-4 w-4" />
+          <span className="hidden sm:inline">提示詞庫</span>
+          <span className="hidden text-xs tabular-nums text-muted-foreground sm:inline">
             {savedPrompts.length}
           </span>
         </Button>
@@ -2373,7 +2467,7 @@ export function ApiChatConsole({
               type="button"
               size="sm"
               onClick={openSavePromptDialog}
-              className="h-9 shrink-0 rounded-xl bg-blue-400 px-3 font-black text-slate-950 hover:bg-blue-300"
+              className="h-11 shrink-0 px-3"
             >
               <Plus className="mr-1.5 h-4 w-4" />
               新增
@@ -2535,7 +2629,7 @@ export function ApiChatConsole({
                 <Button
                   type="button"
                   onClick={openSavePromptDialog}
-                  className="mt-4 h-10 rounded-xl bg-blue-400 px-4 font-black text-slate-950 hover:bg-blue-300"
+                  className="mt-4 h-11 px-4"
                 >
                   建立第一個提示詞
                 </Button>
@@ -2582,33 +2676,26 @@ export function ApiChatConsole({
     <div
       ref={chatConsoleRef}
       className={cn(
-        "flex flex-col overflow-hidden border border-blue-300/25 bg-[linear-gradient(180deg,#17243a_0%,#0e192a_100%)] shadow-[0_28px_80px_rgba(2,8,23,0.38)]",
+        "flex flex-col overflow-hidden border border-border bg-background",
         isChatOnly
-          ? "h-full min-h-0 rounded-2xl lg:rounded-[28px]"
+          ? "h-full min-h-0 rounded-2xl"
           : "min-h-[720px] rounded-[34px] p-5"
       )}
     >
       <div
         className={cn(
           "shrink-0 flex-col gap-4 border-b border-blue-300/20 lg:flex-row lg:items-center lg:justify-between",
-          isChatOnly ? "hidden gap-2 bg-[#18263d] px-3 py-3 sm:px-5 sm:py-4 md:px-6 lg:flex" : "flex pb-5"
+          isChatOnly ? "hidden gap-2 bg-muted/30 px-4 py-2 lg:flex" : "flex pb-5"
         )}
       >
-        <div className="flex items-start gap-3 sm:gap-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-300/35 bg-blue-400/15 text-blue-100 shadow-[0_12px_28px_-18px_rgba(96,165,250,0.8)] sm:h-12 sm:w-12 sm:rounded-[15px]">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center text-primary">
             <MessageSquareText className="h-5.5 w-5.5" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-base font-black tracking-[-0.02em] text-white sm:text-xl">AI 資料助理</p>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/35 bg-emerald-400/15 px-2.5 py-1 text-xs font-bold text-emerald-100">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                已就緒
-              </span>
+              <p className="text-lg font-semibold text-foreground">AI 問答</p>
             </div>
-            <p className="mt-1 hidden text-base leading-7 text-slate-300 sm:block">
-              查詢、比對、摘要與圖片文字擷取，都會保留本次對話脈絡。
-            </p>
           </div>
         </div>
 
@@ -2621,7 +2708,7 @@ export function ApiChatConsole({
               >
                 <SelectTrigger
                   aria-label="選擇 API 金鑰與模型"
-                  className="h-10 w-full rounded-xl border-blue-300/30 bg-slate-950/45 px-3 text-left text-sm font-semibold text-white shadow-none focus:ring-2 focus:ring-blue-400/40 sm:h-12 sm:px-4 sm:text-base"
+                  className="h-11 w-full min-w-0 text-left text-sm [&>span]:truncate"
                 >
                   <SelectValue placeholder="選擇模型" />
                 </SelectTrigger>
@@ -2659,11 +2746,6 @@ export function ApiChatConsole({
               ) : null}
             </div>
           )}
-          {activeGeminiProfile ? (
-            <p className="mt-1 text-right text-[11px] leading-4 text-slate-400">
-              {formatGeminiQuotaSummary(activeGeminiProfile)} · 同一 Google 專案共用；上限資料確認於 2026-10-04
-            </p>
-          ) : null}
         </div>
       </div>
 
@@ -2751,10 +2833,16 @@ export function ApiChatConsole({
           className={cn(
             "border-cyan-300/12",
             isChatOnly
-              ? "shrink-0 border-t border-slate-700/60 bg-[#0d1625] px-1.5 py-1.5 lg:px-6 lg:py-4"
+              ? "shrink-0 border-t border-border bg-muted/30 p-2 lg:px-4 lg:py-3"
               : "mt-4 rounded-[28px] border bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,#101827_0%,#0b1220_100%)] p-3.5 shadow-[0_24px_52px_rgba(2,8,23,0.26),inset_0_1px_0_rgba(255,255,255,0.03)]"
           )}
         >
+          {isChatOnly && conversationCloudState === 'error' && (
+            <div role="alert" className="mb-2 flex items-center justify-between gap-3 text-sm text-amber-200">
+              <span>{conversationRemoteReadyRef.current ? '對話尚未同步，文字暫時保留在本次工作階段。' : '無法載入帳號對話，請重試後再送出。'}</span>
+              <Button type="button" variant="outline" aria-label="重試對話同步" onClick={() => conversationRemoteReadyRef.current ? setConversationSaveRetry(value => value + 1) : setConversationRetry(value => value + 1)} className="h-11 shrink-0">重試</Button>
+            </div>
+          )}
           {readingAttachments && <p role="status" className="mb-2 text-sm text-blue-100">正在讀取附件，完成後即可送出查詢。</p>}
           <input
             ref={imageInputRef}
@@ -2847,30 +2935,14 @@ export function ApiChatConsole({
             onDragLeave={handleComposerDragLeave}
             onDrop={handleComposerDrop}
             className={cn(
-              "rounded-xl border px-1.5 py-1.5 shadow-[0_18px_45px_-24px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-200 focus-within:ring-2",
-              isChatOnly ? "lg:rounded-[20px] lg:px-3 lg:py-3" : "sm:rounded-[20px] sm:px-3 sm:py-3",
+              "rounded-xl border p-2 transition-colors duration-200 focus-within:ring-2",
               isDragOverComposer
-                ? "border-cyan-300/70 bg-[linear-gradient(180deg,#21466a_0%,#183450_100%)] ring-2 ring-cyan-300/25"
-                : "border-blue-300/35 bg-[linear-gradient(180deg,#1b2d49_0%,#14233a_100%)] focus-within:border-blue-300/70 focus-within:ring-blue-400/20"
+                ? "border-primary bg-primary/10 ring-2 ring-primary/25"
+                : "border-border bg-background focus-within:border-primary focus-within:ring-primary/25"
             )}
           >
-            <div className="flex items-center gap-2 md:gap-3">
-              <div className="flex shrink-0 items-center gap-2 self-stretch">
-                {promptLibraryControl}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={loading || readingAttachments || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT}
-                  aria-label="上傳 PDF、PPT、Excel、Word 或圖片"
-                  className={cn("h-11 min-w-11 rounded-xl border border-blue-300/35 bg-blue-400/15 px-3 text-blue-100 shadow-none hover:border-blue-300/70 hover:bg-blue-400/25 disabled:opacity-50", isChatOnly ? "lg:h-12 lg:px-4" : "sm:h-12 sm:px-4")}
-                >
-                  <Paperclip className="h-5 w-5 shrink-0" />
-                  <span className={cn("ml-2 hidden text-sm font-bold", isChatOnly ? "lg:inline" : "sm:inline")}>{readingAttachments ? '讀取附件中…' : '上傳檔案'}</span>
-                </Button>
-              </div>
-
-              <div className={cn("relative min-w-0 flex-1 rounded-xl border border-white/8 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(30,41,59,0.72))] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]", isChatOnly ? "lg:rounded-[16px] lg:px-4 lg:py-3" : "sm:rounded-[16px] sm:px-4 sm:py-3")}>
+            <div className="flex min-w-0 flex-col gap-2">
+              <div className="relative min-w-0 rounded-lg px-2 py-1">
                 {slashMenuOpen ? (
                   <div
                     role="listbox"
@@ -2923,7 +2995,7 @@ export function ApiChatConsole({
                             type="button"
                             onMouseDown={(event) => event.preventDefault()}
                             onClick={openSavePromptDialog}
-                            className="mt-3 h-9 rounded-xl bg-blue-400 px-4 text-sm font-black text-slate-950 hover:bg-blue-300"
+                            className="mt-3 h-11 px-4"
                           >
                             <Plus className="mr-1.5 h-4 w-4" />
                             建立提示詞
@@ -2946,23 +3018,36 @@ export function ApiChatConsole({
                   onPaste={handleComposerPaste}
                   aria-label="輸入查詢內容"
                   placeholder="輸入問題"
-                  className={cn("min-h-10 max-h-24 border-0 bg-transparent px-0 py-0 text-base leading-6 text-white shadow-none placeholder:text-slate-300 focus-visible:ring-0", isChatOnly ? "lg:min-h-[74px] lg:max-h-28 lg:text-[17px] lg:leading-7" : "sm:min-h-[74px] sm:max-h-28 sm:text-[17px] sm:leading-7")}
+                  rows={2}
+                  disabled={isChatOnly && !conversationRemoteReadyRef.current}
+                  className="min-h-10 max-h-24 resize-y rounded-none border-0 !bg-transparent px-0 py-0 text-base leading-6 text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
                 />
               </div>
 
-              <div className="flex shrink-0 items-center gap-2 self-stretch">
-                <div className={cn("hidden h-12 max-w-[220px] items-center truncate rounded-xl border border-blue-300/25 bg-slate-950/45 px-3 text-sm font-bold text-slate-100 shadow-none", isChatOnly ? "lg:flex" : "sm:flex")}>
+              <div data-ai-composer-toolbar="true" className="flex min-w-0 items-center justify-between gap-2 border-t border-border pt-2">
+                <div className="flex shrink-0 items-center gap-2">
+                  {promptLibraryControl}
+                  <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className="h-11 shrink-0 px-3">
+                    <Paperclip className="h-4 w-4" />
+                    <span className="hidden sm:inline">上傳檔案</span>
+                  </Button>
+                </div>
+                <div className="flex min-w-0 items-center gap-2">
+                <div className="hidden h-11 min-w-0 max-w-[220px] items-center rounded-lg px-3 text-sm text-muted-foreground lg:flex">
+                  <span className="truncate" title={model}>
                   {model || "Gemini"}
+                  </span>
                 </div>
                 <Button
                   type="button"
                   onClick={() => void handleSend()}
                   disabled={!canSend}
                   aria-label="送出查詢"
-                  className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-300/30 bg-blue-500 p-0 font-bold text-[#192522] shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] transition-all duration-200 hover:bg-blue-400 active:scale-[0.98] disabled:border-slate-700 disabled:bg-slate-700 disabled:text-slate-400 disabled:shadow-none", isChatOnly ? "lg:h-12 lg:w-12" : "sm:h-12 sm:w-12")}
+                  className="h-11 w-11 shrink-0 p-0"
                 >
                   <Send className="h-4 w-4" />
                 </Button>
+                </div>
               </div>
             </div>
 
@@ -3015,8 +3100,7 @@ export function ApiChatConsole({
                     </div>
                     {!sidebarCollapsed ? (
                       <div className="min-w-0">
-                        <p className="text-xl font-black text-white">資料查詢空間</p>
-                        <p className="mt-1 text-xs font-bold tracking-wide text-blue-200">AI KNOWLEDGE WORKSPACE</p>
+                        <p className="text-xl font-semibold text-white">AI 問答</p>
                       </div>
                     ) : null}
                   </div>
@@ -3035,7 +3119,7 @@ export function ApiChatConsole({
                     variant="ghost"
                     size="icon"
                     onClick={() => setSidebarCollapsed((value) => !value)}
-                    aria-label={sidebarCollapsed ? "展開資料查詢空間" : "收合資料查詢空間"}
+                    aria-label={sidebarCollapsed ? "展開 AI 問答" : "收合 AI 問答"}
                     className={cn(
                       "shrink-0 rounded-xl text-white hover:text-white",
                       sidebarCollapsed
@@ -3055,7 +3139,7 @@ export function ApiChatConsole({
                     setMobileSidebarOpen(false);
                   }}
                   className={cn(
-                    "mt-5 h-12 rounded-xl bg-blue-500 font-black text-[#192522] shadow-[0_12px_28px_-14px_rgba(59,130,246,0.9)] hover:bg-blue-400",
+                    "mt-4 h-11 font-semibold",
                     sidebarCollapsed ? "w-full justify-center px-0" : "w-full justify-start px-4 text-base"
                   )}
                   aria-label="建立新對話"
@@ -3105,14 +3189,15 @@ export function ApiChatConsole({
                       </p>
                     ) : (
                       savedConversations.map((item) => (
-                        <div key={item.id} className="group flex items-center gap-1 rounded-xl border border-transparent hover:border-slate-700/70 hover:bg-slate-800/55">
+                        <div key={item.id} className={cn("group flex items-center gap-1 rounded-xl border", item.id === activeConversationId ? 'border-primary/25 bg-primary/10' : 'border-transparent hover:border-border hover:bg-muted/50')}>
                           <button
                             type="button"
+                            aria-current={item.id === activeConversationId ? 'true' : undefined}
                             onClick={() => {
                               restoreConversation(item);
                               setMobileSidebarOpen(false);
                             }}
-                            className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+                            className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                           >
                             <p className="truncate text-base font-bold text-slate-100">{item.title}</p>
                             <p className="mt-1 truncate text-xs text-slate-300">
@@ -3123,7 +3208,7 @@ export function ApiChatConsole({
                             type="button"
                             onClick={() => removeSavedConversation(item.id)}
                             aria-label={`刪除對話：${item.title}`}
-                            className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 opacity-100 hover:bg-rose-500/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
+                            className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -3150,12 +3235,11 @@ export function ApiChatConsole({
                   )}
                 >
                   {sidebarCollapsed ? (
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
+                    <KeyRound aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
                   ) : (
                     <>
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-bold text-slate-300">目前使用模型</p>
-                        <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
                       </div>
                       <p className="mt-1.5 truncate text-base font-black text-white">{activeKeyLabel}</p>
                       <p className="mt-1 truncate text-sm text-slate-300">

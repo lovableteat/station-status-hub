@@ -7,32 +7,30 @@ const dashboardSource = await readFile(
   "utf8",
 );
 
-test("dashboard explains why machines need attention and what supervisors can do", () => {
+test("dashboard focuses on real issue follow-up instead of delivery and machine progress", () => {
   const requiredCopy = [
-    "需關注機台",
-    "依測項完成率由低到高",
-    "未完成測項",
-    "卡關站點",
+    "問題儀表板",
+    "優先追蹤問題",
+    "嚴重度",
     "負責人",
-    "最近更新",
-    "開啟生產看板",
-    "查看機台",
+    "七日未更新",
+    "查看全部問題",
   ];
 
   for (const copy of requiredCopy) {
     assert.match(dashboardSource, new RegExp(copy), `missing clarified copy: ${copy}`);
   }
 
-  assert.doesNotMatch(dashboardSource, /管理層待辦/);
-  assert.doesNotMatch(dashboardSource, />查看全部</);
+  assert.doesNotMatch(dashboardSource, /整體交付進度|近七日產出趨勢|需關注機台|站點產能|calculateDashboardMetrics|useUnifiedData/);
 });
 
-test("dashboard separates critical issues and explains the zero state", () => {
-  const requiredCopy = ["高風險問題", "目前沒有高風險問題", "查看問題"];
+test("dashboard keeps the issue table structure and explains real empty and failed states", () => {
+  const requiredCopy = ["目前沒有未結問題", "問題載入失敗", "重新載入"];
 
   for (const copy of requiredCopy) {
     assert.match(dashboardSource, new RegExp(copy), `missing issue copy: ${copy}`);
   }
 
-  assert.match(dashboardSource, /onNavigate\?\.\("issues"\)/);
+  assert.match(dashboardSource, /<TableHeader>/);
+  assert.match(dashboardSource, /fetchAllPages/);
 });

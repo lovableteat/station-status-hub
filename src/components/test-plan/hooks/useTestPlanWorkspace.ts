@@ -23,6 +23,7 @@ import {
   getTestPlanErrorMessage,
   toTestPlanError,
 } from "../core/errors";
+import { validateTestPlanFolderPaths } from "../core/files";
 
 interface UploadProgress {
   completed: number;
@@ -243,15 +244,18 @@ export function useTestPlanWorkspace(
     [ownerId, refreshWorkspace, repository, runMutation, spaces],
   );
 
-  const ensureUploadSpace = useCallback(async () => {
+  const ensureUploadSpace = useCallback(async (requestedSpaceId = activeSpaceId) => {
     if (!ownerId) throw new Error("請先登入再上傳檔案。");
-    if (activeSpaceId) {
-      const selected = spaces.find(space => space.id === activeSpaceId);
+    if (requestedSpaceId) {
+      const selected = spaces.find(space => space.id === requestedSpaceId);
       if (!selected) throw new Error("資料空間不存在，請重新整理後再試。");
       return selected;
     }
     const common = spaces.find(space => space.projectId === null && space.name === "共用檔案");
-    return common ?? repository.createSpace(ownerId, null, { name: "共用檔案" });
+    if (common) return common;
+    const created = await repository.createSpace(ownerId, null, { name: "共用檔案" });
+    setSpaces(current => [...current, created]);
+    return created;
   }, [activeSpaceId, ownerId, repository, spaces]);
 
   const createFolder = useCallback(
@@ -301,16 +305,17 @@ export function useTestPlanWorkspace(
   );
 
   const uploadFiles = useCallback(
-    (folderId: string | null, incoming: readonly File[]) =>
+    (folderId: string | null, incoming: readonly File[], options: { preservePaths?: boolean; spaceId?: string | null } = {}) =>
       runMutation(async () => {
         if (!ownerId) throw new Error("請先登入再上傳檔案。");
-        const space = await ensureUploadSpace();
+        if (options.preservePaths) validateTestPlanFolderPaths(incoming);
+        const space = await ensureUploadSpace(options.spaceId === undefined ? activeSpaceId : options.spaceId);
         setUploadProgress({
           completed: 0,
           total: incoming.length,
           uploadedBytes: 0,
           totalBytes: incoming.reduce((total, file) => total + file.size, 0),
-          currentFileName: incoming[0]?.name ?? "",
+          currentFileName: incoming[0]?.webkitRelativePath || incoming[0]?.name || "",
         });
         try {
           const result = await repository.uploadFiles({
@@ -319,10 +324,15 @@ export function useTestPlanWorkspace(
             spaceId: space.id,
             folderId,
             files: incoming,
+            preservePaths: options.preservePaths,
             onProgress: setUploadProgress,
           });
-          await refreshActiveSpace(activeSpaceId, ownerId);
-          return result;
+          try {
+            await refreshActiveSpace(activeSpaceId, ownerId);
+          } catch (caught) {
+            setError(getTestPlanErrorMessage(caught, "上傳結果已儲存，但清單更新失敗，請重新整理。"));
+          }
+          return { ...result, spaceId: space.id };
         } finally {
           setUploadProgress(null);
         }

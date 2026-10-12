@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Camera, ChevronDown, LogOut } from "lucide-react";
+import { ChevronDown, LogOut } from "lucide-react";
 
 import { UserAvatar } from "@/components/account/UserAvatar";
 import { PlatformLogoMark } from "@/components/brand/PlatformLogoMark";
@@ -27,7 +27,6 @@ interface MainWorkspaceHeaderProps {
   onSelect: (id: string) => void;
   onLogout: () => void;
   onBrandClick?: () => void;
-  onOpenWorkspaceHome?: () => void;
   userName?: string;
   userAvatarPath?: string | null;
   userRoleLabel?: string;
@@ -37,7 +36,6 @@ interface MainWorkspaceHeaderProps {
     id: string;
     label: string;
     icon?: ReactNode;
-    emphasized?: boolean;
     onSelect: () => void;
   }>;
 }
@@ -48,7 +46,6 @@ export function MainWorkspaceHeader({
   onSelect,
   onLogout,
   onBrandClick,
-  onOpenWorkspaceHome,
   userName,
   userAvatarPath,
   userRoleLabel,
@@ -56,7 +53,6 @@ export function MainWorkspaceHeader({
   showNotifications = true,
   userMenuItems = [],
 }: MainWorkspaceHeaderProps) {
-  const hasAvatarEditor = userMenuItems.some((item) => item.id === "personal-profile");
   const compactItems = items.slice(0, 4);
   const activeCompactItem = items.find((item) => item.id === activeItem && !compactItems.some((visible) => visible.id === item.id));
   if (activeCompactItem) compactItems.push(activeCompactItem);
@@ -104,7 +100,7 @@ export function MainWorkspaceHeader({
                 className={cn(
                   "interactive-lift min-w-fit shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 2xl:px-4",
                   isActive
-                    ? "bg-accent text-accent-foreground shadow-[0_18px_34px_-24px_hsl(0_0%_0%/0.5)]"
+                    ? "bg-primary/15 text-primary"
                     : "text-foreground/80 hover:bg-accent hover:text-foreground"
                 )}
               >
@@ -122,7 +118,7 @@ export function MainWorkspaceHeader({
               onClick={() => onSelect(item.id)}
               className={cn(
                 "interactive-lift shrink-0 whitespace-nowrap rounded-xl px-2 py-2.5 text-xs font-semibold transition-colors xl:px-3 xl:text-sm",
-                item.id === activeItem ? "bg-accent text-accent-foreground" : "text-foreground/80 hover:bg-accent hover:text-foreground",
+                item.id === activeItem ? "bg-primary/15 text-primary" : "text-foreground/80 hover:bg-accent hover:text-foreground",
               )}
             >
               {item.label}
@@ -166,9 +162,9 @@ export function MainWorkspaceHeader({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                title={hasAvatarEditor ? "開啟帳號選單，可編輯大頭貼" : "開啟帳號選單"}
-                aria-label={hasAvatarEditor ? "開啟帳號選單，可編輯大頭貼" : "開啟帳號選單"}
-                className="interactive-lift flex h-10 w-[140px] shrink-0 items-center gap-2 rounded-xl border border-indigo-300/25 bg-indigo-300/10 px-3 text-left text-foreground transition-colors hover:bg-accent hover:shadow-[0_16px_28px_-24px_rgba(0,0,0,0.6)] max-sm:w-10 max-sm:justify-center max-sm:px-0 sm:h-12 sm:rounded-2xl sm:gap-3"
+                title="開啟帳號選單"
+                aria-label="開啟帳號選單"
+                className="flex h-11 w-[140px] shrink-0 items-center gap-2 rounded-xl border border-border bg-card px-3 text-left text-foreground transition-colors hover:bg-accent max-sm:w-11 max-sm:justify-center max-sm:px-0"
               >
                 <span className="relative shrink-0">
                   <UserAvatar
@@ -177,69 +173,44 @@ export function MainWorkspaceHeader({
                     className="h-8 w-8 border border-primary/20 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)]"
                     fallbackClassName="bg-accent text-xs text-primary sm:text-sm"
                   />
-                  {hasAvatarEditor ? (
-                    <span
-                      aria-hidden="true"
-                      className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-background bg-primary text-primary-foreground shadow-sm"
-                    >
-                      <Camera className="h-2.5 w-2.5" />
-                    </span>
-                  ) : null}
                 </span>
                 <div className="hidden min-w-0 sm:block">
                   <div className="truncate text-sm font-semibold text-foreground">
                     {userName ?? "Operator"}
                   </div>
-                  <div className={cn(
-                    "truncate text-xs",
-                    hasAvatarEditor ? "font-semibold text-primary" : "text-muted-foreground",
-                  )}>
-                    {hasAvatarEditor ? "編輯大頭貼" : userRoleLabel ?? "使用者"}
-                  </div>
+                  {userRoleLabel && userRoleLabel !== userName ? <div className="truncate text-xs text-muted-foreground">{userRoleLabel}</div> : null}
                 </div>
                 <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground max-sm:hidden" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="w-56 rounded-2xl border-primary/15 bg-[hsl(223_34%_11%/0.98)] p-2 text-foreground"
+              data-platform-account-menu="true"
+              className="w-52 rounded-xl border-border bg-popover p-1 text-foreground"
             >
               <div className="px-2 py-1.5">
                 <div className="truncate text-sm font-semibold text-foreground">
                   {userName ?? "Operator"}
                 </div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {userRoleLabel ?? "使用者"}
-                </div>
+                {userRoleLabel && userRoleLabel !== userName ? <div className="truncate text-xs text-muted-foreground">{userRoleLabel}</div> : null}
               </div>
               <DropdownMenuSeparator className="bg-border" />
-              {onOpenWorkspaceHome && (
-                <DropdownMenuItem
-                  onClick={onOpenWorkspaceHome}
-                  className="rounded-xl px-3 py-2 text-sm text-foreground focus:bg-accent focus:text-foreground"
-                >
-                  工作區首頁
-                </DropdownMenuItem>
-              )}
               {userMenuItems.map((item) => (
                 <DropdownMenuItem
                   key={item.id}
                   onClick={item.onSelect}
-                  className={cn(
-                    "rounded-xl px-3 py-2 text-sm text-foreground focus:bg-accent focus:text-foreground",
-                    item.emphasized && "my-1 bg-accent font-semibold text-primary focus:bg-muted focus:text-primary",
-                  )}
+                  className="rounded-md px-3 py-2 text-sm text-foreground focus:bg-accent focus:text-foreground"
                 >
                   {item.icon ? <span className="mr-2 shrink-0">{item.icon}</span> : null}
                   {item.label}
                 </DropdownMenuItem>
               ))}
-              {(onOpenWorkspaceHome || userMenuItems.length > 0) && (
+              {userMenuItems.length > 0 && (
                 <DropdownMenuSeparator className="bg-border" />
               )}
               <DropdownMenuItem
                 onClick={onLogout}
-                className="rounded-xl px-3 py-2 text-sm text-destructive focus:bg-destructive/10 focus:text-destructive"
+                className="rounded-md px-3 py-2 text-sm text-destructive focus:bg-destructive/10 focus:text-destructive"
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 登出

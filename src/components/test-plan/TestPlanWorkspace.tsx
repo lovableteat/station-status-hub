@@ -2,6 +2,7 @@ import {
   type ChangeEvent,
   type DragEvent,
   type FormEvent,
+  type InputHTMLAttributes,
   useEffect,
   useMemo,
   useRef,
@@ -106,6 +107,16 @@ import type {
 import "./test-plan.css";
 
 type ViewMode = "grid" | "list";
+
+interface UploadRetry {
+  folderId: string | null;
+  spaceId: string | null;
+  preservePaths: boolean;
+  files: readonly File[];
+  failures: { fileName: string; message: string }[];
+}
+
+const directoryInputProps = { webkitdirectory: "" } as InputHTMLAttributes<HTMLInputElement>;
 
 type TextAction =
   | { kind: "create-folder"; parentId: string | null }
@@ -516,6 +527,7 @@ export function TestPlanWorkspace() {
   const { query, setQuery, categoryFilter, setCategoryFilter, sort, setSort, clearFilters } = useFileLibraryFilters();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadRetry, setUploadRetry] = useState<UploadRetry | null>(null);
   const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
   const [spaceDialog, setSpaceDialog] = useState<SpaceDialogState | null>(null);
   const [spaceDialogError, setSpaceDialogError] = useState<string | null>(null);
@@ -528,6 +540,7 @@ export function TestPlanWorkspace() {
     new Set(),
   );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
   const requestedFolderRef = useRef<{spaceId: string; folderId: string} | null>(null);
 
   useEffect(() => {
@@ -596,20 +609,25 @@ export function TestPlanWorkspace() {
     if (selectedEntryKey && !selectedEntry) setSelectedEntryKey(null);
   }, [selectedEntry, selectedEntryKey]);
 
-  const handleUpload = async (incoming: readonly File[]) => {
-    if (!canEdit || incoming.length === 0) return;
+  const handleUpload = async (incoming: readonly File[], preservePaths = false, target?: Pick<UploadRetry, "folderId" | "spaceId">) => {
+    if (!canEdit || busy || incoming.length === 0) return;
+    const uploadTarget = target ?? { folderId: activeFolderId, spaceId: activeSpaceId };
+    setUploadRetry(null);
     try {
-      const result = await uploadFiles(activeFolderId, incoming);
+      const result = await uploadFiles(uploadTarget.folderId, incoming, { preservePaths, spaceId: uploadTarget.spaceId });
       if (result.uploaded.length > 0) {
         toast.success(`已上傳 ${result.uploaded.length} 個檔案`);
       }
       if (result.failures.length > 0) {
+        setUploadRetry({ ...uploadTarget, spaceId: result.spaceId, preservePaths, files: result.failedFiles, failures: result.failures });
         toast.error(
-          `${result.failures.length} 個檔案未上傳：${result.failures[0].message}`,
+          `${result.failedFiles.length} 個檔案未上傳：${result.failures[0].message}`,
         );
       }
     } catch (caught) {
-      toast.error(caught instanceof Error ? caught.message : "上傳失敗");
+      const message = caught instanceof Error ? caught.message : "上傳失敗";
+      setUploadRetry({ ...uploadTarget, preservePaths, files: incoming, failures: [{ fileName: "", message }] });
+      toast.error(message);
     }
   };
 
@@ -619,9 +637,16 @@ export function TestPlanWorkspace() {
     void handleUpload(selected);
   };
 
+  const handleFolderSelection = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    void handleUpload(selected, true);
+  };
+
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
+    if (busy || uploadRetry) return;
     void handleUpload(Array.from(event.dataTransfer.files));
   };
 
@@ -794,6 +819,7 @@ export function TestPlanWorkspace() {
         <MaintenancePageHeader
           title="檔案上傳"
           icon={FolderKanban}
+          wrapActionsOnMobile
           actions={(
             <>
               {!canEdit && (
@@ -812,7 +838,10 @@ export function TestPlanWorkspace() {
                 <Plus className="mr-2 h-4 w-4" />
                 <span>新增空間</span>
               </Button>
-              <Button type="button" className="file-library-upload" disabled={!canEdit || busy} onClick={() => fileInputRef.current?.click()}>
+              <Button type="button" variant="outline" className="file-library-upload" aria-label="上傳資料夾" disabled={!canEdit || busy || Boolean(uploadRetry)} onClick={() => folderInputRef.current?.click()}>
+                <FolderInput data-icon="inline-start" /><span>上傳資料夾</span>
+              </Button>
+              <Button type="button" className="file-library-upload" disabled={!canEdit || busy || Boolean(uploadRetry)} onClick={() => fileInputRef.current?.click()}>
                 <Upload data-icon="inline-start" /><span>上傳檔案</span>
               </Button>
             </>
@@ -820,7 +849,20 @@ export function TestPlanWorkspace() {
         />
       </header>
 
-      <input ref={fileInputRef} className="sr-only" type="file" multiple onChange={handleFileSelection} />
+      <input ref={fileInputRef} className="sr-only" type="file" multiple disabled={!canEdit || busy || Boolean(uploadRetry)} onChange={handleFileSelection} />
+      <input ref={folderInputRef} className="sr-only" type="file" multiple {...directoryInputProps} disabled={!canEdit || busy || Boolean(uploadRetry)} aria-label="選擇上傳資料夾" onChange={handleFolderSelection} />
+      <p className="file-library-upload-hint">資料夾保留原有層級，同名檔案會略過；空資料夾無法由瀏覽器選取</p>
+      {uploadRetry && (
+        <section className="file-library-upload-errors" role="alert" aria-label="上傳失敗清單">
+          <div className="file-library-upload-error-heading">
+            <strong>{uploadRetry.files.length} 個檔案未上傳</strong>
+            <Button variant="outline" size="sm" aria-label="重試未上傳檔案" disabled={!canEdit || busy} onClick={() => void handleUpload(uploadRetry.files, uploadRetry.preservePaths, uploadRetry)}>重試未上傳檔案</Button>
+            <Button variant="ghost" size="icon" aria-label="關閉上傳失敗清單" disabled={busy} onClick={() => setUploadRetry(null)}><X className="h-4 w-4" /></Button>
+          </div>
+          <p>成功的檔案已保留，重試會使用原空間與資料夾</p>
+          <ul>{uploadRetry.failures.map((failure, index) => <li key={`${failure.fileName}:${index}`}><strong>{failure.fileName || "整批上傳"}</strong><span>{failure.message}</span></li>)}</ul>
+        </section>
+      )}
       {isSpaceDrawerOpen && (
         <button
           type="button"
@@ -1151,7 +1193,7 @@ export function TestPlanWorkspace() {
                 )}
                 onDragEnter={(event) => {
                   event.preventDefault();
-                  if (canEdit) setIsDragging(true);
+                  if (canEdit && !busy && !uploadRetry) setIsDragging(true);
                 }}
                 onDragOver={(event) => event.preventDefault()}
                 onDragLeave={(event) => {
@@ -1343,7 +1385,7 @@ export function TestPlanWorkspace() {
         <div className="test-plan-upload-progress" role="status">
           <Upload className="h-4 w-4 animate-pulse" />
           <span>
-            正在上傳 {uploadProgress.completed}／{uploadProgress.total}
+            已處理 {uploadProgress.completed}／{uploadProgress.total} 個檔案
             {uploadProgress.currentFileName
               ? ` · ${uploadProgress.currentFileName}`
               : ""}

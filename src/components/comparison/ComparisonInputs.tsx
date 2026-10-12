@@ -24,9 +24,9 @@ export function ComparisonInputs({ side, label, onLabel, value, onChange, disabl
   }, [value.files]);
   const selectFiles = (list: FileList | null) => { if (list?.length) onChange({ files: Array.from(list), selected: {} }); };
   const directoryProps = { webkitdirectory: "" } as InputHTMLAttributes<HTMLInputElement>;
-  return <section className="comparison-input-panel" aria-label={`${side} 版資料`}>
+  return <section className="comparison-input-panel" aria-label={`${side} 版資料`} data-has-files={value.files.length > 0}>
     <div className="comparison-input-heading"><span className="comparison-revision-mark">{side}</span><div><h2>{side === "A" ? "舊版資料" : "新版資料"}</h2><p>{side === "A" ? "作為比對基準的版本" : "要檢查的改版內容"}</p></div><Input aria-label={`${side} 版名稱`} value={label} onChange={event => onLabel(event.target.value)} maxLength={64} disabled={disabled} className="comparison-revision-label" /></div>
-    <div className="comparison-file-actions"><Button variant="outline" disabled={disabled} onClick={() => folder.current?.click()}><FolderOpen />選擇資料夾</Button><Button variant="ghost" disabled={disabled} onClick={() => files.current?.click()}><FilePlus2 />選擇檔案</Button></div>
+    <div className="comparison-file-actions"><Button variant="outline" className="comparison-folder-action" disabled={disabled} onClick={() => folder.current?.click()}><FolderOpen />選擇資料夾</Button><Button variant="ghost" disabled={disabled} onClick={() => files.current?.click()}><FilePlus2 />選擇檔案</Button></div>
     <input ref={folder} {...directoryProps} type="file" multiple className="sr-only" aria-label={`選取 ${side} 版資料夾`} onChange={event => selectFiles(event.target.files)} disabled={disabled} />
     <input ref={files} type="file" multiple className="sr-only" aria-label={`選取 ${side} 版檔案`} accept=".dat,.xls,.xlsx,.csv,.htm,.html,.dsn,.pdf" onChange={event => selectFiles(event.target.files)} disabled={disabled} />
     {inventory.error ? <p className="comparison-alert" role="alert">{inventory.error}</p> : <div className="comparison-input-inventory">{roles.map(role => {

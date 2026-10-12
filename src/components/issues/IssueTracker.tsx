@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -12,6 +12,7 @@ import {
   Image as ImageIcon,
   ListChecks,
   Search,
+  X,
 } from "lucide-react";
 import DOMPurify from "dompurify";
 
@@ -47,15 +48,15 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
+import { getEffectivePriority } from "@/lib/issuePriority";
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 
 import { IssueAnalyticsPanel } from "./IssueAnalyticsPanel";
 import { IssueCreateDialog } from "./IssueCreateDialog";
 import { IssuePDFExportManager } from "./IssuePDFExportManager";
 import { IssueProcessHistory } from "./IssueProcessHistory";
 import { type Issue, IssueTableView } from "./IssueTableView";
-
-type PriorityFilter = "all" | "low" | "medium" | "high" | "critical";
-type StatusFilter = "all" | "open" | "in_progress" | "resolved" | "closed";
+import { type IssueFilters, matchesIssueConditions, readIssueFilters, writeIssueFilters } from "./issueFilters";
 
 interface WorkspaceIssue extends Issue {
   assigned_engineer?: string;
@@ -78,6 +79,7 @@ function statusLabel(status: string) {
     closed: "已關閉",
     in_progress: "處理中",
     open: "待處理",
+    pending: "未結問題",
     resolved: "已解決",
   }[status] || status;
 }
@@ -97,12 +99,27 @@ export function IssueTracker() {
   const { toast } = useToast();
   const [issues, setIssues] = useState<WorkspaceIssue[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return new URLSearchParams(window.location.search).get("system") || "";
-  });
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const loadRequest = useRef(0);
+  const [filters, setFilters] = useState(() => readIssueFilters(typeof window === "undefined" ? "" : window.location.search));
+  const updateFilter = <K extends keyof IssueFilters>(key: K, value: IssueFilters[K]) => {
+    const next = { ...filters, [key]: value };
+    const url = new URL(window.location.href);
+    writeIssueFilters(url, next);
+    replaceWorkspaceHistory(url);
+    setFilters(next);
+  };
+  const clearFilters = () => {
+    const next = readIssueFilters("");
+    const url = new URL(window.location.href);
+    writeIssueFilters(url, next);
+    replaceWorkspaceHistory(url);
+    setFilters(next);
+  };
+  useEffect(() => {
+    const restoreFilters = () => setFilters(readIssueFilters(window.location.search));
+    window.addEventListener("popstate", restoreFilters);
+    return () => window.removeEventListener("popstate", restoreFilters);
+  }, []);
   const [activeView, setActiveView] = useState("list");
   const [selectedIssue, setSelectedIssue] = useState<WorkspaceIssue | null>(null);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
@@ -157,6 +174,7 @@ export function IssueTracker() {
   }, [imageAttachments.length, previewImageIndex, showNextImage, showPreviousImage]);
 
   const loadIssues = useCallback(async (showLoading = true) => {
+    const request = ++loadRequest.current;
     if (!activeProjectId) {
       setIssues([]);
       setLoading(false);
@@ -189,6 +207,7 @@ export function IssueTracker() {
         .range(from, to)
     );
 
+    if (request !== loadRequest.current) return;
     if (error) {
       setLoading(false);
       toast({ title: "問題載入失敗", description: error.message, variant: "destructive" });
@@ -208,6 +227,7 @@ export function IssueTracker() {
           .order("id")
           .range(from, to)
       );
+      if (request !== loadRequest.current) return;
       if (attachmentResult.error) {
         attachmentError = attachmentResult.error as { message: string };
         break;
@@ -233,7 +253,7 @@ export function IssueTracker() {
         assigned_engineer: issue.test_systems?.assigned_engineer,
         assigned_to: issue.assigned_to || "",
         attachments: attachmentsByIssue.get(issue.id) ?? [],
-        priority: (issue.priority || "medium") as WorkspaceIssue["priority"],
+        priority: getEffectivePriority(issue.priority, issue.priority_manual, issue.created_at),
         serial_number: issue.test_systems?.serial_number,
         station_name: issue.test_flow_stations?.station_name,
         station_order: issue.test_flow_stations?.station_order,
@@ -251,7 +271,10 @@ export function IssueTracker() {
   }, [activeProjectId, toast]);
 
   useEffect(() => {
-    loadIssues();
+    setIssues([]);
+    setSelectedIssue(null);
+    void loadIssues();
+    return () => { loadRequest.current += 1; };
   }, [loadIssues]);
 
   useEffect(() => {
@@ -291,7 +314,7 @@ export function IssueTracker() {
   }, [issues]);
 
   const filteredIssues = useMemo(() => {
-    const keyword = searchTerm.trim().toLowerCase();
+    const keyword = filters.query.trim().toLowerCase();
     return issues.filter((issue) => {
       const plainDescription = DOMPurify.sanitize(issue.description || "", { ALLOWED_TAGS: [] }).toLowerCase();
       const matchesSearch =
@@ -302,11 +325,20 @@ export function IssueTracker() {
         issue.serial_number?.toLowerCase().includes(keyword) ||
         issue.station_name?.toLowerCase().includes(keyword) ||
         issue.category?.toLowerCase().includes(keyword);
-      const matchesPriority = priorityFilter === "all" || issue.priority === priorityFilter;
-      const matchesStatus = statusFilter === "all" || issue.status === statusFilter;
-      return matchesSearch && matchesPriority && matchesStatus;
+      return matchesSearch && matchesIssueConditions(issue, filters);
     });
-  }, [issues, priorityFilter, searchTerm, statusFilter]);
+  }, [issues, filters]);
+
+  const stationOptions = useMemo(() => [...new Map(issues.filter(issue => issue.station_id).map(issue => [issue.station_id!, issue.station_name || issue.station_id!])).entries()].sort((left, right) => left[1].localeCompare(right[1], "zh-Hant")), [issues]);
+  const ownerOptions = useMemo(() => [...new Set(issues.map(issue => issue.assigned_to?.trim()).filter((owner): owner is string => Boolean(owner)))].sort((left, right) => left.localeCompare(right, "zh-Hant")), [issues]);
+  const activeFilterChips = [
+    { key: "query" as const, field: "搜尋", label: filters.query, active: Boolean(filters.query) },
+    { key: "station" as const, field: "站點", label: stationOptions.find(([id]) => id === filters.station)?.[1] || filters.station, active: filters.station !== "all" },
+    { key: "status" as const, field: "狀態", label: statusLabel(filters.status), active: filters.status !== "all" },
+    { key: "owner" as const, field: "負責人", label: filters.owner === "unassigned" ? "未指派" : filters.owner, active: filters.owner !== "all" },
+    { key: "priority" as const, field: "嚴重度", label: priorityLabel(filters.priority), active: filters.priority !== "all" },
+    { key: "followUp" as const, field: "追蹤", label: "七日未更新", active: filters.followUp === "stale" },
+  ].filter(chip => chip.active);
 
   const counts = useMemo(
     () =>
@@ -383,42 +415,41 @@ export function IssueTracker() {
             <TabsTrigger value="analytics" className="h-7 rounded-md border-0 px-3 py-1 text-xs shadow-none data-[state=active]:border-0"><BarChart3 className="mr-2 h-3.5 w-3.5" />統計報告</TabsTrigger>
           </TabsList>
 
-          {activeView === "list" && (
-            <>
-              <div className="relative min-w-[220px] flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a9c0d1]" />
-                <Input
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value.slice(0, 120))}
-                  className="h-9 border-[#2a526f] bg-[#06111f] pl-9"
-                  placeholder="搜尋機台、序號、站點或問題內容"
-                />
-              </div>
-              <Select value={priorityFilter} onValueChange={(value) => setPriorityFilter(value as PriorityFilter)}>
-                <SelectTrigger className="h-9 w-[130px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部優先級</SelectItem>
-                  <SelectItem value="critical">緊急</SelectItem>
-                  <SelectItem value="high">高</SelectItem>
-                  <SelectItem value="medium">中</SelectItem>
-                  <SelectItem value="low">低</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-                <SelectTrigger className="h-9 w-[120px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部狀態</SelectItem>
-                  <SelectItem value="open">待處理</SelectItem>
-                  <SelectItem value="in_progress">處理中</SelectItem>
-                  <SelectItem value="resolved">已解決</SelectItem>
-                  <SelectItem value="closed">已關閉</SelectItem>
-                </SelectContent>
-              </Select>
-            </>
-          )}
         </div>
 
         <TabsContent value="list" className="mt-3">
+          <div data-ui="issue-persistent-filters" className="space-y-2 pb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-0 basis-full sm:min-w-[220px] sm:flex-1 sm:basis-auto">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <Input aria-label="搜尋問題" value={filters.query} onChange={event => updateFilter("query", event.target.value.slice(0, 120))} className="h-11 bg-background pl-9 sm:h-9" placeholder="搜尋機台、序號、站點或問題內容" />
+              </div>
+              <Select value={filters.station} onValueChange={value => updateFilter("station", value)}>
+                <SelectTrigger aria-label="篩選站點" className="h-11 min-w-0 flex-1 basis-[140px] sm:h-9 sm:flex-none sm:basis-auto sm:w-[150px]"><SelectValue placeholder="全部站點" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">全部站點</SelectItem>{stationOptions.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}{filters.station !== "all" && !stationOptions.some(([id]) => id === filters.station) && <SelectItem value={filters.station}>{filters.station}</SelectItem>}</SelectContent>
+              </Select>
+              <Select value={filters.status} onValueChange={value => updateFilter("status", value as IssueFilters["status"])}>
+                <SelectTrigger aria-label="篩選狀態" className="h-11 min-w-0 flex-1 basis-[140px] sm:h-9 sm:flex-none sm:basis-auto sm:w-[140px]"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">全部狀態</SelectItem><SelectItem value="pending">未結問題</SelectItem><SelectItem value="open">待處理</SelectItem><SelectItem value="in_progress">處理中</SelectItem><SelectItem value="resolved">已解決</SelectItem><SelectItem value="closed">已關閉</SelectItem></SelectContent>
+              </Select>
+              <Select value={filters.owner} onValueChange={value => updateFilter("owner", value)}>
+                <SelectTrigger aria-label="篩選負責人" className="h-11 min-w-0 flex-1 basis-[140px] sm:h-9 sm:flex-none sm:basis-auto sm:w-[150px]"><SelectValue placeholder="全部負責人" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">全部負責人</SelectItem><SelectItem value="unassigned">未指派</SelectItem>{ownerOptions.map(owner => <SelectItem key={owner} value={owner}>{owner}</SelectItem>)}{!["all", "unassigned"].includes(filters.owner) && !ownerOptions.includes(filters.owner) && <SelectItem value={filters.owner}>{filters.owner}</SelectItem>}</SelectContent>
+              </Select>
+              <Select value={filters.priority} onValueChange={value => updateFilter("priority", value as IssueFilters["priority"])}>
+                <SelectTrigger aria-label="篩選嚴重度" className="h-11 min-w-0 flex-1 basis-[140px] sm:h-9 sm:flex-none sm:basis-auto sm:w-[140px]"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">全部嚴重度</SelectItem><SelectItem value="critical">緊急</SelectItem><SelectItem value="high">高</SelectItem><SelectItem value="medium">中</SelectItem><SelectItem value="low">低</SelectItem></SelectContent>
+              </Select>
+              <Select value={filters.followUp} onValueChange={value => updateFilter("followUp", value as IssueFilters["followUp"])}>
+                <SelectTrigger aria-label="篩選追蹤狀態" className="h-11 min-w-0 flex-1 basis-[140px] sm:h-9 sm:flex-none sm:basis-auto sm:w-[150px]"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="all">全部追蹤狀態</SelectItem><SelectItem value="stale">七日未更新</SelectItem></SelectContent>
+              </Select>
+            </div>
+            {activeFilterChips.length > 0 && <div className="flex flex-wrap gap-2" aria-label="作用中篩選">
+              {activeFilterChips.map(chip => <Button key={chip.key} variant="outline" size="sm" className="h-auto min-h-11 max-w-full whitespace-normal break-words px-3 text-xs sm:min-h-9" aria-label={`清除${chip.field}：${chip.label}`} onClick={() => updateFilter(chip.key, readIssueFilters("")[chip.key])}>{chip.field}：{chip.label}<X className="ml-2 h-3.5 w-3.5 shrink-0" aria-hidden="true" /></Button>)}
+              <Button variant="ghost" size="sm" className="h-11 sm:h-9" onClick={clearFilters}>全部清除</Button>
+            </div>}
+          </div>
           {loading ? (
             <div className="maintenance-panel flex min-h-[360px] items-center justify-center text-sm text-[#a9c0d1]">載入問題資料...</div>
           ) : (

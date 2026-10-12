@@ -75,7 +75,7 @@ const moduleLabels: Record<string, string> = {
   "material-requests": "料號申請",
   "data-center": "Data-center",
   "pcb-designer": "PCB Designer",
-  "ai-chat": "資料查詢空間",
+  "ai-chat": "AI 問答",
   performance: "績效考核系統",
 };
 

@@ -4,7 +4,7 @@
 
 ## 結論
 
-目前路由由 `src/pages/Index.tsx` 暴露首頁與九個工作區：維修中心、檔案上傳、比對系統、料號申請、Data-center、PCB Designer、後台管理、資料查詢空間、績效考核系統。本稽核檢視這些路由實際掛載的元件；舊檔案或沒有被目前路由引用的畫面不列為立即工作。
+目前路由由 `src/pages/Index.tsx` 暴露首頁與九個工作區：維修中心、檔案上傳、比對系統、料號申請、Data-center、PCB Designer、後台管理、AI 問答、績效考核系統。本稽核檢視這些路由實際掛載的元件；舊檔案或沒有被目前路由引用的畫面不列為立即工作。
 
 凡是「使用者設定搜尋或條件後，畫面顯示一組較小的資料結果」的表格、卡片清單、檔案清單或 lane 都應立即對齊 `AGENTS.md`。這裡的「應立即對齊」是現行產品標準與後續實作清單，不代表 Task 8 已修改產品程式碼。沒有任何篩選能力的清單不必為了形式新增無用途的篩選列；一旦加入篩選，就必須直接採用完整標準。
 
@@ -41,13 +41,13 @@
 
 | 工作區／資料結果 | 目前元件 | 現況與應對齊項目 |
 | --- | --- | --- |
-| 比對系統的檢查結果、審查追蹤與位址庫 | `src/components/comparison/ComparisonWorkspace.tsx` | **採用現行標準。** 比對結果與審查表的持久篩選列位於結果正上方，依搜尋 → 狀態 → 負責人 → 嚴重性／檢查分類排列；作用中條件可個別或全部清除，零筆結果保留表頭。`compareSearch`、`compareStatus`、`compareOwner`、`compareSeverity`、`compareCategory`、`comparePage` 保存結果條件，`librarySearch`、`librarySigned` 保存位址庫條件；清除不得移除 `workspace=comparison`、`module=comparison` 與頁面上下文 `comparisonTab`。新入口沿用資料查詢空間授權，來源與結果只保存在本機瀏覽器。 |
+| 比對系統的檢查結果、審查追蹤與位址庫 | `src/components/comparison/ComparisonWorkspace.tsx` | **採用現行標準。** 比對結果與審查表的持久篩選列位於結果正上方，依搜尋 → 狀態 → 負責人 → 嚴重性／檢查分類排列；作用中條件可個別或全部清除，零筆結果保留表頭。`compareSearch`、`compareStatus`、`compareOwner`、`compareSeverity`、`compareCategory`、`comparePage` 保存結果條件，`librarySearch`、`librarySigned` 保存位址庫條件；清除不得移除 `workspace=comparison`、`module=comparison` 與頁面上下文 `comparisonTab`。新入口沿用 AI 問答授權，來源與結果只保存在本機瀏覽器。 |
 | 料號申請的 BOM workspace、料件表與行動卡片 | `src/components/material-requests/MaterialRequestPage.tsx` | **接近標準，亦是可參考現況。** 已有持久搜尋、可用性／欄位條件、active chips、個別移除與全部清除。仍要讓桌面零筆結果留在表格 body 並保留欄位 header；行動卡片可使用領域文字。排序與匯出維持次要層級，使用者儲存的工作狀態不可被全部清除誤刪。
 | Data-center 的共享專案卡片清單 | `src/components/data-center/DeploymentPlanningCenter.tsx` | 共享專案庫若提供搜尋或篩選，應使用持久列、active chips 與清除規則。場景中的機櫃搜尋、圖層與模型庫屬操作上下文，依下節保留專用 UI；例外不應擴張到一般專案結果清單。
 | PCB 專案、模板與元件庫結果 | `src/components/pcb-designer/PcbLeftRail.tsx` | **待對齊。** 左 rail 已固定顯示搜尋與狀態／來源／類型下拉，但沒有 active chips 或全部清除。rail 可以維持窄欄布局，作用中條件仍必須一直看得到且可逐一清除；畫布與圖層工具不套用資料清單外觀。
 | 後台工程師／使用者清單 | `src/components/user-management/UserManagement.tsx` | **待對齊。** 搜尋與團隊條件位於卡片清單上方，但缺少 active chips、個別清除、全部清除與一致的零筆骨架。相對順序應維持搜尋在前，團隊是領域條件。
 | 後台 API 資料預覽表 | `src/components/api-management/ApiDataTable.tsx` | **接近標準。** 搜尋與狀態在表格上方且保留 `TableHeader`；補上 active chips、個別清除與全部清除。`ApiKeyManagement.tsx` 的金鑰表目前沒有篩選，不要求新增空控制，但未來加搜尋／狀態時要直接遵守本標準。
-| 資料查詢空間的共享提示詞、對話與來源清單 | `src/components/api-management/ApiChatConsole.tsx` | **待對齊。** 共享提示詞已有搜尋、分類與排序；搜尋／分類需有 active chips 與全部清除，排序可在行動版收合。對話或來源清單一旦可篩選也相同；模型/provider 選擇是執行上下文，不是清單篩選。
+| AI 問答的共享提示詞、對話與來源清單 | `src/components/api-management/ApiChatConsole.tsx` | **待對齊。** 共享提示詞已有搜尋、分類與排序；搜尋／分類需有 active chips 與全部清除，排序可在行動版收合。對話或來源清單一旦可篩選也相同；模型/provider 選擇是執行上下文，不是清單篩選。
 | 績效考核結果清單 | `src/components/performance/PerformanceAppraisalPage.tsx` | **接近標準。** 搜尋與狀態 panel 緊接卡片／清單結果，但沒有 active chips、個別清除與全部清除。零筆可使用考核領域文字；若呈現欄位式清單，仍保留欄位骨架。
 
 後台的 `AdminCollaborationPanel.tsx` 收件人搜尋是公告撰寫流程內的 picker，不是持久資料結果頁；若日後新增獨立的帳號／訊息稽核清單，該清單需對齊。首頁 `WorkspaceEntrance.tsx` 是工作區導覽，不需篩選列。

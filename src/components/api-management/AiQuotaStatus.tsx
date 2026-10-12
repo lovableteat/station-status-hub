@@ -66,25 +66,28 @@ export function AiQuotaStatus({ apiKeyId, provider, model }: { apiKeyId: string 
   const unavailable = !apiKeyId || !summary || !!error;
   const count = (value: number | null) => unavailable ? "—" : value?.toLocaleString("zh-TW");
   return (
-    <section aria-label="全員共用 API 額度與用量" className="shrink-0 border-b border-white/10 bg-[#1c1c1e] px-3 py-3 text-zinc-100 sm:px-6">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold">全員共用 API 額度</h3>
-        <Button variant="ghost" size="sm" disabled={loading || !apiKeyId} onClick={() => setRefresh(value => value + 1)} aria-label="更新全員 API 用量" className="h-8 shrink-0 text-zinc-300"><RefreshCw className="mr-1 h-3.5 w-3.5" />{loading ? "更新中" : "更新"}</Button>
-      </div>
-      <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
-        <div><p className="text-xs text-zinc-400">最近 1 分鐘 · 全員已用</p><p className="mt-1 font-semibold">{count(minute)}{profile ? ` / ${profile.rpm} 次` : " 次"}</p></div>
-        <div><p className="text-xs text-zinc-400">今日 · 全員已用（太平洋時間）</p><p className="mt-1 font-semibold">{count(day)}{profile ? ` / ${profile.rpd} 次` : " 次"}</p></div>
-      </div>
-      {profile && !unavailable && <p className="mt-2 text-xs leading-5 text-zinc-300">估算可用範圍：本分鐘 0–{buildObservedQuotaRange(minute!, profile.rpm).max} 次 · 今日 0–{buildObservedQuotaRange(day!, profile.rpd).max} 次</p>}
-      {error && <p role="alert" className="mt-2 text-xs text-amber-300">{error}</p>}
-      {!apiKeyId && <p className="mt-2 text-xs text-zinc-400">選擇系統 API 後可查看全員用量。</p>}
-      <details className="mt-2 text-xs leading-5 text-zinc-400">
-        <summary className="cursor-pointer">額度與統計說明</summary>
+    <section aria-label="全員共用 API 額度與用量" className="shrink-0 border-b border-border bg-muted/30 px-3 text-foreground sm:px-6">
+      <div className="flex flex-wrap items-center gap-x-3 text-xs">
+        <h3 className="sr-only font-semibold xl:not-sr-only">全員共用 API 額度</h3>
+        <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1">
+          <p><span className="text-muted-foreground">分鐘 </span><strong>{count(minute)}</strong>{profile ? ` / ${profile.rpm} 次` : " 次"}</p>
+          <p><span className="text-muted-foreground">今日 </span><strong>{count(day)}</strong>{profile ? ` / ${profile.rpd} 次` : " 次"}</p>
+        </div>
+        <Button variant="ghost" size="icon" disabled={loading || !apiKeyId} onClick={() => setRefresh(value => value + 1)} aria-label="更新全員 API 用量" title={loading ? "更新中" : "更新全員 API 用量"} className="ml-auto h-11 w-11 shrink-0"><RefreshCw className={loading ? 'h-4 w-4 animate-spin motion-reduce:animate-none' : 'h-4 w-4'} /></Button>
+        <details className="text-xs leading-5 text-muted-foreground [&[open]]:basis-full">
+        <summary className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">詳情</summary>
+        <div className="space-y-1 pb-3">
+        {!apiKeyId && <p>選擇系統 API 後可查看全員用量。</p>}
+        <p>今日統計依太平洋時間計算；摘要數字為本系統全員已用請求。</p>
+        {profile && !unavailable && <p>估算可用範圍：本分鐘 0–{buildObservedQuotaRange(minute!, profile.rpm).max} 次 · 今日 0–{buildObservedQuotaRange(day!, profile.rpd).max} 次</p>}
         <p>統計這組 API、這個模型在本系統所有使用者的請求；包含重試。同一 Google 專案共用額度，其他網站或金鑰的使用量未計入，因此不是官方剩餘額。</p>
         {profile ? <p>每分鐘輸入上限 {profile.inputTpm.toLocaleString("zh-TW")} tokens；token 用量尚未追蹤。上限依既有設定（{profile.sourceDate}），實際額度以供應商帳戶為準。</p> : <p>此模型尚未設定額度上限，仍可查看系統請求用量。</p>}
         <p>{summary?.trackingStartedAt ? `追蹤起點：${new Date(summary.trackingStartedAt).toLocaleString("zh-TW")}，開始追蹤前的請求不在統計內。` : "用量追蹤尚未開始。"}</p>
         {summary?.generatedAt && <p>更新時間：{new Date(summary.generatedAt).toLocaleTimeString("zh-TW") } · 畫面開啟時每 30 秒更新。</p>}
+        </div>
       </details>
+      </div>
+      {error && <p role="alert" className="pb-2 text-xs text-amber-300">{error}</p>}
     </section>
   );
 }

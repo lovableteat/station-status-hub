@@ -24,3 +24,12 @@ test("project command bar keeps metadata and actions in explicit visual groups",
   assert.match(scopeBar, /data-ui="project-metadata"/);
   assert.match(scopeBar, /data-ui="project-actions"/);
 });
+
+test("project header presents plain metadata and hides missing owner and date noise", async () => {
+  const scopeBar = await read("../src/components/test-projects/ProjectScopeBar.tsx");
+  const header = scopeBar.slice(scopeBar.indexOf('data-ui="project-command-bar"'), scopeBar.indexOf('<SheetContent'));
+  assert.doesNotMatch(header, /未設定負責人|border-l|bg-\[#071827\]/);
+  assert.match(header, /activeProject\.planned_end_date &&/);
+  assert.match(header, /activeOwner &&/);
+  assert.match(header, /aria-label="切換目前專案"/);
+});
