@@ -4,8 +4,7 @@ import { Camera, ChevronDown, LogOut } from "lucide-react";
 import { UserAvatar } from "@/components/account/UserAvatar";
 import { PlatformLogoMark } from "@/components/brand/PlatformLogoMark";
 import { Button } from "@/components/ui/button";
-import { OnlineUsersIndicator } from "@/components/common/OnlineUsersIndicator";
-import { NotificationIndicator } from "@/components/common/NotificationIndicator";
+import { CollaborationIndicator } from "@/components/common/CollaborationIndicator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,7 +56,7 @@ export function MainWorkspaceHeader({
   showNotifications = true,
   userMenuItems = [],
 }: MainWorkspaceHeaderProps) {
-  const compactItems = items.slice(0, 3);
+  const compactItems = items.slice(0, 4);
   const activeCompactItem = items.find((item) => item.id === activeItem && !compactItems.some((visible) => visible.id === item.id));
   if (activeCompactItem) compactItems.push(activeCompactItem);
   const overflowItems = items.filter((item) => !compactItems.some((visible) => visible.id === item.id));
@@ -66,10 +65,7 @@ export function MainWorkspaceHeader({
       <PlatformLogoMark className="interactive-lift h-9 w-9 text-primary sm:h-11 sm:w-11" />
       <div className="min-w-0 text-left">
         <div className="truncate text-base font-semibold tracking-[-0.03em] text-foreground sm:text-[1.35rem] 2xl:text-[1.5rem]">
-          工作整合平台
-        </div>
-        <div className="hidden truncate text-xs text-muted-foreground sm:block 2xl:text-sm">
-          整合式工作平台
+          工作平台
         </div>
       </div>
     </>
@@ -159,9 +155,9 @@ export function MainWorkspaceHeader({
           data-platform-controls="top-right"
           className="absolute right-[max(0.625rem,env(safe-area-inset-right))] top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center justify-end gap-1.5 sm:gap-2 lg:static lg:translate-y-0 2xl:gap-3"
         >
-          {showNotifications && <NotificationIndicator />}
-
-          {showOnlineUsers && <div className="hidden md:block"><OnlineUsersIndicator /></div>}
+          {(showNotifications || showOnlineUsers) && (
+            <CollaborationIndicator showNotifications={showNotifications} showOnlineUsers={showOnlineUsers} />
+          )}
 
           <div className="hidden md:block"><WebsiteQrButton /></div>
 

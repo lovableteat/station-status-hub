@@ -9,6 +9,7 @@ const read = async (path: string) =>
 const permissionsSource = await read("src/lib/workspacePermissions.ts");
 const indexSource = await read("src/pages/Index.tsx");
 const entranceSource = await read("src/components/layout/WorkspaceEntrance.tsx");
+const workspacePreviewSource = await read("src/components/layout/WorkspacePreview.tsx");
 const dialogSource = await read("src/components/admin/UserPermissionsDialog.tsx");
 const previewSource = await read(
   "src/components/pcb-designer/PcbWorkspacePreview.tsx",
@@ -150,16 +151,17 @@ test("restores, catalogs, and renders PCB Designer through the existing navigati
   assert.doesNotMatch(indexSource, /PcbDesignerWorkspace[\s\S]{0,500}<MainWorkspaceHeader/);
 });
 
-test("shows a balanced 3-by-2 home grid with a code-native PCB preview", () => {
-  assert.match(entranceSource, /PcbWorkspacePreview/);
+test("shares a code-native PCB illustration with the responsive home grid", () => {
+  assert.match(workspacePreviewSource, /PcbWorkspacePreview/);
   assert.match(
-    entranceSource,
+    workspacePreviewSource,
     /workspaceId === ["']pcb-designer["'][\s\S]{0,180}<PcbWorkspacePreview\s*\/>/,
   );
   assert.match(entranceSource, /xl:grid-cols-3/);
   assert.match(previewSource, /data-testid=["']pcb-workspace-preview["']/);
   assert.match(previewSource, /PCB|circuit|board|trace/i);
-  assert.doesNotMatch(previewSource, /\b(?:DataCenter|3D|Login)\b/i);
+  assert.doesNotMatch(previewSource, /\b(?:DataCenter|Login)\b/i);
+  assert.match(previewSource, /2D \/ 3D/);
   assert.match(workspaceSource, /export function PcbDesignerWorkspace/);
 });
 

@@ -254,7 +254,7 @@ export async function buildPerformanceExcel(reviews: PerformanceReview[], cycle:
   const ExcelJS = (await import("exceljs")).default;
   if (options.canDownload && !options.canDownload()) throw new Error('資料保護狀態已更新。');
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "工作整合平台";
+  workbook.creator = "工作平台";
   workbook.created = new Date();
   workbook.modified = new Date();
   workbook.title = `${title}-${cycle}`;

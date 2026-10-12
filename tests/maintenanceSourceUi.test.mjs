@@ -9,7 +9,7 @@ test("maintenance source selector exposes current, multi, all and clear scope co
     "src/components/api-management/MaintenanceSourceSelector.tsx",
   );
 
-  assert.match(source, /機台維修紀錄中心/);
+  assert.match(source, /維修中心/);
   assert.match(source, /目前專案/);
   assert.match(source, /全部選取/);
   assert.match(source, /清除/);

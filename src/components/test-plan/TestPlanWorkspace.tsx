@@ -795,7 +795,8 @@ export function TestPlanWorkspace() {
     <section className="test-plan-workspace">
       <header className="test-plan-header">
         <MaintenancePageHeader
-          title="資料儲存"
+          title="檔案上傳"
+          wrapActionsOnMobile
           description={activeProject
             ? `${activeProject.name} 專案的電路板與工程資料：測試計畫、機構圖、PCB、韌體、程式碼、量測紀錄與 Office 檔案（各專案獨立儲存）`
             : "請先選擇維修專案，再管理該專案的工程資料。"}

@@ -74,7 +74,7 @@ export const DEFAULT_WORKSPACE_ACCESS: WorkspaceAccessMap = {
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceId, string> = {
-  "station-status": "機台維修紀錄中心",
+  "station-status": "維修中心",
   "material-requests": "料號申請",
   "data-center": "Data Center",
   "pcb-designer": "PCB Designer",

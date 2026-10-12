@@ -66,7 +66,7 @@ export function WebsiteQrButton() {
     }
 
     try {
-      await navigator.share({ title: "工作整合平台", text: "用手機開啟工作整合平台", url: siteUrl });
+      await navigator.share({ title: "工作平台", text: "用手機開啟工作平台", url: siteUrl });
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") return;
       await copySiteUrl();
@@ -106,7 +106,7 @@ export function WebsiteQrButton() {
             ) : (
               <img
                 src={qrImageUrl}
-                alt="工作整合平台網站二維碼"
+                alt="工作平台網站二維碼"
                 className="h-full w-full object-contain"
                 onError={() => setQrFailed(true)}
               />

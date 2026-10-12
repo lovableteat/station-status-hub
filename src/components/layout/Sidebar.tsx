@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   FileSliders,
-  FolderKanban,
   Gauge,
   ListChecks,
   PanelLeftClose,
@@ -36,7 +35,6 @@ const navigationItems = [
   { id: "flow-info", label: "L10 流程設定", icon: FileSliders },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle },
   { id: "tools", label: "工具與資產", icon: Wrench },
-  { id: "test-plan", label: "資料儲存", icon: FolderKanban },
 ];
 
 export function Sidebar({

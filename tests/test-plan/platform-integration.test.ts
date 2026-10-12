@@ -8,15 +8,17 @@ async function source(path: string): Promise<string> {
   return readFile(new URL(path, root), "utf8");
 }
 
-test("registers Test_Plan in the maintenance navigation and lazy station route", async () => {
+test("registers file upload as an independent workspace with the existing permission boundary", async () => {
   const index = await source("src/pages/Index.tsx");
   const sidebar = await source("src/components/layout/Sidebar.tsx");
 
   assert.match(index, /const TestPlanWorkspace = React\.lazy/);
   assert.match(index, /import\("@\/components\/test-plan\/TestPlanWorkspace"\)/);
-  assert.match(index, /\|\s*"test-plan"/);
-  assert.match(index, /case "test-plan":[\s\S]{0,220}<PermissionGuard module="test-plan">/);
-  assert.match(sidebar, /\{\s*id:\s*"test-plan",\s*label:\s*"資料儲存"/);
+  assert.match(index, /\|\s*"file-uploads"/);
+  assert.match(index, /case "file-uploads":[\s\S]{0,220}<PermissionGuard module="test-plan">/);
+  assert.doesNotMatch(sidebar, /id:\s*"test-plan"/);
+  assert.match(index, /module === "test-plan" \|\| workspace === "file-uploads"/);
+  assert.match(index, /"test-plan": "file-uploads"/);
 });
 
 test("adds view and edit permission contracts everywhere platform permissions are declared", async () => {
@@ -162,7 +164,7 @@ test("admin permission editor explains inherited Test_Plan access instead of exp
     "src/components/admin/UserPermissionsDialog.tsx",
   );
 
-  assert.match(dialog, /資料儲存權限會跟隨「機台維修紀錄中心」/);
+  assert.match(dialog, /「檔案上傳」沿用維修中心的資料儲存權限/);
   assert.match(dialog, /\.filter\(\(\[groupKey\]\)\s*=>\s*groupKey\s*!==\s*"test_plan"\)/);
 });
 
@@ -189,8 +191,9 @@ test("publishes Test_Plan labels to collaboration and offline export catalogs", 
   );
   const siteExport = await source("src/utils/siteArchiveExport.ts");
 
-  assert.match(collaboration, /"test-plan":\s*"資料儲存"/);
-  assert.match(adminCollaboration, /"test-plan":\s*"資料儲存"/);
+  assert.match(collaboration, /"test-plan":\s*"檔案上傳"/);
+  assert.match(collaboration, /"file-uploads":\s*"檔案上傳"/);
+  assert.match(adminCollaboration, /"test-plan":\s*"檔案上傳"/);
   assert.match(siteExport, /\{\s*id:\s*"test-plan",\s*label:\s*"資料儲存"\s*\}/);
 });
 

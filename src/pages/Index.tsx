@@ -7,7 +7,7 @@ import {
   CircuitBoard,
   ClipboardList,
   FileText,
-  FolderKanban,
+  FolderUp,
   KeyRound,
   LayoutDashboard,
   MessageSquareText,
@@ -96,6 +96,7 @@ const ToolsManagement = React.lazy(() =>
 
 type WorkspaceId =
   | "station-status"
+  | "file-uploads"
   | "material-requests"
   | "data-center"
   | "pcb-designer"
@@ -108,8 +109,7 @@ type StationModuleId =
   | "test-tracker"
   | "flow-info"
   | "issues"
-  | "tools"
-  | "test-plan";
+  | "tools";
 
 type AdminModuleId = "users" | "collaboration" | "api-management";
 
@@ -123,7 +123,6 @@ const stationModuleItems: Array<{
   { id: "flow-info", label: "L10 流程設定", icon: FileText },
   { id: "issues", label: "問題追蹤", icon: AlertTriangle },
   { id: "tools", label: "工具管理", icon: Wrench },
-  { id: "test-plan", label: "資料儲存", icon: FolderKanban },
 ];
 
 const moduleWorkspaceMap: Record<string, WorkspaceId> = {
@@ -133,7 +132,8 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
   monitor: "station-status",
   issues: "station-status",
   tools: "station-status",
-  "test-plan": "station-status",
+  "test-plan": "file-uploads",
+  "file-uploads": "file-uploads",
   users: "user-management",
   collaboration: "user-management",
   "api-management": "user-management",
@@ -204,6 +204,9 @@ function getInitialWorkspace(): WorkspaceId | null {
   const workspace = params.get("workspace");
   const module = params.get("module");
 
+  // Existing shared links keep opening the same files after moving the page.
+  if (module === "test-plan" || workspace === "file-uploads") return "file-uploads";
+
   if (module === "users" || module === "collaboration" || module === "api-management") {
     return "user-management";
   }
@@ -242,8 +245,7 @@ function getInitialStationModule(): StationModuleId {
     value === "test-tracker" ||
     value === "flow-info" ||
     value === "issues" ||
-    value === "tools" ||
-    value === "test-plan"
+    value === "tools"
   ) {
     return value;
   }
@@ -300,10 +302,17 @@ const Index = () => {
     () => [
       {
         id: "station-status" as const,
-        label: "機台維修紀錄中心",
+        label: "維修中心",
         description: "依專案追蹤每台 L10 從組裝到 NV_diag 的測試進度，掌握站點瓶頸、問題工單、實際工時與工具資產。",
         icon: LayoutDashboard,
         visible: stationModuleItems.some((item) => canViewModule(item.id)),
+      },
+      {
+        id: "file-uploads" as const,
+        label: "檔案上傳",
+        description: "依專案上傳、分類與共享工程檔案，管理資料夾並預覽文件、試算表與圖檔。",
+        icon: FolderUp,
+        visible: canViewModule("test-plan"),
       },
       {
         id: "material-requests" as const,
@@ -479,6 +488,8 @@ const Index = () => {
       url.searchParams.set("module", activeAdminModule);
     } else if (activeWorkspace === "ai-chat") {
       url.searchParams.set("module", "ai-chat");
+    } else if (activeWorkspace === "file-uploads") {
+      url.searchParams.set("module", "test-plan");
     } else {
       url.searchParams.delete("module");
     }
@@ -514,12 +525,19 @@ const Index = () => {
           ? activeAdminModule
           : nextWorkspace === "ai-chat"
             ? "ai-chat"
-            : undefined;
+            : nextWorkspace === "file-uploads"
+              ? "test-plan"
+              : undefined;
     if (!pushWorkspaceLocation(nextWorkspace, nextModule)) return;
     setActiveWorkspace(nextWorkspace);
   };
 
   const handleStationNavigation = (module: string, params?: Record<string, string>) => {
+    if (module === "test-plan") {
+      if (!pushWorkspaceLocation("file-uploads", "test-plan", params)) return;
+      setActiveWorkspace("file-uploads");
+      return;
+    }
     const normalizedModule = module === "monitor" ? "test-tracker" : module;
     const normalizedParams = module === "monitor"
       ? { ...params, trackerView: "board" }
@@ -564,12 +582,6 @@ const Index = () => {
             <ToolsManagement />
           </PermissionGuard>
         );
-      case "test-plan":
-        return (
-          <PermissionGuard module="test-plan">
-            <TestPlanWorkspace />
-          </PermissionGuard>
-        );
       default:
         return null;
     }
@@ -581,6 +593,15 @@ const Index = () => {
     }
 
     switch (activeWorkspace) {
+      case "file-uploads":
+        return (
+          <PermissionGuard module="test-plan">
+            <div className="file-upload-workspace flex min-h-0 flex-1 flex-col gap-4 p-3 sm:p-5" data-file-upload-page="true">
+              <ProjectScopeBar />
+              {isSwitchingProject ? <MaintenanceLoading label="正在切換專案檔案" /> : <TestPlanWorkspace key={activeProjectId ?? "no-project"} />}
+            </div>
+          </PermissionGuard>
+        );
       case "material-requests":
         return (
           <PermissionGuard module="material-requests">
@@ -674,7 +695,8 @@ const Index = () => {
         activeWorkspace === "ai-chat" && "h-[100dvh] overflow-hidden",
         activeWorkspace === "performance" && "performance-app-shell",
         activeWorkspace === "user-management" && "h-[100dvh] overflow-hidden",
-        activeWorkspace === "station-status" && "lg:h-[100dvh] lg:overflow-hidden"
+        activeWorkspace === "station-status" && "lg:h-[100dvh] lg:overflow-hidden",
+        activeWorkspace === "file-uploads" && "lg:h-[100dvh] lg:overflow-hidden"
       )}
     >
       <UpdateIndicator isUpdating={isUpdating} />
@@ -738,7 +760,7 @@ const Index = () => {
               ? "min-h-0"
             : activeWorkspace === "user-management"
               ? "min-h-0 overflow-hidden"
-            : activeWorkspace === "station-status"
+            : activeWorkspace === "station-status" || activeWorkspace === "file-uploads"
               ? "min-h-0 lg:overflow-hidden"
               : "min-h-0"
         )}
