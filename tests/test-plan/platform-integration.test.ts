@@ -138,7 +138,7 @@ test("latest Test_Plan sharing migration exposes spaces to permitted accounts wi
 
 test("opens the standalone file library while retaining existing project paths", async () => {
   const migration = await source(
-    "supabase/migrations/20261012093208_standalone_file_upload_library.sql",
+    "supabase/migrations/20261012100039_standalone_file_upload_library.sql",
   );
   const adapter = await source(
     "src/components/test-plan/core/supabaseAdapter.ts",
