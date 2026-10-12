@@ -56,6 +56,7 @@ export function MainWorkspaceHeader({
   showNotifications = true,
   userMenuItems = [],
 }: MainWorkspaceHeaderProps) {
+  const hasAvatarEditor = userMenuItems.some((item) => item.id === "personal-profile");
   const compactItems = items.slice(0, 4);
   const activeCompactItem = items.find((item) => item.id === activeItem && !compactItems.some((visible) => visible.id === item.id));
   if (activeCompactItem) compactItems.push(activeCompactItem);
@@ -165,8 +166,8 @@ export function MainWorkspaceHeader({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                title="開啟帳號選單，可編輯大頭貼"
-                aria-label="開啟帳號選單，可編輯大頭貼"
+                title={hasAvatarEditor ? "開啟帳號選單，可編輯大頭貼" : "開啟帳號選單"}
+                aria-label={hasAvatarEditor ? "開啟帳號選單，可編輯大頭貼" : "開啟帳號選單"}
                 className="interactive-lift flex h-10 w-[140px] shrink-0 items-center gap-2 rounded-xl border border-indigo-300/25 bg-indigo-300/10 px-3 text-left text-foreground transition-colors hover:bg-accent hover:shadow-[0_16px_28px_-24px_rgba(0,0,0,0.6)] max-sm:w-10 max-sm:justify-center max-sm:px-0 sm:h-12 sm:rounded-2xl sm:gap-3"
               >
                 <span className="relative shrink-0">
@@ -176,7 +177,7 @@ export function MainWorkspaceHeader({
                     className="h-8 w-8 border border-primary/20 shadow-[inset_0_1px_0_hsl(0_0%_100%/0.04)]"
                     fallbackClassName="bg-accent text-xs text-primary sm:text-sm"
                   />
-                  {userMenuItems.length > 0 ? (
+                  {hasAvatarEditor ? (
                     <span
                       aria-hidden="true"
                       className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-background bg-primary text-primary-foreground shadow-sm"
@@ -191,9 +192,9 @@ export function MainWorkspaceHeader({
                   </div>
                   <div className={cn(
                     "truncate text-xs",
-                    userMenuItems.length > 0 ? "font-semibold text-primary" : "text-muted-foreground",
+                    hasAvatarEditor ? "font-semibold text-primary" : "text-muted-foreground",
                   )}>
-                    {userMenuItems.length > 0 ? "編輯大頭貼" : userRoleLabel ?? "使用者"}
+                    {hasAvatarEditor ? "編輯大頭貼" : userRoleLabel ?? "使用者"}
                   </div>
                 </div>
                 <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground max-sm:hidden" />
