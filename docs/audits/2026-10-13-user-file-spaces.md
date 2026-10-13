@@ -7,6 +7,7 @@
 - 「所有檔案」上傳預設寫入登入者個人空間；選取使用者時只列出該空間內容。一般使用者編輯自己的內容，管理員可管理其他使用者內容；既有 workspace 權限仍生效。
 - 使用者明確要求清空本頁。先固定原有 30 筆檔案、1 個資料夾、14 個舊空間的 ID／object path 清單，再透過 Storage API 實體刪除 30 個物件。確認物件消失後才清除對應 metadata、資料夾、舊空間與 cleanup queue。未使用 Storage SQL DELETE 或全 bucket 清空。
 - 清理後資料庫檔案 0、資料夾 0、舊空間 0、個人空間 21；原 30 個 Storage 物件 0。
+- 最後檢查另外找到 17 個無檔案 metadata 的歷史殘留（12 個屬原空間、5 個是舊診斷測試檔）。固定這 17 個早於本輪作業的 path 清單，重新核對無 metadata 參照後透過 Storage API 清除。合計刪除 47 個 Storage 物件，最終此 bucket 的物件數 0，兩種 cleanup queue 也皆為 0；沒有使用全 bucket DELETE。
 - 一次性清理 Edge Function 僅接受隨機 256-bit credential、固定 path 清單與有效期限，且先核對原 metadata。完成後立即換成無任何刪除能力的 410 回應並重新啟用 JWT 驗證。
 - 補上已排入 cleanup queue 的物件 SELECT 授權，讓檔案 metadata 刪除後仍能透過 Storage.remove 完成實體清理；其他 owner 的待清理物件不可見。
 
