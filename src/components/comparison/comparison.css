@@ -245,18 +245,70 @@
 @media (prefers-reduced-motion: reduce) { .comparison-progress-indicator { animation: none; } }
 
 /* --- First-use guide ------------------------------------------------------ */
-.comparison-guide-dialog { max-width: min(920px, calc(100vw - 32px)); max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+.comparison-guide-dialog { max-width: min(920px, calc(100vw - 32px)); max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
 .comparison-guide-dialog :is(h3,p,ol,ul,dl,dd) { margin: 0; }
 .comparison-guide-dialog h3 { font-size: 14px; font-weight: 650; margin-bottom: 10px; }
 .comparison-guide-dialog p, .comparison-guide-dialog li, .comparison-guide-dialog dd { font-size: 13px; line-height: 1.7; color: hsl(var(--muted-foreground)); }
 .comparison-guide-dialog strong { color: hsl(var(--foreground)); font-weight: 650; }
-.comparison-guide-steps { padding: 16px; border: 1px solid hsl(var(--primary) / .3); border-radius: var(--app-radius-card); background: hsl(var(--primary) / .06); }
-.comparison-guide-steps h3 { color: hsl(var(--primary)); }
-.comparison-guide-steps ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0; list-style: none; }
-.comparison-guide-steps li { display: flex; gap: 12px; align-items: flex-start; }
-.comparison-guide-steps li strong { display: block; margin-bottom: 2px; font-size: 14px; }
-.comparison-guide-step-number { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 999px; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); font-size: 13px; font-weight: 700; }
+
+/* Flow chart: one row per step. The node sits in a fixed column so every
+   arrow lines up; side notes and the "can't run" branch use the column on
+   the right. Before-run steps use the primary tone, after-run steps success,
+   the decision warning. */
+.comparison-flow-wrap { padding: 18px; border: 1px solid hsl(var(--border)); border-radius: var(--app-radius-card); background: hsl(var(--card)); }
+.comparison-flow { --flow-node: 300px; --flow-gap: 30px; --flow-arrow: 30px; display: flex; flex-direction: column; padding: 0; list-style: none; }
+.comparison-flow-row { --tone: var(--primary); --tone-fg: var(--primary-foreground); position: relative; display: grid; grid-template-columns: var(--flow-node) minmax(0, 1fr); column-gap: var(--flow-gap); align-items: center; }
+.comparison-flow-row[data-phase=after] { --tone: var(--success); --tone-fg: var(--success-foreground); }
+.comparison-flow-row.is-decision { --tone: var(--warning); --tone-fg: var(--warning-foreground); }
+.comparison-flow-row + .comparison-flow-row { padding-top: var(--flow-arrow); }
+.comparison-flow-row + .comparison-flow-row::before { content: ""; position: absolute; top: 2px; left: calc(var(--flow-node) / 2 - 1px); width: 2px; height: calc(var(--flow-arrow) - 10px); background: hsl(var(--muted-foreground) / .6); }
+.comparison-flow-row + .comparison-flow-row::after { content: ""; position: absolute; top: calc(var(--flow-arrow) - 8px); left: calc(var(--flow-node) / 2 - 5px); border: 5px solid transparent; border-top: 6px solid hsl(var(--muted-foreground) / .6); border-bottom: 0; }
+.comparison-flow-via { position: absolute; top: calc(var(--flow-arrow) / 2 - 8px); left: calc(var(--flow-node) / 2 + 10px); font-size: 11px; font-weight: 650; line-height: 16px; color: hsl(var(--tone)); }
+.comparison-flow-node { position: relative; display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 10px 14px; border: 1px solid hsl(var(--tone) / .45); border-radius: 10px; background: hsl(var(--tone) / .1); }
+.comparison-flow-node[data-shape=terminal] { border-radius: 999px; padding-inline: 16px 20px; }
+.comparison-flow-node > div { position: relative; display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.comparison-flow-node strong { font-size: 14px; line-height: 1.35; }
+.comparison-flow-node small { font-size: 12px; line-height: 1.4; color: hsl(var(--muted-foreground)); }
+.comparison-flow-number { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 999px; background: hsl(var(--tone)); color: hsl(var(--tone-fg)); font-size: 13px; font-weight: 700; }
+.comparison-flow-icon { width: 18px; height: 18px; flex-shrink: 0; color: hsl(var(--tone)); }
+.comparison-flow-node[data-shape=decision] { min-height: 88px; justify-content: center; padding: 0 56px; border: 0; background: none; text-align: center; }
+.comparison-flow-diamond { position: absolute; inset: 0; background: hsl(var(--tone) / .65); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.comparison-flow-diamond::after { content: ""; position: absolute; inset: 2px 4px; background: linear-gradient(hsl(var(--tone) / .1), hsl(var(--tone) / .1)), hsl(var(--card)); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.comparison-flow-notes { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.comparison-flow-notes:not(:empty)::before { content: ""; position: absolute; top: 50%; left: calc(var(--flow-gap) * -1 + 6px); width: calc(var(--flow-gap) - 12px); border-top: 1px dashed hsl(var(--muted-foreground) / .55); }
+.comparison-guide-dialog .comparison-flow-note { display: flex; align-items: flex-start; gap: 8px; line-height: 1.5; }
+.comparison-flow-note svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
+.comparison-flow-note[data-tone=warn] svg { color: hsl(var(--warning)); }
+.comparison-guide-dialog .comparison-flow-note[data-tone=warn] { color: hsl(var(--foreground) / .9); }
+.comparison-flow-note[data-tone=info] svg { color: hsl(var(--tone)); }
+.comparison-flow-branch { display: flex; align-items: center; min-width: 0; }
+.comparison-flow-branch-arrow { position: relative; flex-shrink: 0; align-self: stretch; display: flex; align-items: center; justify-content: center; width: calc(var(--flow-gap) + 42px); margin-left: calc(var(--flow-gap) * -1); padding-bottom: 22px; font-size: 11px; font-weight: 650; color: hsl(var(--warning)); }
+.comparison-flow-branch-arrow::before { content: ""; position: absolute; top: calc(50% - 1px); left: 0; right: 6px; height: 2px; background: hsl(var(--warning) / .65); }
+.comparison-flow-branch-arrow::after { content: ""; position: absolute; top: calc(50% - 5px); right: 0; border: 5px solid transparent; border-left: 7px solid hsl(var(--warning) / .65); border-right: 0; }
+.comparison-flow-branch-box { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 14px; border: 1px dashed hsl(var(--warning) / .6); border-radius: 10px; background: hsl(var(--warning) / .07); }
+.comparison-guide-dialog .comparison-flow-branch-box p { line-height: 1.5; }
+.comparison-flow-branch-box p strong { display: block; }
+.comparison-flow-branch-box small { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: hsl(var(--warning)); }
+.comparison-flow-branch-box small svg { width: 14px; height: 14px; }
+.comparison-flow-files { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 18px; padding-top: 14px; border-top: 1px solid hsl(var(--border)); }
+.comparison-flow-files-title { font-size: 13px; font-weight: 650; color: hsl(var(--foreground)); }
+.comparison-flow-file-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.comparison-flow-file-group em { padding: 1px 6px; border-radius: 4px; font-size: 11px; font-style: normal; font-weight: 650; }
+.comparison-flow-file-group[data-level=required] em { color: hsl(var(--primary)); background: hsl(var(--primary) / .14); }
+.comparison-flow-file-group[data-level=suggested] em { color: hsl(var(--warning)); background: hsl(var(--warning) / .14); }
+.comparison-flow-file-group[data-level=optional] em { color: hsl(var(--muted-foreground)); background: hsl(var(--muted-foreground) / .14); }
+.comparison-flow-file-group code { padding: 2px 7px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--background) / .5); color: hsl(var(--foreground)); font-family: inherit; font-size: 12px; }
+
+/* Everything beyond the chart stays folded so the first view is the flow. */
+.comparison-guide-more > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 14px; border: 1px solid hsl(var(--border)); border-radius: 8px; color: hsl(var(--muted-foreground)); font-size: 13px; font-weight: 550; cursor: pointer; list-style: none; }
+.comparison-guide-more > summary::-webkit-details-marker { display: none; }
+.comparison-guide-more > summary svg { width: 16px; height: 16px; transition: transform .15s ease; }
+.comparison-guide-more[open] > summary { color: hsl(var(--foreground)); }
+.comparison-guide-more[open] > summary svg { transform: rotate(180deg); }
+.comparison-guide-more > summary:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.comparison-guide-more > :not(summary) { margin-top: 12px; }
 .comparison-guide-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.comparison-guide-grid > section:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .comparison-guide-grid > section, .comparison-guide-extra, .comparison-guide-faq { padding: 16px; border: 1px solid hsl(var(--border)); border-radius: var(--app-radius-card); background: hsl(var(--card)); }
 .comparison-guide-dialog ul { display: flex; flex-direction: column; gap: 6px; padding-left: 18px; }
 .comparison-guide-pairs { display: flex; flex-direction: column; gap: 8px; }
@@ -264,18 +316,28 @@
 .comparison-guide-pairs dt { font-size: 13px; font-weight: 650; color: hsl(var(--foreground)); }
 .comparison-guide-note { margin-top: 10px !important; padding-top: 10px; border-top: 1px solid hsl(var(--border)); font-size: 12px !important; }
 .comparison-guide-extra { display: flex; flex-direction: column; gap: 6px; }
-/* Traps a newcomer can hit with no warning on screen (irreversible overwrite,
-   data that lives only in this browser) - set apart so they are read first. */
-.comparison-guide-traps { padding: 16px; border: 1px solid hsl(38 92% 50% / .35); border-left: 3px solid hsl(38 92% 55%); border-radius: var(--app-radius-card); background: hsl(38 92% 50% / .06); }
-.comparison-guide-traps h3 { display: flex; align-items: center; gap: 8px; color: hsl(38 92% 62%); }
-.comparison-guide-traps h3 svg { width: 16px; height: 16px; flex-shrink: 0; }
-.comparison-guide-traps .comparison-guide-pairs > div { grid-template-columns: 190px minmax(0, 1fr); }
-.comparison-guide-status { margin-top: 8px; }
-.comparison-guide-faq .comparison-guide-pairs > div { grid-template-columns: 180px minmax(0, 1fr); }
+.comparison-guide-status { margin-top: 10px; padding-top: 10px; border-top: 1px solid hsl(var(--border)); }
+.comparison-guide-faq .comparison-guide-pairs > div { grid-template-columns: 190px minmax(0, 1fr); }
 @media (max-width: 720px) {
-  .comparison-guide-steps ol, .comparison-guide-grid { grid-template-columns: minmax(0, 1fr); }
-  .comparison-guide-pairs > div, .comparison-guide-faq .comparison-guide-pairs > div, .comparison-guide-traps .comparison-guide-pairs > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .comparison-flow-wrap { padding: 14px; }
+  .comparison-flow { --flow-arrow: 28px; }
+  .comparison-flow-row { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
+  .comparison-flow-row + .comparison-flow-row::before { left: calc(50% - 1px); }
+  .comparison-flow-row + .comparison-flow-row::after { left: calc(50% - 5px); }
+  .comparison-flow-via { left: calc(50% + 10px); }
+  .comparison-flow-notes:empty { display: none; }
+  .comparison-flow-notes { margin-left: 13px; padding-left: 12px; border-left: 2px solid hsl(var(--tone) / .35); }
+  .comparison-flow-notes:not(:empty)::before { display: none; }
+  /* Stacked, the branch reads as a note under the diamond (same as step
+     notes) so the 可以 arrow below is not mistaken for leaving the branch. */
+  .comparison-flow-branch { align-items: flex-start; gap: 8px; margin-left: 13px; padding-left: 12px; border-left: 2px solid hsl(var(--warning) / .45); }
+  .comparison-flow-branch-arrow { align-self: flex-start; width: auto; margin: 0; padding: 0; font-size: 12px; line-height: 1.5; }
+  .comparison-flow-branch-arrow::before, .comparison-flow-branch-arrow::after { display: none; }
+  .comparison-flow-branch-box { padding: 0; border: 0; background: none; }
+  .comparison-guide-grid { grid-template-columns: minmax(0, 1fr); }
+  .comparison-guide-pairs > div, .comparison-guide-faq .comparison-guide-pairs > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
+@media (prefers-reduced-motion: reduce) { .comparison-guide-more > summary svg { transition: none; } }
 
 /* Validation messages can quote long folder paths with no spaces; let the hint
    column shrink and wrap rather than push the run button off a phone screen. */
