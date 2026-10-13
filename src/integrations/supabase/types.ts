@@ -2276,6 +2276,56 @@ type BaseDatabase = {
           },
         ]
       }
+      comparison_feedback: {
+        Row: {
+          id: string
+          reporter_id: string | null
+          attachment_owner_id: string
+          reporter_name: string
+          reporter_username: string
+          title: string
+          description: string
+          category: string
+          comparison_tab: string
+          project_name: string
+          page_context: Json
+          screenshots: Json
+          is_submitted: boolean
+          status: string
+          admin_note: string
+          reviewed_by: string | null
+          created_at: string
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          attachment_owner_id: string
+          reporter_name: string
+          reporter_username: string
+          title: string
+          description: string
+          category: string
+          comparison_tab: string
+          reporter_id?: string | null
+          project_name?: string
+          page_context?: Json
+          screenshots?: Json
+          is_submitted?: boolean
+          status?: string
+          admin_note?: string
+          reviewed_by?: string | null
+          created_at?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          status?: string
+          admin_note?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       test_plan_folders: {
         Row: {
           created_at: string
@@ -3788,6 +3838,26 @@ type BaseDatabase = {
       }
     }
     Functions: {
+      comparison_feedback_is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      create_comparison_feedback_draft: {
+        Args: { p_id: string; p_reporter_id: string; p_title: string; p_description: string; p_category: string; p_tab: string; p_project: string; p_context: Json; p_images: Json }
+        Returns: Json
+      }
+      submit_comparison_feedback: {
+        Args: { p_id: string }
+        Returns: Json
+      }
+      abandon_comparison_feedback_draft: {
+        Args: { p_id: string }
+        Returns: boolean
+      }
+      review_comparison_feedback: {
+        Args: { p_id: string; p_reviewer_id: string; p_status: string; p_note: string; p_expected_updated_at: string }
+        Returns: Json
+      }
       send_admin_announcement: {
         Args: {
           p_sender_id: string
