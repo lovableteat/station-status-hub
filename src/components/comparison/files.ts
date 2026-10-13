@@ -3,6 +3,17 @@ import type { InputFile, InputRole, RevisionInventory } from "./types.ts";
 export const INPUT_ROLES: InputRole[] = ["pstxnet", "pstxprt", "pstchip", "bom", "dsn", "pdf"];
 const REQUIRED_ROLES: InputRole[] = ["pstxnet", "pstxprt", "pstchip"];
 const MiB = 1024 * 1024;
+// Validation messages surface next to the run button, so name each role the way
+// the input panel labels it (ComparisonInputs). Required netlists keep their
+// filename because that is what people search their export folder for.
+const ROLE_NAMES: Record<InputRole, string> = {
+  pstxnet: "Net 連線（pstxnet.dat）",
+  pstxprt: "零件列表（pstxprt.dat）",
+  pstchip: "Pin 定義（pstchip.dat）",
+  bom: "ERP BOM",
+  dsn: "OrCAD DSN",
+  pdf: "線路圖 PDF",
+};
 
 export function filePath(file: File): string { return file.webkitRelativePath || file.name; }
 
@@ -54,12 +65,12 @@ export function validateRevision(inventory: RevisionInventory, selected: Partial
   for (const role of INPUT_ROLES) {
     const candidates = fresh.roles[role];
     const selection = selected[role];
-    if (selection !== undefined && typeof selection !== "string") { errors.push(`${role}：檔案選擇無效`); continue; }
+    if (selection !== undefined && typeof selection !== "string") { errors.push(`${ROLE_NAMES[role]}：檔案選擇無效`); continue; }
     if (selection === "" && !REQUIRED_ROLES.includes(role)) continue;
-    if (selection && !candidates.some(file => filePath(file) === selection)) errors.push(`${role}：選取的檔案不存在`);
-    if (!candidates.length && REQUIRED_ROLES.includes(role)) errors.push(`缺少必備 netlist：${role}.dat`);
-    if (candidates.length > 1 && !selection) errors.push(`${role} 有多個檔案，請選取要使用的版本`);
-    if (selection === "" && REQUIRED_ROLES.includes(role)) errors.push(`請選取必備 netlist：${role}.dat`);
+    if (selection && !candidates.some(file => filePath(file) === selection)) errors.push(`${ROLE_NAMES[role]}：選取的檔案不存在`);
+    if (!candidates.length && REQUIRED_ROLES.includes(role)) errors.push(`缺少必備 netlist：${ROLE_NAMES[role]}`);
+    if (candidates.length > 1 && !selection) errors.push(`${ROLE_NAMES[role]} 有多個檔案，請在下拉選單選定一份`);
+    if (selection === "" && REQUIRED_ROLES.includes(role)) errors.push(`請選取必備 netlist：${ROLE_NAMES[role]}`);
     const file = chosenFile(fresh, role, selected);
     if (file && chosen.has(filePath(file))) errors.push(`不同輸入角色使用重複的檔案路徑：${filePath(file)}`);
     if (file) chosen.add(filePath(file));
