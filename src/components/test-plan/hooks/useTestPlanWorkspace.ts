@@ -53,7 +53,7 @@ export function useTestPlanWorkspace(
   );
   const isAuthenticated = sessionMode === "authenticated";
   const ownerId = isAuthenticated ? user?.userId ?? null : null;
-  const canEdit = isAuthenticated && canEditModule("test-plan");
+  const moduleCanEdit = isAuthenticated && canEditModule("test-plan");
   const [spaces, setSpaces] = useState<TestPlanSpace[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
   const [folders, setFolders] = useState<TestPlanFolder[]>([]);
@@ -70,6 +70,23 @@ export function useTestPlanWorkspace(
   const ownerIdRef = useRef<string | null>(ownerId);
   activeSpaceIdRef.current = activeSpaceId;
   ownerIdRef.current = ownerId;
+
+  const canEditSpace = useCallback((spaceId: string) => {
+    const space = spaces.find(candidate => candidate.id === spaceId);
+    return moduleCanEdit && space !== undefined && (
+      !space.isPersonal || space.ownerId === ownerId
+      || user?.role === "admin" || user?.role === "super_admin"
+    );
+  }, [moduleCanEdit, ownerId, spaces, user?.role]);
+  const canEdit = moduleCanEdit && (activeSpaceId === null || canEditSpace(activeSpaceId));
+  const requireSpaceEdit = useCallback((spaceId: string) => {
+    if (!canEditSpace(spaceId)) throw new Error("這是其他使用者的檔案空間，目前為唯讀模式。");
+  }, [canEditSpace]);
+  const requireEntryEdit = useCallback((id: string, kind: "file" | "folder") => {
+    const entry = kind === "file" ? files.find(file => file.id === id) : folders.find(folder => folder.id === id);
+    if (!entry) throw new Error("項目不存在，請重新整理後再試。");
+    requireSpaceEdit(entry.spaceId);
+  }, [files, folders, requireSpaceEdit]);
 
   const requireEdit = useCallback(() => {
     if (!isAuthenticated) {
@@ -117,7 +134,7 @@ export function useTestPlanWorkspace(
           null,
           preferredSpaceId === undefined ? activeSpaceId : preferredSpaceId,
         );
-        if (requestId === requestIdRef.current) applyWorkspace(workspace);
+        if (requestId === requestIdRef.current && ownerIdRef.current === ownerId) applyWorkspace(workspace);
       } catch (caught) {
         if (requestId === requestIdRef.current) {
           setError(getTestPlanErrorMessage(caught, "資料儲存載入失敗。"));
@@ -143,9 +160,11 @@ export function useTestPlanWorkspace(
       const requestId = ++requestIdRef.current;
       setLoading(true);
       setError(null);
+      setFolders([]);
+      setFiles([]);
       try {
         const space = await repository.loadSpace(spaceId);
-        if (requestId !== requestIdRef.current) return;
+        if (requestId !== requestIdRef.current || ownerIdRef.current !== ownerId) return;
         setActiveSpaceId(spaceId);
         setFolders(space.folders);
         setFiles(space.files);
@@ -157,12 +176,13 @@ export function useTestPlanWorkspace(
         if (requestId === requestIdRef.current) setLoading(false);
       }
     },
-    [repository, refreshWorkspace],
+    [ownerId, repository, refreshWorkspace],
   );
 
   const runMutation = useCallback(
     async <T,>(operation: () => Promise<T>): Promise<T> => {
       requireEdit();
+      if (loading) throw new Error("檔案空間正在載入，請稍候再試。");
       if (mutationInFlightRef.current) {
         throw new Error("已有資料儲存操作進行中，請稍候再試。");
       }
@@ -183,7 +203,7 @@ export function useTestPlanWorkspace(
         setBusy(false);
       }
     },
-    [requireEdit],
+    [loading, requireEdit],
   );
 
   const refreshActiveSpace = useCallback(async (
@@ -249,14 +269,13 @@ export function useTestPlanWorkspace(
     if (requestedSpaceId) {
       const selected = spaces.find(space => space.id === requestedSpaceId);
       if (!selected) throw new Error("資料空間不存在，請重新整理後再試。");
+      requireSpaceEdit(selected.id);
       return selected;
     }
-    const common = spaces.find(space => space.projectId === null && space.name === "共用檔案");
-    if (common) return common;
-    const created = await repository.createSpace(ownerId, null, { name: "共用檔案" });
-    setSpaces(current => [...current, created]);
-    return created;
-  }, [activeSpaceId, ownerId, repository, spaces]);
+    const personal = spaces.find(space => space.isPersonal && space.ownerId === ownerId);
+    if (!personal) throw new Error("尚未載入你的檔案空間，請重新整理後再上傳。");
+    return personal;
+  }, [activeSpaceId, ownerId, requireSpaceEdit, spaces]);
 
   const createFolder = useCallback(
     (parentId: string | null, name: string) =>
@@ -273,16 +292,18 @@ export function useTestPlanWorkspace(
   const renameFolder = useCallback(
     (folderId: string, name: string) =>
       runMutation(async () => {
+        requireEntryEdit(folderId, "folder");
         const updated = await repository.renameFolder(folderId, name);
         await refreshActiveSpace(activeSpaceId, ownerId);
         return updated;
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeSpaceId, ownerId, refreshActiveSpace, repository, requireEntryEdit, runMutation],
   );
 
   const moveFolder = useCallback(
     (folderId: string, parentId: string | null) =>
       runMutation(async () => {
+        requireEntryEdit(folderId, "folder");
         const updated = await repository.moveFolder(
           folderId,
           parentId,
@@ -291,17 +312,18 @@ export function useTestPlanWorkspace(
         await refreshActiveSpace(activeSpaceId, ownerId);
         return updated;
       }),
-    [activeSpaceId, folders, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeSpaceId, folders, ownerId, refreshActiveSpace, repository, requireEntryEdit, runMutation],
   );
 
   const deleteFolder = useCallback(
     (folderId: string) =>
       runMutation(async () => {
         if (!ownerId) throw new Error("請先登入再刪除資料夾。");
+        requireEntryEdit(folderId, "folder");
         await repository.deleteFolder(ownerId, folderId);
         await refreshActiveSpace(activeSpaceId, ownerId);
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeSpaceId, ownerId, refreshActiveSpace, repository, requireEntryEdit, runMutation],
   );
 
   const uploadFiles = useCallback(
@@ -343,26 +365,29 @@ export function useTestPlanWorkspace(
   const renameFile = useCallback(
     (fileId: string, name: string) =>
       runMutation(async () => {
+        requireEntryEdit(fileId, "file");
         const updated = await repository.renameFile(fileId, name);
         await refreshActiveSpace(activeSpaceId, ownerId);
         return updated;
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeSpaceId, ownerId, refreshActiveSpace, repository, requireEntryEdit, runMutation],
   );
 
   const moveFile = useCallback(
     (fileId: string, folderId: string | null) =>
       runMutation(async () => {
+        requireEntryEdit(fileId, "file");
         const updated = await repository.moveFile(fileId, folderId);
         await refreshActiveSpace(activeSpaceId, ownerId);
         return updated;
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeSpaceId, ownerId, refreshActiveSpace, repository, requireEntryEdit, runMutation],
   );
 
   const updateFileDescription = useCallback(
     (fileId: string, description: string) =>
       runMutation(async () => {
+        requireEntryEdit(fileId, "file");
         const updated = await repository.updateFileDescription(
           fileId,
           description,
@@ -370,17 +395,18 @@ export function useTestPlanWorkspace(
         await refreshActiveSpace(activeSpaceId, ownerId);
         return updated;
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeSpaceId, ownerId, refreshActiveSpace, repository, requireEntryEdit, runMutation],
   );
 
   const deleteFile = useCallback(
     (file: TestPlanFileRecord) =>
       runMutation(async () => {
         if (!ownerId) throw new Error("請先登入再刪除檔案。");
+        requireEntryEdit(file.id, "file");
         await repository.deleteFile(ownerId, file);
         await refreshActiveSpace(activeSpaceId, ownerId);
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeSpaceId, ownerId, refreshActiveSpace, repository, requireEntryEdit, runMutation],
   );
 
   const downloadFile = useCallback(
@@ -391,11 +417,12 @@ export function useTestPlanWorkspace(
   const replaceFileContents = useCallback(
     (file: TestPlanFileRecord, contents: Blob) =>
       runMutation(async () => {
+        requireEntryEdit(file.id, "file");
         const updated = await repository.replaceFileContents(file, contents);
         await refreshActiveSpace(activeSpaceId, ownerId);
         return updated;
       }),
-    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+    [activeSpaceId, ownerId, refreshActiveSpace, repository, requireEntryEdit, runMutation],
   );
 
   return {
@@ -410,6 +437,8 @@ export function useTestPlanWorkspace(
     error,
     uploadProgress,
     canEdit,
+    canEditSpace,
+    ownerId,
     isAuthenticated,
     openSpace,
     refreshWorkspace,

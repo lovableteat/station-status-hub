@@ -28,7 +28,9 @@ test("provides spaces, nested folders, breadcrumbs, search, filters, and both vi
     "src/components/test-plan/TestPlanWorkspace.tsx",
   );
 
-  assert.match(workspace, /createSpace/);
+  assert.match(workspace, /userSpaces\.map/);
+  assert.match(workspace, /使用者空間/);
+  assert.doesNotMatch(workspace, /新增空間|刪除空間|編輯空間/);
   assert.match(workspace, /createFolder/);
   assert.match(workspace, /buildFolderBreadcrumbs/);
   assert.match(workspace, /filterAndSortEntries/);
@@ -174,7 +176,7 @@ test("makes loading, empty, error, view-only, and destructive states explicit", 
   );
 
   assert.match(workspace, /正在載入資料儲存/);
-  assert.match(workspace, /尚未建立空間/);
+  assert.match(workspace, /尚未載入使用者空間/);
   assert.match(workspace, /唯讀/);
   assert.match(workspace, /error/);
   assert.match(workspace, /需要安全登入/);
@@ -185,7 +187,7 @@ test("makes loading, empty, error, view-only, and destructive states explicit", 
   assert.match(workspace, /disabled=\{!canEdit/);
 });
 
-test("finishes the daily Test_Plan workflow with a full space form, guided start, selection, and private-file inspector", async () => {
+test("provides fixed user spaces, guided uploads, selection, and the private-file inspector", async () => {
   const [workspace, spaceDialog, inspector, styles] = await Promise.all([
     source("src/components/test-plan/TestPlanWorkspace.tsx"),
     source("src/components/test-plan/TestPlanSpaceDialog.tsx"),
@@ -201,9 +203,9 @@ test("finishes the daily Test_Plan workflow with a full space form, guided start
   assert.match(spaceDialog, /role="alert"/);
   assert.match(spaceDialog, /資料空間未儲存/);
 
-  assert.match(workspace, /建立空間/);
-  assert.match(workspace, /資料空間建立失敗/);
-  assert.match(workspace, /description: message/);
+  assert.match(workspace, /我的空間/);
+  assert.match(workspace, /個人空間/);
+  assert.match(workspace, /canEditSpace\(entry\.spaceId\)/);
   assert.match(workspace, /建立資料夾/);
   assert.match(workspace, /上傳檔案/);
   assert.match(workspace, /selectedEntry/);
