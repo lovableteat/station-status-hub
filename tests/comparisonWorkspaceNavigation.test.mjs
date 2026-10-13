@@ -37,7 +37,7 @@ test("leaving comparison clears its filters while preserving project context and
   const compiled = ts.transpileModule(declarations.map((node) => node.getText(ast)).join("\n"), {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const filterKeys = ["comparisonTab", "compareSearch", "compareStatus", "compareOwner", "compareSeverity", "compareCategory", "comparePage", "librarySearch", "librarySigned"];
+  const filterKeys = ["comparisonTab", "compareSearch", "compareStatus", "compareOwner", "compareSeverity", "compareCategory", "comparePage", "librarySearch", "librarySigned", "feedbackSearch", "feedbackStatus", "feedbackOwner", "feedbackCategory"];
   const url = new URL("https://example.test/?workspace=comparison&module=comparison&project=fixture");
   for (const key of filterKeys) url.searchParams.set(key, "active");
   let destination, allowed = true;

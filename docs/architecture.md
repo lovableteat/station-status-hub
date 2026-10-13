@@ -124,7 +124,7 @@ main.tsx
 
 切換工作區時，`pushWorkspaceLocation()` 會更新 query string、保留可分享的頁面狀態，並透過 workspace navigation event 通知 shell；不應使用整頁 reload 來完成一般切換。新增工作區或 module 時，要同步更新 `moduleWorkspaceMap`、權限規則、可見入口與回歸測試。績效頁沒有額外 module，直接以 `workspace=performance` 開啟。
 
-比對系統可由 `workspace=comparison&module=comparison` 直接進入，首頁與 render guard 都使用 `ai-chat` 授權，沒有另加資料庫權限 key。`comparisonTab` 保存五個功能頁；結果條件使用 `compareSearch`、`compareStatus`、`compareOwner`、`compareSeverity`、`compareCategory`、`comparePage`，位址庫使用 `librarySearch`、`librarySigned`。切換全站工作區時清除這些頁內條件，結果列表的「全部清除」保留 workspace、module 與功能頁上下文。
+比對系統可由 `workspace=comparison&module=comparison` 直接進入，首頁與 render guard 都使用 `ai-chat` 授權，沒有另加資料庫權限 key。`comparisonTab` 保存五個功能頁；結果條件使用 `compareSearch`、`compareStatus`、`compareOwner`、`compareSeverity`、`compareCategory`、`comparePage`，位址庫使用 `librarySearch`、`librarySigned`。意見收集清單使用 `feedbackSearch`、`feedbackStatus`、`feedbackOwner`、`feedbackCategory`。切換全站工作區時清除這些頁內條件，結果列表的「全部清除」保留 workspace、module 與功能頁上下文。
 
 ## 5. Provider 與資料流
 
@@ -158,6 +158,7 @@ main.tsx
 - 後台 API 金鑰 metadata。金鑰內容需遵守既有遮罩和 server-side 使用邊界。
 - 績效考核資料、考核週期、目標 JSON、主管與員工回饋；前端在 migration 尚未部署時會先以 localStorage 維持可用，雲端表啟用後以 `performance_reviews` 為準。
 - 比對系統使用 Pyodide Web Worker 執行 AutoCheck Python 引擎，原始工程檔不傳往 Supabase 或 AI 服務。結果與審查回覆依登入帳號保存在本機瀏覽器，並以含 JSON 及報表的 ZIP 備份匯入／匯出移轉；這項本機資料不提供跨裝置即時同步。
+- 比對頁首的「意見收集」另將使用者主動送出的問題說明與截圖保存至 `workspace.comparison_feedback` 與私人 Storage bucket `comparison-feedback`。一般帳號只讀取自己的回報；管理員可查看全部已完成上傳的回報、更新處理狀態／備註，並匯出 Excel 清單與全部截圖的 ZIP。寫入經過驗證 Auth 身分與 `ai-chat` 查看權限的 RPC，draft 在所有附件確認完成前不進管理員清單；工程原始檔仍留在本機。
 
 ### 5.4 Migration 工作規則
 
