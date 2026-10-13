@@ -2231,6 +2231,7 @@ type BaseDatabase = {
           created_at: string
           description: string | null
           id: string
+          is_personal: boolean
           name: string
           owner_id: string
           project_id: string | null
@@ -2241,6 +2242,7 @@ type BaseDatabase = {
           created_at?: string
           description?: string | null
           id?: string
+          is_personal?: boolean
           name: string
           owner_id: string
           project_id: string | null
@@ -2251,6 +2253,7 @@ type BaseDatabase = {
           created_at?: string
           description?: string | null
           id?: string
+          is_personal?: boolean
           name?: string
           owner_id?: string
           project_id?: string | null

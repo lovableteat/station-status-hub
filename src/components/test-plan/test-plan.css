@@ -1852,7 +1852,7 @@
 .file-library-workspace .test-plan-rail-heading strong { font-size: 13px; font-weight: 650; color: hsl(var(--foreground)); }
 .file-library-workspace .test-plan-space-list { display: flex; flex: 1; min-height: 0; max-height: none; flex-direction: column; gap: 6px; overflow-y: auto; padding: 10px; }
 .file-library-workspace .test-plan-space-rail:has(.test-plan-folder-tree) .test-plan-space-list { flex: 0 1 auto; max-height: 45%; }
-.file-library-workspace .test-plan-space-row { padding: 0; border: 1px solid transparent; border-radius: 11px; background: transparent; }
+.file-library-workspace .test-plan-space-row { grid-template-columns: minmax(0, 1fr); padding: 0; border: 1px solid transparent; border-radius: 11px; background: transparent; }
 .file-library-workspace .test-plan-space-row:hover { border-color: hsl(var(--border) / .8); background: hsl(var(--secondary) / .5); }
 .file-library-workspace .test-plan-space-row.is-active { border-color: hsl(var(--primary) / .35); background: hsl(var(--primary) / .13); box-shadow: none; }
 .file-library-workspace .test-plan-space-row > button:first-child { min-height: 48px; padding: 8px 10px; gap: 10px; }

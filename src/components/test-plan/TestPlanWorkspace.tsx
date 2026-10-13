@@ -29,7 +29,6 @@ import {
   MoreHorizontal,
   PanelLeftOpen,
   Pencil,
-  Plus,
   Presentation,
   RefreshCw,
   Search,
@@ -51,6 +50,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -92,16 +92,11 @@ import { useFileLibraryFilters } from "./useFileLibraryFilters";
 import { TestPlanInspector } from "./TestPlanInspector";
 import { isEditableSpreadsheet } from "./core/spreadsheet";
 import { TestPlanSpreadsheetEditor } from "./TestPlanSpreadsheetEditor";
-import {
-  TestPlanSpaceDialog,
-  type TestPlanSpaceInput,
-} from "./TestPlanSpaceDialog";
 import type {
   TestPlanEntry,
   TestPlanFileCategory,
   TestPlanFileRecord,
   TestPlanFolder,
-  TestPlanSpace,
   TestPlanSort,
 } from "./types";
 import "./test-plan.css";
@@ -124,16 +119,11 @@ type TextAction =
   | { kind: "rename-file"; id: string; value: string }
   | { kind: "describe-file"; id: string; value: string };
 
-type SpaceDialogState =
-  | { mode: "create"; space: null }
-  | { mode: "edit"; space: TestPlanSpace };
-
 type MoveAction =
   | { kind: "folder"; id: string; name: string }
   | { kind: "file"; id: string; name: string };
 
 type DeleteAction =
-  | { kind: "space"; id: string; name: string }
   | { kind: "folder"; id: string; name: string }
   | { kind: "file"; file: TestPlanFileRecord };
 
@@ -505,12 +495,11 @@ export function TestPlanWorkspace() {
     error,
     uploadProgress,
     canEdit,
+    canEditSpace,
+    ownerId,
     isAuthenticated,
     openSpace,
     refreshWorkspace,
-    createSpace,
-    updateSpace,
-    deleteSpace,
     createFolder,
     renameFolder,
     moveFolder,
@@ -529,8 +518,6 @@ export function TestPlanWorkspace() {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadRetry, setUploadRetry] = useState<UploadRetry | null>(null);
   const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
-  const [spaceDialog, setSpaceDialog] = useState<SpaceDialogState | null>(null);
-  const [spaceDialogError, setSpaceDialogError] = useState<string | null>(null);
   const [textAction, setTextAction] = useState<TextAction | null>(null);
   const [moveAction, setMoveAction] = useState<MoveAction | null>(null);
   const [deleteAction, setDeleteAction] = useState<DeleteAction | null>(null);
@@ -572,9 +559,20 @@ export function TestPlanWorkspace() {
     });
   }, [activeFolderId, folders]);
 
+  const personalSpace = spaces.find(space => space.isPersonal && space.ownerId === ownerId);
+  const userSpaces = useMemo(() => [...spaces].sort((first, second) => {
+    const mine = Number(second.ownerId === ownerId) - Number(first.ownerId === ownerId);
+    return mine || first.name.localeCompare(second.name, "zh-Hant", { numeric: true });
+  }), [ownerId, spaces]);
+
   useEffect(() => {
-    if (spaceDialog) setSpaceDialogError(null);
-  }, [spaceDialog]);
+    setUploadRetry(null);
+    setSelectedEntryKey(null);
+    setSpreadsheetFile(null);
+    setTextAction(null);
+    setMoveAction(null);
+    setDeleteAction(null);
+  }, [ownerId]);
 
   const breadcrumbs = useMemo(
     () => buildFolderBreadcrumbs(folders, activeFolderId),
@@ -610,7 +608,7 @@ export function TestPlanWorkspace() {
   }, [selectedEntry, selectedEntryKey]);
 
   const handleUpload = async (incoming: readonly File[], preservePaths = false, target?: Pick<UploadRetry, "folderId" | "spaceId">) => {
-    if (!canEdit || busy || incoming.length === 0) return;
+    if (!canEdit || busy || loading || incoming.length === 0) return;
     const uploadTarget = target ?? { folderId: activeFolderId, spaceId: activeSpaceId };
     setUploadRetry(null);
     try {
@@ -650,30 +648,6 @@ export function TestPlanWorkspace() {
     void handleUpload(Array.from(event.dataTransfer.files));
   };
 
-  const handleSpaceSubmit = async (input: TestPlanSpaceInput) => {
-    if (!spaceDialog) return;
-    setSpaceDialogError(null);
-    try {
-      if (spaceDialog.mode === "create") {
-        await createSpace(input);
-        toast.success("資料空間已建立");
-      } else {
-        await updateSpace(spaceDialog.space.id, input);
-        toast.success("資料空間已更新");
-      }
-      setSpaceDialog(null);
-    } catch (caught) {
-      const message = getTestPlanErrorMessage(caught, "空間儲存失敗，請稍後再試。");
-      setSpaceDialogError(message);
-      toast.error(
-        spaceDialog.mode === "create"
-          ? "資料空間建立失敗"
-          : "資料空間更新失敗",
-        { description: message },
-      );
-    }
-  };
-
   const handleTextSubmit = async (value: string) => {
     if (!textAction) return;
     try {
@@ -711,9 +685,7 @@ export function TestPlanWorkspace() {
   const handleDelete = async () => {
     if (!deleteAction) return;
     try {
-      if (deleteAction.kind === "space") {
-        await deleteSpace(deleteAction.id);
-      } else if (deleteAction.kind === "folder") {
+      if (deleteAction.kind === "folder") {
         await deleteFolder(deleteAction.id);
         if (activeFolderId === deleteAction.id) setActiveFolderId(null);
       } else {
@@ -772,7 +744,7 @@ export function TestPlanWorkspace() {
   const renderEntryActions = (entry: TestPlanEntry) => (
     <EntryActions
       entry={entry}
-      canEdit={canEdit}
+      canEdit={canEditSpace(entry.spaceId)}
       onEditSpreadsheet={() => {
         if (entry.kind === "file" && isEditableSpreadsheet(entry)) {
           setSpreadsheetFile(entry);
@@ -827,21 +799,13 @@ export function TestPlanWorkspace() {
                   唯讀模式
                 </Badge>
               )}
-              <Button
-                type="button"
-                variant="outline"
-                className="file-library-create-space"
-                aria-label="新增空間"
-                disabled={!canEdit || busy}
-                onClick={() => setSpaceDialog({ mode: "create", space: null })}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                <span>新增空間</span>
+              <Button type="button" variant="outline" disabled={!personalSpace || busy || loading} onClick={() => personalSpace && void openSpace(personalSpace.id)}>
+                <FolderOpen data-icon="inline-start" /><span>我的空間</span>
               </Button>
-              <Button type="button" variant="outline" className="file-library-upload" aria-label="上傳資料夾" disabled={!canEdit || busy || Boolean(uploadRetry)} onClick={() => folderInputRef.current?.click()}>
+              <Button type="button" variant="outline" className="file-library-upload" aria-label="上傳資料夾" disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onClick={() => folderInputRef.current?.click()}>
                 <FolderInput data-icon="inline-start" /><span>上傳資料夾</span>
               </Button>
-              <Button type="button" className="file-library-upload" disabled={!canEdit || busy || Boolean(uploadRetry)} onClick={() => fileInputRef.current?.click()}>
+              <Button type="button" className="file-library-upload" disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onClick={() => fileInputRef.current?.click()}>
                 <Upload data-icon="inline-start" /><span>上傳檔案</span>
               </Button>
             </>
@@ -849,14 +813,17 @@ export function TestPlanWorkspace() {
         />
       </header>
 
-      <input ref={fileInputRef} className="sr-only" type="file" multiple disabled={!canEdit || busy || Boolean(uploadRetry)} onChange={handleFileSelection} />
-      <input ref={folderInputRef} className="sr-only" type="file" multiple {...directoryInputProps} disabled={!canEdit || busy || Boolean(uploadRetry)} aria-label="選擇上傳資料夾" onChange={handleFolderSelection} />
-      <p className="file-library-upload-hint">資料夾保留原有層級，同名檔案會略過；空資料夾無法由瀏覽器選取</p>
+      <input ref={fileInputRef} className="sr-only" type="file" multiple disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onChange={handleFileSelection} />
+      <input ref={folderInputRef} className="sr-only" type="file" multiple {...directoryInputProps} disabled={!canEdit || loading || busy || Boolean(uploadRetry)} aria-label="選擇上傳資料夾" onChange={handleFolderSelection} />
+      <p className="file-library-upload-hint">
+        {activeSpaceId === null ? "在所有檔案上傳時，檔案會放入你的個人空間。" : `目前空間：${activeSpace?.name ?? "載入中"}。`}
+        {"資料夾保留原有層級，同名檔案會略過；空資料夾無法由瀏覽器選取"}
+      </p>
       {uploadRetry && (
         <section className="file-library-upload-errors" role="alert" aria-label="上傳失敗清單">
           <div className="file-library-upload-error-heading">
             <strong>{uploadRetry.files.length} 個檔案未上傳</strong>
-            <Button variant="outline" size="sm" aria-label="重試未上傳檔案" disabled={!canEdit || busy} onClick={() => void handleUpload(uploadRetry.files, uploadRetry.preservePaths, uploadRetry)}>重試未上傳檔案</Button>
+            <Button variant="outline" size="sm" aria-label="重試未上傳檔案" disabled={!canEdit || loading || busy} onClick={() => void handleUpload(uploadRetry.files, uploadRetry.preservePaths, uploadRetry)}>重試未上傳檔案</Button>
             <Button variant="ghost" size="icon" aria-label="關閉上傳失敗清單" disabled={busy} onClick={() => setUploadRetry(null)}><X className="h-4 w-4" /></Button>
           </div>
           <p>成功的檔案已保留，重試會使用原空間與資料夾</p>
@@ -879,11 +846,11 @@ export function TestPlanWorkspace() {
             "test-plan-space-rail",
             isSpaceDrawerOpen && "is-mobile-open",
           )}
-          aria-label="資料儲存空間與資料夾"
+          aria-label="使用者空間與資料夾"
         >
           <div className="test-plan-rail-heading">
             <div>
-              <strong>資料空間</strong>
+              <strong>使用者空間</strong>
             </div>
             <Button
               type="button"
@@ -899,7 +866,7 @@ export function TestPlanWorkspace() {
 
           <div className="test-plan-space-list">
             <button type="button" className={cn("file-library-all", activeSpaceId === null && "is-active")} disabled={busy} onClick={() => { setIsSpaceDrawerOpen(false); void openSpace(null); }}><FolderOpen /><span>所有檔案</span><span className="file-library-count">{activeSpaceId === null ? files.length : ""}</span></button>
-            {spaces.map((space) => (
+            {userSpaces.map((space) => (
               <div
                 key={space.id}
                 className={cn(
@@ -910,53 +877,20 @@ export function TestPlanWorkspace() {
                 <button
                   type="button"
                   disabled={busy}
+                  aria-label={`開啟 ${space.name} 的檔案空間`}
+                  aria-current={activeSpaceId === space.id ? "page" : undefined}
+                  title={`${space.name} ${space.description ?? ""}`}
                   onClick={() => {
                     setIsSpaceDrawerOpen(false);
                     void openSpace(space.id);
                   }}
                 >
-                  <span
-                    className="test-plan-space-color"
-                    style={{ backgroundColor: space.color }}
-                  />
+                  <Avatar className="size-8 shrink-0"><AvatarFallback>{Array.from(space.name).slice(0, 2).join("")}</AvatarFallback></Avatar>
                   <span className="min-w-0">
                     <strong>{space.name}</strong>
                   </span>
+                  {space.ownerId === ownerId && <Badge variant="secondary">我</Badge>}
                 </button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      aria-label={`${space.name} 空間操作`}
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      disabled={!canEdit}
-                      onSelect={() => setSpaceDialog({ mode: "edit", space })}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      編輯空間
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={!canEdit}
-                      className="text-red-300"
-                      onSelect={() =>
-                        setDeleteAction({
-                          kind: "space",
-                          id: space.id,
-                          name: space.name,
-                        })}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      刪除空間
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
             ))}
           </div>
@@ -1024,14 +958,13 @@ export function TestPlanWorkspace() {
               <span className="test-plan-empty-icon">
                 <FolderKanban className="h-8 w-8" />
               </span>
-              <h2>尚未建立空間</h2>
-              <p>建立資料空間，開始整理及上傳檔案。</p>
+              <h2>尚未載入使用者空間</h2>
+              <p>使用者空間會在帳號啟用時自動建立，請重新整理後再試。</p>
               <Button
-                disabled={!canEdit || busy}
-                onClick={() => setSpaceDialog({ mode: "create", space: null })}
+                disabled={busy}
+                onClick={() => void refreshWorkspace(null)}
               >
-                <Plus className="mr-2 h-4 w-4" />
-                建立第一個空間
+                <RefreshCw data-icon="inline-start" />重新整理
               </Button>
             </div>
           ) : (
@@ -1077,7 +1010,7 @@ export function TestPlanWorkspace() {
                 <div className="test-plan-primary-actions">
                   <Button
                     variant="outline"
-                    disabled={!canEdit || busy}
+                    disabled={!canEdit || loading || busy}
                     onClick={() =>
                       setTextAction({
                         kind: "create-folder",
@@ -1193,7 +1126,7 @@ export function TestPlanWorkspace() {
                 )}
                 onDragEnter={(event) => {
                   event.preventDefault();
-                  if (canEdit && !busy && !uploadRetry) setIsDragging(true);
+                  if (canEdit && !loading && !busy && !uploadRetry) setIsDragging(true);
                 }}
                 onDragOver={(event) => event.preventDefault()}
                 onDragLeave={(event) => {
@@ -1220,11 +1153,11 @@ export function TestPlanWorkspace() {
                 ) : visibleEntries.length === 0 ? (
                   <div className="test-plan-empty is-compact">
                     <Archive className="h-8 w-8" />
-                    <h2>{query || categoryFilter !== "all" ? "目前篩選條件沒有符合的檔案" : "這個資料夾目前是空的"}</h2>
+                    <h2>{query || categoryFilter !== "all" ? "目前篩選條件沒有符合的檔案" : activeFolderId ? "這個資料夾目前是空的" : activeSpaceId ? "這個使用者空間目前是空的" : "尚未上傳檔案"}</h2>
                     <p>
                       {query
                         ? "請調整搜尋字詞或檔案類型。"
-                        : "將檔案拖到這裡，或使用右上方的上傳按鈕。"}
+                        : canEdit ? "將檔案拖到這裡，或使用右上方的上傳按鈕。" : "切換到我的空間，即可整理及上傳自己的檔案。"}
                     </p>
                   </div>
                 ) : viewMode === "grid" ? (
@@ -1347,7 +1280,7 @@ export function TestPlanWorkspace() {
         {selectedEntry && (
           <TestPlanInspector
             entry={selectedEntry}
-            canEdit={canEdit}
+            canEdit={canEditSpace(selectedEntry.spaceId)}
             busy={busy}
             onClose={() => setSelectedEntryKey(null)}
             downloadFile={downloadFile}
@@ -1413,7 +1346,7 @@ export function TestPlanWorkspace() {
       <TestPlanSpreadsheetEditor
         open={Boolean(spreadsheetFile)}
         file={spreadsheetFile}
-        canEdit={canEdit}
+        canEdit={spreadsheetFile ? canEditSpace(spreadsheetFile.spaceId) : false}
         downloadFile={downloadFile}
         onOpenChange={(open) => {
           if (!open) setSpreadsheetFile(null);
@@ -1424,20 +1357,6 @@ export function TestPlanWorkspace() {
         }}
       />
 
-      <TestPlanSpaceDialog
-        open={Boolean(spaceDialog)}
-        mode={spaceDialog?.mode ?? "create"}
-        space={spaceDialog?.space}
-        busy={busy}
-        error={spaceDialogError}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSpaceDialog(null);
-            setSpaceDialogError(null);
-          }
-        }}
-        onSubmit={handleSpaceSubmit}
-      />
       <TextActionDialog
         action={textAction}
         busy={busy}

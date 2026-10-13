@@ -14,6 +14,7 @@ export interface TestPlanSpace {
   id: string;
   projectId: string | null;
   ownerId: string;
+  isPersonal?: boolean;
   name: string;
   description: string | null;
   color: string;

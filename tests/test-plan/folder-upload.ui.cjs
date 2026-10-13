@@ -5,7 +5,7 @@ const {React, create, act, loader} = require('../support/renderHarness.cjs');
 function fixture(uploadFiles, editable = true) {
   const state = {
     spaces:[{id:'space-1', name:'Engineering', projectId:null}], activeSpaceId:'space-1', activeSpace:{id:'space-1', name:'Engineering'},
-    folders:[], files:[], loading:false, busy:false, error:null, uploadProgress:null, canEdit:editable, isAuthenticated:true, uploadFiles,
+    folders:[], files:[], loading:false, busy:false, error:null, uploadProgress:null, canEdit:editable, canEditSpace:()=>editable, ownerId:'owner', isAuthenticated:true, uploadFiles,
   };
   const load=loader({globals:{File,Blob},mocks:{
     './hooks/useTestPlanWorkspace':{useTestPlanWorkspace:()=>state},

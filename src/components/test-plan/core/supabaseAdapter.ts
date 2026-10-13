@@ -26,6 +26,7 @@ function mapSpace(row: SpaceRow): TestPlanSpace {
     id: row.id,
     projectId: row.project_id,
     ownerId: row.owner_id,
+    isPersonal: row.is_personal,
     name: row.name,
     description: row.description,
     color: row.color,
@@ -214,12 +215,13 @@ async function uploadLargeObject(
 export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
   return {
     async listSpaces(projectId) {
-      // No project filter on the standalone library. Existing space IDs and
-      // storage paths remain intact; RLS continues to authorize every row.
+      // Fixed account spaces are provisioned by the database; the standalone
+      // library has no maintenance-project context. RLS authorizes every row.
       const records: TestPlanSpace[] = [];
       for (let offset = 0; ; offset += 500) {
         let query = supabase.from("test_plan_spaces").select("*")
-          .order("updated_at", { ascending: false }).order("id")
+          .eq("is_personal", true)
+          .order("name").order("id")
           .range(offset, offset + 499);
         if (projectId) query = query.eq("project_id", projectId);
         const { data, error } = await query;

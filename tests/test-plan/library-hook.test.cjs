@@ -4,7 +4,11 @@ const {React, create, act, loader, flush, browser, deferred} = require('../suppo
 
 function setup() {
   const stamp = '2026-10-12T00:00:00Z';
-  const spaces = [{id:'old-space', projectId:'old-project', ownerId:'owner', name:'Legacy', color:'#60a5fa', createdAt:stamp, updatedAt:stamp}];
+  const spaces = [
+    {id:'old-space', projectId:'old-project', ownerId:'owner', name:'Legacy', color:'#60a5fa', createdAt:stamp, updatedAt:stamp},
+    {id:'personal-space', projectId:null, ownerId:'owner', name:'Owner', isPersonal:true, createdAt:stamp, updatedAt:stamp},
+    {id:'other-space', projectId:null, ownerId:'other', name:'Other User', isPersonal:true, createdAt:stamp, updatedAt:stamp},
+  ];
   const files = [{id:'old-file', spaceId:'old-space', folderId:'nested', originalName:'original.md', storagePath:'owner/old-project/old-space/original.md', extension:'md', category:'document', fileSize:9, createdAt:stamp, updatedAt:stamp}];
   const folders = [{id:'nested', spaceId:'old-space', parentId:null, name:'Nested', createdAt:stamp, updatedAt:stamp}];
   const log = []; const blobs = new Map([[files[0].storagePath, new Blob(['unchanged'])]]);
@@ -28,7 +32,7 @@ function setup() {
   return {spaces,files,folders,log,adapter,session,blobs,Probe,get state(){return state},setEditable(value){editable=value}};
 }
 
-test('opening all files performs no writes; uploads preserve legacy paths or create a global space', async()=>{
+test('opening all files performs no writes; uploads target the signed-in user personal space', async()=>{
   const f=setup();let tree;
   await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
   assert.equal(f.state.activeSpaceId,null);assert.equal(f.state.files[0].folderId,'nested');assert.deepEqual(f.log,[]);
@@ -40,8 +44,9 @@ test('opening all files performs no writes; uploads preserve legacy paths or cre
   assert.equal(f.files[0].storagePath,'owner/old-project/old-space/original.md');
   await act(async()=>{await f.state.openSpace(null)});
   await act(async()=>{await f.state.uploadFiles(null,[new File(['global'],'common.md')])});
-  assert.equal(f.log.find(e=>e[0]==='createSpace')[1].projectId,null);
-  assert.match(f.log.filter(e=>e[0]==='upload').at(-1)[1],/^owner\/global\/global-space\//);
+  assert.equal(f.log.some(e=>e[0]==='createSpace'),false);
+  assert.equal(f.log.filter(e=>e[0]==='createFile').at(-1)[1].spaceId,'personal-space');
+  assert.match(f.log.filter(e=>e[0]==='upload').at(-1)[1],/^owner\/global\/personal-space\//);
   assert.equal(f.state.activeSpaceId,null);assert.equal(f.state.files.length,3);
   await act(async()=>tree.unmount());
 });
@@ -91,7 +96,7 @@ function folderFile(path) {
   return file;
 }
 
-test('folder upload validates the whole selection before creating a common space', async()=>{
+test('folder upload validates the whole selection before uploading to the personal space', async()=>{
   const f=setup();let tree;
   await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
   await act(async()=>{await assert.rejects(f.state.uploadFiles(null,[folderFile('Release/a.md'),folderFile('Release/../b.md')],{preservePaths:true}),/路徑/)});
@@ -127,14 +132,50 @@ test('a post-upload refresh error returns committed successes so retry cannot du
   await act(async()=>tree.unmount());
 });
 
-test('retry after a common-space folder read failure reuses the space already created', async()=>{
+test('retry after a personal-space folder read failure never creates duplicate spaces', async()=>{
   const f=setup();let tree;
   await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
   const originalList=f.adapter.listFolders;let offline=true;
-  f.adapter.listFolders=async id=>{if(id==='global-space'&&offline){offline=false;throw new Error('offline')};return originalList(id)};
+  f.adapter.listFolders=async id=>{if(id==='personal-space'&&offline){offline=false;throw new Error('offline')};return originalList(id)};
   const files=[folderFile('Release/a.md')];
   await act(async()=>{await assert.rejects(f.state.uploadFiles(null,files,{preservePaths:true}),/offline/)});
   await act(async()=>{await f.state.uploadFiles(null,files,{preservePaths:true})});
-  assert.equal(f.log.filter(entry=>entry[0]==='createSpace').length,1);
+  assert.equal(f.log.filter(entry=>entry[0]==='createSpace').length,0);
+  await act(async()=>tree.unmount());
+});
+
+test('all users are visible, other personal spaces are read-only, administrators can edit', async()=>{
+  const f=setup();let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  assert.equal(f.state.spaces.length,3);
+  assert.equal(f.state.canEditSpace('personal-space'),true);
+  assert.equal(f.state.canEditSpace('other-space'),false);
+  await act(async()=>{await assert.rejects(f.state.uploadFiles(null,[new File(['x'],'blocked.md')],{spaceId:'other-space'}),/唯讀/)});
+  assert.deepEqual(f.log,[]);
+  await act(async()=>{await f.state.openSpace('other-space')});
+  assert.equal(f.state.canEdit,false);
+  f.session.user.role='admin';
+  await act(async()=>tree.update(React.createElement(f.Probe)));
+  assert.equal(f.state.canEditSpace('other-space'),true);
+  await act(async()=>{await f.state.uploadFiles(null,[new File(['x'],'admin.md')])});
+  assert.equal(f.log.find(entry=>entry[0]==='createFile')[1].spaceId,'other-space');
+  await act(async()=>tree.unmount());
+});
+
+test('missing personal space fails explicitly without creating a shared or duplicate space', async()=>{
+  const f=setup();f.spaces.splice(1,1);let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  await act(async()=>{await assert.rejects(f.state.uploadFiles(null,[new File(['x'],'blocked.md')]),/尚未載入你的檔案空間/)});
+  assert.deepEqual(f.log,[]);
+  await act(async()=>tree.unmount());
+});
+
+test('entry mutations from all-files view cannot modify another owner content', async()=>{
+  const f=setup();f.files.push({...f.files[0],id:'other-file',spaceId:'other-space'});let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  assert.equal(f.state.canEdit,true);
+  await act(async()=>{await assert.rejects(f.state.renameFile('other-file','renamed.md'),/唯讀/)});
+  await act(async()=>{await assert.rejects(f.state.replaceFileContents(f.files[1],new Blob(['changed'])),/唯讀/)});
+  assert.deepEqual(f.log,[]);
   await act(async()=>tree.unmount());
 });
