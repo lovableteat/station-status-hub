@@ -26,6 +26,8 @@ import {
 interface PermissionsContextValue {
   permissions: Permission[];
   workspacePermissions: WorkspaceAccessMap;
+  /** Active administrator role verified for the current database account. */
+  isAdmin: boolean;
   /** Whether an administrator explicitly assigned this account as a reviewer. */
   isPerformanceManager: boolean;
   loading: boolean;
@@ -256,6 +258,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     () => ({
       permissions,
       workspacePermissions,
+      isAdmin,
       isPerformanceManager,
       loading,
       hasPermission,
@@ -271,6 +274,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       getWorkspaceAccess,
       hasAnyPermission,
       hasPermission,
+      isAdmin,
       isPerformanceManager,
       loading,
       permissions,

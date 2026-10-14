@@ -94,6 +94,24 @@ async function flushCleanupQueue(
   }
 }
 
+export interface TestPlanDeleteResult {
+  cleanupPending: boolean;
+}
+
+async function finishDeletedItemCleanup(
+  adapter: TestPlanDataAdapter,
+  ownerId: string,
+): Promise<TestPlanDeleteResult> {
+  try {
+    await flushCleanupQueue(adapter, ownerId);
+    return { cleanupPending: false };
+  } catch {
+    // Metadata deletion has committed. Keep the durable queue for a later
+    // retry and let the caller refresh the list instead of reporting failure.
+    return { cleanupPending: true };
+  }
+}
+
 export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
   return {
     listSpaces(projectId: string | null = null) {
@@ -346,14 +364,14 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
     },
     async deleteFile(ownerId: string, file: TestPlanFileRecord) {
       await adapter.deleteFile(file.id);
-      await flushCleanupQueue(adapter, ownerId);
+      return finishDeletedItemCleanup(adapter, ownerId);
     },
     async deleteFolder(
       ownerId: string,
       folderId: string,
     ) {
       await adapter.deleteFolder(folderId);
-      await flushCleanupQueue(adapter, ownerId);
+      return finishDeletedItemCleanup(adapter, ownerId);
     },
     async deleteSpace(
       ownerId: string,

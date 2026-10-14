@@ -21,15 +21,15 @@ function setup(options = {}) {
     downloadObject:async(path)=>{log.push(['download',path]);return blobs.get(path)},
   };
   const session = {user:{userId:'owner'},sessionMode:'authenticated'};
-  let editable = true; let state;
+  let editable = true; let canonicalAdmin; let state;
   const load = loader({window:options.window,globals:{File,Blob}, mocks:{
     '@/components/auth/UserContext':{useUser:()=>session},
-    '@/hooks/usePermissions':{usePermissions:()=>({canEditModule:()=>editable})},
+    '@/hooks/usePermissions':{usePermissions:()=>({canEditModule:()=>editable,get isAdmin(){return canonicalAdmin ?? ['admin','super_admin'].includes(session.user?.role)}})},
     '../core/supabaseAdapter':{createSupabaseTestPlanAdapter:()=>adapter},
   }});
   const {useTestPlanWorkspace} = load('src/components/test-plan/hooks/useTestPlanWorkspace.ts');
   function Probe(){state=useTestPlanWorkspace();return null}
-  return {spaces,files,folders,log,adapter,session,blobs,Probe,get state(){return state},setEditable(value){editable=value}};
+  return {spaces,files,folders,log,adapter,session,blobs,Probe,get state(){return state},setEditable(value){editable=value},setIsAdmin(value){canonicalAdmin=value}};
 }
 
 test('opening all files performs no writes; uploads target the signed-in user personal space', async()=>{
@@ -177,6 +177,53 @@ test('entry mutations from all-files view cannot modify another owner content', 
   await act(async()=>{await assert.rejects(f.state.renameFile('other-file','renamed.md'),/唯讀/)});
   await act(async()=>{await assert.rejects(f.state.replaceFileContents(f.files[1],new Blob(['changed'])),/唯讀/)});
   assert.deepEqual(f.log,[]);
+  await act(async()=>tree.unmount());
+});
+
+test('canonical administrators can delete loaded legacy PDFs absent from the account sidebar despite stale session roles', async()=>{
+  const f=setup();f.setIsAdmin(true);f.session.user.role='engineer';
+  const legacy={...f.files[0],id:'legacy-pdf',spaceId:'unlisted-space',originalName:'legacy.pdf',extension:'pdf',storagePath:'other/global/unlisted-space/legacy.pdf'};
+  f.files.push(legacy);
+  f.adapter.deleteFile=async id=>{f.log.push(['deleteFile',id]);const index=f.files.findIndex(file=>file.id===id);if(index>=0)f.files.splice(index,1)};
+  let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  assert.equal(f.state.spaces.some(space=>space.id===legacy.spaceId),false);
+  assert.equal(f.state.canEditSpace('other-space'),true);
+  assert.equal(f.state.canEditSpace(legacy.spaceId),true);
+  await act(async()=>{await assert.rejects(f.state.deleteFile({...legacy,id:'not-loaded'}),/項目不存在/)});
+  assert.deepEqual(f.log,[],'administrator capability must not bypass the loaded-entry guard');
+  await act(async()=>{await f.state.deleteFile(legacy)});
+  assert.deepEqual(f.log,[['deleteFile','legacy-pdf']]);
+  assert.equal(f.state.files.some(file=>file.id===legacy.id),false);
+  await act(async()=>tree.unmount());
+});
+
+test('cached administrator roles do not grant mutation access when the canonical capability is false or revoked', async()=>{
+  const f=setup();f.session.user.role='admin';f.setIsAdmin(false);
+  const other={...f.files[0],id:'other-pdf',spaceId:'other-space',originalName:'other.pdf',extension:'pdf'};
+  const unknown={...other,id:'unknown-pdf',spaceId:'unlisted-space'};
+  f.files.push(other,unknown);
+  f.adapter.deleteFile=async id=>{f.log.push(['deleteFile',id])};
+  let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  assert.equal(f.state.canEditSpace('personal-space'),true);
+  assert.equal(f.state.canEditSpace('other-space'),false);
+  assert.equal(f.state.canEditSpace('unlisted-space'),false);
+  await act(async()=>{await assert.rejects(f.state.deleteFile(other),/唯讀/);await assert.rejects(f.state.deleteFile(unknown),/唯讀/)});
+  assert.deepEqual(f.log,[]);
+  f.setIsAdmin(true);
+  await act(async()=>tree.update(React.createElement(f.Probe)));
+  assert.equal(f.state.canEditSpace('other-space'),true);
+  f.setIsAdmin(false);
+  await act(async()=>tree.update(React.createElement(f.Probe)));
+  assert.equal(f.session.user.role,'admin','stale browser role is intentionally unchanged');
+  await act(async()=>{await assert.rejects(f.state.deleteFile(other),/唯讀/)});
+  assert.deepEqual(f.log,[]);
+  f.setIsAdmin(true);f.setEditable(false);
+  await act(async()=>tree.update(React.createElement(f.Probe)));
+  assert.equal(f.state.canEditSpace('unlisted-space'),false);
+  await act(async()=>{await assert.rejects(f.state.deleteFile(unknown),/唯讀/)});
+  assert.deepEqual(f.log,[],'module edit access remains required even with administrator capability');
   await act(async()=>tree.unmount());
 });
 

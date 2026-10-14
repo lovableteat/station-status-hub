@@ -685,11 +685,12 @@ export function TestPlanWorkspace() {
   const handleDelete = async () => {
     if (!deleteAction) return;
     try {
+      let cleanupPending = false;
       if (deleteAction.kind === "folder") {
-        await deleteFolder(deleteAction.id);
+        cleanupPending = (await deleteFolder(deleteAction.id)).cleanupPending;
         if (activeFolderId === deleteAction.id) setActiveFolderId(null);
       } else {
-        await deleteFile(deleteAction.file);
+        cleanupPending = (await deleteFile(deleteAction.file)).cleanupPending;
       }
       if (
         deleteAction.kind === "file"
@@ -700,7 +701,8 @@ export function TestPlanWorkspace() {
       ) {
         setSelectedEntryKey(null);
       }
-      toast.success("項目已刪除");
+      if (cleanupPending) toast.warning("項目已從清單刪除，實體檔案清理待重試；重新整理時會再處理。");
+      else toast.success("項目已刪除");
       setDeleteAction(null);
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : "刪除失敗");
@@ -1141,7 +1143,7 @@ export function TestPlanWorkspace() {
                   <div className="test-plan-drop-overlay">
                     <HardDriveUpload className="h-9 w-9" />
                     <strong>放開以上傳到此資料夾</strong>
-                    <span>一次最多 20 個檔案，單檔 500 MB</span>
+                    <span>一次最多 20 個檔案，單檔 1 GB，整批合計 1 GB</span>
                   </div>
                 )}
 
