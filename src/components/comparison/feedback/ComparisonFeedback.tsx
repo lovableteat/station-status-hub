@@ -186,7 +186,7 @@ export function ComparisonFeedback({ tab: currentTab, projectName, revisionA, re
     reviewDirty.current = false; setPreview(null); setSelectedId(id);
   };
   return <>
-    <Button variant="outline" disabled={!canSubmit || capturing} title={!canSubmit ? "需要安全登入才能送出回報" : "附上截圖與問題說明"} onClick={() => { setPanel(isAdmin ? "reports" : "new"); setError(""); setOpen(true); }}><MessageSquarePlus data-icon="inline-start" />意見收集</Button>
+    <Button variant="outline" className="comparison-feedback-trigger" disabled={!canSubmit || capturing} title={!canSubmit ? "需要安全登入才能送出回報" : "附上截圖與問題說明"} onClick={() => { setPanel(isAdmin ? "reports" : "new"); setError(""); setOpen(true); }}><MessageSquarePlus data-icon="inline-start" />意見收集</Button>
     <Dialog open={open && !capturing} onOpenChange={close}><DialogContent className="comparison-feedback-dialog" hideCloseButton={busy || adding} onInteractOutside={event => { if (busy || adding) event.preventDefault(); }} onEscapeKeyDown={event => { if (busy || adding) event.preventDefault(); }}>
       <DialogHeader><DialogTitle>AutoCheck 意見收集</DialogTitle><DialogDescription>附上截圖與問題說明，管理員可集中查看並匯出整理。</DialogDescription></DialogHeader>
       {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}

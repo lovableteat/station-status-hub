@@ -4,16 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { filePath, formatBytes, inspectRevision } from "./files";
+import { filePath, formatBytes, inspectRevision, INPUT_ROLES, INPUT_ROLE_DETAILS, REQUIRED_ROLES } from "./files";
 import type { InputRole } from "./types";
 
 export interface RevisionInput { files: File[]; selected: Partial<Record<InputRole, string>>; }
-const roles: Array<{ key: InputRole; label: string; required?: boolean }> = [
-  { key: "pstxnet", label: "Net 連線", required: true },
-  { key: "pstxprt", label: "零件列表", required: true },
-  { key: "pstchip", label: "Pin 定義", required: true },
-  { key: "bom", label: "ERP BOM" }, { key: "dsn", label: "OrCAD DSN" }, { key: "pdf", label: "線路圖 PDF" },
-];
+const roles = INPUT_ROLES.map(key => ({ key, ...INPUT_ROLE_DETAILS[key], required: REQUIRED_ROLES.includes(key) }));
 
 export function ComparisonInputs({ side, label, onLabel, value, onChange, disabled }: { side: "A" | "B"; label: string; onLabel: (value: string) => void; value: RevisionInput; onChange: (value: RevisionInput) => void; disabled: boolean }) {
   const folder = useRef<HTMLInputElement>(null);
@@ -36,13 +31,13 @@ export function ComparisonInputs({ side, label, onLabel, value, onChange, disabl
   const directoryProps = { webkitdirectory: "" } as InputHTMLAttributes<HTMLInputElement>;
   return <section className="comparison-input-panel" aria-label={`${side} 版資料`} data-side={side} data-has-files={value.files.length > 0}>
     <div className="comparison-input-heading"><span className="comparison-revision-mark">{side}</span><div className="comparison-revision-title"><h2>{side === "A" ? "舊版資料" : "新版資料"}</h2><p>{side === "A" ? "作為比對基準的版本" : "要檢查的改版內容"}</p></div><div className="comparison-revision-name"><Label htmlFor={labelId}>版本名稱</Label><Input id={labelId} aria-label={`${side} 版名稱`} value={label} onChange={event => onLabel(event.target.value)} maxLength={64} disabled={disabled} className="comparison-revision-label" /></div></div>
-    {!inventory.error && <p className="comparison-required-summary" data-ready={readyCount === 3} role="status">{readyCount === 3 ? <Check /> : <AlertCircle />}<span>必要檔案 <strong>{readyCount}／3</strong></span><span>{readyCount === 3 ? "已選齊" : `還需 ${3 - readyCount} 份`}</span></p>}
+    {!inventory.error && <p className="comparison-required-summary" data-ready={readyCount === REQUIRED_ROLES.length} role="status">{readyCount === REQUIRED_ROLES.length ? <Check /> : <AlertCircle />}<span>必要檔案 <strong>{readyCount}／{REQUIRED_ROLES.length}</strong></span><span>{readyCount === REQUIRED_ROLES.length ? "已選齊" : `還需 ${REQUIRED_ROLES.length - readyCount} 份`}</span></p>}
     <div className="comparison-file-actions"><Button variant="outline" className="comparison-folder-action" disabled={disabled} onClick={() => folder.current?.click()}><FolderOpen />選擇資料夾</Button><Button variant="ghost" disabled={disabled} onClick={() => files.current?.click()}><FilePlus2 />選擇檔案</Button></div>
     <input ref={folder} {...directoryProps} type="file" multiple className="sr-only" aria-label={`選取 ${side} 版資料夾`} onChange={event => selectFiles(event.target.files)} disabled={disabled} />
     <input ref={files} type="file" multiple className="sr-only" aria-label={`選取 ${side} 版檔案`} accept=".dat,.xls,.xlsx,.csv,.htm,.html,.dsn,.pdf" onChange={event => selectFiles(event.target.files)} disabled={disabled} />
     {inventory.error ? <p className="comparison-alert" role="alert">{inventory.error}</p> : <div className="comparison-input-inventory">{rows.map(({ role, candidates, selected, chosen, state, status }) => {
-      return <div key={role.key} className="comparison-input-file" data-state={state} data-required={Boolean(role.required)}><span className={chosen ? "comparison-good" : state === "missing" ? "comparison-missing" : "text-muted-foreground"}>{chosen ? <Check /> : state === "missing" ? <AlertCircle /> : <Minus />}</span><div className="comparison-file-role"><span>{role.label}{role.required && <small>必要</small>}</span>{role.required && <span className="comparison-role-filename">{role.key}.dat</span>}</div>{candidates.length > 1 ? <Select value={selected === "" && !role.required ? "skip" : selected || "choose"} onValueChange={path => onChange({ ...value, selected: { ...value.selected, [role.key]: path === "skip" ? "" : path } })} disabled={disabled}><SelectTrigger aria-label={`${side} 版${role.label}來源`} className="comparison-file-source"><SelectValue placeholder="選擇來源" /></SelectTrigger><SelectContent>{!role.required && <SelectItem value="skip">不使用</SelectItem>}<SelectItem value="choose" disabled>請選擇一份來源</SelectItem>{candidates.map(file => <SelectItem value={filePath(file)} key={filePath(file)}>{filePath(file)}</SelectItem>)}</SelectContent></Select> : <span className="comparison-file-name" title={chosen ? filePath(chosen) : ""}>{chosen?.name ?? "—"}</span>}<span className="comparison-file-status">{status}</span></div>;
+      return <div key={role.key} className="comparison-input-file" data-state={state} data-required={Boolean(role.required)}><span className={chosen ? "comparison-good" : state === "missing" ? "comparison-missing" : "text-muted-foreground"}>{chosen ? <Check /> : state === "missing" ? <AlertCircle /> : <Minus />}</span><div className="comparison-file-role"><span>{role.label}<small>{role.required ? "必要" : "選用"}</small></span><span className="comparison-role-filename">{role.hint}</span></div>{candidates.length > 1 ? <Select value={selected === "" && !role.required ? "skip" : selected || "choose"} onValueChange={path => onChange({ ...value, selected: { ...value.selected, [role.key]: path === "skip" ? "" : path } })} disabled={disabled}><SelectTrigger aria-label={`${side} 版${role.label}來源`} className="comparison-file-source"><SelectValue placeholder="選擇來源" /></SelectTrigger><SelectContent>{!role.required && <SelectItem value="skip">不使用</SelectItem>}<SelectItem value="choose" disabled>請選擇一份來源</SelectItem>{candidates.map(file => <SelectItem value={filePath(file)} key={filePath(file)}>{filePath(file)}</SelectItem>)}</SelectContent></Select> : <span className="comparison-file-name" title={chosen ? filePath(chosen) : ""}>{chosen?.name ?? "—"}</span>}<span className="comparison-file-status">{status}</span></div>;
     })}</div>}
-    <p className="comparison-input-footnote">{value.files.length ? `${value.files.length} 份檔案 · ${formatBytes(inventory.data?.totalBytes ?? 0)}${inventory.data?.ignored ? ` · ${inventory.data.ignored} 份不相關檔案略過` : ""}` : "選取包含 pstxnet、pstxprt、pstchip 的資料夾；子資料夾也會辨識。"}</p>
+    <p className="comparison-input-footnote">{value.files.length ? `${value.files.length} 份檔案 · ${formatBytes(inventory.data?.totalBytes ?? 0)}${inventory.data?.ignored ? ` · ${inventory.data.ignored} 份不相關檔案略過` : ""}` : "每版必備：Netlist 三份 .dat、BOM 用料表、電路圖 PDF。可一次選取版本資料夾，子資料夾也會辨識。"}</p>
   </section>;
 }
