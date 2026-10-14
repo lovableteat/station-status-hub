@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { KeyRound, UserRoundPlus } from "lucide-react";
 
 import { useUser } from "@/components/auth/UserContext";
@@ -32,20 +32,30 @@ export function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isServiceRestricted, setIsServiceRestricted] = useState(false);
+  const submissionPending = useRef(false);
   const { toast } = useToast();
 
   const switchView = (nextView: AuthView) => {
+    if (submissionPending.current) return;
     setView(nextView);
     setPassword("");
     setConfirmPassword("");
     setIsServiceRestricted(false);
   };
 
-  const handleLogin = async (event: React.FormEvent) => {
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submissionPending.current) return;
+    const values = new FormData(event.currentTarget);
+    const submittedUsername = String(values.get("username") ?? "");
+    const submittedPassword = String(values.get("password") ?? "");
+    // Password managers may fill the live fields before React receives change.
+    setUsername(submittedUsername);
+    setPassword(submittedPassword);
+    submissionPending.current = true;
     setIsLoading(true);
     try {
-      const result = await authenticate(username, password);
+      const result = await authenticate(submittedUsername, submittedPassword);
       if (!result) {
         toast({
           title: "無法登入",
@@ -67,19 +77,31 @@ export function LoginPage() {
         variant: "destructive",
       });
     } finally {
+      submissionPending.current = false;
       setIsLoading(false);
     }
   };
 
-  const handleRegister = async (event: React.FormEvent) => {
+  const handleRegister = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (password !== confirmPassword) {
+    if (submissionPending.current) return;
+    const values = new FormData(event.currentTarget);
+    const submittedName = String(values.get("displayName") ?? "");
+    const submittedUsername = String(values.get("username") ?? "");
+    const submittedPassword = String(values.get("password") ?? "");
+    const submittedConfirmation = String(values.get("confirmPassword") ?? "");
+    setDisplayName(submittedName);
+    setUsername(submittedUsername);
+    setPassword(submittedPassword);
+    setConfirmPassword(submittedConfirmation);
+    if (submittedPassword !== submittedConfirmation) {
       toast({ title: "密碼不一致", description: "請重新確認兩次輸入的密碼。", variant: "destructive" });
       return;
     }
+    submissionPending.current = true;
     setIsLoading(true);
     try {
-      const result = await registerAccount(displayName, username, password);
+      const result = await registerAccount(submittedName, submittedUsername, submittedPassword);
       if (!result.success) {
         toast({
           title: "註冊未完成",
@@ -104,8 +126,19 @@ export function LoginPage() {
         variant: "destructive",
       });
     } finally {
+      submissionPending.current = false;
       setIsLoading(false);
     }
+  };
+
+  const handleFormKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (event.key !== "Enter" || !(event.target instanceof HTMLInputElement)) return;
+    // Composing Enter confirms an IME candidate, rather than logging in.
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+    event.preventDefault();
+    if (event.repeat || submissionPending.current) return;
+    // Preserve native required/minLength validation and the click submit path.
+    event.currentTarget.requestSubmit();
   };
 
   return (
@@ -127,6 +160,7 @@ export function LoginPage() {
               <button
                 key={item}
                 type="button"
+                disabled={isLoading}
                 onClick={() => switchView(item)}
                 className={cn(
                   "flex h-10 items-center justify-center gap-2 rounded-lg text-sm font-bold transition-colors",
@@ -152,29 +186,29 @@ export function LoginPage() {
             </div>
           ) : null}
 
-          <form onSubmit={view === "login" ? handleLogin : handleRegister} className="space-y-4">
+          <form onSubmit={view === "login" ? handleLogin : handleRegister} onKeyDown={handleFormKeyDown} aria-busy={isLoading} className="space-y-4">
             {view === "register" ? (
               <div className="space-y-2">
                 <Label htmlFor="display-name">正確姓名</Label>
-                <Input id="display-name" autoComplete="name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="請填寫本人姓名" required maxLength={100} className="border-white/12 bg-[#0a1627]" />
+                <Input id="display-name" name="displayName" autoComplete="name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="請填寫本人姓名" required maxLength={100} className="border-white/12 bg-[#0a1627]" />
               </div>
             ) : null}
             <div className="space-y-2">
               <Label htmlFor="username">帳號</Label>
-              <Input id="username" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="請輸入帳號" required maxLength={50} className="border-white/12 bg-[#0a1627]" />
+              <Input id="username" name="username" autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="請輸入帳號" required maxLength={50} className="border-white/12 bg-[#0a1627]" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">密碼</Label>
               {view === "login" ? (
-                <Input id="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="請輸入密碼" required minLength={6} maxLength={200} className="border-white/12 bg-[#0a1627]" />
+                <Input id="password" name="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="請輸入密碼" required minLength={6} maxLength={200} className="border-white/12 bg-[#0a1627]" />
               ) : (
-                <Input id="password" type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="請輸入密碼" required minLength={6} maxLength={200} className="border-white/12 bg-[#0a1627]" />
+                <Input id="password" name="password" type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="請輸入密碼" required minLength={6} maxLength={200} className="border-white/12 bg-[#0a1627]" />
               )}
             </div>
             {view === "register" ? (
               <div className="space-y-2">
                 <Label htmlFor="confirm-password">再次輸入密碼</Label>
-                <Input id="confirm-password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="再次輸入相同密碼" required minLength={6} maxLength={200} className="border-white/12 bg-[#0a1627]" />
+                <Input id="confirm-password" name="confirmPassword" type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="再次輸入相同密碼" required minLength={6} maxLength={200} className="border-white/12 bg-[#0a1627]" />
                 <p className="text-xs leading-5 text-slate-500">僅需至少 6 個字元，不限制大小寫、數字或符號組合。</p>
               </div>
             ) : null}
