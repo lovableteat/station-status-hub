@@ -168,6 +168,23 @@ def bom_checks(d: Design, cfg: dict) -> list[Finding]:
     for rule, detail in d.bom_problems:
         out.append(_f(d, category="BOMCHK", rule=rule, severity="ERROR", title=detail.split(" (")[0],
                       detail=detail, key=f"{rule}|{detail}"))
+    for ln in d.bom_links:     # bom_socket.py decisions, BOM file order
+        if ln["status"] == "LINKED":
+            out.append(_f(d, category="BOMCHK", rule="BOM_SOCKET_LINKED", severity="INFO",
+                          title=f"BOM '{ln['token']}' ({ln['pn']}) mapped to {ln['refdes']}",
+                          refdes=[ln["refdes"]],
+                          detail=f"{ln['refdes']} sits on socket {ln['socket']}'s nets "
+                                 f"({', '.join(ln['candidates'])}); BOM row {ln['row']}",
+                          key=f"BOM_SOCKET_LINKED|{ln['token']}|{ln['refdes']}|{ln['pn']}"))
+        else:
+            refs = [ln["socket"]] if ln["socket"] in d.parts else []
+            out.append(_f(d, category="BOMCHK", rule="BOM_REF_UNRESOLVED", severity="WARN",
+                          title=f"BOM '{ln['token']}' ({ln['pn']}) not mapped to a netlist part",
+                          refdes=refs,
+                          detail=f"{ln['reason']}"
+                                 + (f"; candidates {', '.join(ln['candidates'])}" if ln["candidates"] else "")
+                                 + f"; BOM row {ln['row']}. The part it stands for counts as DNP.",
+                          key=f"BOM_REF_UNRESOLVED|{ln['token']}|{ln['pn']}"))
     for r in sorted(set(d.bom) - set(d.parts), key=natkey):
         if mech.match(r):
             continue

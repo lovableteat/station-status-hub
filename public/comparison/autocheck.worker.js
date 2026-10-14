@@ -92,12 +92,12 @@ await micropip.install(['openpyxl==3.1.5', 'olefile==0.47', 'reportlab==4.4.10',
 await micropip.install('pdfplumber==0.11.7', deps=False)
 `);
     const base = new URL('.', self.location.href);
-    const manifestResponse = await fetch(new URL('engine/manifest.json', base));
+    const manifestResponse = await fetch(new URL('engine/manifest.json', base), { cache: 'no-cache' });
     if (!manifestResponse.ok) throw new Error('無法載入 AutoCheck 原始碼清單');
     const manifest = await manifestResponse.json();
     await Promise.all(manifest.files.map(async file => {
       const relative = validPath(file.path);
-      const response = await fetch(new URL(`engine/${relative}`, base));
+      const response = await fetch(new URL(`engine/${relative}`, base), { cache: 'no-cache' });
       if (!response.ok) throw new Error(`無法載入 AutoCheck ${relative}`);
       const bytes = new Uint8Array(await response.arrayBuffer());
       const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -107,10 +107,13 @@ await micropip.install('pdfplumber==0.11.7', deps=False)
       pyodide.FS.mkdirTree(path.slice(0, path.lastIndexOf('/')));
       pyodide.FS.writeFile(path, bytes);
     }));
-    const bridgeResponse = await fetch(new URL('browser_bridge.py', base));
-    if (!bridgeResponse.ok) throw new Error('無法載入 Python 瀏覽器橋接');
+    const adapters = await Promise.all(['browser_compat.py', 'power_tree_compat.py', 'browser_bridge.py'].map(async name => {
+      const response = await fetch(new URL(name, base), { cache: 'no-cache' });
+      if (!response.ok) throw new Error(`無法載入 Python 瀏覽器橋接：${name}`);
+      return response.text();
+    }));
     await pyodide.runPythonAsync(`import sys\nsys.path.insert(0, '/engine')`);
-    await pyodide.runPythonAsync(await bridgeResponse.text());
+    for (const source of adapters) await pyodide.runPythonAsync(source);
     return pyodide;
   })().catch(error => { runtime = undefined; throw error; });
   return runtime;

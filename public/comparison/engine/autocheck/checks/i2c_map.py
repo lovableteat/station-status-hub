@@ -222,6 +222,7 @@ class Device:
     line_nets: list[tuple[str, str]] = field(default_factory=list)   # (line, net) of every line pin, mux channels too
     sda_nets: list[str] = field(default_factory=list)     # net at each upstream SDA / SCL pin (branch label on the diagram)
     scl_nets: list[str] = field(default_factory=list)
+    bom_spec: str = ""        # BOM main spec, raw (Agile "Mfr: MPN; ..."); 陽春版 block diagram box only
 
     @property
     def addr_txt(self) -> str:
@@ -255,6 +256,15 @@ class Bus:
     speed: str = ""
     parent: str = ""          # "U12 ch3" for a mux channel bus
     conn_pins: list[tuple[str, str, str]] = field(default_factory=list)   # (line, net, "CN3.B5 PETN0") off-board pins
+    # 2026-10-13 陽春版 block diagram only (report/i2c_block_diagram.py): pins of ICs that are NOT I2C devices of this bus
+    # (e.g. BMC ball GPIOX3_SDA9_... whose name the sda_pin regex does not take) = the upstream end, plus their VALUE
+    host_pins: list[tuple[str, str, str]] = field(default_factory=list)   # (line, net, "U1.G7 GPIOX3_SDA9_...")
+    part_values: dict[str, str] = field(default_factory=dict)            # RefDes -> symbol VALUE (conn + host parts)
+    # 陽春版 topology (_block_topology): upstream pin -> trunk per line [net, "R686 22R", net, ...]; the trunk is the first
+    # net with a device pin or a fork; a part whose far net is a dead-end device net stays on that device's branch
+    end_chain: dict[str, list[str]] = field(default_factory=dict)
+    pu_net: dict[str, str] = field(default_factory=dict)  # pull-up RefDes -> the bus net it sits on
+    branches: dict[tuple[str, str], list[str]] = field(default_factory=dict)  # (RefDes, line) -> parts trunk -> pin
 
 
 # ------------------------------------------------------------------ helpers
@@ -366,6 +376,7 @@ def build_map(d: Design, cfg: dict, g: NetGraph, lib: list[LibEntry] | None = No
     # design-level connectivity: every 2-pin tie / R <= series_max, built or DNP, never across a rail
     uf = _UF(sorted(d.nets))
     dnp_link: dict[str, tuple[str, str]] = {}
+    link_nn: dict[str, tuple[str, str]] = {}      # every link part (built or DNP) -> its two nets (陽春版 topology)
     tie_px = set(cfg["ground"].get("tie_prefixes", []))
     for r in sorted(d.parts, key=natkey):
         nn = g._two_nets(r)
@@ -375,6 +386,7 @@ def build_map(d: Design, cfg: dict, g: NetGraph, lib: list[LibEntry] | None = No
         if not (_prefix(r) in tie_px or is_nettie(d, r, cfg) or (ohm is not None and ohm <= g.series_max)):
             continue
         uf.union(nn[0], nn[1])
+        link_nn[r] = nn
         if not present(d, r, cfg):
             dnp_link[r] = nn
 
@@ -427,6 +439,7 @@ def build_map(d: Design, cfg: dict, g: NetGraph, lib: list[LibEntry] | None = No
             it = d.bom.get(r) if d.bom else None
             ent = main_entry.get(r)
             devices[r] = Device(refdes=r, symbol=d.value(r), bom=f"{it.pn} {it.desc}".strip() if it else "",
+                                bom_spec=(it.spec or "") if it else "",
                                 built=present(d, r, cfg), kind=ent.kind if ent else "device",
                                 lib=ent.name if ent else "", lib_src=ent.src if ent else "",
                                 fmax=ent.fmax if ent else None, page=d.page_of(r))
@@ -506,6 +519,17 @@ def build_map(d: Design, cfg: dict, g: NetGraph, lib: list[LibEntry] | None = No
         b.conn_pins = sorted({(s.line, d.pin_net[k], f"{k[0]}.{k[1]} {d.pin_name.get(k, '')}".strip())
                               for s in segs for k in s._node.pins if _prefix(k[0]) in g.off_px},  # type: ignore[attr-defined]
                              key=lambda t: (t[0] != "SDA", natkey(t[1]), natkey(t[2])))
+        b.host_pins = sorted({(s.line, d.pin_net[k], f"{k[0]}.{k[1]} {d.pin_name.get(k, '')}".strip())
+                              for s in segs for k in s._node.pins  # type: ignore[attr-defined]
+                              if _prefix(k[0]) in ic_px and k not in line_pins and k[0] not in devs},
+                             key=lambda t: (t[0] != "SDA", natkey(t[1]), natkey(t[2])))
+        b.part_values = {r: d.value(r) for r in sorted({p.split(".", 1)[0] for _, _, p in b.conn_pins + b.host_pins},
+                                                        key=natkey)}
+        for s in segs:
+            for p in s._node.pulls:  # type: ignore[attr-defined]
+                nn = g._two_nets(p.r)
+                if nn:
+                    b.pu_net[p.r] = nn[0] if nn[1] == p.net else nn[1]
         fm = [devices[x].fmax for x in devs if devices[x].built and devices[x].fmax]
         unknown = [x for x in devs if devices[x].built and not devices[x].fmax]
         b.speed = (f"{min(fm)} kHz" if fm else "?") + (f" (未知: {', '.join(unknown)})" if unknown and fm else "")
@@ -516,9 +540,80 @@ def build_map(d: Design, cfg: dict, g: NetGraph, lib: list[LibEntry] | None = No
             for k, (ln, pt) in line_pins.items():
                 if k[0] == x and pt.startswith("ch") and d.pin_net[k] in nets and devices[x].kind == "mux":
                     b.parent = f"{x} {pt}"
+        _block_topology(d, cfg, b, devs, line_pins, link_nn)   # after b.parent: a mux channel bus starts at the mux
         buses.append(b)
     return {"buses": buses, "devices": devices, "segments": segments,
             "scopes": {s: segments[s].scope for s in sda_sids}}
+
+
+def _block_topology(d: Design, cfg: dict, b: Bus, devs: list[str], line_pins: dict, link_nn: dict) -> None:
+    """Bus.end_chain / Bus.branches for the 陽春版 block diagram (report/i2c_block_diagram.py). Graph = bus nets joined
+    by link parts (0R / R <= series_max / ties, built or DNP). Root = first upstream pin net (connector, then other IC);
+    walk while the net has no device pin and exactly one unused link, but never consume a link whose far net is a
+    dead-end net of ONE device (that resistor is drawn on the device's branch, as on a hand-drawn diagram). Trunk = where the
+    walk stops (no upstream: the busiest segment's hub). Branch of a device = BFS path trunk -> its pin net.
+    Drawing only: findings / csv / the detailed map never read these fields."""
+    def txt(r: str) -> str:
+        return f"{r} {d.value(r)}" + ("" if present(d, r, cfg) else " [DNP]")
+    for ln in ("SDA", "SCL"):
+        nets = set(b.sda_nets if ln == "SDA" else b.scl_nets)
+        adj: dict[str, list[tuple[str, str]]] = defaultdict(list)
+        for r in sorted(link_nn, key=natkey):
+            a, c = link_nn[r]
+            if a in nets and c in nets:
+                adj[a].append((r, c))
+                adj[c].append((r, a))
+        mux, _, port = b.parent.partition(" ")
+        dpin: dict[str, list[str]] = defaultdict(list)
+        for k, (l2, _) in sorted(line_pins.items(), key=lambda t: (natkey(t[0][0]), natkey(t[0][1]))):
+            if l2 == ln and k[0] in devs and k[0] != mux and d.pin_net[k] in nets and d.pin_net[k] not in dpin[k[0]]:
+                dpin[k[0]].append(d.pin_net[k])
+        dev_nets = {n for v in dpin.values() for n in v}
+        if mux:   # mux channel bus: the upstream end is the mux's own channel pin
+            ups = [d.pin_net[k] for k, (l2, pt) in sorted(line_pins.items(), key=lambda t: natkey(t[0][1]))
+                   if k[0] == mux and pt == port and l2 == ln and d.pin_net[k] in nets]
+        else:
+            ups = [net for l2, net, _ in b.conn_pins + b.host_pins if l2 == ln]
+        used: set[str] = set()
+        if ups:
+            root = ups[0]
+            chain, cur = [root], root
+            while cur not in dev_nets and len(used) < 20:
+                nxt = [(r, o) for r, o in adj[cur] if r not in used]
+                if len(nxt) != 1:
+                    break
+                r, o = nxt[0]
+                if o in dev_nets and not [q for q, _ in adj[o] if q != r] \
+                        and sum(o in v for v in dpin.values()) == 1:
+                    break       # dead end with ONE device: keep that resistor on the device's branch
+                used.add(r)
+                chain += [txt(r), o]
+                cur = o
+            b.end_chain[ln] = chain
+        else:
+            segs = sorted((sg for sg in b.segments if sg.line == ln), key=lambda sg: (-len(sg.devices), natkey(sg.sid)))
+            if not segs:
+                continue
+            cur = segs[0].sid.split(":", 1)[1]
+        parent: dict[str, tuple[str, str] | None] = {cur: None}
+        queue = [cur]
+        while queue:
+            n = queue.pop(0)
+            for r, o in adj[n]:
+                if r in used or o in parent:
+                    continue
+                parent[o] = (r, n)
+                queue.append(o)
+        for x in devs:
+            reach = [n for n in dpin.get(x, []) if n in parent]
+            if not reach:
+                continue    # not reachable from the trunk (split line): the drawing falls back to Device.series
+            path: list[str] = []
+            n = reach[0] if reach else None
+            while n is not None and parent[n] is not None:
+                r, n = parent[n]
+                path.append(txt(r))
+            b.branches[(x, ln)] = path[::-1]
 
 
 def _hub(d: Design, nd) -> str:

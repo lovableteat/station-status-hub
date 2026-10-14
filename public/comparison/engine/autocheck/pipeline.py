@@ -15,6 +15,7 @@ from .checks.power_tree import power_tree
 from .config import load_config, load_rail_map
 from .findings import Finding, sort_findings
 from .grouping import cross_reference, group_findings, page_overview
+from .bom_socket import resolve as resolve_bom_tokens
 from .loader import build_design
 from .model import Design
 
@@ -65,6 +66,8 @@ def run(a_files: dict[str, Path], b_files: dict[str, Path], a_label: str = "A", 
     rmap = load_rail_map(rail_map)
     a, wa = build_design(a_label, a_files)
     b, wb = build_design(b_label, b_files)
+    resolve_bom_tokens(a, cfg)   # BOM "FOR J2" style entries -> netlist RefDes (no-op for plain BOMs)
+    resolve_bom_tokens(b, cfg)
 
     findings = diff_designs(a, b, cfg)
     # single-design checks on B, tagged NEW / EXISTING against the same checks on A
@@ -93,6 +96,7 @@ def run(a_files: dict[str, Path], b_files: dict[str, Path], a_label: str = "A", 
         findings += tag_new(new_rules, old_rules)
         drows = domain_rows(gb, doms)
         ptree = power_tree(b, cfg, gb)
+        extra_warn += ptree.get("warnings", [])
     except Exception as e:  # noqa: BLE001
         extra_warn.append(f"netlist rules / power tree skipped ({type(e).__name__}: {e})")
     # I2C map (2026-10-12, test state). Own try: a failure costs only the I2C part of the report.

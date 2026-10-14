@@ -14,16 +14,22 @@ an IC's internal LDO / bias rail hangs under that IC's box (dashed) instead of b
 from two places is drawn once, under the first, with "也由 ... 供電"; rails with loads but no identified source
 go to a red section with the built D / R parts that join them to other rails (netlist facts, no guessing).
 Change status is keyed on converter RefDes (company rule: RefDes is never re-annotated between revisions).
+2026-10-13 (owner): converter-internal nets (orphan internal = True: bias VCC / sense / internal LDO that feeds
+nothing) are hidden by default (layout(show_internal=False)); the converter box says "內部 net ×N" and lists them
+on hover. The web page carries both layouts and toggles between them, plus zoom. Diode feeds are dashed boxes.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from html import escape
 
 from ..model import natkey
+from .diagram_html import page
 
 STATUS_ZH = {"new": "新增", "changed": "變更", "removed": "移除"}
-LEGEND = [("", "一般 (實線框 = 有上件)"), ("dnp", "虛線灰框 = DNP / IC 內部 LDO"), ("new", "綠 = 新增"),
+LEGEND = [("", "一般 (實線框 = 有上件)"), ("dnp", "虛線灰框 = DNP / IC 內部 net"), ("diode", "虛線白框 = diode 供電"),
+          ("new", "綠 = 新增"),
           ("changed", "黃 = 變更 (換料 / 上件 / rail 名)"), ("removed", "紅虛線 = 移除 (A 有 B 無)"),
           ("orphan", "紅粗框 = 有負載但來源未識別")]
 ANCHOR = 2            # connectors leave / enter a box at the boundary after its 2nd text line
@@ -45,6 +51,8 @@ class Box:
     status: str = ""                # "" / new / changed / removed
     page: int | None = None         # schematic page of the converter (link target)
     section: str = "tree"           # tree / orphan / removed
+    edge_kind: str = ""             # converter kind of a conv box (diode / FET switch (discrete) / buck ...)
+    internal: list[str] = field(default_factory=list)   # hidden converter-internal nets (show_internal=False)
 
     @property
     def height(self) -> int:
@@ -52,7 +60,16 @@ class Box:
 
     @property
     def dashed(self) -> bool:
-        return self.kind in ("bias", "removed") or not self.built
+        return self.kind in ("bias", "removed") or not self.built or self.edge_kind == "diode"
+
+    @property
+    def diode(self) -> bool:
+        return self.edge_kind == "diode" and self.built
+
+    @property
+    def key(self) -> str:
+        """Stable across the collapsed / expanded layouts (box ids are not): used as the scroll anchor."""
+        return f"{self.kind}|{self.conv}|{self.rail}"
 
 
 def _v(v) -> str:
@@ -89,9 +106,12 @@ def _edge_status(e: dict, ai: dict | None) -> tuple[str, str]:
     return ("changed", "; ".join(notes)) if notes else ("", "")
 
 
-def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str = "B") -> list[Box]:
+def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str = "B",
+           show_internal: bool = True, _keep: frozenset = frozenset()) -> list[Box]:
     """Boxes with level / top assigned. Every converter edge of pt["edges"] appears exactly once, either as a
-    box, as a second-source line inside a box, or as a "也由 ... 供電" note on the box of its output rail."""
+    box, as a second-source line inside a box, or as a "也由 ... 供電" note on the box of its output rail.
+    show_internal=False drops orphans marked internal (converter bias / sense nets feeding nothing); the
+    converter box then carries a "內部 net ×N" line."""
     edges = pt.get("edges") or []
     rails = pt.get("rails") or {}
     orphans = pt.get("orphans") or []
@@ -117,7 +137,7 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
 
     def rail_hover(r):
         ri = rinfo(r)
-        h = []
+        h = [ri["vnote"]] if ri.get("vnote") else []
         if len(ri["members"]) > 1:
             h.append("同組 net: " + ", ".join(ri["members"][:12]) + (" …" if len(ri["members"]) > 12 else ""))
         if ri["loads"]:
@@ -150,6 +170,15 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
         for e in groups[k]:
             conv_rail.setdefault(e["conv"], k)
     by_rail_orphan = {o["rail"]: o for o in orphans}
+    hidden: dict[str, list[str]] = {}                         # converter RefDes -> hidden internal nets
+    if not show_internal:
+        keep = []
+        for o in orphans:
+            if o.get("internal") and o["rail"] not in _keep:
+                hidden.setdefault(o.get("parent_ic") or "", []).append(o["rail"])
+            else:
+                keep.append(o)
+        orphans = keep
     bias_of: dict[tuple, list] = {}
     orphan_left = []
     for o in orphans:
@@ -172,10 +201,14 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
         main = es[0]
         st, note = _edge_status(main, ai)
         b = new_box(kind="conv", rail=k[1], volt=rinfo(k[1])["v"], level=level, parent=parent.id, conv=main["conv"],
-                    built=bool(main["built"]), status=st, page=main["page"])
-        b.lines = [k[1], _v(b.volt), f"{main['conv']}{'' if main['built'] else ' (DNP)'}{tag(st)}", load_line(k[1])]
+                    built=bool(main["built"]), status=st, page=main["page"], edge_kind=main.get("kind", ""))
+        what = {"diode": " (diode)", "FET switch (discrete)": " (FET)"}.get(main.get("kind", ""), "")
+        b.lines = [k[1], _v(b.volt), f"{main['conv']}{what}{'' if main['built'] else ' (DNP)'}{tag(st)}",
+                   load_line(k[1])]
         b.hover = [f"{main['conv']} {main['mpn']}  {main['kind']}  上件 {'Y' if main['built'] else 'DNP'}",
                    f"上游 {k[0]} ({_v(rinfo(k[0])['v'])})"]
+        if main.get("kind") == "diode":
+            b.hover.append("diode 供電 (OR / 隔離)：這個 rail 可能還有別的來源，請對線路圖確認")
         if main["en"]:
             b.hover.append("EN: " + ", ".join(main["en"]))
         if main["pg"]:
@@ -196,6 +229,11 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
         b.hover += rail_hover(k[1])
         for e in es:
             used_edges.add(id(e))
+        hid = hidden.pop(main["conv"], [])
+        if hid:
+            b.internal = sorted(hid)
+            b.lines.append(f"內部 net ×{len(hid)}")
+            b.hover.append(f"{main['conv']} 內部 net (bias / sense，預設隱藏): " + ", ".join(b.internal))
         return b
 
     def grow(rail: str, box: Box, level: int, path: frozenset):
@@ -217,14 +255,14 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
         if r in placed:                                       # also the output of a (DNP) LDO drawn elsewhere
             first = fed_by.get(r)
             if first is not None:
-                first.lines.append(f"也由 {ic} 內部 LDO 供電")
-                first.hover.append(f"也由 {ic} 內部 LDO 供電 ({o.get('source', '')})")
+                first.lines.append(f"也由 {ic} 內部 net 供電")
+                first.hover.append(f"也由 {ic} 內部 net 供電 ({o.get('source', '')})")
             return
         placed.add(r)
         b = new_box(kind="bias", rail=r, volt=o.get("voltage"), level=level,
                     parent=parent.id if parent else None, conv=ic, built=True,
                     section="tree" if parent else "orphan")
-        b.lines = [r, _v(b.volt), f"{ic} 內部 LDO" + ("" if parent else " (IC 框未畫)"), load_line(r, skip=ic)]
+        b.lines = [r, _v(b.volt), f"{ic} 內部 net" + ("" if parent else " (IC 框未畫)"), load_line(r, skip=ic)]
         b.hover = [f"工具判斷: {o.get('source', '')}"] + rail_hover(r)
         fed_by[r] = b
         grow(r, b, level + 1, path | {r})
@@ -327,6 +365,19 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
                            f"{e['rail_in']} -> {e['rail_out']}"]
                 if e.get("page") is not None:
                     b.hover.append(f"{a_label} 線路圖第 {e['page']} 頁")
+    # hidden internal nets of an IC that has no box of its own (alt line / note only): list them where it shows
+    unhosted: set[str] = set()
+    for ic, rs in sorted(hidden.items()):
+        tok = re.compile(rf"(^alt |\(){re.escape(ic)}(?![A-Za-z0-9_])")      # whole RefDes: U1 never hits U12
+        host = next((b for b in boxes if b.conv == ic), None) or next(
+            (b for b in boxes if any(tok.search(t) for t in b.lines)), None)
+        if host is None:
+            unhosted |= set(rs)
+            continue
+        host.internal = sorted(set(host.internal) | set(rs))
+        host.hover.append(f"{ic} 內部 net (bias / sense，預設隱藏): " + ", ".join(sorted(rs)))
+    if unhosted:                    # QA 2026-10-13: never hide a net that no box can point to; draw it as before
+        return layout(pt, pt_a, a_label, b_label, show_internal=False, _keep=_keep | frozenset(unhosted))
     _assign_rows(boxes)
     return boxes
 
@@ -385,7 +436,8 @@ def render_xlsx(ws, boxes: list[Box], title: str, pdf_link=None, a_label: str = 
     ws.sheet_view.showGridLines = False
     ws.cell(1, 1, title).font = Font(name=FONT, bold=True, size=12)
     ws.cell(2, 1, "框內：rail 名 / 電壓 / 轉換元件 RefDes (點 RefDes 跳線路圖該頁) / 負載 IC 數。滑鼠停在 rail 名上看料號、"
-                  "EN / PG、同組 net、負載清單。").font = Font(name=FONT, size=9)
+                  "EN / PG、同組 net、負載清單。converter 內部 net (bias / sense) 不畫，列在該框註解與「Power tree」表格分頁；"
+                  "網頁版可切換顯示。").font = Font(name=FONT, size=9)
     lg = ws.cell(3, 1, "圖例：" + "　".join(t for _, t in LEGEND) + ("" if diff else f"　({a_label} 的 power tree 沒有算出來，"
                                                                                       "本圖沒有變更顏色)"))
     lg.font = Font(name=FONT, size=9, color="595959")
@@ -415,13 +467,15 @@ def render_xlsx(ws, boxes: list[Box], title: str, pdf_link=None, a_label: str = 
             side = Side(style="medium", color="C00000")
         elif b.status == "removed":
             side = Side(style="dashed", color="C00000")
+        elif b.diode:
+            side = Side(style="dashed", color="000000")
         elif b.dashed:
             side = Side(style="dashed", color="808080")
         else:
             side = Side(style="thin", color="000000")
-        key = b.status or ("orphan" if b.kind == "orphan" else ("dnp" if b.dashed else ""))
+        key = b.status or ("orphan" if b.kind == "orphan" else ("dnp" if b.dashed and not b.diode else ""))
         fill = PatternFill("solid", fgColor=fills[key]) if key else None
-        grey = b.dashed and b.status != "removed"
+        grey = b.dashed and b.status != "removed" and not b.diode
         for i, text in enumerate(b.lines):
             r = top0 + b.top + i
             c = ws.cell(r, col)
@@ -506,27 +560,30 @@ def render_svg(boxes: list[Box], pdf_url=None, a_label: str = "A", b_label: str 
                    f'stroke-width="1.2"{dash}/>')
     for b in boxes:
         x, y = x_of(b), y_of(b)
-        key = b.status or ("orphan" if b.kind == "orphan" else ("dnp" if b.dashed else ""))
+        key = b.status or ("orphan" if b.kind == "orphan" else ("dnp" if b.dashed and not b.diode else ""))
         stroke, sw = "#000000", 1
         if b.kind == "orphan":
             stroke, sw = "#C00000", 2.2
         elif b.status == "removed":
             stroke = "#C00000"
-        elif b.dashed:
+        elif b.dashed and not b.diode:
             stroke = "#808080"
         dash = ' stroke-dasharray="5 3"' if (b.dashed or b.status == "removed") else ""
         url = pdf_url(b.page) if (pdf_url and b.page is not None and b.kind == "conv") else None
         g_open = f'<a href="{escape(url)}" target="_blank">' if url else ""
         g_close = "</a>" if url else ""
-        out.append(f'<g class="box">{g_open}<title>{escape(chr(10).join(b.hover))}</title>'
+        out.append(f'<g class="box" data-key="{escape(b.key)}">{g_open}<title>{escape(chr(10).join(b.hover))}</title>'
                    f'<rect x="{x:.1f}" y="{y:.1f}" width="{BW}" height="{b.height * LH}" rx="3" fill="{SVG_FILL[key]}" '
                    f'stroke="{stroke}" stroke-width="{sw}"{dash}/>')
-        grey = b.dashed and b.status != "removed"
+        grey = b.dashed and b.status != "removed" and not b.diode
         for i, t in enumerate(b.lines):
             attrs = ' font-weight="bold"' if i == 0 else ""
             fill = "#808080" if grey else "#000000"
             if i == 2 and url:
                 fill, attrs = "#0563C1", attrs + ' text-decoration="underline"'
+            if b.internal and t.startswith("內部 net ×"):     # click: switch to the expanded view at this box
+                fill, attrs = "#0563C1", attrs + f' class="intl" data-key="{escape(b.key)}" text-decoration="underline"'
+                t = t + "  (點開)"
             out.append(f'<text x="{x + 6:.1f}" y="{y + (i + 1) * LH - 4:.1f}" fill="{fill}"{attrs}>'
                        f'{escape(_clip(t, 27 if i == 0 else 33))}</text>')
         out.append(f"{g_close}</g>")
@@ -546,30 +603,23 @@ def _clip(t: str, n: float = 33) -> str:
 
 
 def render_html(boxes: list[Box], title: str, pdf_url=None, a_label: str = "A", b_label: str = "B",
-                diff: bool = True) -> str:
+                diff: bool = True, boxes_all: list[Box] | None = None) -> str:
+    """boxes = the default view. boxes_all (layout(show_internal=True)) adds a "顯示內部 net" toggle; the page
+    holds both SVGs and switches between them (no client-side relayout). Page frame (zoom bar, fit width,
+    Ctrl + wheel, height = drawing) comes from report/diagram_html.py, shared with the I2C map."""
     svg = render_svg(boxes, pdf_url, a_label, b_label)
+    n_int = sum(len(b.internal) for b in boxes)
+    svg_all = render_svg(boxes_all, pdf_url, a_label, b_label) if (boxes_all is not None and n_int) else ""
     legend = "".join(
         f'<span class="lg"><i style="background:{SVG_FILL.get(k if k != "dnp" else "dnp", "#fff")};'
-        f'border:{"2px solid #C00000" if k == "orphan" else ("1px dashed #C00000" if k == "removed" else ("1px dashed #808080" if k == "dnp" else "1px solid #000"))}"></i>{escape(t)}</span>'
+        f'border:{"2px solid #C00000" if k == "orphan" else ("1px dashed #C00000" if k == "removed" else ("1px dashed #808080" if k == "dnp" else ("1px dashed #000" if k == "diode" else "1px solid #000")))}"></i>{escape(t)}</span>'
         for k, t in LEGEND)
     note = "" if diff else f'<p class="warn">{escape(a_label)} 的 power tree 沒有算出來，本圖沒有變更顏色。</p>'
-    return f"""<!doctype html>
-<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{escape(title)}</title>
-<style>
-:root {{ color-scheme: light; }}
-body {{ margin: 0; padding: 12px 16px; background: #fff; color: #000; font: 13px Arial, 'Microsoft JhengHei', sans-serif; }}
-h1 {{ font-size: 16px; margin: 0 0 6px; }}
-p {{ margin: 4px 0; color: #444; }}
-.warn {{ color: #C00000; }}
-.lg {{ display: inline-flex; align-items: center; margin: 2px 14px 2px 0; font-size: 12px; }}
-.lg i {{ display: inline-block; width: 18px; height: 12px; margin-right: 5px; }}
-.wrap {{ overflow: auto; border-top: 1px solid #ddd; margin-top: 8px; padding-top: 8px; }}
-.box:hover rect {{ stroke-width: 2.5; }}
-</style></head><body>
-<h1>{escape(title)}</h1>
-<p>框內：rail 名 / 電壓 / 轉換元件 RefDes (藍字 = 點擊開線路圖該頁) / 負載 IC 數。滑鼠停在框上看料號、EN / PG、同組 net、負載清單。</p>
-<div>{legend}</div>{note}
-<div class="wrap">{svg}</div>
-</body></html>
-"""
+    hint_int = ("converter 的 bias / sense 等內部 net 預設隱藏，點框內「內部 net ×N」或勾選上方選項顯示。"
+                if svg_all else "")
+    toggle = (f'<label class="tg"><input type="checkbox" id="showint"> 顯示 converter 內部 net ({n_int})</label>'
+              if svg_all else "")
+    intro = ("<p>框內：rail 名 / 電壓 / 轉換元件 RefDes (藍字 = 點擊開線路圖該頁) / 負載 IC 數。"
+             f"滑鼠停在框上看料號、EN / PG、同組 net、負載清單。{hint_int}</p>")
+    return page(title, intro, svg, zoom_key="autocheck_pt_zoom", svg_expanded=svg_all, toggle=toggle,
+                legend=f"<div>{legend}</div>", note=note)

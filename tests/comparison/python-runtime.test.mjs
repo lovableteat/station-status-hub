@@ -143,9 +143,11 @@ with tempfile.TemporaryDirectory() as temporary:
 test('Public engine manifest includes only original Python source and safe config', async () => {
   const manifest = JSON.parse(await readFile(new URL('engine/manifest.json', publicRoot), 'utf8'));
   assert.equal(manifest.version, '0.2.0');
-  assert.equal(manifest.files.length, 40);
+  assert.equal(manifest.origin, 'User-provided AutoCheck_1014.zip');
+  assert.equal(manifest.revision, '2026-10-14');
+  assert.equal(manifest.files.length, 45);
   for (const { path, sha256 } of manifest.files) {
-    assert.match(path, /^(autocheck\/.+\.py|config\/(default|i2c_devices|i2c_devices_user)\.yaml)$/);
+    assert.match(path, /^(autocheck\/.+\.py|config\/(default|i2c_devices|i2c_devices_user|power_parts)\.yaml)$/);
     const bytes = await readFile(new URL(`engine/${path}`, publicRoot));
     const digest = Buffer.from(await webcrypto.subtle.digest('SHA-256', bytes)).toString('hex');
     assert.equal(digest, sha256, path);
@@ -157,7 +159,7 @@ test('Public engine manifest includes only original Python source and safe confi
 test('Original AutoCheck runs through worker and exports actual PDF/Excel/library/datasheet results', {
   skip: process.env.AUTOCHECK_PYODIDE !== '1', timeout: 180000,
 }, async () => {
-  const { loadPyodide } = await import(new URL('../../tmp/autocheck-runtime/node_modules/pyodide/pyodide.mjs', import.meta.url));
+  const { loadPyodide } = await import(process.env.AUTOCHECK_PYODIDE_MODULE || new URL('../../tmp/autocheck-runtime/node_modules/pyodide/pyodide.mjs', import.meta.url));
   let python;
   const bridge = worker(async () => {
     python = await loadPyodide({ stdout: () => {} });
@@ -231,7 +233,7 @@ c.save()
   assert.ok(run.result.i2cMap.buses.length);
   assert.ok(run.result.rows.every(row => row.dest && row.key));
   const artifacts = new Map(run.result.artifacts.map(artifact => [artifact.key, artifact]));
-  for (const key of ['pdf', 'xlsx', 'json', 'caps', 'todo', 'domains', 'circuit_a', 'circuit_b', 'ptree_html', 'i2c_html', 'i2c_csv', 'schematic', 'annotations']) {
+  for (const key of ['pdf', 'xlsx', 'json', 'caps', 'todo', 'domains', 'circuit_a', 'circuit_b', 'ptree_html', 'i2c_html', 'i2c_block_html', 'i2c_csv', 'schematic', 'annotations']) {
     assert.ok(artifacts.get(key)?.bytes.byteLength > 0, key);
   }
   assert.equal(Buffer.from(artifacts.get('pdf').bytes).subarray(0, 4).toString(), '%PDF');
@@ -266,6 +268,46 @@ c.save()
   assert.match(datasheet.result.pageTexts[0].text, /I2C Slave Address/);
   const repeated = await bridge.dispatch('run', { a, b, aLabel: 'EVT', bLabel: 'DVT', options: {} });
   assert.deepEqual(repeated.result.rows.map(row => row.key), run.result.rows.map(row => row.key));
+  await python.runPythonAsync(`
+from openpyxl import Workbook
+w = Workbook()
+s = w.active
+s.append(['Title Block', 'Synthetic Agile BOM'])
+s.append(['BOM'])
+s.append(['Level', 'Find Num', 'Main / Sub', 'Item Number', 'Item Description', 'Qty', 'Ref Des', 'Mfr. Name', 'Mfr. Part Number'])
+for n, (ref, value) in enumerate([('C1', 'MLCC 1uF 6.3V'), ('U1', 'TMP451'), ('R1', '2.2Kohm'), ('R2', '2.2Kohm')], 1):
+    s.append(['1', str(n), 'M', 'PN_' + ref, value, '1', ref, 'Synthetic', value])
+s.append(['1', '5', 'M', 'PROGRAMMED_A', 'Synthetic programmed part', '1', 'FOR J99'])
+s.append(['1', '6', 'M', 'PROGRAMMED_B', 'Synthetic programmed part', '1', 'FOR J98'])
+w.save('/fixture/agile.xlsx')
+`);
+  const agileBom = { path: 'agile.xlsx', bytes: python.FS.readFile('/fixture/agile.xlsx').slice().buffer };
+  const agileRun = await bridge.dispatch('run', {
+    a: [...a.filter(input => !input.path.endsWith('bom.csv')), agileBom],
+    b: [...b.filter(input => !input.path.endsWith('bom.csv')), agileBom], aLabel: 'EVT', bLabel: 'DVT',
+    options: { config: 'power_tree:\n  library: /work/untrusted-power-parts.yaml\n' },
+  });
+  assert.equal(agileRun.type, 'result', agileRun.message);
+  assert.ok(agileRun.result.findings.some(finding => finding.rule === 'MLCC_DERATING'));
+  const unresolved = agileRun.result.rows.filter(row => row.rule === 'BOM_REF_UNRESOLVED');
+  assert.equal(unresolved.length, 2);
+  assert.equal(new Set(unresolved.map(row => row.key)).size, 2);
+  assert.ok(unresolved.every(row => row.key.length > 'BOM_REF_UNRESOLVED|'.length && !row.key.includes('#')));
+  assert.ok(!agileRun.result.inputIssues.some(([level]) => level === 'ERROR'));
+  assert.ok(!agileRun.result.warnings.some(warning => /power tree skipped|未完整完成/.test(warning)));
+  await python.runPythonAsync(`
+w = load_workbook('/fixture/agile.xlsx')
+s = w.active
+for col in range(1, s.max_column + 1):
+    s.cell(8, col).value, s.cell(9, col).value = s.cell(9, col).value, s.cell(8, col).value
+w.save('/fixture/agile-reordered.xlsx')
+`);
+  const reordered = await bridge.dispatch('run', { a, b: [...b.filter(input => !input.path.endsWith('bom.csv')), { path: 'agile.xlsx', bytes: python.FS.readFile('/fixture/agile-reordered.xlsx').slice().buffer }], aLabel: 'EVT', bLabel: 'DVT', options: {} });
+  assert.equal(reordered.type, 'result', reordered.message);
+  assert.deepEqual(reordered.result.rows.filter(row => row.rule === 'BOM_REF_UNRESOLVED').map(row => [row.title, row.key]).sort(), unresolved.map(row => [row.title, row.key]).sort());
+  const invalidPower = await bridge.dispatch('run', { a, b, options: { config: 'power_tree: []' } });
+  assert.equal(invalidPower.type, 'error');
+  assert.match(invalidPower.message, /power_tree 設定/);
   const missing = await bridge.dispatch('run', { a: [], b, options: {} });
   assert.match(missing.message, /缺少必要 netlist/);
   const ambiguous = await bridge.dispatch('run', { a: [...a, file('other/pstchip.dat')], b, options: {} });

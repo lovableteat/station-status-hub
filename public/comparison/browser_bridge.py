@@ -1,4 +1,4 @@
-"""File/report adapter for the user's unchanged AutoCheck 0.2.0 engine."""
+"""Browser adapter for the user's original AutoCheck 2026-10-14 engine."""
 import dataclasses
 import datetime
 import json
@@ -11,7 +11,7 @@ import yaml
 from autocheck import review
 from autocheck.checks import i2c_map as i2c
 from autocheck.cli import write_outputs
-from autocheck.config import load_config
+from autocheck.config import DEFAULT, load_config
 from autocheck.i2c_lib import accept_entry, draft_from_pdf, entry_yaml, page_text, validate_entry
 from autocheck.loader import classify
 from autocheck.pipeline import run
@@ -202,6 +202,10 @@ def _run(payload, root, progress):
         raise ValueError('i2c 設定必須是欄位對照')
     custom['i2c'].update(library=str(i2c.LIB_DEFAULT), user_library=str(root / 'i2c_devices_user.yaml'),
                          datasheets_dir=str(root / 'datasheets'))
+    custom.setdefault('power_tree', {})
+    if not isinstance(custom['power_tree'], dict):
+        raise ValueError('power_tree 設定必須是欄位對照')
+    custom['power_tree']['library'] = str(DEFAULT.parent / 'power_parts.yaml')
     custom['publish'] = {'base_url': '', 'static_dir': 'static'}
     config = root / 'effective.yaml'
     config.write_text(yaml.safe_dump(custom, allow_unicode=True), encoding='utf-8')
@@ -254,7 +258,7 @@ def _run(payload, root, progress):
                     'todo': 'rail_map_todo.csv', 'domains': f'rail_domain_{b_label}.csv',
                     'circuit_b': f'circuit_{b_label}.txt', 'circuit_a': f'circuit_{a_label}.txt',
                     'ptree_html': f'power_tree_{b_label}.html', 'i2c_csv': f'i2c_map_{b_label}.csv',
-                    'i2c_html': f'i2c_map_{b_label}.html'}
+                    'i2c_html': f'i2c_map_{b_label}.html', 'i2c_block_html': f'i2c_block_{b_label}.html'}
         known = {str(out / name): key for key, name in expected.items()}
     artifacts = [_artifact(path, known.get(str(path), 'annotations' if path.name.endswith('.annotations.json') else None))
                  for path in sorted(out.iterdir()) if path.is_file() and path.stat().st_size

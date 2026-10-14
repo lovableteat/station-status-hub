@@ -54,6 +54,7 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
     """replies: tracking key -> {處置, 負責人, 預計版次, 備註, 填寫日期} already given on the web page."""
     meta_a, meta_b = res.a, res.b
     pdf_pages = {k: v.get("pdf_page") for k, v in (sidecar or {}).get("rows", {}).items()}
+    box_bad = {k for k, v in (sidecar or {}).get("rows", {}).items() if v.get("box_check") == "mismatch"}
     wb = Workbook()
 
     # ---- 版本資訊 ----
@@ -110,6 +111,10 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
         c = wt.cell(i, COL["PDF"], f'=IF(OR(版本資訊!{BASE_URL_CELL}="",{d}{i}=""),"",'
                                   f'HYPERLINK(版本資訊!{BASE_URL_CELL}&"#nameddest="&{d}{i},"PDF"))')
         c.font = Font(name=FONT, size=9, color="0563C1", underline="single")
+        if row.key in box_bad:          # annotate self-check failed: mark, never block
+            pc = wt.cell(i, COL["PDF 頁"])
+            pc.fill = PatternFill("solid", fgColor="FFC7CE")
+            pc.comment = Comment("框位置自檢未通過：標註 PDF 上的框可能沒落在零件旁，請以頁碼人工找零件。", "AutoCheck")
     last = len(rows) + 1
     dv = DataValidation(type="list", formula1='"' + ",".join(DISPOSITIONS) + '"', allow_blank=True)
     wt.add_data_validation(dv)
@@ -182,7 +187,7 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
         wp = wb.create_sheet(f"Power tree ({meta_b.label})")
         cols = [("level", "層級", 6), ("tree", "樹狀 (下游 rail)", 30), ("rail_in", "上游 rail", 22), ("v_in", "上游 V", 8),
                 ("conv", "轉換元件", 9), ("mpn", "料號", 20), ("kind", "類型", 18), ("built", "上件", 6),
-                ("v_out", "下游 V", 8), ("en", "EN net", 26), ("pg", "PG net", 22), ("via", "經過 (電感 / FET)", 26),
+                ("v_out", "下游 V", 8), ("v_src", "V 來源", 9), ("en", "EN net", 26), ("pg", "PG net", 22), ("via", "經過 (電感 / FET)", 26),
                 ("page", "頁", 5), ("out_members", "下游 rail 同組 net (經 0R / fuse / 串阻)", 60)]
         wp.cell(1, 1, "從 netlist pin 名稱自動串出的 power tree (B1)。請拿線路圖裡的 power tree 圖對照；"
                       "工具認不出來源的 rail 列在最下面。").font = Font(name=FONT, bold=True, size=10)
@@ -197,8 +202,8 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
             r += 1
         if pt.get("orphans"):
             r += 1
-            wp.cell(r, 1, "有負載但工具認不出來源的 rail").font = Font(name=FONT, bold=True, size=10); r += 1
-            ocols = [("rail", "rail"), ("voltage", "V"), ("loads", "負載 IC (電源腳)"), ("source", "工具判斷"),
+            wp.cell(r, 1, "有負載但工具認不出來源的 rail (含 converter 內部 net：工具判斷欄寫 internal net 的，方框圖預設不畫)").font = Font(name=FONT, bold=True, size=10); r += 1
+            ocols = [("rail", "rail"), ("voltage", "V"), ("v_src", "V 來源"), ("loads", "負載 IC (電源腳)"), ("source", "工具判斷"),
                      ("members", "同組 net")]
             _hdr(wp, r, [c[1] for c in ocols]); r += 1
             for o in pt["orphans"]:
@@ -213,7 +218,9 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
             from .power_tree_diagram import layout, render_xlsx
             pt_a = getattr(res, "power_tree_a", None) or None
             diff = "edges" in (pt_a or {})
-            boxes = layout(pt, pt_a, meta_a.label, meta_b.label)
+            # converter-internal nets hidden (owner 2026-10-13): listed in the converter box comment and in the
+            # "Power tree" table sheet; the web page has the toggle
+            boxes = layout(pt, pt_a, meta_a.label, meta_b.label, show_internal=False)
             pmap = (sidecar or {}).get("page_map", {})
             link = None
             if pmap:
