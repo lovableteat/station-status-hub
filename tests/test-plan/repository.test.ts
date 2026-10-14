@@ -564,11 +564,11 @@ test("folder upload reports blocked and oversized files without creating empty f
   const fake = createAdapter();
   const repository = repositoryModule.createTestPlanRepository(fake.adapter);
   const large = folderFile("Release/large.md");
-  Object.defineProperty(large, "size", { value: 500 * 1024 ** 2 + 1 });
+  Object.defineProperty(large, "size", { value: 1024 ** 3 + 1 });
   const result = await repository.uploadFiles({ ...folderUploadTarget, files: [folderFile("Release/program.exe"), large] });
   assert.equal(result.uploaded.length, 0);
   assert.match(result.failures[0].message, /安全性/);
-  assert.match(result.failures[1].message, /500 MB/);
+  assert.match(result.failures[1].message, /1 GiB/);
   assert.equal(result.failedFiles.length, 2);
   assert.deepEqual(fake.operations, []);
 });

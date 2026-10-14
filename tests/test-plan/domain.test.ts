@@ -86,17 +86,18 @@ test("accepts private engineering source, configuration, firmware, and logs", ()
   assert.equal(result.valid.length, 8);
 });
 
-test("validates executable extensions, 500 MiB file size, and 20-file batches", () => {
-  const MiB = 1024 ** 2;
+test("validates executable extensions, 1 GiB file size, and 20-file batches", () => {
+  const GiB = 1024 ** 3;
   const result = filesModule.validateTestPlanUpload([
-    { name: "safe.step", size: 500 * MiB },
+    { name: "safe.step", size: GiB },
     { name: "unsafe.exe", size: 20 },
-    { name: "oversized.glb", size: 500 * MiB + 1 },
+    { name: "oversized.glb", size: GiB + 1 },
   ]);
 
   assert.deepEqual(result.valid.map((file: { name: string }) => file.name), ["safe.step"]);
   assert.match(result.errors[0].message, /不允許/);
-  assert.match(result.errors[1].message, /500 MB/);
+  assert.equal(result.errors[1].code, "file-size");
+  assert.match(result.errors[1].message, /1 GiB/);
 
   const tooMany = filesModule.validateTestPlanUpload(
     Array.from({ length: 21 }, (_, index) => ({
@@ -106,6 +107,19 @@ test("validates executable extensions, 500 MiB file size, and 20-file batches", 
   );
   assert.equal(tooMany.valid.length, 20);
   assert.equal(tooMany.errors.at(-1).code, "batch-limit");
+});
+
+test("an exact 1 GiB file fits the unchanged 1 GiB batch budget, while even one extra byte cannot join it", () => {
+  const GiB = 1024 ** 3;
+  assert.equal(filesModule.TEST_PLAN_MAX_FILE_SIZE, GiB);
+  assert.equal(filesModule.TEST_PLAN_MAX_BATCH_BYTES, GiB);
+  const exact = { name: "release.zip", size: GiB };
+  const additional = { name: "notes.txt", size: 1 };
+  const result = filesModule.validateTestPlanUpload([exact, additional]);
+  assert.deepEqual(result.valid, [exact]);
+  assert.equal(result.errors[0].code, "batch-size");
+  assert.equal(result.errors[0].fileName, additional.name);
+  assert.match(result.errors[0].message, /1 GiB/);
 });
 
 test("blocks OS executables, installers, drivers, and shortcut payloads", () => {

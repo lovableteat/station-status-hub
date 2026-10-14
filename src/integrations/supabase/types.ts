@@ -2184,18 +2184,21 @@ type BaseDatabase = {
         Row: {
           last_error: string | null
           owner_id: string
+          requested_by: string | null
           queued_at: string
           storage_path: string
         }
         Insert: {
           last_error?: string | null
           owner_id: string
+          requested_by?: string | null
           queued_at?: string
           storage_path: string
         }
         Update: {
           last_error?: string | null
           owner_id?: string
+          requested_by?: string | null
           queued_at?: string
           storage_path?: string
         }

@@ -69,6 +69,14 @@ function throwIfError(error: unknown): void {
   if (error) throw toTestPlanError(error);
 }
 
+function cleanupActorFilter(actorId: string): string {
+  // PostgREST's OR syntax is a raw filter string; only canonical UUIDs enter it.
+  if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(actorId)) {
+    throw new Error("清理操作的帳號識別碼無效。");
+  }
+  return `owner_id.eq.${actorId},requested_by.eq.${actorId}`;
+}
+
 function assertDeleted(
   data: { id: string } | null,
   entityLabel: string,
@@ -449,13 +457,20 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
       throwIfError(error);
     },
     async listCleanupPaths(ownerId) {
-      const { data, error } = await supabase
-        .from("test_plan_storage_cleanup_queue")
-        .select("storage_path")
-        .eq("owner_id", ownerId)
-        .order("queued_at", { ascending: true });
-      throwIfError(error);
-      return (data ?? []).map((row) => row.storage_path);
+      const filter = cleanupActorFilter(ownerId);
+      const paths: string[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await supabase
+          .from("test_plan_storage_cleanup_queue")
+          .select("storage_path")
+          .or(filter)
+          .order("queued_at", { ascending: true })
+          .order("storage_path")
+          .range(offset, offset + 499);
+        throwIfError(error);
+        paths.push(...(data ?? []).map(row => row.storage_path));
+        if (!data || data.length < 500) return [...new Set(paths)];
+      }
     },
     async queueCleanupPath(ownerId, path) {
       const payload: TablesInsert<"test_plan_storage_cleanup_queue"> = {
@@ -473,7 +488,7 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
       const { error } = await supabase
         .from("test_plan_storage_cleanup_queue")
         .delete()
-        .eq("owner_id", ownerId)
+        .or(cleanupActorFilter(ownerId))
         .in("storage_path", paths);
       throwIfError(error);
     },

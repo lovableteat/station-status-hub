@@ -44,7 +44,7 @@ export function useTestPlanWorkspace(
   options: UseTestPlanWorkspaceOptions = {},
 ) {
   const { user, sessionMode } = useUser();
-  const { canEditModule } = usePermissions();
+  const { canEditModule, isAdmin } = usePermissions();
   const repository = useMemo(
     () =>
       options.repository
@@ -72,12 +72,13 @@ export function useTestPlanWorkspace(
   ownerIdRef.current = ownerId;
 
   const canEditSpace = useCallback((spaceId: string) => {
+    if (!moduleCanEdit) return false;
+    // All-files can contain legacy or inactive-owner spaces absent from the
+    // account sidebar. Active administrators still manage their loaded entries.
+    if (isAdmin) return true;
     const space = spaces.find(candidate => candidate.id === spaceId);
-    return moduleCanEdit && space !== undefined && (
-      !space.isPersonal || space.ownerId === ownerId
-      || user?.role === "admin" || user?.role === "super_admin"
-    );
-  }, [moduleCanEdit, ownerId, spaces, user?.role]);
+    return space !== undefined && (!space.isPersonal || space.ownerId === ownerId);
+  }, [isAdmin, moduleCanEdit, ownerId, spaces]);
   const canEdit = moduleCanEdit && (activeSpaceId === null || canEditSpace(activeSpaceId));
   const requireSpaceEdit = useCallback((spaceId: string) => {
     if (!canEditSpace(spaceId)) throw new Error("這是其他使用者的檔案空間，目前為唯讀模式。");
@@ -355,8 +356,9 @@ export function useTestPlanWorkspace(
       runMutation(async () => {
         if (!ownerId) throw new Error("請先登入再刪除資料夾。");
         requireEntryEdit(folderId, "folder");
-        await repository.deleteFolder(ownerId, folderId);
+        const result = await repository.deleteFolder(ownerId, folderId);
         await refreshActiveSpace(activeSpaceId, ownerId);
+        return result;
       }),
     [activeSpaceId, ownerId, refreshActiveSpace, repository, requireEntryEdit, runMutation],
   );
@@ -438,8 +440,9 @@ export function useTestPlanWorkspace(
       runMutation(async () => {
         if (!ownerId) throw new Error("請先登入再刪除檔案。");
         requireEntryEdit(file.id, "file");
-        await repository.deleteFile(ownerId, file);
+        const result = await repository.deleteFile(ownerId, file);
         await refreshActiveSpace(activeSpaceId, ownerId);
+        return result;
       }),
     [activeSpaceId, ownerId, refreshActiveSpace, repository, requireEntryEdit, runMutation],
   );

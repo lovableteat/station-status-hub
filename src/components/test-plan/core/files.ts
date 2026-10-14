@@ -3,7 +3,7 @@ import type {
   TestPlanUploadCandidate,
 } from "../types.ts";
 
-export const TEST_PLAN_MAX_FILE_SIZE = 500 * 1024 ** 2;
+export const TEST_PLAN_MAX_FILE_SIZE = 1024 ** 3;
 export const TEST_PLAN_MAX_BATCH_SIZE = 20;
 export const TEST_PLAN_MAX_BATCH_BYTES = 1024 ** 3;
 
@@ -311,7 +311,7 @@ export function validateTestPlanUpload<T extends TestPlanUploadCandidate>(
       errors.push({
         fileName,
         code: "file-size",
-        message: "單一檔案不可超過 500 MB。",
+        message: "單一檔案不可超過 1 GiB。",
       });
       return;
     }
