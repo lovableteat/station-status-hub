@@ -12,15 +12,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ComparisonInputs, type RevisionInput } from "./ComparisonInputs";
 import { ComparisonResults } from "./ComparisonResults";
 import { ComparisonLibrary } from "./ComparisonLibrary";
+import { DatasheetFiles } from "./DatasheetFiles";
 import { downloadLocal } from "./downloads";
 import { ComparisonCharts } from "./ComparisonCharts";
 import { ComparisonRuntime } from "./runtime";
-import { inspectRevision, readRevision, validateRevision, formatBytes } from "./files";
+import { inspectRevision, readRevision, validateRevision, selectedRevisionFiles, formatBytes, filePath } from "./files";
 import { exportBackup, importBackup } from "./backup";
 import { listSessions, saveSession, readLibrary, saveLibrary } from "./storage";
 import { useComparisonFilters } from "./useComparisonFilters";
 import { ComparisonFeedback } from "./feedback/ComparisonFeedback";
 import { ComparisonGuide } from "./ComparisonGuide";
+import { DATASHEET_BATCH_LIMIT, DATASHEET_COUNT_LIMIT, mergeDatasheetFiles } from "./datasheetSelection";
 import type { Artifact, ComparisonResult, ComparisonSession, InputFile, ReviewChange, ReviewReply } from "./types";
 import "./comparison.css";
 
@@ -119,10 +121,14 @@ export default function ComparisonWorkspace() {
       if (!aLabel.trim() || !bLabel.trim() || aLabel.trim() === bLabel.trim()) throw new Error("請填寫兩個不同的版本名稱");
       if ([aLabel, bLabel].some(label => Array.from(label).some(char => "/\\[]:*?".includes(char) || char.charCodeAt(0) < 32))) throw new Error("版次名稱不可包含 / \\ [ ] : * ? 或控制字元");
       if (inputErrors.length) throw new Error(inputErrors.join("\n"));
+      // Bound the entire worker payload before reading any large file buffers.
+      if (datasheets.length) mergeDatasheetFiles([], datasheets);
+      const runFiles = [...selectedRevisionFiles(inspectRevision(a.files), a.selected), ...selectedRevisionFiles(inspectRevision(b.files), b.selected), ...Object.values(optional).filter((file): file is File => Boolean(file)), ...datasheets];
+      if (runFiles.length > DATASHEET_COUNT_LIMIT || runFiles.reduce((sum, file) => sum + file.size, 0) > DATASHEET_BATCH_LIMIT) throw new Error("本次 A、B、選用工具與 Datasheet 合計不可超過 1000 份／128 MiB；大量 Datasheet 可到位址庫分批逐份處理");
       const [aFiles, bFiles] = await Promise.all([readRevision(inspectRevision(a.files), a.selected), readRevision(inspectRevision(b.files), b.selected)]);
       const options: Record<string, unknown> = { library: libraryYaml || "devices: []\n" };
       for (const [key, file] of Object.entries(optional)) if (file) options[key] = await readOption(file);
-      options.datasheets = await Promise.all(datasheets.map(readOption));
+      options.datasheets = await Promise.all(datasheets.map(async file => ({ path: filePath(file), bytes: await file.arrayBuffer() })));
       scope.assertCurrent(token);
       const result = await runtimeRef.current.request<ComparisonResult>("run", { a: aFiles, b: bFiles, aLabel: aLabel.trim(), bLabel: bLabel.trim(), options }, showProgress);
       scope.assertCurrent(token);
@@ -196,7 +202,7 @@ export default function ComparisonWorkspace() {
         <div className="comparison-setup-heading"><div className="comparison-section-heading"><div><h2>A / B 版本比對</h2><p>選取舊版與新版工程檔，檢查連線、元件、BOM 與線路規則。</p></div></div><div className="comparison-project-name"><Label htmlFor="comparison-project">比對名稱</Label><Input id="comparison-project" placeholder="例如 CATANIA PDB" value={projectName} maxLength={120} disabled={!canEdit || busy} onChange={event => setProjectName(event.target.value)} /></div></div>
         <div className="comparison-revision-grid"><ComparisonInputs side="A" label={aLabel} onLabel={setALabel} value={a} onChange={setA} disabled={!canEdit || busy} /><ComparisonInputs side="B" label={bLabel} onLabel={setBLabel} value={b} onChange={setB} disabled={!canEdit || busy} /></div>
         <div className="comparison-run-actions"><div><strong>{busy ? "處理中" : !canEdit ? "唯讀" : blockers.length ? (noFilesYet ? "先選 A、B 兩版的檔案" : "還不能比對") : !projectName.trim() ? "填好比對名稱就能開始" : "可以開始比對"}</strong><p id="comparison-run-hint">{busy ? "跑完才能再操作" : !canEdit ? "這個帳號沒有編輯權限，不能選檔案或比對" : blockers.length ? (noFilesYet ? "每版都要有 Netlist 三份 .dat、BOM 用料表、電路圖 PDF" : `${blockers[0]}${blockers.length > 1 ? `，還有 ${blockers.length - 1} 項` : ""}`) : "必要資料已選齊；DSN、IC Datasheet 與規則設定是選用工具"}</p></div><Button size="lg" aria-describedby="comparison-run-hint" disabled={!canEdit || busy || !projectName.trim() || blockers.length > 0} onClick={() => void start()}><Play />{busy ? "比對中…" : session ? "重新比對" : "開始比對"}</Button></div>
-        <details className="comparison-optional"><summary>選用工具：IC Datasheet 與進階設定<ChevronDown /></summary><div className="comparison-optional-grid">{optionalInputs.map(option => <div key={option.key}><Label htmlFor={`comparison-option-${option.key}`}>{option.label}</Label><Input id={`comparison-option-${option.key}`} type="file" accept={option.accept} disabled={!canEdit || busy} onChange={event => setOptional(current => ({ ...current, [option.key]: event.target.files?.[0] }))} /></div>)}<div><Label htmlFor="comparison-datasheets">IC Datasheet 規格書 PDF（選用，可多選）</Label><Input id="comparison-datasheets" type="file" accept=".pdf" multiple disabled={!canEdit || busy} onChange={event => setDatasheets(Array.from(event.target.files ?? []))} /></div></div><p>已保存的使用者位址庫會自動套用；可在「位址庫」核對與管理。</p></details>
+        <details className="comparison-optional"><summary>選用工具：IC Datasheet 與進階設定<ChevronDown /></summary><div className="comparison-optional-grid">{optionalInputs.map(option => <div key={option.key}><Label htmlFor={`comparison-option-${option.key}`}>{option.label}</Label><Input id={`comparison-option-${option.key}`} type="file" accept={option.accept} disabled={!canEdit || busy} onChange={event => setOptional(current => ({ ...current, [option.key]: event.target.files?.[0] }))} /></div>)}<div className="comparison-datasheets-run"><Label>IC Datasheet 規格書 PDF（選用）</Label><DatasheetFiles value={datasheets} onChange={setDatasheets} disabled={!canEdit || busy} inputPrefix="comparison-run-datasheets" /></div></div><p>已保存的使用者位址庫會自動套用；可在「位址庫」核對與管理。</p></details>
         </section>
       </details>}
       {session && filters.tab !== "library" && <>
@@ -206,7 +212,7 @@ export default function ComparisonWorkspace() {
         <details className="comparison-section comparison-reports"><summary><FileText />報表與完整資料 · {session.result.artifacts.length} 份</summary><div className="comparison-report-list">{session.result.artifacts.map(artifact => <div key={artifact.key}><div><strong>{artifact.name}</strong><small>{formatBytes(artifact.bytes.byteLength)}</small></div><Button variant="outline" disabled={busy} onClick={() => downloadArtifact(artifact)}><Download />{artifact.key === "xlsx" ? "下載（含回覆）" : "下載"}</Button>{artifact.mime === "application/pdf" && <Button asChild variant="ghost"><a href={urls[artifact.key]} target="_blank" rel="noopener noreferrer">開啟</a></Button>}</div>)}</div>{!!session.result.warnings.length && <details><summary>解析與輸出提示 · {session.result.warnings.length}</summary>{session.result.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</details>}</details>
       </>}
       {!session && filters.tab !== "compare" && filters.tab !== "library" && <section className="comparison-section comparison-start-empty"><GitCompareArrows /><h2>先建立一份比對</h2><p>選擇 A／B 資料後執行檢查，結果會出現在審查表與圖表中。也可以匯入之前的備份。</p><Button onClick={() => update("tab", "compare")}>前往比對檢查</Button></section>}
-      {filters.tab === "library" && <ComparisonLibrary runtime={runtimeRef.current} yaml={libraryYaml} entries={libraryEntries} onEntries={setLibraryEntries} onSave={saveUserLibrary} canEdit={canEdit} signedBy={user?.displayName ?? ""} busy={busy} runJob={runJob} />}
+      {filters.tab === "library" && <ComparisonLibrary key={accountId} runtime={runtimeRef.current} yaml={libraryYaml} entries={libraryEntries} onEntries={setLibraryEntries} onSave={saveUserLibrary} canEdit={canEdit} signedBy={user?.displayName ?? ""} busy={busy} runJob={runJob} />}
     </>}
   </div>;
 }

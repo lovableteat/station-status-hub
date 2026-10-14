@@ -60,7 +60,7 @@ const TABS: Array<[string, string]> = [
   ["比對檢查／審查追蹤", "兩個分頁是同一張結果表。"],
   ["Power Tree", "從 pin 和電阻網路推出電源的上下游，可以縮放。"],
   ["I²C Map", "推出 bus、mux、strap 和每個裝置的位址。"],
-  ["位址庫", "I²C 裝置的位址規則。從 Datasheet 產生的候選規則，要對過 PDF、簽核之後才會生效。"],
+  ["位址庫", "I²C 裝置的位址規則。可選取整個 Datasheet 資料夾，批次產生候選規則；每份要對過 PDF、簽核之後才會生效。"],
 ];
 
 const FAQ: Array<[string, string]> = [
@@ -184,7 +184,7 @@ export function ComparisonGuide() {
 
           <section className="comparison-guide-extra" aria-label="其他功能">
             <h3>其他功能</h3>
-            <p><strong>選用工具：IC Datasheet 與進階設定</strong>：在「開始比對」按鈕下面的摺疊區，可以加元件規格書 PDF、規則設定 YAML、Net 電壓對照、電源域、I²C Block Diagram 對照 CSV。不使用也能比對，使用時要在比對前選好；IC Datasheet 不會代替必要的電路圖 PDF。已經有結果的話，先點「展開來源檔案，重新比對」。</p>
+            <p><strong>選用工具：IC Datasheet 與進階設定</strong>：在「開始比對」按鈕下面，可按「選擇 Datasheet 資料夾」一次加入整批 PDF，包含子資料夾；也能繼續加入其他資料夾，非 PDF 會略過。本次比對的 A、B、選用工具與 Datasheet 合計上限 128 MiB／1000 份。較大的資料夾可到位址庫按「批次產生候選規則」，逐份處理、核對與簽核。IC Datasheet 是選用資料，不會代替必要的電路圖 PDF。規則設定 YAML、電壓對照、電源域與 I²C 對照 CSV 仍可在這裡加入。</p>
             <p><strong>意見收集</strong>：回報問題或建議，可以截圖、選圖片或直接貼上，最多 5 張。這個會上傳到伺服器給管理員看，送出後自己刪不掉，截圖前確認畫面上沒有不能外流的線路圖。</p>
           </section>
         </details>

@@ -80,14 +80,16 @@ export function validateRevision(inventory: RevisionInventory, selected: Partial
   return errors;
 }
 
-export async function readRevision(inventory: RevisionInventory, selected: Partial<Record<InputRole, string>> = {}): Promise<InputFile[]> {
+export function selectedRevisionFiles(inventory: RevisionInventory, selected: Partial<Record<InputRole, string>> = {}): File[] {
   const fresh = inspectRevision(inventory.files);
   const errors = validateRevision(fresh, selected);
   if (errors.length) throw new Error(errors.join("\n"));
+  return INPUT_ROLES.map(role => chosenFile(fresh, role, selected)).filter((file): file is File => Boolean(file));
+}
+
+export async function readRevision(inventory: RevisionInventory, selected: Partial<Record<InputRole, string>> = {}): Promise<InputFile[]> {
   const result: InputFile[] = [];
-  for (const role of INPUT_ROLES) {
-    const file = chosenFile(fresh, role, selected);
-    if (!file) continue;
+  for (const file of selectedRevisionFiles(inventory, selected)) {
     const bytes = await file.arrayBuffer();
     if (!(bytes instanceof ArrayBuffer) || bytes.byteLength !== file.size) throw new Error(`檔案讀取大小不符：${filePath(file)}`);
     result.push({ path: filePath(file), bytes });

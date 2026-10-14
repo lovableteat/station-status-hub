@@ -1,4 +1,6 @@
 export class ComparisonRuntime {
+  private cancellationGeneration = 0;
+  get generation(): number { return this.cancellationGeneration; }
   private worker: Worker | null = null;
   private nextId = 0;
   private pending = new Map<number, { resolve: (result: unknown) => void; reject: (error: Error) => void; progress?: (message: string) => void; timeout: ReturnType<typeof setTimeout> }>();
@@ -28,6 +30,7 @@ export class ComparisonRuntime {
   }
 
   cancel(message = "已取消執行"): void {
+    ++this.cancellationGeneration;
     this.worker?.terminate();
     this.worker = null;
     for (const pending of this.pending.values()) { clearTimeout(pending.timeout); pending.reject(new Error(message)); }

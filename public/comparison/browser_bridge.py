@@ -26,6 +26,25 @@ pdfmetrics.registerFont(UnicodeCIDFont('MSung-Light'))
 pdf_report._FONT.update(name='MSung-Light', bold='MSung-Light', cjk=True)
 
 
+def _folder_datasheets(folder, texts):
+    """Keep browser-selected subfolders and recognize PDF extension casing."""
+    if not folder.is_dir():
+        return []
+    norm = [i2c._norm(text) for text in texts]
+    paths = sorted(
+        (path for path in folder.rglob('*') if path.is_file() and path.suffix.lower() == '.pdf'),
+        key=lambda path: (path.relative_to(folder).as_posix().casefold(), path.relative_to(folder).as_posix()),
+    )
+    return [path for path in paths if len(stem := i2c._norm(path.stem)) >= 5
+            and any(stem in text for text in norm)]
+
+
+# The original engine's hint resolves this module attribute at call time. Extend
+# only browser file discovery; the engine source and its integrity manifest stay
+# unchanged, and no uploaded PDF becomes a signed library rule automatically.
+i2c.matching_datasheets = _folder_datasheets
+
+
 def _plain(value):
     if dataclasses.is_dataclass(value):
         return _plain(dataclasses.asdict(value))

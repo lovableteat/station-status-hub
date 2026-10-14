@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { webcrypto } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import vm from 'node:vm';
 import test from 'node:test';
 
@@ -23,7 +24,7 @@ function worker(load = () => { throw new Error('Validation must run before Pytho
       }
     },
   };
-  vm.runInNewContext(workerSource, {
+  const context = vm.createContext({
     self, URL, ArrayBuffer, Uint8Array, TextEncoder, Set, Promise, crypto: webcrypto,
     importScripts: () => {}, loadPyodide: load,
     fetch: async url => {
@@ -31,8 +32,10 @@ function worker(load = () => { throw new Error('Validation must run before Pytho
       return new Response(await readFile(new URL(relative, publicRoot)));
     },
   });
+  vm.runInContext(workerSource, context);
   return {
     messages,
+    prepare: vm.runInContext('(type, payload, FS) => writeInputs({ FS }, "/work/test", type, validateRequest(type, payload))', context),
     dispatch(type, payload) {
       const id = ++next;
       return new Promise(resolve => {
@@ -66,6 +69,75 @@ test('Python worker enforces file count, file bytes and YAML bounds', async () =
   assert.match(total.message, /超過限制/);
   const yaml = await worker().dispatch('library', { yaml: 'a'.repeat(2 * 1024 * 1024 + 1) });
   assert.match(yaml.message, /大小無效/);
+});
+
+test('Folder datasheets preserve nested paths and duplicate basenames without weakening payload limits', () => {
+  const fsFiles = new Map();
+  const fs = { mkdirTree() {}, writeFile(path, bytes) { fsFiles.set(path, bytes); } };
+  const instance = worker();
+  const datasheets = [file('ICs/Vendor A/TMP9999.pdf', 'first'), file('ICs/Vendor B/TMP9999.PDF', 'second')];
+  const prepared = instance.prepare('run', { ...request([file('EVT/pstxnet.dat')]), options: { datasheets } }, fs);
+  assert.deepEqual(Array.from(prepared.options.datasheets), [
+    '/work/test/datasheets/ICs/Vendor A/TMP9999.pdf',
+    '/work/test/datasheets/ICs/Vendor B/TMP9999.PDF',
+  ]);
+  assert.equal(new TextDecoder().decode(fsFiles.get(prepared.options.datasheets[0])), 'first');
+  assert.equal(new TextDecoder().decode(fsFiles.get(prepared.options.datasheets[1])), 'second');
+  const prepare = sheets => instance.prepare('run', { ...request([]), options: { datasheets: sheets } }, fs);
+  assert.throws(() => prepare([file('ICs/part.pdf'), file('ics/PART.PDF')]), /重複/);
+  assert.throws(() => prepare([file('ICs/../part.pdf')]), /路徑/);
+  assert.throws(() => instance.prepare('run', {
+    ...request([file('EVT/pstxnet.dat')]),
+    options: { datasheets: Array.from({ length: 1000 }, (_, i) => file(`ICs/${i}.PDF`)) },
+  }, fs), /超過限制/);
+  const large = new ArrayBuffer(64 * 1024 * 1024);
+  assert.throws(() => instance.prepare('run', {
+    a: [{ path: 'EVT/schematic.pdf', bytes: large }],
+    b: [{ path: 'DVT/schematic.pdf', bytes: large }],
+    options: { datasheets: [file('ICs/TMP9999.PDF', 'x')] },
+  }, fs), /超過限制/);
+});
+
+test('Browser bridge discovers top-level and nested mixed-case PDF datasheets using original part matching', {
+  skip: !process.env.AUTOCHECK_PYTHON && 'Set AUTOCHECK_PYTHON to a native Python 3 interpreter for this standard-library regression',
+}, () => {
+  const script = String.raw`
+import ast
+import json
+from pathlib import Path
+import re
+import sys
+import tempfile
+from types import SimpleNamespace
+
+bridge = ast.parse(Path(sys.argv[1]).read_text(encoding='utf-8'))
+nodes = [node for node in bridge.body if isinstance(node, ast.FunctionDef) and node.name == '_folder_datasheets'
+         or isinstance(node, ast.Assign) and any(isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
+                                                and target.value.id == 'i2c' and target.attr == 'matching_datasheets'
+                                                for target in node.targets)]
+i2c = SimpleNamespace(_norm=lambda value: re.sub(r'[^A-Z0-9]', '', (value or '').upper()))
+scope = {'i2c': i2c}
+exec(compile(ast.Module(body=nodes, type_ignores=[]), '<browser datasheet adapter>', 'exec'), scope)
+assert i2c.matching_datasheets is scope['_folder_datasheets']
+with tempfile.TemporaryDirectory() as temporary:
+    root = Path(temporary)
+    names = ['TMP9999.pdf', 'ICs/A/TMP9999.PDF', 'ICs/B/TMP9999.pdf', 'ICs/MATCH.pdf',
+             'ICs/TMP9999.txt', 'ICs/AB12.pdf', 'ICs/TMP8888.pdf']
+    for name in names:
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('synthetic fixture', encoding='utf-8')
+    (root / 'TMP9999-directory.PDF').mkdir()
+    result = [path.relative_to(root).as_posix() for path in i2c.matching_datasheets(root, ['IC TMP-9999GF', 'AB12'])]
+    assert result == ['ICs/A/TMP9999.PDF', 'ICs/B/TMP9999.pdf', 'TMP9999.pdf'], result
+    assert i2c.matching_datasheets(root / 'absent', ['TMP9999']) == []
+    assert i2c.matching_datasheets(root, ['TMP7777']) == []
+    print(json.dumps(result))
+`;
+  const result = spawnSync(process.env.AUTOCHECK_PYTHON, ['-c', script, fileURLToPath(new URL('browser_bridge.py', publicRoot))], { encoding: 'utf8' });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.deepEqual(JSON.parse(result.stdout), ['ICs/A/TMP9999.PDF', 'ICs/B/TMP9999.pdf', 'TMP9999.pdf']);
 });
 
 test('Public engine manifest includes only original Python source and safe config', async () => {

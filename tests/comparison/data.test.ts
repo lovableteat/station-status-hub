@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import JSZip from "jszip";
-import { filePath, inspectRevision, readRevision, validateRevision } from "../../src/components/comparison/files.ts";
+import { filePath, inspectRevision, readRevision, selectedRevisionFiles, validateRevision } from "../../src/components/comparison/files.ts";
 import { exportBackup, importBackup } from "../../src/components/comparison/backup.ts";
 import { listSessions, parseSessionSnapshot, readLibrary, saveLibrary, saveSession } from "../../src/components/comparison/storage.ts";
 import type { ComparisonSession } from "../../src/components/comparison/types.ts";
@@ -95,6 +95,17 @@ test("rejects unsafe and case-insensitive duplicate input paths", async () => {
   }
   const duplicate = inspectRevision([...revision(), input("BOARD/PSTXNET.DAT")]);
   assert.match(validateRevision(duplicate, { pstxnet: "board/pstxnet.dat" }).join(" "), /重複/);
+});
+
+test("worker preflight counts only selected sources without reading file buffers", () => {
+  let reads = 0;
+  const files = [...revision(), input("board/other.csv"), input("board/main.dsn"), input("board/notes.txt")];
+  for (const file of files) file.arrayBuffer = async () => { reads++; throw new Error("Preflight must not read file bytes"); };
+  const selected = selectedRevisionFiles(inspectRevision(files), { bom: "board/other.csv", dsn: "" });
+  assert.equal(selected.length, 5);
+  assert.ok(selected.some(file => filePath(file) === "board/other.csv"));
+  assert.ok(!selected.some(file => /bom\.csv|main\.dsn|notes\.txt/.test(filePath(file))));
+  assert.equal(reads, 0);
 });
 
 test("bounds all picked files before reading, including files later ignored", async () => {
