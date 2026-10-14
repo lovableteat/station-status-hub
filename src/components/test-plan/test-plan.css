@@ -1856,7 +1856,12 @@
 .file-library-workspace .test-plan-space-row:hover { border-color: hsl(var(--border) / .8); background: hsl(var(--secondary) / .5); }
 .file-library-workspace .test-plan-space-row.is-active { border-color: hsl(var(--primary) / .35); background: hsl(var(--primary) / .13); box-shadow: none; }
 .file-library-workspace .test-plan-space-row > button:first-child { min-height: 48px; padding: 8px 10px; gap: 10px; }
+.file-library-workspace .file-library-user-icon { width: 18px; height: 18px; flex: 0 0 18px; color: hsl(var(--muted-foreground)); }
+.file-library-workspace .file-library-user-identity { flex: 1; min-width: 0; }
+.file-library-workspace .test-plan-space-row :is(strong, small) { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
 .file-library-workspace .test-plan-space-row strong { font-size: 13px; font-weight: 500; line-height: 1.5; }
+.file-library-workspace .test-plan-space-row small { margin-top: 2px; font-size: 11px; line-height: 1.4; color: hsl(var(--muted-foreground)); }
+.file-library-workspace .file-library-current-user { flex-shrink: 0; padding: 3px 6px; }
 .file-library-workspace .test-plan-space-row.is-active strong { color: var(--file-library-accent); font-weight: 650; }
 .file-library-workspace .test-plan-space-color { height: 9px; width: 9px; border-radius: 50%; box-shadow: none; }
 .file-library-all { display: flex; align-items: center; width: 100%; gap: 10px; min-height: 48px; padding: 8px 10px; margin-bottom: 2px; border: 1px solid transparent; border-radius: 11px; text-align: left; font-size: 13px; font-weight: 650; color: hsl(var(--foreground)); }

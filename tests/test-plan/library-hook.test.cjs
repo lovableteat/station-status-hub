@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {React, create, act, loader, flush, browser, deferred} = require('../support/renderHarness.cjs');
 
-function setup() {
+function setup(options = {}) {
   const stamp = '2026-10-12T00:00:00Z';
   const spaces = [
     {id:'old-space', projectId:'old-project', ownerId:'owner', name:'Legacy', color:'#60a5fa', createdAt:stamp, updatedAt:stamp},
@@ -22,7 +22,7 @@ function setup() {
   };
   const session = {user:{userId:'owner'},sessionMode:'authenticated'};
   let editable = true; let state;
-  const load = loader({globals:{File,Blob}, mocks:{
+  const load = loader({window:options.window,globals:{File,Blob}, mocks:{
     '@/components/auth/UserContext':{useUser:()=>session},
     '@/hooks/usePermissions':{usePermissions:()=>({canEditModule:()=>editable})},
     '../core/supabaseAdapter':{createSupabaseTestPlanAdapter:()=>adapter},
@@ -176,6 +176,53 @@ test('entry mutations from all-files view cannot modify another owner content', 
   assert.equal(f.state.canEdit,true);
   await act(async()=>{await assert.rejects(f.state.renameFile('other-file','renamed.md'),/唯讀/)});
   await act(async()=>{await assert.rejects(f.state.replaceFileContents(f.files[1],new Blob(['changed'])),/唯讀/)});
+  assert.deepEqual(f.log,[]);
+  await act(async()=>tree.unmount());
+});
+
+test('returning to the page refreshes canonical account labels without reloading open folder files', async()=>{
+  const window=browser();const f=setup({window});let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  await act(async()=>{await f.state.openSpace('old-space')});
+  let fileReads=0;const listFiles=f.adapter.listFiles;
+  f.adapter.listFiles=async id=>{fileReads++;return listFiles(id)};
+  f.spaces[0]={...f.spaces[0],name:'後臺新姓名',description:'@canonical'};
+  await act(async()=>{window.dispatchEvent(new Event('focus'))});await flush();
+  assert.equal(f.state.spaces[0].name,'後臺新姓名');
+  assert.equal(f.state.spaces[0].description,'@canonical');
+  assert.equal(f.state.activeSpaceId,'old-space');
+  assert.equal(f.state.folders[0].id,'nested');
+  assert.equal(f.state.files[0].id,'old-file');
+  assert.equal(fileReads,0);
+  assert.deepEqual(f.log,[]);
+  await act(async()=>tree.unmount());
+});
+
+test('late account roster responses cannot restore data after account switch or unmount', async()=>{
+  const window=browser();const f=setup({window});let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  const pending=deferred();const listSpaces=f.adapter.listSpaces;
+  f.adapter.listSpaces=()=>pending.promise;
+  await act(async()=>{window.dispatchEvent(new Event('focus'))});
+  f.adapter.listSpaces=listSpaces;
+  f.session.user={userId:'new-owner',role:'engineer'};
+  f.spaces.splice(0,f.spaces.length,{id:'new-space',ownerId:'new-owner',name:'New owner',isPersonal:true});
+  await act(async()=>tree.update(React.createElement(f.Probe)));await flush();
+  await act(async()=>pending.resolve([{id:'stale-space',ownerId:'owner',name:'Stale owner'}]));await flush();
+  assert.deepEqual(f.state.spaces.map(space=>space.id),['new-space']);
+  let calls=0;f.adapter.listSpaces=async()=>{calls++;return []};
+  await act(async()=>tree.unmount());
+  window.dispatchEvent(new Event('focus'));await flush();
+  assert.equal(calls,0);
+});
+
+test('roster read errors preserve the last list and report failure without any writes', async()=>{
+  const window=browser();const f=setup({window});let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  f.adapter.listSpaces=async()=>{throw new Error('directory unavailable')};
+  await act(async()=>{window.dispatchEvent(new Event('focus'))});await flush();
+  assert.equal(f.state.spaces.length,3);
+  assert.match(f.state.error,/directory unavailable/);
   assert.deepEqual(f.log,[]);
   await act(async()=>tree.unmount());
 });

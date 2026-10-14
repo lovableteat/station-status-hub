@@ -34,6 +34,7 @@ import {
   Search,
   Trash2,
   Upload,
+  UserRound,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -50,7 +51,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -877,7 +877,7 @@ export function TestPlanWorkspace() {
                 <button
                   type="button"
                   disabled={busy}
-                  aria-label={`開啟 ${space.name} 的檔案空間`}
+                  aria-label={`開啟 ${space.name}${space.description ? `（${space.description}）` : ""} 的檔案空間`}
                   aria-current={activeSpaceId === space.id ? "page" : undefined}
                   title={`${space.name} ${space.description ?? ""}`}
                   onClick={() => {
@@ -885,11 +885,12 @@ export function TestPlanWorkspace() {
                     void openSpace(space.id);
                   }}
                 >
-                  <Avatar className="size-8 shrink-0"><AvatarFallback>{Array.from(space.name).slice(0, 2).join("")}</AvatarFallback></Avatar>
-                  <span className="min-w-0">
+                  <UserRound className="file-library-user-icon" aria-hidden="true" />
+                  <span className="file-library-user-identity">
                     <strong>{space.name}</strong>
+                    {space.description && <small>{space.description}</small>}
                   </span>
-                  {space.ownerId === ownerId && <Badge variant="secondary">我</Badge>}
+                  {space.ownerId === ownerId && <Badge variant="secondary" className="file-library-current-user">我</Badge>}
                 </button>
               </div>
             ))}
