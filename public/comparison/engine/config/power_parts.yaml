@@ -1,0 +1,60 @@
+# Power part library for the power tree (2026-10-13, owner choice B). Used only to name rail voltages in the
+# power tree diagram / table; no finding depends on it. Every entry cites the datasheet it came from.
+#
+# Matching: `mpn` is a regex SEARCHED (case-insensitive) in the symbol VALUE and the BOM main description / spec.
+# First match wins, so put the more specific entry first.
+#
+# converters:
+#   type: buck | ldo | pmic | load_switch | efuse
+#     load_switch / efuse: output voltage = input voltage (no regulation).
+#   vref: feedback reference voltage (V). Vout = vref x (1 + Rtop / Rbot): Rtop = built R from the FB pin to the
+#         converter's output rail, Rbot = built R from FB to ground (directly, or through a 0R remote-ground net).
+#         Any other R on the FB net (margining, DAC) -> no FB value (never guessed).
+#   fb_pin: FB pin name regex (full match on the pin name without OrCAD's #<pin> suffix).
+# loads: nominal supply voltage of a load's supply pins (pin name regex, full match), used as a cross-check source.
+#
+# checked: who read the value off the datasheet. RD sign-off pending for every entry (same flow as the I2C library).
+
+converters:
+  - name: MPQ8633A (MPS 16 V 12 A sync buck)
+    mpn: 'MPQ8633A'
+    type: buck
+    vref: 0.600
+    fb_pin: 'FB'
+    src: https://www.mouser.com/datasheet/2/277/MPQ8633A-1500521.pdf   # EC table VREF 600 mV typ (594 / 606)
+    checked: Claude 2026-10-13
+  - name: RT2859A / RT2859B (Richtek 18 V 3 A ACOT buck)
+    mpn: 'RT2859[AB]'
+    type: buck
+    vref: 0.765
+    fb_pin: 'FB'
+    src: https://www.richtek.com/assets/product_file/RT2859A=RT2859B/DS2859AB-08.pdf   # "regulates VFB at 0.765V"
+    checked: Claude 2026-10-13
+  - name: GS7133 (GSTEK 3 A LDO)
+    mpn: 'GS7133'
+    type: ldo
+    vref: 0.8
+    fb_pin: 'FB'
+    src: https://xdevs.com/doc/_Datasheets/_DC_DC/gs7133.pdf   # VOUT = 0.8 (R1 + R2) / R2
+    checked: Claude 2026-10-13
+  - name: AP22908 (Diodes 1.5 A load switch)
+    mpn: 'AP22908'
+    type: load_switch
+    src: https://diodes.com/datasheet/download/AP22908.pdf
+    checked: Claude 2026-10-13
+  - name: APW6017 (ANPEC 5-buck + VTT PMIC)
+    mpn: 'APW6017'
+    type: pmic
+    # outputs set by the SEL strap + OTP / I2C, no FB divider: no vref until the SEL table is on hand (datasheet
+    # not public, 2026-10-13)
+    src: ''
+    checked: ''
+
+loads:
+  - name: Micron DDR5 SDRAM (MT60B)
+    mpn: 'MT60B'
+    pins:
+      - {pin: 'VDD|VDDQ', v: 1.1}
+      - {pin: 'VPP', v: 1.8}
+    src: https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/7969/16gb-ddr5-sdram-dierevd.pdf   # VDD = VDDQ = 1.1V, VPP = 1.8V
+    checked: Claude 2026-10-13

@@ -11,6 +11,7 @@ from __future__ import annotations
 from html import escape
 
 from ..model import natkey
+from .diagram_html import page
 
 FILL = {"new": "#C6EFCE", "changed": "#FFEB9C", "same": "#FFFFFF", "": "#FFFFFF", "dnp": "#F2F2F2"}
 DASH = ' stroke-dasharray="5,4"'
@@ -224,24 +225,13 @@ def render_svg(m: dict, pdf_url=None, a_label: str = "A") -> str:
 
 
 def render_html(m: dict, title: str, pdf_url=None, a_label: str = "A", declared_note: str = "") -> str:
+    """Standalone page: shared frame from report/diagram_html.py (zoom bar, fit width, Ctrl + wheel, height =
+    drawing; zoom remembered under its own localStorage key), same as the power tree page."""
     svg = render_svg(m, pdf_url, a_label)
-    return f"""<!doctype html>
-<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{escape(title)}</title>
-<style>
-:root {{ color-scheme: light; }}
-body {{ margin: 0; padding: 12px 16px; background: #fff; color: #000; font: 13px Arial, 'Microsoft JhengHei', sans-serif; }}
-h1 {{ font-size: 16px; margin: 0 0 6px; }}
-p {{ margin: 4px 0; color: #444; }}
-.wrap {{ overflow: auto; border-top: 1px solid #ddd; margin-top: 8px; padding-top: 8px; }}
-.box:hover rect {{ stroke-width: 2.5; }}
-</style></head><body>
-<h1>{escape(title)}</h1>
-<p>從 netlist + BOM + config/i2c_devices.yaml 推出的 I2C map (測試狀態)。藍線 = SDA、橘線 = SCL，每段標 net name，分支上的電阻 = 串接件，主幹上方 = pull-up；
-連接器框以 net name 為主，symbol pin 名只當附註。框內：RefDes (藍字 = 開線路圖該頁) / symbol 料號 / BOM 主料 /
-位址 (strap 狀態 → 算出的 7-bit 位址) / 每支位址腳實際上件的 strap 電阻 (DNP 列在括號內)。
-strap 狀態：0 = GND、1 = 接到 rail、Z = 空接、SDA / SCL = 接自己的 SDA / SCL、X = 上下拉都上件、? = 不明。灰色虛線 = DNP。綠 = 新增、黃 = 變更 (相對 {escape(a_label)})；紅框 = 位址衝突；「圖不符」= 跟 I2C Block Diagram 對不上。滑鼠停在框上看細節。</p>
-<p>{escape(declared_note)}</p>
-<div class="wrap">{svg}</div>
-</body></html>
-"""
+    intro = ("<p>從 netlist + BOM + config/i2c_devices.yaml 推出的 I2C map (測試狀態)。藍線 = SDA、橘線 = SCL，每段標 net name，"
+             "分支上的電阻 = 串接件，主幹上方 = pull-up；連接器框以 net name 為主，symbol pin 名只當附註。框內：RefDes (藍字 = 開線路圖該頁) / "
+             "symbol 料號 / BOM 主料 / 位址 (strap 狀態 → 算出的 7-bit 位址) / 每支位址腳實際上件的 strap 電阻 (DNP 列在括號內)。"
+             "strap 狀態：0 = GND、1 = 接到 rail、Z = 空接、SDA / SCL = 接自己的 SDA / SCL、X = 上下拉都上件、? = 不明。灰色虛線 = DNP。"
+             f"綠 = 新增、黃 = 變更 (相對 {escape(a_label)})；紅框 = 位址衝突；「圖不符」= 跟 I2C Block Diagram 對不上。滑鼠停在框上看細節。</p>"
+             f"<p>{escape(declared_note)}</p>")
+    return page(title, intro, svg, zoom_key="autocheck_i2c_zoom")

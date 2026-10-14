@@ -121,7 +121,7 @@ def expand_rows(findings: list[Finding], cap_rows: list[dict] | None = None, des
                 if f.category == "CAPV" and r in cap:
                     c = cap[r]
                     detail = (f"{c['value']} | {c['net1']} {c['v1'] or '?'} V / {c['net2']} {c['v2'] or '?'} V | "
-                              f"rated {c['rated']} V, stress {c['stress'] or '?'} V, required {c['required'] or '?'} V"
+                              f"rated {c['rated']} V, stress {c['stress'] or '?'} V, required {c.get('required') or '?'} V"
                               f" | {c['verdict']}")
                     nets = [c["net1"], c["net2"]]
                 pg, pt = page_of(r, f.page, f.page_title)

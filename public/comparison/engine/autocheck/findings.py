@@ -54,6 +54,11 @@ RULE_HELP = {
     "BOM_MPN_NOT_FOUND": "Symbol MPN not among BOM main/alternates. Often a generic symbol; confirm pin-compatibility.",
     "BOM_QTY_MISMATCH": "BOM quantity does not match the RefDes count on the line.",
     "BOM_DUP_REFDES": "Same RefDes on two BOM lines.",
+    "BOM_SOCKET_LINKED": "BOM wrote the location as 'FOR <socket>'; the part stacked on that socket in the netlist "
+                         "was found by its pins and counted as built. Check the mapping once.",
+    "BOM_REF_UNRESOLVED": "A BOM Ref Des entry is not a RefDes and could not be mapped to one netlist part; that "
+                          "part is treated as DNP. Fix the pattern in config bom.socket or the BOM.",
+    "BOM_ALT_ORPHAN": "Agile substitute (Main / Sub = S) whose Find Num matches no main item above it.",
     "STRAP_PU_PD_BOTH": "Strap / address pin with both pull-up and pull-down stuffed: undefined level or a rail "
                         "short (0R both sides). Keep one side DNP.",
     "OD_NO_PULLUP": "Open-drain node with no stuffed pull-up: it can only go low. Stuff the pull-up.",

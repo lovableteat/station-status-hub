@@ -58,6 +58,8 @@ class BomItem:
     parent_pn: str | None = None            # sub-assembly this item sits under, if any
     parent_alternates: list[tuple[str, str, str]] = field(default_factory=list)
     row: int = 0                            # source row in the BOM file (traceability)
+    ref_tokens: list[str] = field(default_factory=list)  # Ref Des entries that are not a plain RefDes,
+    #                                         e.g. Agile "FOR J2" (socketed part); resolved by bom_socket.py
 
 
 @dataclass
@@ -79,6 +81,7 @@ class Design:
     bom_items: list[BomItem] = field(default_factory=list)
     bom: dict[str, BomItem] | None = None    # refdes -> item; None means "no BOM supplied"
     bom_problems: list[tuple[str, str]] = field(default_factory=list)  # (rule, detail)
+    bom_links: list[dict] = field(default_factory=list)   # bom_socket.py: BOM token -> netlist RefDes decisions
     pages: dict[int, str] = field(default_factory=dict)               # page number -> title
     change_history: list[tuple[str, list[str]]] = field(default_factory=list)  # (page title, lines)
     sources: list[SourceFile] = field(default_factory=list)

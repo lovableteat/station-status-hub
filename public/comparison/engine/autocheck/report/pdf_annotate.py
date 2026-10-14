@@ -14,13 +14,15 @@ from __future__ import annotations
 import io
 import json
 import re
+import uuid
 from collections import defaultdict
 from pathlib import Path
 
 import pdfplumber
-from pypdf import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter, Transformation
 from pypdf.annotations import Link, Rectangle
-from pypdf.generic import (ArrayObject, FloatObject, NameObject, NumberObject, TextStringObject, DictionaryObject)
+from pypdf.generic import (ArrayObject, FloatObject, NameObject, NumberObject, TextStringObject, DictionaryObject,
+                           RectangleObject)
 from pypdf.generic import Fit
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfgen import canvas
@@ -64,6 +66,101 @@ def _tight_tokens(chars: list[dict], h: float):
                 group = [c]
 
 
+# ----------------------------------------------------------------------------------- normalise
+def _apply(ctm: tuple, x: float, y: float) -> tuple[float, float]:
+    a, b, c, d, e, f = ctm
+    return a * x + c * y + e, b * x + d * y + f
+
+
+def _transform_annots(page, ctm: tuple) -> int:
+    """Move the page's pre-existing annotations (OrCAD off-page /Link, earlier comments) through the same
+    ctm as the content, so they stay on the thing they point at. /Rect and /QuadPoints are re-derived from
+    the transformed corners; a cached appearance (/AP) is dropped because its /Matrix would be wrong."""
+    n = 0
+    for ref in page.get("/Annots") or []:
+        a = ref.get_object()
+        rect = a.get("/Rect")
+        if not rect:
+            continue
+        x0, y0, x1, y1 = (float(v) for v in rect)
+        pts = [_apply(ctm, x, y) for x, y in ((x0, y0), (x1, y0), (x0, y1), (x1, y1))]
+        xs, ys = [q[0] for q in pts], [q[1] for q in pts]
+        a[NameObject("/Rect")] = ArrayObject([FloatObject(v) for v in (min(xs), min(ys), max(xs), max(ys))])
+        qp = a.get("/QuadPoints")
+        if qp:
+            vals = [float(v) for v in qp]
+            moved = []
+            for k in range(0, len(vals) - 1, 2):
+                moved += _apply(ctm, vals[k], vals[k + 1])
+            a[NameObject("/QuadPoints")] = ArrayObject([FloatObject(v) for v in moved])
+        if "/AP" in a and (ctm[1] or ctm[2]):
+            del a[NameObject("/AP")]
+        n += 1
+    return n
+
+
+def normalize_pdf(pdf_path: Path) -> tuple[io.BytesIO, list[str]]:
+    """Rewrite every page into one plain coordinate system: /Rotate 0, MediaBox = CropBox = (0,0,w,h), no /UserUnit.
+
+    Schematic PDFs arrive any way a print driver felt like: portrait paper + /Rotate 90 (content stored sideways),
+    CropBox offsets, mixed page sizes, /UserUnit scaling. pdfplumber reports *displayed* coordinates while pypdf
+    merge_page / annotations write *user space*, so on such pages every box lands 90 degrees off. Baking the
+    rotation and the crop offset into the content (one exact `cm` prepended by pypdf add_transformation) makes
+    the two agree, with no per-page maths downstream. Pages that are already plain pass through unchanged.
+    The rotation matrices are exact integers on purpose: pypdf's transfer_rotation_to_content() uses cos/sin and
+    writes 6e-17 instead of 0, which flips pdfminer's `upright` flag (a*d > 0) on the rotated pin-number glyphs,
+    and pdfplumber then glues them into the RefDes lines ("R916" -> "R", "9", ...). Verified on OrCAD output.
+    Returns the normalised PDF in memory and a note per page that was touched."""
+    reader = PdfReader(str(pdf_path))
+    writer = PdfWriter()
+    writer.append(reader)
+    notes: list[str] = []
+    for i, p in enumerate(writer.pages):
+        what = []
+        cb, mb = p.cropbox, p.mediabox
+        cbv = tuple(float(v) for v in cb)
+        w, h = cbv[2] - cbv[0], cbv[3] - cbv[1]
+        ctm = None                                   # (a, b, c, d, e, f): content -> plain page
+        if cbv[:2] != (0.0, 0.0) or cbv != tuple(float(v) for v in mb):
+            what.append(f"cropbox {[round(v, 1) for v in cbv]}")
+            ctm = (1, 0, 0, 1, -cbv[0], -cbv[1])
+        rot = p.rotation % 360
+        turn = {90: (0, -1, 1, 0, 0, w), 180: (-1, 0, 0, -1, w, h), 270: (0, 1, -1, 0, h, 0)}.get(rot)
+        if rot and turn is None:
+            what.append(f"rotate {rot} is not a multiple of 90, ignored")
+            if "/Rotate" in p:
+                del p[NameObject("/Rotate")]
+        elif rot:
+            what.append(f"rotate {rot}")
+            # viewer shows the page turned clockwise by rot; apply that turn to the content instead
+            ctm = turn if ctm is None else Transformation(ctm).transform(Transformation(turn)).ctm
+            if rot in (90, 270):
+                w, h = h, w
+        if ctm is not None:
+            p.add_transformation(Transformation(ctm))
+            p.compress_content_streams()
+            r = RectangleObject((0, 0, w, h))
+            p.mediabox = r
+            p.cropbox = r
+            for k in ("/BleedBox", "/TrimBox", "/ArtBox"):
+                if k in p:
+                    del p[NameObject(k)]
+            if "/Rotate" in p:
+                del p[NameObject("/Rotate")]
+            n_ann = _transform_annots(p, ctm)
+            if n_ann:
+                what.append(f"{n_ann} existing annotation(s) moved")
+        if "/UserUnit" in p:
+            what.append(f"userunit {float(p['/UserUnit'])}")
+            del p[NameObject("/UserUnit")]
+        if what:
+            notes.append(f"page {i + 1}: {', '.join(what)}")
+    buf = io.BytesIO()
+    writer.write(buf)
+    buf.seek(0)
+    return buf, notes
+
+
 # ----------------------------------------------------------------------------------- text index
 class PageIndex:
     """Words per PDF page with bboxes in PDF user space (origin bottom-left).
@@ -72,13 +169,15 @@ class PageIndex:
     punctuation) and a tight per-baseline split (handles pin numbers glued to RefDes). Overprinted bold
     text is collapsed first. Section labels (Q168A) are kept in a separate index used only as fallback."""
 
-    def __init__(self, pdf_path: Path):
+    def __init__(self, pdf_path: Path | io.BytesIO):
         self.words: list[dict[str, list[tuple[float, float, float, float]]]] = []
         self.sections: list[dict[str, list[tuple[float, float, float, float]]]] = []
         self.text: list[str] = []
         self.size: list[tuple[float, float]] = []
         self.rotation: list[int] = []
-        with pdfplumber.open(str(pdf_path)) as pdf:
+        if isinstance(pdf_path, io.BytesIO):
+            pdf_path.seek(0)
+        with pdfplumber.open(pdf_path if isinstance(pdf_path, io.BytesIO) else str(pdf_path)) as pdf:
             for p in pdf.pages:
                 h = float(p.height)
                 q = p.dedupe_chars(tolerance=DEDUPE_TOL)
@@ -306,21 +405,24 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
         raise ValueError(f"annotate.jump must be fitr or xyz, got {jump!r}")
 
     rowno = {r.key: i + 1 for i, r in enumerate(rows)}      # same numbering as the Excel tracker (項次)
+    run_id = uuid.uuid4().hex[:8]                            # tags this run's comment boxes (/NM) for the self-check
     rows = [r for r in rows if r.severity in dest_sev]
-    index = PageIndex(schematic_pdf)
+    norm_buf, norm_notes = normalize_pdf(schematic_pdf)
+    index = PageIndex(norm_buf)
     page_map, warnings = map_pages(index, sch_pages, page_override)
     n_words = sum(len(w) for w in index.words)
     if n_words < 5 * max(1, len(index.words)):
         warnings.append(f"PDF text layer looks empty ({n_words} words on {len(index.words)} pages): "
                         "export the schematic from OrCAD as PDF with text, not as an image/print scan")
-    if any(index.rotation):
-        warnings.append(f"PDF pages with /Rotate: {[i + 1 for i, r in enumerate(index.rotation) if r]}; "
-                        "box coordinates on rotated pages are unverified")
+    if norm_notes:
+        warnings.append(f"normalised {len(norm_notes)} page(s) (rotate/cropbox/userunit baked into content): "
+                        + "; ".join(norm_notes[:4]) + (" ..." if len(norm_notes) > 4 else ""))
     loc = locate(rows, index, page_map)
 
     index_reader, links = _index_pages(rows, loc, b_label, a_label, rowno)
     n_index = len(index_reader.pages)
-    src = PdfReader(str(schematic_pdf))
+    norm_buf.seek(0)
+    src = PdfReader(norm_buf)
     writer = PdfWriter()
     writer.append(index_reader)
     writer.append(src)
@@ -340,7 +442,7 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
     root = writer.add_outline_item(f"AutoCheck findings ({b_label})", 0)
     sev_nodes = {s: writer.add_outline_item(s, 0, parent=root) for s in ("ERROR", "WARN", "INFO") if s in dest_sev}
     sidecar = {"page_map": {str(k): (v + 1 + n_index if v is not None else None) for k, v in page_map.items()},
-               "index_pages": n_index, "jump": jump, "rows": {}, "warnings": warnings}
+               "index_pages": n_index, "jump": jump, "run_id": run_id, "rows": {}, "warnings": warnings}
     for r in rows:
         info = loc[r.key]
         if info["pdf_page"] is None and not info["boxes"]:
@@ -370,6 +472,7 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
                 ann[NameObject("/Contents")] = TextStringObject(
                     f"#{rowno[r.key]} {r.key}\n{r.severity} {r.status}\n{r.title}\n{r.detail}")
                 ann[NameObject("/Subj")] = TextStringObject(r.key)
+                ann[NameObject("/NM")] = TextStringObject(f"AutoCheck:{run_id}:{r.key}")
                 writer.add_annotation(page_number=page_no, annotation=ann)
         else:
             page_no = n_index + info["pdf_page"]
@@ -400,8 +503,78 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
         writer.write(fh)
 
     located = sum(1 for v in sidecar["rows"].values() if v.get("bbox"))
+    mismatch = verify_boxes(out_pdf, sidecar)
+    if mismatch:
+        warnings.append(f"BOX_MISMATCH on {len(mismatch)} row(s): the written comment box does not enclose the "
+                        f"part text when the output is re-read: {mismatch[:5]}" + (" ..." if len(mismatch) > 5 else ""))
     sidecar["summary"] = {"rows": len(rows), "located": located,
                           "page_only": sum(1 for v in sidecar["rows"].values() if v["pdf_page"] and not v.get("bbox")),
-                          "unplaced": sum(1 for v in sidecar["rows"].values() if not v["pdf_page"])}
+                          "unplaced": sum(1 for v in sidecar["rows"].values() if not v["pdf_page"]),
+                          "box_mismatch": len(mismatch)}
     out_pdf.with_suffix(".annotations.json").write_text(json.dumps(sidecar, ensure_ascii=False, indent=1), encoding="utf-8")
     return sidecar
+
+
+# ----------------------------------------------------------------------------------- self-check
+def _pdfstr(v) -> str:
+    if isinstance(v, bytes):
+        try:
+            return v.decode("utf-16") if v.startswith(b"\xfe\xff") else v.decode("latin-1")
+        except UnicodeDecodeError:
+            return v.decode("latin-1", "replace")
+    return str(v)
+
+
+def verify_boxes(out_pdf: Path, sidecar: dict, tol: float = 0.75) -> list[str]:
+    """Re-read the written PDF and check every Square comment really encloses the text of one of the parts it was
+    placed on. Guards the coordinate pipeline (normalise -> locate -> write) against page geometry we have not met
+    yet: a mismatch means the viewer will show the box somewhere else than the part. Marks, never blocks:
+    Only the boxes this run wrote are checked (/NM = AutoCheck:<run_id>:<key>), so leftovers from an earlier
+    annotation pass on the same input cannot mask a wrong box. Section labels (U12A) count for part U12, as in
+    PageIndex. sidecar rows get box_check = ok | mismatch | none (no comment box, e.g. INFO rows).
+    Returns mismatched keys."""
+    bad: list[str] = []
+    run_id = sidecar.get("run_id", "")
+    with pdfplumber.open(str(out_pdf)) as pdf:
+        words_cache: dict[int, list[tuple[str, tuple]]] = {}
+
+        def words(pno: int):
+            if pno not in words_cache:
+                p = pdf.pages[pno]
+                h = float(p.height)
+                q = p.dedupe_chars(tolerance=DEDUPE_TOL)
+                ws = q.extract_words(keep_blank_chars=False, use_text_flow=False)
+                words_cache[pno] = [(w["text"], (float(w["x0"]), h - float(w["bottom"]),
+                                                 float(w["x1"]), h - float(w["top"]))) for w in ws]
+                words_cache[pno] += list(_tight_tokens(q.chars, h))      # same tokeniser as the locator
+            return words_cache[pno]
+
+        for key, s in sidecar["rows"].items():
+            if not s.get("bbox") or not s.get("pdf_page"):
+                s["box_check"] = "none"
+                continue
+            pno = s["pdf_page"] - 1
+            p = pdf.pages[pno]
+            h = float(p.height)
+            rects = [(float(a["x0"]), h - float(a["bottom"]), float(a["x1"]), h - float(a["top"]))
+                     for a in (p.annots or [])
+                     if "Square" in repr(a["data"].get("Subtype"))
+                     and _pdfstr(a["data"].get("NM", "")) == f"AutoCheck:{run_id}:{key}"]
+            if not rects:
+                s["box_check"] = "none"
+                continue
+            wanted = set(s.get("found") or [])
+            ok = False
+            for ax0, ay0, ax1, ay1 in rects:
+                for text, (x0, y0, x1, y1) in words(pno):
+                    tok = next((t for t in (text, *_WORD.findall(text))
+                                if t in wanted or (_SECTION.match(t) and _SECTION.match(t).group(1) in wanted)), None)
+                    if tok and ax0 - tol <= x0 and ay0 - tol <= y0 and x1 <= ax1 + tol and y1 <= ay1 + tol:
+                        ok = True
+                        break
+                if ok:
+                    break
+            s["box_check"] = "ok" if ok else "mismatch"
+            if not ok:
+                bad.append(key)
+    return bad

@@ -86,10 +86,12 @@ def write_outputs(res, out: Path, schematic_pdf: Path | None = None, base_url: s
             return f"{url}#page={n}" if (url and n) else None
         pt_a = getattr(res, "power_tree_a", None) or None
         diff = "edges" in (pt_a or {})
-        boxes = layout(pt, pt_a, res.a.label, res.b.label)
+        boxes = layout(pt, pt_a, res.a.label, res.b.label, show_internal=False)     # internal nets hidden
+        boxes_all = layout(pt, pt_a, res.a.label, res.b.label, show_internal=True)  # toggle on the page
         html = render_html(boxes, f"Power tree 方框圖 {res.b.label}"
                            + (f" (顏色 = {res.a.label} -> {res.b.label} 變更)" if diff else "")
-                           + f"　產生 {res.generated}", page_url, res.a.label, res.b.label, diff=diff)
+                           + f"　產生 {res.generated}", page_url, res.a.label, res.b.label, diff=diff,
+                           boxes_all=boxes_all)
         paths["ptree_html"] = _writable(out / f"power_tree_{res.b.label}.html")
         paths["ptree_html"].write_text(html, encoding="utf-8")
         if publish:
@@ -119,6 +121,27 @@ def write_outputs(res, out: Path, schematic_pdf: Path | None = None, base_url: s
             dest = ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
             dest.mkdir(parents=True, exist_ok=True)
             (dest / f"i2c_map_{res.b.label}.html").write_text(html, encoding="utf-8")
+        # 陽春版 block diagram (2026-10-13): same map, owner-sample layout; shown under the detailed map on pages/3.
+        # File name must NOT match i2c_map_*.html (pages/3 lists runs with that glob). A drawing bug never costs a report.
+        try:
+            from .report.i2c_block_diagram import render_html as i2c_block_html
+            html_b = i2c_block_html(im, f"I2C map 陽春版 {res.b.label}　產生 {res.generated}", page_url2)
+            paths["i2c_block_html"] = _writable(out / f"i2c_block_{res.b.label}.html")
+            paths["i2c_block_html"].write_text(html_b, encoding="utf-8")
+            if publish:
+                dest = ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
+                dest.mkdir(parents=True, exist_ok=True)
+                (dest / f"i2c_block_{res.b.label}.html").write_text(html_b, encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            res.warnings.append(f"I2C map 陽春版 not drawn ({type(e).__name__}: {e})")
+            # never leave the previous run's drawing next to this run's map (same run folder name every time)
+            for old in (out / f"i2c_block_{res.b.label}.html",
+                        ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
+                        / f"i2c_block_{res.b.label}.html"):
+                try:
+                    old.unlink(missing_ok=True)
+                except OSError:
+                    pass
     # RD replies: sync this run's rows into the review DB, pre-fill the Excel with replies already given
     from . import review
     db, rep = review_db(res.cfg), {}

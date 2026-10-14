@@ -67,6 +67,17 @@ drc:
   intentional_nc_net_regex: '^(SNN|NC)_'
   nc_pin_name_regex: '^(NC|N\.C\.|DNC|RSVD|RESERVED)(_?\d+)?$'
 
+bom:
+  # BOM Ref Des entries that are not a plain RefDes (Agile "FOR J2" = programmed part inserted in socket J2).
+  # Mapped by netlist topology (autocheck/bom_socket.py): parts stacked on the socket's nets. CONFIRMED approach
+  # (owner 2026-10-13); thresholds DEFAULT.
+  socket:
+    socket_ref_patterns: ['^FOR\s+(\S+)$']   # group 1 = socket RefDes; add other company spellings here
+    match_ratio: 0.8      # share of the candidate's pins on the socket's nets (or same pin no. on same net)
+    min_pin_ratio: 0.5    # candidate must have >= this x socket pin count (keeps 2-pin R / C out)
+    min_pins: 3           # distinctive pins (not ground, not no-connect) the candidate must have
+    ignore_net_regex: '^(NC|N\.C\.|DNC|NC_.*|SNN_.*)$'   # no-connect nets, dropped like ground.regex nets
+
 pin_roles:
   # Netlist rules (2026-10-09, HANDOVER 0u): what a pin IS, judged from its pstchip pin name.
   # Full-match, case-insensitive regex. DEFAULT: tuned on the CATANIA symbols; edit when a library names pins
@@ -130,6 +141,30 @@ power_tree:
   # never into ground, never between two different known voltages, never into a signal net.
   inductor_prefixes: [L]
   fet_prefixes: [Q]
+  # 2026-10-13 (OTA01 DC-SCM): power-section RefDes. The tree reads these as the right-hand prefix (PU1 = an IC,
+  # PL1 = an inductor, PR / PFB = series R / bead). Power tree only: netrules / capv keep their own prefix lists.
+  prefix_aliases: {PU: U, PL: L, PQ: Q, PR: R, PFB: FB, PF: F, PD: D}
+  # OrCAD makes duplicate pin names unique as NAME#<own pin number> (VIN#4, GND#2, VCC_DDR_VDDQ#M6): cut that
+  # suffix before the pin_roles match. Only the pin's own number is cut (RESET# / OE# untouched).
+  strip_duplicate_pin_suffix: true
+  # board-to-board connectors whose RefDes prefix is not in netrules.offboard_prefixes (OTA01: DC-SCI_GF1 gold
+  # finger). Full match. Power tree only.
+  connector_refdes_regex: 'DC-SCI_GF\d*'
+  # a leading supply word names the rail, not a bias pin: VCC_BMC_0V8 -> 0.8 V, VCC_12V -> 12 V (tree only;
+  # capv keeps the stricter rule: supply word only right after the voltage token)
+  name_prefix_words: [VCC, VDD, PVCC, AVDD, DVDD, VDDA, VDDIO]
+  # diode feed edges (diode-OR / isolation): anode / cathode by pin number or pin name, full match
+  diode_anode_pin: 'A|ANODE'
+  diode_cathode_pin: 'K|C|CATHODE'
+  # rail voltage sources (2026-10-13, owner choice B), first one wins, the rest are a cross-check:
+  # rail_map > FB divider (library vref) > net name > switch output = input > load supply pin name (VCC_PECIVDD_1V0)
+  # > load spec library (DDR5 VDD 1.1 V) > board connector pin name (P3V0_HPM_SCM_BAT) > diode (input, no Vf: "≈")
+  library: power_parts.yaml          # relative to this config folder; vref / type per converter, load supply specs
+  # BOM text of parts not in the library, only for LDO / switch type edges (a switcher never passes its input)
+  load_switch_desc_regex: '\b(LOAD|POWER|PWR)\s*SW(ITCH)?\b(?!ING)|\bE-?FUSE\b'
+  load_switch_desc_exclude: '\bLDO\b|REGULAT|\bREG\b|LINEAR|BUCK|BOOST|CONVERTER'
+  voltage_conflict_abs: 0.05         # exact sources disagree when |dV| > max(abs, pct of the chosen value)
+  voltage_conflict_pct: 3.0
 
 i2c:
   # I2C map (2026-10-12, owner request, TEST STATE). Derives the I2C map from netlist + BOM + the device library

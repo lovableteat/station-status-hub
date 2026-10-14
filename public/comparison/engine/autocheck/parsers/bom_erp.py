@@ -8,6 +8,8 @@ Observed format (CATANIA PDB EVT/DVT, 2026-10):
   * Sub-assemblies (e.g. VGCS50VB0010) have children one level deeper and may have their own
     alternates at sub-assembly level (whose children are not listed).
 Also accepts a real .xlsx / .csv with the same column headers.
+An Agile PLM export (real BIFF .xls / .xlsx, "Level / Find Num / Item Number / Ref Des" header) is
+detected first and handed to bom_agile.py; the ERP path below is unchanged.
 """
 from __future__ import annotations
 
@@ -18,7 +20,7 @@ from pathlib import Path
 import pandas as pd
 
 from ..model import BomItem, Design, SourceFile
-from . import sha256_of
+from . import bom_agile, sha256_of
 
 COLS = {
     "pn": ["主件料號", "料號", "Part Number", "PN"],
@@ -42,6 +44,16 @@ def _decode_html(raw: bytes) -> str:
         except (UnicodeDecodeError, LookupError):
             continue
     return raw.decode("cp950", errors="replace")
+
+
+def _raw_frame(path: Path) -> pd.DataFrame | None:
+    """Header-less frame of a real Excel file (Agile sniffing), None for HTML-as-.xls and .csv."""
+    if path.suffix.lower() not in (".xls", ".xlsx"):
+        return None
+    head = path.read_bytes()[:8]
+    if not (head.startswith(b"\xd0\xcf\x11\xe0") or head.startswith(b"PK")):
+        return None      # ERP HTML disguised as .xls: leave it to _read_table
+    return pd.read_excel(path, header=None, dtype=str)
 
 
 def _read_table(path: Path) -> pd.DataFrame:
@@ -81,6 +93,11 @@ def _qty(x: str) -> float | None:
 
 def parse_bom(path: str | Path) -> tuple[list[BomItem], list[tuple[str, str]]]:
     path = Path(path)
+    frame = _raw_frame(path)
+    if frame is not None:
+        rows = frame.fillna("").astype(str).values.tolist()
+        if bom_agile.find_header(rows) is not None:
+            return bom_agile.parse_rows(rows)
     df = _read_table(path)
     cpn, cdesc, cspec, cqty, cref = (_col(df, k) for k in ("pn", "desc", "spec", "qty", "ref"))
     items: list[BomItem] = []

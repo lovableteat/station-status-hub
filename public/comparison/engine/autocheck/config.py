@@ -14,7 +14,13 @@ def load_config(path: str | Path | None = None) -> dict:
     if path:
         user = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
         _merge(base, user)
-    base["_hash"] = hashlib.sha1(yaml.safe_dump(base, sort_keys=True).encode()).hexdigest()[:10]
+    h = hashlib.sha1(yaml.safe_dump(base, sort_keys=True).encode())
+    lib = (base.get("power_tree", {}) or {}).get("library")      # power_parts.yaml changes the tree's voltages
+    if lib:
+        lp = Path(lib) if Path(lib).is_absolute() else DEFAULT.parent / lib
+        if lp.exists():
+            h.update(lp.read_bytes())
+    base["_hash"] = h.hexdigest()[:10]
     return base
 
 
