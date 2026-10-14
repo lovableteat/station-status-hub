@@ -13,7 +13,7 @@ function input(path: string, size = 4): File {
 }
 
 function revision(): File[] {
-  return ["pstxnet.dat", "pstxprt.dat", "pstchip.dat"].map(name => input(`board/${name}`));
+  return ["pstxnet.dat", "pstxprt.dat", "pstchip.dat", "bom.csv", "schematic.pdf"].map(name => input(`board/${name}`));
 }
 
 function session(): ComparisonSession {
@@ -31,7 +31,7 @@ function session(): ComparisonSession {
 }
 
 test("recognizes original loader roles and excludes generated PDFs and declared I2C BOM candidates", () => {
-  const files = [...revision(), input("board/ERP.xlsx"), input("board/main.dsn"), input("board/main.pdf"), input("board/AutoCheck.pdf"), input("board/i2c_map_declared.csv")];
+  const files = [...revision().filter(file => !/\.(csv|pdf)$/.test(file.name)), input("board/ERP.xlsx"), input("board/main.dsn"), input("board/main.pdf"), input("board/AutoCheck.pdf"), input("board/i2c_map_declared.csv")];
   const inventory = inspectRevision(files);
   assert.equal(inventory.roles.pstxnet.length, 1);
   assert.equal(inventory.roles.bom[0].name, "ERP.xlsx");
@@ -47,19 +47,44 @@ test("blocks missing netlists and requires choosing among role candidates", asyn
   const chosen = { pstxnet: "other/pstxnet.dat" };
   assert.deepEqual(validateRevision(inventory, chosen), []);
   const read = await readRevision(inventory, chosen);
-  assert.equal(read.length, 3);
+  assert.equal(read.length, 5);
   assert.equal(read[0].path, "other/pstxnet.dat");
   assert.equal(read[0].bytes.byteLength, 4);
   assert.match(validateRevision(inventory, { pstxnet: "missing.dat" }).join(" "), /不存在/);
 });
 
-test("reads only selected optional files while retaining safe relative paths", async () => {
-  const inventory = inspectRevision([...revision(), input("board/ERP.csv"), input("board/schematic.pdf"), input("board/readme.md")]);
-  const read = await readRevision(inventory, { pdf: "" });
-  assert.equal(read.length, 4);
-  assert.ok(read.some(file => file.path === "board/ERP.csv"));
-  assert.ok(!read.some(file => file.path.endsWith(".pdf") || file.path.endsWith(".md")));
+test("requires Netlist, BOM and circuit PDF while DSN stays optional", async () => {
+  const complete = revision();
+  for (const name of ["bom.csv", "schematic.pdf", "pstxnet.dat", "pstxprt.dat", "pstchip.dat"]) {
+    const missing = inspectRevision(complete.filter(file => file.name !== name));
+    assert.match(validateRevision(missing).join(" "), /缺少/);
+    await assert.rejects(() => readRevision(missing), /缺少/);
+  }
+  const inventory = inspectRevision([...complete, input("board/main.dsn"), input("board/readme.md")]);
+  const read = await readRevision(inventory, { dsn: "" });
+  assert.equal(read.length, 5);
+  assert.ok(read.some(file => file.path === "board/bom.csv"));
+  assert.ok(read.some(file => file.path === "board/schematic.pdf"));
+  assert.ok(!read.some(file => file.path.endsWith(".dsn") || file.path.endsWith(".md")));
+  for (const role of ["bom", "pdf"] as const) {
+    assert.match(validateRevision(inventory, { [role]: "" }).join(" "), /一定要選/);
+    await assert.rejects(() => readRevision(inventory, { [role]: "" }), /一定要選/);
+  }
   assert.equal(filePath({ name: "pstchip.dat" } as File), "pstchip.dat");
+});
+
+test("required BOM and PDF ambiguities must be resolved and are never recognized as DAT netlists", async () => {
+  const inventory = inspectRevision([...revision(), input("board/other.csv"), input("board/other.pdf"), input("board/bom.dat"), input("board/pdf.dat")]);
+  assert.equal(inventory.roles.bom.length, 2);
+  assert.equal(inventory.roles.pdf.length, 2);
+  assert.match(validateRevision(inventory).join(" "), /BOM.*好幾份/);
+  assert.match(validateRevision(inventory).join(" "), /PDF.*好幾份/);
+  const selected = { bom: "board/other.csv", pdf: "board/other.pdf" };
+  assert.deepEqual(validateRevision(inventory, selected), []);
+  const read = await readRevision(inventory, selected);
+  assert.equal(read.length, 5);
+  assert.ok(read.some(file => file.path === selected.bom));
+  assert.ok(read.some(file => file.path === selected.pdf));
 });
 
 test("rejects unsafe and case-insensitive duplicate input paths", async () => {

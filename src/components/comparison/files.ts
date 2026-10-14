@@ -1,19 +1,21 @@
 import type { InputFile, InputRole, RevisionInventory } from "./types.ts";
 
-export const INPUT_ROLES: InputRole[] = ["pstxnet", "pstxprt", "pstchip", "bom", "dsn", "pdf"];
-const REQUIRED_ROLES: InputRole[] = ["pstxnet", "pstxprt", "pstchip"];
+const NETLIST_ROLES: InputRole[] = ["pstxnet", "pstxprt", "pstchip"];
+export const INPUT_ROLES: InputRole[] = [...NETLIST_ROLES, "bom", "pdf", "dsn"];
+export const REQUIRED_ROLES: InputRole[] = [...NETLIST_ROLES, "bom", "pdf"];
+export const INPUT_ROLE_DETAILS: Record<InputRole, { label: string; hint: string }> = {
+  pstxnet: { label: "Netlist 連線資料", hint: "pstxnet.dat" },
+  pstxprt: { label: "Netlist 零件資料", hint: "pstxprt.dat" },
+  pstchip: { label: "Netlist 接腳資料", hint: "pstchip.dat" },
+  bom: { label: "零件用料表 BOM", hint: "Excel／CSV／HTML" },
+  pdf: { label: "電路圖 PDF", hint: "電路圖 .pdf" },
+  dsn: { label: "電路設計原檔 DSN", hint: "OrCAD .dsn（選用）" },
+};
 const MiB = 1024 * 1024;
 // Validation messages surface next to the run button, so name each role the way
 // the input panel labels it (ComparisonInputs). Required netlists keep their
 // filename because that is what people search their export folder for.
-const ROLE_NAMES: Record<InputRole, string> = {
-  pstxnet: "Net 連線（pstxnet.dat）",
-  pstxprt: "零件列表（pstxprt.dat）",
-  pstchip: "Pin 定義（pstchip.dat）",
-  bom: "ERP BOM",
-  dsn: "OrCAD DSN",
-  pdf: "線路圖 PDF",
-};
+const roleName = (role: InputRole) => `${INPUT_ROLE_DETAILS[role].label}（${INPUT_ROLE_DETAILS[role].hint}）`;
 
 export function filePath(file: File): string { return file.webkitRelativePath || file.name; }
 
@@ -29,7 +31,7 @@ export function inspectRevision(files: File[]): RevisionInventory {
   for (const file of files) {
     const name = file.name.toLowerCase();
     let recognized = false;
-    for (const role of REQUIRED_ROLES) {
+    for (const role of NETLIST_ROLES) {
       if (name.includes(role) && name.endsWith(".dat")) { roles[role].push(file); recognized = true; }
     }
     if (/\.(xls|xlsx|htm|html|csv)$/.test(name) && !(name.startsWith("i2c_map_declared") && name.endsWith(".csv"))) {
@@ -65,12 +67,12 @@ export function validateRevision(inventory: RevisionInventory, selected: Partial
   for (const role of INPUT_ROLES) {
     const candidates = fresh.roles[role];
     const selection = selected[role];
-    if (selection !== undefined && typeof selection !== "string") { errors.push(`${ROLE_NAMES[role]}：檔案選擇無效`); continue; }
+    if (selection !== undefined && typeof selection !== "string") { errors.push(`${roleName(role)}：檔案選擇無效`); continue; }
     if (selection === "" && !REQUIRED_ROLES.includes(role)) continue;
-    if (selection && !candidates.some(file => filePath(file) === selection)) errors.push(`${ROLE_NAMES[role]}：選的檔案不存在`);
-    if (!candidates.length && REQUIRED_ROLES.includes(role)) errors.push(`缺少 ${ROLE_NAMES[role]}`);
-    if (candidates.length > 1 && !selection) errors.push(`${ROLE_NAMES[role]} 有好幾份，從下拉選單挑一份`);
-    if (selection === "" && REQUIRED_ROLES.includes(role)) errors.push(`${ROLE_NAMES[role]} 一定要選一份`);
+    if (selection && !candidates.some(file => filePath(file) === selection)) errors.push(`${roleName(role)}：選的檔案不存在`);
+    if (!candidates.length && REQUIRED_ROLES.includes(role)) errors.push(`缺少 ${roleName(role)}`);
+    if (candidates.length > 1 && !selection) errors.push(`${roleName(role)} 有好幾份，從下拉選單挑一份`);
+    if (selection === "" && REQUIRED_ROLES.includes(role)) errors.push(`${roleName(role)} 一定要選一份`);
     const file = chosenFile(fresh, role, selected);
     if (file && chosen.has(filePath(file))) errors.push(`不同輸入角色使用重複的檔案路徑：${filePath(file)}`);
     if (file) chosen.add(filePath(file));

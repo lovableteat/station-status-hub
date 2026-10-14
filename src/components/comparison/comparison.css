@@ -38,6 +38,18 @@
 .comparison-project-name label { flex-shrink: 0; font-weight: 650; }
 .comparison-project-name input { max-width: 520px; min-height: 44px; border-color: hsl(var(--primary) / .65); background: hsl(var(--background)); }
 .comparison-guide-trigger { color: hsl(var(--primary)); border-color: hsl(var(--primary) / .55); background: hsl(var(--primary) / .1); font-weight: 650; }
+.comparison-guide-examples { margin-top: 16px; }
+.comparison-guide-examples > p { margin-top: 6px; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 1.7; }
+.comparison-guide-example-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin-top: 12px; }
+.comparison-guide-example-grid figure { min-width: 0; margin: 0; }
+.comparison-guide-example-grid a { display: block; border-radius: 12px; overflow: hidden; }
+.comparison-guide-example-grid a:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+.comparison-guide-example-grid img { display: block; width: 100%; height: auto; }
+.comparison-guide-example-grid figcaption { margin-top: 8px; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.7; }
+@media (max-width: 700px) { .comparison-guide-example-grid { grid-template-columns: minmax(0,1fr); } }
+.comparison-page-header button.comparison-feedback-trigger { border: 2px solid hsl(var(--primary)); background: hsl(var(--primary) / .12); color: hsl(var(--foreground)); box-shadow: 0 2px 14px hsl(var(--primary) / .28), inset 0 1px 0 hsl(var(--primary) / .6); font-weight: 700; }
+.comparison-page-header button.comparison-feedback-trigger:not(:disabled):hover { background: hsl(var(--primary) / .22); border-color: hsl(var(--foreground)); }
+.comparison-page-header button.comparison-feedback-trigger > svg { color: hsl(var(--primary)); }
 .comparison-revision-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
 .comparison-input-panel { min-width: 0; padding: 18px; border: 1px solid hsl(var(--primary) / .55); border-radius: 12px; background: hsl(var(--card)); }
 .comparison-input-panel[data-side=B] { border-color: hsl(var(--primary) / .85); }
@@ -59,7 +71,7 @@
 .comparison-file-actions .comparison-folder-action { color: hsl(var(--primary)); border-color: hsl(var(--primary) / .4); background: hsl(var(--primary) / .08); }
 .comparison-file-actions .comparison-folder-action:hover { border-color: hsl(var(--primary) / .7); background: hsl(var(--primary) / .15); }
 .comparison-input-inventory { display: flex; flex-direction: column; gap: 0; }
-.comparison-input-file { display: grid; grid-template-columns: 18px 132px minmax(0,1fr) 76px; align-items: center; gap: 10px; min-height: 56px; padding-block: 8px; border-bottom: 1px solid hsl(var(--border)); }
+.comparison-input-file { display: grid; grid-template-columns: 18px 174px minmax(0,1fr) 76px; align-items: center; gap: 10px; min-height: 56px; padding-block: 8px; border-bottom: 1px solid hsl(var(--border)); }
 .comparison-input-file > span:first-child > svg { width: 18px; height: 18px; }
 .comparison-file-role > span:first-child { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; }
 .comparison-file-role small { padding: 1px 4px; border-radius: 3px; color: hsl(var(--foreground)); background: hsl(var(--secondary)); font-size: 11px; font-weight: 650; }
@@ -262,7 +274,7 @@
 @media (prefers-reduced-motion: reduce) { .comparison-progress-indicator { animation: none; } }
 
 /* --- First-use guide ------------------------------------------------------ */
-.comparison-guide-dialog { max-width: min(920px, calc(100vw - 32px)); max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.workspace-dialog-surface.comparison-guide-dialog { width: min(1100px, calc(100vw - 32px)); max-width: calc(100vw - 32px); max-height: 90dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; --tw-enter-translate-x: -50%; --tw-enter-translate-y: -50%; --tw-exit-translate-x: -50%; --tw-exit-translate-y: -50%; }
 .comparison-guide-dialog :is(h3,p,ol,ul,dl,dd) { margin: 0; }
 .comparison-guide-dialog h3 { font-size: 14px; font-weight: 650; margin-bottom: 10px; }
 .comparison-guide-dialog p, .comparison-guide-dialog li, .comparison-guide-dialog dd { font-size: 13px; line-height: 1.7; color: hsl(var(--muted-foreground)); }

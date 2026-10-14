@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360" role="img" aria-labelledby="title desc">
+  <title id="title">Netlist 檔案範例</title><desc id="desc">Netlist 資料夾須包含 pstxnet.dat 連線資料、pstxprt.dat 零件資料、pstchip.dat 接腳資料，三份都必要。</desc>
+  <defs><g id="file" fill="none" stroke="#64cabc" stroke-width="2.5" stroke-linejoin="round"><path d="M2 1h17l8 8v24H2Z"/><path d="M19 1v9h8M8 17h13M8 24h13"/></g></defs>
+  <rect width="640" height="360" rx="12" fill="#1b1b1d"/>
+  <g font-family="Segoe UI,Microsoft JhengHei,sans-serif">
+    <text x="28" y="42" fill="#f2f2f3" font-size="24" font-weight="700">Netlist 資料夾內的三份檔案</text>
+    <text x="28" y="74" fill="#b7b7bd" font-size="18">由工程軟體匯出的 .dat；三份皆必要</text>
+    <path d="M28 103h584M28 170h584M28 237h584M28 304h584" stroke="#414149"/>
+    <g transform="translate(35 122)"><use href="#file"/><text x="49" y="23" fill="#f2f2f3" font-size="22" font-weight="650">pstxnet.dat</text><text x="325" y="23" fill="#b7b7bd" font-size="20">連線資料</text><text x="518" y="23" fill="#64cabc" font-size="18">必要</text></g>
+    <g transform="translate(35 189)"><use href="#file"/><text x="49" y="23" fill="#f2f2f3" font-size="22" font-weight="650">pstxprt.dat</text><text x="325" y="23" fill="#b7b7bd" font-size="20">零件資料</text><text x="518" y="23" fill="#64cabc" font-size="18">必要</text></g>
+    <g transform="translate(35 256)"><use href="#file"/><text x="49" y="23" fill="#f2f2f3" font-size="22" font-weight="650">pstchip.dat</text><text x="325" y="23" fill="#b7b7bd" font-size="20">接腳資料</text><text x="518" y="23" fill="#64cabc" font-size="18">必要</text></g>
+    <text x="28" y="336" fill="#64cabc" font-size="18">同一版本有多份來源時，要在下拉選單指定一份。</text>
+  </g>
+</svg>
