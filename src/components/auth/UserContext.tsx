@@ -151,6 +151,7 @@ function storeUser(user: User | null) {
   } catch {
     // Session state still works when browser storage is unavailable.
   }
+  window.dispatchEvent(new CustomEvent("station-user-changed", { detail: user?.userId ?? null }));
 }
 
 function hasCurrentSessionVersion() {

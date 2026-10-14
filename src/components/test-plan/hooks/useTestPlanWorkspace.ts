@@ -148,6 +148,7 @@ export function useTestPlanWorkspace(
   );
 
   useEffect(() => {
+    setUploadProgress(null);
     void refreshWorkspace(null);
   }, [ownerId, repository]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -384,7 +385,9 @@ export function useTestPlanWorkspace(
             folderId,
             files: incoming,
             preservePaths: options.preservePaths,
-            onProgress: setUploadProgress,
+            onProgress: progress => {
+              if (ownerIdRef.current === ownerId) setUploadProgress(progress);
+            },
           });
           try {
             await refreshActiveSpace(activeSpaceId, ownerId);
@@ -393,7 +396,7 @@ export function useTestPlanWorkspace(
           }
           return { ...result, spaceId: space.id };
         } finally {
-          setUploadProgress(null);
+          if (ownerIdRef.current === ownerId) setUploadProgress(null);
         }
       }),
     [activeSpaceId, ensureUploadSpace, ownerId, refreshActiveSpace, repository, runMutation],

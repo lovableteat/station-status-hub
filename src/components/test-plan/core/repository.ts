@@ -47,6 +47,8 @@ export interface TestPlanDataAdapter {
     file: File,
     onProgress?: (uploadedBytes: number, totalBytes: number) => void,
   ): Promise<void>;
+  completeObjectUpload(path: string): void;
+  findFileByStoragePath(path: string): Promise<TestPlanFileRecord | undefined>;
   replaceObject(path: string, file: File): Promise<void>;
   createFile(input: {
     spaceId: string;
@@ -97,6 +99,9 @@ async function flushCleanupQueue(
 export interface TestPlanDeleteResult {
   cleanupPending: boolean;
 }
+
+// shortcut: Retry paths require the original File; add a persisted manifest if reload recovery is needed.
+const pendingUploads = new WeakMap<File, Map<string, { storagePath: string; objectUploaded: boolean }>>();
 
 async function finishDeletedItemCleanup(
   adapter: TestPlanDataAdapter,
@@ -243,10 +248,21 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
 
       for (const file of validation.valid) {
         const currentFileName = preservePaths ? file.webkitRelativePath : file.name;
-        const storagePath = buildStoragePath(ownerId, projectId, spaceId, file.name);
-        let objectUploaded = false;
+        const scope = JSON.stringify([ownerId, projectId, spaceId, folderId, preservePaths]);
+        let fileUploads = pendingUploads.get(file);
+        if (!fileUploads) { fileUploads = new Map(); pendingUploads.set(file, fileUploads); }
+        let pending = fileUploads.get(scope);
+        if (!pending) {
+          pending = { storagePath: buildStoragePath(ownerId, projectId, spaceId, file.name), objectUploaded: false };
+          fileUploads.set(scope, pending);
+        }
+        const { storagePath } = pending;
+        let targetFolderId = folderId;
+        let created: TestPlanFileRecord | undefined;
+        const matchesUpload = (record: TestPlanFileRecord) => record.spaceId === spaceId
+          && record.folderId === targetFolderId && record.uploadedBy === ownerId
+          && record.originalName === file.name && record.fileSize === file.size;
         try {
-          let targetFolderId = folderId;
           for (const name of relativePaths.get(file)?.slice(0, -1) ?? []) {
             const sameName = (value: string) => value.toLowerCase() === name.toLowerCase();
             if (knownFiles.some(existing => existing.folderId === targetFolderId && sameName(existing.originalName))) {
@@ -259,25 +275,41 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
             }
             targetFolderId = folder.id;
           }
+          created = await adapter.findFileByStoragePath(storagePath);
+          if (created) {
+            if (!matchesUpload(created)) {
+              created = undefined;
+              throw new Error("此上傳路徑已有不同的檔案記錄，請重新選取原檔案。");
+            }
+            continue;
+          }
           if (preservePaths && (
             knownFiles.some(existing => existing.folderId === targetFolderId && existing.originalName.toLowerCase() === file.name.toLowerCase())
             || knownFolders.some(existing => existing.parentId === targetFolderId && existing.name.toLowerCase() === file.name.toLowerCase())
           )) {
             throw new Error("目標位置已有同名檔案或資料夾，已略過以避免覆寫。");
           }
-          await adapter.uploadObject(
-            storagePath,
-            file,
-            (currentUploadedBytes) => onProgress?.({
-              completed,
-              total: files.length,
-              uploadedBytes: uploadedBytes + currentUploadedBytes,
-              totalBytes,
-              currentFileName,
-            }),
-          );
-          objectUploaded = true;
-          const created = await adapter.createFile({
+          if (!pending.objectUploaded) {
+            try {
+              await adapter.uploadObject(
+                storagePath,
+                file,
+                (currentUploadedBytes) => onProgress?.({
+                  completed,
+                  total: files.length,
+                  uploadedBytes: uploadedBytes + currentUploadedBytes,
+                  totalBytes,
+                  currentFileName,
+                }),
+              );
+            } catch (error) {
+              // shortcut: Empty uploads lack resumable state; use a fresh path until Storage supports them.
+              if (file.size === 0) fileUploads.delete(scope);
+              throw error;
+            }
+            pending.objectUploaded = true;
+          }
+          created = await adapter.createFile({
             spaceId,
             folderId: targetFolderId,
             originalName: file.name,
@@ -288,33 +320,27 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
             fileSize: file.size,
             uploadedBy: ownerId,
           });
-          uploaded.push(created);
-          knownFiles.push(created);
-          uploadedBytes += file.size;
         } catch (error) {
-          let cleanupQueueError: unknown = null;
-          if (objectUploaded) {
+          if (pending.objectUploaded) {
             try {
-              await adapter.removeObjects([storagePath]);
+              const committed = await adapter.findFileByStoragePath(storagePath);
+              if (committed && matchesUpload(committed)) created = committed;
             } catch {
-              try {
-                await adapter.queueCleanupPath(ownerId, storagePath);
-              } catch (queueError) {
-                cleanupQueueError = queueError;
-              }
+              // An unavailable response cannot prove that metadata did not commit.
             }
           }
-          failures.push({
-            fileName: currentFileName,
-            message: [
-              error instanceof Error ? error.message : "上傳失敗。",
-              cleanupQueueError
-                ? "暫存檔清理排程失敗，請聯絡管理員。"
-                : "",
-            ].filter(Boolean).join(" "),
-          });
-          failedFiles.push(file);
+          if (!created) {
+            failures.push({ fileName: currentFileName, message: error instanceof Error ? error.message : "上傳失敗。" });
+            failedFiles.push(file);
+          }
         } finally {
+          if (created) {
+            uploaded.push(created);
+            knownFiles.push(created);
+            uploadedBytes += file.size;
+            adapter.completeObjectUpload(storagePath);
+            fileUploads.delete(scope);
+          }
           completed += 1;
           onProgress?.({
             completed,

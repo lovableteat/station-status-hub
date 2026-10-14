@@ -14,6 +14,7 @@ function setup(options = {}) {
   const log = []; const blobs = new Map([[files[0].storagePath, new Blob(['unchanged'])]]);
   const adapter = {
     listSpaces:async()=>[...spaces], listFiles:async(id)=>files.filter(f=>!id||f.spaceId===id), listFolders:async(id)=>folders.filter(f=>!id||f.spaceId===id),
+    findFileByStoragePath:async(path)=>files.find(file=>file.storagePath===path), completeObjectUpload(){},
     listCleanupPaths:async()=>[], createSpace:async(input)=>{log.push(['createSpace',input]);const s={...input,id:'global-space',createdAt:stamp,updatedAt:stamp};spaces.push(s);return s},
     createFolder:async(input)=>{log.push(['createFolder',input]);const folder={...input,id:`folder-${folders.length}`,createdAt:stamp,updatedAt:stamp};folders.push(folder);return folder},
     uploadObject:async(path,file)=>{log.push(['upload',path]);blobs.set(path,file)},
@@ -129,6 +130,25 @@ test('a post-upload refresh error returns committed successes so retry cannot du
   assert.equal(result.uploaded.length,1);
   assert.equal(result.failedFiles.length,0);
   assert.match(f.state.error,/refresh failed/);
+  await act(async()=>tree.unmount());
+});
+
+test('account switching hides the previous owner upload progress and ignores its late updates', async()=>{
+  const f=setup();let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  const pending=deferred();let progress;
+  f.adapter.uploadObject=async(path,file,onProgress)=>{progress=onProgress;onProgress(1,file.size);await pending.promise};
+  let uploading;
+  await act(async()=>{uploading=f.state.uploadFiles(null,[new File(['secret'],'private-release.zip')])});
+  assert.equal(f.state.uploadProgress.currentFileName,'private-release.zip');
+  f.session.user={userId:'new-owner'};
+  f.spaces.splice(0,f.spaces.length,{id:'new-space',ownerId:'new-owner',name:'New owner',isPersonal:true});
+  await act(async()=>tree.update(React.createElement(f.Probe)));await flush();
+  assert.equal(f.state.uploadProgress,null);
+  await act(async()=>progress(3,6));
+  assert.equal(f.state.uploadProgress,null);
+  await act(async()=>{pending.resolve();await uploading});
+  assert.equal(f.state.uploadProgress,null);
   await act(async()=>tree.unmount());
 });
 

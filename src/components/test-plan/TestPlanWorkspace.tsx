@@ -104,11 +104,35 @@ import "./test-plan.css";
 type ViewMode = "grid" | "list";
 
 interface UploadRetry {
+  ownerId: string;
   folderId: string | null;
   spaceId: string | null;
   preservePaths: boolean;
   files: readonly File[];
   failures: { fileName: string; message: string }[];
+}
+
+// shortcut: File references survive workspace navigation in tab memory; reload requires selecting the originals again.
+let retainedUploadRetry: UploadRetry | null = null;
+
+function preventRetryUnload(event: BeforeUnloadEvent) {
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+function clearRetryForOwnerChange(event: Event) {
+  if ((event as CustomEvent<string | null>).detail !== retainedUploadRetry?.ownerId) retainUploadRetry(null);
+}
+
+function retainUploadRetry(retry: UploadRetry | null) {
+  retainedUploadRetry = retry;
+  if (retry) {
+    window.addEventListener("beforeunload", preventRetryUnload);
+    window.addEventListener("station-user-changed", clearRetryForOwnerChange);
+  } else {
+    window.removeEventListener("beforeunload", preventRetryUnload);
+    window.removeEventListener("station-user-changed", clearRetryForOwnerChange);
+  }
 }
 
 const directoryInputProps = { webkitdirectory: "" } as InputHTMLAttributes<HTMLInputElement>;
@@ -516,7 +540,8 @@ export function TestPlanWorkspace() {
   const { query, setQuery, categoryFilter, setCategoryFilter, sort, setSort, clearFilters } = useFileLibraryFilters();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [isDragging, setIsDragging] = useState(false);
-  const [uploadRetry, setUploadRetry] = useState<UploadRetry | null>(null);
+  const [retryState, setRetryState] = useState<UploadRetry | null>(() => retainedUploadRetry);
+  const uploadRetry = retryState?.ownerId === ownerId ? retryState : null;
   const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
   const [textAction, setTextAction] = useState<TextAction | null>(null);
   const [moveAction, setMoveAction] = useState<MoveAction | null>(null);
@@ -529,6 +554,11 @@ export function TestPlanWorkspace() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const requestedFolderRef = useRef<{spaceId: string; folderId: string} | null>(null);
+  const uploadRequestRef = useRef(0);
+  const setUploadRetry = (retry: UploadRetry | null) => {
+    retainUploadRetry(retry);
+    setRetryState(retry);
+  };
 
   useEffect(() => {
     const requested = requestedFolderRef.current;
@@ -566,13 +596,33 @@ export function TestPlanWorkspace() {
   }), [ownerId, spaces]);
 
   useEffect(() => {
-    setUploadRetry(null);
+    if (retainedUploadRetry?.ownerId !== ownerId) retainUploadRetry(null);
+    setRetryState(retainedUploadRetry);
     setSelectedEntryKey(null);
     setSpreadsheetFile(null);
     setTextAction(null);
     setMoveAction(null);
     setDeleteAction(null);
+    return () => { uploadRequestRef.current += 1; };
   }, [ownerId]);
+
+  useEffect(() => {
+    if (!busy) return;
+    const preventNavigation = (event: Event) => {
+      event.preventDefault();
+      toast.error("目前正在上傳檔案，完成後才能切換工作區。");
+    };
+    const preventUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("workspace-before-navigate", preventNavigation);
+    window.addEventListener("beforeunload", preventUnload);
+    return () => {
+      window.removeEventListener("workspace-before-navigate", preventNavigation);
+      window.removeEventListener("beforeunload", preventUnload);
+    };
+  }, [busy]);
 
   const breadcrumbs = useMemo(
     () => buildFolderBreadcrumbs(folders, activeFolderId),
@@ -608,23 +658,26 @@ export function TestPlanWorkspace() {
   }, [selectedEntry, selectedEntryKey]);
 
   const handleUpload = async (incoming: readonly File[], preservePaths = false, target?: Pick<UploadRetry, "folderId" | "spaceId">) => {
-    if (!canEdit || busy || loading || incoming.length === 0) return;
+    if (!ownerId || !canEdit || busy || loading || incoming.length === 0) return;
+    const requestId = ++uploadRequestRef.current;
     const uploadTarget = target ?? { folderId: activeFolderId, spaceId: activeSpaceId };
     setUploadRetry(null);
     try {
       const result = await uploadFiles(uploadTarget.folderId, incoming, { preservePaths, spaceId: uploadTarget.spaceId });
+      if (requestId !== uploadRequestRef.current) return;
       if (result.uploaded.length > 0) {
         toast.success(`已上傳 ${result.uploaded.length} 個檔案`);
       }
       if (result.failures.length > 0) {
-        setUploadRetry({ ...uploadTarget, spaceId: result.spaceId, preservePaths, files: result.failedFiles, failures: result.failures });
+        setUploadRetry({ ...uploadTarget, ownerId, spaceId: result.spaceId, preservePaths, files: result.failedFiles, failures: result.failures });
         toast.error(
           `${result.failedFiles.length} 個檔案未上傳：${result.failures[0].message}`,
         );
       }
     } catch (caught) {
+      if (requestId !== uploadRequestRef.current) return;
       const message = caught instanceof Error ? caught.message : "上傳失敗";
-      setUploadRetry({ ...uploadTarget, preservePaths, files: incoming, failures: [{ fileName: "", message }] });
+      setUploadRetry({ ...uploadTarget, ownerId, preservePaths, files: incoming, failures: [{ fileName: "", message }] });
       toast.error(message);
     }
   };
@@ -829,6 +882,7 @@ export function TestPlanWorkspace() {
             <Button variant="ghost" size="icon" aria-label="關閉上傳失敗清單" disabled={busy} onClick={() => setUploadRetry(null)}><X className="h-4 w-4" /></Button>
           </div>
           <p>成功的檔案已保留，重試會使用原空間與資料夾</p>
+          <p>原檔仍在你的電腦；同頁按「重試未上傳檔案」可重試，大檔案傳輸中斷時可續傳。切換工作區後回來仍可重試；重新整理或關閉頁面後，須重新選取原檔。</p>
           <ul>{uploadRetry.failures.map((failure, index) => <li key={`${failure.fileName}:${index}`}><strong>{failure.fileName || "整批上傳"}</strong><span>{failure.message}</span></li>)}</ul>
         </section>
       )}
