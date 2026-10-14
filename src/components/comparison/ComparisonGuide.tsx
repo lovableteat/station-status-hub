@@ -99,7 +99,7 @@ function FlowRow({ step, number }: { step: FlowStep; number: number }) {
 export function ComparisonGuide() {
   const [open, setOpen] = useState(false);
   return <>
-    <Button variant="ghost" onClick={() => setOpen(true)}><CircleHelp />使用說明</Button>
+    <Button variant="outline" className="comparison-guide-trigger" onClick={() => setOpen(true)}><CircleHelp />使用說明</Button>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="comparison-guide-dialog">
         <DialogHeader>
