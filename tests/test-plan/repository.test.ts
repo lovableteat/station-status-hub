@@ -61,14 +61,12 @@ function createRecordSet() {
 
 function createAdapter(options: {
   failInsertName?: string;
-  failFirstRemove?: boolean;
   failFolderName?: string;
 } = {}) {
   const records = createRecordSet();
   const operations: string[] = [];
   const cleanupPaths: string[] = [];
   let nextFile = 2;
-  let removeFailures = options.failFirstRemove ? 1 : 0;
   return {
     records,
     operations,
@@ -84,6 +82,12 @@ function createAdapter(options: {
       async listFiles(spaceId?: string) {
         operations.push(`list-files:${spaceId}`);
         return records.files.filter((file) => !spaceId || file.spaceId === spaceId);
+      },
+      async findFileByStoragePath(path: string) {
+        return records.files.find((file) => file.storagePath === path);
+      },
+      completeObjectUpload(path: string) {
+        operations.push(`complete-upload:${path}`);
       },
       async createSpace(input: Record<string, unknown>) {
         operations.push(`create-space:${input.ownerId}`);
@@ -196,10 +200,6 @@ function createAdapter(options: {
       },
       async removeObjects(paths: string[]) {
         operations.push(`remove:${paths.join(",")}`);
-        if (removeFailures > 0) {
-          removeFailures -= 1;
-          throw new Error("storage unavailable");
-        }
       },
       async listCleanupPaths(ownerId: string) {
         operations.push(`list-cleanup:${ownerId}`);
@@ -273,7 +273,7 @@ test("all-files library preserves nested legacy files from multiple projects wit
   assert.deepEqual(selected.files.map((file: { id: string }) => file.id), ["file-2"]);
 });
 
-test("cleans an uploaded object when metadata insertion fails and continues the batch", async () => {
+test("preserves an uploaded object when metadata insertion fails and continues the batch", async () => {
   const fake = createAdapter({ failInsertName: "bad.step" });
   const repository = repositoryModule.createTestPlanRepository(fake.adapter);
   const files = [
@@ -293,28 +293,182 @@ test("cleans an uploaded object when metadata insertion fails and continues the 
   assert.equal(result.failures.length, 1);
   const badUpload = fake.operations.find((operation) => operation.startsWith("upload:bad.step:"));
   const badPath = badUpload?.split(":").slice(2).join(":");
-  assert.ok(fake.operations.includes(`remove:${badPath}`));
+  assert.ok(badPath);
+  assert.equal(fake.operations.some(operation => operation.startsWith("remove:") || operation.startsWith("queue-cleanup:")), false);
+  assert.equal(fake.operations.includes(`complete-upload:${badPath}`), false);
 });
 
-test("durably queues an uploaded object when immediate rollback cleanup fails", async () => {
-  const fake = createAdapter({
+test("retries failed metadata without uploading or deleting the completed object again", async () => {
+  const options = {
     failInsertName: "bad.step",
-    failFirstRemove: true,
-  });
+  };
+  const fake = createAdapter(options);
   const repository = repositoryModule.createTestPlanRepository(fake.adapter);
 
-  await repository.uploadFiles({
+  const input = {
     ownerId: "owner-1",
     projectId: "project-1",
     spaceId: "space-1",
     folderId: null,
     files: [new File(["bad"], "bad.step", { type: "model/step" })],
-  });
+  };
+  const failed = await repository.uploadFiles(input);
+  options.failInsertName = "";
+  const result = await repository.uploadFiles({ ...input, files: failed.failedFiles });
+  assert.equal(result.uploaded.length, 1);
+  assert.equal(fake.operations.filter(operation => operation.startsWith("upload:bad.step:")).length, 1);
+  assert.equal(fake.operations.some(operation => operation.startsWith("remove:") || operation.startsWith("queue-cleanup:")), false);
+  assert.ok(fake.operations.includes(`complete-upload:${result.uploaded[0].storagePath}`));
+});
 
-  assert.ok(
-    fake.operations.some((operation) =>
-      operation.startsWith("queue-cleanup:owner-1:owner-1/project-1/space-1/")),
-  );
+test("an interrupted upload keeps its path for the same File and target across repository recreation", async () => {
+  const fake = createAdapter();
+  const file = new File(["large"], "release.zip");
+  Object.defineProperty(file, "size", { value: 650 * 1024 ** 2 });
+  const input = { ownerId: "owner-1", projectId: null, spaceId: "space-1", folderId: null, files: [file] };
+  const paths: string[] = [];
+  fake.adapter.uploadObject = async path => { paths.push(path); throw new Error("network interrupted"); };
+  const failed = await repositoryModule.createTestPlanRepository(fake.adapter).uploadFiles(input);
+  fake.adapter.uploadObject = async path => { paths.push(path); };
+  const retried = await repositoryModule.createTestPlanRepository(fake.adapter).uploadFiles({ ...input, files: failed.failedFiles });
+  assert.equal(retried.uploaded.length, 1);
+  assert.deepEqual(paths, [paths[0], paths[0]]);
+});
+
+test("a zero-byte transport response loss retries the original File at its target with a fresh path", async () => {
+  const fake = createAdapter();
+  const file = new File([], "empty.md");
+  const input = { ownerId: "owner-1", projectId: "project-1", spaceId: "space-1", folderId: "folder-a", files: [file] };
+  const paths: string[] = [];
+  const objects = new Set<string>();
+  fake.adapter.uploadObject = async path => {
+    paths.push(path);
+    if (objects.has(path)) throw new Error("storage conflict 409");
+    objects.add(path);
+    if (paths.length === 1) throw new Error("response lost after object commit");
+  };
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  const failed = await repository.uploadFiles(input);
+  assert.deepEqual(failed.failedFiles, [file]);
+  const result = await repository.uploadFiles({ ...input, files: failed.failedFiles });
+  assert.equal(result.uploaded.length, 1);
+  assert.notEqual(paths[0], paths[1]);
+  assert.equal(result.uploaded[0].storagePath, paths[1]);
+  assert.equal(result.uploaded[0].folderId, input.folderId);
+  assert.equal(result.uploaded[0].spaceId, input.spaceId);
+  assert.equal(result.uploaded[0].uploadedBy, input.ownerId);
+  assert.equal(fake.operations.some(operation => operation.startsWith("remove:")), false);
+});
+
+test("a zero-byte metadata failure retains its completed path and does not upload again", async () => {
+  const options = { failInsertName: "empty.md" };
+  const fake = createAdapter(options);
+  const file = new File([], "empty.md");
+  const input = { ownerId: "owner-1", projectId: "project-1", spaceId: "space-1", folderId: null, files: [file] };
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  const failed = await repository.uploadFiles(input);
+  assert.deepEqual(failed.failedFiles, [file]);
+  const path = fake.operations.find(operation => operation.startsWith("upload:empty.md:"))!.slice("upload:empty.md:".length);
+  options.failInsertName = "";
+  const result = await repository.uploadFiles({ ...input, files: failed.failedFiles });
+  assert.equal(result.uploaded.length, 1);
+  assert.equal(result.uploaded[0].storagePath, path);
+  assert.equal(fake.operations.filter(operation => operation.startsWith("upload:empty.md:")).length, 1);
+});
+
+test("a committed metadata insert with a lost response is recovered without deleting its object", async () => {
+  const fake = createAdapter();
+  const createFile = fake.adapter.createFile;
+  fake.adapter.createFile = async input => { await createFile(input); throw new Error("metadata response lost"); };
+  const result = await repositoryModule.createTestPlanRepository(fake.adapter).uploadFiles({
+    ownerId: "owner-1", projectId: "project-1", spaceId: "space-1", folderId: null,
+    files: [new File(["safe"], "release.zip")],
+  });
+  assert.equal(result.uploaded.length, 1);
+  assert.deepEqual(result.failures, []);
+  assert.equal(fake.operations.some(operation => operation.startsWith("remove:") || operation.startsWith("queue-cleanup:")), false);
+  assert.ok(fake.operations.includes(`complete-upload:${result.uploaded[0].storagePath}`));
+});
+
+test("an uncertain metadata lookup preserves the object and recognizes its committed record on retry", async () => {
+  const fake = createAdapter();
+  const file = new File(["safe"], "release.zip");
+  const input = { ownerId: "owner-1", projectId: "project-1", spaceId: "space-1", folderId: null, files: [file] };
+  const createFile = fake.adapter.createFile;
+  const findFile = fake.adapter.findFileByStoragePath;
+  let metadataAttempted = false;
+  fake.adapter.createFile = async payload => { await createFile(payload); metadataAttempted = true; throw new Error("metadata response lost"); };
+  fake.adapter.findFileByStoragePath = async path => {
+    if (metadataAttempted) throw new Error("lookup unavailable");
+    return findFile(path);
+  };
+  const failed = await repositoryModule.createTestPlanRepository(fake.adapter).uploadFiles(input);
+  assert.deepEqual(failed.failedFiles, [file]);
+  assert.equal(fake.operations.some(operation => operation.startsWith("remove:") || operation.startsWith("queue-cleanup:")), false);
+  fake.adapter.findFileByStoragePath = findFile;
+  const retried = await repositoryModule.createTestPlanRepository(fake.adapter).uploadFiles(input);
+  assert.equal(retried.uploaded.length, 1);
+  assert.equal(fake.operations.filter(operation => operation.startsWith("upload:release.zip:")).length, 1);
+  assert.equal(fake.operations.filter(operation => operation === "create-file:release.zip").length, 1);
+});
+
+test("retry paths are isolated by owner, project, space, folder and File identity", async () => {
+  const fake = createAdapter();
+  const original = new File(["same"], "release.zip");
+  const input = { ownerId: "owner-1", projectId: "project-1", spaceId: "space-1", folderId: null, files: [original] };
+  const paths: string[] = [];
+  fake.adapter.uploadObject = async path => { paths.push(path); throw new Error("interrupted"); };
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  for (const patch of [{}, { ownerId: "owner-2" }, { projectId: null }, { spaceId: "space-2" }, { folderId: "folder-a" }, { files: [new File(["same"], "release.zip")] }]) {
+    await repository.uploadFiles({ ...input, ...patch });
+  }
+  assert.equal(new Set(paths).size, 6);
+  await repository.uploadFiles(input);
+  assert.equal(paths.at(-1), paths[0]);
+});
+
+test("preserving folder paths and a plain upload are distinct targets for the same File", async () => {
+  const fake = createAdapter();
+  const file = folderFile("Release/docs/release.zip");
+  const paths: string[] = [];
+  fake.adapter.uploadObject = async path => { paths.push(path); throw new Error("interrupted"); };
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  await repository.uploadFiles({ ...folderUploadTarget, files: [file] });
+  await repository.uploadFiles({ ...folderUploadTarget, files: [file], preservePaths: false });
+  assert.notEqual(paths[0], paths[1]);
+});
+
+test("folder retry recognizes its own committed record before checking duplicate names", async () => {
+  const fake = createAdapter();
+  const file = folderFile("Release/docs/release.zip");
+  const createFile = fake.adapter.createFile;
+  const findFile = fake.adapter.findFileByStoragePath;
+  let committed = false;
+  fake.adapter.createFile = async input => { await createFile(input); committed = true; throw new Error("response lost"); };
+  fake.adapter.findFileByStoragePath = async path => {
+    if (committed) throw new Error("offline");
+    return findFile(path);
+  };
+  const repository = repositoryModule.createTestPlanRepository(fake.adapter);
+  const failed = await repository.uploadFiles({ ...folderUploadTarget, files: [file] });
+  fake.adapter.findFileByStoragePath = findFile;
+  const result = await repository.uploadFiles({ ...folderUploadTarget, files: failed.failedFiles });
+  assert.equal(result.uploaded.length, 1);
+  assert.deepEqual(result.failures, []);
+  assert.equal(fake.operations.filter(operation => operation.startsWith("upload:release.zip:")).length, 1);
+  assert.equal(fake.operations.filter(operation => operation === "create-file:release.zip").length, 1);
+});
+
+test("a storage path lookup never accepts metadata for a different upload target", async () => {
+  const fake = createAdapter();
+  fake.adapter.findFileByStoragePath = async path => ({ ...fake.records.files[0], storagePath: path });
+  const result = await repositoryModule.createTestPlanRepository(fake.adapter).uploadFiles({
+    ownerId: "owner-1", projectId: "project-1", spaceId: "space-1", folderId: null,
+    files: [new File(["safe"], "release.zip")],
+  });
+  assert.equal(result.uploaded.length, 0);
+  assert.match(result.failures[0].message, /不同的檔案記錄/);
+  assert.equal(fake.operations.some(operation => operation.startsWith("upload:") || operation.startsWith("complete-upload:") || operation.startsWith("remove:")), false);
 });
 
 test("keeps an empty browser MIME type as null metadata", async () => {
