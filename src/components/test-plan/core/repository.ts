@@ -96,6 +96,9 @@ async function flushCleanupQueue(
 
 export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
   return {
+    listSpaces(projectId: string | null = null) {
+      return adapter.listSpaces(projectId);
+    },
     async loadWorkspace(
       ownerId: string,
       projectId: string | null,

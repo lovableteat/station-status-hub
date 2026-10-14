@@ -227,8 +227,27 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
         const { data, error } = await query;
         throwIfError(error);
         records.push(...(data ?? []).map(mapSpace));
-        if (!data || data.length < 500) return records;
+        if (!data || data.length < 500) break;
       }
+      // The account directory owns identity and active-account visibility.
+      // Stored space names are historical labels; keep their IDs and contents.
+      const members = new Map<string, { username: string; display_name: string }>();
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await supabase.rpc("list_active_collaboration_members")
+          .order("user_id")
+          .range(offset, offset + 499);
+        throwIfError(error);
+        for (const member of data ?? []) members.set(member.user_id, member);
+        if (!data || data.length < 500) break;
+      }
+      return records.flatMap(space => {
+        const member = members.get(space.ownerId);
+        return member ? [{
+          ...space,
+          name: member.display_name?.trim() || member.username,
+          description: `@${member.username}`,
+        }] : [];
+      });
     },
     async listFolders(spaceId) {
       const records: TestPlanFolder[] = [];

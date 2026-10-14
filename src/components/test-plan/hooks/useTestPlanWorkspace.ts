@@ -150,6 +150,41 @@ export function useTestPlanWorkspace(
     void refreshWorkspace(null);
   }, [ownerId, repository]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!ownerId || loading || busy) return;
+    let current = true;
+    let pending = false;
+    const refreshRoster = async () => {
+      if (!current || pending || document.visibilityState === "hidden") return;
+      pending = true;
+      try {
+        const latest = await repository.listSpaces(null);
+        if (!current || ownerIdRef.current !== ownerId) return;
+        const selected = activeSpaceIdRef.current;
+        if (selected && !latest.some(space => space.id === selected)) {
+          await refreshWorkspace(null);
+        } else {
+          // Refresh account labels without disturbing the open folder or files.
+          setSpaces(latest);
+        }
+      } catch (caught) {
+        if (current && ownerIdRef.current === ownerId) {
+          setError(getTestPlanErrorMessage(caught, "帳號名單更新失敗，請重新整理後再試。"));
+        }
+      } finally {
+        pending = false;
+      }
+    };
+    const refresh = () => { void refreshRoster(); };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      current = false;
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [busy, loading, ownerId, refreshWorkspace, repository]);
+
   const openSpace = useCallback(
     async (spaceId: string | null) => {
       if (mutationInFlightRef.current) {
