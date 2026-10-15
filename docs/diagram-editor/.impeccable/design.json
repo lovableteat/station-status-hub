@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-15T07:03:36.101Z",
+  "generatedAt": "2026-10-15T07:11:27.103Z",
   "title": "Design System: AutoCheck Diagram Editor",
   "extensions": {
     "colorMeta": {
@@ -97,61 +97,61 @@
       "chrome": {
         "role": "neutral",
         "displayName": "Chrome",
-        "canonical": "#303641",
+        "canonical": "#242426",
         "tonalRamp": [
-          "oklch(15.00% 0.0212 262.57)",
-          "oklch(26.43% 0.0212 262.57)",
-          "oklch(37.86% 0.0212 262.57)",
-          "oklch(49.29% 0.0212 262.57)",
-          "oklch(60.71% 0.0212 262.57)",
-          "oklch(72.14% 0.0212 262.57)",
-          "oklch(83.57% 0.0212 262.57)",
-          "oklch(95.00% 0.0212 262.57)"
+          "oklch(15.00% 0.0037 286.14)",
+          "oklch(26.43% 0.0037 286.14)",
+          "oklch(37.86% 0.0037 286.14)",
+          "oklch(49.29% 0.0037 286.14)",
+          "oklch(60.71% 0.0037 286.14)",
+          "oklch(72.14% 0.0037 286.14)",
+          "oklch(83.57% 0.0037 286.14)",
+          "oklch(95.00% 0.0037 286.14)"
         ]
       },
       "surface": {
         "role": "neutral",
         "displayName": "Surface",
-        "canonical": "#353d49",
+        "canonical": "#2c2c2e",
         "tonalRamp": [
-          "oklch(15.00% 0.0235 258.37)",
-          "oklch(26.43% 0.0235 258.37)",
-          "oklch(37.86% 0.0235 258.37)",
-          "oklch(49.29% 0.0235 258.37)",
-          "oklch(60.71% 0.0235 258.37)",
-          "oklch(72.14% 0.0235 258.37)",
-          "oklch(83.57% 0.0235 258.37)",
-          "oklch(95.00% 0.0235 258.37)"
+          "oklch(15.00% 0.0036 286.18)",
+          "oklch(26.43% 0.0036 286.18)",
+          "oklch(37.86% 0.0036 286.18)",
+          "oklch(49.29% 0.0036 286.18)",
+          "oklch(60.71% 0.0036 286.18)",
+          "oklch(72.14% 0.0036 286.18)",
+          "oklch(83.57% 0.0036 286.18)",
+          "oklch(95.00% 0.0036 286.18)"
         ]
       },
       "canvas": {
         "role": "neutral",
         "displayName": "Canvas",
-        "canonical": "#282d35",
+        "canonical": "#1c1c1e",
         "tonalRamp": [
-          "oklch(15.00% 0.0162 259.79)",
-          "oklch(26.43% 0.0162 259.79)",
-          "oklch(37.86% 0.0162 259.79)",
-          "oklch(49.29% 0.0162 259.79)",
-          "oklch(60.71% 0.0162 259.79)",
-          "oklch(72.14% 0.0162 259.79)",
-          "oklch(83.57% 0.0162 259.79)",
-          "oklch(95.00% 0.0162 259.79)"
+          "oklch(15.00% 0.0038 286.09)",
+          "oklch(26.43% 0.0038 286.09)",
+          "oklch(37.86% 0.0038 286.09)",
+          "oklch(49.29% 0.0038 286.09)",
+          "oklch(60.71% 0.0038 286.09)",
+          "oklch(72.14% 0.0038 286.09)",
+          "oklch(83.57% 0.0038 286.09)",
+          "oklch(95.00% 0.0038 286.09)"
         ]
       },
       "field": {
         "role": "neutral",
         "displayName": "Field",
-        "canonical": "#2d323a",
+        "canonical": "#323235",
         "tonalRamp": [
-          "oklch(15.00% 0.0159 259.80)",
-          "oklch(26.43% 0.0159 259.80)",
-          "oklch(37.86% 0.0159 259.80)",
-          "oklch(49.29% 0.0159 259.80)",
-          "oklch(60.71% 0.0159 259.80)",
-          "oklch(72.14% 0.0159 259.80)",
-          "oklch(83.57% 0.0159 259.80)",
-          "oklch(95.00% 0.0159 259.80)"
+          "oklch(15.00% 0.0053 286.10)",
+          "oklch(26.43% 0.0053 286.10)",
+          "oklch(37.86% 0.0053 286.10)",
+          "oklch(49.29% 0.0053 286.10)",
+          "oklch(60.71% 0.0053 286.10)",
+          "oklch(72.14% 0.0053 286.10)",
+          "oklch(83.57% 0.0053 286.10)",
+          "oklch(95.00% 0.0053 286.10)"
         ]
       },
       "text": {
@@ -202,31 +202,31 @@
       "separator": {
         "role": "neutral",
         "displayName": "Separator",
-        "canonical": "#536071",
+        "canonical": "#454548",
         "tonalRamp": [
-          "oklch(15.00% 0.0318 255.22)",
-          "oklch(26.43% 0.0318 255.22)",
-          "oklch(37.86% 0.0318 255.22)",
-          "oklch(49.29% 0.0318 255.22)",
-          "oklch(60.71% 0.0318 255.22)",
-          "oklch(72.14% 0.0318 255.22)",
-          "oklch(83.57% 0.0318 255.22)",
-          "oklch(95.00% 0.0318 255.22)"
+          "oklch(15.00% 0.0050 286.17)",
+          "oklch(26.43% 0.0050 286.17)",
+          "oklch(37.86% 0.0050 286.17)",
+          "oklch(49.29% 0.0050 286.17)",
+          "oklch(60.71% 0.0050 286.17)",
+          "oklch(72.14% 0.0050 286.17)",
+          "oklch(83.57% 0.0050 286.17)",
+          "oklch(95.00% 0.0050 286.17)"
         ]
       },
       "control-border": {
         "role": "neutral",
         "displayName": "Control Border",
-        "canonical": "#7b8b9f",
+        "canonical": "#636369",
         "tonalRamp": [
-          "oklch(15.00% 0.0355 254.09)",
-          "oklch(26.43% 0.0355 254.09)",
-          "oklch(37.86% 0.0355 254.09)",
-          "oklch(49.29% 0.0355 254.09)",
-          "oklch(60.71% 0.0355 254.09)",
-          "oklch(72.14% 0.0355 254.09)",
-          "oklch(83.57% 0.0355 254.09)",
-          "oklch(95.00% 0.0355 254.09)"
+          "oklch(15.00% 0.0094 286.06)",
+          "oklch(26.43% 0.0094 286.06)",
+          "oklch(37.86% 0.0094 286.06)",
+          "oklch(49.29% 0.0094 286.06)",
+          "oklch(60.71% 0.0094 286.06)",
+          "oklch(72.14% 0.0094 286.06)",
+          "oklch(83.57% 0.0094 286.06)",
+          "oklch(95.00% 0.0094 286.06)"
         ]
       },
       "destructive": {
@@ -801,7 +801,7 @@
       "refersTo": "button-ghost",
       "description": "Quiet toolbar action; the pressed state identifies an active tool.",
       "html": "<button class=\"ds-ghost\" aria-pressed=\"true\">連線</button>",
-      "css": ".ds-ghost { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; font-size: 12px; font-weight: 500; min-height: 44px; padding: 0 12px; border-radius: 7px; cursor: pointer; transition: background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1), opacity 150ms cubic-bezier(.4,0,.2,1); padding: 0 10px; border: 0; background: transparent; color: var(--diagram-secondary, #dce5f2); } .ds-ghost:hover { background: var(--diagram-hover, #ffffff0c); } .ds-ghost[aria-pressed=\"true\"] { background: var(--diagram-selected, #244a71); color: var(--diagram-accent-text, #9ecbff); } .ds-ghost:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-ghost:active { background: var(--diagram-active, #46546a); opacity: .75; transition-duration: 0ms; } .ds-ghost:disabled { opacity: .38; cursor: default; } @media (prefers-reduced-motion: reduce) { .ds-ghost { transition: none; } }"
+      "css": ".ds-ghost { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; font-size: 12px; font-weight: 500; min-height: 44px; padding: 0 12px; border-radius: 7px; cursor: pointer; transition: background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1), opacity 150ms cubic-bezier(.4,0,.2,1); padding: 0 10px; border: 0; background: transparent; color: var(--diagram-secondary, #dce5f2); } .ds-ghost:hover { background: var(--diagram-hover, #ffffff0c); } .ds-ghost[aria-pressed=\"true\"] { background: var(--diagram-selected, #244a71); color: var(--diagram-accent-text, #9ecbff); } .ds-ghost:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-ghost:active { background: var(--diagram-active, #48484a); opacity: .75; transition-duration: 0ms; } .ds-ghost:disabled { opacity: .38; cursor: default; } @media (prefers-reduced-motion: reduce) { .ds-ghost { transition: none; } }"
     },
     {
       "name": "Outlined Button",
@@ -809,7 +809,7 @@
       "refersTo": "button-outline",
       "description": "Secondary document action such as exporting or duplicating a shape.",
       "html": "<button class=\"ds-outline\">匯出</button>",
-      "css": ".ds-outline { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; font-size: 12px; font-weight: 500; min-height: 44px; padding: 0 12px; border-radius: 7px; cursor: pointer; transition: background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1), opacity 150ms cubic-bezier(.4,0,.2,1); background: var(--diagram-surface, #353d49); color: var(--diagram-secondary, #dce5f2); border: 1px solid var(--diagram-control-line, #7b8b9f); } .ds-outline:hover { border-color: hsl(var(--muted-foreground, 217 18% 74%) / .5); } .ds-outline:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-outline:active { opacity: .75; transition-duration: 0ms; } .ds-outline:disabled { opacity: .38; cursor: default; } @media (prefers-reduced-motion: reduce) { .ds-outline { transition: none; } }"
+      "css": ".ds-outline { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; font-size: 12px; font-weight: 500; min-height: 44px; padding: 0 12px; border-radius: 7px; cursor: pointer; transition: background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1), opacity 150ms cubic-bezier(.4,0,.2,1); background: var(--diagram-surface, #2c2c2e); color: var(--diagram-secondary, #dce5f2); border: 1px solid var(--diagram-control-line, #636369); } .ds-outline:hover { border-color: hsl(var(--muted-foreground, 217 18% 74%) / .5); } .ds-outline:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-outline:active { opacity: .75; transition-duration: 0ms; } .ds-outline:disabled { opacity: .38; cursor: default; } @media (prefers-reduced-motion: reduce) { .ds-outline { transition: none; } }"
     },
     {
       "name": "Property Field",
@@ -817,7 +817,7 @@
       "refersTo": "field",
       "description": "Theme-aware inspector field for editable dimensions and diagram properties.",
       "html": "<label class=\"ds-field-label\" for=\"ds-field\">寬度 <span>px</span></label><input id=\"ds-field\" class=\"ds-field\" type=\"number\" min=\"80\" max=\"2400\" value=\"180\" />",
-      "css": ".ds-field-label { display: flex; justify-content: space-between; width: 148px; margin-bottom: 8px; color: var(--diagram-secondary, #dce5f2); font: 500 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; } .ds-field-label span { color: var(--diagram-muted, #b2bbc9); font-size: 10px; } .ds-field { width: 148px; height: 38px; border: 1px solid var(--diagram-control-line, #7b8b9f); border-radius: 6px; padding: 10px 16px; background: var(--diagram-field, #2d323a); color: var(--diagram-text, #f5f5f7); font: 400 13px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; box-shadow: none; caret-color: var(--diagram-accent, #69afff); } .ds-field:hover { border-color: hsl(210 100% 45% / .35); } .ds-field:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; border-color: hsl(210 100% 45% / .7); } .ds-field:disabled { opacity: .5; cursor: not-allowed; } @media (max-width: 700px) { .ds-field { font-size: 16px; } }"
+      "css": ".ds-field-label { display: flex; justify-content: space-between; width: 148px; margin-bottom: 8px; color: var(--diagram-secondary, #dce5f2); font: 500 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; } .ds-field-label span { color: var(--diagram-muted, #b2bbc9); font-size: 10px; } .ds-field { width: 148px; height: 38px; border: 1px solid var(--diagram-control-line, #636369); border-radius: 6px; padding: 10px 16px; background: var(--diagram-field, #323235); color: var(--diagram-text, #f5f5f7); font: 400 13px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; box-shadow: none; caret-color: var(--diagram-accent, #69afff); } .ds-field:hover { border-color: hsl(210 100% 45% / .35); } .ds-field:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; border-color: hsl(210 100% 45% / .7); } .ds-field:disabled { opacity: .5; cursor: not-allowed; } @media (max-width: 700px) { .ds-field { font-size: 16px; } }"
     },
     {
       "name": "Command Bar",
@@ -825,7 +825,7 @@
       "refersTo": "command-bar",
       "description": "Grouped document commands above the drawing canvas.",
       "html": "<div class=\"ds-toolbar\" role=\"toolbar\" aria-label=\"圖稿工具\"><div class=\"ds-toolbar-group\"><button type=\"button\" aria-label=\"復原\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M3 7v6h6\"/><path d=\"M3 13a8 8 0 1 1 2.4 5.7\"/></svg></button></div><button type=\"button\" class=\"ds-toolbar-active\" aria-pressed=\"true\">連線</button><button type=\"button\">自動排列</button></div>",
-      "css": ".ds-toolbar { display: flex; align-items: center; gap: 6px; min-height: 49px; padding: 2px 8px; background: var(--diagram-chrome, #303641); border-bottom: 1px solid var(--diagram-line, #536071); font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; } .ds-toolbar-group { padding-right: 6px; border-right: 1px solid var(--diagram-line, #536071); } .ds-toolbar button { min-height: 44px; min-width: 44px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--diagram-secondary, #dce5f2); font: 500 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-toolbar button:hover { background: var(--diagram-hover, #ffffff0c); } .ds-toolbar button:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-toolbar button:active { background: var(--diagram-active, #46546a); opacity: .75; } .ds-toolbar .ds-toolbar-active { background: var(--diagram-selected, #244a71); color: var(--diagram-accent-text, #9ecbff); } @media (max-width: 1050px) { .ds-toolbar { overflow-x: auto; } }"
+      "css": ".ds-toolbar { display: flex; align-items: center; gap: 6px; min-height: 49px; padding: 2px 8px; background: var(--diagram-chrome, #242426); border-bottom: 1px solid var(--diagram-line, #454548); font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; } .ds-toolbar-group { padding-right: 6px; border-right: 1px solid var(--diagram-line, #454548); } .ds-toolbar button { min-height: 44px; min-width: 44px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--diagram-secondary, #dce5f2); font: 500 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-toolbar button:hover { background: var(--diagram-hover, #ffffff0c); } .ds-toolbar button:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-toolbar button:active { background: var(--diagram-active, #48484a); opacity: .75; } .ds-toolbar .ds-toolbar-active { background: var(--diagram-selected, #244a71); color: var(--diagram-accent-text, #9ecbff); } @media (max-width: 1050px) { .ds-toolbar { overflow-x: auto; } }"
     },
     {
       "name": "Shape Card",
@@ -833,7 +833,7 @@
       "refersTo": "shape-card",
       "description": "Blue rectangles, teal ellipses, violet diamonds, and amber notes, with themed library colors and distinct new-document defaults.",
       "html": "<div class=\"ds-shapes\"><button class=\"ds-shape ds-shape-blue\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/></svg><span>方框</span></button><button class=\"ds-shape ds-shape-teal\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/></svg><span>圓形</span></button><button class=\"ds-shape ds-shape-violet\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"m12 2 10 10-10 10L2 12Z\"/></svg><span>判斷</span></button><button class=\"ds-shape ds-shape-amber\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z\"/><path d=\"M16 3v5h5\"/></svg><span>備註</span></button></div>",
-      "css": ".ds-shapes { display: grid; grid-template-columns: repeat(2, 72px); gap: 8px; } .ds-shape-blue { --shape-color: var(--diagram-shape-blue, #80b9ff); --shape-fill: var(--diagram-shape-blue-fill, #203e62); } .ds-shape-teal { --shape-color: var(--diagram-shape-teal, #79dfd0); --shape-fill: var(--diagram-shape-teal-fill, #1f4647); } .ds-shape-violet { --shape-color: var(--diagram-shape-violet, #cab1f0); --shape-fill: var(--diagram-shape-violet-fill, #393350); } .ds-shape-amber { --shape-color: var(--diagram-shape-amber, #e8c685); --shape-fill: var(--diagram-shape-amber-fill, #4c3e28); } .ds-shape { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: 72px; height: 88px; padding: 10px 4px; border: 1px solid var(--diagram-line, #536071); border-radius: 7px; background: var(--shape-fill); color: var(--diagram-secondary, #dce5f2); font: 400 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-shape svg { color: var(--shape-color); } .ds-shape:hover { background: var(--diagram-selected, #244a71); border-color: var(--shape-color); } .ds-shape:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-shape:active { opacity: .75; } .ds-shape:disabled { opacity: .38; } @media (max-width: 700px) { .ds-shapes { grid-template-columns: repeat(4, minmax(0, 1fr)); } .ds-shape { width: auto; height: 48px; padding: 4px; flex-direction: row; gap: 5px; border: 0; font-size: 11px; } .ds-shape svg { width: 22px; height: 22px; } }"
+      "css": ".ds-shapes { display: grid; grid-template-columns: repeat(2, 72px); gap: 8px; } .ds-shape-blue { --shape-color: var(--diagram-shape-blue, #80b9ff); --shape-fill: var(--diagram-shape-blue-fill, #203e62); } .ds-shape-teal { --shape-color: var(--diagram-shape-teal, #79dfd0); --shape-fill: var(--diagram-shape-teal-fill, #1f4647); } .ds-shape-violet { --shape-color: var(--diagram-shape-violet, #cab1f0); --shape-fill: var(--diagram-shape-violet-fill, #393350); } .ds-shape-amber { --shape-color: var(--diagram-shape-amber, #e8c685); --shape-fill: var(--diagram-shape-amber-fill, #4c3e28); } .ds-shape { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: 72px; height: 88px; padding: 10px 4px; border: 1px solid var(--diagram-line, #454548); border-radius: 7px; background: var(--shape-fill); color: var(--diagram-secondary, #dce5f2); font: 400 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-shape svg { color: var(--shape-color); } .ds-shape:hover { background: var(--diagram-selected, #244a71); border-color: var(--shape-color); } .ds-shape:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-shape:active { opacity: .75; } .ds-shape:disabled { opacity: .38; } @media (max-width: 700px) { .ds-shapes { grid-template-columns: repeat(4, minmax(0, 1fr)); } .ds-shape { width: auto; height: 48px; padding: 4px; flex-direction: row; gap: 5px; border: 0; font-size: 11px; } .ds-shape svg { width: 22px; height: 22px; } }"
     },
     {
       "name": "Saved Document Card",
@@ -841,7 +841,7 @@
       "refersTo": "saved-document-card",
       "description": "Open an account-local document from the saved-document dialog.",
       "html": "<button class=\"ds-saved\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><path d=\"M14 2v6h6M8 13h8M8 17h6\"/></svg><span><strong>電源方塊圖</strong><small>2026/10/15 · 4 個圖形</small></span><span class=\"ds-saved-check\" aria-label=\"目前圖稿\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m20 6-11 11-5-5\"/></svg></span></button>",
-      "css": ".ds-saved { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 68px; padding: 12px; text-align: left; border: 1px solid transparent; border-radius: 6px; background: hsl(var(--secondary, 219 16% 27%)); color: var(--diagram-text, #f5f5f7); font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-saved:hover { border-color: hsl(210 100% 45%); } .ds-saved:focus-visible { outline: 2px solid hsl(210 100% 45%); outline-offset: -2px; } .ds-saved:active { opacity: .75; } .ds-saved:disabled { opacity: .5; } .ds-saved > svg { flex-shrink: 0; color: hsl(210 100% 45%); } .ds-saved > span:not(.ds-saved-check) { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; } .ds-saved strong { font-size: 13px; font-weight: 600; } .ds-saved small { font-size: 11px; color: hsl(var(--muted-foreground, 217 18% 74%)); } .ds-saved-check { color: hsl(210 100% 45%); }"
+      "css": ".ds-saved { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 68px; padding: 12px; text-align: left; border: 1px solid transparent; border-radius: 6px; background: hsl(var(--secondary, 240 3% 20%)); color: var(--diagram-text, #f5f5f7); font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-saved:hover { border-color: hsl(210 100% 45%); } .ds-saved:focus-visible { outline: 2px solid hsl(210 100% 45%); outline-offset: -2px; } .ds-saved:active { opacity: .75; } .ds-saved:disabled { opacity: .5; } .ds-saved > svg { flex-shrink: 0; color: hsl(210 100% 45%); } .ds-saved > span:not(.ds-saved-check) { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; } .ds-saved strong { font-size: 13px; font-weight: 600; } .ds-saved small { font-size: 11px; color: hsl(var(--muted-foreground, 217 18% 74%)); } .ds-saved-check { color: hsl(210 100% 45%); }"
     },
     {
       "name": "Selection Chip",
@@ -854,9 +854,9 @@
   ],
   "narrative": {
     "northStar": "The Diagram Workbench",
-    "overview": "The editor pairs the familiar draw.io workbench arrangement with brighter Apple-inspired blue graphite colors by default and a complete light variant. A quiet frame holds the document controls, shape library, and status tools around the drawing surface. Blue identifies actions, focus, and selection; blue, teal, violet, and amber distinguish the library's four shape roles.\n\nThis record applies only to the diagram editor, its menus, and its saved-document and deletion dialogs. The surrounding AutoCheck website keeps its incumbent design. The record follows the implemented component and stylesheet rather than prescribing a new website identity.",
+    "overview": "The editor pairs the familiar draw.io workbench arrangement with Apple-inspired neutral graphite backgrounds by default and a complete light variant. A quiet frame holds the document controls, shape library, and status tools around the drawing surface. Brighter blue identifies actions, focus, and selection; blue, teal, violet, and amber distinguish the library's four shape roles.\n\nThis record applies only to the diagram editor, its menus, and its saved-document and deletion dialogs. The surrounding AutoCheck website keeps its incumbent design. The record follows the implemented component and stylesheet rather than prescribing a new website identity.",
     "keyCharacteristics": [
-      "Brighter blue graphite canvas and tools by default, with a complete light variant.",
+      "Neutral graphite canvas and tools by default, with a complete light variant.",
       "Compact system typography and explicit control labels.",
       "A persistent, color-coded shape library with contextual editing properties.",
       "Direct movement, drag-to-draw arrows, visible connection handles, and reversible edits.",

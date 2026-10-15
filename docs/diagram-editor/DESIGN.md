@@ -1,6 +1,6 @@
 ---
 name: AutoCheck Diagram Editor
-description: Scoped Apple-inspired blue graphite workspace with colored shapes and a light variant
+description: Scoped Apple-inspired neutral graphite workspace with colored shapes and a light variant
 colors:
   action-blue: "#0071e3"
   primary-hover: "#0066cc"
@@ -8,15 +8,15 @@ colors:
   focus-blue: "#69afff"
   action-text: "#9ecbff"
   selection-fill: "#244a71"
-  chrome: "#303641"
-  surface: "#353d49"
-  canvas: "#282d35"
-  field: "#2d323a"
+  chrome: "#242426"
+  surface: "#2c2c2e"
+  canvas: "#1c1c1e"
+  field: "#323235"
   text: "#f5f5f7"
   control-text: "#dce5f2"
   secondary-text: "#b2bbc9"
-  separator: "#536071"
-  control-border: "#7b8b9f"
+  separator: "#454548"
+  control-border: "#636369"
   destructive: "#ff9490"
   dark-canvas-detail: "#c1c9d5"
   canvas-text: "#1f2937"
@@ -132,7 +132,7 @@ components:
     height: "88px"
     padding: "10px 4px"
   saved-document-card:
-    backgroundColor: "hsl(219 16% 27%)"
+    backgroundColor: "hsl(240 3% 20%)"
     textColor: "{colors.text}"
     typography: "{typography.body}"
     rounded: "{rounded.field}"
@@ -151,12 +151,12 @@ components:
 
 **Creative North Star: "The Diagram Workbench"**
 
-The editor pairs the familiar draw.io workbench arrangement with brighter Apple-inspired blue graphite colors by default and a complete light variant. A quiet frame holds the document controls, shape library, and status tools around the drawing surface. Blue identifies actions, focus, and selection; blue, teal, violet, and amber distinguish the library's four shape roles.
+The editor pairs the familiar draw.io workbench arrangement with Apple-inspired neutral graphite backgrounds by default and a complete light variant. A quiet frame holds the document controls, shape library, and status tools around the drawing surface. Brighter blue identifies actions, focus, and selection; blue, teal, violet, and amber distinguish the library's four shape roles.
 
 This record applies only to the diagram editor, its menus, and its saved-document and deletion dialogs. The surrounding AutoCheck website keeps its incumbent design. The record follows the implemented component and stylesheet rather than prescribing a new website identity.
 
 **Key Characteristics:**
-- Brighter blue graphite canvas and tools by default, with a complete light variant.
+- Neutral graphite canvas and tools by default, with a complete light variant.
 - Compact system typography and explicit control labels.
 - A persistent, color-coded shape library with contextual editing properties.
 - Direct movement, drag-to-draw arrows, visible connection handles, and reversible edits.
@@ -164,7 +164,7 @@ This record applies only to the diagram editor, its menus, and its saved-documen
 
 ## Colors
 
-The default palette uses brighter blue graphite surfaces, light neutral text, and blue interaction accents. The frontmatter holds the normative values from `diagramEditor.css`, `diagramTheme.ts`, and `ComparisonDiagramEditor.tsx`: unsuffixed UI roles describe dark mode, `light-` roles describe the light variant, `document-` roles describe new-shape color values, and the canvas text/detail roles retain the portable light-rendering values.
+The default palette uses the earlier neutral graphite backgrounds, light text, and brighter blue interaction accents. The frontmatter holds the normative values from `diagramEditor.css`, `diagramTheme.ts`, and `ComparisonDiagramEditor.tsx`: unsuffixed UI roles describe dark mode, `light-` roles describe the light variant, `document-` roles describe new-shape color values, and the canvas text/detail roles retain the portable light-rendering values.
 
 ### Primary
 

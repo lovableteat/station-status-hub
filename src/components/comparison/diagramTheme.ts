@@ -9,15 +9,15 @@ export const DIAGRAM_THEME = {
 } as const;
 
 const DARK_DIAGRAM_THEME = {
-  canvas: "#282d35",
+  canvas: "#1c1c1e",
   text: "#f5f5f7",
   detail: "#c1c9d5",
-  labelBackground: "#353d49",
+  labelBackground: "#2c2c2e",
 } as const;
 
 export function diagramTheme(mode: DiagramAppearance = "light") {
   return mode === "dark"
-    ? { ...DARK_DIAGRAM_THEME, grid: "#536171" }
+    ? { ...DARK_DIAGRAM_THEME, grid: "#444448" }
     : { ...DIAGRAM_THEME, grid: "#c6cdd1" };
 }
 
