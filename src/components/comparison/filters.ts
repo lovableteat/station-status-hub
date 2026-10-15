@@ -1,6 +1,6 @@
 import type { ReviewReply, TrackRow } from "./types";
 
-export const comparisonTabs = ["compare", "review", "power", "i2c", "library"] as const;
+export const comparisonTabs = ["compare", "review", "power", "i2c", "library", "diagram"] as const;
 export type ComparisonTab = typeof comparisonTabs[number];
 export interface ComparisonFilters {
   tab: ComparisonTab;
