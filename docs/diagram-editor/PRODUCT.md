@@ -36,7 +36,7 @@ Audience details beyond existing AutoCheck comparison users, formal success meas
 
 ## Brand Commitments
 
-The user explicitly requested Apple design colors, dark mode, and then a brighter dark appearance with more color. The implemented default is Apple-inspired blue graphite with colored shape-library roles and a light-mode option. This is a scoped editor change; the existing site's exterior design is preserved. The actual editor palette and reusable visual rules are recorded in the adjacent `DESIGN.md`.
+The user explicitly requested Apple design colors, dark mode, and colored shapes while retaining the earlier dark backgrounds. The implemented default is Apple-inspired neutral graphite with colored shape-library roles, brighter foreground accents, and a light-mode option. This is a scoped editor change; the existing site's exterior design is preserved. The actual editor palette and reusable visual rules are recorded in the adjacent `DESIGN.md`.
 
 ## Evidence on Hand
 
