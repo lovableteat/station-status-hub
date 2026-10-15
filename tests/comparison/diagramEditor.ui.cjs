@@ -63,7 +63,7 @@ const alertMocks = {
   AlertDialogDescription: child, AlertDialogFooter: child, AlertDialogHeader: child, AlertDialogTitle: child,
 };
 
-function fixture({ canvasBounds } = {}) {
+function fixture({ canvasBounds, inspectorBounds, globals } = {}) {
   const window = browser();
   const body = { style: { overflow: 'auto' } };
   window.document = { body };
@@ -111,13 +111,14 @@ function fixture({ canvasBounds } = {}) {
     },
   };
   const flow = { setViewport: async value => { viewportCalls.push(clone(value)); }, fitView: async () => {}, screenToFlowPosition: point => point };
+  const updateNodeInternals = () => {};
   // renderHarness isolates each module in its own VM realm. JSON bridges keep
   // the real model's plain-object validation intact across that test boundary.
   const loadModel = loader({ transform(source, file) {
     return file.endsWith('diagramModel.ts') ? `${source}\nexport const parseTestJson = (value: string) => parseDiagramDocument(JSON.parse(value));\nexport const layoutTestJson = (value: string) => autoLayoutDiagram(JSON.parse(value));` : source;
   } });
   const model = loadModel('src/components/comparison/diagramModel.ts');
-  const load = loader({ window, mocks: {
+  const load = loader({ window, globals, mocks: {
     './diagramModel': { ...model,
       parseDiagramDocument: value => model.parseTestJson(JSON.stringify(value)),
       autoLayoutDiagram: value => model.layoutTestJson(JSON.stringify(value)),
@@ -140,6 +141,7 @@ function fixture({ canvasBounds } = {}) {
         return React.createElement('flow', props, props.children);
       },
       useReactFlow: () => flow,
+      useUpdateNodeInternals: () => updateNodeInternals,
       Background: child, BaseEdge: child, Controls: child, Handle: child, NodeResizer: child,
       BackgroundVariant: { Dots: 'dots' }, ConnectionMode: { Loose: 'loose' }, MarkerType: { ArrowClosed: 'arrowclosed' },
       Position: { Left: 'left', Right: 'right', Top: 'top', Bottom: 'bottom' },
@@ -157,7 +159,11 @@ function fixture({ canvasBounds } = {}) {
     documents(account) { return [...owner(account).values()]; },
     get tree() { return tree; },
     async mount() {
-      await act(async () => { tree = create(render(), { createNodeMock: element => canvasBounds && element.props.className === 'diagram-canvas' ? { getBoundingClientRect: () => canvasBounds } : null }); });
+      await act(async () => { tree = create(render(), { createNodeMock: element => {
+        if (canvasBounds && element.props.className === 'diagram-canvas') return { getBoundingClientRect: () => canvasBounds };
+        if (inspectorBounds && element.props.className === 'diagram-inspector') return { getBoundingClientRect: () => inspectorBounds };
+        return null;
+      } }); });
       await flush();
     },
     async update(next) { props = { ...props, ...next }; await act(async () => tree.update(render())); await flush(); },
@@ -169,6 +175,15 @@ function fixture({ canvasBounds } = {}) {
         ?? controls.find(node => node.props.role === 'menuitem' && text(node).startsWith(label));
     },
     async edit(title) { await act(async () => this.title().props.onChange({ target: { value: title } })); },
+    field(id) {
+      return tree.root.findAll(node => ['input', 'textarea', 'select', 'stub'].includes(node.type) && node.props.id === id)[0];
+    },
+    async change(id, value) {
+      const field = this.field(id);
+      assert.ok(field, `Field ${id} exists`);
+      assert.ok(!field.props.disabled, `Field ${id} is enabled`);
+      await act(async () => field.props.onChange({ target: { value } }));
+    },
     async click(label) {
       const button = this.button(label);
       assert.ok(button, `Control ${label} exists`);
@@ -530,6 +545,61 @@ test('fitting the canvas contains distant free endpoints and outward curve contr
   }
 });
 
+test('selecting a line keeps it above a mobile property panel and reacts when that panel grows', async () => {
+  const canvasBounds = { width: 390, height: 700, left: 0, top: 100, right: 390, bottom: 800 };
+  const inspectorBounds = { width: 390, height: 320, left: 0, top: 480, right: 390, bottom: 800 };
+  const observers = new Set();
+  class ResizeObserver {
+    constructor(callback) { this.callback = callback; this.targets = new Set(); observers.add(this); }
+    observe(target) { this.targets.add(target); }
+    disconnect() { observers.delete(this); }
+  }
+  const f = fixture({ canvasBounds, inspectorBounds, globals: { ResizeObserver } });
+  const frames = new Map(); let frameId = 0;
+  f.window.requestAnimationFrame = callback => { const id = ++frameId; frames.set(id, callback); return id; };
+  f.window.cancelAnimationFrame = id => frames.delete(id);
+  const runFrames = async () => {
+    const pending = [...frames.values()]; frames.clear();
+    await act(async () => { for (const callback of pending) callback(); });
+  };
+  const saved = document('mobile-selected-line', '手機上編輯線條');
+  saved.edges = [{ id: 'wire', source: '', sourcePoint: { x: 40, y: 520 }, target: '', targetPoint: { x: 350, y: 620 }, label: '下方線條', color: '#79a9e8', lineType: 'straight' }];
+  f.seed(accountA, saved); await f.mount(); await f.open(saved.id);
+  await runFrames(); f.viewportCalls.length = 0;
+  const flow = () => f.tree.root.findByType('flow');
+  assert.equal(observers.size, 0, 'the unselected line has no property-panel observer');
+  await act(async () => flow().props.onEdgeClick(null, flow().props.edges[0]));
+  assert.equal(f.tree.root.findAll(node => node.type === 'aside' && node.props['aria-label'] === '圖形屬性').length, 1);
+  assert.equal(observers.size, 1);
+  assert.equal([...observers][0].targets.size, 2, 'both the canvas and the overlapping inspector are observed');
+  await runFrames();
+  assert.equal(f.viewportCalls.length, 1, 'opening the mobile inspector adjusts the selected line into view');
+  const assertVisible = viewport => {
+    const overlap = Math.min(canvasBounds.bottom, inspectorBounds.bottom) - Math.max(canvasBounds.top, inspectorBounds.top);
+    const visibleHeight = canvasBounds.height - overlap;
+    for (const point of flow().props.edges[0].data.route.points) {
+      const x = point.x * viewport.zoom + viewport.x, y = point.y * viewport.zoom + viewport.y;
+      assert.ok(x >= 24 && x <= canvasBounds.width - 24, 'the complete selected line has horizontal margin');
+      assert.ok(y >= 24 && y <= visibleHeight - 24, 'the complete selected line stays above the property panel');
+    }
+  };
+  assertVisible(f.viewportCalls[0]);
+  Object.assign(inspectorBounds, { top: 340, height: 460 });
+  await act(async () => { for (const observer of observers) { observer.callback(); observer.callback(); } });
+  assert.equal(frames.size, 1, 'successive resize notifications coalesce into one camera update');
+  await runFrames();
+  assert.equal(f.viewportCalls.length, 2);
+  assertVisible(f.viewportCalls[1]);
+  assert.ok(f.viewportCalls[1].y < f.viewportCalls[0].y, 'a taller panel moves the selected line farther up');
+  assert.deepEqual(clone(flow().props.edges[0].data.edge), saved.edges[0], 'visibility changes preserve the editable line geometry');
+  assert.equal(f.timers.size, 0, 'selecting and revealing a line does not itself edit its content');
+  await act(async () => flow().props.onPaneClick());
+  assert.equal(observers.size, 0, 'closing the properties disconnects the layout observer');
+  assert.equal(frames.size, 0);
+  await f.unmount();
+  assert.deepEqual(f.documents(accountA), [saved]);
+});
+
 test('cancelled gestures and short clicks do not leave arrows or autosave work behind', async () => {
   const f = fixture();
   await f.mount(); await f.click('畫箭頭');
@@ -704,6 +774,102 @@ test('reversing a legacy arrow preserves its physical anchors when its original 
   await f.unmount();
 });
 
+test('rotating imported electrical symbols keeps omitted and unsupported edge ports on the same physical terminal', async () => {
+  const f = fixture(); const saved = document('legacy-symbol-rotation', '舊符號旋轉接點');
+  saved.nodes = [
+    { id: 'r', x: 100, y: 100, width: 120, height: 180, shape: 'resistor', rotation: 90, label: 'R1', detail: '', color: '#79a9e8' },
+    { id: 'block', x: 500, y: 100, width: 180, height: 90, shape: 'rectangle', label: '控制器', detail: '', color: '#63c8b7' },
+  ];
+  const style = { label: '保留端子', color: '#b59bdf', lineType: 'straight', arrowhead: 'both', jump: 'none' };
+  saved.edges = [
+    { id: 'out-omitted', source: 'r', target: 'block', targetPort: 'left', ...style },
+    { id: 'in-omitted', source: 'block', sourcePort: 'left', target: 'r', ...style },
+    { id: 'out-unsupported', source: 'r', sourcePort: 'left', target: 'block', targetPort: 'left', ...style },
+    { id: 'in-unsupported', source: 'block', sourcePort: 'left', target: 'r', targetPort: 'right', ...style },
+  ];
+  f.seed(accountA, saved); await f.mount(); await f.open(saved.id);
+  const flow = () => f.tree.root.findByType('flow');
+  const symbol = () => flow().props.nodes.find(node => node.id === 'r');
+  for (const edge of flow().props.edges) {
+    if (edge.id.startsWith('out-')) {
+      assert.equal(edge.sourceHandle, 'bottom');
+      assert.deepEqual(clone(edge.data.route.points[0]), { x: 160, y: 280 });
+    } else {
+      assert.equal(edge.targetHandle, 'top');
+      assert.deepEqual(clone(edge.data.route.points.at(-1)), { x: 160, y: 100 });
+    }
+  }
+  await act(async () => flow().props.onNodeClick(null, symbol()));
+  await f.change('diagram-symbol-rotation', '180');
+  assert.deepEqual(clone({ ...symbol().position, width: symbol().data.width, height: symbol().data.height }), { x: 70, y: 130, width: 180, height: 120 }, 'a quarter turn preserves the component center');
+  for (const edge of flow().props.edges) {
+    if (edge.id.startsWith('out-')) {
+      assert.equal(edge.data.edge.sourcePort, 'left', 'the previous bottom source terminal rotates to the left');
+      assert.equal(edge.sourceHandle, 'left');
+      assert.deepEqual(clone(edge.data.route.points[0]), { x: 70, y: 190 });
+    } else {
+      assert.equal(edge.data.edge.targetPort, 'right', 'the previous top target terminal rotates to the right');
+      assert.equal(edge.targetHandle, 'right');
+      assert.deepEqual(clone(edge.data.route.points.at(-1)), { x: 250, y: 190 });
+    }
+    for (const [key, value] of Object.entries(style)) assert.equal(edge.data.edge[key], value);
+  }
+  const rotatedEdges = clone(flow().props.edges.map(edge => edge.data.edge));
+  await f.click('復原');
+  assert.equal(symbol().data.rotation, 90);
+  assert.deepEqual(clone(flow().props.edges.map(edge => edge.data.edge)), saved.edges, 'one undo restores the imported legacy fields');
+  await f.click('重做');
+  assert.equal(symbol().data.rotation, 180);
+  assert.deepEqual(clone(flow().props.edges.map(edge => edge.data.edge)), rotatedEdges);
+  await f.runTimers(); await flush();
+  assert.deepEqual(f.documents(accountA)[0].edges, rotatedEdges);
+  await f.unmount(); await f.mount(); await f.open(saved.id);
+  assert.equal(symbol().data.rotation, 180);
+  assert.deepEqual(clone(flow().props.edges.map(edge => edge.data.edge)), rotatedEdges);
+  await f.unmount();
+});
+
+test('reversing imported rotated-symbol arrows preserves actual anchors for omitted and unsupported ports', async () => {
+  const f = fixture(); const saved = document('legacy-symbol-reverse', '舊符號反轉接點');
+  saved.nodes = [
+    { id: 'r', x: 100, y: 100, width: 120, height: 180, shape: 'resistor', rotation: 90, label: 'R1', detail: '', color: '#79a9e8' },
+    { id: 'c', x: 400, y: 100, width: 120, height: 180, shape: 'capacitor', rotation: 270, label: 'C1', detail: '', color: '#63c8b7' },
+  ];
+  const style = { label: '實體端點', color: '#d6ad65', lineType: 'straight', arrowhead: 'both', width: 3, jump: 'none' };
+  saved.edges = [
+    { id: 'attached-omitted', source: 'r', target: 'c', ...style },
+    { id: 'attached-unsupported', source: 'r', sourcePort: 'left', target: 'c', targetPort: 'right', ...style },
+    { id: 'outgoing-free', source: 'r', target: '', targetPoint: { x: 700, y: 400 }, ...style },
+    { id: 'incoming-free', source: '', sourcePoint: { x: 0, y: 70 }, target: 'c', ...style },
+  ];
+  f.seed(accountA, saved); await f.mount(); await f.open(saved.id);
+  const flow = () => f.tree.root.findByType('flow');
+  for (const original of saved.edges) {
+    const before = flow().props.edges.find(edge => edge.id === original.id);
+    const anchors = clone([before.data.route.points[0], before.data.route.points.at(-1)]);
+    const handles = [before.sourceHandle, before.targetHandle];
+    await act(async () => flow().props.onEdgeClick(null, before));
+    await f.click('反轉方向');
+    const after = flow().props.edges.find(edge => edge.id === original.id);
+    const persisted = after.data.edge;
+    assert.equal(persisted.source, original.target); assert.equal(persisted.target, original.source);
+    assert.equal(after.sourceHandle, handles[1], `${original.id} retains the old target's visible handle`);
+    assert.equal(after.targetHandle, handles[0], `${original.id} retains the old source's visible handle`);
+    assert.deepEqual(clone([after.data.route.points[0], after.data.route.points.at(-1)]), [anchors[1], anchors[0]], `${original.id} swaps its physical endpoints without changing terminals`);
+    if (persisted.source) assert.equal(persisted.sourcePort, handles[1]);
+    if (persisted.target) assert.equal(persisted.targetPort, handles[0]);
+    for (const [key, value] of Object.entries(style)) assert.equal(persisted[key], value);
+  }
+  const reversed = clone(flow().props.edges.map(edge => edge.data.edge));
+  await f.runTimers(); await flush();
+  assert.deepEqual(f.documents(accountA)[0].edges, JSON.parse(JSON.stringify(reversed)));
+  await f.menuAction('匯出', '可編輯圖稿 JSON');
+  assert.deepEqual(f.exports[0].document.edges, reversed);
+  await f.unmount(); await f.mount(); await f.open(saved.id);
+  assert.deepEqual(clone(flow().props.edges.map(edge => edge.data.edge)), JSON.parse(JSON.stringify(reversed)));
+  await f.unmount();
+});
+
 test('revoking permission during a stroke blocks stale drawing and reconnection callbacks while retaining export', async () => {
   const f = fixture();
   const saved = document('readonly-arrow', '唯讀箭頭');
@@ -735,6 +901,260 @@ test('revoking permission during a stroke blocks stale drawing and reconnection 
   await f.unmount();
   assert.deepEqual(f.documents(accountA), [saved]);
   assert.equal(f.calls.some(call => call.kind === 'save:start'), false);
+});
+
+test('electrical symbols and a named net retain usable ports, rotation, and labels after saving and reopening', async () => {
+  const f = fixture();
+  await f.mount();
+  const flow = () => f.tree.root.findByType('flow');
+  const definitions = [['電阻', 'resistor'], ['電容', 'capacitor'], ['接地', 'ground'], ['Net Name', 'netlabel']];
+  for (const [name, shape] of definitions) {
+    await f.click(name);
+    assert.equal(flow().props.nodes.filter(node => node.type === 'diagram').at(-1).data.shape, shape);
+  }
+  const realNodes = () => flow().props.nodes.filter(node => node.type === 'diagram');
+  const byShape = shape => realNodes().find(node => node.data.shape === shape);
+  await f.change('diagram-label', 'VDD_3V3');
+  await act(async () => flow().props.onNodeClick(null, byShape('resistor')));
+  await f.change('diagram-symbol-rotation', '90');
+  const expectedPorts = { resistor: ['bottom', 'top'], capacitor: ['left', 'right'], ground: ['top'], netlabel: ['left'] };
+  for (const [, shape] of definitions) {
+    const node = byShape(shape);
+    let rendered;
+    await act(async () => { rendered = create(React.createElement(flow().props.nodeTypes.diagram, { id: node.id, data: node.data, selected: true })); });
+    const handles = rendered.root.findAll(item => item.type === 'stub' && item.props.type === 'source');
+    assert.deepEqual(handles.map(item => item.props.id).sort(), expectedPorts[shape], `${shape} exposes only its physical connection ports`);
+    assert.ok(handles.every(item => item.props.isConnectable), 'electrical symbols remain connectable');
+    await act(async () => rendered.unmount());
+  }
+  for (const [sourceShape, sourceHandle, targetShape, targetHandle] of [
+    ['resistor', 'bottom', 'capacitor', 'left'], ['capacitor', 'right', 'ground', 'top'], ['netlabel', 'left', 'resistor', 'top'],
+  ]) {
+    await act(async () => flow().props.onConnect({ source: byShape(sourceShape).id, sourceHandle, target: byShape(targetShape).id, targetHandle }));
+  }
+  assert.equal(flow().props.edges.length, 3);
+  await f.runTimers(); await flush();
+  const saved = clone(f.documents(accountA)[0]);
+  assert.equal(saved.nodes.length, 4);
+  assert.equal(saved.nodes.find(node => node.shape === 'netlabel').label, 'VDD_3V3');
+  assert.equal(saved.nodes.find(node => node.shape === 'resistor').rotation, 90);
+  assert.deepEqual(saved.edges.map(edge => [edge.sourcePort, edge.targetPort]), [['bottom', 'left'], ['right', 'top'], ['left', 'top']]);
+  for (const node of saved.nodes) {
+    assert.equal(Object.hasOwn(node, 'editable'), false);
+    assert.equal(Object.hasOwn(node, 'appearance'), false);
+    assert.equal(Object.hasOwn(node, 'onResize'), false, 'render-only callbacks never enter stored diagram data');
+  }
+  await f.menuAction('匯出', '可編輯圖稿 JSON');
+  assert.deepEqual(f.exports[0].document.nodes, saved.nodes);
+  await f.unmount(); await f.mount(); await f.open(saved.id);
+  assert.deepEqual(clone(realNodes().map(node => ({ id: node.id, shape: node.data.shape, label: node.data.label, rotation: node.data.rotation }))),
+    saved.nodes.map(node => ({ id: node.id, shape: node.shape, label: node.label, rotation: node.rotation })));
+  assert.deepEqual(clone(flow().props.edges.map(edge => edge.data.edge)), saved.edges);
+  await f.unmount();
+});
+
+test('custom outline and fill colors accept complete hex values, reject unfinished values, and reset to automatic fill', async () => {
+  const f = fixture();
+  await f.mount(); await f.click('方框');
+  const data = () => f.tree.root.findByType('flow').props.nodes.find(node => node.type === 'diagram').data;
+  await f.change('diagram-node-color', '#102a43');
+  assert.equal(data().color, '#102a43');
+  await f.change('diagram-node-color-hex', '#14A3F0');
+  assert.equal(data().color.toLowerCase(), '#14a3f0');
+  await f.change('diagram-node-fill', '#203450');
+  assert.equal(data().fillColor, '#203450');
+  await f.change('diagram-node-fill-hex', '#D6AB44');
+  assert.equal(data().fillColor.toLowerCase(), '#d6ab44');
+  await f.runTimers(); await flush();
+  const stored = clone(f.documents(accountA)[0]);
+  const writes = f.calls.filter(call => call.kind === 'save:start').length;
+  for (const [id, invalid] of [['diagram-node-color-hex', '#12'], ['diagram-node-fill-hex', 'url(javascript:alert(1))']]) {
+    await f.change(id, invalid);
+    const field = f.field(id);
+    assert.equal(field.props.value, invalid, 'an unfinished edit can stay visible without corrupting the diagram');
+    await act(async () => field.props.onBlur({ target: { value: invalid } }));
+    assert.notEqual(f.field(id).props.value, invalid, 'leaving an invalid field restores the current valid color');
+  }
+  assert.equal(data().color.toLowerCase(), '#14a3f0');
+  assert.equal(data().fillColor.toLowerCase(), '#d6ab44');
+  assert.equal(f.timers.size, 0, 'invalid color drafts do not schedule autosaves');
+  assert.equal(f.calls.filter(call => call.kind === 'save:start').length, writes);
+  await f.menuAction('匯出', '可編輯圖稿 JSON');
+  assert.deepEqual(f.exports[0].document.nodes, stored.nodes);
+  await f.click('使用自動填色');
+  assert.equal(data().fillColor, undefined);
+  await f.runTimers(); await flush();
+  const reset = f.documents(accountA)[0];
+  assert.equal(Object.hasOwn(reset.nodes[0], 'fillColor'), false, 'automatic fill is saved as an omitted optional override');
+  assert.equal(reset.nodes[0].color.toLowerCase(), '#14a3f0', 'automatic fill preserves the independently selected outline');
+  await f.unmount(); await f.mount(); await f.open(reset.id);
+  assert.equal(data().fillColor, undefined);
+  assert.equal(data().color.toLowerCase(), '#14a3f0');
+  await f.unmount();
+});
+
+test('native color input events update shapes, next-stroke defaults, and existing lines without accepting invalid colors', async () => {
+  const f = fixture();
+  await f.mount(); await f.click('方框');
+  const flow = () => f.tree.root.findByType('flow');
+  const node = () => flow().props.nodes.find(item => item.type === 'diagram').data;
+  const inputColor = async (field, value) => {
+    assert.equal(typeof field.props.onInput, 'function', 'native color wells handle continuous input events');
+    await act(async () => field.props.onInput({ currentTarget: { value } }));
+  };
+  await inputColor(f.field('diagram-node-color'), '#C25491');
+  await inputColor(f.field('diagram-node-fill'), '#D4E8F2');
+  assert.equal(node().color, '#c25491'); assert.equal(node().fillColor, '#d4e8f2');
+  await f.runTimers(); await flush();
+  await inputColor(f.field('diagram-node-color'), '#12');
+  await inputColor(f.field('diagram-node-fill'), 'url(javascript:alert(1))');
+  assert.equal(node().color, '#c25491'); assert.equal(node().fillColor, '#d4e8f2');
+  assert.equal(f.timers.size, 0, 'invalid native input events do not change or autosave a shape');
+  await f.click('畫雙箭頭');
+  const drawingColor = () => f.tree.root.findByProps({ 'aria-label': '繪製線條顏色' });
+  await inputColor(drawingColor(), '#EF7A45');
+  assert.equal(drawingColor().props.value, '#ef7a45', 'continuous picker input updates the next-stroke color');
+  await inputColor(drawingColor(), '#123');
+  await inputColor(drawingColor(), 'red');
+  assert.equal(drawingColor().props.value, '#ef7a45', 'invalid defaults cannot reach the next drawn edge');
+  assert.equal(f.timers.size, 0, 'a new-stroke default does not change the saved diagram');
+  await f.pointer('onPointerDown', 600, 400); await f.pointer('onPointerUp', 900, 600);
+  assert.equal(flow().props.edges[0].data.edge.color, '#ef7a45', 'the drawn edge uses the color delivered by input rather than change');
+  await f.click('選取工具');
+  await inputColor(f.field('diagram-edge-color'), '#4D7AC2');
+  assert.equal(flow().props.edges[0].data.edge.color, '#4d7ac2');
+  await f.runTimers(); await flush();
+  await inputColor(f.field('diagram-edge-color'), '#0');
+  assert.equal(flow().props.edges[0].data.edge.color, '#4d7ac2');
+  assert.equal(f.timers.size, 0);
+  const saved = clone(f.documents(accountA)[0]);
+  assert.equal(saved.nodes[0].color, '#c25491'); assert.equal(saved.nodes[0].fillColor, '#d4e8f2');
+  assert.equal(saved.edges[0].color, '#4d7ac2');
+  await f.menuAction('匯出', '可編輯圖稿 JSON');
+  assert.deepEqual(f.exports[0].document.nodes, saved.nodes);
+  assert.deepEqual(f.exports[0].document.edges, saved.edges);
+  await f.unmount();
+});
+
+test('the double-arrow tool and crossing defaults create persistent strokes while existing edges remain independently editable', async () => {
+  const f = fixture();
+  await f.mount(); await f.click('畫雙箭頭');
+  const flow = () => f.tree.root.findByType('flow');
+  const drawingControl = label => f.tree.root.findByProps({ 'aria-label': label });
+  assert.equal(drawingControl('繪製箭頭方向').props.value, 'both');
+  assert.equal(drawingControl('繪製跨線方式').props.value, 'arc');
+  await f.pointer('onPointerDown', 40, 100); await f.pointer('onPointerUp', 400, 100);
+  const first = clone(flow().props.edges[0].data.edge);
+  assert.equal(first.arrowhead, 'both'); assert.equal(first.jump, 'arc');
+  assert.ok(flow().props.edges[0].markerStart && flow().props.edges[0].markerEnd, 'double arrows render both end markers');
+  await f.runTimers(); await flush();
+  for (const [label, value] of [['繪製箭頭方向', 'none'], ['繪製跨線方式', 'none'], ['繪製線條顏色', '#ad3570']]) {
+    await act(async () => drawingControl(label).props.onChange({ target: { value } }));
+  }
+  assert.equal(f.timers.size, 0, 'changing next-stroke defaults does not rewrite an existing arrow');
+  assert.deepEqual(clone(flow().props.edges[0].data.edge), first);
+  await f.pointer('onPointerDown', 200, 20); await f.pointer('onPointerUp', 200, 240);
+  const second = clone(flow().props.edges[1].data.edge);
+  assert.equal(second.arrowhead, 'none'); assert.equal(second.jump, 'none'); assert.equal(second.color, '#ad3570');
+  assert.equal(flow().props.edges[1].markerStart, undefined); assert.equal(flow().props.edges[1].markerEnd, undefined);
+  assert.match(flow().props.edges[0].data.route.path, /Q/, 'the canvas receives a real bridge path at the crossing');
+  assert.doesNotMatch(flow().props.edges[1].data.route.path, /Q/, 'the line without crossing bridges stays straight');
+  await f.click('選取工具');
+  await act(async () => flow().props.onEdgeClick(null, flow().props.edges[0]));
+  await f.change('diagram-arrowhead', 'end');
+  await f.change('diagram-line-jump', 'none');
+  assert.equal(flow().props.edges[0].data.edge.jump, 'none');
+  assert.equal(flow().props.edges[0].data.edge.arrowhead, 'end');
+  assert.doesNotMatch(flow().props.edges[0].data.route.path, /Q/, 'disabling crossing bridges updates the displayed path');
+  await f.click('復原');
+  assert.equal(flow().props.edges[0].data.edge.jump, 'arc', 'crossing style can be undone independently');
+  assert.equal(flow().props.edges[0].data.edge.arrowhead, 'end');
+  assert.match(flow().props.edges[0].data.route.path, /Q/, 'undo restores the visible bridge');
+  await f.click('復原');
+  assert.equal(flow().props.edges[0].data.edge.arrowhead, 'both');
+  await f.click('重做'); await f.click('重做');
+  await f.runTimers(); await flush();
+  const saved = clone(f.documents(accountA)[0]);
+  assert.equal(saved.nodes.length, 0);
+  assert.deepEqual(saved.edges[0], { ...first, arrowhead: 'end', jump: 'none' });
+  assert.deepEqual(saved.edges[1], second);
+  await f.unmount(); await f.mount(); await f.open(saved.id);
+  assert.deepEqual(clone(flow().props.edges.map(edge => edge.data.edge)), saved.edges);
+  await f.unmount();
+});
+
+test('edge colors and crossing controls preserve saved data when edit permission is revoked', async () => {
+  const f = fixture(); const saved = document('custom-wires', '自訂線條');
+  saved.edges = [{ id: 'wire', source: '', sourcePoint: { x: 40, y: 60 }, target: '', targetPoint: { x: 360, y: 180 }, label: 'VCORE', color: '#79a9e8', arrowhead: 'both', jump: 'arc' }];
+  f.seed(accountA, saved); await f.mount(); await f.open(saved.id);
+  const flow = () => f.tree.root.findByType('flow');
+  await act(async () => flow().props.onEdgeClick(null, flow().props.edges[0]));
+  await f.change('diagram-edge-color', '#ad3570');
+  await f.change('diagram-edge-color-hex', '#24A080');
+  assert.equal(flow().props.edges[0].data.edge.color.toLowerCase(), '#24a080');
+  await f.runTimers(); await flush();
+  const valid = clone(f.documents(accountA)[0]);
+  await f.change('diagram-edge-color-hex', '#0');
+  await act(async () => f.field('diagram-edge-color-hex').props.onBlur({ target: { value: '#0' } }));
+  assert.equal(f.timers.size, 0);
+  assert.equal(flow().props.edges[0].data.edge.color.toLowerCase(), '#24a080');
+  const stale = Object.fromEntries(['diagram-edge-color', 'diagram-edge-color-hex', 'diagram-line-jump', 'diagram-arrowhead'].map(id => [id, f.field(id).props]));
+  await f.update({ canEdit: false });
+  for (const id of Object.keys(stale)) assert.equal(f.field(id).props.disabled, true);
+  assert.equal(f.button('畫雙箭頭').props.disabled, true);
+  for (const name of ['電阻', '電容', '接地', 'Net Name']) assert.equal(f.button(name).props.disabled, true);
+  await act(async () => {
+    stale['diagram-edge-color'].onChange({ target: { value: '#ff0000' } });
+    stale['diagram-edge-color-hex'].onChange({ target: { value: '#00ff00' } });
+    stale['diagram-line-jump'].onChange({ target: { value: 'none' } });
+    stale['diagram-arrowhead'].onChange({ target: { value: 'none' } });
+  });
+  assert.deepEqual(clone(flow().props.edges[0].data.edge), valid.edges[0]);
+  assert.equal(f.timers.size, 0);
+  await f.menuAction('匯出', '可編輯圖稿 JSON');
+  assert.deepEqual(f.exports[0].document.edges, valid.edges);
+  await f.unmount();
+  assert.deepEqual(f.documents(accountA), [valid]);
+});
+
+test('electrical symbol colors, net names, and rotation reject stale property callbacks in read-only mode', async () => {
+  const f = fixture();
+  await f.mount(); await f.click('電阻');
+  const flow = () => f.tree.root.findByType('flow');
+  await f.change('diagram-symbol-rotation', '270');
+  await f.change('diagram-node-color', '#238970');
+  const resistor = flow().props.nodes.find(node => node.type === 'diagram');
+  const rotation = f.field('diagram-symbol-rotation').props;
+  await f.click('Net Name');
+  await f.change('diagram-label', 'VDD_1V8');
+  await f.change('diagram-node-fill', '#e8d2a0');
+  await f.runTimers(); await flush();
+  const saved = clone(f.documents(accountA)[0]);
+  const netlabel = flow().props.nodes.find(node => node.type === 'diagram' && node.data.shape === 'netlabel');
+  const stale = Object.fromEntries(['diagram-label', 'diagram-node-color', 'diagram-node-fill'].map(id => [id, f.field(id).props]));
+  await f.update({ canEdit: false });
+  for (const id of Object.keys(stale)) assert.equal(f.field(id).props.disabled, true);
+  assert.equal(f.button('使用自動填色').props.disabled, true);
+  await act(async () => flow().props.onNodeClick(null, resistor));
+  assert.equal(f.field('diagram-symbol-rotation').props.disabled, true);
+  await act(async () => {
+    stale['diagram-label'].onChange({ target: { value: '不可覆寫的元件' } });
+    stale['diagram-node-color'].onChange({ target: { value: '#ff0000' } });
+    stale['diagram-node-fill'].onChange({ target: { value: '#ffffff' } });
+    rotation.onChange({ target: { value: '0' } });
+  });
+  for (const stored of saved.nodes) {
+    const visible = flow().props.nodes.find(node => node.id === stored.id).data;
+    for (const property of ['label', 'color', 'fillColor', 'rotation']) assert.equal(visible[property], stored[property]);
+  }
+  await act(async () => flow().props.onNodeClick(null, netlabel));
+  assert.equal(f.field('diagram-label').props.value, 'VDD_1V8');
+  assert.equal(f.field('diagram-node-fill').props.value, '#e8d2a0');
+  assert.equal(f.timers.size, 0);
+  await f.menuAction('匯出', '可編輯圖稿 JSON');
+  assert.deepEqual(f.exports[0].document.nodes, saved.nodes);
+  await f.unmount();
+  assert.deepEqual(f.documents(accountA), [saved]);
 });
 
 test('workspace permission refresh keeps the same mounted draft available in read-only mode', async () => {

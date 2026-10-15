@@ -72,7 +72,7 @@ export function diagramStrokeColor(color: string, mode: DiagramAppearance = "lig
   return blend(color, destination, high);
 }
 
-export function diagramNodeColors(color: string, mode: DiagramAppearance = "light") {
+export function diagramNodeColors(color: string, mode: DiagramAppearance = "light", fillColor?: string) {
   const theme = diagramTheme(mode);
   let amount = mode === "dark" ? 0.72 : 0.88;
   let fill = blend(color, theme.canvas, amount);
@@ -86,6 +86,13 @@ export function diagramNodeColors(color: string, mode: DiagramAppearance = "ligh
       else high = middle;
     }
     fill = blend(color, theme.canvas, high);
+  }
+  if (fillColor) {
+    const lightText = "#ffffff", darkText = "#000000";
+    const lightContrast = 1.05 / (luminance(fillColor) + 0.05);
+    const darkContrast = (luminance(fillColor) + 0.05) / (luminance(darkText) + 0.05);
+    const text = lightContrast >= darkContrast ? lightText : darkText;
+    return { fill: fillColor, stroke: diagramStrokeColor(color, mode), text, detail: text };
   }
   return {
     fill,

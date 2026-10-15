@@ -1,4 +1,6 @@
 import type { DiagramNode, DiagramPoint, DiagramPort } from "./diagramModel";
+import { diagramSymbolGraphics, diagramSymbolPorts } from "./diagramSymbols.ts";
+import { diagramNodeAnchor } from "./diagramGeometry.ts";
 
 export type ArrowEndpoint = { nodeId: string; port?: DiagramPort; point: DiagramPoint };
 
@@ -15,6 +17,14 @@ export function snapArrowEndpoint(point: DiagramPoint, toward: DiagramPoint, nod
   if (!nearest) return { nodeId: "", point };
   const center = { x: nearest.x + nearest.width / 2, y: nearest.y + nearest.height / 2 };
   const direction = distance === 0 ? toward : point;
+  if (diagramSymbolGraphics(nearest.shape)) {
+    const supported = diagramSymbolPorts(nearest.shape, nearest.rotation);
+    const port = supported.reduce((best, next) => {
+      const first = diagramNodeAnchor(nearest!, best), second = diagramNodeAnchor(nearest!, next);
+      return Math.hypot(second.x - direction.x, second.y - direction.y) < Math.hypot(first.x - direction.x, first.y - direction.y) ? next : best;
+    });
+    return { nodeId: nearest.id, port, point: diagramNodeAnchor(nearest, port) };
+  }
   const dx = direction.x - center.x, dy = direction.y - center.y;
   const port: DiagramPort = Math.abs(dx) / nearest.width >= Math.abs(dy) / nearest.height ? (dx >= 0 ? "right" : "left") : (dy >= 0 ? "bottom" : "top");
   return { nodeId: nearest.id, port, point: { x: port === "left" ? nearest.x : port === "right" ? nearest.x + nearest.width : center.x, y: port === "top" ? nearest.y : port === "bottom" ? nearest.y + nearest.height : center.y } };

@@ -164,6 +164,18 @@ test("free arrows survive saving and reopening without any virtual canvas nodes"
   assert.deepEqual(reopened.nodes, []);
 });
 
+test("symbol rotation, net names, frame fills and crossing settings survive reopening", async () => {
+  install();
+  const doc = document("electrical-drawing");
+  doc.nodes = [
+    { id: "R1", x: 0, y: 0, width: 180, height: 120, shape: "resistor", label: "R1", detail: "10 kΩ", color: "#f97316", rotation: 90 },
+    { id: "net", x: 300, y: 0, width: 180, height: 60, shape: "netlabel", label: "P3V3", detail: "", color: "#2563eb", fillColor: "#e2e8f0" },
+  ];
+  doc.edges = [{ id: "wire", source: "R1", target: "net", sourcePort: "bottom", targetPort: "left", color: "#f97316", label: "", jump: "arc", arrowhead: "both" }];
+  await saveDiagram(owner, doc);
+  assert.deepEqual((await listDiagrams(owner))[0], doc);
+});
+
 test("a successful write request followed by quota abort rejects and preserves the earlier saved document", async () => {
   const db = install();
   await saveDiagram(owner, document("same", "Saved before failure"));

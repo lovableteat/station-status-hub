@@ -1,6 +1,7 @@
 import { parseDiagramDocument, type DiagramDocument } from "./diagramModel.ts";
 import { DIAGRAM_THEME, diagramNodeColors, diagramStrokeColor } from "./diagramTheme.ts";
-import { diagramEdgeRoute } from "./diagramGeometry.ts";
+import { buildDiagramEdgeRoutes } from "./diagramGeometry.ts";
+import { diagramSymbolGraphics, diagramSymbolLabelBox, isElectricalSymbol } from "./diagramSymbols.ts";
 
 type Node = DiagramDocument["nodes"][number];
 type Point = { x: number; y: number };
@@ -48,32 +49,41 @@ function lines(value: string, width: number, font: number, maximum: number): str
 }
 function renderNode(node: Node, index: number): string {
   const { x, y, width, height } = node;
-  const colors = diagramNodeColors(node.color);
+  const circuit = isElectricalSymbol(node.shape);
+  const colors = diagramNodeColors(node.color, "light", circuit ? undefined : node.fillColor);
+  const symbol = diagramSymbolGraphics(node.shape);
   const attributes = `data-node-id="${xml(node.id)}" fill="${colors.fill}" stroke="${colors.stroke}" stroke-width="1.5"`;
   let shape: string;
-  if (node.shape === "ellipse") shape = `<ellipse ${attributes} cx="${n(x + width / 2)}" cy="${n(y + height / 2)}" rx="${n(width / 2)}" ry="${n(height / 2)}"/>`;
+  if (symbol) {
+    shape = `<g data-node-id="${xml(node.id)}" data-symbol="${node.shape}" transform="translate(${n(x)} ${n(y)}) scale(${n(width / 100)} ${n(height / 100)})"><g transform="rotate(${node.rotation ?? 0} 50 50)">${symbol.paths.map(path => `<path d="${path}" fill="${circuit ? "none" : colors.fill}" stroke="${colors.stroke}" stroke-width="${circuit ? 2 : 1.5}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`).join("")}</g></g>`;
+  } else if (node.shape === "ellipse") shape = `<ellipse ${attributes} cx="${n(x + width / 2)}" cy="${n(y + height / 2)}" rx="${n(width / 2)}" ry="${n(height / 2)}"/>`;
   else if (node.shape === "diamond") shape = `<polygon ${attributes} points="${n(x + width / 2)},${n(y)} ${n(x + width)},${n(y + height / 2)} ${n(x + width / 2)},${n(y + height)} ${n(x)},${n(y + height / 2)}"/>`;
   else if (node.shape === "note") {
     const fold = Math.min(18, width / 5, height / 5);
     shape = `<path ${attributes} d="M${n(x)} ${n(y)} H${n(x + width - fold)} L${n(x + width)} ${n(y + fold)} V${n(y + height)} H${n(x)} Z"/><path d="M${n(x + width - fold)} ${n(y)} V${n(y + fold)} H${n(x + width)}" fill="none" stroke="${colors.stroke}" stroke-width="1.5"/>`;
   } else shape = `<rect ${attributes} x="${n(x)}" y="${n(y)}" width="${n(width)}" height="${n(height)}" rx="8"/>`;
   const padding = Math.min(12, width / 5, height / 5);
-  const innerWidth = Math.max(1, node.shape === "diamond" ? width * 0.48 : node.shape === "ellipse" ? width * 0.7 : width - padding * 2);
-  const innerHeight = Math.max(1, node.shape === "diamond" ? height * 0.48 : node.shape === "ellipse" ? height * 0.7 : height - padding * 2);
-  const font = Math.max(7, Math.min(14, innerHeight / 1.4));
-  const lineHeight = font * 1.3;
+  const symbolLabel = diagramSymbolLabelBox(node.shape, node.rotation);
+  const innerWidth = Math.max(1, symbolLabel ? width * symbolLabel.width / 100 : node.shape === "diamond" ? width * 0.48 : node.shape === "ellipse" ? width * 0.7 : width - padding * 2);
+  const innerHeight = Math.max(1, symbolLabel ? height * symbolLabel.height / 100 : node.shape === "diamond" ? height * 0.48 : node.shape === "ellipse" ? height * 0.7 : height - padding * 2);
+  const centerX = symbolLabel ? x + width * (symbolLabel.x + symbolLabel.width / 2) / 100 : x + width / 2;
+  const centerY = symbolLabel ? y + height * (symbolLabel.y + symbolLabel.height / 2) / 100 : y + height / 2;
+  const font = Math.max(7, Math.min(circuit ? 12 : 14, innerHeight / (circuit ? 2.2 : 1.4)));
+  const lineHeight = font * (circuit ? 1.1 : 1.3);
   const capacity = Math.max(1, Math.floor(innerHeight / lineHeight));
   const label = lines(node.label, innerWidth, font, capacity);
   const detail = lines(node.detail, innerWidth, font * 0.8, Math.max(0, capacity - label.length));
   const count = label.length + detail.length;
-  const firstY = y + height / 2 - ((count - 1) * lineHeight) / 2 + font * 0.34;
+  const firstY = centerY - ((count - 1) * lineHeight) / 2 + font * 0.34;
   const spans = [...label.map(value => ({ value, detail: false })), ...detail.map(value => ({ value, detail: true }))]
-    .map((line, row) => `<tspan x="${n(x + width / 2)}" y="${n(firstY + row * lineHeight)}"${line.detail ? ` font-size="${n(font * 0.8)}" fill="${colors.detail}"` : ""}>${xml(line.value)}</tspan>`).join("");
-  return `<g><title>${xml([node.label, node.detail, node.refdes ? `RefDes: ${node.refdes}` : "", node.page ? `線路圖第 ${node.page} 頁` : ""].filter(Boolean).join("\n"))}</title>${shape}<clipPath id="diagram-node-${index}"><rect x="${n(x + (width - innerWidth) / 2)}" y="${n(y + (height - innerHeight) / 2)}" width="${n(innerWidth)}" height="${n(innerHeight)}"/></clipPath><text text-anchor="middle" font-size="${n(font)}" font-weight="600" fill="${colors.text}" clip-path="url(#diagram-node-${index})">${spans}</text></g>`;
+    .map((line, row) => `<tspan x="${n(centerX)}" y="${n(firstY + row * lineHeight)}"${line.detail ? ` font-size="${n(font * 0.8)}" fill="${colors.detail}"` : ""}>${xml(line.value)}</tspan>`).join("");
+  return `<g><title>${xml([node.label, node.detail, node.refdes ? `RefDes: ${node.refdes}` : "", node.page ? `線路圖第 ${node.page} 頁` : ""].filter(Boolean).join("\n"))}</title>${shape}<clipPath id="diagram-node-${index}"><rect x="${n(centerX - innerWidth / 2)}" y="${n(centerY - innerHeight / 2)}" width="${n(innerWidth)}" height="${n(innerHeight)}"/></clipPath><text text-anchor="middle" font-size="${n(font)}" font-weight="600" fill="${colors.text}" clip-path="url(#diagram-node-${index})">${spans}</text></g>`;
 }
 function render(doc: DiagramDocument) {
   const byId = new Map(doc.nodes.map(node => [node.id, node]));
-  const edges = doc.edges.map(edge => ({ edge, route: diagramEdgeRoute(edge, byId) }));
+  const routes = buildDiagramEdgeRoutes(doc.edges, byId);
+  if (routes.notice) throw new Error(routes.notice);
+  const edges = doc.edges.map(edge => ({ edge, route: routes.get(edge.id)! }));
   const points: Point[] = doc.nodes.flatMap(node => [{ x: node.x, y: node.y }, { x: node.x + node.width, y: node.y + node.height }]);
   const edgeLabels = edges.map(({ edge, route }) => {
     const text = lines(edge.label, 240, 12, 6);
@@ -94,7 +104,13 @@ function render(doc: DiagramDocument) {
     const size = Math.max(10, (edge.width ?? 2) * 3), middle = size / 2;
     return `<marker id="diagram-arrow-${index}" markerUnits="userSpaceOnUse" markerWidth="${size}" markerHeight="${size}" refX="${size}" refY="${middle}" orient="auto-start-reverse"><path d="M0 0 L${size} ${middle} L0 ${size} Z" fill="${diagramStrokeColor(edge.color)}"/></marker>`;
   }).join("");
-  const paths = edges.map(({ edge, route }, index) => `<path data-edge-id="${xml(edge.id)}" d="${route.path}" fill="none" stroke="${diagramStrokeColor(edge.color)}" stroke-width="${edge.width ?? 2}" stroke-linecap="round" stroke-linejoin="round"${edge.style === "dashed" ? ' stroke-dasharray="7 5"' : ""}${edge.arrowhead === "both" ? ` marker-start="url(#diagram-arrow-${index})"` : ""}${edge.arrowhead === "none" ? "" : ` marker-end="url(#diagram-arrow-${index})"`}><title>${xml(edge.label)}</title></path>`).join("");
+  const indexedEdges = edges.map((entry, index) => ({ ...entry, index }));
+  // Bridge owners sit above the wires they cross, without changing marker IDs.
+  const drawOrder = [...indexedEdges.filter(({ edge }) => edge.jump !== "arc"), ...indexedEdges.filter(({ edge }) => edge.jump === "arc")];
+  const paths = drawOrder.map(({ edge, route, index }) => {
+    const bridgeHalo = route.bridgePath ? `<path data-bridge-for="${xml(edge.id)}" d="${route.bridgePath}" fill="none" stroke="${DIAGRAM_THEME.canvas}" stroke-width="${(edge.width ?? 2) + 4}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>` : "";
+    return `${bridgeHalo}<path data-edge-id="${xml(edge.id)}" d="${route.path}" fill="none" stroke="${diagramStrokeColor(edge.color)}" stroke-width="${edge.width ?? 2}" stroke-linecap="round" stroke-linejoin="round"${edge.style === "dashed" ? ' stroke-dasharray="7 5"' : ""}${edge.arrowhead === "both" ? ` marker-start="url(#diagram-arrow-${index})"` : ""}${edge.arrowhead === "none" ? "" : ` marker-end="url(#diagram-arrow-${index})"`}><title>${xml(edge.label)}</title></path>`;
+  }).join("");
   const labels = edges.map(({ route }, index) => {
     const label = edgeLabels[index];
     if (!label.text.length) return "";

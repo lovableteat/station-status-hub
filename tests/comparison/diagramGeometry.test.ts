@@ -72,3 +72,21 @@ test("self loops and coincident free endpoints remain finite and safe to export"
     assert.deepEqual(result.label, { x: -20, y: 40 });
   }
 });
+
+test("electrical terminals and rotated symbols resolve only to visible connection ports", () => {
+  const resistor: DiagramNode = { ...node, shape: "resistor", rotation: 90 };
+  const capacitor: DiagramNode = { ...node, shape: "capacitor", rotation: 270 };
+  const ground: DiagramNode = { ...node, shape: "ground", rotation: 90 };
+  const netlabel: DiagramNode = { ...node, shape: "netlabel" };
+  assert.deepEqual(diagramNodeAnchor(resistor, "top"), { x: 60, y: 20 });
+  assert.deepEqual(diagramNodeAnchor(capacitor, "bottom"), { x: 60, y: 80 });
+  for (const [shape, expectedSource, expectedTarget] of [
+    [resistor, "bottom", "top"], [capacitor, "top", "bottom"], [ground, "right", "right"], [netlabel, "left", "left"],
+  ] as const) {
+    assert.equal(diagramEdgeEndpoint(free({ source: node.id }), "source", [shape]).port, expectedSource);
+    assert.equal(diagramEdgeEndpoint(free({ target: node.id, targetPort: "right" }), "target", [shape]).port, expectedTarget);
+    const route = diagramEdgeRoute(free({ source: node.id, lineType: "curve" }), [shape]);
+    assert.deepEqual(route.points[0], diagramNodeAnchor(shape, expectedSource));
+    assert.doesNotMatch(route.path, /NaN|undefined/);
+  }
+});
