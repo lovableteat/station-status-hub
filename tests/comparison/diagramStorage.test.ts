@@ -152,6 +152,18 @@ test("save snapshots caller data before opening the database and resolves only a
   assert.equal(db.connections[0].closed, true);
 });
 
+test("free arrows survive saving and reopening without any virtual canvas nodes", async () => {
+  install();
+  const doc = document("free-arrows");
+  doc.edges = [{ id: "arrow", source: "", target: "", sourcePoint: { x: -125.5, y: 80 }, targetPoint: { x: 300, y: 270 }, lineType: "curve", arrowhead: "both", width: 5, style: "dashed", color: "#2563eb", label: "畫圖" }];
+  await saveDiagram(owner, doc);
+  const [reopened] = await listDiagrams(owner);
+  assert.deepEqual(reopened, doc);
+  reopened.edges[0].targetPoint!.x = 999;
+  assert.deepEqual((await listDiagrams(owner))[0], doc);
+  assert.deepEqual(reopened.nodes, []);
+});
+
 test("a successful write request followed by quota abort rejects and preserves the earlier saved document", async () => {
   const db = install();
   await saveDiagram(owner, document("same", "Saved before failure"));
