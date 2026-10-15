@@ -2,6 +2,9 @@ import type { ComparisonSession } from "./types.ts";
 
 export type DiagramShape = "rectangle" | "ellipse" | "diamond" | "note";
 export type DiagramPort = "left" | "right" | "top" | "bottom";
+export interface DiagramPoint { x: number; y: number }
+export type DiagramLineType = "straight" | "elbow" | "curve";
+export type DiagramArrowhead = "end" | "both" | "none";
 export interface DiagramNode {
   id: string; x: number; y: number; width: number; height: number;
   shape: DiagramShape; label: string; detail: string; color: string;
@@ -11,6 +14,8 @@ export interface DiagramEdge {
   id: string; source: string; target: string;
   sourcePort?: DiagramPort; targetPort?: DiagramPort;
   label: string; color: string; style?: "solid" | "dashed";
+  sourcePoint?: DiagramPoint; targetPoint?: DiagramPoint;
+  lineType?: DiagramLineType; arrowhead?: DiagramArrowhead; width?: number;
 }
 export interface DiagramDocument {
   version: 1; id: string; title: string; createdAt: string; updatedAt: string;
@@ -62,6 +67,12 @@ function timestamp(value: unknown): value is string {
   return Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
 
+function point(value: unknown): DiagramPoint {
+  const item = object(value, ["x", "y"]);
+  if (!finite(item.x, -MAX_COORDINATE, MAX_COORDINATE) || !finite(item.y, -MAX_COORDINATE, MAX_COORDINATE)) fail("連線座標或範圍");
+  return { x: item.x, y: item.y };
+}
+
 /** Validate imports and create a detached plain-data document for editor/storage. */
 export function parseDiagramDocument(value: unknown): DiagramDocument {
   const doc = object(value, ["version", "id", "title", "createdAt", "updatedAt", "nodes", "edges", "viewport"], ["source"]);
@@ -90,17 +101,28 @@ export function parseDiagramDocument(value: unknown): DiagramDocument {
   const nodeIds = new Set(nodes.map(node => node.id));
   if (nodeIds.size !== nodes.length) fail("節點識別碼重複");
   const edges = array(doc.edges, MAX_DIAGRAM_EDGES, "連線").map(value => {
-    const edge = object(value, ["id", "source", "target", "label", "color"], ["sourcePort", "targetPort", "style"]);
-    if (!identifier(edge.id) || nodeIds.has(edge.id) || !identifier(edge.source) || !identifier(edge.target) || !nodeIds.has(edge.source) || !nodeIds.has(edge.target)
+    const edge = object(value, ["id", "source", "target", "label", "color"], ["sourcePort", "targetPort", "style", "sourcePoint", "targetPoint", "lineType", "arrowhead", "width"]);
+    const sourcePoint = edge.sourcePoint === undefined ? undefined : point(edge.sourcePoint);
+    const targetPoint = edge.targetPoint === undefined ? undefined : point(edge.targetPoint);
+    const endpoint = (value: unknown, freePoint: DiagramPoint | undefined) => value === "" ? Boolean(freePoint) : identifier(value) && nodeIds.has(value);
+    if (!identifier(edge.id) || nodeIds.has(edge.id) || !endpoint(edge.source, sourcePoint) || !endpoint(edge.target, targetPoint)
       || !text(edge.label, 500) || typeof edge.color !== "string" || !COLOR.test(edge.color)
       || edge.sourcePort !== undefined && !PORTS.includes(edge.sourcePort as DiagramPort)
       || edge.targetPort !== undefined && !PORTS.includes(edge.targetPort as DiagramPort)
-      || edge.style !== undefined && !["solid", "dashed"].includes(edge.style as string)) fail("連線欄位、端點或節點不存在");
+      || edge.style !== undefined && !["solid", "dashed"].includes(edge.style as string)
+      || edge.lineType !== undefined && !["straight", "elbow", "curve"].includes(edge.lineType as string)
+      || edge.arrowhead !== undefined && !["end", "both", "none"].includes(edge.arrowhead as string)
+      || edge.width !== undefined && (!Number.isInteger(edge.width) || !finite(edge.width, 1, 8))) fail("連線欄位、端點或節點不存在");
     return {
-      id: edge.id, source: edge.source, target: edge.target, label: edge.label, color: edge.color,
+      id: edge.id, source: edge.source as string, target: edge.target as string, label: edge.label, color: edge.color,
       ...(edge.sourcePort === undefined ? {} : { sourcePort: edge.sourcePort as DiagramPort }),
       ...(edge.targetPort === undefined ? {} : { targetPort: edge.targetPort as DiagramPort }),
       ...(edge.style === undefined ? {} : { style: edge.style as "solid" | "dashed" }),
+      ...(sourcePoint === undefined ? {} : { sourcePoint }),
+      ...(targetPoint === undefined ? {} : { targetPoint }),
+      ...(edge.lineType === undefined ? {} : { lineType: edge.lineType as DiagramLineType }),
+      ...(edge.arrowhead === undefined ? {} : { arrowhead: edge.arrowhead as DiagramArrowhead }),
+      ...(edge.width === undefined ? {} : { width: edge.width as number }),
     };
   });
   if (new Set(edges.map(edge => edge.id)).size !== edges.length) fail("連線識別碼重複");
@@ -124,6 +146,7 @@ export function autoLayoutDiagram(value: DiagramDocument): DiagramDocument {
   const outgoing = new Map(ordered.map(node => [node.id, new Set<string>()]));
   const indegree = new Map(ordered.map(node => [node.id, 0]));
   for (const edge of doc.edges) {
+    if (!edge.source || !edge.target) continue;
     if (edge.source === edge.target || outgoing.get(edge.source)!.has(edge.target)) continue;
     outgoing.get(edge.source)!.add(edge.target);
     indegree.set(edge.target, indegree.get(edge.target)! + 1);

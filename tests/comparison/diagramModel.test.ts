@@ -122,6 +122,44 @@ test("the node and edge count limits cannot be bypassed by imported arrays", () 
   assert.throws(() => parseDiagramDocument(doc), /2000/);
 });
 
+test("free arrows and mixed node/free endpoints round-trip independently without creating hidden nodes", () => {
+  const doc = document();
+  doc.edges = [{ id: "free", source: "", target: "", sourcePoint: { x: -50, y: 125 }, targetPoint: { x: 500, y: -200 }, label: "畫出的箭頭", color: "#2563eb", lineType: "straight", arrowhead: "both", width: 8 }];
+  doc.nodes = [];
+  const parsed = parseDiagramDocument(doc);
+  assert.deepEqual(parsed, doc);
+  parsed.edges[0].sourcePoint!.x = 99;
+  assert.equal(doc.edges[0].sourcePoint!.x, -50, "free endpoint data must also be detached");
+  assert.deepEqual(autoLayoutDiagram(doc).edges, doc.edges, "layout leaves free drawing coordinates alone");
+  doc.nodes = [node("node-1")];
+  doc.edges[0].target = "node-1";
+  doc.edges[0].targetPort = "bottom";
+  delete doc.edges[0].targetPoint;
+  assert.deepEqual(parseDiagramDocument(doc), doc);
+  assert.doesNotThrow(() => autoLayoutDiagram(doc), "partially attached arrows do not enter node topology");
+});
+
+test("free arrows reject missing, dangling, unsafe or unbounded endpoints and invalid drawing styles", () => {
+  const free = () => ({ ...document(), nodes: [], edges: [{ id: "free", source: "", target: "", sourcePoint: { x: 0, y: 0 }, targetPoint: { x: 100, y: 100 }, label: "", color: "#2563eb" }] }) as DiagramDocument;
+  const changes = [
+    { sourcePoint: undefined }, { targetPoint: undefined }, { source: "missing" }, { target: null },
+    { sourcePoint: { x: Infinity, y: 0 } }, { targetPoint: { x: 0, y: -1_000_001 } },
+    { sourcePoint: { x: 0, y: 0, extra: true } }, { targetPoint: Object.assign(Object.create({ x: 0 }), { y: 0 }) },
+    { lineType: "script" }, { arrowhead: "triangle" }, { width: 0 }, { width: 9 }, { width: 1.5 }, { width: NaN },
+  ];
+  for (const patch of changes) {
+    const doc = free(); Object.assign(doc.edges[0], patch);
+    assert.throws(() => parseDiagramDocument(doc), /圖表資料無效/);
+  }
+  let invoked = false;
+  const doc = free();
+  Object.defineProperty(doc.edges[0].sourcePoint, "x", { get() { invoked = true; return 0; }, enumerable: true });
+  assert.throws(() => parseDiagramDocument(doc), /存取器/);
+  assert.equal(invoked, false);
+  const legacy = document();
+  assert.deepEqual(parseDiagramDocument(legacy), legacy, "version 1 documents do not gain new optional fields");
+});
+
 test("Power Tree conversion preserves actual rail/converter topology, provenance, RefDes/page and the original session", () => {
   const input = session(), snapshot = structuredClone(input);
   const doc = createDiagramFromResult(input, "power");

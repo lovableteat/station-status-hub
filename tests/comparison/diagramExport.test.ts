@@ -6,6 +6,7 @@ import ts from "typescript";
 import { parseDiagramDocument, type DiagramDocument } from "../../src/components/comparison/diagramModel.ts";
 import { diagramToSvg } from "../../src/components/comparison/diagramExport.ts";
 import { DIAGRAM_THEME, diagramNodeColors, diagramStrokeColor } from "../../src/components/comparison/diagramTheme.ts";
+import { diagramEdgeRoute } from "../../src/components/comparison/diagramGeometry.ts";
 
 const source = await readFile(new URL("../../src/components/comparison/diagramExport.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -78,6 +79,7 @@ test("light canvas keeps pastel nodes and low-contrast connections legible witho
 
 test("edge endpoints honor explicit ports and bounds include negative nodes, arrow controls and labels", () => {
   const doc = documentFixture();
+  doc.edges[0].lineType = "curve";
   const svg = diagramToSvg(doc);
   const numbers = path(svg, "edge-a-b").match(/-?\d+(?:\.\d+)?/g)!.map(Number);
   assert.deepEqual(numbers.slice(0, 2), [0, 30], "source must begin at its left border");
@@ -198,6 +200,7 @@ function exportHarness(options: HarnessOptions = {}) {
     require(name: string) {
       if (name === "./diagramModel.ts") return { parseDiagramDocument };
       if (name === "./diagramTheme.ts") return { DIAGRAM_THEME, diagramNodeColors, diagramStrokeColor };
+      if (name === "./diagramGeometry.ts") return { diagramEdgeRoute };
       assert.equal(name, "jspdf");
       if (options.missingPdf) throw new Error("PDF module unavailable");
       return { jsPDF: FakePdf };
@@ -227,6 +230,36 @@ test("JSON download is editable validated data and releases its download URL", a
   const bad = { ...doc, script: "alert(1)" } as DiagramDocument;
   await assert.rejects(harness.download(bad, "json"), /圖表資料無效/);
   assert.equal(harness.downloads.length, 1);
+});
+
+test("node-free drawing exports preserve line routes, arrowheads, widths and editable JSON endpoints", async () => {
+  const doc = documentFixture(); doc.nodes = [];
+  doc.edges = [
+    { id: "straight", source: "", target: "", sourcePoint: { x: -200, y: -100 }, targetPoint: { x: 400, y: 200 }, label: "手畫箭頭", color: "#2563eb", lineType: "straight", arrowhead: "both", width: 8 },
+    { id: "elbow", source: "", target: "", sourcePoint: { x: 0, y: 0 }, targetPoint: { x: 100, y: 100 }, label: "", color: "#334155", lineType: "elbow", arrowhead: "none", width: 1, style: "dashed" },
+    { id: "curve", source: "", target: "", sourcePoint: { x: 0, y: 200 }, targetPoint: { x: 400, y: 200 }, label: "", color: "#334155", lineType: "curve" },
+  ];
+  const svg = diagramToSvg(doc);
+  assert.equal(path(svg, "straight"), "M-200 -100 L400 200");
+  assert.match(path(svg, "elbow"), /L/); assert.doesNotMatch(path(svg, "elbow"), /C/);
+  assert.match(path(svg, "curve"), /C/);
+  assert.match(svg, /data-edge-id="straight"[^>]*stroke-width="8"[^>]*marker-start="url\(#diagram-arrow-0\)"[^>]*marker-end="url\(#diagram-arrow-0\)"/);
+  assert.match(svg, /id="diagram-arrow-0"[^>]*markerWidth="24"[^>]*orient="auto-start-reverse"/);
+  assert.doesNotMatch(svg.match(/data-edge-id="elbow"[^>]*>/)![0], /marker-/);
+  assert.doesNotMatch(svg, /id="diagram-arrow-1"/);
+  assert.match(svg, /data-edge-id="curve"[^>]*stroke-width="2"[^>]*marker-end=/);
+  const [x, y, width, height] = viewBox(svg);
+  assert.ok(x <= -232 && y <= -132 && x + width >= 432 && y + height >= 232);
+  for (const format of ["json", "svg", "png", "pdf"] as const) {
+    const harness = exportHarness();
+    await harness.download(doc, format);
+    assert.equal(harness.downloads.length, 1);
+    if (format === "json") assert.deepEqual(parseDiagramDocument(JSON.parse(await harness.downloads[0].blob.text())), doc);
+    if (format === "svg") assert.equal(await harness.downloads[0].blob.text(), svg);
+    if (format === "png" || format === "pdf") assert.ok(harness.drawings[0][2] > 0 && harness.drawings[0][3] > 0);
+    harness.fireTimers(10_000);
+    assert.equal(new Set(harness.revoked).size, harness.blobs.size);
+  }
 });
 
 test("PNG exports use a detached snapshot, respect pixel limits and release SVG resources and canvas memory", async () => {

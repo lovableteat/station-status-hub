@@ -1,11 +1,9 @@
 import { parseDiagramDocument, type DiagramDocument } from "./diagramModel.ts";
 import { DIAGRAM_THEME, diagramNodeColors, diagramStrokeColor } from "./diagramTheme.ts";
+import { diagramEdgeRoute } from "./diagramGeometry.ts";
 
 type Node = DiagramDocument["nodes"][number];
-type Edge = DiagramDocument["edges"][number];
-type Port = "left" | "right" | "top" | "bottom";
 type Point = { x: number; y: number };
-type Route = { path: string; points: Point[]; label: Point };
 const MARGIN = 32;
 const MAX_RASTER_SIDE = 8192;
 const MAX_RASTER_PIXELS = 16 * 1024 * 1024;
@@ -20,54 +18,6 @@ function xml(value: string): string {
   }).join("").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[character]!);
 }
 function n(value: number): string { return String(Number(value.toFixed(3))); }
-function p(point: Point): string { return `${n(point.x)} ${n(point.y)}`; }
-const vectors: Record<Port, Point> = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, top: { x: 0, y: -1 }, bottom: { x: 0, y: 1 } };
-function anchor(node: Node, port: Port): Point {
-  return { x: node.x + node.width * (port === "left" ? 0 : port === "right" ? 1 : 0.5), y: node.y + node.height * (port === "top" ? 0 : port === "bottom" ? 1 : 0.5) };
-}
-function offset(point: Point, vector: Point, distance: number): Point { return { x: point.x + vector.x * distance, y: point.y + vector.y * distance }; }
-function halfway(points: Point[]): Point {
-  const lengths = points.slice(1).map((point, index) => Math.hypot(point.x - points[index].x, point.y - points[index].y));
-  let remaining = lengths.reduce((sum, length) => sum + length, 0) / 2;
-  for (let index = 0; index < lengths.length; index++) {
-    if (remaining <= lengths[index] && lengths[index]) {
-      const ratio = remaining / lengths[index];
-      return { x: points[index].x + (points[index + 1].x - points[index].x) * ratio, y: points[index].y + (points[index + 1].y - points[index].y) * ratio };
-    }
-    remaining -= lengths[index];
-  }
-  return points[0];
-}
-function route(edge: Edge, source: Node, target: Node): Route {
-  const sourcePort = edge.sourcePort ?? "right";
-  const targetPort = edge.targetPort ?? "left";
-  const start = anchor(source, sourcePort), end = anchor(target, targetPort);
-  if (source.id === target.id) {
-    const gap = 40;
-    const left = source.x - gap, right = source.x + source.width + gap, top = source.y - gap, bottom = source.y + source.height + gap;
-    const order: Port[] = ["top", "right", "bottom", "left"];
-    const corners = [{ x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom }, { x: left, y: top }];
-    let index = order.indexOf(sourcePort);
-    const delta = (order.indexOf(targetPort) - index + 4) % 4;
-    const direction = delta > 2 ? -1 : 1;
-    const steps = delta === 0 ? 4 : Math.min(delta, 4 - delta);
-    const points = [start, offset(start, vectors[sourcePort], gap)];
-    for (let step = 0; step < steps; step++) {
-      const next = (index + direction + 4) % 4;
-      points.push(corners[direction === 1 ? index : next], offset(anchor(source, order[next]), vectors[order[next]], gap));
-      index = next;
-    }
-    points.push(end);
-    return { path: `M${p(start)} ${points.slice(1).map(point => `L${p(point)}`).join(" ")}`, points, label: halfway(points) };
-  }
-  const distance = Math.max(32, Math.min(160, Math.hypot(end.x - start.x, end.y - start.y) / 2));
-  const first = offset(start, vectors[sourcePort], distance), second = offset(end, vectors[targetPort], distance);
-  return {
-    path: `M${p(start)} C${p(first)} ${p(second)} ${p(end)}`,
-    points: [start, first, second, end],
-    label: { x: (start.x + 3 * first.x + 3 * second.x + end.x) / 8, y: (start.y + 3 * first.y + 3 * second.y + end.y) / 8 },
-  };
-}
 function textWidth(value: string, font: number): number {
   return Array.from(value).reduce((width, character) => width + (/\s/.test(character) ? 0.34 : character.codePointAt(0)! > 0x2e7f ? 1 : 0.62) * font, 0);
 }
@@ -123,7 +73,7 @@ function renderNode(node: Node, index: number): string {
 }
 function render(doc: DiagramDocument) {
   const byId = new Map(doc.nodes.map(node => [node.id, node]));
-  const edges = doc.edges.map(edge => ({ edge, route: route(edge, byId.get(edge.source)!, byId.get(edge.target)!) }));
+  const edges = doc.edges.map(edge => ({ edge, route: diagramEdgeRoute(edge, byId) }));
   const points: Point[] = doc.nodes.flatMap(node => [{ x: node.x, y: node.y }, { x: node.x + node.width, y: node.y + node.height }]);
   const edgeLabels = edges.map(({ edge, route }) => {
     const text = lines(edge.label, 240, 12, 6);
@@ -139,8 +89,12 @@ function render(doc: DiagramDocument) {
   const top = points.length ? minY - MARGIN : 0;
   const width = points.length ? maxX + MARGIN - left : 640;
   const height = points.length ? maxY + MARGIN - top : 360;
-  const definitions = edges.map(({ edge }, index) => `<marker id="diagram-arrow-${index}" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="${diagramStrokeColor(edge.color)}"/></marker>`).join("");
-  const paths = edges.map(({ edge, route }, index) => `<path data-edge-id="${xml(edge.id)}" d="${route.path}" fill="none" stroke="${diagramStrokeColor(edge.color)}" stroke-width="2"${edge.style === "dashed" ? ' stroke-dasharray="7 5"' : ""} marker-end="url(#diagram-arrow-${index})"><title>${xml(edge.label)}</title></path>`).join("");
+  const definitions = edges.map(({ edge }, index) => {
+    if (edge.arrowhead === "none") return "";
+    const size = Math.max(10, (edge.width ?? 2) * 3), middle = size / 2;
+    return `<marker id="diagram-arrow-${index}" markerUnits="userSpaceOnUse" markerWidth="${size}" markerHeight="${size}" refX="${size}" refY="${middle}" orient="auto-start-reverse"><path d="M0 0 L${size} ${middle} L0 ${size} Z" fill="${diagramStrokeColor(edge.color)}"/></marker>`;
+  }).join("");
+  const paths = edges.map(({ edge, route }, index) => `<path data-edge-id="${xml(edge.id)}" d="${route.path}" fill="none" stroke="${diagramStrokeColor(edge.color)}" stroke-width="${edge.width ?? 2}" stroke-linecap="round" stroke-linejoin="round"${edge.style === "dashed" ? ' stroke-dasharray="7 5"' : ""}${edge.arrowhead === "both" ? ` marker-start="url(#diagram-arrow-${index})"` : ""}${edge.arrowhead === "none" ? "" : ` marker-end="url(#diagram-arrow-${index})"`}><title>${xml(edge.label)}</title></path>`).join("");
   const labels = edges.map(({ route }, index) => {
     const label = edgeLabels[index];
     if (!label.text.length) return "";
