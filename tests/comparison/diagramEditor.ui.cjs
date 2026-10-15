@@ -11,8 +11,62 @@ const document = (id = 'diagram-saved', title = '原圖稿') => ({
   nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 },
 });
 
+// Keep menus and dialogs closed until their actual controls are used. The
+// shared harness otherwise renders every UI primitive's children at once.
+const MenuContext = React.createContext(null);
+const DialogContext = React.createContext(null);
+const AlertContext = React.createContext(null);
+const menuMocks = {
+  DropdownMenu({ children }) {
+    const [open, setOpen] = React.useState(false);
+    return React.createElement(MenuContext.Provider, { value: { open, setOpen } }, children);
+  },
+  DropdownMenuTrigger({ children }) {
+    const menu = React.useContext(MenuContext);
+    const trigger = React.Children.only(children);
+    return React.cloneElement(trigger, { onClick() { if (!trigger.props.disabled) menu.setOpen(value => !value); } });
+  },
+  DropdownMenuContent({ children, ...props }) {
+    const menu = React.useContext(MenuContext);
+    return menu.open ? React.createElement('stub', { ...props, role: 'menu' }, children) : null;
+  },
+  DropdownMenuItem({ children, disabled, onSelect, ...props }) {
+    const menu = React.useContext(MenuContext);
+    return React.createElement('stub', { ...props, role: 'menuitem', disabled, onSelect(event) {
+      if (disabled) return;
+      onSelect?.(event);
+      menu.setOpen(false);
+    } }, children);
+  },
+  DropdownMenuGroup: child, DropdownMenuLabel: child, DropdownMenuSeparator: child,
+};
+const dialogMocks = {
+  Dialog: ({ open, onOpenChange, children }) => React.createElement(DialogContext.Provider, { value: { open, onOpenChange } }, children),
+  DialogContent({ children, ...props }) {
+    return React.useContext(DialogContext).open ? React.createElement('stub', { ...props, role: 'dialog' }, children) : null;
+  },
+  DialogHeader: child, DialogTitle: child, DialogDescription: child,
+};
+const alertMocks = {
+  AlertDialog: ({ open, onOpenChange, children }) => React.createElement(AlertContext.Provider, { value: { open, onOpenChange } }, children),
+  AlertDialogContent({ children, ...props }) {
+    return React.useContext(AlertContext).open ? React.createElement('stub', { ...props, role: 'alertdialog' }, children) : null;
+  },
+  AlertDialogAction({ children, onClick, ...props }) {
+    const dialog = React.useContext(AlertContext);
+    return React.createElement('stub', { ...props, onClick(event) { onClick?.(event); dialog.onOpenChange(false); } }, children);
+  },
+  AlertDialogCancel({ children, ...props }) {
+    const dialog = React.useContext(AlertContext);
+    return React.createElement('stub', { ...props, onClick() { dialog.onOpenChange(false); } }, children);
+  },
+  AlertDialogDescription: child, AlertDialogFooter: child, AlertDialogHeader: child, AlertDialogTitle: child,
+};
+
 function fixture() {
   const window = browser();
+  const body = { style: { overflow: 'auto' } };
+  window.document = { body };
   const timers = new Map();
   let timerId = 0;
   window.setTimeout = callback => { const id = ++timerId; timers.set(id, callback); return id; };
@@ -20,6 +74,8 @@ function fixture() {
   window.requestAnimationFrame = () => 0;
   const records = new Map();
   const calls = [];
+  const exports = [];
+  const flowMounts = [];
   const saveGates = [], deleteGates = [];
   const owner = id => {
     if (!records.has(id)) records.set(id, new Map());
@@ -56,10 +112,22 @@ function fixture() {
       autoLayoutDiagram: value => model.layoutTestJson(JSON.stringify(value)),
     },
     './diagramStorage': storage,
-    './diagramExport': { downloadDiagram: async () => {} },
+    './diagramExport': { downloadDiagram: async (document, format) => { exports.push({ document: clone(document), format }); } },
+    // Relocating the editor to a portal remounts its ReactFlow subtree in the
+    // browser. A distinct wrapper models that lifecycle without a DOM renderer.
+    'react-dom': { createPortal: (children, target) => {
+      assert.equal(target, body);
+      return React.createElement('portal', null, children);
+    } },
+    '@/components/ui/dropdown-menu': menuMocks,
+    '@/components/ui/dialog': dialogMocks,
+    '@/components/ui/alert-dialog': alertMocks,
     '@xyflow/react': {
       ReactFlowProvider: ({ children }) => children,
-      ReactFlow: props => React.createElement('flow', props, props.children),
+      ReactFlow: props => {
+        React.useEffect(() => { flowMounts.push(clone(props.defaultViewport)); }, []);
+        return React.createElement('flow', props, props.children);
+      },
       useReactFlow: () => flow,
       Background: child, Controls: child, Handle: child, NodeResizer: child,
       BackgroundVariant: { Dots: 'dots' }, ConnectionMode: { Loose: 'loose' }, MarkerType: { ArrowClosed: 'arrowclosed' },
@@ -71,7 +139,7 @@ function fixture() {
   let props = { accountId: accountA, canEdit: true, session: null };
   const render = () => React.createElement(Editor, { ...props, key: props.accountId });
   return {
-    records, calls, timers, saveGates, deleteGates,
+    records, calls, exports, timers, saveGates, deleteGates, flowMounts, body,
     seed(account, doc) { owner(account).set(doc.id, clone(doc)); },
     documents(account) { return [...owner(account).values()]; },
     get tree() { return tree; },
@@ -79,17 +147,27 @@ function fixture() {
     async update(next) { props = { ...props, ...next }; await act(async () => tree.update(render())); await flush(); },
     async unmount() { await act(async () => tree.unmount()); await flush(); },
     title() { return tree.root.findByProps({ id: 'diagram-title' }); },
-    button(label) { return tree.root.findAll(node => node.type === 'stub' && typeof node.props.onClick === 'function' && text(node) === label)[0]; },
+    button(label) {
+      const controls = tree.root.findAll(node => ['stub', 'button'].includes(node.type) && (typeof node.props.onClick === 'function' || typeof node.props.onSelect === 'function'));
+      return controls.find(node => node.props['aria-label'] === label || text(node) === label)
+        ?? controls.find(node => node.props.role === 'menuitem' && text(node).startsWith(label));
+    },
     async edit(title) { await act(async () => this.title().props.onChange({ target: { value: title } })); },
-    async click(label) { const button = this.button(label); assert.ok(button, `Button ${label} exists`); await act(async () => { button.props.onClick(); }); },
+    async click(label) {
+      const button = this.button(label);
+      assert.ok(button, `Control ${label} exists`);
+      assert.ok(!button.props.disabled, `Control ${label} is enabled`);
+      await act(async () => { (button.props.onSelect ?? button.props.onClick)(); });
+    },
+    async menuAction(menu, label) { await this.click(menu); await this.click(label); },
     async open(id) {
-      const select = tree.root.findByProps({ 'aria-label': '開啟已儲存圖稿' });
-      await act(async () => { select.props.onChange({ target: { value: id } }); });
+      const saved = this.documents(props.accountId).find(item => item.id === id);
+      assert.ok(saved, `Saved document ${id} exists`);
+      await this.menuAction('檔案', '開啟已儲存圖稿');
+      await this.click(`開啟圖稿：${saved.title}`);
     },
     async confirmDelete() {
-      const button = tree.root.findAll(node => node.type === 'stub' && node.props['aria-label'] === '刪除此圖稿')[0];
-      assert.ok(button && !button.props.disabled);
-      await act(async () => { button.props.onClick(); });
+      await this.menuAction('檔案', '刪除此圖稿');
       await this.click('刪除圖稿');
     },
     async runTimers() {
@@ -124,9 +202,10 @@ test('switching documents locks edits until the previous snapshot commits', asyn
   await f.mount();
   await f.edit('切換前需要保存的版本');
   const pending = deferred(); f.saveGates.push(pending);
-  await f.click('空白圖稿');
+  await f.menuAction('檔案', '空白圖稿');
   assert.equal(f.calls.filter(call => call.kind === 'save:start').length, 1);
   assert.equal(f.title().props.disabled, true, 'the switch waits for persistence with editing disabled');
+  await f.click('檔案');
   assert.equal(f.button('空白圖稿').props.disabled, true);
   await f.edit('等待期間不應寫入的內容');
   assert.equal(f.title().props.value, '切換前需要保存的版本', 'the mutation guard also rejects stale input callbacks');
@@ -142,7 +221,7 @@ test('deleting joins the pending write queue and an overdue autosave cannot resu
   f.seed(accountA, saved);
   await f.mount(); await f.open(saved.id); await f.edit('已進入儲存中的版本');
   const pendingSave = deferred(); f.saveGates.push(pendingSave);
-  await f.click('儲存');
+  await f.menuAction('檔案', '儲存');
   await f.edit('刪除前的新修改');
   const overdueAutosave = [...f.timers.values()][0];
   assert.ok(overdueAutosave);
@@ -169,7 +248,7 @@ test('revoking edit permission before a queued delete starts preserves the saved
   f.seed(accountA, saved);
   await f.mount(); await f.open(saved.id); await f.edit('已授權開始的保存');
   const pending = deferred(); f.saveGates.push(pending);
-  await f.click('儲存');
+  await f.menuAction('檔案', '儲存');
   await f.confirmDelete();
   await f.update({ canEdit: false });
   await act(async () => pending.resolve()); await flush();
@@ -192,6 +271,7 @@ test('importing an empty source reports its revision and preserves the existing 
     await f.click('方框');
     const before = f.tree.root.findByType('flow').props.nodes;
     assert.equal(before.length, 1);
+    await f.click('帶入比對結果');
     const revision = f.tree.root.findByProps({ 'aria-label': '來源版本' });
     await act(async () => revision.props.onChange({ target: { value: 'a' } }));
     await f.click(`帶入 ${label}`); await flush();
@@ -221,6 +301,103 @@ test('moving the canvas alone schedules autosave with the current viewport', asy
   assert.equal(f.documents(accountA).length, 1);
   assert.deepEqual(f.documents(accountA)[0].viewport, viewport);
   await f.unmount();
+});
+
+test('read-only viewport survives full-canvas portal remounts without saving the viewing change', async () => {
+  const f = fixture();
+  const saved = document('readonly-viewport', '唯讀查看圖稿');
+  f.seed(accountA, saved);
+  await f.mount(); await f.open(saved.id);
+  await f.update({ canEdit: false });
+  const viewport = { x: -230, y: 185, zoom: 0.65 };
+  await act(async () => f.tree.root.findByType('flow').props.onMoveEnd(null, viewport));
+  assert.equal(f.timers.size, 0, 'viewing a read-only drawing must not schedule writes');
+  assert.equal(text(f.tree.root.findByProps({ 'aria-label': '設為百分之百縮放' })), '65%');
+  assert.deepEqual(f.documents(accountA), [saved], 'read-only viewing leaves the stored document unchanged');
+
+  await f.click('展開全畫布');
+  assert.equal(f.flowMounts.length, 2, 'moving into the portal remounts the canvas');
+  assert.deepEqual(f.flowMounts.at(-1), viewport, 'the new canvas starts at the latest viewing position');
+  assert.equal(f.body.style.overflow, 'hidden');
+  assert.equal(f.title().props.value, saved.title);
+  assert.equal(f.title().props.disabled, true);
+  await f.click('離開全畫布');
+  assert.equal(f.flowMounts.length, 3, 'moving back into the workspace remounts the canvas again');
+  assert.deepEqual(f.flowMounts.at(-1), viewport);
+  assert.equal(text(f.tree.root.findByProps({ 'aria-label': '設為百分之百縮放' })), '65%');
+  assert.equal(f.body.style.overflow, 'auto', 'leaving full canvas restores page scrolling');
+  await f.unmount();
+  assert.deepEqual(f.documents(accountA), [saved]);
+  assert.equal(f.calls.some(call => call.kind === 'save:start'), false);
+});
+
+test('the property panel follows selection and dismissing it preserves edited graph content', async () => {
+  const f = fixture();
+  await f.mount();
+  const inspector = () => f.tree.root.findAll(node => node.type === 'aside' && node.props['aria-label'] === '圖形屬性');
+  const flow = () => f.tree.root.findByType('flow');
+  assert.equal(inspector().length, 0, 'the blank canvas keeps its space until an object is selected');
+  await f.click('方框');
+  assert.equal(inspector().length, 1);
+  const label = f.tree.root.findByProps({ id: 'diagram-label' });
+  await act(async () => label.props.onChange({ target: { value: '已編輯的控制器' } }));
+  const selected = flow().props.nodes[0];
+  const original = { id: selected.id, data: { label: selected.data.label } };
+  await act(async () => flow().props.onPaneClick());
+  assert.equal(inspector().length, 0);
+  assert.equal(flow().props.nodes[0].data.label, '已編輯的控制器');
+  await act(async () => flow().props.onNodeClick(null, flow().props.nodes[0]));
+  assert.equal(inspector().length, 1);
+  assert.equal(f.tree.root.findByProps({ id: 'diagram-label' }).props.value, original.data.label);
+  const editor = f.tree.root.findByProps({ 'aria-label': '圖表編輯器' });
+  await act(async () => editor.props.onKeyDown({ key: 'Escape', target: { closest: () => null } }));
+  assert.equal(inspector().length, 0);
+  assert.equal(flow().props.nodes[0].id, original.id);
+  assert.equal(flow().props.nodes[0].data.label, original.data.label);
+  await act(async () => flow().props.onNodeClick(null, flow().props.nodes[0]));
+  await f.click('關閉屬性面板');
+  assert.equal(inspector().length, 0);
+  await f.unmount();
+  assert.equal(f.documents(accountA)[0].nodes[0].label, original.data.label, 'dismissing UI preserves the content that is saved');
+});
+
+test('read-only mode preserves an unsaved drawing for export while rejecting current mutation callbacks', async () => {
+  const f = fixture();
+  await f.mount();
+  await f.edit('權限變更前的未存草稿');
+  await f.click('方框');
+  await act(async () => f.tree.root.findByProps({ id: 'diagram-label' }).props.onChange({ target: { value: '仍可匯出的圖形' } }));
+  const selected = f.tree.root.findByType('flow').props.nodes[0];
+  const original = { id: selected.id, data: { label: selected.data.label }, position: clone(selected.position) };
+  await f.update({ canEdit: false });
+  assert.equal(f.timers.size, 0, 'permission changes cancel the pending write instead of discarding the draft');
+  assert.equal(f.title().props.disabled, true);
+  assert.equal(f.tree.root.findByProps({ id: 'diagram-label' }).props.disabled, true);
+  assert.equal(f.button('方框').props.disabled, true);
+  assert.equal(f.button('複製圖形').props.disabled, true);
+  const flow = () => f.tree.root.findByType('flow');
+  assert.equal(flow().props.nodesDraggable, false);
+  assert.equal(flow().props.nodesConnectable, false);
+  await f.edit('不應覆寫的名稱');
+  await act(async () => {
+    f.tree.root.findByProps({ id: 'diagram-label' }).props.onChange({ target: { value: '不應覆寫的圖形' } });
+    flow().props.onNodesChange([{ id: original.id, type: 'position', position: { x: 999, y: 999 } }]);
+  });
+  assert.equal(f.title().props.value, '權限變更前的未存草稿');
+  assert.equal(flow().props.nodes[0].data.label, original.data.label);
+  assert.deepEqual(clone(flow().props.nodes[0].position), original.position);
+  assert.ok(!f.button('匯出').props.disabled);
+  await f.menuAction('匯出', '可編輯圖稿 JSON');
+  assert.equal(f.exports.length, 1);
+  assert.equal(f.exports[0].format, 'json');
+  assert.equal(f.exports[0].document.title, '權限變更前的未存草稿');
+  assert.equal(f.exports[0].document.nodes[0].id, original.id);
+  assert.equal(f.exports[0].document.nodes[0].label, original.data.label);
+  await f.click('檔案');
+  assert.equal(f.button('儲存').props.disabled, true);
+  assert.equal(f.button('空白圖稿').props.disabled, true);
+  await f.unmount();
+  assert.equal(f.documents(accountA).length, 0, 'read-only export does not write the draft into storage');
 });
 
 test('workspace permission refresh keeps the same mounted draft available in read-only mode', async () => {

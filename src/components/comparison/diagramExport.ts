@@ -1,4 +1,5 @@
 import { parseDiagramDocument, type DiagramDocument } from "./diagramModel.ts";
+import { DIAGRAM_THEME, diagramNodeColors, diagramStrokeColor } from "./diagramTheme.ts";
 
 type Node = DiagramDocument["nodes"][number];
 type Edge = DiagramDocument["edges"][number];
@@ -95,20 +96,16 @@ function lines(value: string, width: number, font: number, maximum: number): str
   }
   return result.slice(0, maximum);
 }
-function ink(color: string): string {
-  const channel = [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16) / 255)
-    .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
-  return channel[0] * 0.2126 + channel[1] * 0.7152 + channel[2] * 0.0722 > 0.179 ? "#111827" : "#ffffff";
-}
 function renderNode(node: Node, index: number): string {
   const { x, y, width, height } = node;
-  const attributes = `data-node-id="${xml(node.id)}" fill="${xml(node.color)}" stroke="#475569" stroke-width="1.5"`;
+  const colors = diagramNodeColors(node.color);
+  const attributes = `data-node-id="${xml(node.id)}" fill="${colors.fill}" stroke="${colors.stroke}" stroke-width="1.5"`;
   let shape: string;
   if (node.shape === "ellipse") shape = `<ellipse ${attributes} cx="${n(x + width / 2)}" cy="${n(y + height / 2)}" rx="${n(width / 2)}" ry="${n(height / 2)}"/>`;
   else if (node.shape === "diamond") shape = `<polygon ${attributes} points="${n(x + width / 2)},${n(y)} ${n(x + width)},${n(y + height / 2)} ${n(x + width / 2)},${n(y + height)} ${n(x)},${n(y + height / 2)}"/>`;
   else if (node.shape === "note") {
     const fold = Math.min(18, width / 5, height / 5);
-    shape = `<path ${attributes} d="M${n(x)} ${n(y)} H${n(x + width - fold)} L${n(x + width)} ${n(y + fold)} V${n(y + height)} H${n(x)} Z"/><path d="M${n(x + width - fold)} ${n(y)} V${n(y + fold)} H${n(x + width)}" fill="none" stroke="#475569" stroke-width="1.5"/>`;
+    shape = `<path ${attributes} d="M${n(x)} ${n(y)} H${n(x + width - fold)} L${n(x + width)} ${n(y + fold)} V${n(y + height)} H${n(x)} Z"/><path d="M${n(x + width - fold)} ${n(y)} V${n(y + fold)} H${n(x + width)}" fill="none" stroke="${colors.stroke}" stroke-width="1.5"/>`;
   } else shape = `<rect ${attributes} x="${n(x)}" y="${n(y)}" width="${n(width)}" height="${n(height)}" rx="8"/>`;
   const padding = Math.min(12, width / 5, height / 5);
   const innerWidth = Math.max(1, node.shape === "diamond" ? width * 0.48 : node.shape === "ellipse" ? width * 0.7 : width - padding * 2);
@@ -121,8 +118,8 @@ function renderNode(node: Node, index: number): string {
   const count = label.length + detail.length;
   const firstY = y + height / 2 - ((count - 1) * lineHeight) / 2 + font * 0.34;
   const spans = [...label.map(value => ({ value, detail: false })), ...detail.map(value => ({ value, detail: true }))]
-    .map((line, row) => `<tspan x="${n(x + width / 2)}" y="${n(firstY + row * lineHeight)}"${line.detail ? ` font-size="${n(font * 0.8)}" opacity="0.82"` : ""}>${xml(line.value)}</tspan>`).join("");
-  return `<g><title>${xml([node.label, node.detail, node.refdes ? `RefDes: ${node.refdes}` : "", node.page ? `線路圖第 ${node.page} 頁` : ""].filter(Boolean).join("\n"))}</title>${shape}<clipPath id="diagram-node-${index}"><rect x="${n(x + (width - innerWidth) / 2)}" y="${n(y + (height - innerHeight) / 2)}" width="${n(innerWidth)}" height="${n(innerHeight)}"/></clipPath><text text-anchor="middle" font-size="${n(font)}" font-weight="600" fill="${ink(node.color)}" clip-path="url(#diagram-node-${index})">${spans}</text></g>`;
+    .map((line, row) => `<tspan x="${n(x + width / 2)}" y="${n(firstY + row * lineHeight)}"${line.detail ? ` font-size="${n(font * 0.8)}" fill="${colors.detail}"` : ""}>${xml(line.value)}</tspan>`).join("");
+  return `<g><title>${xml([node.label, node.detail, node.refdes ? `RefDes: ${node.refdes}` : "", node.page ? `線路圖第 ${node.page} 頁` : ""].filter(Boolean).join("\n"))}</title>${shape}<clipPath id="diagram-node-${index}"><rect x="${n(x + (width - innerWidth) / 2)}" y="${n(y + (height - innerHeight) / 2)}" width="${n(innerWidth)}" height="${n(innerHeight)}"/></clipPath><text text-anchor="middle" font-size="${n(font)}" font-weight="600" fill="${colors.text}" clip-path="url(#diagram-node-${index})">${spans}</text></g>`;
 }
 function render(doc: DiagramDocument) {
   const byId = new Map(doc.nodes.map(node => [node.id, node]));
@@ -142,14 +139,14 @@ function render(doc: DiagramDocument) {
   const top = points.length ? minY - MARGIN : 0;
   const width = points.length ? maxX + MARGIN - left : 640;
   const height = points.length ? maxY + MARGIN - top : 360;
-  const definitions = edges.map(({ edge }, index) => `<marker id="diagram-arrow-${index}" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="${xml(edge.color)}"/></marker>`).join("");
-  const paths = edges.map(({ edge, route }, index) => `<path data-edge-id="${xml(edge.id)}" d="${route.path}" fill="none" stroke="${xml(edge.color)}" stroke-width="2"${edge.style === "dashed" ? ' stroke-dasharray="7 5"' : ""} marker-end="url(#diagram-arrow-${index})"><title>${xml(edge.label)}</title></path>`).join("");
+  const definitions = edges.map(({ edge }, index) => `<marker id="diagram-arrow-${index}" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="${diagramStrokeColor(edge.color)}"/></marker>`).join("");
+  const paths = edges.map(({ edge, route }, index) => `<path data-edge-id="${xml(edge.id)}" d="${route.path}" fill="none" stroke="${diagramStrokeColor(edge.color)}" stroke-width="2"${edge.style === "dashed" ? ' stroke-dasharray="7 5"' : ""} marker-end="url(#diagram-arrow-${index})"><title>${xml(edge.label)}</title></path>`).join("");
   const labels = edges.map(({ route }, index) => {
     const label = edgeLabels[index];
     if (!label.text.length) return "";
-    return `<g><rect x="${n(route.label.x - label.width / 2)}" y="${n(route.label.y - label.height / 2)}" width="${n(label.width)}" height="${n(label.height)}" rx="4" fill="#ffffff" fill-opacity="0.95"/><text text-anchor="middle" font-size="12" fill="#334155">${label.text.map((value, row) => `<tspan x="${n(route.label.x)}" y="${n(route.label.y - label.height / 2 + 16 + row * 16)}">${xml(value)}</tspan>`).join("")}</text></g>`;
+    return `<g><rect x="${n(route.label.x - label.width / 2)}" y="${n(route.label.y - label.height / 2)}" width="${n(label.width)}" height="${n(label.height)}" rx="4" fill="${DIAGRAM_THEME.labelBackground}" fill-opacity="0.95"/><text text-anchor="middle" font-size="12" fill="${DIAGRAM_THEME.text}">${label.text.map((value, row) => `<tspan x="${n(route.label.x)}" y="${n(route.label.y - label.height / 2 + 16 + row * 16)}">${xml(value)}</tspan>`).join("")}</text></g>`;
   }).join("");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${n(width)}" height="${n(height)}" viewBox="${n(left)} ${n(top)} ${n(width)} ${n(height)}" role="img" aria-labelledby="diagram-title" font-family="Arial, Microsoft JhengHei, Noto Sans CJK TC, sans-serif"><title id="diagram-title">${xml(doc.title)}</title><rect x="${n(left)}" y="${n(top)}" width="${n(width)}" height="${n(height)}" fill="#ffffff"/><defs>${definitions}</defs>${paths}${labels}${doc.nodes.map(renderNode).join("")}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${n(width)}" height="${n(height)}" viewBox="${n(left)} ${n(top)} ${n(width)} ${n(height)}" role="img" aria-labelledby="diagram-title" font-family="Arial, Microsoft JhengHei, Noto Sans CJK TC, sans-serif"><title id="diagram-title">${xml(doc.title)}</title><rect x="${n(left)}" y="${n(top)}" width="${n(width)}" height="${n(height)}" fill="${DIAGRAM_THEME.canvas}"/><defs>${definitions}</defs>${paths}${labels}${doc.nodes.map(renderNode).join("")}</svg>`;
   if (new Blob([svg]).size > MAX_SVG_BYTES) throw new Error("圖表內容過大，請拆成較小的圖表再匯出。");
   return { svg, width, height };
 }
@@ -179,7 +176,7 @@ async function rasterize(svg: string, width: number, height: number) {
     canvas.width = Math.max(1, Math.floor(width * scale)); canvas.height = Math.max(1, Math.floor(height * scale));
     const context = canvas.getContext("2d");
     if (!context) throw new Error("瀏覽器無法建立繪圖畫布，請重試或改匯出 SVG。");
-    context.fillStyle = "#ffffff"; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = DIAGRAM_THEME.canvas; context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     const dimensions = { width: canvas.width, height: canvas.height };
     const blob = await new Promise<Blob>((resolve, reject) => {

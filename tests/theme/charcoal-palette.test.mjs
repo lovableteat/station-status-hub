@@ -46,6 +46,14 @@ test("warning and error retain distinct semantic colors", () => {
   assert.equal(recolorCssValue("#f78ea0", "color"), "#e9aab0");
 });
 
+test("diagram editor preserves its requested Apple palette without changing the surrounding site", async () => {
+  const css = `.comparison-diagram-editor { background: #f5f5f7; color: #1d1d1f; --diagram-accent: #0071e3; }`;
+  const editor = await postcss([charcoalPalette()]).process(css, { from: "src/components/comparison/diagramEditor.css" });
+  assert.equal(editor.css, css);
+  const surrounding = await postcss([charcoalPalette()]).process(css, { from: "src/index.css" });
+  assert.notEqual(surrounding.css, css);
+});
+
 test("solid action and destructive fills keep readable text across hover states", async () => {
   const result = await postcss([charcoalPalette()]).process(`
     .bg-blue-600 { background-color: #2563eb; }
