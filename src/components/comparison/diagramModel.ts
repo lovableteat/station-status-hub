@@ -1,14 +1,15 @@
 import type { ComparisonSession } from "./types.ts";
 
-export type DiagramShape = "rectangle" | "ellipse" | "diamond" | "note";
+export type DiagramShape = "rectangle" | "ellipse" | "diamond" | "note" | "resistor" | "capacitor" | "ground" | "netlabel";
 export type DiagramPort = "left" | "right" | "top" | "bottom";
+export type DiagramRotation = 0 | 90 | 180 | 270;
 export interface DiagramPoint { x: number; y: number }
 export type DiagramLineType = "straight" | "elbow" | "curve";
 export type DiagramArrowhead = "end" | "both" | "none";
 export interface DiagramNode {
   id: string; x: number; y: number; width: number; height: number;
   shape: DiagramShape; label: string; detail: string; color: string;
-  refdes?: string; page?: number;
+  refdes?: string; page?: number; fillColor?: string; rotation?: DiagramRotation;
 }
 export interface DiagramEdge {
   id: string; source: string; target: string;
@@ -16,6 +17,7 @@ export interface DiagramEdge {
   label: string; color: string; style?: "solid" | "dashed";
   sourcePoint?: DiagramPoint; targetPoint?: DiagramPoint;
   lineType?: DiagramLineType; arrowhead?: DiagramArrowhead; width?: number;
+  jump?: "none" | "arc";
 }
 export interface DiagramDocument {
   version: 1; id: string; title: string; createdAt: string; updatedAt: string;
@@ -29,7 +31,7 @@ export const MAX_DIAGRAM_EDGES = 6000;
 const MAX_COORDINATE = 1_000_000;
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/;
 const COLOR = /^#[0-9a-f]{6}$/i;
-const SHAPES: DiagramShape[] = ["rectangle", "ellipse", "diamond", "note"];
+const SHAPES: DiagramShape[] = ["rectangle", "ellipse", "diamond", "note", "resistor", "capacitor", "ground", "netlabel"];
 const PORTS: DiagramPort[] = ["left", "right", "top", "bottom"];
 function fail(detail: string): never { throw new Error(`圖表資料無效：${detail}`); }
 const finite = (value: unknown, min: number, max: number): value is number => typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
@@ -85,10 +87,12 @@ export function parseDiagramDocument(value: unknown): DiagramDocument {
     source = { kind: item.kind as "power" | "i2c", sessionId: item.sessionId, revision: item.revision as "a" | "b", generated: item.generated };
   }
   const nodes = array(doc.nodes, MAX_DIAGRAM_NODES, "節點").map(value => {
-    const node = object(value, ["id", "x", "y", "width", "height", "shape", "label", "detail", "color"], ["refdes", "page"]);
+    const node = object(value, ["id", "x", "y", "width", "height", "shape", "label", "detail", "color"], ["refdes", "page", "fillColor", "rotation"]);
     if (!identifier(node.id) || !finite(node.x, -MAX_COORDINATE, MAX_COORDINATE) || !finite(node.y, -MAX_COORDINATE, MAX_COORDINATE)
       || !finite(node.width, 24, 2400) || !finite(node.height, 24, 2400) || !SHAPES.includes(node.shape as DiagramShape)
       || !text(node.label, 500) || !text(node.detail, 4000) || typeof node.color !== "string" || !COLOR.test(node.color)
+      || node.fillColor !== undefined && (typeof node.fillColor !== "string" || !COLOR.test(node.fillColor))
+      || node.rotation !== undefined && (!["resistor", "capacitor", "ground"].includes(node.shape as string) || ![0, 90, 180, 270].includes(node.rotation as number))
       || node.refdes !== undefined && !text(node.refdes, 160, true)
       || node.page !== undefined && (!Number.isInteger(node.page) || !finite(node.page, 1, 10000))) fail("節點欄位或範圍");
     return {
@@ -96,12 +100,14 @@ export function parseDiagramDocument(value: unknown): DiagramDocument {
       shape: node.shape as DiagramShape, label: node.label, detail: node.detail, color: node.color,
       ...(node.refdes === undefined ? {} : { refdes: node.refdes as string }),
       ...(node.page === undefined ? {} : { page: node.page as number }),
+      ...(node.fillColor === undefined ? {} : { fillColor: node.fillColor as string }),
+      ...(node.rotation === undefined ? {} : { rotation: node.rotation as DiagramRotation }),
     };
   });
   const nodeIds = new Set(nodes.map(node => node.id));
   if (nodeIds.size !== nodes.length) fail("節點識別碼重複");
   const edges = array(doc.edges, MAX_DIAGRAM_EDGES, "連線").map(value => {
-    const edge = object(value, ["id", "source", "target", "label", "color"], ["sourcePort", "targetPort", "style", "sourcePoint", "targetPoint", "lineType", "arrowhead", "width"]);
+    const edge = object(value, ["id", "source", "target", "label", "color"], ["sourcePort", "targetPort", "style", "sourcePoint", "targetPoint", "lineType", "arrowhead", "width", "jump"]);
     const sourcePoint = edge.sourcePoint === undefined ? undefined : point(edge.sourcePoint);
     const targetPoint = edge.targetPoint === undefined ? undefined : point(edge.targetPoint);
     const endpoint = (value: unknown, freePoint: DiagramPoint | undefined) => value === "" ? Boolean(freePoint) : identifier(value) && nodeIds.has(value);
@@ -112,6 +118,7 @@ export function parseDiagramDocument(value: unknown): DiagramDocument {
       || edge.style !== undefined && !["solid", "dashed"].includes(edge.style as string)
       || edge.lineType !== undefined && !["straight", "elbow", "curve"].includes(edge.lineType as string)
       || edge.arrowhead !== undefined && !["end", "both", "none"].includes(edge.arrowhead as string)
+      || edge.jump !== undefined && !["none", "arc"].includes(edge.jump as string)
       || edge.width !== undefined && (!Number.isInteger(edge.width) || !finite(edge.width, 1, 8))) fail("連線欄位、端點或節點不存在");
     return {
       id: edge.id, source: edge.source as string, target: edge.target as string, label: edge.label, color: edge.color,
@@ -123,6 +130,7 @@ export function parseDiagramDocument(value: unknown): DiagramDocument {
       ...(edge.lineType === undefined ? {} : { lineType: edge.lineType as DiagramLineType }),
       ...(edge.arrowhead === undefined ? {} : { arrowhead: edge.arrowhead as DiagramArrowhead }),
       ...(edge.width === undefined ? {} : { width: edge.width as number }),
+      ...(edge.jump === undefined ? {} : { jump: edge.jump as "none" | "arc" }),
     };
   });
   if (new Set(edges.map(edge => edge.id)).size !== edges.length) fail("連線識別碼重複");

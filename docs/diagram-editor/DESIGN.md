@@ -51,6 +51,7 @@ colors:
   document-teal: "#63c8b7"
   document-violet: "#b59bdf"
   document-amber: "#d6ad65"
+  document-gray: "#a4adb9"
 typography:
   title:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif'
@@ -119,6 +120,11 @@ components:
     rounded: "{rounded.field}"
     height: "38px"
     padding: "10px 16px"
+  color-control:
+    backgroundColor: "{colors.field}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.field}"
   command-bar:
     backgroundColor: "{colors.chrome}"
     textColor: "{colors.control-text}"
@@ -151,7 +157,7 @@ components:
 
 **Creative North Star: "The Diagram Workbench"**
 
-The editor pairs the familiar draw.io workbench arrangement with Apple-inspired neutral graphite backgrounds by default and a complete light variant. A quiet frame holds the document controls, shape library, and status tools around the drawing surface. Brighter blue identifies actions, focus, and selection; blue, teal, violet, and amber distinguish the library's four shape roles.
+The editor pairs the familiar draw.io workbench arrangement with Apple-inspired neutral graphite backgrounds by default and a complete light variant. A quiet frame holds the document controls, shape library, and status tools around the drawing surface. Brighter blue identifies actions, focus, and selection; colored basic shapes and circuit symbols give the eight-item library recognizable roles.
 
 This record applies only to the diagram editor, its menus, and its saved-document and deletion dialogs. The surrounding AutoCheck website keeps its incumbent design. The record follows the implemented component and stylesheet rather than prescribing a new website identity.
 
@@ -164,7 +170,7 @@ This record applies only to the diagram editor, its menus, and its saved-documen
 
 ## Colors
 
-The default palette uses the earlier neutral graphite backgrounds, light text, and brighter blue interaction accents. The frontmatter holds the normative values from `diagramEditor.css`, `diagramTheme.ts`, and `ComparisonDiagramEditor.tsx`: unsuffixed UI roles describe dark mode, `light-` roles describe the light variant, `document-` roles describe new-shape color values, and the canvas text/detail roles retain the portable light-rendering values.
+The default palette uses the earlier neutral graphite backgrounds, light text, and brighter blue interaction accents. The frontmatter holds the normative values from `diagramEditor.css`, `diagramTheme.ts`, and `diagramPalette.ts`: unsuffixed UI roles describe dark mode, `light-` roles describe the light variant, `document-` roles describe new-shape color values, and the canvas text/detail roles retain the portable light-rendering values.
 
 ### Primary
 
@@ -175,8 +181,8 @@ The default palette uses the earlier neutral graphite backgrounds, light text, a
 
 ### Secondary
 
-- **Shape Blue** identifies rectangles, **Shape Teal** identifies ellipses, **Shape Violet** identifies diamonds, and **Shape Amber** identifies notes. Each role has a themed icon color and tile fill, including corresponding light-mode values.
-- **Document Blue / Teal / Violet / Amber** are the stored default colors for newly created shapes in those roles. The library's themed presentation colors do not overwrite existing document colors.
+- **Shape Blue** identifies rectangles and resistors, **Shape Teal** identifies ellipses and capacitors, **Shape Violet** identifies diamonds, and **Shape Amber** identifies notes and Net Name tags. Each role has a themed icon color and tile fill, including corresponding light-mode values. Ground uses the neutral control-text/surface roles.
+- **Document Blue / Teal / Violet / Amber / Gray** are stored defaults for newly created shapes. Ground uses Document Gray; the other shapes follow their corresponding library color roles. The library's themed presentation colors do not overwrite existing document colors.
 
 ### Neutral
 
@@ -192,7 +198,7 @@ The default palette uses the earlier neutral graphite backgrounds, light text, a
 
 The header appearance control switches dark/light mode and remembers the choice in this browser's local storage. Missing or unavailable storage defaults to dark; a failed preference write still allows the current toggle to work. Appearance is outside the saved diagram and its undo history. SVG, PNG, and PDF exports always retain the white page and light drawing-color helpers.
 
-Dark node fills blend toward the canvas by 0.72 to retain more of the chosen hue, with further blending when needed to keep relative fill luminance at or below 0.083. Dark strokes are brightened when their relative luminance is below 0.38. The light rendering retains its 0.88 fill blend and 0.25 maximum stroke-luminance threshold.
+Automatic dark node fills blend toward the canvas by 0.72 to retain more of the chosen hue, with further blending when needed to keep relative fill luminance at or below 0.083. Dark strokes are brightened when their relative luminance is below 0.38. The light rendering retains its 0.88 fill blend and 0.25 maximum stroke-luminance threshold. A custom fill preserves the chosen color and selects black or white label/detail text according to the higher contrast; electrical R/C/GND symbols remain unfilled line drawings.
 
 ## Typography
 
@@ -208,13 +214,13 @@ Dark node fills blend toward the canvas by 0.72 to retain more of the chosen hue
 - **Label:** commands and property labels.
 - **Metadata:** source revision, saved state, hints, and counts.
 
-Diagram-node names use the panel-title size and weight with a line height of 1.4. Details use the metadata size with a line height of 1.5 and show up to three lines. On screens at or below 700px, title and editable property fields use 16px text. Portable visual exports use their existing Arial / Microsoft JhengHei / Noto Sans CJK TC fallback stack.
+Diagram-node names use the panel-title size and weight with a line height of 1.4. Details use the metadata size with a line height of 1.5 and show up to three lines. Symbol captions use 12px names and 10px details with a line height of 1.1; details show up to two lines, and captions remain upright outside circuit strokes during rotation. On screens at or below 700px, title and editable property fields use 16px text. Portable visual exports use their existing Arial / Microsoft JhengHei / Noto Sans CJK TC fallback stack.
 
 ## Layout
 
 The document header is followed by a grouped command bar, then the workbench, then the count and zoom status bar. The workbench uses a left shape library (176px), a flexible canvas, and a contextual inspector (264px). The inspector appears when an object is selected or the connection tool is active, and is hidden while the arrow drawing tool is active. Clicking the canvas or closing the inspector clears that context.
 
-At or below 1050px, the library narrows to 144px and the inspector to 244px; the command bar can scroll horizontally. At or below 700px, shapes become a four-column horizontal strip, and the inspector becomes a pane below the canvas with a maximum height of 48% of the workbench. The document actions wrap beneath the name. The main library hints are hidden to preserve working space.
+At or below 1050px, the library narrows to 144px and the inspector to 244px; the command bar can scroll horizontally. At or below 700px, the eight shapes form a four-column grid, and the inspector becomes a pane below the canvas with a maximum height of 48% of the workbench. The document actions wrap beneath the name. The main library hints are hidden to preserve working space. Active drawing settings form a separate wrapping row below the commands and a two-column grid on narrow screens.
 
 The embedded editor is at least 650px high, with a viewport-relative preferred height and an upper limit of 1100px. The narrow layout has a 660px minimum. Full-canvas mode occupies the viewport and restores the embedded layout when closed. The canvas snaps movement to a 20px grid and offers zoom, 100%, and fit controls.
 
@@ -230,9 +236,11 @@ Connection handles fade in over 120ms on hover, selection, or keyboard focus, an
 
 The embedded shell uses the shell radius and menus/dialogs use the floating radius; narrow embedded mode uses the control radius, and full-canvas mode has square outer corners. Buttons use softly rounded controls, property fields and saved-document cards use the field radius, and menu items use compact corners. Thin borders define panels and control boundaries.
 
-The shape library offers rectangles, ellipses, diamonds, and notes. Drawing rectangles use the diagram-node radius; ellipses are fully rounded, diamonds use a polygon, and notes have a folded-corner silhouette with a dashed border. These are document shapes rather than additional UI container styles.
+The shape library offers four basic shapes (rectangle, ellipse, diamond, note) and four circuit items (resistor, capacitor, ground, Net Name). Drawing rectangles use the diagram-node radius; ellipses are fully rounded, diamonds use a polygon, and notes have a folded-corner silhouette with a dashed border. These are document shapes rather than additional UI container styles.
 
-New rectangles and connections use Document Blue; ellipses use Document Teal, diamonds use Document Violet, and notes use Document Amber. Documents retain their selected colors, including source-graph colors. The interface palette does not recolor stored drawing content.
+New rectangles and resistors use Document Blue; ellipses and capacitors use Document Teal, diamonds use Document Violet, notes and Net Name tags use Document Amber, and ground uses Document Gray. The drawing color setting supplies new connection colors. Documents retain their selected colors, including source-graph colors. The interface palette does not recolor stored drawing content.
+
+Resistor and capacitor symbols have two terminals; ground and Net Name tags have one. R/C/GND rotation offers 0°, 90°, 180°, and 270°. Quarter-turns swap width and height about the symbol center and remap attached terminals. Shared native SVG paths and terminal geometry define the library, canvas, and exports.
 
 ## Components
 
@@ -244,15 +252,17 @@ Focus is visible as the active mode's focus-color outline (2px). Pressed feedbac
 
 ### Fields
 
-Fields use the current mode's Field, Text, Control Border, and field radius. The document title is visually transparent at rest, with a boundary on hover and focus. Property editing supports node names, descriptions, dimensions, color, and arrow text, path, arrowheads, line style, width, or reversal. Width and height fields are paired; descriptions can expand vertically. The stylesheet explicitly overrides inherited input colors, text fill, and shadows to preserve the selected appearance.
+Fields use the current mode's Field, Text, Control Border, and field radius. The document title is visually transparent at rest, with a boundary on hover and focus. Property editing supports node names, Net Name tags, descriptions, dimensions, electrical-symbol rotation, and arrow text, path, arrowheads, crossings, line style, width, or reversal. Width and height fields are paired; descriptions can expand vertically. The stylesheet explicitly overrides inherited input colors, text fill, and shadows to preserve the selected appearance.
+
+Stroke and optional fill controls pair a native color picker with a six-digit HEX field and the existing swatches. Only a complete `#RRGGBB` value commits; an incomplete draft is marked invalid and resets to the stored color on blur. Basic shapes and Net Name tags can reset custom fills with “使用自動填色”. A connection's editable text can carry a Net Name such as `VCC_3V3`.
 
 ### Navigation and Toolbars
 
-The command bar uses Chrome and separators between command groups. File and export menus keep secondary actions out of the canvas. The source menu selects A or B revision before bringing in Power Tree or I²C content. Menus retain 44px item targets, the active mode's surface, and blue highlighted states. The arrow tool exposes a straight/elbow/curve selector while active.
+The command bar uses Chrome and separators between command groups. File and export menus keep secondary actions out of the canvas. The source menu selects A or B revision before bringing in Power Tree or I²C content. Menus retain 44px item targets, the active mode's surface, and blue highlighted states. Dedicated “箭頭” and “雙箭頭” buttons enter drawing with the corresponding arrowheads. Active drawing settings expose path, arrowhead, crossing, and line-color controls.
 
 ### Shape Cards
 
-Library tiles pair a geometric icon with a text name, a role-colored fill, and a role-colored icon with a subtle fill. On desktop they form a two-column grid and support clicking or dragging into the canvas. Hover introduces Selection Fill and the shape role's border color. On narrow screens they become compact horizontal controls.
+Library tiles pair a geometric or circuit icon with a text name and its role colors. The R/C/GND icons are line symbols; Net Name uses its tag outline. On desktop they form a two-column grid and support clicking or dragging into the canvas. Hover introduces Selection Fill and the shape role's border color. On narrow screens the eight tiles become compact horizontal controls in a four-column grid.
 
 ### Saved Document Cards
 
@@ -268,9 +278,13 @@ A compact canvas chip names the active selection or connection task. It uses the
 
 The arrow tool (`A`) turns the canvas into a drag-to-draw region with a crosshair, a live route preview, and an instruction hint. Either endpoint can remain free or snap to a shape body within 18 screen pixels; snapping selects the appropriate shape port. Holding Shift constrains the drawing gesture horizontally or vertically. `V` returns to selection; Escape cancels the current draft and exits drawing. Completed arrows remain in the document.
 
-In selection mode, either arrow endpoint can be dragged to a free position or reattached to a shape. Properties offer straight, elbow, or curved paths; end-only, both-end, or absent arrowheads; solid/dashed lines; integer widths from 1 through 8; and reversal of the endpoints. New drawn arrows default to a straight path, an end arrowhead, and width 2. Existing connections without the optional fields keep elbow routing, an end arrowhead, and width 2.
+In selection mode, either arrow endpoint can be dragged to a free position or reattached to a shape's available terminals. Properties offer straight, elbow, or curved paths; end-only, both-end, or absent arrowheads; solid/dashed lines; integer widths from 1 through 8; and reversal of the endpoints. Drawing settings initially use a straight path, an end arrowhead, and width 2; the direct double-arrow button sets both ends. Existing connections without the optional fields keep elbow routing, an end arrowhead, and width 2.
 
-The version-1 document adds optional edge fields for these capabilities. Free endpoints are persisted as edge coordinates; invisible canvas helper nodes are presentation objects and never enter saved JSON. Appearance changes likewise stay outside document data.
+New arrows and connections enable arc bridges at crossings by default, with a per-edge option to disable them. Bridges indicate crossing wires without a connection, and shared endpoints do not receive a bridge. The canvas and visual exports use the same routes and bridge geometry. A canvas-colored halo separates the bridge from the crossed wire; that halo is white on the exported page.
+
+If crossing computation exceeds its density limits, the canvas preserves the original routes and displays “連線過於密集，已暫停跨線拱橋；請減少線段或拆成較小的圖表。” SVG/PNG/PDF export stops with the same notice so it does not silently drop bridge geometry. Editable JSON can still be exported.
+
+The version-1 document adds optional node fill/rotation and edge crossing fields alongside the earlier arrow fields. Free endpoints are persisted as edge coordinates; invisible canvas helper nodes are presentation objects and never enter saved JSON. Appearance changes likewise stay outside document data.
 
 ## Do's and Don'ts
 

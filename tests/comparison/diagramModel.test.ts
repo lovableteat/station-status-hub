@@ -160,6 +160,44 @@ test("free arrows reject missing, dangling, unsafe or unbounded endpoints and in
   assert.deepEqual(parseDiagramDocument(legacy), legacy, "version 1 documents do not gain new optional fields");
 });
 
+test("electrical symbols, net names, independent fills and line jumps round-trip as version 1 data", () => {
+  const doc = document();
+  doc.nodes = [
+    { ...node("R1"), shape: "resistor", rotation: 90, label: "R1", detail: "10 kΩ", color: "#F97316" },
+    { ...node("C1", 300), shape: "capacitor", rotation: 270, label: "C1", detail: "100 nF" },
+    { ...node("ground", 600), shape: "ground", rotation: 180, label: "GND" },
+    { ...node("net", 900), shape: "netlabel", label: "I2C_SDA", fillColor: "#E2E8F0" },
+    { ...node("frame", 1200), color: "#7C3AED", fillColor: "#111827" },
+  ];
+  doc.edges = [{ id: "wire", source: "R1", target: "C1", sourcePort: "bottom", targetPort: "top", label: "", color: "#2563eb", arrowhead: "both", jump: "arc" }];
+  const snapshot = structuredClone(doc);
+  assert.deepEqual(parseDiagramDocument(JSON.parse(JSON.stringify(doc))), doc);
+  assert.deepEqual(autoLayoutDiagram(doc).nodes.map(({ shape, rotation, fillColor, color }) => ({ shape, rotation, fillColor, color })), doc.nodes.map(({ shape, rotation, fillColor, color }) => ({ shape, rotation, fillColor, color })));
+  assert.deepEqual(doc, snapshot);
+  doc.edges[0].jump = "none";
+  assert.equal(parseDiagramDocument(doc).edges[0].jump, "none");
+});
+
+test("electrical drawing fields reject unsafe fills, arbitrary rotations and invalid jump modes", () => {
+  for (const patch of [
+    { fillColor: "#fff" }, { fillColor: "url(https://invalid.test)" }, { fillColor: '#fff" onload="run()' },
+    { fillColor: null }, { fillColor: 0 }, { rotation: 90 },
+    { shape: "resistor", rotation: 45 }, { shape: "resistor", rotation: "90" }, { shape: "resistor", rotation: NaN },
+    { shape: "netlabel", rotation: 90 },
+  ]) {
+    const doc = document(); Object.assign(doc.nodes[0], patch);
+    assert.throws(() => parseDiagramDocument(doc), /圖表資料無效/);
+  }
+  for (const jump of ["bridge", null, 1, { arc: true }]) {
+    const doc = document(); Object.assign(doc.edges[0], { jump });
+    assert.throws(() => parseDiagramDocument(doc), /圖表資料無效/);
+  }
+  for (const shape of ["resistor", "capacitor", "ground"] as const) for (const rotation of [0, 90, 180, 270] as const) {
+    const doc = document(); Object.assign(doc.nodes[0], { shape, rotation });
+    assert.equal(parseDiagramDocument(doc).nodes[0].rotation, rotation);
+  }
+});
+
 test("Power Tree conversion preserves actual rail/converter topology, provenance, RefDes/page and the original session", () => {
   const input = session(), snapshot = structuredClone(input);
   const doc = createDiagramFromResult(input, "power");

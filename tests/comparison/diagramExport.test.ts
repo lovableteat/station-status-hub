@@ -6,7 +6,8 @@ import ts from "typescript";
 import { parseDiagramDocument, type DiagramDocument } from "../../src/components/comparison/diagramModel.ts";
 import { diagramToSvg } from "../../src/components/comparison/diagramExport.ts";
 import { DIAGRAM_THEME, diagramNodeColors, diagramStrokeColor } from "../../src/components/comparison/diagramTheme.ts";
-import { diagramEdgeRoute } from "../../src/components/comparison/diagramGeometry.ts";
+import { buildDiagramEdgeRoutes } from "../../src/components/comparison/diagramGeometry.ts";
+import { diagramSymbolGraphics, diagramSymbolLabelBox, isElectricalSymbol } from "../../src/components/comparison/diagramSymbols.ts";
 
 const source = await readFile(new URL("../../src/components/comparison/diagramExport.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -200,7 +201,8 @@ function exportHarness(options: HarnessOptions = {}) {
     require(name: string) {
       if (name === "./diagramModel.ts") return { parseDiagramDocument };
       if (name === "./diagramTheme.ts") return { DIAGRAM_THEME, diagramNodeColors, diagramStrokeColor };
-      if (name === "./diagramGeometry.ts") return { diagramEdgeRoute };
+      if (name === "./diagramGeometry.ts") return { buildDiagramEdgeRoutes };
+      if (name === "./diagramSymbols.ts") return { diagramSymbolGraphics, diagramSymbolLabelBox, isElectricalSymbol };
       assert.equal(name, "jspdf");
       if (options.missingPdf) throw new Error("PDF module unavailable");
       return { jsPDF: FakePdf };
@@ -260,6 +262,69 @@ test("node-free drawing exports preserve line routes, arrowheads, widths and edi
     harness.fireTimers(10_000);
     assert.equal(new Set(harness.revoked).size, harness.blobs.size);
   }
+});
+
+test("electrical symbols, net labels, chosen frame fills, crossing bridges and double arrows reach every export format", async () => {
+  const doc = documentFixture();
+  doc.nodes = [
+    { id: "R1", x: 0, y: 0, width: 180, height: 120, shape: "resistor", label: "R1", detail: "10 kΩ", color: "#f97316", rotation: 90 },
+    { id: "C1", x: 240, y: 0, width: 180, height: 120, shape: "capacitor", label: "C1", detail: "100 nF", color: "#2563eb" },
+    { id: "gnd", x: 480, y: 0, width: 100, height: 100, shape: "ground", label: "GND", detail: "", color: "#0f766e", rotation: 270 },
+    { id: "net", x: 640, y: 0, width: 180, height: 60, shape: "netlabel", label: "I2C_SDA <R1>", detail: "", color: "#7c3aed", fillColor: "#e2e8f0" },
+    { id: "frame", x: 880, y: 0, width: 180, height: 100, shape: "rectangle", label: "Controller", detail: "U1", color: "#f97316", fillColor: "#111827" },
+  ];
+  doc.edges = [
+    { id: "horizontal", source: "", target: "", sourcePoint: { x: 0, y: 250 }, targetPoint: { x: 200, y: 250 }, label: "", color: "#2563eb", lineType: "straight", arrowhead: "none", jump: "arc" },
+    { id: "vertical", source: "", target: "", sourcePoint: { x: 100, y: 180 }, targetPoint: { x: 100, y: 320 }, label: "", color: "#7c3aed", lineType: "straight", arrowhead: "both", jump: "arc" },
+  ];
+  const snapshot = structuredClone(doc), svg = diagramToSvg(doc);
+  for (const shape of ["resistor", "capacitor", "ground", "netlabel"] as const) {
+    assert.match(svg, new RegExp(`data-symbol="${shape}"`));
+    assert.ok(svg.includes(`d="${diagramSymbolGraphics(shape)!.paths[0]}"`));
+  }
+  assert.match(svg, /transform="rotate\(90 50 50\)"/);
+  assert.match(svg, /transform="rotate\(270 50 50\)"/);
+  assert.match(svg, /10 kΩ/); assert.match(svg, /100 nF/);
+  assert.match(svg, /I2C_SDA &lt;R1&gt;/);
+  assert.match(svg, /data-node-id="frame" fill="#111827"/);
+  const frameColors = diagramNodeColors("#f97316", "light", "#111827");
+  assert.match(svg, new RegExp(`fill="${frameColors.text}" clip-path="url\\(#diagram-node-4\\)"`));
+  assert.match(svg, /fill="#e2e8f0" stroke=/);
+  assert.ok(/[QA]/.test(path(svg, "horizontal") + path(svg, "vertical")), "the exported crossing contains a real bridge curve");
+  assert.match(svg, /data-edge-id="vertical"[^>]*marker-start="url\(#diagram-arrow-1\)"[^>]*marker-end="url\(#diagram-arrow-1\)"/);
+  for (const format of ["json", "svg", "png", "pdf"] as const) {
+    const harness = exportHarness();
+    await harness.download(doc, format);
+    assert.equal(harness.downloads.length, 1);
+    if (format === "json") assert.deepEqual(parseDiagramDocument(JSON.parse(await harness.downloads[0].blob.text())), snapshot);
+    else {
+      const exportedSvg = format === "svg" ? await harness.downloads[0].blob.text() : await harness.blobs.get("blob:test-0")!.text();
+      assert.equal(exportedSvg, svg, `${format} must use the same circuit strokes, names, fills and bridges`);
+    }
+  }
+  assert.deepEqual(doc, snapshot);
+});
+
+test("export bridges erase the underpass using a background halo while preserving original arrow marker identities", () => {
+  const doc = documentFixture(); doc.nodes = [];
+  doc.edges = [
+    { id: "bridge", source: "", target: "", sourcePoint: { x: 0, y: 50 }, targetPoint: { x: 200, y: 50 }, label: "top wire", color: "#2563eb", lineType: "straight", arrowhead: "both", width: 5, jump: "arc" },
+    { id: "underpass", source: "", target: "", sourcePoint: { x: 100, y: -50 }, targetPoint: { x: 100, y: 150 }, label: "under wire", color: "#7c3aed", lineType: "straight", arrowhead: "none", width: 2, jump: "none" },
+    { id: "other-bridge", source: "", target: "", sourcePoint: { x: 250, y: 0 }, targetPoint: { x: 350, y: 0 }, label: "no crossing", color: "#2563eb", lineType: "straight", arrowhead: "end", jump: "arc" },
+  ];
+  const svg = diagramToSvg(doc);
+  assert.ok(svg.indexOf('data-edge-id="underpass"') < svg.indexOf('data-bridge-for="bridge"'), "an earlier document edge can own the bridge and must paint after the underpass");
+  assert.ok(svg.indexOf('data-bridge-for="bridge"') < svg.indexOf('data-edge-id="bridge"'), "the halo must paint before its foreground arch");
+  assert.ok(svg.indexOf('data-edge-id="bridge"') < svg.indexOf('data-edge-id="other-bridge"'), "bridge owners retain their relative document order");
+  const halo = svg.match(/<path data-bridge-for="bridge"[^>]+\/>/)![0];
+  assert.match(halo, / d="M[^"]+Q[^"]+"/);
+  assert.match(halo, /fill="none" stroke="#ffffff" stroke-width="9"/);
+  assert.match(halo, /pointer-events="none"/);
+  assert.doesNotMatch(halo, /marker-/);
+  assert.doesNotMatch(svg, /data-bridge-for="(?:underpass|other-bridge)"/);
+  assert.match(svg, /data-edge-id="bridge"[^>]*marker-start="url\(#diagram-arrow-0\)"[^>]*marker-end="url\(#diagram-arrow-0\)"/);
+  assert.match(svg, /data-edge-id="other-bridge"[^>]*marker-end="url\(#diagram-arrow-2\)"/);
+  assert.doesNotMatch(JSON.stringify(parseDiagramDocument(doc)), /bridgePath|data-bridge-for/);
 });
 
 test("PNG exports use a detached snapshot, respect pixel limits and release SVG resources and canvas memory", async () => {

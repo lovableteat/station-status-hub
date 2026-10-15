@@ -48,6 +48,18 @@ test("appearance defaults to dark and remembers an explicit light or dark choice
   assert.equal(readDiagramAppearance(storage), "dark");
 });
 
+test("custom fills retain the exact chosen color with readable labels in both appearances", () => {
+  for (const red of [0, 51, 102, 153, 204, 255]) for (const green of [0, 51, 102, 153, 204, 255]) for (const blue of [0, 51, 102, 153, 204, 255]) {
+    const fill = `#${[red, green, blue].map(channel => channel.toString(16).padStart(2, "0")).join("")}`;
+    for (const appearance of ["light", "dark"] as const) {
+      const node = diagramNodeColors("#79a9e8", appearance, fill);
+      assert.equal(node.fill, fill);
+      assert.ok(contrast(node.text, fill) >= 4.5, `${appearance} ${fill}: chosen-fill labels`);
+      assert.ok(contrast(node.detail, fill) >= 4.5, `${appearance} ${fill}: chosen-fill detail`);
+    }
+  }
+});
+
 test("unavailable browser storage does not prevent drawing or changing appearance", () => {
   assert.equal(readDiagramAppearance(null), "dark");
   assert.doesNotThrow(() => writeDiagramAppearance("light", null));

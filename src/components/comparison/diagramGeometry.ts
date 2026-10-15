@@ -1,7 +1,10 @@
 import type { DiagramEdge, DiagramNode, DiagramPoint, DiagramPort } from "./diagramModel.ts";
+import { addDiagramCrossings, type DiagramEdgeRoutes } from "./diagramCrossings.ts";
+import { diagramSymbolGraphics, diagramSymbolPortPosition, diagramSymbolPorts } from "./diagramSymbols.ts";
+export type { DiagramEdgeRoutes } from "./diagramCrossings.ts";
 
 type Nodes = readonly DiagramNode[] | ReadonlyMap<string, DiagramNode>;
-export interface DiagramEdgeRoute { path: string; points: DiagramPoint[]; label: DiagramPoint }
+export interface DiagramEdgeRoute { path: string; points: DiagramPoint[]; label: DiagramPoint; bridgePath?: string }
 export interface DiagramEdgeEndpoint { point: DiagramPoint; port?: DiagramPort; node?: DiagramNode }
 
 const vectors: Record<DiagramPort, DiagramPoint> = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, top: { x: 0, y: -1 }, bottom: { x: 0, y: 1 } };
@@ -10,6 +13,8 @@ const p = (point: DiagramPoint) => `${n(point.x)} ${n(point.y)}`;
 const offset = (point: DiagramPoint, vector: DiagramPoint, distance: number): DiagramPoint => ({ x: point.x + vector.x * distance, y: point.y + vector.y * distance });
 
 export function diagramNodeAnchor(node: DiagramNode, port: DiagramPort): DiagramPoint {
+  const anchor = diagramSymbolPortPosition(node.shape, port, node.rotation);
+  if (anchor) return { x: node.x + node.width * anchor.x / 100, y: node.y + node.height * anchor.y / 100 };
   return { x: node.x + node.width * (port === "left" ? 0 : port === "right" ? 1 : 0.5), y: node.y + node.height * (port === "top" ? 0 : port === "bottom" ? 1 : 0.5) };
 }
 
@@ -19,7 +24,11 @@ export function diagramEdgeEndpoint(edge: DiagramEdge, side: "source" | "target"
   if (id) {
     const node = Array.isArray(nodes) ? nodes.find(node => node.id === id) : (nodes as ReadonlyMap<string, DiagramNode>).get(id);
     if (!node) throw new Error("連線的圖形不存在。");
-    const port = (side === "source" ? edge.sourcePort : edge.targetPort) ?? (side === "source" ? "right" : "left");
+    let port = (side === "source" ? edge.sourcePort : edge.targetPort) ?? (side === "source" ? "right" : "left");
+    if (diagramSymbolGraphics(node.shape)) {
+      const ports = diagramSymbolPorts(node.shape, node.rotation);
+      if (!ports.includes(port)) port = ports[side === "source" ? ports.length - 1 : 0];
+    }
     return { point: diagramNodeAnchor(node, port), port, node };
   }
   const point = side === "source" ? edge.sourcePoint : edge.targetPoint;
@@ -129,4 +138,10 @@ export function diagramEdgeRoute(edge: DiagramEdge, nodes: Nodes): DiagramEdgeRo
   const endpointNodes = [source.node, target.node].filter((node): node is DiagramNode => Boolean(node));
   const middle = avoidEndpointNodes(first, last, endpointNodes, [first, ...bends, last]);
   return polyline([start, ...middle, end]);
+}
+
+/** Resolve the complete graph once so canvas and portable exports display identical bridges. */
+export function buildDiagramEdgeRoutes(edges: readonly DiagramEdge[], nodes: Nodes): DiagramEdgeRoutes {
+  const byId = Array.isArray(nodes) ? new Map(nodes.map(node => [node.id, node])) : nodes;
+  return addDiagramCrossings(edges, new Map(edges.map(edge => [edge.id, diagramEdgeRoute(edge, byId)])));
 }
