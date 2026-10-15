@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { deflateRawSync } from "node:zlib";
 import JSZip from "jszip";
 import { filePath, inspectRevision, readRevision, selectedRevisionFiles, validateRevision } from "../../src/components/comparison/files.ts";
 import { exportBackup, importBackup } from "../../src/components/comparison/backup.ts";
@@ -171,6 +172,37 @@ test("backup round trip retains reports, replies, history and project identity",
   const zip = await JSZip.loadAsync(await blob.arrayBuffer());
   assert.ok(zip.file("session.json"));
   assert.ok(Object.keys(zip.files).some(path => path.startsWith("reports/") && path.endsWith(".pdf")));
+});
+
+test("backup preserves all native DRAWIO comparison pages byte-for-byte alongside legacy reports and rejects altered MIME metadata", async () => {
+  const valid = session();
+  const legacy = structuredClone(valid.result.artifacts[0]);
+  for (const [kind, revision] of [["power", "a"], ["power", "b"], ["i2c", "a"], ["i2c", "b"]] as const) {
+    const key = `${kind}_drawio_${revision}`;
+    const model = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="U1" value="${kind} ${revision} · 電源 &amp; I²C" vertex="1" parent="1"><mxGeometry x="40" y="80" width="160" height="60" as="geometry"/></mxCell></root></mxGraphModel>`;
+    const compressed = deflateRawSync(encodeURIComponent(model)).toString("base64");
+    const xml = `\uFEFF<?xml version="1.0" encoding="UTF-8"?>\n<mxfile host="AutoCheck" custom="${key}">\n<diagram id="compressed-page" name="壓縮電路頁">${compressed}</diagram>\n<diagram id="editable-page" name="另一頁">${model}</diagram>\n</mxfile>\n`;
+    valid.result.artifacts.push({ key, name: `${key}.drawio`, mime: "application/vnd.jgraph.mxfile", bytes: new TextEncoder().encode(xml).buffer });
+  }
+  const blob = await exportBackup(valid);
+  const restored = await importBackup(new File([blob], "native-drawio.autocheck.zip"));
+  assert.deepEqual(restored, valid);
+  assert.deepEqual(restored.result.artifacts[0], legacy, "existing PDF report remains unchanged");
+  assert.deepEqual(restored.result.artifacts.slice(1).map(artifact => artifact.key), ["power_drawio_a", "power_drawio_b", "i2c_drawio_a", "i2c_drawio_b"]);
+  for (const original of valid.result.artifacts.slice(1)) {
+    const artifact = restored.result.artifacts.find(item => item.key === original.key)!;
+    assert.equal(artifact.mime, "application/vnd.jgraph.mxfile");
+    assert.deepEqual(new Uint8Array(artifact.bytes), new Uint8Array(original.bytes), `${original.key}: BOM, compressed pages and UTF-8 labels survive unchanged`);
+  }
+  const archive = await JSZip.loadAsync(await blob.arrayBuffer());
+  assert.equal(Object.keys(archive.files).filter(path => path.endsWith(".drawio")).length, 4);
+  const metadata = JSON.parse(await archive.file("session.json")!.async("string"));
+  for (const original of valid.result.artifacts.slice(1)) {
+    const altered = structuredClone(metadata);
+    altered.result.artifacts.find((artifact: { key: string }) => artifact.key === original.key).mime = "text/xml";
+    const zip = archive.clone().file("session.json", JSON.stringify(altered));
+    await assert.rejects(importBackup(new File([await zip.generateAsync({ type: "uint8array" })], "wrong-drawio-mime.zip")), /MIME 與檔名不一致/);
+  }
 });
 
 test("backup import rejects missing/unreferenced reports and sanitized traversal entries", async () => {

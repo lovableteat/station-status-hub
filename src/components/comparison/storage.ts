@@ -10,6 +10,7 @@ export const REPLY_FIELDS = ["disp", "owner", "target_rev", "note", "filled"] as
 const ARTIFACT_MIMES: Record<string, string> = {
   pdf: "application/pdf", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   json: "application/json", csv: "text/csv", txt: "text/plain", html: "text/html", db: "application/vnd.sqlite3",
+  drawio: "application/vnd.jgraph.mxfile",
 };
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -105,7 +106,7 @@ export function parseSessionSnapshot(value: unknown): ComparisonSession {
   let reportBytes = 0;
   for (const artifact of result.artifacts) {
     require(record(artifact) && keys(artifact, ["key", "name", "mime", "bytes"]), "報表結構");
-    require(text(artifact.key, true, 120) && isSafeRelativePath(artifact.name) && !artifact.name.includes("/") && /\.(pdf|xlsx|json|csv|txt|html|db)$/i.test(artifact.name) && text(artifact.mime, true, 120), "報表檔名或型別");
+    require(text(artifact.key, true, 120) && isSafeRelativePath(artifact.name) && !artifact.name.includes("/") && /\.(pdf|xlsx|json|csv|txt|html|db|drawio)$/i.test(artifact.name) && text(artifact.mime, true, 120), "報表檔名或型別");
     require(artifact.mime === ARTIFACT_MIMES[(artifact.name as string).split(".").at(-1)!.toLowerCase()], "報表 MIME 與檔名不一致");
     require(artifact.bytes instanceof ArrayBuffer, "報表缺少二進位資料");
     require(artifact.key !== "schematic" || artifact.mime === "application/pdf", "線路圖必須是 PDF");

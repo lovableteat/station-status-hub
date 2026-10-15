@@ -1,6 +1,6 @@
 {
-  "origin": "User-provided AutoCheck_1014.zip",
-  "sourceSha256": "837c31b3bec70c8ebb6dc85d5cc5d625de58f213566ecbb7ff8d7d24cc73aa02",
+  "origin": "User-provided AutoCheck_1015.zip",
+  "sourceSha256": "dd6ab9090ebb60fe86575a6c349355f0a0a4b3a5acca31e29df624d264ac2e35",
   "files": [
     {
       "path": "autocheck/__init__.py",
@@ -40,7 +40,7 @@
     },
     {
       "path": "autocheck/cli.py",
-      "sha256": "bc2679ea49b115262f55de8cbe6111082316ed772a0f20bb5da637ab22570740"
+      "sha256": "e07f5ec892a28b6cb0eb035743697aa5ef51be8c084731f0b38f9b4d950b5aed"
     },
     {
       "path": "autocheck/config.py",
@@ -116,7 +116,11 @@
     },
     {
       "path": "autocheck/report/i2c_block_diagram.py",
-      "sha256": "ea2f3804f51a4d6d5f9fc75ae4a2f2352f907f43d7f94b2e5355f633978696f5"
+      "sha256": "03c57d4f7c39522af16a0f095bb2ee8cfd611041000931b05aacb11dcd88ec9f"
+    },
+    {
+      "path": "autocheck/report/i2c_block_drawio.py",
+      "sha256": "0e07ff7883ef7081be33337a6c526984e5432eabc4c520988b03b636b80bb7c3"
     },
     {
       "path": "autocheck/report/i2c_map_diagram.py",
@@ -133,6 +137,10 @@
     {
       "path": "autocheck/report/power_tree_diagram.py",
       "sha256": "a0b603b5be15b1407bf7d6b5c3307a78316a3e350fb78571de3196c3aa7bcb27"
+    },
+    {
+      "path": "autocheck/report/power_tree_drawio.py",
+      "sha256": "c38f097d41a247867b5e5b7a4bd0461588cc69d5b76ba52704d68cec7344d0d7"
     },
     {
       "path": "autocheck/report/xlsx_tracker.py",
@@ -184,5 +192,5 @@
     }
   ],
   "version": "0.2.0",
-  "revision": "2026-10-14"
+  "revision": "2026-10-15"
 }

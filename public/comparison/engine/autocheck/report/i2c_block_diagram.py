@@ -16,6 +16,7 @@ Pure SVG, shared page frame from report/diagram_html.py (own zoom key).
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from html import escape
 
 from ..model import natkey
@@ -188,13 +189,78 @@ def _box_lines(dv) -> list[tuple[str, int, str, str]]:
             (f"7-bit: {addr}", 12, RED if (addr == "?" and not dnp) else base, "bold")]
 
 
-def _group_svg(key, buses, devs: dict, y0: float, pdf_url, conflict: set) -> tuple[list[str], float, float]:
-    """SVG parts of one upstream group starting at y0. Returns (parts, bottom y, right x)."""
+def _rect(x, y, w, h, fill, stroke, sw, dash) -> str:
+    return (f'<rect x="{x:.0f}" y="{y:.0f}" width="{w:.0f}" height="{h:.0f}" fill="{fill}" stroke="{stroke}" '
+            f'stroke-width="{sw}"{dash}/>')
+
+
+def _bar(x1, x2, y) -> str:
+    return (f'<line x1="{x1 - 10:.0f}" y1="{y:.0f}" x2="{x2 + 10:.0f}" y2="{y:.0f}" stroke="#000" '
+            f'stroke-width="1.6"/>')
+
+
+def _link_text(url, tx, tyy, t, s, w) -> str:
+    return (f'<a href="{escape(url)}" target="_blank"><text x="{tx:.0f}" y="{tyy:.0f}" font-size="{s}" '
+            f'font-weight="{w}" text-anchor="middle" fill="#0563C1" text-decoration="underline">'
+            f'{escape(t)}</text></a>')
+
+
+def _sep(y) -> str:
+    return f'<line x1="10" y1="{y:.0f}" x2="__W__" y2="{y:.0f}" stroke="#D0D0D0" stroke-dasharray="2,4"/>'
+
+
+# ---- layout model (2026-10-15, owner request: draw.io output). layout() places everything once; render_svg draws
+# the SVG primitives (byte-identical to the 2026-10-13 drawing), report/i2c_block_drawio.py draws nodes + wires.
+@dataclass
+class Node:
+    """Something placed on the drawing. kind: up (upstream box), dev (device box), res (resistor, centre x / y,
+    data.orient h / v), dot (join), bar (rail bar x..x + w at y), sep (group separator at y), text (free text,
+    x / y = SVG text anchor point). Colours are logical: K (normal), G (DNP grey), R (red), SCL, SDA."""
+    key: str
+    kind: str
+    x: float
+    y: float
+    w: float = 0.0
+    h: float = 0.0
+    data: dict = field(default_factory=dict)
+
+
+@dataclass
+class Wire:
+    """One electrical run drawn as a chain of stops: ("n", node key, fx, fy) attaches to a node (fx / fy = relative
+    port on a box, None = node default), ("p", x, y) is a corner / free end. col = logical colour, labels =
+    (text, size, bold, colour, x, y, "first" | "last" run) at SVG text anchor points (start-anchored)."""
+    key: str
+    line: str
+    stops: list
+    col: str
+    dash: bool = False
+    width: float = 1.6
+    start_arrow: bool = False
+    end_arrow: bool = False
+    labels: list = field(default_factory=list)
+    z: int = 1             # paint order in draw.io: 0 = upstream lines / trunks (drawn first, so crossing wires hop)
+
+
+@dataclass
+class Drawing:
+    parts: list            # SVG primitives (fn, args) in paint order
+    width: float
+    height: float
+    nodes: list            # [Node]
+    wires: list            # [Wire]
+
+
+def _group_layout(key, buses, devs: dict, y0: float, pdf_url, conflict: set):
+    """Layout of one upstream group starting at y0. Returns (SVG primitives, nodes, wires, bottom y, right x)."""
     kind, refs = key
-    parts: list[str] = []
+    gk = kind + ":" + "+".join(refs)
+    parts: list = []
+    nodes: list[Node] = []
+    wires: list[Wire] = []
+    P = parts.append
     mux_ref = refs[0].split(" ", 1)[0] if kind == "mux" else ""
     rows = [[devs[x] for x in b.devices if x in devs and x != mux_ref] for b in buses]
-
     # ---- device boxes (right), bus 0 on top
     y = y0 + 10
     box_y: list[list[float]] = []
@@ -206,7 +272,6 @@ def _group_svg(key, buses, devs: dict, y0: float, pdf_url, conflict: set) -> tup
         if ds:
             y += 10
     boxes_bottom = y
-
     # ---- upstream lines: bus0 SCL, bus0 SDA, bus1 SCL, ... below the boxes, leaving room for the pull-up bars
     # upstream chain per line: nets n0..nk and series parts p1..pk (checks/i2c_map Bus.end_chain); a pull-up on n_j is
     # drawn in zone j, i.e. between p_j and p_j+1, so the picture keeps which side of a damping R it sits on.
@@ -236,7 +301,6 @@ def _group_svg(key, buses, devs: dict, y0: float, pdf_url, conflict: set) -> tup
     line_y0 = bar_y + (78 if pus else 24)
     ly = {(i, ln): line_y0 + LGAP * (2 * i + (0 if ln == "SCL" else 1)) for i in range(len(buses)) for ln in ("SCL", "SDA")}
     last_ly = max(ly.values())
-
     # ---- upstream box (left)
     if kind == "mux":
         box_txt = [(refs[0], 13, "#000", "bold"), ("mux channel", 10, GREY, "normal")]
@@ -257,13 +321,14 @@ def _group_svg(key, buses, devs: dict, y0: float, pdf_url, conflict: set) -> tup
     ex_top = line_y0 - 26
     ex_h = max(last_ly - line_y0 + 46, 18 * len(box_txt) + 16)
     fill, stroke, dash = ("#F2F2F2", GREY, ' stroke-dasharray="5,4"') if kind == "none" else ("#F4B183", "#843C0C", "")
-    parts.append(f'<rect x="{ex_x}" y="{ex_top:.0f}" width="{ex_w:.0f}" height="{ex_h:.0f}" fill="{fill}" '
-                 f'stroke="{stroke}" stroke-width="2"{dash}/>')
+    P((_rect, (ex_x, ex_top, ex_w, ex_h, fill, stroke, "2", dash)))
+    up_key = gk + "|up"
+    nodes.append(Node(up_key, "up", ex_x, ex_top, ex_w, ex_h,
+                      {"kind": kind, "lines": [(t, s, _LOGI[c], w) for t, s, c, w in box_txt]}))
     ty = ex_top + ex_h / 2 - 9 * (len(box_txt) - 1)
     for t, s, c, w in box_txt:
-        parts.append(_text(ex_x + ex_w / 2, ty + 5, t, s, c, w, "middle"))
+        P((_text, (ex_x + ex_w / 2, ty + 5, t, s, c, w, "middle")))
         ty += 18
-
     # ---- x positions: net labels, pull-ups, trunks, series parts, device boxes
     end_net = {k: v[0][0] for k, v in chain.items()}
     x = ex_r + 20 + max(_tw(n, 11) for n in end_net.values()) + 10     # cursor: right edge of what is placed
@@ -287,7 +352,6 @@ def _group_svg(key, buses, devs: dict, y0: float, pdf_url, conflict: set) -> tup
     dnets = [_dev_net(dv, buses[i], ln) for i, ds in enumerate(rows) for dv in ds for ln in ("SCL", "SDA")]
     x_dev = net_x + max([_tw(n, 10) for n in dnets] + [60]) + 30
     bw = max([150] + [_tw(t, s) + 20 for ds in rows for dv in ds for t, s, _, _ in _box_lines(dv)])
-
     # ---- trunks (vertical): from the first branch down to this bus's upstream line
     trunk_rng: dict[tuple[int, str], tuple[float, float]] = {}
     for i, ds in enumerate(rows):
@@ -295,24 +359,30 @@ def _group_svg(key, buses, devs: dict, y0: float, pdf_url, conflict: set) -> tup
             top = (box_y[i][0] + BR[ln]) if ds else ly[(i, ln)]
             trunk_rng[(i, ln)] = (top, ly[(i, ln)])
             if ds:
-                parts.append(_vline(xt[(i, ln)], top, ly[(i, ln)], LINE[ln], width=2.4))
-
+                P((_vline, (xt[(i, ln)], top, ly[(i, ln)], LINE[ln]), {"width": 2.4}))
     # ---- upstream lines (horizontal): box -> own trunk; SDA arrow into the box (data both ways), SCL plain
+    up_stops: dict[tuple[int, str], list] = {}        # (x, stop) along the line, pull-up dots added below
     for i, b in enumerate(buses):
         for ln in ("SCL", "SDA"):
             yy = ly[(i, ln)]
             x2 = xt[(i, ln)]
-            parts.append(_hline(ex_r, x2, yy, LINE[ln], width=2, start="aw" + ln if ln == "SDA" else ""))
-            parts.append(_text(ex_r + 20, yy - 5, end_net[(i, ln)], 11, LINE[ln], "bold"))
+            P((_hline, (ex_r, x2, yy, LINE[ln]), {"width": 2, "start": "aw" + ln if ln == "SDA" else ""}))
+            P((_text, (ex_r + 20, yy - 5, end_net[(i, ln)], 11, LINE[ln], "bold")))
+            up_stops[(i, ln)] = []
             for q, (r, v, built) in enumerate(chain[(i, ln)][1]):
                 sx = colx[q]
-                parts.append(_res_h(sx, yy, "#000" if built else GREY))
+                P((_res_h, (sx, yy, "#000" if built else GREY)))
                 if not built:
-                    parts.append(_xmark(sx, yy))
-                parts.append(_text(sx, yy - 9, f"{r} {v}".strip(), 10, "#000" if built else GREY, anchor="middle"))
+                    P((_xmark, (sx, yy)))
+                P((_text, (sx, yy - 9, f"{r} {v}".strip(), 10, "#000" if built else GREY), {"anchor": "middle"}))
+                rk = f"{gk}|{b.bid}|{ln}|up|{q}|{r}"
+                nodes.append(Node(rk, "res", sx, yy, data={"orient": "h", "refdes": r, "value": v, "built": built,
+                                                          "label": f"{r} {v}".strip()}))
+                up_stops[(i, ln)].append((sx, ("n", rk, None, None)))
             if not rows[i]:
-                parts.append(_text(x2 + 8, yy + 4, "(沒有 I2C 元件)", 11, GREY))
-
+                P((_text, (x2 + 8, yy + 4, "(沒有 I2C 元件)", 11, GREY)))
+                nodes.append(Node(f"{gk}|{b.bid}|{ln}|empty", "text", x2 + 8, yy + 4,
+                                  data={"text": "(沒有 I2C 元件)", "size": 11, "col": "G", "bold": False}))
     # ---- pull-ups: rail bar (shared by consecutive same-rail parts), vertical down to its line, hop over lines above
     k = 0
     run_no = 0
@@ -322,33 +392,45 @@ def _group_svg(key, buses, devs: dict, y0: float, pdf_url, conflict: set) -> tup
         while j + 1 < len(pus) and pus[j + 1][4] == rail and pus[j + 1][6] == pus[k][6]:
             j += 1
         x1, x2 = pux[k], pux[j]
-        parts.append(f'<line x1="{x1 - 10:.0f}" y1="{bar_y:.0f}" x2="{x2 + 10:.0f}" y2="{bar_y:.0f}" stroke="#000" '
-                     f'stroke-width="1.6"/>')
-        parts.append(_text((x1 + x2) / 2, bar_y - 8 - 13 * (run_no % 2), rail, 11, "#000", "bold", "middle"))
+        P((_bar, (x1, x2, bar_y)))
+        P((_text, ((x1 + x2) / 2, bar_y - 8 - 13 * (run_no % 2), rail, 11, "#000", "bold", "middle")))
+        bar_key = f"{gk}|bar{run_no}|{rail}"
+        nodes.append(Node(bar_key, "bar", x1 - 10, bar_y, x2 - x1 + 20, 0,
+                          {"rail": rail, "label_dy": 8 + 13 * (run_no % 2)}))
         for q in range(k, j + 1):
             i, ln, r, v, _, built, _ = pus[q]
             x = pux[q]
             yy = ly[(i, ln)]
             col = LINE[ln] if built else GREY
             above = [ly[t] for t in ly if ly[t] < yy]
-            parts.append(_dot(x, bar_y))
-            parts.append(_vline(x, bar_y, yy, col, crosses=above, width=1.6))
+            P((_dot, (x, bar_y)))
+            P((_vline, (x, bar_y, yy, col), {"crosses": above, "width": 1.6}))
             ry = bar_y + 28
-            parts.append(_res_v(x, ry, "#000" if built else GREY))
+            P((_res_v, (x, ry, "#000" if built else GREY)))
             if not built:
-                parts.append(_xmark(x, ry))
-            parts.append(_text(x - 9, ry - 2, r, 10, "#000" if built else GREY, "bold", "end"))
-            parts.append(_text(x - 9, ry + 11, v + ("" if built else " DNP"), 10, "#000" if built else GREY,
-                               anchor="end"))
-            parts.append(_dot(x, yy))
+                P((_xmark, (x, ry)))
+            P((_text, (x - 9, ry - 2, r, 10, "#000" if built else GREY, "bold", "end")))
+            P((_text, (x - 9, ry + 11, v + ("" if built else " DNP"), 10, "#000" if built else GREY), {"anchor": "end"}))
+            P((_dot, (x, yy)))
+            bid = buses[i].bid
+            pk = f"{gk}|{bid}|{ln}|pu|{r}"
+            top_dot, line_dot = pk + "|rail", pk + "|line"
+            nodes.append(Node(top_dot, "dot", x, bar_y, data={"bar": bar_key}))
+            nodes.append(Node(pk, "res", x, ry, data={"orient": "v", "refdes": r, "built": built,
+                                                     "value": v + ("" if built else " DNP"), "label": r}))
+            nodes.append(Node(line_dot, "dot", x, yy))
+            wires.append(Wire(pk, ln, [("n", top_dot, None, None), ("n", pk, None, None), ("n", line_dot, None, None)],
+                              ln if built else "G"))
+            up_stops[(i, ln)].append((x, ("n", line_dot, None, None)))
         run_no += 1
         k = j + 1
-
     # ---- branches + device boxes
+    br_stops: dict[tuple[int, str], list] = {}        # (y, stop) of the branch joins on each trunk
     for i, ds in enumerate(rows):
         b = buses[i]
         for dv, by in zip(ds, box_y[i]):
             dnp = not dv.built
+            dk = f"{gk}|{b.bid}|dev|{dv.refdes}"
             for ln in ("SCL", "SDA"):
                 yy = by + BR[ln]
                 ser = _branch(dv, b, ln)
@@ -360,35 +442,81 @@ def _group_svg(key, buses, devs: dict, y0: float, pdf_url, conflict: set) -> tup
                     t0, t1 = trunk_rng[(i, "SDA")]
                     if rows[i] and t0 < yy < t1:
                         crosses.append(xt[(i, "SDA")])
-                parts.append(_hline(xt[(i, ln)], x_dev, yy, col, crosses=crosses, width=1.6, dash=dash,
-                                    end="ar" + ("G" if grey else ln)))
-                if yy != trunk_rng[(i, ln)][0]:
-                    parts.append(_dot(xt[(i, ln)], yy))
+                P((_hline, (xt[(i, ln)], x_dev, yy, col),
+                   {"crosses": crosses, "width": 1.6, "dash": dash, "end": "ar" + ("G" if grey else ln)}))
+                is_top = yy == trunk_rng[(i, ln)][0]
+                jk = f"{dk}|{ln}|join"
+                if not is_top:
+                    P((_dot, (xt[(i, ln)], yy)))
+                    nodes.append(Node(jk, "dot", xt[(i, ln)], yy))
+                stops = [] if is_top else [("n", jk, None, None)]
                 for s, (r, v, built) in enumerate(ser):
                     sx = xs0 + RS_DX * s
-                    parts.append(_res_h(sx, yy, "#000" if built else GREY))
+                    P((_res_h, (sx, yy, "#000" if built else GREY)))
                     if not built:
-                        parts.append(_xmark(sx, yy))
-                    parts.append(_text(sx, yy - 9, f"{r} {v}".strip(), 10, "#000" if built else GREY, anchor="middle"))
-                parts.append(_text(net_x, yy - 5, _dev_net(dv, b, ln), 10, col, "bold"))
+                        P((_xmark, (sx, yy)))
+                    P((_text, (sx, yy - 9, f"{r} {v}".strip(), 10, "#000" if built else GREY), {"anchor": "middle"}))
+                    rk = f"{dk}|{ln}|{s}|{r}"
+                    nodes.append(Node(rk, "res", sx, yy, data={"orient": "h", "refdes": r, "value": v, "built": built,
+                                                              "label": f"{r} {v}".strip(), "branch_of": dv.refdes}))
+                    stops.append(("n", rk, None, None))
+                P((_text, (net_x, yy - 5, _dev_net(dv, b, ln), 10, col, "bold")))
+                stops.append(("n", dk, 0.0, BR[ln] / BH))
+                lab = (_dev_net(dv, b, ln), 10, True, "G" if grey else ln, net_x, yy - 5, "last")
+                if is_top:
+                    br_stops[(i, ln, "top")] = (stops, grey, lab)
+                else:
+                    br_stops.setdefault((i, ln), []).append((yy, jk))
+                    wires.append(Wire(f"{dk}|{ln}", ln, stops, "G" if grey else ln, dash=grey, end_arrow=True,
+                                      labels=[lab]))
             st = RED if dv.refdes in conflict else (GREY if dnp else "#000")
             sw = 3 if dv.refdes in conflict else 2
             fillb = "#F2F2F2" if dnp else "#D9D9D9"
             bdash = ' stroke-dasharray="5,4"' if dnp else ""
-            parts.append(f'<rect x="{x_dev:.0f}" y="{by:.0f}" width="{bw:.0f}" height="{BH}" fill="{fillb}" stroke="{st}" '
-                         f'stroke-width="{sw}"{bdash}/>')
+            P((_rect, (x_dev, by, bw, BH, fillb, st, str(sw), bdash)))
             url = pdf_url(dv.page) if pdf_url and dv.page else None
             for j, (t, s, c, w) in enumerate(_box_lines(dv)):
                 tx, tyy = x_dev + bw / 2, by + 18 + 18 * j
                 if j == 0 and url:
-                    parts.append(f'<a href="{escape(url)}" target="_blank"><text x="{tx:.0f}" y="{tyy:.0f}" font-size="{s}" '
-                                 f'font-weight="{w}" text-anchor="middle" fill="#0563C1" text-decoration="underline">'
-                                 f'{escape(t)}</text></a>')
+                    P((_link_text, (url, tx, tyy, t, s, w)))
                 else:
-                    parts.append(_text(tx, tyy, t, s, c, w, "middle"))
+                    P((_text, (tx, tyy, t, s, c, w, "middle")))
+            nodes.append(Node(dk, "dev", x_dev, by, bw, BH,
+                              {"refdes": dv.refdes, "dnp": dnp, "conflict": dv.refdes in conflict, "url": url,
+                               "lines": [(t, s, _LOGI[c], w) for t, s, c, w in _box_lines(dv)]}))
+    # ---- wires per upstream line: box -> series parts / pull-up joins -> trunk foot (upstream line, width 2); foot ->
+    # branch joins bottom up -> trunk top (trunk, width 2.4); trunk top -> first device's branch. Corner nodes at the
+    # foot and the top keep each run's own width / colour (the first branch may be grey / dashed). Line without
+    # devices: one wire with a free end at the trunk x.
+    for i, b in enumerate(buses):
+        for ln in ("SCL", "SDA"):
+            yy = ly[(i, ln)]
+            stops = [("n", up_key, 1.0, (yy - ex_top) / ex_h)]
+            stops += [s for _, s in sorted(up_stops[(i, ln)], key=lambda t: t[0])]
+            lab = [(end_net[(i, ln)], 11, True, ln, ex_r + 20, yy - 5, "first")]
+            if not rows[i]:
+                wires.append(Wire(f"{gk}|{b.bid}|{ln}|up", ln, stops + [("p", xt[(i, ln)], yy)], ln, width=2,
+                                  start_arrow=ln == "SDA", labels=lab, z=0))
+                continue
+            fk, ck = f"{gk}|{b.bid}|{ln}|foot", f"{gk}|{b.bid}|{ln}|corner"
+            nodes.append(Node(fk, "corner", xt[(i, ln)], yy, data={"col": ln}))
+            nodes.append(Node(ck, "corner", xt[(i, ln)], trunk_rng[(i, ln)][0], data={"col": ln}))
+            wires.append(Wire(f"{gk}|{b.bid}|{ln}|up", ln, stops + [("n", fk, None, None)], ln, width=2,
+                              start_arrow=ln == "SDA", labels=lab, z=0))
+            joins = sorted(br_stops.get((i, ln), []), key=lambda t: -t[0])
+            chain_t = [fk] + [j[1] for j in joins] + [ck]
+            for a_, c_ in zip(chain_t, chain_t[1:]):
+                wires.append(Wire(f"{gk}|{b.bid}|{ln}|trunk|{a_}", ln, [("n", a_, None, None), ("n", c_, None, None)],
+                                  ln, width=2.4, z=0))
+            top_stops, grey, top_lab = br_stops[(i, ln, "top")]
+            wires.append(Wire(f"{gk}|{b.bid}|{ln}|first", ln, [("n", ck, None, None)] + top_stops,
+                              "G" if grey else ln, dash=grey, end_arrow=True, labels=[top_lab]))
     bottom = max(ex_top + ex_h, last_ly + 20, boxes_bottom)
     right = x_dev + bw + 20 if any(rows) else xt_last + 160
-    return [p for p in parts if p], bottom, right
+    return parts, nodes, wires, bottom, right
+
+
+_LOGI = {"#000": "K", GREY: "G", RED: "R"}
 
 
 def _defs() -> str:
@@ -401,29 +529,49 @@ def _defs() -> str:
     return "<defs>" + "".join(out) + "</defs>"
 
 
-def render_svg(m: dict, pdf_url=None) -> str:
+def layout(m: dict, pdf_url=None) -> Drawing:
+    """Place every group once (deterministic: natkey orders only). Shared by render_svg and the draw.io renderer."""
     devs = m.get("devices", {})
     conflict: set[str] = set()
     for f in m.get("_findings", []):
         if f.rule == "I2C_ADDR_CONFLICT":
             conflict |= set(f.refdes)
-    parts, y, w = [], 10.0, 400.0
+    parts, nodes, wires, y, w = [], [], [], 10.0, 400.0
     gs = groups(m)
     for n, (key, buses) in enumerate(gs):
         if n:
-            parts.append(f'<line x1="10" y1="{y:.0f}" x2="__W__" y2="{y:.0f}" stroke="#D0D0D0" stroke-dasharray="2,4"/>')
+            parts.append((_sep, (y,)))
+            nodes.append(Node(f"sep{n}", "sep", 10, y))
             y += 16
-        p, bottom, right = _group_svg(key, buses, devs, y, pdf_url, conflict)
+        p, nd, wr, bottom, right = _group_layout(key, buses, devs, y, pdf_url, conflict)
         parts += p
+        nodes += nd
+        wires += wr
         y = bottom + 24
         w = max(w, right)
+    for nd in nodes:
+        if nd.kind == "sep":
+            nd.w = w - 20
     rem = m.get("removed") or []
     if rem:
-        parts.append(_text(16, y + 12, "上一版有、本版沒有的 I2C 裝置: " + ", ".join(rem), 12, RED))
+        t = "上一版有、本版沒有的 I2C 裝置: " + ", ".join(rem)
+        parts.append((_text, (16, y + 12, t, 12, RED)))
+        nodes.append(Node("removed", "text", 16, y + 12, data={"text": t, "size": 12, "col": "R", "bold": False}))
         y += 24
-    body = "".join(parts).replace("__W__", f"{w - 10:.0f}")
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="{y + 10:.0f}" '
-            f'viewBox="0 0 {w:.0f} {y + 10:.0f}" font-family="Arial, Microsoft JhengHei, sans-serif">'
+    return Drawing(parts, w, y + 10, nodes, wires)
+
+
+def _paint(prim) -> str:
+    fn, args = prim[0], prim[1]
+    return fn(*args, **(prim[2] if len(prim) > 2 else {}))
+
+
+def render_svg(m: dict, pdf_url=None) -> str:
+    d = layout(m, pdf_url)
+    w, h = d.width, d.height
+    body = "".join(x for x in map(_paint, d.parts) if x).replace("__W__", f"{w - 10:.0f}")
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" height="{h:.0f}" '
+            f'viewBox="0 0 {w:.0f} {h:.0f}" font-family="Arial, Microsoft JhengHei, sans-serif">'
             + _defs() + body + "</svg>")
 
 

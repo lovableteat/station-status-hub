@@ -99,6 +99,28 @@ def write_outputs(res, out: Path, schematic_pdf: Path | None = None, base_url: s
             dest = ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
             dest.mkdir(parents=True, exist_ok=True)
             (dest / f"power_tree_{res.b.label}.html").write_text(html, encoding="utf-8")
+        # editable draw.io copy (2026-10-15, owner): same boxes, owner restyles in diagrams.net; static copy feeds the
+        # download button on pages/2. A drawing bug never costs a report, and never leaves the previous run's file.
+        dio_name = f"power_tree_{res.b.label}.drawio"
+        dio_dest = ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
+        try:
+            from .report.power_tree_drawio import render_drawio
+            dio = render_drawio(boxes, f"Power tree 方框圖 {res.b.label}"
+                                + (f" (顏色 = {res.a.label} -> {res.b.label} 變更)" if diff else "")
+                                + f"　產生 {res.generated}", page_url, res.a.label, res.b.label, diff=diff,
+                                boxes_all=boxes_all)
+            paths["ptree_drawio"] = _writable(out / dio_name)
+            paths["ptree_drawio"].write_text(dio, encoding="utf-8")
+            if publish:
+                dio_dest.mkdir(parents=True, exist_ok=True)
+                (dio_dest / dio_name).write_text(dio, encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            res.warnings.append(f"Power tree .drawio not written ({type(e).__name__}: {e})")
+            for old in (out / dio_name,) + ((dio_dest / dio_name,) if publish else ()):
+                try:
+                    old.unlink(missing_ok=True)
+                except OSError:
+                    pass
     # I2C map (2026-10-12, test state): table csv + boxes .html (+ static copy for pages/3_I2C_map.py)
     im = getattr(res, "i2c_map", None) or {}
     if im.get("buses"):
@@ -138,6 +160,28 @@ def write_outputs(res, out: Path, schematic_pdf: Path | None = None, base_url: s
             for old in (out / f"i2c_block_{res.b.label}.html",
                         ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
                         / f"i2c_block_{res.b.label}.html"):
+                try:
+                    old.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        # editable draw.io copy of the 陽春版 (2026-10-15, owner): same layout(), wires glued to the parts, dark
+        # canvas; static copy feeds the download button on pages/3. Own try: never costs the report or the .html,
+        # never leaves the previous run's file behind.
+        bdio_name = f"i2c_block_{res.b.label}.drawio"
+        bdio_dest = ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
+        try:
+            from .report.i2c_block_drawio import render_drawio as i2c_block_drawio
+            bdio = i2c_block_drawio(im, f"I2C map 陽春版 {res.b.label}　產生 {res.generated}", page_url2)
+            paths["i2c_block_drawio"] = _writable(out / bdio_name)
+            paths["i2c_block_drawio"].write_text(bdio, encoding="utf-8")
+            if publish:
+                bdio_dest.mkdir(parents=True, exist_ok=True)
+                (bdio_dest / bdio_name).write_text(bdio, encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            res.warnings.append(f"I2C map 陽春版 .drawio not written ({type(e).__name__}: {e})")
+            # QA 2026-10-15: drop the path from the printed list, and also remove a _writable() fallback name
+            written = paths.pop("i2c_block_drawio", None)
+            for old in (out / bdio_name,) + ((written,) if written else ()) + ((bdio_dest / bdio_name,) if publish else ()):
                 try:
                     old.unlink(missing_ok=True)
                 except OSError:
