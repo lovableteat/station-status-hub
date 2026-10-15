@@ -71,6 +71,7 @@ test("personal-space labels come from the current account directory while stable
   assert.equal(row.description, "@new-login");
   assert.equal(row.id, original.id);
   assert.equal(row.ownerId, original.owner_id);
+  assert.equal(row.ownerRole, "engineer");
   assert.equal(row.projectId, original.project_id);
   assert.equal(row.color, original.color);
   assert.equal(row.isPersonal, true);
@@ -79,6 +80,35 @@ test("personal-space labels come from the current account directory while stable
   assert.equal(original.name, "Stale owner");
   assert.ok(calls.every(call => call.method === "select" || call.method === "rpc"));
   assert.deepEqual(calls.map(call => call.entity), ["test_plan_spaces", "list_active_collaboration_members"]);
+});
+
+test("owner roles come from the account directory even when administrators rename themselves or other accounts use administrator names", async () => {
+  const directory = [
+    { ...member("admin", "一般姓名", "renamed-admin"), role: "admin" },
+    { ...member("super", "工程同仁", "another-login"), role: "super_admin" },
+    member("engineer", "管理員", "super_admin"),
+    member("ordinary", "Administrator", "admin"),
+  ];
+  const stored = directory.map(account => space(account.user_id));
+  const { adapter, calls } = loadAdapter(rows(stored, directory));
+  const result = await adapter.listSpaces();
+  assert.deepEqual(Array.from(result, row => [row.ownerId, row.name, row.ownerRole]), [
+    ["admin", "一般姓名", "admin"],
+    ["super", "工程同仁", "super_admin"],
+    ["engineer", "管理員", "engineer"],
+    ["ordinary", "Administrator", "engineer"],
+  ]);
+  directory[0].display_name = "新管理姓名";
+  directory[1].display_name = "";
+  const renamed = await adapter.listSpaces();
+  assert.equal(renamed[0].name, "新管理姓名");
+  assert.equal(renamed[0].ownerRole, "admin");
+  assert.equal(renamed[1].name, "another-login");
+  assert.equal(renamed[1].ownerRole, "super_admin");
+  assert.deepEqual(calls.map(call => call.entity), [
+    "test_plan_spaces", "list_active_collaboration_members",
+    "test_plan_spaces", "list_active_collaboration_members",
+  ]);
 });
 
 test("same display names remain distinct accounts and blank display names fall back to username", async () => {
