@@ -1874,6 +1874,21 @@
 .file-library-workspace .test-plan-toolbar { min-height: 64px; flex: 0 0 auto; padding: 14px 16px 10px; gap: 12px; border: 0; background: transparent; }
 .file-library-workspace .test-plan-location > button { font-size: 14px; font-weight: 650; color: hsl(var(--foreground)); }
 .file-library-workspace .test-plan-primary-actions button { min-height: 40px; background: var(--file-library-raised); border-color: var(--file-library-border); color: hsl(var(--foreground)); }
+.file-library-bulk-tools { display: flex; flex: 0 0 auto; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 0 16px 10px; font-size: 12px; }
+.file-library-select-all { display: inline-flex; min-height: 40px; align-items: center; gap: 8px; cursor: pointer; }
+.file-library-selection-count { margin-right: auto; color: hsl(var(--muted-foreground)); font-variant-numeric: tabular-nums; }
+.file-library-bulk-tools button { min-height: 40px; gap: 6px; border-radius: 10px; }
+.file-library-bulk-tools button > svg { width: 16px; height: 16px; }
+.file-library-entry-check { display: inline-flex; flex: 0 0 32px; width: 32px; min-height: 44px; align-items: center; justify-content: center; cursor: pointer; }
+.file-library-workspace :is(.file-library-entry-check, .file-library-select-all) input { width: 18px; height: 18px; margin: 0; flex-shrink: 0; accent-color: hsl(var(--primary)); cursor: pointer; }
+.file-library-workspace :is(.file-library-entry-check, .file-library-select-all) input:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
+.file-library-workspace :is(.file-library-entry-check, .file-library-select-all):has(input:disabled) { cursor: default; opacity: .45; }
+.file-library-workspace :is(.file-library-entry-check, .file-library-select-all) input:disabled { cursor: default; }
+.file-library-workspace .file-library-name-heading { padding-left: 44px; }
+.file-library-workspace .test-plan-list-row.is-checked { background: hsl(var(--primary) / .1); }
+.file-library-workspace .test-plan-entry-card.is-checked { border-color: hsl(var(--primary) / .6); background: hsl(var(--primary) / .1); }
+.file-library-delete-names { max-height: min(240px, 30dvh); overflow-y: auto; margin: 12px 0 0; padding: 0; list-style: none; text-align: left; }
+.file-library-delete-names li { padding: 8px 0; border-bottom: 1px solid hsl(var(--border)); font-size: 13px; overflow-wrap: anywhere; }
 .file-library-workspace .test-plan-filterbar { flex: 0 0 auto; margin: 0 16px 12px; padding: 10px; gap: 8px; flex-wrap: wrap; border: 1px solid var(--file-library-border); border-radius: 14px; background: hsl(var(--secondary) / .55); }
 .file-library-workspace .test-plan-search { flex: 1 1 220px; min-width: 160px; height: 44px; border-radius: 10px; background: hsl(var(--card)); border-color: var(--file-library-border); }
 .file-library-workspace .test-plan-search input { font-size: 13px; font-weight: 400; }
@@ -1896,7 +1911,7 @@
 .file-library-workspace .test-plan-list-name strong { min-width: 0; font-size: 13px; line-height: 1.55; font-weight: 550; white-space: normal; overflow-wrap: anywhere; color: hsl(var(--foreground)); }
 .file-library-workspace .test-plan-list-name small { display: block; margin-top: 3px; font-size: 11px; font-weight: 400; color: hsl(var(--muted-foreground)); }
 .file-library-workspace .test-plan-statusbar { min-height: 40px; flex: 0 0 auto; gap: 12px; padding: 9px 16px; border-top: 1px solid var(--file-library-border); background: hsl(var(--secondary) / .28); font-size: 11px; color: hsl(var(--muted-foreground)); }
-.file-library-workspace .test-plan-entry-grid { padding: 14px; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 12px; }
+.file-library-workspace .test-plan-entry-grid { padding: 14px; grid-template-columns: repeat(auto-fill, minmax(min(280px,100%),1fr)); gap: 12px; }
 .file-library-workspace .test-plan-entry-card { padding: 14px; background: hsl(var(--secondary) / .55); border-color: var(--file-library-border); box-shadow: none; }
 .file-library-workspace .test-plan-entry-card:hover { border-color: hsl(var(--primary) / .35); background: hsl(var(--secondary) / .8); }
 .file-library-workspace .test-plan-entry-card.is-selected { background: hsl(var(--primary) / .1); border-color: hsl(var(--primary) / .6); }
@@ -1949,6 +1964,10 @@
   .file-library-workspace .test-plan-primary-actions { width: auto; }
   .file-library-workspace .test-plan-primary-actions button { padding: 8px; font-size: 12px; }
   .file-library-workspace .test-plan-filterbar { margin: 0 12px 10px; padding: 8px; }
+  .file-library-bulk-tools { padding-inline: 12px; gap: 4px 8px; }
+  .file-library-bulk-tools button { font-size: 12px; padding-inline: 10px; min-height: 44px; }
+  .file-library-select-all { min-height: 44px; }
+  .file-library-workspace .file-library-name-heading { padding-left: 41px; }
   .file-library-workspace .test-plan-search { width: 100%; flex-basis: 100%; }
   .file-library-workspace .test-plan-filterbar [role=combobox] { flex: 1 1 70px; min-width: 0; width: auto; padding-inline: 8px; font-size: 11px; }
   .file-library-workspace .test-plan-view-toggle button { width: 40px; height: 40px; }

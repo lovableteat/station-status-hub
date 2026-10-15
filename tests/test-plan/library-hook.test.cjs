@@ -97,6 +97,151 @@ function folderFile(path) {
   return file;
 }
 
+function addBatchFiles(f, count = 3) {
+  const base=f.files[0];
+  for(let index=1;index<count;index++) f.files.push({...base,id:`batch-${index}`,originalName:`batch-${index}.md`,storagePath:`owner/batch-${index}.md`});
+  f.adapter.deleteFile=async id=>{f.log.push(['deleteFile',id]);const index=f.files.findIndex(file=>file.id===id);if(index>=0)f.files.splice(index,1)};
+  return f.files.map(file=>({...file,kind:'file'}));
+}
+
+test('batch delete continues after individual failures, keeps exact keys and refreshes only once', async()=>{
+  const f=setup();const entries=addBatchFiles(f);let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  let refreshes=0;const listFiles=f.adapter.listFiles;f.adapter.listFiles=async id=>{refreshes++;return listFiles(id)};
+  const remove=f.adapter.deleteFile;
+  f.adapter.deleteFile=async id=>{if(id==='batch-1'){f.log.push(['failedDelete',id]);throw new Error('busy object')};return remove(id)};
+  let result;await act(async()=>{result=await f.state.deleteEntries(entries)});
+  assert.deepEqual(Array.from(result.deletedKeys),['file:old-file','file:batch-2']);
+  assert.deepEqual(Array.from(result.failures, failure=>({...failure})),[{key:'file:batch-1',name:'batch-1.md',message:'busy object'}]);
+  assert.equal(refreshes,1);assert.deepEqual(f.state.files.map(file=>file.id),['batch-1']);
+  assert.equal(f.state.busy,false);await act(async()=>tree.unmount());
+});
+
+test('batch delete deduplicates folders, descendants and duplicate entries without deleting another space', async()=>{
+  const f=setup();const root=f.folders[0];const child={...root,id:'child',parentId:root.id,name:'Child'};
+  f.folders.push(child,{...root,id:'foreign-parent',spaceId:'other-space'});
+  f.files[0]={...f.files[0],folderId:child.id};
+  const extra={...f.files[0],id:'unrelated',folderId:null};f.files.push(extra);
+  f.adapter.deleteFolder=async id=>{f.log.push(['deleteFolder',id]);f.folders.splice(0,2);f.files.splice(0,1)};
+  f.adapter.deleteFile=async id=>{f.log.push(['deleteFile',id]);f.files.splice(f.files.findIndex(file=>file.id===id),1)};
+  let tree;await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  let result;await act(async()=>{result=await f.state.deleteEntries([
+    {...f.files[0],kind:'file'}, {...child,kind:'folder'}, {...root,kind:'folder'}, {...child,kind:'folder'}, {...extra,kind:'file'},
+  ])});
+  assert.deepEqual(f.log,[['deleteFolder','nested'],['deleteFile','unrelated']]);
+  assert.deepEqual(Array.from(result.deletedKeys).sort(),['file:old-file','folder:child','folder:nested','file:unrelated'].sort());
+  assert.equal(result.failures.length,0);assert.equal(f.state.folders[0].id,'foreign-parent');
+  await act(async()=>tree.unmount());
+});
+
+test('batch preflight checks every selected permission and existence before any write', async()=>{
+  const f=setup();const entries=addBatchFiles(f,2);const other={...f.files[0],id:'other',spaceId:'other-space'};f.files.push(other);
+  let tree;await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  await act(async()=>{await assert.rejects(f.state.deleteEntries([...entries,{...other,kind:'file'}]),/唯讀/)});
+  assert.deepEqual(f.log,[]);
+  await act(async()=>{await assert.rejects(f.state.deleteEntries([...entries,{...other,id:'missing',kind:'file'}]),/項目不存在/)});
+  assert.deepEqual(f.log,[]);await act(async()=>tree.unmount());
+});
+
+test('batch deletion stays busy through every deletion and final refresh and blocks navigation or overlapping writes', async()=>{
+  const f=setup();const entries=addBatchFiles(f,2);const first=deferred();const second=deferred();const refresh=deferred();
+  let tree;await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  f.adapter.deleteFile=async id=>{f.log.push(['deleteFile',id]);await (id==='old-file'?first.promise:second.promise)};
+  f.adapter.listFiles=()=>refresh.promise;
+  let pending;await act(async()=>{pending=f.state.deleteEntries(entries)});
+  assert.equal(f.state.busy,true);
+  await act(async()=>{await assert.rejects(f.state.deleteEntries(entries),/操作進行中/);await f.state.openSpace('personal-space')});
+  assert.equal(f.state.activeSpaceId,null);
+  await act(async()=>first.resolve());assert.equal(f.state.busy,true);assert.equal(f.log.length,2);
+  await act(async()=>second.resolve());assert.equal(f.state.busy,true);
+  await act(async()=>{refresh.resolve([]);await pending});assert.equal(f.state.busy,false);
+  await act(async()=>tree.unmount());
+});
+
+test('revoking canonical administrator capability stops all remaining batch writes after an awaited call', async()=>{
+  const f=setup();f.setIsAdmin(true);const entries=addBatchFiles(f);f.files[1].spaceId='other-space';f.files[2].spaceId='other-space';
+  entries[1].spaceId='other-space';entries[2].spaceId='other-space';const first=deferred();
+  f.adapter.deleteFile=async id=>{f.log.push(['deleteFile',id]);await first.promise};
+  let tree;await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  let pending;await act(async()=>{pending=f.state.deleteEntries(entries)});
+  f.setIsAdmin(false);await act(async()=>tree.update(React.createElement(f.Probe)));
+  let result;await act(async()=>{first.resolve();result=await pending});
+  assert.deepEqual(f.log,[['deleteFile','old-file']]);
+  assert.deepEqual(Array.from(result.deletedKeys),['file:old-file']);assert.equal(result.failures.length,2);
+  assert.match(result.failures[0].message,/唯讀/);await act(async()=>tree.unmount());
+});
+
+test('account switching during batch deletion prevents remaining writes and late refreshes', async()=>{
+  const f=setup();const entries=addBatchFiles(f);const first=deferred();
+  f.adapter.deleteFile=async id=>{f.log.push(['deleteFile',id]);await first.promise};
+  let tree;await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  const staleDelete=f.state.deleteEntries;
+  let pending;await act(async()=>{pending=staleDelete(entries)});
+  f.session.user={userId:'new-owner'};
+  f.spaces.splice(0,f.spaces.length,{id:'new-space',ownerId:'new-owner',name:'New',isPersonal:true});
+  f.files.splice(0,f.files.length,{...entries[0],id:'new-file',spaceId:'new-space'});
+  await act(async()=>tree.update(React.createElement(f.Probe)));await flush();
+  let reads=0;const listFiles=f.adapter.listFiles;f.adapter.listFiles=async id=>{reads++;return listFiles(id)};
+  let result;await act(async()=>{first.resolve();result=await pending});
+  assert.deepEqual(f.log,[['deleteFile','old-file']]);assert.equal(result.failures.length,2);assert.match(result.failures[0].message,/帳號或檔案空間已變更/);
+  assert.equal(reads,0);assert.deepEqual(f.state.files.map(file=>file.id),['new-file']);
+  await act(async()=>{await assert.rejects(staleDelete(entries),/帳號或檔案空間已變更/)});
+  assert.deepEqual(f.log,[['deleteFile','old-file']]);await act(async()=>tree.unmount());
+});
+
+test('module access revoked after selection blocks stale batch handlers before any write', async()=>{
+  const f=setup();const entries=addBatchFiles(f,2);let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();const stale=f.state.deleteEntries;
+  f.setEditable(false);await act(async()=>tree.update(React.createElement(f.Probe)));
+  await act(async()=>{await assert.rejects(stale(entries),/唯讀/)});
+  assert.deepEqual(f.log,[]);await act(async()=>tree.unmount());
+});
+
+test('scope changes during batch deletion stop remaining calls without restoring the previous scope', async()=>{
+  const f=setup();const entries=addBatchFiles(f);const first=deferred();
+  f.adapter.deleteFile=async id=>{f.log.push(['deleteFile',id]);await first.promise};
+  let tree;await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  let pending;await act(async()=>{pending=f.state.deleteEntries(entries)});
+  await act(async()=>{await f.state.refreshWorkspace('personal-space')});
+  let result;await act(async()=>{first.resolve();result=await pending});
+  assert.deepEqual(f.log,[['deleteFile','old-file']]);assert.equal(result.failures.length,2);
+  assert.match(result.failures[0].message,/帳號或檔案空間已變更/);assert.equal(f.state.activeSpaceId,'personal-space');
+  await act(async()=>tree.unmount());
+});
+
+test('a failed selected parent reports its selected descendants without retrying separate child deletion', async()=>{
+  const f=setup();const selected=[{...f.files[0],kind:'file'},{...f.folders[0],kind:'folder'}];
+  f.adapter.deleteFolder=async id=>{f.log.push(['deleteFolder',id]);throw new Error('folder denied')};
+  f.adapter.deleteFile=async id=>{f.log.push(['deleteFile',id])};
+  let tree;await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  let result;await act(async()=>{result=await f.state.deleteEntries(selected)});
+  assert.deepEqual(f.log,[['deleteFolder','nested']]);assert.equal(result.deletedKeys.length,0);
+  assert.deepEqual(Array.from(result.failures,failure=>failure.key).sort(),['file:old-file','folder:nested']);
+  assert.equal(result.failures.every(failure=>failure.message==='folder denied'),true);
+  await act(async()=>tree.unmount());
+});
+
+test('unmounting the workspace stops pending batches before the next destructive call', async()=>{
+  const f=setup();const entries=addBatchFiles(f,2);const first=deferred();
+  f.adapter.deleteFile=async id=>{f.log.push(['deleteFile',id]);await first.promise};
+  let tree;await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  let pending;await act(async()=>{pending=f.state.deleteEntries(entries)});
+  await act(async()=>tree.unmount());
+  let result;await act(async()=>{first.resolve();result=await pending});
+  assert.deepEqual(f.log,[['deleteFile','old-file']]);assert.equal(result.failures.length,1);
+});
+
+test('batch returns committed successes when final refresh fails and reports deferred object cleanup separately', async()=>{
+  const f=setup();const entries=addBatchFiles(f,2);let tree;
+  await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();
+  let cleanupReads=0;f.adapter.listCleanupPaths=async()=>{if(++cleanupReads<=2)throw new Error('storage cleanup unavailable');return []};
+  f.adapter.listFiles=async()=>{throw new Error('refresh unavailable')};
+  let result;await act(async()=>{result=await f.state.deleteEntries(entries)});
+  assert.equal(result.deletedKeys.length,2);assert.equal(result.failures.length,0);assert.equal(result.cleanupPending,true);
+  assert.match(f.state.error,/refresh unavailable/);assert.equal(f.state.busy,false);
+  await act(async()=>tree.unmount());
+});
+
 test('folder upload validates the whole selection before uploading to the personal space', async()=>{
   const f=setup();let tree;
   await act(async()=>{tree=create(React.createElement(f.Probe))});await flush();

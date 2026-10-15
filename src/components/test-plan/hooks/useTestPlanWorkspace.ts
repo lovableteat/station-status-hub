@@ -15,6 +15,7 @@ import {
 } from "../core/repository";
 import { createSupabaseTestPlanAdapter } from "../core/supabaseAdapter";
 import type {
+  TestPlanEntry,
   TestPlanFileRecord,
   TestPlanFolder,
   TestPlanSpace,
@@ -24,6 +25,13 @@ import {
   toTestPlanError,
 } from "../core/errors";
 import { validateTestPlanFolderPaths } from "../core/files";
+import { groupTestPlanDeleteSelection, testPlanEntryKey } from "../core/deleteSelection";
+
+export interface TestPlanBatchDeleteResult {
+  deletedKeys: string[];
+  failures: { key: string; name: string; message: string }[];
+  cleanupPending: boolean;
+}
 
 interface UploadProgress {
   completed: number;
@@ -97,6 +105,21 @@ export function useTestPlanWorkspace(
       throw new Error("目前為唯讀模式，無法修改資料儲存。");
     }
   }, [canEdit, isAuthenticated]);
+
+  const deleteScopeRef = useRef({ ownerId, activeSpaceId, repository, generation: 0 });
+  if (
+    deleteScopeRef.current.ownerId !== ownerId
+    || deleteScopeRef.current.activeSpaceId !== activeSpaceId
+    || deleteScopeRef.current.repository !== repository
+  ) {
+    deleteScopeRef.current = { ownerId, activeSpaceId, repository, generation: deleteScopeRef.current.generation + 1 };
+  }
+  const deleteCapabilitiesRef = useRef({ requireEdit, requireEntryEdit, files, folders, loading });
+  deleteCapabilitiesRef.current = { requireEdit, requireEntryEdit, files, folders, loading };
+  useEffect(() => () => {
+    // A late batch must not continue deleting after this workspace unmounts.
+    deleteScopeRef.current = { ...deleteScopeRef.current, generation: deleteScopeRef.current.generation + 1 };
+  }, []);
 
   const applyWorkspace = useCallback(
     (workspace: Awaited<ReturnType<TestPlanRepository["loadWorkspace"]>>) => {
@@ -450,6 +473,77 @@ export function useTestPlanWorkspace(
     [activeSpaceId, ownerId, refreshActiveSpace, repository, requireEntryEdit, runMutation],
   );
 
+  const deleteEntries = useCallback(
+    (entries: readonly TestPlanEntry[]): Promise<TestPlanBatchDeleteResult> =>
+      runMutation(async () => {
+        const scope = deleteScopeRef.current;
+        const assertScope = () => {
+          if (
+            !ownerId
+            || scope.ownerId !== ownerId
+            || scope.activeSpaceId !== activeSpaceId
+            || scope.repository !== repository
+            || deleteScopeRef.current.generation !== scope.generation
+          ) throw new Error("登入帳號或檔案空間已變更，已停止剩餘刪除。");
+          const current = deleteCapabilitiesRef.current;
+          current.requireEdit();
+          if (current.loading) throw new Error("檔案空間正在載入，已停止剩餘刪除。");
+          return current;
+        };
+        const current = assertScope();
+        const groups = groupTestPlanDeleteSelection(entries, current.folders, current.files);
+        // Validate the whole selection before the first irreversible call.
+        for (const group of groups) {
+          for (const entry of group.selected) current.requireEntryEdit(entry.id, entry.kind);
+        }
+        const result: TestPlanBatchDeleteResult = { deletedKeys: [], failures: [], cleanupPending: false };
+        if (groups.length === 0) return result;
+        const failGroup = (group: typeof groups[number], message: string) => {
+          result.failures.push(...group.selected.map(entry => ({
+            key: testPlanEntryKey(entry),
+            name: entry.kind === "folder" ? entry.name : entry.originalName,
+            message,
+          })));
+        };
+        for (let index = 0; index < groups.length; index++) {
+          const group = groups[index];
+          let latest: ReturnType<typeof assertScope>;
+          try {
+            latest = assertScope();
+            // Recheck every remaining selected item after each awaited call:
+            // administrator or module access may have changed mid-batch.
+            for (const remaining of groups.slice(index)) {
+              for (const entry of remaining.selected) latest.requireEntryEdit(entry.id, entry.kind);
+            }
+          } catch (caught) {
+            const message = getTestPlanErrorMessage(caught, "權限已變更，已停止剩餘刪除。");
+            for (const remaining of groups.slice(index)) failGroup(remaining, message);
+            break;
+          }
+          try {
+            const deleted = group.entry.kind === "folder"
+              ? await repository.deleteFolder(ownerId!, group.entry.id)
+              : await repository.deleteFile(ownerId!, latest.files.find(file => file.id === group.entry.id)!);
+            result.deletedKeys.push(...group.selected.map(testPlanEntryKey));
+            result.cleanupPending ||= deleted.cleanupPending;
+          } catch (caught) {
+            failGroup(group, getTestPlanErrorMessage(caught, "刪除失敗，請稍後重試。"));
+          }
+        }
+        if (deleteScopeRef.current.generation === scope.generation) {
+          try {
+            await refreshActiveSpace(activeSpaceId, ownerId);
+          } catch (caught) {
+            if (deleteScopeRef.current.generation === scope.generation) {
+              setError(getTestPlanErrorMessage(caught, "刪除結果已儲存，但清單更新失敗，請重新整理。"));
+            }
+          }
+        }
+        return result;
+      }),
+    [activeSpaceId, ownerId, refreshActiveSpace, repository, runMutation],
+  );
+
   const downloadFile = useCallback(
     async (file: TestPlanFileRecord) => repository.downloadFile(file),
     [repository],
@@ -495,6 +589,7 @@ export function useTestPlanWorkspace(
     moveFile,
     updateFileDescription,
     deleteFile,
+    deleteEntries,
     downloadFile,
     replaceFileContents,
   };
