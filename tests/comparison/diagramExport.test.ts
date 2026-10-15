@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import { parseDiagramDocument, type DiagramDocument } from "../../src/components/comparison/diagramModel.ts";
 import { diagramToSvg } from "../../src/components/comparison/diagramExport.ts";
+import { DIAGRAM_THEME, diagramNodeColors, diagramStrokeColor } from "../../src/components/comparison/diagramTheme.ts";
 
 const source = await readFile(new URL("../../src/components/comparison/diagramExport.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -39,12 +40,40 @@ test("SVG exports escape labels and metadata, render every supported shape, and 
   assert.match(svg, /<ellipse data-node-id="node-b"/);
   assert.match(svg, /<polygon data-node-id="diamond"/);
   assert.match(svg, /<path data-node-id="note"/);
-  assert.match(svg, /fill="#ffffff" clip-path=/, "dark nodes need light readable labels");
+  assert.match(svg, /fill="#1f2937" clip-path=/, "pale nodes need dark readable labels");
   assert.doesNotMatch(svg, /<script|<foreignObject|<image|<iframe/);
   for (const tag of svg.match(/<[^>]+>/g) ?? []) assert.doesNotMatch(tag, /\s(?:href|src|onload)=/);
   assert.match(svg, /<marker[^>]+id="diagram-arrow-0"/);
   assert.match(svg, /stroke-dasharray="7 5"/);
   assert.match(svg, /<tspan[^>]*>/);
+});
+
+test("light canvas keeps pastel nodes and low-contrast connections legible without changing saved colors", () => {
+  const luminance = (color: string) => {
+    const values = [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16) / 255)
+      .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722;
+  };
+  const contrast = (first: string, second: string) => {
+    const values = [luminance(first), luminance(second)].sort((a, b) => b - a);
+    return (values[0] + 0.05) / (values[1] + 0.05);
+  };
+  for (const color of ["#ffffff", "#ffff00", "#79c9be", "#ef7b78", "#94a3b8", "#111827", "#000000"]) {
+    const colors = diagramNodeColors(color);
+    assert.match(colors.fill, /^#[a-f0-9]{6}$/);
+    assert.ok(contrast(colors.text, colors.fill) >= 7, `node label contrast for ${color}`);
+    assert.ok(contrast(colors.detail, colors.fill) >= 4.5, `node detail contrast for ${color}`);
+    assert.ok(contrast(colors.stroke, DIAGRAM_THEME.canvas) >= 3.5, `stroke contrast for ${color}`);
+    const doc = documentFixture();
+    doc.nodes[0].color = color; doc.edges[0].color = color;
+    const original = structuredClone(doc);
+    const svg = diagramToSvg(doc);
+    assert.ok(svg.includes(`data-node-id="node-a" fill="${colors.fill}" stroke="${colors.stroke}"`));
+    assert.ok(svg.includes(`fill="${diagramStrokeColor(color)}"/></marker>`));
+    assert.match(svg, new RegExp(`data-edge-id="edge-a-b"[^>]*stroke="${colors.stroke}"`));
+    assert.doesNotMatch(svg, /color-mix|rgba\(|hsl\(/);
+    assert.deepEqual(doc, original, "render colors must not replace the user's stored palette");
+  }
 });
 
 test("edge endpoints honor explicit ports and bounds include negative nodes, arrow controls and labels", () => {
@@ -168,6 +197,7 @@ function exportHarness(options: HarnessOptions = {}) {
     },
     require(name: string) {
       if (name === "./diagramModel.ts") return { parseDiagramDocument };
+      if (name === "./diagramTheme.ts") return { DIAGRAM_THEME, diagramNodeColors, diagramStrokeColor };
       assert.equal(name, "jspdf");
       if (options.missingPdf) throw new Error("PDF module unavailable");
       return { jsPDF: FakePdf };
