@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-15T06:34:49.021Z",
+  "generatedAt": "2026-10-15T07:03:36.101Z",
   "title": "Design System: AutoCheck Diagram Editor",
   "extensions": {
     "colorMeta": {
@@ -52,106 +52,106 @@
       "focus-blue": {
         "role": "primary",
         "displayName": "Focus Blue",
-        "canonical": "#0a84ff",
+        "canonical": "#69afff",
         "tonalRamp": [
-          "oklch(15.00% 0.2056 255.49)",
-          "oklch(26.43% 0.2056 255.49)",
-          "oklch(37.86% 0.2056 255.49)",
-          "oklch(49.29% 0.2056 255.49)",
-          "oklch(60.71% 0.2056 255.49)",
-          "oklch(72.14% 0.2056 255.49)",
-          "oklch(83.57% 0.2056 255.49)",
-          "oklch(95.00% 0.2056 255.49)"
+          "oklch(15.00% 0.1365 252.94)",
+          "oklch(26.43% 0.1365 252.94)",
+          "oklch(37.86% 0.1365 252.94)",
+          "oklch(49.29% 0.1365 252.94)",
+          "oklch(60.71% 0.1365 252.94)",
+          "oklch(72.14% 0.1365 252.94)",
+          "oklch(83.57% 0.1365 252.94)",
+          "oklch(95.00% 0.1365 252.94)"
         ]
       },
       "action-text": {
         "role": "primary",
         "displayName": "Action Text",
-        "canonical": "#7bb7ff",
+        "canonical": "#9ecbff",
         "tonalRamp": [
-          "oklch(15.00% 0.1213 253.70)",
-          "oklch(26.43% 0.1213 253.70)",
-          "oklch(37.86% 0.1213 253.70)",
-          "oklch(49.29% 0.1213 253.70)",
-          "oklch(60.71% 0.1213 253.70)",
-          "oklch(72.14% 0.1213 253.70)",
-          "oklch(83.57% 0.1213 253.70)",
-          "oklch(95.00% 0.1213 253.70)"
+          "oklch(15.00% 0.0877 252.46)",
+          "oklch(26.43% 0.0877 252.46)",
+          "oklch(37.86% 0.0877 252.46)",
+          "oklch(49.29% 0.0877 252.46)",
+          "oklch(60.71% 0.0877 252.46)",
+          "oklch(72.14% 0.0877 252.46)",
+          "oklch(83.57% 0.0877 252.46)",
+          "oklch(95.00% 0.0877 252.46)"
         ]
       },
       "selection-fill": {
         "role": "primary",
         "displayName": "Selection Fill",
-        "canonical": "#16375b",
+        "canonical": "#244a71",
         "tonalRamp": [
-          "oklch(15.00% 0.0747 252.70)",
-          "oklch(26.43% 0.0747 252.70)",
-          "oklch(37.86% 0.0747 252.70)",
-          "oklch(49.29% 0.0747 252.70)",
-          "oklch(60.71% 0.0747 252.70)",
-          "oklch(72.14% 0.0747 252.70)",
-          "oklch(83.57% 0.0747 252.70)",
-          "oklch(95.00% 0.0747 252.70)"
+          "oklch(15.00% 0.0792 250.96)",
+          "oklch(26.43% 0.0792 250.96)",
+          "oklch(37.86% 0.0792 250.96)",
+          "oklch(49.29% 0.0792 250.96)",
+          "oklch(60.71% 0.0792 250.96)",
+          "oklch(72.14% 0.0792 250.96)",
+          "oklch(83.57% 0.0792 250.96)",
+          "oklch(95.00% 0.0792 250.96)"
         ]
       },
       "chrome": {
         "role": "neutral",
         "displayName": "Chrome",
-        "canonical": "#242426",
+        "canonical": "#303641",
         "tonalRamp": [
-          "oklch(15.00% 0.0037 286.14)",
-          "oklch(26.43% 0.0037 286.14)",
-          "oklch(37.86% 0.0037 286.14)",
-          "oklch(49.29% 0.0037 286.14)",
-          "oklch(60.71% 0.0037 286.14)",
-          "oklch(72.14% 0.0037 286.14)",
-          "oklch(83.57% 0.0037 286.14)",
-          "oklch(95.00% 0.0037 286.14)"
+          "oklch(15.00% 0.0212 262.57)",
+          "oklch(26.43% 0.0212 262.57)",
+          "oklch(37.86% 0.0212 262.57)",
+          "oklch(49.29% 0.0212 262.57)",
+          "oklch(60.71% 0.0212 262.57)",
+          "oklch(72.14% 0.0212 262.57)",
+          "oklch(83.57% 0.0212 262.57)",
+          "oklch(95.00% 0.0212 262.57)"
         ]
       },
       "surface": {
         "role": "neutral",
         "displayName": "Surface",
-        "canonical": "#2c2c2e",
+        "canonical": "#353d49",
         "tonalRamp": [
-          "oklch(15.00% 0.0036 286.18)",
-          "oklch(26.43% 0.0036 286.18)",
-          "oklch(37.86% 0.0036 286.18)",
-          "oklch(49.29% 0.0036 286.18)",
-          "oklch(60.71% 0.0036 286.18)",
-          "oklch(72.14% 0.0036 286.18)",
-          "oklch(83.57% 0.0036 286.18)",
-          "oklch(95.00% 0.0036 286.18)"
+          "oklch(15.00% 0.0235 258.37)",
+          "oklch(26.43% 0.0235 258.37)",
+          "oklch(37.86% 0.0235 258.37)",
+          "oklch(49.29% 0.0235 258.37)",
+          "oklch(60.71% 0.0235 258.37)",
+          "oklch(72.14% 0.0235 258.37)",
+          "oklch(83.57% 0.0235 258.37)",
+          "oklch(95.00% 0.0235 258.37)"
         ]
       },
       "canvas": {
         "role": "neutral",
         "displayName": "Canvas",
-        "canonical": "#1c1c1e",
+        "canonical": "#282d35",
         "tonalRamp": [
-          "oklch(15.00% 0.0038 286.09)",
-          "oklch(26.43% 0.0038 286.09)",
-          "oklch(37.86% 0.0038 286.09)",
-          "oklch(49.29% 0.0038 286.09)",
-          "oklch(60.71% 0.0038 286.09)",
-          "oklch(72.14% 0.0038 286.09)",
-          "oklch(83.57% 0.0038 286.09)",
-          "oklch(95.00% 0.0038 286.09)"
+          "oklch(15.00% 0.0162 259.79)",
+          "oklch(26.43% 0.0162 259.79)",
+          "oklch(37.86% 0.0162 259.79)",
+          "oklch(49.29% 0.0162 259.79)",
+          "oklch(60.71% 0.0162 259.79)",
+          "oklch(72.14% 0.0162 259.79)",
+          "oklch(83.57% 0.0162 259.79)",
+          "oklch(95.00% 0.0162 259.79)"
         ]
       },
       "field": {
         "role": "neutral",
         "displayName": "Field",
-        "canonical": "#323235",
+        "canonical": "#2d323a",
         "tonalRamp": [
-          "oklch(15.00% 0.0053 286.10)",
-          "oklch(26.43% 0.0053 286.10)",
-          "oklch(37.86% 0.0053 286.10)",
-          "oklch(49.29% 0.0053 286.10)",
-          "oklch(60.71% 0.0053 286.10)",
-          "oklch(72.14% 0.0053 286.10)",
-          "oklch(83.57% 0.0053 286.10)",
-          "oklch(95.00% 0.0053 286.10)"
+          "oklch(15.00% 0.0159 259.80)",
+          "oklch(26.43% 0.0159 259.80)",
+          "oklch(37.86% 0.0159 259.80)",
+          "oklch(49.29% 0.0159 259.80)",
+          "oklch(60.71% 0.0159 259.80)",
+          "oklch(72.14% 0.0159 259.80)",
+          "oklch(83.57% 0.0159 259.80)",
+          "oklch(95.00% 0.0159 259.80)"
         ]
       },
       "text": {
@@ -172,61 +172,61 @@
       "control-text": {
         "role": "neutral",
         "displayName": "Control Text",
-        "canonical": "#d1d1d6",
+        "canonical": "#dce5f2",
         "tonalRamp": [
-          "oklch(15.00% 0.0068 286.26)",
-          "oklch(26.43% 0.0068 286.26)",
-          "oklch(37.86% 0.0068 286.26)",
-          "oklch(49.29% 0.0068 286.26)",
-          "oklch(60.71% 0.0068 286.26)",
-          "oklch(72.14% 0.0068 286.26)",
-          "oklch(83.57% 0.0068 286.26)",
-          "oklch(95.00% 0.0068 286.26)"
+          "oklch(15.00% 0.0202 257.47)",
+          "oklch(26.43% 0.0202 257.47)",
+          "oklch(37.86% 0.0202 257.47)",
+          "oklch(49.29% 0.0202 257.47)",
+          "oklch(60.71% 0.0202 257.47)",
+          "oklch(72.14% 0.0202 257.47)",
+          "oklch(83.57% 0.0202 257.47)",
+          "oklch(95.00% 0.0202 257.47)"
         ]
       },
       "secondary-text": {
         "role": "neutral",
         "displayName": "Secondary Text",
-        "canonical": "#aaaab1",
+        "canonical": "#b2bbc9",
         "tonalRamp": [
-          "oklch(15.00% 0.0100 286.15)",
-          "oklch(26.43% 0.0100 286.15)",
-          "oklch(37.86% 0.0100 286.15)",
-          "oklch(49.29% 0.0100 286.15)",
-          "oklch(60.71% 0.0100 286.15)",
-          "oklch(72.14% 0.0100 286.15)",
-          "oklch(83.57% 0.0100 286.15)",
-          "oklch(95.00% 0.0100 286.15)"
+          "oklch(15.00% 0.0222 259.19)",
+          "oklch(26.43% 0.0222 259.19)",
+          "oklch(37.86% 0.0222 259.19)",
+          "oklch(49.29% 0.0222 259.19)",
+          "oklch(60.71% 0.0222 259.19)",
+          "oklch(72.14% 0.0222 259.19)",
+          "oklch(83.57% 0.0222 259.19)",
+          "oklch(95.00% 0.0222 259.19)"
         ]
       },
       "separator": {
         "role": "neutral",
         "displayName": "Separator",
-        "canonical": "#454548",
+        "canonical": "#536071",
         "tonalRamp": [
-          "oklch(15.00% 0.0050 286.17)",
-          "oklch(26.43% 0.0050 286.17)",
-          "oklch(37.86% 0.0050 286.17)",
-          "oklch(49.29% 0.0050 286.17)",
-          "oklch(60.71% 0.0050 286.17)",
-          "oklch(72.14% 0.0050 286.17)",
-          "oklch(83.57% 0.0050 286.17)",
-          "oklch(95.00% 0.0050 286.17)"
+          "oklch(15.00% 0.0318 255.22)",
+          "oklch(26.43% 0.0318 255.22)",
+          "oklch(37.86% 0.0318 255.22)",
+          "oklch(49.29% 0.0318 255.22)",
+          "oklch(60.71% 0.0318 255.22)",
+          "oklch(72.14% 0.0318 255.22)",
+          "oklch(83.57% 0.0318 255.22)",
+          "oklch(95.00% 0.0318 255.22)"
         ]
       },
       "control-border": {
         "role": "neutral",
         "displayName": "Control Border",
-        "canonical": "#636369",
+        "canonical": "#7b8b9f",
         "tonalRamp": [
-          "oklch(15.00% 0.0094 286.06)",
-          "oklch(26.43% 0.0094 286.06)",
-          "oklch(37.86% 0.0094 286.06)",
-          "oklch(49.29% 0.0094 286.06)",
-          "oklch(60.71% 0.0094 286.06)",
-          "oklch(72.14% 0.0094 286.06)",
-          "oklch(83.57% 0.0094 286.06)",
-          "oklch(95.00% 0.0094 286.06)"
+          "oklch(15.00% 0.0355 254.09)",
+          "oklch(26.43% 0.0355 254.09)",
+          "oklch(37.86% 0.0355 254.09)",
+          "oklch(49.29% 0.0355 254.09)",
+          "oklch(60.71% 0.0355 254.09)",
+          "oklch(72.14% 0.0355 254.09)",
+          "oklch(83.57% 0.0355 254.09)",
+          "oklch(95.00% 0.0355 254.09)"
         ]
       },
       "destructive": {
@@ -247,16 +247,16 @@
       "dark-canvas-detail": {
         "role": "neutral",
         "displayName": "Dark Canvas Detail",
-        "canonical": "#b6bcc6",
+        "canonical": "#c1c9d5",
         "tonalRamp": [
-          "oklch(15.00% 0.0156 260.73)",
-          "oklch(26.43% 0.0156 260.73)",
-          "oklch(37.86% 0.0156 260.73)",
-          "oklch(49.29% 0.0156 260.73)",
-          "oklch(60.71% 0.0156 260.73)",
-          "oklch(72.14% 0.0156 260.73)",
-          "oklch(83.57% 0.0156 260.73)",
-          "oklch(95.00% 0.0156 260.73)"
+          "oklch(15.00% 0.0189 258.36)",
+          "oklch(26.43% 0.0189 258.36)",
+          "oklch(37.86% 0.0189 258.36)",
+          "oklch(49.29% 0.0189 258.36)",
+          "oklch(60.71% 0.0189 258.36)",
+          "oklch(72.14% 0.0189 258.36)",
+          "oklch(83.57% 0.0189 258.36)",
+          "oklch(95.00% 0.0189 258.36)"
         ]
       },
       "canvas-text": {
@@ -438,6 +438,306 @@
           "oklch(83.57% 0.1866 26.93)",
           "oklch(95.00% 0.1866 26.93)"
         ]
+      },
+      "shape-blue": {
+        "role": "secondary",
+        "displayName": "Shape Blue",
+        "canonical": "#80b9ff",
+        "tonalRamp": [
+          "oklch(15.00% 0.1172 254.15)",
+          "oklch(26.43% 0.1172 254.15)",
+          "oklch(37.86% 0.1172 254.15)",
+          "oklch(49.29% 0.1172 254.15)",
+          "oklch(60.71% 0.1172 254.15)",
+          "oklch(72.14% 0.1172 254.15)",
+          "oklch(83.57% 0.1172 254.15)",
+          "oklch(95.00% 0.1172 254.15)"
+        ]
+      },
+      "shape-blue-fill": {
+        "role": "secondary",
+        "displayName": "Shape Blue Fill",
+        "canonical": "#203e62",
+        "tonalRamp": [
+          "oklch(15.00% 0.0725 254.13)",
+          "oklch(26.43% 0.0725 254.13)",
+          "oklch(37.86% 0.0725 254.13)",
+          "oklch(49.29% 0.0725 254.13)",
+          "oklch(60.71% 0.0725 254.13)",
+          "oklch(72.14% 0.0725 254.13)",
+          "oklch(83.57% 0.0725 254.13)",
+          "oklch(95.00% 0.0725 254.13)"
+        ]
+      },
+      "shape-teal": {
+        "role": "secondary",
+        "displayName": "Shape Teal",
+        "canonical": "#79dfd0",
+        "tonalRamp": [
+          "oklch(15.00% 0.0985 183.28)",
+          "oklch(26.43% 0.0985 183.28)",
+          "oklch(37.86% 0.0985 183.28)",
+          "oklch(49.29% 0.0985 183.28)",
+          "oklch(60.71% 0.0985 183.28)",
+          "oklch(72.14% 0.0985 183.28)",
+          "oklch(83.57% 0.0985 183.28)",
+          "oklch(95.00% 0.0985 183.28)"
+        ]
+      },
+      "shape-teal-fill": {
+        "role": "secondary",
+        "displayName": "Shape Teal Fill",
+        "canonical": "#1f4647",
+        "tonalRamp": [
+          "oklch(15.00% 0.0441 197.63)",
+          "oklch(26.43% 0.0441 197.63)",
+          "oklch(37.86% 0.0441 197.63)",
+          "oklch(49.29% 0.0441 197.63)",
+          "oklch(60.71% 0.0441 197.63)",
+          "oklch(72.14% 0.0441 197.63)",
+          "oklch(83.57% 0.0441 197.63)",
+          "oklch(95.00% 0.0441 197.63)"
+        ]
+      },
+      "shape-violet": {
+        "role": "secondary",
+        "displayName": "Shape Violet",
+        "canonical": "#cab1f0",
+        "tonalRamp": [
+          "oklch(15.00% 0.0913 302.55)",
+          "oklch(26.43% 0.0913 302.55)",
+          "oklch(37.86% 0.0913 302.55)",
+          "oklch(49.29% 0.0913 302.55)",
+          "oklch(60.71% 0.0913 302.55)",
+          "oklch(72.14% 0.0913 302.55)",
+          "oklch(83.57% 0.0913 302.55)",
+          "oklch(95.00% 0.0913 302.55)"
+        ]
+      },
+      "shape-violet-fill": {
+        "role": "secondary",
+        "displayName": "Shape Violet Fill",
+        "canonical": "#393350",
+        "tonalRamp": [
+          "oklch(15.00% 0.0505 293.02)",
+          "oklch(26.43% 0.0505 293.02)",
+          "oklch(37.86% 0.0505 293.02)",
+          "oklch(49.29% 0.0505 293.02)",
+          "oklch(60.71% 0.0505 293.02)",
+          "oklch(72.14% 0.0505 293.02)",
+          "oklch(83.57% 0.0505 293.02)",
+          "oklch(95.00% 0.0505 293.02)"
+        ]
+      },
+      "shape-amber": {
+        "role": "secondary",
+        "displayName": "Shape Amber",
+        "canonical": "#e8c685",
+        "tonalRamp": [
+          "oklch(15.00% 0.0913 83.02)",
+          "oklch(26.43% 0.0913 83.02)",
+          "oklch(37.86% 0.0913 83.02)",
+          "oklch(49.29% 0.0913 83.02)",
+          "oklch(60.71% 0.0913 83.02)",
+          "oklch(72.14% 0.0913 83.02)",
+          "oklch(83.57% 0.0913 83.02)",
+          "oklch(95.00% 0.0913 83.02)"
+        ]
+      },
+      "shape-amber-fill": {
+        "role": "secondary",
+        "displayName": "Shape Amber Fill",
+        "canonical": "#4c3e28",
+        "tonalRamp": [
+          "oklch(15.00% 0.0397 78.37)",
+          "oklch(26.43% 0.0397 78.37)",
+          "oklch(37.86% 0.0397 78.37)",
+          "oklch(49.29% 0.0397 78.37)",
+          "oklch(60.71% 0.0397 78.37)",
+          "oklch(72.14% 0.0397 78.37)",
+          "oklch(83.57% 0.0397 78.37)",
+          "oklch(95.00% 0.0397 78.37)"
+        ]
+      },
+      "light-shape-blue": {
+        "role": "secondary",
+        "displayName": "Light Shape Blue",
+        "canonical": "#2868b7",
+        "tonalRamp": [
+          "oklch(15.00% 0.1405 255.64)",
+          "oklch(26.43% 0.1405 255.64)",
+          "oklch(37.86% 0.1405 255.64)",
+          "oklch(49.29% 0.1405 255.64)",
+          "oklch(60.71% 0.1405 255.64)",
+          "oklch(72.14% 0.1405 255.64)",
+          "oklch(83.57% 0.1405 255.64)",
+          "oklch(95.00% 0.1405 255.64)"
+        ]
+      },
+      "light-shape-blue-fill": {
+        "role": "secondary",
+        "displayName": "Light Shape Blue Fill",
+        "canonical": "#edf4ff",
+        "tonalRamp": [
+          "oklch(15.00% 0.0165 259.42)",
+          "oklch(26.43% 0.0165 259.42)",
+          "oklch(37.86% 0.0165 259.42)",
+          "oklch(49.29% 0.0165 259.42)",
+          "oklch(60.71% 0.0165 259.42)",
+          "oklch(72.14% 0.0165 259.42)",
+          "oklch(83.57% 0.0165 259.42)",
+          "oklch(95.00% 0.0165 259.42)"
+        ]
+      },
+      "light-shape-teal": {
+        "role": "secondary",
+        "displayName": "Light Shape Teal",
+        "canonical": "#14786e",
+        "tonalRamp": [
+          "oklch(15.00% 0.0865 184.39)",
+          "oklch(26.43% 0.0865 184.39)",
+          "oklch(37.86% 0.0865 184.39)",
+          "oklch(49.29% 0.0865 184.39)",
+          "oklch(60.71% 0.0865 184.39)",
+          "oklch(72.14% 0.0865 184.39)",
+          "oklch(83.57% 0.0865 184.39)",
+          "oklch(95.00% 0.0865 184.39)"
+        ]
+      },
+      "light-shape-teal-fill": {
+        "role": "secondary",
+        "displayName": "Light Shape Teal Fill",
+        "canonical": "#eaf8f4",
+        "tonalRamp": [
+          "oklch(15.00% 0.0157 177.09)",
+          "oklch(26.43% 0.0157 177.09)",
+          "oklch(37.86% 0.0157 177.09)",
+          "oklch(49.29% 0.0157 177.09)",
+          "oklch(60.71% 0.0157 177.09)",
+          "oklch(72.14% 0.0157 177.09)",
+          "oklch(83.57% 0.0157 177.09)",
+          "oklch(95.00% 0.0157 177.09)"
+        ]
+      },
+      "light-shape-violet": {
+        "role": "secondary",
+        "displayName": "Light Shape Violet",
+        "canonical": "#7950a6",
+        "tonalRamp": [
+          "oklch(15.00% 0.1361 304.04)",
+          "oklch(26.43% 0.1361 304.04)",
+          "oklch(37.86% 0.1361 304.04)",
+          "oklch(49.29% 0.1361 304.04)",
+          "oklch(60.71% 0.1361 304.04)",
+          "oklch(72.14% 0.1361 304.04)",
+          "oklch(83.57% 0.1361 304.04)",
+          "oklch(95.00% 0.1361 304.04)"
+        ]
+      },
+      "light-shape-violet-fill": {
+        "role": "secondary",
+        "displayName": "Light Shape Violet Fill",
+        "canonical": "#f4effb",
+        "tonalRamp": [
+          "oklch(15.00% 0.0168 304.80)",
+          "oklch(26.43% 0.0168 304.80)",
+          "oklch(37.86% 0.0168 304.80)",
+          "oklch(49.29% 0.0168 304.80)",
+          "oklch(60.71% 0.0168 304.80)",
+          "oklch(72.14% 0.0168 304.80)",
+          "oklch(83.57% 0.0168 304.80)",
+          "oklch(95.00% 0.0168 304.80)"
+        ]
+      },
+      "light-shape-amber": {
+        "role": "secondary",
+        "displayName": "Light Shape Amber",
+        "canonical": "#876218",
+        "tonalRamp": [
+          "oklch(15.00% 0.0985 79.82)",
+          "oklch(26.43% 0.0985 79.82)",
+          "oklch(37.86% 0.0985 79.82)",
+          "oklch(49.29% 0.0985 79.82)",
+          "oklch(60.71% 0.0985 79.82)",
+          "oklch(72.14% 0.0985 79.82)",
+          "oklch(83.57% 0.0985 79.82)",
+          "oklch(95.00% 0.0985 79.82)"
+        ]
+      },
+      "light-shape-amber-fill": {
+        "role": "secondary",
+        "displayName": "Light Shape Amber Fill",
+        "canonical": "#fff6e5",
+        "tonalRamp": [
+          "oklch(15.00% 0.0244 83.42)",
+          "oklch(26.43% 0.0244 83.42)",
+          "oklch(37.86% 0.0244 83.42)",
+          "oklch(49.29% 0.0244 83.42)",
+          "oklch(60.71% 0.0244 83.42)",
+          "oklch(72.14% 0.0244 83.42)",
+          "oklch(83.57% 0.0244 83.42)",
+          "oklch(95.00% 0.0244 83.42)"
+        ]
+      },
+      "document-blue": {
+        "role": "secondary",
+        "displayName": "Document Blue",
+        "canonical": "#79a9e8",
+        "tonalRamp": [
+          "oklch(15.00% 0.1058 255.54)",
+          "oklch(26.43% 0.1058 255.54)",
+          "oklch(37.86% 0.1058 255.54)",
+          "oklch(49.29% 0.1058 255.54)",
+          "oklch(60.71% 0.1058 255.54)",
+          "oklch(72.14% 0.1058 255.54)",
+          "oklch(83.57% 0.1058 255.54)",
+          "oklch(95.00% 0.1058 255.54)"
+        ]
+      },
+      "document-teal": {
+        "role": "secondary",
+        "displayName": "Document Teal",
+        "canonical": "#63c8b7",
+        "tonalRamp": [
+          "oklch(15.00% 0.0983 181.17)",
+          "oklch(26.43% 0.0983 181.17)",
+          "oklch(37.86% 0.0983 181.17)",
+          "oklch(49.29% 0.0983 181.17)",
+          "oklch(60.71% 0.0983 181.17)",
+          "oklch(72.14% 0.0983 181.17)",
+          "oklch(83.57% 0.0983 181.17)",
+          "oklch(95.00% 0.0983 181.17)"
+        ]
+      },
+      "document-violet": {
+        "role": "secondary",
+        "displayName": "Document Violet",
+        "canonical": "#b59bdf",
+        "tonalRamp": [
+          "oklch(15.00% 0.1000 301.54)",
+          "oklch(26.43% 0.1000 301.54)",
+          "oklch(37.86% 0.1000 301.54)",
+          "oklch(49.29% 0.1000 301.54)",
+          "oklch(60.71% 0.1000 301.54)",
+          "oklch(72.14% 0.1000 301.54)",
+          "oklch(83.57% 0.1000 301.54)",
+          "oklch(95.00% 0.1000 301.54)"
+        ]
+      },
+      "document-amber": {
+        "role": "secondary",
+        "displayName": "Document Amber",
+        "canonical": "#d6ad65",
+        "tonalRamp": [
+          "oklch(15.00% 0.1024 80.39)",
+          "oklch(26.43% 0.1024 80.39)",
+          "oklch(37.86% 0.1024 80.39)",
+          "oklch(49.29% 0.1024 80.39)",
+          "oklch(60.71% 0.1024 80.39)",
+          "oklch(72.14% 0.1024 80.39)",
+          "oklch(83.57% 0.1024 80.39)",
+          "oklch(95.00% 0.1024 80.39)"
+        ]
       }
     },
     "typographyMeta": {
@@ -493,7 +793,7 @@
       "refersTo": "button-primary",
       "description": "Commit a local editor action such as adding a connection.",
       "html": "<button class=\"ds-primary\">新增連線</button>",
-      "css": ".ds-primary { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; font-size: 12px; font-weight: 500; min-height: 44px; padding: 0 12px; border-radius: 7px; cursor: pointer; transition: background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1), opacity 150ms cubic-bezier(.4,0,.2,1); border: 1px solid transparent; background: var(--diagram-primary, #0071e3); color: var(--diagram-on-primary, #ffffff); } .ds-primary:hover { background: var(--diagram-primary-hover, #0066cc); } .ds-primary:focus-visible { outline: 2px solid var(--diagram-accent, #0a84ff); outline-offset: -2px; } .ds-primary:active { opacity: .75; transition-duration: 0ms; } .ds-primary:disabled { opacity: .38; cursor: default; } @media (prefers-reduced-motion: reduce) { .ds-primary { transition: none; } }"
+      "css": ".ds-primary { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; font-size: 12px; font-weight: 500; min-height: 44px; padding: 0 12px; border-radius: 7px; cursor: pointer; transition: background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1), opacity 150ms cubic-bezier(.4,0,.2,1); border: 1px solid transparent; background: var(--diagram-primary, #0071e3); color: var(--diagram-on-primary, #ffffff); } .ds-primary:hover { background: var(--diagram-primary-hover, #0066cc); } .ds-primary:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-primary:active { opacity: .75; transition-duration: 0ms; } .ds-primary:disabled { opacity: .38; cursor: default; } @media (prefers-reduced-motion: reduce) { .ds-primary { transition: none; } }"
     },
     {
       "name": "Ghost Button",
@@ -501,7 +801,7 @@
       "refersTo": "button-ghost",
       "description": "Quiet toolbar action; the pressed state identifies an active tool.",
       "html": "<button class=\"ds-ghost\" aria-pressed=\"true\">連線</button>",
-      "css": ".ds-ghost { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; font-size: 12px; font-weight: 500; min-height: 44px; padding: 0 12px; border-radius: 7px; cursor: pointer; transition: background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1), opacity 150ms cubic-bezier(.4,0,.2,1); padding: 0 10px; border: 0; background: transparent; color: var(--diagram-secondary, #d1d1d6); } .ds-ghost:hover { background: var(--diagram-hover, #ffffff0c); } .ds-ghost[aria-pressed=\"true\"] { background: var(--diagram-selected, #16375b); color: var(--diagram-accent-text, #7bb7ff); } .ds-ghost:focus-visible { outline: 2px solid var(--diagram-accent, #0a84ff); outline-offset: -2px; } .ds-ghost:active { background: var(--diagram-active, #48484a); opacity: .75; transition-duration: 0ms; } .ds-ghost:disabled { opacity: .38; cursor: default; } @media (prefers-reduced-motion: reduce) { .ds-ghost { transition: none; } }"
+      "css": ".ds-ghost { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; font-size: 12px; font-weight: 500; min-height: 44px; padding: 0 12px; border-radius: 7px; cursor: pointer; transition: background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1), opacity 150ms cubic-bezier(.4,0,.2,1); padding: 0 10px; border: 0; background: transparent; color: var(--diagram-secondary, #dce5f2); } .ds-ghost:hover { background: var(--diagram-hover, #ffffff0c); } .ds-ghost[aria-pressed=\"true\"] { background: var(--diagram-selected, #244a71); color: var(--diagram-accent-text, #9ecbff); } .ds-ghost:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-ghost:active { background: var(--diagram-active, #46546a); opacity: .75; transition-duration: 0ms; } .ds-ghost:disabled { opacity: .38; cursor: default; } @media (prefers-reduced-motion: reduce) { .ds-ghost { transition: none; } }"
     },
     {
       "name": "Outlined Button",
@@ -509,7 +809,7 @@
       "refersTo": "button-outline",
       "description": "Secondary document action such as exporting or duplicating a shape.",
       "html": "<button class=\"ds-outline\">匯出</button>",
-      "css": ".ds-outline { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; font-size: 12px; font-weight: 500; min-height: 44px; padding: 0 12px; border-radius: 7px; cursor: pointer; transition: background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1), opacity 150ms cubic-bezier(.4,0,.2,1); background: var(--diagram-surface, #2c2c2e); color: var(--diagram-secondary, #d1d1d6); border: 1px solid var(--diagram-control-line, #636369); } .ds-outline:hover { border-color: hsl(var(--muted-foreground, 240 4% 68%) / .5); } .ds-outline:focus-visible { outline: 2px solid var(--diagram-accent, #0a84ff); outline-offset: -2px; } .ds-outline:active { opacity: .75; transition-duration: 0ms; } .ds-outline:disabled { opacity: .38; cursor: default; } @media (prefers-reduced-motion: reduce) { .ds-outline { transition: none; } }"
+      "css": ".ds-outline { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; font-size: 12px; font-weight: 500; min-height: 44px; padding: 0 12px; border-radius: 7px; cursor: pointer; transition: background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1), opacity 150ms cubic-bezier(.4,0,.2,1); background: var(--diagram-surface, #353d49); color: var(--diagram-secondary, #dce5f2); border: 1px solid var(--diagram-control-line, #7b8b9f); } .ds-outline:hover { border-color: hsl(var(--muted-foreground, 217 18% 74%) / .5); } .ds-outline:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-outline:active { opacity: .75; transition-duration: 0ms; } .ds-outline:disabled { opacity: .38; cursor: default; } @media (prefers-reduced-motion: reduce) { .ds-outline { transition: none; } }"
     },
     {
       "name": "Property Field",
@@ -517,7 +817,7 @@
       "refersTo": "field",
       "description": "Theme-aware inspector field for editable dimensions and diagram properties.",
       "html": "<label class=\"ds-field-label\" for=\"ds-field\">寬度 <span>px</span></label><input id=\"ds-field\" class=\"ds-field\" type=\"number\" min=\"80\" max=\"2400\" value=\"180\" />",
-      "css": ".ds-field-label { display: flex; justify-content: space-between; width: 148px; margin-bottom: 8px; color: var(--diagram-secondary, #d1d1d6); font: 500 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; } .ds-field-label span { color: var(--diagram-muted, #aaaab1); font-size: 10px; } .ds-field { width: 148px; height: 38px; border: 1px solid var(--diagram-control-line, #636369); border-radius: 6px; padding: 10px 16px; background: var(--diagram-field, #323235); color: var(--diagram-text, #f5f5f7); font: 400 13px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; box-shadow: none; caret-color: var(--diagram-accent, #0a84ff); } .ds-field:hover { border-color: hsl(210 100% 45% / .35); } .ds-field:focus-visible { outline: 2px solid var(--diagram-accent, #0a84ff); outline-offset: -2px; border-color: hsl(210 100% 45% / .7); } .ds-field:disabled { opacity: .5; cursor: not-allowed; } @media (max-width: 700px) { .ds-field { font-size: 16px; } }"
+      "css": ".ds-field-label { display: flex; justify-content: space-between; width: 148px; margin-bottom: 8px; color: var(--diagram-secondary, #dce5f2); font: 500 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; } .ds-field-label span { color: var(--diagram-muted, #b2bbc9); font-size: 10px; } .ds-field { width: 148px; height: 38px; border: 1px solid var(--diagram-control-line, #7b8b9f); border-radius: 6px; padding: 10px 16px; background: var(--diagram-field, #2d323a); color: var(--diagram-text, #f5f5f7); font: 400 13px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; box-shadow: none; caret-color: var(--diagram-accent, #69afff); } .ds-field:hover { border-color: hsl(210 100% 45% / .35); } .ds-field:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; border-color: hsl(210 100% 45% / .7); } .ds-field:disabled { opacity: .5; cursor: not-allowed; } @media (max-width: 700px) { .ds-field { font-size: 16px; } }"
     },
     {
       "name": "Command Bar",
@@ -525,15 +825,15 @@
       "refersTo": "command-bar",
       "description": "Grouped document commands above the drawing canvas.",
       "html": "<div class=\"ds-toolbar\" role=\"toolbar\" aria-label=\"圖稿工具\"><div class=\"ds-toolbar-group\"><button type=\"button\" aria-label=\"復原\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M3 7v6h6\"/><path d=\"M3 13a8 8 0 1 1 2.4 5.7\"/></svg></button></div><button type=\"button\" class=\"ds-toolbar-active\" aria-pressed=\"true\">連線</button><button type=\"button\">自動排列</button></div>",
-      "css": ".ds-toolbar { display: flex; align-items: center; gap: 6px; min-height: 49px; padding: 2px 8px; background: var(--diagram-chrome, #242426); border-bottom: 1px solid var(--diagram-line, #454548); font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; } .ds-toolbar-group { padding-right: 6px; border-right: 1px solid var(--diagram-line, #454548); } .ds-toolbar button { min-height: 44px; min-width: 44px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--diagram-secondary, #d1d1d6); font: 500 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-toolbar button:hover { background: var(--diagram-hover, #ffffff0c); } .ds-toolbar button:focus-visible { outline: 2px solid var(--diagram-accent, #0a84ff); outline-offset: -2px; } .ds-toolbar button:active { background: var(--diagram-active, #48484a); opacity: .75; } .ds-toolbar .ds-toolbar-active { background: var(--diagram-selected, #16375b); color: var(--diagram-accent-text, #7bb7ff); } @media (max-width: 1050px) { .ds-toolbar { overflow-x: auto; } }"
+      "css": ".ds-toolbar { display: flex; align-items: center; gap: 6px; min-height: 49px; padding: 2px 8px; background: var(--diagram-chrome, #303641); border-bottom: 1px solid var(--diagram-line, #536071); font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; } .ds-toolbar-group { padding-right: 6px; border-right: 1px solid var(--diagram-line, #536071); } .ds-toolbar button { min-height: 44px; min-width: 44px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--diagram-secondary, #dce5f2); font: 500 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-toolbar button:hover { background: var(--diagram-hover, #ffffff0c); } .ds-toolbar button:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-toolbar button:active { background: var(--diagram-active, #46546a); opacity: .75; } .ds-toolbar .ds-toolbar-active { background: var(--diagram-selected, #244a71); color: var(--diagram-accent-text, #9ecbff); } @media (max-width: 1050px) { .ds-toolbar { overflow-x: auto; } }"
     },
     {
       "name": "Shape Card",
       "kind": "card",
       "refersTo": "shape-card",
-      "description": "A labelled library shape that can be clicked or dragged into the canvas.",
-      "html": "<button class=\"ds-shape\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.25\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/></svg><span>方框</span></button>",
-      "css": ".ds-shape { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: 72px; height: 88px; padding: 10px 4px; border: 1px solid var(--diagram-line, #454548); border-radius: 7px; background: var(--diagram-surface, #2c2c2e); color: var(--diagram-secondary, #d1d1d6); font: 400 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-shape:hover { background: var(--diagram-selected, #16375b); border-color: var(--diagram-accent, #0a84ff); } .ds-shape:focus-visible { outline: 2px solid var(--diagram-accent, #0a84ff); outline-offset: -2px; } .ds-shape:active { opacity: .75; } .ds-shape:disabled { opacity: .38; } @media (max-width: 700px) { .ds-shape { width: auto; height: 48px; padding: 4px; flex-direction: row; gap: 5px; border: 0; font-size: 11px; } .ds-shape svg { width: 22px; height: 22px; } }"
+      "description": "Blue rectangles, teal ellipses, violet diamonds, and amber notes, with themed library colors and distinct new-document defaults.",
+      "html": "<div class=\"ds-shapes\"><button class=\"ds-shape ds-shape-blue\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/></svg><span>方框</span></button><button class=\"ds-shape ds-shape-teal\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/></svg><span>圓形</span></button><button class=\"ds-shape ds-shape-violet\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"m12 2 10 10-10 10L2 12Z\"/></svg><span>判斷</span></button><button class=\"ds-shape ds-shape-amber\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z\"/><path d=\"M16 3v5h5\"/></svg><span>備註</span></button></div>",
+      "css": ".ds-shapes { display: grid; grid-template-columns: repeat(2, 72px); gap: 8px; } .ds-shape-blue { --shape-color: var(--diagram-shape-blue, #80b9ff); --shape-fill: var(--diagram-shape-blue-fill, #203e62); } .ds-shape-teal { --shape-color: var(--diagram-shape-teal, #79dfd0); --shape-fill: var(--diagram-shape-teal-fill, #1f4647); } .ds-shape-violet { --shape-color: var(--diagram-shape-violet, #cab1f0); --shape-fill: var(--diagram-shape-violet-fill, #393350); } .ds-shape-amber { --shape-color: var(--diagram-shape-amber, #e8c685); --shape-fill: var(--diagram-shape-amber-fill, #4c3e28); } .ds-shape { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: 72px; height: 88px; padding: 10px 4px; border: 1px solid var(--diagram-line, #536071); border-radius: 7px; background: var(--shape-fill); color: var(--diagram-secondary, #dce5f2); font: 400 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-shape svg { color: var(--shape-color); } .ds-shape:hover { background: var(--diagram-selected, #244a71); border-color: var(--shape-color); } .ds-shape:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-shape:active { opacity: .75; } .ds-shape:disabled { opacity: .38; } @media (max-width: 700px) { .ds-shapes { grid-template-columns: repeat(4, minmax(0, 1fr)); } .ds-shape { width: auto; height: 48px; padding: 4px; flex-direction: row; gap: 5px; border: 0; font-size: 11px; } .ds-shape svg { width: 22px; height: 22px; } }"
     },
     {
       "name": "Saved Document Card",
@@ -541,7 +841,7 @@
       "refersTo": "saved-document-card",
       "description": "Open an account-local document from the saved-document dialog.",
       "html": "<button class=\"ds-saved\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><path d=\"M14 2v6h6M8 13h8M8 17h6\"/></svg><span><strong>電源方塊圖</strong><small>2026/10/15 · 4 個圖形</small></span><span class=\"ds-saved-check\" aria-label=\"目前圖稿\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m20 6-11 11-5-5\"/></svg></span></button>",
-      "css": ".ds-saved { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 68px; padding: 12px; text-align: left; border: 1px solid transparent; border-radius: 6px; background: hsl(var(--secondary, 240 3% 20%)); color: var(--diagram-text, #f5f5f7); font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-saved:hover { border-color: hsl(210 100% 45%); } .ds-saved:focus-visible { outline: 2px solid hsl(210 100% 45%); outline-offset: -2px; } .ds-saved:active { opacity: .75; } .ds-saved:disabled { opacity: .5; } .ds-saved > svg { flex-shrink: 0; color: hsl(210 100% 45%); } .ds-saved > span:not(.ds-saved-check) { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; } .ds-saved strong { font-size: 13px; font-weight: 600; } .ds-saved small { font-size: 11px; color: hsl(var(--muted-foreground, 240 4% 68%)); } .ds-saved-check { color: hsl(210 100% 45%); }"
+      "css": ".ds-saved { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 68px; padding: 12px; text-align: left; border: 1px solid transparent; border-radius: 6px; background: hsl(var(--secondary, 219 16% 27%)); color: var(--diagram-text, #f5f5f7); font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-saved:hover { border-color: hsl(210 100% 45%); } .ds-saved:focus-visible { outline: 2px solid hsl(210 100% 45%); outline-offset: -2px; } .ds-saved:active { opacity: .75; } .ds-saved:disabled { opacity: .5; } .ds-saved > svg { flex-shrink: 0; color: hsl(210 100% 45%); } .ds-saved > span:not(.ds-saved-check) { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; } .ds-saved strong { font-size: 13px; font-weight: 600; } .ds-saved small { font-size: 11px; color: hsl(var(--muted-foreground, 217 18% 74%)); } .ds-saved-check { color: hsl(210 100% 45%); }"
     },
     {
       "name": "Selection Chip",
@@ -549,16 +849,16 @@
       "refersTo": "selection-chip",
       "description": "Theme-aware passive text feedback for the selected object or active connection task.",
       "html": "<span class=\"ds-selection-chip\">已選取 1 個圖形</span>",
-      "css": ".ds-selection-chip { display: inline-block; color: var(--diagram-accent-text, #7bb7ff); background: var(--diagram-selected, #16375b); border: 1px solid var(--diagram-selected-line, #325b89); border-radius: 4px; padding: 5px 8px; font: 400 11px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; pointer-events: none; } @media (max-width: 700px) { .ds-selection-chip { font-size: 10px; } }"
+      "css": ".ds-selection-chip { display: inline-block; color: var(--diagram-accent-text, #9ecbff); background: var(--diagram-selected, #244a71); border: 1px solid var(--diagram-selected-line, #5d8dbd); border-radius: 4px; padding: 5px 8px; font: 400 11px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; pointer-events: none; } @media (max-width: 700px) { .ds-selection-chip { font-size: 10px; } }"
     }
   ],
   "narrative": {
     "northStar": "The Diagram Workbench",
-    "overview": "The editor pairs the familiar draw.io workbench arrangement with Apple-inspired graphite colors by default and a complete light variant. A quiet neutral frame holds the document controls, shape library, and status tools around the drawing surface. Blue identifies actions, focus, and selection while the drawing itself remains the main content.\n\nThis record applies only to the diagram editor, its menus, and its saved-document and deletion dialogs. The surrounding AutoCheck website keeps its incumbent design. The record follows the implemented component and stylesheet rather than prescribing a new website identity.",
+    "overview": "The editor pairs the familiar draw.io workbench arrangement with brighter Apple-inspired blue graphite colors by default and a complete light variant. A quiet frame holds the document controls, shape library, and status tools around the drawing surface. Blue identifies actions, focus, and selection; blue, teal, violet, and amber distinguish the library's four shape roles.\n\nThis record applies only to the diagram editor, its menus, and its saved-document and deletion dialogs. The surrounding AutoCheck website keeps its incumbent design. The record follows the implemented component and stylesheet rather than prescribing a new website identity.",
     "keyCharacteristics": [
-      "Graphite canvas and tools by default, with a complete light variant.",
+      "Brighter blue graphite canvas and tools by default, with a complete light variant.",
       "Compact system typography and explicit control labels.",
-      "A persistent shape library with contextual editing properties.",
+      "A persistent, color-coded shape library with contextual editing properties.",
       "Direct movement, drag-to-draw arrows, visible connection handles, and reversible edits.",
       "Responsive tools that keep the drawing workspace usable on narrow screens."
     ],

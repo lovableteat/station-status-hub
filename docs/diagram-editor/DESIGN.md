@@ -1,24 +1,24 @@
 ---
 name: AutoCheck Diagram Editor
-description: Scoped Apple-inspired graphite drawing workspace with a light variant
+description: Scoped Apple-inspired blue graphite workspace with colored shapes and a light variant
 colors:
   action-blue: "#0071e3"
   primary-hover: "#0066cc"
   on-primary: "#ffffff"
-  focus-blue: "#0a84ff"
-  action-text: "#7bb7ff"
-  selection-fill: "#16375b"
-  chrome: "#242426"
-  surface: "#2c2c2e"
-  canvas: "#1c1c1e"
-  field: "#323235"
+  focus-blue: "#69afff"
+  action-text: "#9ecbff"
+  selection-fill: "#244a71"
+  chrome: "#303641"
+  surface: "#353d49"
+  canvas: "#282d35"
+  field: "#2d323a"
   text: "#f5f5f7"
-  control-text: "#d1d1d6"
-  secondary-text: "#aaaab1"
-  separator: "#454548"
-  control-border: "#636369"
+  control-text: "#dce5f2"
+  secondary-text: "#b2bbc9"
+  separator: "#536071"
+  control-border: "#7b8b9f"
   destructive: "#ff9490"
-  dark-canvas-detail: "#b6bcc6"
+  dark-canvas-detail: "#c1c9d5"
   canvas-text: "#1f2937"
   canvas-detail: "#526171"
   light-action-text: "#0066cc"
@@ -31,6 +31,26 @@ colors:
   light-separator: "#d8dce1"
   light-control-border: "#c8cdd3"
   light-destructive: "#c93430"
+  shape-blue: "#80b9ff"
+  shape-blue-fill: "#203e62"
+  shape-teal: "#79dfd0"
+  shape-teal-fill: "#1f4647"
+  shape-violet: "#cab1f0"
+  shape-violet-fill: "#393350"
+  shape-amber: "#e8c685"
+  shape-amber-fill: "#4c3e28"
+  light-shape-blue: "#2868b7"
+  light-shape-blue-fill: "#edf4ff"
+  light-shape-teal: "#14786e"
+  light-shape-teal-fill: "#eaf8f4"
+  light-shape-violet: "#7950a6"
+  light-shape-violet-fill: "#f4effb"
+  light-shape-amber: "#876218"
+  light-shape-amber-fill: "#fff6e5"
+  document-blue: "#79a9e8"
+  document-teal: "#63c8b7"
+  document-violet: "#b59bdf"
+  document-amber: "#d6ad65"
 typography:
   title:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif'
@@ -106,13 +126,13 @@ components:
     height: "49px"
     padding: "2px 8px"
   shape-card:
-    backgroundColor: "{colors.surface}"
+    backgroundColor: "{colors.shape-blue-fill}"
     textColor: "{colors.control-text}"
     rounded: "{rounded.control}"
     height: "88px"
     padding: "10px 4px"
   saved-document-card:
-    backgroundColor: "hsl(240 3% 20%)"
+    backgroundColor: "hsl(219 16% 27%)"
     textColor: "{colors.text}"
     typography: "{typography.body}"
     rounded: "{rounded.field}"
@@ -131,20 +151,20 @@ components:
 
 **Creative North Star: "The Diagram Workbench"**
 
-The editor pairs the familiar draw.io workbench arrangement with Apple-inspired graphite colors by default and a complete light variant. A quiet neutral frame holds the document controls, shape library, and status tools around the drawing surface. Blue identifies actions, focus, and selection while the drawing itself remains the main content.
+The editor pairs the familiar draw.io workbench arrangement with brighter Apple-inspired blue graphite colors by default and a complete light variant. A quiet frame holds the document controls, shape library, and status tools around the drawing surface. Blue identifies actions, focus, and selection; blue, teal, violet, and amber distinguish the library's four shape roles.
 
 This record applies only to the diagram editor, its menus, and its saved-document and deletion dialogs. The surrounding AutoCheck website keeps its incumbent design. The record follows the implemented component and stylesheet rather than prescribing a new website identity.
 
 **Key Characteristics:**
-- Graphite canvas and tools by default, with a complete light variant.
+- Brighter blue graphite canvas and tools by default, with a complete light variant.
 - Compact system typography and explicit control labels.
-- A persistent shape library with contextual editing properties.
+- A persistent, color-coded shape library with contextual editing properties.
 - Direct movement, drag-to-draw arrows, visible connection handles, and reversible edits.
 - Responsive tools that keep the drawing workspace usable on narrow screens.
 
 ## Colors
 
-The default palette uses graphite surfaces, light neutral text, and restrained blue interaction accents. The frontmatter holds the normative values from `diagramEditor.css` and `diagramTheme.ts`: unsuffixed UI roles describe dark mode, `light-` roles describe the light variant, and the canvas text/detail roles retain the portable light-rendering values.
+The default palette uses brighter blue graphite surfaces, light neutral text, and blue interaction accents. The frontmatter holds the normative values from `diagramEditor.css`, `diagramTheme.ts`, and `ComparisonDiagramEditor.tsx`: unsuffixed UI roles describe dark mode, `light-` roles describe the light variant, `document-` roles describe new-shape color values, and the canvas text/detail roles retain the portable light-rendering values.
 
 ### Primary
 
@@ -152,6 +172,11 @@ The default palette uses graphite surfaces, light neutral text, and restrained b
 - **Focus Blue** marks dark-mode focus, resizing, and selected connections; light mode uses Action Blue for these roles.
 - **Action Text** supplies selected and highlighted text in the active mode.
 - **Selection Fill** identifies active tools, highlighted menu items, and hovered shape cards.
+
+### Secondary
+
+- **Shape Blue** identifies rectangles, **Shape Teal** identifies ellipses, **Shape Violet** identifies diamonds, and **Shape Amber** identifies notes. Each role has a themed icon color and tile fill, including corresponding light-mode values.
+- **Document Blue / Teal / Violet / Amber** are the stored default colors for newly created shapes in those roles. The library's themed presentation colors do not overwrite existing document colors.
 
 ### Neutral
 
@@ -166,6 +191,8 @@ The default palette uses graphite surfaces, light neutral text, and restrained b
 **The Scoped Color Rule.** Apply the same `data-diagram-theme` to the editor and its portaled menus and dialogs; preserve the surrounding site's colors.
 
 The header appearance control switches dark/light mode and remembers the choice in this browser's local storage. Missing or unavailable storage defaults to dark; a failed preference write still allows the current toggle to work. Appearance is outside the saved diagram and its undo history. SVG, PNG, and PDF exports always retain the white page and light drawing-color helpers.
+
+Dark node fills blend toward the canvas by 0.72 to retain more of the chosen hue, with further blending when needed to keep relative fill luminance at or below 0.083. Dark strokes are brightened when their relative luminance is below 0.38. The light rendering retains its 0.88 fill blend and 0.25 maximum stroke-luminance threshold.
 
 ## Typography
 
@@ -205,7 +232,7 @@ The embedded shell uses the shell radius and menus/dialogs use the floating radi
 
 The shape library offers rectangles, ellipses, diamonds, and notes. Drawing rectangles use the diagram-node radius; ellipses are fully rounded, diamonds use a polygon, and notes have a folded-corner silhouette with a dashed border. These are document shapes rather than additional UI container styles.
 
-New shapes and connections use the existing blue document swatch; new notes use the amber document swatch. Documents retain their selected colors, including source-graph colors. The interface palette does not recolor stored drawing content.
+New rectangles and connections use Document Blue; ellipses use Document Teal, diamonds use Document Violet, and notes use Document Amber. Documents retain their selected colors, including source-graph colors. The interface palette does not recolor stored drawing content.
 
 ## Components
 
@@ -225,7 +252,7 @@ The command bar uses Chrome and separators between command groups. File and expo
 
 ### Shape Cards
 
-Library tiles pair an outlined geometric icon with a text name. On desktop they form a two-column grid and support clicking or dragging into the canvas. Hover introduces Selection Fill and an Action Blue border. On narrow screens they become compact horizontal controls.
+Library tiles pair a geometric icon with a text name, a role-colored fill, and a role-colored icon with a subtle fill. On desktop they form a two-column grid and support clicking or dragging into the canvas. Hover introduces Selection Fill and the shape role's border color. On narrow screens they become compact horizontal controls.
 
 ### Saved Document Cards
 

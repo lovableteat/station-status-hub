@@ -9,15 +9,15 @@ export const DIAGRAM_THEME = {
 } as const;
 
 const DARK_DIAGRAM_THEME = {
-  canvas: "#1c1c1e",
+  canvas: "#282d35",
   text: "#f5f5f7",
-  detail: "#b6bcc6",
-  labelBackground: "#2c2c2e",
+  detail: "#c1c9d5",
+  labelBackground: "#353d49",
 } as const;
 
 export function diagramTheme(mode: DiagramAppearance = "light") {
   return mode === "dark"
-    ? { ...DARK_DIAGRAM_THEME, grid: "#444448" }
+    ? { ...DARK_DIAGRAM_THEME, grid: "#536171" }
     : { ...DIAGRAM_THEME, grid: "#c6cdd1" };
 }
 
@@ -59,7 +59,7 @@ function luminance(color: string): number {
 /** Retain the chosen hue while keeping even white/yellow connections visible. */
 export function diagramStrokeColor(color: string, mode: DiagramAppearance = "light"): string {
   const dark = mode === "dark";
-  const threshold = dark ? 0.32 : 0.25;
+  const threshold = dark ? 0.38 : 0.25;
   const sufficient = (value: number) => dark ? value >= threshold : value <= threshold;
   if (sufficient(luminance(color))) return color.toLowerCase();
   const destination = dark ? "#c1dcff" : "#233542";
@@ -74,8 +74,21 @@ export function diagramStrokeColor(color: string, mode: DiagramAppearance = "lig
 
 export function diagramNodeColors(color: string, mode: DiagramAppearance = "light") {
   const theme = diagramTheme(mode);
+  let amount = mode === "dark" ? 0.72 : 0.88;
+  let fill = blend(color, theme.canvas, amount);
+  // Keep stronger hue in ordinary diagram colors while imported bright colors
+  // still leave enough contrast for labels and the smaller detail text.
+  if (mode === "dark" && luminance(fill) > 0.083) {
+    let high = 1;
+    for (let step = 0; step < 12; step++) {
+      const middle = (amount + high) / 2;
+      if (luminance(blend(color, theme.canvas, middle)) > 0.083) amount = middle;
+      else high = middle;
+    }
+    fill = blend(color, theme.canvas, high);
+  }
   return {
-    fill: blend(color, theme.canvas, mode === "dark" ? 0.84 : 0.88),
+    fill,
     stroke: diagramStrokeColor(color, mode),
     text: theme.text,
     detail: theme.detail,
