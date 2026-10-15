@@ -39,7 +39,7 @@ type FlowNode = ShapeFlowNode | Node<Record<string, unknown>, "endpoint">;
 type FlowEdge = Edge<{ edge: DiagramEdge; nodes: ReadonlyMap<string, DiagramNode> }, "diagram">;
 const endpointId = (id: string, side: "source" | "target") => `__diagram_endpoint_${id}_${side}`;
 const ports = [["left", Position.Left], ["right", Position.Right], ["top", Position.Top], ["bottom", Position.Bottom]] as const;
-const shapes = [{ shape: "rectangle", name: "方框", Icon: Square }, { shape: "ellipse", name: "圓形", Icon: Circle }, { shape: "diamond", name: "判斷", Icon: Diamond }, { shape: "note", name: "備註", Icon: StickyNote }] as const;
+const shapes = [{ shape: "rectangle", name: "方框", Icon: Square, color: "#79a9e8" }, { shape: "ellipse", name: "圓形", Icon: Circle, color: "#63c8b7" }, { shape: "diamond", name: "判斷", Icon: Diamond, color: "#b59bdf" }, { shape: "note", name: "備註", Icon: StickyNote, color: "#d6ad65" }] as const;
 const colors = ["#63c8b7", "#79a9e8", "#d6ad65", "#b59bdf", "#e28f99", "#a4adb9"];
 const message = (error: unknown) => error instanceof Error ? error.message : "操作失敗，請重試";
 const snapshot = (document: DiagramDocument) => JSON.stringify(document);
@@ -381,7 +381,8 @@ function DiagramEditor({ accountId, session, canEdit, pdfUrl, initialSource, onS
     const bounds = canvas.current?.getBoundingClientRect();
     const center = point ? flow.screenToFlowPosition(point) : bounds ? flow.screenToFlowPosition({ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }) : { x: 120, y: 120 };
     const height = shape === "diamond" ? 120 : 90;
-    const node: DiagramNode = { id: crypto.randomUUID(), x: Math.round((center.x - 90) / 20) * 20, y: Math.round((center.y - height / 2) / 20) * 20, width: 180, height, shape, label: shapes.find(item => item.shape === shape)!.name, detail: "", color: shape === "note" ? colors[2] : colors[1] };
+    const definition = shapes.find(item => item.shape === shape)!;
+    const node: DiagramNode = { id: crypto.randomUUID(), x: Math.round((center.x - 90) / 20) * 20, y: Math.round((center.y - height / 2) / 20) * 20, width: 180, height, shape, label: definition.name, detail: "", color: definition.color };
     commit(current => ({ ...current, nodes: [...current.nodes, node] })); setSelected({ kind: "node", id: node.id });
   };
   const duplicate = () => {
