@@ -23,3 +23,11 @@ test("invalid enum URL values cannot create an invisible condition", () => {
   assert.equal(filters.tab, "compare");
   assert.equal(filterTrackingRows(rows, replies, filters).length, 3);
 });
+
+test("diagram editor deep links retain the tab without changing tracking filters", () => {
+  const filters = readComparisonFilters("?workspace=comparison&comparisonTab=diagram&compareSearch=p3v3&compareStatus=filled");
+  assert.equal(filters.tab, "diagram");
+  assert.equal(filters.query, "p3v3");
+  assert.equal(filters.status, "filled");
+  assert.deepEqual(filterTrackingRows(rows, replies, filters).map(row => row.key), ["U1"]);
+});

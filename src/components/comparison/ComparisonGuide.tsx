@@ -184,6 +184,7 @@ export function ComparisonGuide() {
 
           <section className="comparison-guide-extra" aria-label="其他功能">
             <h3>其他功能</h3>
+            <p><strong>圖表編輯器</strong>：可從空白圖稿畫 Block Diagram／流程圖，或在 Power Tree、I²C Map 按「編輯此圖」帶入比對資料。點選圖形可修改名稱、說明與顏色，拖曳調整位置；點兩個連接點，或在右側選起點／終點，即可連線。圖稿會依帳號自動存於目前瀏覽器。換電腦或分享時，請另外匯出「可編輯圖稿 JSON」，再用「開啟圖稿檔」讀回；圖稿不包含在上方的 .autocheck.zip 備份中。改圖會保留原始比對結果。</p>
             <p><strong>選用工具：IC Datasheet 與進階設定</strong>：在「開始比對」按鈕下面，可按「選擇 Datasheet 資料夾」一次加入整批 PDF，包含子資料夾；也能繼續加入其他資料夾，非 PDF 會略過。本次比對的 A、B、選用工具與 Datasheet 合計上限 128 MiB／1000 份。較大的資料夾可到位址庫按「批次產生候選規則」，逐份處理、核對與簽核。IC Datasheet 是選用資料，不會代替必要的電路圖 PDF。規則設定 YAML、電壓對照、電源域與 I²C 對照 CSV 仍可在這裡加入。</p>
             <p><strong>意見收集</strong>：回報問題或建議，可以截圖、選圖片或直接貼上，最多 5 張。這個會上傳到伺服器給管理員看，送出後自己刪不掉，截圖前確認畫面上沒有不能外流的線路圖。</p>
           </section>
