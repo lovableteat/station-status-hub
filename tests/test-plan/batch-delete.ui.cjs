@@ -212,7 +212,10 @@ for (const context of ['account', 'space', 'folder']) {
     await act(async () => button(tree, '刪除已選項目').props.onClick());
     const oldConfirm = confirm(tree).props.onClick;
     if (context === 'account') { f.state.ownerId = 'owner-b'; await rerender(tree, f); }
-    else if (context === 'space') { f.state.activeSpaceId = 'space-a'; f.state.activeSpace = f.state.spaces[0]; await rerender(tree, f); }
+    else if (context === 'space') {
+      await act(async () => selectFor(tree, '其他使用者').props.onValueChange('space-b'));
+      await rerender(tree, f);
+    }
     else {
       const folder = tree.root.findAll(node => node.type === 'article' && text(node).includes('Release'))[0];
       await act(async () => folder.props.onDoubleClick());

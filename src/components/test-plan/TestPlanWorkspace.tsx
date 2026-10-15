@@ -603,6 +603,9 @@ export function TestPlanWorkspace() {
     const mine = Number(second.ownerId === ownerId) - Number(first.ownerId === ownerId);
     return mine || first.name.localeCompare(second.name, "zh-Hant", { numeric: true });
   }), [ownerId, spaces]);
+  const pinnedSpaces = userSpaces.filter(space => space.ownerId === ownerId || space.ownerRole === "admin" || space.ownerRole === "super_admin");
+  const otherSpaces = userSpaces.filter(space => !pinnedSpaces.includes(space));
+  const selectedOtherSpace = otherSpaces.find(space => space.id === activeSpaceId);
 
   useEffect(() => {
     if (retainedUploadRetry?.ownerId !== ownerId) retainUploadRetry(null);
@@ -998,7 +1001,7 @@ export function TestPlanWorkspace() {
 
           <div className="test-plan-space-list">
             <button type="button" className={cn("file-library-all", activeSpaceId === null && "is-active")} disabled={busy} onClick={() => { setIsSpaceDrawerOpen(false); void openSpace(null); }}><FolderOpen /><span>所有檔案</span><span className="file-library-count">{activeSpaceId === null ? files.length : ""}</span></button>
-            {userSpaces.map((space) => (
+            {pinnedSpaces.map((space) => (
               <div
                 key={space.id}
                 className={cn(
@@ -1008,7 +1011,7 @@ export function TestPlanWorkspace() {
               >
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || loading}
                   aria-label={`開啟 ${space.name}${space.description ? `（${space.description}）` : ""} 的檔案空間`}
                   aria-current={activeSpaceId === space.id ? "page" : undefined}
                   title={`${space.name} ${space.description ?? ""}`}
@@ -1026,6 +1029,31 @@ export function TestPlanWorkspace() {
                 </button>
               </div>
             ))}
+            {otherSpaces.length > 0 && (
+              <div className="file-library-other-users">
+                <span id="file-library-other-users-label">其他使用者</span>
+                <Select
+                  value={selectedOtherSpace?.id ?? ""}
+                  disabled={busy || loading}
+                  onValueChange={spaceId => {
+                    if (busy || loading || !otherSpaces.some(space => space.id === spaceId)) return;
+                    setIsSpaceDrawerOpen(false);
+                    void openSpace(spaceId);
+                  }}
+                >
+                  <SelectTrigger className="file-library-user-select" aria-label="其他使用者" aria-labelledby="file-library-other-users-label">
+                    <SelectValue placeholder="選擇其他使用者">
+                      {selectedOtherSpace && <span className="file-library-user-option"><span>{selectedOtherSpace.name}</span>{selectedOtherSpace.description && <small>{selectedOtherSpace.description}</small>}</span>}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="file-library-user-options">
+                    {otherSpaces.map(space => <SelectItem key={space.id} value={space.id} textValue={`${space.name} ${space.description ?? ""}`}>
+                      <span className="file-library-user-option"><span>{space.name}</span>{space.description && <small>{space.description}</small>}</span>
+                    </SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           {activeSpace && (

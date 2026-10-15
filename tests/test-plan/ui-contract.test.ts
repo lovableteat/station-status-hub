@@ -28,7 +28,8 @@ test("provides spaces, nested folders, breadcrumbs, search, filters, and both vi
     "src/components/test-plan/TestPlanWorkspace.tsx",
   );
 
-  assert.match(workspace, /userSpaces\.map/);
+  assert.match(workspace, /pinnedSpaces\.map/);
+  assert.match(workspace, /otherSpaces\.map/);
   assert.match(workspace, /使用者空間/);
   assert.doesNotMatch(workspace, /新增空間|刪除空間|編輯空間/);
   assert.match(workspace, /createFolder/);

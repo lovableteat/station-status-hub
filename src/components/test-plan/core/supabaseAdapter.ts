@@ -343,7 +343,7 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
       }
       // The account directory owns identity and active-account visibility.
       // Stored space names are historical labels; keep their IDs and contents.
-      const members = new Map<string, { username: string; display_name: string }>();
+      const members = new Map<string, { username: string; display_name: string; role: string }>();
       for (let offset = 0; ; offset += 500) {
         const { data, error } = await supabase.rpc("list_active_collaboration_members")
           .order("user_id")
@@ -356,6 +356,7 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
         const member = members.get(space.ownerId);
         return member ? [{
           ...space,
+          ownerRole: member.role,
           name: member.display_name?.trim() || member.username,
           description: `@${member.username}`,
         }] : [];

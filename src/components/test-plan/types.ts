@@ -14,6 +14,8 @@ export interface TestPlanSpace {
   id: string;
   projectId: string | null;
   ownerId: string;
+  /** Account-directory role for display grouping only; never an authorization source. */
+  ownerRole?: string;
   isPersonal?: boolean;
   name: string;
   description: string | null;
