@@ -149,7 +149,11 @@ type MoveAction =
 
 type DeleteAction =
   | { kind: "folder"; id: string; name: string }
-  | { kind: "file"; file: TestPlanFileRecord };
+  | { kind: "file"; file: TestPlanFileRecord }
+  | { kind: "batch"; entries: TestPlanEntry[]; scope: string };
+
+const entryKey = (entry: TestPlanEntry) => `${entry.kind}:${entry.id}`;
+const entryName = (entry: TestPlanEntry) => entry.kind === "folder" ? entry.name : entry.originalName;
 
 const CATEGORY_LABELS: Record<TestPlanFileCategory | "all", string> = {
   all: "全部格式",
@@ -515,7 +519,7 @@ export function TestPlanWorkspace() {
     folders,
     files,
     loading,
-    busy,
+    busy: workspaceBusy,
     error,
     uploadProgress,
     canEdit,
@@ -534,6 +538,7 @@ export function TestPlanWorkspace() {
     updateFileDescription,
     downloadFile,
     deleteFile,
+    deleteEntries,
     replaceFileContents,
   } = workspace;
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -547,6 +552,10 @@ export function TestPlanWorkspace() {
   const [moveAction, setMoveAction] = useState<MoveAction | null>(null);
   const [deleteAction, setDeleteAction] = useState<DeleteAction | null>(null);
   const [selectedEntryKey, setSelectedEntryKey] = useState<string | null>(null);
+  const [checkedState, setCheckedState] = useState<{ scope: string; keys: Set<string> }>({ scope: "", keys: new Set() });
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const busy = workspaceBusy || batchDeleting;
+  const batchDeleteInFlight = useRef(false);
   const [spreadsheetFile, setSpreadsheetFile] = useState<TestPlanFileRecord | null>(null);
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(
     new Set(),
@@ -610,7 +619,7 @@ export function TestPlanWorkspace() {
     if (!busy) return;
     const preventNavigation = (event: Event) => {
       event.preventDefault();
-      toast.error("目前正在上傳檔案，完成後才能切換工作區。");
+      toast.error(batchDeleting ? "目前正在刪除檔案，完成後才能切換工作區。" : "目前正在上傳檔案，完成後才能切換工作區。");
     };
     const preventUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -622,7 +631,7 @@ export function TestPlanWorkspace() {
       window.removeEventListener("workspace-before-navigate", preventNavigation);
       window.removeEventListener("beforeunload", preventUnload);
     };
-  }, [busy]);
+  }, [batchDeleting, busy]);
 
   const breadcrumbs = useMemo(
     () => buildFolderBreadcrumbs(folders, activeFolderId),
@@ -642,6 +651,42 @@ export function TestPlanWorkspace() {
       sort,
     });
   }, [activeFolderId, activeSpaceId, categoryFilter, files, folders, query, sort]);
+  const selectionScope = JSON.stringify([ownerId, activeSpaceId, activeFolderId, query.trim(), categoryFilter]);
+  const eligibleEntries = visibleEntries.filter(entry => canEditSpace(entry.spaceId));
+  const eligibleKeySignature = JSON.stringify(eligibleEntries.map(entryKey).sort());
+  const checkedEntries = checkedState.scope === selectionScope ? eligibleEntries.filter(entry => checkedState.keys.has(entryKey(entry))) : [];
+  const checkedKeys = new Set(checkedEntries.map(entryKey));
+  const allChecked = eligibleEntries.length > 0 && checkedEntries.length === eligibleEntries.length;
+  const selectionContext = useRef({ scope: selectionScope, eligible: new Map<string, TestPlanEntry>(), disabled: false });
+  selectionContext.current = { scope: selectionScope, eligible: new Map(eligibleEntries.map(entry => [entryKey(entry), entry])), disabled: busy || loading };
+  const visibleDeleteAction = deleteAction?.kind === "batch" && deleteAction.scope !== selectionScope ? null : deleteAction;
+  useEffect(() => {
+    setCheckedState({ scope: selectionScope, keys: new Set() });
+    setDeleteAction(action => action?.kind === "batch" ? null : action);
+  }, [selectionScope]);
+  useEffect(() => {
+    const eligibleKeys = new Set<string>(JSON.parse(eligibleKeySignature));
+    setCheckedState(state => {
+      if (state.scope !== selectionScope) return state;
+      const keys = new Set([...state.keys].filter(key => eligibleKeys.has(key)));
+      return keys.size === state.keys.size ? state : { scope: selectionScope, keys };
+    });
+    if (!batchDeleteInFlight.current) {
+      setDeleteAction(action => action?.kind === "batch" && action.entries.some(entry => !eligibleKeys.has(entryKey(entry))) ? null : action);
+    }
+  }, [eligibleKeySignature, selectionScope]);
+  const toggleEntry = (entry: TestPlanEntry, checked: boolean) => {
+    const context = selectionContext.current;
+    if (context.disabled || context.scope !== selectionScope || !context.eligible.has(entryKey(entry))) return;
+    setCheckedState(state => {
+      const keys = new Set(state.scope === context.scope ? state.keys : []);
+      if (checked) keys.add(entryKey(entry)); else keys.delete(entryKey(entry));
+      return { scope: context.scope, keys };
+    });
+  };
+  const renderEntryCheckbox = (entry: TestPlanEntry) => <label className="file-library-entry-check" onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
+    <input type="checkbox" aria-label={`勾選 ${entryName(entry)}`} checked={checkedKeys.has(entryKey(entry))} disabled={busy || loading || !canEditSpace(entry.spaceId)} onChange={event => toggleEntry(entry, event.target.checked)} />
+  </label>;
   const selectedEntry = useMemo<TestPlanEntry | null>(() => {
     if (!selectedEntryKey) return null;
     const [kind, id] = selectedEntryKey.split(":");
@@ -737,6 +782,35 @@ export function TestPlanWorkspace() {
 
   const handleDelete = async () => {
     if (!deleteAction) return;
+    if (deleteAction.kind === "batch") {
+      const action = deleteAction;
+      const context = selectionContext.current;
+      if (batchDeleteInFlight.current || context.disabled || context.scope !== action.scope || action.entries.some(entry => !context.eligible.has(entryKey(entry)))) return;
+      batchDeleteInFlight.current = true;
+      setBatchDeleting(true);
+      try {
+        const result = await deleteEntries(action.entries);
+        if (selectionContext.current.scope !== action.scope) return;
+        const deleted = new Set(result.deletedKeys);
+        let cursor = activeFolderId;
+        const visited = new Set<string>();
+        while (cursor && !visited.has(cursor)) {
+          if (deleted.has(`folder:${cursor}`)) { setActiveFolderId(null); break; }
+          visited.add(cursor);
+          cursor = folders.find(folder => folder.id === cursor)?.parentId ?? null;
+        }
+        setCheckedState(state => ({ scope: action.scope, keys: new Set([...state.keys].filter(key => !deleted.has(key))) }));
+        setDeleteAction(null);
+        if (result.deletedKeys.length) {
+          if (result.cleanupPending) toast.warning(`已刪除 ${result.deletedKeys.length} 項，實體檔案清理待重試；重新整理時會再處理。`);
+          else toast.success(`已刪除 ${result.deletedKeys.length} 項`);
+        }
+        if (result.failures.length) toast.error(`${result.failures.length} 項刪除失敗，已保留勾選：${result.failures[0].message}`);
+      } catch (caught) {
+        if (selectionContext.current.scope === action.scope) toast.error(caught instanceof Error ? caught.message : "批次刪除失敗，請重試");
+      } finally { batchDeleteInFlight.current = false; setBatchDeleting(false); }
+      return;
+    }
     try {
       let cleanupPending = false;
       if (deleteAction.kind === "folder") {
@@ -779,6 +853,7 @@ export function TestPlanWorkspace() {
   };
 
   const openEntry = (entry: TestPlanEntry) => {
+    if (busy || loading) return;
     if (entry.kind === "folder") {
       if (entry.spaceId !== activeSpaceId) {
         requestedFolderRef.current = {spaceId: entry.spaceId, folderId: entry.id};
@@ -792,6 +867,7 @@ export function TestPlanWorkspace() {
   };
 
   const selectEntry = (entry: TestPlanEntry) => {
+    if (busy || loading) return;
     if (entry.kind === "folder") { openEntry(entry); return; }
     setSelectedEntryKey(`${entry.kind}:${entry.id}`);
   };
@@ -1080,17 +1156,29 @@ export function TestPlanWorkspace() {
                 </div>
               </div>
 
+              <div className="file-library-bulk-tools" role="toolbar" aria-label="批次檔案操作">
+                <label className="file-library-select-all"><input type="checkbox" aria-label="全選目前清單可刪除項目" checked={allChecked} aria-checked={allChecked ? "true" : checkedEntries.length ? "mixed" : "false"} ref={input => { if (input) input.indeterminate = !allChecked && checkedEntries.length > 0; }} disabled={busy || loading || !eligibleEntries.length} onChange={event => {
+                  const context = selectionContext.current;
+                  if (context.disabled || context.scope !== selectionScope) return;
+                  setCheckedState({ scope: context.scope, keys: new Set(event.target.checked ? context.eligible.keys() : []) });
+                }} /><span>全選目前清單</span></label>
+                <span className="file-library-selection-count" role="status">已勾選 {checkedEntries.length} 項</span>
+                {checkedEntries.length > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => setCheckedState({ scope: selectionScope, keys: new Set() })}>取消勾選</Button>}
+                <Button variant="outline" size="sm" className="file-library-bulk-delete" disabled={busy || loading || !checkedEntries.length} onClick={() => setDeleteAction({ kind: "batch", entries: checkedEntries, scope: selectionScope })}><Trash2 />刪除已選項目</Button>
+              </div>
               <div className="test-plan-filterbar">
                 <label className="test-plan-search">
                   <Search className="h-4 w-4" />
                   <Input
                     value={query}
+                    disabled={busy}
                     placeholder="搜尋檔案與資料夾"
                     onChange={(event) => setQuery(event.target.value)}
                   />
                 </label>
                 <Select
                   value={categoryFilter}
+                  disabled={busy}
                   onValueChange={(value) =>
                     setCategoryFilter(value as TestPlanFileCategory | "all")}
                 >
@@ -1107,6 +1195,7 @@ export function TestPlanWorkspace() {
                 </Select>
                 <Select
                   value={sort}
+                  disabled={busy}
                   onValueChange={(value) => setSort(value as TestPlanSort)}
                 >
                   <SelectTrigger className="w-[145px]" aria-label="排序方式">
@@ -1125,6 +1214,7 @@ export function TestPlanWorkspace() {
                     type="button"
                     variant="ghost"
                     size="icon"
+                    disabled={busy}
                     className={cn(viewMode === "grid" && "is-active")}
                     onClick={() => setViewMode("grid")}
                   >
@@ -1135,6 +1225,7 @@ export function TestPlanWorkspace() {
                     type="button"
                     variant="ghost"
                     size="icon"
+                    disabled={busy}
                     className={cn(viewMode === "list" && "is-active")}
                     onClick={() => setViewMode("list")}
                   >
@@ -1146,7 +1237,7 @@ export function TestPlanWorkspace() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  disabled={loading}
+                  disabled={loading || busy}
                   onClick={() => void refreshWorkspace(activeSpaceId)}
                 >
                   <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
@@ -1156,9 +1247,9 @@ export function TestPlanWorkspace() {
 
               {(query.trim() || categoryFilter !== "all") && (
                 <div className="file-library-filter-chips" aria-label="目前篩選條件">
-                  {query.trim() && <Button variant="secondary" size="sm" onClick={() => setQuery("")} aria-label="清除搜尋條件">搜尋：{query}<X /></Button>}
-                  {categoryFilter !== "all" && <Button variant="secondary" size="sm" onClick={() => setCategoryFilter("all")} aria-label="清除格式條件">格式：{CATEGORY_LABELS[categoryFilter]}<X /></Button>}
-                  <Button variant="ghost" size="sm" onClick={clearFilters}>全部清除</Button>
+                  {query.trim() && <Button variant="secondary" size="sm" disabled={busy} onClick={() => setQuery("")} aria-label="清除搜尋條件">搜尋：{query}<X /></Button>}
+                  {categoryFilter !== "all" && <Button variant="secondary" size="sm" disabled={busy} onClick={() => setCategoryFilter("all")} aria-label="清除格式條件">格式：{CATEGORY_LABELS[categoryFilter]}<X /></Button>}
+                  <Button variant="ghost" size="sm" disabled={busy} onClick={clearFilters}>全部清除</Button>
                 </div>
               )}
 
@@ -1201,7 +1292,7 @@ export function TestPlanWorkspace() {
                   </div>
                 )}
 
-                {viewMode === "list" && <div className="test-plan-list-head"><span>名稱</span><span>格式</span><span>大小</span><span>更新時間</span><span className="sr-only">操作</span></div>}
+                {viewMode === "list" && <div className="test-plan-list-head"><span className="file-library-name-heading">名稱</span><span>格式</span><span>大小</span><span>更新時間</span><span className="sr-only">操作</span></div>}
                 {loading ? (
                   <div className="test-plan-loading">
                     <RefreshCw className="h-5 w-5 animate-spin" />
@@ -1225,6 +1316,7 @@ export function TestPlanWorkspace() {
                         className={cn(
                           "test-plan-entry-card",
                           selectedEntryKey === `${entry.kind}:${entry.id}` && "is-selected",
+                          checkedKeys.has(entryKey(entry)) && "is-checked",
                         )}
                         tabIndex={0}
                         aria-selected={selectedEntryKey === `${entry.kind}:${entry.id}`}
@@ -1235,6 +1327,7 @@ export function TestPlanWorkspace() {
                           if (event.key === "Enter") openEntry(entry);
                         }}
                       >
+                        {renderEntryCheckbox(entry)}
                         <div
                           className={cn(
                             "test-plan-entry-icon",
@@ -1279,6 +1372,7 @@ export function TestPlanWorkspace() {
                         className={cn(
                           "test-plan-list-row",
                           selectedEntryKey === `${entry.kind}:${entry.id}` && "is-selected",
+                          checkedKeys.has(entryKey(entry)) && "is-checked",
                         )}
                         tabIndex={0}
                         aria-selected={selectedEntryKey === `${entry.kind}:${entry.id}`}
@@ -1290,6 +1384,7 @@ export function TestPlanWorkspace() {
                         }}
                       >
                         <span className="test-plan-list-name">
+                          {renderEntryCheckbox(entry)}
                           {entry.kind === "folder" ? (
                             <Folder className="h-4 w-4 text-cyan-300" />
                           ) : (
@@ -1428,26 +1523,29 @@ export function TestPlanWorkspace() {
         onSubmit={handleMoveSubmit}
       />
       <AlertDialog
-        open={Boolean(deleteAction)}
-        onOpenChange={(open) => !open && setDeleteAction(null)}
+        open={Boolean(visibleDeleteAction)}
+        onOpenChange={(open) => !open && !batchDeleteInFlight.current && setDeleteAction(null)}
       >
         <AlertDialogContent className="file-library-dialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>確定要刪除？</AlertDialogTitle>
+            <AlertDialogTitle>{visibleDeleteAction?.kind === "batch" ? `確定要刪除已勾選的 ${visibleDeleteAction.entries.length} 項？` : "確定要刪除？"}</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteAction?.kind === "file"
-                ? `「${deleteAction.file.originalName}」將從儲存空間永久刪除。`
-                : `「${deleteAction?.name ?? ""}」及其中的所有檔案都會永久刪除。`}
+              {visibleDeleteAction?.kind === "batch"
+                ? `已勾選項目將永久刪除${visibleDeleteAction.entries.some(entry => entry.kind === "folder") ? "，包含所選資料夾裡的所有子資料夾與檔案" : ""}，無法復原。`
+                : visibleDeleteAction?.kind === "file"
+                  ? `「${visibleDeleteAction.file.originalName}」將從儲存空間永久刪除。`
+                  : `「${visibleDeleteAction?.name ?? ""}」及其中的所有檔案都會永久刪除。`}
             </AlertDialogDescription>
+            {visibleDeleteAction?.kind === "batch" && <ul className="file-library-delete-names" aria-label="待刪除項目">{visibleDeleteAction.entries.map(entry => <li key={entryKey(entry)}>{entryName(entry)}</li>)}</ul>}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>取消</AlertDialogCancel>
             <AlertDialogAction
-              disabled={busy}
+              disabled={busy || (visibleDeleteAction?.kind === "batch" && visibleDeleteAction.entries.some(entry => !selectionContext.current.eligible.has(entryKey(entry))))}
               className="bg-red-600 text-white hover:bg-red-500"
               onClick={() => void handleDelete()}
             >
-              {busy ? "刪除中…" : "永久刪除"}
+              {busy ? "刪除中…" : visibleDeleteAction?.kind === "batch" ? `永久刪除 ${visibleDeleteAction.entries.length} 項` : "永久刪除"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
