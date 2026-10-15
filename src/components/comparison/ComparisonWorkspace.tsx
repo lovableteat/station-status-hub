@@ -26,7 +26,7 @@ import { DATASHEET_BATCH_LIMIT, DATASHEET_COUNT_LIMIT, mergeDatasheetFiles } fro
 import type { Artifact, ComparisonResult, ComparisonSession, InputFile, ReviewChange, ReviewReply } from "./types";
 import "./comparison.css";
 
-const ComparisonDiagramEditor = lazy(() => import("./ComparisonDiagramEditor"));
+const ComparisonDiagramEditor = lazy(() => import("./ComparisonDiagramWorkspace"));
 const tabLabels = { compare: "比對檢查", review: "審查追蹤", power: "Power Tree", i2c: "I²C Map", library: "位址庫", diagram: "圖表編輯器" } as const;
 type DiagramSource = { accountId: string; sessionId: string; kind: "power" | "i2c"; revision: "a" | "b" };
 type OptionalKey = "config" | "railMap" | "railDomain" | "i2cDeclared";
@@ -194,6 +194,7 @@ export default function ComparisonWorkspace() {
   const editorSource = diagramSource?.accountId === accountId && diagramSource.sessionId === editorSession?.id ? diagramSource : undefined;
   const editorInitialSource = useMemo(() => editorSource ? { kind: editorSource.kind, revision: editorSource.revision } : undefined, [editorSource]);
   const consumeDiagramSource = useCallback(() => setDiagramSource(current => current === editorSource ? null : current), [editorSource]);
+  const captureDiagramPersistence = useCallback(() => { const token = scope.capture(); return () => scope.assertCurrent(token); }, [scope]);
   const editChart = (kind: "power" | "i2c") => {
     if (!canEdit || !accountId || !editorSession || busy) return;
     setDiagramSource({ accountId, sessionId: editorSession.id, kind, revision: "b" });
@@ -224,13 +225,13 @@ export default function ComparisonWorkspace() {
       {session && filters.tab !== "library" && filters.tab !== "diagram" && <>
         <div className="comparison-summary"><span><strong className="comparison-error-count">{counts?.errors}</strong> ERROR</span><span><strong className="comparison-warning-count">{counts?.warnings}</strong> WARN</span><span><strong>{counts?.answered} / {session.result.rows.length}</strong> 已回覆</span><span>引擎 {session.result.meta.tool_version} · 規則 {session.result.meta.rules_version}</span></div>
         {(filters.tab === "compare" || filters.tab === "review") && <>{!!session.result.inputIssues.length && <details className="comparison-input-issues" open={session.result.inputIssues.some(([level]) => level === "ERROR")}><summary>輸入完整性 · {session.result.inputIssues.length} 項提醒</summary>{session.result.inputIssues.map(([level, message], index) => <div key={index} className="comparison-input-issue"><Badge className={`comparison-severity is-${level.toLowerCase()}`}>{level}</Badge><span>{message}</span></div>)}</details>}<ComparisonResults session={session} filters={filters} update={update} clear={clear} canEdit={canEdit} onSaveReply={saveReply} pdfUrl={urls.schematic} busy={busy} /></>}
-        {(filters.tab === "power" || filters.tab === "i2c") && <ComparisonCharts key={filters.tab} kind={filters.tab} artifact={session.result.artifacts.find(artifact => artifact.key === (filters.tab === "power" ? "ptree_html" : "i2c_html"))} blockArtifact={filters.tab === "i2c" ? session.result.artifacts.find(artifact => artifact.key === "i2c_block_html") : undefined} pdfUrl={urls.schematic} schematicName={schematic?.name} canEdit={canEdit && !busy} onEdit={editChart} />}
+        {(filters.tab === "power" || filters.tab === "i2c") && <ComparisonCharts key={filters.tab} kind={filters.tab} artifact={session.result.artifacts.find(artifact => artifact.key === (filters.tab === "power" ? "ptree_html" : "i2c_html"))} blockArtifact={filters.tab === "i2c" ? session.result.artifacts.find(artifact => artifact.key === "i2c_block_html") : undefined} drawioArtifact={session.result.artifacts.find(artifact => artifact.key === `${filters.tab === "power" ? "power" : "i2c"}_drawio_b`)} pdfUrl={urls.schematic} schematicName={schematic?.name} canEdit={canEdit && !busy} onEdit={editChart} />}
         <details className="comparison-section comparison-reports"><summary><FileText />報表與完整資料 · {session.result.artifacts.length} 份</summary><div className="comparison-report-list">{session.result.artifacts.map(artifact => <div key={artifact.key}><div><strong>{artifact.name}</strong><small>{formatBytes(artifact.bytes.byteLength)}</small></div><Button variant="outline" disabled={busy} onClick={() => downloadArtifact(artifact)}><Download />{artifact.key === "xlsx" ? "下載（含回覆）" : "下載"}</Button>{artifact.mime === "application/pdf" && <Button asChild variant="ghost"><a href={urls[artifact.key]} target="_blank" rel="noopener noreferrer">開啟</a></Button>}</div>)}</div>{!!session.result.warnings.length && <details><summary>解析與輸出提示 · {session.result.warnings.length}</summary>{session.result.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</details>}</details>
       </>}
       {!session && filters.tab !== "compare" && filters.tab !== "library" && filters.tab !== "diagram" && <section className="comparison-section comparison-start-empty"><GitCompareArrows /><h2>先建立一份比對</h2><p>選擇 A／B 資料後執行檢查，結果會出現在審查表與圖表中。也可以匯入之前的備份。</p><Button onClick={() => update("tab", "compare")}>前往比對檢查</Button></section>}
       {filters.tab === "library" && <ComparisonLibrary key={accountId} runtime={runtimeRef.current} yaml={libraryYaml} entries={libraryEntries} onEntries={setLibraryEntries} onSave={saveUserLibrary} canEdit={canEdit} signedBy={user?.displayName ?? ""} busy={busy} runJob={runJob} />}
     </>}
     {/* Keep the same account's draft mounted while permission changes refresh comparison records. */}
-    {filters.tab === "diagram" && (accountId ? <Suspense fallback={<div className="comparison-loading" role="status">正在載入圖表編輯器…</div>}><ComparisonDiagramEditor key={accountId} accountId={accountId} session={editorSession} canEdit={canEdit && !busy} pdfUrl={editorSession ? urls.schematic : undefined} initialSource={editorInitialSource} onSourceConsumed={consumeDiagramSource} /></Suspense> : <section className="comparison-section"><p>請先登入後使用圖表編輯器。</p></section>)}
+    {filters.tab === "diagram" && (accountId ? <Suspense fallback={<div className="comparison-loading" role="status">正在載入圖表編輯器…</div>}><ComparisonDiagramEditor key={accountId} accountId={accountId} session={editorSession} canEdit={canEdit && !busy} pdfUrl={editorSession ? urls.schematic : undefined} initialSource={editorInitialSource} onSourceConsumed={consumeDiagramSource} capturePersistence={captureDiagramPersistence} /></Suspense> : <section className="comparison-section"><p>請先登入後使用圖表編輯器。</p></section>)}
   </div>;
 }

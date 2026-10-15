@@ -298,6 +298,17 @@
 .diagram-delete-dialog .app-button.bg-primary { background: var(--diagram-primary); color: var(--diagram-on-primary); }
 .diagram-delete-dialog .app-button.bg-secondary { background: var(--diagram-surface); color: var(--diagram-text); border-color: var(--diagram-control-line); }
 .comparison-diagram-editor.is-expanded { position: fixed; inset: 0; z-index: 50; height: 100dvh; max-height: none; border: 0; border-radius: 0; }
+.diagram-engine-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: 13px; }
+.drawio-document-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--diagram-line); }
+.drawio-editor #drawio-title { min-height: 32px; height: 32px; font-size: 14px; font-weight: 600; }
+.drawio-frame-container { flex: 1; min-height: 360px; position: relative; background: var(--diagram-canvas); }
+.drawio-frame-container iframe { display: block; width: 100%; height: 100%; min-height: 360px; border: 0; }
+.drawio-frame-status { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; background: var(--diagram-canvas); color: var(--diagram-secondary); font-size: 14px; text-align: center; }
+.drawio-frame-status > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.drawio-state { flex: 1; display: grid; place-items: center; padding: 32px; font-size: 14px; }
+.drawio-editor .diagram-error { flex-shrink: 0; padding: 12px 16px; color: var(--diagram-error-text); background: var(--diagram-error-surface); font-size: 13px; }
+.drawio-editor .diagram-statusbar { flex-wrap: wrap; padding-block: 8px; font-size: 11px; color: var(--diagram-muted); }
+@media (max-width: 620px) { .drawio-document-tools .app-button { flex-grow: 1; } .drawio-editor #drawio-title { font-size: 16px; } .drawio-editor .diagram-document-identity { flex: 1 1 220px; } }
 @media (max-width: 1050px) {
   .diagram-palette { width: 144px; }
   .diagram-shape-grid { padding: 12px 8px; gap: 6px; }

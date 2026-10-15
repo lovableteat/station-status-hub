@@ -1,9 +1,10 @@
-"""Browser adapter for the user's original AutoCheck 2026-10-14 engine."""
+"""Browser adapter for the user's original AutoCheck 2026-10-15 engine."""
 import dataclasses
 import datetime
 import json
 import os
 import re
+from html import escape
 from pathlib import Path
 
 import yaml
@@ -147,8 +148,56 @@ def _classified(paths, label):
 def _artifact(path, key=None):
     mime = {'.pdf': 'application/pdf', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             '.json': 'application/json', '.csv': 'text/csv', '.txt': 'text/plain', '.html': 'text/html',
+            '.drawio': 'application/vnd.jgraph.mxfile',
             }.get(path.suffix, 'application/octet-stream')
     return {'key': key or path.stem, 'name': path.name, 'mime': mime, 'path': str(path)}
+
+
+def _drawio_outputs(result, out, paths):
+    """Keep the upstream B renderers and expose independent A/B editable copies.
+
+    The CLI owns B report generation, including its isolated renderer failures.
+    A uses the same shared layouts without a comparison overlay. Browser-only
+    key names never change the original engine or replace existing diagrams.
+    """
+    for original, key in (('ptree_drawio', 'power_drawio_b'), ('i2c_block_drawio', 'i2c_drawio_b')):
+        path = paths.pop(original, None)
+        if path is not None and path.is_file() and path.stat().st_size:
+            paths[key] = path
+
+    def write_a(kind, filename, make):
+        # A and B labels may be equal or contain suffixes; never overwrite B's
+        # existing file even when its label happens to match the A filename.
+        target = out / filename
+        suffix = 2
+        while target.exists():
+            target = out / f'{Path(filename).stem}_{suffix}.drawio'
+            suffix += 1
+        try:
+            xml = make()
+            target.write_text(xml, encoding='utf-8')
+            paths[kind] = target
+        except Exception as error:
+            target.unlink(missing_ok=True)
+            result.warnings.append(f'A 版可編輯圖稿未產生（{kind}，{type(error).__name__}: {error}）')
+
+    power_a = getattr(result, 'power_tree_a', None) or {}
+    if power_a.get('edges') is not None:
+        def power():
+            from autocheck.report.power_tree_diagram import layout
+            from autocheck.report.power_tree_drawio import render_drawio
+            boxes = layout(power_a, None, result.a.label, result.a.label, show_internal=False)
+            boxes_all = layout(power_a, None, result.a.label, result.a.label, show_internal=True)
+            return render_drawio(boxes, f'Power tree 方框圖 {result.a.label}　產生 {result.generated}',
+                                 a_label=result.a.label, b_label=result.a.label, diff=False, boxes_all=boxes_all)
+
+        write_a('power_drawio_a', f'power_tree_{result.a.label}_A.drawio', power)
+    i2c_a = getattr(result, 'i2c_map_a', None) or {}
+    if i2c_a.get('buses'):
+        def i2c_diagram():
+            from autocheck.report.i2c_block_drawio import render_drawio
+            return render_drawio(i2c_a, f'I2C map 陽春版 {result.a.label}　產生 {result.generated}')
+        write_a('i2c_drawio_a', f'i2c_block_{result.a.label}_A.drawio', i2c_diagram)
 
 
 def _safe_workbook(workbook):
@@ -217,7 +266,7 @@ def _run(payload, root, progress):
     result.warnings.extend(library['warnings'])
     rows = expand_rows(result.findings, result.cap_rows, result.b)
     out = root / 'out'
-    progress('產生原始 PDF、Excel、JSON、CSV 與圖表')
+    progress('產生原始 PDF、Excel、JSON、CSV、圖表與可編輯 draw.io')
     paths = {}
     failed_schematic = None
     try:
@@ -238,11 +287,15 @@ def _run(payload, root, progress):
                 result.warnings.append(f'其餘報表輸出失敗（{type(fallback_error).__name__}: {fallback_error}）')
             finally:
                 result.files['b']['pdf'] = pdf
+    _drawio_outputs(result, out, paths)
     schematic = next((p for p in out.glob('*.pdf') if '_schematic_' in p.name and p != failed_schematic and p.stat().st_size), None)
     if schematic:
         prefix = f'/__autocheck_local__/{a_label}_vs_{b_label}/{schematic.name}'
         for path in out.glob('*.html'):
             path.write_text(path.read_text(encoding='utf-8').replace(prefix, schematic.name), encoding='utf-8')
+        for path in out.glob('*.drawio'):
+            path.write_text(path.read_text(encoding='utf-8').replace(escape(prefix, quote=True),
+                                                                   escape(schematic.name, quote=True)), encoding='utf-8')
     for path in out.glob('*.xlsx'):
         from openpyxl import load_workbook
         workbook = load_workbook(path, keep_links=False)
@@ -251,15 +304,15 @@ def _run(payload, root, progress):
         _safe_workbook(workbook)
         workbook.save(path)
         review.store_xlsx(root / 'review.db', f'{a_label}_vs_{b_label}', path)
-    known = {str(path): key for key, path in paths.items()}
-    if not paths:
-        expected = {'pdf': f'AutoCheck_{a_label}_vs_{b_label}.pdf', 'xlsx': f'AutoCheck_tracker_{a_label}_vs_{b_label}.xlsx',
-                    'json': f'findings_{a_label}_vs_{b_label}.json', 'caps': f'cap_table_{b_label}.csv',
-                    'todo': 'rail_map_todo.csv', 'domains': f'rail_domain_{b_label}.csv',
-                    'circuit_b': f'circuit_{b_label}.txt', 'circuit_a': f'circuit_{a_label}.txt',
-                    'ptree_html': f'power_tree_{b_label}.html', 'i2c_csv': f'i2c_map_{b_label}.csv',
-                    'i2c_html': f'i2c_map_{b_label}.html', 'i2c_block_html': f'i2c_block_{b_label}.html'}
-        known = {str(out / name): key for key, name in expected.items()}
+    expected = {'pdf': f'AutoCheck_{a_label}_vs_{b_label}.pdf', 'xlsx': f'AutoCheck_tracker_{a_label}_vs_{b_label}.xlsx',
+                'json': f'findings_{a_label}_vs_{b_label}.json', 'caps': f'cap_table_{b_label}.csv',
+                'todo': 'rail_map_todo.csv', 'domains': f'rail_domain_{b_label}.csv',
+                'circuit_b': f'circuit_{b_label}.txt', 'circuit_a': f'circuit_{a_label}.txt',
+                'ptree_html': f'power_tree_{b_label}.html', 'i2c_csv': f'i2c_map_{b_label}.csv',
+                'i2c_html': f'i2c_map_{b_label}.html', 'i2c_block_html': f'i2c_block_{b_label}.html',
+                'power_drawio_b': f'power_tree_{b_label}.drawio', 'i2c_drawio_b': f'i2c_block_{b_label}.drawio'}
+    known = {str(out / name): key for key, name in expected.items()}
+    known.update({str(path): key for key, path in paths.items()})
     artifacts = [_artifact(path, known.get(str(path), 'annotations' if path.name.endswith('.annotations.json') else None))
                  for path in sorted(out.iterdir()) if path.is_file() and path.stat().st_size
                  and path != failed_schematic and path != (failed_schematic.with_suffix('.annotations.json') if failed_schematic else None)]

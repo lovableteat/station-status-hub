@@ -17,6 +17,8 @@ import { createBlankDiagram, createDiagramFromResult, autoLayoutDiagram, parseDi
 import { listDiagrams, saveDiagram, deleteDiagram } from "./diagramStorage";
 import { diagramHistory, editDiagram, undoDiagram, redoDiagram } from "./diagramHistory";
 import { downloadDiagram } from "./diagramExport";
+import { diagramToDrawioXml } from "./diagramDrawioExport";
+import { downloadLocal } from "./downloads";
 import { diagramTheme, diagramNodeColors, diagramStrokeColor, readDiagramAppearance, writeDiagramAppearance, type DiagramAppearance } from "./diagramTheme";
 import { buildDiagramEdgeRoutes, diagramEdgeEndpoint, diagramEdgeRoute, type DiagramEdgeRoute } from "./diagramGeometry";
 import { diagramSymbolGraphics, diagramSymbolLabelBox, diagramSymbolPorts, isElectricalSymbol } from "./diagramSymbols";
@@ -27,14 +29,17 @@ import type { ComparisonSession } from "./types";
 import "@xyflow/react/dist/style.css";
 import "./diagramEditor.css";
 
-interface Props {
+export interface DiagramEditorProps {
   accountId: string;
   session: ComparisonSession | null;
   canEdit: boolean;
   pdfUrl?: string;
   initialSource?: { kind: "power" | "i2c"; revision: "a" | "b" };
   onSourceConsumed?: () => void;
+  onOpenDrawio?: (document: DiagramDocument) => void;
+  capturePersistence?: () => () => void;
 }
+type Props = DiagramEditorProps;
 type Resize = { x: number; y: number; width: number; height: number };
 type FlowData = DiagramNode & Record<string, unknown> & { editable: boolean; appearance: DiagramAppearance; onResize: (id: string, value: Resize) => void };
 type ShapeFlowNode = Node<FlowData, "diagram">;
@@ -93,7 +98,7 @@ export default function ComparisonDiagramEditor(props: Props) {
   return <ReactFlowProvider><DiagramEditor {...props} /></ReactFlowProvider>;
 }
 
-function DiagramEditor({ accountId, session, canEdit, pdfUrl, initialSource, onSourceConsumed }: Props) {
+function DiagramEditor({ accountId, session, canEdit, pdfUrl, initialSource, onSourceConsumed, onOpenDrawio }: Props) {
   const [history, setHistory] = useState(() => diagramHistory(createBlankDiagram()));
   const document = history.present;
   const documentRef = useRef(document);
@@ -456,10 +461,12 @@ function DiagramEditor({ accountId, session, canEdit, pdfUrl, initialSource, onS
     } finally { operationRef.current = false; if (alive.current) setOperation(false); }
   };
 
-  const exportDocument = async (format: "json" | "svg" | "png" | "pdf") => {
+  const exportDocument = async (format: "json" | "svg" | "png" | "pdf" | "drawio") => {
     setExporting(true);
     try {
-      await downloadDiagram({ ...document, title: document.title.trim() || "未命名圖表", viewport: currentViewport.current }, format);
+      const snapshot = { ...document, title: document.title.trim() || "未命名圖表", viewport: currentViewport.current };
+      if (format === "drawio") downloadLocal(diagramToDrawioXml(snapshot), `${snapshot.title.replace(/[<>:"/\\|?*]/g, "_")}.drawio`, "application/vnd.jgraph.mxfile");
+      else await downloadDiagram(snapshot, format);
       setStatus("圖稿已匯出");
     } catch (caught) { setError(message(caught)); }
     finally { if (alive.current) setExporting(false); }
@@ -541,6 +548,7 @@ function DiagramEditor({ accountId, session, canEdit, pdfUrl, initialSource, onS
             <DropdownMenuItem disabled={loading || operation} onSelect={() => setSavedOpen(true)}><FolderOpen />開啟已儲存圖稿<span className="diagram-menu-count">{saved.length}</span></DropdownMenuItem>
             <DropdownMenuItem disabled={!writable} onSelect={() => input.current?.click()}><FileText />開啟圖稿檔</DropdownMenuItem>
             <DropdownMenuItem disabled={!writable} onSelect={() => void save().catch(caught => setError(message(caught)))}><Save />儲存<span className="diagram-menu-shortcut">Ctrl S</span></DropdownMenuItem>
+            {onOpenDrawio && <DropdownMenuItem disabled={!writable} onSelect={() => { void save().then(() => { if (capability.current.canEdit && capability.current.accountId === accountId) onOpenDrawio(documentRef.current); }).catch(caught => setError(message(caught))); }}><Expand />在 DRAWIO 編輯副本</DropdownMenuItem>}
           </DropdownMenuGroup><DropdownMenuSeparator /><DropdownMenuGroup>
             <DropdownMenuItem aria-label="刪除此圖稿" disabled={!writable || !saved.some(item => item.id === document.id)} onSelect={() => setDeleting(true)}><Trash2 />刪除此圖稿</DropdownMenuItem>
           </DropdownMenuGroup></DropdownMenuContent>
@@ -548,6 +556,7 @@ function DiagramEditor({ accountId, session, canEdit, pdfUrl, initialSource, onS
         <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm" disabled={exporting}><ArrowDownToLine /><span>{exporting ? "匯出中…" : "匯出"}</span><ChevronDown /></Button></DropdownMenuTrigger>
           <DropdownMenuContent className="diagram-menu" data-diagram-theme={appearance} align="end"><DropdownMenuLabel>匯出目前圖稿</DropdownMenuLabel><DropdownMenuGroup>
             <DropdownMenuItem onSelect={() => void exportDocument("json")}>可編輯圖稿 JSON<span className="diagram-menu-shortcut">備份 / 分享</span></DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void exportDocument("drawio")}>DRAWIO 可編輯圖稿</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => void exportDocument("svg")}>SVG 向量圖</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => void exportDocument("png")}>PNG 圖片</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => void exportDocument("pdf")}>PDF 文件</DropdownMenuItem>

@@ -1184,7 +1184,7 @@ test('workspace permission refresh keeps the same mounted draft available in rea
     './ComparisonCharts': { ComparisonCharts: () => null },
     './ComparisonGuide': { ComparisonGuide: () => null },
     './feedback/ComparisonFeedback': { ComparisonFeedback: () => null },
-    './ComparisonDiagramEditor': { default: DraftProbe },
+    './ComparisonDiagramWorkspace': { default: DraftProbe },
     './downloads': {}, './backup': {}, './datasheetSelection': {},
   } });
   const Workspace = load('src/components/comparison/ComparisonWorkspace.tsx').default;

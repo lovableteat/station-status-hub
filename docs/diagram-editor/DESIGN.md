@@ -157,20 +157,21 @@ components:
 
 **Creative North Star: "The Diagram Workbench"**
 
-The editor pairs the familiar draw.io workbench arrangement with Apple-inspired neutral graphite backgrounds by default and a complete light variant. A quiet frame holds the document controls, shape library, and status tools around the drawing surface. Brighter blue identifies actions, focus, and selection; colored basic shapes and circuit symbols give the eight-item library recognizable roles.
+The default workspace embeds the official draw.io editor and its full shape libraries inside the existing AutoCheck document shell. The retained “快速繪圖” editor pairs the familiar workbench arrangement with Apple-inspired neutral graphite backgrounds and a light variant. Brighter blue identifies host and quick-editor actions, focus, and selection; colored basic shapes and circuit symbols give the quick editor's eight-item library recognizable roles.
 
-This record applies only to the diagram editor, its menus, and its saved-document and deletion dialogs. The surrounding AutoCheck website keeps its incumbent design. The record follows the implemented component and stylesheet rather than prescribing a new website identity.
+This record applies to the host document shell, quick editor, and their menus and dialogs. The official cross-origin DRAWIO frame retains its own interface; its internals are not styled by the host stylesheet. The surrounding AutoCheck website keeps its incumbent design. The record follows the implemented components and stylesheet rather than prescribing a new website identity.
 
 **Key Characteristics:**
 - Neutral graphite canvas and tools by default, with a complete light variant.
 - Compact system typography and explicit control labels.
-- A persistent, color-coded shape library with contextual editing properties.
+- The official full DRAWIO workspace by default, with the existing eight-shape quick editor available separately.
+- A persistent, color-coded shape library with contextual editing properties in the quick editor.
 - Direct movement, drag-to-draw arrows, visible connection handles, and reversible edits.
 - Responsive tools that keep the drawing workspace usable on narrow screens.
 
 ## Colors
 
-The default palette uses the earlier neutral graphite backgrounds, light text, and brighter blue interaction accents. The frontmatter holds the normative values from `diagramEditor.css`, `diagramTheme.ts`, and `diagramPalette.ts`: unsuffixed UI roles describe dark mode, `light-` roles describe the light variant, `document-` roles describe new-shape color values, and the canvas text/detail roles retain the portable light-rendering values.
+The host shell and quick editor use the earlier neutral graphite backgrounds, light text, and brighter blue interaction accents. The frontmatter holds the normative values from `diagramEditor.css`, `diagramTheme.ts`, and `diagramPalette.ts`: unsuffixed UI roles describe dark mode, `light-` roles describe the light variant, `document-` roles describe quick-editor new-shape color values, and the canvas text/detail roles retain the portable light-rendering values. The official DRAWIO frame receives the selected dark/light mode through its URL and configuration; these host tokens do not claim control over its complete internal palette.
 
 ### Primary
 
@@ -194,7 +195,7 @@ The default palette uses the earlier neutral graphite backgrounds, light text, a
 - **Canvas Text** and **Canvas Detail** supply light-canvas and export text. The dark canvas uses Text and Dark Canvas Detail. Mode-aware helpers derive shape fills and visible connection strokes from the document's existing colors without changing those stored color values.
 - **Destructive** identifies removal actions. It does not replace the confirmation dialog for deleting a saved document.
 
-**The Scoped Color Rule.** Apply the same `data-diagram-theme` to the editor and its portaled menus and dialogs; preserve the surrounding site's colors.
+**The Scoped Color Rule.** Apply the same `data-diagram-theme` to the host shell, quick editor, and their portaled menus and dialogs; preserve the surrounding site's colors.
 
 The header appearance control switches dark/light mode and remembers the choice in this browser's local storage. Missing or unavailable storage defaults to dark; a failed preference write still allows the current toggle to work. Appearance is outside the saved diagram and its undo history. SVG, PNG, and PDF exports always retain the white page and light drawing-color helpers.
 
@@ -218,13 +219,15 @@ Diagram-node names use the panel-title size and weight with a line height of 1.4
 
 ## Layout
 
-The document header is followed by a grouped command bar, then the workbench, then the count and zoom status bar. The workbench uses a left shape library (176px), a flexible canvas, and a contextual inspector (264px). The inspector appears when an object is selected or the connection tool is active, and is hidden while the arrow drawing tool is active. Clicking the canvas or closing the inspector clears that context.
+In the default DRAWIO workspace, the host document header is followed by wrapping file tools, the flexible official editor frame, and a local-storage/network status footer. The frame has a 360px minimum drawing region; loading and connection failure states occupy that same region. At or below 620px the file tools grow to fill their rows. Full-canvas and appearance changes preserve the current contents before remounting the frame. The DRAWIO frame provides its own library, properties, layers, and pages.
+
+In the quick editor, the document header is followed by a grouped command bar, then the workbench, then the count and zoom status bar. The workbench uses a left shape library (176px), a flexible canvas, and a contextual inspector (264px). The inspector appears when an object is selected or the connection tool is active, and is hidden while the arrow drawing tool is active. Clicking the canvas or closing the inspector clears that context.
 
 At or below 1050px, the library narrows to 144px and the inspector to 244px; the command bar can scroll horizontally. At or below 700px, the eight shapes form a four-column grid, and the inspector becomes a pane below the canvas with a maximum height of 48% of the workbench. The document actions wrap beneath the name. The main library hints are hidden to preserve working space. Active drawing settings form a separate wrapping row below the commands and a two-column grid on narrow screens.
 
 The embedded editor is at least 650px high, with a viewport-relative preferred height and an upper limit of 1100px. The narrow layout has a 660px minimum. Full-canvas mode occupies the viewport and restores the embedded layout when closed. The canvas snaps movement to a 20px grid and offers zoom, 100%, and fit controls.
 
-**The Contextual Properties Rule.** Reserve the inspector for the selected object or active connection task so the unselected canvas receives the available width.
+**The Contextual Properties Rule.** In the quick editor, reserve the inspector for the selected object or active connection task so the unselected canvas receives the available width.
 
 ## Elevation & Depth
 
@@ -243,6 +246,16 @@ New rectangles and resistors use Document Blue; ellipses and capacitors use Docu
 Resistor and capacitor symbols have two terminals; ground and Net Name tags have one. R/C/GND rotation offers 0°, 90°, 180°, and 270°. Quarter-turns swap width and height about the symbol center and remap attached terminals. Shared native SVG paths and terminal geometry define the library, canvas, and exports.
 
 ## Components
+
+### DRAWIO Workspace
+
+The host tools expose “新增圖稿”, “開啟 .drawio”, “本機圖稿”, “下載 .drawio”, and “快速繪圖”. The default full editor is the official `embed.diagrams.net` frame, with general, basic, arrow, flowchart, and electrical libraries enabled. Further libraries, groups, layers, and multiple pages remain native DRAWIO operations. Host loading, save, error, retry, and read-only messages sit outside that frame and follow the existing scoped colors.
+
+DRAWIO documents retain raw XML with a 20 MiB limit, including compressed pages; they use a separate account-local browser store. Opening foreign XML never flattens it into the quick editor's eight-shape format. The host accepts editor messages from the current official frame, and correlates requested XML exports before saving or changing views. Network access is required to load the full editor. A connection failure retains the saved document and offers retry or a return to quick drawing.
+
+New comparison results provide `power_drawio_a`, `power_drawio_b`, `i2c_drawio_a`, and `i2c_drawio_b` source artifacts when that source graph is available. Source navigation opens a separate editable DRAWIO document; older results without these artifacts use the retained quick source path. The quick editor can also export DRAWIO or open a DRAWIO copy, with editable approximate curve paths and portable circuit stencils. Original generated artifacts are included in comparison backups; edited DRAWIO documents require their own `.drawio` download, and quick documents retain their separate JSON backup.
+
+The remaining component descriptions cover the host's shared controls and the retained quick editor. They do not redefine the official frame's internal component design.
 
 ### Buttons
 
@@ -294,7 +307,8 @@ The version-1 document adds optional node fill/rotation and edge crossing fields
 - **Do** use blue for actions, focus, and active editor controls while neutral surfaces carry structure.
 - **Do** theme portaled editor menus and dialogs alongside the embedded editor.
 - **Do** keep both canvas appearances legible with mode-aware drawing-color helpers and preserve the white page for portable exports.
-- **Do** retain visible saved-state feedback and separate editable JSON backup instructions.
+- **Do** retain visible saved-state feedback and separate `.drawio` / editable JSON backup instructions.
+- **Do** distinguish network-dependent DRAWIO loading from account-local document persistence.
 
 ### Don't:
 
@@ -303,3 +317,4 @@ The version-1 document adds optional node fill/rotation and edge crossing fields
 - **Don't** rely on color alone for selected swatches, current saved documents, or disabled editing capability.
 - **Don't** remove the narrow-screen property pane or accessible command names when simplifying the toolbar.
 - **Don't** persist appearance preferences or invisible canvas endpoint helpers inside diagram documents.
+- **Don't** flatten imported DRAWIO files into quick-editor shapes or imply that edited local documents are included in comparison backups.

@@ -143,9 +143,9 @@ with tempfile.TemporaryDirectory() as temporary:
 test('Public engine manifest includes only original Python source and safe config', async () => {
   const manifest = JSON.parse(await readFile(new URL('engine/manifest.json', publicRoot), 'utf8'));
   assert.equal(manifest.version, '0.2.0');
-  assert.equal(manifest.origin, 'User-provided AutoCheck_1014.zip');
-  assert.equal(manifest.revision, '2026-10-14');
-  assert.equal(manifest.files.length, 45);
+  assert.equal(manifest.origin, 'User-provided AutoCheck_1015.zip');
+  assert.equal(manifest.revision, '2026-10-15');
+  assert.equal(manifest.files.length, 47);
   for (const { path, sha256 } of manifest.files) {
     assert.match(path, /^(autocheck\/.+\.py|config\/(default|i2c_devices|i2c_devices_user|power_parts)\.yaml)$/);
     const bytes = await readFile(new URL(`engine/${path}`, publicRoot));
@@ -233,6 +233,13 @@ c.save()
   assert.ok(run.result.i2cMap.buses.length);
   assert.ok(run.result.rows.every(row => row.dest && row.key));
   const artifacts = new Map(run.result.artifacts.map(artifact => [artifact.key, artifact]));
+  for (const key of ['power_drawio_a', 'power_drawio_b', 'i2c_drawio_a', 'i2c_drawio_b']) {
+    const artifact = artifacts.get(key);
+    assert.ok(artifact?.bytes.byteLength > 0, key);
+    assert.equal(artifact.mime, 'application/vnd.jgraph.mxfile');
+    assert.match(artifact.name, /\.drawio$/);
+    assert.match(new TextDecoder().decode(artifact.bytes), /<mxfile\b/);
+  }
   for (const key of ['pdf', 'xlsx', 'json', 'caps', 'todo', 'domains', 'circuit_a', 'circuit_b', 'ptree_html', 'i2c_html', 'i2c_block_html', 'i2c_csv', 'schematic', 'annotations']) {
     assert.ok(artifacts.get(key)?.bytes.byteLength > 0, key);
   }

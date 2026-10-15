@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-15T07:33:28.790Z",
+  "generatedAt": "2026-10-15T09:57:12.144Z",
   "title": "Design System: AutoCheck Diagram Editor",
   "extensions": {
     "colorMeta": {
@@ -838,7 +838,7 @@
       "name": "Color Control",
       "kind": "input",
       "refersTo": "color-control",
-      "description": "Native picker, six-digit HEX input, and existing swatches for stroke or optional fill colors.",
+      "description": "Quick editor: Native picker, six-digit HEX input, and existing swatches for stroke or optional fill colors.",
       "html": "<div class=\"ds-color-control\"><label for=\"ds-color-picker\">框線顏色</label><div class=\"ds-color-row\"><input id=\"ds-color-picker\" type=\"color\" value=\"#79a9e8\"/><input class=\"ds-color-hex\" aria-label=\"框線顏色色碼\" value=\"#79a9e8\" maxlength=\"7\" spellcheck=\"false\"/></div><div class=\"ds-color-swatches\"><button type=\"button\" aria-label=\"使用 #63c8b7 顏色\" aria-pressed=\"false\"><span style=\"background:#63c8b7\"></span></button><button type=\"button\" aria-label=\"使用 #79a9e8 顏色\" aria-pressed=\"true\"><span style=\"background:#79a9e8\"></span><svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m20 6-11 11-5-5\"/></svg></button><button type=\"button\" aria-label=\"使用 #d6ad65 顏色\" aria-pressed=\"false\"><span style=\"background:#d6ad65\"></span></button><button type=\"button\" aria-label=\"使用 #b59bdf 顏色\" aria-pressed=\"false\"><span style=\"background:#b59bdf\"></span></button><button type=\"button\" aria-label=\"使用 #e28f99 顏色\" aria-pressed=\"false\"><span style=\"background:#e28f99\"></span></button><button type=\"button\" aria-label=\"使用 #a4adb9 顏色\" aria-pressed=\"false\"><span style=\"background:#a4adb9\"></span></button></div></div>",
       "css": ".ds-color-control { display: flex; flex-direction: column; gap: 9px; max-width: 232px; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; } .ds-color-control label { color: var(--diagram-secondary, #dce5f2); font-size: 12px; font-weight: 500; } .ds-color-row { display: flex; gap: 8px; align-items: center; } .ds-color-row input { border: 1px solid var(--diagram-control-line, #636369); border-radius: 6px; background: var(--diagram-field, #323235); color: var(--diagram-text, #f5f5f7); font: 400 13px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; caret-color: var(--diagram-accent, #69afff); } .ds-color-row input[type=\"color\"] { width: 46px; min-width: 46px; height: 44px; padding: 4px; cursor: pointer; } .ds-color-hex { flex: 1; min-width: 0; height: 38px; padding: 10px 16px; font-variant-numeric: tabular-nums; } .ds-color-row input:focus-visible, .ds-color-swatches button:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-color-swatches { display: flex; } .ds-color-swatches button { position: relative; display: grid; place-items: center; width: 36px; min-width: 36px; height: 44px; padding: 0; border: 0; border-radius: 4px; background: transparent; cursor: pointer; } .ds-color-swatches button:hover { background: var(--diagram-hover, #ffffff0c); } .ds-color-swatches button:active { opacity: .75; } .ds-color-swatches button > span { width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--diagram-swatch-line, #ffffff35); } .ds-color-swatches button[aria-pressed=\"true\"] > span { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: 3px; } .ds-color-swatches svg { position: absolute; color: #152329; } .ds-color-control input:disabled, .ds-color-control button:disabled { opacity: .4; cursor: default; } @media (max-width: 700px) { .ds-color-hex { font-size: 16px; } .ds-color-swatches button { width: 44px; min-width: 44px; } }"
     },
@@ -846,7 +846,7 @@
       "name": "Command Bar",
       "kind": "nav",
       "refersTo": "command-bar",
-      "description": "Grouped document commands above the drawing canvas.",
+      "description": "Quick editor: Grouped document commands above the drawing canvas.",
       "html": "<div class=\"ds-toolbar\" role=\"toolbar\" aria-label=\"圖稿工具\"><div class=\"ds-toolbar-group\"><button type=\"button\" aria-label=\"復原\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M3 7v6h6\"/><path d=\"M3 13a8 8 0 1 1 2.4 5.7\"/></svg></button></div><button type=\"button\" class=\"ds-toolbar-active\" aria-pressed=\"true\">連線</button><button type=\"button\">雙箭頭</button><button type=\"button\">自動排列</button></div>",
       "css": ".ds-toolbar { display: flex; align-items: center; gap: 6px; min-height: 49px; padding: 2px 8px; background: var(--diagram-chrome, #242426); border-bottom: 1px solid var(--diagram-line, #454548); font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; } .ds-toolbar-group { padding-right: 6px; border-right: 1px solid var(--diagram-line, #454548); } .ds-toolbar button { min-height: 44px; min-width: 44px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--diagram-secondary, #dce5f2); font: 500 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-toolbar button:hover { background: var(--diagram-hover, #ffffff0c); } .ds-toolbar button:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-toolbar button:active { background: var(--diagram-active, #48484a); opacity: .75; } .ds-toolbar .ds-toolbar-active { background: var(--diagram-selected, #244a71); color: var(--diagram-accent-text, #9ecbff); } @media (max-width: 1050px) { .ds-toolbar { overflow-x: auto; } }"
     },
@@ -854,7 +854,7 @@
       "name": "Shape Card",
       "kind": "card",
       "refersTo": "shape-card",
-      "description": "Eight shapes: four basic shapes plus resistor, capacitor, ground, and an editable Net Name tag. Circuit icon paths match the shared source graphics.",
+      "description": "Quick editor: Eight shapes: four basic shapes plus resistor, capacitor, ground, and an editable Net Name tag. Circuit icon paths match the shared source graphics.",
       "html": "<div class=\"ds-shapes\"><button class=\"ds-shape ds-shape-blue\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/></svg><span>方框</span></button><button class=\"ds-shape ds-shape-teal\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/></svg><span>圓形</span></button><button class=\"ds-shape ds-shape-violet\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m12 2 10 10-10 10L2 12Z\"/></svg><span>判斷</span></button><button class=\"ds-shape ds-shape-amber\" draggable=\"true\"><svg viewBox=\"0 0 24 24\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z\"/><path d=\"M16 3v5h5\"/></svg><span>備註</span></button><button class=\"ds-shape ds-shape-blue\" draggable=\"true\"><svg viewBox=\"0 0 100 100\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M0 50 H20 L26 34 L38 66 L50 34 L62 66 L74 34 L80 50 H100\" fill=\"none\" stroke-width=\"5\"/></svg><span>電阻</span></button><button class=\"ds-shape ds-shape-teal\" draggable=\"true\"><svg viewBox=\"0 0 100 100\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M0 50 H42 M42 26 V74 M58 26 V74 M58 50 H100\" fill=\"none\" stroke-width=\"5\"/></svg><span>電容</span></button><button class=\"ds-shape ds-shape-neutral\" draggable=\"true\"><svg viewBox=\"0 0 100 100\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M50 0 V36 M20 36 H80 M30 52 H70 M40 68 H60\" fill=\"none\" stroke-width=\"5\"/></svg><span>接地</span></button><button class=\"ds-shape ds-shape-amber\" draggable=\"true\"><svg viewBox=\"0 0 100 100\" width=\"36\" height=\"30\" fill=\"currentColor\" fill-opacity=\".12\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M0 50 L14 22 H100 V78 H14 Z\" fill=\"none\" stroke-width=\"5\"/></svg><span>Net Name</span></button></div>",
       "css": ".ds-shapes { display: grid; grid-template-columns: repeat(2, 72px); gap: 8px; } .ds-shape-blue { --shape-color: var(--diagram-shape-blue, #80b9ff); --shape-fill: var(--diagram-shape-blue-fill, #203e62); } .ds-shape-teal { --shape-color: var(--diagram-shape-teal, #79dfd0); --shape-fill: var(--diagram-shape-teal-fill, #1f4647); } .ds-shape-violet { --shape-color: var(--diagram-shape-violet, #cab1f0); --shape-fill: var(--diagram-shape-violet-fill, #393350); } .ds-shape-amber { --shape-color: var(--diagram-shape-amber, #e8c685); --shape-fill: var(--diagram-shape-amber-fill, #4c3e28); } .ds-shape-neutral { --shape-color: var(--diagram-secondary, #dce5f2); --shape-fill: var(--diagram-surface, #2c2c2e); } .ds-shape { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: 72px; height: 88px; padding: 10px 4px; border: 1px solid var(--diagram-line, #454548); border-radius: 7px; background: var(--shape-fill); color: var(--diagram-secondary, #dce5f2); font: 400 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-shape svg { color: var(--shape-color); } .ds-shape:hover { background: var(--diagram-selected, #244a71); border-color: var(--shape-color); } .ds-shape:focus-visible { outline: 2px solid var(--diagram-accent, #69afff); outline-offset: -2px; } .ds-shape:active { opacity: .75; } .ds-shape:disabled { opacity: .38; } @media (max-width: 700px) { .ds-shapes { grid-template-columns: repeat(4, minmax(0, 1fr)); } .ds-shape { width: auto; height: 48px; padding: 4px; flex-direction: row; gap: 5px; border: 0; font-size: 11px; } .ds-shape svg { width: 22px; height: 22px; } }"
     },
@@ -862,7 +862,7 @@
       "name": "Saved Document Card",
       "kind": "card",
       "refersTo": "saved-document-card",
-      "description": "Open an account-local document from the saved-document dialog.",
+      "description": "Quick editor: Open an account-local document from the saved-document dialog.",
       "html": "<button class=\"ds-saved\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><path d=\"M14 2v6h6M8 13h8M8 17h6\"/></svg><span><strong>電源方塊圖</strong><small>2026/10/15 · 4 個圖形</small></span><span class=\"ds-saved-check\" aria-label=\"目前圖稿\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m20 6-11 11-5-5\"/></svg></span></button>",
       "css": ".ds-saved { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 68px; padding: 12px; text-align: left; border: 1px solid transparent; border-radius: 6px; background: hsl(var(--secondary, 240 3% 20%)); color: var(--diagram-text, #f5f5f7); font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; cursor: pointer; } .ds-saved:hover { border-color: hsl(210 100% 45%); } .ds-saved:focus-visible { outline: 2px solid hsl(210 100% 45%); outline-offset: -2px; } .ds-saved:active { opacity: .75; } .ds-saved:disabled { opacity: .5; } .ds-saved > svg { flex-shrink: 0; color: hsl(210 100% 45%); } .ds-saved > span:not(.ds-saved-check) { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; } .ds-saved strong { font-size: 13px; font-weight: 600; } .ds-saved small { font-size: 11px; color: hsl(var(--muted-foreground, 217 18% 74%)); } .ds-saved-check { color: hsl(210 100% 45%); }"
     },
@@ -870,30 +870,31 @@
       "name": "Selection Chip",
       "kind": "chip",
       "refersTo": "selection-chip",
-      "description": "Theme-aware passive text feedback for the selected object or active connection task.",
+      "description": "Quick editor: Theme-aware passive text feedback for the selected object or active connection task.",
       "html": "<span class=\"ds-selection-chip\">已選取 1 個圖形</span>",
       "css": ".ds-selection-chip { display: inline-block; color: var(--diagram-accent-text, #9ecbff); background: var(--diagram-selected, #244a71); border: 1px solid var(--diagram-selected-line, #5d8dbd); border-radius: 4px; padding: 5px 8px; font: 400 11px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans TC\", sans-serif; pointer-events: none; } @media (max-width: 700px) { .ds-selection-chip { font-size: 10px; } }"
     }
   ],
   "narrative": {
     "northStar": "The Diagram Workbench",
-    "overview": "The editor pairs the familiar draw.io workbench arrangement with Apple-inspired neutral graphite backgrounds by default and a complete light variant. A quiet frame holds the document controls, shape library, and status tools around the drawing surface. Brighter blue identifies actions, focus, and selection; colored basic shapes and circuit symbols give the eight-item library recognizable roles.\n\nThis record applies only to the diagram editor, its menus, and its saved-document and deletion dialogs. The surrounding AutoCheck website keeps its incumbent design. The record follows the implemented component and stylesheet rather than prescribing a new website identity.",
+    "overview": "The default workspace embeds the official draw.io editor and its full shape libraries inside the existing AutoCheck document shell. The retained “快速繪圖” editor pairs the familiar workbench arrangement with Apple-inspired neutral graphite backgrounds and a light variant. Brighter blue identifies host and quick-editor actions, focus, and selection; colored basic shapes and circuit symbols give the quick editor's eight-item library recognizable roles.\n\nThis record applies to the host document shell, quick editor, and their menus and dialogs. The official cross-origin DRAWIO frame retains its own interface; its internals are not styled by the host stylesheet. The surrounding AutoCheck website keeps its incumbent design. The record follows the implemented components and stylesheet rather than prescribing a new website identity.",
     "keyCharacteristics": [
       "Neutral graphite canvas and tools by default, with a complete light variant.",
       "Compact system typography and explicit control labels.",
-      "A persistent, color-coded shape library with contextual editing properties.",
+      "The official full DRAWIO workspace by default, with the existing eight-shape quick editor available separately.",
+      "A persistent, color-coded shape library with contextual editing properties in the quick editor.",
       "Direct movement, drag-to-draw arrows, visible connection handles, and reversible edits.",
       "Responsive tools that keep the drawing workspace usable on narrow screens."
     ],
     "rules": [
       {
         "name": "The Scoped Color Rule",
-        "body": "Apply the same `data-diagram-theme` to the editor and its portaled menus and dialogs; preserve the surrounding site's colors.",
+        "body": "Apply the same `data-diagram-theme` to the host shell, quick editor, and their portaled menus and dialogs; preserve the surrounding site's colors.",
         "section": "colors"
       },
       {
         "name": "The Contextual Properties Rule",
-        "body": "Reserve the inspector for the selected object or active connection task so the unselected canvas receives the available width.",
+        "body": "In the quick editor, reserve the inspector for the selected object or active connection task so the unselected canvas receives the available width.",
         "section": "layout"
       }
     ],
@@ -902,14 +903,16 @@
       "**Do** use blue for actions, focus, and active editor controls while neutral surfaces carry structure.",
       "**Do** theme portaled editor menus and dialogs alongside the embedded editor.",
       "**Do** keep both canvas appearances legible with mode-aware drawing-color helpers and preserve the white page for portable exports.",
-      "**Do** retain visible saved-state feedback and separate editable JSON backup instructions."
+      "**Do** retain visible saved-state feedback and separate `.drawio` / editable JSON backup instructions.",
+      "**Do** distinguish network-dependent DRAWIO loading from account-local document persistence."
     ],
     "donts": [
       "**Don't** apply this scoped editor palette to the surrounding AutoCheck website.",
       "**Don't** make the inspector a permanent empty column when there is no selected object or active connection task.",
       "**Don't** rely on color alone for selected swatches, current saved documents, or disabled editing capability.",
       "**Don't** remove the narrow-screen property pane or accessible command names when simplifying the toolbar.",
-      "**Don't** persist appearance preferences or invisible canvas endpoint helpers inside diagram documents."
+      "**Don't** persist appearance preferences or invisible canvas endpoint helpers inside diagram documents.",
+      "**Don't** flatten imported DRAWIO files into quick-editor shapes or imply that edited local documents are included in comparison backups."
     ]
   }
 }
