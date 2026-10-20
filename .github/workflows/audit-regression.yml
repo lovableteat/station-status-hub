@@ -23,7 +23,7 @@ jobs:
       - name: Set isolated QA directory
         run: echo "AUDIT_QA_DIR=$RUNNER_TEMP/station-audit-qa" >> "$GITHUB_ENV"
       - name: Install isolated QA dependencies
-        run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock react@18.3.1 react-test-renderer@18.3.1 @electric-sql/pglite@0.5.8 playwright@1.58.2
+        run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock react@18.3.1 react-test-renderer@18.3.1 jsdom@29.1.1 @electric-sql/pglite@0.5.8 playwright@1.58.2
       - name: Deferred requests, live events, drafts and permissions
         run: node --test tests/audit*.integration.cjs
       - name: Application and build configuration types
