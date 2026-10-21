@@ -156,7 +156,6 @@ export function shouldApplyBomWorkspaceCache({
 export const MATERIAL_TABLE_COLUMNS = [
   // Website columns first, then the CE workbook columns in workbook order, then the website columns that follow the data.
   { key: "item", label: "Item", locked: false, ceHeader: "" },
-  { key: "marked", label: "標記", locked: false, ceHeader: "" },
   { key: "name", label: "Name", locked: true, ceHeader: "Name" },
   { key: "qty", label: "Qty", locked: false, ceHeader: "Qty" },
   { key: "refDes", label: "Ref Des", locked: false, ceHeader: "Ref Des" },

@@ -140,22 +140,22 @@ test("the table shows Part Spec as its own workbook column and keeps the old spe
   assert.match(rowBlock, /data-material-cell="partSpec"/);
   assert.match(alternativeBlock, /record\.partSpec \|\| group\.partSpec/);
   assert.doesNotMatch(alternativeBlock, /record\.remark/);
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 19);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 19);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 18);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 18);
   assert.doesNotMatch(source, /specification: ColumnFilterSelection|specification: null|case "specification"/);
 });
 
-test("material column geometry and fixed actions match the nineteen columns", () => {
-  assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [56, 56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150, 220, 110]);
-  assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [48, 48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 120, 180, 100]);
-  assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [96, 80, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 420, 200]);
-  assert.equal(readWidths("DEFAULT_COLUMN_WIDTHS").length, 19);
+test("material column geometry and fixed actions match the eighteen columns", () => {
+  assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150, 220, 110]);
+  assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 120, 180, 100]);
+  assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 420, 200]);
+  assert.equal(readWidths("DEFAULT_COLUMN_WIDTHS").length, 18);
   assert.equal((tableBlock.match(/column\.key === "actions"/g) ?? []).length, 3);
   assert.doesNotMatch(source, /colSpan=\{1[012]\}/);
   assert.match(source, /colSpan=\{visibleColumnCount\}/);
 });
 
-test("stored column widths are reused only when they match the current nineteen-column layout", () => {
+test("stored column widths are reused only when they match the current eighteen-column layout", () => {
   const loadBlock = source.slice(source.indexOf("function loadColumnWidths()"), source.indexOf("function clampBomTrackerPageCount("));
   const load = new Function("window", "DEFAULT_COLUMN_WIDTHS", "MIN_COLUMN_WIDTHS", "MAX_COLUMN_WIDTHS", "COLUMN_WIDTHS_SESSION_KEY", `${loadBlock}; return loadColumnWidths();`);
   const run = (stored) => load({ sessionStorage: { getItem: (key) => key === "fixture" && stored !== null ? JSON.stringify(stored) : null } }, readWidths("DEFAULT_COLUMN_WIDTHS"), readWidths("MIN_COLUMN_WIDTHS"), readWidths("MAX_COLUMN_WIDTHS"), "fixture");
@@ -164,7 +164,7 @@ test("stored column widths are reused only when they match the current nineteen-
   assert.deepEqual(run(stored), stored.map((width, index) => Math.min(readWidths("MAX_COLUMN_WIDTHS")[index], width)));
   assert.deepEqual(run([96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130]), defaults);
   assert.deepEqual(run(null), defaults);
-  assert.match(source, /COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v10"/);
+  assert.match(source, /COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v11"/);
 });
 
 test("restored material filters discard removed or invalid conditions without losing current filters", () => {
