@@ -26,11 +26,12 @@ const toolbar = slice('data-testid="material-table-toolbar"', 'data-testid="mate
 const filterRow = slice("</ResizableHeader>", "</thead>");
 const COLUMN_KEYS = [
   "item", "name", "qty", "refDes", "mpn", "manufacturer", "sourcingStatus", "virtual", "physical",
-  "partName", "partSpec", "schematicPart", "footprint", "phaseOut", "partUsage", "tracking", "actions",
+  "partName", "partSpec", "schematicPart", "footprint", "phaseOut", "partUsage", "actions",
 ];
 
 test("the table mirrors the CE workbook: its 14 item columns in workbook order, between the website columns, with no 標記 column", () => {
-  assert.ok(!presentation.MATERIAL_TABLE_COLUMNS.some((column) => column.key === "marked" || column.key === "status"));
+  assert.ok(!presentation.MATERIAL_TABLE_COLUMNS.some((column) => ["marked", "status", "tracking"].includes(column.key)));
+  assert.equal(presentation.MATERIAL_TABLE_COLUMNS.at(-1).label, "狀態追蹤 / 更新");
   assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.map((column) => column.key), COLUMN_KEYS);
   const workbookHeaders = MATERIAL_CE_FIELDS.map((field) => field.header).filter((header) => header !== "Level");
   assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.filter((column) => column.ceHeader).map((column) => column.ceHeader), workbookHeaders);
@@ -61,8 +62,9 @@ test("every main-row and alternative-row cell follows the column list and its vi
     assert.match(rowBlock, new RegExp(`data-material-cell="${key}"`));
     assert.match(alternativeBlock, new RegExp(`\\{columns\\.${key} && `), `alternative cell ${key} must be toggleable`);
   }
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 17);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 17);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 16);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 16);
+  assert.match(rowBlock, /data-material-cell="actions"[\s\S]*?data-material-cell="tracking"[\s\S]*?<TrackingHistoryCell/, "tracking lives inside the sticky update cell");
   assert.match(source, /data-testid="material-column-visibility"/);
   assert.match(source, /HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1"/);
   assert.match(source, /colSpan=\{visibleColumnCount\}/);
@@ -72,7 +74,7 @@ test("the second header row shows the workbook meaning, or the filter where one 
   assert.match(filterRow, /MATERIAL_TABLE_COLUMN_MEANING\[column\.key\]/);
   assert.match(filterRow, /MATERIAL_COLUMN_FILTER_KEYS\[column\.key\]/);
   const filterKeys = slice("const MATERIAL_COLUMN_FILTER_KEYS", "};");
-  for (const [key, filterKey] of [["name", "material"], ["refDes", "refDes"], ["mpn", "mpn"], ["virtual", "virtualAlternative"], ["physical", "internal"], ["tracking", "trackingStatus"]]) {
+  for (const [key, filterKey] of [["name", "material"], ["refDes", "refDes"], ["mpn", "mpn"], ["virtual", "virtualAlternative"], ["physical", "internal"], ["actions", "trackingStatus"]]) {
     assert.match(filterKeys, new RegExp(`${key}: "${filterKey}"`));
   }
   assert.match(source, /MATERIAL_CE_HELP_BY_HEADER\.get\(column\.ceHeader\)\?\.meaning/);

@@ -93,7 +93,7 @@ test("material hover cards expose searchable, scrollable, and explicit copy cont
   assert.match(compactHoverBlock, /data-testid="compact-hover-content"/);
   assert.match(compactHoverBlock, /data-testid="compact-hover-search"/);
   assert.match(compactHoverBlock, /data-testid="compact-hover-copy-all"/);
-  assert.match(compactHoverBlock, /max-h-\[min\(240px,40vh\)\] flex-wrap gap-1 overflow-y-auto/);
+  assert.match(compactHoverBlock, /max-h-\[min\(240px,40vh\)\] divide-y divide-border\/60 overflow-y-auto/);
   assert.doesNotMatch(compactHoverBlock, /padStart\(2, "0"\)/, "values are chips, not numbered rows");
   assert.match(identityBlock, /data-testid="material-identity-metrics"/);
   assert.match(identityBlock, /"material-identity-ref-list"\]/);
@@ -140,22 +140,22 @@ test("the table shows Part Spec as its own workbook column and keeps the old spe
   assert.match(rowBlock, /data-material-cell="partSpec"/);
   assert.match(alternativeBlock, /record\.partSpec \|\| group\.partSpec/);
   assert.doesNotMatch(alternativeBlock, /record\.remark/);
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 17);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 17);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 16);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 16);
   assert.doesNotMatch(source, /specification: ColumnFilterSelection|specification: null|case "specification"/);
 });
 
-test("material column geometry and fixed actions match the seventeen columns", () => {
-  assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 220, 110]);
-  assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 180, 100]);
-  assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 420, 200]);
-  assert.equal(readWidths("DEFAULT_COLUMN_WIDTHS").length, 17);
-  assert.equal((tableBlock.match(/column\.key === "actions"/g) ?? []).length, 3);
+test("material column geometry and fixed actions match the sixteen columns", () => {
+  assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 300]);
+  assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 240]);
+  assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 560]);
+  assert.equal(readWidths("DEFAULT_COLUMN_WIDTHS").length, 16);
+  assert.equal((tableBlock.match(/column\.key === "actions"/g) ?? []).length, 4);
   assert.doesNotMatch(source, /colSpan=\{1[012]\}/);
   assert.match(source, /colSpan=\{visibleColumnCount\}/);
 });
 
-test("stored column widths are reused only when they match the current seventeen-column layout", () => {
+test("stored column widths are reused only when they match the current sixteen-column layout", () => {
   const loadBlock = source.slice(source.indexOf("function loadColumnWidths()"), source.indexOf("function clampBomTrackerPageCount("));
   const load = new Function("window", "DEFAULT_COLUMN_WIDTHS", "MIN_COLUMN_WIDTHS", "MAX_COLUMN_WIDTHS", "COLUMN_WIDTHS_SESSION_KEY", `${loadBlock}; return loadColumnWidths();`);
   const run = (stored) => load({ sessionStorage: { getItem: (key) => key === "fixture" && stored !== null ? JSON.stringify(stored) : null } }, readWidths("DEFAULT_COLUMN_WIDTHS"), readWidths("MIN_COLUMN_WIDTHS"), readWidths("MAX_COLUMN_WIDTHS"), "fixture");
@@ -164,7 +164,7 @@ test("stored column widths are reused only when they match the current seventeen
   assert.deepEqual(run(stored), stored.map((width, index) => Math.min(readWidths("MAX_COLUMN_WIDTHS")[index], width)));
   assert.deepEqual(run([96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130]), defaults);
   assert.deepEqual(run(null), defaults);
-  assert.match(source, /COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v12"/);
+  assert.match(source, /COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v13"/);
 });
 
 test("restored material filters discard removed or invalid conditions without losing current filters", () => {

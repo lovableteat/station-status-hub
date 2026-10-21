@@ -243,7 +243,7 @@ const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:"
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const VIEW_STATE_KEY_PREFIX = "station-status-hub:material-view:v1:";
-const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v12";
+const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v13";
 const HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const MAX_BOM_TRACKER_PAGES = 500;
@@ -272,9 +272,9 @@ const BOM_PAGE_STATUS_OPTIONS: Array<{
     idleClassName: "text-muted-foreground hover:bg-accent hover:text-foreground",
   },
 ];
-const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 220, 110];
-const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 180, 100];
-const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 420, 200];
+const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 300];
+const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 240];
+const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 560];
 const DEFAULT_BOM_TABLE_COLOR_THEME: BomTableColorTheme = {
   primary: "#0F5D74",
   alternative: "#343B73",
@@ -448,9 +448,9 @@ function CompactHoverValue({
           </div>
         ) : null}
 
-        <ul className="flex max-h-[min(240px,40vh)] flex-wrap gap-1 overflow-y-auto">
+        <ul className="max-h-[min(240px,40vh)] divide-y divide-border/60 overflow-y-auto rounded-md border border-border bg-background/40">
           {filteredValues.length > 0 ? filteredValues.map((value, index) => (
-            <li key={`${value}-${index}`} className="max-w-full truncate rounded-md border border-border bg-secondary px-1.5 font-mono text-xs leading-5 text-foreground" title={value}>
+            <li key={`${value}-${index}`} className="truncate px-2 font-mono text-xs leading-6 text-foreground" title={value}>
               {value}
             </li>
           )) : (
@@ -524,14 +524,14 @@ function MaterialIdentityHover({
         ].map(([sectionLabel, values, emptyText, testId]) => (
           <section key={sectionLabel as string} data-testid={testId as string} className="mt-2 min-w-0 border-t border-border pt-2">
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{sectionLabel as string}</p>
-            <ScrollArea className={cn((values as string[]).length > 24 && "h-32")}>
-              <ul className="flex flex-wrap gap-1">
+            <ScrollArea className={cn((values as string[]).length > 10 && "h-48")}>
+              <ul className="divide-y divide-border/60 rounded-md border border-border bg-background/40">
                 {(values as string[]).length > 0 ? (values as string[]).map((value) => (
-                  <li key={value} className="max-w-full truncate rounded-md border border-border bg-secondary px-1.5 font-mono text-xs leading-5 text-foreground" title={value}>
+                  <li key={value} className="truncate px-2 font-mono text-xs leading-6 text-foreground" title={value}>
                     {value}
                   </li>
                 )) : (
-                  <li className="text-xs text-muted-foreground">{emptyText as string}</li>
+                  <li className="px-2 text-xs leading-6 text-muted-foreground">{emptyText as string}</li>
                 )}
               </ul>
             </ScrollArea>
@@ -592,7 +592,7 @@ const MATERIAL_COLUMN_FILTER_KEYS: Partial<Record<MaterialTableColumnKey, Column
   mpn: "mpn",
   virtual: "virtualAlternative",
   physical: "internal",
-  tracking: "trackingStatus",
+  actions: "trackingStatus",
 };
 
 // Row 5 of the CE workbook (the Chinese meaning) shown under each workbook column header.
@@ -609,8 +609,7 @@ const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>
       .map((column) => [column.key, `Excel 欄名：${column.ceHeader}\n${getMaterialCeFieldHelp(column.ceHeader).description}`]),
   ),
   item: "網站列號，依目前排序與分頁編號。",
-  tracking: "網站人工維護的狀態追蹤，與 CE Excel 的供應／核准狀態、phase out 及零件狀態分開。",
-  actions: "新增或更新這組料的資料。",
+  actions: "網站人工維護的狀態追蹤與資料更新，與 CE Excel 的供應／核准狀態、phase out 及零件狀態分開。",
 };
 
 function normalizeBomTableColorTheme(theme: Partial<BomTableColorTheme> | null | undefined): BomTableColorTheme {
@@ -3693,28 +3692,28 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
             <PartUsageStatus record={statusRecord} />
           </td>
         )}
-        {columns.tracking && (
-          <td data-material-cell="tracking" className={MATERIAL_CELL_CLASS} onClick={stopRowToggle}>
-            {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={actions.openTracking} />}
-          </td>
-        )}
         {columns.actions && (
           <td
             data-material-cell="actions"
-            className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5 text-center")}
+            className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5")}
             data-testid="material-data-update-cell"
             onClick={stopRowToggle}
           >
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => actions.openCreate(group)}
-              className="h-7 w-full border-cyan-400/25 bg-cyan-400/10 px-2 text-xs text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-50"
-              title={updateTitle}
-            >
-              <Plus className="mr-1 h-3.5 w-3.5" />更新
-            </Button>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <div className="min-w-0 flex-1" data-material-cell="tracking">
+                {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={actions.openTracking} />}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => actions.openCreate(group)}
+                className="h-7 flex-none border-cyan-400/25 bg-cyan-400/10 px-2 text-xs text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-50"
+                title={updateTitle}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />更新
+              </Button>
+            </div>
             {editingNames && (
               <p className="mt-1 truncate rounded border border-amber-300/28 bg-amber-400/12 px-1 text-[10px] font-bold leading-4 text-amber-100" title={`${editingNames} 正在編輯`}>
                 {editingNames.split("、")[0]} 編輯中
@@ -3909,18 +3908,16 @@ function CompactAlternativeRows({
             {columns.partUsage && (
               <td className={MATERIAL_CELL_CLASS}><PartUsageStatus record={record} /></td>
             )}
-            {columns.tracking && (
-              <td className={MATERIAL_CELL_CLASS} onClick={stopRowToggle}>
-                {record.id === primaryTrackingRecordId ? (
-                  <span className="block truncate text-xs text-slate-400" title="這筆的狀態追蹤已顯示在主料列">同主料列</span>
-                ) : (
-                  <TrackingHistoryCell record={record} onOpen={onOpenTracking} />
-                )}
-              </td>
-            )}
             {columns.actions && (
-              <td className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5")}>
-                <div className="flex justify-center gap-1.5">
+              <td className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5")} onClick={stopRowToggle}>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <div className="min-w-0 flex-1">
+                    {record.id === primaryTrackingRecordId ? (
+                      <span className="block truncate text-xs text-slate-400" title="這筆的狀態追蹤已顯示在主料列">同主料列</span>
+                    ) : (
+                      <TrackingHistoryCell record={record} onOpen={onOpenTracking} />
+                    )}
+                  </div>
                   <button type="button" onClick={() => onView(record)} className="rounded-md border border-cyan-400/25 bg-cyan-400/10 p-1.5 text-cyan-300 hover:bg-cyan-400/20" title="詳細資訊">
                     <Eye className="h-3.5 w-3.5" />
                   </button>
@@ -6286,20 +6283,13 @@ export function MaterialRequestPage() {
                 {MATERIAL_TABLE_COLUMNS.map((column) => {
                   if (!columnVisibility[column.key]) return null;
                   const filterKey = MATERIAL_COLUMN_FILTER_KEYS[column.key];
-                  if (column.key === "actions") {
-                    return (
-                      <th key={column.key} className={MATERIAL_STICKY_COLUMN_CLASSES.filter}>
-                        <div className="flex h-8 items-center justify-center text-[11px] text-slate-500">操作</div>
-                      </th>
-                    );
-                  }
                   if (filterKey) {
                     return (
-                      <th key={column.key} className="border-r border-blue-300/20 p-1.5">
+                      <th key={column.key} className={column.key === "actions" ? MATERIAL_STICKY_COLUMN_CLASSES.filter : "border-r border-blue-300/20 p-1.5"}>
                         <ExcelFilterPopover
                           filterKey={filterKey}
                           getOptions={getColumnFilterOptions}
-                          label={column.label}
+                          label={column.key === "actions" ? "狀態追蹤" : column.label}
                           selectedValues={columnFilters[filterKey]}
                           onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, [filterKey]: values }))}
                         />
