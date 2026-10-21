@@ -1806,3 +1806,17 @@ details[open] > summary > .rd2-disclosure-chevron { transform: rotate(180deg); }
   .performance-workspace .rd2-department-export { padding: 16px; }
   .performance-workspace .rd2-assessment-table-scroll th, .performance-workspace .rd2-assessment-table-scroll td { padding: 14px; }
 }
+
+/* 誰評核誰: each role is one line (icon · role · duty) instead of icon above text. */
+.rd2-bright .rd2-process-roles ul { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+.rd2-bright .rd2-process-roles li { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 8px 12px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--card)); }
+.rd2-bright .rd2-process-roles li > svg { width: 20px; height: 20px; flex: 0 0 20px; color: hsl(var(--primary)); }
+.rd2-bright .rd2-process-roles li > div { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.rd2-bright .rd2-process-roles li strong { font-size: 14px; font-weight: 700; color: hsl(var(--foreground)); }
+.rd2-bright .rd2-process-roles li span { font-size: 13px; color: hsl(var(--foreground) / .75); }
+/* 員工自評: exports and the copy controls share one row; the hint sits under it. */
+.rd2-bright .rd2-self-export-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 16px; margin-top: 12px; }
+.rd2-bright .rd2-self-export-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.rd2-bright .rd2-self-export-row .rd2-copy-panel { margin: 0; flex: 1 1 auto; }
+.rd2-bright .rd2-self-export-row .rd2-copy-panel-actions > button { min-height: 40px; }
+.rd2-bright .rd2-self-export-row + .rd2-hint { margin-top: 8px; }

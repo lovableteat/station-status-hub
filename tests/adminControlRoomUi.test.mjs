@@ -142,7 +142,7 @@ test("admin workspace uses the maintenance visual system and a responsive sideba
   assert.match(panel, /<MaintenanceMetricStrip/);
   assert.doesNotMatch(panel, /radial-gradient|blur-3xl|bg-gradient-to-r/);
 
-  assert.match(sidebar, /用戶管理/);
+  assert.match(sidebar, /帳號管理/);
   assert.match(sidebar, /通知與在線/);
   assert.match(sidebar, /API 管理/);
   assert.match(sidebar, /收合側欄/);

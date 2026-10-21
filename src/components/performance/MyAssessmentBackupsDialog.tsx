@@ -109,7 +109,10 @@ export function MyAssessmentBackupsDialog({
         .limit(50);
       if (!active) return;
       if (queryError) {
-        setError(queryError.message || "目前無法讀取自評備份。");
+        const message = queryError.message || "";
+        setError(/permission denied|42501/i.test(message)
+          ? "目前的帳號還沒有讀取自評備份的權限（資料庫尚未開放 resolve_performance_employee 給一般帳號）。請聯絡管理員開通後再試。"
+          : message || "目前無法讀取自評備份。");
         setBackups([]);
       } else {
         setBackups((data || []) as AssessmentBackup[]);
@@ -161,9 +164,10 @@ export function MyAssessmentBackupsDialog({
               正在讀取你的備份…
             </div>
           ) : error ? (
-            <p className="rounded-2xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm leading-6 text-destructive" role="alert">
-              {error}
-            </p>
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-4" role="alert">
+              <p className="text-base font-semibold text-destructive">暫時無法讀取備份</p>
+              <p className="mt-1 text-sm leading-6 text-foreground/85">{error}</p>
+            </div>
           ) : backups.length === 0 ? (
             <div className="flex min-h-36 flex-col items-center justify-center rounded-2xl border border-dashed border-primary/20 bg-background/25 px-4 text-center">
               <FileJson className="mb-2 h-7 w-7 text-muted-foreground" />

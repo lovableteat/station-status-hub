@@ -3024,7 +3024,7 @@ export function ApiChatConsole({
                 />
               </div>
 
-              <div data-ai-composer-toolbar="true" className="flex min-w-0 items-center justify-between gap-2 border-t border-border pt-2">
+              <div data-ai-composer-toolbar="true" className="flex min-w-0 items-center justify-between gap-2 border-t border-border pt-2 lg:pr-32">
                 <div className="flex shrink-0 items-center gap-2">
                   {promptLibraryControl}
                   <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className="h-11 shrink-0 px-3">

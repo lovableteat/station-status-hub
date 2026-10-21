@@ -270,6 +270,15 @@ export function DirectMessagesPanel({
   const [replyingTo, setReplyingTo] = useState<ReplyTarget | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<DirectMessageAttachment | null>(null);
+  // The enlarged image is a toggle: click it (or the backdrop, or press Esc) to shrink back.
+  useEffect(() => {
+    if (!previewAttachment) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewAttachment(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [previewAttachment]);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [selectedMediaFiles, setSelectedMediaFiles] = useState<SelectedMediaFile[]>([]);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -1017,8 +1026,8 @@ export function DirectMessagesPanel({
           </div>
         </form>
         {previewAttachment?.url ? (
-          <div className="absolute inset-0 z-50 flex flex-col bg-[#020914]/96 backdrop-blur-sm" role="dialog" aria-label={`預覽 ${previewAttachment.fileName}`}>
-            <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/10 px-3">
+          <div className="absolute inset-0 z-50 flex cursor-zoom-out flex-col bg-[#020914]/96 backdrop-blur-sm" role="dialog" aria-label={`預覽 ${previewAttachment.fileName}`} onClick={() => setPreviewAttachment(null)}>
+            <div className="flex h-14 shrink-0 cursor-default items-center gap-2 border-b border-white/10 px-3" onClick={(event) => event.stopPropagation()}>
               <div className="min-w-0 flex-1 truncate text-sm font-bold text-white">{previewAttachment.fileName}</div>
               <a
                 href={previewAttachment.url}
