@@ -8,9 +8,10 @@ const session = (id, token = `token-${id}`) => ({
 });
 const profile = id => ({ data: [{ user_id: id, username: id, role: 'user', display_name: id }], error: null });
 
-async function fixture() {
+async function fixture({ cachedUser, realtimeV2Enabled = true } = {}) {
   const window = browser();
   const storage = new Map([['bringup-auth-session-version', '2026-07-31-tab-isolation-v2']]);
+  if (cachedUser) storage.set('user', JSON.stringify(cachedUser));
   window.sessionStorage = {
     getItem: key => storage.get(key) ?? null,
     setItem: (key, value) => storage.set(key, value),
@@ -18,6 +19,8 @@ async function fixture() {
   };
   const bootstrap = deferred();
   const profiles = [];
+  const channels = [];
+  const removedChannels = [];
   const timers = new Map();
   let nextTimer = 0, listener, state, signOuts = 0, subscribed = true;
   const supabase = {
@@ -35,14 +38,14 @@ async function fixture() {
       const request = deferred(); profiles.push(request); return request.promise;
     },
     realtime: { setAuth: async () => {} },
-    channel: () => ({ on() { return this; }, subscribe() { return this; } }),
-    removeChannel: async () => {},
+    channel: name => ({ name, on() { return this; }, subscribe() { channels.push(this); return this; } }),
+    removeChannel: async channel => { removedChannels.push(channel); },
   };
   const load = loader({
     window,
     mocks: {
       '@/integrations/supabase/client': { supabase },
-      '@/lib/realtimeCollaborationConfig': { REALTIME_COLLABORATION_V2_ENABLED: true },
+      '@/lib/realtimeCollaborationConfig': { REALTIME_COLLABORATION_V2_ENABLED: realtimeV2Enabled },
     },
     globals: {
       setTimeout: (callback, delay) => { const id = ++nextTimer; timers.set(id, { callback, delay }); return id; },
@@ -55,7 +58,7 @@ async function fixture() {
   let tree;
   await act(async () => { tree = create(React.createElement(UserProvider, null, React.createElement(Probe))); });
   return {
-    profiles, bootstrap, storage, timers, supabase,
+    profiles, bootstrap, storage, timers, supabase, channels, removedChannels,
     get state() { return state; },
     get signOuts() { return signOuts; },
     get subscribed() { return subscribed; },
@@ -75,6 +78,34 @@ async function fixture() {
     async unmount() { await act(async () => { tree.unmount(); }); },
   };
 }
+
+test('cached v2 accounts subscribe only after verification and remove the channel on logout', async t => {
+  const cachedUser = { userId: 'A', username: 'A', role: 'user', displayName: 'A', avatarPath: null };
+  const f = await fixture({ cachedUser }); t.after(() => f.unmount());
+  assert.equal(f.state.isInitializing, true);
+  assert.equal(f.state.sessionMode, 'legacy');
+  assert.equal(f.channels.length, 0, 'cached identity must not subscribe with an unverified token');
+
+  await f.resolveBootstrap(session('A'));
+  assert.equal(f.state.isInitializing, true);
+  assert.equal(f.channels.length, 0, 'a pending server profile must keep the account channel closed');
+  await f.resolveProfile(0, profile('A'));
+  assert.equal(f.state.isInitializing, false);
+  assert.equal(f.state.sessionMode, 'authenticated');
+  assert.deepEqual(f.channels.map(channel => channel.name), ['account-session:A']);
+
+  await f.logout();
+  assert.equal(f.state.user, null);
+  assert.deepEqual(f.removedChannels, f.channels, 'logout must remove the verified account channel');
+});
+
+test('v2-disabled cached legacy accounts retain their existing account subscription', async t => {
+  const cachedUser = { userId: 'A', username: 'A', role: 'user', displayName: 'A', avatarPath: null };
+  const f = await fixture({ cachedUser, realtimeV2Enabled: false }); t.after(() => f.unmount());
+  assert.equal(f.state.isInitializing, true);
+  assert.equal(f.state.sessionMode, 'legacy');
+  assert.deepEqual(f.channels.map(channel => channel.name), ['account-session:A']);
+});
 
 for (const first of ['event', 'getSession']) {
   test(`same-token ${first} bootstrap shares one profile request and keeps the gate closed`, async t => {
