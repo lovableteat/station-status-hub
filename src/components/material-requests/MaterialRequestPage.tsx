@@ -123,8 +123,8 @@ import {
   saveBomWorkspaceRecord,
   subscribeBomWorkspaceChanges,
 } from "./materialBomStorage";
-import type { BomTableColorTheme, BomWorkspaceProject } from "./materialBomStorage";
-import { loadBomWorkspaceProjects, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
+import type { BomTableColorTheme, BomWorkspaceArchive, BomWorkspaceProject } from "./materialBomStorage";
+import { loadBomWorkspaceArchives, loadBomWorkspaceProjects, saveBomWorkspaceArchive, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { UploadGuideDialog } from "./MaterialUploadGuideDialog";
 import { MATERIAL_SPEC_ACCEPT, createMaterialSpecUrl, formatMaterialSpecSize, uploadMaterialSpecDocument } from "./materialSpecDocuments";
 import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
@@ -2317,24 +2317,24 @@ function TrackingHistoryDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent onPaste={handleImagePaste} className="max-w-5xl gap-4 p-5 sm:p-6">
+        <DialogContent onPaste={handleImagePaste} className="max-h-[94vh] w-[min(92vw,1400px)] max-w-[min(92vw,1400px)] gap-4 overflow-y-auto p-5 text-base sm:p-7">
           <DialogHeader>
-            <DialogTitle>狀態追蹤</DialogTitle>
+            <DialogTitle className="text-xl">狀態追蹤</DialogTitle>
             <DialogDescription className="truncate" title={dialogDescription}>
               {dialogDescription}
             </DialogDescription>
           </DialogHeader>
 
           {record && (
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="space-y-4">
                 <section data-testid="tracking-current-summary" className="workspace-dialog-section rounded-2xl p-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">最新狀態</h3>
+                    <h3 className="text-base font-semibold text-foreground">最新狀態</h3>
                     <span className={cn(CHIP_BASE, getTrackingStatusTone(latestWorkflowStatus))}>
                       {getTrackingStatusDisplayLabel(latestWorkflowStatus)}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-foreground/75">
                       歷史 {historyEntries.length} 筆
                       {latestEntry?.createdAt ? ` · ${formatTimestamp(latestEntry.createdAt)}` : ""}
                       {latestEntry?.createdBy ? ` · ${latestEntry.createdBy}` : ""}
@@ -2345,17 +2345,17 @@ function TrackingHistoryDialog({
                         : <span className={cn(CHIP_BASE, CHIP_TONES.warning)}>單號 {requestMeta.ticket}</span>
                     )}
                     {latestWorkflowStatus !== "已完成" && (
-                      <Button type="button" variant="outline" size="sm" onClick={handleMarkCompleted} disabled={!canEdit} className="ml-auto h-8 text-xs">
+                      <Button type="button" variant="outline" size="sm" onClick={handleMarkCompleted} disabled={!canEdit} className="ml-auto h-9 text-sm">
                         <CircleCheck className="mr-1.5 h-3.5 w-3.5" />
                         直接標記完成
                       </Button>
                     )}
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-foreground/90">
-                    {latestEntry?.note || <span className="text-muted-foreground">還沒有追蹤備註，建立第一筆後會顯示在這裡。</span>}
+                  <p className="mt-2 text-base leading-7 text-foreground/90">
+                    {latestEntry?.note || <span className="text-foreground/60">還沒有追蹤備註，建立第一筆後會顯示在這裡。</span>}
                   </p>
                   {latestEntry?.requestInfo && (
-                    <p className="mt-1 truncate text-xs text-muted-foreground" title={latestEntry.requestInfo}>
+                    <p className="mt-1 truncate text-sm text-foreground/75" title={latestEntry.requestInfo}>
                       申請狀態資訊：
                       {isExternalUrl(latestEntry.requestInfo) ? (
                         <a href={latestEntry.requestInfo} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
@@ -2370,12 +2370,12 @@ function TrackingHistoryDialog({
 
                 <section data-testid="tracking-compose-panel" className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">新增一筆進度</h3>
-                    <span className="text-xs text-muted-foreground">狀態必填，其餘可留空</span>
+                    <h3 className="text-base font-semibold text-foreground">新增一筆進度</h3>
+                    <span className="text-sm text-foreground/70">狀態必填，其餘可留空</span>
                   </div>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <div className="space-y-1">
-                      <Label htmlFor="tracking-status-select" className="text-xs font-semibold">最新狀態 *</Label>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="tracking-status-select" className="text-sm font-semibold">最新狀態 *</Label>
                       <Select value={status} onValueChange={(value) => setStatus(value as (typeof TRACKING_STATUS_OPTIONS)[number])}>
                         <SelectTrigger id="tracking-status-select" className={fieldClassName}>
                           <SelectValue placeholder="選擇狀態" />
@@ -2390,27 +2390,27 @@ function TrackingHistoryDialog({
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="tracking-ticket-input" className="text-xs font-semibold">單號</Label>
+                      <Label htmlFor="tracking-ticket-input" className="text-sm font-semibold">單號</Label>
                       <Input id="tracking-ticket-input" value={requestTicket} onChange={(event) => setRequestTicket(event.target.value)} placeholder="Excel 單號 / ticket" className={fieldClassName} />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="tracking-request-url-input" className="text-xs font-semibold">連結</Label>
+                      <Label htmlFor="tracking-request-url-input" className="text-sm font-semibold">連結</Label>
                       <Input id="tracking-request-url-input" value={requestUrl} onChange={(event) => setRequestUrl(event.target.value)} placeholder="request URL" className={fieldClassName} />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="tracking-owner-input" className="text-xs font-semibold">更新人</Label>
+                      <Label htmlFor="tracking-owner-input" className="text-sm font-semibold">更新人</Label>
                       <Input id="tracking-owner-input" value={createdBy} onChange={(event) => setCreatedBy(event.target.value)} placeholder="採購 / RD / 姓名" className={fieldClassName} />
                     </div>
                     <div className="space-y-1 md:col-span-2 xl:col-span-4">
-                      <Label htmlFor="tracking-request-info-input" className="text-xs font-semibold">申請狀態資訊</Label>
+                      <Label htmlFor="tracking-request-info-input" className="text-sm font-semibold">申請狀態資訊</Label>
                       <Input id="tracking-request-info-input" value={requestInfo} onChange={(event) => setRequestInfo(event.target.value)} placeholder="Excel 單號 / ticket / request URL" className={fieldClassName} />
                     </div>
                     <div className="space-y-1 md:col-span-2 xl:col-span-4">
-                      <Label htmlFor="tracking-note-input" className="text-xs font-semibold">追蹤說明</Label>
-                      <Textarea id="tracking-note-input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="這次做了什麼、卡在哪、下一步" className="min-h-20 rounded-xl text-sm" />
+                      <Label htmlFor="tracking-note-input" className="text-sm font-semibold">追蹤說明</Label>
+                      <Textarea id="tracking-note-input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="這次做了什麼、卡在哪、下一步" className="min-h-28 rounded-xl text-base" />
                     </div>
                     <div className="space-y-1.5 md:col-span-2 xl:col-span-4">
-                      <label htmlFor="tracking-images-input" className="flex h-9 cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-3 text-xs font-semibold text-foreground transition-colors hover:bg-primary/10">
+                      <label htmlFor="tracking-images-input" className="flex h-12 cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-3 text-sm font-semibold text-foreground transition-colors hover:bg-primary/10">
                         <span className="flex items-center gap-1.5"><Upload className="h-3.5 w-3.5 text-primary" />選擇圖片</span>
                         <span className="text-muted-foreground">或</span>
                         <span className="flex items-center gap-1.5"><ClipboardPaste className="h-3.5 w-3.5 text-primary" />在這個視窗按 Ctrl+V 貼上截圖</span>
@@ -2439,8 +2439,8 @@ function TrackingHistoryDialog({
                   </div>
 
                   <div data-testid="tracking-dialog-footer" className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-3">
-                    <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>取消</Button>
-                    <Button type="button" size="sm" onClick={handleSave} disabled={!canEdit || !status.trim()}>儲存這次追蹤</Button>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-10 px-4 text-sm">取消</Button>
+                    <Button type="button" onClick={handleSave} disabled={!canEdit || !status.trim()} className="h-10 px-5 text-sm font-bold">儲存這次追蹤</Button>
                   </div>
                 </section>
               </div>
@@ -2448,18 +2448,18 @@ function TrackingHistoryDialog({
               <section data-testid="tracking-history-panel" className="workspace-dialog-section rounded-2xl p-4">
                 <div className="flex items-center gap-2">
                   <History className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold text-foreground">過去歷史</h3>
-                  <span className="text-xs text-muted-foreground">{historyEntries.length} 筆</span>
+                  <h3 className="text-base font-semibold text-foreground">過去歷史</h3>
+                  <span className="text-sm text-foreground/70">{historyEntries.length} 筆</span>
                 </div>
 
-                <div className="mt-3 space-y-2">
+                <div className="mt-3 space-y-0 border-l-2 border-border pl-4">
                   {historyEntries.length === 0 && (
-                    <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">還沒有歷史紀錄</p>
+                    <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-sm text-foreground/60">還沒有歷史紀錄</p>
                   )}
 
                   {historyEntries.map((entry, index) => (
-                    <article key={`${entry.id}-${index}`} className="rounded-xl border border-border bg-background/40 p-3">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    <article key={`${entry.id}-${index}`} className="relative mb-3 rounded-xl border border-border bg-background/40 p-3 before:absolute before:-left-[1.45rem] before:top-4 before:h-3 before:w-3 before:rounded-full before:border-2 before:border-background before:bg-primary">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground/75">
                         <span className={cn(CHIP_BASE, getTrackingStatusTone(entry.status))}>
                           {getTrackingStatusDisplayLabel(entry.status)}
                         </span>
@@ -2470,7 +2470,7 @@ function TrackingHistoryDialog({
                       </div>
 
                       {entry.note && (
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-5 text-foreground/90">
+                        <p className="mt-2 whitespace-pre-wrap text-base leading-6 text-foreground/90">
                           {entry.note}
                         </p>
                       )}
@@ -2703,9 +2703,9 @@ function BomPageTrackerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-4 overflow-hidden p-5 sm:p-6">
+      <DialogContent className="flex max-h-[94vh] w-[min(92vw,1400px)] max-w-[min(92vw,1400px)] flex-col gap-4 overflow-hidden p-5 text-base sm:p-7">
         <DialogHeader>
-          <DialogTitle>頁數進度</DialogTitle>
+          <DialogTitle className="text-xl">頁數進度</DialogTitle>
           <DialogDescription className="truncate" title={dialogDescription}>
             {dialogDescription}
           </DialogDescription>
@@ -3040,7 +3040,7 @@ function PendingMaterialsDialog({
         </div>
         <PendingMailDialog groups={groups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
 
-        <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-1 border-b border-border">
+        <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-2 rounded-xl border border-border bg-background/40 p-1.5">
           {[{ key: "all" as const, label: "全部", count: groups.length, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
             <button
               key={tab.key}
@@ -3049,13 +3049,13 @@ function PendingMaterialsDialog({
               aria-selected={selectedCategory === tab.key}
               onClick={() => setActiveCategory(tab.key)}
               className={cn(
-                "-mb-px inline-flex h-10 items-center gap-2 rounded-t-lg border-b-2 px-4 text-base font-bold transition-colors",
-                selectedCategory === tab.key ? "border-primary bg-primary/15 text-foreground" : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                "inline-flex h-11 items-center gap-2 rounded-lg border px-5 text-base font-bold transition-colors",
+                selectedCategory === tab.key ? "border-primary bg-primary text-primary-foreground shadow-[0_0_0_2px_hsl(var(--primary)/0.35)]" : "border-border bg-secondary/60 text-foreground/80 hover:bg-accent hover:text-foreground",
               )}
             >
               {tab.label}
               {tab.priority && <span className="h-2 w-2 rounded-full bg-destructive" aria-hidden="true" />}
-              <span className={cn("rounded-full px-2 font-mono text-sm leading-5", selectedCategory === tab.key ? "bg-primary/25 text-foreground" : "bg-secondary text-muted-foreground")}>{tab.count.toLocaleString()}</span>
+              <span className={cn("rounded-full px-2 font-mono text-sm leading-5", selectedCategory === tab.key ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background/60 text-foreground/80")}>{tab.count.toLocaleString()}</span>
             </button>
           ))}
         </div>
@@ -3105,11 +3105,13 @@ function BomManagerDialog({
   canEdit,
   activeBomId,
   activeProjectName,
+  archivedWorkspaces,
   bomWorkspaces,
   open,
   projectGroups,
   projects,
   onAssignProject,
+  onSetArchived,
   onDelete,
   onOpenChange,
   onOpenPageTracker,
@@ -3118,24 +3120,27 @@ function BomManagerDialog({
   canEdit: boolean;
   activeBomId: string;
   activeProjectName?: string;
+  archivedWorkspaces: BomWorkspace[];
   bomWorkspaces: BomWorkspace[];
   open: boolean;
   projectGroups: BomProjectGroup<BomWorkspace>[];
   projects: Array<{ id: string; name: string }>;
   onAssignProject: (workspaceId: string, projectId: string | null) => void;
+  onSetArchived: (workspaceId: string, archived: boolean) => void;
   onDelete: (id: string) => void;
   onOpenChange: (open: boolean) => void;
   onOpenPageTracker: (workspaceId: string) => void;
   onSelect: (id: string) => void;
 }) {
   const [historyQuery, setHistoryQuery] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const totalRecordCount = useMemo(
     () => bomWorkspaces.reduce((sum, workspace) => sum + workspace.payload.recordCount, 0),
     [bomWorkspaces],
   );
   const activeWorkspaceName = bomWorkspaces.find((workspace) => workspace.id === activeBomId)?.name ?? "未選擇";
   const mostRecentWorkspaceId = bomWorkspaces[0]?.id;
-  const dialogDescription = `目前專案：${activeProjectName ?? "未選擇"} · 共 ${bomWorkspaces.length} 個 BOM · ${totalRecordCount.toLocaleString()} 筆明細 · 目前使用：${activeWorkspaceName}`;
+  const dialogDescription = `目前專案：${activeProjectName ?? "未選擇"} · 共 ${bomWorkspaces.length} 個 BOM · ${totalRecordCount.toLocaleString()} 筆明細${archivedWorkspaces.length > 0 ? ` · 已封存 ${archivedWorkspaces.length} 個` : ""} · 目前使用：${activeWorkspaceName}`;
   const visibleGroups = useMemo(() => {
     const keyword = historyQuery.trim().toLowerCase();
     if (!keyword) return projectGroups;
@@ -3252,6 +3257,7 @@ function BomManagerDialog({
                         {!isActive && (
                           <Button type="button" variant="secondary" size="sm" onClick={() => onSelect(workspace.id)} className="h-7 px-2 text-xs">切換</Button>
                         )}
+                        <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onSetArchived(workspace.id, true)} className="h-7 px-2 text-xs" title="移到封存區：不再出現在切換器與專案分組，資料保留">封存</Button>
                         <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onDelete(workspace.id)} className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive">刪除</Button>
                       </div>
                     </div>
@@ -3262,6 +3268,30 @@ function BomManagerDialog({
                 );
               })),
           ])}
+          {archivedWorkspaces.length > 0 && (
+            <section data-testid="bom-archive-section" className="pt-3">
+              <button type="button" onClick={() => setShowArchived((current) => !current)} aria-expanded={showArchived} className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-left text-sm font-semibold text-foreground/80 hover:bg-accent/40">
+                <FileArchive className="h-4 w-4 flex-none text-muted-foreground" aria-hidden="true" />
+                已封存 {archivedWorkspaces.length} 個 BOM
+                <span className="ml-auto text-xs font-normal text-muted-foreground">{showArchived ? "收合" : "展開"}</span>
+              </button>
+              {showArchived && (
+                <div className="mt-1.5 space-y-1.5">
+                  {archivedWorkspaces.map((workspace) => (
+                    <div key={workspace.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background/30 px-3 py-2 opacity-80">
+                      <p className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">{workspace.name}</p>
+                      <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.neutral)}>已封存</span>
+                      <span className="flex-none text-sm text-foreground/70">{formatTimestamp(workspace.archive?.archivedAt ?? "")}{workspace.archive?.archivedBy ? ` · ${workspace.archive.archivedBy}` : ""} · {workspace.payload.recordCount.toLocaleString()} 筆</span>
+                      <div className="ml-auto flex flex-none items-center gap-1">
+                        <Button type="button" variant="secondary" size="sm" disabled={!canEdit} onClick={() => onSetArchived(workspace.id, false)} className="h-7 px-2 text-xs">解除封存</Button>
+                        <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onDelete(workspace.id)} className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive">刪除</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -3337,7 +3367,7 @@ function MaterialRecordDialog({
   return (
     <TooltipProvider delayDuration={160}>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="material-record-dialog max-w-4xl gap-4 p-5 sm:p-6">
+      <DialogContent className="material-record-dialog max-h-[94vh] w-[min(92vw,1400px)] max-w-[min(92vw,1400px)] gap-4 overflow-y-auto p-5 text-base sm:p-7">
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">
             <DialogTitle>{title}</DialogTitle>
@@ -3530,7 +3560,8 @@ interface VisibleGroupRow {
   uniqueMpnCount: number;
 }
 
-const MATERIAL_CELL_CLASS = "border-r border-blue-400/10 px-2 py-1.5 align-middle";
+// White-based grid lines stay visible on every custom row colour; the old blue 10% vanished on green rows.
+const MATERIAL_CELL_CLASS = "border-r border-white/20 px-2 py-1.5 align-middle";
 
 const stopRowToggle = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
@@ -3656,7 +3687,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         onClick={() => hasAlternatives && actions.toggleExpanded(group.key)}
         style={mainRowStyle}
         className={cn(
-          "group/material-row border-b border-blue-400/15 text-slate-200 transition-colors",
+          "group/material-row border-b border-white/20 text-slate-200 transition-colors",
           hasAlternatives ? "cursor-pointer" : "cursor-default",
           "bg-[var(--material-row-bg)] hover:bg-[var(--material-row-hover)]",
         )}
@@ -3930,7 +3961,7 @@ function CompactAlternativeRows({
             key={record.id}
             style={rowStyle}
             className={cn(
-              "group/material-row border-b border-blue-400/10 text-slate-200 transition-colors",
+              "group/material-row border-b border-white/15 text-slate-200 transition-colors",
               "bg-[var(--material-row-bg)] hover:bg-[var(--material-row-hover)]"
             )}
           >
@@ -4157,7 +4188,7 @@ function MaterialExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!activeFormat) onOpenChange(nextOpen); }}>
-      <DialogContent className="max-w-xl gap-4 p-5 sm:p-6">
+      <DialogContent className="max-w-3xl gap-4 p-5 text-base sm:p-7">
         <DialogHeader>
           <DialogTitle>匯出主管報表</DialogTitle>
           <DialogDescription>
@@ -4361,13 +4392,14 @@ export function MaterialRequestPage() {
   const refreshBomProjects = useCallback(async () => {
     const generation = bomAccountRef.current.generation;
     try {
-      const projectByWorkspace = await loadBomWorkspaceProjects();
+      const [projectByWorkspace, archiveByWorkspace] = await Promise.all([loadBomWorkspaceProjects(), loadBomWorkspaceArchives()]);
       if (generation !== bomAccountRef.current.generation) return;
       setBomWorkspaces((current) => current.map((workspace) => {
         const project = projectByWorkspace.get(workspace.id);
-        return project?.projectId === workspace.project?.projectId && project?.projectName === workspace.project?.projectName
-          ? workspace
-          : { ...workspace, project };
+        const archive = archiveByWorkspace.get(workspace.id);
+        const sameProject = project?.projectId === workspace.project?.projectId && project?.projectName === workspace.project?.projectName;
+        const sameArchive = archive?.archivedAt === workspace.archive?.archivedAt;
+        return sameProject && sameArchive ? workspace : { ...workspace, project, archive };
       }));
     } catch { /* keep the current grouping until the next full reload */ }
   }, []);
@@ -4772,9 +4804,11 @@ export function MaterialRequestPage() {
     () => [...bomWorkspaces].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()),
     [bomWorkspaces]
   );
+  const activeBomWorkspaces = useMemo(() => orderedBomWorkspaces.filter((workspace) => !workspace.archive), [orderedBomWorkspaces]);
+  const archivedBomWorkspaces = useMemo(() => orderedBomWorkspaces.filter((workspace) => Boolean(workspace.archive)), [orderedBomWorkspaces]);
   const bomProjectGroups = useMemo(
-    () => groupBomWorkspacesByProject(orderedBomWorkspaces, { activeProjectId, activeProjectName: activeProject?.name, projectNames }),
-    [activeProject?.name, activeProjectId, orderedBomWorkspaces, projectNames],
+    () => groupBomWorkspacesByProject(activeBomWorkspaces, { activeProjectId, activeProjectName: activeProject?.name, projectNames }),
+    [activeBomWorkspaces, activeProject?.name, activeProjectId, projectNames],
   );
 
   // Switching the global project pulls the BOM switcher along: once the remote
@@ -4793,7 +4827,7 @@ export function MaterialRequestPage() {
     if (!pickedUnderProjectId) return;
     const current = bomWorkspaces.find((workspace) => workspace.id === activeBomId);
     if (current?.project?.projectId === activeProjectId) return;
-    const target = orderedBomWorkspaces.find((workspace) => workspace.project?.projectId === activeProjectId);
+    const target = orderedBomWorkspaces.find((workspace) => !workspace.archive && workspace.project?.projectId === activeProjectId);
     if (target && target.id !== activeBomId) switchActiveBomRef.current(target.id);
   }, [activeBomId, activeProjectId, bomWorkspaces, orderedBomWorkspaces, workspaceListSettled]);
 
@@ -5498,6 +5532,36 @@ export function MaterialRequestPage() {
   };
   switchActiveBomRef.current = switchActiveBom;
 
+  const setBomArchived = async (workspaceId: string, archived: boolean) => {
+    let writeScope;
+    try {writeScope = captureBomWrite();} catch {return;}
+    const workspace = bomWorkspaces.find((item) => item.id === workspaceId);
+    if (!workspace || Boolean(workspace.archive) === archived) return;
+    const nextArchive: BomWorkspaceArchive | null = archived
+      ? { archivedAt: new Date().toISOString(), archivedBy: user?.displayName || user?.username || "" }
+      : null;
+
+    setBomWorkspaces((current) => current.map((item) => (item.id === workspaceId ? { ...item, archive: nextArchive ?? undefined } : item)));
+    if (archived && workspaceId === activeBomId) {
+      const fallback = orderedBomWorkspaces.find((item) => item.id !== workspaceId && !item.archive);
+      if (fallback) switchActiveBom(fallback.id);
+    }
+
+    try {
+      recentLocalWorkspaceWritesRef.current.set(workspaceId, Date.now());
+      await saveBomWorkspaceArchive(workspaceId, nextArchive, () => assertBomWriteCurrent(writeScope));
+      if (!isBomWriteCurrent(writeScope)) return;
+      toast({
+        title: archived ? "BOM 已封存" : "BOM 已解除封存",
+        description: archived ? `「${workspace.name}」移到封存區，不再出現在切換器與專案分組；資料都還在，隨時可解除。` : `「${workspace.name}」已回到清單。`,
+      });
+    } catch {
+      if (!isBomWriteCurrent(writeScope)) return;
+      setBomWorkspaces((current) => current.map((item) => (item.id === workspaceId ? { ...item, archive: workspace.archive } : item)));
+      toast({ variant: "destructive", title: archived ? "封存失敗" : "解除封存失敗", description: "尚未寫入資料庫，請稍後再試。" });
+    }
+  };
+
   const assignBomProject = async (workspaceId: string, projectId: string | null) => {
     let writeScope;
     try {writeScope = captureBomWrite();} catch {return;}
@@ -5957,7 +6021,7 @@ export function MaterialRequestPage() {
         }}
       />
       <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
-      <BomManagerDialog canEdit={canEdit} activeBomId={activeBomId} activeProjectName={activeProject?.name} bomWorkspaces={orderedBomWorkspaces} projectGroups={bomProjectGroups} projects={projects} open={bomManagerOpen} onAssignProject={(id, projectId) => void assignBomProject(id, projectId)} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
+      <BomManagerDialog canEdit={canEdit} activeBomId={activeBomId} activeProjectName={activeProject?.name} bomWorkspaces={activeBomWorkspaces} archivedWorkspaces={archivedBomWorkspaces} projectGroups={bomProjectGroups} projects={projects} open={bomManagerOpen} onAssignProject={(id, projectId) => void assignBomProject(id, projectId)} onSetArchived={(id, archived) => void setBomArchived(id, archived)} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
       <MaterialRecordDialog canEdit={canEdit} open={editorOpen} mode={editorMode} record={editorRecord} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target) => void openSpecDocument(target)} onSave={handleSaveRecord} />
       <TrackingHistoryDialog canEdit={canEdit} open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
       <MaterialExportDialog
@@ -6116,22 +6180,22 @@ export function MaterialRequestPage() {
           </div>
 
           <div data-material-zone="actions" className="ml-auto flex flex-wrap items-center gap-1.5">
-            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={() => setPendingDialogOpen(true)} className={cn("h-9 border-rose-200/70 bg-rose-500/85 px-3 text-sm font-black text-white hover:bg-rose-400 hover:text-white", requiredApplicationCount > 0 && "material-attention")}>
+            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={() => setPendingDialogOpen(true)} className={cn("h-9 border-destructive/60 bg-destructive px-3 text-sm font-black text-destructive-foreground hover:bg-destructive/85 hover:text-destructive-foreground", requiredApplicationCount > 0 && "material-attention")}>
               <TriangleAlert className="mr-1 h-3.5 w-3.5" />待處理料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong>
             </Button>
-            <Button type="button" variant="outline" size="sm" data-testid="discouraged-export-button" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} title="查看依專案解除不建議使用料的申請 SOP、預覽並匯出 PLM 申請清單" className="h-9 border-orange-200/70 bg-orange-500/85 px-3 text-sm font-black text-white hover:bg-orange-400 hover:text-white disabled:cursor-wait disabled:opacity-60">
+            <Button type="button" variant="outline" size="sm" data-testid="discouraged-export-button" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} title="查看依專案解除不建議使用料的申請 SOP、預覽並匯出 PLM 申請清單" className="h-9 border-warning/60 bg-warning px-3 text-sm font-black text-warning-foreground hover:bg-warning/85 hover:text-warning-foreground disabled:cursor-wait disabled:opacity-60">
               <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />{isExportingDiscouraged ? "匯出中…" : "不建議料匯出"} <strong className="ml-1">{discouragedMaterialCount.toLocaleString()}</strong>
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border-emerald-200/70 bg-emerald-500/85 px-3 text-sm font-black text-white hover:bg-emerald-400 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">
+            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border-success/60 bg-success px-3 text-sm font-black text-success-foreground hover:bg-success/85 hover:text-success-foreground disabled:cursor-not-allowed disabled:opacity-50">
               <Upload className="mr-1 h-3.5 w-3.5" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-amber-200/70 bg-amber-400/90 px-3 text-sm font-black text-amber-950 hover:bg-amber-300 hover:text-amber-950 disabled:cursor-wait disabled:opacity-60">
+            <Button type="button" variant="outline" size="sm" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-border bg-secondary px-3 text-sm font-black text-foreground hover:bg-accent hover:text-foreground disabled:cursor-wait disabled:opacity-60">
               <Download className="mr-1 h-3.5 w-3.5" />匯出報表
             </Button>
-            <Button type="button" size="sm" onClick={() => openCreate()} disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border border-cyan-100/60 bg-cyan-300 px-3.5 text-sm font-black text-[#052536] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:border-cyan-900/50 disabled:bg-cyan-950/35 disabled:text-cyan-100/60">
+            <Button type="button" size="sm" onClick={() => openCreate()} disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border border-primary/60 bg-primary px-3.5 text-sm font-black text-primary-foreground hover:bg-primary/85 hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">
               <Plus className="mr-1 h-3.5 w-3.5" />新增料件
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="h-9 border-violet-200/70 bg-violet-500/85 px-3 text-sm font-black text-white hover:bg-violet-400 hover:text-white">
+            <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="h-9 border-border bg-secondary px-3 text-sm font-black text-foreground hover:bg-accent hover:text-foreground">
               <CircleHelp className="mr-1 h-3.5 w-3.5" />上傳說明
             </Button>
           </div>
@@ -6454,7 +6518,7 @@ export function MaterialRequestPage() {
                   const filterKey = MATERIAL_COLUMN_FILTER_KEYS[column.key];
                   if (filterKey) {
                     return (
-                      <th key={column.key} className={column.key === "actions" ? MATERIAL_STICKY_COLUMN_CLASSES.filter : "border-r border-blue-300/20 p-1.5"}>
+                      <th key={column.key} className={column.key === "actions" ? MATERIAL_STICKY_COLUMN_CLASSES.filter : "border-r border-white/20 p-1.5"}>
                         <ExcelFilterPopover
                           filterKey={filterKey}
                           getOptions={getColumnFilterOptions}
@@ -6467,7 +6531,7 @@ export function MaterialRequestPage() {
                   }
                   const meaning = MATERIAL_TABLE_COLUMN_MEANING[column.key] ?? "";
                   return (
-                    <th key={column.key} className="border-r border-blue-300/20 p-1.5">
+                    <th key={column.key} className="border-r border-white/20 p-1.5">
                       <div className="flex h-8 items-center justify-center truncate px-1 text-[10px] font-normal leading-4 text-slate-500" title={meaning || undefined}>
                         {meaning || "—"}
                       </div>

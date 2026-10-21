@@ -19,7 +19,7 @@ export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpe
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
+      <DialogContent className="max-h-[94vh] w-[min(92vw,1400px)] max-w-[min(92vw,1400px)] overflow-y-auto border-blue-400/30 bg-[#0d1729] text-base text-slate-100">
         <DialogHeader>
           <DialogTitle className="text-2xl text-slate-50">上傳說明・CE／RD 交付規格</DialogTitle>
           <DialogDescription className="text-[15px] leading-6 text-slate-400">
