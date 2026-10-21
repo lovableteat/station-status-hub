@@ -23,6 +23,7 @@ export interface MaterialWorkbookRecord {
   requestUrl?: string;
   manufacturer: string;
   sourcingStatus: string;
+  partUsageStatus?: string;
   refGroup: string;
   lv: number | string;
   remark: string;
@@ -148,6 +149,7 @@ type MaterialField =
   | "requestUrl"
   | "manufacturer"
   | "sourcingStatus"
+  | "partUsageStatus"
   | "refGroup"
   | "lv"
   | "remark"
@@ -163,7 +165,7 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   level: ["Level", "層級", "階層", "BOM Level"],
   name: ["Name", "Material Name", "料件名稱", "料名", "品名", "元件名稱"],
   qty: ["Qty", "Quantity", "數量", "用量"],
-  refDes: ["Ref Des", "RefDes", "Reference Designator", "位號", "參考位號"],
+  refDes: ["Ref Des", "RefDes", "Reference Designator", "位號", "參考位號", "location"],
   mpn1: ["Manufacturer Part Number(1)", "Manufacturer Part Number", "MPN", "Mfr Part Number", "廠商料號", "製造商料號"],
   mpn2: ["Manufacturer Part Number(2)", "MPN2", "Alternate MPN", "第二料號", "替代廠商料號"],
   virtualAlternative: ["TX", "TX P/N", "TX PN", "虛擬料", "虛擬替代料", "虛擬料號"],
@@ -177,6 +179,7 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   requestUrl: ["Request URL", "Ticket URL", "Link", "URL", "申請連結", "單號連結", "Request Link"],
   manufacturer: ["Manufacturer", "Mfr", "Maker", "Vendor", "廠商", "製造商", "品牌"],
   sourcingStatus: ["Sourcing Status", "AVL Status", "Approval Status", "供料狀態", "核准狀態", "料件狀態"],
+  partUsageStatus: ["零件狀態", "Part Usage Status", "Design Usage Status", "新設計使用狀態"],
   refGroup: ["Ref_tmp", "Ref Group", "Group", "替代料群組", "料件群組", "群組代碼"],
   lv: ["LV", "Version", "版本", "版次"],
   remark: [],
@@ -191,6 +194,7 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
 
 const APPROVED_STATUS_WORDS = ["approved", "qualified", "active", "已核准", "合格", "可用", "啟用"];
 const RISK_STATUS_WORDS = ["obsolete", "disqualified", "qualificationpending", "nrnd", "eol", "停產", "淘汰", "禁用", "不建議採用", "認證中"];
+const USAGE_RISK_STATUS_WORDS = [...RISK_STATUS_WORDS, "ODM 不建議用料", "新設計產品不建議使用", "待確認"];
 
 function normalizeText(value: unknown) {
   return String(value ?? "").normalize("NFKC").replace(/\u3000/g, " ").trim();
@@ -537,10 +541,12 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   ]).join(" • ");
 
   const normalizedStatus = normalizeHeader(raw.sourcingStatus);
+  const normalizedUsageStatus = normalizeHeader(raw.partUsageStatus);
   const isPending = actionKind !== "ok" && actionKind !== "other";
   const isPreferred = actionKind === "ok" && isPreferredInternalPartNumber(raw.partNumber);
-  const isApproved = APPROVED_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)));
-  const isRisk = RISK_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)));
+  const isRisk = RISK_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)))
+    || USAGE_RISK_STATUS_WORDS.some((word) => normalizedUsageStatus.includes(normalizeHeader(word)));
+  const isApproved = !isRisk && APPROVED_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)));
 
   return {
     ...raw,
@@ -592,6 +598,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
       raw.pcbFootprint,
       raw.remark,
       raw.sourcingStatus,
+      raw.partUsageStatus,
     ]),
   };
 }
@@ -962,6 +969,7 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
       requestUrl,
       manufacturer: normalizeText(getFieldValue(row, fields, "manufacturer")),
       sourcingStatus: normalizeText(getFieldValue(row, fields, "sourcingStatus")),
+      ...(fields.has("partUsageStatus") ? { partUsageStatus: normalizeText(getFieldValue(row, fields, "partUsageStatus")) } : {}),
       refGroup,
       lv: normalizeCellValue(getFieldValue(row, fields, "lv")),
       // Keep remark as an app-managed field instead of importing CIS/Remark from BOM files.
