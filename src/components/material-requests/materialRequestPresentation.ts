@@ -265,3 +265,30 @@ export function getBomPreferenceWorkspaceId(tableKey: string, prefixes: readonly
   const workspaceId = prefix ? tableKey.slice(prefix.length) : "";
   return workspaceId || undefined;
 }
+
+export type PendingMaterialCategory = "connector" | "ic" | "rlc" | "other";
+
+/** Categories for the 待處理料 dialog, in handling priority: connectors and ICs first, passives next. */
+export const PENDING_MATERIAL_CATEGORIES: ReadonlyArray<{ key: PendingMaterialCategory; label: string; hint: string; priority: boolean }> = [
+  { key: "connector", label: "CONNECTOR", hint: "J 開頭", priority: true },
+  { key: "ic", label: "IC", hint: "U 開頭", priority: true },
+  { key: "rlc", label: "RLC 被動元件", hint: "R／L／C 開頭：電阻、電感、電容", priority: false },
+  { key: "other", label: "其他", hint: "其餘位號", priority: false },
+];
+
+/** Classifies a part by the letter prefix of its first reference designator. */
+export function getPendingMaterialCategory(refDes: string): PendingMaterialCategory {
+  const prefix = (refDes.trim().match(/^[A-Za-z]+/)?.[0] ?? "").toUpperCase();
+  if (prefix.startsWith("J")) return "connector";
+  if (prefix.startsWith("U")) return "ic";
+  if (/^[RLC]/.test(prefix)) return "rlc";
+  return "other";
+}
+
+export function groupPendingMaterials<T extends { displayRef: string }>(groups: readonly T[]) {
+  const buckets = new Map<PendingMaterialCategory, T[]>(PENDING_MATERIAL_CATEGORIES.map((category) => [category.key, []]));
+  for (const group of groups) buckets.get(getPendingMaterialCategory(group.displayRef))!.push(group);
+  return PENDING_MATERIAL_CATEGORIES
+    .map((category) => ({ ...category, groups: buckets.get(category.key) ?? [] }))
+    .filter((category) => category.groups.length > 0);
+}

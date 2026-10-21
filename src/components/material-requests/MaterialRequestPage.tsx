@@ -140,6 +140,7 @@ import {
   getMaterialSourceValue,
   getMaterialTableWidth,
   groupBomWorkspacesByProject,
+  groupPendingMaterials,
   normalizeHiddenMaterialColumns,
   resizeMaterialColumnWidths,
   shouldApplyBomWorkspaceCache,
@@ -3005,6 +3006,91 @@ function BomPageTrackerDialog({
   );
 }
 
+function PendingMaterialsDialog({
+  canEdit,
+  groups,
+  open,
+  onLocate,
+  onOpenChange,
+  onOpenCreate,
+  onOpenTracking,
+}: {
+  canEdit: boolean;
+  groups: MaterialGroup[];
+  open: boolean;
+  onLocate: (group: MaterialGroup) => void;
+  onOpenChange: (open: boolean) => void;
+  onOpenCreate: (group: MaterialGroup) => void;
+  onOpenTracking: (record: MaterialRecord) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const categories = useMemo(() => groupPendingMaterials(groups), [groups]);
+  const keyword = query.trim().toLowerCase();
+  const visibleCategories = useMemo(() => (
+    keyword
+      ? categories
+          .map((category) => ({ ...category, groups: category.groups.filter((group) => group.searchText.includes(keyword)) }))
+          .filter((category) => category.groups.length > 0)
+      : categories
+  ), [categories, keyword]);
+  const priorityCount = categories.filter((category) => category.priority).reduce((sum, category) => sum + category.groups.length, 0);
+  const description = `共 ${groups.length.toLocaleString()} 筆料號待補 · CONNECTOR 與 IC 優先 ${priorityCount.toLocaleString()} 筆 · 其餘依位號分類`;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent data-testid="pending-materials-dialog" className="flex max-h-[90vh] max-w-4xl flex-col gap-4 overflow-hidden p-5 sm:p-6">
+        <DialogHeader>
+          <DialogTitle>待處理料</DialogTitle>
+          <DialogDescription className="truncate" title={description}>{description}</DialogDescription>
+        </DialogHeader>
+
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜尋位號、料名、MPN 或追蹤狀態"
+            aria-label="搜尋待處理料"
+            className="h-9 rounded-xl pl-9 text-sm"
+          />
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+          {visibleCategories.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
+              {groups.length === 0 ? "目前沒有待處理的料號" : "找不到符合條件的待處理料"}
+            </p>
+          ) : visibleCategories.flatMap((category) => [
+            <div key={`category:${category.key}`} className="flex items-center gap-2 px-1 pt-2 first:pt-0">
+              <h3 className="text-xs font-bold text-foreground">{category.label}</h3>
+              <span className="text-[11px] text-muted-foreground">{category.hint}</span>
+              {category.priority && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)}>優先處理</span>}
+              <span className="ml-auto flex-none font-mono text-[11px] text-muted-foreground">{category.groups.length.toLocaleString()} 筆</span>
+            </div>,
+            ...category.groups.map((group) => {
+              const record = group.primaryRecord;
+              const trackingStatus = record.trackingStatus?.trim() || "";
+              return (
+                <div key={group.key} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background/40 px-3 py-1.5 hover:bg-accent/40">
+                  <span className="w-[7.5rem] flex-none truncate font-mono text-xs font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={group.name}>{group.name || "未命名料件"}</span>
+                  <span className="hidden w-[11rem] flex-none truncate font-mono text-xs text-muted-foreground md:block" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
+                  <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(trackingStatus))}>{trackingStatus || "未追蹤"}</span>
+                  <div className="ml-auto flex flex-none items-center gap-1">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => onLocate(group)} className="h-7 px-2 text-xs">定位</Button>
+                    <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onOpenTracking(record)} className="h-7 px-2 text-xs">追蹤</Button>
+                    <Button type="button" variant="secondary" size="sm" disabled={!canEdit} onClick={() => onOpenCreate(group)} className="h-7 px-2 text-xs">更新料號</Button>
+                  </div>
+                </div>
+              );
+            }),
+          ])}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 const UNASSIGNED_BOM_PROJECT_VALUE = "__unassigned__";
 
 function BomManagerDialog({
@@ -4137,6 +4223,7 @@ export function MaterialRequestPage() {
   const [bomManagerOpen, setBomManagerOpen] = useState(false);
   const [pendingDeleteBomId, setPendingDeleteBomId] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("view");
   const [editorRecord, setEditorRecord] = useState<MaterialWorkbookRecord>(createRecordTemplate());
@@ -4926,10 +5013,8 @@ export function MaterialRequestPage() {
     () => dataset.groups.filter((group) => !requiresApplication(group)).length,
     [dataset.groups]
   );
-  const requiredApplicationCount = useMemo(
-    () => dataset.groups.filter(requiresApplication).length,
-    [dataset.groups]
-  );
+  const pendingMaterialGroups = useMemo(() => dataset.groups.filter(requiresApplication), [dataset.groups]);
+  const requiredApplicationCount = pendingMaterialGroups.length;
   const pendingGroupCount = useMemo(
     () => dataset.groups.filter((group) => group.pendingCount > 0).length,
     [dataset.groups]
@@ -5761,6 +5846,23 @@ export function MaterialRequestPage() {
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
+      <PendingMaterialsDialog
+        canEdit={canEdit}
+        groups={pendingMaterialGroups}
+        open={pendingDialogOpen}
+        onOpenChange={setPendingDialogOpen}
+        onLocate={(group) => {
+          setPendingDialogOpen(false);
+          setAvailability("required");
+          setColumnFilters(EMPTY_COLUMN_FILTERS);
+          setSearchDraft(group.displayRef);
+          setQuery(group.displayRef);
+          setExpandedKey(group.key);
+          setPage(1);
+        }}
+        onOpenCreate={(group) => { setPendingDialogOpen(false); openCreate(group); }}
+        onOpenTracking={(record) => { setPendingDialogOpen(false); openTrackingDialog(record); }}
+      />
       <BomTableColorDialog
         open={tableColorDialogOpen}
         theme={tableColorDraft}
@@ -5896,6 +5998,7 @@ export function MaterialRequestPage() {
               </Select>
               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
               <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
+              <Button type="button" variant="outline" onClick={() => setPendingDialogOpen(true)} className="h-11 border-rose-300/30 bg-rose-400/10 text-rose-100"><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {requiredApplicationCount.toLocaleString()}</Button>
               <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
               <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
             </div>
@@ -5930,6 +6033,9 @@ export function MaterialRequestPage() {
           </div>
 
           <div data-material-zone="actions" className="ml-auto flex flex-wrap items-center gap-1.5">
+            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={() => setPendingDialogOpen(true)} className="h-8 border-rose-300/40 bg-rose-400/15 px-2.5 text-xs font-bold text-rose-50 hover:border-rose-200/70 hover:bg-rose-400/30 hover:text-white">
+              <TriangleAlert className="mr-1 h-3.5 w-3.5" />待處理料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong>
+            </Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => setGuideOpen(true)} className="h-8 px-2.5 text-xs font-bold text-violet-100 hover:bg-violet-400/15 hover:text-white">
               <CircleHelp className="mr-1 h-3.5 w-3.5" />上傳說明
             </Button>

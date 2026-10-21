@@ -199,3 +199,17 @@ test("preference keys map back to the full BOM id, which itself contains a colon
   assert.equal(presentation.getBomPreferenceWorkspaceId("material-bom-project:", prefixes), undefined);
   assert.equal(presentation.getBomPreferenceWorkspaceId("other:bom:foo", prefixes), undefined);
 });
+
+test("pending materials are classified by reference prefix with connectors and ICs first", () => {
+  assert.equal(presentation.getPendingMaterialCategory("J12, J13"), "connector");
+  assert.equal(presentation.getPendingMaterialCategory("u839"), "ic");
+  for (const ref of ["R7063", "LB37", "C1", "RN5", "L2"]) assert.equal(presentation.getPendingMaterialCategory(ref), "rlc");
+  for (const ref of ["D138", "FB1", "Q3", "", "123"]) assert.equal(presentation.getPendingMaterialCategory(ref), "other");
+  const groups = presentation.groupPendingMaterials([
+    { displayRef: "R1" }, { displayRef: "U1" }, { displayRef: "J1" }, { displayRef: "D1" }, { displayRef: "C1" },
+  ]);
+  assert.deepEqual(groups.map((category) => [category.key, category.priority, category.groups.map((group) => group.displayRef)]), [
+    ["connector", true, ["J1"]], ["ic", true, ["U1"]], ["rlc", false, ["R1", "C1"]], ["other", false, ["D1"]],
+  ]);
+  assert.deepEqual(presentation.groupPendingMaterials([{ displayRef: "U9" }]).map((category) => category.key), ["ic"]);
+});
