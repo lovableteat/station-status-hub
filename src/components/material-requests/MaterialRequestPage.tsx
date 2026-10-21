@@ -132,7 +132,8 @@ import type {
   MaterialExportProgress,
   MaterialReportSnapshot,
 } from "./materialRequestExport";
-import { collectDiscouragedMaterialRows, exportDiscouragedMaterialsExcel } from "./materialRequestExport";
+import { collectDiscouragedMaterialRows, collectNonPvlPartNumbers, exportDiscouragedMaterialsExcel, exportNonPvlApplyList } from "./materialRequestExport";
+import { MaterialNonPvlDialog } from "./MaterialNonPvlDialog";
 import {
   MATERIAL_TABLE_COLUMNS,
   type BomProjectGroup,
@@ -4894,10 +4895,12 @@ export function MaterialRequestPage() {
     [dataset.groups]
   );
   const pendingMaterialGroups = useMemo(() => dataset.groups.filter(requiresApplication), [dataset.groups]);
-  const discouragedMaterialCount = useMemo(() => collectDiscouragedMaterialRows(dataset.records).length, [dataset.records]);
+  const discouragedMaterialRows = useMemo(() => collectDiscouragedMaterialRows(dataset.records), [dataset.records]);
+  const discouragedMaterialCount = discouragedMaterialRows.length;
+  const [nonPvlDialogOpen, setNonPvlDialogOpen] = useState(false);
   const [isExportingDiscouraged, setIsExportingDiscouraged] = useState(false);
   const exportDiscouragedMaterials = async () => {
-    const rows = collectDiscouragedMaterialRows(dataset.records);
+    const rows = discouragedMaterialRows;
     if (rows.length === 0) {
       toast({ title: "沒有不建議料", description: "目前 BOM 的零件狀態沒有「不建議使用／不建議用料」的料。" });
       return;
@@ -4909,9 +4912,25 @@ export function MaterialRequestPage() {
         workspaceName: activeWorkspace.name,
         exportedBy: user?.displayName || user?.username || "未知使用者",
       });
-      toast({ title: "不建議料已匯出", description: `${rows.length.toLocaleString()} 筆 · ${fileName}` });
+      toast({ title: "不建議料明細已匯出", description: `${rows.length.toLocaleString()} 筆 · ${fileName}` });
     } catch (error) {
       toast({ title: "不建議料匯出失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
+    } finally {
+      setIsExportingDiscouraged(false);
+    }
+  };
+  const exportNonPvlList = async () => {
+    const partNumbers = collectNonPvlPartNumbers(discouragedMaterialRows);
+    if (partNumbers.length === 0) {
+      toast({ title: "沒有可申請的實體料號", description: "不建議料都還沒有實體料號，先補料號再匯出 PLM 申請清單。" });
+      return;
+    }
+    setIsExportingDiscouraged(true);
+    try {
+      const fileName = await exportNonPvlApplyList({ partNumbers, workspaceName: activeWorkspace.name });
+      toast({ title: "PLM 申請清單已匯出", description: `${partNumbers.length.toLocaleString()} 個實體料號 · ${fileName}，請到 PLM 的 Non PVL 申請上傳。` });
+    } catch (error) {
+      toast({ title: "PLM 申請清單匯出失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
     } finally {
       setIsExportingDiscouraged(false);
     }
@@ -5758,6 +5777,15 @@ export function MaterialRequestPage() {
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
+      <MaterialNonPvlDialog
+        isExporting={isExportingDiscouraged}
+        open={nonPvlDialogOpen}
+        rows={discouragedMaterialRows}
+        workspaceName={activeWorkspace.name}
+        onExportApplyList={() => void exportNonPvlList()}
+        onExportDetail={() => void exportDiscouragedMaterials()}
+        onOpenChange={setNonPvlDialogOpen}
+      />
       <PendingMaterialsDialog
         canEdit={canEdit}
         groups={pendingMaterialGroups}
@@ -5912,7 +5940,7 @@ export function MaterialRequestPage() {
               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
               <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
               <Button type="button" variant="outline" onClick={() => setPendingDialogOpen(true)} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", requiredApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {requiredApplicationCount.toLocaleString()}</Button>
-              <Button type="button" variant="outline" onClick={() => void exportDiscouragedMaterials()} disabled={isExportingDiscouraged || isWorkspaceLoading} className="h-11 border-orange-300/30 bg-orange-400/10 text-orange-100"><FileSpreadsheet className="mr-2 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
+              <Button type="button" variant="outline" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} className="h-11 border-orange-300/30 bg-orange-400/10 text-orange-100"><FileSpreadsheet className="mr-2 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
               <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
               <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
             </div>
@@ -5950,7 +5978,7 @@ export function MaterialRequestPage() {
             <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={() => setPendingDialogOpen(true)} className={cn("h-8 border-rose-300/40 bg-rose-400/15 px-2.5 text-xs font-bold text-rose-50 hover:border-rose-200/70 hover:bg-rose-400/30 hover:text-white", requiredApplicationCount > 0 && "material-attention")}>
               <TriangleAlert className="mr-1 h-3.5 w-3.5" />待處理料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong>
             </Button>
-            <Button type="button" variant="outline" size="sm" data-testid="discouraged-export-button" onClick={() => void exportDiscouragedMaterials()} disabled={isExportingDiscouraged || isWorkspaceLoading} title="匯出零件狀態為「新設計產品不建議使用 - ODM不建議用料」等不建議料的實體料號" className="h-8 border-orange-300/40 bg-orange-400/15 px-2.5 text-xs font-bold text-orange-50 hover:border-orange-200/70 hover:bg-orange-400/30 hover:text-white disabled:cursor-wait disabled:opacity-60">
+            <Button type="button" variant="outline" size="sm" data-testid="discouraged-export-button" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} title="查看依專案解除不建議使用料的申請 SOP、預覽並匯出 PLM 申請清單" className="h-8 border-orange-300/40 bg-orange-400/15 px-2.5 text-xs font-bold text-orange-50 hover:border-orange-200/70 hover:bg-orange-400/30 hover:text-white disabled:cursor-wait disabled:opacity-60">
               <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />{isExportingDiscouraged ? "匯出中…" : "不建議料匯出"} <strong className="ml-1">{discouragedMaterialCount.toLocaleString()}</strong>
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-8 border-emerald-300/40 bg-emerald-400/15 px-2.5 text-xs font-bold text-emerald-50 hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">
