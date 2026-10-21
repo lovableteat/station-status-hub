@@ -49,7 +49,7 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
         title: "更新成功",
         description: result.deferred
           ? "帳號資料已更新；首次正式登入時會安全建立即時身分"
-          : "用戶資料與登入身分已同步更新",
+          : "帳號資料與登入身分已同步更新",
       });
 
       setIsOpen(false);
@@ -57,14 +57,14 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
     } catch (error) {
       toast({
         title: "更新失敗",
-        description: error instanceof Error ? error.message : "無法更新用戶資料",
+        description: error instanceof Error ? error.message : "無法更新帳號資料",
         variant: "destructive"
       });
     }
   };
 
   const handleDelete = () => {
-    if (window.confirm(`確定要刪除用戶 ${username} 嗎？此操作無法復原。`)) {
+    if (window.confirm(`確定要刪除帳號 ${username} 嗎？此操作無法復原。`)) {
       onDelete(userId);
       setIsOpen(false);
     }
@@ -83,7 +83,7 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
         className="admin-user-edit-dialog min-w-0 max-w-xl border border-cyan-200/35 bg-[#0d263a] text-slate-100 shadow-[0_28px_90px_-45px_rgba(34,211,238,0.8)]"
       >
         <DialogHeader className="pr-12">
-          <DialogTitle>編輯用戶</DialogTitle>
+          <DialogTitle>編輯帳號</DialogTitle>
         </DialogHeader>
         <div className="admin-user-edit-body min-w-0 space-y-5">
           <div className="rounded-2xl border border-primary/15 bg-primary/10 p-4 text-sm text-muted-foreground">
@@ -92,7 +92,7 @@ export function UserEditDialog({ userId, username, role, status, displayName, on
 
           <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 [&>div]:min-w-0">
             <div className="space-y-2">
-              <Label>用戶名</Label>
+              <Label>帳號</Label>
               <Input
                 value={editValues.username}
                 onChange={(e) => setEditValues({...editValues, username: e.target.value})}

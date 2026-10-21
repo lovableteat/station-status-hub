@@ -1073,14 +1073,15 @@ export function PerformanceAppraisalPage() {
                           {new Date(editorReview.updatedAt).toLocaleString("zh-TW")}
                         </small>
                       )}
-                      <div className="rd2-self-export-actions">
-                        <Button type="button" disabled={exporting} onClick={() => void exportSelfFile('zip')}><FileArchive />{exporting ? '匯出中…' : '匯出完整 ZIP'}</Button>
-                        <Button type="button" variant="outline" disabled={exporting} onClick={() => void exportSelfFile('xlsx')}><FileSpreadsheet />{exporting ? '匯出中…' : '匯出 Excel'}</Button>
-                        <Button type="button" variant="outline" disabled={exporting} onClick={() => void exportSelfFile('html')}><FileCode2 />匯出 HTML</Button>
-                        <p className="rd2-hint">ZIP 包含 Excel、HTML、整合文字與佐證檔案，只需上傳一個檔案。</p>
-                        {exporting && exportStatus && <p className="rd2-hint" role="status">{exportStatus}</p>}
+                      <div className="rd2-self-export-row">
+                        <div className="rd2-self-export-actions">
+                          <Button type="button" disabled={exporting} onClick={() => void exportSelfFile('zip')}><FileArchive />{exporting ? '匯出中…' : '匯出完整 ZIP'}</Button>
+                          <Button type="button" variant="outline" disabled={exporting} onClick={() => void exportSelfFile('xlsx')}><FileSpreadsheet />{exporting ? '匯出中…' : '匯出 Excel'}</Button>
+                          <Button type="button" variant="outline" disabled={exporting} onClick={() => void exportSelfFile('html')}><FileCode2 />匯出 HTML</Button>
+                        </div>
+                        <PerformanceCopyPanel contextKey={`${accessScope}:${cycle}:${editorReview?.id}:${editorReview?.updatedAt}`} disabled={exporting || recordsPending || !!loadError || editorReview?.contentLoaded === false} getText={() => selfCopyText()} />
                       </div>
-                      <PerformanceCopyPanel contextKey={`${accessScope}:${cycle}:${editorReview?.id}:${editorReview?.updatedAt}`} disabled={exporting || recordsPending || !!loadError || editorReview?.contentLoaded === false} getText={() => selfCopyText()} />
+                      <p className="rd2-hint">ZIP 包含 Excel、HTML、整合文字與佐證檔案，只需上傳一個檔案。匯出不會儲存或提交。{exporting && exportStatus ? ` ${exportStatus}` : ""}</p>
                     </div>
                   </section>
                 ) : tab === "manager" && !editorReview ? (

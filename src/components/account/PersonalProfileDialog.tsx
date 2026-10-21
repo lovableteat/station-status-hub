@@ -103,21 +103,32 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
           <DialogDescription>選擇照片並儲存後，導覽列與聊天室會立即同步。</DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-5 px-6 py-5">
-          <div className="flex items-center gap-4 rounded-2xl border border-border bg-background/30 p-4">
-            <Avatar className="h-20 w-20 border-2 border-primary/25 bg-accent shadow-[0_18px_38px_-24px_hsl(0_0%_0%/0.65)]">
-              {avatarUrl ? <AvatarImage src={avatarUrl} alt={`${displayName}的頭像預覽`} className="object-cover" /> : null}
-              <AvatarFallback className="bg-accent text-xl font-black text-primary">
-                {displayName.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-semibold text-foreground">{displayName}</div>
-              <div className="truncate text-sm text-muted-foreground">@{user?.username}</div>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                JPG、PNG 或 WebP，檔案上限 5 MB；畫面會自動裁切為正方形。
-              </p>
+        <div className="grid gap-5 px-6 py-6">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => fileInputRef.current?.click()}
+              aria-label={selectedFile ? "重新選擇大頭貼圖片" : "選擇大頭貼圖片"}
+              className="group relative rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              <Avatar className="h-32 w-32 border-4 border-primary/30 bg-accent shadow-[0_24px_48px_-28px_hsl(0_0%_0%/0.7)]">
+                {avatarUrl ? <AvatarImage src={avatarUrl} alt={`${displayName}的頭像預覽`} className="object-cover" /> : null}
+                <AvatarFallback className="bg-accent text-3xl font-black text-primary">
+                  {displayName.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="absolute bottom-1 right-1 flex h-10 w-10 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-lg transition-transform group-hover:scale-105">
+                <ImagePlus className="h-5 w-5" aria-hidden="true" />
+              </span>
+            </button>
+            <div className="min-w-0">
+              <p className="truncate text-lg font-semibold text-foreground">{displayName}</p>
+              <p className="truncate text-sm text-muted-foreground">@{user?.username}</p>
             </div>
+            <p className="text-sm leading-6 text-foreground/70">
+              {selectedFile ? `已選擇 ${selectedFile.name}，按「儲存大頭貼」套用。` : "點上方頭像或下方按鈕選擇照片；JPG、PNG 或 WebP，5 MB 以內，會自動裁成正方形。"}
+            </p>
           </div>
 
           <input
@@ -130,16 +141,16 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
             className="sr-only"
           />
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             <Button
               type="button"
               variant="outline"
               disabled={saving}
               onClick={() => fileInputRef.current?.click()}
-              className="rounded-xl border-border bg-accent font-semibold text-primary hover:bg-muted hover:text-primary"
+              className="h-10 rounded-xl px-4 text-sm font-semibold"
             >
               <ImagePlus className="mr-2 h-4 w-4" />
-              {selectedFile ? "重新選擇大頭貼" : "選擇大頭貼圖片"}
+              {selectedFile ? "重新選擇" : "選擇照片"}
             </Button>
             {user?.avatarPath ? (
               <Button
@@ -147,7 +158,7 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
                 variant="ghost"
                 disabled={saving}
                 onClick={() => void removeAvatar()}
-                className="rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                className="h-10 rounded-xl px-4 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 移除目前頭像

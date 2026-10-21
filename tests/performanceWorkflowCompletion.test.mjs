@@ -87,5 +87,5 @@ test("review attachments provide explicit download feedback and readable filenam
 
 test("account creation dialog has an accessible description", async () => {
   const source = await readSource("src/components/admin/AdminPanel.tsx");
-  assert.match(source, /<DialogTitle>新增系統用戶<\/DialogTitle>\s*<DialogDescription>/);
+  assert.match(source, /<DialogTitle>新增帳號<\/DialogTitle>\s*<DialogDescription>/);
 });

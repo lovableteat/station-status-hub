@@ -50,7 +50,7 @@ export function AdminSidebar({
   }, [mobileOpen]);
 
   const items = [
-    { id: "users" as const, label: "用戶管理", description: "帳號、角色與權限", icon: Users },
+    { id: "users" as const, label: "帳號管理", description: "帳號、角色與權限", icon: Users },
     { id: "collaboration" as const, label: "通知與在線", description: "協作狀態與公告", icon: RadioTower },
     ...(canViewApiManagement
       ? [{ id: "api-management" as const, label: "API 管理", description: "金鑰、測試與文件", icon: Network }]

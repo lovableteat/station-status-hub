@@ -148,7 +148,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     } catch (error) {
       toast({
         title: "載入失敗",
-        description: "無法載入系統用戶資料",
+        description: "無法載入帳號資料",
         variant: "destructive"
       });
     }
@@ -203,7 +203,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
     if (!newUser.username || !newUser.password || !newUser.displayName) {
       toast({
         title: "新增失敗",
-        description: "請填寫完整的用戶名、密碼和顯示名稱",
+        description: "請填寫完整的帳號、密碼和顯示名稱",
         variant: "destructive"
       });
       return;
@@ -234,7 +234,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
       toast({
         title: "新增成功",
-        description: "系統用戶已新增，請接著設定此人員可使用的工作區。"
+        description: "帳號已新增，請接著設定此人員可使用的工作區。"
       });
 
       setIsUserDialogOpen(false);
@@ -249,7 +249,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       console.error('Error adding user:', error);
       toast({
         title: "新增失敗",
-        description: error instanceof Error ? error.message : "無法新增系統用戶",
+        description: error instanceof Error ? error.message : "無法新增帳號",
         variant: "destructive"
       });
     }
@@ -293,14 +293,14 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
       toast({
         title: "狀態更新成功",
-        description: `用戶狀態已更新為${newStatus === 'active' ? '啟用' : '停用'}`
+        description: `帳號狀態已更新為${newStatus === 'active' ? '啟用' : '停用'}`
       });
 
       loadSystemUsers();
     } catch (error) {
       toast({
         title: "更新失敗",
-        description: "無法更新用戶狀態",
+        description: "無法更新帳號狀態",
         variant: "destructive"
       });
     }
@@ -338,14 +338,14 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
       toast({
         title: "刪除成功",
-        description: "用戶已成功刪除"
+        description: "帳號已刪除"
       });
 
       loadSystemUsers();
     } catch (error) {
       toast({
         title: "刪除失敗",
-        description: "無法刪除用戶",
+        description: "無法刪除帳號",
         variant: "destructive"
       });
     }
@@ -553,7 +553,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
                 <Users className="h-4.5 w-4.5 text-sky-200" />
               </div>
               <div>
-                <h2 className="text-lg font-bold tracking-tight text-slate-100">系統用戶管理</h2>
+                <h2 className="text-lg font-bold tracking-tight text-slate-100">帳號管理</h2>
                 <p className="admin-user-hero-copy mt-0.5 text-sm text-slate-400">管理帳號狀態、角色與各工作區存取權限</p>
               </div>
               {SHOW_EXTENDED_ADMIN_COPY ? <p className="max-w-3xl text-sm text-muted-foreground">
@@ -569,7 +569,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
               className="admin-primary-action h-10 rounded-xl px-4 font-black disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Plus className="h-4 w-4 sm:mr-2" />
-              <span className="admin-primary-action-label">新增用戶</span>
+              <span className="admin-primary-action-label">新增帳號</span>
             </Button>
             <Dialog
               open={isUserDialogOpen}
@@ -577,7 +577,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             >
               <DialogContent id="admin-create-user-dialog" className="max-w-2xl border border-[#356985] bg-[#10263a] text-slate-100">
                 <DialogHeader>
-                  <DialogTitle>新增系統用戶</DialogTitle>
+                  <DialogTitle>新增帳號</DialogTitle>
                   <DialogDescription>建立登入帳號並設定基本角色；建立後接著配置工作區權限。</DialogDescription>
                 </DialogHeader>
 
@@ -588,7 +588,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>用戶名</Label>
+                      <Label>帳號</Label>
                       <Input
                         className="border-cyan-200/22 bg-white/[0.03] text-slate-50 placeholder:text-slate-400"
                         value={newUser.username}

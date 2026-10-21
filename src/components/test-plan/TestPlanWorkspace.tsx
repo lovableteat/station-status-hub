@@ -2,6 +2,7 @@ import {
   type ChangeEvent,
   type DragEvent,
   type FormEvent,
+  Fragment,
   type InputHTMLAttributes,
   useEffect,
   useMemo,
@@ -35,6 +36,7 @@ import {
   Trash2,
   Upload,
   UserRound,
+  Users,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -651,6 +653,11 @@ export function TestPlanWorkspace() {
   const pinnedSpaces = userSpaces.filter(space => space.ownerId === ownerId || space.ownerRole === "admin" || space.ownerRole === "super_admin");
   const otherSpaces = userSpaces.filter(space => !pinnedSpaces.includes(space));
   const selectedOtherSpace = otherSpaces.find(space => space.id === activeSpaceId);
+  const ownSpaces = pinnedSpaces.filter(space => space.ownerId === ownerId);
+  const teamSpaces = pinnedSpaces.filter(space => space.ownerId !== ownerId);
+  const isOwnSpace = Boolean(activeSpace && activeSpace.ownerId === ownerId);
+  const showOwnerColumn = activeSpaceId === null;
+  const spaceNameById = useMemo(() => new Map(spaces.map(space => [space.id, space.name] as const)), [spaces]);
 
   useEffect(() => {
     if (retainedUploadRetry?.ownerId !== ownerId) retainUploadRetry(null);
@@ -699,6 +706,26 @@ export function TestPlanWorkspace() {
       sort,
     });
   }, [activeFolderId, activeSpaceId, categoryFilter, files, folders, query, sort]);
+  // Cross-user view: never mix owners in one run of rows. Own files first, then each owner's block.
+  const listSections = useMemo(() => {
+    if (!showOwnerColumn) return [{ key: "all", label: null as string | null, entries: visibleEntries }];
+    const bySpace = new Map<string, TestPlanEntry[]>();
+    for (const entry of visibleEntries) {
+      const bucket = bySpace.get(entry.spaceId) ?? [];
+      bucket.push(entry);
+      bySpace.set(entry.spaceId, bucket);
+    }
+    return [...bySpace.entries()]
+      .sort(([left], [right]) => {
+        const mine = Number(spaces.find(space => space.id === right)?.ownerId === ownerId) - Number(spaces.find(space => space.id === left)?.ownerId === ownerId);
+        return mine || (spaceNameById.get(left) ?? "").localeCompare(spaceNameById.get(right) ?? "", "zh-Hant", { numeric: true });
+      })
+      .map(([spaceId, entries]) => ({
+        key: spaceId,
+        label: spaces.find(space => space.id === spaceId)?.ownerId === ownerId ? `我的空間 · ${spaceNameById.get(spaceId) ?? ""}` : spaceNameById.get(spaceId) ?? "未知空間",
+        entries,
+      }));
+  }, [ownerId, showOwnerColumn, spaceNameById, spaces, visibleEntries]);
   const selectionScope = JSON.stringify([ownerId, activeSpaceId, activeFolderId, query.trim(), categoryFilter]);
   const eligibleEntries = visibleEntries.filter(entry => canEditSpace(entry.spaceId));
   const eligibleKeySignature = JSON.stringify(eligibleEntries.map(entryKey).sort());
@@ -1078,14 +1105,8 @@ export function TestPlanWorkspace() {
                   唯讀模式
                 </Badge>
               )}
-              <Button type="button" variant="outline" disabled={!personalSpace || busy || loading} onClick={() => personalSpace && void openSpace(personalSpace.id)}>
+              <Button type="button" variant="outline" disabled={!personalSpace || busy || loading || isOwnSpace} onClick={() => personalSpace && void openSpace(personalSpace.id)}>
                 <FolderOpen data-icon="inline-start" /><span>我的空間</span>
-              </Button>
-              <Button type="button" variant="outline" className="file-library-upload" aria-label="上傳資料夾" disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onClick={() => folderInputRef.current?.click()}>
-                <FolderInput data-icon="inline-start" /><span>上傳資料夾</span>
-              </Button>
-              <Button type="button" className="file-library-upload" disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onClick={() => fileInputRef.current?.click()}>
-                <Upload data-icon="inline-start" /><span>上傳檔案</span>
               </Button>
             </>
           )}
@@ -1094,10 +1115,33 @@ export function TestPlanWorkspace() {
 
       <input ref={fileInputRef} className="sr-only" type="file" multiple disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onChange={handleFileSelection} />
       <input ref={folderInputRef} className="sr-only" type="file" multiple {...directoryInputProps} disabled={!canEdit || loading || busy || Boolean(uploadRetry)} aria-label="選擇上傳資料夾" onChange={handleFolderSelection} />
-      <p className="file-library-upload-hint">
-        {activeSpaceId === null ? "在所有檔案上傳時，檔案會放入你的個人空間。" : `目前空間：${activeSpace?.name ?? "載入中"}。`}
-        {"資料夾保留原有層級，同名檔案會略過；空資料夾無法由瀏覽器選取。清單裡的檔案可以直接拖到桌面或檔案總管存檔（Chrome／Edge），也可以拖到左側資料夾或麵包屑搬移。"}
-      </p>
+      <div className={cn("file-library-context", activeSpaceId === null ? "is-everyone" : isOwnSpace ? "is-mine" : "is-other")} role="status">
+        {activeSpaceId === null ? (
+          <>
+            <Users className="file-library-context-icon" aria-hidden="true" />
+            <div>
+              <strong>所有人的檔案</strong>
+              <span>每一列都標示擁有者並依擁有者分組，不會和你的檔案混在一起；在這裡上傳仍會放進你的個人空間。</span>
+            </div>
+          </>
+        ) : isOwnSpace ? (
+          <>
+            <UserRound className="file-library-context-icon" aria-hidden="true" />
+            <div>
+              <strong>我的空間</strong>
+              <span>只有你的檔案。拖到左側資料夾可搬移，拖到桌面或檔案總管可直接存檔（Chrome／Edge）；上傳資料夾會保留層級，同名檔案略過。</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <LockKeyhole className="file-library-context-icon" aria-hidden="true" />
+            <div>
+              <strong>{activeSpace?.name ?? "載入中"} 的空間</strong>
+              <span>{canEdit ? "你有管理權限，可以整理這個空間；" : "唯讀：可以瀏覽與下載，不能修改；"}上傳的檔案會放進你自己的個人空間。</span>
+            </div>
+          </>
+        )}
+      </div>
       {uploadRetry && (
         <section className="file-library-upload-errors" role="alert" aria-label="上傳失敗清單">
           <div className="file-library-upload-error-heading">
@@ -1145,35 +1189,45 @@ export function TestPlanWorkspace() {
           </div>
 
           <div className="test-plan-space-list">
-            <button type="button" className={cn("file-library-all", activeSpaceId === null && "is-active")} disabled={busy} onClick={() => { setIsSpaceDrawerOpen(false); void openSpace(null); }}><FolderOpen /><span>所有檔案</span><span className="file-library-count">{activeSpaceId === null ? files.length : ""}</span></button>
-            {pinnedSpaces.map((space) => (
-              <div
-                key={space.id}
-                className={cn(
-                  "test-plan-space-row",
-                  activeSpaceId === space.id && "is-active",
-                )}
-              >
-                <button
-                  type="button"
-                  disabled={busy || loading}
-                  aria-label={`開啟 ${space.name}${space.description ? `（${space.description}）` : ""} 的檔案空間`}
-                  aria-current={activeSpaceId === space.id ? "page" : undefined}
-                  title={`${space.name} ${space.description ?? ""}`}
-                  onClick={() => {
-                    setIsSpaceDrawerOpen(false);
-                    void openSpace(space.id);
-                  }}
+            {ownSpaces.length === 0 && (
+              <>
+                <p className="file-library-rail-label">我的空間</p>
+                <p className="file-library-rail-empty">個人空間建立中，重新整理後再試。</p>
+              </>
+            )}
+            {pinnedSpaces.map((space, index) => (
+              <Fragment key={space.id}>
+                {index === 0 && space.ownerId === ownerId && <p className="file-library-rail-label">我的空間</p>}
+                {index === ownSpaces.length && <p className="file-library-rail-label">團隊成員</p>}
+                <div
+                  className={cn(
+                    "test-plan-space-row",
+                    activeSpaceId === space.id && "is-active",
+                  )}
                 >
-                  <UserRound className="file-library-user-icon" aria-hidden="true" />
-                  <span className="file-library-user-identity">
-                    <strong>{space.name}</strong>
-                    {space.description && <small>{space.description}</small>}
-                  </span>
-                  {space.ownerId === ownerId && <Badge variant="secondary" className="file-library-current-user">我</Badge>}
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    disabled={busy || loading}
+                    aria-label={`開啟 ${space.name}${space.description ? `（${space.description}）` : ""} 的檔案空間`}
+                    aria-current={activeSpaceId === space.id ? "page" : undefined}
+                    title={`${space.name} ${space.description ?? ""}`}
+                    onClick={() => {
+                      setIsSpaceDrawerOpen(false);
+                      void openSpace(space.id);
+                    }}
+                  >
+                    <UserRound className="file-library-user-icon" aria-hidden="true" />
+                    <span className="file-library-user-identity">
+                      <strong>{space.name}</strong>
+                      {space.description && <small>{space.description}</small>}
+                    </span>
+                    {space.ownerId === ownerId && <Badge variant="secondary" className="file-library-current-user">我</Badge>}
+                  </button>
+                </div>
+              </Fragment>
             ))}
+            {teamSpaces.length === 0 && otherSpaces.length > 0 && <p className="file-library-rail-label">團隊成員</p>}
+
             {otherSpaces.length > 0 && (
               <div className="file-library-other-users">
                 <span id="file-library-other-users-label">其他使用者</span>
@@ -1199,6 +1253,9 @@ export function TestPlanWorkspace() {
                 </Select>
               </div>
             )}
+
+            <p className="file-library-rail-label">跨使用者</p>
+            <button type="button" className={cn("file-library-all", activeSpaceId === null && "is-active")} disabled={busy} onClick={() => { setIsSpaceDrawerOpen(false); void openSpace(null); }}><Users /><span>所有檔案（所有人）</span><span className="file-library-count">{activeSpaceId === null ? files.length : ""}</span></button>
           </div>
 
           {activeSpace && (
@@ -1341,6 +1398,12 @@ export function TestPlanWorkspace() {
                   >
                     <Folder className="mr-2 h-4 w-4" />
                     新增資料夾
+                  </Button>
+                  <Button type="button" variant="outline" className="file-library-upload" aria-label="上傳資料夾" disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onClick={() => folderInputRef.current?.click()}>
+                    <FolderInput data-icon="inline-start" /><span>上傳資料夾</span>
+                  </Button>
+                  <Button type="button" className="file-library-upload is-primary" disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onClick={() => fileInputRef.current?.click()}>
+                    <Upload data-icon="inline-start" /><span>上傳檔案</span>
                   </Button>
                 </div>
               </div>
@@ -1486,7 +1549,7 @@ export function TestPlanWorkspace() {
                   </div>
                 )}
 
-                {viewMode === "list" && <div className="test-plan-list-head"><span className="file-library-name-heading">名稱</span><span>格式</span><span>大小</span><span>更新時間</span><span className="sr-only">操作</span></div>}
+                {viewMode === "list" && <div className="test-plan-list-head" data-owner-column={showOwnerColumn ? "true" : undefined}><span className="file-library-name-heading">名稱</span>{showOwnerColumn && <span>擁有者</span>}<span>格式</span><span>大小</span><span>更新時間</span><span className="sr-only">操作</span></div>}
                 {loading ? (
                   <div className="test-plan-loading">
                     <RefreshCw className="h-5 w-5 animate-spin" />
@@ -1504,7 +1567,9 @@ export function TestPlanWorkspace() {
                   </div>
                 ) : viewMode === "grid" ? (
                   <div className="test-plan-entry-grid">
-                    {visibleEntries.map((entry) => (
+                    {listSections.flatMap((section) => [
+                      ...(section.label ? [<div key={`group:${section.key}`} className="file-library-owner-group" role="presentation"><span>{section.label}</span><small>{section.entries.length} 項</small></div>] : []),
+                      ...section.entries.map((entry) => (
                       <article
                         key={`${entry.kind}:${entry.id}`}
                         className={cn(
@@ -1559,11 +1624,14 @@ export function TestPlanWorkspace() {
                         </div>
                         {renderEntryActions(entry)}
                       </article>
-                    ))}
+                      )),
+                    ])}
                   </div>
                 ) : (
                   <div className="test-plan-entry-list">
-                    {visibleEntries.map((entry) => (
+                    {listSections.flatMap((section) => [
+                      ...(section.label ? [<div key={`group:${section.key}`} className="file-library-owner-group" role="presentation"><span>{section.label}</span><small>{section.entries.length} 項</small></div>] : []),
+                      ...section.entries.map((entry) => (
                       <article
                         key={`${entry.kind}:${entry.id}`}
                         className={cn(
@@ -1572,6 +1640,7 @@ export function TestPlanWorkspace() {
                           checkedKeys.has(entryKey(entry)) && "is-checked",
                           entry.kind === "folder" && dropTargetId === entry.id && "is-drop-target",
                         )}
+                        data-owner-column={showOwnerColumn ? "true" : undefined}
                         tabIndex={0}
                         aria-selected={selectedEntryKey === `${entry.kind}:${entry.id}`}
                         onClick={() => selectEntry(entry)}
@@ -1595,9 +1664,15 @@ export function TestPlanWorkspace() {
                           )}
                           <strong>
                             {entry.kind === "folder" ? entry.name : entry.originalName}
-                            {activeSpaceId === null && <small>{spaces.find(space => space.id === entry.spaceId)?.name}</small>}
                           </strong>
                         </span>
+                        {showOwnerColumn && (
+                          <span className="file-library-owner-cell">
+                            <span className={cn("file-library-owner-chip", spaces.find(space => space.id === entry.spaceId)?.ownerId === ownerId && "is-mine")}>
+                              {spaceNameById.get(entry.spaceId) ?? "未知"}
+                            </span>
+                          </span>
+                        )}
                         <span>
                           {entry.kind === "folder"
                             ? "資料夾"
@@ -1613,7 +1688,8 @@ export function TestPlanWorkspace() {
                         </span>
                         {renderEntryActions(entry)}
                       </article>
-                    ))}
+                      )),
+                    ])}
                   </div>
                 )}
               </div>
@@ -1623,7 +1699,7 @@ export function TestPlanWorkspace() {
                 <span>{folders.length} 個資料夾</span>
                 <span>{files.length} 個檔案</span>
                 <span className="ml-auto">
-                  {canEdit ? "可編輯" : "唯讀模式"}
+                  {activeSpaceId === null ? "所有人的檔案 · 依擁有者分組" : isOwnSpace ? "我的空間" : `${activeSpace?.name ?? ""} 的空間`} · {canEdit ? "可編輯" : "唯讀模式"}
                 </span>
               </footer>
             </>
