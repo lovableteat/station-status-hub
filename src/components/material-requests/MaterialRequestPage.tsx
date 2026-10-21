@@ -396,67 +396,60 @@ function CompactHoverValue({
         side="top"
         sideOffset={8}
         collisionPadding={16}
-        className="w-[min(480px,calc(100vw-24px))] overflow-hidden rounded-2xl border-border bg-popover p-0 text-popover-foreground shadow-lg"
+        className="w-auto min-w-[14rem] max-w-[min(440px,calc(100vw-24px))] rounded-xl border-border bg-popover p-3 text-popover-foreground shadow-lg"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-          <p className="text-sm font-semibold text-foreground">{label}</p>
-          <span className="font-mono text-xs text-muted-foreground">{filteredValues.length}/{summary.values.length}</span>
+        <div className="mb-2 flex items-center gap-2">
+          <p className="text-xs font-semibold text-foreground">{label}</p>
+          <span className="font-mono text-[11px] text-muted-foreground">{filteredValues.length}/{summary.values.length}</span>
+          {onCopy && summary.fullText !== "-" ? (
+            <button
+              type="button"
+              data-testid="compact-hover-copy-all"
+              aria-label={`複製全部${label}`}
+              title="複製全部"
+              onClick={(event) => {
+                event.stopPropagation();
+                onCopy(summary.fullText);
+              }}
+              className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
         </div>
 
         {canSearch ? (
-          <div className="relative border-b border-border px-3 py-2">
-            <Search className="pointer-events-none absolute left-6 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <div className="relative mb-2">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               data-testid="compact-hover-search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={`搜尋${label}`}
-              className="h-8 w-full rounded-lg border border-input bg-secondary pl-8 pr-8 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-ring/30"
+              className="h-7 w-full rounded-md border border-input bg-secondary pl-8 pr-7 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-ring/30"
             />
             {query ? (
               <button
                 type="button"
                 aria-label="清除搜尋"
                 onClick={() => setQuery("")}
-                className="absolute right-5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                className="absolute right-1 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-3 w-3" />
               </button>
             ) : null}
           </div>
         ) : null}
 
-        <ScrollArea className="h-[min(260px,40vh)]">
-          <ol className="grid gap-x-3 px-4 py-2 sm:grid-cols-2">
-            {filteredValues.length > 0 ? filteredValues.map((value, index) => (
-              <li key={`${value}-${index}`} className="flex min-w-0 items-center gap-2 border-b border-border/60 py-1.5 last:border-b-0" title={value}>
-                <span className="w-6 flex-none font-mono text-[10px] text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
-                <span className="min-w-0 truncate font-mono text-xs text-foreground">{value}</span>
-              </li>
-            )) : (
-              <li className="col-span-full py-8 text-center text-sm text-muted-foreground">找不到符合「{query}」的內容</li>
-            )}
-          </ol>
-        </ScrollArea>
-
-        {onCopy && summary.fullText !== "-" ? (
-          <div className="flex justify-end border-t border-border px-3 py-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              data-testid="compact-hover-copy-all"
-              onClick={(event) => {
-                event.stopPropagation();
-                onCopy(summary.fullText);
-              }}
-              className="h-8 px-3 text-xs"
-            >
-              <Copy className="mr-1.5 h-3.5 w-3.5" />
-              複製全部
-            </Button>
-          </div>
-        ) : null}
+        <ul className="flex max-h-[min(240px,40vh)] flex-wrap gap-1 overflow-y-auto">
+          {filteredValues.length > 0 ? filteredValues.map((value, index) => (
+            <li key={`${value}-${index}`} className="max-w-full truncate rounded-md border border-border bg-secondary px-1.5 font-mono text-xs leading-5 text-foreground" title={value}>
+              {value}
+            </li>
+          )) : (
+            <li className="w-full py-3 text-center text-xs text-muted-foreground">找不到符合「{query}」的內容</li>
+          )}
+        </ul>
       </HoverCardContent>
     </HoverCard>
   );
@@ -508,69 +501,35 @@ function MaterialIdentityHover({
         side="top"
         sideOffset={8}
         collisionPadding={16}
-        className="w-[min(520px,calc(100vw-24px))] overflow-hidden rounded-2xl border-border bg-popover p-0 text-popover-foreground shadow-lg"
+        className="w-auto min-w-[16rem] max-w-[min(520px,calc(100vw-24px))] rounded-xl border-border bg-popover p-3 text-popover-foreground shadow-lg"
       >
-        <div className="border-b border-border px-4 py-3">
-          <p className="truncate text-sm font-semibold text-foreground">{name || "未命名料件"}</p>
-          <p data-testid="material-primary-vendor" className="truncate text-xs text-muted-foreground">
-            {manufacturer || "未填廠商"}
-          </p>
-        </div>
-
-        <dl data-testid="material-identity-metrics" className="grid grid-cols-3 divide-x divide-border border-b border-border bg-background/40 text-center">
-          {[
-            ["REF DES", refs.length],
-            ["MPN", mpns.length],
-            ["數量", qty],
-          ].map(([metricLabel, metricValue]) => (
-            <div key={metricLabel} className="px-3 py-2">
-              <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{metricLabel}</dt>
-              <dd className="font-mono text-base font-semibold text-foreground">{metricValue}</dd>
-            </div>
-          ))}
-        </dl>
-
-        <div className="grid sm:grid-cols-2 sm:divide-x sm:divide-border">
-          <section data-testid="material-identity-ref-list" className="min-w-0 border-b border-border sm:border-b-0">
-            <p className="px-4 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">REF DES</p>
-            <ScrollArea className="h-36">
-              <ol className="px-4 py-1">
-              {refs.length > 0 ? (
-                refs.map((value, index) => (
-                  <li key={value} className="flex items-center gap-2 border-b border-border/60 py-1 last:border-b-0" title={value}>
-                    <span className="w-6 flex-none font-mono text-[10px] text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
-                    <span className="min-w-0 truncate font-mono text-xs text-foreground">{value}</span>
-                  </li>
-                ))
-              ) : (
-                <li className="py-8 text-center text-xs text-muted-foreground">尚未設定 REF DES</li>
-              )}
-              </ol>
-            </ScrollArea>
-          </section>
-
-          <section data-testid="material-identity-mpn-list" className="min-w-0">
-            <p className="px-4 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">MPN</p>
-            <ScrollArea className="h-36">
-              <ol className="px-4 py-1">
-              {mpns.length > 0 ? (
-                mpns.map((value, index) => (
-                  <li key={value} className="flex items-center gap-2 border-b border-border/60 py-1 last:border-b-0" title={value}>
-                    <span className="w-6 flex-none font-mono text-[10px] text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
-                    <span className="min-w-0 truncate font-mono text-xs text-foreground">{value}</span>
-                  </li>
-                ))
-              ) : (
-                <li className="py-8 text-center text-xs text-muted-foreground">尚未設定 MPN</li>
-              )}
-              </ol>
-            </ScrollArea>
-          </section>
-        </div>
-
-        <p className="truncate border-t border-border px-4 py-2 text-xs text-muted-foreground">
-          模組：<span className="text-foreground">{assemblyName || "未指定"}</span>
+        <p className="truncate text-sm font-semibold text-foreground">{name || "未命名料件"}</p>
+        <p data-testid="material-primary-vendor" className="truncate text-xs text-muted-foreground">
+          {manufacturer || "未填廠商"} · 模組：<span className="text-foreground">{assemblyName || "未指定"}</span>
         </p>
+        <p data-testid="material-identity-metrics" className="mt-1 font-mono text-[11px] text-muted-foreground">
+          REF DES {refs.length} · MPN {mpns.length} · 數量 {qty}
+        </p>
+
+        {[
+          ["REF DES", refs, "尚未設定 REF DES", "material-identity-ref-list"],
+          ["MPN", mpns, "尚未設定 MPN", "material-identity-mpn-list"],
+        ].map(([sectionLabel, values, emptyText, testId]) => (
+          <section key={sectionLabel as string} data-testid={testId as string} className="mt-2 min-w-0 border-t border-border pt-2">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{sectionLabel as string}</p>
+            <ScrollArea className={cn((values as string[]).length > 24 && "h-32")}>
+              <ul className="flex flex-wrap gap-1">
+                {(values as string[]).length > 0 ? (values as string[]).map((value) => (
+                  <li key={value} className="max-w-full truncate rounded-md border border-border bg-secondary px-1.5 font-mono text-xs leading-5 text-foreground" title={value}>
+                    {value}
+                  </li>
+                )) : (
+                  <li className="text-xs text-muted-foreground">{emptyText as string}</li>
+                )}
+              </ul>
+            </ScrollArea>
+          </section>
+        ))}
       </HoverCardContent>
     </HoverCard>
   );
