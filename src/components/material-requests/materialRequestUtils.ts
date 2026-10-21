@@ -1,4 +1,5 @@
 import type { CellObject, WorkSheet } from "xlsx";
+import { MATERIAL_CE_FIELDS, MATERIAL_CE_LEGACY_MEANING_FIELDS } from "./materialUploadContract.mjs";
 
 type XlsxModule = typeof import("xlsx");
 
@@ -23,6 +24,7 @@ export interface MaterialWorkbookRecord {
   requestUrl?: string;
   manufacturer: string;
   sourcingStatus: string;
+  phaseOutStatus?: string;
   partUsageStatus?: string;
   refGroup: string;
   lv: number | string;
@@ -167,6 +169,7 @@ type MaterialField =
   | "requestUrl"
   | "manufacturer"
   | "sourcingStatus"
+  | "phaseOutStatus"
   | "partUsageStatus"
   | "refGroup"
   | "lv"
@@ -198,7 +201,8 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   requestUrl: ["Request URL", "Ticket URL", "Link", "URL", "申請連結", "單號連結", "Request Link"],
   manufacturer: ["Manufacturer", "Mfr", "Maker", "Vendor", "廠商", "製造商", "品牌"],
   sourcingStatus: ["Sourcing Status", "AVL Status", "Approval Status", "供料狀態", "核准狀態", "料件狀態"],
-  partUsageStatus: ["零件狀態", "Part Usage Status", "Design Usage Status", "新設計使用狀態"],
+  phaseOutStatus: ["phase out", "Phaseout", "Phase Out Status", "零件狀態（phase out）"],
+  partUsageStatus: ["新設計使用限制", "零件狀態", "Part Usage Status", "Design Usage Status", "新設計使用狀態"],
   refGroup: ["Ref_tmp", "Ref Group", "Group", "替代料群組", "料件群組", "群組代碼"],
   lv: ["LV", "Version", "版本", "版次"],
   remark: [],
@@ -660,6 +664,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
       raw.pcbFootprint,
       raw.remark,
       raw.sourcingStatus,
+      raw.phaseOutStatus,
       raw.partUsageStatus,
     ]),
   };
@@ -816,6 +821,29 @@ function findHeaderRow(rows: unknown[][]) {
   return bestMatch;
 }
 
+function isCeColumnMeaningRow(row: unknown[] | undefined, fields: Map<MaterialField, number>) {
+  if (!row) return false;
+
+  return [MATERIAL_CE_FIELDS, MATERIAL_CE_LEGACY_MEANING_FIELDS].some((template) => {
+    const templateFields = resolveHeaderFields(template.map((field) => field.header));
+    if (templateFields.size !== template.length) return false;
+
+    const meaningColumns = new Set<number>();
+    for (const [field, templateColumn] of templateFields) {
+      const column = fields.get(field);
+      const meaning = template[templateColumn].meaning;
+      if (column == null || !meaning || normalizeText(row[column]) !== normalizeText(meaning)) {
+        return false;
+      }
+      meaningColumns.add(column);
+    }
+
+    // Only a complete shared template row is metadata. Never discard a real row
+    // merely because it occupies row 5, contains Chinese text, or has a nonnumeric Level.
+    return row.every((value, column) => meaningColumns.has(column) || !normalizeText(value));
+  });
+}
+
 function getFieldValue(row: unknown[], fields: Map<MaterialField, number>, field: MaterialField) {
   const index = fields.get(field);
   return index == null ? "" : row[index];
@@ -925,10 +953,12 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
     },
   });
   const records: MaterialWorkbookRecord[] = [];
+  const meaningRowOffset = isCeColumnMeaningRow(rows[headerRowIndex + 1], fields) ? 1 : 0;
+  const firstDataRowIndex = headerRowIndex + 1 + meaningRowOffset;
   const hasLevelColumn = fields.has("level");
   const blueGroupRows = new Set<number>();
 
-  for (let index = headerRowIndex + 1; index < rows.length; index += 1) {
+  for (let index = firstDataRowIndex; index < rows.length; index += 1) {
     const levelCell = getFieldValue(rows[index], fields, "level");
     const parsedLevel = Number(levelCell);
     const levelValue = hasLevelColumn && normalizeText(levelCell) && Number.isFinite(parsedLevel) ? parsedLevel : 2;
@@ -944,8 +974,11 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
   let currentSourceGroupKey = "";
   let currentGroupRef = "";
 
-  for (let index = headerRowIndex + 1; index < rows.length; index += 1) {
+  for (let index = firstDataRowIndex; index < rows.length; index += 1) {
     const row = rows[index];
+    // The template's explanatory row must not change the identities used to
+    // merge an existing BOM's manual tracking on a same-file reimport.
+    const logicalRowIndex = index - meaningRowOffset;
     const levelCell = getFieldValue(row, fields, "level");
     const parsedLevel = Number(levelCell);
     const levelValue = hasLevelColumn && normalizeText(levelCell) && Number.isFinite(parsedLevel) ? parsedLevel : 2;
@@ -989,7 +1022,7 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
     const isGroupStart = useBlueGroupRows && blueGroupRows.has(index);
 
     if (useBlueGroupRows && (isGroupStart || !currentSourceGroupKey)) {
-      currentSourceGroupKey = `${sheetName}-row-${index + 1}`;
+      currentSourceGroupKey = `${sheetName}-row-${logicalRowIndex + 1}`;
       currentGroupRef = firstNonEmpty(rowRefGroup, refDes, partNumber, name);
     }
 
@@ -1008,14 +1041,14 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
     );
     const trackingHistory = createImportedTrackingHistoryEntry({
       sheetName,
-      rowIndex: index,
+      rowIndex: logicalRowIndex,
       statusNote: importedTrackingText,
       createdBy: getFieldValue(row, fields, "trackingCreatedBy"),
       requestInfo: importedRequestInfo,
     });
 
     records.push({
-      id: `${sheetName}-${index}`,
+      id: `${sheetName}-${logicalRowIndex}`,
       sourceGroupKey: useBlueGroupRows ? currentSourceGroupKey : undefined,
       sourceRow: index + 1,
       isGroupStart: useBlueGroupRows ? isGroupStart : undefined,
@@ -1035,6 +1068,7 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
       requestUrl,
       manufacturer: normalizeText(getFieldValue(row, fields, "manufacturer")),
       sourcingStatus: normalizeText(getFieldValue(row, fields, "sourcingStatus")),
+      ...(fields.has("phaseOutStatus") ? { phaseOutStatus: normalizeText(getFieldValue(row, fields, "phaseOutStatus")) } : {}),
       ...(fields.has("partUsageStatus") ? { partUsageStatus: normalizeText(getFieldValue(row, fields, "partUsageStatus")) } : {}),
       refGroup,
       lv: normalizeCellValue(getFieldValue(row, fields, "lv")),

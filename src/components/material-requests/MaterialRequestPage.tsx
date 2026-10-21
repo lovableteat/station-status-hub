@@ -98,7 +98,6 @@ import {
   buildMaterialDataset,
   getActionLabel,
   getMaterialBuildRequirementLabel,
-  getMaterialBuildRequirements,
   getLatestTrackingEntry,
   isPreferredInternalPartNumber,
   normalizeMaterialSearchText,
@@ -123,6 +122,7 @@ import {
 import type { BomTableColorTheme } from "./materialBomStorage";
 import { saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { UploadGuideDialog } from "./MaterialUploadGuideDialog";
+import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
 import type {
   MaterialExportProgress,
   MaterialReportSnapshot,
@@ -134,6 +134,7 @@ import {
   createCompactValueSummary,
   getMaterialExportScopeLabel,
   getMaterialStickyColumnClasses,
+  getMaterialSourceValue,
   getMaterialTableWidth,
   normalizeHiddenMaterialColumns,
   resizeMaterialColumnWidths,
@@ -163,8 +164,8 @@ const SORT_MODE_LABELS: Record<SortMode, string> = {
 
 const AVAILABILITY_FILTER_LABELS: Record<AvailabilityFilter, string> = {
   all: "全部狀態",
-  usable: "已有可用料",
-  required: "主料與替代都無料",
+  usable: "已提供料號",
+  required: "未提供虛擬／實體料號",
   pending: "有待申請明細",
   risk: "有風險",
   single: "單一來源",
@@ -260,9 +261,9 @@ const BOM_PAGE_STATUS_OPTIONS: Array<{
     idleClassName: "border-violet-400/18 bg-violet-400/8 text-violet-200 hover:bg-violet-400/14",
   },
 ];
-const DEFAULT_COLUMN_WIDTHS = [96, 92, 260, 160, 260, 210, 190, 180, 220, 130];
-const MIN_COLUMN_WIDTHS = [80, 76, 200, 120, 180, 170, 150, 140, 180, 110];
-const MAX_COLUMN_WIDTHS = [148, 108, 520, 360, 520, 460, 420, 360, 420, 260];
+const DEFAULT_COLUMN_WIDTHS = [96, 92, 260, 160, 260, 210, 190, 180, 160, 180, 220, 130];
+const MIN_COLUMN_WIDTHS = [80, 76, 200, 120, 180, 170, 150, 140, 140, 140, 180, 110];
+const MAX_COLUMN_WIDTHS = [148, 108, 520, 360, 520, 460, 420, 360, 320, 360, 420, 260];
 const DEFAULT_BOM_TABLE_COLOR_THEME: BomTableColorTheme = {
   primary: "#0F5D74",
   alternative: "#343B73",
@@ -284,29 +285,56 @@ const BOM_TABLE_COLOR_FIELDS: Array<{
   { key: "secondary", label: "其餘料", description: "其他替代料或未首選列背景。" },
 ];
 
+const MATERIAL_CE_HELP_BY_HEADER = new Map<string, { header: string; meaning: string; requirement: string; example: string }>(
+  MATERIAL_CE_FIELDS.map((field) => [field.header, field]),
+);
+
+function getMaterialCeFieldHelp(header: string) {
+  const field = MATERIAL_CE_HELP_BY_HEADER.get(header);
+  if (!field) throw new Error(`Unknown CE field: ${header}`);
+  return {
+    header: field.header,
+    description: `${field.meaning}。${field.requirement}`,
+    example: field.example,
+  };
+}
+
 const MATERIAL_FIELD_HELP = {
-  refGroup: { description: "同一 BOM、模組與位號內的分組參考；新 CE 格式以 Ref Des 填寫位號，不需要額外準備此代碼，也不會只因虛擬料號相同就合併不同位號。", example: "C1 或 CARRIER_RAIL" },
-  refDes: { description: "料件在電路板上的位置，可填一個或多個位置代號。", example: "C418、R806" },
-  name: { description: "電路圖或 BOM 使用的料件名稱，用來辨識這一組料。", example: "CAP CER 0.1UF 16V" },
-  qty: { description: "這組料在單一產品或模組中的使用數量。", example: "1、2、4" },
-  assemblyName: { description: "料件所屬的板卡、模組或組裝層級，方便搜尋與報表分類。", example: "C2 Carrier Board" },
-  schematicPart: { description: "原理圖符號的名稱，與該料號是否已建置 Symbol 分開記錄。", example: "CAP、CONN、IC" },
-  symbolStatus: { description: "該實體料是否已建置 Symbol。已有實體料且明確填無時只需補 Symbol；C 等未定義代碼保留原值並待確認。", example: "有、無、待確認；其他代碼照原值保留" },
-  pcbFootprint: { description: "PCB Layout 使用的封裝或圖面名稱。", example: "c0402_t01_h24" },
-  partSpec: { description: "電氣、機構或採購需要確認的完整規格。", example: "0402、1uF、±10%、25V" },
-  manufacturer: { description: "實際生產這顆料的原廠名稱；不是代理商或採購窗口。", example: "Murata Manufacturing Co., Ltd." },
-  manufacturerPartNumber: { description: "單一廠商的單一原廠料號（MPN），每列只填一個；其他可共用料另列。", example: "GRM155C81E105KE11D" },
-  manufacturerPartNumberAlt: { description: "舊檔保留的第二個原廠料號；新資料請拆成另一列，每列只對應一個廠商與 MPN。", example: "舊檔的第二 MPN 原值" },
-  virtualAlternative: { description: "可共用實體料的上層虛擬料號；其下可有多個實體料，每個實體料各自對應單一廠商與單一 MPN。", example: "填公司原始虛擬料號" },
-  requestTicket: { description: "申請單、Excel 單號或工單編號，方便回查申請進度。", example: "REQ-20260713-001" },
-  requestUrl: { description: "對應申請單或工單的完整網址；若沒有可留空。", example: "https://..." },
-  tracking: { description: "此區只顯示最新追蹤內容；新增歷史、圖片與狀態請從表格的「狀態追蹤」進入。", example: "新增追蹤、處理中、已完成" },
-  sourcingStatus: { description: "原廠供應與生命週期狀態，供採購與工程判斷風險。", example: "Approved、NRND、Obsolete" },
-  partUsageStatus: { description: "CE 依公司來源補上的新設計使用限制，與 Sourcing Status 分開；RD 依公司流程確認，不明時保留待確認。", example: "禁用、EOL、ODM 不建議用料、待確認" },
-  partNumber: { description: "申請後取得的實體料號，一個實體料只對應單一廠商與單一 MPN；尚未申請完成時留空。", example: "填公司原始實體料號" },
-  partName: { description: "實體料號對應的公司料名，應與正式系統命名一致。", example: "CAP NCS X6S 0402 1uF" },
-  remark: { description: "補充申請狀態、缺料原因或需要下一位同仁處理的事項。", example: "需申請 Part / Symbol" },
+  refGroup: { description: "網站內部分組參考，不是 CE Excel 欄位。新格式以 Ref Des 填寫位號，不需額外準備代碼；相同虛擬料號不會合併不同位號。", example: "C101" },
+  refDes: getMaterialCeFieldHelp("Ref Des"),
+  name: getMaterialCeFieldHelp("Name"),
+  qty: getMaterialCeFieldHelp("Qty"),
+  assemblyName: { description: "Level 1 模組列所代表的模組名稱；網站保留作分類，料件列不需另填這一欄。", example: "C2 Carrier Board" },
+  schematicPart: getMaterialCeFieldHelp("Schematic_Part"),
+  symbolStatus: getMaterialCeFieldHelp("Symbol"),
+  pcbFootprint: getMaterialCeFieldHelp("PCB_Footprint"),
+  partSpec: getMaterialCeFieldHelp("Part Spec"),
+  manufacturer: getMaterialCeFieldHelp("Manufacturer"),
+  manufacturerPartNumber: getMaterialCeFieldHelp("Manufacturer Part Number"),
+  manufacturerPartNumberAlt: { description: "舊檔保留的第二個廠商料號，新 CE Excel 沒有這一欄。新資料請拆成另一列，每列對應一個廠商及一個 MPN。", example: "舊檔的第二 MPN 原值" },
+  virtualAlternative: getMaterialCeFieldHelp("虛擬料號"),
+  requestTicket: { description: "網站維護的申請單或工單編號，不是 CE Excel 欄位，供回查申請進度。", example: "REQ-20260713-001" },
+  requestUrl: { description: "網站維護的申請單完整網址，不是 CE Excel 欄位；沒有可留白。", example: "https://..." },
+  tracking: { description: "網站維護的最新追蹤內容，不是 CE Excel 欄位。新增歷史、圖片與狀態請從表格的「狀態追蹤」進入。", example: "新增追蹤、處理中、已完成" },
+  sourcingStatus: getMaterialCeFieldHelp("Sourcing Status"),
+  partUsageStatus: getMaterialCeFieldHelp("零件狀態"),
+  phaseOutStatus: getMaterialCeFieldHelp("phase out"),
+  partNumber: getMaterialCeFieldHelp("實體料號"),
+  partName: getMaterialCeFieldHelp("Part Name"),
+  remark: { description: "網站維護的人工申請狀態或備註，不是 CE Excel 欄位，不會由零件狀態自動建立申請。", example: "待確認實體料號、只需補 Symbol" },
 } as const;
+
+const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>> = {
+  material: ["Name", "Manufacturer"].map((header) => getMaterialCeFieldHelp(header).description).join("\n"),
+  refDes: getMaterialCeFieldHelp("Ref Des").description,
+  mpn: getMaterialCeFieldHelp("Manufacturer Part Number").description,
+  internal: ["實體料號", "Schematic_Part", "PCB_Footprint"].map((header) => getMaterialCeFieldHelp(header).description).join("\n"),
+  tx: getMaterialCeFieldHelp("虛擬料號").description,
+  phaseOut: getMaterialCeFieldHelp("phase out").description,
+  symbol: getMaterialCeFieldHelp("Symbol").description,
+  status: ["Sourcing Status", "零件狀態"].map((header) => getMaterialCeFieldHelp(header).description).join("\n"),
+  tracking: "網站人工維護的狀態追蹤，與 CE Excel 的供應／核准狀態、phase out 及零件狀態分開。",
+};
 
 function CompactHoverValue({
   label,
@@ -622,6 +650,7 @@ function MaterialFieldLabel({
           className="max-w-80 border-cyan-300/25 bg-[#071522] px-3 py-2.5 text-slate-100 shadow-xl"
         >
           <p className="text-sm leading-5">{help.description}</p>
+          {"header" in help && <p className="mt-1.5 text-xs text-slate-400">Excel 欄名：{help.header}</p>}
           <p className="mt-1.5 text-xs text-cyan-200">範例：{help.example}</p>
         </TooltipContent>
       </Tooltip>
@@ -701,9 +730,12 @@ function loadColumnWidths() {
 
   try {
     const parsed = JSON.parse(window.sessionStorage.getItem(COLUMN_WIDTHS_SESSION_KEY) ?? "null");
-    const widths = Array.isArray(parsed) && parsed.length === 11
+    const legacyWidths = Array.isArray(parsed) && parsed.length === 11
       ? parsed.filter((_, index) => index !== 8)
       : parsed;
+    const widths = Array.isArray(legacyWidths) && legacyWidths.length === 10
+      ? [...legacyWidths.slice(0, 7), DEFAULT_COLUMN_WIDTHS[7], DEFAULT_COLUMN_WIDTHS[8], ...legacyWidths.slice(7)]
+      : legacyWidths;
     if (!Array.isArray(widths) || widths.length !== DEFAULT_COLUMN_WIDTHS.length) {
       return DEFAULT_COLUMN_WIDTHS;
     }
@@ -858,6 +890,7 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     manufacturer: record.manufacturer,
     sourcingStatus: record.sourcingStatus,
     partUsageStatus: record.partUsageStatus ?? "",
+    ...(Object.prototype.hasOwnProperty.call(record, "phaseOutStatus") ? { phaseOutStatus: record.phaseOutStatus ?? "" } : {}),
     ...(Object.prototype.hasOwnProperty.call(record, "symbolStatus") ? { symbolStatus: record.symbolStatus ?? "" } : {}),
     refGroup: record.refGroup,
     lv: record.lv,
@@ -894,10 +927,11 @@ function createRecordTemplate(group?: MaterialGroup): MaterialWorkbookRecord {
     manufacturer: "",
     sourcingStatus: "",
     partUsageStatus: "",
+    phaseOutStatus: "",
     symbolStatus: "",
     refGroup: group?.displayRef ?? "",
     lv: "",
-    remark: group ? "需申請 00/Part/Symbol" : "",
+    remark: "",
     partNumber: "",
     partName: group?.partName ?? "",
     partSpec: group?.partSpec ?? "",
@@ -2730,20 +2764,21 @@ function TrackingHistoryDialog({
 }
 
 function SymbolBuildStatus({ record, className }: { record: MaterialRecord; className?: string }) {
-  const requirements = getMaterialBuildRequirements(record);
-  const symbolStatus = record.symbolStatus?.trim() || "待確認";
-  const requirementLabel = getMaterialBuildRequirementLabel(record);
+  const value = getMaterialSourceValue(record.symbolStatus);
   return (
     <span
       data-testid="material-symbol-build-status"
-      className={cn("inline-flex min-w-0 max-w-full items-center gap-1 text-xs leading-4", className)}
-      title={`Symbol 建置狀態：${symbolStatus} · ${requirementLabel}`}
+      className={cn("block min-w-0 max-w-full truncate text-xs font-semibold leading-5 text-slate-200", className)}
+      title={`Symbol：${value}`}
     >
-      <span className="flex-none text-slate-500">Symbol</span>
-      <span className="flex-none font-semibold text-slate-200">{symbolStatus}</span>
-      <span className={cn("min-w-0 truncate font-semibold", requirements.status === "complete" ? "text-cyan-200" : "text-amber-200")}>· {requirementLabel}</span>
+      {value}
     </span>
   );
+}
+
+function PhaseOutStatus({ record }: { record: MaterialRecord }) {
+  const value = getMaterialSourceValue(record.phaseOutStatus);
+  return <span data-testid="material-phase-out-status" className="block truncate text-xs font-semibold leading-5 text-slate-200" title={`phase out（零件狀態）：${value}`}>{value}</span>;
 }
 
 function StatusPill({ record }: { record: MaterialRecord }) {
@@ -2751,14 +2786,13 @@ function StatusPill({ record }: { record: MaterialRecord }) {
     <div className="flex min-w-0 flex-col gap-0.5" data-testid="material-source-status">
       <div className="flex min-w-0 items-center gap-1">
         <ActionPill record={record} />
-        <span className="inline-flex min-w-0 truncate rounded border border-slate-400/25 bg-slate-400/10 px-1.5 text-[11px] font-bold leading-5 text-slate-300" title={`供應／核准：${record.sourcingStatus || "未提供"}`}>
-          {record.sourcingStatus || "供應未提供"}
+        <span className="inline-flex min-w-0 truncate rounded border border-slate-400/25 bg-slate-400/10 px-1.5 text-[11px] font-bold leading-5 text-slate-300" title={`供應／核准狀態：${record.sourcingStatus || "未提供"}`}>
+          {record.sourcingStatus || "供應／核准狀態未提供"}
         </span>
         <span className={cn("inline-flex min-w-0 truncate rounded border px-1.5 text-[11px] font-bold leading-5", record.isRisk ? "border-rose-400/30 bg-rose-400/10 text-rose-300" : "border-slate-400/25 bg-slate-400/10 text-slate-300")} title={`零件狀態：${record.partUsageStatus || "未提供"}`}>
           {record.partUsageStatus || "零件狀態未提供"}
         </span>
       </div>
-      <SymbolBuildStatus record={record} />
     </div>
   );
 }
@@ -3260,7 +3294,7 @@ function MaterialRecordDialog({
             </span>
           </div>
           <DialogDescription className="text-xs text-slate-400">
-            <span className="text-rose-300">*</span> 為必填；欄位名稱旁的 ? 有說明與範例。
+            <span className="text-rose-300">*</span> 為必填；? 說明與 CE Excel 一致。內部分組、模組及申請追蹤由網站管理。
           </DialogDescription>
         </DialogHeader>
 
@@ -3268,15 +3302,15 @@ function MaterialRecordDialog({
           <h3 className="mb-2.5 text-sm font-black text-sky-100">電路與原理圖 <span className="font-normal text-slate-400">· 決定主料分組與位置</span></h3>
           <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
             <div className="space-y-1">
-              <MaterialFieldLabel field="refGroup" htmlFor="material-ref" label="Ref Group" required />
-              <Input id="material-ref" disabled={readOnly} value={form.refGroup} onChange={(event) => updateField("refGroup", event.target.value)} placeholder="例如 CARRIER_RAIL" />
+              <MaterialFieldLabel field="refGroup" htmlFor="material-ref" label="內部分組（網站）" required />
+              <Input id="material-ref" disabled={readOnly} value={form.refGroup} onChange={(event) => updateField("refGroup", event.target.value)} placeholder="例如 C101；僅供網站分組" />
             </div>
             <div className="space-y-1">
               <MaterialFieldLabel field="refDes" htmlFor="material-ref-des" label="REF DES" />
               <Input id="material-ref-des" disabled={readOnly} value={form.refDes} onChange={(event) => updateField("refDes", event.target.value)} placeholder="例如 C418、R806" />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <MaterialFieldLabel field="name" htmlFor="material-name" label="電路料名稱" required />
+              <MaterialFieldLabel field="name" htmlFor="material-name" label="料件名稱" required />
               <Input id="material-name" disabled={readOnly} value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="例如 CAP CER 0.1UF 16V" />
             </div>
             <div className="space-y-1">
@@ -3288,15 +3322,15 @@ function MaterialRecordDialog({
               <Input id="material-assembly" disabled={readOnly} value={form.assemblyName} onChange={(event) => updateField("assemblyName", event.target.value)} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="schematicPart" htmlFor="material-symbol" label="Schematic_Part" />
+              <MaterialFieldLabel field="schematicPart" htmlFor="material-symbol" label="原理圖符號名稱" />
               <Input id="material-symbol" disabled={readOnly} value={form.schematicPart} onChange={(event) => updateField("schematicPart", event.target.value)} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="symbolStatus" htmlFor="material-symbol-status" label="Symbol 建置狀態" />
-              <Input id="material-symbol-status" disabled={readOnly} value={form.symbolStatus ?? ""} onChange={(event) => updateField("symbolStatus", event.target.value)} placeholder="有／無／待確認" />
+              <MaterialFieldLabel field="symbolStatus" htmlFor="material-symbol-status" label="Symbol" />
+              <Input id="material-symbol-status" disabled={readOnly} value={form.symbolStatus ?? ""} onChange={(event) => updateField("symbolStatus", event.target.value)} placeholder="保留 Excel 原始值" />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="pcbFootprint" htmlFor="material-footprint" label="Footprint" />
+              <MaterialFieldLabel field="pcbFootprint" htmlFor="material-footprint" label="PCB 封裝名稱" />
               <Input id="material-footprint" disabled={readOnly} value={form.pcbFootprint} onChange={(event) => updateField("pcbFootprint", event.target.value)} />
             </div>
             <div className="space-y-1 md:col-span-3">
@@ -3336,11 +3370,15 @@ function MaterialRecordDialog({
               <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="多個可共用實體料的上層料號" />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="sourcingStatus" htmlFor="material-sourcing" label="Sourcing Status" />
+              <MaterialFieldLabel field="sourcingStatus" htmlFor="material-sourcing" label="供應／核准狀態" />
               <Input id="material-sourcing" disabled={readOnly} value={form.sourcingStatus} onChange={(event) => updateField("sourcingStatus", event.target.value)} placeholder="Approved / NRND / Obsolete" />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="partUsageStatus" htmlFor="material-part-usage" label="零件狀態（CE）" />
+              <MaterialFieldLabel field="phaseOutStatus" htmlFor="material-phase-out" label="phase out（零件狀態）" />
+              <Input id="material-phase-out" disabled={readOnly} value={form.phaseOutStatus ?? ""} onChange={(event) => updateField("phaseOutStatus", event.target.value)} placeholder="保留原文，例如 ACTIVE／PHASEOUT" />
+            </div>
+            <div className="space-y-1">
+              <MaterialFieldLabel field="partUsageStatus" htmlFor="material-part-usage" label="零件狀態" />
               <Input id="material-part-usage" disabled={readOnly} value={form.partUsageStatus ?? ""} onChange={(event) => updateField("partUsageStatus", event.target.value)} placeholder="禁用／EOL／待確認" />
             </div>
             <div className="space-y-1">
@@ -3362,7 +3400,7 @@ function MaterialRecordDialog({
             </div>
             <div className="space-y-1 md:col-span-3">
               <MaterialFieldLabel field="remark" htmlFor="material-remark" label="申請狀態 / 備註" />
-              <Textarea id="material-remark" disabled={readOnly} value={form.remark} onChange={(event) => updateField("remark", event.target.value)} className="min-h-9 text-sm" rows={1} placeholder="例如 OK、需申請 00/Part/Symbol" />
+              <Textarea id="material-remark" disabled={readOnly} value={form.remark} onChange={(event) => updateField("remark", event.target.value)} className="min-h-9 text-sm" rows={1} placeholder="例如 待確認實體料號、只需補 Symbol" />
             </div>
           </div>
         </section>
@@ -3463,7 +3501,7 @@ function MaterialColumnSettings({
                   onCheckedChange={() => onToggle(column.key)}
                   className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-[#192522]"
                 />
-                <span className="min-w-0 flex-1 truncate">{column.label}</span>
+                <span className="min-w-0 flex-1 truncate" title={MATERIAL_TABLE_COLUMN_HELP[column.key]}>{column.label}</span>
                 {column.locked && <span className="text-[10px] text-slate-400">固定</span>}
               </label>
             );
@@ -3525,11 +3563,11 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   const statusLabel = group.riskCount > 0
     ? "料況需 RD 確認"
     : mustApply
-      ? "主料與替代都無料"
+      ? "未提供虛擬／實體料號"
       : primaryReady
-        ? "主料已建"
+        ? "主料資料齊備"
         : availableAlternativeCount > 0
-          ? `已建料候選 ${availableAlternativeCount}`
+          ? `資料齊備候選 ${availableAlternativeCount}`
           : "已有實體／虛擬料號，待確認";
   const statusClassName = group.riskCount > 0
     ? "border-rose-300/40 bg-rose-400/15 text-rose-200"
@@ -3540,7 +3578,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         : "border-cyan-300/40 bg-cyan-400/20 text-cyan-100";
   const statusTitle = [
     primaryAlternative?.remark ? `主料 Remark：${primaryAlternative.remark}` : "",
-    availableAlternativeCount > 0 ? `已建料候選 ${availableAlternativeCount}` : "",
+    availableAlternativeCount > 0 ? `資料齊備候選 ${availableAlternativeCount}` : "",
     group.pendingCount > 0 ? `待建明細 ${group.pendingCount}` : "",
   ].filter(Boolean).join("\n");
   const valueClassName = primaryReady ? "text-emerald-100" : mustApply ? "text-amber-100" : "text-cyan-100";
@@ -3677,15 +3715,15 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                   <Copy className={cn("h-3.5 w-3.5 flex-none opacity-60 group-hover:opacity-100", iconClassName)} />
                 </button>
               ) : (
-                <span className="text-xs font-semibold leading-5 text-amber-300">尚未建立實體料號</span>
+                <span className="text-xs font-semibold leading-5 text-amber-300">實體料號未提供</span>
               )}
               <span
                 className="truncate text-xs leading-4 text-slate-400"
-                title={`原理圖名稱：${group.schematicPart || "未提供"}\nFootprint：${group.footprint || "No Footprint"}`}
+                title={`原理圖符號名稱：${statusRecord.schematicPart || "原理圖符號未提供"}\nPCB 封裝名稱：${statusRecord.pcbFootprint || "封裝未提供"}`}
               >
-                <span className="font-mono text-cyan-300/90">{group.schematicPart || "未提供"}</span>
+                <span className="font-mono text-cyan-300/90">{statusRecord.schematicPart || "原理圖符號未提供"}</span>
                 <span className="text-slate-600"> · </span>
-                <span className="font-mono text-indigo-300/90">{group.footprint || "No Footprint"}</span>
+                <span className="font-mono text-indigo-300/90">{statusRecord.pcbFootprint || "封裝未提供"}</span>
               </span>
             </div>
           </td>
@@ -3701,6 +3739,12 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
             )}
           </td>
         )}
+        {columns.phaseOut && (
+          <td data-material-cell="phaseOut" className={MATERIAL_CELL_CLASS}><PhaseOutStatus record={statusRecord} /></td>
+        )}
+        {columns.symbol && (
+          <td data-material-cell="symbol" className={MATERIAL_CELL_CLASS}><SymbolBuildStatus record={statusRecord} /></td>
+        )}
         {columns.status && (
           <td data-material-cell="status" className={MATERIAL_CELL_CLASS}>
             <div className="flex min-w-0 flex-col gap-0.5">
@@ -3714,7 +3758,6 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                   </span>
                 )}
               </span>
-              <SymbolBuildStatus record={statusRecord} />
             </div>
           </td>
         )}
@@ -3772,7 +3815,6 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
 
 function CompactAlternativeRows({
   canEdit,
-  group,
   records,
   primaryRecord,
   itemValue,
@@ -3805,7 +3847,6 @@ function CompactAlternativeRows({
   const alternatives = records.filter((record) => record.id !== primaryRecord.id);
   const groupRefDes = primaryRecord.refDes || primaryRecord.refGroup || "-";
   const refValues = splitRefDesignators(groupRefDes);
-  const schematicTitle = `原理圖名稱：${group.schematicPart || "未提供"}\nFootprint：${group.footprint || "未設定"}`;
 
   return (
     <>
@@ -3887,7 +3928,7 @@ function CompactAlternativeRows({
                       <span className="min-w-0 truncate font-mono text-[13px] font-black leading-5 text-blue-200 group-hover:text-blue-100">{record.manufacturerPartNumber}</span>
                       <Copy className="h-3.5 w-3.5 flex-none text-blue-400 opacity-60 group-hover:opacity-100" />
                     </span>
-                    {record.manufacturerPartNumberAlt && <span className="truncate font-mono text-xs leading-4 text-slate-500" title={`舊檔第二 MPN：${record.manufacturerPartNumberAlt}`}>舊值 {record.manufacturerPartNumberAlt}</span>}
+                    {record.manufacturerPartNumberAlt && <span className="truncate font-mono text-xs leading-4 text-slate-500" title={`舊檔第二 MPN：${record.manufacturerPartNumberAlt}`}>舊檔第二 MPN：{record.manufacturerPartNumberAlt}</span>}
                   </button>
                 ) : (
                   <span className="text-xs font-bold text-amber-300">未填 MPN</span>
@@ -3903,12 +3944,12 @@ function CompactAlternativeRows({
                       <Copy className="h-3.5 w-3.5 flex-none text-cyan-300 opacity-60 group-hover:opacity-100" />
                     </button>
                   ) : (
-                    <span className="text-xs font-bold leading-5 text-amber-300">尚未建立</span>
+                    <span className="text-xs font-bold leading-5 text-amber-300">實體料號未提供</span>
                   )}
-                  <span className="truncate text-xs leading-4 text-slate-500" title={schematicTitle}>
-                    <span className="font-mono text-cyan-300/80">{group.schematicPart || "未提供"}</span>
+                  <span className="truncate text-xs leading-4 text-slate-500" title={`原理圖符號名稱：${record.schematicPart || "未提供"}\nPCB 封裝名稱：${record.pcbFootprint || "未提供"}`}>
+                    <span className="font-mono text-cyan-300/80">{record.schematicPart || "原理圖符號未提供"}</span>
                     <span className="text-slate-600"> · </span>
-                    <span className="font-mono text-indigo-300/80">{group.footprint || "未設定"}</span>
+                    <span className="font-mono text-indigo-300/80">{record.pcbFootprint || "封裝未提供"}</span>
                   </span>
                 </div>
               </td>
@@ -3921,6 +3962,12 @@ function CompactAlternativeRows({
                   <InlineVirtualAlternativeEditor canEdit={canEdit} value={record.virtualAlternative ?? ""} onSave={(value) => onSaveVirtual(record, value)} />
                 )}
               </td>
+            )}
+            {columns.phaseOut && (
+              <td className={MATERIAL_CELL_CLASS}><PhaseOutStatus record={record} /></td>
+            )}
+            {columns.symbol && (
+              <td className={MATERIAL_CELL_CLASS}><SymbolBuildStatus record={record} /></td>
             )}
             {columns.status && (
               <td className={MATERIAL_CELL_CLASS}>
@@ -4659,8 +4706,8 @@ export function MaterialRequestPage() {
           ? "單一料 無替代料 單一來源 single source no alternative"
           : "有替代料 multiple source alternative";
         const applicationSearchText = mustApply
-          ? "完全無料 主料與替代都無料 待申請料 必須申請 must apply no usable material"
-          : "至少一顆可用料 有可用替代 remark ok 尾數 00 或 zz 或 zy usable material";
+          ? "未提供虛擬／實體料號 料號待補 完全無料 主料與替代都無料"
+          : "已提供料號 已提供實體料號或虛擬料號";
 
         searchableTextByGroup.set(group.key, `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`);
         const refTokens = Array.from(new Set(
@@ -5353,7 +5400,7 @@ export function MaterialRequestPage() {
         return {
           actionStatus: getActionLabel(record.actionKind),
           assembly: group.assemblyName,
-          footprint: group.footprint,
+          footprint: record.pcbFootprint,
           images: images.map((image) => ({
             dataUrl: image.dataUrl,
             id: image.id,
@@ -5366,7 +5413,8 @@ export function MaterialRequestPage() {
           manufacturerPartNumber: record.manufacturerPartNumber,
           manufacturerPartNumberAlt: record.manufacturerPartNumberAlt,
           marked: markedGroupKeySet.has(group.key),
-          materialName: group.name,
+          materialName: record.name,
+          partName: record.partName,
           qty: String(group.qty),
           refDes: record.refDes || group.primaryRecord.refDes,
           refGroup: group.displayRef,
@@ -5375,8 +5423,9 @@ export function MaterialRequestPage() {
           requestUrl: requestMeta.url,
           sourcingStatus: record.sourcingStatus,
           partUsageStatus: record.partUsageStatus ?? "",
-          specification: record.partSpec || group.partSpec || group.partName,
-          symbol: group.schematicPart,
+          phaseOutStatus: record.phaseOutStatus ?? "",
+          specification: record.partSpec,
+          symbol: record.schematicPart,
           symbolStatus: record.symbolStatus ?? "",
           buildRequirement: getMaterialBuildRequirementLabel(record),
           trackingOwner: latestTrackingEntry?.createdBy ?? "",
@@ -5763,7 +5812,7 @@ export function MaterialRequestPage() {
 
           <div className="flex snap-x gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <button type="button" onClick={clearFilters} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", availability === "all" && !showMarkedOnly ? "border-sky-200/50 bg-sky-300 text-sky-950" : "border-sky-300/20 bg-sky-400/10 text-sky-100")}>全部 {dataset.stats.totalGroups.toLocaleString()}</button>
-            <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", availability === "required" ? "border-amber-200/60 bg-amber-300 text-amber-950" : "border-amber-300/25 bg-amber-400/10 text-amber-100")}>待申請 {requiredApplicationCount.toLocaleString()}</button>
+            <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", availability === "required" ? "border-amber-200/60 bg-amber-300 text-amber-950" : "border-amber-300/25 bg-amber-400/10 text-amber-100")}>料號待補 {requiredApplicationCount.toLocaleString()}</button>
             <button type="button" onClick={() => setShowMarkedOnly((current) => !current)} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", showMarkedOnly ? "border-lime-200/60 bg-lime-300 text-lime-950" : "border-lime-300/20 bg-lime-400/10 text-lime-100")}><Star className={cn("mr-1 inline h-3.5 w-3.5", showMarkedOnly && "fill-current")} />標記 {markedGroupCount}</button>
           </div>
 
@@ -5960,7 +6009,7 @@ export function MaterialRequestPage() {
                   }
                 }}
                 aria-label="搜尋料號"
-                placeholder="搜尋料名、REF DES、MPN、實體料號、虛擬料號、狀態追蹤；可輸入『完全無料』"
+                placeholder="搜尋料名、REF DES、MPN、實體料號、虛擬料號、狀態追蹤；可輸入『料號待補』"
                 className="h-9 border-[#356985] bg-[#071522] pl-9 pr-9 text-sm text-slate-100 placeholder:text-[#a9c0d1] focus-visible:ring-cyan-400"
               />
               {isSearchPending && (
@@ -5969,7 +6018,7 @@ export function MaterialRequestPage() {
             </div>
             <div data-material-zone="summary-filters" className="flex items-center gap-1">
               <button type="button" onClick={clearFilters} aria-pressed={availability === "all" && !showMarkedOnly} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "all" ? "border-sky-300/34 bg-sky-400/18 text-sky-50" : "border-slate-500/28 bg-slate-900/42 text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-sky-100")}>主料 <strong className="ml-1">{dataset.stats.totalGroups.toLocaleString()}</strong></button>
-              <button type="button" onClick={() => applyAvailabilityFilter("required")} aria-pressed={availability === "required"} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "required" ? "border-amber-300/50 bg-amber-400/20 text-amber-50" : "border-amber-300/28 bg-amber-400/10 text-amber-100 hover:bg-amber-400/18 hover:text-amber-50")}>待申請 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => applyAvailabilityFilter("required")} aria-pressed={availability === "required"} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "required" ? "border-amber-300/50 bg-amber-400/20 text-amber-50" : "border-amber-300/28 bg-amber-400/10 text-amber-100 hover:bg-amber-400/18 hover:text-amber-50")}>料號待補 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
               {!columnVisibility.marked && (
                 <button
                   type="button"
@@ -6067,13 +6116,13 @@ export function MaterialRequestPage() {
                   <button type="button" onClick={() => openRecord(mainRecord, "view")} className="min-w-0 flex-1 text-left">
                     <p className="truncate text-sm font-black leading-5 text-white">{group.name || mainRecord.name || "未命名料件"}</p>
                     <p className="truncate text-xs font-semibold text-cyan-200">{getDisplayMpn(mainRecord) || "尚未填寫 MPN"} · <span className="font-normal text-slate-400">{mainRecord.manufacturer || "未指定廠商"}</span></p>
-                    <div className="mt-1 flex min-w-0 items-center gap-1.5"><PartUsageSummary records={group.records} /><SymbolBuildStatus record={mainRecord} /></div>
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><PartUsageSummary records={group.records} /><span className="inline-flex min-w-0 items-center gap-1"><span className="text-xs text-slate-500">phase out</span><PhaseOutStatus record={mainRecord} /></span><span className="inline-flex min-w-0 items-center gap-1"><span className="text-xs text-slate-500">Symbol</span><SymbolBuildStatus record={mainRecord} /></span></div>
                   </button>
                   <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-500" />
                 </div>
 
                 <div className="flex items-center gap-1.5 overflow-x-auto border-y border-white/5 bg-[#091827]/85 px-2.5 py-1.5 text-[11px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  <span className={cn("shrink-0 rounded-full border px-2 py-0.5 font-black", group.riskCount > 0 ? "border-rose-300/35 bg-rose-400/12 text-rose-100" : mustApply ? "border-amber-300/35 bg-amber-400/12 text-amber-100" : "border-slate-300/30 bg-slate-400/10 text-slate-100")}>{group.riskCount > 0 ? "料況需確認" : mustApply ? "需要申請" : mainRecord.sourcingStatus || "未提供料況"}</span>
+                  <span className={cn("shrink-0 rounded-full border px-2 py-0.5 font-black", group.riskCount > 0 ? "border-rose-300/35 bg-rose-400/12 text-rose-100" : mustApply ? "border-amber-300/35 bg-amber-400/12 text-amber-100" : "border-slate-300/30 bg-slate-400/10 text-slate-100")}>{group.riskCount > 0 ? "料況需確認" : mustApply ? "未提供虛擬／實體料號" : mainRecord.sourcingStatus || "供應／核准狀態未提供"}</span>
                   <span className="max-w-[11rem] shrink-0 truncate rounded-full border border-slate-500/20 bg-slate-800/35 px-2 py-0.5 text-slate-200">REF {mainRecord.refDes || mainRecord.refGroup || "-"}</span>
                   <span className={cn("shrink-0 rounded-full border px-2 py-0.5 font-bold", availableAlternativeCount > 0 ? "border-emerald-300/25 bg-emerald-400/8 text-emerald-200" : "border-slate-500/25 bg-slate-800/40 text-slate-300")}>替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
                 </div>
@@ -6123,11 +6172,11 @@ export function MaterialRequestPage() {
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
                     onResize={(width) => resizeColumn(columnIndex, width)}
-                    className={columnIndex === 9
+                    className={column.key === "actions"
                       ? MATERIAL_STICKY_COLUMN_CLASSES.header
                       : undefined}
                   >
-                    <span data-testid={columnIndex === 9 ? "material-data-update-header" : undefined}>
+                    <span data-testid={column.key === "actions" ? "material-data-update-header" : undefined} title={MATERIAL_TABLE_COLUMN_HELP[column.key]}>
                       {column.label}
                     </span>
                   </ResizableHeader>
@@ -6164,6 +6213,8 @@ export function MaterialRequestPage() {
                 {columnVisibility.mpn && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="mpn" getOptions={getColumnFilterOptions} label="MPN" selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} /></th>}
                 {columnVisibility.internal && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="internal" getOptions={getColumnFilterOptions} label="實體料號" selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} /></th>}
                 {columnVisibility.tx && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="virtualAlternative" getOptions={getColumnFilterOptions} label="虛擬料號" selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} /></th>}
+                {columnVisibility.phaseOut && <th className="border-r border-blue-300/20 p-1.5"><div className="flex h-8 items-center justify-center text-[11px] text-slate-500">來源原文</div></th>}
+                {columnVisibility.symbol && <th className="border-r border-blue-300/20 p-1.5"><div className="flex h-8 items-center justify-center text-[11px] text-slate-500">來源原文</div></th>}
                 {columnVisibility.status && (
                   <th className="border-r border-blue-300/20 p-1.5">
                     <div className="flex h-8 items-center justify-center text-[11px] text-slate-500">—</div>
