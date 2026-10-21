@@ -134,7 +134,9 @@ test("Excel keeps CE usage, source sourcing and RD tracking in separate columns"
   assert.equal(values.getCell(columnFor(sheet, "建料狀態")).value, "待建料");
   assert.equal(values.getCell(columnFor(sheet, "單號")).value, "REQ-1");
   assert.deepEqual(values.getCell(columnFor(sheet, "申請連結")).value, { text: row.requestUrl, hyperlink: row.requestUrl });
-  assert.equal(values.getCell(columnFor(sheet, "內部料號")).value, row.internalPartNumber);
+  assert.equal(values.getCell(columnFor(sheet, "實體料號")).value, row.internalPartNumber);
+  assert.equal(values.getCell(columnFor(sheet, "虛擬料號")).value, row.tx);
+  assert.equal(values.getCell(columnFor(sheet, "舊檔第二 MPN")).value, row.manufacturerPartNumberAlt);
   assert.equal(values.getCell(columnFor(sheet, "規格 / 備註")).value, row.specification);
   assert.equal(sheet.autoFilter, "A11:AA11");
   assert.equal(sheet.getCell("AA1").master.address, "A1");
@@ -146,10 +148,10 @@ test("manual OK and Part/Symbol build requirements remain independent in Excel a
   const row = reportRow({ actionStatus: "OK", buildRequirement: "只需補Symbol" });
   const sheet = await exportedSheet([row]);
   assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "建料狀態")).value, "OK");
-  assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "Part／Symbol缺件判斷")).value, "只需補Symbol");
-  assert.equal(columnFor(sheet, "Part／Symbol缺件判斷"), columnFor(sheet, "建料狀態") + 1);
+  assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "實體料／Symbol缺件判斷")).value, "只需補Symbol");
+  assert.equal(columnFor(sheet, "實體料／Symbol缺件判斷"), columnFor(sheet, "建料狀態") + 1);
   const html = await (await captureExport(exportMaterialReportHtml, snapshot([row]))).text();
-  assert.match(html, /<th>建料狀態<\/th><th>Part／Symbol缺件判斷<\/th>/);
+  assert.match(html, /<th>建料狀態<\/th><th>實體料／Symbol缺件判斷<\/th>/);
   assert.match(html, /<td>OK<\/td>\s*<td>只需補Symbol<\/td>/);
 });
 
@@ -178,7 +180,7 @@ test("Excel insertion preserves widths, status alignment and image placement", a
   const row = reportRow({ images: [{ id: "image-1", name: "測試圖片.jpg", mimeType: "image/jpeg", dataUrl: "data:image/jpeg;base64,/9j/2Q==" }] });
   const sheet = await exportedSheet([row], { includeImage: true });
   assert.deepEqual(sheet.columns.map((column) => column.width ?? 9), [10, 8, 20, 20, 30, 22, 9, 26, 18, 20, 20, 24, 24, 22, 45, 16, 34, 18, 30, 26, 18, 18, 18, 28, 22, 38, 18]);
-  for (const header of ["項次", "標記", "Qty", "Symbol建置狀態", "零件狀態", "目前狀態", "建料狀態", "Part／Symbol缺件判斷"]) {
+  for (const header of ["項次", "標記", "Qty", "Symbol建置狀態", "零件狀態", "目前狀態", "建料狀態", "實體料／Symbol缺件判斷"]) {
     assert.equal(sheet.getRow(12).getCell(columnFor(sheet, header)).alignment.horizontal, "center");
   }
   assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "狀態追蹤")).alignment.horizontal, "left");
@@ -196,11 +198,11 @@ test("legacy rows with no optional usage, Symbol status or build requirement exp
   const sheet = await exportedSheet([legacy]);
   assert.ok(["", null].includes(sheet.getRow(12).getCell(columnFor(sheet, "零件狀態")).value));
   assert.ok(["", null].includes(sheet.getRow(12).getCell(columnFor(sheet, "Symbol建置狀態")).value));
-  assert.ok(["", null].includes(sheet.getRow(12).getCell(columnFor(sheet, "Part／Symbol缺件判斷")).value));
+  assert.ok(["", null].includes(sheet.getRow(12).getCell(columnFor(sheet, "實體料／Symbol缺件判斷")).value));
   assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "Schematic_Part（名稱）")).value, "RES");
   assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "Sourcing Status")).value, "Approved");
   const html = await (await captureExport(exportMaterialReportHtml, snapshot([legacy]))).text();
-  assert.match(html, /<th>TX<\/th><th>零件狀態<\/th><th>狀態追蹤<\/th>/);
+  assert.match(html, /<th>虛擬料號<\/th><th>零件狀態<\/th><th>狀態追蹤<\/th>/);
   assert.match(html, /<td>TX-1<\/td>\s*<td><\/td>\s*<td><span class="status">處理中<\/span>/);
   assert.match(html, /Schematic_Part（名稱）：RES<br>Footprint：0402<\/small><\/td>\s*<td><\/td>\s*<td>TX-1<\/td>/);
   assert.match(html, /<td>Approved<\/td>/);
@@ -215,9 +217,9 @@ for (const format of ["html", "zip"]) {
     const html = format === "zip"
       ? await (await JSZip.loadAsync(await blob.arrayBuffer())).file("料號申請篩選報表.html").async("string")
       : await blob.text();
-    assert.match(html, /<th>TX<\/th><th>零件狀態<\/th><th>狀態追蹤<\/th>/);
-    assert.match(html, /<th>申請資訊<\/th><th>Sourcing Status<\/th><th>建料狀態<\/th><th>Part／Symbol缺件判斷<\/th><th>規格 \/ 備註<\/th>/);
-    assert.match(html, /<th>內部料號 \/ 圖面名稱<\/th><th>Symbol建置狀態<\/th><th>TX<\/th>/);
+    assert.match(html, /<th>虛擬料號<\/th><th>零件狀態<\/th><th>狀態追蹤<\/th>/);
+    assert.match(html, /<th>申請資訊<\/th><th>Sourcing Status<\/th><th>建料狀態<\/th><th>實體料／Symbol缺件判斷<\/th><th>規格 \/ 備註<\/th>/);
+    assert.match(html, /<th>實體料號 \/ 圖面名稱<\/th><th>Symbol建置狀態<\/th><th>虛擬料號<\/th>/);
     assert.match(html, /Schematic_Part（名稱）：RES &lt;name&gt;<br>Footprint：0402/);
     assert.match(html, /<td>DNP &lt;script&gt;alert\(&quot;usage&quot;\)&lt;\/script&gt; &amp; &#039;quoted&#039;<\/td>/);
     assert.match(html, /<td>CE &lt;Approved&gt; &amp; sourcing<\/td>/);

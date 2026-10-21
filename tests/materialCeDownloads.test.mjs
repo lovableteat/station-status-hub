@@ -16,6 +16,10 @@ test("the downloadable CE reference imports the documented examples with both in
   assert.equal(payload.sheetName, "CE交付範例");
   assert.equal(payload.recordCount, 4);
   assert.equal(payload.records[0].partNumber, "000-DEMO-001");
+  assert.equal(payload.records[0].virtualAlternative, "DEMO-VIRTUAL-001");
+  assert.equal(payload.records[1].virtualAlternative, "DEMO-VIRTUAL-001");
+  assert.notEqual(payload.records[0].partNumber, payload.records[1].partNumber);
+  assert.notEqual(payload.records[0].manufacturer, payload.records[1].manufacturer);
   assert.deepEqual(payload.records.map(record => record.symbolStatus), ["無", "C", "有", "無"]);
   assert.equal(payload.records[1].schematicPart, "CAP");
   assert.equal(payload.records[1].sourcingStatus, "Approved");
@@ -34,6 +38,11 @@ test("the downloadable blank template has no sample records and accepts one real
   assert.ok(sheet);
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
   assert.deepEqual(rows[3].slice(0, headers.length), headers);
+  assert.equal(headers.length, 15);
+  assert.ok(headers.includes("虛擬料號") && headers.includes("實體料號"));
+  for (const removed of ["Manufacturer Part Number(2)", "PEGA P/N", "Part Number", "Ref_tmp", "LV", "CIS/Remark"]) {
+    assert.ok(!headers.includes(removed), `${removed} must not burden the new CE format`);
+  }
   assert.ok(rows.slice(4).every(row => !row[1]), "a blank template must not contain sample part names");
   await assert.rejects(parseMaterialWorkbookFile(new File([bytes], "blank.xlsx")), /找不到可解析的料號資料/);
 

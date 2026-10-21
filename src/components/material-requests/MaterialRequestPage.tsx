@@ -201,8 +201,8 @@ const COLUMN_FILTER_LABELS: Record<ColumnFilterKey, string> = {
   material: "料件",
   refDes: "REF DES",
   mpn: "MPN",
-  internal: "內部料號",
-  virtualAlternative: "TX",
+  internal: "實體料號",
+  virtualAlternative: "虛擬料號",
   trackingStatus: "狀態追蹤",
 };
 
@@ -280,31 +280,31 @@ const BOM_TABLE_COLOR_FIELDS: Array<{
   description: string;
 }> = [
   { key: "primary", label: "主料", description: "主料列與首筆主資料背景。" },
-  { key: "alternative", label: "替代料", description: "替代料列與可用替代背景。" },
+  { key: "alternative", label: "替代料", description: "替代料列與已建料候選背景。" },
   { key: "secondary", label: "其餘料", description: "其他替代料或未首選列背景。" },
 ];
 
 const MATERIAL_FIELD_HELP = {
-  refGroup: { description: "同一組主料與替代料的分組代碼。相同 Ref Group 會顯示在同一組。", example: "C1 或 CARRIER_RAIL" },
+  refGroup: { description: "同一 BOM、模組與位號內的分組參考；新 CE 格式以 Ref Des 填寫位號，不需要額外準備此代碼，也不會只因虛擬料號相同就合併不同位號。", example: "C1 或 CARRIER_RAIL" },
   refDes: { description: "料件在電路板上的位置，可填一個或多個位置代號。", example: "C418、R806" },
   name: { description: "電路圖或 BOM 使用的料件名稱，用來辨識這一組料。", example: "CAP CER 0.1UF 16V" },
   qty: { description: "這組料在單一產品或模組中的使用數量。", example: "1、2、4" },
   assemblyName: { description: "料件所屬的板卡、模組或組裝層級，方便搜尋與報表分類。", example: "C2 Carrier Board" },
   schematicPart: { description: "原理圖符號的名稱，與該料號是否已建置 Symbol 分開記錄。", example: "CAP、CONN、IC" },
-  symbolStatus: { description: "該料號是否已建置 Symbol。已有 Part 且明確填無時只需補 Symbol；C 等未定義代碼保留原值並待確認。", example: "有、無、待確認；其他代碼照原值保留" },
+  symbolStatus: { description: "該實體料是否已建置 Symbol。已有實體料且明確填無時只需補 Symbol；C 等未定義代碼保留原值並待確認。", example: "有、無、待確認；其他代碼照原值保留" },
   pcbFootprint: { description: "PCB Layout 使用的封裝或圖面名稱。", example: "c0402_t01_h24" },
   partSpec: { description: "電氣、機構或採購需要確認的完整規格。", example: "0402、1uF、±10%、25V" },
   manufacturer: { description: "實際生產這顆料的原廠名稱；不是代理商或採購窗口。", example: "Murata Manufacturing Co., Ltd." },
-  manufacturerPartNumber: { description: "原廠正式料號（MPN），用來判斷是否為同一顆料。", example: "GRM155C81E105KE11D" },
-  manufacturerPartNumberAlt: { description: "同一筆資料需要保留的第二個原廠料號；沒有可留空。", example: "替代封裝或舊版 MPN" },
-  virtualAlternative: { description: "內部暫用的 TX／規劃代號，不會取代正式 MPN 或狀態追蹤。", example: "1AT200087S00" },
+  manufacturerPartNumber: { description: "單一廠商的單一原廠料號（MPN），每列只填一個；其他可共用料另列。", example: "GRM155C81E105KE11D" },
+  manufacturerPartNumberAlt: { description: "舊檔保留的第二個原廠料號；新資料請拆成另一列，每列只對應一個廠商與 MPN。", example: "舊檔的第二 MPN 原值" },
+  virtualAlternative: { description: "可共用實體料的上層虛擬料號；其下可有多個實體料，每個實體料各自對應單一廠商與單一 MPN。", example: "填公司原始虛擬料號" },
   requestTicket: { description: "申請單、Excel 單號或工單編號，方便回查申請進度。", example: "REQ-20260713-001" },
   requestUrl: { description: "對應申請單或工單的完整網址；若沒有可留空。", example: "https://..." },
   tracking: { description: "此區只顯示最新追蹤內容；新增歷史、圖片與狀態請從表格的「狀態追蹤」進入。", example: "新增追蹤、處理中、已完成" },
   sourcingStatus: { description: "原廠供應與生命週期狀態，供採購與工程判斷風險。", example: "Approved、NRND、Obsolete" },
   partUsageStatus: { description: "CE 依公司來源補上的新設計使用限制，與 Sourcing Status 分開；RD 依公司流程確認，不明時保留待確認。", example: "禁用、EOL、ODM 不建議用料、待確認" },
-  partNumber: { description: "公司內部正式建立的料號；尚未建料時請留空。", example: "1A20-060X0IN" },
-  partName: { description: "內部料號對應的公司料名，應與正式系統命名一致。", example: "CAP NCS X6S 0402 1uF" },
+  partNumber: { description: "申請後取得的實體料號，一個實體料只對應單一廠商與單一 MPN；尚未申請完成時留空。", example: "填公司原始實體料號" },
+  partName: { description: "實體料號對應的公司料名，應與正式系統命名一致。", example: "CAP NCS X6S 0402 1uF" },
   remark: { description: "補充申請狀態、缺料原因或需要下一位同仁處理的事項。", example: "需申請 Part / Symbol" },
 } as const;
 
@@ -2180,7 +2180,7 @@ function InlineVirtualAlternativeEditor({
     const nextValue = draft.trim();
 
     if (!nextValue) {
-      const confirmed = window.confirm("TX 尚未填入資訊，確定要維持空白嗎？");
+      const confirmed = window.confirm("虛擬料號尚未填入資訊，確定要維持空白嗎？");
       if (!confirmed) {
         requestAnimationFrame(() => inputRef.current?.focus());
         return;
@@ -2225,7 +2225,7 @@ function InlineVirtualAlternativeEditor({
         onBlur={commit}
         onKeyDown={handleKeyDown}
         className="h-8 border-teal-300/50 bg-[#071522] font-mono text-[13px] font-bold text-teal-100 focus-visible:ring-teal-400"
-        placeholder="輸入 TX"
+        placeholder="輸入虛擬料號"
       />
     );
   }
@@ -2237,9 +2237,9 @@ function InlineVirtualAlternativeEditor({
         disabled={!canEdit}
         onClick={() => setEditing(true)}
         className="group flex h-8 w-full items-center justify-between gap-2 rounded-md border border-teal-400/20 bg-teal-400/[0.07] px-2 text-left transition-colors hover:bg-teal-400/15 disabled:cursor-default disabled:hover:bg-teal-400/[0.07]"
-        title={value ? `TX：${value}（點擊修改）` : "點擊填寫 TX"}
+        title={value ? `虛擬料號：${value}（點擊修改）` : "點擊填寫虛擬料號"}
       >
-        <span className={cn("min-w-0 truncate font-mono text-[13px] font-bold", value ? "text-teal-200 group-hover:text-teal-100" : "text-slate-400")}>{value || "填寫 TX"}</span>
+        <span className={cn("min-w-0 truncate font-mono text-[13px] font-bold", value ? "text-teal-200 group-hover:text-teal-100" : "text-slate-400")}>{value || "填寫虛擬料號"}</span>
         <Pencil className="h-3.5 w-3.5 flex-none text-teal-400/80" />
       </button>
       {/* Mounted only while confirming so a page of rows does not carry a dialog each. */}
@@ -2247,7 +2247,7 @@ function InlineVirtualAlternativeEditor({
         <Dialog open onOpenChange={(open) => { if (!open) closeConfirmation(); }}>
           <DialogContent className="max-w-sm border-teal-400/25 bg-[#0d1729] p-5 text-slate-100">
             <DialogHeader>
-              <DialogTitle className="text-lg text-slate-50">確認更新 TX</DialogTitle>
+              <DialogTitle className="text-lg text-slate-50">確認更新虛擬料號</DialogTitle>
               <DialogDescription className="text-slate-400">送出後會寫入共用資料。</DialogDescription>
             </DialogHeader>
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-lg border border-teal-400/15 bg-[#091222] px-3 py-2.5 text-sm">
@@ -3314,24 +3314,26 @@ function MaterialRecordDialog({
               <Input id="material-maker" disabled={readOnly} value={form.manufacturer} onChange={(event) => updateField("manufacturer", event.target.value)} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="manufacturerPartNumber" htmlFor="material-mpn" label="Manufacturer P/N" />
+              <MaterialFieldLabel field="manufacturerPartNumber" htmlFor="material-mpn" label="廠商料號（MPN）" />
               <Input id="material-mpn" disabled={readOnly} value={form.manufacturerPartNumber} onChange={(event) => updateField("manufacturerPartNumber", event.target.value)} />
             </div>
+            {form.manufacturerPartNumberAlt.trim() && (
+              <div className="space-y-1">
+                <MaterialFieldLabel field="manufacturerPartNumberAlt" htmlFor="material-mpn-2" label="舊檔第二 MPN" />
+                <Input id="material-mpn-2" disabled={readOnly} value={form.manufacturerPartNumberAlt} onChange={(event) => updateField("manufacturerPartNumberAlt", event.target.value)} />
+              </div>
+            )}
             <div className="space-y-1">
-              <MaterialFieldLabel field="manufacturerPartNumberAlt" htmlFor="material-mpn-2" label="第二廠商料號" />
-              <Input id="material-mpn-2" disabled={readOnly} value={form.manufacturerPartNumberAlt} onChange={(event) => updateField("manufacturerPartNumberAlt", event.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="partNumber" htmlFor="material-internal-pn" label="內部料號" />
+              <MaterialFieldLabel field="partNumber" htmlFor="material-internal-pn" label="實體料號" />
               <Input id="material-internal-pn" disabled={readOnly} value={form.partNumber} onChange={(event) => updateField("partNumber", event.target.value)} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="partName" htmlFor="material-part-name" label="內部料名" />
+              <MaterialFieldLabel field="partName" htmlFor="material-part-name" label="實體料名" />
               <Input id="material-part-name" disabled={readOnly} value={form.partName} onChange={(event) => updateField("partName", event.target.value)} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="virtualAlternative" htmlFor="material-virtual-alternative" label="TX" />
-              <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="暫用／規劃代號" />
+              <MaterialFieldLabel field="virtualAlternative" htmlFor="material-virtual-alternative" label="虛擬料號" />
+              <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="多個可共用實體料的上層料號" />
             </div>
             <div className="space-y-1">
               <MaterialFieldLabel field="sourcingStatus" htmlFor="material-sourcing" label="Sourcing Status" />
@@ -3527,8 +3529,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
       : primaryReady
         ? "主料已建"
         : availableAlternativeCount > 0
-          ? `已有可用替代 ${availableAlternativeCount}`
-          : "已有公司料號／TX，待確認";
+          ? `已建料候選 ${availableAlternativeCount}`
+          : "已有實體／虛擬料號，待確認";
   const statusClassName = group.riskCount > 0
     ? "border-rose-300/40 bg-rose-400/15 text-rose-200"
     : mustApply
@@ -3538,7 +3540,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         : "border-cyan-300/40 bg-cyan-400/20 text-cyan-100";
   const statusTitle = [
     primaryAlternative?.remark ? `主料 Remark：${primaryAlternative.remark}` : "",
-    availableAlternativeCount > 0 ? `可用替代 ${availableAlternativeCount}` : "",
+    availableAlternativeCount > 0 ? `已建料候選 ${availableAlternativeCount}` : "",
     group.pendingCount > 0 ? `待建明細 ${group.pendingCount}` : "",
   ].filter(Boolean).join("\n");
   const valueClassName = primaryReady ? "text-emerald-100" : mustApply ? "text-amber-100" : "text-cyan-100";
@@ -3669,13 +3671,13 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                     actions.copy(primaryAlternative.partNumber);
                   }}
                   className="group flex min-w-0 items-center gap-1.5 text-left"
-                  title={`複製內部料號：${primaryAlternative.partNumber}`}
+                  title={`複製實體料號：${primaryAlternative.partNumber}`}
                 >
                   <span className={cn("min-w-0 truncate font-mono text-[13px] font-black leading-5", valueClassName)}>{primaryAlternative.partNumber}</span>
                   <Copy className={cn("h-3.5 w-3.5 flex-none opacity-60 group-hover:opacity-100", iconClassName)} />
                 </button>
               ) : (
-                <span className="text-xs font-semibold leading-5 text-amber-300">尚未建立內部料號</span>
+                <span className="text-xs font-semibold leading-5 text-amber-300">尚未建立實體料號</span>
               )}
               <span
                 className="truncate text-xs leading-4 text-slate-400"
@@ -3860,7 +3862,7 @@ function CompactAlternativeRows({
                         backgroundColor: withAlpha(colorTheme.alternative, 0.28),
                       }}
                     >
-                      可用替代
+                      已建料候選
                     </span>
                   )}
                 </div>
@@ -3885,7 +3887,7 @@ function CompactAlternativeRows({
                       <span className="min-w-0 truncate font-mono text-[13px] font-black leading-5 text-blue-200 group-hover:text-blue-100">{record.manufacturerPartNumber}</span>
                       <Copy className="h-3.5 w-3.5 flex-none text-blue-400 opacity-60 group-hover:opacity-100" />
                     </span>
-                    {record.manufacturerPartNumberAlt && <span className="truncate font-mono text-xs leading-4 text-slate-500" title={`第二料號：${record.manufacturerPartNumberAlt}`}>Alt {record.manufacturerPartNumberAlt}</span>}
+                    {record.manufacturerPartNumberAlt && <span className="truncate font-mono text-xs leading-4 text-slate-500" title={`舊檔第二 MPN：${record.manufacturerPartNumberAlt}`}>舊值 {record.manufacturerPartNumberAlt}</span>}
                   </button>
                 ) : (
                   <span className="text-xs font-bold text-amber-300">未填 MPN</span>
@@ -3896,7 +3898,7 @@ function CompactAlternativeRows({
               <td className={MATERIAL_CELL_CLASS}>
                 <div className="flex min-w-0 flex-col">
                   {record.partNumber ? (
-                    <button type="button" onClick={() => onCopy(record.partNumber)} className="group flex min-w-0 items-center gap-1.5 text-left" title={`複製內部料號：${record.partNumber}`}>
+                    <button type="button" onClick={() => onCopy(record.partNumber)} className="group flex min-w-0 items-center gap-1.5 text-left" title={`複製實體料號：${record.partNumber}`}>
                       <span className="min-w-0 truncate font-mono text-[13px] font-black leading-5 text-cyan-200">{record.partNumber}</span>
                       <Copy className="h-3.5 w-3.5 flex-none text-cyan-300 opacity-60 group-hover:opacity-100" />
                     </button>
@@ -3914,7 +3916,7 @@ function CompactAlternativeRows({
             {columns.tx && (
               <td className={MATERIAL_CELL_CLASS}>
                 {record.id === primaryTxRecordId ? (
-                  <span className="block truncate font-mono text-[13px] font-bold text-teal-200/70" title="這筆的 TX 已顯示在主料列，請在主料列修改">{record.virtualAlternative || "—"}</span>
+                  <span className="block truncate font-mono text-[13px] font-bold text-teal-200/70" title="這筆的虛擬料號已顯示在主料列，請在主料列修改">{record.virtualAlternative || "—"}</span>
                 ) : (
                   <InlineVirtualAlternativeEditor canEdit={canEdit} value={record.virtualAlternative ?? ""} onSave={(value) => onSaveVirtual(record, value)} />
                 )}
@@ -5167,7 +5169,7 @@ export function MaterialRequestPage() {
       if (!isBomWriteCurrent(writeScope)) return;
       toast({
         title: "資料更新失敗",
-        description: "TX 尚未同步到共用資料，已重新載入最新版本。",
+        description: "虛擬料號尚未同步到共用資料，已重新載入最新版本。",
         variant: "destructive",
       });
     });
@@ -5744,7 +5746,7 @@ export function MaterialRequestPage() {
                   }
                 }}
                 enterKeyHint="search"
-                placeholder="掃料名、MPN、REF DES、內部料號"
+                placeholder="掃料名、MPN、REF DES、實體料號"
                 aria-label="快速搜尋料號"
                 className="h-11 rounded-xl border-cyan-300/35 bg-[#071522] pl-10 pr-3 text-base text-white placeholder:text-slate-500 focus-visible:ring-cyan-300"
               />
@@ -5958,7 +5960,7 @@ export function MaterialRequestPage() {
                   }
                 }}
                 aria-label="搜尋料號"
-                placeholder="搜尋料名、REF DES、MPN、內部料號、狀態追蹤；可輸入『完全無料』"
+                placeholder="搜尋料名、REF DES、MPN、實體料號、虛擬料號、狀態追蹤；可輸入『完全無料』"
                 className="h-9 border-[#356985] bg-[#071522] pl-9 pr-9 text-sm text-slate-100 placeholder:text-[#a9c0d1] focus-visible:ring-cyan-400"
               />
               {isSearchPending && (
@@ -6160,8 +6162,8 @@ export function MaterialRequestPage() {
                 {columnVisibility.material && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="material" getOptions={getColumnFilterOptions} label="料件" selectedValues={columnFilters.material} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, material: values }))} /></th>}
                 {columnVisibility.refDes && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="refDes" getOptions={getColumnFilterOptions} label="REF DES" selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} /></th>}
                 {columnVisibility.mpn && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="mpn" getOptions={getColumnFilterOptions} label="MPN" selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} /></th>}
-                {columnVisibility.internal && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="internal" getOptions={getColumnFilterOptions} label="內部料號" selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} /></th>}
-                {columnVisibility.tx && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="virtualAlternative" getOptions={getColumnFilterOptions} label="TX" selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} /></th>}
+                {columnVisibility.internal && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="internal" getOptions={getColumnFilterOptions} label="實體料號" selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} /></th>}
+                {columnVisibility.tx && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="virtualAlternative" getOptions={getColumnFilterOptions} label="虛擬料號" selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} /></th>}
                 {columnVisibility.status && (
                   <th className="border-r border-blue-300/20 p-1.5">
                     <div className="flex h-8 items-center justify-center text-[11px] text-slate-500">—</div>
