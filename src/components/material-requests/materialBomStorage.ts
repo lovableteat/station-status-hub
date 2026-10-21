@@ -39,6 +39,11 @@ export interface BomWorkspaceProject {
   updatedAt: string;
 }
 
+export interface BomWorkspaceArchive {
+  archivedAt: string;
+  archivedBy: string;
+}
+
 export interface BomWorkspace {
   id: string;
   name: string;
@@ -47,6 +52,7 @@ export interface BomWorkspace {
   recordMeta?: Record<string, BomRecordSyncMeta>;
   tableColorTheme?: BomTableColorTheme;
   project?: BomWorkspaceProject;
+  archive?: BomWorkspaceArchive;
   isLoaded?: boolean;
   updatedAt: string;
 }
@@ -125,7 +131,8 @@ const PREFERENCE_KEY_PREFIX = "material-bom-workspace:";
 const PAGE_TRACKER_KEY_PREFIX = "material-bom-page-tracker:";
 const TABLE_COLOR_THEME_KEY_PREFIX = "material-bom-table-color-theme:";
 const PROJECT_KEY_PREFIX = "material-bom-project:";
-const BOM_PREFERENCE_KEY_PREFIXES = [PREFERENCE_KEY_PREFIX, PAGE_TRACKER_KEY_PREFIX, TABLE_COLOR_THEME_KEY_PREFIX, PROJECT_KEY_PREFIX];
+const ARCHIVE_KEY_PREFIX = "material-bom-archive:";
+const BOM_PREFERENCE_KEY_PREFIXES = [PREFERENCE_KEY_PREFIX, PAGE_TRACKER_KEY_PREFIX, TABLE_COLOR_THEME_KEY_PREFIX, PROJECT_KEY_PREFIX, ARCHIVE_KEY_PREFIX];
 const RECORD_BATCH_SIZE = 200;
 const REMOTE_RECORD_FETCH_BATCH_SIZE = 1000;
 const REMOTE_RECORD_FETCH_CONCURRENCY = 8;
@@ -308,6 +315,10 @@ function getProjectRowKey(workspaceId: string) {
   return `${PROJECT_KEY_PREFIX}${workspaceId}`;
 }
 
+function getArchiveRowKey(workspaceId: string) {
+  return `${ARCHIVE_KEY_PREFIX}${workspaceId}`;
+}
+
 function normalizePageTracker(raw: unknown, fallbackUpdatedAt: string) {
   if (!raw || typeof raw !== "object") return undefined;
 
@@ -386,6 +397,17 @@ function normalizeWorkspaceProject(raw: unknown, fallbackUpdatedAt: string) {
   } satisfies BomWorkspaceProject;
 }
 
+function normalizeWorkspaceArchive(raw: unknown, fallbackUpdatedAt: string) {
+  if (!raw || typeof raw !== "object") return undefined;
+  const candidate = raw as Partial<BomWorkspaceArchive> & { archived?: unknown };
+  if (candidate.archived === false) return undefined;
+  if (typeof candidate.archivedAt !== "string" && candidate.archived !== true) return undefined;
+  return {
+    archivedAt: typeof candidate.archivedAt === "string" && candidate.archivedAt ? candidate.archivedAt : fallbackUpdatedAt,
+    archivedBy: typeof candidate.archivedBy === "string" ? candidate.archivedBy.trim() : "",
+  } satisfies BomWorkspaceArchive;
+}
+
 function parsePreferenceWorkspace(raw: unknown, fallbackUpdatedAt: string): BomWorkspace | null {
   if (!raw || typeof raw !== "object") return null;
 
@@ -417,6 +439,7 @@ function parsePreferenceWorkspace(raw: unknown, fallbackUpdatedAt: string): BomW
     pageTracker: normalizePageTracker(workspace.pageTracker, fallbackUpdatedAt),
     tableColorTheme: normalizeTableColorTheme(workspace.tableColorTheme),
     project: normalizeWorkspaceProject(workspace.project, fallbackUpdatedAt),
+    archive: normalizeWorkspaceArchive(workspace.archive, fallbackUpdatedAt),
     updatedAt: typeof workspace.updatedAt === "string" ? workspace.updatedAt : fallbackUpdatedAt,
   } satisfies BomWorkspace;
 }
@@ -509,6 +532,7 @@ function buildWorkspaceFromRows(
   pageTracker?: BomPageTracker,
   tableColorTheme?: BomTableColorTheme,
   project?: BomWorkspaceProject,
+  archive?: BomWorkspaceArchive,
   isComplete = true,
 ): BomWorkspace {
   const records = [...recordRows]
@@ -531,6 +555,7 @@ function buildWorkspaceFromRows(
     ),
     tableColorTheme,
     project,
+    archive,
     // Only a complete remote record set is safe for client-side grouping,
     // filtering, and pagination. Partial pages remain summary workspaces.
     isLoaded: isComplete || workspaceRow.record_count === 0,
@@ -543,6 +568,7 @@ function buildWorkspaceSummary(
   pageTracker?: BomPageTracker,
   tableColorTheme?: BomTableColorTheme,
   project?: BomWorkspaceProject,
+  archive?: BomWorkspaceArchive,
 ): BomWorkspace {
   return {
     id: workspaceRow.id,
@@ -558,6 +584,7 @@ function buildWorkspaceSummary(
     recordMeta: {},
     tableColorTheme,
     project,
+    archive,
     isLoaded: workspaceRow.record_count === 0,
     updatedAt: workspaceRow.updated_at,
   };
@@ -569,6 +596,7 @@ function buildWorkspaceFromCache(
   pageTracker?: BomPageTracker,
   tableColorTheme?: BomTableColorTheme,
   project?: BomWorkspaceProject,
+  archive?: BomWorkspaceArchive,
 ): BomWorkspace {
   return {
     ...cachedWorkspace,
@@ -584,6 +612,7 @@ function buildWorkspaceFromCache(
     pageTracker,
     tableColorTheme,
     project,
+    archive,
     isLoaded: true,
     updatedAt: workspaceRow.updated_at,
   };
@@ -725,11 +754,32 @@ async function loadProjectMap() {
   return projectByWorkspace;
 }
 
+async function loadArchiveMap() {
+  const data = await runBomReadWithRetry(async () => {
+    const { data: preferenceRows, error } = await supabaseClient
+      .from(PREFERENCE_TABLE)
+      .select("table_key, column_order, updated_at")
+      .like("table_key", `${ARCHIVE_KEY_PREFIX}%`);
+
+    if (error) throw error;
+    return preferenceRows;
+  });
+
+  const archiveByWorkspace = new Map<string, BomWorkspaceArchive>();
+  for (const row of (data ?? []) as BomPreferenceRow[]) {
+    const workspaceId = row.table_key.replace(ARCHIVE_KEY_PREFIX, "");
+    if (!workspaceId) continue;
+    const archive = normalizeWorkspaceArchive(row.column_order, row.updated_at);
+    if (archive) archiveByWorkspace.set(workspaceId, archive);
+  }
+  return archiveByWorkspace;
+}
+
 async function loadRemoteBomWorkspaces(
   preferredWorkspaceId?: string,
   options: BomWorkspaceLoadOptions = {},
 ) {
-  const [workspaceRows, pageTrackerByWorkspace, tableColorThemeByWorkspace, loadedProjectByWorkspace] = await Promise.all([
+  const [workspaceRows, pageTrackerByWorkspace, tableColorThemeByWorkspace, loadedProjectByWorkspace, loadedArchiveByWorkspace] = await Promise.all([
     runBomReadWithRetry(async () => {
       const { data, error } = await supabaseClient
       .from(WORKSPACE_TABLE)
@@ -742,10 +792,14 @@ async function loadRemoteBomWorkspaces(
     loadPageTrackerMap().catch(() => new Map<string, BomPageTracker>()),
     loadTableColorThemeMap().catch(() => new Map<string, BomTableColorTheme>()),
     loadProjectMap().catch(() => null),
+    loadArchiveMap().catch(() => null),
   ]);
   // An unreadable project map must not regroup every BOM as unassigned (and cache that); keep the cached projects instead.
   const projectByWorkspace = loadedProjectByWorkspace ?? new Map<string, BomWorkspaceProject>(
     (options.cachedResult?.workspaces ?? []).flatMap((workspace) => (workspace.project ? [[workspace.id, workspace.project] as const] : [])),
+  );
+  const archiveByWorkspace = loadedArchiveByWorkspace ?? new Map<string, BomWorkspaceArchive>(
+    (options.cachedResult?.workspaces ?? []).flatMap((workspace) => (workspace.archive ? [[workspace.id, workspace.archive] as const] : [])),
   );
   const activeWorkspaceId = preferredWorkspaceId && workspaceRows.some((row) => row.id === preferredWorkspaceId)
     ? preferredWorkspaceId
@@ -779,6 +833,7 @@ async function loadRemoteBomWorkspaces(
             pageTrackerByWorkspace.get(workspaceRow.id),
             tableColorThemeByWorkspace.get(workspaceRow.id),
             projectByWorkspace.get(workspaceRow.id),
+            archiveByWorkspace.get(workspaceRow.id),
           )
         : buildWorkspaceFromRows(
           workspaceRow,
@@ -786,6 +841,7 @@ async function loadRemoteBomWorkspaces(
           pageTrackerByWorkspace.get(workspaceRow.id),
           tableColorThemeByWorkspace.get(workspaceRow.id),
           projectByWorkspace.get(workspaceRow.id),
+          archiveByWorkspace.get(workspaceRow.id),
           isComplete,
         )
       : buildWorkspaceSummary(
@@ -793,6 +849,7 @@ async function loadRemoteBomWorkspaces(
           pageTrackerByWorkspace.get(workspaceRow.id),
           tableColorThemeByWorkspace.get(workspaceRow.id),
           projectByWorkspace.get(workspaceRow.id),
+          archiveByWorkspace.get(workspaceRow.id),
         )),
   );
   const activeRecordRows = activeWorkspaceId && !canReuseCache
@@ -942,6 +999,27 @@ async function removeRemoteTableColorTheme(id: string) {
   if (error) throw error;
 }
 
+async function saveRemoteWorkspaceArchive(workspaceId: string, archive: BomWorkspaceArchive | null) {
+  const { error } = await supabaseClient
+    .from(PREFERENCE_TABLE)
+    .upsert({
+      table_key: getArchiveRowKey(workspaceId),
+      // Unarchiving is a tombstone, like clearing a project: DELETE payloads carry no table_key for realtime.
+      column_order: archive ?? { archived: false, archivedAt: "", archivedBy: "" },
+    }, { onConflict: "table_key" });
+
+  if (error) throw error;
+}
+
+async function removeRemoteWorkspaceArchive(id: string) {
+  const { error } = await supabaseClient
+    .from(PREFERENCE_TABLE)
+    .delete()
+    .eq("table_key", getArchiveRowKey(id));
+
+  if (error) throw error;
+}
+
 async function removeRemoteWorkspaceProject(id: string) {
   const { error } = await supabaseClient
     .from(PREFERENCE_TABLE)
@@ -981,24 +1059,27 @@ async function migrateLegacyBomWorkspaces(
 }
 
 async function loadRecoveryBomWorkspaces() {
-  const [preferenceWorkspaces, legacyWorkspaces, pageTrackerByWorkspace, tableColorThemeByWorkspace, projectByWorkspace] = await Promise.all([
+  const [preferenceWorkspaces, legacyWorkspaces, pageTrackerByWorkspace, tableColorThemeByWorkspace, projectByWorkspace, archiveByWorkspace] = await Promise.all([
     loadPreferenceBackedBomWorkspaces().catch(() => []),
     loadLegacyBomWorkspaces(),
     loadPageTrackerMap().catch(() => new Map<string, BomPageTracker>()),
     loadTableColorThemeMap().catch(() => new Map<string, BomTableColorTheme>()),
     loadProjectMap().catch(() => new Map<string, BomWorkspaceProject>()),
+    loadArchiveMap().catch(() => new Map<string, BomWorkspaceArchive>()),
   ]);
   const mergedPreferenceWorkspaces = preferenceWorkspaces.map((workspace) => ({
     ...workspace,
     pageTracker: pageTrackerByWorkspace.get(workspace.id) ?? workspace.pageTracker,
     tableColorTheme: tableColorThemeByWorkspace.get(workspace.id) ?? workspace.tableColorTheme,
     project: projectByWorkspace.get(workspace.id) ?? workspace.project,
+    archive: archiveByWorkspace.get(workspace.id) ?? workspace.archive,
   }));
   const mergedLegacyWorkspaces = legacyWorkspaces.map((workspace) => ({
     ...workspace,
     pageTracker: pageTrackerByWorkspace.get(workspace.id) ?? workspace.pageTracker,
     tableColorTheme: tableColorThemeByWorkspace.get(workspace.id) ?? workspace.tableColorTheme,
     project: projectByWorkspace.get(workspace.id) ?? workspace.project,
+    archive: archiveByWorkspace.get(workspace.id) ?? workspace.archive,
   }));
 
   try {
@@ -1016,12 +1097,16 @@ async function loadRecoveryBomWorkspaces() {
         const latestProjectByWorkspace = await loadProjectMap().catch(
           () => new Map<string, BomWorkspaceProject>(),
         );
+        const latestArchiveByWorkspace = await loadArchiveMap().catch(
+          () => new Map<string, BomWorkspaceArchive>(),
+        );
 
         return workspaces.map((workspace) => ({
           ...workspace,
           pageTracker: latestPageTrackerByWorkspace.get(workspace.id) ?? workspace.pageTracker,
           tableColorTheme: latestTableColorThemeByWorkspace.get(workspace.id) ?? workspace.tableColorTheme,
           project: latestProjectByWorkspace.get(workspace.id) ?? workspace.project,
+          archive: latestArchiveByWorkspace.get(workspace.id) ?? workspace.archive,
         }));
       },
     );
@@ -1243,6 +1328,17 @@ export async function loadBomWorkspaceProjects() {
   return loadProjectMap();
 }
 
+export async function loadBomWorkspaceArchives() {
+  return loadArchiveMap();
+}
+
+export async function saveBomWorkspaceArchive(workspaceId: string, archive: BomWorkspaceArchive | null, assertWrite: () => void = () => {}) {
+  assertWrite();
+  await saveRemoteWorkspaceArchive(workspaceId, archive);
+  assertWrite();
+  void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, archive: archive ?? undefined }), assertWrite);
+}
+
 export async function saveBomWorkspaceProject(workspaceId: string, project: BomWorkspaceProject | null, assertWrite: () => void = () => {}) {
   assertWrite();
   await saveRemoteWorkspaceProject(workspaceId, project);
@@ -1265,6 +1361,7 @@ export async function removeBomWorkspace(id: string, assertWrite: () => void = (
     removeRemotePageTracker(id),
     removeRemoteTableColorTheme(id),
     removeRemoteWorkspaceProject(id),
+    removeRemoteWorkspaceArchive(id),
   ]);
   assertWrite();
   await removeLegacyBomWorkspace(id, assertWrite);

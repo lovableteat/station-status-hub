@@ -83,7 +83,7 @@ test("the second header row shows the workbook meaning, or the filter where one 
 test("main rows are memoised and keep every cell to one or two short lines", () => {
   assert.match(source, /const MaterialGroupRow = memo\(function MaterialGroupRow\(/);
   assert.match(source, /const rowActions = useMemo<MaterialRowActions>/);
-  assert.match(source, /const MATERIAL_CELL_CLASS = "border-r border-blue-400\/10 px-2 py-1\.5 align-middle"/);
+  assert.match(source, /const MATERIAL_CELL_CLASS = "border-r border-white\/20 px-2 py-1\.5 align-middle"/);
   assert.doesNotMatch(rowBlock, /py-3|line-clamp|<br \/>|主料 Remark:|個 MPN/);
   const identityBlock = slice("function MaterialIdentityHover(", "function MaterialFieldLabel(");
   assert.match(identityBlock, /data-testid="material-primary-name"\s+className="block min-w-0 flex-1 truncate/);
@@ -161,7 +161,7 @@ test("the desktop empty state keeps the table skeleton and the standard wording"
 
 test("BOMs are grouped by project in BOM 管理 and in the header switcher", () => {
   assert.match(source, /import \{ useTestProject \} from "@\/components\/test-projects\/TestProjectProvider"/);
-  assert.match(source, /const bomProjectGroups = useMemo\(\s*\(\) => groupBomWorkspacesByProject\(orderedBomWorkspaces, \{ activeProjectId, activeProjectName: activeProject\?\.name, projectNames \}\)/);
+  assert.match(source, /const bomProjectGroups = useMemo\(\s*\(\) => groupBomWorkspacesByProject\(activeBomWorkspaces, \{ activeProjectId, activeProjectName: activeProject\?\.name, projectNames \}\)/);
   const bomManager = slice("function BomManagerDialog(", "function MaterialRecordDialog(");
   assert.match(bomManager, /projectGroups: BomProjectGroup<BomWorkspace>\[\]/);
   assert.match(bomManager, /visibleGroups\.flatMap\(\(group\) => \[/);
@@ -187,6 +187,8 @@ test("the project row has one writer and realtime keeps the bom: prefix of works
   assert.doesNotMatch(storageSource, /key\.split\(":"\)\.pop\(\)/);
   assert.match(storageSource, /loadProjectMap\(\)\.catch\(\(\) => null\)/);
   assert.match(storageSource, /export async function loadBomWorkspaceProjects\(\)/);
+  assert.match(storageSource, /export async function saveBomWorkspaceArchive\(/);
+  assert.match(storageSource, /column_order: archive \?\? \{ archived: false, archivedAt: "", archivedBy: "" \}/);
   assert.match(source, /if \(!existingWorkspace && importProject\) \{\s*recentLocalWorkspaceWritesRef\.current\.set\(workspaceId, Date\.now\(\)\);\s*await saveBomWorkspaceProject\(workspaceId, importProject,/);
   assert.match(source, /if \(!activeProjectId \|\| !workspaceListSettled\) return;/);
   assert.match(source, /if \(change\.recordIds\.length === 0 && change\.workspaceIds\.length > 0\) void refreshBomProjects\(\);/);
@@ -258,4 +260,15 @@ test("待處理料 can turn the pending parts into per-vendor mail content", () 
   const pending = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
   assert.match(pending, /data-testid="pending-mail-button"[\s\S]*?信件生成/);
   assert.match(pending, /<PendingMailDialog groups=\{groups\}/);
+});
+
+test("BOM 管理 can archive a BOM and keeps archived BOMs out of the switcher and project groups", () => {
+  const bomManager = slice("function BomManagerDialog(", "function MaterialRecordDialog(");
+  assert.match(bomManager, />封存</);
+  assert.match(bomManager, />解除封存</);
+  assert.match(bomManager, /data-testid="bom-archive-section"/);
+  assert.match(source, /const activeBomWorkspaces = useMemo\(\(\) => orderedBomWorkspaces\.filter\(\(workspace\) => !workspace\.archive\)/);
+  assert.match(source, /groupBomWorkspacesByProject\(activeBomWorkspaces, /);
+  assert.match(source, /!workspace\.archive && workspace\.project\?\.projectId === activeProjectId/);
+  assert.match(source, /saveBomWorkspaceArchive\(workspaceId, nextArchive, \(\) => assertBomWriteCurrent\(writeScope\)\)/);
 });
