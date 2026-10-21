@@ -231,7 +231,7 @@ const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:"
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const VIEW_STATE_KEY_PREFIX = "station-status-hub:material-view:v1:";
-const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v9";
+const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v10";
 const HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const MAX_BOM_TRACKER_PAGES = 500;
@@ -244,25 +244,25 @@ const BOM_PAGE_STATUS_OPTIONS: Array<{
   {
     value: "done",
     label: "已完成",
-    activeClassName: "border-emerald-300/35 bg-emerald-400/18 text-emerald-50",
-    idleClassName: "border-emerald-400/18 bg-emerald-400/8 text-emerald-200 hover:bg-emerald-400/14",
+    activeClassName: "bg-success text-success-foreground",
+    idleClassName: "text-muted-foreground hover:bg-accent hover:text-foreground",
   },
   {
     value: "pending",
     label: "待處理",
-    activeClassName: "border-amber-300/35 bg-amber-400/18 text-amber-50",
-    idleClassName: "border-amber-400/18 bg-amber-400/8 text-amber-200 hover:bg-amber-400/14",
+    activeClassName: "bg-accent text-foreground",
+    idleClassName: "text-muted-foreground hover:bg-accent hover:text-foreground",
   },
   {
     value: "done_missing",
     label: "已完成但缺料",
-    activeClassName: "border-violet-300/35 bg-violet-400/18 text-violet-50",
-    idleClassName: "border-violet-400/18 bg-violet-400/8 text-violet-200 hover:bg-violet-400/14",
+    activeClassName: "bg-warning text-warning-foreground",
+    idleClassName: "text-muted-foreground hover:bg-accent hover:text-foreground",
   },
 ];
-const DEFAULT_COLUMN_WIDTHS = [96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130];
-const MIN_COLUMN_WIDTHS = [80, 76, 200, 120, 180, 170, 150, 140, 140, 180, 110];
-const MAX_COLUMN_WIDTHS = [148, 108, 520, 360, 520, 460, 420, 360, 360, 420, 260];
+const DEFAULT_COLUMN_WIDTHS = [56, 56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150, 220, 110];
+const MIN_COLUMN_WIDTHS = [48, 48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 120, 180, 100];
+const MAX_COLUMN_WIDTHS = [96, 80, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 420, 200];
 const DEFAULT_BOM_TABLE_COLOR_THEME: BomTableColorTheme = {
   primary: "#0F5D74",
   alternative: "#343B73",
@@ -273,6 +273,15 @@ const FILTER_OPTION_LIST_HEIGHT = 224;
 const FILTER_OPTION_OVERSCAN = 8;
 // One collator for the Ref sort; localeCompare with options builds one per comparison.
 const REF_COLLATOR = new Intl.Collator(undefined, { numeric: true });
+// Status chips share one shape and the page's semantic tones.
+const CHIP_BASE = "inline-flex min-w-0 max-w-full items-center truncate rounded-md border px-1.5 text-[11px] font-semibold leading-5";
+const CHIP_TONES = {
+  neutral: "border-border bg-secondary text-secondary-foreground",
+  primary: "border-primary/35 bg-primary/15 text-primary",
+  success: "border-success/35 bg-success/15 text-success",
+  warning: "border-warning/35 bg-warning/15 text-warning",
+  danger: "border-destructive/35 bg-destructive/15 text-destructive",
+} as const;
 
 const BOM_TABLE_COLOR_FIELDS: Array<{
   key: keyof BomTableColorTheme;
@@ -322,17 +331,6 @@ const MATERIAL_FIELD_HELP = {
   remark: { description: "網站維護的人工申請狀態或備註，不是 CE Excel 欄位，不會由零件狀態自動建立申請。", example: "待確認實體料號、待核對原理圖符號" },
 } as const;
 
-const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>> = {
-  material: ["Name", "Manufacturer"].map((header) => getMaterialCeFieldHelp(header).description).join("\n"),
-  refDes: getMaterialCeFieldHelp("Ref Des").description,
-  mpn: getMaterialCeFieldHelp("Manufacturer Part Number").description,
-  internal: ["實體料號", "Schematic_Part", "PCB_Footprint"].map((header) => getMaterialCeFieldHelp(header).description).join("\n"),
-  tx: getMaterialCeFieldHelp("虛擬料號").description,
-  phaseOut: getMaterialCeFieldHelp("phase out").description,
-  status: ["Sourcing Status", "零件狀態"].map((header) => getMaterialCeFieldHelp(header).description).join("\n"),
-  tracking: "網站人工維護的狀態追蹤，與 CE Excel 的供應／核准狀態、phase out 及零件狀態分開。",
-};
-
 function CompactHoverValue({
   label,
   maxItems = 3,
@@ -371,7 +369,7 @@ function CompactHoverValue({
             event.stopPropagation();
             if (onCopy && summary.fullText !== "-") onCopy(summary.fullText);
           }}
-          className="group inline-flex w-full min-w-0 items-center gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+          className="group inline-flex w-full min-w-0 items-center gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span
             data-testid="compact-hover-preview"
@@ -380,8 +378,8 @@ function CompactHoverValue({
             {summary.preview}
           </span>
           {summary.remainingCount > 0 && (
-            <span className="inline-flex flex-none rounded border border-cyan-300/20 bg-cyan-300/10 px-1.5 py-0.5 text-[11px] font-bold leading-4 text-cyan-200">
-              +{summary.remainingCount} 項
+            <span className="inline-flex flex-none rounded border border-border bg-secondary px-1.5 text-[11px] font-semibold leading-4 text-muted-foreground">
+              +{summary.remainingCount}
             </span>
           )}
         </button>
@@ -390,89 +388,69 @@ function CompactHoverValue({
         data-testid="compact-hover-content"
         align="start"
         side="top"
-        sideOffset={10}
+        sideOffset={8}
         collisionPadding={16}
-        className="w-[min(540px,calc(100vw-24px))] overflow-hidden rounded-2xl border-cyan-200/35 bg-[#071522] p-0 text-slate-100 shadow-[0_28px_80px_-28px_rgba(6,182,212,0.55)]"
+        className="w-[min(480px,calc(100vw-24px))] overflow-hidden rounded-2xl border-border bg-popover p-0 text-popover-foreground shadow-lg"
       >
-        <div className="flex items-center justify-between gap-4 border-b border-cyan-300/20 bg-[linear-gradient(135deg,rgba(34,211,238,0.16),rgba(59,130,246,0.05))] px-4 py-3.5">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-xl border border-cyan-200/25 bg-cyan-300/10 text-cyan-100">
-              <Layers3 className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black text-white">{label}</p>
-              <p className="mt-0.5 text-xs text-cyan-100/65">共 {summary.values.length} 項完整資料</p>
-            </div>
-          </div>
-          <span className="rounded-full border border-cyan-200/20 bg-black/20 px-2.5 py-1 font-mono text-xs font-black text-cyan-100">
-            {filteredValues.length}/{summary.values.length}
-          </span>
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+          <p className="text-sm font-semibold text-foreground">{label}</p>
+          <span className="font-mono text-xs text-muted-foreground">{filteredValues.length}/{summary.values.length}</span>
         </div>
 
         {canSearch ? (
-          <div className="border-b border-white/[0.07] px-4 py-3">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-200/70" />
-              <input
-                data-testid="compact-hover-search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={`搜尋${label}...`}
-                className="h-9 w-full rounded-xl border border-cyan-200/20 bg-black/25 pl-9 pr-9 text-sm text-white outline-none placeholder:text-slate-400 focus:border-cyan-200/55 focus:ring-2 focus:ring-cyan-300/10"
-              />
-              {query ? (
-                <button
-                  type="button"
-                  aria-label="清除搜尋"
-                  onClick={() => setQuery("")}
-                  className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-white/10 hover:text-white"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
-            </div>
+          <div className="relative border-b border-border px-3 py-2">
+            <Search className="pointer-events-none absolute left-6 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              data-testid="compact-hover-search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`搜尋${label}`}
+              className="h-8 w-full rounded-lg border border-input bg-secondary pl-8 pr-8 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-ring/30"
+            />
+            {query ? (
+              <button
+                type="button"
+                aria-label="清除搜尋"
+                onClick={() => setQuery("")}
+                className="absolute right-5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
           </div>
         ) : null}
 
-        <ScrollArea className="h-[min(288px,42vh)]">
-          <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ScrollArea className="h-[min(260px,40vh)]">
+          <ol className="grid gap-x-3 px-4 py-2 sm:grid-cols-2">
             {filteredValues.length > 0 ? filteredValues.map((value, index) => (
-              <div
-                key={`${value}-${index}`}
-                className="group/value flex min-w-0 items-center gap-2 rounded-xl border border-sky-300/14 bg-sky-400/[0.055] px-2.5 py-2 transition-colors hover:border-cyan-200/35 hover:bg-cyan-300/[0.09]"
-                title={value}
-              >
-                <span className="inline-flex h-5 min-w-5 flex-none items-center justify-center rounded-md bg-cyan-300/10 px-1 font-mono text-[10px] font-black text-cyan-200">
-                  {index + 1}
-                </span>
-                <span className="min-w-0 truncate font-mono text-xs text-sky-50">{value}</span>
-              </div>
+              <li key={`${value}-${index}`} className="flex min-w-0 items-center gap-2 border-b border-border/60 py-1.5 last:border-b-0" title={value}>
+                <span className="w-6 flex-none font-mono text-[10px] text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
+                <span className="min-w-0 truncate font-mono text-xs text-foreground">{value}</span>
+              </li>
             )) : (
-              <div className="col-span-full py-10 text-center">
-                <Search className="mx-auto h-5 w-5 text-slate-600" />
-                <p className="mt-2 text-sm font-semibold text-slate-400">找不到符合「{query}」的內容</p>
-              </div>
+              <li className="col-span-full py-8 text-center text-sm text-muted-foreground">找不到符合「{query}」的內容</li>
             )}
-          </div>
+          </ol>
         </ScrollArea>
 
-        <div className="flex items-center justify-between gap-3 border-t border-white/[0.07] bg-black/15 px-4 py-3">
-          <p className="text-xs text-slate-400">滑鼠可停留瀏覽；搜尋不會改動原始資料</p>
-          {onCopy && summary.fullText !== "-" ? (
-            <button
+        {onCopy && summary.fullText !== "-" ? (
+          <div className="flex justify-end border-t border-border px-3 py-2">
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               data-testid="compact-hover-copy-all"
               onClick={(event) => {
                 event.stopPropagation();
                 onCopy(summary.fullText);
               }}
-              className="inline-flex h-8 flex-none items-center gap-1.5 rounded-lg border border-cyan-200/30 bg-cyan-300/10 px-3 text-xs font-black text-cyan-100 transition-colors hover:border-cyan-100/60 hover:bg-cyan-300/20"
+              className="h-8 px-3 text-xs"
             >
-              <Copy className="h-3.5 w-3.5" />
+              <Copy className="mr-1.5 h-3.5 w-3.5" />
               複製全部
-            </button>
-          ) : null}
-        </div>
+            </Button>
+          </div>
+        ) : null}
       </HoverCardContent>
     </HoverCard>
   );
@@ -507,105 +485,86 @@ function MaterialIdentityHover({
           data-testid="material-identity-trigger"
           aria-label={`查看${name}的 REF DES 與 MPN`}
           onClick={(event) => event.stopPropagation()}
-          className="group/identity flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-left outline-none transition-colors hover:bg-cyan-300/[0.06] focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+          className="group/identity flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <span className="min-w-0 flex-1">
-            <span
-              data-testid="material-primary-name"
-              className="block truncate text-[13px] font-black leading-5 text-slate-50"
-              title={name || "未命名料件"}
-            >
-              {name || "未命名料件"}
-            </span>
-            <span
-              data-testid="material-primary-vendor"
-              className="block truncate text-xs leading-4 text-cyan-200"
-            >
-              {manufacturer || "未填廠商"}
-            </span>
+          <span
+            data-testid="material-primary-name"
+            className="block min-w-0 flex-1 truncate text-[13px] font-semibold leading-5 text-foreground"
+            title={name || "未命名料件"}
+          >
+            {name || "未命名料件"}
           </span>
-          <span className="inline-flex h-5 w-5 flex-none items-center justify-center rounded-md border border-cyan-300/20 bg-cyan-300/[0.08] text-cyan-200 opacity-70 transition-opacity group-hover/identity:opacity-100">
-            <CircleHelp className="h-3.5 w-3.5" />
-          </span>
+          <CircleHelp className="h-3.5 w-3.5 flex-none text-muted-foreground opacity-60 transition-opacity group-hover/identity:opacity-100" />
         </button>
       </HoverCardTrigger>
       <HoverCardContent
         align="start"
         side="top"
-        sideOffset={10}
+        sideOffset={8}
         collisionPadding={16}
-        className="w-[min(560px,calc(100vw-24px))] overflow-hidden rounded-xl border-cyan-200/35 bg-[#071522] p-0 text-slate-100 shadow-[0_28px_80px_-28px_rgba(6,182,212,0.55)]"
+        className="w-[min(520px,calc(100vw-24px))] overflow-hidden rounded-2xl border-border bg-popover p-0 text-popover-foreground shadow-lg"
       >
-        <div className="flex items-center gap-3 border-b border-cyan-300/20 bg-[linear-gradient(135deg,rgba(34,211,238,0.16),rgba(59,130,246,0.05))] px-4 py-3">
-          <span className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-lg border border-cyan-200/30 bg-cyan-300/12 text-cyan-100">
-            <Factory className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-black text-white">{name || "未命名料件"}</p>
-            <p className="truncate text-xs font-semibold text-cyan-200">{manufacturer || "未填廠商"}</p>
-          </div>
+        <div className="border-b border-border px-4 py-3">
+          <p className="truncate text-sm font-semibold text-foreground">{name || "未命名料件"}</p>
+          <p data-testid="material-primary-vendor" className="truncate text-xs text-muted-foreground">
+            {manufacturer || "未填廠商"}
+          </p>
         </div>
 
-        <div data-testid="material-identity-metrics" className="grid grid-cols-3 border-b border-white/[0.07] bg-black/10">
+        <dl data-testid="material-identity-metrics" className="grid grid-cols-3 divide-x divide-border border-b border-border bg-background/40 text-center">
           {[
             ["REF DES", refs.length],
             ["MPN", mpns.length],
             ["數量", qty],
-          ].map(([metricLabel, metricValue], index) => (
-            <div key={metricLabel} className={cn("flex items-baseline gap-2 px-4 py-2", index > 0 && "border-l border-white/[0.07]")}>
-              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">{metricLabel}</span>
-              <span className="font-mono text-base font-black text-white">{metricValue}</span>
+          ].map(([metricLabel, metricValue]) => (
+            <div key={metricLabel} className="px-3 py-2">
+              <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{metricLabel}</dt>
+              <dd className="font-mono text-base font-semibold text-foreground">{metricValue}</dd>
             </div>
           ))}
-        </div>
+        </dl>
 
-        <div className="grid min-h-0 sm:grid-cols-2">
-          <section data-testid="material-identity-ref-list" className="min-w-0 border-b border-white/[0.07] sm:border-b-0 sm:border-r">
-            <div className="flex items-center gap-2 border-b border-white/[0.07] px-4 py-2">
-              <Layers3 className="h-4 w-4 text-sky-200" />
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-sky-100">REF DES</p>
-            </div>
-            <ScrollArea className="h-40">
-              <div className="space-y-1 p-2.5">
+        <div className="grid sm:grid-cols-2 sm:divide-x sm:divide-border">
+          <section data-testid="material-identity-ref-list" className="min-w-0 border-b border-border sm:border-b-0">
+            <p className="px-4 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">REF DES</p>
+            <ScrollArea className="h-36">
+              <ol className="px-4 py-1">
               {refs.length > 0 ? (
                 refs.map((value, index) => (
-                  <div key={value} className="flex items-center gap-2 rounded-md border border-sky-300/12 bg-sky-400/[0.05] px-2 py-1" title={value}>
-                    <span className="font-mono text-[10px] font-black text-sky-300/70">{String(index + 1).padStart(2, "0")}</span>
-                    <span className="min-w-0 truncate font-mono text-xs text-sky-50">{value}</span>
-                  </div>
+                  <li key={value} className="flex items-center gap-2 border-b border-border/60 py-1 last:border-b-0" title={value}>
+                    <span className="w-6 flex-none font-mono text-[10px] text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="min-w-0 truncate font-mono text-xs text-foreground">{value}</span>
+                  </li>
                 ))
               ) : (
-                <p className="py-10 text-center text-sm text-slate-400">尚未設定 REF DES</p>
+                <li className="py-8 text-center text-xs text-muted-foreground">尚未設定 REF DES</li>
               )}
-              </div>
+              </ol>
             </ScrollArea>
           </section>
 
           <section data-testid="material-identity-mpn-list" className="min-w-0">
-            <div className="flex items-center gap-2 border-b border-white/[0.07] px-4 py-2">
-              <FileCode2 className="h-4 w-4 text-emerald-200" />
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-100">MPN</p>
-            </div>
-            <ScrollArea className="h-40">
-              <div className="space-y-1 p-2.5">
+            <p className="px-4 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">MPN</p>
+            <ScrollArea className="h-36">
+              <ol className="px-4 py-1">
               {mpns.length > 0 ? (
                 mpns.map((value, index) => (
-                  <div key={value} className="flex items-center gap-2 rounded-md border border-emerald-300/12 bg-emerald-400/[0.045] px-2 py-1" title={value}>
-                    <span className="font-mono text-[10px] font-black text-emerald-300/70">{String(index + 1).padStart(2, "0")}</span>
-                    <span className="min-w-0 truncate font-mono text-xs text-emerald-50">{value}</span>
-                  </div>
+                  <li key={value} className="flex items-center gap-2 border-b border-border/60 py-1 last:border-b-0" title={value}>
+                    <span className="w-6 flex-none font-mono text-[10px] text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="min-w-0 truncate font-mono text-xs text-foreground">{value}</span>
+                  </li>
                 ))
               ) : (
-                <p className="py-10 text-center text-sm text-slate-400">尚未設定 MPN</p>
+                <li className="py-8 text-center text-xs text-muted-foreground">尚未設定 MPN</li>
               )}
-              </div>
+              </ol>
             </ScrollArea>
           </section>
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-white/[0.07] bg-black/15 px-4 py-2 text-xs text-slate-400">
-          <span className="min-w-0 truncate">模組：<strong className="font-semibold text-slate-200">{assemblyName || "未指定"}</strong></span>
-        </div>
+        <p className="truncate border-t border-border px-4 py-2 text-xs text-muted-foreground">
+          模組：<span className="text-foreground">{assemblyName || "未指定"}</span>
+        </p>
       </HoverCardContent>
     </HoverCard>
   );
@@ -626,17 +585,17 @@ function MaterialFieldLabel({
 
   return (
     <div className="flex items-center gap-1.5">
-      <Label htmlFor={htmlFor} className="text-sm font-bold text-slate-200">
-        {label}{required ? <span className="ml-1 text-rose-300">*</span> : null}
+      <Label htmlFor={htmlFor} className="text-xs font-semibold text-foreground">
+        {label}{required ? <span className="ml-0.5 text-destructive">*</span> : null}
       </Label>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
             aria-label={`${label}填寫說明`}
-            className="inline-flex h-5 w-5 items-center justify-center rounded-full text-cyan-300 transition-colors hover:bg-cyan-300/12 hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/70"
+            className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <CircleHelp className="h-4 w-4" />
+            <CircleHelp className="h-3.5 w-3.5" />
           </button>
         </TooltipTrigger>
         <TooltipContent
@@ -644,16 +603,45 @@ function MaterialFieldLabel({
           align="start"
           sideOffset={8}
           collisionPadding={16}
-          className="max-w-80 border-cyan-300/25 bg-[#071522] px-3 py-2.5 text-slate-100 shadow-xl"
+          className="max-w-80 rounded-xl border-border bg-popover px-3 py-2.5 text-popover-foreground shadow-lg"
         >
           <p className="text-sm leading-5">{help.description}</p>
-          {"header" in help && <p className="mt-1.5 text-xs text-slate-400">Excel 欄名：{help.header}</p>}
-          <p className="mt-1.5 text-xs text-cyan-200">範例：{help.example}</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">範例：{help.example}</p>
+          {"header" in help && <p className="mt-1 text-xs text-muted-foreground">Excel 欄名：{help.header}</p>}
         </TooltipContent>
       </Tooltip>
     </div>
   );
 }
+
+const MATERIAL_COLUMN_FILTER_KEYS: Partial<Record<MaterialTableColumnKey, ColumnFilterKey>> = {
+  name: "material",
+  refDes: "refDes",
+  mpn: "mpn",
+  virtual: "virtualAlternative",
+  physical: "internal",
+  tracking: "trackingStatus",
+};
+
+// Row 5 of the CE workbook (the Chinese meaning) shown under each workbook column header.
+const MATERIAL_TABLE_COLUMN_MEANING: Partial<Record<MaterialTableColumnKey, string>> = Object.fromEntries(
+  MATERIAL_TABLE_COLUMNS
+    .filter((column) => column.ceHeader)
+    .map((column) => [column.key, MATERIAL_CE_HELP_BY_HEADER.get(column.ceHeader)?.meaning ?? ""]),
+);
+
+const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>> = {
+  ...Object.fromEntries(
+    MATERIAL_TABLE_COLUMNS
+      .filter((column) => column.ceHeader)
+      .map((column) => [column.key, `Excel 欄名：${column.ceHeader}\n${getMaterialCeFieldHelp(column.ceHeader).description}`]),
+  ),
+  item: "網站列號，依目前排序與分頁編號。",
+  marked: "我的標記，只存在這個瀏覽器。",
+  status: "網站依虛擬／實體料號與零件狀態判斷的建料狀態，不是 CE Excel 欄位。",
+  tracking: "網站人工維護的狀態追蹤，與 CE Excel 的供應／核准狀態、phase out 及零件狀態分開。",
+  actions: "新增或更新這組料的資料。",
+};
 
 function normalizeBomTableColorTheme(theme: Partial<BomTableColorTheme> | null | undefined): BomTableColorTheme {
   const pickColor = (value: unknown, fallback: string) => (
@@ -726,26 +714,13 @@ function loadColumnWidths() {
   if (typeof window === "undefined") return DEFAULT_COLUMN_WIDTHS;
 
   try {
-    const currentStored = window.sessionStorage.getItem(COLUMN_WIDTHS_SESSION_KEY);
-    const parsed = JSON.parse(currentStored ?? window.sessionStorage.getItem("station-status-hub:material-column-widths:v8") ?? "null");
-    let widths = parsed;
-    if (currentStored === null && Array.isArray(parsed)) {
-      // The former 12-column layout included Symbol between phase out and status.
-      if (parsed.length === 12) {
-        widths = parsed.filter((_, index) => index !== 8);
-      } else {
-        // Older layouts had no phase out; the 11-column version also included specification.
-        const legacyWidths = parsed.length === 11 ? parsed.filter((_, index) => index !== 8) : parsed;
-        widths = legacyWidths.length === 10
-          ? [...legacyWidths.slice(0, 7), DEFAULT_COLUMN_WIDTHS[7], ...legacyWidths.slice(7)]
-          : legacyWidths;
-      }
-    }
-    if (!Array.isArray(widths) || widths.length !== DEFAULT_COLUMN_WIDTHS.length) {
+    // Older layouts had different column sets; anything that is not the current 19-column shape starts from defaults.
+    const parsed = JSON.parse(window.sessionStorage.getItem(COLUMN_WIDTHS_SESSION_KEY) ?? "null");
+    if (!Array.isArray(parsed) || parsed.length !== DEFAULT_COLUMN_WIDTHS.length) {
       return DEFAULT_COLUMN_WIDTHS;
     }
 
-    return widths.map((width, index) => Number.isFinite(width)
+    return parsed.map((width, index) => Number.isFinite(width)
       ? Math.min(MAX_COLUMN_WIDTHS[index], Math.max(MIN_COLUMN_WIDTHS[index], Number(width)))
       : DEFAULT_COLUMN_WIDTHS[index]);
   } catch {
@@ -823,20 +798,20 @@ function getBomPageStatusMeta(status: BomPageTrackerStatus) {
     case "done":
       return {
         label: "已完成",
-        cardClassName: "border-emerald-400/20 bg-emerald-400/[0.08]",
-        textClassName: "text-emerald-100",
+        cardClassName: "border-success/30 bg-success/10",
+        textClassName: "text-success",
       };
     case "done_missing":
       return {
         label: "已完成但缺料",
-        cardClassName: "border-violet-400/20 bg-violet-400/[0.08]",
-        textClassName: "text-violet-100",
+        cardClassName: "border-warning/30 bg-warning/10",
+        textClassName: "text-warning",
       };
     default:
       return {
         label: "待處理",
-        cardClassName: "border-blue-400/10 bg-[#10192c]",
-        textClassName: "text-slate-100",
+        cardClassName: "border-border bg-background/40",
+        textClassName: "text-foreground",
       };
   }
 }
@@ -855,14 +830,12 @@ function BomPageTrackerSummaryPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold",
-        ready
-          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-100"
-          : "border-slate-400/25 bg-slate-500/10 text-slate-300",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
+        ready ? CHIP_TONES.success : CHIP_TONES.neutral,
         className,
       )}
     >
-      <CircleCheck className={cn("h-3.5 w-3.5", ready ? "text-emerald-300" : "text-slate-400")} />
+      <CircleCheck className="h-3.5 w-3.5" />
       {ready
         ? hasCurrentPage
           ? `目前第 ${summary.currentPage} / ${summary.totalPages} 頁 · 已完成 ${summary.completedPages} 頁`
@@ -1405,68 +1378,61 @@ function getCollaborationStatusMeta(status: CollaborationStatus) {
 
 function getTrackingStatusTone(status: string) {
   const normalized = status.trim().toLowerCase();
-  if (!normalized) return "border-slate-300/25 bg-slate-200/10 text-slate-200";
+  if (!normalized) return CHIP_TONES.neutral;
   if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "border-fuchsia-300/60 bg-fuchsia-500/20 text-fuchsia-50 shadow-[0_0_18px_rgba(217,70,239,0.28)]";
+    return CHIP_TONES.success;
   }
   if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "border-amber-300/60 bg-amber-400/20 text-amber-50 shadow-[0_0_18px_rgba(251,191,36,0.24)]";
+    return CHIP_TONES.warning;
   }
   if (["無狀態", "新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "border-slate-300/25 bg-slate-200/10 text-slate-200";
+    return CHIP_TONES.neutral;
   }
-  return "border-sky-400/30 bg-sky-400/10 text-sky-200";
+  return CHIP_TONES.primary;
 }
 
 function getTrackingStatusCardTone(status: string) {
   const normalized = status.trim().toLowerCase();
+  const neutral = {
+    wrapper: "border-border bg-secondary/60 hover:bg-secondary",
+    accent: "bg-muted-foreground/60",
+    note: "bg-background/40 text-foreground",
+    meta: "text-muted-foreground",
+    icon: "text-muted-foreground",
+  };
 
-  if (!normalized) {
-    return {
-      wrapper: "border-slate-300/25 bg-slate-200/[0.08] hover:bg-slate-200/[0.12]",
-      accent: "bg-slate-200/80",
-      note: "bg-slate-950/25 text-slate-200",
-      meta: "text-slate-300",
-      icon: "text-slate-200",
-    };
-  }
+  if (!normalized) return neutral;
 
   if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return {
-      wrapper: "border-fuchsia-300/55 bg-fuchsia-500/[0.2] shadow-[0_0_22px_rgba(217,70,239,0.18)] hover:bg-fuchsia-500/[0.26]",
-      accent: "bg-fuchsia-200",
-      note: "bg-fuchsia-950/40 text-fuchsia-50",
-      meta: "text-fuchsia-100",
-      icon: "text-fuchsia-100",
+      wrapper: "border-success/30 bg-success/10 hover:bg-success/15",
+      accent: "bg-success",
+      note: "bg-background/40 text-foreground",
+      meta: "text-success",
+      icon: "text-success",
     };
   }
 
   if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
     return {
-      wrapper: "border-amber-300/55 bg-amber-400/[0.18] shadow-[0_0_22px_rgba(251,191,36,0.15)] hover:bg-amber-400/[0.24]",
-      accent: "bg-amber-300",
-      note: "bg-amber-950/30 text-amber-50",
-      meta: "text-amber-100",
-      icon: "text-amber-100",
+      wrapper: "border-warning/30 bg-warning/10 hover:bg-warning/15",
+      accent: "bg-warning",
+      note: "bg-background/40 text-foreground",
+      meta: "text-warning",
+      icon: "text-warning",
     };
   }
 
   if (["無狀態", "新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return {
-      wrapper: "border-slate-300/25 bg-slate-200/[0.08] hover:bg-slate-200/[0.12]",
-      accent: "bg-slate-200/80",
-      note: "bg-slate-950/25 text-slate-200",
-      meta: "text-slate-300",
-      icon: "text-slate-200",
-    };
+    return neutral;
   }
 
   return {
-    wrapper: "border-sky-400/40 bg-sky-500/[0.15] hover:bg-sky-500/[0.22]",
-    accent: "bg-sky-300",
-    note: "bg-sky-950/30 text-sky-50",
-    meta: "text-sky-100",
-    icon: "text-sky-100",
+    wrapper: "border-primary/30 bg-primary/10 hover:bg-primary/15",
+    accent: "bg-primary",
+    note: "bg-background/40 text-foreground",
+    meta: "text-primary",
+    icon: "text-primary",
   };
 }
 
@@ -1920,19 +1886,19 @@ function ExcelFilterPopover({
         <button
           type="button"
           className={cn(
-            "flex h-8 w-full items-center justify-between rounded border px-2 text-left text-xs font-bold transition-colors hover:border-cyan-300/50 hover:bg-cyan-400/10",
+            "flex h-8 w-full items-center justify-between rounded-md border px-2 text-left text-xs font-semibold transition-colors hover:border-primary/50 hover:bg-primary/10",
             appliedSelectedValues === null
-              ? "border-blue-300/20 bg-[#07182d] text-slate-200"
-              : "border-cyan-300/45 bg-cyan-400/12 text-cyan-50",
+              ? "border-border bg-secondary/60 text-foreground"
+              : "border-primary/45 bg-primary/15 text-foreground",
           )}
           title={appliedSelectedValues === null ? `篩選${label}` : `${label}：已選 ${selectedCount} 項`}
         >
           <span className="inline-flex min-w-0 items-center gap-1.5">
-            <Filter className={cn("h-3.5 w-3.5 flex-none", appliedSelectedValues === null ? "text-cyan-300/70" : "text-cyan-200")} />
+            <Filter className={cn("h-3.5 w-3.5 flex-none", appliedSelectedValues === null ? "text-muted-foreground" : "text-primary")} />
             <span className="truncate">{label}</span>
           </span>
           {appliedSelectedValues !== null && (
-            <span className="ml-1 flex-none rounded bg-cyan-400/15 px-1.5 text-[10px] leading-4 text-cyan-100">
+            <span className="ml-1 flex-none rounded bg-primary/20 px-1.5 text-[10px] leading-4 text-primary">
               {triggerSummary}
             </span>
           )}
@@ -1946,12 +1912,12 @@ function ExcelFilterPopover({
         style={{
           maxHeight: "min(640px, calc(var(--radix-popover-content-available-height) - 12px))",
         }}
-        className="w-[min(320px,calc(100vw-24px))] overflow-y-auto overscroll-contain border border-blue-400/25 bg-[#0d182b] p-2.5 text-slate-100 shadow-[0_24px_80px_rgba(2,8,23,0.55)] [scrollbar-color:rgba(103,232,249,0.45)_rgba(15,23,42,0.35)] [scrollbar-width:thin]"
+        className="w-[min(320px,calc(100vw-24px))] overflow-y-auto overscroll-contain rounded-2xl border border-border bg-popover p-2.5 text-popover-foreground shadow-lg [scrollbar-width:thin]"
       >
         <div className="space-y-2">
-          <div className="flex items-center justify-between rounded-xl border border-blue-400/15 bg-[#111f36] px-3 py-2">
-            <p className="text-sm font-black text-slate-50">{label}</p>
-            <span className="rounded bg-cyan-400/10 px-2 py-0.5 text-[11px] font-bold text-cyan-100">{panelSummary}</span>
+          <div className="flex items-center justify-between px-1">
+            <p className="text-sm font-semibold text-foreground">{label}</p>
+            <span className={cn(CHIP_BASE, CHIP_TONES.neutral)}>{panelSummary}</span>
           </div>
 
           <div className="grid grid-cols-3 gap-1.5">
@@ -1961,8 +1927,8 @@ function ExcelFilterPopover({
               className={cn(
                 "rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors",
                 sortDirection === "asc"
-                  ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
-                  : "border-blue-300/20 bg-[#111f36] text-slate-300 hover:bg-blue-400/10"
+                  ? "border-primary/45 bg-primary/15 text-foreground"
+                  : "border-border bg-secondary/60 text-muted-foreground hover:bg-secondary"
               )}
             >
               A → Z
@@ -1973,8 +1939,8 @@ function ExcelFilterPopover({
               className={cn(
                 "rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors",
                 sortDirection === "desc"
-                  ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
-                  : "border-blue-300/20 bg-[#111f36] text-slate-300 hover:bg-blue-400/10"
+                  ? "border-primary/45 bg-primary/15 text-foreground"
+                  : "border-border bg-secondary/60 text-muted-foreground hover:bg-secondary"
               )}
             >
               Z → A
@@ -1982,53 +1948,51 @@ function ExcelFilterPopover({
             <button
               type="button"
               onClick={clearColumnDraft}
-              className="rounded-lg border border-blue-400/15 bg-[#10192e] px-2 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-cyan-300/25 hover:bg-cyan-400/10 hover:text-cyan-100"
+              className="rounded-lg border border-border bg-secondary/60 px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             >
               清除篩選
             </button>
           </div>
 
-          <div className="rounded-xl border border-cyan-400/18 bg-cyan-400/[0.05] p-2">
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-200">搜尋</p>
-              <Input
-                value={draftSearchValue}
-                onChange={(event) => setDraftSearchValue(event.target.value)}
-                placeholder={`輸入 ${label} 關鍵字，只縮小清單`}
-                className="h-9 rounded-lg border-blue-400/20 bg-[#111f36] px-3 text-[13px] text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500"
-              />
-            </div>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={draftSearchValue}
+              onChange={(event) => setDraftSearchValue(event.target.value)}
+              placeholder={`輸入 ${label} 關鍵字，只縮小清單`}
+              aria-label={`搜尋${label}篩選值`}
+              className="h-9 rounded-lg pl-8 pr-3 text-[13px]"
+            />
           </div>
 
-          <div className="flex items-center justify-between rounded-xl border border-blue-400/15 bg-[#10192e] px-3 py-2 text-[12px] text-slate-300">
+          <div className="flex items-center justify-between px-1 text-[12px] text-muted-foreground">
             <span>目前勾選 {draftSelectedValues === null ? options.length : effectiveSelected.length} / {options.length}</span>
             <span>搜尋命中 {exactMatchingCount} 筆</span>
           </div>
 
           {hiddenBySearchCount > 0 ? (
-            <div className="rounded-xl border border-sky-300/18 bg-sky-400/10 px-3 py-2 text-[12px] text-sky-100">
+            <p className="rounded-lg border border-border bg-background/40 px-3 py-2 text-[12px] text-muted-foreground">
               目前搜尋只顯示其中 {visibleCheckedCount} 個已勾選值；另有 {hiddenBySearchCount} 個已勾選值被搜尋關鍵字暫時隱藏。
-            </div>
+            </p>
           ) : null}
 
           {hiddenSelectedValues.length > 0 ? (
-            <div className="rounded-xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-[12px] text-amber-100">
+            <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
               另有 {hiddenSelectedValues.length} 個已勾選值因目前條件未顯示，套用時仍會保留。
-            </div>
+            </p>
           ) : null}
 
           {isPanelReady ? (
-            <div className="rounded-xl border border-blue-400/15 bg-[#091222]">
+            <div className="rounded-xl border border-border bg-background/40">
               {options.length > 0 && (
-                <div className="border-b border-blue-400/10 p-2">
-                  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-blue-400/10 bg-blue-400/[0.06] px-2.5 py-2 text-[13px] font-semibold text-slate-100 hover:bg-blue-400/10">
+                <div className="border-b border-border p-2">
+                  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold text-foreground hover:bg-accent">
                     <Checkbox
                       checked={allOptionsChecked ? true : (draftSelectedValues !== null && draftSelectedValues.length > 0 ? "indeterminate" : false)}
                       onCheckedChange={(value) => toggleAllOptions(value === true)}
-                      className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-[#192522]"
                     />
                     <span className="min-w-0 flex-1 truncate">(全選)</span>
-                    <span className="text-sm text-slate-300">
+                    <span className="text-xs text-muted-foreground">
                       {draftSelectedValues === null ? options.length : effectiveSelected.length}/{options.length}
                     </span>
                   </label>
@@ -2036,27 +2000,23 @@ function ExcelFilterPopover({
               )}
 
               {searchHasValue ? (
-                <div className="border-b border-blue-400/10 p-2">
-                  <div className="space-y-2 rounded-lg border border-cyan-400/12 bg-cyan-400/[0.04] p-2">
-                    <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-[13px] font-semibold text-slate-100 hover:bg-blue-400/10">
-                      <Checkbox
-                        checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
-                        onCheckedChange={(value) => toggleVisibleSelection(value === true)}
-                        className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-[#192522]"
-                      />
-                      <span className="min-w-0 flex-1 truncate">(選取所有搜尋結果)</span>
-                      <span className="text-sm text-cyan-200">{visibleCheckedCount}/{filteredOptions.length}</span>
-                    </label>
+                <div className="space-y-1 border-b border-border p-2">
+                  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-foreground hover:bg-accent">
+                    <Checkbox
+                      checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
+                      onCheckedChange={(value) => toggleVisibleSelection(value === true)}
+                    />
+                    <span className="min-w-0 flex-1 truncate">(選取所有搜尋結果)</span>
+                    <span className="text-xs text-muted-foreground">{visibleCheckedCount}/{filteredOptions.length}</span>
+                  </label>
 
-                    <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-[13px] text-slate-300 hover:bg-blue-400/10">
-                      <Checkbox
-                        checked={mergeSearchSelection}
-                        onCheckedChange={(value) => setMergeSearchSelection(value === true)}
-                        className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-[#192522]"
-                      />
-                      <span>[新增目前的選取範圍至篩選]</span>
-                    </label>
-                  </div>
+                  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] text-muted-foreground hover:bg-accent">
+                    <Checkbox
+                      checked={mergeSearchSelection}
+                      onCheckedChange={(value) => setMergeSearchSelection(value === true)}
+                    />
+                    <span>[新增目前的選取範圍至篩選]</span>
+                  </label>
                 </div>
               ) : null}
 
@@ -2077,59 +2037,43 @@ function ExcelFilterPopover({
                       return (
                         <label
                           key={option.value}
-                          className="absolute left-0 right-0 flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-[13px] text-slate-100 hover:border-blue-400/10 hover:bg-blue-400/10"
+                          className="absolute left-0 right-0 flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-foreground hover:bg-accent"
                           style={{ top: offsetY, height: FILTER_OPTION_ROW_HEIGHT }}
                         >
                           <Checkbox
                             checked={checked}
                             onCheckedChange={(value) => toggleValue(option.value, value === true)}
-                            className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-[#192522]"
                           />
                           <span
                             className={cn(
-                              "h-2.5 w-2.5 rounded-full flex-none",
-                              tone === "emerald" && "bg-emerald-300",
-                              tone === "amber" && "bg-amber-300",
-                              tone === "sky" && "bg-sky-300",
-                              tone === "rose" && "bg-rose-300",
-                              tone === "slate" && "bg-slate-400",
+                              "h-2 w-2 flex-none rounded-full",
+                              tone === "emerald" && "bg-success",
+                              tone === "amber" && "bg-warning",
+                              tone === "sky" && "bg-primary",
+                              tone === "rose" && "bg-destructive",
+                              tone === "slate" && "bg-muted-foreground/60",
                             )}
                           />
                           <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                          <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[11px] text-slate-300">{option.count}</span>
+                          <span className="rounded-full bg-secondary px-2 text-[11px] leading-5 text-muted-foreground">{option.count}</span>
                         </label>
                       );
                     })}
                   </div>
                 </div>
               ) : (
-                <div className="px-2 py-6 text-center text-[13px] text-slate-400">找不到符合的篩選值</div>
+                <div className="px-2 py-6 text-center text-[13px] text-muted-foreground">找不到符合的篩選值</div>
               )}
             </div>
           ) : (
-            <div className="rounded-xl border border-blue-400/15 bg-[#091222] px-3 py-8 text-center text-[13px] text-slate-400">
+            <div className="rounded-xl border border-border bg-background/40 px-3 py-8 text-center text-[13px] text-muted-foreground">
               正在載入篩選清單...
             </div>
           )}
 
-          <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-end gap-2 border-t border-blue-400/15 bg-[#0d182b]/95 px-1 pb-0.5 pt-2 backdrop-blur">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={cancelSelection}
-              className="h-9 rounded-lg border-slate-500/30 bg-slate-500/10 px-4 text-slate-200 hover:bg-slate-500/20 hover:text-white"
-            >
-              取消
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={commitSelection}
-              className="h-9 rounded-lg bg-cyan-500 px-5 font-bold text-slate-950 hover:bg-cyan-400"
-            >
-              確定
-            </Button>
+          <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-end gap-2 border-t border-border bg-popover/95 px-1 pb-0.5 pt-2 backdrop-blur">
+            <Button type="button" variant="outline" size="sm" onClick={cancelSelection} className="h-8 px-3 text-xs">取消</Button>
+            <Button type="button" size="sm" onClick={commitSelection} className="h-8 px-4 text-xs">確定</Button>
           </div>
         </div>
       </PopoverContent>
@@ -2262,7 +2206,7 @@ function InlineVirtualAlternativeEditor({
         onChange={(event) => setDraft(event.target.value)}
         onBlur={commit}
         onKeyDown={handleKeyDown}
-        className="h-8 border-teal-300/50 bg-[#071522] font-mono text-[13px] font-bold text-teal-100 focus-visible:ring-teal-400"
+        className="h-8 rounded-lg px-2 font-mono text-[13px] font-semibold"
         placeholder="輸入虛擬料號"
       />
     );
@@ -2274,29 +2218,29 @@ function InlineVirtualAlternativeEditor({
         type="button"
         disabled={!canEdit}
         onClick={() => setEditing(true)}
-        className="group flex h-8 w-full items-center justify-between gap-2 rounded-md border border-teal-400/20 bg-teal-400/[0.07] px-2 text-left transition-colors hover:bg-teal-400/15 disabled:cursor-default disabled:hover:bg-teal-400/[0.07]"
+        className="group flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-border bg-secondary/60 px-2 text-left transition-colors hover:border-primary/40 hover:bg-secondary disabled:cursor-default disabled:hover:border-border disabled:hover:bg-secondary/60"
         title={value ? `虛擬料號：${value}（點擊修改）` : "點擊填寫虛擬料號"}
       >
-        <span className={cn("min-w-0 truncate font-mono text-[13px] font-bold", value ? "text-teal-200 group-hover:text-teal-100" : "text-slate-400")}>{value || "填寫虛擬料號"}</span>
-        <Pencil className="h-3.5 w-3.5 flex-none text-teal-400/80" />
+        <span className={cn("min-w-0 truncate font-mono text-[13px] font-semibold", value ? "text-foreground" : "text-muted-foreground")}>{value || "填寫虛擬料號"}</span>
+        <Pencil className="h-3.5 w-3.5 flex-none text-muted-foreground opacity-60 group-hover:opacity-100" />
       </button>
       {/* Mounted only while confirming so a page of rows does not carry a dialog each. */}
       {confirmOpen && (
         <Dialog open onOpenChange={(open) => { if (!open) closeConfirmation(); }}>
-          <DialogContent className="max-w-sm border-teal-400/25 bg-[#0d1729] p-5 text-slate-100">
+          <DialogContent className="max-w-sm gap-4 p-5 sm:p-6">
             <DialogHeader>
-              <DialogTitle className="text-lg text-slate-50">確認更新虛擬料號</DialogTitle>
-              <DialogDescription className="text-slate-400">送出後會寫入共用資料。</DialogDescription>
+              <DialogTitle>確認更新虛擬料號</DialogTitle>
+              <DialogDescription>送出後會寫入共用資料。</DialogDescription>
             </DialogHeader>
-            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-lg border border-teal-400/15 bg-[#091222] px-3 py-2.5 text-sm">
-              <dt className="text-slate-400">原本</dt>
-              <dd className="break-all font-mono font-bold text-slate-200">{value || "空白"}</dd>
-              <dt className="text-slate-400">更新後</dt>
-              <dd className="break-all font-mono font-bold text-teal-200">{pendingValue || "空白"}</dd>
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm">
+              <dt className="text-muted-foreground">原本</dt>
+              <dd className="break-all font-mono font-semibold text-foreground">{value || "空白"}</dd>
+              <dt className="text-muted-foreground">更新後</dt>
+              <dd className="break-all font-mono font-semibold text-primary">{pendingValue || "空白"}</dd>
             </dl>
             <DialogFooter className="gap-2 sm:justify-end">
-              <Button type="button" variant="outline" size="sm" onClick={closeConfirmation} className="border-slate-400/20 bg-transparent text-slate-300 hover:bg-slate-400/10 hover:text-slate-100">取消</Button>
-              <Button type="button" size="sm" onClick={confirmSave} className="bg-teal-500 font-bold text-slate-950 hover:bg-teal-400">確認更新</Button>
+              <Button type="button" variant="outline" size="sm" onClick={closeConfirmation}>取消</Button>
+              <Button type="button" size="sm" onClick={confirmSave}>確認更新</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -2334,15 +2278,15 @@ function TrackingHistoryCell({
       data-testid="tracking-history-cell"
       onClick={() => onOpen(record)}
       className={cn(
-        "group flex min-h-[40px] w-full items-center gap-2 rounded-md border px-2 py-1 text-left transition-colors",
+        "group flex min-h-[40px] w-full items-center gap-2 rounded-lg border px-2 py-1 text-left transition-colors",
         cardTone.wrapper,
       )}
       title={tooltip}
     >
-      <span className={cn("inline-flex flex-none rounded-full border px-1.5 py-0.5 text-[11px] font-bold leading-4", getTrackingStatusTone(workflowStatus))}>
+      <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(workflowStatus))}>
         {statusLabel}
       </span>
-      <span className={cn("min-w-0 flex-1 truncate text-xs", latestEntry?.note ? "text-slate-200" : "text-slate-400")}>
+      <span className={cn("min-w-0 flex-1 truncate text-xs", latestEntry?.note ? "text-foreground" : "text-muted-foreground")}>
         {summary}
       </span>
       {requestMeta.ticket && (
@@ -2352,18 +2296,18 @@ function TrackingHistoryCell({
             target="_blank"
             rel="noreferrer"
             onClick={(event) => event.stopPropagation()}
-            className="inline-flex max-w-20 flex-none truncate rounded border border-amber-300/30 bg-amber-400/12 px-1 text-[10px] font-bold leading-4 text-amber-100 hover:bg-amber-400/22"
+            className={cn(CHIP_BASE, "max-w-20 flex-none hover:bg-warning/25", CHIP_TONES.warning)}
             title={`${requestMeta.ticket} · ${requestMeta.url}`}
           >
             {requestMeta.ticket}
           </a>
         ) : (
-          <span className="inline-flex max-w-20 flex-none truncate rounded border border-amber-300/30 bg-amber-400/12 px-1 text-[10px] font-bold leading-4 text-amber-100" title={requestMeta.ticket}>
+          <span className={cn(CHIP_BASE, "max-w-20 flex-none", CHIP_TONES.warning)} title={requestMeta.ticket}>
             {requestMeta.ticket}
           </span>
         )
       )}
-      <History className={cn("h-3.5 w-3.5 flex-none opacity-75 transition-opacity group-hover:opacity-100", cardTone.icon)} />
+      <History className={cn("h-3.5 w-3.5 flex-none opacity-70 transition-opacity group-hover:opacity-100", cardTone.icon)} />
     </button>
   );
 }
@@ -2515,7 +2459,7 @@ function TrackingHistoryDialog({
   };
 
   const requestMeta = record ? getTrackingRequestMeta(record) : { ticket: "", url: "" };
-  const fieldClassName = "h-9 border-blue-400/25 bg-[#071522] text-sm text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500";
+  const fieldClassName = "h-9 rounded-xl px-3 text-sm";
   const dialogDescription = record
     ? `${record.name || "未命名料件"} · ${record.manufacturerPartNumber || record.partNumber || record.displayRef}`
     : "管理目前料件的追蹤歷史與附件圖片。";
@@ -2523,75 +2467,70 @@ function TrackingHistoryDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent onPaste={handleImagePaste} className="max-h-[92vh] max-w-5xl gap-0 overflow-hidden border-cyan-300/25 bg-[#071422] p-0 text-slate-100 shadow-[0_28px_90px_rgba(0,0,0,0.62)]">
-          <DialogHeader className="border-b border-cyan-300/15 bg-[linear-gradient(115deg,rgba(24,83,118,0.38),rgba(8,25,42,0.96)_52%,rgba(10,57,63,0.34))] px-5 py-3 pr-12">
-            <DialogTitle className="text-lg text-slate-50">狀態追蹤</DialogTitle>
-            <DialogDescription className="truncate text-xs text-slate-400" title={dialogDescription}>
+        <DialogContent onPaste={handleImagePaste} className="max-w-5xl gap-4 p-5 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>狀態追蹤</DialogTitle>
+            <DialogDescription className="truncate" title={dialogDescription}>
               {dialogDescription}
             </DialogDescription>
           </DialogHeader>
 
           {record && (
-            <div className="grid max-h-[calc(92vh-64px)] items-start gap-3 overflow-y-auto px-4 py-3 xl:grid-cols-[minmax(0,1fr)_340px]">
-              <section className="self-start overflow-hidden rounded-xl border border-sky-300/20 bg-[linear-gradient(155deg,rgba(16,41,65,0.96),rgba(8,24,40,0.98))]">
-                <div data-testid="tracking-current-summary" className="flex flex-wrap items-center gap-2 border-b border-sky-300/15 bg-sky-300/[0.055] px-4 py-2.5">
-                  <h3 className="text-sm font-bold text-slate-50">最新狀態</h3>
-                  <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold", getTrackingStatusTone(latestWorkflowStatus))}>
-                    {getTrackingStatusDisplayLabel(latestWorkflowStatus)}
-                  </span>
-                  <span className="text-xs text-slate-400">歷史 {historyEntries.length} 筆</span>
-                  {latestEntry?.createdAt && <span className="text-xs text-slate-400">· {formatTimestamp(latestEntry.createdAt)}</span>}
-                  {latestEntry?.createdBy && <span className="text-xs text-slate-400">· {latestEntry.createdBy}</span>}
-                  {requestMeta.ticket && (
-                    requestMeta.url
-                      ? <a href={requestMeta.url} target="_blank" rel="noreferrer" className="rounded border border-amber-300/30 bg-amber-400/12 px-1.5 text-[11px] font-bold leading-5 text-amber-100 hover:bg-amber-400/22">單號 {requestMeta.ticket}</a>
-                      : <span className="rounded border border-amber-300/30 bg-amber-400/12 px-1.5 text-[11px] font-bold leading-5 text-amber-100">單號 {requestMeta.ticket}</span>
-                  )}
-                  {latestWorkflowStatus !== "已完成" && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleMarkCompleted} disabled={!canEdit}
-                      className="ml-auto h-8 border-emerald-400/30 bg-emerald-400/15 px-3 text-xs font-bold text-emerald-100 hover:bg-emerald-400/25 hover:text-emerald-50"
-                    >
-                      <CircleCheck className="mr-1.5 h-3.5 w-3.5" />
-                      直接標記完成
-                    </Button>
-                  )}
-                </div>
-                <div className="px-4 py-2.5">
-                  <p className="text-sm leading-6 text-slate-300">
-                    {latestEntry?.note || "還沒有追蹤備註，建立第一筆後會顯示在這裡。"}
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="space-y-4">
+                <section data-testid="tracking-current-summary" className="workspace-dialog-section rounded-2xl p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">最新狀態</h3>
+                    <span className={cn(CHIP_BASE, getTrackingStatusTone(latestWorkflowStatus))}>
+                      {getTrackingStatusDisplayLabel(latestWorkflowStatus)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      歷史 {historyEntries.length} 筆
+                      {latestEntry?.createdAt ? ` · ${formatTimestamp(latestEntry.createdAt)}` : ""}
+                      {latestEntry?.createdBy ? ` · ${latestEntry.createdBy}` : ""}
+                    </span>
+                    {requestMeta.ticket && (
+                      requestMeta.url
+                        ? <a href={requestMeta.url} target="_blank" rel="noreferrer" className={cn(CHIP_BASE, "hover:bg-warning/25", CHIP_TONES.warning)}>單號 {requestMeta.ticket}</a>
+                        : <span className={cn(CHIP_BASE, CHIP_TONES.warning)}>單號 {requestMeta.ticket}</span>
+                    )}
+                    {latestWorkflowStatus !== "已完成" && (
+                      <Button type="button" variant="outline" size="sm" onClick={handleMarkCompleted} disabled={!canEdit} className="ml-auto h-8 text-xs">
+                        <CircleCheck className="mr-1.5 h-3.5 w-3.5" />
+                        直接標記完成
+                      </Button>
+                    )}
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-foreground/90">
+                    {latestEntry?.note || <span className="text-muted-foreground">還沒有追蹤備註，建立第一筆後會顯示在這裡。</span>}
                   </p>
                   {latestEntry?.requestInfo && (
-                    <p className="mt-1.5 truncate text-xs text-amber-200" title={latestEntry.requestInfo}>
+                    <p className="mt-1 truncate text-xs text-muted-foreground" title={latestEntry.requestInfo}>
                       申請狀態資訊：
                       {isExternalUrl(latestEntry.requestInfo) ? (
-                        <a href={latestEntry.requestInfo} target="_blank" rel="noreferrer" className="font-bold text-cyan-100 underline decoration-cyan-300/60 underline-offset-4 hover:text-cyan-50">
+                        <a href={latestEntry.requestInfo} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
                           {latestEntry.requestInfo}
                         </a>
                       ) : (
-                        <span className="font-bold text-slate-100">{latestEntry.requestInfo}</span>
+                        <span className="text-foreground">{latestEntry.requestInfo}</span>
                       )}
                     </p>
                   )}
-                </div>
+                </section>
 
-                <div data-testid="tracking-compose-panel" className="border-t border-cyan-300/15 bg-[#081726] px-4 py-3">
+                <section data-testid="tracking-compose-panel" className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
                   <div className="flex items-center gap-2">
-                    <ImagePlus className="h-4 w-4 text-cyan-300" />
-                    <p className="text-sm font-bold text-cyan-100">新增一筆進度</p>
-                    <span className="text-xs text-slate-400">狀態必填，其餘可留空</span>
+                    <h3 className="text-sm font-semibold text-foreground">新增一筆進度</h3>
+                    <span className="text-xs text-muted-foreground">狀態必填，其餘可留空</span>
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <div className="space-y-1">
-                      <Label htmlFor="tracking-status-select" className="text-xs">最新狀態 *</Label>
+                      <Label htmlFor="tracking-status-select" className="text-xs font-semibold">最新狀態 *</Label>
                       <Select value={status} onValueChange={(value) => setStatus(value as (typeof TRACKING_STATUS_OPTIONS)[number])}>
                         <SelectTrigger id="tracking-status-select" className={fieldClassName}>
                           <SelectValue placeholder="選擇狀態" />
                         </SelectTrigger>
-                        <SelectContent className="border-blue-400/25 bg-[#0d1729] text-slate-100">
+                        <SelectContent>
                           {TRACKING_STATUS_OPTIONS.map((option) => (
                             <SelectItem key={option} value={option}>
                               {getTrackingStatusDisplayLabel(option)}
@@ -2601,45 +2540,45 @@ function TrackingHistoryDialog({
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="tracking-ticket-input" className="text-xs">單號</Label>
+                      <Label htmlFor="tracking-ticket-input" className="text-xs font-semibold">單號</Label>
                       <Input id="tracking-ticket-input" value={requestTicket} onChange={(event) => setRequestTicket(event.target.value)} placeholder="Excel 單號 / ticket" className={fieldClassName} />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="tracking-request-url-input" className="text-xs">連結</Label>
+                      <Label htmlFor="tracking-request-url-input" className="text-xs font-semibold">連結</Label>
                       <Input id="tracking-request-url-input" value={requestUrl} onChange={(event) => setRequestUrl(event.target.value)} placeholder="request URL" className={fieldClassName} />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="tracking-owner-input" className="text-xs">更新人</Label>
+                      <Label htmlFor="tracking-owner-input" className="text-xs font-semibold">更新人</Label>
                       <Input id="tracking-owner-input" value={createdBy} onChange={(event) => setCreatedBy(event.target.value)} placeholder="採購 / RD / 姓名" className={fieldClassName} />
                     </div>
                     <div className="space-y-1 md:col-span-2 xl:col-span-4">
-                      <Label htmlFor="tracking-request-info-input" className="text-xs">申請狀態資訊</Label>
+                      <Label htmlFor="tracking-request-info-input" className="text-xs font-semibold">申請狀態資訊</Label>
                       <Input id="tracking-request-info-input" value={requestInfo} onChange={(event) => setRequestInfo(event.target.value)} placeholder="Excel 單號 / ticket / request URL" className={fieldClassName} />
                     </div>
                     <div className="space-y-1 md:col-span-2 xl:col-span-4">
-                      <Label htmlFor="tracking-note-input" className="text-xs">追蹤說明</Label>
-                      <Textarea id="tracking-note-input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="這次做了什麼、卡在哪、下一步" className="min-h-20 border-blue-400/25 bg-[#071522] text-sm text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500" />
+                      <Label htmlFor="tracking-note-input" className="text-xs font-semibold">追蹤說明</Label>
+                      <Textarea id="tracking-note-input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="這次做了什麼、卡在哪、下一步" className="min-h-20 rounded-xl text-sm" />
                     </div>
                     <div className="space-y-1.5 md:col-span-2 xl:col-span-4">
-                      <label htmlFor="tracking-images-input" className="flex h-9 cursor-pointer items-center justify-center gap-3 rounded-lg border border-dashed border-cyan-300/40 bg-cyan-400/[0.08] px-3 text-xs font-semibold text-cyan-100 transition-colors hover:bg-cyan-400/[0.14]">
-                        <span className="flex items-center gap-1.5"><Upload className="h-3.5 w-3.5" />選擇圖片</span>
-                        <span className="text-slate-400">或</span>
-                        <span className="flex items-center gap-1.5 text-sky-200"><ClipboardPaste className="h-3.5 w-3.5" />在這個視窗按 Ctrl+V 貼上截圖</span>
+                      <label htmlFor="tracking-images-input" className="flex h-9 cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-3 text-xs font-semibold text-foreground transition-colors hover:bg-primary/10">
+                        <span className="flex items-center gap-1.5"><Upload className="h-3.5 w-3.5 text-primary" />選擇圖片</span>
+                        <span className="text-muted-foreground">或</span>
+                        <span className="flex items-center gap-1.5"><ClipboardPaste className="h-3.5 w-3.5 text-primary" />在這個視窗按 Ctrl+V 貼上截圖</span>
                       </label>
                       <input id="tracking-images-input" type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
                       {images.length > 0 && (
                         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5">
                           {images.map((image) => (
-                            <div key={image.id} className="relative overflow-hidden rounded-lg border border-blue-400/20 bg-[#0a1527]">
+                            <div key={image.id} className="relative overflow-hidden rounded-xl border border-border bg-background/40">
                               <button
                                 type="button"
                                 onClick={() => setPreviewImage(image)}
-                                className="block aspect-[4/3] w-full bg-slate-950/40 transition hover:opacity-90"
+                                className="block aspect-[4/3] w-full transition hover:opacity-90"
                                 title={`預覽圖片：${image.name} · ${(image.size / 1024).toFixed(1)} KB`}
                               >
                                 <img src={image.dataUrl} alt={image.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
                               </button>
-                              <button type="button" onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))} className="absolute right-1 top-1 rounded-md border border-rose-400/30 bg-[#0a1527]/90 p-1 text-rose-200 hover:bg-rose-400/20" title="移除圖片">
+                              <button type="button" onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))} className="absolute right-1 top-1 rounded-md border border-border bg-popover/90 p-1 text-muted-foreground hover:text-destructive" title="移除圖片">
                                 <X className="h-3 w-3" />
                               </button>
                             </div>
@@ -2649,48 +2588,39 @@ function TrackingHistoryDialog({
                     </div>
                   </div>
 
-                  <div data-testid="tracking-dialog-footer" className="sticky bottom-0 -mx-4 mt-3 flex items-center justify-end gap-2 border-t border-cyan-300/15 bg-[#081726]/95 px-4 pt-3 backdrop-blur">
-                    <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="border-slate-400/20 bg-transparent text-slate-300 hover:bg-slate-400/10 hover:text-slate-100">
-                      取消
-                    </Button>
-                    <Button type="button" size="sm" onClick={handleSave} disabled={!canEdit || !status.trim()} className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400">
-                      儲存這次追蹤
-                    </Button>
+                  <div data-testid="tracking-dialog-footer" className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-3">
+                    <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>取消</Button>
+                    <Button type="button" size="sm" onClick={handleSave} disabled={!canEdit || !status.trim()}>儲存這次追蹤</Button>
                   </div>
-                </div>
-              </section>
-
-            <section data-testid="tracking-history-panel" className="self-start rounded-xl border border-blue-300/20 bg-[linear-gradient(160deg,rgba(15,37,62,0.96),rgba(8,22,38,0.98))] p-3">
-              <div className="flex items-center gap-2">
-                <History className="h-4 w-4 text-blue-300" />
-                <h3 className="text-sm font-bold text-slate-50">過去歷史</h3>
-                <span className="text-xs text-slate-400">{historyEntries.length} 筆</span>
+                </section>
               </div>
 
-              <div className="mt-2.5 space-y-2">
-                {historyEntries.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-slate-400/20 bg-[#071522] px-3 py-4 text-center text-xs text-slate-400">
-                    還沒有歷史紀錄
-                  </div>
-                )}
+              <section data-testid="tracking-history-panel" className="workspace-dialog-section rounded-2xl p-4">
+                <div className="flex items-center gap-2">
+                  <History className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold text-foreground">過去歷史</h3>
+                  <span className="text-xs text-muted-foreground">{historyEntries.length} 筆</span>
+                </div>
 
-                {historyEntries.map((entry, index) => {
-                  const entryTone = getTrackingStatusCardTone(entry.status);
+                <div className="mt-3 space-y-2">
+                  {historyEntries.length === 0 && (
+                    <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">還沒有歷史紀錄</p>
+                  )}
 
-                  return (
-                    <article key={`${entry.id}-${index}`} className={cn("rounded-lg border p-2.5", entryTone.wrapper)}>
-                      <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 text-xs", entryTone.meta)}>
-                        <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold", getTrackingStatusTone(entry.status))}>
+                  {historyEntries.map((entry, index) => (
+                    <article key={`${entry.id}-${index}`} className="rounded-xl border border-border bg-background/40 p-3">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                        <span className={cn(CHIP_BASE, getTrackingStatusTone(entry.status))}>
                           {getTrackingStatusDisplayLabel(entry.status)}
                         </span>
-                        {index === 0 && <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-1.5 text-[10px] font-bold leading-4 text-emerald-200"><CircleCheck className="h-3 w-3" />最新</span>}
+                        {index === 0 && <span className={cn(CHIP_BASE, CHIP_TONES.primary)}>最新</span>}
                         <span>{entry.createdAt ? formatTimestamp(entry.createdAt) : "舊版狀態"}</span>
                         {entry.createdBy && <span>· {entry.createdBy}</span>}
                         {(entry.images?.length ?? 0) > 0 && <span>· {entry.images?.length} 張圖</span>}
                       </div>
 
                       {entry.note && (
-                        <p className={cn("mt-2 whitespace-pre-wrap rounded-md px-2.5 py-2 text-sm leading-5", entryTone.note)}>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-5 text-foreground/90">
                           {entry.note}
                         </p>
                       )}
@@ -2699,17 +2629,17 @@ function TrackingHistoryDialog({
                         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
                           {entry.requestTicket && (
                             entry.requestUrl ? (
-                              <a href={normalizeRequestUrl(entry.requestUrl)} target="_blank" rel="noreferrer" className="rounded border border-amber-300/35 bg-amber-400/16 px-1.5 font-bold leading-5 text-amber-100 hover:bg-amber-400/24">
+                              <a href={normalizeRequestUrl(entry.requestUrl)} target="_blank" rel="noreferrer" className={cn(CHIP_BASE, "hover:bg-warning/25", CHIP_TONES.warning)}>
                                 單號 {entry.requestTicket}
                               </a>
                             ) : (
-                              <span className="rounded border border-amber-300/35 bg-amber-400/16 px-1.5 font-bold leading-5 text-amber-100">單號 {entry.requestTicket}</span>
+                              <span className={cn(CHIP_BASE, CHIP_TONES.warning)}>單號 {entry.requestTicket}</span>
                             )
                           )}
                           {entry.requestInfo && (
                             isExternalUrl(entry.requestInfo)
-                              ? <a href={entry.requestInfo} target="_blank" rel="noreferrer" className="truncate text-cyan-100 underline decoration-cyan-300/60 underline-offset-4 hover:text-cyan-50" title={entry.requestInfo}>申請狀態連結</a>
-                              : <span className="truncate text-slate-300" title={entry.requestInfo}>{entry.requestInfo}</span>
+                              ? <a href={entry.requestInfo} target="_blank" rel="noreferrer" className="truncate text-primary underline-offset-4 hover:underline" title={entry.requestInfo}>申請狀態連結</a>
+                              : <span className="truncate text-muted-foreground" title={entry.requestInfo}>{entry.requestInfo}</span>
                           )}
                         </div>
                       )}
@@ -2721,7 +2651,7 @@ function TrackingHistoryDialog({
                               key={image.id}
                               type="button"
                               onClick={() => setPreviewImage(image)}
-                              className="aspect-[4/3] overflow-hidden rounded-md border border-blue-400/15 bg-slate-950/30 hover:border-cyan-400/30"
+                              className="aspect-[4/3] overflow-hidden rounded-lg border border-border hover:border-primary/50"
                               title={`檢視圖片：${image.name}`}
                             >
                               <img src={image.dataUrl} alt={image.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
@@ -2730,34 +2660,29 @@ function TrackingHistoryDialog({
                         </div>
                       )}
                     </article>
-                  );
-                })}
-              </div>
-            </section>
-          </div>
-        )}
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
       <Dialog open={Boolean(previewImage)} onOpenChange={(nextOpen) => { if (!nextOpen) setPreviewImage(null); }}>
-        <DialogContent className="max-w-4xl border-blue-400/30 bg-[#0d1729] p-4 text-slate-100">
+        <DialogContent className="max-w-4xl gap-3 p-4 sm:p-5">
           {previewImage && (
             <>
               <DialogHeader>
-                <DialogTitle className="truncate text-base text-slate-50">{previewImage.name}</DialogTitle>
-                <DialogDescription className="text-xs text-slate-400">{(previewImage.size / 1024).toFixed(1)} KB</DialogDescription>
+                <DialogTitle className="truncate text-base">{previewImage.name}</DialogTitle>
+                <DialogDescription>{(previewImage.size / 1024).toFixed(1)} KB</DialogDescription>
               </DialogHeader>
-              <div className="overflow-hidden rounded-xl border border-blue-400/15 bg-slate-950/40">
+              <div className="overflow-hidden rounded-xl border border-border bg-background/60">
                 <img src={previewImage.dataUrl} alt={previewImage.name} className="max-h-[70vh] w-full object-contain" />
               </div>
               <div className="flex justify-end">
-                <a
-                  href={previewImage.dataUrl}
-                  download={previewImage.name}
-                  className="rounded-lg border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100"
-                >
-                  下載圖片
-                </a>
+                <Button asChild variant="secondary" size="sm">
+                  <a href={previewImage.dataUrl} download={previewImage.name}>下載圖片</a>
+                </Button>
               </div>
             </>
           )}
@@ -2769,22 +2694,41 @@ function TrackingHistoryDialog({
 
 function PhaseOutStatus({ record }: { record: MaterialRecord }) {
   const value = getMaterialSourceValue(record.phaseOutStatus);
-  return <span data-testid="material-phase-out-status" className="block truncate text-xs font-semibold leading-5 text-slate-200" title={`phase out（零件狀態）：${value}`}>{value}</span>;
+  return <span data-testid="material-phase-out-status" className="block truncate text-xs font-semibold leading-5 text-foreground" title={`phase out（零件狀態）：${value}`}>{value}</span>;
 }
 
 function StatusPill({ record }: { record: MaterialRecord }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5" data-testid="material-source-status">
-      <div className="flex min-w-0 items-center gap-1">
-        <ActionPill record={record} />
-        <span className="inline-flex min-w-0 truncate rounded border border-slate-400/25 bg-slate-400/10 px-1.5 text-[11px] font-bold leading-5 text-slate-300" title={`供應／核准狀態：${record.sourcingStatus || "未提供"}`}>
-          {record.sourcingStatus || "供應／核准狀態未提供"}
-        </span>
-        <span className={cn("inline-flex min-w-0 truncate rounded border px-1.5 text-[11px] font-bold leading-5", record.isRisk ? "border-rose-400/30 bg-rose-400/10 text-rose-300" : "border-slate-400/25 bg-slate-400/10 text-slate-300")} title={`零件狀態：${record.partUsageStatus || "未提供"}`}>
-          {record.partUsageStatus || "零件狀態未提供"}
-        </span>
-      </div>
+    <div className="flex min-w-0 items-center gap-1" data-testid="material-source-status">
+      <ActionPill record={record} />
     </div>
+  );
+}
+
+/** One CE workbook value: the original text, or a muted 未提供 when the source left it blank. */
+function MaterialSourceText({ value, label, mono = false, chip = false }: { value: string | number | null | undefined; label: string; mono?: boolean; chip?: boolean }) {
+  const text = getMaterialSourceValue(value == null ? "" : String(value));
+  const missing = text === "未提供";
+  if (chip && !missing) {
+    return <span className={cn(CHIP_BASE, CHIP_TONES.neutral)} title={`${label}：${text}`}>{text}</span>;
+  }
+  return (
+    <span
+      className={cn("block truncate text-[13px] leading-5", mono && "font-mono", missing ? "text-muted-foreground/70" : "text-foreground")}
+      title={`${label}：${text}`}
+    >
+      {text}
+    </span>
+  );
+}
+
+function PartUsageStatus({ record }: { record: MaterialRecord }) {
+  const text = getMaterialSourceValue(record.partUsageStatus);
+  if (text === "未提供") return <span className="block truncate text-[13px] leading-5 text-muted-foreground/70" title="零件狀態：未提供">未提供</span>;
+  return (
+    <span className={cn(CHIP_BASE, record.isRisk ? CHIP_TONES.danger : CHIP_TONES.neutral)} title={`零件狀態：${text}`}>
+      {text}
+    </span>
   );
 }
 
@@ -2795,7 +2739,7 @@ function PartUsageSummary({ records }: { records: MaterialRecord[] }) {
   return (
     <span
       data-testid="material-part-usage-summary"
-      className={cn("inline-flex max-w-[9rem] flex-none truncate rounded border px-1.5 text-[11px] font-semibold leading-5", risk ? "border-rose-300/35 bg-rose-400/12 text-rose-100" : "border-slate-500/30 bg-slate-500/10 text-slate-300")}
+      className={cn(CHIP_BASE, "max-w-[9rem] flex-none", risk ? CHIP_TONES.danger : CHIP_TONES.neutral)}
       title={`零件狀態：${statuses.join("；")}`}
     >
       {statuses.join("；")}
@@ -2804,14 +2748,9 @@ function PartUsageSummary({ records }: { records: MaterialRecord[] }) {
 }
 
 function ActionPill({ record }: { record: MaterialRecord }) {
-  const className = record.isReady
-    ? "border-sky-400/30 bg-sky-400/10 text-sky-300"
-    : record.isPending
-      ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
-      : "border-slate-400/25 bg-slate-400/10 text-slate-300";
-
+  const tone = record.isReady ? CHIP_TONES.success : record.isPending ? CHIP_TONES.warning : CHIP_TONES.neutral;
   return (
-    <span className={cn("inline-flex min-w-0 truncate rounded-full border px-2 text-[11px] font-bold leading-5", className)} title={getActionLabel(record.actionKind)}>
+    <span className={cn(CHIP_BASE, tone)} title={getActionLabel(record.actionKind)}>
       {getActionLabel(record.actionKind)}
     </span>
   );
@@ -2915,22 +2854,22 @@ function BomPageTrackerDialog({
     }
   };
 
-  const numberFieldClassName = "h-8 w-24 border-blue-400/20 bg-[#111f36] text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-60";
+  const numberFieldClassName = "h-9 w-24 rounded-xl px-3 text-sm";
   const dialogDescription = `${workspace.name} · ${workspace.payload.sheetName} · ${workspace.payload.recordCount.toLocaleString()} 筆料件`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-3 overflow-hidden border-blue-400/30 bg-[#0d1729] p-5 text-slate-100">
+      <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-4 overflow-hidden p-5 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-lg text-slate-50">頁數進度</DialogTitle>
-          <DialogDescription className="truncate text-xs text-slate-400" title={dialogDescription}>
+          <DialogTitle>頁數進度</DialogTitle>
+          <DialogDescription className="truncate" title={dialogDescription}>
             {dialogDescription}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-wrap items-end gap-x-4 gap-y-2 rounded-xl border border-blue-400/20 bg-[#101d33] px-4 py-3">
+        <section className="workspace-dialog-section flex flex-wrap items-end gap-x-4 gap-y-2 rounded-2xl px-4 py-3">
           <div className="space-y-1">
-            <Label htmlFor="bom-total-pages" className="text-xs">總頁數</Label>
+            <Label htmlFor="bom-total-pages" className="text-xs font-semibold">總頁數</Label>
             <Input
               id="bom-total-pages"
               type="number"
@@ -2945,7 +2884,7 @@ function BomPageTrackerDialog({
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="bom-current-page" className="text-xs">目前做到第幾頁</Label>
+            <Label htmlFor="bom-current-page" className="text-xs font-semibold">目前做到第幾頁</Label>
             <Input
               id="bom-current-page"
               type="number"
@@ -2960,21 +2899,21 @@ function BomPageTrackerDialog({
               className={numberFieldClassName}
             />
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 pb-0.5 text-xs font-bold">
+          <div className="flex flex-wrap items-center gap-2 pb-1.5">
             <BomPageTrackerSummaryPill pageTracker={{ totalPages, currentPage, pages: syncedPages, updatedAt: workspace.pageTracker?.updatedAt ?? workspace.updatedAt }} />
-            <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1 text-cyan-100">完成率 {completionRate}%</span>
+            <span className="text-xs text-muted-foreground">完成率 {completionRate}%</span>
           </div>
-        </div>
+        </section>
 
         {totalPages === 0 ? (
-          <div className="rounded-xl border border-dashed border-blue-400/20 bg-[#0b1322] px-6 py-10 text-center">
-            <p className="text-sm font-bold text-slate-200">先填總頁數，下面就會列出每一頁</p>
-          </div>
+          <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
+            先填總頁數，下面就會列出每一頁
+          </p>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] px-4 py-2.5">
-              <span className="text-xs font-bold text-slate-200">批次設定</span>
-              <Label htmlFor="bom-range-start" className="text-xs text-slate-400">第</Label>
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-background/40 px-4 py-2.5">
+              <span className="text-xs font-semibold text-foreground">批次設定</span>
+              <Label htmlFor="bom-range-start" className="text-xs text-muted-foreground">第</Label>
               <Input
                 id="bom-range-start"
                 type="number"
@@ -2984,9 +2923,9 @@ function BomPageTrackerDialog({
                 value={rangeStartInput}
                 onChange={(event) => setRangeStartInput(event.target.value)}
                 aria-label="起始頁"
-                className="h-8 w-20 border-emerald-400/20 bg-[#111f36] text-sm text-slate-100"
+                className="h-8 w-20 rounded-lg px-2 text-sm"
               />
-              <Label htmlFor="bom-range-end" className="text-xs text-slate-400">~</Label>
+              <Label htmlFor="bom-range-end" className="text-xs text-muted-foreground">~</Label>
               <Input
                 id="bom-range-end"
                 type="number"
@@ -2996,33 +2935,33 @@ function BomPageTrackerDialog({
                 value={rangeEndInput}
                 onChange={(event) => setRangeEndInput(event.target.value)}
                 aria-label="結束頁"
-                className="h-8 w-20 border-emerald-400/20 bg-[#111f36] text-sm text-slate-100"
+                className="h-8 w-20 rounded-lg px-2 text-sm"
               />
-              <span className="text-xs text-slate-400">頁設為</span>
-              {BOM_PAGE_STATUS_OPTIONS.map((option) => (
-                <Button
-                  key={`range-${option.value}`}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => applyRangeStatus(option.value)}
-                  disabled={rangeSelectionCount === 0}
-                  className={cn("h-8 px-3 text-xs font-bold disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/20 disabled:text-slate-400", option.idleClassName)}
-                >
-                  {option.label}
-                </Button>
-              ))}
-              <span className="ml-auto text-xs text-slate-400">
+              <span className="text-xs text-muted-foreground">頁設為</span>
+              <div className="inline-flex rounded-lg border border-border bg-secondary p-0.5">
+                {BOM_PAGE_STATUS_OPTIONS.map((option) => (
+                  <button
+                    key={`range-${option.value}`}
+                    type="button"
+                    onClick={() => applyRangeStatus(option.value)}
+                    disabled={rangeSelectionCount === 0}
+                    className={cn("h-7 rounded-md px-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50", option.idleClassName)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <span className="ml-auto text-xs text-muted-foreground">
                 {rangeSelectionCount > 0 ? `共 ${rangeSelectionCount} 頁，備註會保留` : "先填起訖頁"}
               </span>
             </div>
 
-            <div className="flex items-center justify-between px-1 text-xs text-slate-400">
+            <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
               <span>逐頁狀態與備註</span>
               <span>{completedPages} / {totalPages} 頁完成</span>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-blue-400/15 bg-[#0b1322]">
-              <div className="divide-y divide-blue-400/10">
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border bg-background/40">
+              <div className="divide-y divide-border/70">
                 {visiblePages.map((page) => {
                   const statusMeta = getBomPageStatusMeta(page.status);
                   const isCurrent = page.pageNumber === currentPage;
@@ -3030,35 +2969,34 @@ function BomPageTrackerDialog({
                   return (
                     <div
                       key={page.pageNumber}
-                      className={cn("flex flex-wrap items-center gap-2 px-3 py-1.5", isCurrent && "bg-cyan-400/[0.08]")}
+                      className={cn("flex flex-wrap items-center gap-2 px-3 py-1.5", isCurrent && "bg-primary/10")}
                     >
-                      <span className={cn("w-16 flex-none text-sm font-black", statusMeta.textClassName)}>第 {page.pageNumber} 頁</span>
-                      <div className="flex flex-none gap-1">
+                      <span className={cn("w-16 flex-none text-sm font-semibold", statusMeta.textClassName)}>第 {page.pageNumber} 頁</span>
+                      <div className="inline-flex flex-none rounded-lg border border-border bg-secondary p-0.5" role="group" aria-label={`第 ${page.pageNumber} 頁狀態`}>
                         {BOM_PAGE_STATUS_OPTIONS.map((option) => (
-                          <Button
+                          <button
                             key={option.value}
                             type="button"
-                            variant="outline"
-                            size="sm"
+                            aria-pressed={page.status === option.value}
                             onClick={() => {
                               updatePage(page.pageNumber, { status: option.value });
                               if (currentPage === 0 || page.pageNumber > currentPage) {
                                 setCurrentPageInput(String(page.pageNumber));
                               }
                             }}
-                            className={cn("h-7 px-2.5 text-xs font-bold", page.status === option.value ? option.activeClassName : option.idleClassName)}
+                            className={cn("h-7 rounded-md px-2.5 text-xs font-semibold transition-colors", page.status === option.value ? option.activeClassName : option.idleClassName)}
                           >
                             {option.label}
-                          </Button>
+                          </button>
                         ))}
                       </div>
                       {isCurrent ? (
-                        <span className="flex-none rounded-full border border-cyan-300/35 bg-cyan-400/16 px-2 text-[11px] font-bold leading-5 text-cyan-100">目前頁</span>
+                        <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.primary)}>目前頁</span>
                       ) : (
                         <button
                           type="button"
                           onClick={() => setCurrentPageInput(String(page.pageNumber))}
-                          className="flex-none rounded-full border border-cyan-400/20 px-2 text-[11px] font-bold leading-5 text-cyan-200/80 hover:bg-cyan-400/10 hover:text-cyan-100"
+                          className="flex-none rounded-md px-2 text-[11px] font-semibold leading-5 text-muted-foreground hover:bg-accent hover:text-foreground"
                         >
                           設為目前頁
                         </button>
@@ -3071,9 +3009,9 @@ function BomPageTrackerDialog({
                             setCurrentPageInput(String(page.pageNumber));
                           }
                         }}
-                        placeholder="備註：缺 A 料、等 RD 回覆、已送審"
+                        placeholder="備註"
                         aria-label={`第 ${page.pageNumber} 頁備註`}
-                        className="h-8 min-w-[12rem] flex-1 border-blue-400/20 bg-[#111f36] text-sm text-slate-100 placeholder:text-slate-400"
+                        className="h-8 min-w-[12rem] flex-1 rounded-lg px-2.5 text-sm"
                       />
                     </div>
                   );
@@ -3084,22 +3022,8 @@ function BomPageTrackerDialog({
         )}
 
         <DialogFooter className="gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onOpenChange(false)}
-            className="border-blue-400/20 bg-blue-400/10 text-slate-200 hover:bg-blue-400/20"
-          >
-            關閉
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400 disabled:bg-slate-600 disabled:text-slate-300"
-          >
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>關閉</Button>
+          <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
             {isSaving ? "儲存中..." : "儲存頁數進度"}
           </Button>
         </DialogFooter>
@@ -3152,29 +3076,30 @@ function BomManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col gap-3 overflow-hidden border-blue-400/30 bg-[#0d1729] p-5 text-slate-100">
+      <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-4 overflow-hidden p-5 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-lg text-slate-50">BOM 管理</DialogTitle>
-          <DialogDescription className="truncate text-xs text-slate-400" title={dialogDescription}>
+          <DialogTitle>BOM 管理</DialogTitle>
+          <DialogDescription className="truncate" title={dialogDescription}>
             {dialogDescription}
           </DialogDescription>
         </DialogHeader>
 
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-300" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={historyQuery}
             onChange={(event) => setHistoryQuery(event.target.value)}
             placeholder="搜尋 BOM 名稱、工作表或來源檔名"
-            className="h-9 border-blue-400/20 bg-[#111f36] pl-9 text-sm text-slate-100 placeholder:text-slate-400 focus-visible:ring-blue-500"
+            aria-label="搜尋 BOM"
+            className="h-9 rounded-xl pl-9 text-sm"
           />
         </div>
 
         <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
           {filteredWorkspaces.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-blue-400/20 bg-[#10192c] px-6 py-10 text-center text-sm text-slate-400">
+            <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
               找不到符合條件的 BOM
-            </div>
+            </p>
           ) : filteredWorkspaces.map((workspace, index) => {
             const isActive = workspace.id === activeBomId;
             const pageTrackerSummary = getBomPageTrackerSummary(workspace.pageTracker);
@@ -3194,32 +3119,26 @@ function BomManagerDialog({
               <div
                 key={workspace.id}
                 className={cn(
-                  "rounded-lg border px-3 py-2 transition-colors",
-                  isActive
-                    ? hasTracking
-                      ? "border-amber-300/45 bg-amber-400/12"
-                      : "border-cyan-300/40 bg-cyan-400/10"
-                    : hasTracking
-                      ? "border-amber-400/24 bg-amber-400/[0.07] hover:bg-amber-400/[0.11]"
-                      : "border-blue-400/15 bg-[#101d33] hover:bg-[#13223b]"
+                  "rounded-xl border px-3 py-2 transition-colors",
+                  isActive ? "border-primary/40 bg-primary/10" : "border-border bg-background/40 hover:bg-accent/40",
                 )}
                 title={detail}
               >
                 <div className="flex items-center gap-2">
-                  <span className="flex-none rounded-full border border-blue-300/20 bg-blue-400/10 px-1.5 text-[10px] font-black leading-4 text-blue-100">#{index + 1}</span>
-                  <p className="min-w-0 flex-1 truncate text-sm font-black text-slate-50">{workspace.name}</p>
-                  {isActive && <span className="flex-none rounded-full border border-cyan-300/35 bg-cyan-400/15 px-1.5 text-[10px] font-black leading-4 text-cyan-100">使用中</span>}
-                  {hasTracking && <span className="flex-none rounded-full border border-amber-300/35 bg-amber-400/16 px-1.5 text-[10px] font-black leading-4 text-amber-100">含追蹤</span>}
-                  {!isActive && index === 0 && <span className="flex-none rounded-full border border-violet-300/35 bg-violet-400/15 px-1.5 text-[10px] font-black leading-4 text-violet-100">最近更新</span>}
+                  <span className="w-6 flex-none font-mono text-[11px] text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
+                  <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{workspace.name}</p>
+                  {isActive && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.primary)}>使用中</span>}
+                  {hasTracking && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.warning)}>含追蹤</span>}
+                  {!isActive && index === 0 && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.neutral)}>最近更新</span>}
                   <div className="ml-1 flex flex-none items-center gap-1">
-                    <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => onOpenPageTracker(workspace.id)} className="h-7 border-emerald-400/25 bg-emerald-400/10 px-2 text-xs font-bold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100">頁數</Button>
+                    <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onOpenPageTracker(workspace.id)} className="h-7 px-2 text-xs">頁數</Button>
                     {!isActive && (
-                      <Button type="button" variant="outline" size="sm" onClick={() => onSelect(workspace.id)} className="h-7 border-cyan-400/25 bg-cyan-400/10 px-2 text-xs font-bold text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-100">切換</Button>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => onSelect(workspace.id)} className="h-7 px-2 text-xs">切換</Button>
                     )}
-                    <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => onDelete(workspace.id)} className="h-7 border-rose-400/25 bg-rose-400/10 px-2 text-xs font-bold text-rose-200 hover:bg-rose-400/20 hover:text-rose-100">刪除</Button>
+                    <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onDelete(workspace.id)} className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive">刪除</Button>
                   </div>
                 </div>
-                <p className="mt-1 truncate text-xs text-slate-400">
+                <p className="mt-1 truncate pl-8 text-xs text-muted-foreground">
                   {workspace.payload.sourceFile} · {workspace.payload.sheetName} · {workspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatRelativeTimestamp(workspace.updatedAt)} · {pageText}
                 </p>
               </div>
@@ -3272,136 +3191,138 @@ function MaterialRecordDialog({
   };
 
   const title = mode === "create" ? "新增料件 / 替代料" : mode === "edit" ? "修改料件資料" : "料件詳細資訊";
+  const fieldClassName = "h-9 rounded-xl px-3 text-sm";
 
   return (
     <TooltipProvider delayDuration={160}>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="material-record-dialog max-h-[90vh] max-w-4xl gap-3 overflow-y-auto border-cyan-300/30 bg-[#091727] p-5 text-slate-100 shadow-[0_28px_90px_rgba(0,0,0,0.55)] [&_input]:h-9 [&_input]:text-sm">
+      <DialogContent className="material-record-dialog max-w-4xl gap-4 p-5 sm:p-6">
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">
-            <DialogTitle className="text-lg text-slate-50">{title}</DialogTitle>
-            <span className={cn("rounded-full border px-2 text-[11px] font-black leading-5", readOnly ? "border-slate-400/25 bg-slate-400/10 text-slate-300" : "border-cyan-300/30 bg-cyan-300/12 text-cyan-100")}>
+            <DialogTitle>{title}</DialogTitle>
+            <span className={cn(CHIP_BASE, readOnly ? CHIP_TONES.neutral : CHIP_TONES.primary)}>
               {readOnly ? "唯讀" : "編輯中"}
             </span>
           </div>
-          <DialogDescription className="text-xs text-slate-400">
-            <span className="text-rose-300">*</span> 為必填；? 說明與 CE Excel 一致。內部分組、模組及申請追蹤由網站管理。
+          <DialogDescription>
+            欄位順序與 CE Excel 相同；<span className="text-destructive">*</span> 為必填，? 有各欄意思與範例。
           </DialogDescription>
         </DialogHeader>
 
-        <section className="rounded-xl border border-sky-300/24 bg-[linear-gradient(145deg,rgba(18,46,74,0.96),rgba(10,27,45,0.98))] p-3 [&_input]:border-sky-300/22 [&_input]:bg-[#071522] [&_textarea]:border-sky-300/22 [&_textarea]:bg-[#071522]">
-          <h3 className="mb-2.5 text-sm font-black text-sky-100">電路與原理圖 <span className="font-normal text-slate-400">· 決定主料分組與位置</span></h3>
+        {/* Same 14 item columns, same order, as the CE workbook (Level is always 2 for an item row). */}
+        <section className="workspace-dialog-section rounded-2xl p-4">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">CE Excel 欄位 <span className="font-normal text-muted-foreground">· 依交付格式順序</span></h3>
           <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
-            <div className="space-y-1">
-              <MaterialFieldLabel field="refGroup" htmlFor="material-ref" label="內部分組（網站）" required />
-              <Input id="material-ref" disabled={readOnly} value={form.refGroup} onChange={(event) => updateField("refGroup", event.target.value)} placeholder="例如 C101；僅供網站分組" />
+            <div className="space-y-1 md:col-span-2">
+              <MaterialFieldLabel field="name" htmlFor="material-name" label="Name（料件名稱）" required />
+              <Input id="material-name" disabled={readOnly} value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="例如 CAP CER 0.1UF 16V X7R" className={fieldClassName} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="refDes" htmlFor="material-ref-des" label="REF DES" />
-              <Input id="material-ref-des" disabled={readOnly} value={form.refDes} onChange={(event) => updateField("refDes", event.target.value)} placeholder="例如 C418、R806" />
+              <MaterialFieldLabel field="qty" htmlFor="material-qty" label="Qty（用量）" />
+              <Input id="material-qty" disabled={readOnly} value={String(form.qty)} onChange={(event) => updateField("qty", event.target.value)} className={fieldClassName} />
+            </div>
+            <div className="space-y-1">
+              <MaterialFieldLabel field="refDes" htmlFor="material-ref-des" label="Ref Des（位號）" />
+              <Input id="material-ref-des" disabled={readOnly} value={form.refDes} onChange={(event) => updateField("refDes", event.target.value)} placeholder="例如 C101, C102" className={fieldClassName} />
             </div>
             <div className="space-y-1 md:col-span-2">
-              <MaterialFieldLabel field="name" htmlFor="material-name" label="料件名稱" required />
-              <Input id="material-name" disabled={readOnly} value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="例如 CAP CER 0.1UF 16V" />
+              <MaterialFieldLabel field="manufacturerPartNumber" htmlFor="material-mpn" label="Manufacturer Part Number（MPN）" />
+              <Input id="material-mpn" disabled={readOnly} value={form.manufacturerPartNumber} onChange={(event) => updateField("manufacturerPartNumber", event.target.value)} className={fieldClassName} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="qty" htmlFor="material-qty" label="Qty" />
-              <Input id="material-qty" disabled={readOnly} value={String(form.qty)} onChange={(event) => updateField("qty", event.target.value)} />
+              <MaterialFieldLabel field="manufacturer" htmlFor="material-maker" label="Manufacturer（廠商）" />
+              <Input id="material-maker" disabled={readOnly} value={form.manufacturer} onChange={(event) => updateField("manufacturer", event.target.value)} className={fieldClassName} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="assemblyName" htmlFor="material-assembly" label="模組" />
-              <Input id="material-assembly" disabled={readOnly} value={form.assemblyName} onChange={(event) => updateField("assemblyName", event.target.value)} />
+              <MaterialFieldLabel field="sourcingStatus" htmlFor="material-sourcing" label="Sourcing Status" />
+              <Input id="material-sourcing" disabled={readOnly} value={form.sourcingStatus} onChange={(event) => updateField("sourcingStatus", event.target.value)} placeholder="Approved / NRND / Obsolete" className={fieldClassName} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="schematicPart" htmlFor="material-symbol" label="原理圖符號（Schematic_Part）" />
-              <Input id="material-symbol" disabled={readOnly} value={form.schematicPart} onChange={(event) => updateField("schematicPart", event.target.value)} />
+              <MaterialFieldLabel field="virtualAlternative" htmlFor="material-virtual-alternative" label="虛擬料號" />
+              <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="可共用實體料的上層料號" className={fieldClassName} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="pcbFootprint" htmlFor="material-footprint" label="PCB 封裝名稱" />
-              <Input id="material-footprint" disabled={readOnly} value={form.pcbFootprint} onChange={(event) => updateField("pcbFootprint", event.target.value)} />
+              <MaterialFieldLabel field="partNumber" htmlFor="material-internal-pn" label="實體料號" />
+              <Input id="material-internal-pn" disabled={readOnly} value={form.partNumber} onChange={(event) => updateField("partNumber", event.target.value)} placeholder="單一廠商、單一 MPN" className={fieldClassName} />
             </div>
-            <div className="space-y-1 md:col-span-3">
-              <MaterialFieldLabel field="partSpec" htmlFor="material-spec" label="料件規格" />
-              <Textarea id="material-spec" disabled={readOnly} value={form.partSpec} onChange={(event) => updateField("partSpec", event.target.value)} className="min-h-9 text-sm" rows={1} />
+            <div className="space-y-1">
+              <MaterialFieldLabel field="partName" htmlFor="material-part-name" label="Part Name（公司料名）" />
+              <Input id="material-part-name" disabled={readOnly} value={form.partName} onChange={(event) => updateField("partName", event.target.value)} className={fieldClassName} />
+            </div>
+            <div className="space-y-1">
+              <MaterialFieldLabel field="partSpec" htmlFor="material-spec" label="Part Spec（料件規格）" />
+              <Textarea id="material-spec" disabled={readOnly} value={form.partSpec} onChange={(event) => updateField("partSpec", event.target.value)} className="min-h-9 rounded-xl text-sm" rows={1} />
+            </div>
+            <div className="space-y-1">
+              <MaterialFieldLabel field="schematicPart" htmlFor="material-symbol" label="Schematic_Part（原理圖符號）" />
+              <Input id="material-symbol" disabled={readOnly} value={form.schematicPart} onChange={(event) => updateField("schematicPart", event.target.value)} placeholder="OrCAD 要能叫出的符號" className={fieldClassName} />
+            </div>
+            <div className="space-y-1">
+              <MaterialFieldLabel field="pcbFootprint" htmlFor="material-footprint" label="PCB_Footprint" />
+              <Input id="material-footprint" disabled={readOnly} value={form.pcbFootprint} onChange={(event) => updateField("pcbFootprint", event.target.value)} className={fieldClassName} />
+            </div>
+            <div className="space-y-1">
+              <MaterialFieldLabel field="phaseOutStatus" htmlFor="material-phase-out" label="phase out（零件狀態）" />
+              <Input id="material-phase-out" disabled={readOnly} value={form.phaseOutStatus ?? ""} onChange={(event) => updateField("phaseOutStatus", event.target.value)} placeholder="保留原文，例如 ACTIVE／PHASEOUT" className={fieldClassName} />
+            </div>
+            <div className="space-y-1">
+              <MaterialFieldLabel field="partUsageStatus" htmlFor="material-part-usage" label="零件狀態" />
+              <Input id="material-part-usage" disabled={readOnly} value={form.partUsageStatus ?? ""} onChange={(event) => updateField("partUsageStatus", event.target.value)} placeholder="新設計使用限制；不明填待確認" className={fieldClassName} />
             </div>
           </div>
         </section>
 
-        <section className="rounded-xl border border-teal-300/24 bg-[linear-gradient(145deg,rgba(13,50,59,0.94),rgba(8,28,42,0.98))] p-3 [&_input]:border-teal-300/22 [&_input]:bg-[#071522] [&_textarea]:border-teal-300/22 [&_textarea]:bg-[#071522]">
-          <h3 className="mb-2.5 text-sm font-black text-teal-100">廠商、料號與申請 <span className="font-normal text-slate-400">· 展開後的替代料明細</span></h3>
+        <section className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">網站維護欄位 <span className="font-normal text-muted-foreground">· 不在 CE Excel 裡</span></h3>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
-              <MaterialFieldLabel field="manufacturer" htmlFor="material-maker" label="廠商" />
-              <Input id="material-maker" disabled={readOnly} value={form.manufacturer} onChange={(event) => updateField("manufacturer", event.target.value)} />
+              <MaterialFieldLabel field="refGroup" htmlFor="material-ref" label="內部分組（網站）" required />
+              <Input id="material-ref" disabled={readOnly} value={form.refGroup} onChange={(event) => updateField("refGroup", event.target.value)} placeholder="例如 C101；僅供網站分組" className={fieldClassName} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="manufacturerPartNumber" htmlFor="material-mpn" label="廠商料號（MPN）" />
-              <Input id="material-mpn" disabled={readOnly} value={form.manufacturerPartNumber} onChange={(event) => updateField("manufacturerPartNumber", event.target.value)} />
+              <MaterialFieldLabel field="assemblyName" htmlFor="material-assembly" label="模組" />
+              <Input id="material-assembly" disabled={readOnly} value={form.assemblyName} onChange={(event) => updateField("assemblyName", event.target.value)} className={fieldClassName} />
             </div>
             {form.manufacturerPartNumberAlt.trim() && (
               <div className="space-y-1">
                 <MaterialFieldLabel field="manufacturerPartNumberAlt" htmlFor="material-mpn-2" label="舊檔第二 MPN" />
-                <Input id="material-mpn-2" disabled={readOnly} value={form.manufacturerPartNumberAlt} onChange={(event) => updateField("manufacturerPartNumberAlt", event.target.value)} />
+                <Input id="material-mpn-2" disabled={readOnly} value={form.manufacturerPartNumberAlt} onChange={(event) => updateField("manufacturerPartNumberAlt", event.target.value)} className={fieldClassName} />
               </div>
             )}
             <div className="space-y-1">
-              <MaterialFieldLabel field="partNumber" htmlFor="material-internal-pn" label="實體料號" />
-              <Input id="material-internal-pn" disabled={readOnly} value={form.partNumber} onChange={(event) => updateField("partNumber", event.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="partName" htmlFor="material-part-name" label="實體料名" />
-              <Input id="material-part-name" disabled={readOnly} value={form.partName} onChange={(event) => updateField("partName", event.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="virtualAlternative" htmlFor="material-virtual-alternative" label="虛擬料號" />
-              <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="多個可共用實體料的上層料號" />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="sourcingStatus" htmlFor="material-sourcing" label="供應／核准狀態" />
-              <Input id="material-sourcing" disabled={readOnly} value={form.sourcingStatus} onChange={(event) => updateField("sourcingStatus", event.target.value)} placeholder="Approved / NRND / Obsolete" />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="phaseOutStatus" htmlFor="material-phase-out" label="phase out（零件狀態）" />
-              <Input id="material-phase-out" disabled={readOnly} value={form.phaseOutStatus ?? ""} onChange={(event) => updateField("phaseOutStatus", event.target.value)} placeholder="保留原文，例如 ACTIVE／PHASEOUT" />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="partUsageStatus" htmlFor="material-part-usage" label="零件狀態" />
-              <Input id="material-part-usage" disabled={readOnly} value={form.partUsageStatus ?? ""} onChange={(event) => updateField("partUsageStatus", event.target.value)} placeholder="禁用／EOL／待確認" />
-            </div>
-            <div className="space-y-1">
               <MaterialFieldLabel field="requestTicket" htmlFor="material-request-ticket" label="單號" />
-              <Input id="material-request-ticket" disabled={readOnly} value={form.requestTicket ?? ""} onChange={(event) => updateField("requestTicket", event.target.value)} placeholder="Excel 單號 / ticket" />
+              <Input id="material-request-ticket" disabled={readOnly} value={form.requestTicket ?? ""} onChange={(event) => updateField("requestTicket", event.target.value)} placeholder="Excel 單號 / ticket" className={fieldClassName} />
             </div>
             <div className="space-y-1 md:col-span-2">
               <MaterialFieldLabel field="requestUrl" htmlFor="material-request-url" label="單號連結" />
-              <Input id="material-request-url" disabled={readOnly} value={form.requestUrl ?? ""} onChange={(event) => updateField("requestUrl", event.target.value)} placeholder="request URL" />
+              <Input id="material-request-url" disabled={readOnly} value={form.requestUrl ?? ""} onChange={(event) => updateField("requestUrl", event.target.value)} placeholder="request URL" className={fieldClassName} />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 md:col-span-3">
               <MaterialFieldLabel field="tracking" label="狀態追蹤" />
-              <div className="flex h-9 min-w-0 items-center gap-2 rounded-md border border-sky-400/20 bg-sky-400/[0.06] px-3 text-xs" title={latestTrackingEntry?.note || "從表格的「狀態追蹤」欄位新增歷史與圖片"}>
-                <span className="flex-none font-bold text-sky-200">{latestTrackingEntry?.status || "尚未建立"}</span>
-                <span className="min-w-0 truncate text-slate-300">{latestTrackingEntry?.note || "從表格的「狀態追蹤」管理"}</span>
-                {latestTrackingEntry?.createdAt && <span className="flex-none text-slate-400">{formatTimestamp(latestTrackingEntry.createdAt)}</span>}
-                {trackingMeta.ticket && <span className="flex-none text-amber-200">單號 {trackingMeta.ticket}</span>}
+              <div className="flex h-9 min-w-0 items-center gap-2 rounded-xl border border-border bg-background/40 px-3 text-xs" title={latestTrackingEntry?.note || "從表格的「狀態追蹤」欄位新增歷史與圖片"}>
+                <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(latestTrackingEntry?.status ?? ""))}>{latestTrackingEntry?.status || "尚未建立"}</span>
+                <span className="min-w-0 truncate text-muted-foreground">{latestTrackingEntry?.note || "從表格的「狀態追蹤」管理"}</span>
+                {latestTrackingEntry?.createdAt && <span className="flex-none text-muted-foreground">{formatTimestamp(latestTrackingEntry.createdAt)}</span>}
+                {trackingMeta.ticket && <span className="flex-none text-warning">單號 {trackingMeta.ticket}</span>}
               </div>
             </div>
             <div className="space-y-1 md:col-span-3">
               <MaterialFieldLabel field="remark" htmlFor="material-remark" label="申請狀態 / 備註" />
-              <Textarea id="material-remark" disabled={readOnly} value={form.remark} onChange={(event) => updateField("remark", event.target.value)} className="min-h-9 text-sm" rows={1} placeholder="例如 待確認實體料號、待核對原理圖符號" />
+              <Textarea id="material-remark" disabled={readOnly} value={form.remark} onChange={(event) => updateField("remark", event.target.value)} className="min-h-9 rounded-xl text-sm" rows={1} placeholder="例如 待確認實體料號、待核對原理圖符號" />
             </div>
           </div>
         </section>
 
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="border-slate-400/20 bg-transparent text-slate-300 hover:bg-slate-400/10 hover:text-slate-100">
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             {readOnly ? "關閉" : "取消"}
           </Button>
           {readOnly ? (
-            <Button type="button" size="sm" disabled={!canEdit} onClick={() => onModeChange("edit")} className="bg-blue-600 text-white hover:bg-blue-500">
+            <Button type="button" size="sm" disabled={!canEdit} onClick={() => onModeChange("edit")}>
               <Pencil className="mr-1.5 h-3.5 w-3.5" />修改這筆
             </Button>
           ) : (
-            <Button type="button" size="sm" onClick={handleSave} disabled={!form.refGroup.trim() || !form.name.trim()} className="bg-blue-600 text-white hover:bg-blue-500">
+            <Button type="button" size="sm" onClick={handleSave} disabled={!form.refGroup.trim() || !form.name.trim()}>
               儲存資料
             </Button>
           )}
@@ -3460,55 +3381,50 @@ function MaterialColumnSettings({
           variant="outline"
           size="sm"
           data-testid="material-column-visibility"
-          className="h-8 border-violet-300/35 bg-violet-400/12 px-2.5 text-xs font-bold text-violet-100 hover:bg-violet-400/22 hover:text-white"
+          className="h-9 px-2.5 text-xs"
         >
           <Columns3 className="mr-1.5 h-3.5 w-3.5" />
           欄位
           {hiddenColumns.length > 0 && (
-            <span className="ml-1.5 rounded-full border border-current/25 px-1.5 text-[10px] leading-4">隱藏 {hiddenColumns.length}</span>
+            <span className={cn(CHIP_BASE, "ml-1.5", CHIP_TONES.primary)}>隱藏 {hiddenColumns.length}</span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" collisionPadding={12} className="w-60 border border-blue-400/25 bg-[#0d182b] p-2 text-slate-100 shadow-[0_24px_80px_rgba(2,8,23,0.55)]">
-        <p className="px-1 text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">顯示欄位</p>
-        <div className="mt-1.5 space-y-0.5">
+      <PopoverContent align="end" collisionPadding={12} className="w-64 rounded-2xl border-border bg-popover p-2 text-popover-foreground shadow-lg">
+        <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">顯示欄位</p>
+        <div className="max-h-[min(420px,60vh)] space-y-0.5 overflow-y-auto">
           {MATERIAL_TABLE_COLUMNS.map((column) => {
             const visible = !hiddenColumns.includes(column.key);
             return (
               <label
                 key={column.key}
                 className={cn(
-                  "flex h-8 items-center gap-2.5 rounded-md px-2 text-[13px]",
-                  column.locked ? "cursor-default text-slate-400" : "cursor-pointer text-slate-100 hover:bg-blue-400/10",
+                  "flex h-8 items-center gap-2.5 rounded-lg px-2 text-[13px]",
+                  column.locked ? "cursor-default text-muted-foreground" : "cursor-pointer text-foreground hover:bg-accent",
                 )}
               >
                 <Checkbox
                   checked={visible}
                   disabled={column.locked}
                   onCheckedChange={() => onToggle(column.key)}
-                  className="border-blue-400/40 data-[state=checked]:bg-blue-500 data-[state=checked]:text-[#192522]"
                 />
-                <span className="min-w-0 flex-1 truncate" title={MATERIAL_TABLE_COLUMN_HELP[column.key]}>{column.label}</span>
-                {column.locked && <span className="text-[10px] text-slate-400">固定</span>}
+                <span className="min-w-0 flex-1 truncate">{column.label}</span>
+                {"ceHeader" in column && column.ceHeader ? <span className="text-[10px] text-muted-foreground">Excel</span> : null}
+                {column.locked && <span className="text-[10px] text-muted-foreground">固定</span>}
               </label>
             );
           })}
         </div>
-        <div className="mt-2 grid grid-cols-3 gap-1 border-t border-blue-400/15 pt-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onShowAll} disabled={hiddenColumns.length === 0} className="h-7 px-1 text-xs text-slate-200 hover:bg-blue-400/10 hover:text-white">全部顯示</Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onResetWidths} className="h-7 px-1 text-xs text-amber-100 hover:bg-amber-400/10 hover:text-amber-50">重設欄寬</Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onOpenColors} className="h-7 px-1 text-xs text-violet-100 hover:bg-violet-400/10 hover:text-white">配色</Button>
+        <div className="mt-2 grid grid-cols-3 gap-1 border-t border-border pt-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onShowAll} disabled={hiddenColumns.length === 0} className="h-7 px-1 text-xs">全部顯示</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onResetWidths} className="h-7 px-1 text-xs">重設欄寬</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onOpenColors} className="h-7 px-1 text-xs">配色</Button>
         </div>
       </PopoverContent>
     </Popover>
   );
 }
 
-/**
- * One main-material row. Memoised so typing in the search box or opening a
- * dialog does not re-render every row on the page; everything the row needs
- * arrives as primitives, memoised objects, or the stable `actions` bundle.
- */
 const MaterialGroupRow = memo(function MaterialGroupRow({
   row,
   itemValue,
@@ -3546,7 +3462,10 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
     .flatMap((record) => [getDisplayMpn(record), record.manufacturerPartNumberAlt || ""])
     .filter(Boolean);
   const primaryMpn = primaryAlternative ? getDisplayMpn(primaryAlternative) : "";
+  // The main row shows the same Excel columns as the CE workbook, read from the
+  // first matching record of the group (the alternatives expand below it).
   const statusRecord = primaryAlternative ?? group.primaryRecord;
+  const partSpec = statusRecord.partSpec || group.partSpec || "";
   const statusLabel = group.riskCount > 0
     ? "料況需 RD 確認"
     : mustApply
@@ -3613,8 +3532,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
             </button>
           </td>
         )}
-        {columns.material && (
-          <td data-material-cell="material" className="relative overflow-hidden border-r border-blue-400/10 px-2 py-1.5">
+        {columns.name && (
+          <td data-material-cell="name" className="relative overflow-hidden border-r border-blue-400/10 px-2 py-1.5">
             <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-[var(--material-row-accent)]" />
             <div className="flex items-center gap-1.5 pl-1">
               <button
@@ -3648,8 +3567,12 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                   refValues={materialRefValues}
                 />
               </div>
-              <PartUsageSummary records={group.records} />
             </div>
+          </td>
+        )}
+        {columns.qty && (
+          <td data-material-cell="qty" className={cn(MATERIAL_CELL_CLASS, "text-center font-mono text-[13px] font-bold text-slate-100")}>
+            {group.qty}
           </td>
         )}
         {columns.refDes && (
@@ -3673,7 +3596,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                   if (primaryMpn) actions.copy(primaryMpn);
                 }}
                 className="group flex w-full min-w-0 items-center gap-1.5 text-left"
-                title={primaryMpn ? `複製首選 MPN：${primaryMpn}` : "尚未填 MPN"}
+                title={primaryMpn ? `複製 MPN：${primaryMpn}` : "尚未填 MPN"}
               >
                 <span className={cn("min-w-0 truncate font-mono text-[13px] font-black leading-5", primaryMpn ? valueClassName : "text-amber-300")}>
                   {primaryMpn || "未填 MPN"}
@@ -3685,38 +3608,18 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
             )}
           </td>
         )}
-        {columns.internal && (
-          <td data-material-cell="internal" className={MATERIAL_CELL_CLASS}>
-            <div className="flex min-w-0 flex-col">
-              {primaryAlternative?.partNumber ? (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    actions.copy(primaryAlternative.partNumber);
-                  }}
-                  className="group flex min-w-0 items-center gap-1.5 text-left"
-                  title={`複製實體料號：${primaryAlternative.partNumber}`}
-                >
-                  <span className={cn("min-w-0 truncate font-mono text-[13px] font-black leading-5", valueClassName)}>{primaryAlternative.partNumber}</span>
-                  <Copy className={cn("h-3.5 w-3.5 flex-none opacity-60 group-hover:opacity-100", iconClassName)} />
-                </button>
-              ) : (
-                <span className="text-xs font-semibold leading-5 text-amber-300">實體料號未提供</span>
-              )}
-              <span
-                className="truncate text-xs leading-4 text-slate-400"
-                title={`原理圖符號（Schematic_Part）：${statusRecord.schematicPart || "未提供"}\nPCB 封裝名稱：${statusRecord.pcbFootprint || "封裝未提供"}`}
-              >
-                <span className="font-mono text-cyan-300/90">{statusRecord.schematicPart || "原理圖符號未提供"}</span>
-                <span className="text-slate-600"> · </span>
-                <span className="font-mono text-indigo-300/90">{statusRecord.pcbFootprint || "封裝未提供"}</span>
-              </span>
-            </div>
+        {columns.manufacturer && (
+          <td data-material-cell="manufacturer" className={MATERIAL_CELL_CLASS}>
+            <MaterialSourceText value={statusRecord.manufacturer} label="Manufacturer" />
           </td>
         )}
-        {columns.tx && (
-          <td data-material-cell="tx" className={MATERIAL_CELL_CLASS} onClick={stopRowToggle}>
+        {columns.sourcingStatus && (
+          <td data-material-cell="sourcingStatus" className={MATERIAL_CELL_CLASS}>
+            <MaterialSourceText value={statusRecord.sourcingStatus} label="Sourcing Status" chip />
+          </td>
+        )}
+        {columns.virtual && (
+          <td data-material-cell="virtual" className={MATERIAL_CELL_CLASS} onClick={stopRowToggle}>
             {virtualAlternativeRecord && (
               <InlineVirtualAlternativeEditor
                 canEdit={canEdit}
@@ -3726,23 +3629,66 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
             )}
           </td>
         )}
+        {columns.physical && (
+          <td data-material-cell="physical" className={MATERIAL_CELL_CLASS}>
+            {primaryAlternative?.partNumber ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  actions.copy(primaryAlternative.partNumber);
+                }}
+                className="group flex w-full min-w-0 items-center gap-1.5 text-left"
+                title={`複製實體料號：${primaryAlternative.partNumber}`}
+              >
+                <span className={cn("min-w-0 truncate font-mono text-[13px] font-black leading-5", valueClassName)}>{primaryAlternative.partNumber}</span>
+                <Copy className={cn("h-3.5 w-3.5 flex-none opacity-60 group-hover:opacity-100", iconClassName)} />
+              </button>
+            ) : (
+              <span className="text-xs font-semibold leading-5 text-amber-300">實體料號未提供</span>
+            )}
+          </td>
+        )}
+        {columns.partName && (
+          <td data-material-cell="partName" className={MATERIAL_CELL_CLASS}>
+            <MaterialSourceText value={statusRecord.partName} label="Part Name" />
+          </td>
+        )}
+        {columns.partSpec && (
+          <td data-material-cell="partSpec" className={MATERIAL_CELL_CLASS}>
+            <MaterialSourceText value={partSpec} label="Part Spec" />
+          </td>
+        )}
+        {columns.schematicPart && (
+          <td data-material-cell="schematicPart" className={MATERIAL_CELL_CLASS}>
+            <MaterialSourceText value={statusRecord.schematicPart} label="Schematic_Part" mono />
+          </td>
+        )}
+        {columns.footprint && (
+          <td data-material-cell="footprint" className={MATERIAL_CELL_CLASS}>
+            <MaterialSourceText value={statusRecord.pcbFootprint} label="PCB_Footprint" mono />
+          </td>
+        )}
         {columns.phaseOut && (
           <td data-material-cell="phaseOut" className={MATERIAL_CELL_CLASS}><PhaseOutStatus record={statusRecord} /></td>
         )}
+        {columns.partUsage && (
+          <td data-material-cell="partUsage" className={MATERIAL_CELL_CLASS}>
+            <PartUsageStatus record={statusRecord} />
+          </td>
+        )}
         {columns.status && (
           <td data-material-cell="status" className={MATERIAL_CELL_CLASS}>
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className={cn("inline-flex min-w-0 truncate rounded border px-1.5 text-xs font-black leading-5", statusClassName)} title={statusTitle || undefined}>
-                  {statusLabel}
-                </span>
-                {group.pendingCount > 0 && (
-                  <span className="flex-none rounded bg-slate-400/10 px-1.5 text-[11px] font-semibold leading-5 text-slate-300" title="待建明細">
-                    待建 {group.pendingCount}
-                  </span>
-                )}
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className={cn("inline-flex min-w-0 truncate rounded border px-1.5 text-xs font-black leading-5", statusClassName)} title={statusTitle || undefined}>
+                {statusLabel}
               </span>
-            </div>
+              {group.pendingCount > 0 && (
+                <span className="flex-none rounded bg-slate-400/10 px-1.5 text-[11px] font-semibold leading-5 text-slate-300" title="待建明細">
+                  待建 {group.pendingCount}
+                </span>
+              )}
+            </span>
           </td>
         )}
         {columns.tracking && (
@@ -3799,6 +3745,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
 
 function CompactAlternativeRows({
   canEdit,
+  group,
   records,
   primaryRecord,
   itemValue,
@@ -3819,7 +3766,7 @@ function CompactAlternativeRows({
   itemValue: number;
   colorTheme: BomTableColorTheme;
   columns: MaterialColumnVisibility;
-  /** Records whose TX editor / tracking cell already sit on the main row; they render as plain text here. */
+  /** Records whose 虛擬料號 editor / tracking cell already sit on the main row; they render as plain text here. */
   primaryTxRecordId: string;
   primaryTrackingRecordId: string;
   onCopy: (value: string) => void;
@@ -3862,7 +3809,7 @@ function CompactAlternativeRows({
               </td>
             )}
             {columns.marked && <td className={MATERIAL_CELL_CLASS} />}
-            {columns.material && (
+            {columns.name && (
               <td className={MATERIAL_CELL_CLASS}>
                 <div className="flex min-w-0 items-center gap-2 pl-1">
                   <span
@@ -3872,13 +3819,7 @@ function CompactAlternativeRows({
                   >
                     #{index + 1}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <CompactHoverValue
-                      label="廠商"
-                      values={[record.manufacturer || "未填廠商"]}
-                      previewClassName="text-[13px] font-bold leading-5 text-slate-50"
-                    />
-                  </div>
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-slate-300" title={record.name || group.name}>{record.name || group.name || "未命名料件"}</span>
                   {preferred && (
                     <span
                       className="flex-none rounded-full px-2 text-[11px] font-bold leading-5 text-slate-50"
@@ -3892,6 +3833,9 @@ function CompactAlternativeRows({
                   )}
                 </div>
               </td>
+            )}
+            {columns.qty && (
+              <td className={cn(MATERIAL_CELL_CLASS, "text-center font-mono text-[13px] text-slate-300")}>{record.qty || group.qty}</td>
             )}
             {columns.refDes && (
               <td className={MATERIAL_CELL_CLASS}>
@@ -3919,26 +3863,13 @@ function CompactAlternativeRows({
                 )}
               </td>
             )}
-            {columns.internal && (
-              <td className={MATERIAL_CELL_CLASS}>
-                <div className="flex min-w-0 flex-col">
-                  {record.partNumber ? (
-                    <button type="button" onClick={() => onCopy(record.partNumber)} className="group flex min-w-0 items-center gap-1.5 text-left" title={`複製實體料號：${record.partNumber}`}>
-                      <span className="min-w-0 truncate font-mono text-[13px] font-black leading-5 text-cyan-200">{record.partNumber}</span>
-                      <Copy className="h-3.5 w-3.5 flex-none text-cyan-300 opacity-60 group-hover:opacity-100" />
-                    </button>
-                  ) : (
-                    <span className="text-xs font-bold leading-5 text-amber-300">實體料號未提供</span>
-                  )}
-                  <span className="truncate text-xs leading-4 text-slate-500" title={`原理圖符號（Schematic_Part）：${record.schematicPart || "未提供"}\nPCB 封裝名稱：${record.pcbFootprint || "未提供"}`}>
-                    <span className="font-mono text-cyan-300/80">{record.schematicPart || "原理圖符號未提供"}</span>
-                    <span className="text-slate-600"> · </span>
-                    <span className="font-mono text-indigo-300/80">{record.pcbFootprint || "封裝未提供"}</span>
-                  </span>
-                </div>
-              </td>
+            {columns.manufacturer && (
+              <td className={MATERIAL_CELL_CLASS}><MaterialSourceText value={record.manufacturer} label="Manufacturer" /></td>
             )}
-            {columns.tx && (
+            {columns.sourcingStatus && (
+              <td className={MATERIAL_CELL_CLASS}><MaterialSourceText value={record.sourcingStatus} label="Sourcing Status" chip /></td>
+            )}
+            {columns.virtual && (
               <td className={MATERIAL_CELL_CLASS}>
                 {record.id === primaryTxRecordId ? (
                   <span className="block truncate font-mono text-[13px] font-bold text-teal-200/70" title="這筆的虛擬料號已顯示在主料列，請在主料列修改">{record.virtualAlternative || "—"}</span>
@@ -3947,8 +3878,35 @@ function CompactAlternativeRows({
                 )}
               </td>
             )}
+            {columns.physical && (
+              <td className={MATERIAL_CELL_CLASS}>
+                {record.partNumber ? (
+                  <button type="button" onClick={() => onCopy(record.partNumber)} className="group flex w-full min-w-0 items-center gap-1.5 text-left" title={`複製實體料號：${record.partNumber}`}>
+                    <span className="min-w-0 truncate font-mono text-[13px] font-black leading-5 text-cyan-200">{record.partNumber}</span>
+                    <Copy className="h-3.5 w-3.5 flex-none text-cyan-300 opacity-60 group-hover:opacity-100" />
+                  </button>
+                ) : (
+                  <span className="text-xs font-bold leading-5 text-amber-300">實體料號未提供</span>
+                )}
+              </td>
+            )}
+            {columns.partName && (
+              <td className={MATERIAL_CELL_CLASS}><MaterialSourceText value={record.partName} label="Part Name" /></td>
+            )}
+            {columns.partSpec && (
+              <td className={MATERIAL_CELL_CLASS}><MaterialSourceText value={record.partSpec || group.partSpec} label="Part Spec" /></td>
+            )}
+            {columns.schematicPart && (
+              <td className={MATERIAL_CELL_CLASS}><MaterialSourceText value={record.schematicPart} label="Schematic_Part" mono /></td>
+            )}
+            {columns.footprint && (
+              <td className={MATERIAL_CELL_CLASS}><MaterialSourceText value={record.pcbFootprint} label="PCB_Footprint" mono /></td>
+            )}
             {columns.phaseOut && (
               <td className={MATERIAL_CELL_CLASS}><PhaseOutStatus record={record} /></td>
+            )}
+            {columns.partUsage && (
+              <td className={MATERIAL_CELL_CLASS}><PartUsageStatus record={record} /></td>
             )}
             {columns.status && (
               <td className={MATERIAL_CELL_CLASS}>
@@ -4002,50 +3960,44 @@ function BomTableColorDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-blue-400/20 bg-[#0a1324] p-5 text-slate-100 sm:max-w-[520px]">
+      <DialogContent className="max-w-md gap-4 p-5 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-lg font-black text-white">表格配色</DialogTitle>
-          <DialogDescription className="text-xs text-slate-400">
+          <DialogTitle>表格配色</DialogTitle>
+          <DialogDescription>
             只套用到「{workspaceName}」，開啟同一份 BOM 的人會看到同樣的配色。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="divide-y divide-blue-400/10 rounded-xl border border-blue-400/15 bg-slate-950/40">
+        <div className="divide-y divide-border rounded-2xl border border-border bg-background/40">
           {BOM_TABLE_COLOR_FIELDS.map((field) => (
             <div key={field.key} className="flex items-center gap-3 px-3 py-2">
-              <span className="h-7 w-7 flex-none rounded-md border border-white/10" style={{ backgroundColor: theme[field.key] }} />
+              <span className="h-7 w-7 flex-none rounded-md border border-border" style={{ backgroundColor: theme[field.key] }} />
               <div className="min-w-0 flex-1">
-                <Label className="text-sm font-bold text-slate-100">{field.label}</Label>
-                <p className="truncate text-xs text-slate-400" title={field.description}>{field.description}</p>
+                <Label className="text-sm font-semibold text-foreground">{field.label}</Label>
+                <p className="truncate text-xs text-muted-foreground" title={field.description}>{field.description}</p>
               </div>
               <Input
                 type="color"
                 value={theme[field.key]}
                 onChange={(event) => onThemeChange(field.key, event.target.value)}
                 aria-label={`${field.label}顏色`}
-                className="h-9 w-12 flex-none cursor-pointer border-blue-400/20 bg-[#0c1b31] p-1"
+                className="h-9 w-12 flex-none cursor-pointer rounded-lg p-1"
               />
               <Input
                 value={theme[field.key]}
                 readOnly
                 aria-label={`${field.label}色碼`}
-                className="h-9 w-24 flex-none border-blue-400/20 bg-[#0c1b31] font-mono text-sm font-bold text-slate-100"
+                className="h-9 w-24 flex-none rounded-lg px-2 font-mono text-sm"
               />
             </div>
           ))}
         </div>
 
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
-          <Button type="button" variant="outline" size="sm" onClick={onReset} className="border-blue-400/20 bg-blue-400/10 text-slate-200 hover:bg-blue-400/20">
-            還原預設
-          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onReset}>還原預設</Button>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="border-slate-500/25 bg-slate-800/60 text-slate-300 hover:bg-slate-700/80">
-              取消
-            </Button>
-            <Button type="button" size="sm" onClick={onApply} className="bg-cyan-400 text-slate-950 hover:bg-cyan-300">
-              套用到目前 BOM
-            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>取消</Button>
+            <Button type="button" size="sm" onClick={onApply}>套用到目前 BOM</Button>
           </div>
         </DialogFooter>
       </DialogContent>
@@ -4081,51 +4033,56 @@ function MaterialExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!activeFormat) onOpenChange(nextOpen); }}>
-      <DialogContent className="max-w-2xl border-cyan-300/25 bg-[#0b1829] p-5 text-slate-100">
+      <DialogContent className="max-w-xl gap-4 p-5 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-lg text-slate-50">匯出主管報表</DialogTitle>
-          <DialogDescription className="text-xs text-slate-400">
+          <DialogTitle>匯出主管報表</DialogTitle>
+          <DialogDescription>
             三種格式用同一份固定查詢結果，匯出期間不會重新查詢或改動原始資料。
           </DialogDescription>
         </DialogHeader>
 
         {snapshot ? (
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-slate-500/20 bg-[#081322] px-3 py-2 text-sm">
-              <span><span className="text-slate-400">原始主料 </span><strong className="text-white">{snapshot.originalGroupCount.toLocaleString()}</strong></span>
-              <span><span className="text-slate-400">篩選後 </span><strong className="text-cyan-100">{snapshot.filteredGroupCount.toLocaleString()}</strong></span>
-              <span><span className="text-slate-400">匯出明細 </span><strong className="text-emerald-100">{snapshot.rows.length.toLocaleString()}</strong></span>
-              <span className="ml-auto truncate text-xs text-slate-400" title={`${snapshot.exportedBy} · ${formatTimestamp(snapshot.dataAsOf)}`}>{snapshot.exportedBy} · {formatTimestamp(snapshot.dataAsOf)}</span>
-            </div>
+            <dl className="grid grid-cols-3 divide-x divide-border rounded-2xl border border-border bg-background/40 text-center">
+              {[
+                ["原始主料", snapshot.originalGroupCount],
+                ["篩選後主料", snapshot.filteredGroupCount],
+                ["匯出明細", snapshot.rows.length],
+              ].map(([label, value]) => (
+                <div key={label} className="px-3 py-2.5">
+                  <dt className="text-[11px] text-muted-foreground">{label}</dt>
+                  <dd className="font-mono text-lg font-semibold text-foreground">{Number(value).toLocaleString()}</dd>
+                </div>
+              ))}
+            </dl>
 
-            <div className="rounded-lg border border-slate-500/20 bg-[#081322] px-3 py-2 text-sm">
-              <p className="truncate" title={snapshot.workspaceName}><span className="text-slate-400">BOM：</span>{snapshot.workspaceName}</p>
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-slate-400">範圍 {snapshot.scopeLabel}：</span>
-                {(snapshot.filterSummary.length > 0 ? snapshot.filterSummary : ["全部資料"]).map((filter) => (
-                  <span key={filter} className="rounded border border-cyan-300/20 bg-cyan-300/[0.08] px-1.5 text-[11px] leading-5 text-cyan-100">{filter}</span>
-                ))}
-              </div>
-            </div>
+            <dl className="space-y-1.5 rounded-2xl border border-border bg-background/40 px-4 py-3 text-sm">
+              <div className="flex gap-3"><dt className="w-16 flex-none text-muted-foreground">BOM</dt><dd className="min-w-0 truncate text-foreground" title={snapshot.workspaceName}>{snapshot.workspaceName}</dd></div>
+              <div className="flex gap-3"><dt className="w-16 flex-none text-muted-foreground">匯出人</dt><dd className="min-w-0 truncate text-foreground">{snapshot.exportedBy} · {formatTimestamp(snapshot.dataAsOf)}</dd></div>
+              <div className="flex gap-3"><dt className="w-16 flex-none text-muted-foreground">範圍</dt><dd className="flex min-w-0 flex-wrap items-center gap-1.5"><span className="text-foreground">{snapshot.scopeLabel}</span>{(snapshot.filterSummary.length > 0 ? snapshot.filterSummary : ["全部資料"]).map((filter) => (
+                <span key={filter} className={cn(CHIP_BASE, CHIP_TONES.neutral)}>{filter}</span>
+              ))}</dd></div>
+            </dl>
 
-            <p className="rounded-lg border border-cyan-300/18 bg-cyan-300/[0.06] px-3 py-1.5 text-xs text-cyan-100" role="status" aria-live="polite">
+            <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status" aria-live="polite">
+              {activeFormat && <RotateCcw className="h-3.5 w-3.5 animate-spin text-primary" />}
               {progressLabel}
             </p>
 
             <div className="grid gap-2 sm:grid-cols-3">
-              <Button type="button" disabled={Boolean(activeFormat)} onClick={() => onExport("excel")} className="h-10 bg-emerald-500 font-bold text-slate-950 hover:bg-emerald-400 disabled:bg-slate-600">
+              <Button type="button" disabled={Boolean(activeFormat)} onClick={() => onExport("excel")} className="h-10">
                 <FileSpreadsheet className="mr-2 h-4 w-4" />{activeFormat === "excel" ? "產生中" : "Excel"}
               </Button>
-              <Button type="button" disabled={Boolean(activeFormat)} onClick={() => onExport("html")} className="h-10 bg-sky-500 font-bold text-slate-950 hover:bg-sky-400 disabled:bg-slate-600">
+              <Button type="button" variant="secondary" disabled={Boolean(activeFormat)} onClick={() => onExport("html")} className="h-10">
                 <FileCode2 className="mr-2 h-4 w-4" />{activeFormat === "html" ? "產生中" : "HTML"}
               </Button>
-              <Button type="button" disabled={Boolean(activeFormat)} onClick={() => onExport("zip")} className="h-10 bg-cyan-500 font-bold text-slate-950 hover:bg-cyan-400 disabled:bg-slate-600">
+              <Button type="button" variant="secondary" disabled={Boolean(activeFormat)} onClick={() => onExport("zip")} className="h-10">
                 <FileArchive className="mr-2 h-4 w-4" />{activeFormat === "zip" ? "封裝中" : "HTML + 圖片 ZIP"}
               </Button>
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border border-amber-300/20 bg-amber-400/[0.08] p-3 text-sm text-amber-100">尚未建立報表快照。</div>
+          <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">尚未建立報表快照。</p>
         )}
       </DialogContent>
     </Dialog>
@@ -5700,16 +5657,16 @@ export function MaterialRequestPage() {
         snapshot={exportSnapshot}
       />
       <AlertDialog open={Boolean(pendingDeleteBomId)} onOpenChange={(open) => !open && setPendingDeleteBomId(null)}>
-        <AlertDialogContent className="border-rose-300/35 bg-[radial-gradient(circle_at_100%_0%,rgba(244,63,94,0.18),transparent_18rem),#0b1b2d] text-slate-100 shadow-[0_30px_90px_-28px_rgba(244,63,94,0.55)]">
+        <AlertDialogContent data-dialog-tone="danger" className="gap-4 p-5 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg text-rose-50">永久刪除這份 BOM？</AlertDialogTitle>
-            <AlertDialogDescription className="leading-6 text-slate-300">
+            <AlertDialogTitle>永久刪除這份 BOM？</AlertDialogTitle>
+            <AlertDialogDescription>
               「{bomWorkspaces.find((workspace) => workspace.id === pendingDeleteBomId)?.name || "目前 BOM"}」及其料件、頁數與追蹤資料會一併移除，這個動作無法復原。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-slate-400/25 bg-slate-900/40 text-slate-200 hover:bg-slate-800 hover:text-white">保留 BOM</AlertDialogCancel>
-            <AlertDialogAction className="bg-rose-600 font-bold text-white hover:bg-rose-500" onClick={() => void confirmDeleteBom()}>
+            <AlertDialogCancel>保留 BOM</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => void confirmDeleteBom()}>
               確認永久刪除
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -6155,55 +6112,72 @@ export function MaterialRequestPage() {
                       ? MATERIAL_STICKY_COLUMN_CLASSES.header
                       : undefined}
                   >
-                    <span data-testid={column.key === "actions" ? "material-data-update-header" : undefined} title={MATERIAL_TABLE_COLUMN_HELP[column.key]}>
+                    <span
+                      data-testid={column.key === "actions" ? "material-data-update-header" : undefined}
+                      className="block truncate"
+                      title={MATERIAL_TABLE_COLUMN_HELP[column.key]}
+                    >
                       {column.label}
                     </span>
                   </ResizableHeader>
                 ))}
               </tr>
+              {/* Second header row mirrors row 5 of the CE workbook: the Chinese meaning, or the column filter where one exists. */}
               <tr className="bg-[#10263a] text-slate-100">
-                {columnVisibility.item && (
-                  <th className="border-r border-blue-300/20 p-1.5">
-                    <div className="flex h-8 items-center justify-center text-[11px] font-bold text-slate-500">#</div>
-                  </th>
-                )}
-                {columnVisibility.marked && (
-                  <th className="border-r border-blue-300/20 p-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setShowMarkedOnly((current) => !current)}
-                      aria-pressed={showMarkedOnly}
-                      className={cn(
-                        "flex h-8 w-full items-center justify-center gap-1 rounded border text-xs font-bold transition-colors",
-                        showMarkedOnly
-                          ? "border-amber-300/40 bg-amber-400/18 text-amber-100"
-                          : "border-blue-300/20 bg-[#07182d] text-amber-200 hover:bg-amber-400/10",
-                      )}
-                      aria-label="只看我的標記"
-                      title="只看我的標記"
-                    >
-                      <Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />
-                      <span aria-hidden="true">{markedGroupCount}</span>
-                    </button>
-                  </th>
-                )}
-                {columnVisibility.material && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="material" getOptions={getColumnFilterOptions} label="料件" selectedValues={columnFilters.material} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, material: values }))} /></th>}
-                {columnVisibility.refDes && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="refDes" getOptions={getColumnFilterOptions} label="REF DES" selectedValues={columnFilters.refDes} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, refDes: values }))} /></th>}
-                {columnVisibility.mpn && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="mpn" getOptions={getColumnFilterOptions} label="MPN" selectedValues={columnFilters.mpn} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, mpn: values }))} /></th>}
-                {columnVisibility.internal && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="internal" getOptions={getColumnFilterOptions} label="實體料號" selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} /></th>}
-                {columnVisibility.tx && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="virtualAlternative" getOptions={getColumnFilterOptions} label="虛擬料號" selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} /></th>}
-                {columnVisibility.phaseOut && <th className="border-r border-blue-300/20 p-1.5"><div className="flex h-8 items-center justify-center text-[11px] text-slate-500">來源原文</div></th>}
-                {columnVisibility.status && (
-                  <th className="border-r border-blue-300/20 p-1.5">
-                    <div className="flex h-8 items-center justify-center text-[11px] text-slate-500">—</div>
-                  </th>
-                )}
-                {columnVisibility.tracking && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="trackingStatus" getOptions={getColumnFilterOptions} label="狀態追蹤" selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, trackingStatus: values }))} /></th>}
-                {columnVisibility.actions && (
-                  <th className={MATERIAL_STICKY_COLUMN_CLASSES.filter}>
-                    <div className="flex h-8 items-center justify-center text-[11px] text-slate-500">操作</div>
-                  </th>
-                )}
+                {MATERIAL_TABLE_COLUMNS.map((column) => {
+                  if (!columnVisibility[column.key]) return null;
+                  const filterKey = MATERIAL_COLUMN_FILTER_KEYS[column.key];
+                  if (column.key === "actions") {
+                    return (
+                      <th key={column.key} className={MATERIAL_STICKY_COLUMN_CLASSES.filter}>
+                        <div className="flex h-8 items-center justify-center text-[11px] text-slate-500">操作</div>
+                      </th>
+                    );
+                  }
+                  if (column.key === "marked") {
+                    return (
+                      <th key={column.key} className="border-r border-blue-300/20 p-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setShowMarkedOnly((current) => !current)}
+                          aria-pressed={showMarkedOnly}
+                          className={cn(
+                            "flex h-8 w-full items-center justify-center gap-1 rounded border text-xs font-bold transition-colors",
+                            showMarkedOnly
+                              ? "border-amber-300/40 bg-amber-400/18 text-amber-100"
+                              : "border-blue-300/20 bg-[#07182d] text-amber-200 hover:bg-amber-400/10",
+                          )}
+                          aria-label="只看我的標記"
+                          title="只看我的標記"
+                        >
+                          <Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />
+                          <span aria-hidden="true">{markedGroupCount}</span>
+                        </button>
+                      </th>
+                    );
+                  }
+                  if (filterKey) {
+                    return (
+                      <th key={column.key} className="border-r border-blue-300/20 p-1.5">
+                        <ExcelFilterPopover
+                          filterKey={filterKey}
+                          getOptions={getColumnFilterOptions}
+                          label={column.label}
+                          selectedValues={columnFilters[filterKey]}
+                          onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, [filterKey]: values }))}
+                        />
+                      </th>
+                    );
+                  }
+                  const meaning = MATERIAL_TABLE_COLUMN_MEANING[column.key] ?? "";
+                  return (
+                    <th key={column.key} className="border-r border-blue-300/20 p-1.5">
+                      <div className="flex h-8 items-center justify-center truncate px-1 text-[10px] font-normal leading-4 text-slate-500" title={meaning || undefined}>
+                        {meaning || "—"}
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             {visibleGroupRows.map((row, rowIndex) => {
@@ -6243,7 +6217,7 @@ export function MaterialRequestPage() {
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-blue-400/15 bg-[#101d33] px-3 py-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-blue-400/15 bg-[#101d33] px-3 py-1.5 lg:pr-28">
           <div className="flex items-center gap-2 text-xs text-slate-400"><span>每頁</span><Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}><SelectTrigger aria-label="每頁筆數" className="h-8 w-20 border-blue-400/20 bg-[#0b1527] text-xs text-slate-200"><SelectValue /></SelectTrigger><SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">{PAGE_SIZE_OPTIONS.map((size) => <SelectItem key={size} value={String(size)}>{size} 列</SelectItem>)}</SelectContent></Select><span>第 {page} / {totalPages} 頁</span></div>
           <div className="flex items-center gap-1.5"><Button type="button" variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="h-8 border-blue-400/20 bg-[#0b1527] px-2.5 text-xs text-slate-300"><ChevronLeft className="mr-1 h-3.5 w-3.5" />上一頁</Button><Button type="button" variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="h-8 border-blue-400/20 bg-[#0b1527] px-2.5 text-xs text-slate-300">下一頁<ChevronRight className="ml-1 h-3.5 w-3.5" /></Button></div>
         </div>
