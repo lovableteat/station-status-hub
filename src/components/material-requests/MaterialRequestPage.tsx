@@ -133,6 +133,7 @@ import {
   MATERIAL_TABLE_COLUMNS,
   type BomProjectGroup,
   type MaterialTableColumnKey,
+  type PendingMaterialCategory,
   createClipboardImageName,
   createCompactValueSummary,
   getMaterialExportScopeLabel,
@@ -238,7 +239,7 @@ const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:"
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const VIEW_STATE_KEY_PREFIX = "station-status-hub:material-view:v1:";
-const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v10";
+const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v11";
 const HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const MAX_BOM_TRACKER_PAGES = 500;
@@ -267,9 +268,9 @@ const BOM_PAGE_STATUS_OPTIONS: Array<{
     idleClassName: "text-muted-foreground hover:bg-accent hover:text-foreground",
   },
 ];
-const DEFAULT_COLUMN_WIDTHS = [56, 56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150, 220, 110];
-const MIN_COLUMN_WIDTHS = [48, 48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 120, 180, 100];
-const MAX_COLUMN_WIDTHS = [96, 80, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 420, 200];
+const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150, 220, 110];
+const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 120, 180, 100];
+const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 420, 200];
 const DEFAULT_BOM_TABLE_COLOR_THEME: BomTableColorTheme = {
   primary: "#0F5D74",
   alternative: "#343B73",
@@ -603,7 +604,6 @@ const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>
       .map((column) => [column.key, `Excel 欄名：${column.ceHeader}\n${getMaterialCeFieldHelp(column.ceHeader).description}`]),
   ),
   item: "網站列號，依目前排序與分頁編號。",
-  marked: "我的標記，只存在這個瀏覽器。",
   status: "網站依虛擬／實體料號與零件狀態判斷的建料狀態，不是 CE Excel 欄位。",
   tracking: "網站人工維護的狀態追蹤，與 CE Excel 的供應／核准狀態、phase out 及零件狀態分開。",
   actions: "新增或更新這組料的資料。",
@@ -1655,47 +1655,23 @@ function ExcelFilterPopover({
   const [isPanelReady, setIsPanelReady] = useState(false);
   const [options, setOptions] = useState<ExcelFilterOption[]>([]);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [mergeSearchSelection, setMergeSearchSelection] = useState(true);
-  const [draftSelectedValues, setDraftSelectedValues] = useState<ColumnFilterSelection>(
-    normalizeColumnFilterSelection(selectedValues),
-  );
-  const [draftSearchValue, setDraftSearchValue] = useState("");
+  const [searchValue, setSearchValue] = useState("");
   const [scrollTop, setScrollTop] = useState(0);
-  const wasOpenRef = useRef(false);
-  const selectedValuesRef = useRef(selectedValues);
-  const deferredDraftSearchValue = useDeferredValue(draftSearchValue);
+  const deferredSearchValue = useDeferredValue(searchValue);
+  // Every click applies immediately: the table is the preview, so no draft, 取消 or 確定.
+  const selected = useMemo(() => normalizeColumnFilterSelection(selectedValues), [selectedValues]);
   const allOptionValues = useMemo(() => options.map((option) => option.value), [options]);
   const optionValueSet = useMemo(() => new Set(allOptionValues), [allOptionValues]);
-  const appliedSelectedValues = useMemo(
-    () => normalizeColumnFilterSelection(selectedValues),
-    [selectedValues],
-  );
-
-  useEffect(() => {
-    selectedValuesRef.current = selectedValues;
-  }, [selectedValues]);
-
-  useEffect(() => {
-    if (open && !wasOpenRef.current) {
-      setDraftSelectedValues(normalizeColumnFilterSelection(selectedValuesRef.current));
-      setDraftSearchValue("");
-      setMergeSearchSelection(true);
-      setScrollTop(0);
-    }
-
-    wasOpenRef.current = open;
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      setDraftSelectedValues(normalizeColumnFilterSelection(selectedValues));
-    }
-  }, [open, selectedValues]);
+  const selectedList = useMemo(() => (selected === null ? allOptionValues : selected), [allOptionValues, selected]);
+  const selectedSet = useMemo(() => new Set(selectedList), [selectedList]);
+  const hiddenSelectedCount = selected === null ? 0 : selected.filter((value) => !optionValueSet.has(value)).length;
 
   useEffect(() => {
     if (!open) {
       setIsPanelReady(false);
       setOptions([]);
+      setSearchValue("");
+      setScrollTop(0);
       return undefined;
     }
 
@@ -1707,149 +1683,52 @@ function ExcelFilterPopover({
     return () => window.cancelAnimationFrame(frameId);
   }, [filterKey, getOptions, open]);
 
-  const effectiveSelected = useMemo(
-    () => draftSelectedValues === null
-      ? allOptionValues
-      : normalizeColumnFilterSelection(draftSelectedValues) ?? [],
-    [allOptionValues, draftSelectedValues],
-  );
-  const effectiveSelectedSet = useMemo(() => new Set(effectiveSelected), [effectiveSelected]);
-  const hiddenSelectedValues = useMemo(
-    () => draftSelectedValues === null
-      ? []
-      : effectiveSelected.filter((value) => !optionValueSet.has(value)),
-    [draftSelectedValues, effectiveSelected, optionValueSet],
-  );
-  const selectedCount = appliedSelectedValues === null ? options.length : appliedSelectedValues.length;
-  const triggerSummary = appliedSelectedValues === null ? "全部" : `${selectedCount}項`;
-
+  const searchTokens = useMemo(() => parseSearchTokens(deferredSearchValue), [deferredSearchValue]);
+  const searchHasValue = searchTokens.length > 0;
   const filteredOptions = useMemo(() => {
-    if (!isPanelReady) return options;
-
-    const searchTokens = parseSearchTokens(deferredDraftSearchValue);
-    const next = options.filter((option) => {
-      if (searchTokens.length === 0) return true;
-
-      const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
-      return searchTokens.every((token) => searchableText.includes(token));
-    });
-
+    const next = searchHasValue
+      ? options.filter((option) => {
+          const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
+          return searchTokens.every((token) => searchableText.includes(token));
+        })
+      : options;
     return [...next].sort((left, right) => sortDirection === "asc"
       ? left.label.localeCompare(right.label, undefined, { numeric: true })
       : right.label.localeCompare(left.label, undefined, { numeric: true }));
-  }, [deferredDraftSearchValue, isPanelReady, options, sortDirection]);
-
-  const visibleCheckedCount = filteredOptions.filter((option) => effectiveSelectedSet.has(option.value)).length;
-  const allVisibleChecked = filteredOptions.length > 0 && visibleCheckedCount === filteredOptions.length;
-  const allOptionsChecked = draftSelectedValues === null || (
-    hiddenSelectedValues.length === 0
-    && options.length > 0
-    && options.every((option) => effectiveSelectedSet.has(option.value))
-  );
-  const virtualStartIndex = Math.max(
-    0,
-    Math.floor(scrollTop / FILTER_OPTION_ROW_HEIGHT) - FILTER_OPTION_OVERSCAN,
-  );
-  const virtualEndIndex = Math.min(
-    filteredOptions.length,
-    Math.ceil((scrollTop + FILTER_OPTION_LIST_HEIGHT) / FILTER_OPTION_ROW_HEIGHT) + FILTER_OPTION_OVERSCAN,
-  );
-  const visibleOptionSlice = filteredOptions.slice(virtualStartIndex, virtualEndIndex);
-  const panelSummary = draftSelectedValues === null ? "全部" : `${effectiveSelected.length} 項`;
-  const exactMatchingCount = useMemo(() => {
-    const searchTokens = parseSearchTokens(deferredDraftSearchValue);
-    return options.filter((option) => {
-      if (searchTokens.length === 0) return true;
-      const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
-      return searchTokens.every((token) => searchableText.includes(token));
-    }).length;
-  }, [deferredDraftSearchValue, options]);
-  const searchHasValue = deferredDraftSearchValue.trim().length > 0;
-  const currentVisibleValues = useMemo(
-    () => filteredOptions.map((option) => option.value),
-    [filteredOptions],
-  );
-  const hiddenBySearchCount = useMemo(
-    () => searchHasValue
-      ? effectiveSelected.filter((value) => !currentVisibleValues.includes(value)).length
-      : 0,
-    [currentVisibleValues, effectiveSelected, searchHasValue],
-  );
-
-  const convertSelectionState = useCallback((values: string[]) => {
-    const normalized = normalizeColumnFilterSelection(values) ?? [];
-
-    if (
-      hiddenSelectedValues.length === 0
-      && options.length > 0
-      && normalized.length === options.length
-      && options.every((option) => normalized.includes(option.value))
-    ) {
-      return null;
-    }
-
-    return normalized;
-  }, [hiddenSelectedValues.length, options]);
-
-  const applySelection = (nextValues: string[]) => {
-    setDraftSelectedValues(convertSelectionState(nextValues));
-  };
-
-  const commitSelection = () => {
-    const nextSelection = draftSelectedValues === null
-      ? null
-      : normalizeColumnFilterSelection(draftSelectedValues);
-    onSelectedValuesChange(nextSelection);
-    setOpen(false);
-  };
-
-  const cancelSelection = () => {
-    setDraftSelectedValues(normalizeColumnFilterSelection(selectedValues));
-    setOpen(false);
-  };
-
-  const clearColumnDraft = () => {
-    setDraftSearchValue("");
-    setDraftSelectedValues(null);
-    setMergeSearchSelection(true);
-    setScrollTop(0);
-  };
-
-  const toggleValue = (value: string, checked: boolean) => {
-    const current = draftSelectedValues === null
-      ? allOptionValues
-      : effectiveSelected;
-    const next = checked
-      ? Array.from(new Set([...current, value]))
-      : current.filter((item) => item !== value);
-
-    applySelection(next);
-  };
-
-  const toggleAllOptions = (checked: boolean) => {
-    setDraftSelectedValues(checked ? null : []);
-  };
-
-  const toggleVisibleSelection = (checked: boolean) => {
-    const current = draftSelectedValues === null
-      ? allOptionValues
-      : effectiveSelected;
-
-    if (checked) {
-      applySelection(
-        searchHasValue && !mergeSearchSelection
-          ? currentVisibleValues
-          : Array.from(new Set([...current, ...currentVisibleValues])),
-      );
-      return;
-    }
-
-    applySelection(current.filter((value) => !currentVisibleValues.includes(value)));
-  };
+  }, [options, searchHasValue, searchTokens, sortDirection]);
+  const visibleValues = useMemo(() => filteredOptions.map((option) => option.value), [filteredOptions]);
+  const visibleCheckedCount = filteredOptions.filter((option) => selectedSet.has(option.value)).length;
+  const allOptionsChecked = selected === null || (hiddenSelectedCount === 0 && options.length > 0 && options.every((option) => selectedSet.has(option.value)));
 
   useEffect(() => {
     setScrollTop(0);
-  }, [deferredDraftSearchValue, filteredOptions.length, sortDirection]);
+  }, [deferredSearchValue, sortDirection]);
+
+  const virtualStartIndex = Math.max(0, Math.floor(scrollTop / FILTER_OPTION_ROW_HEIGHT) - FILTER_OPTION_OVERSCAN);
+  const virtualEndIndex = Math.min(filteredOptions.length, Math.ceil((scrollTop + FILTER_OPTION_LIST_HEIGHT) / FILTER_OPTION_ROW_HEIGHT) + FILTER_OPTION_OVERSCAN);
+  const visibleOptionSlice = filteredOptions.slice(virtualStartIndex, virtualEndIndex);
+
+  const apply = (values: string[] | null) => {
+    if (values === null) {
+      onSelectedValuesChange(null);
+      return;
+    }
+    const normalized = normalizeColumnFilterSelection(values) ?? [];
+    const isEverything = hiddenSelectedCount === 0
+      && options.length > 0
+      && normalized.length === options.length
+      && options.every((option) => normalized.includes(option.value));
+    onSelectedValuesChange(isEverything ? null : normalized);
+  };
+  const toggleValue = (value: string, checked: boolean) => {
+    apply(checked ? Array.from(new Set([...selectedList, value])) : selectedList.filter((item) => item !== value));
+  };
+  const keepOnlyVisible = () => apply(visibleValues);
+  const addVisible = () => apply(Array.from(new Set([...selectedList, ...visibleValues])));
+  const removeVisible = () => apply(selectedList.filter((value) => !visibleValues.includes(value)));
+
+  const appliedCount = selected === null ? options.length : selected.length;
+  const triggerSummary = selected === null ? "全部" : `${selected.length}項`;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -1858,17 +1737,17 @@ function ExcelFilterPopover({
           type="button"
           className={cn(
             "flex h-8 w-full items-center justify-between rounded-md border px-2 text-left text-xs font-semibold transition-colors hover:border-primary/50 hover:bg-primary/10",
-            appliedSelectedValues === null
+            selected === null
               ? "border-border bg-secondary/60 text-foreground"
               : "border-primary/45 bg-primary/15 text-foreground",
           )}
-          title={appliedSelectedValues === null ? `篩選${label}` : `${label}：已選 ${selectedCount} 項`}
+          title={selected === null ? `篩選${label}` : `${label}：已選 ${selected.length} 項`}
         >
           <span className="inline-flex min-w-0 items-center gap-1.5">
-            <Filter className={cn("h-3.5 w-3.5 flex-none", appliedSelectedValues === null ? "text-muted-foreground" : "text-primary")} />
+            <Filter className={cn("h-3.5 w-3.5 flex-none", selected === null ? "text-muted-foreground" : "text-primary")} />
             <span className="truncate">{label}</span>
           </span>
-          {appliedSelectedValues !== null && (
+          {selected !== null && (
             <span className="ml-1 flex-none rounded bg-primary/20 px-1.5 text-[10px] leading-4 text-primary">
               {triggerSummary}
             </span>
@@ -1880,141 +1759,89 @@ function ExcelFilterPopover({
         collisionPadding={12}
         sticky="always"
         data-testid="material-column-filter-panel"
-        style={{
-          maxHeight: "min(640px, calc(var(--radix-popover-content-available-height) - 12px))",
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement | null)?.querySelector<HTMLInputElement>("input")?.focus();
         }}
-        className="w-[min(320px,calc(100vw-24px))] overflow-y-auto overscroll-contain rounded-2xl border border-border bg-popover p-2.5 text-popover-foreground shadow-lg [scrollbar-width:thin]"
+        className="w-[min(320px,calc(100vw-24px))] rounded-2xl border border-border bg-popover p-2.5 text-popover-foreground shadow-lg"
       >
         <div className="space-y-2">
-          <div className="flex items-center justify-between px-1">
-            <p className="text-sm font-semibold text-foreground">{label}</p>
-            <span className={cn(CHIP_BASE, CHIP_TONES.neutral)}>{panelSummary}</span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="flex items-center gap-2 px-1">
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{label}</p>
+            <span className="font-mono text-[11px] text-muted-foreground">{appliedCount}/{options.length}</span>
             <button
               type="button"
-              onClick={() => setSortDirection("asc")}
-              className={cn(
-                "rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors",
-                sortDirection === "asc"
-                  ? "border-primary/45 bg-primary/15 text-foreground"
-                  : "border-border bg-secondary/60 text-muted-foreground hover:bg-secondary"
-              )}
+              onClick={() => setSortDirection((current) => (current === "asc" ? "desc" : "asc"))}
+              aria-label={sortDirection === "asc" ? "改為 Z 到 A 排序" : "改為 A 到 Z 排序"}
+              title={sortDirection === "asc" ? "目前 A → Z，點擊改為 Z → A" : "目前 Z → A，點擊改為 A → Z"}
+              className="rounded-md border border-border bg-secondary/60 px-1.5 font-mono text-[11px] leading-5 text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
-              A → Z
-            </button>
-            <button
-              type="button"
-              onClick={() => setSortDirection("desc")}
-              className={cn(
-                "rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors",
-                sortDirection === "desc"
-                  ? "border-primary/45 bg-primary/15 text-foreground"
-                  : "border-border bg-secondary/60 text-muted-foreground hover:bg-secondary"
-              )}
-            >
-              Z → A
-            </button>
-            <button
-              type="button"
-              onClick={clearColumnDraft}
-              className="rounded-lg border border-border bg-secondary/60 px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            >
-              清除篩選
+              {sortDirection === "asc" ? "A→Z" : "Z→A"}
             </button>
           </div>
 
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
-              value={draftSearchValue}
-              onChange={(event) => setDraftSearchValue(event.target.value)}
-              placeholder={`輸入 ${label} 關鍵字，只縮小清單`}
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && searchHasValue && filteredOptions.length > 0) {
+                  event.preventDefault();
+                  keepOnlyVisible();
+                } else if (event.key === "Escape") {
+                  setOpen(false);
+                }
+              }}
+              placeholder="輸入關鍵字；Enter 只留符合的值"
               aria-label={`搜尋${label}篩選值`}
               className="h-9 rounded-lg pl-8 pr-3 text-[13px]"
             />
           </div>
 
-          <div className="flex items-center justify-between px-1 text-[12px] text-muted-foreground">
-            <span>目前勾選 {draftSelectedValues === null ? options.length : effectiveSelected.length} / {options.length}</span>
-            <span>搜尋命中 {exactMatchingCount} 筆</span>
-          </div>
-
-          {hiddenBySearchCount > 0 ? (
-            <p className="rounded-lg border border-border bg-background/40 px-3 py-2 text-[12px] text-muted-foreground">
-              目前搜尋只顯示其中 {visibleCheckedCount} 個已勾選值；另有 {hiddenBySearchCount} 個已勾選值被搜尋關鍵字暫時隱藏。
-            </p>
-          ) : null}
-
-          {hiddenSelectedValues.length > 0 ? (
-            <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
-              另有 {hiddenSelectedValues.length} 個已勾選值因目前條件未顯示，套用時仍會保留。
-            </p>
-          ) : null}
-
           {isPanelReady ? (
             <div className="rounded-xl border border-border bg-background/40">
-              {options.length > 0 && (
-                <div className="border-b border-border p-2">
-                  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold text-foreground hover:bg-accent">
+              <div className="flex items-center gap-1 border-b border-border p-1.5">
+                {searchHasValue ? (
+                  <>
+                    <span className="px-1 text-[11px] text-muted-foreground">符合 {filteredOptions.length} 筆</span>
+                    <button type="button" onClick={keepOnlyVisible} disabled={filteredOptions.length === 0} className="rounded-md border border-primary/40 bg-primary/15 px-2 text-xs font-semibold leading-6 text-foreground hover:bg-primary/25 disabled:opacity-50">只留符合</button>
+                    <button type="button" onClick={addVisible} disabled={filteredOptions.length === 0} className="rounded-md border border-border bg-secondary/60 px-2 text-xs font-semibold leading-6 text-foreground hover:bg-secondary disabled:opacity-50">加入符合</button>
+                    <button type="button" onClick={removeVisible} disabled={visibleCheckedCount === 0} className="rounded-md border border-border bg-secondary/60 px-2 text-xs font-semibold leading-6 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50">移除符合</button>
+                  </>
+                ) : (
+                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1 text-[13px] font-semibold text-foreground hover:bg-accent">
                     <Checkbox
-                      checked={allOptionsChecked ? true : (draftSelectedValues !== null && draftSelectedValues.length > 0 ? "indeterminate" : false)}
-                      onCheckedChange={(value) => toggleAllOptions(value === true)}
+                      checked={allOptionsChecked ? true : (selectedList.length > 0 ? "indeterminate" : false)}
+                      onCheckedChange={(value) => apply(value === true ? null : [])}
                     />
-                    <span className="min-w-0 flex-1 truncate">(全選)</span>
-                    <span className="text-xs text-muted-foreground">
-                      {draftSelectedValues === null ? options.length : effectiveSelected.length}/{options.length}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate">全選</span>
+                    <span className="text-xs text-muted-foreground">{selectedList.length - hiddenSelectedCount}/{options.length}</span>
                   </label>
-                </div>
-              )}
-
-              {searchHasValue ? (
-                <div className="space-y-1 border-b border-border p-2">
-                  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-foreground hover:bg-accent">
-                    <Checkbox
-                      checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false}
-                      onCheckedChange={(value) => toggleVisibleSelection(value === true)}
-                    />
-                    <span className="min-w-0 flex-1 truncate">(選取所有搜尋結果)</span>
-                    <span className="text-xs text-muted-foreground">{visibleCheckedCount}/{filteredOptions.length}</span>
-                  </label>
-
-                  <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] text-muted-foreground hover:bg-accent">
-                    <Checkbox
-                      checked={mergeSearchSelection}
-                      onCheckedChange={(value) => setMergeSearchSelection(value === true)}
-                    />
-                    <span>[新增目前的選取範圍至篩選]</span>
-                  </label>
-                </div>
-              ) : null}
+                )}
+                {selected !== null && (
+                  <button type="button" onClick={() => apply(null)} className="ml-auto rounded-md px-2 text-xs font-semibold leading-6 text-muted-foreground hover:bg-accent hover:text-foreground">清除</button>
+                )}
+              </div>
 
               {filteredOptions.length > 0 ? (
-                <div
-                  className="h-56 overflow-y-auto"
-                  onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
-                >
-                  <div
-                    className="relative"
-                    style={{ height: filteredOptions.length * FILTER_OPTION_ROW_HEIGHT }}
-                  >
+                <div className="h-56 overflow-y-auto" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+                  <div className="relative" style={{ height: filteredOptions.length * FILTER_OPTION_ROW_HEIGHT }}>
                     {visibleOptionSlice.map((option, index) => {
-                      const checked = effectiveSelectedSet.has(option.value);
+                      const checked = selectedSet.has(option.value);
                       const tone = option.tone ?? "slate";
                       const offsetY = (virtualStartIndex + index) * FILTER_OPTION_ROW_HEIGHT;
 
                       return (
                         <label
                           key={option.value}
-                          className="absolute left-0 right-0 flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-foreground hover:bg-accent"
+                          className={cn(
+                            "absolute left-0 right-0 flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] hover:bg-accent",
+                            checked ? "text-foreground" : "text-muted-foreground",
+                          )}
                           style={{ top: offsetY, height: FILTER_OPTION_ROW_HEIGHT }}
                         >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(value) => toggleValue(option.value, value === true)}
-                          />
+                          <Checkbox checked={checked} onCheckedChange={(value) => toggleValue(option.value, value === true)} />
                           <span
                             className={cn(
                               "h-2 w-2 flex-none rounded-full",
@@ -2042,9 +1869,11 @@ function ExcelFilterPopover({
             </div>
           )}
 
-          <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-end gap-2 border-t border-border bg-popover/95 px-1 pb-0.5 pt-2 backdrop-blur">
-            <Button type="button" variant="outline" size="sm" onClick={cancelSelection} className="h-8 px-3 text-xs">取消</Button>
-            <Button type="button" size="sm" onClick={commitSelection} className="h-8 px-4 text-xs">確定</Button>
+          <div className="flex items-center justify-between gap-2 px-1">
+            <p className="min-w-0 truncate text-[11px] text-muted-foreground">
+              {hiddenSelectedCount > 0 ? `另有 ${hiddenSelectedCount} 個已選值不在目前清單，仍會保留` : "點一下立即套用，表格同步更新"}
+            </p>
+            <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)} className="h-7 px-3 text-xs">完成</Button>
           </div>
         </div>
       </PopoverContent>
@@ -3024,21 +2853,31 @@ function PendingMaterialsDialog({
   onOpenTracking: (record: MaterialRecord) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all">("all");
   const categories = useMemo(() => groupPendingMaterials(groups), [groups]);
   const keyword = query.trim().toLowerCase();
+  // One category at a time keeps long BOMs from becoming one endless scroll; the tabs carry the counts.
+  const selectedCategory = categories.some((category) => category.key === activeCategory) ? activeCategory : "all";
   const visibleCategories = useMemo(() => (
-    keyword
-      ? categories
-          .map((category) => ({ ...category, groups: category.groups.filter((group) => group.searchText.includes(keyword)) }))
-          .filter((category) => category.groups.length > 0)
-      : categories
-  ), [categories, keyword]);
+    categories
+      .filter((category) => selectedCategory === "all" || category.key === selectedCategory)
+      .map((category) => (keyword ? { ...category, groups: category.groups.filter((group) => group.searchText.includes(keyword)) } : category))
+      .filter((category) => category.groups.length > 0)
+  ), [categories, keyword, selectedCategory]);
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setActiveCategory(categories[0]?.key ?? "all");
+    }
+    // Only re-run when the dialog opens; the category list may change while it is open without resetting the tab.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const priorityCount = categories.filter((category) => category.priority).reduce((sum, category) => sum + category.groups.length, 0);
   const description = `共 ${groups.length.toLocaleString()} 筆料號待補 · CONNECTOR 與 IC 優先 ${priorityCount.toLocaleString()} 筆 · 其餘依位號分類`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="pending-materials-dialog" className="flex max-h-[90vh] max-w-4xl flex-col gap-4 overflow-hidden p-5 sm:p-6">
+      <DialogContent data-testid="pending-materials-dialog" className="flex max-h-[90vh] max-w-5xl flex-col gap-3 overflow-hidden p-5 sm:p-6">
         <DialogHeader>
           <DialogTitle>待處理料</DialogTitle>
           <DialogDescription className="truncate" title={description}>{description}</DialogDescription>
@@ -3053,6 +2892,26 @@ function PendingMaterialsDialog({
             aria-label="搜尋待處理料"
             className="h-9 rounded-xl pl-9 text-sm"
           />
+        </div>
+
+        <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-1.5">
+          {[{ key: "all" as const, label: "全部", count: groups.length, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={selectedCategory === tab.key}
+              onClick={() => setActiveCategory(tab.key)}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors",
+                selectedCategory === tab.key ? "border-primary/45 bg-primary/15 text-foreground" : "border-border bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
+              )}
+            >
+              {tab.label}
+              {tab.priority && <span className="h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}
+              <span className="font-mono text-[11px] text-muted-foreground">{tab.count.toLocaleString()}</span>
+            </button>
+          ))}
         </div>
 
         <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
@@ -3071,7 +2930,7 @@ function PendingMaterialsDialog({
               const record = group.primaryRecord;
               const trackingStatus = record.trackingStatus?.trim() || "";
               return (
-                <div key={group.key} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background/40 px-3 py-1.5 hover:bg-accent/40">
+                <div key={group.key} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/40 px-2.5 py-1 hover:bg-accent/40">
                   <span className="w-[7.5rem] flex-none truncate font-mono text-xs font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
                   <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={group.name}>{group.name || "未命名料件"}</span>
                   <span className="hidden w-[11rem] flex-none truncate font-mono text-xs text-muted-foreground md:block" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
@@ -3450,7 +3309,6 @@ type MaterialColumnVisibility = Record<MaterialTableColumnKey, boolean>;
 
 interface MaterialRowActions {
   toggleExpanded: (key: string) => void;
-  toggleMarked: (key: string) => void;
   copy: (value: string) => void;
   openCreate: (group: MaterialGroup) => void;
   openTracking: (record: MaterialRecord) => void;
@@ -3542,7 +3400,6 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   row,
   itemValue,
   expanded,
-  isMarked,
   canEdit,
   editingNames,
   latestRecordUpdate,
@@ -3554,7 +3411,6 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   row: VisibleGroupRow;
   itemValue: number;
   expanded: boolean;
-  isMarked: boolean;
   canEdit: boolean;
   editingNames: string;
   latestRecordUpdate: string;
@@ -3626,23 +3482,6 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         {columns.item && (
           <td data-material-cell="item" className={cn(MATERIAL_CELL_CLASS, "text-center font-mono text-[13px] font-black text-slate-100")}>
             {itemValue}
-          </td>
-        )}
-        {columns.marked && (
-          <td data-material-cell="marked" className={cn(MATERIAL_CELL_CLASS, "text-center")} onClick={stopRowToggle}>
-            <button
-              type="button"
-              onClick={() => actions.toggleMarked(group.key)}
-              className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md border transition-colors",
-                isMarked
-                  ? "border-amber-300/40 bg-amber-400/18 text-amber-200 hover:bg-amber-400/24"
-                  : "border-slate-500/25 bg-slate-900/35 text-slate-500 hover:border-amber-300/24 hover:bg-amber-400/10 hover:text-amber-200",
-              )}
-              title={isMarked ? "移除我的標記" : "加入我的標記"}
-            >
-              <Star className={cn("h-3.5 w-3.5", isMarked && "fill-current")} />
-            </button>
           </td>
         )}
         {columns.name && (
@@ -3921,7 +3760,6 @@ function CompactAlternativeRows({
                 <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-violet-300/85">Alt</span>
               </td>
             )}
-            {columns.marked && <td className={MATERIAL_CELL_CLASS} />}
             {columns.name && (
               <td className={MATERIAL_CELL_CLASS}>
                 <div className="flex min-w-0 items-center gap-2 pl-1">
@@ -5797,7 +5635,6 @@ export function MaterialRequestPage() {
   const rowActionsRef = useRef<MaterialRowActions | null>(null);
   rowActionsRef.current = {
     toggleExpanded,
-    toggleMarked: toggleMarkedGroup,
     copy: (value) => { void handleCopy(value); },
     openCreate,
     openTracking: openTrackingDialog,
@@ -5807,7 +5644,6 @@ export function MaterialRequestPage() {
   };
   const rowActions = useMemo<MaterialRowActions>(() => ({
     toggleExpanded: (key) => rowActionsRef.current?.toggleExpanded(key),
-    toggleMarked: (key) => rowActionsRef.current?.toggleMarked(key),
     copy: (value) => rowActionsRef.current?.copy(value),
     openCreate: (group) => rowActionsRef.current?.openCreate(group),
     openTracking: (record) => rowActionsRef.current?.openTracking(record),
@@ -6036,9 +5872,6 @@ export function MaterialRequestPage() {
             <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={() => setPendingDialogOpen(true)} className="h-8 border-rose-300/40 bg-rose-400/15 px-2.5 text-xs font-bold text-rose-50 hover:border-rose-200/70 hover:bg-rose-400/30 hover:text-white">
               <TriangleAlert className="mr-1 h-3.5 w-3.5" />待處理料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong>
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setGuideOpen(true)} className="h-8 px-2.5 text-xs font-bold text-violet-100 hover:bg-violet-400/15 hover:text-white">
-              <CircleHelp className="mr-1 h-3.5 w-3.5" />上傳說明
-            </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-8 border-emerald-300/40 bg-emerald-400/15 px-2.5 text-xs font-bold text-emerald-50 hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">
               <Upload className="mr-1 h-3.5 w-3.5" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
@@ -6047,6 +5880,9 @@ export function MaterialRequestPage() {
             </Button>
             <Button type="button" size="sm" onClick={() => openCreate()} disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} className="h-8 border border-cyan-100/60 bg-cyan-300 px-3 text-xs font-black text-[#052536] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:border-cyan-900/50 disabled:bg-cyan-950/35 disabled:text-cyan-100/60">
               <Plus className="mr-1 h-3.5 w-3.5" />新增料件
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="h-8 border-violet-300/40 bg-violet-400/15 px-2.5 text-xs font-bold text-violet-50 hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white">
+              <CircleHelp className="mr-1 h-3.5 w-3.5" />上傳說明
             </Button>
           </div>
         </div>
@@ -6207,19 +6043,6 @@ export function MaterialRequestPage() {
             <div data-material-zone="summary-filters" className="flex items-center gap-1">
               <button type="button" onClick={clearFilters} aria-pressed={availability === "all" && !showMarkedOnly} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "all" ? "border-sky-300/34 bg-sky-400/18 text-sky-50" : "border-slate-500/28 bg-slate-900/42 text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-sky-100")}>主料 <strong className="ml-1">{dataset.stats.totalGroups.toLocaleString()}</strong></button>
               <button type="button" onClick={() => applyAvailabilityFilter("required")} aria-pressed={availability === "required"} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "required" ? "border-amber-300/50 bg-amber-400/20 text-amber-50" : "border-amber-300/28 bg-amber-400/10 text-amber-100 hover:bg-amber-400/18 hover:text-amber-50")}>料號待補 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
-              {!columnVisibility.marked && (
-                <button
-                  type="button"
-                  onClick={() => setShowMarkedOnly((current) => !current)}
-                  aria-pressed={showMarkedOnly}
-                  aria-label="只看我的標記"
-                  title="只看我的標記"
-                  className={cn("inline-flex h-9 items-center gap-1 rounded-lg border px-2.5 text-xs font-black transition-colors", showMarkedOnly ? "border-amber-300/40 bg-amber-400/18 text-amber-100" : "border-slate-500/28 bg-slate-900/42 text-amber-200 hover:bg-amber-400/10")}
-                >
-                  <Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />
-                  <span aria-hidden="true">{markedGroupCount}</span>
-                </button>
-              )}
             </div>
             <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
               <SelectTrigger aria-label="排序" className="h-9 w-48 border-[#2a526f] bg-[#071522] text-xs text-slate-200">
@@ -6386,28 +6209,6 @@ export function MaterialRequestPage() {
                       </th>
                     );
                   }
-                  if (column.key === "marked") {
-                    return (
-                      <th key={column.key} className="border-r border-blue-300/20 p-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setShowMarkedOnly((current) => !current)}
-                          aria-pressed={showMarkedOnly}
-                          className={cn(
-                            "flex h-8 w-full items-center justify-center gap-1 rounded border text-xs font-bold transition-colors",
-                            showMarkedOnly
-                              ? "border-amber-300/40 bg-amber-400/18 text-amber-100"
-                              : "border-blue-300/20 bg-[#07182d] text-amber-200 hover:bg-amber-400/10",
-                          )}
-                          aria-label="只看我的標記"
-                          title="只看我的標記"
-                        >
-                          <Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />
-                          <span aria-hidden="true">{markedGroupCount}</span>
-                        </button>
-                      </th>
-                    );
-                  }
                   if (filterKey) {
                     return (
                       <th key={column.key} className="border-r border-blue-300/20 p-1.5">
@@ -6448,7 +6249,6 @@ export function MaterialRequestPage() {
                   row={row}
                   itemValue={getGroupItemValue(row.group, (page - 1) * pageSize + rowIndex + 1)}
                   expanded={expandedKey === row.group.key}
-                  isMarked={markedGroupKeySet.has(row.group.key)}
                   canEdit={canEdit}
                   editingNames={editingNames}
                   latestRecordUpdate={latestRecordUpdate}

@@ -25,11 +25,12 @@ const desktopHeader = slice('data-material-zone="overview"', 'data-testid="mater
 const toolbar = slice('data-testid="material-table-toolbar"', 'data-testid="material-mobile-cards"');
 const filterRow = slice("</ResizableHeader>", "</thead>");
 const COLUMN_KEYS = [
-  "item", "marked", "name", "qty", "refDes", "mpn", "manufacturer", "sourcingStatus", "virtual", "physical",
+  "item", "name", "qty", "refDes", "mpn", "manufacturer", "sourcingStatus", "virtual", "physical",
   "partName", "partSpec", "schematicPart", "footprint", "phaseOut", "partUsage", "status", "tracking", "actions",
 ];
 
-test("the table mirrors the CE workbook: its 14 item columns in workbook order, between the website columns", () => {
+test("the table mirrors the CE workbook: its 14 item columns in workbook order, between the website columns, with no 標記 column", () => {
+  assert.ok(!presentation.MATERIAL_TABLE_COLUMNS.some((column) => column.key === "marked"));
   assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.map((column) => column.key), COLUMN_KEYS);
   const workbookHeaders = MATERIAL_CE_FIELDS.map((field) => field.header).filter((header) => header !== "Level");
   assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.filter((column) => column.ceHeader).map((column) => column.ceHeader), workbookHeaders);
@@ -50,7 +51,7 @@ test("the table width only counts visible columns", () => {
   const widths = COLUMN_KEYS.map((_, index) => 100 + index);
   const total = widths.reduce((sum, width) => sum + width, 0);
   assert.equal(presentation.getMaterialTableWidth(widths, []), total);
-  assert.equal(presentation.getMaterialTableWidth(widths, ["refDes", "virtual"]), total - widths[4] - widths[8]);
+  assert.equal(presentation.getMaterialTableWidth(widths, ["refDes", "virtual"]), total - widths[3] - widths[7]);
   assert.equal(presentation.getMaterialTableWidth(widths, ["unknown"]), total);
 });
 
@@ -60,8 +61,8 @@ test("every main-row and alternative-row cell follows the column list and its vi
     assert.match(rowBlock, new RegExp(`data-material-cell="${key}"`));
     assert.match(alternativeBlock, new RegExp(`\\{columns\\.${key} && `), `alternative cell ${key} must be toggleable`);
   }
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 19);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 19);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 18);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 18);
   assert.match(source, /data-testid="material-column-visibility"/);
   assert.match(source, /HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1"/);
   assert.match(source, /colSpan=\{visibleColumnCount\}/);
@@ -111,7 +112,8 @@ test("duplicate controls were merged: one clear, one page-progress entry, delete
   assert.doesNotMatch(toolbar, /條件邏輯|尚未套用搜尋|aria-label=\{isSearchPending \? "搜尋中" : "搜尋"\}/);
   assert.equal((toolbar.match(/全部清除/g) ?? []).length, 1);
   assert.doesNotMatch(filterRow, />清除</);
-  assert.match(filterRow, /aria-pressed=\{showMarkedOnly\}/);
+  assert.doesNotMatch(filterRow, /showMarkedOnly|column\.key === "marked"/);
+  assert.doesNotMatch(toolbar, /columnVisibility\.marked|只看我的標記/);
   assert.doesNotMatch(source, /function AlternativeRows\(|function SummaryTile\(|saveQuickBomPageTracker|pageTrackerPanelCollapsed/);
   const bomManager = slice("function BomManagerDialog(", "function MaterialRecordDialog(");
   assert.match(bomManager, />刪除</);
@@ -140,7 +142,7 @@ test("dialogs and popovers use the page theme tokens instead of their own fixed 
 });
 
 test("phase out stays an independent source value and the Symbol column is gone", () => {
-  assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.slice(14, 16).map((column) => [column.key, column.label]), [["phaseOut", "phase out"], ["partUsage", "零件狀態"]]);
+  assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.slice(13, 15).map((column) => [column.key, column.label]), [["phaseOut", "phase out"], ["partUsage", "零件狀態"]]);
   assert.deepEqual(presentation.normalizeHiddenMaterialColumns(["status", "symbol", "mpn"]), ["status", "mpn"]);
   for (const raw of ["PHASEOUT", "ACTIVE", "UNDERREVIEW", "  ACTIVE  "]) assert.equal(presentation.getMaterialSourceValue(raw), raw);
   for (const empty of ["", "   ", undefined]) assert.equal(presentation.getMaterialSourceValue(empty), "未提供");
@@ -193,8 +195,10 @@ test("the project row has one writer and realtime keeps the bom: prefix of works
 });
 
 test("待處理料 opens from the header actions and groups pending parts by category", () => {
+  const dialogSource = () => slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
   const actions = slice('data-material-zone="actions"', '{collaborationStatus !== "remote" && (');
-  assert.match(actions, /data-testid="pending-materials-button"[\s\S]*?待處理料[\s\S]*?上傳說明/);
+  assert.match(actions, /data-testid="pending-materials-button"[\s\S]*?待處理料[\s\S]*?新增料件[\s\S]*?上傳說明\s*<\/Button>\s*<\/div>/);
+  assert.match(dialogSource(), /role="tablist" aria-label="待處理料分類"/);
   const dialog = slice("function PendingMaterialsDialog(", 'const UNASSIGNED_BOM_PROJECT_VALUE');
   assert.match(dialog, /groupPendingMaterials\(groups\)/);
   assert.match(dialog, />優先處理</);
@@ -203,4 +207,13 @@ test("待處理料 opens from the header actions and groups pending parts by cat
   assert.match(source, /<PendingMaterialsDialog/);
   const dialogTokens = dialog;
   assert.doesNotMatch(dialogTokens, /bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);
+});
+
+test("column filters apply on every click instead of waiting for 確定", () => {
+  const popover = slice("function ExcelFilterPopover(", "function ResizableHeader(");
+  assert.doesNotMatch(popover, /draftSelectedValues|commitSelection|cancelSelection|mergeSearchSelection|>確定<|>取消</);
+  assert.match(popover, /const toggleValue = \(value: string, checked: boolean\) => \{\s*apply\(/);
+  assert.match(popover, /if \(event\.key === "Enter" && searchHasValue && filteredOptions\.length > 0\)/);
+  for (const text of [">只留符合<", ">加入符合<", ">移除符合<", ">全選<", ">清除<", ">完成<"]) assert.ok(popover.includes(text), text);
+  assert.match(popover, /onOpenAutoFocus=/);
 });
