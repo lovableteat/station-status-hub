@@ -47,6 +47,31 @@ test("the material table rightmost column can resize without an adjacent column"
   );
 });
 
+test("resizing borrows width from the given visible neighbour and skips hidden columns", () => {
+  assert.deepEqual(
+    presentation.resizeMaterialColumnWidths({
+      adjacentIndex: 2,
+      index: 0,
+      maxWidths: [300, 300, 300],
+      minWidths: [50, 50, 50],
+      requestedWidth: 140,
+      widths: [100, 100, 100],
+    }),
+    [140, 100, 60],
+  );
+  assert.deepEqual(
+    presentation.resizeMaterialColumnWidths({
+      adjacentIndex: -1,
+      index: 1,
+      maxWidths: [300, 300, 300],
+      minWidths: [50, 50, 50],
+      requestedWidth: 180,
+      widths: [100, 100, 100],
+    }),
+    [100, 180, 100],
+  );
+});
+
 test("the sticky data update column keeps the same visual treatment as neighboring columns", () => {
   assert.equal(typeof presentation.getMaterialStickyColumnClasses, "function");
 

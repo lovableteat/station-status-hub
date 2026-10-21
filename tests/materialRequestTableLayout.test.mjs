@@ -67,7 +67,7 @@ test("material vendor cells keep relation metadata inside the hover card", () =>
     /function MaterialIdentityHover\([\s\S]*?\r?\n}\r?\n\r?\nfunction MaterialFieldLabel/,
   )?.[0] ?? "";
   const primaryCellBlock = source.match(
-    /<td className="relative overflow-hidden[\s\S]*?<\/td>\r?\n\s*<td className="border-r border-blue-400\/10 px-4 py-3 align-middle"/,
+    /<td data-material-cell="material"[\s\S]*?<\/td>[\s\S]*?<td data-material-cell="refDes"/,
   )?.[0] ?? "";
 
   assert.match(identityBlock, /data-testid="material-identity-trigger"/);
@@ -112,7 +112,7 @@ test("tracking table summaries remain compact instead of stretching material row
   )?.[0] ?? "";
 
   assert.match(cellBlock, /data-testid="tracking-history-cell"/);
-  assert.match(cellBlock, /min-h-\[54px\]/);
+  assert.match(cellBlock, /min-h-\[40px\]/);
   assert.doesNotMatch(cellBlock, /h-14 w-1\.5/);
   assert.doesNotMatch(cellBlock, /line-clamp-2/);
 });
@@ -127,13 +127,14 @@ test("tracking dialog separates current status, update form, history, and footer
 
 const tableStart = source.indexOf('data-testid="material-table-scroll"');
 const tableBlock = source.slice(tableStart, source.indexOf("</table>", tableStart));
+const rowBlock = source.slice(source.indexOf("const MaterialGroupRow = memo("), source.indexOf("function CompactAlternativeRows("));
 const alternativeBlock = source.slice(source.indexOf("function CompactAlternativeRows("), source.indexOf("function BomTableColorDialog("));
 const readWidths = (name) => JSON.parse(source.match(new RegExp(`const ${name} = (\\[[^;]+\\]);`))[1]);
 
 test("material table removes specification from headers, filters, primary and alternative rows", () => {
-  assert.doesNotMatch(tableBlock, /規格 \/ 備註|filterKey="specification"|group\.partSpec/);
+  assert.doesNotMatch(`${tableBlock}${rowBlock}`, /規格 \/ 備註|filterKey="specification"|group\.partSpec/);
   assert.doesNotMatch(alternativeBlock, /record\.partSpec|record\.remark/);
-  assert.equal((tableBlock.match(/<td\b/g) ?? []).length, 10);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 10);
   assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 10);
   assert.doesNotMatch(source, /specification: ColumnFilterSelection|specification: null|case "specification"/);
 });
@@ -143,8 +144,8 @@ test("material column geometry and fixed actions match the remaining ten columns
   assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [80, 76, 200, 120, 180, 170, 150, 140, 180, 110]);
   assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [148, 108, 520, 360, 520, 460, 420, 360, 420, 260]);
   assert.equal((tableBlock.match(/columnIndex === 9/g) ?? []).length, 2);
-  assert.doesNotMatch(source, /colSpan=\{11\}/);
-  assert.match(source, /colSpan=\{10\}/);
+  assert.doesNotMatch(source, /colSpan=\{1[01]\}/);
+  assert.match(source, /colSpan=\{visibleColumnCount\}/);
 });
 
 test("old eleven-column widths drop only the removed specification width", () => {
