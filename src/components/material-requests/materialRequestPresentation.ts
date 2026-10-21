@@ -203,3 +203,55 @@ export function getMaterialTableWidth(widths: readonly number[], hiddenColumns: 
 export function getMaterialSourceValue(value?: string) {
   return value?.trim() ? value : "未提供";
 }
+
+export interface BomProjectGroup<T> {
+  key: string;
+  projectId: string | null;
+  label: string;
+  isActive: boolean;
+  workspaces: T[];
+}
+
+export const UNASSIGNED_BOM_PROJECT_LABEL = "未指定專案";
+
+const BOM_PROJECT_COLLATOR = new Intl.Collator("zh-Hant", { numeric: true, sensitivity: "base" });
+
+/**
+ * Groups BOMs under their project: the active project first (kept even while
+ * it has no BOM so the empty state stays visible), other projects by name,
+ * BOMs without a project last. Workspace order inside a group is preserved.
+ */
+export function groupBomWorkspacesByProject<T extends { id: string; project?: { projectId: string; projectName: string } | null }>(
+  workspaces: readonly T[],
+  options: { activeProjectId?: string | null; activeProjectName?: string | null; projectNames?: ReadonlyMap<string, string> } = {},
+): BomProjectGroup<T>[] {
+  const activeProjectId = options.activeProjectId ?? null;
+  const groups = new Map<string, BomProjectGroup<T>>();
+  const ensureGroup = (projectId: string | null, fallbackName: string) => {
+    const key = projectId ?? "unassigned";
+    let group = groups.get(key);
+    if (!group) {
+      const liveName = projectId ? options.projectNames?.get(projectId) : undefined;
+      group = {
+        key,
+        projectId,
+        label: projectId ? liveName || fallbackName || projectId : UNASSIGNED_BOM_PROJECT_LABEL,
+        isActive: projectId !== null && projectId === activeProjectId,
+        workspaces: [],
+      };
+      groups.set(key, group);
+    }
+    return group;
+  };
+
+  if (activeProjectId) ensureGroup(activeProjectId, options.activeProjectName ?? "");
+  for (const workspace of workspaces) {
+    ensureGroup(workspace.project?.projectId ?? null, workspace.project?.projectName ?? "").workspaces.push(workspace);
+  }
+
+  return [...groups.values()].sort((left, right) => {
+    if (left.isActive !== right.isActive) return left.isActive ? -1 : 1;
+    if ((left.projectId === null) !== (right.projectId === null)) return left.projectId === null ? 1 : -1;
+    return BOM_PROJECT_COLLATOR.compare(left.label, right.label);
+  });
+}

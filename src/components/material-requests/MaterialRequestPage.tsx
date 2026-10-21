@@ -72,7 +72,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -85,6 +87,7 @@ import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { useWorkspaceMutationScope, WorkspaceMutationScopeChangedError } from "@/hooks/useWorkspaceMutationScope";
 
 import {
@@ -118,8 +121,8 @@ import {
   saveBomWorkspaceRecord,
   subscribeBomWorkspaceChanges,
 } from "./materialBomStorage";
-import type { BomTableColorTheme } from "./materialBomStorage";
-import { saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
+import type { BomTableColorTheme, BomWorkspaceProject } from "./materialBomStorage";
+import { saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { UploadGuideDialog } from "./MaterialUploadGuideDialog";
 import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
 import type {
@@ -128,6 +131,7 @@ import type {
 } from "./materialRequestExport";
 import {
   MATERIAL_TABLE_COLUMNS,
+  type BomProjectGroup,
   type MaterialTableColumnKey,
   createClipboardImageName,
   createCompactValueSummary,
@@ -135,6 +139,7 @@ import {
   getMaterialStickyColumnClasses,
   getMaterialSourceValue,
   getMaterialTableWidth,
+  groupBomWorkspacesByProject,
   normalizeHiddenMaterialColumns,
   resizeMaterialColumnWidths,
   shouldApplyBomWorkspaceCache,
@@ -226,6 +231,7 @@ const FILTER_KEYS = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
 
 const DEFAULT_BOM_ID = "bom:申請carrier料.xlsx";
 const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
+const ACTIVE_BOM_PROJECT_KEY = "station-status-hub:active-material-bom-project:v1";
 const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
@@ -1597,6 +1603,11 @@ function hasTrackingActivity(record: Pick<MaterialWorkbookRecord, "trackingHisto
     || latestEntry?.note?.trim()
     || latestEntry?.requestInfo?.trim()
   );
+}
+
+function toBomWorkspaceProject(project: { id: string; name: string } | null | undefined): BomWorkspaceProject | undefined {
+  if (!project?.id) return undefined;
+  return { projectId: project.id, projectName: project.name, updatedAt: new Date().toISOString() };
 }
 
 function workspaceHasTrackingActivity(workspace: BomWorkspace) {
@@ -3032,11 +3043,17 @@ function BomPageTrackerDialog({
   );
 }
 
+const UNASSIGNED_BOM_PROJECT_VALUE = "__unassigned__";
+
 function BomManagerDialog({
   canEdit,
   activeBomId,
+  activeProjectName,
   bomWorkspaces,
   open,
+  projectGroups,
+  projects,
+  onAssignProject,
   onDelete,
   onOpenChange,
   onOpenPageTracker,
@@ -3044,8 +3061,12 @@ function BomManagerDialog({
 }: {
   canEdit: boolean;
   activeBomId: string;
+  activeProjectName?: string;
   bomWorkspaces: BomWorkspace[];
   open: boolean;
+  projectGroups: BomProjectGroup<BomWorkspace>[];
+  projects: Array<{ id: string; name: string }>;
+  onAssignProject: (workspaceId: string, projectId: string | null) => void;
   onDelete: (id: string) => void;
   onOpenChange: (open: boolean) => void;
   onOpenPageTracker: (workspaceId: string) => void;
@@ -3057,22 +3078,26 @@ function BomManagerDialog({
     [bomWorkspaces],
   );
   const activeWorkspaceName = bomWorkspaces.find((workspace) => workspace.id === activeBomId)?.name ?? "未選擇";
-  const dialogDescription = `共 ${bomWorkspaces.length} 個 BOM · ${totalRecordCount.toLocaleString()} 筆明細 · 目前使用：${activeWorkspaceName}`;
-  const filteredWorkspaces = useMemo(() => {
+  const mostRecentWorkspaceId = bomWorkspaces[0]?.id;
+  const dialogDescription = `目前專案：${activeProjectName ?? "未選擇"} · 共 ${bomWorkspaces.length} 個 BOM · ${totalRecordCount.toLocaleString()} 筆明細 · 目前使用：${activeWorkspaceName}`;
+  const visibleGroups = useMemo(() => {
     const keyword = historyQuery.trim().toLowerCase();
-    if (!keyword) return bomWorkspaces;
+    if (!keyword) return projectGroups;
 
-    return bomWorkspaces.filter((workspace) => {
-      const haystack = [
-        workspace.name,
-        workspace.payload.sourceFile,
-        workspace.payload.sheetName,
-        workspace.id,
-      ].join(" ").toLowerCase();
-
-      return haystack.includes(keyword);
-    });
-  }, [bomWorkspaces, historyQuery]);
+    return projectGroups
+      .map((group) => ({
+        ...group,
+        workspaces: group.label.toLowerCase().includes(keyword)
+          ? group.workspaces
+          : group.workspaces.filter((workspace) => [
+              workspace.name,
+              workspace.payload.sourceFile,
+              workspace.payload.sheetName,
+              workspace.id,
+            ].join(" ").toLowerCase().includes(keyword)),
+      }))
+      .filter((group) => group.workspaces.length > 0);
+  }, [historyQuery, projectGroups]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -3089,61 +3114,95 @@ function BomManagerDialog({
           <Input
             value={historyQuery}
             onChange={(event) => setHistoryQuery(event.target.value)}
-            placeholder="搜尋 BOM 名稱、工作表或來源檔名"
+            placeholder="搜尋 BOM 名稱、專案、工作表或來源檔名"
             aria-label="搜尋 BOM"
             className="h-9 rounded-xl pl-9 text-sm"
           />
         </div>
 
-        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
-          {filteredWorkspaces.length === 0 ? (
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+          {visibleGroups.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
               找不到符合條件的 BOM
             </p>
-          ) : filteredWorkspaces.map((workspace, index) => {
-            const isActive = workspace.id === activeBomId;
-            const pageTrackerSummary = getBomPageTrackerSummary(workspace.pageTracker);
-            const hasTracking = workspaceHasTrackingActivity(workspace);
-            const pageText = pageTrackerSummary.totalPages > 0
-              ? `${pageTrackerSummary.currentPage > 0 ? `第 ${pageTrackerSummary.currentPage}/${pageTrackerSummary.totalPages} 頁 · ` : ""}完成 ${pageTrackerSummary.completedPages} 頁`
-              : "頁數未設定";
-            const detail = [
-              `來源：${workspace.payload.sourceFile}`,
-              `工作表：${workspace.payload.sheetName}`,
-              `建立：${formatTimestamp(workspace.payload.generatedAt)}`,
-              `最後更新：${formatTimestamp(workspace.updatedAt)}`,
-              `BOM ID：${workspace.id}`,
-            ].join("\n");
-
-            return (
-              <div
-                key={workspace.id}
-                className={cn(
-                  "rounded-xl border px-3 py-2 transition-colors",
-                  isActive ? "border-primary/40 bg-primary/10" : "border-border bg-background/40 hover:bg-accent/40",
-                )}
-                title={detail}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-6 flex-none font-mono text-[11px] text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
-                  <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{workspace.name}</p>
-                  {isActive && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.primary)}>使用中</span>}
-                  {hasTracking && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.warning)}>含追蹤</span>}
-                  {!isActive && index === 0 && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.neutral)}>最近更新</span>}
-                  <div className="ml-1 flex flex-none items-center gap-1">
-                    <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onOpenPageTracker(workspace.id)} className="h-7 px-2 text-xs">頁數</Button>
-                    {!isActive && (
-                      <Button type="button" variant="secondary" size="sm" onClick={() => onSelect(workspace.id)} className="h-7 px-2 text-xs">切換</Button>
-                    )}
-                    <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onDelete(workspace.id)} className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive">刪除</Button>
-                  </div>
-                </div>
-                <p className="mt-1 truncate pl-8 text-xs text-muted-foreground">
-                  {workspace.payload.sourceFile} · {workspace.payload.sheetName} · {workspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatRelativeTimestamp(workspace.updatedAt)} · {pageText}
-                </p>
+          ) : visibleGroups.map((group) => (
+            <section key={group.key} aria-label={`專案 ${group.label}`} className="space-y-1.5">
+              <div className="flex items-center gap-2 px-1">
+                <Layers3 className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" />
+                <h3 className="min-w-0 truncate text-xs font-bold text-foreground">{group.label}</h3>
+                {group.isActive && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.success)}>目前專案</span>}
+                <span className="flex-none text-[11px] text-muted-foreground">{group.workspaces.length} 個 BOM</span>
               </div>
-            );
-          })}
+              {group.workspaces.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
+                  此專案還沒有 BOM。上傳 Excel 會自動歸入目前專案，或用每列的專案選單把現有 BOM 移進來。
+                </p>
+              ) : group.workspaces.map((workspace, index) => {
+                const isActive = workspace.id === activeBomId;
+                const pageTrackerSummary = getBomPageTrackerSummary(workspace.pageTracker);
+                const hasTracking = workspaceHasTrackingActivity(workspace);
+                const pageText = pageTrackerSummary.totalPages > 0
+                  ? `${pageTrackerSummary.currentPage > 0 ? `第 ${pageTrackerSummary.currentPage}/${pageTrackerSummary.totalPages} 頁 · ` : ""}完成 ${pageTrackerSummary.completedPages} 頁`
+                  : "頁數未設定";
+                const detail = [
+                  `專案：${group.label}`,
+                  `來源：${workspace.payload.sourceFile}`,
+                  `工作表：${workspace.payload.sheetName}`,
+                  `建立：${formatTimestamp(workspace.payload.generatedAt)}`,
+                  `最後更新：${formatTimestamp(workspace.updatedAt)}`,
+                  `BOM ID：${workspace.id}`,
+                ].join("\n");
+                // An archived project is no longer offered, but a BOM still inside it keeps showing its name.
+                const projectOptions = workspace.project && !projects.some((project) => project.id === workspace.project?.projectId)
+                  ? [...projects, { id: workspace.project.projectId, name: group.label }]
+                  : projects;
+
+                return (
+                  <div
+                    key={workspace.id}
+                    className={cn(
+                      "rounded-xl border px-3 py-2 transition-colors",
+                      isActive ? "border-primary/40 bg-primary/10" : "border-border bg-background/40 hover:bg-accent/40",
+                    )}
+                    title={detail}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="w-6 flex-none font-mono text-[11px] text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
+                      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{workspace.name}</p>
+                      {isActive && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.primary)}>使用中</span>}
+                      {hasTracking && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.warning)}>含追蹤</span>}
+                      {!isActive && workspace.id === mostRecentWorkspaceId && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.neutral)}>最近更新</span>}
+                      <div className="ml-auto flex flex-none items-center gap-1">
+                        <Select
+                          value={workspace.project?.projectId ?? UNASSIGNED_BOM_PROJECT_VALUE}
+                          onValueChange={(value) => onAssignProject(workspace.id, value === UNASSIGNED_BOM_PROJECT_VALUE ? null : value)}
+                          disabled={!canEdit}
+                        >
+                          <SelectTrigger aria-label={`${workspace.name} 所屬專案`} className="h-7 w-[9.5rem] rounded-md px-2 text-xs">
+                            <SelectValue placeholder="指定專案" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={UNASSIGNED_BOM_PROJECT_VALUE}>未指定專案</SelectItem>
+                            {projectOptions.map((project) => (
+                              <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onOpenPageTracker(workspace.id)} className="h-7 px-2 text-xs">頁數</Button>
+                        {!isActive && (
+                          <Button type="button" variant="secondary" size="sm" onClick={() => onSelect(workspace.id)} className="h-7 px-2 text-xs">切換</Button>
+                        )}
+                        <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onDelete(workspace.id)} className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive">刪除</Button>
+                      </div>
+                    </div>
+                    <p className="mt-1 truncate pl-8 text-xs text-muted-foreground">
+                      {workspace.payload.sourceFile} · {workspace.payload.sheetName} · {workspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatRelativeTimestamp(workspace.updatedAt)} · {pageText}
+                    </p>
+                  </div>
+                );
+              })}
+            </section>
+          ))}
         </div>
       </DialogContent>
     </Dialog>
@@ -4142,6 +4201,8 @@ export function MaterialRequestPage() {
   const { user } = useUser();
   const { canEditModule } = usePermissions();
   const canEdit = canEditModule("material-requests");
+  const { activeProject, activeProjectId, allProjects, projects } = useTestProject();
+  const projectNames = useMemo(() => new Map(allProjects.map((project) => [project.id, project.name])), [allProjects]);
   const {capture: captureBomWrite, isCurrent: isBomWriteCurrent, assertCurrent: assertBomWriteCurrent}
     = useWorkspaceMutationScope(user?.userId ?? null, canEdit);
   const bomAccountRef = useRef({accountId: user?.userId, generation: 0});
@@ -4182,6 +4243,10 @@ export function MaterialRequestPage() {
   }, []);
 
   const activeWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId) ?? bomWorkspaces[0];
+  const activeWorkspaceProjectLabel = activeWorkspace.project
+    ? projectNames.get(activeWorkspace.project.projectId) ?? activeWorkspace.project.projectName
+    : "";
+  const isActiveWorkspaceOutsideProject = Boolean(activeProjectId && activeWorkspace.project && activeWorkspace.project.projectId !== activeProjectId);
   const isFullDatasetLoaded = activeWorkspace.isLoaded !== false
     && activeWorkspace.payload.records.length >= activeWorkspace.payload.recordCount;
   const isPreviewDataset = !isFullDatasetLoaded && activeWorkspace.payload.records.length > 0;
@@ -4619,6 +4684,28 @@ export function MaterialRequestPage() {
     () => [...bomWorkspaces].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()),
     [bomWorkspaces]
   );
+  const bomProjectGroups = useMemo(
+    () => groupBomWorkspacesByProject(orderedBomWorkspaces, { activeProjectId, activeProjectName: activeProject?.name, projectNames }),
+    [activeProject?.name, activeProjectId, orderedBomWorkspaces, projectNames],
+  );
+
+  // Switching the global project pulls the BOM switcher along: once the BOM list
+  // is loaded and the project differs from the one the current BOM was picked
+  // under, jump to that project's most recent BOM. Manual picks of another
+  // project's BOM stay put because they happen under the same project.
+  const switchActiveBomRef = useRef<(value: string) => void>(() => {});
+  useEffect(() => {
+    if (!activeProjectId || isInitialLoading) return;
+    let pickedUnderProjectId: string | null = null;
+    try { pickedUnderProjectId = window.localStorage.getItem(ACTIVE_BOM_PROJECT_KEY); } catch { /* storage unavailable */ }
+    if (pickedUnderProjectId === activeProjectId) return;
+    try { window.localStorage.setItem(ACTIVE_BOM_PROJECT_KEY, activeProjectId); } catch { /* storage unavailable */ }
+    if (!pickedUnderProjectId) return;
+    const current = bomWorkspaces.find((workspace) => workspace.id === activeBomId);
+    if (current?.project?.projectId === activeProjectId) return;
+    const target = orderedBomWorkspaces.find((workspace) => workspace.project?.projectId === activeProjectId);
+    if (target && target.id !== activeBomId) switchActiveBomRef.current(target.id);
+  }, [activeBomId, activeProjectId, bomWorkspaces, isInitialLoading, orderedBomWorkspaces]);
 
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
   const hasActiveColumnFilters = Object.values(columnFilters).some((values) => Boolean(values?.length));
@@ -4957,13 +5044,14 @@ export function MaterialRequestPage() {
       let lastWorkspaceId = activeBomId;
       let totalRecords = 0;
       const workspaceMap = new Map(bomWorkspaces.map((workspace) => [workspace.id, workspace]));
+      const importProject = toBomWorkspaceProject(activeProject);
 
       for (const file of files) {
         const payload = await parseMaterialWorkbookFile(file);
         assertBomWriteCurrent(writeScope);
         const workspaceId = createBomId(file.name);
         const existingWorkspace = workspaceMap.get(workspaceId);
-        const workspace = mergeImportedWorkspace(existingWorkspace, workspaceId, payload);
+        const workspace = { ...mergeImportedWorkspace(existingWorkspace, workspaceId, payload), project: existingWorkspace?.project ?? importProject };
         await saveBomWorkspace(workspace, () => assertBomWriteCurrent(writeScope));
         if (!isBomWriteCurrent(writeScope)) return;
         void logMaterialWorkspaceAction({
@@ -4971,6 +5059,7 @@ export function MaterialRequestPage() {
           actor: user,
           metadata: {
             fileName: file.name,
+            projectId: workspace.project?.projectId ?? null,
             recordCount: workspace.payload.recordCount,
             replacedExistingWorkspace: Boolean(existingWorkspace),
             sheetName: workspace.payload.sheetName,
@@ -4990,7 +5079,7 @@ export function MaterialRequestPage() {
       setPage(1);
       toast({
         title: files.length === 1 ? "BOM 已載入" : `${files.length} 個 BOM 已載入`,
-        description: `共 ${totalRecords.toLocaleString()} 筆廠商料明細，可從 BOM 切換器管理。`,
+        description: `共 ${totalRecords.toLocaleString()} 筆廠商料明細${importProject ? `，已歸入專案「${importProject.projectName}」` : ""}，可從 BOM 切換器管理。`,
       });
     } catch (error) {
       if (writeScope && !isBomWriteCurrent(writeScope)) return;
@@ -5249,6 +5338,41 @@ export function MaterialRequestPage() {
     setShowMarkedOnly(false);
     setExpandedKey(null);
     setPage(1);
+  };
+  switchActiveBomRef.current = switchActiveBom;
+
+  const assignBomProject = async (workspaceId: string, projectId: string | null) => {
+    let writeScope;
+    try {writeScope = captureBomWrite();} catch {return;}
+    const workspace = bomWorkspaces.find((item) => item.id === workspaceId);
+    if (!workspace) return;
+    const nextProject = toBomWorkspaceProject(projectId ? allProjects.find((project) => project.id === projectId) : null) ?? null;
+    if ((workspace.project?.projectId ?? null) === (nextProject?.projectId ?? null)) return;
+
+    setBomWorkspaces((current) => current.map((item) => (
+      item.id === workspaceId ? { ...item, project: nextProject ?? undefined } : item
+    )));
+
+    try {
+      await saveBomWorkspaceProject(workspaceId, nextProject, () => assertBomWriteCurrent(writeScope));
+      if (!isBomWriteCurrent(writeScope)) return;
+      toast({
+        title: nextProject ? "BOM 已歸入專案" : "BOM 已移出專案",
+        description: nextProject
+          ? `「${workspace.name}」現在屬於專案「${nextProject.projectName}」，其他人也會看到相同分組。`
+          : `「${workspace.name}」已改為未指定專案。`,
+      });
+    } catch {
+      if (!isBomWriteCurrent(writeScope)) return;
+      setBomWorkspaces((current) => current.map((item) => (
+        item.id === workspaceId ? { ...item, project: workspace.project } : item
+      )));
+      toast({
+        variant: "destructive",
+        title: "專案歸屬儲存失敗",
+        description: "分組尚未寫入資料庫，請稍後再試。",
+      });
+    }
   };
 
   const applyAvailabilityFilter = (nextAvailability: AvailabilityFilter) => {
@@ -5645,7 +5769,7 @@ export function MaterialRequestPage() {
         }}
       />
       <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
-      <BomManagerDialog canEdit={canEdit} activeBomId={activeBomId} bomWorkspaces={orderedBomWorkspaces} open={bomManagerOpen} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
+      <BomManagerDialog canEdit={canEdit} activeBomId={activeBomId} activeProjectName={activeProject?.name} bomWorkspaces={orderedBomWorkspaces} projectGroups={bomProjectGroups} projects={projects} open={bomManagerOpen} onAssignProject={(id, projectId) => void assignBomProject(id, projectId)} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
       <MaterialRecordDialog canEdit={canEdit} open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
       <TrackingHistoryDialog canEdit={canEdit} open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
       <MaterialExportDialog
@@ -5845,22 +5969,36 @@ export function MaterialRequestPage() {
           <span className="text-xs font-black uppercase tracking-[0.1em] text-cyan-100">BOM</span>
           <Select value={activeBomId} onValueChange={switchActiveBom}>
             <SelectTrigger aria-label="切換 BOM" className="h-8 w-full max-w-[30rem] flex-1 items-center border-cyan-300/35 bg-[#08111d] px-2.5 py-0 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] sm:min-w-[18rem]">
-              <span className="block min-w-0 truncate text-left text-[13px] font-bold leading-5 text-cyan-100">{activeWorkspace.name}</span>
+              <span className="block min-w-0 truncate text-left text-[13px] font-bold leading-5 text-cyan-100">
+                {activeWorkspaceProjectLabel && <span className="mr-1 font-semibold text-cyan-200/70">{activeWorkspaceProjectLabel} /</span>}
+                {activeWorkspace.name}
+              </span>
             </SelectTrigger>
             <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">
-              {orderedBomWorkspaces.map((workspace) => (
-                <SelectItem key={workspace.id} value={workspace.id}>
-                  <span className="flex max-w-[28rem] items-center gap-2 text-left">
-                    <span className="min-w-0 truncate font-semibold text-slate-100">{workspace.name}</span>
-                    {workspaceHasTrackingActivity(workspace) && (
-                      <span className="flex-none rounded-full border border-amber-300/35 bg-amber-400/16 px-1.5 text-[10px] font-black leading-4 text-amber-100">追蹤</span>
-                    )}
-                    <span className="flex-none text-xs text-slate-400">{workspace.payload.recordCount.toLocaleString()} 筆 · {formatTimestamp(workspace.updatedAt)}</span>
-                  </span>
-                </SelectItem>
+              {bomProjectGroups.filter((group) => group.workspaces.length > 0).map((group) => (
+                <SelectGroup key={group.key}>
+                  <SelectLabel className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-cyan-200/80">
+                    <span className="min-w-0 truncate">{group.label}</span>
+                    {group.isActive && <span className="flex-none rounded-full border border-emerald-300/35 bg-emerald-400/15 px-1.5 text-[10px] font-black normal-case leading-4 tracking-normal text-emerald-100">目前專案</span>}
+                  </SelectLabel>
+                  {group.workspaces.map((workspace) => (
+                    <SelectItem key={workspace.id} value={workspace.id}>
+                      <span className="flex max-w-[28rem] items-center gap-2 text-left">
+                        <span className="min-w-0 truncate font-semibold text-slate-100">{workspace.name}</span>
+                        {workspaceHasTrackingActivity(workspace) && (
+                          <span className="flex-none rounded-full border border-amber-300/35 bg-amber-400/16 px-1.5 text-[10px] font-black leading-4 text-amber-100">追蹤</span>
+                        )}
+                        <span className="flex-none text-xs text-slate-400">{workspace.payload.recordCount.toLocaleString()} 筆 · {formatTimestamp(workspace.updatedAt)}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
           </Select>
+          {isActiveWorkspaceOutsideProject && (
+            <span title="這份 BOM 屬於其他專案，可在 BOM 管理中調整歸屬" className="flex-none rounded-full border border-amber-300/35 bg-amber-400/16 px-1.5 text-[10px] font-black leading-4 text-amber-100">非目前專案</span>
+          )}
           <Button
             type="button"
             variant="outline"
