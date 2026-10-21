@@ -123,124 +123,99 @@ function columnFor(sheet, header) {
   return index;
 }
 
-test("Excel keeps CE usage, source sourcing and RD tracking in separate columns", async () => {
-  const row = reportRow();
+const EXPECTED_HEADERS = ["Item", "Name", "Qty", "Ref Des", "Manufacturer Part Number", "Manufacturer", "Sourcing Status", "虛擬料號", "實體料號", "Part Name", "Part Spec", "Schematic_Part", "PCB_Footprint", "phase out", "零件狀態", "狀態追蹤", "追蹤內容", "單號", "單號連結", "申請資訊", "最後更新人", "最後追蹤時間", "模組", "備註", "SPEC 文件", "圖片"];
+
+test("Excel mirrors the 料號申請 table: CE workbook columns first, then the website tracking columns", async () => {
+  const row = reportRow({ remark: "待核對", specDocumentName: "spec.pdf", trackingUpdatedAt: "2026-10-20T01:02:03.000Z" });
   const sheet = await exportedSheet([row]);
+  assert.deepEqual(sheet.getRow(11).values.slice(1), EXPECTED_HEADERS);
+  assert.equal(sheet.columnCount, EXPECTED_HEADERS.length);
   const values = sheet.getRow(12);
-  assert.equal(sheet.columnCount, 27);
-  assert.equal(columnFor(sheet, "零件狀態"), 15);
-  assert.equal(values.getCell(columnFor(sheet, "零件狀態")).value, row.partUsageStatus);
-  assert.equal(values.getCell(columnFor(sheet, "phase out（零件狀態）")).value, row.phaseOutStatus);
-  assert.equal(values.getCell(columnFor(sheet, "供應／核准狀態（Sourcing Status）")).value, "Approved");
-  assert.equal(values.getCell(columnFor(sheet, "目前狀態")).value, "處理中");
-  assert.equal(values.getCell(columnFor(sheet, "狀態追蹤")).value, "RD 持續追蹤");
-  assert.equal(values.getCell(columnFor(sheet, "建料狀態")).value, "待建料");
-  assert.equal(values.getCell(columnFor(sheet, "單號")).value, "REQ-1");
-  assert.deepEqual(values.getCell(columnFor(sheet, "申請連結")).value, { text: row.requestUrl, hyperlink: row.requestUrl });
-  assert.equal(values.getCell(columnFor(sheet, "實體料號")).value, row.internalPartNumber);
-  assert.equal(values.getCell(columnFor(sheet, "實體料名（Part Name）")).value, row.partName);
+  assert.equal(values.getCell(columnFor(sheet, "Name")).value, row.materialName);
+  assert.equal(values.getCell(columnFor(sheet, "Ref Des")).value, row.refDes);
+  assert.equal(values.getCell(columnFor(sheet, "Manufacturer Part Number")).value, row.manufacturerPartNumber);
+  assert.equal(values.getCell(columnFor(sheet, "Sourcing Status")).value, "Approved");
   assert.equal(values.getCell(columnFor(sheet, "虛擬料號")).value, row.tx);
-  assert.equal(values.getCell(columnFor(sheet, "舊檔第二 MPN")).value, row.manufacturerPartNumberAlt);
-  assert.equal(values.getCell(columnFor(sheet, "料件規格（Part Spec）")).value, row.specification);
-  assert.equal(sheet.autoFilter, "A11:AA11");
-  assert.equal(sheet.getCell("AA1").master.address, "A1");
+  assert.equal(values.getCell(columnFor(sheet, "實體料號")).value, row.internalPartNumber);
+  assert.equal(values.getCell(columnFor(sheet, "Part Name")).value, row.partName);
+  assert.equal(values.getCell(columnFor(sheet, "Part Spec")).value, row.specification);
+  assert.equal(values.getCell(columnFor(sheet, "Schematic_Part")).value, row.symbol);
+  assert.equal(values.getCell(columnFor(sheet, "PCB_Footprint")).value, row.footprint);
+  assert.equal(values.getCell(columnFor(sheet, "phase out")).value, row.phaseOutStatus);
+  assert.equal(values.getCell(columnFor(sheet, "零件狀態")).value, row.partUsageStatus);
+  assert.equal(values.getCell(columnFor(sheet, "狀態追蹤")).value, "處理中");
+  assert.equal(values.getCell(columnFor(sheet, "追蹤內容")).value, "RD 持續追蹤");
+  assert.equal(values.getCell(columnFor(sheet, "單號")).value, "REQ-1");
+  assert.deepEqual(values.getCell(columnFor(sheet, "單號連結")).value, { text: row.requestUrl, hyperlink: row.requestUrl });
+  assert.equal(values.getCell(columnFor(sheet, "最後更新人")).value, "測試工程師");
+  assert.match(String(values.getCell(columnFor(sheet, "最後追蹤時間")).value), /2026/);
+  assert.equal(values.getCell(columnFor(sheet, "模組")).value, "主板");
+  assert.equal(values.getCell(columnFor(sheet, "備註")).value, "待核對");
+  assert.equal(values.getCell(columnFor(sheet, "SPEC 文件")).value, "spec.pdf");
+  assert.ok(!sheet.getRow(11).values.includes("標記"));
+  assert.ok(!sheet.getRow(11).values.includes("建料狀態"));
+  assert.ok(!sheet.getRow(11).values.includes("舊檔第二 MPN"));
+  assert.ok(!sheet.getRow(12).values.includes("TEST-ALT"));
+  assert.equal(sheet.getRow(11).getCell(columnFor(sheet, "零件狀態")).note?.texts?.[0]?.text ?? sheet.getRow(11).getCell(columnFor(sheet, "零件狀態")).note, "新設計使用限制；不明填待確認");
+  assert.equal(sheet.autoFilter, "A11:Z11");
+  assert.equal(sheet.getCell("Z1").master.address, "A1");
   assert.equal(sheet.views[0].ySplit, 11);
-  assert.equal(sheet.views[0].xSplit, 3);
-});
-
-test("new reports keep manual build status and omit obsolete Symbol source and inferred requirement columns", async () => {
-  const row = reportRow({ actionStatus: "OK", buildRequirement: "REMOVED-BUILD-REQUIREMENT", symbolStatus: "REMOVED-SYMBOL-CODE" });
-  const sheet = await exportedSheet([row]);
-  assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "建料狀態")).value, "OK");
-  assert.ok(!sheet.getRow(11).values.includes("Symbol"));
-  assert.ok(!sheet.getRow(11).values.includes("實體料／Symbol缺件判斷"));
-  assert.ok(!sheet.getRow(12).values.includes(row.symbolStatus));
-  assert.ok(!sheet.getRow(12).values.includes(row.buildRequirement));
-  const html = await (await captureExport(exportMaterialReportHtml, snapshot([row]))).text();
-  assert.match(html, /<th>建料狀態<\/th><th>料件規格（Part Spec）<\/th>/);
-  assert.match(html, /<td>OK<\/td>\s*<td>10 kΩ<\/td>/);
-  assert.doesNotMatch(html, /<th>Symbol<\/th>|實體料／Symbol缺件判斷|REMOVED-BUILD-REQUIREMENT|REMOVED-SYMBOL-CODE/);
-});
-
-test("Excel preserves Schematic_Part source text without a second Symbol column", async () => {
-  const rows = [
-    reportRow({ symbol: "RES_0402", symbolStatus: "C" }),
-    reportRow({ item: "2", symbol: "無法叫出 <unknown> & 'C'", symbolStatus: "REMOVED-LEGACY-STATUS" }),
-  ];
-  const sheet = await exportedSheet(rows);
-  assert.equal(columnFor(sheet, "原理圖符號（Schematic_Part）"), 8);
-  assert.equal(columnFor(sheet, "PCB 封裝名稱（PCB_Footprint）"), 9);
-  rows.forEach((row, index) => {
-    const exported = sheet.getRow(index + 12);
-    assert.equal(exported.getCell(columnFor(sheet, "原理圖符號（Schematic_Part）")).value, row.symbol);
-    assert.equal(exported.getCell(columnFor(sheet, "PCB 封裝名稱（PCB_Footprint）")).value, row.footprint);
-    assert.equal(exported.getCell(columnFor(sheet, "供應／核准狀態（Sourcing Status）")).value, row.sourcingStatus);
-    assert.equal(exported.getCell(columnFor(sheet, "零件狀態")).value, row.partUsageStatus);
-    assert.equal(exported.getCell(columnFor(sheet, "目前狀態")).value, row.trackingStatus);
-  });
-  assert.ok(!sheet.getRow(11).values.includes("Symbol"));
-  assert.equal(columnFor(sheet, "phase out（零件狀態）"), 14);
+  assert.equal(sheet.views[0].xSplit, 2);
 });
 
 test("Excel insertion preserves widths, status alignment and image placement", async () => {
   const row = reportRow({ images: [{ id: "image-1", name: "測試圖片.jpg", mimeType: "image/jpeg", dataUrl: "data:image/jpeg;base64,/9j/2Q==" }] });
   const sheet = await exportedSheet([row], { includeImage: true });
-  assert.deepEqual(sheet.columns.map((column) => column.width ?? 9), [10, 8, 20, 20, 30, 22, 9, 26, 20, 20, 28, 24, 22, 25, 45, 16, 34, 18, 30, 26, 18, 25, 18, 22, 28, 38, 18]);
-  for (const header of ["項次", "標記", "Qty", "phase out（零件狀態）", "零件狀態", "目前狀態", "建料狀態"]) {
+  assert.deepEqual(sheet.columns.map((column) => column.width ?? 9), [8, 34, 7, 22, 28, 24, 16, 16, 16, 24, 30, 20, 20, 14, 30, 12, 34, 16, 28, 24, 14, 18, 16, 28, 24, 18]);
+  for (const header of ["Item", "Qty", "phase out", "零件狀態", "狀態追蹤"]) {
     assert.equal(sheet.getRow(12).getCell(columnFor(sheet, header)).alignment.horizontal, "center");
   }
-  assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "狀態追蹤")).alignment.horizontal, "left");
-  assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "申請連結")).font.underline, true);
+  assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "追蹤內容")).alignment.horizontal, "left");
+  assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "單號連結")).font.underline, true);
   assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "圖片")).value, "測試圖片.jpg");
   assert.equal(sheet.getImages().length, 1);
   assert.equal(sheet.getImages()[0].range.tl.nativeCol, columnFor(sheet, "圖片") - 1);
 });
 
-test("legacy rows with no optional usage export blank without borrowing names or other statuses", async () => {
+test("legacy rows with no optional fields export blank without borrowing other values", async () => {
   const legacy = reportRow();
   delete legacy.partUsageStatus;
   delete legacy.partName;
   delete legacy.symbolStatus;
   delete legacy.phaseOutStatus;
   delete legacy.buildRequirement;
+  delete legacy.actionStatus;
+  delete legacy.marked;
   const sheet = await exportedSheet([legacy]);
-  assert.ok(["", null].includes(sheet.getRow(12).getCell(columnFor(sheet, "零件狀態")).value));
-  assert.ok(["", null].includes(sheet.getRow(12).getCell(columnFor(sheet, "實體料名（Part Name）")).value));
-  assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "原理圖符號（Schematic_Part）")).value, "RES");
-  assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "供應／核准狀態（Sourcing Status）")).value, "Approved");
+  for (const header of ["零件狀態", "Part Name", "phase out", "備註", "SPEC 文件", "最後追蹤時間"]) {
+    assert.ok(["", null].includes(sheet.getRow(12).getCell(columnFor(sheet, header)).value), header);
+  }
+  assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "Schematic_Part")).value, "RES");
+  assert.equal(sheet.getRow(12).getCell(columnFor(sheet, "Sourcing Status")).value, "Approved");
   const html = await (await captureExport(exportMaterialReportHtml, snapshot([legacy]))).text();
-  assert.match(html, /<th>虛擬料號<\/th><th>phase out（零件狀態）<\/th><th>零件狀態<\/th><th>狀態追蹤<\/th>/);
-  assert.match(html, /<td>TX-1<\/td>\s*<td><\/td>\s*<td><\/td>\s*<td><span class="status">處理中<\/span>/);
-  assert.match(html, /原理圖符號（Schematic_Part）：RES<br>PCB 封裝名稱（PCB_Footprint）：0402<br>實體料名（Part Name）：<\/small><\/td>\s*<td>TX-1<\/td>/);
-  assert.match(html, /<td>Approved<\/td>/);
-  assert.match(html, /<td>待建料<\/td>\s*<td>10 kΩ<\/td>/);
+  assert.match(html, /<td>TX-1<\/td>\s*<td>TEST-0001<\/td>\s*<td><\/td>\s*<td>10 kΩ<\/td>\s*<td>RES<\/td>\s*<td>0402<\/td>\s*<td><\/td>\s*<td><\/td>\s*<td><span class="status">處理中<\/span>/);
   assert.doesNotMatch(html.match(/<tbody>([\s\S]*?)<\/tbody>/)[1], /undefined|null/);
 });
 
 for (const format of ["html", "zip"]) {
-  test(`${format} export separates and escapes CE fields without publishing obsolete Symbol data`, async () => {
-    const row = reportRow({ phaseOutStatus: 'PHASEOUT <script>alert("phase")</script> & raw', partUsageStatus: 'DNP <script>alert("usage")</script> & \'quoted\'', sourcingStatus: "CE <Approved> & sourcing", symbol: "RES <name>", symbolStatus: 'C <script>alert("symbol")</script> & \'quoted\'', actionStatus: "OK", buildRequirement: '只需補Symbol <script>alert("build")</script> & \'quoted\'' });
+  test(`${format} export lists the table columns in order and escapes every CE field`, async () => {
+    const row = reportRow({ phaseOutStatus: 'PHASEOUT <script>alert("phase")</script> & raw', partUsageStatus: 'DNP <script>alert("usage")</script> & \'quoted\'', sourcingStatus: "CE <Approved> & sourcing", symbol: "RES <name>", remark: "備註 <b>", specDocumentName: "spec <1>.pdf", trackingUpdatedAt: "2026-10-20T01:02:03.000Z" });
     const blob = await captureExport(format === "zip" ? exportMaterialReportHtmlZip : exportMaterialReportHtml, snapshot([row]));
     const html = format === "zip"
       ? await (await JSZip.loadAsync(await blob.arrayBuffer())).file("料號申請篩選報表.html").async("string")
       : await blob.text();
-    assert.match(html, /<th>虛擬料號<\/th><th>phase out（零件狀態）<\/th><th>零件狀態<\/th><th>狀態追蹤<\/th>/);
-    assert.match(html, /<th>申請資訊<\/th><th>供應／核准狀態（Sourcing Status）<\/th><th>建料狀態<\/th><th>料件規格（Part Spec）<\/th>/);
-    assert.match(html, /<th>實體料號 \/ 符號與封裝 \/ 實體料名<\/th><th>虛擬料號<\/th>/);
-    assert.match(html, /原理圖符號（Schematic_Part）：RES &lt;name&gt;<br>PCB 封裝名稱（PCB_Footprint）：0402/);
+    assert.match(html, /<thead><tr><th>Item<\/th><th>Name<\/th><th>Qty<\/th><th>Ref Des<\/th><th>Manufacturer Part Number<\/th><th>Manufacturer<\/th><th>Sourcing Status<\/th><th>虛擬料號<\/th><th>實體料號<\/th><th>Part Name<\/th><th>Part Spec<\/th><th>Schematic_Part<\/th><th>PCB_Footprint<\/th><th>phase out<\/th><th>零件狀態<\/th><th>狀態追蹤<\/th><th>單號<\/th><th>備註<\/th><th>SPEC 文件<\/th><th>圖片<\/th><\/tr><\/thead>/);
+    assert.match(html, /<td>RES &lt;name&gt;<\/td>/);
     assert.match(html, /<td>DNP &lt;script&gt;alert\(&quot;usage&quot;\)&lt;\/script&gt; &amp; &#039;quoted&#039;<\/td>/);
     assert.match(html, /<td>CE &lt;Approved&gt; &amp; sourcing<\/td>/);
-    assert.match(html, /<td>OK<\/td>\s*<td>10 kΩ<\/td>/);
-    assert.doesNotMatch(html, /&quot;symbol&quot;|&quot;build&quot;|<th>Symbol<\/th>|實體料／Symbol缺件判斷/);
-    assert.match(html, /<span class="status">處理中<\/span><small>RD 持續追蹤<\/small>/);
     assert.match(html, /<td>PHASEOUT &lt;script&gt;alert\(&quot;phase&quot;\)&lt;\/script&gt; &amp; raw<\/td>/);
-    assert.doesNotMatch(html, /<script>alert\("phase"\)<\/script>/);
-    assert.doesNotMatch(html, /<script>alert\("usage"\)<\/script>/);
-    assert.doesNotMatch(html, /<script>alert\("symbol"\)<\/script>/);
-    assert.doesNotMatch(html, /<script>alert\("build"\)<\/script>/);
+    assert.match(html, /<td>備註 &lt;b&gt;<\/td>\s*<td>spec &lt;1&gt;\.pdf<\/td>/);
+    assert.match(html, /<span class="status">處理中<\/span><small>RD 持續追蹤<\/small><small>測試工程師 · 2026/);
+    assert.match(html, /<small>模組：主板<\/small>/);
+    assert.doesNotMatch(html, /<script>alert\("phase"\)<\/script>|<script>alert\("usage"\)<\/script>|<th>標記<\/th>|<th>建料狀態<\/th>|TEST-ALT/);
     const headerCount = (html.match(/<th>/g) ?? []).length;
     const body = html.match(/<tbody>([\s\S]*?)<\/tbody>/)[1];
-    assert.equal(headerCount, 15);
+    assert.equal(headerCount, 20);
     assert.equal((body.match(/<td(?:\s[^>]*)?>/g) ?? []).length, headerCount);
   });
 }
@@ -285,12 +260,12 @@ test("page snapshots and actual exports keep each physical candidate's own CE fi
     assert.equal(Object.hasOwn(row, "symbolStatus"), false);
     assert.equal(Object.hasOwn(row, "buildRequirement"), false);
     const excel = sheet.getRow(index + 12);
-    for (const [header, expected] of [["phase out（零件狀態）", record.phaseOutStatus], ["實體料名（Part Name）", record.partName], ["料件規格（Part Spec）", record.partSpec], ["原理圖符號（Schematic_Part）", record.schematicPart], ["PCB 封裝名稱（PCB_Footprint）", record.pcbFootprint]]) {
+    for (const [header, expected] of [["phase out", record.phaseOutStatus], ["Part Name", record.partName], ["Part Spec", record.partSpec], ["Schematic_Part", record.schematicPart], ["PCB_Footprint", record.pcbFootprint]]) {
       assert.equal(excel.getCell(columnFor(sheet, header)).value ?? "", expected);
     }
   });
-  assert.match(html, /實體料名（Part Name）：實體料 A/);
-  assert.match(html, /實體料名（Part Name）：實體料 B/);
+  assert.match(html, /<td>實體料 A<\/td>/);
+  assert.match(html, /<td>實體料 B<\/td>/);
   assert.doesNotMatch(html, /GROUP (?:NAME|SYMBOL|FOOTPRINT|SPEC) MUST/);
 });
 

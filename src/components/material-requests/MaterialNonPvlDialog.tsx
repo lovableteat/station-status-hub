@@ -66,21 +66,21 @@ export function MaterialNonPvlDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="material-non-pvl-dialog" className="flex max-h-[92vh] max-w-5xl flex-col gap-3 overflow-hidden p-5 sm:p-6">
+      <DialogContent data-testid="material-non-pvl-dialog" className="flex max-h-[94vh] max-w-6xl flex-col gap-3 overflow-hidden p-5 text-base sm:p-7">
         <DialogHeader>
-          <DialogTitle>不建議料匯出</DialogTitle>
+          <DialogTitle className="text-xl">不建議料匯出</DialogTitle>
           <DialogDescription className="truncate" title={description}>{description}</DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
           <section className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">申請 SOP</h3>
+              <h3 className="text-lg font-semibold text-foreground">申請 SOP</h3>
               <a
                 href={NON_PVL_SOP_URL}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="inline-flex min-w-0 items-center gap-1 truncate text-xs font-semibold text-primary underline-offset-2 hover:underline"
+                className="inline-flex min-w-0 items-center gap-1 truncate text-base font-semibold text-primary underline-offset-2 hover:underline"
               >
                 {NON_PVL_SOP_TITLE}
                 <ExternalLink className="h-3.5 w-3.5 flex-none" aria-hidden="true" />
@@ -89,24 +89,24 @@ export function MaterialNonPvlDialog({
                 {showSop ? "收合說明" : "展開說明"}
               </Button>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">適用對象：各 BU 的 RD／CE／Sourcer／Project leader。流程：先用下方「匯出 PLM 申請清單」拿到 .xls，再到 PLM 的 Non PVL 申請上傳，簽核通過後該專案掛 BOM 就不會再被卡。</p>
+            <p className="mt-1 text-sm text-foreground/80">適用對象：各 BU 的 RD／CE／Sourcer／Project leader。流程：先用下方「匯出 PLM 申請清單」拿到 .xls，再到 PLM 的 Non PVL 申請上傳，簽核通過後該專案掛 BOM 就不會再被卡。</p>
             {showSop && (
               <div className="mt-3 space-y-3">
                 <div>
-                  <p className="text-xs font-semibold text-foreground">適用範圍</p>
-                  <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-xs text-muted-foreground">
+                  <p className="text-base font-semibold text-foreground">適用範圍</p>
+                  <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm text-foreground/85">
                     {SOP_SCOPE.map((item) => <li key={item}>{item}</li>)}
                   </ol>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-foreground">如何申請 ZZ／ZY／00-ODM 料件可於特定專案使用</p>
+                  <p className="text-base font-semibold text-foreground">如何申請 ZZ／ZY／00-ODM 料件可於特定專案使用</p>
                   <ol className="mt-1 space-y-3">
                     {SOP_STEPS.map((step, index) => (
                       <li key={step.title} className="rounded-xl border border-border bg-background/40 p-3">
-                        <p className="text-xs font-semibold text-foreground"><span className="mr-1.5 font-mono text-muted-foreground">{index + 1}.</span>{step.title}</p>
-                        {step.detail && <p className="mt-1 text-xs text-muted-foreground">{step.detail}</p>}
+                        <p className="text-base font-semibold text-foreground"><span className="mr-1.5 font-mono text-primary">{index + 1}.</span>{step.title}</p>
+                        {step.detail && <p className="mt-1 text-sm text-foreground/80">{step.detail}</p>}
                         {step.image && (
-                          <img src={`${assetBase}${step.image}`} alt={`步驟 ${index + 1}：${step.title}`} loading="lazy" decoding="async" className="mt-2 max-h-72 w-auto max-w-full rounded-lg border border-border bg-white" />
+                          <img src={`${assetBase}${step.image}`} alt={`步驟 ${index + 1}：${step.title}`} loading="lazy" decoding="async" className="mt-2 w-auto max-w-full rounded-lg border border-border bg-white" />
                         )}
                       </li>
                     ))}
@@ -118,22 +118,22 @@ export function MaterialNonPvlDialog({
 
           <section className="workspace-dialog-section rounded-2xl p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">匯出預覽</h3>
-              <span className="text-xs text-muted-foreground">{visibleRows.length.toLocaleString()} / {rows.length.toLocaleString()} 筆</span>
+              <h3 className="text-lg font-semibold text-foreground">匯出預覽</h3>
+              <span className="text-sm text-foreground/75">{visibleRows.length.toLocaleString()} / {rows.length.toLocaleString()} 筆</span>
               <div className="relative ml-auto w-full sm:w-64">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋位號、料名、MPN 或料號" aria-label="搜尋不建議料" className="h-8 rounded-lg pl-9 text-xs" />
               </div>
             </div>
             <div className="mt-2 overflow-x-auto rounded-xl border border-border">
-              <table className="w-full min-w-[720px] text-left text-xs">
+              <table className="w-full min-w-[960px] table-fixed text-left text-sm">
                 <thead className="bg-background/60 text-muted-foreground">
                   <tr>
-                    <th className="px-2 py-1.5 font-semibold">Ref Des</th>
-                    <th className="px-2 py-1.5 font-semibold">Name</th>
-                    <th className="px-2 py-1.5 font-semibold">MPN</th>
-                    <th className="px-2 py-1.5 font-semibold">實體料號</th>
-                    <th className="px-2 py-1.5 font-semibold">零件狀態</th>
+                    <th className="w-[13rem] px-3 py-2 font-semibold">Ref Des</th>
+                    <th className="px-3 py-2 font-semibold">Name</th>
+                    <th className="w-[15rem] px-3 py-2 font-semibold">MPN</th>
+                    <th className="w-[15rem] px-3 py-2 font-semibold">實體料號</th>
+                    <th className="w-[22rem] px-3 py-2 font-semibold">零件狀態</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -141,11 +141,11 @@ export function MaterialNonPvlDialog({
                     <tr><td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">{rows.length === 0 ? "目前 BOM 沒有零件狀態為不建議用料的料" : "找不到符合條件的料"}</td></tr>
                   ) : visibleRows.map((row, index) => (
                     <tr key={`${row.refDes}-${row.manufacturerPartNumber}-${index}`} className={cn(!row.partNumber && "text-muted-foreground")}>
-                      <td className="max-w-[10rem] truncate px-2 py-1 font-mono" title={row.refDes}>{row.refDes || "—"}</td>
-                      <td className="max-w-[18rem] truncate px-2 py-1" title={row.name}>{row.name || "—"}</td>
-                      <td className="max-w-[12rem] truncate px-2 py-1 font-mono" title={row.manufacturerPartNumber}>{row.manufacturerPartNumber || "—"}</td>
-                      <td className="px-2 py-1 font-mono">{row.partNumber || <span className="text-warning">未提供，不會進申請清單</span>}</td>
-                      <td className="max-w-[18rem] truncate px-2 py-1" title={row.partUsageStatus}>{row.partUsageStatus}</td>
+                      <td className="truncate px-3 py-1.5 font-mono" title={row.refDes}>{row.refDes || "—"}</td>
+                      <td className="truncate px-3 py-1.5" title={row.name}>{row.name || "—"}</td>
+                      <td className="truncate px-3 py-1.5 font-mono" title={row.manufacturerPartNumber}>{row.manufacturerPartNumber || "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-1.5 font-mono">{row.partNumber || <span className="text-warning">未提供 · 不進申請清單</span>}</td>
+                      <td className="truncate px-3 py-1.5" title={row.partUsageStatus}>{row.partUsageStatus}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -154,14 +154,17 @@ export function MaterialNonPvlDialog({
           </section>
         </div>
 
-        <DialogFooter className="gap-2 sm:justify-between">
-          <p className="text-xs text-muted-foreground">PLM 申請清單只有「料號(必填)」一欄、一列一個實體料號，存成 .xls（Excel 97-2003），可直接上傳 Non PVL 申請。</p>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={isExporting || rows.length === 0} onClick={onExportDetail}>
-              <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />匯出明細 (.xlsx)
+        <DialogFooter className="gap-3 sm:justify-between">
+          <div className="grid gap-1 text-sm text-foreground/80">
+            <p><strong className="text-foreground">PLM 申請清單（.xls）</strong>：只有「料號(必填)」一欄、一列一個實體料號，拿去 PLM 的 Non PVL 申請直接上傳。</p>
+            <p><strong className="text-foreground">完整明細（.xlsx）</strong>：上面預覽的全部欄位（位號、料名、MPN、廠商、實體／虛擬料號、零件狀態），給自己或同事核對用。</p>
+          </div>
+          <div className="flex flex-none flex-wrap gap-2">
+            <Button type="button" variant="outline" disabled={isExporting || rows.length === 0} onClick={onExportDetail} className="h-10 px-4 text-sm">
+              <FileSpreadsheet className="mr-1.5 h-4 w-4" />匯出完整明細 (.xlsx)
             </Button>
-            <Button type="button" size="sm" data-testid="non-pvl-export-apply" disabled={isExporting || partNumbers.size === 0} onClick={onExportApplyList}>
-              <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />{isExporting ? "匯出中…" : `匯出 PLM 申請清單 (.xls · ${partNumbers.size.toLocaleString()} 個料號)`}
+            <Button type="button" data-testid="non-pvl-export-apply" disabled={isExporting || partNumbers.size === 0} onClick={onExportApplyList} className="h-10 px-4 text-sm font-bold">
+              <FileSpreadsheet className="mr-1.5 h-4 w-4" />{isExporting ? "匯出中…" : `匯出 PLM 申請清單 (.xls · ${partNumbers.size.toLocaleString()} 個料號)`}
             </Button>
           </div>
         </DialogFooter>

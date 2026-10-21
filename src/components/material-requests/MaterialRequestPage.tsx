@@ -200,10 +200,19 @@ interface SavedMaterialChanges {
 
 interface MaterialColumnFilters {
   material: ColumnFilterSelection;
+  qty: ColumnFilterSelection;
   refDes: ColumnFilterSelection;
   mpn: ColumnFilterSelection;
-  internal: ColumnFilterSelection;
+  manufacturer: ColumnFilterSelection;
+  sourcingStatus: ColumnFilterSelection;
   virtualAlternative: ColumnFilterSelection;
+  internal: ColumnFilterSelection;
+  partName: ColumnFilterSelection;
+  partSpec: ColumnFilterSelection;
+  schematicPart: ColumnFilterSelection;
+  footprint: ColumnFilterSelection;
+  phaseOut: ColumnFilterSelection;
+  partUsage: ColumnFilterSelection;
   trackingStatus: ColumnFilterSelection;
 }
 
@@ -211,10 +220,19 @@ type ColumnFilterKey = keyof MaterialColumnFilters;
 
 const COLUMN_FILTER_LABELS: Record<ColumnFilterKey, string> = {
   material: "料件",
+  qty: "Qty",
   refDes: "REF DES",
   mpn: "MPN",
-  internal: "實體料號",
+  manufacturer: "Manufacturer",
+  sourcingStatus: "Sourcing Status",
   virtualAlternative: "虛擬料號",
+  internal: "實體料號",
+  partName: "Part Name",
+  partSpec: "Part Spec",
+  schematicPart: "Schematic_Part",
+  footprint: "PCB_Footprint",
+  phaseOut: "phase out",
+  partUsage: "零件狀態",
   trackingStatus: "狀態追蹤",
 };
 
@@ -227,10 +245,19 @@ type CachedRecordColumnValues = Record<ColumnFilterKey, CachedColumnValues>;
 
 const EMPTY_COLUMN_FILTERS: MaterialColumnFilters = {
   material: null,
+  qty: null,
   refDes: null,
   mpn: null,
-  internal: null,
+  manufacturer: null,
+  sourcingStatus: null,
   virtualAlternative: null,
+  internal: null,
+  partName: null,
+  partSpec: null,
+  schematicPart: null,
+  footprint: null,
+  phaseOut: null,
+  partUsage: null,
   trackingStatus: null,
 };
 
@@ -588,12 +615,8 @@ function MaterialFieldLabel({
 }
 
 const MATERIAL_COLUMN_FILTER_KEYS: Partial<Record<MaterialTableColumnKey, ColumnFilterKey>> = {
-  name: "material",
-  refDes: "refDes",
-  mpn: "mpn",
-  virtual: "virtualAlternative",
-  physical: "internal",
-  actions: "trackingStatus",
+  name: "material", qty: "qty", refDes: "refDes", mpn: "mpn", manufacturer: "manufacturer", sourcingStatus: "sourcingStatus", virtual: "virtualAlternative", physical: "internal",
+  partName: "partName", partSpec: "partSpec", schematicPart: "schematicPart", footprint: "footprint", phaseOut: "phaseOut", partUsage: "partUsage", actions: "trackingStatus",
 };
 
 // Row 5 of the CE workbook (the Chinese meaning) shown under each workbook column header.
@@ -1237,6 +1260,24 @@ function getRecordColumnValues(record: MaterialRecord, group: MaterialGroup, key
       return [record.partNumber, record.schematicPart, record.pcbFootprint];
     case "virtualAlternative":
       return [record.virtualAlternative ?? ""];
+    case "qty":
+      return [String(group.qty ?? "")];
+    case "manufacturer":
+      return [record.manufacturer];
+    case "sourcingStatus":
+      return [record.sourcingStatus];
+    case "partName":
+      return [record.partName];
+    case "partSpec":
+      return [record.partSpec];
+    case "schematicPart":
+      return [record.schematicPart];
+    case "footprint":
+      return [record.pcbFootprint];
+    case "phaseOut":
+      return [record.phaseOutStatus ?? ""];
+    case "partUsage":
+      return [record.partUsageStatus ?? ""];
     case "trackingStatus": {
       const values = [
         getTrackingWorkflowStatus(record),
@@ -2896,9 +2937,9 @@ function PendingMaterialsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="pending-materials-dialog" className="flex max-h-[90vh] max-w-5xl flex-col gap-3 overflow-hidden p-5 sm:p-6">
+      <DialogContent data-testid="pending-materials-dialog" className="flex max-h-[92vh] max-w-6xl flex-col gap-3 overflow-hidden p-5 text-base sm:p-7">
         <DialogHeader>
-          <DialogTitle>待處理料</DialogTitle>
+          <DialogTitle className="text-xl">待處理料</DialogTitle>
           <DialogDescription className="truncate" title={description}>{description}</DialogDescription>
         </DialogHeader>
 
@@ -2913,7 +2954,7 @@ function PendingMaterialsDialog({
           />
         </div>
 
-        <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-1.5">
+        <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-1 border-b border-border">
           {[{ key: "all" as const, label: "全部", count: groups.length, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
             <button
               key={tab.key}
@@ -2922,13 +2963,13 @@ function PendingMaterialsDialog({
               aria-selected={selectedCategory === tab.key}
               onClick={() => setActiveCategory(tab.key)}
               className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors",
-                selectedCategory === tab.key ? "border-primary/45 bg-primary/15 text-foreground" : "border-border bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground",
+                "-mb-px inline-flex h-10 items-center gap-2 rounded-t-lg border-b-2 px-4 text-base font-bold transition-colors",
+                selectedCategory === tab.key ? "border-primary bg-primary/15 text-foreground" : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground",
               )}
             >
               {tab.label}
-              {tab.priority && <span className="h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}
-              <span className="font-mono text-[11px] text-muted-foreground">{tab.count.toLocaleString()}</span>
+              {tab.priority && <span className="h-2 w-2 rounded-full bg-destructive" aria-hidden="true" />}
+              <span className={cn("rounded-full px-2 font-mono text-sm leading-5", selectedCategory === tab.key ? "bg-primary/25 text-foreground" : "bg-secondary text-muted-foreground")}>{tab.count.toLocaleString()}</span>
             </button>
           ))}
         </div>
@@ -2952,9 +2993,9 @@ function PendingMaterialsDialog({
               return (
                 <div key={group.key} className={cn("flex flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
                   <span className={cn("h-2 w-2 flex-none rounded-full", stale ? "material-blink bg-destructive" : "bg-muted-foreground/40")} aria-hidden="true" />
-                  <span className="w-[7.5rem] flex-none truncate font-mono text-xs font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={group.name}>{group.name || "未命名料件"}</span>
-                  <span className="hidden w-[11rem] flex-none truncate font-mono text-xs text-muted-foreground md:block" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
+                  <span className="w-[9rem] flex-none truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
+                  <span className="min-w-0 flex-1 truncate text-base text-foreground" title={group.name}>{group.name || "未命名料件"}</span>
+                  <span className="hidden w-[12rem] flex-none truncate font-mono text-sm text-foreground/75 md:block" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
                   <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(trackingStatus))}>{trackingStatus || "未追蹤"}</span>
                   {stale && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)} title="還沒取得料號，且超過 3 天沒有更新資料">逾 3 天未更新</span>}
                   <div className="ml-auto flex flex-none items-center gap-1">
@@ -3030,9 +3071,9 @@ function BomManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-4 overflow-hidden p-5 sm:p-6">
+      <DialogContent className="flex max-h-[92vh] max-w-5xl flex-col gap-4 overflow-hidden p-5 text-base sm:p-7">
         <DialogHeader>
-          <DialogTitle>BOM 管理</DialogTitle>
+          <DialogTitle className="text-xl">BOM 管理</DialogTitle>
           <DialogDescription className="truncate" title={dialogDescription}>
             {dialogDescription}
           </DialogDescription>
@@ -3058,13 +3099,13 @@ function BomManagerDialog({
             // Headers and rows are siblings of one list: a row that changes project is moved, not remounted, so keyboard focus survives.
             <div key={`project:${group.key}`} className="flex items-center gap-2 px-1 pt-2 first:pt-0">
               <Layers3 className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" />
-              <h3 className="min-w-0 truncate text-xs font-bold text-foreground">{group.label}</h3>
+              <h3 className="min-w-0 truncate text-base font-bold text-foreground">{group.label}</h3>
               {group.isActive && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.success)}>目前專案</span>}
               <span className="flex-none text-[11px] text-muted-foreground">{group.workspaces.length} 個 BOM</span>
             </div>,
             ...(group.workspaces.length === 0
               ? [
-                  <p key={`empty:${group.key}`} className="rounded-xl border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
+                  <p key={`empty:${group.key}`} className="rounded-xl border border-dashed border-border px-3 py-3 text-sm text-foreground/75">
                     {canEdit
                       ? "此專案還沒有 BOM。上傳 Excel 會自動歸入目前專案，或用每列的專案選單把現有 BOM 移進來。"
                       : "此專案還沒有 BOM。請有編輯權限的同事上傳 Excel 或指定專案。"}
@@ -3101,7 +3142,7 @@ function BomManagerDialog({
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="w-6 flex-none font-mono text-[11px] text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
-                      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{workspace.name}</p>
+                      <p className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">{workspace.name}</p>
                       {isActive && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.primary)}>使用中</span>}
                       {hasTracking && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.warning)}>含追蹤</span>}
                       {!isActive && workspace.id === mostRecentWorkspaceId && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.neutral)}>最近更新</span>}
@@ -3111,7 +3152,7 @@ function BomManagerDialog({
                           onValueChange={(value) => onAssignProject(workspace.id, value === UNASSIGNED_BOM_PROJECT_VALUE ? null : value)}
                           disabled={!canEdit}
                         >
-                          <SelectTrigger aria-label={`${workspace.name} 所屬專案`} className="h-11 w-[9.5rem] rounded-md px-2 text-xs md:h-7">
+                          <SelectTrigger aria-label={`${workspace.name} 所屬專案`} className="h-11 w-[11rem] rounded-md px-2 text-sm md:h-8">
                             <SelectValue placeholder="指定專案" />
                           </SelectTrigger>
                           <SelectContent>
@@ -3128,7 +3169,7 @@ function BomManagerDialog({
                         <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onDelete(workspace.id)} className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive">刪除</Button>
                       </div>
                     </div>
-                    <p className="mt-1 truncate pl-8 text-xs text-muted-foreground">
+                    <p className="mt-1 truncate pl-8 text-sm text-foreground/75">
                       {workspace.payload.sourceFile} · {workspace.payload.sheetName} · {workspace.payload.recordCount.toLocaleString()} 筆 · 更新 {formatRelativeTimestamp(workspace.updatedAt)} · {pageText}
                     </p>
                   </div>
@@ -4737,6 +4778,15 @@ export function MaterialRequestPage() {
           mpn: createCachedColumnValues([record.manufacturerPartNumber, record.manufacturerPartNumberAlt]),
           internal: createCachedColumnValues([record.partNumber, record.schematicPart, record.pcbFootprint]),
           virtualAlternative: createCachedColumnValues([record.virtualAlternative ?? ""]),
+          qty: createCachedColumnValues([String(group.qty ?? "")]),
+          manufacturer: createCachedColumnValues([record.manufacturer]),
+          sourcingStatus: createCachedColumnValues([record.sourcingStatus]),
+          partName: createCachedColumnValues([record.partName]),
+          partSpec: createCachedColumnValues([record.partSpec]),
+          schematicPart: createCachedColumnValues([record.schematicPart]),
+          footprint: createCachedColumnValues([record.pcbFootprint]),
+          phaseOut: createCachedColumnValues([record.phaseOutStatus ?? ""]),
+          partUsage: createCachedColumnValues([record.partUsageStatus ?? ""]),
           trackingStatus: createCachedColumnValues([
             getTrackingWorkflowStatus(record),
             latestTrackingEntry?.note ?? "",
@@ -5482,7 +5532,6 @@ export function MaterialRequestPage() {
         );
 
         return {
-          actionStatus: getActionLabel(record.actionKind),
           assembly: group.assemblyName,
           footprint: record.pcbFootprint,
           images: images.map((image) => ({
@@ -5495,11 +5544,11 @@ export function MaterialRequestPage() {
           item: String(getGroupItemValue(group, groupIndex + 1)),
           manufacturer: record.manufacturer,
           manufacturerPartNumber: record.manufacturerPartNumber,
-          manufacturerPartNumberAlt: record.manufacturerPartNumberAlt,
-          marked: markedGroupKeySet.has(group.key),
           materialName: record.name,
           partName: record.partName,
           qty: String(group.qty),
+          remark: record.remark ?? "",
+          specDocumentName: record.specDocument?.name ?? "",
           refDes: record.refDes || group.primaryRecord.refDes,
           refGroup: group.displayRef,
           requestInfo: latestTrackingEntry?.requestInfo ?? "",
@@ -5513,6 +5562,7 @@ export function MaterialRequestPage() {
           trackingOwner: latestTrackingEntry?.createdBy ?? "",
           trackingStatus: getTrackingWorkflowStatus(record),
           trackingSummary: latestTrackingEntry?.note ?? record.trackingNote ?? record.trackingStatus ?? "",
+          trackingUpdatedAt: latestTrackingEntry?.createdAt ?? "",
           tx: record.virtualAlternative ?? "",
         };
       }),
@@ -5978,22 +6028,22 @@ export function MaterialRequestPage() {
           </div>
 
           <div data-material-zone="actions" className="ml-auto flex flex-wrap items-center gap-1.5">
-            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={() => setPendingDialogOpen(true)} className={cn("h-8 border-rose-300/40 bg-rose-400/15 px-2.5 text-xs font-bold text-rose-50 hover:border-rose-200/70 hover:bg-rose-400/30 hover:text-white", requiredApplicationCount > 0 && "material-attention")}>
+            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={() => setPendingDialogOpen(true)} className={cn("h-9 border-rose-200/70 bg-rose-500/85 px-3 text-sm font-black text-white hover:bg-rose-400 hover:text-white", requiredApplicationCount > 0 && "material-attention")}>
               <TriangleAlert className="mr-1 h-3.5 w-3.5" />待處理料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong>
             </Button>
-            <Button type="button" variant="outline" size="sm" data-testid="discouraged-export-button" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} title="查看依專案解除不建議使用料的申請 SOP、預覽並匯出 PLM 申請清單" className="h-8 border-orange-300/40 bg-orange-400/15 px-2.5 text-xs font-bold text-orange-50 hover:border-orange-200/70 hover:bg-orange-400/30 hover:text-white disabled:cursor-wait disabled:opacity-60">
+            <Button type="button" variant="outline" size="sm" data-testid="discouraged-export-button" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} title="查看依專案解除不建議使用料的申請 SOP、預覽並匯出 PLM 申請清單" className="h-9 border-orange-200/70 bg-orange-500/85 px-3 text-sm font-black text-white hover:bg-orange-400 hover:text-white disabled:cursor-wait disabled:opacity-60">
               <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />{isExportingDiscouraged ? "匯出中…" : "不建議料匯出"} <strong className="ml-1">{discouragedMaterialCount.toLocaleString()}</strong>
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-8 border-emerald-300/40 bg-emerald-400/15 px-2.5 text-xs font-bold text-emerald-50 hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">
+            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border-emerald-200/70 bg-emerald-500/85 px-3 text-sm font-black text-white hover:bg-emerald-400 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">
               <Upload className="mr-1 h-3.5 w-3.5" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-8 border-amber-300/40 bg-amber-400/15 px-2.5 text-xs font-bold text-amber-50 hover:border-amber-200/75 hover:bg-amber-400/30 hover:text-white disabled:cursor-wait disabled:opacity-60">
+            <Button type="button" variant="outline" size="sm" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-amber-200/70 bg-amber-400/90 px-3 text-sm font-black text-amber-950 hover:bg-amber-300 hover:text-amber-950 disabled:cursor-wait disabled:opacity-60">
               <Download className="mr-1 h-3.5 w-3.5" />匯出報表
             </Button>
-            <Button type="button" size="sm" onClick={() => openCreate()} disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} className="h-8 border border-cyan-100/60 bg-cyan-300 px-3 text-xs font-black text-[#052536] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:border-cyan-900/50 disabled:bg-cyan-950/35 disabled:text-cyan-100/60">
+            <Button type="button" size="sm" onClick={() => openCreate()} disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border border-cyan-100/60 bg-cyan-300 px-3.5 text-sm font-black text-[#052536] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:border-cyan-900/50 disabled:bg-cyan-950/35 disabled:text-cyan-100/60">
               <Plus className="mr-1 h-3.5 w-3.5" />新增料件
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="h-8 border-violet-300/40 bg-violet-400/15 px-2.5 text-xs font-bold text-violet-50 hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white">
+            <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="h-9 border-violet-200/70 bg-violet-500/85 px-3 text-sm font-black text-white hover:bg-violet-400 hover:text-white">
               <CircleHelp className="mr-1 h-3.5 w-3.5" />上傳說明
             </Button>
           </div>
