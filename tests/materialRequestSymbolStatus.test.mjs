@@ -38,7 +38,7 @@ test("Symbol availability recognizes only the confirmed explicit values and pres
   for (const value of ["無", "未建立", "No", " no ", "Ｎｏ"]) {
     assert.equal(getSymbolAvailability(value), "missing", value);
   }
-  for (const value of [undefined, null, "", " ", "C", "CAP", "待確認", "pending", "1", 1, true, "無法確認", "已有待確認"]) {
+  for (const value of [undefined, null, "", " ", "C", "CAP", "待確認", "pending", "1", 1, true, "無法確認", "已有待確認", "缺 Symbol", "已齊備"]) {
     assert.equal(getSymbolAvailability(value), "unknown", String(value));
   }
 });

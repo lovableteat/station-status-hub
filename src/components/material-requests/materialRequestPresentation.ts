@@ -159,8 +159,10 @@ export const MATERIAL_TABLE_COLUMNS = [
   { key: "material", label: "主料 / 廠商", locked: true },
   { key: "refDes", label: "REF DES", locked: false },
   { key: "mpn", label: "MPN", locked: false },
-  { key: "internal", label: "實體料號 / 圖面", locked: false },
+  { key: "internal", label: "實體料號 / 符號與封裝", locked: false },
   { key: "tx", label: "虛擬料號", locked: false },
+  { key: "phaseOut", label: "phase out（零件狀態）", locked: false },
+  { key: "symbol", label: "Symbol", locked: false },
   { key: "status", label: "狀態", locked: false },
   { key: "tracking", label: "狀態追蹤", locked: false },
   { key: "actions", label: "資料更新", locked: true },
@@ -188,4 +190,8 @@ export function getMaterialTableWidth(widths: readonly number[], hiddenColumns: 
     (total, column, index) => (hidden.has(column.key) ? total : total + (widths[index] ?? 0)),
     0,
   );
+}
+
+export function getMaterialSourceValue(value?: string) {
+  return value?.trim() ? value : "未提供";
 }
