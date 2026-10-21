@@ -1704,8 +1704,9 @@ function matchesColumnFilters(
   );
 }
 
-function normalizeColumnFilterSelection(selectedValues: ColumnFilterSelection) {
-  if (selectedValues === null) return null;
+function normalizeColumnFilterSelection(selectedValues: ColumnFilterSelection | undefined) {
+  // Filters restored from an older saved layout may lack newer columns.
+  if (selectedValues == null) return null;
 
   return Array.from(new Set(
     selectedValues.map((value) => normalizeFilterValue(

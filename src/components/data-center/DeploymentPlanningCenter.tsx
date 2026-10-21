@@ -88,6 +88,10 @@ import { pushWorkspaceHistory, replaceWorkspaceHistory } from "@/lib/workspaceHi
 
 import { DataCenter3DPlanner } from "./DataCenter3DPlanner";
 import { DataCenterDailyReports } from "./DataCenterDailyReports";
+import { useQuery } from "@tanstack/react-query";
+import { loadDailyWorkReports, taipeiReportDate } from "./dailyWorkReports";
+import { WorkflowStrip, WorkProgressPanel, type ReportState } from "./DataCenterWorkOverview";
+import { buildWorkflowSteps, summarizeSiteProgress, summarizeWorkReports } from "./workOverview.mjs";
 import "./data-center.css";
 import { DataCenter2DPlanner } from "./DataCenter2DPlanner";
 import { DataCenterModelViewer } from "./DataCenterModelViewer";
@@ -2540,6 +2544,7 @@ export function DeploymentPlanningCenter() {
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [showSceneTools, setShowSceneTools] = useState(true);
   const [showRackDetails, setShowRackDetails] = useState(false);
+  const [showWorkPanel, setShowWorkPanel] = useState(true);
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [previewModelId, setPreviewModelId] = useState<string | null>(null);
@@ -2729,6 +2734,40 @@ export function DeploymentPlanningCenter() {
   const alertCount = selectedSite.racks.filter((rack) => getRackHealth(rack) !== "healthy").length;
   const activeLayerOption = LAYER_OPTIONS.find((layer) => layer.id === activeLayer) ?? LAYER_OPTIONS[0];
 
+  // The overview reads the same report cache as the 每日工作回報 page, so today's
+  // state here and the submitted list there never disagree.
+  const reportUser = isRealtimeAuthenticated ? user : null;
+  const workReportsQuery = useQuery({
+    queryKey: ["data-center-work-reports", reportUser?.userId, sharedProjects.selectedProjectId],
+    queryFn: () => loadDailyWorkReports(sharedProjects.selectedProjectId),
+    enabled: Boolean(sharedProjects.selectedProjectId && reportUser),
+    retry: 1,
+  });
+  const reportState: ReportState = !reportUser
+    ? "signed-out"
+    : !sharedProjects.selectedProjectId
+      ? "no-project"
+      : workReportsQuery.isPending
+        ? "loading"
+        : workReportsQuery.isError
+          ? "error"
+          : "ready";
+  const siteProgress = useMemo(() => summarizeSiteProgress(selectedSite, models, getRackHealth), [models, selectedSite]);
+  const reportSummary = useMemo(
+    () => summarizeWorkReports(workReportsQuery.data ?? [], { today: taipeiReportDate(), siteId: selectedSite.id, userId: reportUser?.userId ?? "" }),
+    [reportUser?.userId, selectedSite.id, workReportsQuery.data],
+  );
+  const workflow = buildWorkflowSteps({
+    projectName: sharedProjects.selectedProject?.name ?? "",
+    siteLabel: selectedSite.label,
+    facility: selectedFacility,
+    progress: siteProgress,
+    reportState,
+    todayReported: Boolean(reportSummary.todayMine),
+    syncState: sharedProjects.syncState,
+  });
+  const workPanelVisible = isDesktopLayout && showWorkPanel && !showDailyReports && workspaceMode === "3d" && !showRackDetails;
+
   const requestCamera = (preset: CameraPreset) => {
     setCameraPreset(preset);
     setCameraRequestId((value) => value + 1);
@@ -2740,6 +2779,14 @@ export function DeploymentPlanningCenter() {
     setMobileLeftOpen(false);
     setMobileRightOpen(false);
     requestCamera("overview");
+  };
+
+  const runWorkflowStep = (id: string) => {
+    if (id === "projects") setMobileLeftOpen(true);
+    else if (id === "facility") setFacilityPlannerOpen(true);
+    else if (id === "plan") { changeView(false); setWorkspaceMode("2d"); }
+    else if (id === "rack") { changeView(false); setMobileRightOpen(true); }
+    else if (id === "reports") changeView(true);
   };
 
   const openModelLibrary = (kind: DataCenterAssetKind) => {
@@ -3852,6 +3899,11 @@ export function DeploymentPlanningCenter() {
           ? "lg:grid-cols-[minmax(0,1fr)_68px]"
           : "lg:grid-cols-[minmax(0,1fr)_360px]"
         : "lg:grid-cols-[minmax(0,1fr)]";
+  const workPanelGridClass = showSceneTools
+    ? leftCollapsed
+      ? "lg:grid-cols-[72px_minmax(0,1fr)_336px]"
+      : "lg:grid-cols-[224px_minmax(0,1fr)_336px]"
+    : "lg:grid-cols-[minmax(0,1fr)_336px]";
 
   const reportPanel = <DataCenterDailyReports key={`${user?.userId}:${sharedProjects.selectedProjectId}`}
     projectId={sharedProjects.selectedProjectId} projectName={sharedProjects.selectedProject?.name ?? ""}
@@ -3922,20 +3974,24 @@ export function DeploymentPlanningCenter() {
           {!isDesktopLayout && <Button type="button" variant="outline" className="dc-mobile-report-entry ml-auto shrink-0" onClick={() => changeView(!showDailyReports)}><ClipboardCheck className="h-4 w-4" />{showDailyReports ? "返回場景" : "工作回報"}</Button>}
         </header>
 
-        {!showDailyReports && <section data-testid="data-center-task-guide" className="dc-task-guide" aria-label="機房配置使用說明">
-          <p><span className="hidden sm:inline">先選專案與站點，再用 2D 排機櫃；選取機櫃後，從「機櫃與設備」查看與配置設備。</span><span className="sm:hidden">選專案站點 → 2D 排機櫃 → 配置設備</span></p>
-          <details>
-            <summary>使用說明</summary>
-            <div>
-              <p><strong>這頁的用途：</strong>規劃機房空間、機櫃位置及櫃內設備，並回報每天的工作進度。場景呈現已設定的配置與狀態，不代表即時監控資料。</p>
-              <ol><li>「專案與站點」選擇要工作的機房。</li><li>「2D 配置規劃」安排機櫃、通道與電源位置；「場地與通道」調整尺寸。</li><li>「機櫃與設備」查看選取機櫃，從「模型庫」套用外框或安裝設備。</li><li>「每日工作回報」記錄完成事項、阻礙與下一步，不會改動場景配置。</li></ol>
-              <p>3D 可拖曳旋轉、滾輪縮放；手機使用單指旋轉、雙指縮放／平移。空白地板是尚未配置的空間。</p>
-            </div>
-          </details>
+        {!showDailyReports && <section data-testid="data-center-task-guide" className="dc-task-guide" aria-label="機房配置工作流程">
+          <WorkflowStrip
+            steps={workflow.steps}
+            nextStepId={workflow.nextStepId}
+            onStep={runWorkflowStep}
+            help={(
+              <div className="dc-flow-help-text">
+                <p><strong>這頁的用途：</strong>規劃機房空間、機櫃位置及櫃內設備，並回報每天的工作進度。場景呈現已設定的配置與狀態，不代表即時監控資料。</p>
+                <p>先選專案與站點，再用 2D 排機櫃；選取機櫃後，從「機櫃與設備」查看與配置設備。上方五個步驟會顯示目前進度，標示「下一步」的就是建議接著做的事。</p>
+                <ol><li>「專案與站點」選擇要工作的機房。</li><li>「場地與通道」設定地板尺寸、冷熱通道與 PDU。</li><li>「2D 配置規劃」安排機櫃位置；拖曳後 3D 立即更新。</li><li>「機櫃與設備」查看選取機櫃，從「模型庫」套用外框或安裝設備。</li><li>「每日工作回報」記錄完成事項、阻礙與下一步，不會改動場景配置。</li></ol>
+                <p>3D 可拖曳旋轉、滾輪縮放；手機使用單指旋轉、雙指縮放／平移。空白地板是尚未配置的空間。</p>
+              </div>
+            )}
+          />
         </section>}
 
         {isDesktopLayout ? (
-        <div className={cn("dc-desktop-layout grid min-h-0 flex-1 gap-3 bg-[#02060b] p-3", compactDesktopGridClass)}>
+        <div className={cn("dc-desktop-layout grid min-h-0 flex-1 gap-3 bg-[#02060b] p-3", workPanelVisible ? workPanelGridClass : compactDesktopGridClass)}>
           {showSceneTools ? (
             <aside
               data-testid="data-center-navigation-dock"
@@ -4167,6 +4223,7 @@ export function DeploymentPlanningCenter() {
                 <DropdownMenuContent align="end">{([ ["overview", "全景"], ["top", "俯視"], ["front", "正視"], ["focus", "聚焦機櫃"], ["detail", "近距離"] ] as const).map(([value, label]) => <DropdownMenuItem key={value} onSelect={() => requestCamera(value)}>{label}</DropdownMenuItem>)}</DropdownMenuContent>
               </DropdownMenu>
               <Button type="button" variant="outline" aria-pressed={showLabels} onClick={() => setShowLabels(value => !value)} className="h-9 border-white/12 bg-white/[0.04] px-3 text-xs text-white">{showLabels ? "隱藏標籤" : "顯示標籤"}</Button>
+              {!showRackDetails ? <Button type="button" variant="outline" aria-pressed={showWorkPanel} onClick={() => setShowWorkPanel(value => !value)} className="h-9 border-white/12 bg-white/[0.04] px-3 text-xs text-white">{showWorkPanel ? "隱藏進度" : "工作進度"}</Button> : null}
             </div>
 
             <div className={cn("absolute bottom-4 left-4 z-20 hidden items-center gap-3 rounded-xl border border-white/10 bg-black/72 px-3 py-2 text-[11px] text-slate-300 backdrop-blur-xl sm:flex", workspaceMode !== "3d" && "!hidden")}>
@@ -4196,6 +4253,21 @@ export function DeploymentPlanningCenter() {
             </div>
           </main>
 
+          {workPanelVisible ? <WorkProgressPanel
+            siteLabel={selectedSite.label}
+            progress={siteProgress}
+            healthLabels={HEALTH_LABELS}
+            selectedRackId={selectedRack.id}
+            onSelectRack={(rackId) => { handleRackSelect(rackId); requestCamera("focus"); }}
+            onOpenRack={(rackId) => { handleRackSelect(rackId); setMobileRightOpen(true); }}
+            onOpenPlan={() => { changeView(false); setWorkspaceMode("2d"); }}
+            onOpenReports={() => changeView(true)}
+            onCollapse={() => setShowWorkPanel(false)}
+            reportState={reportState}
+            reports={reportSummary}
+            canReport={canEdit && isRealtimeAuthenticated}
+            siteName={(siteId) => sites.find((site) => site.id === siteId)?.label ?? siteId}
+          /> : null}
           {showRackDetails ? <aside className="min-w-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081c2d] shadow-[0_24px_70px_rgba(2,8,23,0.42)]">
             <RackInspector {...inspectorProps} collapsed={rightCollapsed} onToggleCollapse={() => setRightCollapsed((value) => !value)} />
           </aside> : null}
@@ -4843,7 +4915,6 @@ export function DeploymentPlanningCenter() {
                             <span>寬 {aisle.depth.toFixed(2)} m</span>
                             <span className="text-slate-400">距左 {friendlyPosition.left.toFixed(2)} m · 距上 {friendlyPosition.top.toFixed(2)} m</span>
                           </div>
-                          <div className="mt-2 text-[10px] text-slate-500">位置與尺寸請到 2D 規劃直接拖曳調整</div>
                         </div>
                       );
                     })}
@@ -4854,7 +4925,7 @@ export function DeploymentPlanningCenter() {
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-black text-white">電力佈線</h2>
-                      <p className="mt-1 text-[11px] text-slate-400">電力圖層會從啟用的饋線連到所有機櫃。</p>
+                      <p className="mt-1 text-[11px] text-slate-400">位置請到 2D 規劃直接拖曳；電力圖層會從啟用的饋線連到所有機櫃。</p>
                     </div>
                     <Button type="button" size="sm" variant="outline" disabled={!canEdit} onClick={addPowerFeed} className="h-8 border-amber-300/20 bg-amber-400/10 px-2.5 text-[11px] text-amber-100 hover:bg-amber-400/20">
                       <Plus className="mr-1 h-3.5 w-3.5" />饋線
@@ -4882,9 +4953,6 @@ export function DeploymentPlanningCenter() {
                               移除
                             </Button>
                           </div>
-                        </div>
-                        <div className="rounded-lg border border-dashed border-amber-200/15 bg-amber-400/[0.05] px-2.5 py-2 text-[10px] text-slate-400">
-                          位置請到 2D 規劃直接拖曳；啟用後會連到所有機櫃。
                         </div>
                       </div>
                     ))}

@@ -430,7 +430,7 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
           <aside className="order-2 min-w-0 max-h-[36svh] overflow-y-auto border-t border-[#1f4766] bg-[#071522] p-4 lg:order-1 lg:max-h-none lg:border-r lg:border-t-0" aria-label="模型檢視工具">
             <section className="dc-preview-section" aria-label="顯示模式">
               <h3 className="dc-preview-section-title"><Layers3 className="h-4 w-4" />顯示模式</h3>
-              <div className="grid min-w-0 grid-cols-3 gap-2">
+              <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(76px,1fr))] gap-2">
               {([[
                 "solid",
                 "實體",
@@ -442,7 +442,7 @@ export function DataCenterModelViewer({ open, model, onOpenChange }: DataCenterM
                   aria-pressed={mode === id}
                   onClick={() => setMode(id)}
                   className={cn(
-                    "flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl border px-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300",
+                    "flex h-11 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border px-2 text-[13px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300",
                     mode === id
                       ? "border-cyan-300/55 bg-cyan-300 text-cyan-950"
                       : "border-[#2a526f] bg-[#10263a] text-cyan-50 hover:bg-[#17364f]"
