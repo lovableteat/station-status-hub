@@ -2057,9 +2057,12 @@ function InlineVirtualAlternativeEditor({
 function TrackingHistoryCell({
   record,
   onOpen,
+  embedded = false,
 }: {
   record: MaterialRecord;
   onOpen: (record: MaterialRecord) => void;
+  /** Inside the merged 狀態追蹤 / 更新 control the cell drops its own frame and shares the group's. */
+  embedded?: boolean;
 }) {
   const latestEntry = getLatestTrackingEntry(record);
   const requestMeta = getTrackingRequestMeta(record);
@@ -2083,7 +2086,8 @@ function TrackingHistoryCell({
       data-testid="tracking-history-cell"
       onClick={() => onOpen(record)}
       className={cn(
-        "group flex min-h-[40px] w-full items-center gap-2 rounded-lg border px-2 py-1 text-left transition-colors",
+        "group flex min-h-[40px] w-full items-center gap-2 px-2 py-1 text-left transition-colors",
+        embedded ? "rounded-none border-0" : "rounded-lg border",
         cardTone.wrapper,
       )}
       title={tooltip}
@@ -3700,20 +3704,19 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
             data-testid="material-data-update-cell"
             onClick={stopRowToggle}
           >
-            <div className="flex min-w-0 items-center gap-1.5">
+            <div className="flex min-w-0 items-stretch overflow-hidden rounded-lg border border-cyan-400/25 bg-cyan-400/5" data-testid="material-tracking-update-control">
               <div className="min-w-0 flex-1" data-material-cell="tracking">
-                {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={actions.openTracking} />}
+                {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={actions.openTracking} embedded />}
               </div>
-              <Button
+              <button
                 type="button"
-                variant="outline"
-                size="sm"
                 onClick={() => actions.openCreate(group)}
-                className="h-7 flex-none border-cyan-400/25 bg-cyan-400/10 px-2 text-xs text-cyan-200 hover:bg-cyan-400/20 hover:text-cyan-50"
+                className="flex flex-none items-center gap-1 border-l border-cyan-400/25 bg-cyan-400/10 px-2 text-xs font-bold text-cyan-200 transition-colors hover:bg-cyan-400/25 hover:text-cyan-50"
                 title={updateTitle}
+                aria-label="更新料號"
               >
-                <Plus className="mr-1 h-3.5 w-3.5" />更新
-              </Button>
+                <Plus className="h-3.5 w-3.5" />更新
+              </button>
             </div>
             {editingNames && (
               <p className="mt-1 truncate rounded border border-amber-300/28 bg-amber-400/12 px-1 text-[10px] font-bold leading-4 text-amber-100" title={`${editingNames} 正在編輯`}>
@@ -3911,18 +3914,18 @@ function CompactAlternativeRows({
             )}
             {columns.actions && (
               <td className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5")} onClick={stopRowToggle}>
-                <div className="flex min-w-0 items-center gap-1.5">
+                <div className="flex min-w-0 items-stretch overflow-hidden rounded-lg border border-cyan-400/25 bg-cyan-400/5">
                   <div className="min-w-0 flex-1">
                     {record.id === primaryTrackingRecordId ? (
-                      <span className="block truncate text-xs text-slate-400" title="這筆的狀態追蹤已顯示在主料列">同主料列</span>
+                      <span className="flex min-h-[40px] items-center truncate px-2 text-xs text-slate-400" title="這筆的狀態追蹤已顯示在主料列">同主料列</span>
                     ) : (
-                      <TrackingHistoryCell record={record} onOpen={onOpenTracking} />
+                      <TrackingHistoryCell record={record} onOpen={onOpenTracking} embedded />
                     )}
                   </div>
-                  <button type="button" onClick={() => onView(record)} className="rounded-md border border-cyan-400/25 bg-cyan-400/10 p-1.5 text-cyan-300 hover:bg-cyan-400/20" title="詳細資訊">
+                  <button type="button" onClick={() => onView(record)} className="flex flex-none items-center border-l border-cyan-400/25 bg-cyan-400/10 px-2 text-cyan-300 hover:bg-cyan-400/25" title="詳細資訊" aria-label="詳細資訊">
                     <Eye className="h-3.5 w-3.5" />
                   </button>
-                  <button type="button" disabled={!canEdit} onClick={() => onEdit(record)} className="rounded-md border border-blue-400/25 bg-blue-400/10 p-1.5 text-blue-300 hover:bg-blue-400/20 disabled:cursor-not-allowed disabled:opacity-50" title="修改">
+                  <button type="button" disabled={!canEdit} onClick={() => onEdit(record)} className="flex flex-none items-center border-l border-cyan-400/25 bg-cyan-400/10 px-2 text-cyan-300 hover:bg-cyan-400/25 disabled:cursor-not-allowed disabled:opacity-50" title="修改" aria-label="修改">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                 </div>
