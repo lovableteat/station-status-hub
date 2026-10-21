@@ -13,8 +13,13 @@ function useMediaQuery(query: string) {
     const mediaQuery = window.matchMedia(query)
     const onChange = () => setMatches(mediaQuery.matches)
     mediaQuery.addEventListener("change", onChange)
+    // Some embedded and emulated viewports resize without a media-query change event.
+    window.addEventListener("resize", onChange)
     onChange()
-    return () => mediaQuery.removeEventListener("change", onChange)
+    return () => {
+      mediaQuery.removeEventListener("change", onChange)
+      window.removeEventListener("resize", onChange)
+    }
   }, [query])
 
   return matches
