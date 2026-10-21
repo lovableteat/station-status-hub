@@ -1,25 +1,14 @@
-import React, { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLoadingScreen } from "@/components/common/AppRuntimeBoundary";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { HashRouter, Routes, Route } from "react-router-dom";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { UserProvider, useUser } from "@/components/auth/UserContext";
-import { TestProjectProvider } from "@/components/test-projects/TestProjectProvider";
-import { PermissionGuard } from "@/components/layout/PermissionGuard";
-import { PermissionsProvider } from "@/hooks/usePermissions";
-import { UnifiedDataProvider } from "@/hooks/useUnifiedData";
-import { UserPresenceProvider } from "@/hooks/useUserPresence";
 
-const Index = lazy(() => import("./pages/Index"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const TestTrackerPage = lazy(() => import("./pages/TestTrackerPage"));
-const ApiManagementPage = lazy(() =>
-  import("@/components/api-management/ApiManagementPage").then((module) => ({
-    default: module.ApiManagementPage,
-  }))
+const AuthenticatedApplication = lazy(() =>
+  import("@/components/auth/AuthenticatedApplication")
 );
 
 const queryClient = new QueryClient({
@@ -31,7 +20,7 @@ const queryClient = new QueryClient({
   },
 });
 
-function ApplicationSessionGate({ children }: { children: React.ReactNode }) {
+function ApplicationSessionGate() {
   const { isInitializing, isLoggedIn, requiresRealtimeUpgrade } = useUser();
 
   if (isInitializing) {
@@ -42,7 +31,11 @@ function ApplicationSessionGate({ children }: { children: React.ReactNode }) {
     return <LoginPage />;
   }
 
-  return <>{children}</>;
+  return (
+    <Suspense fallback={<AppLoadingScreen />}>
+      <AuthenticatedApplication />
+    </Suspense>
+  );
 }
 
 const App = () => {
@@ -60,41 +53,7 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <ApplicationSessionGate>
-            <UserPresenceProvider>
-              <PermissionsProvider>
-                <TestProjectProvider>
-                  <UnifiedDataProvider>
-                    <HashRouter>
-                      <Suspense fallback={<AppLoadingScreen />}>
-                        <Routes>
-                          <Route path="/" element={<Index />} />
-                          <Route
-                            path="/test-tracker"
-                            element={
-                              <PermissionGuard modules={["test-tracker", "monitor"]}>
-                                <TestTrackerPage />
-                              </PermissionGuard>
-                            }
-                          />
-                          <Route
-                            path="/api-management"
-                            element={
-                              <PermissionGuard module="api-management">
-                                <ApiManagementPage />
-                              </PermissionGuard>
-                            }
-                          />
-                          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                          <Route path="*" element={<NotFound />} />
-                        </Routes>
-                      </Suspense>
-                    </HashRouter>
-                  </UnifiedDataProvider>
-                </TestProjectProvider>
-              </PermissionsProvider>
-            </UserPresenceProvider>
-          </ApplicationSessionGate>
+          <ApplicationSessionGate />
         </TooltipProvider>
       </UserProvider>
     </QueryClientProvider>

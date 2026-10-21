@@ -7,7 +7,7 @@ import {
   isSupabaseServiceRestrictedError,
 } from "../src/integrations/supabase/serviceErrors.js";
 
-const appUrl = new URL("../src/App.tsx", import.meta.url);
+const authenticatedApplicationUrl = new URL("../src/components/auth/AuthenticatedApplication.tsx", import.meta.url);
 const loginUrl = new URL("../src/components/auth/LoginPage.tsx", import.meta.url);
 const projectProviderUrl = new URL(
   "../src/components/test-projects/TestProjectProvider.tsx",
@@ -49,7 +49,7 @@ test("login explains quota restrictions instead of reporting a generic credentia
 
 test("station data uses one shared provider and skips backend traffic while signed out", async () => {
   const [app, projectProvider, unifiedData] = await Promise.all([
-    readFile(appUrl, "utf8"),
+    readFile(authenticatedApplicationUrl, "utf8"),
     readFile(projectProviderUrl, "utf8"),
     readFile(unifiedDataUrl, "utf8"),
   ]);
@@ -65,7 +65,7 @@ test("station data uses one shared provider and skips backend traffic while sign
 
 test("50-user mode avoids duplicate presence and notification subscriptions", async () => {
   const [app, index, presence, notifications] = await Promise.all([
-    readFile(appUrl, "utf8"),
+    readFile(authenticatedApplicationUrl, "utf8"),
     readFile(indexUrl, "utf8"),
     readFile(presenceUrl, "utf8"),
     readFile(notificationsUrl, "utf8"),

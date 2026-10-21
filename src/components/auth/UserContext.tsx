@@ -268,7 +268,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // to be restored. Keep the global session gate closed until that check ends.
   const [isInitializing, setIsInitializing] = useState(!demoUser);
   const [reauthRequired, setReauthRequired] = useState(false);
-  const authenticatedSessionSeen = useRef(false);
+  const sessionRestore = useRef<{
+    generation: number;
+    token: string | null;
+    pending: Promise<void> | null;
+  }>({ generation: 0, token: null, pending: null });
+
+  const invalidateSessionRestore = useCallback(() => {
+    sessionRestore.current = {
+      generation: sessionRestore.current.generation + 1,
+      token: null,
+      pending: null,
+    };
+  }, []);
 
   const applyUser = useCallback((nextUser: User, mode: Exclude<SessionMode, "signed-out">) => {
     setUser(nextUser);
@@ -278,80 +290,101 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     (userId: string, username: string, role: string, displayName: string) => {
+      invalidateSessionRestore();
       applyUser({ userId, username, role, displayName, avatarPath: null }, "legacy");
     },
-    [applyUser],
+    [applyUser, invalidateSessionRestore],
   );
 
   useEffect(() => {
     if (demoUser) return;
     let active = true;
 
-    const restoreSession = async (session: Session | null) => {
-      if (!active) return;
+    const restoreSession = (session: Session | null): Promise<void> => {
+      if (!active) return Promise.resolve();
+      const token = session?.access_token ?? null;
+      const previous = sessionRestore.current;
+      // getSession() and INITIAL_SESSION can report the same token together.
+      // Share only the in-flight verification; future events still revalidate.
+      if (token && previous.token === token && previous.pending) return previous.pending;
 
-      try {
-        if (!session) {
-          setUser(null);
-          setSessionMode("signed-out");
-          storeUser(null);
-          return;
-        }
+      const current = {
+        generation: previous.generation + 1,
+        token,
+        pending: null as Promise<void> | null,
+      };
+      sessionRestore.current = current;
+      const isCurrent = () => active && sessionRestore.current === current;
 
-        if (!hasCurrentSessionVersion()) {
-          setUser(null);
-          setSessionMode("signed-out");
-          storeUser(null);
-          setReauthRequired(true);
-          authenticatedSessionSeen.current = false;
-          void supabase.auth.signOut({ scope: "local" });
-          return;
-        }
+      current.pending = Promise.resolve().then(async () => {
+        if (!isCurrent()) return;
 
-        authenticatedSessionSeen.current = true;
-        void authorizeRealtime(session);
+        try {
+          if (!session) {
+            setUser(null);
+            setSessionMode("signed-out");
+            storeUser(null);
+            return;
+          }
 
-        const profileResult = await runSessionBootstrapWithDeadline(
-          () => userFromSession(session),
-          { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS },
-        );
-        if (!active) return;
+          if (!hasCurrentSessionVersion()) {
+            setUser(null);
+            setSessionMode("signed-out");
+            storeUser(null);
+            setReauthRequired(true);
+            void supabase.auth.signOut({ scope: "local" });
+            return;
+          }
 
-        let authenticatedUser: User | null = null;
-        if (profileResult.status === "fulfilled") {
-          authenticatedUser = profileResult.value;
-        } else {
-          console.warn(
-            profileResult.status === "timed-out"
-              ? "Session profile restore timed out"
-              : "Session profile restore failed",
-            profileResult.status === "rejected" ? profileResult.error : undefined,
+          void authorizeRealtime(session);
+
+          const profileResult = await runSessionBootstrapWithDeadline(
+            () => userFromSession(session),
+            { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS },
           );
-        }
+          if (!isCurrent()) return;
 
-        if (!active) return;
-        if (authenticatedUser) {
-          setReauthRequired(false);
-          applyUser(authenticatedUser, "authenticated");
-          return;
-        }
+          let authenticatedUser: User | null = null;
+          if (profileResult.status === "fulfilled") {
+            authenticatedUser = profileResult.value;
+          } else {
+            console.warn(
+              profileResult.status === "timed-out"
+                ? "Session profile restore timed out"
+                : "Session profile restore failed",
+              profileResult.status === "rejected" ? profileResult.error : undefined,
+            );
+          }
 
-        setUser(null);
-        setSessionMode("signed-out");
-        storeUser(null);
-        storeCurrentSessionVersion(false);
-        void supabase.auth.signOut({ scope: "local" });
-      } finally {
-        if (active) setIsInitializing(false);
-      }
+          if (authenticatedUser) {
+            setReauthRequired(false);
+            applyUser(authenticatedUser, "authenticated");
+            return;
+          }
+
+          setUser(null);
+          setSessionMode("signed-out");
+          storeUser(null);
+          storeCurrentSessionVersion(false);
+          void supabase.auth.signOut({ scope: "local" });
+        } finally {
+          if (isCurrent()) {
+            current.pending = null;
+            setIsInitializing(false);
+          }
+        }
+      });
+      return current.pending;
     };
 
     const initializeSession = async () => {
+      const generation = sessionRestore.current.generation;
       const sessionResult = await runSessionBootstrapWithDeadline(
         () => supabase.auth.getSession(),
         { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS },
       );
-      if (!active) return;
+      // An Auth event, explicit login, or logout supersedes this older read.
+      if (!active || sessionRestore.current.generation !== generation) return;
 
       if (sessionResult.status !== "fulfilled") {
         console.warn(
@@ -381,21 +414,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     void initializeSession();
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT" && authenticatedSessionSeen.current) {
-        setUser(null);
-        setSessionMode("signed-out");
-        storeUser(null);
-        setIsInitializing(false);
-        return;
-      }
-      void restoreSession(session);
+      void restoreSession(event === "SIGNED_OUT" ? null : session);
     });
 
     return () => {
       active = false;
+      invalidateSessionRestore();
       authListener.subscription.unsubscribe();
     };
-  }, [applyUser, demoUser]);
+  }, [applyUser, demoUser, invalidateSessionRestore]);
 
   const authenticate = useCallback(
     async (username: string, password: string): Promise<AuthenticationResult | null> => {
@@ -430,7 +457,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
                 displayName: profile.display_name || profile.username,
                 avatarPath: profile.avatar_path || null,
               };
+              // The login endpoint already returned a verified account. A
+              // slower SIGNED_IN profile read must not undo this login later.
+              invalidateSessionRestore();
               applyUser(authenticatedUser, "authenticated");
+              setIsInitializing(false);
               return { user: authenticatedUser, mode: "authenticated" };
             }
             throw new Error("Authenticated account profile is incomplete");
@@ -469,10 +500,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
         displayName: legacyUser.display_name || legacyUser.username,
         avatarPath: null,
       };
+      invalidateSessionRestore();
       applyUser(compatibleUser, "legacy");
       return { user: compatibleUser, mode: "legacy" };
     },
-    [applyUser],
+    [applyUser, invalidateSessionRestore],
   );
 
   const registerAccount = useCallback(
@@ -612,13 +644,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [sessionMode, user?.userId]);
 
   const logout = useCallback(() => {
+    invalidateSessionRestore();
     setUser(null);
     setSessionMode("signed-out");
     storeUser(null);
     storeCurrentSessionVersion(false);
     setReauthRequired(false);
+    setIsInitializing(false);
     void supabase.auth.signOut({ scope: "local" });
-  }, []);
+  }, [invalidateSessionRestore]);
 
   useEffect(() => {
     if (!user?.userId || sessionMode === "demo") return;
