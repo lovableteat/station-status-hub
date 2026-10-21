@@ -61,9 +61,10 @@ test("realtime presence uses a current Supabase protocol client", async () => {
 });
 
 test("stale cached sessions use the same login page before private providers mount", async () => {
-  const [context, app, index, loginPage] = await Promise.all([
+  const [context, app, authenticatedApplication, index, loginPage] = await Promise.all([
     readSource("src/components/auth/UserContext.tsx"),
     readSource("src/App.tsx"),
+    readSource("src/components/auth/AuthenticatedApplication.tsx"),
     readSource("src/pages/Index.tsx"),
     readSource("src/components/auth/LoginPage.tsx"),
   ]);
@@ -124,8 +125,8 @@ test("stale cached sessions use the same login page before private providers mou
     "signed-out and legacy-session states must render one shared login page",
   );
   assert.match(
-    app,
-    /<ApplicationSessionGate>[\s\S]*<UserPresenceProvider>[\s\S]*<\/UserPresenceProvider>[\s\S]*<\/ApplicationSessionGate>/,
+    authenticatedApplication,
+    /<UserPresenceProvider>[\s\S]*<PermissionsProvider>[\s\S]*<TestProjectProvider>[\s\S]*<UnifiedDataProvider>/,
   );
   assert.doesNotMatch(
     index,
