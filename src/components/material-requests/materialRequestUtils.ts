@@ -187,8 +187,8 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   refDes: ["Ref Des", "RefDes", "Reference Designator", "位號", "參考位號", "location"],
   mpn1: ["Manufacturer Part Number(1)", "Manufacturer Part Number", "MPN", "Mfr Part Number", "廠商料號", "製造商料號"],
   mpn2: ["Manufacturer Part Number(2)", "MPN2", "Alternate MPN", "第二料號", "替代廠商料號"],
-  virtualAlternative: ["TX", "TX P/N", "TX PN", "虛擬料", "虛擬替代料", "虛擬料號"],
-  virtualPn: ["Virtual PN", "Virtual P/N", "Virtual Part Number", "Virtual Alternative", "Virtual Alternate", "Virtual MPN"],
+  virtualAlternative: ["TX", "TX P/N", "TX PN", "虛擬替代料"],
+  virtualPn: ["虛擬料號", "虛擬料", "Virtual PN", "Virtual P/N", "Virtual Part Number", "Virtual Alternative", "Virtual Alternate", "Virtual MPN"],
   pegaPartNumber: ["PEGA P/N", "PEGA PN"],
   trackingStatus: ["Tracking Status", "Process Status", "料號狀態追蹤", "申請狀態追蹤", "處理狀態", "追蹤狀態", "自訂狀態"],
   trackingCreatedBy: ["EE", "Updated By", "Updater", "Owner", "更新人"],
@@ -202,7 +202,7 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   refGroup: ["Ref_tmp", "Ref Group", "Group", "替代料群組", "料件群組", "群組代碼"],
   lv: ["LV", "Version", "版本", "版次"],
   remark: [],
-  partNumber: ["Part Number", "Internal Part Number", "Internal PN", "PN", "內部料號", "公司料號"],
+  partNumber: ["實體料號", "實體料", "Physical PN", "Physical Part Number", "Part Number", "Internal Part Number", "Internal PN", "PN", "內部料號", "公司料號"],
   partName: ["Part Name", "Internal Part Name", "內部料名", "料號名稱"],
   partSpec: ["Part Spec", "Specification", "Spec", "規格", "料件規格"],
   schematicPart: ["Schematic_Part", "Schematic Part", "原理圖元件", "原理圖符號"],
@@ -247,11 +247,11 @@ export function getMaterialBuildRequirementLabel(
 ) {
   const requirements = getMaterialBuildRequirements(record);
   switch (requirements.status) {
-    case "needs-symbol": return "已有 Part，待補 Symbol";
-    case "needs-part-symbol": return "待補 Part／Symbol";
-    case "needs-part": return "已有 Symbol，待補 Part";
-    case "complete": return "Part／Symbol 已齊備";
-    default: return requirements.hasPartNumber ? "已有 Part，Symbol 待確認" : "Part 待補，Symbol 待確認";
+    case "needs-symbol": return "已有實體料，待補 Symbol";
+    case "needs-part-symbol": return "待補實體料／Symbol";
+    case "needs-part": return "已有 Symbol，待補實體料";
+    case "complete": return "實體料／Symbol 已齊備";
+    default: return requirements.hasPartNumber ? "已有實體料，Symbol 待確認" : "實體料待補，Symbol 待確認";
   }
 }
 
@@ -805,7 +805,7 @@ function findHeaderRow(rows: unknown[][]) {
   rows.slice(0, 40).forEach((row, index) => {
     const fields = resolveHeaderFields(row);
     const hasName = fields.has("name") || fields.has("partName");
-    const hasMaterialIdentity = fields.has("mpn1") || fields.has("partNumber") || fields.has("refDes") || fields.has("refGroup");
+    const hasMaterialIdentity = fields.has("mpn1") || fields.has("partNumber") || fields.has("pegaPartNumber") || fields.has("refDes") || fields.has("refGroup");
     const score = fields.size;
 
     if (hasName && hasMaterialIdentity && score >= 3 && (!bestMatch || score > bestMatch.score)) {
@@ -950,7 +950,12 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
     const parsedLevel = Number(levelCell);
     const levelValue = hasLevelColumn && normalizeText(levelCell) && Number.isFinite(parsedLevel) ? parsedLevel : 2;
     const partName = normalizeText(getFieldValue(row, fields, "partName"));
-    const partNumber = normalizeText(getFieldValue(row, fields, "partNumber"));
+    // A PEGA PN is a physical manufacturer-specific part, never a virtual group.
+    // Prefer the explicit physical column even when a legacy PEGA column comes first.
+    const partNumber = firstNonPlaceholder(
+      getFieldValue(row, fields, "partNumber"),
+      getFieldValue(row, fields, "pegaPartNumber"),
+    );
     const mpn1 = normalizeText(getFieldValue(row, fields, "mpn1"));
     const name = firstNonEmpty(getFieldValue(row, fields, "name"), partName, partNumber, mpn1);
 
@@ -993,7 +998,6 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
       : rowRefGroup;
     const virtualAlternative = firstNonPlaceholder(
       getFieldValue(row, fields, "virtualPn"),
-      getFieldValue(row, fields, "pegaPartNumber"),
       getFieldValue(row, fields, "virtualAlternative"),
     );
     const importedTrackingText = firstNonEmpty(trackingNote, getFieldValue(row, fields, "trackingStatus"));

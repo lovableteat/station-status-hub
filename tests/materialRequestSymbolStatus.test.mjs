@@ -64,13 +64,13 @@ test("build requirements distinguish missing Part and missing Symbol without inf
 
 test("the shared build labels describe each source combination and never infer legacy Symbol names", () => {
   const cases = [
-    [{ partNumber: "000-ABC-00", symbolStatus: "無" }, "已有 Part，待補 Symbol"],
-    [{ partNumber: "", symbolStatus: "無" }, "待補 Part／Symbol"],
-    [{ partNumber: "", symbolStatus: "有" }, "已有 Symbol，待補 Part"],
-    [{ partNumber: "000-ABC-00", symbolStatus: "有" }, "Part／Symbol 已齊備"],
-    [{ partNumber: "000-ABC-00", symbolStatus: "C" }, "已有 Part，Symbol 待確認"],
-    [{ partNumber: "", symbolStatus: "" }, "Part 待補，Symbol 待確認"],
-    [{ partNumber: "000-ABC-00", schematicPart: "CAP" }, "已有 Part，Symbol 待確認"],
+    [{ partNumber: "000-ABC-00", symbolStatus: "無" }, "已有實體料，待補 Symbol"],
+    [{ partNumber: "", symbolStatus: "無" }, "待補實體料／Symbol"],
+    [{ partNumber: "", symbolStatus: "有" }, "已有 Symbol，待補實體料"],
+    [{ partNumber: "000-ABC-00", symbolStatus: "有" }, "實體料／Symbol 已齊備"],
+    [{ partNumber: "000-ABC-00", symbolStatus: "C" }, "已有實體料，Symbol 待確認"],
+    [{ partNumber: "", symbolStatus: "" }, "實體料待補，Symbol 待確認"],
+    [{ partNumber: "000-ABC-00", schematicPart: "CAP" }, "已有實體料，Symbol 待確認"],
   ];
   for (const [record, expected] of cases) assert.equal(getMaterialBuildRequirementLabel(record), expected);
 });

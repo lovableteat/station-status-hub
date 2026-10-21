@@ -42,6 +42,7 @@ export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpe
           <section className="rounded-2xl border border-sky-400/25 bg-sky-400/[0.06] p-5" aria-labelledby="handoff-download-title">
             <h3 id="handoff-download-title" className="text-lg font-bold text-sky-200">2. 交給 CE 的檔案</h3>
             <p className="mt-2 leading-6 text-slate-300">交給 CE 只需要這份空白格式，資料整理、查核與填寫由 CE 自行處理。交付檔只有固定欄位，沒有分工說明或示範資料；欄位參考留供內部核對。</p>
+            <p className="mt-3 rounded-xl border border-sky-300/20 bg-[#0a1527] p-3 leading-6 text-sky-100">{MATERIAL_HANDOFF_RULES[2]}</p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <Button asChild className="shrink-0 font-bold">
                 <a href={templateUrl} download="CE_BOM_交付格式.xlsx">
@@ -63,14 +64,14 @@ export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpe
             <p className="mt-3 rounded-xl border border-amber-300/20 bg-[#0a1527] p-3 leading-6 text-amber-100">
               例如：Sourcing Status＝Approved，零件狀態＝ODM 不建議用料。網站會分開保留並提示風險，交由 RD 按公司流程確認。
             </p>
-            <p className="mt-3 leading-6 text-slate-300">{MATERIAL_HANDOFF_RULES[2]}</p>
+            <p className="mt-3 leading-6 text-slate-300">零件狀態放在最右側，由 CE 帶出公司原文；未確認時填待確認，不得自行改填 Approved 或可用。</p>
             <p className="mt-3 leading-6 text-slate-300">{MATERIAL_HANDOFF_RULES[3]}</p>
             <p className="mt-3 rounded-xl border border-cyan-300/20 bg-[#0a1527] p-3 leading-6 text-cyan-100">{MATERIAL_HANDOFF_RULES[5]}</p>
           </section>
 
           <section className="rounded-2xl border border-blue-400/20 bg-[#101d33] p-5" aria-labelledby="handoff-fields-title">
             <h3 id="handoff-fields-title" className="text-lg font-bold text-blue-200">4. 每一欄由誰填、網站放哪裡</h3>
-            <p className="mt-2 leading-6 text-slate-300">範本第 4 列是固定表頭，第 5 列起填資料。CE 從原 BOM 或公司系統保留／帶出資料；Symbol 填建置狀態，Schematic_Part 填原理圖符號名稱，最右側是「零件狀態」。</p>
+            <p className="mt-2 leading-6 text-slate-300">依整理後的 15 欄交付，第 4 列是固定表頭，第 5 列起填資料。一列為單一廠商的一個實體料；同一虛擬料下的實體料分列填寫。Symbol 填建置狀態，Schematic_Part 填符號名稱，最右側是「零件狀態」。</p>
             <div className="mt-4 overflow-x-auto rounded-xl border border-blue-400/15" tabIndex={0} role="region" aria-label="CE 交付欄位責任表，可左右捲動">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="bg-blue-400/10 text-blue-200">
@@ -100,13 +101,13 @@ export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpe
           <section className="rounded-2xl border border-slate-400/20 bg-[#101d33] p-5">
             <h3 className="text-lg font-bold text-slate-100">6. 匯入前再檢查</h3>
             <ul className="mt-3 list-disc space-y-3 pl-5 leading-6 text-slate-300">
-              <li>一列一個廠商料，同組替代料相鄰排列；Ref Des 不可用料名取代，Ref_tmp 可留白或與位號相同。</li>
-              <li>既有檔若有藍色主料起始列，網站會優先採用該分組。新範本使用 Ref Des／Ref_tmp，不要求 CE 另外手動上色。</li>
-              <li>保留公司料號前導零；沒有公司料號就留白，不把 TX 或 MPN 當正式公司料號。</li>
-              <li>TX 優先讀 Virtual PN，再讀 PEGA P/N，最後相容舊檔 TX P/N。CIS/Remark 不匯入網站追蹤。</li>
+              <li>每列填一個廠商的一個 MPN 與實體料號；同一虛擬料下的實體料重複填相同虛擬料號，同一設計位置保留相同 Ref Des。</li>
+              <li>新格式依 Ref Des 與系統／模組分組，不以料名或虛擬料號把不同設計位置合併；不要求 CE 另外手動上色。</li>
+              <li>保留實體料號前導零；沒有實體料號就留白，不把虛擬料號或 MPN 代填。</li>
+              <li>舊檔的 Virtual PN／TX 讀為虛擬料號；Part Number／PEGA P/N 讀為實體料號。第二 MPN、Ref_tmp、LV、CIS/Remark 不再要求 CE 填寫。</li>
               <li>舊 BOM 缺少零件狀態仍可匯入，但不代表已完成 CE 狀態確認；本次 CE 交付請補齊，不明就填待確認。</li>
               <li>只保留一張要匯入的資料工作表。網站會自動挑資料最完整的工作表，因此空白範本與示範資料分成兩個檔案。</li>
-              <li>相同檔名重新上傳會更新原 BOM；要保留不同版本請先另存不同檔名。匯入後核對位號、料號、兩種狀態與分組，再繼續作業。</li>
+              <li>相同檔名重新上傳會更新原 BOM；要保留不同版本請先另存不同檔名。匯入後核對位號、虛擬料號、實體料號、兩種狀態與分組，再繼續作業。</li>
             </ul>
           </section>
         </div>

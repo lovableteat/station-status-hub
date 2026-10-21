@@ -80,8 +80,8 @@ const EXCEL_HEADERS = [
   "Footprint",
   "廠商",
   "Manufacturer P/N",
-  "Manufacturer P/N 2",
-  "TX",
+  "舊檔第二 MPN",
+  "虛擬料號",
   "零件狀態",
   "目前狀態",
   "狀態追蹤",
@@ -91,15 +91,15 @@ const EXCEL_HEADERS = [
   "最後更新人",
   "Sourcing Status",
   "建料狀態",
-  "Part／Symbol缺件判斷",
-  "內部料號",
+  "實體料／Symbol缺件判斷",
+  "實體料號",
   "規格 / 備註",
   "圖片",
 ] as const;
 
 const EXCEL_COLUMN_WIDTHS = [10, 8, 20, 20, 30, 22, 9, 26, 18, 20, 20, 24, 24, 22, 45, 16, 34, 18, 30, 26, 18, 18, 18, 28, 22, 38, 18];
 const EXCEL_CENTERED_COLUMNS = new Set(
-  (["項次", "標記", "Qty", "Symbol建置狀態", "零件狀態", "目前狀態", "建料狀態", "Part／Symbol缺件判斷"] as const)
+  (["項次", "標記", "Qty", "Symbol建置狀態", "零件狀態", "目前狀態", "建料狀態", "實體料／Symbol缺件判斷"] as const)
     .map((header) => EXCEL_HEADERS.indexOf(header) + 1),
 );
 const EXCEL_REQUEST_LINK_COLUMN = EXCEL_HEADERS.indexOf("申請連結") + 1;
@@ -447,7 +447,7 @@ body.image-preview-open{overflow:hidden}
 <section class="meta"><div><span>匯出範圍</span><strong>${escapeHtml(snapshot.scopeLabel)}</strong></div><div><span>匯出人員</span><strong>${escapeHtml(snapshot.exportedBy)}</strong></div><div><span>匯出時間</span><strong>${escapeHtml(formatDateTime(snapshot.exportedAt))}</strong></div><div><span>來源</span><strong>${escapeHtml(snapshot.sourceFile)} / ${escapeHtml(snapshot.sheetName)}</strong></div><div><span>原始主料數</span><strong>${snapshot.originalGroupCount.toLocaleString()}</strong></div><div><span>篩選後主料數</span><strong>${snapshot.filteredGroupCount.toLocaleString()}</strong></div><div><span>匯出明細數</span><strong>${snapshot.rows.length.toLocaleString()}</strong></div></section>
 <section class="filters">${filterBadges}</section><section class="stats">${statusCards}</section>
 <section class="report-actions"><span class="report-actions__hint">長內容已預設收合，可逐筆展開或一次控制全部資料。</span><div class="report-actions__buttons"><button type="button" data-details-action="expand">全部展開</button><button type="button" data-details-action="collapse">全部收合</button></div></section>
-<div class="table-wrap"><table><thead><tr><th>項次</th><th>標記</th><th>REF</th><th>料件</th><th>廠商 / MPN</th><th>內部料號 / 圖面名稱</th><th>Symbol建置狀態</th><th>TX</th><th>零件狀態</th><th>狀態追蹤</th><th>申請資訊</th><th>Sourcing Status</th><th>建料狀態</th><th>Part／Symbol缺件判斷</th><th>規格 / 備註</th><th>圖片</th></tr></thead><tbody>${bodyRows}</tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>項次</th><th>標記</th><th>REF</th><th>料件</th><th>廠商 / MPN</th><th>實體料號 / 圖面名稱</th><th>Symbol建置狀態</th><th>虛擬料號</th><th>零件狀態</th><th>狀態追蹤</th><th>申請資訊</th><th>Sourcing Status</th><th>建料狀態</th><th>實體料／Symbol缺件判斷</th><th>規格 / 備註</th><th>圖片</th></tr></thead><tbody>${bodyRows}</tbody></table></div>
 <footer class="footer">報表識別：${escapeHtml(snapshot.id)} · 本報表為 ${escapeHtml(formatDateTime(snapshot.dataAsOf))} 的固定查詢快照，不會隨系統後續更新自動改變。</footer>
 </main>
 <div class="image-lightbox" id="image-lightbox" hidden role="dialog" aria-modal="true" aria-label="圖片放大預覽">
