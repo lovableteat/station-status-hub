@@ -1989,3 +1989,18 @@
   .file-library-workspace .test-plan-statusbar > :nth-child(2), .file-library-workspace .test-plan-statusbar > :nth-child(3) { display: none; }
   .file-library-filter-chips { padding-inline: 12px; }
 }
+
+/* Drag and drop: entries are draggable (to folders, breadcrumbs, the tree, or the desktop); folders light up as targets. */
+.file-library-workspace :is(.test-plan-list-row, .test-plan-entry-card)[draggable="true"] { cursor: grab; }
+.file-library-workspace :is(.test-plan-list-row, .test-plan-entry-card)[draggable="true"]:active { cursor: grabbing; }
+.file-library-workspace .test-plan-list-row { min-height: 46px; }
+.file-library-workspace .test-plan-list-row .test-plan-list-name strong { font-size: 13px; color: hsl(var(--foreground)); }
+.file-library-workspace .test-plan-list-row > button[aria-label="開啟項目操作"] { opacity: .55; transition: opacity 120ms ease; }
+.file-library-workspace .test-plan-list-row:is(:hover, :focus-within, .is-selected) > button[aria-label="開啟項目操作"] { opacity: 1; }
+.file-library-workspace :is(.test-plan-list-row, .test-plan-entry-card, .test-plan-folder-tree-row, .test-plan-folder-tree-item, .test-plan-location button).is-drop-target { outline: 2px dashed hsl(var(--primary)); outline-offset: -2px; background: hsl(var(--primary) / .16); }
+.file-library-workspace .test-plan-location button.is-drop-target { border-radius: 8px; }
+.file-library-bulk-tools { min-height: 36px; padding-block: 0 6px; }
+.file-library-bulk-tools .file-library-select-all { min-height: 32px; }
+.file-library-bulk-tools button { min-height: 32px; }
+.file-library-drag-hint { margin-left: auto; color: hsl(var(--muted-foreground)); font-size: 11px; }
+@media (max-width: 767px) { .file-library-drag-hint { display: none; } }

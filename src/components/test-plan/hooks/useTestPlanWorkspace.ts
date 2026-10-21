@@ -549,6 +549,11 @@ export function useTestPlanWorkspace(
     [repository],
   );
 
+  const getFileDownloadUrl = useCallback(
+    async (file: TestPlanFileRecord) => repository.getFileDownloadUrl(file),
+    [repository],
+  );
+
   const replaceFileContents = useCallback(
     (file: TestPlanFileRecord, contents: Blob) =>
       runMutation(async () => {
@@ -591,6 +596,7 @@ export function useTestPlanWorkspace(
     deleteFile,
     deleteEntries,
     downloadFile,
+    getFileDownloadUrl,
     replaceFileContents,
   };
 }
