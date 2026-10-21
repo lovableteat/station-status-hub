@@ -1823,3 +1823,18 @@ body {
   .workspace-entrance-card, .workspace-entrance-mobile-row { transition: none; }
   .workspace-entrance-card.interactive-lift:hover, .workspace-entrance-card.interactive-lift:active, .workspace-entrance-mobile-row:active { transform: none; }
 }
+
+/* 待處理料: the header button glows and stale rows blink until the part number arrives. */
+@keyframes material-attention {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(251 113 133 / 0); }
+  50% { box-shadow: 0 0 0 4px rgb(251 113 133 / 0.45); }
+}
+.material-attention { animation: material-attention 1.4s ease-in-out infinite; }
+@keyframes material-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+.material-blink { animation: material-blink 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .material-attention, .material-blink { animation: none; }
+}

@@ -109,6 +109,7 @@ import {
   type BomPageTracker,
   type BomPageTrackerPage,
   type BomPageTrackerStatus,
+  type BomRecordSyncMeta,
   type BomStorageMode,
   type BomWorkspace,
   type BomWorkspaceLoadResult,
@@ -2835,10 +2836,25 @@ function BomPageTrackerDialog({
   );
 }
 
+const STALE_PENDING_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** Latest change on any record of the group: a saved edit or a tracking entry. Zero when nothing is dated. */
+function getPendingGroupUpdatedAt(group: MaterialGroup, recordMeta?: Record<string, BomRecordSyncMeta>) {
+  let latest = 0;
+  for (const record of group.records) {
+    for (const value of [recordMeta?.[record.id]?.updatedAt, ...(record.trackingHistory ?? []).map((entry) => entry.createdAt)]) {
+      const time = value ? new Date(value).getTime() : 0;
+      if (Number.isFinite(time) && time > latest) latest = time;
+    }
+  }
+  return latest;
+}
+
 function PendingMaterialsDialog({
   canEdit,
   groups,
   open,
+  recordMeta,
   onLocate,
   onOpenChange,
   onOpenCreate,
@@ -2847,6 +2863,7 @@ function PendingMaterialsDialog({
   canEdit: boolean;
   groups: MaterialGroup[];
   open: boolean;
+  recordMeta?: Record<string, BomRecordSyncMeta>;
   onLocate: (group: MaterialGroup) => void;
   onOpenChange: (open: boolean) => void;
   onOpenCreate: (group: MaterialGroup) => void;
@@ -2873,7 +2890,10 @@ function PendingMaterialsDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const priorityCount = categories.filter((category) => category.priority).reduce((sum, category) => sum + category.groups.length, 0);
-  const description = `共 ${groups.length.toLocaleString()} 筆料號待補 · CONNECTOR 與 IC 優先 ${priorityCount.toLocaleString()} 筆 · 其餘依位號分類`;
+  const staleThreshold = Date.now() - STALE_PENDING_MS;
+  const isStale = (group: MaterialGroup) => getPendingGroupUpdatedAt(group, recordMeta) < staleThreshold;
+  const staleCount = groups.filter(isStale).length;
+  const description = `共 ${groups.length.toLocaleString()} 筆料號待補 · CONNECTOR 與 IC 優先 ${priorityCount.toLocaleString()} 筆 · ${staleCount.toLocaleString()} 筆逾 3 天未更新`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2929,12 +2949,15 @@ function PendingMaterialsDialog({
             ...category.groups.map((group) => {
               const record = group.primaryRecord;
               const trackingStatus = record.trackingStatus?.trim() || "";
+              const stale = isStale(group);
               return (
-                <div key={group.key} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background/40 px-2.5 py-1 hover:bg-accent/40">
+                <div key={group.key} className={cn("flex flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
+                  <span className={cn("h-2 w-2 flex-none rounded-full", stale ? "material-blink bg-destructive" : "bg-muted-foreground/40")} aria-hidden="true" />
                   <span className="w-[7.5rem] flex-none truncate font-mono text-xs font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
                   <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={group.name}>{group.name || "未命名料件"}</span>
                   <span className="hidden w-[11rem] flex-none truncate font-mono text-xs text-muted-foreground md:block" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
                   <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(trackingStatus))}>{trackingStatus || "未追蹤"}</span>
+                  {stale && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)} title="還沒取得料號，且超過 3 天沒有更新資料">逾 3 天未更新</span>}
                   <div className="ml-auto flex flex-none items-center gap-1">
                     <Button type="button" variant="ghost" size="sm" onClick={() => onLocate(group)} className="h-7 px-2 text-xs">定位</Button>
                     <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onOpenTracking(record)} className="h-7 px-2 text-xs">追蹤</Button>
@@ -3212,7 +3235,7 @@ function MaterialRecordDialog({
             </div>
             <div className="space-y-1">
               <MaterialFieldLabel field="partNumber" htmlFor="material-internal-pn" label="實體料號" />
-              <Input id="material-internal-pn" disabled={readOnly} value={form.partNumber} onChange={(event) => updateField("partNumber", event.target.value)} placeholder="單一廠商、單一 MPN" className={fieldClassName} />
+              <Input id="material-internal-pn" disabled={readOnly} value={form.partNumber} onChange={(event) => updateField("partNumber", event.target.value)} placeholder="填入實體料號：單一廠商、單一 MPN" className={cn(fieldClassName, !form.partNumber.trim() && !readOnly && "!border-warning/70 !bg-warning/10 placeholder:!text-warning")} />
             </div>
             <div className="space-y-1">
               <MaterialFieldLabel field="partName" htmlFor="material-part-name" label="Part Name（公司料名）" />
@@ -5686,6 +5709,7 @@ export function MaterialRequestPage() {
         canEdit={canEdit}
         groups={pendingMaterialGroups}
         open={pendingDialogOpen}
+        recordMeta={activeWorkspace.recordMeta}
         onOpenChange={setPendingDialogOpen}
         onLocate={(group) => {
           setPendingDialogOpen(false);
@@ -5834,7 +5858,7 @@ export function MaterialRequestPage() {
               </Select>
               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
               <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
-              <Button type="button" variant="outline" onClick={() => setPendingDialogOpen(true)} className="h-11 border-rose-300/30 bg-rose-400/10 text-rose-100"><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {requiredApplicationCount.toLocaleString()}</Button>
+              <Button type="button" variant="outline" onClick={() => setPendingDialogOpen(true)} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", requiredApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {requiredApplicationCount.toLocaleString()}</Button>
               <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
               <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
             </div>
@@ -5869,7 +5893,7 @@ export function MaterialRequestPage() {
           </div>
 
           <div data-material-zone="actions" className="ml-auto flex flex-wrap items-center gap-1.5">
-            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={() => setPendingDialogOpen(true)} className="h-8 border-rose-300/40 bg-rose-400/15 px-2.5 text-xs font-bold text-rose-50 hover:border-rose-200/70 hover:bg-rose-400/30 hover:text-white">
+            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={() => setPendingDialogOpen(true)} className={cn("h-8 border-rose-300/40 bg-rose-400/15 px-2.5 text-xs font-bold text-rose-50 hover:border-rose-200/70 hover:bg-rose-400/30 hover:text-white", requiredApplicationCount > 0 && "material-attention")}>
               <TriangleAlert className="mr-1 h-3.5 w-3.5" />待處理料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong>
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-8 border-emerald-300/40 bg-emerald-400/15 px-2.5 text-xs font-bold text-emerald-50 hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">

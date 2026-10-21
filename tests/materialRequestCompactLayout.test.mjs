@@ -217,3 +217,12 @@ test("column filters apply on every click instead of waiting for 確定", () => 
   for (const text of [">只留符合<", ">加入符合<", ">移除符合<", ">全選<", ">清除<", ">完成<"]) assert.ok(popover.includes(text), text);
   assert.match(popover, /onOpenAutoFocus=/);
 });
+
+test("pending parts keep blinking until a part number arrives or data is refreshed", () => {
+  assert.match(source, /const STALE_PENDING_MS = 3 \* 24 \* 60 \* 60 \* 1000;/);
+  const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
+  assert.match(dialog, /stale \? "material-blink bg-destructive"/);
+  assert.match(dialog, />逾 3 天未更新</);
+  assert.match(source, /data-testid="pending-materials-button"[\s\S]{0,400}?requiredApplicationCount > 0 && "material-attention"/);
+  assert.match(source, /id="material-internal-pn"[\s\S]{0,400}?placeholder:!text-warning/);
+});
