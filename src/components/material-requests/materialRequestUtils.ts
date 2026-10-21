@@ -3,6 +3,16 @@ import { MATERIAL_CE_FIELDS, MATERIAL_CE_LEGACY_MEANING_SCHEMAS } from "./materi
 
 type XlsxModule = typeof import("xlsx");
 
+/** A SPEC / datasheet stored in the material-spec-documents bucket; the record keeps only the path and metadata. */
+export interface MaterialSpecDocument {
+  name: string;
+  path: string;
+  mimeType: string;
+  size: number;
+  uploadedAt: string;
+  uploadedBy?: string;
+}
+
 export interface MaterialWorkbookRecord {
   id: string;
   sourceGroupKey?: string;
@@ -35,6 +45,7 @@ export interface MaterialWorkbookRecord {
   schematicPart: string;
   symbolStatus?: string;
   pcbFootprint: string;
+  specDocument?: MaterialSpecDocument;
 }
 
 export type SymbolAvailability = "present" | "missing" | "unknown";
