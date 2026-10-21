@@ -312,3 +312,13 @@ test("信件生成 groups every MPN candidate of the pending parts by manufactur
   assert.match(text, /^主旨：【料號申請】Test BOM · Vendor A 共 1 項\n\n您好，請協助。\n\nVendor A 需申請料號（共 1 項）：\n1\. U9 · IC B · MPN MPN-A1（Qty 2；待確認）$/);
   assert.equal(sections[2].items[0].name, "CAP");
 });
+
+test("mail HTML keeps images and links for the vendor mail but drops scripts; plain text mirrors it", () => {
+  const html = '<p>您好<b>急件</b></p><img src="data:image/png;base64,AAA" alt="logo"><script>alert(1)</script><a href="javascript:evil()" onclick="x()">link</a>';
+  const safe = moduleExports.sanitizeMailHtml(html);
+  assert.match(safe, /<img src="data:image\/png;base64,AAA" alt="logo">/);
+  assert.doesNotMatch(safe, /<script|onclick|javascript:/);
+  assert.equal(moduleExports.mailHtmlToText(html), "您好急件\n\n[圖片：logo]\nlink");
+  const text = moduleExports.renderVendorMailText({ vendor: "V", subject: "S", items: [] }, "開頭", "Vincent\n+886");
+  assert.match(text, /\n\nVincent\n\+886$/);
+});
