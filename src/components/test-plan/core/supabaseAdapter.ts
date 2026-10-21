@@ -568,6 +568,14 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
       throwIfError(error);
       return data;
     },
+    async createDownloadUrl(path, fileName) {
+      const { data, error } = await supabase.storage
+        .from(TEST_PLAN_STORAGE_BUCKET)
+        .createSignedUrl(path, 600, { download: fileName });
+      throwIfError(error);
+      if (!data?.signedUrl) throw new Error("無法建立下載連結。");
+      return data.signedUrl;
+    },
     async removeObjects(paths) {
       if (paths.length === 0) return;
       const { error } = await supabase.storage

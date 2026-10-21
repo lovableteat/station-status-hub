@@ -175,6 +175,32 @@ const SORT_LABELS: Record<TestPlanSort, string> = {
   type: "檔案類型",
 };
 
+const ENTRY_DRAG_TYPE = "application/x-test-plan-entry";
+
+interface EntryDragPayload {
+  kind: TestPlanEntry["kind"];
+  id: string;
+  spaceId: string;
+  folderId: string | null;
+}
+
+function readEntryDragPayload(dataTransfer: DataTransfer | null): EntryDragPayload | null {
+  if (!dataTransfer) return null;
+  try {
+    const raw = dataTransfer.getData(ENTRY_DRAG_TYPE);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<EntryDragPayload>;
+    if (!parsed.id || !parsed.spaceId || (parsed.kind !== "file" && parsed.kind !== "folder")) return null;
+    return { kind: parsed.kind, id: parsed.id, spaceId: parsed.spaceId, folderId: parsed.folderId ?? null };
+  } catch {
+    return null;
+  }
+}
+
+function isEntryDrag(dataTransfer: DataTransfer | null) {
+  return Boolean(dataTransfer && Array.from(dataTransfer.types).includes(ENTRY_DRAG_TYPE));
+}
+
 function FileCategoryIcon({
   category,
   className,
@@ -201,6 +227,10 @@ function FolderBranch({
   expandedFolderIds,
   onOpen,
   onToggle,
+  dropTargetId = null,
+  onDragOverFolder,
+  onDropOnFolder,
+  onDragLeaveFolder,
   level = 0,
 }: {
   folders: readonly TestPlanFolder[];
@@ -210,6 +240,10 @@ function FolderBranch({
   expandedFolderIds: ReadonlySet<string>;
   onOpen: (folderId: string) => void;
   onToggle: (folderId: string) => void;
+  dropTargetId?: string | null;
+  onDragOverFolder?: (folderId: string, event: DragEvent<HTMLElement>) => void;
+  onDropOnFolder?: (folderId: string, event: DragEvent<HTMLElement>) => void;
+  onDragLeaveFolder?: () => void;
   level?: number;
 }) {
   const children = folders
@@ -236,8 +270,12 @@ function FolderBranch({
               className={cn(
                 "test-plan-folder-tree-row",
                 isActive && "is-active",
+                dropTargetId === folder.id && "is-drop-target",
               )}
               style={{ paddingLeft: `${level * 14}px` }}
+              onDragOver={(event) => onDragOverFolder?.(folder.id, event)}
+              onDragLeave={() => onDragLeaveFolder?.()}
+              onDrop={(event) => onDropOnFolder?.(folder.id, event)}
             >
               {hasChildren ? (
                 <button
@@ -285,6 +323,10 @@ function FolderBranch({
                 expandedFolderIds={expandedFolderIds}
                 onOpen={onOpen}
                 onToggle={onToggle}
+                dropTargetId={dropTargetId}
+                onDragOverFolder={onDragOverFolder}
+                onDropOnFolder={onDropOnFolder}
+                onDragLeaveFolder={onDragLeaveFolder}
                 level={level + 1}
               />
             )}
@@ -537,6 +579,7 @@ export function TestPlanWorkspace() {
     moveFile,
     updateFileDescription,
     downloadFile,
+    getFileDownloadUrl,
     deleteFile,
     deleteEntries,
     replaceFileContents,
@@ -545,6 +588,8 @@ export function TestPlanWorkspace() {
   const { query, setQuery, categoryFilter, setCategoryFilter, sort, setSort, clearFilters } = useFileLibraryFilters();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [isDragging, setIsDragging] = useState(false);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const downloadUrlCacheRef = useRef(new Map<string, { url: string; expiresAt: number }>());
   const [retryState, setRetryState] = useState<UploadRetry | null>(() => retainedUploadRetry);
   const uploadRetry = retryState?.ownerId === ownerId ? retryState : null;
   const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
@@ -745,9 +790,104 @@ export function TestPlanWorkspace() {
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
+    const payload = readEntryDragPayload(event.dataTransfer);
+    if (payload) {
+      // An entry dropped on the open area (not on a folder) goes to the folder being viewed.
+      void moveDraggedEntry(payload, activeFolderId);
+      return;
+    }
     if (busy || uploadRetry) return;
     void handleUpload(Array.from(event.dataTransfer.files));
   };
+
+  // Drag to desktop: Chrome/Edge read a "DownloadURL" entry on dragstart, which must be
+  // synchronous, so the signed link is fetched ahead of time when the row is hovered or focused.
+  const prefetchDownloadUrl = (file: TestPlanFileRecord) => {
+    const cached = downloadUrlCacheRef.current.get(file.id);
+    if (cached && cached.expiresAt > Date.now()) return;
+    downloadUrlCacheRef.current.set(file.id, { url: "", expiresAt: Date.now() + 15_000 });
+    void getFileDownloadUrl(file)
+      .then((url) => {
+        if (url) downloadUrlCacheRef.current.set(file.id, { url, expiresAt: Date.now() + 8 * 60_000 });
+        else downloadUrlCacheRef.current.delete(file.id);
+      })
+      .catch(() => downloadUrlCacheRef.current.delete(file.id));
+  };
+
+  const handleEntryDragStart = (entry: TestPlanEntry, event: DragEvent<HTMLElement>) => {
+    if (busy || loading) { event.preventDefault(); return; }
+    const payload: EntryDragPayload = {
+      kind: entry.kind,
+      id: entry.id,
+      spaceId: entry.spaceId,
+      folderId: entry.kind === "folder" ? entry.parentId : entry.folderId,
+    };
+    event.dataTransfer.setData(ENTRY_DRAG_TYPE, JSON.stringify(payload));
+    event.dataTransfer.setData("text/plain", entryName(entry));
+    event.dataTransfer.effectAllowed = canEditSpace(entry.spaceId) ? "copyMove" : "copy";
+    if (entry.kind === "file") {
+      const cached = downloadUrlCacheRef.current.get(entry.id);
+      if (cached?.url) {
+        event.dataTransfer.setData("DownloadURL", `${entry.mimeType || "application/octet-stream"}:${entry.originalName}:${cached.url}`);
+        event.dataTransfer.setData("text/uri-list", cached.url);
+      }
+    }
+  };
+
+  const canDropOnFolder = (payload: EntryDragPayload, targetFolderId: string | null) => {
+    if (!canEditSpace(payload.spaceId)) return false;
+    if (payload.folderId === targetFolderId) return false;
+    const targetFolder = targetFolderId ? folders.find((folder) => folder.id === targetFolderId) : null;
+    if (targetFolderId && (!targetFolder || targetFolder.spaceId !== payload.spaceId)) return false;
+    if (targetFolderId === null && activeSpaceId !== payload.spaceId) return false;
+    if (payload.kind === "folder" && targetFolderId && (targetFolderId === payload.id || isFolderDescendant(folders, targetFolderId, payload.id))) return false;
+    return true;
+  };
+
+  const handleFolderDragOver = (targetFolderId: string | null, event: DragEvent<HTMLElement>) => {
+    if (!isEntryDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    setDropTargetId(targetFolderId ?? "__root__");
+  };
+
+  const moveDraggedEntry = async (payload: EntryDragPayload, targetFolderId: string | null) => {
+    setDropTargetId(null);
+    if (busy || loading || !canDropOnFolder(payload, targetFolderId)) return;
+    try {
+      if (payload.kind === "folder") await moveFolder(payload.id, targetFolderId);
+      else await moveFile(payload.id, targetFolderId);
+      const targetName = targetFolderId ? folders.find((folder) => folder.id === targetFolderId)?.name ?? "資料夾" : "根目錄";
+      toast.success(`已搬移到「${targetName}」`);
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : "搬移失敗");
+    }
+  };
+
+  const handleFolderDrop = (targetFolderId: string | null, event: DragEvent<HTMLElement>) => {
+    const payload = readEntryDragPayload(event.dataTransfer);
+    if (!payload) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    void moveDraggedEntry(payload, targetFolderId);
+  };
+
+  const entryDragProps = (entry: TestPlanEntry) => ({
+    draggable: !busy && !loading,
+    onDragStart: (event: DragEvent<HTMLElement>) => handleEntryDragStart(entry, event),
+    onDragEnd: () => setDropTargetId(null),
+    onPointerEnter: entry.kind === "file" ? () => prefetchDownloadUrl(entry) : undefined,
+    onFocus: entry.kind === "file" ? () => prefetchDownloadUrl(entry) : undefined,
+    ...(entry.kind === "folder"
+      ? {
+          onDragOver: (event: DragEvent<HTMLElement>) => handleFolderDragOver(entry.id, event),
+          onDragLeave: () => setDropTargetId((current) => (current === entry.id ? null : current)),
+          onDrop: (event: DragEvent<HTMLElement>) => handleFolderDrop(entry.id, event),
+        }
+      : {}),
+  });
 
   const handleTextSubmit = async (value: string) => {
     if (!textAction) return;
@@ -875,6 +1015,11 @@ export function TestPlanWorkspace() {
     setSelectedEntryKey(`${entry.kind}:${entry.id}`);
   };
 
+  const requestEntryDelete = (entry: TestPlanEntry) => {
+    if (busy || loading) return;
+    setDeleteAction(entry.kind === "folder" ? { kind: "folder", id: entry.id, name: entry.name } : { kind: "file", file: entry });
+  };
+
   const renderEntryActions = (entry: TestPlanEntry) => (
     <EntryActions
       entry={entry}
@@ -951,7 +1096,7 @@ export function TestPlanWorkspace() {
       <input ref={folderInputRef} className="sr-only" type="file" multiple {...directoryInputProps} disabled={!canEdit || loading || busy || Boolean(uploadRetry)} aria-label="選擇上傳資料夾" onChange={handleFolderSelection} />
       <p className="file-library-upload-hint">
         {activeSpaceId === null ? "在所有檔案上傳時，檔案會放入你的個人空間。" : `目前空間：${activeSpace?.name ?? "載入中"}。`}
-        {"資料夾保留原有層級，同名檔案會略過；空資料夾無法由瀏覽器選取"}
+        {"資料夾保留原有層級，同名檔案會略過；空資料夾無法由瀏覽器選取。清單裡的檔案可以直接拖到桌面或檔案總管存檔（Chrome／Edge），也可以拖到左側資料夾或麵包屑搬移。"}
       </p>
       {uploadRetry && (
         <section className="file-library-upload-errors" role="alert" aria-label="上傳失敗清單">
@@ -1064,12 +1209,16 @@ export function TestPlanWorkspace() {
                   "test-plan-folder-tree-item",
                   "test-plan-folder-tree-root",
                   activeFolderId === null && "is-active",
+                  dropTargetId === "__root__" && "is-drop-target",
                 )}
                 onClick={() => {
                   setActiveFolderId(null);
                   setSelectedEntryKey(null);
                   setIsSpaceDrawerOpen(false);
                 }}
+                onDragOver={(event) => handleFolderDragOver(null, event)}
+                onDragLeave={() => setDropTargetId((current) => (current === "__root__" ? null : current))}
+                onDrop={(event) => handleFolderDrop(null, event)}
               >
                 <FolderOpen className="h-4 w-4" />
                 <span>全部檔案</span>
@@ -1092,6 +1241,10 @@ export function TestPlanWorkspace() {
                     else next.add(folderId);
                     return next;
                   })}
+                dropTargetId={dropTargetId}
+                onDragOverFolder={handleFolderDragOver}
+                onDropOnFolder={handleFolderDrop}
+                onDragLeaveFolder={() => setDropTargetId(null)}
               />
             </div>
           )}
@@ -1146,10 +1299,14 @@ export function TestPlanWorkspace() {
                 <div className="test-plan-location">
                   <button
                     type="button"
+                    className={cn(dropTargetId === "__root__" && "is-drop-target")}
                     onClick={() => {
                       setActiveFolderId(null);
                       setSelectedEntryKey(null);
                     }}
+                    onDragOver={(event) => activeSpaceId && handleFolderDragOver(null, event)}
+                    onDragLeave={() => setDropTargetId((current) => (current === "__root__" ? null : current))}
+                    onDrop={(event) => handleFolderDrop(null, event)}
                   >
                     {activeSpace?.name ?? "所有檔案"}
                   </button>
@@ -1158,10 +1315,14 @@ export function TestPlanWorkspace() {
                       <ChevronRight className="h-3.5 w-3.5" />
                       <button
                         type="button"
+                        className={cn(dropTargetId === folder.id && "is-drop-target")}
                         onClick={() => {
                           setActiveFolderId(folder.id);
                           setSelectedEntryKey(null);
                         }}
+                        onDragOver={(event) => handleFolderDragOver(folder.id, event)}
+                        onDragLeave={() => setDropTargetId((current) => (current === folder.id ? null : current))}
+                        onDrop={(event) => handleFolderDrop(folder.id, event)}
                       >
                         {folder.name}
                       </button>
@@ -1190,9 +1351,10 @@ export function TestPlanWorkspace() {
                   if (context.disabled || context.scope !== selectionScope) return;
                   setCheckedState({ scope: context.scope, keys: new Set(event.target.checked ? context.eligible.keys() : []) });
                 }} /><span>全選目前清單</span></label>
-                <span className="file-library-selection-count" role="status">已勾選 {checkedEntries.length} 項</span>
+                <span className="file-library-selection-count" role="status">{checkedEntries.length > 0 ? `已勾選 ${checkedEntries.length} 項` : `${eligibleEntries.length} 個可整理項目`}</span>
                 {checkedEntries.length > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => setCheckedState({ scope: selectionScope, keys: new Set() })}>取消勾選</Button>}
                 <Button variant="outline" size="sm" className="file-library-bulk-delete" disabled={busy || loading || !checkedEntries.length} onClick={() => setDeleteAction({ kind: "batch", entries: checkedEntries, scope: selectionScope })}><Trash2 />刪除已選項目</Button>
+                <span className="file-library-drag-hint">拖曳檔案到資料夾可搬移；拖到桌面或檔案總管可直接存檔</span>
               </div>
               <div className="test-plan-filterbar">
                 <label className="test-plan-search">
@@ -1302,9 +1464,13 @@ export function TestPlanWorkspace() {
                 )}
                 onDragEnter={(event) => {
                   event.preventDefault();
+                  if (isEntryDrag(event.dataTransfer)) return;
                   if (canEdit && !loading && !busy && !uploadRetry) setIsDragging(true);
                 }}
-                onDragOver={(event) => event.preventDefault()}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (isEntryDrag(event.dataTransfer)) event.dataTransfer.dropEffect = "move";
+                }}
                 onDragLeave={(event) => {
                   if (!event.currentTarget.contains(event.relatedTarget as Node)) {
                     setIsDragging(false);
@@ -1345,6 +1511,7 @@ export function TestPlanWorkspace() {
                           "test-plan-entry-card",
                           selectedEntryKey === `${entry.kind}:${entry.id}` && "is-selected",
                           checkedKeys.has(entryKey(entry)) && "is-checked",
+                          entry.kind === "folder" && dropTargetId === entry.id && "is-drop-target",
                         )}
                         tabIndex={0}
                         aria-selected={selectedEntryKey === `${entry.kind}:${entry.id}`}
@@ -1353,7 +1520,9 @@ export function TestPlanWorkspace() {
                         onKeyDown={(event) => {
                           if (event.target !== event.currentTarget) return;
                           if (event.key === "Enter") openEntry(entry);
+                          if (event.key === "Delete" && canEditSpace(entry.spaceId)) requestEntryDelete(entry);
                         }}
+                        {...entryDragProps(entry)}
                       >
                         {renderEntryCheckbox(entry)}
                         <div
@@ -1401,6 +1570,7 @@ export function TestPlanWorkspace() {
                           "test-plan-list-row",
                           selectedEntryKey === `${entry.kind}:${entry.id}` && "is-selected",
                           checkedKeys.has(entryKey(entry)) && "is-checked",
+                          entry.kind === "folder" && dropTargetId === entry.id && "is-drop-target",
                         )}
                         tabIndex={0}
                         aria-selected={selectedEntryKey === `${entry.kind}:${entry.id}`}
@@ -1409,7 +1579,9 @@ export function TestPlanWorkspace() {
                         onKeyDown={(event) => {
                           if (event.target !== event.currentTarget) return;
                           if (event.key === "Enter") openEntry(entry);
+                          if (event.key === "Delete" && canEditSpace(entry.spaceId)) requestEntryDelete(entry);
                         }}
+                        {...entryDragProps(entry)}
                       >
                         <span className="test-plan-list-name">
                           {renderEntryCheckbox(entry)}

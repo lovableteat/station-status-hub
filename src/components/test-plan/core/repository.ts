@@ -78,6 +78,8 @@ export interface TestPlanDataAdapter {
   ): Promise<TestPlanFileRecord>;
   deleteFile(fileId: string): Promise<void>;
   downloadObject(path: string): Promise<Blob>;
+  /** Short-lived direct link (for drag-to-desktop); adapters without one fall back to a blob download. */
+  createDownloadUrl?(path: string, fileName: string): Promise<string>;
   removeObjects(paths: string[]): Promise<void>;
   listCleanupPaths(ownerId: string): Promise<string[]>;
   queueCleanupPath(ownerId: string, path: string): Promise<void>;
@@ -375,6 +377,10 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
     },
     downloadFile(file: TestPlanFileRecord) {
       return adapter.downloadObject(file.storagePath);
+    },
+    async getFileDownloadUrl(file: TestPlanFileRecord) {
+      if (!adapter.createDownloadUrl) return null;
+      return adapter.createDownloadUrl(file.storagePath, file.originalName);
     },
     async replaceFileContents(file: TestPlanFileRecord, contents: Blob) {
       const mimeType = contents.type || file.mimeType || "application/octet-stream";
