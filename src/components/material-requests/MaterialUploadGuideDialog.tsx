@@ -10,8 +10,8 @@ import {
 } from "./materialUploadContract.mjs";
 
 export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const templateUrl = `${import.meta.env.BASE_URL}material-upload-template.xlsx`;
-  const referenceUrl = `${import.meta.env.BASE_URL}material-ce-reference.xlsx`;
+  const templateUrl = `${import.meta.env.BASE_URL}material-upload-template.xlsx?v=${MATERIAL_HANDOFF_VERSION}`;
+  const referenceUrl = `${import.meta.env.BASE_URL}material-ce-reference.xlsx?v=${MATERIAL_HANDOFF_VERSION}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
