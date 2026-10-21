@@ -35,12 +35,15 @@ export function getMaterialExportScopeLabel(activeFilters: string[]) {
 }
 
 export function resizeMaterialColumnWidths({
+  adjacentIndex: adjacentIndexOverride,
   index,
   maxWidths,
   minWidths,
   requestedWidth,
   widths,
 }: {
+  /** Column that gives up width; defaults to the next column. Pass the next *visible* column when some are hidden; -1 means none. */
+  adjacentIndex?: number;
   index: number;
   maxWidths: number[];
   minWidths: number[];
@@ -54,9 +57,9 @@ export function resizeMaterialColumnWidths({
     maxWidths[index] ?? Number.POSITIVE_INFINITY,
     Math.max(minWidths[index] ?? 0, requestedWidth),
   );
-  const adjacentIndex = index + 1;
+  const adjacentIndex = adjacentIndexOverride ?? index + 1;
 
-  if (adjacentIndex >= widths.length) {
+  if (adjacentIndex <= index || adjacentIndex >= widths.length) {
     next[index] = targetWidth;
     return next;
   }
@@ -148,4 +151,41 @@ export function shouldApplyBomWorkspaceCache({
     && currentRequest
     && !remoteSettled
     && hasRenderableBomWorkspaceCache(result, preferredWorkspaceId);
+}
+
+export const MATERIAL_TABLE_COLUMNS = [
+  { key: "item", label: "Item", locked: false },
+  { key: "marked", label: "標記", locked: false },
+  { key: "material", label: "主料 / 廠商", locked: true },
+  { key: "refDes", label: "REF DES", locked: false },
+  { key: "mpn", label: "MPN", locked: false },
+  { key: "internal", label: "內部料號 / 圖面", locked: false },
+  { key: "tx", label: "TX", locked: false },
+  { key: "status", label: "狀態", locked: false },
+  { key: "tracking", label: "狀態追蹤", locked: false },
+  { key: "actions", label: "資料更新", locked: true },
+] as const;
+
+export type MaterialTableColumnKey = (typeof MATERIAL_TABLE_COLUMNS)[number]["key"];
+
+/**
+ * Keeps only known, hideable column keys so a stale or edited preference can
+ * never hide the material or action columns.
+ */
+export function normalizeHiddenMaterialColumns(value: unknown): MaterialTableColumnKey[] {
+  if (!Array.isArray(value)) return [];
+  const hideable = new Set<string>(
+    MATERIAL_TABLE_COLUMNS.filter((column) => !column.locked).map((column) => column.key),
+  );
+  return Array.from(new Set(
+    value.filter((key): key is MaterialTableColumnKey => typeof key === "string" && hideable.has(key)),
+  ));
+}
+
+export function getMaterialTableWidth(widths: readonly number[], hiddenColumns: readonly string[]) {
+  const hidden = new Set(hiddenColumns);
+  return MATERIAL_TABLE_COLUMNS.reduce(
+    (total, column, index) => (hidden.has(column.key) ? total : total + (widths[index] ?? 0)),
+    0,
+  );
 }

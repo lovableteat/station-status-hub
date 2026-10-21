@@ -4,7 +4,10 @@ const MOBILE_BREAKPOINT = 768
 const COMPACT_LAYOUT_BREAKPOINT = 1024
 
 function useMediaQuery(query: string) {
-  const [matches, setMatches] = React.useState(false)
+  // Start from the real viewport so compact layouts do not render the desktop tree for one frame.
+  const [matches, setMatches] = React.useState(
+    () => (typeof window !== "undefined" && "matchMedia" in window ? window.matchMedia(query).matches : false),
+  )
 
   React.useEffect(() => {
     const mediaQuery = window.matchMedia(query)
