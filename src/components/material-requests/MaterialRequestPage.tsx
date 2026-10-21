@@ -132,7 +132,7 @@ import type {
   MaterialExportProgress,
   MaterialReportSnapshot,
 } from "./materialRequestExport";
-import { buildVendorMailSections, collectDiscouragedMaterialRows, collectNonPvlPartNumbers, exportDiscouragedMaterialsExcel, exportNonPvlApplyList, exportVendorMailHtml, renderVendorMailText } from "./materialRequestExport";
+import { buildVendorMailSections, collectDiscouragedMaterialRows, collectNonPvlPartNumbers, exportDiscouragedMaterialsExcel, exportNonPvlApplyList, exportVendorMailHtml, mailHtmlToText, renderVendorMailText } from "./materialRequestExport";
 import { MaterialNonPvlDialog } from "./MaterialNonPvlDialog";
 import {
   MATERIAL_TABLE_COLUMNS,
@@ -2890,7 +2890,127 @@ function getPendingGroupUpdatedAt(group: MaterialGroup, recordMeta?: Record<stri
   return latest;
 }
 
-const DEFAULT_VENDOR_MAIL_MESSAGE = "您好，以下料件需要申請料號／取得建料資料（規格書、Symbol、Footprint），再麻煩協助提供，謝謝。";
+const DEFAULT_VENDOR_MAIL_MESSAGE = "<p>您好，以下料件需要申請料號／取得建料資料（規格書、Symbol、Footprint），再麻煩協助提供，謝謝。</p>";
+const VENDOR_MAIL_SIGNATURE_KEY = "station-status-hub:material-mail-signature:v1";
+const VENDOR_MAIL_MESSAGE_KEY = "station-status-hub:material-mail-message:v1";
+
+function loadStoredHtml(key: string, fallback: string) {
+  if (typeof window === "undefined") return fallback;
+  try {
+    return window.localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function storeHtml(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch { /* storage unavailable */ }
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => (typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("讀取失敗")));
+    reader.onerror = () => reject(new Error("讀取失敗"));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * A small rich editor for mail content: typed text, pasted rich text, pasted or
+ * chosen images (kept inline as data URLs) and links all survive into the HTML.
+ */
+function MailRichEditor({
+  id,
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (html: string) => void;
+}) {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastValueRef = useRef<string>("");
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || value === lastValueRef.current) return;
+    editor.innerHTML = value;
+    lastValueRef.current = value;
+  }, [value]);
+
+  const emit = () => {
+    const html = editorRef.current?.innerHTML ?? "";
+    lastValueRef.current = html;
+    onChange(html);
+  };
+  const exec = (command: string, argument?: string) => {
+    editorRef.current?.focus();
+    document.execCommand(command, false, argument);
+    emit();
+  };
+  const insertImages = async (files: File[]) => {
+    const images = files.filter((file) => file.type.startsWith("image/"));
+    if (images.length === 0) return;
+    editorRef.current?.focus();
+    for (const file of images) {
+      const dataUrl = await readFileAsDataUrl(file);
+      document.execCommand("insertHTML", false, `<img src="${dataUrl}" alt="${file.name.replace(/"/g, "")}" style="max-width:100%;height:auto;">`);
+    }
+    emit();
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Label htmlFor={id} className="text-base font-semibold text-foreground">{label}</Label>
+        <span className="text-sm text-foreground/70">{hint}</span>
+        <div className="ml-auto flex items-center gap-1">
+          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => exec("bold")} className="h-8 px-2 text-sm font-black" title="粗體">B</Button>
+          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => exec("underline")} className="h-8 px-2 text-sm underline" title="底線">U</Button>
+          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => exec("insertUnorderedList")} className="h-8 px-2 text-sm" title="項目符號">• 清單</Button>
+          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => { const url = window.prompt("連結網址"); if (url) exec("createLink", url); }} className="h-8 px-2 text-sm" title="插入連結">連結</Button>
+          <Button type="button" variant="secondary" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => fileInputRef.current?.click()} className="h-8 px-2 text-sm" title="插入圖片（也可直接貼上或拖進來）"><ImagePlus className="mr-1 h-4 w-4" />圖片</Button>
+          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => { if (editorRef.current) { editorRef.current.innerHTML = ""; emit(); } }} className="h-8 px-2 text-sm text-destructive hover:text-destructive" title="清空">清空</Button>
+        </div>
+      </div>
+      <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void insertImages(files); }} />
+      <div
+        ref={editorRef}
+        id={id}
+        role="textbox"
+        aria-multiline="true"
+        aria-label={label}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={emit}
+        onBlur={emit}
+        onPaste={(event) => {
+          const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith("image/"));
+          if (files.length > 0) {
+            event.preventDefault();
+            void insertImages(files);
+          }
+        }}
+        onDrop={(event) => {
+          const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => file.type.startsWith("image/"));
+          if (files.length > 0) {
+            event.preventDefault();
+            void insertImages(files);
+          }
+        }}
+        className="material-mail-editor min-h-[8rem] rounded-xl border border-input bg-secondary/60 px-4 py-3 text-base leading-7 text-foreground outline-none focus-visible:border-primary/70 focus-visible:ring-2 focus-visible:ring-ring/35 [&_a]:text-primary [&_a]:underline [&_img]:my-2 [&_img]:max-h-72 [&_img]:max-w-full [&_img]:rounded-lg [&_ul]:list-disc [&_ul]:pl-6"
+      />
+    </div>
+  );
+}
 
 function PendingMailDialog({
   groups,
@@ -2905,16 +3025,22 @@ function PendingMailDialog({
   exportedBy: string;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [message, setMessage] = useState(DEFAULT_VENDOR_MAIL_MESSAGE);
+  const [messageHtml, setMessageHtml] = useState(() => loadStoredHtml(VENDOR_MAIL_MESSAGE_KEY, DEFAULT_VENDOR_MAIL_MESSAGE));
+  const [signatureHtml, setSignatureHtml] = useState(() => loadStoredHtml(VENDOR_MAIL_SIGNATURE_KEY, ""));
   const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
   const sections = useMemo(() => buildVendorMailSections(groups, workspaceName), [groups, workspaceName]);
   const itemCount = sections.reduce((sum, section) => sum + section.items.length, 0);
+  const message = useMemo(() => mailHtmlToText(messageHtml), [messageHtml]);
+  const signature = useMemo(() => mailHtmlToText(signatureHtml), [signatureHtml]);
+  // The opening text and signature are personal boilerplate, so they persist in this browser.
+  useEffect(() => { storeHtml(VENDOR_MAIL_MESSAGE_KEY, messageHtml); }, [messageHtml]);
+  useEffect(() => { storeHtml(VENDOR_MAIL_SIGNATURE_KEY, signatureHtml); }, [signatureHtml]);
 
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const fileName = await exportVendorMailHtml({ sections, message, workspaceName, exportedBy });
+      const fileName = await exportVendorMailHtml({ sections, messageHtml, signatureHtml, workspaceName, exportedBy });
       toast({ title: "信件 HTML 已產生", description: `${sections.length} 家廠商 · ${itemCount} 項 · ${fileName}，開啟後每家按「複製」即可貼到郵件群發。` });
     } catch (error) {
       toast({ title: "信件生成失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
@@ -2925,15 +3051,15 @@ function PendingMailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="pending-mail-dialog" className="flex max-h-[92vh] max-w-4xl flex-col gap-4 overflow-hidden p-5 text-base sm:p-7">
+      <DialogContent data-testid="pending-mail-dialog" className="flex max-h-[94vh] w-[min(92vw,1400px)] max-w-[min(92vw,1400px)] flex-col gap-4 overflow-hidden p-5 text-base sm:p-7">
         <DialogHeader>
           <DialogTitle className="text-xl">信件生成</DialogTitle>
           <DialogDescription>把目前 {groups.length.toLocaleString()} 筆待處理料整理成每家廠商一封信（共 {sections.length} 家、{itemCount.toLocaleString()} 項），匯出 HTML 後逐家複製貼到郵件即可群發。</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-          <section className="workspace-dialog-section rounded-2xl p-4">
-            <Label htmlFor="pending-mail-message" className="text-base font-semibold text-foreground">信件開頭文字</Label>
-            <Textarea id="pending-mail-message" value={message} onChange={(event) => setMessage(event.target.value)} rows={4} className="mt-2 rounded-xl text-base" placeholder="每封信開頭都會放這段文字" />
+          <section className="workspace-dialog-section space-y-5 rounded-2xl p-4">
+            <MailRichEditor id="pending-mail-message" label="信件開頭" hint="每封信最上方；可貼上圖片、連結、粗體" value={messageHtml} onChange={setMessageHtml} />
+            <MailRichEditor id="pending-mail-signature" label="結尾／簽名檔" hint="每封信最下方；把你的簽名檔連同 logo、banner 貼進來即可，會記住" value={signatureHtml} onChange={setSignatureHtml} />
           </section>
           <section className="workspace-dialog-section rounded-2xl p-4">
             <h3 className="text-base font-semibold text-foreground">廠商分組預覽</h3>
@@ -2947,7 +3073,7 @@ function PendingMailDialog({
                       <strong className="min-w-0 flex-1 truncate text-base text-foreground">{section.vendor}</strong>
                       <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.primary)}>{section.items.length} 項</span>
                     </div>
-                    <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-lg bg-background/40 p-2 font-sans text-sm text-foreground/80">{renderVendorMailText(section, message)}</pre>
+                    <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-lg bg-background/40 p-2 font-sans text-sm text-foreground/80">{renderVendorMailText(section, message, signature)}</pre>
                   </li>
                 ))}
               </ul>
