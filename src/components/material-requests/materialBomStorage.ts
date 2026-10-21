@@ -1,6 +1,7 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
+import { getBomPreferenceWorkspaceId } from "./materialRequestPresentation";
 
 import type { MaterialWorkbookPayload, MaterialWorkbookRecord } from "./materialRequestUtils";
 import {
@@ -124,6 +125,7 @@ const PREFERENCE_KEY_PREFIX = "material-bom-workspace:";
 const PAGE_TRACKER_KEY_PREFIX = "material-bom-page-tracker:";
 const TABLE_COLOR_THEME_KEY_PREFIX = "material-bom-table-color-theme:";
 const PROJECT_KEY_PREFIX = "material-bom-project:";
+const BOM_PREFERENCE_KEY_PREFIXES = [PREFERENCE_KEY_PREFIX, PAGE_TRACKER_KEY_PREFIX, TABLE_COLOR_THEME_KEY_PREFIX, PROJECT_KEY_PREFIX];
 const RECORD_BATCH_SIZE = 200;
 const REMOTE_RECORD_FETCH_BATCH_SIZE = 1000;
 const REMOTE_RECORD_FETCH_CONCURRENCY = 8;
@@ -727,7 +729,7 @@ async function loadRemoteBomWorkspaces(
   preferredWorkspaceId?: string,
   options: BomWorkspaceLoadOptions = {},
 ) {
-  const [workspaceRows, pageTrackerByWorkspace, tableColorThemeByWorkspace, projectByWorkspace] = await Promise.all([
+  const [workspaceRows, pageTrackerByWorkspace, tableColorThemeByWorkspace, loadedProjectByWorkspace] = await Promise.all([
     runBomReadWithRetry(async () => {
       const { data, error } = await supabaseClient
       .from(WORKSPACE_TABLE)
@@ -739,8 +741,12 @@ async function loadRemoteBomWorkspaces(
     }),
     loadPageTrackerMap().catch(() => new Map<string, BomPageTracker>()),
     loadTableColorThemeMap().catch(() => new Map<string, BomTableColorTheme>()),
-    loadProjectMap().catch(() => new Map<string, BomWorkspaceProject>()),
+    loadProjectMap().catch(() => null),
   ]);
+  // An unreadable project map must not regroup every BOM as unassigned (and cache that); keep the cached projects instead.
+  const projectByWorkspace = loadedProjectByWorkspace ?? new Map<string, BomWorkspaceProject>(
+    (options.cachedResult?.workspaces ?? []).flatMap((workspace) => (workspace.project ? [[workspace.id, workspace.project] as const] : [])),
+  );
   const activeWorkspaceId = preferredWorkspaceId && workspaceRows.some((row) => row.id === preferredWorkspaceId)
     ? preferredWorkspaceId
     : workspaceRows[0]?.id;
@@ -896,12 +902,14 @@ async function saveRemoteTableColorTheme(workspaceId: string, tableColorTheme: B
   if (error) throw error;
 }
 
-async function saveRemoteWorkspaceProject(workspaceId: string, project: BomWorkspaceProject) {
+async function saveRemoteWorkspaceProject(workspaceId: string, project: BomWorkspaceProject | null) {
   const { error } = await supabaseClient
     .from(PREFERENCE_TABLE)
     .upsert({
       table_key: getProjectRowKey(workspaceId),
-      column_order: project,
+      // A cleared project is stored as a tombstone rather than deleted: realtime
+      // DELETE payloads carry no table_key, so other clients would never hear it.
+      column_order: project ?? { projectId: "", projectName: "", updatedAt: new Date().toISOString() },
     }, { onConflict: "table_key" });
 
   if (error) throw error;
@@ -1120,12 +1128,6 @@ export async function saveBomWorkspace(workspace: BomWorkspace, assertWrite: () 
     assertWrite();
   }
 
-  if (workspace.project) {
-    assertWrite();
-    await saveRemoteWorkspaceProject(workspace.id, workspace.project);
-    assertWrite();
-  }
-
   const savedWorkspaceRow = await upsertWorkspaceRow(workspace);
   assertWrite();
   await removeLegacyBomWorkspace(workspace.id, assertWrite);
@@ -1237,13 +1239,13 @@ export async function saveBomWorkspaceTableColorTheme(workspaceId: string, table
   void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, tableColorTheme }), assertWrite);
 }
 
+export async function loadBomWorkspaceProjects() {
+  return loadProjectMap();
+}
+
 export async function saveBomWorkspaceProject(workspaceId: string, project: BomWorkspaceProject | null, assertWrite: () => void = () => {}) {
   assertWrite();
-  if (project) {
-    await saveRemoteWorkspaceProject(workspaceId, project);
-  } else {
-    await removeRemoteWorkspaceProject(workspaceId);
-  }
+  await saveRemoteWorkspaceProject(workspaceId, project);
   assertWrite();
   void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, project: project ?? undefined }), assertWrite);
 }
@@ -1302,12 +1304,8 @@ export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChan
     })
     .on("postgres_changes", { event: "*", schema: "workspace", table: PREFERENCE_TABLE }, (payload: RealtimeRowPayload) => {
       const keys = [payload?.new?.table_key, payload?.old?.table_key].filter((value): value is string => typeof value === "string");
-      if (keys.some((value) => value.startsWith(PREFERENCE_KEY_PREFIX) || value.startsWith(PAGE_TRACKER_KEY_PREFIX) || value.startsWith(TABLE_COLOR_THEME_KEY_PREFIX) || value.startsWith(PROJECT_KEY_PREFIX))) {
-        const workspaceId = keys
-          .map((key) => key.split(":").pop())
-          .find(Boolean);
-        emitChange(workspaceId);
-      }
+      const workspaceId = keys.map((key) => getBomPreferenceWorkspaceId(key, BOM_PREFERENCE_KEY_PREFIXES)).find(Boolean);
+      if (workspaceId) emitChange(workspaceId);
     })
     .subscribe();
 

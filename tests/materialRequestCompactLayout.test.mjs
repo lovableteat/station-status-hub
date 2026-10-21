@@ -6,6 +6,7 @@ import { MATERIAL_CE_FIELDS } from "../src/components/material-requests/material
 
 const source = (await readFile(new URL("../src/components/material-requests/MaterialRequestPage.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const presentationSource = await readFile(new URL("../src/components/material-requests/materialRequestPresentation.ts", import.meta.url), "utf8");
+const storageSource = (await readFile(new URL("../src/components/material-requests/materialBomStorage.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const transpiled = ts.transpileModule(presentationSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText;
@@ -159,7 +160,11 @@ test("BOMs are grouped by project in BOM 管理 and in the header switcher", () 
   assert.match(source, /const bomProjectGroups = useMemo\(\s*\(\) => groupBomWorkspacesByProject\(orderedBomWorkspaces, \{ activeProjectId, activeProjectName: activeProject\?\.name, projectNames \}\)/);
   const bomManager = slice("function BomManagerDialog(", "function MaterialRecordDialog(");
   assert.match(bomManager, /projectGroups: BomProjectGroup<BomWorkspace>\[\]/);
-  assert.match(bomManager, /<section key=\{group\.key\} aria-label=\{`專案 \$\{group\.label\}`\}/);
+  assert.match(bomManager, /visibleGroups\.flatMap\(\(group\) => \[/);
+  assert.match(bomManager, /<div key=\{`project:\$\{group\.key\}`\}/);
+  assert.doesNotMatch(bomManager, /<section key=\{group\.key\}/);
+  assert.match(bomManager, /請有編輯權限的同事上傳 Excel 或指定專案/);
+  assert.match(bomManager, /className="h-11 w-\[9\.5rem\] rounded-md px-2 text-xs md:h-7"/);
   assert.match(bomManager, />目前專案</);
   assert.match(bomManager, /onAssignProject\(workspace\.id, value === UNASSIGNED_BOM_PROJECT_VALUE \? null : value\)/);
   assert.match(bomManager, /此專案還沒有 BOM/);
@@ -168,4 +173,21 @@ test("BOMs are grouped by project in BOM 管理 and in the header switcher", () 
   assert.match(desktopHeader, />非目前專案</);
   assert.match(source, /project: existingWorkspace\?\.project \?\? importProject \}/);
   assert.match(source, /saveBomWorkspaceProject\(workspaceId, nextProject, \(\) => assertBomWriteCurrent\(writeScope\)\)/);
+});
+
+test("the project row has one writer and realtime keeps the bom: prefix of workspace ids", () => {
+  const saveWorkspace = storageSource.slice(storageSource.indexOf("export async function saveBomWorkspace("), storageSource.indexOf("export async function saveBomWorkspaceRecord("));
+  assert.doesNotMatch(saveWorkspace, /workspace\.project/);
+  assert.match(storageSource, /column_order: project \?\? \{ projectId: "", projectName: "", updatedAt: new Date\(\)\.toISOString\(\) \}/);
+  assert.match(storageSource, /getBomPreferenceWorkspaceId\(key, BOM_PREFERENCE_KEY_PREFIXES\)/);
+  assert.doesNotMatch(storageSource, /key\.split\(":"\)\.pop\(\)/);
+  assert.match(storageSource, /loadProjectMap\(\)\.catch\(\(\) => null\)/);
+  assert.match(storageSource, /export async function loadBomWorkspaceProjects\(\)/);
+  assert.match(source, /if \(!existingWorkspace && importProject\) \{\s*recentLocalWorkspaceWritesRef\.current\.set\(workspaceId, Date\.now\(\)\);\s*await saveBomWorkspaceProject\(workspaceId, importProject,/);
+  assert.match(source, /if \(!activeProjectId \|\| !workspaceListSettled\) return;/);
+  assert.match(source, /if \(change\.recordIds\.length === 0 && change\.workspaceIds\.length > 0\) void refreshBomProjects\(\);/);
+  assert.match(source, /change\.recordIds\.length === 0 && now - localWorkspaceWriteAt > 5000/);
+  const compactHeader = slice('data-testid="material-mobile-command-center"', 'data-material-zone="overview"');
+  assert.match(compactHeader, /activeWorkspaceProjectLabel/);
+  assert.match(compactHeader, />非目前專案</);
 });
