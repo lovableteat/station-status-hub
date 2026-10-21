@@ -2737,7 +2737,10 @@ function PartUsageStatus({ record }: { record: MaterialRecord }) {
   const text = getMaterialSourceValue(record.partUsageStatus);
   if (text === "未提供") return <span className="block truncate text-[13px] leading-5 text-muted-foreground/70" title="零件狀態：未提供">未提供</span>;
   return (
-    <span className={cn(CHIP_BASE, record.isRisk ? CHIP_TONES.danger : CHIP_TONES.neutral)} title={`零件狀態：${text}`}>
+    <span
+      className={cn(CHIP_BASE, record.isRisk ? CHIP_TONES.danger : CHIP_TONES.neutral)}
+      title={record.partUsageStatusSource === "legacy-tracking" ? `零件狀態（由舊格式的料號追蹤欄帶入）：${text}` : `零件狀態：${text}`}
+    >
       {text}
     </span>
   );
@@ -3327,6 +3330,9 @@ function MaterialRecordDialog({
             <div className="space-y-1">
               <MaterialFieldLabel field="partUsageStatus" htmlFor="material-part-usage" label="零件狀態" />
               <Input id="material-part-usage" disabled={readOnly} value={form.partUsageStatus ?? ""} onChange={(event) => updateField("partUsageStatus", event.target.value)} placeholder="新設計使用限制；不明填待確認" className={fieldClassName} />
+              {(record as Partial<MaterialRecord>).partUsageStatusSource === "legacy-tracking" && (
+                <p className="text-[11px] leading-4 text-muted-foreground">舊格式沒有零件狀態欄，此值取自匯入的料號追蹤首句；儲存後會正式寫入零件狀態。</p>
+              )}
             </div>
           </div>
         </section>

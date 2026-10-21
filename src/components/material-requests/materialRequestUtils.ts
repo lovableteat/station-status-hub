@@ -103,6 +103,8 @@ export interface MaterialRecord extends MaterialWorkbookRecord {
   isPreferred: boolean;
   isApproved: boolean;
   isRisk: boolean;
+  /** Set when 零件狀態 was empty and the value came from the legacy tracking column. */
+  partUsageStatusSource?: "legacy-tracking";
   searchText: string;
 }
 
@@ -219,6 +221,10 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
 const APPROVED_STATUS_WORDS = ["approved", "qualified", "active", "已核准", "合格", "可用", "啟用"];
 const RISK_STATUS_WORDS = ["obsolete", "disqualified", "qualificationpending", "nrnd", "eol", "停產", "淘汰", "禁用", "不建議採用", "認證中"];
 const USAGE_RISK_STATUS_WORDS = [...RISK_STATUS_WORDS, "ODM 不建議用料", "新設計產品不建議使用", "待確認"];
+// Old BOM files had no 零件狀態 column; CE wrote the design-usage restriction into
+// the tracking column instead. Only these phrases count as such a restriction.
+const LEGACY_USAGE_RESTRICTION_WORDS = ["不建議使用", "不建議用料", "禁用"];
+const IMPORTED_TRACKING_ID_PREFIX = "imported-tracking-";
 
 function normalizeText(value: unknown) {
   return String(value ?? "").normalize("NFKC").replace(/\u3000/g, " ").trim();
@@ -440,7 +446,7 @@ function createImportedTrackingHistoryEntry({
   if (!note && !request) return [];
 
   return [{
-    id: `imported-tracking-${sheetName}-${rowIndex + 1}`,
+    id: `${IMPORTED_TRACKING_ID_PREFIX}${sheetName}-${rowIndex + 1}`,
     status: status || "新增追蹤",
     note,
     createdAt: "",
@@ -448,6 +454,22 @@ function createImportedTrackingHistoryEntry({
     requestInfo: request,
     images: [],
   }] satisfies MaterialTrackingHistoryEntry[];
+}
+
+/**
+ * Returns the design-usage restriction a legacy workbook carried in its
+ * tracking column: the first clause of an imported tracking note (never a
+ * manual note) when it names a restriction. Used only while 零件狀態 is empty.
+ */
+export function getLegacyUsageRestriction(trackingHistory: MaterialTrackingHistoryEntry[]) {
+  for (const entry of trackingHistory) {
+    if (!entry.id.startsWith(IMPORTED_TRACKING_ID_PREFIX)) continue;
+    const clause = (normalizeText(entry.note) || normalizeText(entry.status)).split(/[，,；;\r\n]/)[0].trim();
+    if (!clause) continue;
+    const normalized = normalizeHeader(clause);
+    if (LEGACY_USAGE_RESTRICTION_WORDS.some((word) => normalized.includes(normalizeHeader(word)))) return clause;
+  }
+  return "";
 }
 
 export function getTrackingHistory(record: Pick<MaterialWorkbookRecord, "trackingHistory">) {
@@ -599,8 +621,11 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
     raw.pcbFootprint,
   ]).join(" • ");
 
+  const explicitUsageStatus = normalizeText(raw.partUsageStatus);
+  const partUsageStatus = explicitUsageStatus || getLegacyUsageRestriction(trackingHistory);
+  const partUsageStatusSource = !explicitUsageStatus && partUsageStatus ? "legacy-tracking" as const : undefined;
   const normalizedStatus = normalizeHeader(raw.sourcingStatus);
-  const normalizedUsageStatus = normalizeHeader(raw.partUsageStatus);
+  const normalizedUsageStatus = normalizeHeader(partUsageStatus);
   const isPending = actionKind !== "ok" && actionKind !== "other";
   // Symbol was removed from the CE handoff. Keep old imported codes as source
   // data, without letting an invisible legacy column change current readiness.
@@ -618,6 +643,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
     trackingHistory,
     trackingStatus,
     remark,
+    ...(partUsageStatusSource ? { partUsageStatus, partUsageStatusSource } : {}),
     displayRef,
     locationKey,
     locationTokens,
@@ -664,7 +690,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
       raw.remark,
       raw.sourcingStatus,
       raw.phaseOutStatus,
-      raw.partUsageStatus,
+      partUsageStatus,
     ]),
   };
 }

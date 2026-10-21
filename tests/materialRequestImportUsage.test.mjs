@@ -310,3 +310,55 @@ test("RD tracking imports only its own fields when a CE usage restriction is pre
   assert.equal(record.trackingHistory[0].createdBy, "RD owner");
   assert.equal(record.trackingHistory[0].status, "處理中");
 });
+
+test("a legacy workbook's imported tracking restriction fills an empty 零件狀態 without touching the note", async () => {
+  const payload = await importRows(
+    ["Name", "Ref Des", "MPN", "Sourcing Status", "料號追蹤", "EE"],
+    [
+      ["FER BEAD", "LB1", "MPN-1", "Approved", "新設計產品不建議使用 - ODM不建議用料，有symbol", "Sean"],
+      ["IC", "U1", "MPN-2", "Approved", "新設計產品不建議使用 - ODM不建議用料-已申請\r\nSean_0707y26:Symbol已建立", "Sean"],
+      ["CAP", "C1", "MPN-3", "Approved", "6/23開始申請", "Sean"],
+      ["RES", "R1", "MPN-4", "Approved", "", ""],
+    ],
+  );
+  assert.ok(payload.records.every(record => !Object.hasOwn(record, "partUsageStatus")), "import keeps the raw file as-is");
+  const dataset = buildMaterialDataset(payload);
+  assert.equal(dataset.records[0].partUsageStatus, "新設計產品不建議使用 - ODM不建議用料");
+  assert.equal(dataset.records[0].partUsageStatusSource, "legacy-tracking");
+  assert.match(dataset.records[0].trackingNote, /^新設計產品不建議使用 - ODM不建議用料[,，]有symbol$/, "the note itself is untouched (NFKC may fold the comma)");
+  assert.equal(dataset.records[0].isRisk, true);
+  assert.equal(dataset.records[0].isApproved, false);
+  assert.equal(dataset.records[1].partUsageStatus, "新設計產品不建議使用 - ODM不建議用料-已申請");
+  assert.ok(dataset.records[0].searchText.includes("odm不建議用料"));
+  assert.ok(!Object.hasOwn(dataset.records[2], "partUsageStatus"));
+  assert.equal(dataset.records[2].isRisk, false);
+  assert.equal(dataset.records[2].isApproved, true);
+  assert.ok(!Object.hasOwn(dataset.records[3], "partUsageStatus"));
+  assert.equal(dataset.stats.riskRecords, 2);
+});
+
+test("an explicit 零件狀態 and manual tracking notes are never replaced by the legacy fallback", async () => {
+  const payload = await importRows(
+    ["Name", "Ref Des", "MPN", "Sourcing Status", "料號追蹤", "零件狀態"],
+    [
+      ["FER BEAD", "LB1", "MPN-1", "Approved", "新設計產品不建議使用 - ODM不建議用料，有symbol", "可用"],
+      ["IC", "U1", "MPN-2", "Approved", "新設計產品不建議使用 - ODM不建議用料", ""],
+    ],
+  );
+  const explicit = buildMaterialDataset(payload).records[0];
+  assert.equal(explicit.partUsageStatus, "可用");
+  assert.equal(explicit.partUsageStatusSource, undefined);
+  assert.equal(explicit.isRisk, false);
+
+  const manual = {
+    ...payload,
+    records: [{
+      ...payload.records[1],
+      trackingHistory: payload.records[1].trackingHistory.map(entry => ({ ...entry, id: "tracking-1783500916113-manual" })),
+    }],
+  };
+  const manualRecord = buildMaterialDataset(manual).records[0];
+  assert.equal(manualRecord.partUsageStatus, "");
+  assert.equal(manualRecord.partUsageStatusSource, undefined);
+  assert.equal(manualRecord.isRisk, false);
+});
