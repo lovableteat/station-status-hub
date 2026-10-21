@@ -22,8 +22,8 @@ const desktopHeader = slice('data-material-zone="overview"', 'data-testid="mater
 const toolbar = slice('data-testid="material-table-toolbar"', 'data-testid="material-mobile-cards"');
 const filterRow = slice("</ResizableHeader>", "</thead>");
 
-test("the material table has twelve columns and only the material and action columns are locked", () => {
-  assert.equal(presentation.MATERIAL_TABLE_COLUMNS.length, 12);
+test("the material table has eleven columns and only the material and action columns are locked", () => {
+  assert.equal(presentation.MATERIAL_TABLE_COLUMNS.length, 11);
   assert.deepEqual(
     presentation.MATERIAL_TABLE_COLUMNS.filter((column) => column.locked).map((column) => column.key),
     ["material", "actions"],
@@ -37,19 +37,19 @@ test("hidden column preferences drop unknown, locked, and duplicate keys", () =>
 });
 
 test("the table width only counts visible columns", () => {
-  const widths = [96, 92, 260, 160, 260, 210, 190, 180, 160, 180, 220, 130];
-  assert.equal(presentation.getMaterialTableWidth(widths, []), 2138);
-  assert.equal(presentation.getMaterialTableWidth(widths, ["refDes", "tx"]), 2138 - 160 - 190);
-  assert.equal(presentation.getMaterialTableWidth(widths, ["unknown"]), 2138);
+  const widths = [96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130];
+  assert.equal(presentation.getMaterialTableWidth(widths, []), 1978);
+  assert.equal(presentation.getMaterialTableWidth(widths, ["refDes", "tx"]), 1978 - 160 - 190);
+  assert.equal(presentation.getMaterialTableWidth(widths, ["unknown"]), 1978);
 });
 
 test("every main-row cell is wrapped in its column visibility flag", () => {
-  const keys = ["item", "marked", "material", "refDes", "mpn", "internal", "tx", "phaseOut", "symbol", "status", "tracking", "actions"];
+  const keys = ["item", "marked", "material", "refDes", "mpn", "internal", "tx", "phaseOut", "status", "tracking", "actions"];
   for (const key of keys) {
     assert.match(rowBlock, new RegExp(`\\{columns\\.${key} && \\($`, "m"), `cell ${key} must be toggleable`);
     assert.match(rowBlock, new RegExp(`data-material-cell="${key}"`));
   }
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 12);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 11);
   assert.match(source, /data-testid="material-column-visibility"/);
   assert.match(source, /HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1"/);
   assert.match(source, /colSpan=\{visibleColumnCount\}/);
@@ -70,7 +70,7 @@ test("expanded alternative rows do not repeat the group star or the main row's l
   assert.doesNotMatch(alternativeBlock, /onToggleMarked|<Star\b/);
   assert.match(alternativeBlock, /record\.id === primaryTxRecordId \?/);
   assert.match(alternativeBlock, /record\.id === primaryTrackingRecordId \?/);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 12);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 11);
   assert.match(rowBlock, /aria-expanded=\{hasAlternatives \? expanded : undefined\}/);
   assert.match(source, /adjacentIndex = MATERIAL_TABLE_COLUMNS\.findIndex\(/);
   assert.match(source, /const REF_COLLATOR = new Intl\.Collator\(undefined, \{ numeric: true \}\)/);
@@ -102,21 +102,16 @@ test("the desktop empty state keeps the table skeleton and the standard wording"
 });
 
 
-test("phase out and Symbol are independently visible while old hidden preferences remain valid", () => {
-  assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.slice(7, 9).map(column => [column.key, column.label]), [["phaseOut", "phase out（零件狀態）"], ["symbol", "Symbol"]]);
-  assert.deepEqual(presentation.normalizeHiddenMaterialColumns(["status", "mpn"]), ["status", "mpn"]);
-  assert.equal(presentation.getMaterialTableWidth([96, 92, 260, 160, 260, 210, 190, 180, 160, 180, 220, 130], ["phaseOut", "symbol"]), 1798);
+test("phase out remains visible and stale hidden Symbol preferences are discarded", () => {
+  assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.slice(7, 9).map(column => [column.key, column.label]), [["phaseOut", "phase out（零件狀態）"], ["status", "狀態"]]);
+  assert.deepEqual(presentation.normalizeHiddenMaterialColumns(["status", "symbol", "mpn"]), ["status", "mpn"]);
+  assert.equal(presentation.getMaterialTableWidth([96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130], ["phaseOut", "symbol"]), 1798);
 });
 
-test("source columns preserve the raw Symbol and phase out codes without interpretation", () => {
-  for (const raw of ["C", "無", "有", "缺 Symbol", "已齊備", "PHASEOUT", "ACTIVE", "UNDERREVIEW", "  C  "]) {
-    assert.equal(presentation.getMaterialSourceValue(raw), raw);
-  }
-  for (const empty of ["", "   ", undefined]) {
-    assert.equal(presentation.getMaterialSourceValue(empty), "未提供");
-  }
-  const sourceColumns = slice("function SymbolBuildStatus(", "function StatusPill(");
-  assert.match(sourceColumns, /getMaterialSourceValue\(record\.symbolStatus\)/);
+test("phase out source values remain unmodified without Symbol inference", () => {
+  for (const raw of ["PHASEOUT", "ACTIVE", "UNDERREVIEW", "  ACTIVE  "]) assert.equal(presentation.getMaterialSourceValue(raw), raw);
+  for (const empty of ["", "   ", undefined]) assert.equal(presentation.getMaterialSourceValue(empty), "未提供");
+  const sourceColumns = slice("function PhaseOutStatus(", "function StatusPill(");
   assert.match(sourceColumns, /getMaterialSourceValue\(record\.phaseOutStatus\)/);
-  assert.doesNotMatch(sourceColumns, /partNumber|getMaterialBuildRequirements|getMaterialBuildRequirementLabel|symbolAvailability/);
+  assert.doesNotMatch(sourceColumns, /symbolStatus|getMaterialBuildRequirements|getMaterialBuildRequirementLabel|symbolAvailability/);
 });

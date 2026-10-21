@@ -162,7 +162,6 @@ export const MATERIAL_TABLE_COLUMNS = [
   { key: "internal", label: "實體料號 / 符號與封裝", locked: false },
   { key: "tx", label: "虛擬料號", locked: false },
   { key: "phaseOut", label: "phase out（零件狀態）", locked: false },
-  { key: "symbol", label: "Symbol", locked: false },
   { key: "status", label: "狀態", locked: false },
   { key: "tracking", label: "狀態追蹤", locked: false },
   { key: "actions", label: "資料更新", locked: true },

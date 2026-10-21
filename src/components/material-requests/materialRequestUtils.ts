@@ -1,5 +1,5 @@
 import type { CellObject, WorkSheet } from "xlsx";
-import { MATERIAL_CE_FIELDS, MATERIAL_CE_LEGACY_MEANING_FIELDS } from "./materialUploadContract.mjs";
+import { MATERIAL_CE_FIELDS, MATERIAL_CE_LEGACY_MEANING_SCHEMAS } from "./materialUploadContract.mjs";
 
 type XlsxModule = typeof import("xlsx");
 
@@ -602,12 +602,11 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   const normalizedStatus = normalizeHeader(raw.sourcingStatus);
   const normalizedUsageStatus = normalizeHeader(raw.partUsageStatus);
   const isPending = actionKind !== "ok" && actionKind !== "other";
-  const hasSymbolStatus = Object.prototype.hasOwnProperty.call(raw, "symbolStatus");
-  const buildRequirements = getMaterialBuildRequirements(raw);
-  const legacyReady = actionKind === "ok" || (Boolean(normalizeText(raw.partNumber)) && !isPending);
-  const isReady = hasSymbolStatus ? buildRequirements.status === "complete" && !isPending : legacyReady;
-  const isPreferred = actionKind === "ok" && isPreferredInternalPartNumber(raw.partNumber)
-    && (!hasSymbolStatus || isReady);
+  // Symbol was removed from the CE handoff. Keep old imported codes as source
+  // data, without letting an invisible legacy column change current readiness.
+  // A Schematic_Part name alone cannot establish whether OrCAD can call it up.
+  const isReady = actionKind === "ok" || (Boolean(normalizeText(raw.partNumber)) && !isPending);
+  const isPreferred = actionKind === "ok" && isPreferredInternalPartNumber(raw.partNumber);
   const isRisk = RISK_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)))
     || USAGE_RISK_STATUS_WORDS.some((word) => normalizedUsageStatus.includes(normalizeHeader(word)));
   const isApproved = !isRisk && APPROVED_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)));
@@ -824,7 +823,7 @@ function findHeaderRow(rows: unknown[][]) {
 function isCeColumnMeaningRow(row: unknown[] | undefined, fields: Map<MaterialField, number>) {
   if (!row) return false;
 
-  return [MATERIAL_CE_FIELDS, MATERIAL_CE_LEGACY_MEANING_FIELDS].some((template) => {
+  return [MATERIAL_CE_FIELDS, ...MATERIAL_CE_LEGACY_MEANING_SCHEMAS].some((template) => {
     const templateFields = resolveHeaderFields(template.map((field) => field.header));
     if (templateFields.size !== template.length) return false;
 

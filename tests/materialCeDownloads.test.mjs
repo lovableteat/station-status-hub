@@ -17,7 +17,7 @@ const headers = MATERIAL_CE_FIELDS.map(field => field.header);
 const meanings = MATERIAL_CE_FIELDS.map(field => field.meaning);
 const fileBytes = name => readFile(new URL(`../public/${name}`, import.meta.url));
 
-test("the downloadable CE reference imports the documented examples with both independent statuses", async () => {
+test("the downloadable CE reference imports the current examples without a standalone Symbol column", async () => {
   const bytes = await fileBytes("material-ce-reference.xlsx");
   const payload = await parseMaterialWorkbookFile(new File([bytes], "CE-reference.xlsx"));
   assert.equal(payload.sheetName, "CE交付範例");
@@ -32,7 +32,7 @@ test("the downloadable CE reference imports the documented examples with both in
   assert.equal(payload.records[1].virtualAlternative, "DEMO-VIRTUAL-001");
   assert.notEqual(payload.records[0].partNumber, payload.records[1].partNumber);
   assert.notEqual(payload.records[0].manufacturer, payload.records[1].manufacturer);
-  assert.deepEqual(payload.records.map(record => record.symbolStatus), ["無", "C", "有", "無"]);
+  assert.ok(payload.records.every(record => !Object.hasOwn(record, "symbolStatus")));
   assert.deepEqual(payload.records.map(record => record.phaseOutStatus), ["ACTIVE", "ACTIVE", "PHASEOUT", "UNDERREVIEW"]);
   assert.equal(payload.records[1].schematicPart, "CAP");
   assert.equal(payload.records[1].sourcingStatus, "Approved");
@@ -52,10 +52,10 @@ test("the downloadable blank template has no sample records and accepts one real
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
   assert.deepEqual(rows[MATERIAL_CE_HEADER_ROW - 1].slice(0, headers.length), headers);
   assert.deepEqual(rows[MATERIAL_CE_MEANING_ROW - 1].slice(0, meanings.length), meanings);
-  assert.equal(headers.length, 16);
+  assert.equal(headers.length, 15);
   assert.ok(headers.includes("虛擬料號") && headers.includes("實體料號"));
   assert.deepEqual(headers.slice(-2), ["phase out", "零件狀態"]);
-  for (const removed of ["Manufacturer Part Number(2)", "PEGA P/N", "Part Number", "Ref_tmp", "LV", "CIS/Remark"]) {
+  for (const removed of ["Symbol", "Manufacturer Part Number(2)", "PEGA P/N", "Part Number", "Ref_tmp", "LV", "CIS/Remark"]) {
     assert.ok(!headers.includes(removed), `${removed} must not burden the new CE format`);
   }
   assert.ok(rows.slice(MATERIAL_CE_DATA_START_ROW - 1).every(row => !row[1]), "a blank template must not contain sample part names");
@@ -68,7 +68,7 @@ test("the downloadable blank template has no sample records and accepts one real
   assert.equal(payload.recordCount, 1);
   assert.equal(payload.records[0].sourceRow, MATERIAL_CE_DATA_START_ROW);
   assert.equal(payload.records[0].manufacturerPartNumber, "DEMO-CAP-ALT");
-  assert.equal(payload.records[0].symbolStatus, "C");
+  assert.equal(Object.hasOwn(payload.records[0], "symbolStatus"), false);
   assert.equal(payload.records[0].phaseOutStatus, "ACTIVE");
   assert.match(payload.records[0].partUsageStatus, /ODM 不建議用料/);
 });
@@ -98,10 +98,12 @@ test("editing and saving a material preserves the imported usage restriction", a
   assert.equal(saved.partUsageStatus, payload.records[1].partUsageStatus);
   assert.equal(saved.sourcingStatus, "Approved");
   assert.equal(saved.phaseOutStatus, "ACTIVE");
-  assert.equal(saved.symbolStatus, "C");
+  assert.equal(Object.hasOwn(saved, "symbolStatus"), false);
   assert.equal(saved.remark, "RD 補上追蹤");
   assert.equal(JSON.parse(JSON.stringify(saved)).partUsageStatus, saved.partUsageStatus, "the JSON record stored by the collaboration layer must retain CE state");
-  assert.equal(JSON.parse(JSON.stringify(saved)).symbolStatus, "C", "saving a tracking edit must retain the original Symbol code");
+  const savedLegacySymbol = toRecord({ ...payload.records[1], symbolStatus: "C" });
+  assert.equal(savedLegacySymbol.symbolStatus, "C");
+  assert.equal(JSON.parse(JSON.stringify(savedLegacySymbol)).symbolStatus, "C", "saving a tracking edit must retain an older stored Symbol code even after the CE column is removed");
   const { symbolStatus: _symbolStatus, phaseOutStatus: _phaseOutStatus, ...legacyRecord } = payload.records[1];
   assert.equal(Object.hasOwn(toRecord(legacyRecord), "symbolStatus"), false, "saving a legacy record must not introduce a blank Symbol field");
   assert.equal(Object.hasOwn(toRecord(legacyRecord), "phaseOutStatus"), false, "saving a legacy record must not introduce a blank phase-out field");
