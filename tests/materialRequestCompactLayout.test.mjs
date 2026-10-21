@@ -153,3 +153,19 @@ test("the desktop empty state keeps the table skeleton and the standard wording"
   assert.match(emptyBlock, /<tbody>/);
   assert.match(emptyBlock, />目前篩選條件沒有符合的料件</);
 });
+
+test("BOMs are grouped by project in BOM 管理 and in the header switcher", () => {
+  assert.match(source, /import \{ useTestProject \} from "@\/components\/test-projects\/TestProjectProvider"/);
+  assert.match(source, /const bomProjectGroups = useMemo\(\s*\(\) => groupBomWorkspacesByProject\(orderedBomWorkspaces, \{ activeProjectId, activeProjectName: activeProject\?\.name, projectNames \}\)/);
+  const bomManager = slice("function BomManagerDialog(", "function MaterialRecordDialog(");
+  assert.match(bomManager, /projectGroups: BomProjectGroup<BomWorkspace>\[\]/);
+  assert.match(bomManager, /<section key=\{group\.key\} aria-label=\{`專案 \$\{group\.label\}`\}/);
+  assert.match(bomManager, />目前專案</);
+  assert.match(bomManager, /onAssignProject\(workspace\.id, value === UNASSIGNED_BOM_PROJECT_VALUE \? null : value\)/);
+  assert.match(bomManager, /此專案還沒有 BOM/);
+  assert.match(desktopHeader, /<SelectGroup key=\{group\.key\}>/);
+  assert.match(desktopHeader, /<SelectLabel/);
+  assert.match(desktopHeader, />非目前專案</);
+  assert.match(source, /project: existingWorkspace\?\.project \?\? importProject \}/);
+  assert.match(source, /saveBomWorkspaceProject\(workspaceId, nextProject, \(\) => assertBomWriteCurrent\(writeScope\)\)/);
+});

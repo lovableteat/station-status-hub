@@ -157,3 +157,37 @@ test("a late cache response never replaces a settled remote response", () => {
     result: loaded,
   }), false);
 });
+
+test("BOMs group under the active project first, other projects by name, unassigned last", () => {
+  const workspaces = [
+    { id: "w1", project: { projectId: "p-zeta", projectName: "Zeta" } },
+    { id: "w2" },
+    { id: "w3", project: { projectId: "p-alpha", projectName: "Alpha (old name)" } },
+    { id: "w4", project: { projectId: "p-zeta", projectName: "Zeta" } },
+    { id: "w5", project: null },
+  ];
+  const groups = presentation.groupBomWorkspacesByProject(workspaces, {
+    activeProjectId: "p-alpha",
+    activeProjectName: "Alpha",
+    projectNames: new Map([["p-alpha", "Alpha"], ["p-zeta", "Zeta"]]),
+  });
+
+  assert.deepEqual(groups.map((group) => [group.label, group.isActive, group.workspaces.map((workspace) => workspace.id)]), [
+    ["Alpha", true, ["w3"]],
+    ["Zeta", false, ["w1", "w4"]],
+    [presentation.UNASSIGNED_BOM_PROJECT_LABEL, false, ["w2", "w5"]],
+  ]);
+});
+
+test("the active project keeps an empty group and stored names fill in for unknown projects", () => {
+  const groups = presentation.groupBomWorkspacesByProject(
+    [{ id: "w1", project: { projectId: "p-gone", projectName: "Archived" } }],
+    { activeProjectId: "p-new", activeProjectName: "New" },
+  );
+
+  assert.deepEqual(groups.map((group) => [group.key, group.label, group.workspaces.length]), [
+    ["p-new", "New", 0],
+    ["p-gone", "Archived", 1],
+  ]);
+  assert.deepEqual(presentation.groupBomWorkspacesByProject([{ id: "w1" }]).map((group) => group.key), ["unassigned"]);
+});
