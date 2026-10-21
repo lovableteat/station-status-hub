@@ -372,6 +372,34 @@ const MATERIAL_FIELD_HELP = {
   specDocument: { description: "這顆料的 SPEC／datasheet 檔案，存在網站的檔案空間，不是 CE Excel 欄位。表格的 Part Spec 欄會出現迴紋針，點了直接開啟。", example: "PDF、Word、Excel、圖片或 zip，單檔 25 MB 以內" },
 } as const;
 
+// Plain-language version of each field's help for the record dialog. The CE
+// contract text stays the source of truth for meanings and exports; this only
+// explains the same thing in everyday words.
+const MATERIAL_FIELD_PLAIN: Record<keyof typeof MATERIAL_FIELD_HELP, string> = {
+  refGroup: "網站用來把同一個位號的主料和替代料放在一起的分組代碼，通常直接填位號，例如 C101。這不是 CE Excel 的欄位，CE 不用填。",
+  refDes: "這顆料在電路圖上的位號，例如 C101、R1。同一顆料用在好幾個位置，就用逗號分開，例如 C101, C102。",
+  name: "設計 BOM 上的料件名稱，照原本的寫法填，例如 CAP CER 0.1UF 16V X7R。",
+  qty: "一台產品要用幾顆，填數字就好。",
+  assemblyName: "這顆料屬於哪個模組（Level 1 的模組名稱），網站拿來分類；一般料件列不用特別填。",
+  schematicPart: "OrCAD 要叫得出來的原理圖符號名稱，例如 CAP。由 CE 核對後填。",
+  pcbFootprint: "PCB 上的零件封裝（footprint）名稱，例如 C_0402。",
+  partSpec: "料件規格，照原本的內容填，例如 0.1uF / 16V / X7R。同一顆料有多個廠商時，規格要一致，不一致請交給 RD 確認。",
+  manufacturer: "這一列 MPN 的製造商（原廠）名稱，一列只填一家。",
+  manufacturerPartNumber: "原廠料號（MPN），一列只填一個。同一顆料還有別的廠商或料號，就另外開一列。",
+  manufacturerPartNumberAlt: "舊檔留下來的第二個廠商料號。新的 CE Excel 已經沒有這一欄，新資料請拆成另一列。",
+  virtualAlternative: "虛擬料號：可以共用好幾個實體料的上層料號，同一個虛擬料號底下可以對應多列實體料。",
+  partNumber: "實體料號：公司系統裡已經申請好的料號，對應單一廠商、單一 MPN。還沒申請就留白，網站會把這顆料列在「待處理料」。",
+  partName: "實體料號在公司系統裡對應的料名。",
+  sourcingStatus: "公司／原廠的供應與核准狀態，照原文填，例如 Approved、NRND、Obsolete。不要拿它來填 phase out 或零件狀態。",
+  phaseOutStatus: "公司系統裡這顆料的 phase out 狀態，照原文填，例如 ACTIVE、PHASEOUT、UNDERREVIEW。它和右邊的「零件狀態」是兩回事，各填各的。",
+  partUsageStatus: "新設計能不能用這顆料的限制，照公司原文填，例如「新設計產品不建議使用－ODM 不建議用料」；不清楚就填「待確認」。",
+  requestTicket: "申請單或工單的編號，方便之後回查進度。這是網站自己維護的欄位，CE Excel 沒有。",
+  requestUrl: "申請單的完整網址，貼上去就能從網站直接開；沒有可以留白。",
+  tracking: "這顆料最新的追蹤進度。要新增紀錄、貼圖片或改狀態，請用表格最右邊的「狀態追蹤」。",
+  remark: "人工備註，例如「待確認實體料號」。只給網站上的人看，不會自動建立申請。",
+  specDocument: "這顆料的規格書／datasheet 檔案。上傳後存在網站上，表格的 Part Spec 欄會多一個迴紋針，點了直接開。",
+};
+
 function CompactHoverValue({
   label,
   maxItems = 3,
@@ -585,31 +613,33 @@ function MaterialFieldLabel({
 
   return (
     <div className="flex items-center gap-1.5">
-      <Label htmlFor={htmlFor} className="text-xs font-semibold text-foreground">
+      <Label htmlFor={htmlFor} className="text-sm font-semibold text-foreground">
         {label}{required ? <span className="ml-0.5 text-destructive">*</span> : null}
       </Label>
-      <Tooltip>
-        <TooltipTrigger asChild>
+      {/* HoverCard portals to the body, so the help never gets clipped by a scrolling dialog. */}
+      <HoverCard openDelay={120} closeDelay={150}>
+        <HoverCardTrigger asChild>
           <button
             type="button"
             aria-label={`${label}填寫說明`}
-            className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <CircleHelp className="h-3.5 w-3.5" />
+            <CircleHelp className="h-4 w-4" />
           </button>
-        </TooltipTrigger>
-        <TooltipContent
+        </HoverCardTrigger>
+        <HoverCardContent
           side="bottom"
           align="start"
           sideOffset={8}
           collisionPadding={16}
-          className="max-w-80 rounded-xl border-border bg-popover px-3 py-2.5 text-popover-foreground shadow-lg"
+          className="z-[60] w-[24rem] max-w-[calc(100vw-24px)] rounded-xl border-border bg-popover px-4 py-3 text-popover-foreground shadow-lg"
         >
-          <p className="text-sm leading-5">{help.description}</p>
-          <p className="mt-1.5 text-xs text-muted-foreground">範例：{help.example}</p>
-          {"header" in help && <p className="mt-1 text-xs text-muted-foreground">Excel 欄名：{help.header}</p>}
-        </TooltipContent>
-      </Tooltip>
+          <p className="text-base font-semibold text-foreground">{label}</p>
+          <p className="mt-1.5 whitespace-normal text-sm leading-6 text-foreground/90">{MATERIAL_FIELD_PLAIN[field] ?? help.description}</p>
+          <p className="mt-2 text-sm text-foreground/70">範例：{help.example}</p>
+          {"header" in help && <p className="mt-1 text-sm text-foreground/70">Excel 欄名：{help.header}</p>}
+        </HoverCardContent>
+      </HoverCard>
     </div>
   );
 }
