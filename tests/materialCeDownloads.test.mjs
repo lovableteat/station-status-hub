@@ -44,17 +44,19 @@ test("the downloadable blank template has no sample records and accepts one real
   assert.match(payload.records[0].partUsageStatus, /ODM 不建議用料/);
 });
 
-test("both downloads carry the shared roles and field rules without inserting an importable example in the blank file", async () => {
-  for (const name of ["material-upload-template.xlsx", "material-ce-reference.xlsx"]) {
-    const workbook = XLSX.read(await fileBytes(name), { type: "buffer" });
-    const guide = workbook.Sheets["分工與欄位說明"];
-    assert.ok(guide, `${name} must carry its handoff rules`);
-    const text = XLSX.utils.sheet_to_csv(guide);
-    for (const required of ["公司現有系統", "CE", "RD", "料號追蹤工具", "零件狀態", "Sourcing Status", "待確認", "核准"]) {
-      assert.ok(text.includes(required), `${name} is missing ${required}`);
-    }
-    assert.ok(!headers.includes("料號追蹤") && !headers.includes("單號") && !headers.includes("EE"), "RD workflow columns do not belong to the required CE handoff");
+test("CE receives only a blank format while the separate internal reference retains its guidance", async () => {
+  const blank = XLSX.read(await fileBytes("material-upload-template.xlsx"), { type: "buffer" });
+  assert.deepEqual(blank.SheetNames, ["上傳資料"]);
+  const blankRows = XLSX.utils.sheet_to_json(blank.Sheets["上傳資料"], { header: 1, defval: "" });
+  assert.ok(blankRows[2].every(value => !value), "the CE format must not carry a responsibility row");
+  const reference = XLSX.read(await fileBytes("material-ce-reference.xlsx"), { type: "buffer" });
+  const guide = reference.Sheets["分工與欄位說明"];
+  assert.ok(guide);
+  const text = XLSX.utils.sheet_to_csv(guide);
+  for (const required of ["公司現有系統", "CE", "RD", "料號追蹤工具", "零件狀態", "Sourcing Status", "待確認", "核准"]) {
+    assert.ok(text.includes(required), `the internal reference is missing ${required}`);
   }
+  assert.ok(!headers.includes("料號追蹤") && !headers.includes("單號") && !headers.includes("EE"), "RD workflow columns do not belong to the required CE handoff");
 });
 
 test("editing and saving a material preserves the imported usage restriction", async () => {

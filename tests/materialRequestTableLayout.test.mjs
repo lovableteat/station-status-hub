@@ -8,7 +8,7 @@ const uploadGuide = await readFile(new URL("../src/components/material-requests/
 
 test("template download uses the shared accessible button colors and preserves the native download", () => {
   const guide = uploadGuide;
-  const button = guide.match(/<Button\b([^>]*)>\s*<a href=\{templateUrl\} download="CE_BOM_空白交付範本\.xlsx">/)?.[1];
+  const button = guide.match(/<Button\b([^>]*)>\s*<a href=\{templateUrl\} download="CE_BOM_交付格式\.xlsx">/)?.[1];
 
   assert.ok(button, "template download must remain a native link inside Button");
   assert.match(button, /\basChild\b/);

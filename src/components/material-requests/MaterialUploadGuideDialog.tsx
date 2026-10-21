@@ -10,7 +10,7 @@ import {
 } from "./materialUploadContract.mjs";
 
 export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const templateUrl = `${import.meta.env.BASE_URL}material-upload-template.xlsx?v=${MATERIAL_HANDOFF_VERSION}`;
+  const templateUrl = `${import.meta.env.BASE_URL}material-upload-template.xlsx?v=${MATERIAL_HANDOFF_VERSION}-format-only`;
   const referenceUrl = `${import.meta.env.BASE_URL}material-ce-reference.xlsx?v=${MATERIAL_HANDOFF_VERSION}`;
 
   return (
@@ -40,16 +40,16 @@ export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpe
 
           <section className="rounded-2xl border border-sky-400/25 bg-sky-400/[0.06] p-5" aria-labelledby="handoff-download-title">
             <h3 id="handoff-download-title" className="text-lg font-bold text-sky-200">2. 交給 CE 的檔案</h3>
-            <p className="mt-2 leading-6 text-slate-300">先看填寫參考，再用空白範本交付。兩份檔案都包含同一份責任與欄位說明；空白範本沒有範例資料，避免誤匯入。</p>
+            <p className="mt-2 leading-6 text-slate-300">交給 CE 只需要這份空白格式，資料整理、查核與填寫由 CE 自行處理。交付檔只有固定欄位，沒有分工說明或示範資料；欄位參考留供內部核對。</p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <Button asChild className="shrink-0 font-bold">
-                <a href={templateUrl} download="CE_BOM_空白交付範本.xlsx">
-                  <Download className="mr-2 h-4 w-4" />下載 CE 空白範本
+                <a href={templateUrl} download="CE_BOM_交付格式.xlsx">
+                  <Download className="mr-2 h-4 w-4" />下載 CE 交付格式
                 </a>
               </Button>
               <Button asChild variant="outline" className="shrink-0 font-bold">
                 <a href={referenceUrl} download="CE_BOM_填寫參考與範例.xlsx">
-                  <Download className="mr-2 h-4 w-4" />下載 CE 填寫參考與範例
+                  <Download className="mr-2 h-4 w-4" />下載內部欄位參考
                 </a>
               </Button>
             </div>
