@@ -1,5 +1,6 @@
 // Shared by the on-screen guide and the downloadable CE workbooks.
 export const MATERIAL_HANDOFF_VERSION = "2026-10-21";
+export const MATERIAL_CE_FORMAT_REVISION = "2026-10-21-symbol";
 
 export const MATERIAL_HANDOFF_ROLES = [
   { role: "公司現有系統", responsibility: "維持原本的料號、料況與申請／核准流程，是正式資料來源；本工具不要求修改公司系統。", output: "公司料號與來源狀態" },
@@ -14,6 +15,7 @@ export const MATERIAL_HANDOFF_RULES = [
   "零件狀態放在 BOM 最右側，由 CE 帶出公司原文；未確認時填待確認，不得自行改填 Approved 或可用。查無公司料號時，Part Number 保持空白。",
   "料號追蹤、單號、EE 是 RD 在網站維護的作業紀錄，CE 不需為了交付清單額外填寫；零件狀態不會自動建立申請追蹤。",
   "範例中的料號、廠商與狀態都是格式示範，不能當成真實選料、核准或替代料相容性依據。",
+  "Symbol 填該料號是否已建置 Symbol：有／無／待確認。已有 Part、明確無 Symbol 時只補 Symbol；空白或 C 等未定義代碼保留原值，先待確認。Schematic_Part 另存符號名稱。",
 ];
 
 export const MATERIAL_CE_FIELDS = [
@@ -31,9 +33,10 @@ export const MATERIAL_CE_FIELDS = [
   { header: "LV", owner: "來源資料／CE 保留", requirement: "來源有版次就保留，不另造版本。", destination: "版次", example: "A", width: 12 },
   { header: "CIS/Remark", owner: "來源參考／CE 保留", requirement: "只供原 Excel 參考；網站不匯入此欄，也不把它當成 RD 追蹤說明。", destination: "不匯入", example: "來源備註（選填）", width: 30 },
   { header: "Part Number", owner: "CE 從公司系統帶出", requirement: "填公司正式料號並保留前導零；查無時留白，於零件狀態填待確認，不把廠商 MPN／TX 填進這欄。", destination: "內部料號", example: "000-DEMO-001", width: 25 },
+  { header: "Symbol", owner: "CE 查核後填寫", requirement: "填該料號有沒有已建置 Symbol：有／無／待確認。已有 Part 且填無時只需補 Symbol；原始 C 等代碼保留，未定義前不判有無。", destination: "Symbol 建置狀態／缺件提示", example: "有／無／待確認", width: 26 },
   { header: "Part Name", owner: "CE 從公司系統帶出", requirement: "來源有公司料名就保留；無資料可留白。", destination: "內部料名", example: "示範電容", width: 25 },
   { header: "Part Spec", owner: "RD 原始／CE 保留", requirement: "保留原規格；同組資料維持一致，差異交 RD 確認。", destination: "規格", example: "0.1uF / 16V / X7R", width: 30 },
-  { header: "Schematic_Part", owner: "RD 原始／CE 保留", requirement: "原 BOM 有原理圖符號就保留；無資料可留白，不要求 CE 新建符號。", destination: "Symbol", example: "CAP", width: 25 },
+  { header: "Schematic_Part", owner: "原 BOM／CE 保留", requirement: "原 BOM 的符號名稱，例如 CAP；這欄不代表 Symbol 是否已建置，有無狀態請填 Symbol 欄。", destination: "原理圖符號名稱", example: "CAP", width: 25 },
   { header: "PCB_Footprint", owner: "RD 原始／CE 保留", requirement: "原 BOM 有封裝就保留；無資料可留白，不要求 CE 新建封裝。", destination: "Footprint", example: "C_0402", width: 25 },
   { header: "零件狀態", owner: "CE 補欄／帶出原文", requirement: "本次交付必須補在最右側。填公司新設計使用限制原文；不明填待確認，供 RD 後續確認與參考。", destination: "零件狀態（獨立顯示）", example: "新設計產品不建議使用－ODM 不建議用料", width: 45 },
 ];
@@ -47,8 +50,8 @@ export const MATERIAL_HANDOFF_STEPS = [
 ];
 
 export const MATERIAL_CE_EXAMPLE_ROWS = [
-  [2, "CAP CER 0.1UF 16V X7R", 2, "C101, C102", "DEMO-CAP-001", "", "示範廠商 A", "Approved", "DEMO-TX-001", "", "C101, C102", "A", "格式示範，非真實核准料", "000-DEMO-001", "示範電容", "0.1uF / 16V / X7R", "CAP", "C_0402", "待確認"],
-  [2, "CAP CER 0.1UF 16V X7R", 2, "C101, C102", "DEMO-CAP-ALT", "", "示範廠商 B", "Approved", "", "DEMO-PEGA-ALT", "C101, C102", "A", "同位號候選料另列，RD 尚未確認", "000-DEMO-ALT", "示範替代電容", "0.1uF / 16V / X7R", "CAP", "C_0402", "新設計產品不建議使用－ODM 不建議用料"],
-  [2, "POWER IC", 1, "U10", "DEMO-IC-EOL", "", "示範廠商 C", "Active", "", "", "U10", "A", "Active 不代表新設計可用", "000-DEMO-EOL", "示範電源 IC", "示範規格", "POWER_IC", "QFN_DEMO", "新設計產品不建議使用－EOL"],
-  [2, "CONNECTOR", 1, "J20", "DEMO-CONN-NEW", "", "示範廠商 D", "", "", "", "J20", "A", "查無公司料號；請 RD 確認後續處理", "", "", "示範規格", "CONN", "CONN_DEMO", "待確認"],
+  [2, "CAP CER 0.1UF 16V X7R", 2, "C101, C102", "DEMO-CAP-001", "", "示範廠商 A", "Approved", "DEMO-TX-001", "", "C101, C102", "A", "格式示範，非真實核准料", "000-DEMO-001", "無", "示範電容", "0.1uF / 16V / X7R", "CAP", "C_0402", "待確認"],
+  [2, "CAP CER 0.1UF 16V X7R", 2, "C101, C102", "DEMO-CAP-ALT", "", "示範廠商 B", "Approved", "", "DEMO-PEGA-ALT", "C101, C102", "A", "同位號候選料另列，RD 尚未確認", "000-DEMO-ALT", "C", "示範替代電容", "0.1uF / 16V / X7R", "CAP", "C_0402", "新設計產品不建議使用－ODM 不建議用料"],
+  [2, "POWER IC", 1, "U10", "DEMO-IC-EOL", "", "示範廠商 C", "Active", "", "", "U10", "A", "Active 不代表新設計可用", "000-DEMO-EOL", "有", "示範電源 IC", "示範規格", "POWER_IC", "QFN_DEMO", "新設計產品不建議使用－EOL"],
+  [2, "CONNECTOR", 1, "J20", "DEMO-CONN-NEW", "", "示範廠商 D", "", "", "", "J20", "A", "查無公司料號；請 RD 確認後續處理", "", "無", "", "示範規格", "CONN", "CONN_DEMO", "待確認"],
 ];

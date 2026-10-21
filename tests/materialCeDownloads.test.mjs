@@ -16,6 +16,8 @@ test("the downloadable CE reference imports the documented examples with both in
   assert.equal(payload.sheetName, "CE交付範例");
   assert.equal(payload.recordCount, 4);
   assert.equal(payload.records[0].partNumber, "000-DEMO-001");
+  assert.deepEqual(payload.records.map(record => record.symbolStatus), ["無", "C", "有", "無"]);
+  assert.equal(payload.records[1].schematicPart, "CAP");
   assert.equal(payload.records[1].sourcingStatus, "Approved");
   assert.match(payload.records[1].partUsageStatus, /ODM 不建議用料/);
   assert.ok(payload.records.every(record => record.trackingHistory.length === 0));
@@ -41,6 +43,7 @@ test("the downloadable blank template has no sample records and accepts one real
   assert.equal(payload.sheetName, "上傳資料");
   assert.equal(payload.recordCount, 1);
   assert.equal(payload.records[0].manufacturerPartNumber, "DEMO-CAP-ALT");
+  assert.equal(payload.records[0].symbolStatus, "C");
   assert.match(payload.records[0].partUsageStatus, /ODM 不建議用料/);
 });
 
@@ -68,6 +71,10 @@ test("editing and saving a material preserves the imported usage restriction", a
   const saved = toRecord({ ...payload.records[1], remark: "RD 補上追蹤" });
   assert.equal(saved.partUsageStatus, payload.records[1].partUsageStatus);
   assert.equal(saved.sourcingStatus, "Approved");
+  assert.equal(saved.symbolStatus, "C");
   assert.equal(saved.remark, "RD 補上追蹤");
   assert.equal(JSON.parse(JSON.stringify(saved)).partUsageStatus, saved.partUsageStatus, "the JSON record stored by the collaboration layer must retain CE state");
+  assert.equal(JSON.parse(JSON.stringify(saved)).symbolStatus, "C", "saving a tracking edit must retain the original Symbol code");
+  const { symbolStatus: _symbolStatus, ...legacyRecord } = payload.records[1];
+  assert.equal(Object.hasOwn(toRecord(legacyRecord), "symbolStatus"), false, "saving a legacy record must not introduce a blank Symbol field");
 });

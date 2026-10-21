@@ -96,6 +96,8 @@ import {
   type MaterialWorkbookPayload,
   buildMaterialDataset,
   getActionLabel,
+  getMaterialBuildRequirementLabel,
+  getMaterialBuildRequirements,
   getLatestTrackingEntry,
   isPreferredInternalPartNumber,
   normalizeMaterialSearchText,
@@ -281,7 +283,8 @@ const MATERIAL_FIELD_HELP = {
   name: { description: "電路圖或 BOM 使用的料件名稱，用來辨識這一組料。", example: "CAP CER 0.1UF 16V" },
   qty: { description: "這組料在單一產品或模組中的使用數量。", example: "1、2、4" },
   assemblyName: { description: "料件所屬的板卡、模組或組裝層級，方便搜尋與報表分類。", example: "C2 Carrier Board" },
-  schematicPart: { description: "原理圖中的 Symbol 名稱或電路符號識別碼。", example: "CAP、CONN、IC" },
+  schematicPart: { description: "原理圖符號的名稱，與該料號是否已建置 Symbol 分開記錄。", example: "CAP、CONN、IC" },
+  symbolStatus: { description: "該料號是否已建置 Symbol。已有 Part 且明確填無時只需補 Symbol；C 等未定義代碼保留原值並待確認。", example: "有、無、待確認；其他代碼照原值保留" },
   pcbFootprint: { description: "PCB Layout 使用的封裝或圖面名稱。", example: "c0402_t01_h24" },
   partSpec: { description: "電氣、機構或採購需要確認的完整規格。", example: "0402、1uF、±10%、25V" },
   manufacturer: { description: "實際生產這顆料的原廠名稱；不是代理商或採購窗口。", example: "Murata Manufacturing Co., Ltd." },
@@ -855,6 +858,7 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     manufacturer: record.manufacturer,
     sourcingStatus: record.sourcingStatus,
     partUsageStatus: record.partUsageStatus ?? "",
+    ...(Object.prototype.hasOwnProperty.call(record, "symbolStatus") ? { symbolStatus: record.symbolStatus ?? "" } : {}),
     refGroup: record.refGroup,
     lv: record.lv,
     remark: record.remark,
@@ -890,6 +894,7 @@ function createRecordTemplate(group?: MaterialGroup): MaterialWorkbookRecord {
     manufacturer: "",
     sourcingStatus: "",
     partUsageStatus: "",
+    symbolStatus: "",
     refGroup: group?.displayRef ?? "",
     lv: "",
     remark: group ? "需申請 00/Part/Symbol" : "",
@@ -2771,6 +2776,16 @@ function TrackingHistoryDialog({
   );
 }
 
+function SymbolBuildStatus({ record }: { record: MaterialRecord }) {
+  const requirements = getMaterialBuildRequirements(record);
+  return (
+    <div data-testid="material-symbol-build-status" className="mt-2 space-y-0.5 whitespace-normal break-words text-xs leading-5">
+      <p className="text-slate-300">Symbol 建置狀態：<span className="font-semibold">{record.symbolStatus?.trim() || "待確認"}</span></p>
+      <p className={cn("font-semibold", requirements.status === "complete" ? "text-cyan-200" : "text-amber-200")}>{getMaterialBuildRequirementLabel(record)}</p>
+    </div>
+  );
+}
+
 function StatusPill({ record }: { record: MaterialRecord }) {
   return (
     <div className="flex flex-wrap gap-2" data-testid="material-source-status">
@@ -2780,6 +2795,7 @@ function StatusPill({ record }: { record: MaterialRecord }) {
       <span className={cn("inline-flex rounded-lg border px-3 py-1.5 text-sm font-bold", record.isRisk ? "border-rose-400/30 bg-rose-400/10 text-rose-300" : "border-slate-400/25 bg-slate-400/10 text-slate-300")}>
         零件狀態：{record.partUsageStatus || "未提供"}
       </span>
+      <div className="basis-full"><SymbolBuildStatus record={record} /></div>
     </div>
   );
 }
@@ -3530,8 +3546,12 @@ function MaterialRecordDialog({
                 <Input id="material-assembly" disabled={readOnly} value={form.assemblyName} onChange={(event) => updateField("assemblyName", event.target.value)} />
               </div>
               <div className="space-y-2">
-                <MaterialFieldLabel field="schematicPart" htmlFor="material-symbol" label="Symbol" />
+                <MaterialFieldLabel field="schematicPart" htmlFor="material-symbol" label="Schematic_Part（名稱）" />
                 <Input id="material-symbol" disabled={readOnly} value={form.schematicPart} onChange={(event) => updateField("schematicPart", event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <MaterialFieldLabel field="symbolStatus" htmlFor="material-symbol-status" label="Symbol 建置狀態" />
+                <Input id="material-symbol-status" disabled={readOnly} value={form.symbolStatus ?? ""} onChange={(event) => updateField("symbolStatus", event.target.value)} placeholder="有／無／待確認；原始代碼照填" />
               </div>
               <div className="space-y-2">
                 <MaterialFieldLabel field="pcbFootprint" htmlFor="material-footprint" label="Footprint" />
@@ -3670,7 +3690,7 @@ function AlternativeRows({
                 )}
               </div>
               <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-400">
-                <span>Symbol：<strong className="font-mono text-cyan-300">{group.schematicPart || "未設定"}</strong></span>
+                <span>Schematic_Part（名稱）：<strong className="font-mono text-cyan-300">{group.schematicPart || "未提供"}</strong></span>
                 <span>Footprint：<strong className="font-mono text-indigo-300">{group.footprint || "未設定"}</strong></span>
               </div>
             </div>
@@ -5417,6 +5437,8 @@ export function MaterialRequestPage() {
           partUsageStatus: record.partUsageStatus ?? "",
           specification: record.partSpec || group.partSpec || group.partName,
           symbol: group.schematicPart,
+          symbolStatus: record.symbolStatus ?? "",
+          buildRequirement: getMaterialBuildRequirementLabel(record),
           trackingOwner: latestTrackingEntry?.createdBy ?? "",
           trackingStatus: getTrackingWorkflowStatus(record),
           trackingSummary: latestTrackingEntry?.note ?? record.trackingNote ?? record.trackingStatus ?? "",
@@ -6289,7 +6311,7 @@ export function MaterialRequestPage() {
                   </button>
                   <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-500" />
                 </div>
-                <div className="px-2.5 pb-2"><PartUsageSummary records={group.records} /></div>
+                <div className="px-2.5 pb-2"><PartUsageSummary records={group.records} /><SymbolBuildStatus record={mainRecord} /></div>
 
                 <div className="flex items-center gap-1.5 overflow-x-auto border-y border-white/5 bg-[#091827]/85 px-2.5 py-2 text-[11px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <span className={cn("shrink-0 rounded-full border px-2 py-1 font-black", group.riskCount > 0 ? "border-rose-300/35 bg-rose-400/12 text-rose-100" : mustApply ? "border-amber-300/35 bg-amber-400/12 text-amber-100" : "border-slate-300/30 bg-slate-400/10 text-slate-100")}>{group.riskCount > 0 ? "料況需確認" : mustApply ? "需要申請" : mainRecord.sourcingStatus || "未提供料況"}</span>
@@ -6574,11 +6596,12 @@ export function MaterialRequestPage() {
                                   <p className="mt-1 text-[15px] font-semibold text-amber-300">尚未建立內部料號</p>
                                 )}
                                 <p className="mt-2 truncate font-mono text-[13px] font-semibold text-cyan-300">
-                                  {group.schematicPart || "No Symbol"}
+                                  原理圖名稱：{group.schematicPart || "未提供"}
                                 </p>
                                 <p className="mt-1 truncate font-mono text-[13px] text-indigo-300">
                                   {group.footprint || "No Footprint"}
                                 </p>
+                                <SymbolBuildStatus record={primaryAlternative ?? group.primaryRecord} />
                               </div>
                             </div>
                           </div>
