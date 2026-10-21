@@ -255,3 +255,13 @@ export function groupBomWorkspacesByProject<T extends { id: string; project?: { 
     return BOM_PROJECT_COLLATOR.compare(left.label, right.label);
   });
 }
+
+/**
+ * Maps a ui_table_preferences key back to its BOM id. BOM ids contain ':'
+ * themselves (`bom:<file>`), so only the known prefix is stripped.
+ */
+export function getBomPreferenceWorkspaceId(tableKey: string, prefixes: readonly string[]) {
+  const prefix = prefixes.find((candidate) => tableKey.startsWith(candidate));
+  const workspaceId = prefix ? tableKey.slice(prefix.length) : "";
+  return workspaceId || undefined;
+}

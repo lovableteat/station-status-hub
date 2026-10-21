@@ -191,3 +191,11 @@ test("the active project keeps an empty group and stored names fill in for unkno
   ]);
   assert.deepEqual(presentation.groupBomWorkspacesByProject([{ id: "w1" }]).map((group) => group.key), ["unassigned"]);
 });
+
+test("preference keys map back to the full BOM id, which itself contains a colon", () => {
+  const prefixes = ["material-bom-workspace:", "material-bom-page-tracker:", "material-bom-table-color-theme:", "material-bom-project:"];
+  assert.equal(presentation.getBomPreferenceWorkspaceId("material-bom-project:bom:foo.xlsx", prefixes), "bom:foo.xlsx");
+  assert.equal(presentation.getBomPreferenceWorkspaceId("material-bom-page-tracker:bom:a:b", prefixes), "bom:a:b");
+  assert.equal(presentation.getBomPreferenceWorkspaceId("material-bom-project:", prefixes), undefined);
+  assert.equal(presentation.getBomPreferenceWorkspaceId("other:bom:foo", prefixes), undefined);
+});

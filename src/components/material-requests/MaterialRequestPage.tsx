@@ -122,7 +122,7 @@ import {
   subscribeBomWorkspaceChanges,
 } from "./materialBomStorage";
 import type { BomTableColorTheme, BomWorkspaceProject } from "./materialBomStorage";
-import { saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
+import { loadBomWorkspaceProjects, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { UploadGuideDialog } from "./MaterialUploadGuideDialog";
 import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
 import type {
@@ -3123,24 +3123,28 @@ function BomManagerDialog({
           />
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
           {visibleGroups.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
               找不到符合條件的 BOM
             </p>
-          ) : visibleGroups.map((group) => (
-            <section key={group.key} aria-label={`專案 ${group.label}`} className="space-y-1.5">
-              <div className="flex items-center gap-2 px-1">
-                <Layers3 className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" />
-                <h3 className="min-w-0 truncate text-xs font-bold text-foreground">{group.label}</h3>
-                {group.isActive && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.success)}>目前專案</span>}
-                <span className="flex-none text-[11px] text-muted-foreground">{group.workspaces.length} 個 BOM</span>
-              </div>
-              {group.workspaces.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
-                  此專案還沒有 BOM。上傳 Excel 會自動歸入目前專案，或用每列的專案選單把現有 BOM 移進來。
-                </p>
-              ) : group.workspaces.map((workspace, index) => {
+          ) : visibleGroups.flatMap((group) => [
+            // Headers and rows are siblings of one list: a row that changes project is moved, not remounted, so keyboard focus survives.
+            <div key={`project:${group.key}`} className="flex items-center gap-2 px-1 pt-2 first:pt-0">
+              <Layers3 className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" />
+              <h3 className="min-w-0 truncate text-xs font-bold text-foreground">{group.label}</h3>
+              {group.isActive && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.success)}>目前專案</span>}
+              <span className="flex-none text-[11px] text-muted-foreground">{group.workspaces.length} 個 BOM</span>
+            </div>,
+            ...(group.workspaces.length === 0
+              ? [
+                  <p key={`empty:${group.key}`} className="rounded-xl border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
+                    {canEdit
+                      ? "此專案還沒有 BOM。上傳 Excel 會自動歸入目前專案，或用每列的專案選單把現有 BOM 移進來。"
+                      : "此專案還沒有 BOM。請有編輯權限的同事上傳 Excel 或指定專案。"}
+                  </p>,
+                ]
+              : group.workspaces.map((workspace, index) => {
                 const isActive = workspace.id === activeBomId;
                 const pageTrackerSummary = getBomPageTrackerSummary(workspace.pageTracker);
                 const hasTracking = workspaceHasTrackingActivity(workspace);
@@ -3181,7 +3185,7 @@ function BomManagerDialog({
                           onValueChange={(value) => onAssignProject(workspace.id, value === UNASSIGNED_BOM_PROJECT_VALUE ? null : value)}
                           disabled={!canEdit}
                         >
-                          <SelectTrigger aria-label={`${workspace.name} 所屬專案`} className="h-7 w-[9.5rem] rounded-md px-2 text-xs">
+                          <SelectTrigger aria-label={`${workspace.name} 所屬專案`} className="h-11 w-[9.5rem] rounded-md px-2 text-xs md:h-7">
                             <SelectValue placeholder="指定專案" />
                           </SelectTrigger>
                           <SelectContent>
@@ -3203,9 +3207,8 @@ function BomManagerDialog({
                     </p>
                   </div>
                 );
-              })}
-            </section>
-          ))}
+              })),
+          ])}
         </div>
       </DialogContent>
     </Dialog>
@@ -4183,6 +4186,7 @@ export function MaterialRequestPage() {
   const [pageTrackerDialogOpen, setPageTrackerDialogOpen] = useState(false);
   const [pageTrackerWorkspaceId, setPageTrackerWorkspaceId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [workspaceListSettled, setWorkspaceListSettled] = useState(false);
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportSnapshotRequested, setExportSnapshotRequested] = useState(false);
@@ -4201,6 +4205,7 @@ export function MaterialRequestPage() {
   const activeBomIdRef = useRef(activeBomId);
   const loadedRecordRangeRef = useRef("");
   const recentLocalRecordIdsRef = useRef(new Map<string, number>());
+  const recentLocalWorkspaceWritesRef = useRef(new Map<string, number>());
   const loadedViewStateKeyRef = useRef("");
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
@@ -4295,6 +4300,21 @@ export function MaterialRequestPage() {
     setPage(1);
   }, [isCompactLayout, pageSize]);
 
+  // Project assignments regroup every BOM, so another client's change only needs the project map, not a full reload.
+  const refreshBomProjects = useCallback(async () => {
+    const generation = bomAccountRef.current.generation;
+    try {
+      const projectByWorkspace = await loadBomWorkspaceProjects();
+      if (generation !== bomAccountRef.current.generation) return;
+      setBomWorkspaces((current) => current.map((workspace) => {
+        const project = projectByWorkspace.get(workspace.id);
+        return project?.projectId === workspace.project?.projectId && project?.projectName === workspace.project?.projectName
+          ? workspace
+          : { ...workspace, project };
+      }));
+    } catch { /* keep the current grouping until the next full reload */ }
+  }, []);
+
   const applyLoadedWorkspaces = useCallback((storedWorkspaces: BomWorkspace[], preferredBomId?: string) => {
     if (user?.userId !== bomAccountRef.current.accountId) return;
     if (storedWorkspaces.length === 0) {
@@ -4385,7 +4405,10 @@ export function MaterialRequestPage() {
       bomSyncRetryAttemptRef.current = 0;
       setCollaborationStatus(result.mode);
       loadedRecordRangeRef.current = getBomWorkspaceRecordRangeKey(result.workspaces, workspaceId);
-      const applyResult = () => applyLoadedWorkspaces(result.workspaces, preferredBomId);
+      const applyResult = () => {
+        applyLoadedWorkspaces(result.workspaces, preferredBomId);
+        setWorkspaceListSettled(true);
+      };
       if (previewApplied) startTransition(applyResult);
       else applyResult();
       return result.workspaces;
@@ -4469,9 +4492,10 @@ export function MaterialRequestPage() {
 
     void syncWorkspaces(loadActiveBomId());
     const unsubscribe = subscribeBomWorkspaceChanges((change) => {
+      const now = Date.now();
+      if (change.recordIds.length === 0 && change.workspaceIds.length > 0) void refreshBomProjects();
       if (!change.workspaceIds.includes(activeBomIdRef.current)) return;
 
-      const now = Date.now();
       const externalRecordIds = change.recordIds.filter((recordId) => {
         const localTimestamp = recentLocalRecordIdsRef.current.get(recordId) ?? 0;
         return now - localTimestamp > 5000;
@@ -4479,7 +4503,8 @@ export function MaterialRequestPage() {
       if (externalRecordIds.length > 0) {
         setPendingRemoteRecordIds((current) => Array.from(new Set([...current, ...externalRecordIds])));
       }
-      if (change.recordIds.length === 0) {
+      const localWorkspaceWriteAt = recentLocalWorkspaceWritesRef.current.get(activeBomIdRef.current) ?? 0;
+      if (change.recordIds.length === 0 && now - localWorkspaceWriteAt > 5000) {
         setHasPendingWorkspaceUpdate(true);
       }
     });
@@ -4488,7 +4513,7 @@ export function MaterialRequestPage() {
       active = false;
       unsubscribe();
     };
-  }, [applyLoadedWorkspaces, reloadBomWorkspaces]);
+  }, [applyLoadedWorkspaces, refreshBomProjects, reloadBomWorkspaces]);
 
   useEffect(() => {
     if (collaborationStatus !== "error") {
@@ -4695,13 +4720,15 @@ export function MaterialRequestPage() {
     [activeProject?.name, activeProjectId, orderedBomWorkspaces, projectNames],
   );
 
-  // Switching the global project pulls the BOM switcher along: once the BOM list
-  // is loaded and the project differs from the one the current BOM was picked
-  // under, jump to that project's most recent BOM. Manual picks of another
-  // project's BOM stay put because they happen under the same project.
+  // Switching the global project pulls the BOM switcher along: once the remote
+  // BOM list has settled (the final apply re-asserts the remembered BOM, so an
+  // earlier jump would be undone) and the project differs from the one the
+  // current BOM was picked under, jump to that project's most recent BOM.
+  // Manual picks of another project's BOM stay put because they happen under
+  // the same project.
   const switchActiveBomRef = useRef<(value: string) => void>(() => {});
   useEffect(() => {
-    if (!activeProjectId || isInitialLoading) return;
+    if (!activeProjectId || !workspaceListSettled) return;
     let pickedUnderProjectId: string | null = null;
     try { pickedUnderProjectId = window.localStorage.getItem(ACTIVE_BOM_PROJECT_KEY); } catch { /* storage unavailable */ }
     if (pickedUnderProjectId === activeProjectId) return;
@@ -4711,7 +4738,7 @@ export function MaterialRequestPage() {
     if (current?.project?.projectId === activeProjectId) return;
     const target = orderedBomWorkspaces.find((workspace) => workspace.project?.projectId === activeProjectId);
     if (target && target.id !== activeBomId) switchActiveBomRef.current(target.id);
-  }, [activeBomId, activeProjectId, bomWorkspaces, isInitialLoading, orderedBomWorkspaces]);
+  }, [activeBomId, activeProjectId, bomWorkspaces, orderedBomWorkspaces, workspaceListSettled]);
 
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
   const hasActiveColumnFilters = Object.values(columnFilters).some((values) => Boolean(values?.length));
@@ -5049,6 +5076,7 @@ export function MaterialRequestPage() {
       writeScope = captureBomWrite();
       let lastWorkspaceId = activeBomId;
       let totalRecords = 0;
+      let assignedToActiveProject = 0;
       const workspaceMap = new Map(bomWorkspaces.map((workspace) => [workspace.id, workspace]));
       const importProject = toBomWorkspaceProject(activeProject);
 
@@ -5057,9 +5085,17 @@ export function MaterialRequestPage() {
         assertBomWriteCurrent(writeScope);
         const workspaceId = createBomId(file.name);
         const existingWorkspace = workspaceMap.get(workspaceId);
+        // Only a brand-new BOM takes the active project. An existing BOM keeps the server's assignment (the
+        // in-memory copy may be stale), and the project row is written by saveBomWorkspaceProject alone.
         const workspace = { ...mergeImportedWorkspace(existingWorkspace, workspaceId, payload), project: existingWorkspace?.project ?? importProject };
         await saveBomWorkspace(workspace, () => assertBomWriteCurrent(writeScope));
         if (!isBomWriteCurrent(writeScope)) return;
+        if (!existingWorkspace && importProject) {
+          recentLocalWorkspaceWritesRef.current.set(workspaceId, Date.now());
+          await saveBomWorkspaceProject(workspaceId, importProject, () => assertBomWriteCurrent(writeScope));
+          if (!isBomWriteCurrent(writeScope)) return;
+          assignedToActiveProject += 1;
+        }
         void logMaterialWorkspaceAction({
           action: "import",
           actor: user,
@@ -5085,7 +5121,7 @@ export function MaterialRequestPage() {
       setPage(1);
       toast({
         title: files.length === 1 ? "BOM 已載入" : `${files.length} 個 BOM 已載入`,
-        description: `共 ${totalRecords.toLocaleString()} 筆廠商料明細${importProject ? `，已歸入專案「${importProject.projectName}」` : ""}，可從 BOM 切換器管理。`,
+        description: `共 ${totalRecords.toLocaleString()} 筆廠商料明細${importProject && assignedToActiveProject > 0 ? `，${assignedToActiveProject} 個新 BOM 已歸入專案「${importProject.projectName}」` : ""}，可從 BOM 切換器管理。`,
       });
     } catch (error) {
       if (writeScope && !isBomWriteCurrent(writeScope)) return;
@@ -5305,6 +5341,7 @@ export function MaterialRequestPage() {
     replaceBomWorkspace(nextWorkspace);
 
     try {
+      recentLocalWorkspaceWritesRef.current.set(workspaceId, Date.now());
       await saveBomWorkspacePageTracker(workspaceId, pageTracker, () => assertBomWriteCurrent(writeScope));
       if (!isBomWriteCurrent(writeScope)) return;
       void logMaterialWorkspaceAction({
@@ -5360,6 +5397,7 @@ export function MaterialRequestPage() {
     )));
 
     try {
+      recentLocalWorkspaceWritesRef.current.set(workspaceId, Date.now());
       await saveBomWorkspaceProject(workspaceId, nextProject, () => assertBomWriteCurrent(writeScope));
       if (!isBomWriteCurrent(writeScope)) return;
       toast({
@@ -5693,6 +5731,7 @@ export function MaterialRequestPage() {
     setTableColorDialogOpen(false);
 
     try {
+      recentLocalWorkspaceWritesRef.current.set(activeWorkspace.id, Date.now());
       await saveBomWorkspaceTableColorTheme(activeWorkspace.id, nextTheme, () => assertBomWriteCurrent(writeScope));
       if (!isBomWriteCurrent(writeScope)) return;
       toast({
@@ -5816,7 +5855,11 @@ export function MaterialRequestPage() {
                 {collaborationStatusMeta.label}
               </span>
             </div>
-            <p className="max-w-[48vw] truncate text-[11px] text-slate-400">{activeWorkspace.name}</p>
+            <p className="flex max-w-[48vw] items-center gap-1 text-[11px] text-slate-400">
+              {activeWorkspaceProjectLabel && <span className="min-w-0 truncate text-cyan-200/70">{activeWorkspaceProjectLabel} /</span>}
+              <span className="min-w-0 truncate">{activeWorkspace.name}</span>
+              {isActiveWorkspaceOutsideProject && <span className="flex-none rounded-full border border-amber-300/35 bg-amber-400/16 px-1.5 text-[9px] font-black leading-4 text-amber-100">非目前專案</span>}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <button

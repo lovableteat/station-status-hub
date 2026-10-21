@@ -33,7 +33,7 @@ function execute(name,h,overrides={}){
   recentLocalRecordIdsRef:{current:new Map()},loadDefaultBomWorkspace:async()=>workspace,createDefaultBomWorkspace:()=>workspace,
   getBomPageTrackerSummary:()=>({}),normalizeBomTableColorTheme:v=>v,tableColorDraft:{},
   useCallback:fn=>fn,bomAccountRef:{current:{accountId:'account-A',generation:0}},
-  activeProject:null,toBomWorkspaceProject:()=>undefined,
+  activeProject:null,toBomWorkspaceProject:()=>undefined,saveBomWorkspaceProject:async()=>{writes.push('project');},recentLocalWorkspaceWritesRef:{current:new Map()},
   ...overrides,
  };
  assert.ok(handlers.has(name),name);
