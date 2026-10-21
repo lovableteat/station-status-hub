@@ -34,6 +34,7 @@ import {
   History,
   ImagePlus,
   Layers3,
+  Paperclip,
   Pencil,
   Plus,
   RotateCcw,
@@ -125,6 +126,7 @@ import {
 import type { BomTableColorTheme, BomWorkspaceProject } from "./materialBomStorage";
 import { loadBomWorkspaceProjects, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { UploadGuideDialog } from "./MaterialUploadGuideDialog";
+import { MATERIAL_SPEC_ACCEPT, createMaterialSpecUrl, formatMaterialSpecSize, uploadMaterialSpecDocument } from "./materialSpecDocuments";
 import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
 import type {
   MaterialExportProgress,
@@ -338,6 +340,7 @@ const MATERIAL_FIELD_HELP = {
   partNumber: getMaterialCeFieldHelp("實體料號"),
   partName: getMaterialCeFieldHelp("Part Name"),
   remark: { description: "網站維護的人工申請狀態或備註，不是 CE Excel 欄位，不會由零件狀態自動建立申請。", example: "待確認實體料號、待核對原理圖符號" },
+  specDocument: { description: "這顆料的 SPEC／datasheet 檔案，存在網站的檔案空間，不是 CE Excel 欄位。表格的 Part Spec 欄會出現迴紋針，點了直接開啟。", example: "PDF、Word、Excel、圖片或 zip，單檔 25 MB 以內" },
 } as const;
 
 function CompactHoverValue({
@@ -835,6 +838,7 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     manufacturer: record.manufacturer,
     sourcingStatus: record.sourcingStatus,
     partUsageStatus: record.partUsageStatus ?? "",
+    specDocument: record.specDocument,
     ...(Object.prototype.hasOwnProperty.call(record, "phaseOutStatus") ? { phaseOutStatus: record.phaseOutStatus ?? "" } : {}),
     ...(Object.prototype.hasOwnProperty.call(record, "symbolStatus") ? { symbolStatus: record.symbolStatus ?? "" } : {}),
     refGroup: record.refGroup,
@@ -3147,21 +3151,44 @@ function MaterialRecordDialog({
   open,
   mode,
   record,
+  uploaderName,
+  workspaceId,
   onOpenChange,
   onModeChange,
+  onOpenSpec,
   onSave,
 }: {
   canEdit: boolean;
   open: boolean;
   mode: EditorMode;
   record: MaterialWorkbookRecord;
+  uploaderName?: string;
+  workspaceId: string;
   onOpenChange: (open: boolean) => void;
   onModeChange: (mode: EditorMode) => void;
+  onOpenSpec: (record: Pick<MaterialWorkbookRecord, "specDocument">) => void;
   onSave: (record: MaterialWorkbookRecord) => void;
 }) {
   const [form, setForm] = useState(record);
+  const [isUploadingSpec, setIsUploadingSpec] = useState(false);
+  const specInputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
   const readOnly = mode === "view" || !canEdit;
+  const handleSpecFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || readOnly) return;
+    setIsUploadingSpec(true);
+    try {
+      const specDocument = await uploadMaterialSpecDocument({ workspaceId, recordId: form.id, file, uploadedBy: uploaderName });
+      setForm((current) => ({ ...current, specDocument }));
+      toast({ title: "SPEC 已上傳", description: `「${file.name}」會在儲存資料後跟著這顆料一起保存。` });
+    } catch (error) {
+      toast({ title: "SPEC 上傳失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
+    } finally {
+      setIsUploadingSpec(false);
+    }
+  };
   const latestTrackingEntry = getLatestTrackingEntry(form);
   const trackingMeta = getTrackingRequestMeta(form);
 
@@ -3302,6 +3329,36 @@ function MaterialRecordDialog({
               </div>
             </div>
             <div className="space-y-1 md:col-span-3">
+              <MaterialFieldLabel field="specDocument" label="SPEC 文件" />
+              <input ref={specInputRef} type="file" accept={MATERIAL_SPEC_ACCEPT} className="hidden" onChange={(event) => void handleSpecFile(event)} />
+              <div data-testid="material-spec-document" className="flex min-h-9 min-w-0 flex-wrap items-center gap-2 rounded-xl border border-border bg-background/40 px-3 py-1 text-xs">
+                {form.specDocument ? (
+                  <>
+                    <Paperclip className="h-3.5 w-3.5 flex-none text-primary" aria-hidden="true" />
+                    <button type="button" onClick={() => onOpenSpec(form)} className="min-w-0 flex-1 truncate text-left font-semibold text-foreground underline-offset-2 hover:underline" title={`開啟 ${form.specDocument.name}`}>
+                      {form.specDocument.name}
+                    </button>
+                    <span className="flex-none text-muted-foreground">{formatMaterialSpecSize(form.specDocument.size)} · {formatTimestamp(form.specDocument.uploadedAt)}{form.specDocument.uploadedBy ? ` · ${form.specDocument.uploadedBy}` : ""}</span>
+                    {!readOnly && (
+                      <>
+                        <Button type="button" variant="ghost" size="sm" disabled={isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-7 px-2 text-xs">{isUploadingSpec ? "上傳中…" : "更換"}</Button>
+                        <Button type="button" variant="ghost" size="sm" disabled={isUploadingSpec} onClick={() => setForm((current) => ({ ...current, specDocument: undefined }))} className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive">移除</Button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{readOnly ? "尚未上傳 SPEC" : "尚未上傳 SPEC；上傳後按「儲存資料」才會保存"}</span>
+                    {!readOnly && (
+                      <Button type="button" variant="secondary" size="sm" disabled={isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-7 px-2.5 text-xs">
+                        <Upload className="mr-1 h-3.5 w-3.5" />{isUploadingSpec ? "上傳中…" : "上傳 SPEC"}
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1 md:col-span-3">
               <MaterialFieldLabel field="remark" htmlFor="material-remark" label="申請狀態 / 備註" />
               <Textarea id="material-remark" disabled={readOnly} value={form.remark} onChange={(event) => updateField("remark", event.target.value)} className="min-h-9 rounded-xl text-sm" rows={1} placeholder="例如 待確認實體料號、待核對原理圖符號" />
             </div>
@@ -3335,6 +3392,7 @@ interface MaterialRowActions {
   copy: (value: string) => void;
   openCreate: (group: MaterialGroup) => void;
   openTracking: (record: MaterialRecord) => void;
+  openSpec: (record: MaterialRecord) => void;
   saveVirtual: (record: MaterialRecord, value: string) => void;
   viewRecord: (record: MaterialRecord) => void;
   editRecord: (record: MaterialRecord) => void;
@@ -3631,7 +3689,20 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         )}
         {columns.partSpec && (
           <td data-material-cell="partSpec" className={MATERIAL_CELL_CLASS}>
-            <MaterialSourceText value={partSpec} label="Part Spec" />
+            <div className="flex min-w-0 items-center gap-1">
+              <MaterialSourceText value={partSpec} label="Part Spec" />
+              {statusRecord.specDocument && (
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); actions.openSpec(statusRecord); }}
+                  title={`開啟 SPEC：${statusRecord.specDocument.name}`}
+                  aria-label={`開啟 SPEC ${statusRecord.specDocument.name}`}
+                  className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md border border-primary/35 bg-primary/15 text-primary hover:bg-primary/25"
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </td>
         )}
         {columns.schematicPart && (
@@ -5071,6 +5142,16 @@ export function MaterialRequestPage() {
     setEditorOpen(true);
   };
 
+  const openSpecDocument = async (record: Pick<MaterialWorkbookRecord, "specDocument">) => {
+    if (!record.specDocument) return;
+    try {
+      const url = await createMaterialSpecUrl(record.specDocument.path);
+      window.open(url, "_blank", "noopener");
+    } catch (error) {
+      toast({ title: "無法開啟 SPEC", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
+    }
+  };
+
   const openTrackingDialog = (record: MaterialRecord) => {
     if (!canEdit) return;
     setTrackingRecord(record);
@@ -5661,6 +5742,7 @@ export function MaterialRequestPage() {
     copy: (value) => { void handleCopy(value); },
     openCreate,
     openTracking: openTrackingDialog,
+    openSpec: (record) => { void openSpecDocument(record); },
     saveVirtual: saveVirtualAlternative,
     viewRecord: (record) => openRecord(record, "view"),
     editRecord: (record) => openRecord(record, "edit"),
@@ -5670,6 +5752,7 @@ export function MaterialRequestPage() {
     copy: (value) => rowActionsRef.current?.copy(value),
     openCreate: (group) => rowActionsRef.current?.openCreate(group),
     openTracking: (record) => rowActionsRef.current?.openTracking(record),
+    openSpec: (record) => rowActionsRef.current?.openSpec(record),
     saveVirtual: (record, value) => rowActionsRef.current?.saveVirtual(record, value),
     viewRecord: (record) => rowActionsRef.current?.viewRecord(record),
     editRecord: (record) => rowActionsRef.current?.editRecord(record),
@@ -5736,7 +5819,7 @@ export function MaterialRequestPage() {
       />
       <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
       <BomManagerDialog canEdit={canEdit} activeBomId={activeBomId} activeProjectName={activeProject?.name} bomWorkspaces={orderedBomWorkspaces} projectGroups={bomProjectGroups} projects={projects} open={bomManagerOpen} onAssignProject={(id, projectId) => void assignBomProject(id, projectId)} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
-      <MaterialRecordDialog canEdit={canEdit} open={editorOpen} mode={editorMode} record={editorRecord} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onSave={handleSaveRecord} />
+      <MaterialRecordDialog canEdit={canEdit} open={editorOpen} mode={editorMode} record={editorRecord} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target) => void openSpecDocument(target)} onSave={handleSaveRecord} />
       <TrackingHistoryDialog canEdit={canEdit} open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
       <MaterialExportDialog
         activeFormat={activeExportFormat}

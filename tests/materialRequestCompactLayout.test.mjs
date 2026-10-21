@@ -226,3 +226,14 @@ test("pending parts keep blinking until a part number arrives or data is refresh
   assert.match(source, /data-testid="pending-materials-button"[\s\S]{0,400}?requiredApplicationCount > 0 && "material-attention"/);
   assert.match(source, /id="material-internal-pn"[\s\S]{0,400}?placeholder:!text-warning/);
 });
+
+test("a SPEC document can be attached to a record and opened from the Part Spec cell", () => {
+  const dialog = slice("function MaterialRecordDialog(", "type MaterialColumnVisibility");
+  assert.match(dialog, /data-testid="material-spec-document"/);
+  assert.match(dialog, /uploadMaterialSpecDocument\(\{ workspaceId, recordId: form\.id, file, uploadedBy: uploaderName \}\)/);
+  assert.match(dialog, /accept=\{MATERIAL_SPEC_ACCEPT\}/);
+  assert.match(dialog, /"上傳 SPEC"/);
+  assert.match(rowBlock, /statusRecord\.specDocument && \(/);
+  assert.match(source, /specDocument: record\.specDocument,/);
+  assert.match(rowBlock, /<MaterialSourceText value=\{partSpec\} label="Part Spec" \/>/);
+});
