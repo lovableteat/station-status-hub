@@ -74,7 +74,7 @@ test("the second header row shows the workbook meaning, or the filter where one 
   assert.match(filterRow, /MATERIAL_TABLE_COLUMN_MEANING\[column\.key\]/);
   assert.match(filterRow, /MATERIAL_COLUMN_FILTER_KEYS\[column\.key\]/);
   const filterKeys = slice("const MATERIAL_COLUMN_FILTER_KEYS", "};");
-  for (const [key, filterKey] of [["name", "material"], ["refDes", "refDes"], ["mpn", "mpn"], ["virtual", "virtualAlternative"], ["physical", "internal"], ["actions", "trackingStatus"]]) {
+  for (const [key, filterKey] of [["name", "material"], ["qty", "qty"], ["refDes", "refDes"], ["mpn", "mpn"], ["manufacturer", "manufacturer"], ["sourcingStatus", "sourcingStatus"], ["virtual", "virtualAlternative"], ["physical", "internal"], ["partName", "partName"], ["partSpec", "partSpec"], ["schematicPart", "schematicPart"], ["footprint", "footprint"], ["phaseOut", "phaseOut"], ["partUsage", "partUsage"], ["actions", "trackingStatus"]]) {
     assert.match(filterKeys, new RegExp(`${key}: "${filterKey}"`));
   }
   assert.match(source, /MATERIAL_CE_HELP_BY_HEADER\.get\(column\.ceHeader\)\?\.meaning/);
@@ -168,7 +168,7 @@ test("BOMs are grouped by project in BOM 管理 and in the header switcher", () 
   assert.match(bomManager, /<div key=\{`project:\$\{group\.key\}`\}/);
   assert.doesNotMatch(bomManager, /<section key=\{group\.key\}/);
   assert.match(bomManager, /請有編輯權限的同事上傳 Excel 或指定專案/);
-  assert.match(bomManager, /className="h-11 w-\[9\.5rem\] rounded-md px-2 text-xs md:h-7"/);
+  assert.match(bomManager, /className="h-11 w-\[11rem\] rounded-md px-2 text-sm md:h-8"/);
   assert.match(bomManager, />目前專案</);
   assert.match(bomManager, /onAssignProject\(workspace\.id, value === UNASSIGNED_BOM_PROJECT_VALUE \? null : value\)/);
   assert.match(bomManager, /此專案還沒有 BOM/);
@@ -245,7 +245,7 @@ test("不建議料匯出 opens the Non PVL dialog with the SOP link, preview and
   assert.match(dialogSource, /NON_PVL_SOP_URL = "https:\/\/sp\.pegatroncorp\.com\/plm\/FAQ\/Part\/\[PART\]%20/);
   assert.match(dialogSource, /NON_PVL_SOP_TITLE = "\[PART\] 依專案解除不建議使用料申請說明"/);
   assert.match(dialogSource, /material-non-pvl\//);
-  for (const text of ["step1.png", "step6.png", "匯出 PLM 申請清單", "匯出明細 (.xlsx)", "料號(必填)"]) assert.ok(dialogSource.includes(text), text);
+  for (const text of ["step1.png", "step6.png", "匯出 PLM 申請清單", "匯出完整明細 (.xlsx)", "料號(必填)"]) assert.ok(dialogSource.includes(text), text);
   assert.match(source, /data-testid="discouraged-export-button" onClick=\{\(\) => setNonPvlDialogOpen\(true\)\}/);
   assert.match(source, /<MaterialNonPvlDialog/);
 });

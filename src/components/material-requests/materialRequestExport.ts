@@ -8,16 +8,20 @@ export interface MaterialReportImage {
 }
 
 export interface MaterialReportRow {
-  actionStatus: string;
+  /** Legacy snapshots only; the 建料狀態 column no longer exists. */
+  actionStatus?: string;
   assembly: string;
   footprint: string;
   internalPartNumber: string;
   item: string;
   manufacturer: string;
   manufacturerPartNumber: string;
-  manufacturerPartNumberAlt: string;
-  marked: boolean;
+  manufacturerPartNumberAlt?: string;
+  /** Legacy snapshots only; the 標記 column no longer exists. */
+  marked?: boolean;
   materialName: string;
+  remark?: string;
+  specDocumentName?: string;
   partName?: string;
   partUsageStatus?: string;
   phaseOutStatus?: string;
@@ -33,6 +37,7 @@ export interface MaterialReportRow {
   trackingOwner: string;
   trackingStatus: string;
   trackingSummary: string;
+  trackingUpdatedAt?: string;
   tx: string;
   images: MaterialReportImage[];
 }
@@ -69,43 +74,73 @@ export interface MaterialExportProgress {
 
 type ProgressHandler = (progress: MaterialExportProgress) => void;
 
+// The report mirrors the 料號申請 table: the CE workbook columns in workbook
+// order, then the website-maintained tracking columns.
 const EXCEL_HEADERS = [
-  "項次",
-  "標記",
-  "內部分組",
-  "REF DES",
-  "料件名稱",
-  "模組",
+  "Item",
+  "Name",
   "Qty",
-  "原理圖符號（Schematic_Part）",
-  "PCB 封裝名稱（PCB_Footprint）",
-  "廠商",
-  "廠商料號（Manufacturer Part Number）",
-  "舊檔第二 MPN",
+  "Ref Des",
+  "Manufacturer Part Number",
+  "Manufacturer",
+  "Sourcing Status",
   "虛擬料號",
-  "phase out（零件狀態）",
-  "零件狀態",
-  "目前狀態",
-  "狀態追蹤",
-  "單號",
-  "申請連結",
-  "申請狀態資訊",
-  "最後更新人",
-  "供應／核准狀態（Sourcing Status）",
-  "建料狀態",
   "實體料號",
-  "實體料名（Part Name）",
-  "料件規格（Part Spec）",
+  "Part Name",
+  "Part Spec",
+  "Schematic_Part",
+  "PCB_Footprint",
+  "phase out",
+  "零件狀態",
+  "狀態追蹤",
+  "追蹤內容",
+  "單號",
+  "單號連結",
+  "申請資訊",
+  "最後更新人",
+  "最後追蹤時間",
+  "模組",
+  "備註",
+  "SPEC 文件",
   "圖片",
 ] as const;
 
-const EXCEL_COLUMN_WIDTHS = [10, 8, 20, 20, 30, 22, 9, 26, 20, 20, 28, 24, 22, 25, 45, 16, 34, 18, 30, 26, 18, 25, 18, 22, 28, 38, 18];
+const EXCEL_COLUMN_WIDTHS = [8, 34, 7, 22, 28, 24, 16, 16, 16, 24, 30, 20, 20, 14, 30, 12, 34, 16, 28, 24, 14, 18, 16, 28, 24, 18];
 const EXCEL_CENTERED_COLUMNS = new Set(
-  (["項次", "標記", "Qty", "phase out（零件狀態）", "零件狀態", "目前狀態", "建料狀態"] as const)
+  (["Item", "Qty", "phase out", "零件狀態", "狀態追蹤"] as const)
     .map((header) => EXCEL_HEADERS.indexOf(header) + 1),
 );
-const EXCEL_REQUEST_LINK_COLUMN = EXCEL_HEADERS.indexOf("申請連結") + 1;
+const EXCEL_REQUEST_LINK_COLUMN = EXCEL_HEADERS.indexOf("單號連結") + 1;
 const EXCEL_IMAGE_COLUMN_INDEX = EXCEL_HEADERS.indexOf("圖片");
+// CE workbook meanings (row 5 of the 交付格式) as header notes; kept in step with materialUploadContract.mjs.
+const EXCEL_HEADER_NOTES: Partial<Record<(typeof EXCEL_HEADERS)[number], string>> = {
+  Name: "設計 BOM 的料件名稱",
+  Qty: "單一產品的用量",
+  "Ref Des": "電路位號，例如 C101、R1",
+  "Manufacturer Part Number": "單一廠商的單一原廠料號（MPN）",
+  Manufacturer: "該列 MPN 的製造商",
+  "Sourcing Status": "供應／核准來源狀態，保留原文",
+  虛擬料號: "可共用多個實體料的上層料號",
+  實體料號: "已申請的單一廠商、單一 MPN 實體料號",
+  "Part Name": "實體料號對應的公司料名",
+  "Part Spec": "料件規格，保留原內容",
+  Schematic_Part: "原理圖符號(orcad要能叫出原理圖符號)",
+  PCB_Footprint: "零件footprint",
+  "phase out": "零件狀態（保留公司原文）",
+  零件狀態: "新設計使用限制；不明填待確認",
+  Item: "網站列號",
+  狀態追蹤: "網站人工維護的追蹤狀態，不是 CE Excel 欄位",
+  追蹤內容: "最新一筆追蹤的說明",
+  單號: "申請單號",
+  單號連結: "申請單連結",
+  申請資訊: "最新追蹤附帶的申請資訊",
+  最後更新人: "最新一筆追蹤的建立者",
+  最後追蹤時間: "最新一筆追蹤的時間",
+  模組: "網站的模組分組",
+  備註: "網站維護的申請狀態／備註",
+  "SPEC 文件": "附在料件上的 SPEC 檔名",
+  圖片: "追蹤紀錄的第一張圖片（HTML 匯出含全部圖片）",
+};
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("zh-TW", {
@@ -209,18 +244,18 @@ async function createJpegThumbnail(dataUrl: string, maxWidth = 320, maxHeight = 
 function rowToValues(row: MaterialReportRow) {
   return [
     row.item,
-    row.marked ? "★" : "",
-    row.refGroup,
-    row.refDes,
     row.materialName,
-    row.assembly,
     row.qty,
+    row.refDes,
+    row.manufacturerPartNumber,
+    row.manufacturer,
+    row.sourcingStatus,
+    row.tx,
+    row.internalPartNumber,
+    row.partName ?? "",
+    row.specification,
     row.symbol,
     row.footprint,
-    row.manufacturer,
-    row.manufacturerPartNumber,
-    row.manufacturerPartNumberAlt,
-    row.tx,
     row.phaseOutStatus ?? "",
     row.partUsageStatus ?? "",
     row.trackingStatus,
@@ -229,11 +264,10 @@ function rowToValues(row: MaterialReportRow) {
     row.requestUrl,
     row.requestInfo,
     row.trackingOwner,
-    row.sourcingStatus,
-    row.actionStatus,
-    row.internalPartNumber,
-    row.partName ?? "",
-    row.specification,
+    row.trackingUpdatedAt ? formatDateTime(row.trackingUpdatedAt) : "",
+    row.assembly,
+    row.remark ?? "",
+    row.specDocumentName ?? "",
     row.images.length > 0 ? `${row.images[0].name}${row.images.length > 1 ? `（共 ${row.images.length} 張）` : ""}` : "",
   ];
 }
@@ -318,7 +352,9 @@ export async function exportMaterialReportExcel(
   const headerRow = sheet.getRow(headerRowNumber);
   headerRow.values = [...EXCEL_HEADERS];
   headerRow.height = 30;
-  headerRow.eachCell((cell) => {
+  headerRow.eachCell((cell, column) => {
+    const note = EXCEL_HEADER_NOTES[EXCEL_HEADERS[column - 1]];
+    if (note) cell.note = note;
     cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1D5F8A" } };
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
@@ -376,7 +412,7 @@ export async function exportMaterialReportExcel(
     onProgress?.({ phase: "images", current: index + 1, total: snapshot.rows.length });
   }
 
-  sheet.views = [{ state: "frozen", ySplit: headerRowNumber, xSplit: 3 }];
+  sheet.views = [{ state: "frozen", ySplit: headerRowNumber, xSplit: 2 }];
   sheet.autoFilter = {
     from: { row: headerRowNumber, column: 1 },
     to: { row: headerRowNumber, column: EXCEL_HEADERS.length },
@@ -412,21 +448,29 @@ function buildHtmlReport(snapshot: MaterialReportSnapshot, imagePathById?: Map<s
       ? `<a class="link" href="${escapeHtml(row.requestUrl)}" target="_blank" rel="noreferrer">${escapeHtml(row.requestTicket || "開啟連結")}</a>`
       : escapeHtml(row.requestTicket);
 
+    const trackingTime = row.trackingUpdatedAt ? formatDateTime(row.trackingUpdatedAt) : "";
+    const trackingMeta = [row.trackingOwner, trackingTime].filter(Boolean).join(" · ");
+
     return `<tr>
       <td>${escapeHtml(row.item)}</td>
-      <td>${row.marked ? "★" : ""}</td>
-      <td class="ref-cell"><strong>${escapeHtml(row.refGroup)}</strong>${renderCollapsibleRefDes(row.refDes)}</td>
-      <td><strong>${escapeHtml(row.materialName)}</strong><small>${escapeHtml(row.assembly)} · Qty ${escapeHtml(row.qty)}</small></td>
-      <td>${escapeHtml(row.manufacturer)}<small>${escapeHtml(row.manufacturerPartNumber)}${row.manufacturerPartNumberAlt ? `<br>舊檔第二 MPN：${escapeHtml(row.manufacturerPartNumberAlt)}` : ""}</small></td>
-      <td>${escapeHtml(row.internalPartNumber)}<small>原理圖符號（Schematic_Part）：${escapeHtml(row.symbol)}<br>PCB 封裝名稱（PCB_Footprint）：${escapeHtml(row.footprint)}<br>實體料名（Part Name）：${escapeHtml(row.partName)}</small></td>
+      <td><strong>${escapeHtml(row.materialName)}</strong>${row.assembly ? `<small>模組：${escapeHtml(row.assembly)}</small>` : ""}</td>
+      <td>${escapeHtml(row.qty)}</td>
+      <td class="ref-cell">${renderCollapsibleRefDes(row.refDes)}</td>
+      <td>${escapeHtml(row.manufacturerPartNumber)}</td>
+      <td>${escapeHtml(row.manufacturer)}</td>
+      <td>${escapeHtml(row.sourcingStatus)}</td>
       <td>${escapeHtml(row.tx)}</td>
+      <td>${escapeHtml(row.internalPartNumber)}</td>
+      <td>${escapeHtml(row.partName)}</td>
+      <td>${escapeHtml(row.specification)}</td>
+      <td>${escapeHtml(row.symbol)}</td>
+      <td>${escapeHtml(row.footprint)}</td>
       <td>${escapeHtml(row.phaseOutStatus)}</td>
       <td>${escapeHtml(row.partUsageStatus)}</td>
-      <td><span class="status">${escapeHtml(row.trackingStatus || "未設定")}</span><small>${escapeHtml(row.trackingSummary)}</small></td>
-      <td>${requestLink}<small>${escapeHtml(row.requestInfo)}${row.trackingOwner ? `<br>更新：${escapeHtml(row.trackingOwner)}` : ""}</small></td>
-      <td>${escapeHtml(row.sourcingStatus)}</td>
-      <td>${escapeHtml(row.actionStatus)}</td>
-      <td>${escapeHtml(row.specification)}</td>
+      <td><span class="status">${escapeHtml(row.trackingStatus || "未設定")}</span>${row.trackingSummary ? `<small>${escapeHtml(row.trackingSummary)}</small>` : ""}${trackingMeta ? `<small>${escapeHtml(trackingMeta)}</small>` : ""}</td>
+      <td>${requestLink}${row.requestInfo ? `<small>${escapeHtml(row.requestInfo)}</small>` : ""}</td>
+      <td>${escapeHtml(row.remark)}</td>
+      <td>${escapeHtml(row.specDocumentName)}</td>
       <td>${images}</td>
     </tr>`;
   }).join("");
@@ -448,7 +492,7 @@ body.image-preview-open{overflow:hidden}
 <section class="meta"><div><span>匯出範圍</span><strong>${escapeHtml(snapshot.scopeLabel)}</strong></div><div><span>匯出人員</span><strong>${escapeHtml(snapshot.exportedBy)}</strong></div><div><span>匯出時間</span><strong>${escapeHtml(formatDateTime(snapshot.exportedAt))}</strong></div><div><span>來源</span><strong>${escapeHtml(snapshot.sourceFile)} / ${escapeHtml(snapshot.sheetName)}</strong></div><div><span>原始主料數</span><strong>${snapshot.originalGroupCount.toLocaleString()}</strong></div><div><span>篩選後主料數</span><strong>${snapshot.filteredGroupCount.toLocaleString()}</strong></div><div><span>匯出明細數</span><strong>${snapshot.rows.length.toLocaleString()}</strong></div></section>
 <section class="filters">${filterBadges}</section><section class="stats">${statusCards}</section>
 <section class="report-actions"><span class="report-actions__hint">長內容已預設收合，可逐筆展開或一次控制全部資料。</span><div class="report-actions__buttons"><button type="button" data-details-action="expand">全部展開</button><button type="button" data-details-action="collapse">全部收合</button></div></section>
-<div class="table-wrap"><table><thead><tr><th>項次</th><th>標記</th><th>位號／內部分組</th><th>料件</th><th>廠商 / MPN</th><th>實體料號 / 符號與封裝 / 實體料名</th><th>虛擬料號</th><th>phase out（零件狀態）</th><th>零件狀態</th><th>狀態追蹤</th><th>申請資訊</th><th>供應／核准狀態（Sourcing Status）</th><th>建料狀態</th><th>料件規格（Part Spec）</th><th>圖片</th></tr></thead><tbody>${bodyRows}</tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Name</th><th>Qty</th><th>Ref Des</th><th>Manufacturer Part Number</th><th>Manufacturer</th><th>Sourcing Status</th><th>虛擬料號</th><th>實體料號</th><th>Part Name</th><th>Part Spec</th><th>Schematic_Part</th><th>PCB_Footprint</th><th>phase out</th><th>零件狀態</th><th>狀態追蹤</th><th>單號</th><th>備註</th><th>SPEC 文件</th><th>圖片</th></tr></thead><tbody>${bodyRows}</tbody></table></div>
 <footer class="footer">報表識別：${escapeHtml(snapshot.id)} · 本報表為 ${escapeHtml(formatDateTime(snapshot.dataAsOf))} 的固定查詢快照，不會隨系統後續更新自動改變。</footer>
 </main>
 <div class="image-lightbox" id="image-lightbox" hidden role="dialog" aria-modal="true" aria-label="圖片放大預覽">

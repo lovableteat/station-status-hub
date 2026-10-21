@@ -189,7 +189,7 @@ test("specification data remains available in the material form and exports", as
   assert.match(source, /specification: record\.partSpec,/);
   assert.doesNotMatch(source, /specification: record\.partSpec \|\|/);
   const exportSource = await readFile(new URL("../src/components/material-requests/materialRequestExport.ts", import.meta.url), "utf8");
-  assert.match(exportSource, /料件規格（Part Spec）/);
+  assert.match(exportSource, /"Part Spec",/);
   assert.match(exportSource, /row\.specification/);
 });
 
