@@ -170,8 +170,7 @@ export const MATERIAL_TABLE_COLUMNS = [
   { key: "footprint", label: "PCB_Footprint", locked: false, ceHeader: "PCB_Footprint" },
   { key: "phaseOut", label: "phase out", locked: false, ceHeader: "phase out" },
   { key: "partUsage", label: "零件狀態", locked: false, ceHeader: "零件狀態" },
-  { key: "tracking", label: "狀態追蹤", locked: false, ceHeader: "" },
-  { key: "actions", label: "資料更新", locked: true, ceHeader: "" },
+  { key: "actions", label: "狀態追蹤 / 更新", locked: true, ceHeader: "" },
 ] as const;
 
 export type MaterialTableColumnKey = (typeof MATERIAL_TABLE_COLUMNS)[number]["key"];
