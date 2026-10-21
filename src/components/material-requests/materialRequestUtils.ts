@@ -31,7 +31,25 @@ export interface MaterialWorkbookRecord {
   partName: string;
   partSpec: string;
   schematicPart: string;
+  symbolStatus?: string;
   pcbFootprint: string;
+}
+
+export type SymbolAvailability = "present" | "missing" | "unknown";
+
+export type MaterialBuildStatus =
+  | "needs-symbol"
+  | "needs-part-symbol"
+  | "needs-part"
+  | "complete"
+  | "needs-confirmation";
+
+export interface MaterialBuildRequirements {
+  status: MaterialBuildStatus;
+  hasPartNumber: boolean;
+  symbolAvailability: SymbolAvailability;
+  needsPart: boolean;
+  needsSymbol: boolean | null;
 }
 
 export interface MaterialTrackingHistoryImage {
@@ -157,6 +175,7 @@ type MaterialField =
   | "partName"
   | "partSpec"
   | "schematicPart"
+  | "symbolStatus"
   | "pcbFootprint"
   | "sectionName"
   | "assemblyName";
@@ -186,7 +205,8 @@ const FIELD_ALIASES: Record<MaterialField, string[]> = {
   partNumber: ["Part Number", "Internal Part Number", "Internal PN", "PN", "內部料號", "公司料號"],
   partName: ["Part Name", "Internal Part Name", "內部料名", "料號名稱"],
   partSpec: ["Part Spec", "Specification", "Spec", "規格", "料件規格"],
-  schematicPart: ["Schematic_Part", "Schematic Part", "Symbol", "原理圖元件", "原理圖符號"],
+  schematicPart: ["Schematic_Part", "Schematic Part", "原理圖元件", "原理圖符號"],
+  symbolStatus: ["Symbol", "Symbol Status", "Symbol建置狀態", "Symbol 建置狀態", "Symbol 狀態"],
   pcbFootprint: ["PCB_Footprint", "PCB Footprint", "Footprint", "封裝", "PCB封裝"],
   sectionName: ["Section", "Section Name", "系統", "區段", "大分類"],
   assemblyName: ["Assembly", "Assembly Name", "Module", "模組", "子系統"],
@@ -198,6 +218,41 @@ const USAGE_RISK_STATUS_WORDS = [...RISK_STATUS_WORDS, "ODM 不建議用料", "�
 
 function normalizeText(value: unknown) {
   return String(value ?? "").normalize("NFKC").replace(/\u3000/g, " ").trim();
+}
+
+export function getSymbolAvailability(value: unknown): SymbolAvailability {
+  const normalized = normalizeText(value).toLocaleLowerCase();
+  if (["有", "已建立", "yes"].includes(normalized)) return "present";
+  if (["無", "未建立", "no"].includes(normalized)) return "missing";
+  return "unknown";
+}
+
+export function getMaterialBuildRequirements(
+  record: Pick<MaterialWorkbookRecord, "partNumber" | "symbolStatus">,
+): MaterialBuildRequirements {
+  const hasPartNumber = Boolean(normalizeText(record.partNumber));
+  const symbolAvailability = getSymbolAvailability(record.symbolStatus);
+  const needsSymbol = symbolAvailability === "unknown" ? null : symbolAvailability === "missing";
+  const status: MaterialBuildStatus = symbolAvailability === "unknown"
+    ? "needs-confirmation"
+    : !hasPartNumber
+      ? needsSymbol ? "needs-part-symbol" : "needs-part"
+      : needsSymbol ? "needs-symbol" : "complete";
+
+  return { status, hasPartNumber, symbolAvailability, needsPart: !hasPartNumber, needsSymbol };
+}
+
+export function getMaterialBuildRequirementLabel(
+  record: Pick<MaterialWorkbookRecord, "partNumber" | "symbolStatus">,
+) {
+  const requirements = getMaterialBuildRequirements(record);
+  switch (requirements.status) {
+    case "needs-symbol": return "已有 Part，待補 Symbol";
+    case "needs-part-symbol": return "待補 Part／Symbol";
+    case "needs-part": return "已有 Symbol，待補 Part";
+    case "complete": return "Part／Symbol 已齊備";
+    default: return requirements.hasPartNumber ? "已有 Part，Symbol 待確認" : "Part 待補，Symbol 待確認";
+  }
 }
 
 export function normalizeMaterialSearchText(value: unknown) {
@@ -543,7 +598,12 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   const normalizedStatus = normalizeHeader(raw.sourcingStatus);
   const normalizedUsageStatus = normalizeHeader(raw.partUsageStatus);
   const isPending = actionKind !== "ok" && actionKind !== "other";
-  const isPreferred = actionKind === "ok" && isPreferredInternalPartNumber(raw.partNumber);
+  const hasSymbolStatus = Object.prototype.hasOwnProperty.call(raw, "symbolStatus");
+  const buildRequirements = getMaterialBuildRequirements(raw);
+  const legacyReady = actionKind === "ok" || (Boolean(normalizeText(raw.partNumber)) && !isPending);
+  const isReady = hasSymbolStatus ? buildRequirements.status === "complete" && !isPending : legacyReady;
+  const isPreferred = actionKind === "ok" && isPreferredInternalPartNumber(raw.partNumber)
+    && (!hasSymbolStatus || isReady);
   const isRisk = RISK_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)))
     || USAGE_RISK_STATUS_WORDS.some((word) => normalizedUsageStatus.includes(normalizeHeader(word)));
   const isApproved = !isRisk && APPROVED_STATUS_WORDS.some((word) => normalizedStatus.includes(normalizeHeader(word)));
@@ -563,7 +623,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
     partSummary,
     actionKind,
     isPending,
-    isReady: actionKind === "ok" || (Boolean(normalizeText(raw.partNumber)) && !isPending),
+    isReady,
     isPreferred,
     isApproved,
     isRisk,
@@ -595,6 +655,8 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
       raw.partNumber,
       raw.partName,
       raw.partSpec,
+      raw.schematicPart,
+      raw.symbolStatus,
       raw.pcbFootprint,
       raw.remark,
       raw.sourcingStatus,
@@ -978,6 +1040,7 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
       partName,
       partSpec: normalizeText(getFieldValue(row, fields, "partSpec")),
       schematicPart: normalizeText(getFieldValue(row, fields, "schematicPart")),
+      ...(fields.has("symbolStatus") ? { symbolStatus: normalizeText(getFieldValue(row, fields, "symbolStatus")) } : {}),
       pcbFootprint: normalizeText(getFieldValue(row, fields, "pcbFootprint")),
     });
   }

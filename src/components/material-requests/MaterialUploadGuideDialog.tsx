@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   MATERIAL_CE_FIELDS,
+  MATERIAL_CE_FORMAT_REVISION,
   MATERIAL_HANDOFF_ROLES,
   MATERIAL_HANDOFF_RULES,
   MATERIAL_HANDOFF_STEPS,
@@ -10,8 +11,8 @@ import {
 } from "./materialUploadContract.mjs";
 
 export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const templateUrl = `${import.meta.env.BASE_URL}material-upload-template.xlsx?v=${MATERIAL_HANDOFF_VERSION}-format-only`;
-  const referenceUrl = `${import.meta.env.BASE_URL}material-ce-reference.xlsx?v=${MATERIAL_HANDOFF_VERSION}`;
+  const templateUrl = `${import.meta.env.BASE_URL}material-upload-template.xlsx?v=${MATERIAL_CE_FORMAT_REVISION}`;
+  const referenceUrl = `${import.meta.env.BASE_URL}material-ce-reference.xlsx?v=${MATERIAL_CE_FORMAT_REVISION}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -64,11 +65,12 @@ export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpe
             </p>
             <p className="mt-3 leading-6 text-slate-300">{MATERIAL_HANDOFF_RULES[2]}</p>
             <p className="mt-3 leading-6 text-slate-300">{MATERIAL_HANDOFF_RULES[3]}</p>
+            <p className="mt-3 rounded-xl border border-cyan-300/20 bg-[#0a1527] p-3 leading-6 text-cyan-100">{MATERIAL_HANDOFF_RULES[5]}</p>
           </section>
 
           <section className="rounded-2xl border border-blue-400/20 bg-[#101d33] p-5" aria-labelledby="handoff-fields-title">
             <h3 id="handoff-fields-title" className="text-lg font-bold text-blue-200">4. 每一欄由誰填、網站放哪裡</h3>
-            <p className="mt-2 leading-6 text-slate-300">範本第 4 列是固定表頭，第 5 列起填資料。CE 從原 BOM 或公司系統保留／帶出資料，不必重新手打整份 BOM；最右側「零件狀態」是本次補欄。</p>
+            <p className="mt-2 leading-6 text-slate-300">範本第 4 列是固定表頭，第 5 列起填資料。CE 從原 BOM 或公司系統保留／帶出資料；Symbol 填建置狀態，Schematic_Part 填原理圖符號名稱，最右側是「零件狀態」。</p>
             <div className="mt-4 overflow-x-auto rounded-xl border border-blue-400/15" tabIndex={0} role="region" aria-label="CE 交付欄位責任表，可左右捲動">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="bg-blue-400/10 text-blue-200">
