@@ -291,3 +291,24 @@ test("the PLM Non PVL apply list keeps unique non-empty part numbers under the �
   assert.match(exportSource, /bookType: "biff8"/);
   assert.match(exportSource, /applyNonPvlParts_/);
 });
+
+test("信件生成 groups every MPN candidate of the pending parts by manufacturer", () => {
+  const groups = [
+    { displayRef: "U9", name: "IC B", qty: 2, records: [
+      { refDes: "U9", name: "IC B", manufacturer: "Vendor B", manufacturerPartNumber: "MPN-B1", partSpec: "spec", partUsageStatus: "" },
+      { refDes: "U9", name: "IC B", manufacturer: "Vendor A", manufacturerPartNumber: "MPN-A1", partSpec: "", partUsageStatus: "待確認" },
+      { refDes: "U9", name: "IC B", manufacturer: "Vendor A", manufacturerPartNumber: "MPN-A1", partSpec: "", partUsageStatus: "" },
+    ] },
+    { displayRef: "C1", name: "CAP", qty: 1, records: [{ refDes: "", name: "", manufacturer: "", manufacturerPartNumber: "MPN-C", partSpec: "", partUsageStatus: "" }] },
+  ];
+  const sections = moduleExports.buildVendorMailSections(groups, "Test BOM");
+  assert.deepEqual(sections.map((section) => [section.vendor, section.items.map((item) => `${item.refDes}:${item.manufacturerPartNumber}`)]), [
+    ["Vendor A", ["U9:MPN-A1"]],
+    ["Vendor B", ["U9:MPN-B1"]],
+    [moduleExports.UNKNOWN_VENDOR_LABEL, ["C1:MPN-C"]],
+  ]);
+  assert.equal(sections[0].subject, "【料號申請】Test BOM · Vendor A 共 1 項");
+  const text = moduleExports.renderVendorMailText(sections[0], "您好，請協助。");
+  assert.match(text, /^主旨：【料號申請】Test BOM · Vendor A 共 1 項\n\n您好，請協助。\n\nVendor A 需申請料號（共 1 項）：\n1\. U9 · IC B · MPN MPN-A1（Qty 2；待確認）$/);
+  assert.equal(sections[2].items[0].name, "CAP");
+});

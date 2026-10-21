@@ -1,4 +1,4 @@
-import type { MaterialWorkbookRecord } from "./materialRequestUtils";
+import type { MaterialGroup, MaterialWorkbookRecord } from "./materialRequestUtils";
 
 export interface MaterialReportImage {
   dataUrl: string;
@@ -710,5 +710,137 @@ export async function exportNonPvlApplyList({
   const output = xlsx.write(workbook, { bookType: "biff8", type: "array" }) as ArrayBuffer;
   const fileName = `applyNonPvlParts_${sanitizeFileName(workspaceName)}_${getTimestamp(exportedAt)}.xls`;
   downloadBlob(new Blob([output], { type: "application/vnd.ms-excel" }), fileName);
+  return fileName;
+}
+
+export interface VendorMailItem {
+  refDes: string;
+  name: string;
+  manufacturerPartNumber: string;
+  qty: string;
+  partSpec: string;
+  partUsageStatus: string;
+}
+
+export interface VendorMailSection {
+  vendor: string;
+  subject: string;
+  items: VendorMailItem[];
+}
+
+export const UNKNOWN_VENDOR_LABEL = "未填廠商";
+
+/**
+ * One mail per manufacturer: every MPN candidate of the pending groups, grouped
+ * by its manufacturer so the same vendor receives a single request.
+ */
+export function buildVendorMailSections(
+  groups: ReadonlyArray<Pick<MaterialGroup, "displayRef" | "name" | "qty" | "records">>,
+  workspaceName: string,
+): VendorMailSection[] {
+  const byVendor = new Map<string, VendorMailItem[]>();
+  for (const group of groups) {
+    const seen = new Set<string>();
+    for (const record of group.records) {
+      const vendor = record.manufacturer?.trim() || UNKNOWN_VENDOR_LABEL;
+      const mpn = record.manufacturerPartNumber?.trim() ?? "";
+      const key = `${vendor}\u0000${mpn}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const items = byVendor.get(vendor) ?? [];
+      items.push({
+        refDes: record.refDes?.trim() || group.displayRef,
+        name: record.name || group.name,
+        manufacturerPartNumber: mpn,
+        qty: String(group.qty ?? ""),
+        partSpec: record.partSpec ?? "",
+        partUsageStatus: record.partUsageStatus ?? "",
+      });
+      byVendor.set(vendor, items);
+    }
+  }
+  return [...byVendor.entries()]
+    .sort(([left], [right]) => (left === UNKNOWN_VENDOR_LABEL ? 1 : right === UNKNOWN_VENDOR_LABEL ? -1 : left.localeCompare(right, "zh-Hant", { numeric: true })))
+    .map(([vendor, items]) => ({
+      vendor,
+      subject: `【料號申請】${workspaceName} · ${vendor} 共 ${items.length} 項`,
+      items: items.sort((left, right) => left.refDes.localeCompare(right.refDes, undefined, { numeric: true })),
+    }));
+}
+
+export function renderVendorMailText(section: VendorMailSection, message: string) {
+  const lines = [
+    `主旨：${section.subject}`,
+    "",
+    ...(message.trim() ? [message.trim(), ""] : []),
+    `${section.vendor} 需申請料號（共 ${section.items.length} 項）：`,
+    ...section.items.map((item, index) => {
+      const extras = [item.qty ? `Qty ${item.qty}` : "", item.partSpec, item.partUsageStatus].filter(Boolean).join("；");
+      return `${index + 1}. ${item.refDes} · ${item.name} · MPN ${item.manufacturerPartNumber || "未填"}${extras ? `（${extras}）` : ""}`;
+    }),
+  ];
+  return lines.join("\n");
+}
+
+export async function exportVendorMailHtml({
+  sections,
+  message,
+  workspaceName,
+  exportedBy,
+  exportedAt = new Date(),
+}: {
+  sections: VendorMailSection[];
+  message: string;
+  workspaceName: string;
+  exportedBy: string;
+  exportedAt?: Date;
+}) {
+  const sectionHtml = sections.map((section, index) => {
+    const rows = section.items.map((item, itemIndex) => `<tr><td>${itemIndex + 1}</td><td>${escapeHtml(item.refDes)}</td><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.manufacturerPartNumber)}</td><td>${escapeHtml(item.qty)}</td><td>${escapeHtml(item.partSpec)}</td><td>${escapeHtml(item.partUsageStatus)}</td></tr>`).join("");
+    const text = renderVendorMailText(section, message);
+    return `<section class="mail" id="mail-${index + 1}">
+<header><h2>${escapeHtml(section.vendor)}<small>${section.items.length} 項</small></h2><div class="actions"><button type="button" data-copy="text-${index + 1}">複製純文字信件</button><button type="button" data-copy-html="mail-${index + 1}">複製表格版本</button></div></header>
+<p class="subject"><strong>主旨：</strong>${escapeHtml(section.subject)}</p>
+${message.trim() ? `<div class="message">${escapeHtml(message.trim()).replace(/\n/g, "<br>")}</div>` : ""}
+<table><thead><tr><th>#</th><th>Ref Des</th><th>Name</th><th>Manufacturer Part Number</th><th>Qty</th><th>Part Spec</th><th>零件狀態</th></tr></thead><tbody>${rows}</tbody></table>
+<textarea id="text-${index + 1}" readonly aria-label="${escapeHtml(section.vendor)} 純文字信件">${escapeHtml(text)}</textarea>
+</section>`;
+  }).join("\n");
+
+  const html = `<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(workspaceName)} 料號申請信件</title>
+<style>
+:root{color-scheme:light;--ink:#102033;--muted:#587086;--line:#cddce7;--blue:#155e85;--paper:#f4f8fb}*{box-sizing:border-box}body{margin:0;background:#e9f0f5;color:var(--ink);font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;font-size:14px}.page{max-width:1100px;margin:0 auto;padding:24px}.hero{padding:22px 24px;border-radius:14px;background:linear-gradient(135deg,#123a61,#17677c);color:#fff}.hero h1{margin:0;font-size:22px}.hero p{margin:8px 0 0;color:#d7eef5}.mail{margin-top:18px;border:1px solid var(--line);border-radius:14px;background:#fff;padding:18px 20px}.mail header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}.mail h2{margin:0;font-size:18px}.mail h2 small{margin-left:8px;color:var(--muted);font-size:13px;font-weight:400}.actions{display:flex;gap:8px}.actions button{border:1px solid #8ac6d5;border-radius:8px;background:#fff;color:#164e63;padding:7px 12px;font:inherit;font-weight:700;cursor:pointer}.actions button:hover{background:#dff3f7}.actions button.is-done{background:#dcfce7;border-color:#4ade80;color:#166534}.subject{margin:12px 0 6px}.message{white-space:pre-wrap;margin:0 0 12px;padding:12px;border-left:3px solid #8ac6d5;background:var(--paper)}table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}thead th{background:var(--blue);color:#fff}tbody tr:nth-child(even){background:var(--paper)}textarea{position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0}.footer{margin-top:18px;color:var(--muted);font-size:12px}
+</style></head><body><main class="page">
+<header class="hero"><h1>${escapeHtml(workspaceName)} 料號申請信件</h1><p>共 ${sections.length} 家廠商 · ${sections.reduce((sum, section) => sum + section.items.length, 0)} 項 · 由 ${escapeHtml(exportedBy)} 於 ${escapeHtml(formatDateTime(exportedAt.toISOString()))} 產生。每家廠商一封：按「複製純文字信件」貼到郵件即可群發，「複製表格版本」會連表格一起複製。</p></header>
+${sectionHtml}
+<footer class="footer">信件內容依產生當下的待處理料整理，後續料況變動不會自動更新。</footer>
+</main>
+<script>
+(() => {
+  const mark = (button) => { button.classList.add("is-done"); const label = button.textContent; button.textContent = "已複製"; setTimeout(() => { button.textContent = label; button.classList.remove("is-done"); }, 1600); };
+  document.querySelectorAll("[data-copy]").forEach((button) => button.addEventListener("click", async () => {
+    const area = document.getElementById(button.getAttribute("data-copy"));
+    if (!area) return;
+    try { await navigator.clipboard.writeText(area.value); } catch { area.style.position = "static"; area.select(); document.execCommand("copy"); area.style.position = ""; }
+    mark(button);
+  }));
+  document.querySelectorAll("[data-copy-html]").forEach((button) => button.addEventListener("click", async () => {
+    const section = document.getElementById(button.getAttribute("data-copy-html"));
+    if (!section) return;
+    const clone = section.cloneNode(true);
+    clone.querySelectorAll(".actions, textarea").forEach((node) => node.remove());
+    const html = clone.innerHTML;
+    const text = section.querySelector("textarea")?.value ?? "";
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+    } catch { await navigator.clipboard.writeText(text); }
+    mark(button);
+  }));
+})();
+</script></body></html>`;
+  const fileName = `${sanitizeFileName(`${workspaceName}_料號申請信件`)}_${getTimestamp(exportedAt)}.html`;
+  downloadBlob(new Blob([html], { type: "text/html;charset=utf-8" }), fileName);
   return fileName;
 }

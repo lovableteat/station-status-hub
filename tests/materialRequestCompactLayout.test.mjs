@@ -249,3 +249,13 @@ test("不建議料匯出 opens the Non PVL dialog with the SOP link, preview and
   assert.match(source, /data-testid="discouraged-export-button" onClick=\{\(\) => setNonPvlDialogOpen\(true\)\}/);
   assert.match(source, /<MaterialNonPvlDialog/);
 });
+
+test("待處理料 can turn the pending parts into per-vendor mail content", () => {
+  const dialog = slice("function PendingMailDialog(", "function PendingMaterialsDialog(");
+  assert.match(dialog, /buildVendorMailSections\(groups, workspaceName\)/);
+  assert.match(dialog, /exportVendorMailHtml\(\{ sections, message, workspaceName, exportedBy \}\)/);
+  assert.match(dialog, /id="pending-mail-message"/);
+  const pending = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
+  assert.match(pending, /data-testid="pending-mail-button"[\s\S]*?信件生成/);
+  assert.match(pending, /<PendingMailDialog groups=\{groups\}/);
+});

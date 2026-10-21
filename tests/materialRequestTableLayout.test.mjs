@@ -93,7 +93,7 @@ test("material hover cards expose searchable, scrollable, and explicit copy cont
   assert.match(compactHoverBlock, /data-testid="compact-hover-content"/);
   assert.match(compactHoverBlock, /data-testid="compact-hover-search"/);
   assert.match(compactHoverBlock, /data-testid="compact-hover-copy-all"/);
-  assert.match(compactHoverBlock, /max-h-\[min\(240px,40vh\)\] divide-y divide-border\/60 overflow-y-auto/);
+  assert.match(compactHoverBlock, /grid max-h-\[min\(360px,55vh\)\] grid-cols-\[repeat\(auto-fill,minmax\(10rem,1fr\)\)\]/);
   assert.doesNotMatch(compactHoverBlock, /padStart\(2, "0"\)/, "values are chips, not numbered rows");
   assert.match(identityBlock, /data-testid="material-identity-metrics"/);
   assert.match(identityBlock, /"material-identity-ref-list"\]/);
