@@ -239,3 +239,13 @@ test("a SPEC document can be attached to a record and opened from the Part Spec 
   assert.match(source, /specDocument: record\.specDocument,/);
   assert.match(rowBlock, /<MaterialSourceText value=\{partSpec\} label="Part Spec" \/>/);
 });
+
+test("不建議料匯出 opens the Non PVL dialog with the SOP link, preview and both exports", async () => {
+  const dialogSource = (await readFile(new URL("../src/components/material-requests/MaterialNonPvlDialog.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+  assert.match(dialogSource, /NON_PVL_SOP_URL = "https:\/\/sp\.pegatroncorp\.com\/plm\/FAQ\/Part\/\[PART\]%20/);
+  assert.match(dialogSource, /NON_PVL_SOP_TITLE = "\[PART\] 依專案解除不建議使用料申請說明"/);
+  assert.match(dialogSource, /material-non-pvl\//);
+  for (const text of ["step1.png", "step6.png", "匯出 PLM 申請清單", "匯出明細 (.xlsx)", "料號(必填)"]) assert.ok(dialogSource.includes(text), text);
+  assert.match(source, /data-testid="discouraged-export-button" onClick=\{\(\) => setNonPvlDialogOpen\(true\)\}/);
+  assert.match(source, /<MaterialNonPvlDialog/);
+});

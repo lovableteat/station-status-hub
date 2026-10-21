@@ -636,3 +636,35 @@ export async function exportDiscouragedMaterialsExcel({
   downloadBlob(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), fileName);
   return fileName;
 }
+
+export const NON_PVL_APPLY_HEADER = "料號(必填)";
+
+/** Unique physical part numbers, in first-seen order, for the PLM Non PVL apply list. */
+export function collectNonPvlPartNumbers(rows: ReadonlyArray<Pick<DiscouragedMaterialRow, "partNumber">>) {
+  return Array.from(new Set(rows.map((row) => row.partNumber.trim()).filter(Boolean)));
+}
+
+/**
+ * PLM's Non PVL 申請 only accepts the sample file layout: one 料號(必填) column,
+ * one part number per row, saved as Excel 97-2003 (.xls) with no filter or
+ * hidden column, so this writer uses SheetJS BIFF8 instead of ExcelJS.
+ */
+export async function exportNonPvlApplyList({
+  partNumbers,
+  workspaceName,
+  exportedAt = new Date(),
+}: {
+  partNumbers: string[];
+  workspaceName: string;
+  exportedAt?: Date;
+}) {
+  const xlsx = await import("xlsx");
+  const sheet = xlsx.utils.aoa_to_sheet([[NON_PVL_APPLY_HEADER], ...partNumbers.map((partNumber) => [partNumber])]);
+  sheet["!cols"] = [{ wch: 24 }];
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, sheet, "Sheet1");
+  const output = xlsx.write(workbook, { bookType: "biff8", type: "array" }) as ArrayBuffer;
+  const fileName = `applyNonPvlParts_${sanitizeFileName(workspaceName)}_${getTimestamp(exportedAt)}.xls`;
+  downloadBlob(new Blob([output], { type: "application/vnd.ms-excel" }), fileName);
+  return fileName;
+}

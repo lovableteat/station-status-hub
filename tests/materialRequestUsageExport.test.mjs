@@ -307,3 +307,12 @@ test("不建議料匯出 collects the physical part numbers whose 零件狀態 i
   ]);
   assert.deepEqual(moduleExports.DISCOURAGED_EXPORT_HEADERS, ["Ref Des", "Name", "Manufacturer Part Number", "Manufacturer", "實體料號", "虛擬料號", "零件狀態"]);
 });
+
+test("the PLM Non PVL apply list keeps unique non-empty part numbers under the 料號(必填) header", () => {
+  assert.equal(moduleExports.NON_PVL_APPLY_HEADER, "料號(必填)");
+  assert.deepEqual(moduleExports.collectNonPvlPartNumbers([
+    { partNumber: "0600-00010ZZ" }, { partNumber: " 0200-00EA0ZY " }, { partNumber: "" }, { partNumber: "0600-00010ZZ" },
+  ]), ["0600-00010ZZ", "0200-00EA0ZY"]);
+  assert.match(exportSource, /bookType: "biff8"/);
+  assert.match(exportSource, /applyNonPvlParts_/);
+});
