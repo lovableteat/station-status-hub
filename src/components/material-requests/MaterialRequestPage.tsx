@@ -132,7 +132,7 @@ import type {
   MaterialExportProgress,
   MaterialReportSnapshot,
 } from "./materialRequestExport";
-import { collectDiscouragedMaterialRows, collectNonPvlPartNumbers, exportDiscouragedMaterialsExcel, exportNonPvlApplyList } from "./materialRequestExport";
+import { buildVendorMailSections, collectDiscouragedMaterialRows, collectNonPvlPartNumbers, exportDiscouragedMaterialsExcel, exportNonPvlApplyList, exportVendorMailHtml, renderVendorMailText } from "./materialRequestExport";
 import { MaterialNonPvlDialog } from "./MaterialNonPvlDialog";
 import {
   MATERIAL_TABLE_COLUMNS,
@@ -431,7 +431,7 @@ function CompactHoverValue({
         side="top"
         sideOffset={8}
         collisionPadding={16}
-        className="w-auto min-w-[14rem] max-w-[min(440px,calc(100vw-24px))] rounded-xl border-border bg-popover p-3 text-popover-foreground shadow-lg"
+        className={cn("w-auto min-w-[14rem] max-w-[min(820px,calc(100vw-24px))] rounded-xl border-border bg-popover p-3 text-popover-foreground shadow-lg", summary.values.length > 8 && "w-[min(820px,calc(100vw-24px))]")}
       >
         <div className="mb-2 flex items-center gap-2">
           <p className="text-xs font-semibold text-foreground">{label}</p>
@@ -476,9 +476,9 @@ function CompactHoverValue({
           </div>
         ) : null}
 
-        <ul className="max-h-[min(240px,40vh)] divide-y divide-border/60 overflow-y-auto rounded-md border border-border bg-background/40">
+        <ul className="grid max-h-[min(360px,55vh)] grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-x-3 overflow-y-auto rounded-md border border-border bg-background/40 px-1">
           {filteredValues.length > 0 ? filteredValues.map((value, index) => (
-            <li key={`${value}-${index}`} className="truncate px-2 font-mono text-xs leading-6 text-foreground" title={value}>
+            <li key={`${value}-${index}`} className="truncate border-b border-border/40 px-1 font-mono text-xs leading-6 text-foreground" title={value}>
               {value}
             </li>
           )) : (
@@ -536,7 +536,7 @@ function MaterialIdentityHover({
         side="top"
         sideOffset={8}
         collisionPadding={16}
-        className="w-auto min-w-[16rem] max-w-[min(520px,calc(100vw-24px))] rounded-xl border-border bg-popover p-3 text-popover-foreground shadow-lg"
+        className={cn("w-auto min-w-[16rem] max-w-[min(820px,calc(100vw-24px))] rounded-xl border-border bg-popover p-3 text-popover-foreground shadow-lg", refs.length + mpns.length > 8 && "w-[min(820px,calc(100vw-24px))]")}
       >
         <p className="truncate text-sm font-semibold text-foreground">{name || "未命名料件"}</p>
         <p data-testid="material-primary-vendor" className="truncate text-xs text-muted-foreground">
@@ -552,10 +552,10 @@ function MaterialIdentityHover({
         ].map(([sectionLabel, values, emptyText, testId]) => (
           <section key={sectionLabel as string} data-testid={testId as string} className="mt-2 min-w-0 border-t border-border pt-2">
             <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{sectionLabel as string}</p>
-            <ScrollArea className={cn((values as string[]).length > 10 && "h-48")}>
-              <ul className="divide-y divide-border/60 rounded-md border border-border bg-background/40">
+            <ScrollArea className={cn((values as string[]).length > 30 && "h-56")}>
+              <ul className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-x-3 rounded-md border border-border bg-background/40 px-1">
                 {(values as string[]).length > 0 ? (values as string[]).map((value) => (
-                  <li key={value} className="truncate px-2 font-mono text-xs leading-6 text-foreground" title={value}>
+                  <li key={value} className="truncate border-b border-border/40 px-1 font-mono text-xs leading-6 text-foreground" title={value}>
                     {value}
                   </li>
                 )) : (
@@ -2890,11 +2890,88 @@ function getPendingGroupUpdatedAt(group: MaterialGroup, recordMeta?: Record<stri
   return latest;
 }
 
+const DEFAULT_VENDOR_MAIL_MESSAGE = "您好，以下料件需要申請料號／取得建料資料（規格書、Symbol、Footprint），再麻煩協助提供，謝謝。";
+
+function PendingMailDialog({
+  groups,
+  open,
+  workspaceName,
+  exportedBy,
+  onOpenChange,
+}: {
+  groups: MaterialGroup[];
+  open: boolean;
+  workspaceName: string;
+  exportedBy: string;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [message, setMessage] = useState(DEFAULT_VENDOR_MAIL_MESSAGE);
+  const [isExporting, setIsExporting] = useState(false);
+  const { toast } = useToast();
+  const sections = useMemo(() => buildVendorMailSections(groups, workspaceName), [groups, workspaceName]);
+  const itemCount = sections.reduce((sum, section) => sum + section.items.length, 0);
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const fileName = await exportVendorMailHtml({ sections, message, workspaceName, exportedBy });
+      toast({ title: "信件 HTML 已產生", description: `${sections.length} 家廠商 · ${itemCount} 項 · ${fileName}，開啟後每家按「複製」即可貼到郵件群發。` });
+    } catch (error) {
+      toast({ title: "信件生成失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent data-testid="pending-mail-dialog" className="flex max-h-[92vh] max-w-4xl flex-col gap-4 overflow-hidden p-5 text-base sm:p-7">
+        <DialogHeader>
+          <DialogTitle className="text-xl">信件生成</DialogTitle>
+          <DialogDescription>把目前 {groups.length.toLocaleString()} 筆待處理料整理成每家廠商一封信（共 {sections.length} 家、{itemCount.toLocaleString()} 項），匯出 HTML 後逐家複製貼到郵件即可群發。</DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+          <section className="workspace-dialog-section rounded-2xl p-4">
+            <Label htmlFor="pending-mail-message" className="text-base font-semibold text-foreground">信件開頭文字</Label>
+            <Textarea id="pending-mail-message" value={message} onChange={(event) => setMessage(event.target.value)} rows={4} className="mt-2 rounded-xl text-base" placeholder="每封信開頭都會放這段文字" />
+          </section>
+          <section className="workspace-dialog-section rounded-2xl p-4">
+            <h3 className="text-base font-semibold text-foreground">廠商分組預覽</h3>
+            {sections.length === 0 ? (
+              <p className="mt-2 text-sm text-foreground/75">目前沒有待處理料，無法產生信件。</p>
+            ) : (
+              <ul className="mt-2 divide-y divide-border/60 rounded-xl border border-border">
+                {sections.map((section) => (
+                  <li key={section.vendor} className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <strong className="min-w-0 flex-1 truncate text-base text-foreground">{section.vendor}</strong>
+                      <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.primary)}>{section.items.length} 項</span>
+                    </div>
+                    <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-lg bg-background/40 p-2 font-sans text-sm text-foreground/80">{renderVendorMailText(section, message)}</pre>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-10 px-4 text-sm">關閉</Button>
+          <Button type="button" data-testid="pending-mail-export" disabled={isExporting || sections.length === 0} onClick={() => void handleExport()} className="h-10 px-4 text-sm font-bold">
+            <FileCode2 className="mr-1.5 h-4 w-4" />{isExporting ? "產生中…" : "匯出信件 HTML"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function PendingMaterialsDialog({
   canEdit,
   groups,
   open,
   recordMeta,
+  workspaceName,
+  exportedBy,
   onLocate,
   onOpenChange,
   onOpenCreate,
@@ -2904,12 +2981,15 @@ function PendingMaterialsDialog({
   groups: MaterialGroup[];
   open: boolean;
   recordMeta?: Record<string, BomRecordSyncMeta>;
+  workspaceName: string;
+  exportedBy: string;
   onLocate: (group: MaterialGroup) => void;
   onOpenChange: (open: boolean) => void;
   onOpenCreate: (group: MaterialGroup) => void;
   onOpenTracking: (record: MaterialRecord) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [mailOpen, setMailOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all">("all");
   const categories = useMemo(() => groupPendingMaterials(groups), [groups]);
   const keyword = query.trim().toLowerCase();
@@ -2937,22 +3017,28 @@ function PendingMaterialsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="pending-materials-dialog" className="flex max-h-[92vh] max-w-6xl flex-col gap-3 overflow-hidden p-5 text-base sm:p-7">
+      <DialogContent data-testid="pending-materials-dialog" className="flex max-h-[94vh] w-[min(96vw,1760px)] max-w-[min(96vw,1760px)] flex-col gap-3 overflow-hidden p-5 text-base sm:p-7">
         <DialogHeader>
           <DialogTitle className="text-xl">待處理料</DialogTitle>
           <DialogDescription className="truncate" title={description}>{description}</DialogDescription>
         </DialogHeader>
 
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜尋位號、料名、MPN 或追蹤狀態"
-            aria-label="搜尋待處理料"
-            className="h-9 rounded-xl pl-9 text-sm"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[16rem] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜尋位號、料名、MPN 或追蹤狀態"
+              aria-label="搜尋待處理料"
+              className="h-10 rounded-xl pl-9 text-sm"
+            />
+          </div>
+          <Button type="button" variant="secondary" data-testid="pending-mail-button" disabled={groups.length === 0} onClick={() => setMailOpen(true)} className="h-10 px-4 text-sm font-bold" title="把待處理料依廠商整理成信件內容並匯出 HTML">
+            <FileCode2 className="mr-1.5 h-4 w-4" />信件生成
+          </Button>
         </div>
+        <PendingMailDialog groups={groups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
 
         <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-1 border-b border-border">
           {[{ key: "all" as const, label: "全部", count: groups.length, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
@@ -2993,9 +3079,9 @@ function PendingMaterialsDialog({
               return (
                 <div key={group.key} className={cn("flex flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
                   <span className={cn("h-2 w-2 flex-none rounded-full", stale ? "material-blink bg-destructive" : "bg-muted-foreground/40")} aria-hidden="true" />
-                  <span className="w-[9rem] flex-none truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
+                  <span className="w-[16rem] flex-none truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
                   <span className="min-w-0 flex-1 truncate text-base text-foreground" title={group.name}>{group.name || "未命名料件"}</span>
-                  <span className="hidden w-[12rem] flex-none truncate font-mono text-sm text-foreground/75 md:block" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
+                  <span className="hidden w-[18rem] flex-none truncate font-mono text-sm text-foreground/75 md:block" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
                   <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(trackingStatus))}>{trackingStatus || "未追蹤"}</span>
                   {stale && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)} title="還沒取得料號，且超過 3 天沒有更新資料">逾 3 天未更新</span>}
                   <div className="ml-auto flex flex-none items-center gap-1">
@@ -3071,7 +3157,7 @@ function BomManagerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-5xl flex-col gap-4 overflow-hidden p-5 text-base sm:p-7">
+      <DialogContent className="flex max-h-[92vh] w-[min(92vw,1400px)] max-w-[min(92vw,1400px)] flex-col gap-4 overflow-hidden p-5 text-base sm:p-7">
         <DialogHeader>
           <DialogTitle className="text-xl">BOM 管理</DialogTitle>
           <DialogDescription className="truncate" title={dialogDescription}>
@@ -5844,6 +5930,8 @@ export function MaterialRequestPage() {
         groups={pendingMaterialGroups}
         open={pendingDialogOpen}
         recordMeta={activeWorkspace.recordMeta}
+        workspaceName={activeWorkspace.name}
+        exportedBy={user?.displayName || user?.username || "未知使用者"}
         onOpenChange={setPendingDialogOpen}
         onLocate={(group) => {
           setPendingDialogOpen(false);

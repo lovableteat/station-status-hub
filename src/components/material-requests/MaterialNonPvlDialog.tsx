@@ -66,7 +66,7 @@ export function MaterialNonPvlDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="material-non-pvl-dialog" className="flex max-h-[94vh] max-w-6xl flex-col gap-3 overflow-hidden p-5 text-base sm:p-7">
+      <DialogContent data-testid="material-non-pvl-dialog" className="flex max-h-[94vh] w-[min(96vw,1760px)] max-w-[min(96vw,1760px)] flex-col gap-3 overflow-hidden p-5 text-base sm:p-7">
         <DialogHeader>
           <DialogTitle className="text-xl">不建議料匯出</DialogTitle>
           <DialogDescription className="truncate" title={description}>{description}</DialogDescription>
