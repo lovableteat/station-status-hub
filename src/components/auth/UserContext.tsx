@@ -655,7 +655,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [invalidateSessionRestore]);
 
   useEffect(() => {
-    if (!user?.userId || sessionMode === "demo") return;
+    if (
+      !user?.userId ||
+      sessionMode === "demo" ||
+      (REALTIME_COLLABORATION_V2_ENABLED && (isInitializing || sessionMode !== "authenticated"))
+    ) return;
     const channel = supabase
       .channel(`account-session:${user.userId}`)
       .on(
@@ -688,7 +692,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [logout, sessionMode, user?.userId]);
+  }, [isInitializing, logout, sessionMode, user?.userId]);
 
   const value = useMemo<UserContextType>(
     () => {
