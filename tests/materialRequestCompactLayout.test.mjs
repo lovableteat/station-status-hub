@@ -191,3 +191,16 @@ test("the project row has one writer and realtime keeps the bom: prefix of works
   assert.match(compactHeader, /activeWorkspaceProjectLabel/);
   assert.match(compactHeader, />非目前專案</);
 });
+
+test("待處理料 opens from the header actions and groups pending parts by category", () => {
+  const actions = slice('data-material-zone="actions"', '{collaborationStatus !== "remote" && (');
+  assert.match(actions, /data-testid="pending-materials-button"[\s\S]*?待處理料[\s\S]*?上傳說明/);
+  const dialog = slice("function PendingMaterialsDialog(", 'const UNASSIGNED_BOM_PROJECT_VALUE');
+  assert.match(dialog, /groupPendingMaterials\(groups\)/);
+  assert.match(dialog, />優先處理</);
+  assert.match(dialog, /onLocate\(group\)|onOpenTracking\(record\)|onOpenCreate\(group\)/);
+  assert.match(source, /const pendingMaterialGroups = useMemo\(\(\) => dataset\.groups\.filter\(requiresApplication\)/);
+  assert.match(source, /<PendingMaterialsDialog/);
+  const dialogTokens = dialog;
+  assert.doesNotMatch(dialogTokens, /bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);
+});
