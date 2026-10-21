@@ -154,17 +154,26 @@ export function shouldApplyBomWorkspaceCache({
 }
 
 export const MATERIAL_TABLE_COLUMNS = [
-  { key: "item", label: "Item", locked: false },
-  { key: "marked", label: "標記", locked: false },
-  { key: "material", label: "主料 / 廠商", locked: true },
-  { key: "refDes", label: "REF DES", locked: false },
-  { key: "mpn", label: "MPN", locked: false },
-  { key: "internal", label: "實體料號 / 符號與封裝", locked: false },
-  { key: "tx", label: "虛擬料號", locked: false },
-  { key: "phaseOut", label: "phase out（零件狀態）", locked: false },
-  { key: "status", label: "狀態", locked: false },
-  { key: "tracking", label: "狀態追蹤", locked: false },
-  { key: "actions", label: "資料更新", locked: true },
+  // Website columns first, then the CE workbook columns in workbook order, then the website columns that follow the data.
+  { key: "item", label: "Item", locked: false, ceHeader: "" },
+  { key: "marked", label: "標記", locked: false, ceHeader: "" },
+  { key: "name", label: "Name", locked: true, ceHeader: "Name" },
+  { key: "qty", label: "Qty", locked: false, ceHeader: "Qty" },
+  { key: "refDes", label: "Ref Des", locked: false, ceHeader: "Ref Des" },
+  { key: "mpn", label: "Manufacturer Part Number", locked: false, ceHeader: "Manufacturer Part Number" },
+  { key: "manufacturer", label: "Manufacturer", locked: false, ceHeader: "Manufacturer" },
+  { key: "sourcingStatus", label: "Sourcing Status", locked: false, ceHeader: "Sourcing Status" },
+  { key: "virtual", label: "虛擬料號", locked: false, ceHeader: "虛擬料號" },
+  { key: "physical", label: "實體料號", locked: false, ceHeader: "實體料號" },
+  { key: "partName", label: "Part Name", locked: false, ceHeader: "Part Name" },
+  { key: "partSpec", label: "Part Spec", locked: false, ceHeader: "Part Spec" },
+  { key: "schematicPart", label: "Schematic_Part", locked: false, ceHeader: "Schematic_Part" },
+  { key: "footprint", label: "PCB_Footprint", locked: false, ceHeader: "PCB_Footprint" },
+  { key: "phaseOut", label: "phase out", locked: false, ceHeader: "phase out" },
+  { key: "partUsage", label: "零件狀態", locked: false, ceHeader: "零件狀態" },
+  { key: "status", label: "建料狀態", locked: false, ceHeader: "" },
+  { key: "tracking", label: "狀態追蹤", locked: false, ceHeader: "" },
+  { key: "actions", label: "資料更新", locked: true, ceHeader: "" },
 ] as const;
 
 export type MaterialTableColumnKey = (typeof MATERIAL_TABLE_COLUMNS)[number]["key"];

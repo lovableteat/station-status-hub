@@ -69,7 +69,7 @@ test("material vendor cells keep relation metadata inside the hover card", () =>
     /function MaterialIdentityHover\([\s\S]*?\r?\n}\r?\n\r?\nfunction MaterialFieldLabel/,
   )?.[0] ?? "";
   const primaryCellBlock = source.match(
-    /<td data-material-cell="material"[\s\S]*?<\/td>[\s\S]*?<td data-material-cell="refDes"/,
+    /<td data-material-cell="name"[\s\S]*?<\/td>[\s\S]*?<td data-material-cell="qty"/,
   )?.[0] ?? "";
 
   assert.match(identityBlock, /data-testid="material-identity-trigger"/);
@@ -133,36 +133,36 @@ const rowBlock = source.slice(source.indexOf("const MaterialGroupRow = memo("), 
 const alternativeBlock = source.slice(source.indexOf("function CompactAlternativeRows("), source.indexOf("function BomTableColorDialog("));
 const readWidths = (name) => JSON.parse(source.match(new RegExp(`const ${name} = (\\[[^;]+\\]);`))[1]);
 
-test("material table removes specification from headers, filters, primary and alternative rows", () => {
-  assert.doesNotMatch(`${tableBlock}${rowBlock}`, /規格 \/ 備註|filterKey="specification"|group\.partSpec/);
-  assert.doesNotMatch(alternativeBlock, /record\.partSpec|record\.remark/);
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 11);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 11);
+test("the table shows Part Spec as its own workbook column and keeps the old specification filter out", () => {
+  assert.doesNotMatch(`${tableBlock}${rowBlock}`, /規格 \/ 備註|filterKey="specification"/);
+  assert.match(rowBlock, /data-material-cell="partSpec"/);
+  assert.match(alternativeBlock, /record\.partSpec \|\| group\.partSpec/);
+  assert.doesNotMatch(alternativeBlock, /record\.remark/);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 19);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 19);
   assert.doesNotMatch(source, /specification: ColumnFilterSelection|specification: null|case "specification"/);
 });
 
-test("material column geometry and fixed actions match the eleven columns", () => {
-  assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130]);
-  assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [80, 76, 200, 120, 180, 170, 150, 140, 140, 180, 110]);
-  assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [148, 108, 520, 360, 520, 460, 420, 360, 360, 420, 260]);
-  assert.equal((tableBlock.match(/column\.key === "actions"/g) ?? []).length, 2);
+test("material column geometry and fixed actions match the nineteen columns", () => {
+  assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [56, 56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150, 220, 110]);
+  assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [48, 48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 120, 180, 100]);
+  assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [96, 80, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 420, 200]);
+  assert.equal(readWidths("DEFAULT_COLUMN_WIDTHS").length, 19);
+  assert.equal((tableBlock.match(/column\.key === "actions"/g) ?? []).length, 3);
   assert.doesNotMatch(source, /colSpan=\{1[012]\}/);
   assert.match(source, /colSpan=\{visibleColumnCount\}/);
 });
 
-test("Symbol removal preserves every remaining width when restoring old or current layouts", () => {
+test("stored column widths are reused only when they match the current nineteen-column layout", () => {
   const loadBlock = source.slice(source.indexOf("function loadColumnWidths()"), source.indexOf("function clampBomTrackerPageCount("));
   const load = new Function("window", "DEFAULT_COLUMN_WIDTHS", "MIN_COLUMN_WIDTHS", "MAX_COLUMN_WIDTHS", "COLUMN_WIDTHS_SESSION_KEY", `${loadBlock}; return loadColumnWidths();`);
-  const run = (stored, current = false) => load({ sessionStorage: { getItem: key => key === (current ? "fixture" : "station-status-hub:material-column-widths:v8") && stored !== null ? JSON.stringify(stored) : null } }, readWidths("DEFAULT_COLUMN_WIDTHS"), readWidths("MIN_COLUMN_WIDTHS"), readWidths("MAX_COLUMN_WIDTHS"), "fixture");
-  const oldEleven = [97, 93, 261, 161, 261, 211, 191, 181, 251, 221, 131];
-  const oldTen = oldEleven.filter((_, index) => index !== 8);
-  const priorTwelve = [...oldTen.slice(0, 7), 180, 160, ...oldTen.slice(7)];
-  const expected = priorTwelve.filter((_, index) => index !== 8);
-  assert.deepEqual(run(priorTwelve), expected);
-  assert.deepEqual(run(oldEleven), expected);
-  assert.deepEqual(run(oldTen), expected);
-  assert.deepEqual(run(expected, true), expected);
-  assert.deepEqual(run(null), readWidths("DEFAULT_COLUMN_WIDTHS"));
+  const run = (stored) => load({ sessionStorage: { getItem: (key) => key === "fixture" && stored !== null ? JSON.stringify(stored) : null } }, readWidths("DEFAULT_COLUMN_WIDTHS"), readWidths("MIN_COLUMN_WIDTHS"), readWidths("MAX_COLUMN_WIDTHS"), "fixture");
+  const defaults = readWidths("DEFAULT_COLUMN_WIDTHS");
+  const stored = defaults.map((width) => width + 5);
+  assert.deepEqual(run(stored), stored.map((width, index) => Math.min(readWidths("MAX_COLUMN_WIDTHS")[index], width)));
+  assert.deepEqual(run([96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130]), defaults);
+  assert.deepEqual(run(null), defaults);
+  assert.match(source, /COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v10"/);
 });
 
 test("restored material filters discard removed or invalid conditions without losing current filters", () => {
@@ -183,7 +183,7 @@ test("restored material filters discard removed or invalid conditions without lo
 });
 
 test("specification data remains available in the material form and exports", async () => {
-  assert.match(source, /htmlFor="material-spec" label="料件規格"/);
+  assert.match(source, /htmlFor="material-spec" label="Part Spec（料件規格）"/);
   assert.match(source, /specification: record\.partSpec,/);
   assert.doesNotMatch(source, /specification: record\.partSpec \|\|/);
   const exportSource = await readFile(new URL("../src/components/material-requests/materialRequestExport.ts", import.meta.url), "utf8");
@@ -222,7 +222,7 @@ test("phase out remains independent while the removed Symbol column is absent fr
   assert.match(alternativeBlock, /<PhaseOutStatus record=\{record\}/);
   assert.doesNotMatch(`${rowBlock}${alternativeBlock}`, /columns\.symbol|SymbolBuildStatus|data-material-cell="symbol"/);
   assert.doesNotMatch(source, /field="symbolStatus"|getMaterialCeFieldHelp\("Symbol"\)|material-symbol-build-status/);
-  assert.match(source, /field="schematicPart" htmlFor="material-symbol" label="原理圖符號（Schematic_Part）"/);
+  assert.match(source, /field="schematicPart" htmlFor="material-symbol" label="Schematic_Part（原理圖符號）"/);
   assert.match(source, /field="phaseOutStatus" htmlFor="material-phase-out" label="phase out（零件狀態）"/);
   assert.match(source, /field="partUsageStatus" htmlFor="material-part-usage" label="零件狀態"/);
 });

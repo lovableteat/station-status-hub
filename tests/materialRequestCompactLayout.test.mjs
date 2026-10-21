@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
+import { MATERIAL_CE_FIELDS } from "../src/components/material-requests/materialUploadContract.mjs";
 
-const source = await readFile(new URL("../src/components/material-requests/MaterialRequestPage.tsx", import.meta.url), "utf8");
+const source = (await readFile(new URL("../src/components/material-requests/MaterialRequestPage.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const presentationSource = await readFile(new URL("../src/components/material-requests/materialRequestPresentation.ts", import.meta.url), "utf8");
 const transpiled = ts.transpileModule(presentationSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
@@ -18,66 +19,87 @@ const slice = (from, to) => {
   return source.slice(start, end);
 };
 const rowBlock = slice("const MaterialGroupRow = memo(", "function CompactAlternativeRows(");
+const alternativeBlock = slice("function CompactAlternativeRows(", "function BomTableColorDialog(");
 const desktopHeader = slice('data-material-zone="overview"', 'data-testid="material-table-card"');
 const toolbar = slice('data-testid="material-table-toolbar"', 'data-testid="material-mobile-cards"');
 const filterRow = slice("</ResizableHeader>", "</thead>");
+const COLUMN_KEYS = [
+  "item", "marked", "name", "qty", "refDes", "mpn", "manufacturer", "sourcingStatus", "virtual", "physical",
+  "partName", "partSpec", "schematicPart", "footprint", "phaseOut", "partUsage", "status", "tracking", "actions",
+];
 
-test("the material table has eleven columns and only the material and action columns are locked", () => {
-  assert.equal(presentation.MATERIAL_TABLE_COLUMNS.length, 11);
+test("the table mirrors the CE workbook: its 14 item columns in workbook order, between the website columns", () => {
+  assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.map((column) => column.key), COLUMN_KEYS);
+  const workbookHeaders = MATERIAL_CE_FIELDS.map((field) => field.header).filter((header) => header !== "Level");
+  assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.filter((column) => column.ceHeader).map((column) => column.ceHeader), workbookHeaders);
+  presentation.MATERIAL_TABLE_COLUMNS.filter((column) => column.ceHeader).forEach((column) => assert.equal(column.label, column.ceHeader));
   assert.deepEqual(
     presentation.MATERIAL_TABLE_COLUMNS.filter((column) => column.locked).map((column) => column.key),
-    ["material", "actions"],
+    ["name", "actions"],
   );
 });
 
 test("hidden column preferences drop unknown, locked, and duplicate keys", () => {
-  assert.deepEqual(presentation.normalizeHiddenMaterialColumns(["refDes", "material", "nope", "refDes", 7, "tx"]), ["refDes", "tx"]);
+  assert.deepEqual(presentation.normalizeHiddenMaterialColumns(["refDes", "name", "nope", "refDes", 7, "virtual", "symbol"]), ["refDes", "virtual"]);
   assert.deepEqual(presentation.normalizeHiddenMaterialColumns("refDes"), []);
   assert.deepEqual(presentation.normalizeHiddenMaterialColumns(null), []);
 });
 
 test("the table width only counts visible columns", () => {
-  const widths = [96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130];
-  assert.equal(presentation.getMaterialTableWidth(widths, []), 1978);
-  assert.equal(presentation.getMaterialTableWidth(widths, ["refDes", "tx"]), 1978 - 160 - 190);
-  assert.equal(presentation.getMaterialTableWidth(widths, ["unknown"]), 1978);
+  const widths = COLUMN_KEYS.map((_, index) => 100 + index);
+  const total = widths.reduce((sum, width) => sum + width, 0);
+  assert.equal(presentation.getMaterialTableWidth(widths, []), total);
+  assert.equal(presentation.getMaterialTableWidth(widths, ["refDes", "virtual"]), total - widths[4] - widths[8]);
+  assert.equal(presentation.getMaterialTableWidth(widths, ["unknown"]), total);
 });
 
-test("every main-row cell is wrapped in its column visibility flag", () => {
-  const keys = ["item", "marked", "material", "refDes", "mpn", "internal", "tx", "phaseOut", "status", "tracking", "actions"];
-  for (const key of keys) {
+test("every main-row and alternative-row cell follows the column list and its visibility flag", () => {
+  for (const key of COLUMN_KEYS) {
     assert.match(rowBlock, new RegExp(`\\{columns\\.${key} && \\($`, "m"), `cell ${key} must be toggleable`);
     assert.match(rowBlock, new RegExp(`data-material-cell="${key}"`));
+    assert.match(alternativeBlock, new RegExp(`\\{columns\\.${key} && `), `alternative cell ${key} must be toggleable`);
   }
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 11);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 19);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 19);
   assert.match(source, /data-testid="material-column-visibility"/);
   assert.match(source, /HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1"/);
   assert.match(source, /colSpan=\{visibleColumnCount\}/);
 });
 
-test("main rows are memoised and keep every cell at one or two short lines", () => {
+test("the second header row shows the workbook meaning, or the filter where one exists", () => {
+  assert.match(filterRow, /MATERIAL_TABLE_COLUMN_MEANING\[column\.key\]/);
+  assert.match(filterRow, /MATERIAL_COLUMN_FILTER_KEYS\[column\.key\]/);
+  const filterKeys = slice("const MATERIAL_COLUMN_FILTER_KEYS", "};");
+  for (const [key, filterKey] of [["name", "material"], ["refDes", "refDes"], ["mpn", "mpn"], ["virtual", "virtualAlternative"], ["physical", "internal"], ["tracking", "trackingStatus"]]) {
+    assert.match(filterKeys, new RegExp(`${key}: "${filterKey}"`));
+  }
+  assert.match(source, /MATERIAL_CE_HELP_BY_HEADER\.get\(column\.ceHeader\)\?\.meaning/);
+});
+
+test("main rows are memoised and keep every cell to one or two short lines", () => {
   assert.match(source, /const MaterialGroupRow = memo\(function MaterialGroupRow\(/);
   assert.match(source, /const rowActions = useMemo<MaterialRowActions>/);
   assert.match(source, /const MATERIAL_CELL_CLASS = "border-r border-blue-400\/10 px-2 py-1\.5 align-middle"/);
   assert.doesNotMatch(rowBlock, /py-3|line-clamp|<br \/>|主料 Remark:|個 MPN/);
   const identityBlock = slice("function MaterialIdentityHover(", "function MaterialFieldLabel(");
-  assert.match(identityBlock, /data-testid="material-primary-name"\s+className="block truncate/);
+  assert.match(identityBlock, /data-testid="material-primary-name"\s+className="block min-w-0 flex-1 truncate/);
   assert.doesNotMatch(identityBlock, /line-clamp-2 text-\[15px\]/);
+  assert.match(rowBlock, /<MaterialSourceText value=\{statusRecord\.manufacturer\} label="Manufacturer" \/>/);
+  assert.match(rowBlock, /<MaterialSourceText value=\{partSpec\} label="Part Spec" \/>/);
+  assert.match(rowBlock, /<PartUsageStatus record=\{statusRecord\} \/>/);
 });
 
 test("expanded alternative rows do not repeat the group star or the main row's live editors", () => {
-  const alternativeBlock = slice("function CompactAlternativeRows(", "function BomTableColorDialog(");
   assert.doesNotMatch(alternativeBlock, /onToggleMarked|<Star\b/);
   assert.match(alternativeBlock, /record\.id === primaryTxRecordId \?/);
   assert.match(alternativeBlock, /record\.id === primaryTrackingRecordId \?/);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 11);
   assert.match(rowBlock, /aria-expanded=\{hasAlternatives \? expanded : undefined\}/);
   assert.match(source, /adjacentIndex = MATERIAL_TABLE_COLUMNS\.findIndex\(/);
   assert.match(source, /const REF_COLLATOR = new Intl\.Collator\(undefined, \{ numeric: true \}\)/);
   assert.match(source, /const markedFilterSet = showMarkedOnly \? markedGroupKeySet : null/);
 });
 
-test("the TX confirm dialog only mounts while confirming", () => {
+test("the 虛擬料號 confirm dialog only mounts while confirming", () => {
   const editorBlock = slice("function InlineVirtualAlternativeEditor(", "function TrackingHistoryCell(");
   assert.match(editorBlock, /\{confirmOpen && \(\s*<Dialog open onOpenChange/);
 });
@@ -95,23 +117,39 @@ test("duplicate controls were merged: one clear, one page-progress entry, delete
   assert.doesNotMatch(bomManager, /BOM ID<\/p>|歷史 BOM 清單/);
 });
 
-test("the desktop empty state keeps the table skeleton and the standard wording", () => {
-  const emptyBlock = slice("{visibleGroupRows.length === 0 && (", "</table>");
-  assert.match(emptyBlock, /<tbody>/);
-  assert.match(emptyBlock, />目前篩選條件沒有符合的料件</);
+test("dialogs and popovers use the page theme tokens instead of their own fixed colours", () => {
+  const dialogBlocks = [
+    slice("function CompactHoverValue(", "function MaterialFieldLabel("),
+    slice("function TrackingHistoryDialog(", "function PhaseOutStatus("),
+    slice("function BomPageTrackerDialog(", "function MaterialRecordDialog("),
+    slice("function MaterialRecordDialog(", "type MaterialColumnVisibility"),
+    slice("function MaterialColumnSettings(", "const MaterialGroupRow = memo("),
+    slice("function BomTableColorDialog(", "export function MaterialRequestPage() {"),
+    slice("  return (\n    <Popover open={open} onOpenChange={setOpen}>", "function ResizableHeader("),
+  ].join("\n");
+  assert.doesNotMatch(dialogBlocks, /#0[0-9a-f]{5}|bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d|bg-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);
+  assert.match(dialogBlocks, /workspace-dialog-section/);
+  assert.match(source, /const CHIP_TONES = \{/);
+  const pageTracker = slice("function BomPageTrackerDialog(", "function BomManagerDialog(");
+  assert.match(pageTracker, /className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border bg-background\/40"/);
+  assert.match(pageTracker, /role="group" aria-label=\{`第 \$\{page\.pageNumber\} 頁狀態`\}/);
+  assert.match(slice("function MaterialRecordDialog(", "const MaterialGroupRow = memo("), /CE Excel 欄位/);
+  assert.match(source, /<AlertDialogContent data-dialog-tone="danger"/);
+  assert.match(source, /px-3 py-1\.5 lg:pr-28"/);
 });
 
-
-test("phase out remains visible and stale hidden Symbol preferences are discarded", () => {
-  assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.slice(7, 9).map(column => [column.key, column.label]), [["phaseOut", "phase out（零件狀態）"], ["status", "狀態"]]);
+test("phase out stays an independent source value and the Symbol column is gone", () => {
+  assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.slice(14, 16).map((column) => [column.key, column.label]), [["phaseOut", "phase out"], ["partUsage", "零件狀態"]]);
   assert.deepEqual(presentation.normalizeHiddenMaterialColumns(["status", "symbol", "mpn"]), ["status", "mpn"]);
-  assert.equal(presentation.getMaterialTableWidth([96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130], ["phaseOut", "symbol"]), 1798);
-});
-
-test("phase out source values remain unmodified without Symbol inference", () => {
   for (const raw of ["PHASEOUT", "ACTIVE", "UNDERREVIEW", "  ACTIVE  "]) assert.equal(presentation.getMaterialSourceValue(raw), raw);
   for (const empty of ["", "   ", undefined]) assert.equal(presentation.getMaterialSourceValue(empty), "未提供");
   const sourceColumns = slice("function PhaseOutStatus(", "function StatusPill(");
   assert.match(sourceColumns, /getMaterialSourceValue\(record\.phaseOutStatus\)/);
   assert.doesNotMatch(sourceColumns, /symbolStatus|getMaterialBuildRequirements|getMaterialBuildRequirementLabel|symbolAvailability/);
+});
+
+test("the desktop empty state keeps the table skeleton and the standard wording", () => {
+  const emptyBlock = slice("{visibleGroupRows.length === 0 && (", "</table>");
+  assert.match(emptyBlock, /<tbody>/);
+  assert.match(emptyBlock, />目前篩選條件沒有符合的料件</);
 });
