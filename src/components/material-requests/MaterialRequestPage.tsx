@@ -119,6 +119,7 @@ import {
 } from "./materialBomStorage";
 import type { BomTableColorTheme } from "./materialBomStorage";
 import { saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
+import { UploadGuideDialog } from "./MaterialUploadGuideDialog";
 import type {
   MaterialExportProgress,
   MaterialReportSnapshot,
@@ -291,6 +292,7 @@ const MATERIAL_FIELD_HELP = {
   requestUrl: { description: "對應申請單或工單的完整網址；若沒有可留空。", example: "https://..." },
   tracking: { description: "此區只顯示最新追蹤內容；新增歷史、圖片與狀態請從表格的「狀態追蹤」進入。", example: "新增追蹤、處理中、已完成" },
   sourcingStatus: { description: "原廠供應與生命週期狀態，供採購與工程判斷風險。", example: "Approved、NRND、Obsolete" },
+  partUsageStatus: { description: "CE 依公司來源補上的新設計使用限制，與 Sourcing Status 分開；RD 依公司流程確認，不明時保留待確認。", example: "禁用、EOL、ODM 不建議用料、待確認" },
   partNumber: { description: "公司內部正式建立的料號；尚未建料時請留空。", example: "1A20-060X0IN" },
   partName: { description: "內部料號對應的公司料名，應與正式系統命名一致。", example: "CAP NCS X6S 0402 1uF" },
   remark: { description: "補充申請狀態、缺料原因或需要下一位同仁處理的事項。", example: "需申請 Part / Symbol" },
@@ -852,6 +854,7 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     requestUrl: record.requestUrl ?? "",
     manufacturer: record.manufacturer,
     sourcingStatus: record.sourcingStatus,
+    partUsageStatus: record.partUsageStatus ?? "",
     refGroup: record.refGroup,
     lv: record.lv,
     remark: record.remark,
@@ -886,6 +889,7 @@ function createRecordTemplate(group?: MaterialGroup): MaterialWorkbookRecord {
     requestUrl: "",
     manufacturer: "",
     sourcingStatus: "",
+    partUsageStatus: "",
     refGroup: group?.displayRef ?? "",
     lv: "",
     remark: group ? "需申請 00/Part/Symbol" : "",
@@ -2768,27 +2772,22 @@ function TrackingHistoryDialog({
 }
 
 function StatusPill({ record }: { record: MaterialRecord }) {
-  if (record.isRisk) {
-    return (
-      <span className="inline-flex rounded-full border border-rose-400/30 bg-rose-400/10 px-3 py-1.5 text-sm font-bold text-rose-300">
-        {record.sourcingStatus || "風險料"}
-      </span>
-    );
-  }
-
-  if (record.isApproved) {
-    return (
-      <span className="inline-flex rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-sm font-bold text-emerald-300">
-        Approved
-      </span>
-    );
-  }
-
   return (
-    <span className="inline-flex rounded-full border border-slate-400/25 bg-slate-400/10 px-3 py-1.5 text-sm font-bold text-slate-300">
-      {record.sourcingStatus || "未標記"}
-    </span>
+    <div className="flex flex-wrap gap-2" data-testid="material-source-status">
+      <span className="inline-flex rounded-lg border border-slate-400/25 bg-slate-400/10 px-3 py-1.5 text-sm font-bold text-slate-300">
+        供應／核准：{record.sourcingStatus || "未提供"}
+      </span>
+      <span className={cn("inline-flex rounded-lg border px-3 py-1.5 text-sm font-bold", record.isRisk ? "border-rose-400/30 bg-rose-400/10 text-rose-300" : "border-slate-400/25 bg-slate-400/10 text-slate-300")}>
+        零件狀態：{record.partUsageStatus || "未提供"}
+      </span>
+    </div>
   );
+}
+
+function PartUsageSummary({ records }: { records: MaterialRecord[] }) {
+  const statuses = [...new Set(records.map(record => record.partUsageStatus?.trim()).filter(Boolean))];
+  if (!statuses.length) return null;
+  return <p data-testid="material-part-usage-summary" className={cn("mt-2 whitespace-normal break-words text-xs font-semibold leading-5", records.some(record => record.isRisk) ? "text-rose-200" : "text-slate-300")}>零件狀態：{statuses.join("；")}</p>;
 }
 
 function ActionPill({ record }: { record: MaterialRecord }) {
@@ -2843,127 +2842,6 @@ function SummaryTile({
   );
 }
 
-function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const templateUrl = `${import.meta.env.BASE_URL}material-upload-template.xlsx`;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto border-blue-400/30 bg-[#0d1729] text-slate-100">
-          <DialogHeader>
-            <DialogTitle className="text-2xl text-slate-50">上傳說明</DialogTitle>
-            <DialogDescription className="text-[15px] leading-6 text-slate-400">
-              先用範本整理欄位，再確認 Excel 欄位會對應到網站哪個位置；匯入後再用篩選與狀態追蹤檢查結果。
-            </DialogDescription>
-          </DialogHeader>
-
-        <div className="space-y-5 py-2 text-[15px]">
-          <section className="rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.07] p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-cyan-200">1. 先用標準範本整理</h3>
-                <p className="mt-1 leading-6 text-slate-400">如果你手上的 BOM 很亂，先用範本重排一次最省事。範本裡有欄位示例，照著填，網站辨識率最高。</p>
-              </div>
-              <Button asChild className="shrink-0 font-bold">
-                <a href={templateUrl} download="料號替代料_上傳範本.xlsx">
-                  <Download className="mr-2 h-4 w-4" />下載上傳範本
-                </a>
-              </Button>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-sky-400/25 bg-sky-400/[0.06] p-5">
-            <h3 className="text-lg font-bold text-sky-200">2. 範本欄位與網站欄位對應</h3>
-            <p className="mt-1 leading-6 text-slate-400">
-              表頭不用完全同名，但建議照範本命名。下面是目前系統會優先辨識的欄位與匯入後的位置。
-            </p>
-            <div className="mt-4 overflow-hidden rounded-xl border border-sky-400/15">
-              <div className="grid grid-cols-[1fr_1fr_1.4fr] bg-sky-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-sky-200">
-                <span>Excel 欄位</span>
-                <span>網站位置</span>
-                <span>用途</span>
-              </div>
-              {[
-                ["Name / Part Name", "主料 / 廠商", "料件名稱，表格第一欄會用來辨識同一組主料。"],
-                ["Qty", "數量", "顯示該料件或該組 location 的數量。"],
-                ["Ref Des / location", "REF DES", "電路板上的 location，例如 C418、J10、U73。"],
-                ["Manufacturer Part Number", "MPN", "廠商料號，主料與替代料都會讀這個欄位。"],
-                ["Manufacturer", "廠商", "廠商名稱，會跟 MPN 一起顯示。"],
-                ["Sourcing Status", "料況", "Approved、Obsolete、NRND 等供應狀態。"],
-                ["Virtual PN / PEGA P/N / TX P/N", "TX", "匯入優先順序是 Virtual PN，再來 PEGA P/N，最後才是 TX P/N；填在主料或替代料都可以，不會寫入狀態追蹤。"],
-                ["料號追蹤 / Tracking Note", "狀態追蹤：追蹤說明", "有內容才會建立匯入追蹤；不要再把料況或 CIS/Remark 放進這裡。"],
-                ["單號", "狀態追蹤：申請狀態資訊", "申請單、ticket 或 request number。"],
-                ["EE", "狀態追蹤：更新人", "只會當成追蹤紀錄的更新人；如果沒有料號追蹤或單號，單填 EE 不會變成黃色追蹤。"],
-              ].map(([excelField, appField, usage]) => (
-                <div key={excelField} className="grid grid-cols-[1fr_1fr_1.4fr] border-t border-sky-400/10 px-4 py-3 text-sm">
-                  <span className="font-bold text-slate-100">{excelField}</span>
-                  <span className="font-semibold text-cyan-200">{appField}</span>
-                  <span className="leading-6 text-slate-400">{usage}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-blue-400/20 bg-[#101d33] p-5">
-            <h3 className="text-lg font-bold text-blue-200">3. Excel 要怎麼排，網站才看得懂</h3>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {[
-                ["一列只放一個廠商料", "同一個 location 如果有 3 個候選 MPN，就要拆成 3 列，不要把 3 個料號塞在同一格。"],
-                ["主料與替代料要排在一起", "同一組資料請連續擺放，主料在前，替代料接在後面，避免網站把它拆成不同群組。"],
-                ["有藍色起始列就照藍色分組", "如果你的 Excel 有用底色標主料，網站會優先用這個規則；下一個藍色列出現前，都算同一組。"],
-                ["Ref Des / location 要寫清楚", "像 `C418`、`J10`、`U73` 這些位號是網站判斷焊位的核心欄位，能填就一定要填。"],
-                ["同一組的圖面資料要一致", "Part Spec、Schematic_Part、PCB_Footprint 這些資料，在同一主料與替代料群組裡不要亂變。"],
-                ["CIS/Remark 不會匯入追蹤", "CIS/Remark 只保留在你的 Excel 參考，網站不會再把它當成狀態追蹤說明。"],
-                ["料況欄請用固定字", "Sourcing Status 建議用 Approved、Active、NRND、Obsolete、Disqualified，中文也能吃，但固定寫法最穩。"],
-                ["TX 與追蹤欄可後補", "Virtual PN、PEGA P/N、料號追蹤、單號、EE 不一定要在 Excel 就填好，匯入後也能直接在網站上補；主表 TX 會依序吃 Virtual PN、PEGA P/N、TX P/N。"],
-                ["同檔名會覆蓋前一個", "如果你重新上傳同檔名 Excel，網站會直接更新原本那個 BOM；要保留舊版請先改檔名。"],
-              ].map(([title, description]) => (
-                <div key={title} className="rounded-xl border border-blue-400/15 bg-[#0a1527] p-4">
-                  <p className="font-bold text-slate-100">{title}</p>
-                  <p className="mt-2 leading-6 text-slate-400">{description}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5">
-            <h3 className="text-lg font-bold text-emerald-200">4. 上傳後系統怎麼判斷</h3>
-            <div className="mt-4 space-y-3 leading-6 text-slate-300">
-              <p><strong className="text-slate-100">先找主工作表：</strong>如果檔案裡有很多 sheet，系統會挑欄位最完整、有效資料最多的那一張來讀。</p>
-              <p><strong className="text-slate-100">再判斷分組：</strong>有藍色列就先照藍色列；沒有藍色列才退回用 Ref Group、Ref Des、料名等欄位去猜。</p>
-              <p><strong className="text-slate-100">再判斷可用料：</strong>一列如果有可用的內部料號，或你已經填了 TX，系統就不會把它當成完全無料。</p>
-              <p><strong className="text-slate-100">TX 怎麼顯示：</strong>同一組主料與替代料只要有任一列有值，主表 TX 會依序優先顯示 `Virtual PN`、`PEGA P/N`、`TX P/N`。</p>
-              <p><strong className="text-slate-100">黃色追蹤何時出現：</strong>只有 `料號追蹤` 或 `單號` 有內容時，才會建立匯入追蹤；單填 `EE` 不會變黃。</p>
-              <p><strong className="text-slate-100">你看到的主料總表：</strong>是一行一個主料群組，展開後才會看到下面所有替代料與追蹤資訊。</p>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-amber-400/25 bg-amber-400/[0.07] p-5">
-            <h3 className="text-lg font-bold text-amber-200">5. 實際操作流程</h3>
-            <ol className="mt-3 space-y-2 leading-6 text-slate-300">
-              <li>1. 先把單一專案 / 單一版本 BOM 整理成一個 Excel 檔。</li>
-              <li>2. 按「上傳 BOM」匯入；可以一次選多個檔。相同檔名會覆蓋原本 BOM，不同檔名才會建立新的 BOM 工作區。</li>
-              <li>3. 匯入後先看上方統計數字，再用表頭篩選檢查 `REF DES`、`MPN`、`內部料號`、`TX`、`狀態追蹤`。</li>
-              <li>4. 如果某組料需要補 `TX` 可直接在表格內填；如果要補 `料號追蹤`、`單號` 或圖片，就到「狀態追蹤」欄位新增紀錄。</li>
-              <li>5. 要切不同版本或不同專案，直接用上方 BOM 切換器，或進 `BOM管理` 看所有歷史 BOM。</li>
-              <li>6. 確認畫面篩選結果沒問題後，再用「匯出結果」下載你目前看到的結果。</li>
-            </ol>
-          </section>
-
-          <section className="rounded-2xl border border-rose-400/25 bg-rose-400/[0.06] p-5">
-            <h3 className="text-lg font-bold text-rose-200">6. 常見錯誤先看這裡</h3>
-            <div className="mt-3 space-y-3 leading-6 text-slate-300">
-              <p><strong className="text-slate-100">搜不到資料：</strong>先按右上角或表頭的「清除」，很多時候是舊篩選還留著，不是真的沒有資料。</p>
-              <p><strong className="text-slate-100">TX 沒顯示：</strong>先確認 Excel 欄名是不是 `Virtual PN`、`PEGA P/N` 或 `TX P/N`；系統會先吃 `Virtual PN`，空白才退回後面的欄位。</p>
-              <p><strong className="text-slate-100">同一個 location 看起來重複：</strong>先回原始 BOM 看是不是同一個位號被展開成多個候選料，或同一顆料被分配到多個位號。</p>
-              <p><strong className="text-slate-100">上傳後分組怪怪的：</strong>通常是主料與替代料沒有排在一起、藍色列沒標好，或 Ref Des / Ref Group 本身就不完整。</p>
-              <p><strong className="text-slate-100">TX 被清空：</strong>現在空白送出前會跳確認框，若看到提示請確認是不是要故意留白，不要直接略過。</p>
-            </div>
-          </section>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function BomPageTrackerDialog({
   workspace,
@@ -3718,6 +3596,10 @@ function MaterialRecordDialog({
                 <Input id="material-sourcing" disabled={readOnly} value={form.sourcingStatus} onChange={(event) => updateField("sourcingStatus", event.target.value)} placeholder="Approved / NRND / Obsolete" />
               </div>
               <div className="space-y-2">
+                <MaterialFieldLabel field="partUsageStatus" htmlFor="material-part-usage" label="零件狀態（CE 來源）" />
+                <Input id="material-part-usage" disabled={readOnly} value={form.partUsageStatus ?? ""} onChange={(event) => updateField("partUsageStatus", event.target.value)} placeholder="禁用／EOL／ODM 不建議用料／待確認" />
+              </div>
+              <div className="space-y-2">
                 <MaterialFieldLabel field="partNumber" htmlFor="material-internal-pn" label="內部料號" />
                 <Input id="material-internal-pn" disabled={readOnly} value={form.partNumber} onChange={(event) => updateField("partNumber", event.target.value)} />
               </div>
@@ -3926,7 +3808,7 @@ function CompactAlternativeRows({
   return (
     <>
       {alternatives.map((record, index) => {
-        const preferred = record.isPreferred;
+        const preferred = record.isPreferred && !record.isRisk;
         const rowColor = preferred ? colorTheme.alternative : colorTheme.secondary;
         const rowStyle = {
           ...buildTableRowStyle(rowColor, {
@@ -5532,6 +5414,7 @@ export function MaterialRequestPage() {
           requestTicket: requestMeta.ticket,
           requestUrl: requestMeta.url,
           sourcingStatus: record.sourcingStatus,
+          partUsageStatus: record.partUsageStatus ?? "",
           specification: record.partSpec || group.partSpec || group.partName,
           symbol: group.schematicPart,
           trackingOwner: latestTrackingEntry?.createdBy ?? "",
@@ -6376,7 +6259,7 @@ export function MaterialRequestPage() {
             const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
             const isMarked = markedGroupKeySet.has(group.key);
             const mustApply = group.requiresApplication;
-            const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred).length;
+            const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred && !record.isRisk).length;
 
             return (
               <article
@@ -6406,9 +6289,10 @@ export function MaterialRequestPage() {
                   </button>
                   <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-500" />
                 </div>
+                <div className="px-2.5 pb-2"><PartUsageSummary records={group.records} /></div>
 
                 <div className="flex items-center gap-1.5 overflow-x-auto border-y border-white/5 bg-[#091827]/85 px-2.5 py-2 text-[11px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  <span className={cn("shrink-0 rounded-full border px-2 py-1 font-black", mustApply ? "border-amber-300/35 bg-amber-400/12 text-amber-100" : "border-emerald-300/30 bg-emerald-400/10 text-emerald-100")}>{mustApply ? "需要申請" : mainRecord.sourcingStatus || "資料可用"}</span>
+                  <span className={cn("shrink-0 rounded-full border px-2 py-1 font-black", group.riskCount > 0 ? "border-rose-300/35 bg-rose-400/12 text-rose-100" : mustApply ? "border-amber-300/35 bg-amber-400/12 text-amber-100" : "border-slate-300/30 bg-slate-400/10 text-slate-100")}>{group.riskCount > 0 ? "料況需確認" : mustApply ? "需要申請" : mainRecord.sourcingStatus || "未提供料況"}</span>
                   <span className="max-w-[11rem] shrink-0 truncate rounded-full border border-slate-500/20 bg-slate-800/35 px-2 py-1 text-slate-200">REF {mainRecord.refDes || mainRecord.refGroup || "-"}</span>
                   <span className={cn("shrink-0 rounded-full border px-2 py-1 font-bold", availableAlternativeCount > 0 ? "border-emerald-300/25 bg-emerald-400/8 text-emerald-200" : "border-slate-500/25 bg-slate-800/40 text-slate-300")}>替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
                 </div>
@@ -6507,8 +6391,8 @@ export function MaterialRequestPage() {
               {visibleGroupRows.map(({ group, matchingRecords, primaryAlternative, virtualAlternativeRecord, trackingRecord, secondaryAlternatives }, rowIndex) => {
                 const expanded = expandedKey === group.key;
                 const mustApply = group.requiresApplication;
-                const primaryReady = Boolean(primaryAlternative?.isPreferred);
-                const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred).length;
+                const primaryReady = Boolean(primaryAlternative?.isPreferred && !primaryAlternative.isRisk);
+                const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred && !record.isRisk).length;
                 const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
                 const groupRefValues = splitRefDesignators(groupRefDes);
                 const materialRefValues = splitRefDesignators(group.displayRef || groupRefDes);
@@ -6584,6 +6468,7 @@ export function MaterialRequestPage() {
                               qty={group.qty}
                               refValues={materialRefValues}
                             />
+                            <PartUsageSummary records={group.records} />
                             {isMarked && (
                               <span className="mt-2 inline-flex rounded-full border border-amber-300/35 bg-amber-400/16 px-2.5 py-1 text-xs font-bold text-amber-200">
                                 已標記
@@ -6616,7 +6501,7 @@ export function MaterialRequestPage() {
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className={cn("text-xs font-black", primaryReady ? "text-emerald-300" : mustApply ? "text-amber-300" : "text-cyan-300")}>{primaryReady ? "主料已建・OK + 00" : mustApply ? "主料與替代都待申請" : "主料未建・已有可用替代"}</p>
+                                  <p className={cn("text-xs font-black", group.riskCount > 0 ? "text-rose-200" : primaryReady ? "text-emerald-300" : mustApply ? "text-amber-300" : "text-cyan-300")}>{group.riskCount > 0 ? "料況需 RD 確認" : primaryReady ? "主料已建・OK + 00" : mustApply ? "主料與替代都待申請" : availableAlternativeCount > 0 ? "主料未建・已有可用替代" : "已有公司料號／TX，待 RD 確認"}</p>
                                   <p className={cn("mt-0.5 break-all font-mono text-[15px] font-black leading-6", primaryReady ? "text-emerald-100" : mustApply ? "text-amber-100" : "text-cyan-100")}>
                                     {getDisplayMpn(primaryAlternative) || "未填 MPN"}
                                   </p>
@@ -6738,7 +6623,7 @@ export function MaterialRequestPage() {
                         {virtualAlternativeRecord && <InlineVirtualAlternativeEditor canEdit={canEdit} value={virtualAlternativeRecord.virtualAlternative ?? ""} onSave={(value) => saveVirtualAlternative(virtualAlternativeRecord, value)} />}
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3">
-                        <div className="flex flex-col items-start gap-2">{mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">已有可用替代 {availableAlternativeCount}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded border border-violet-300/30 bg-violet-400/15 px-2.5 py-1 text-sm font-bold text-violet-200">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
+                        <div className="flex flex-col items-start gap-2">{group.riskCount > 0 ? <span className="rounded-md border border-rose-300/40 bg-rose-400/15 px-3 py-1.5 text-[15px] font-black text-rose-200">料況需 RD 確認</span> : mustApply ? <span className="rounded-md border border-amber-300/50 bg-amber-400/25 px-3 py-1.5 text-[15px] font-black text-amber-100">主料與替代都無料</span> : primaryReady ? <span className="rounded-md border border-emerald-300/40 bg-emerald-400/20 px-3 py-1.5 text-[15px] font-black text-emerald-200">主料已建</span> : <span className="rounded-md border border-cyan-300/40 bg-cyan-400/20 px-3 py-1.5 text-[15px] font-black text-cyan-100">{availableAlternativeCount > 0 ? `已有可用替代 ${availableAlternativeCount}` : "已有公司料號／TX，待確認"}</span>}{!primaryReady && <span className={cn("text-sm font-semibold leading-5", mustApply ? "text-amber-200" : "text-cyan-200")}>主料 Remark: {primaryAlternative?.remark || "未填"}<br />主料 Part Number: {primaryAlternative?.partNumber || "未填"}</span>}{availableAlternativeCount > 0 && <span className="rounded border border-violet-300/30 bg-violet-400/15 px-2.5 py-1 text-sm font-bold text-violet-200">可用替代 {availableAlternativeCount}</span>}{group.pendingCount > 0 && <span className="rounded bg-slate-400/10 px-2.5 py-1 text-sm font-semibold text-slate-300">待建明細 {group.pendingCount}</span>}</div>
                       </td>
                       <td className="border-r border-blue-400/10 px-4 py-3 align-middle" onClick={(event) => event.stopPropagation()}>
                         {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={openTrackingDialog} />}

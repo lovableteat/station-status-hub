@@ -4,10 +4,11 @@ import test from "node:test";
 
 const sourceUrl = new URL("../src/components/material-requests/MaterialRequestPage.tsx", import.meta.url);
 const source = await readFile(sourceUrl, "utf8");
+const uploadGuide = await readFile(new URL("../src/components/material-requests/MaterialUploadGuideDialog.tsx", import.meta.url), "utf8");
 
 test("template download uses the shared accessible button colors and preserves the native download", () => {
-  const guide = source.match(/function UploadGuideDialog\([\s\S]*?\r?\n}\r?\n/)?.[0] ?? "";
-  const button = guide.match(/<Button\b([^>]*)>\s*<a href=\{templateUrl\} download="料號替代料_上傳範本\.xlsx">/)?.[1];
+  const guide = uploadGuide;
+  const button = guide.match(/<Button\b([^>]*)>\s*<a href=\{templateUrl\} download="CE_BOM_空白交付範本\.xlsx">/)?.[1];
 
   assert.ok(button, "template download must remain a native link inside Button");
   assert.match(button, /\basChild\b/);
