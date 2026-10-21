@@ -1,3 +1,5 @@
+import type { MaterialWorkbookRecord } from "./materialRequestUtils";
+
 export interface MaterialReportImage {
   dataUrl: string;
   id: string;
@@ -565,5 +567,72 @@ export async function exportMaterialReportHtmlZip(
   const fileName = `${sanitizeFileName(snapshot.reportName)}_${getTimestamp(new Date(snapshot.exportedAt))}_HTML.zip`;
   downloadBlob(blob, fileName);
   onProgress?.({ phase: "complete" });
+  return fileName;
+}
+
+export interface DiscouragedMaterialRow {
+  refDes: string;
+  name: string;
+  manufacturerPartNumber: string;
+  manufacturer: string;
+  partNumber: string;
+  virtualAlternative: string;
+  partUsageStatus: string;
+}
+
+const DISCOURAGED_USAGE_PATTERN = /不建議/;
+
+/**
+ * Physical part numbers whose 零件狀態 says the part is not recommended
+ * (「新設計產品不建議使用 - ODM不建議用料」 and the like), one row per record.
+ */
+export function collectDiscouragedMaterialRows(
+  records: ReadonlyArray<Pick<MaterialWorkbookRecord, "refDes" | "refGroup" | "name" | "manufacturerPartNumber" | "manufacturer" | "partNumber" | "virtualAlternative" | "partUsageStatus">>,
+): DiscouragedMaterialRow[] {
+  return records
+    .filter((record) => DISCOURAGED_USAGE_PATTERN.test(record.partUsageStatus ?? ""))
+    .map((record) => ({
+      refDes: record.refDes?.trim() || record.refGroup?.trim() || "",
+      name: record.name ?? "",
+      manufacturerPartNumber: record.manufacturerPartNumber ?? "",
+      manufacturer: record.manufacturer ?? "",
+      partNumber: record.partNumber?.trim() ?? "",
+      virtualAlternative: record.virtualAlternative?.trim() ?? "",
+      partUsageStatus: record.partUsageStatus ?? "",
+    }))
+    .sort((left, right) => left.refDes.localeCompare(right.refDes, undefined, { numeric: true }));
+}
+
+export const DISCOURAGED_EXPORT_HEADERS = ["Ref Des", "Name", "Manufacturer Part Number", "Manufacturer", "實體料號", "虛擬料號", "零件狀態"];
+
+export async function exportDiscouragedMaterialsExcel({
+  rows,
+  workspaceName,
+  exportedBy,
+  exportedAt = new Date(),
+}: {
+  rows: DiscouragedMaterialRow[];
+  workspaceName: string;
+  exportedBy: string;
+  exportedAt?: Date;
+}) {
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = exportedBy;
+  workbook.created = exportedAt;
+  workbook.title = `${workspaceName} 不建議料`;
+  const sheet = workbook.addWorksheet("不建議料", { properties: { defaultRowHeight: 20 } });
+  sheet.columns = [18, 44, 30, 30, 18, 18, 44].map((width) => ({ width }));
+  const headerRow = sheet.addRow(DISCOURAGED_EXPORT_HEADERS);
+  headerRow.font = { bold: true };
+  rows.forEach((row) => {
+    sheet.addRow([row.refDes, row.name, row.manufacturerPartNumber, row.manufacturer, row.partNumber, row.virtualAlternative, row.partUsageStatus]);
+  });
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: DISCOURAGED_EXPORT_HEADERS.length } };
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const fileName = `${sanitizeFileName(`${workspaceName}_不建議料`)}_${getTimestamp(exportedAt)}.xlsx`;
+  downloadBlob(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), fileName);
   return fileName;
 }

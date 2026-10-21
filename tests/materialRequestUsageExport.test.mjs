@@ -293,3 +293,17 @@ test("page snapshots and actual exports keep each physical candidate's own CE fi
   assert.match(html, /實體料名（Part Name）：實體料 B/);
   assert.doesNotMatch(html, /GROUP (?:NAME|SYMBOL|FOOTPRINT|SPEC) MUST/);
 });
+
+test("不建議料匯出 collects the physical part numbers whose 零件狀態 is a usage restriction", () => {
+  const rows = moduleExports.collectDiscouragedMaterialRows([
+    { refDes: "U9", refGroup: "U9", name: "IC B", manufacturerPartNumber: "MPN-B", manufacturer: "Vendor", partNumber: "000-B", virtualAlternative: "", partUsageStatus: "新設計產品不建議使用 - ODM不建議用料" },
+    { refDes: "C1", refGroup: "C1", name: "CAP", manufacturerPartNumber: "MPN-C", manufacturer: "Vendor", partNumber: "", virtualAlternative: "1AT-1", partUsageStatus: "ODM 不建議用料" },
+    { refDes: "R1", refGroup: "R1", name: "RES", manufacturerPartNumber: "MPN-R", manufacturer: "Vendor", partNumber: "000-R", virtualAlternative: "", partUsageStatus: "可用" },
+    { refDes: "", refGroup: "D2", name: "DIODE", manufacturerPartNumber: "MPN-D", manufacturer: "Vendor", partNumber: "000-D", virtualAlternative: "", partUsageStatus: "" },
+  ]);
+  assert.deepEqual(rows.map((row) => [row.refDes, row.partNumber, row.partUsageStatus]), [
+    ["C1", "", "ODM 不建議用料"],
+    ["U9", "000-B", "新設計產品不建議使用 - ODM不建議用料"],
+  ]);
+  assert.deepEqual(moduleExports.DISCOURAGED_EXPORT_HEADERS, ["Ref Des", "Name", "Manufacturer Part Number", "Manufacturer", "實體料號", "虛擬料號", "零件狀態"]);
+});

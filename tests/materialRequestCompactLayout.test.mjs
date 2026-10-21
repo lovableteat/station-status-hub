@@ -26,11 +26,11 @@ const toolbar = slice('data-testid="material-table-toolbar"', 'data-testid="mate
 const filterRow = slice("</ResizableHeader>", "</thead>");
 const COLUMN_KEYS = [
   "item", "name", "qty", "refDes", "mpn", "manufacturer", "sourcingStatus", "virtual", "physical",
-  "partName", "partSpec", "schematicPart", "footprint", "phaseOut", "partUsage", "status", "tracking", "actions",
+  "partName", "partSpec", "schematicPart", "footprint", "phaseOut", "partUsage", "tracking", "actions",
 ];
 
 test("the table mirrors the CE workbook: its 14 item columns in workbook order, between the website columns, with no 標記 column", () => {
-  assert.ok(!presentation.MATERIAL_TABLE_COLUMNS.some((column) => column.key === "marked"));
+  assert.ok(!presentation.MATERIAL_TABLE_COLUMNS.some((column) => column.key === "marked" || column.key === "status"));
   assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.map((column) => column.key), COLUMN_KEYS);
   const workbookHeaders = MATERIAL_CE_FIELDS.map((field) => field.header).filter((header) => header !== "Level");
   assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.filter((column) => column.ceHeader).map((column) => column.ceHeader), workbookHeaders);
@@ -61,8 +61,8 @@ test("every main-row and alternative-row cell follows the column list and its vi
     assert.match(rowBlock, new RegExp(`data-material-cell="${key}"`));
     assert.match(alternativeBlock, new RegExp(`\\{columns\\.${key} && `), `alternative cell ${key} must be toggleable`);
   }
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 18);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 18);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 17);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 17);
   assert.match(source, /data-testid="material-column-visibility"/);
   assert.match(source, /HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1"/);
   assert.match(source, /colSpan=\{visibleColumnCount\}/);
@@ -143,10 +143,10 @@ test("dialogs and popovers use the page theme tokens instead of their own fixed 
 
 test("phase out stays an independent source value and the Symbol column is gone", () => {
   assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.slice(13, 15).map((column) => [column.key, column.label]), [["phaseOut", "phase out"], ["partUsage", "零件狀態"]]);
-  assert.deepEqual(presentation.normalizeHiddenMaterialColumns(["status", "symbol", "mpn"]), ["status", "mpn"]);
+  assert.deepEqual(presentation.normalizeHiddenMaterialColumns(["status", "symbol", "mpn"]), ["mpn"]);
   for (const raw of ["PHASEOUT", "ACTIVE", "UNDERREVIEW", "  ACTIVE  "]) assert.equal(presentation.getMaterialSourceValue(raw), raw);
   for (const empty of ["", "   ", undefined]) assert.equal(presentation.getMaterialSourceValue(empty), "未提供");
-  const sourceColumns = slice("function PhaseOutStatus(", "function StatusPill(");
+  const sourceColumns = slice("function PhaseOutStatus(", "function MaterialSourceText(");
   assert.match(sourceColumns, /getMaterialSourceValue\(record\.phaseOutStatus\)/);
   assert.doesNotMatch(sourceColumns, /symbolStatus|getMaterialBuildRequirements|getMaterialBuildRequirementLabel|symbolAvailability/);
 });

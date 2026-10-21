@@ -132,6 +132,7 @@ import type {
   MaterialExportProgress,
   MaterialReportSnapshot,
 } from "./materialRequestExport";
+import { collectDiscouragedMaterialRows, exportDiscouragedMaterialsExcel } from "./materialRequestExport";
 import {
   MATERIAL_TABLE_COLUMNS,
   type BomProjectGroup,
@@ -242,7 +243,7 @@ const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:"
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const VIEW_STATE_KEY_PREFIX = "station-status-hub:material-view:v1:";
-const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v11";
+const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v12";
 const HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const MAX_BOM_TRACKER_PAGES = 500;
@@ -271,9 +272,9 @@ const BOM_PAGE_STATUS_OPTIONS: Array<{
     idleClassName: "text-muted-foreground hover:bg-accent hover:text-foreground",
   },
 ];
-const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150, 220, 110];
-const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 120, 180, 100];
-const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 420, 200];
+const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 220, 110];
+const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 180, 100];
+const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 420, 200];
 const DEFAULT_BOM_TABLE_COLOR_THEME: BomTableColorTheme = {
   primary: "#0F5D74",
   alternative: "#343B73",
@@ -608,7 +609,6 @@ const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>
       .map((column) => [column.key, `Excel 欄名：${column.ceHeader}\n${getMaterialCeFieldHelp(column.ceHeader).description}`]),
   ),
   item: "網站列號，依目前排序與分頁編號。",
-  status: "網站依虛擬／實體料號與零件狀態判斷的建料狀態，不是 CE Excel 欄位。",
   tracking: "網站人工維護的狀態追蹤，與 CE Excel 的供應／核准狀態、phase out 及零件狀態分開。",
   actions: "新增或更新這組料的資料。",
 };
@@ -2502,15 +2502,6 @@ function PhaseOutStatus({ record }: { record: MaterialRecord }) {
   return <span data-testid="material-phase-out-status" className="block truncate text-xs font-semibold leading-5 text-foreground" title={`phase out（零件狀態）：${value}`}>{value}</span>;
 }
 
-function StatusPill({ record }: { record: MaterialRecord }) {
-  return (
-    <div className="flex min-w-0 items-center gap-1" data-testid="material-source-status">
-      <ActionPill record={record} />
-    </div>
-  );
-}
-
-/** One CE workbook value: the original text, or a muted 未提供 when the source left it blank. */
 function MaterialSourceText({ value, label, mono = false, chip = false }: { value: string | number | null | undefined; label: string; mono?: boolean; chip?: boolean }) {
   const text = getMaterialSourceValue(value == null ? "" : String(value));
   const missing = text === "未提供";
@@ -3516,27 +3507,6 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   // first matching record of the group (the alternatives expand below it).
   const statusRecord = primaryAlternative ?? group.primaryRecord;
   const partSpec = statusRecord.partSpec || group.partSpec || "";
-  const statusLabel = group.riskCount > 0
-    ? "料況需 RD 確認"
-    : mustApply
-      ? "未提供虛擬／實體料號"
-      : primaryReady
-        ? "主料資料齊備"
-        : availableAlternativeCount > 0
-          ? `資料齊備候選 ${availableAlternativeCount}`
-          : "已有實體／虛擬料號，待確認";
-  const statusClassName = group.riskCount > 0
-    ? "border-rose-300/40 bg-rose-400/15 text-rose-200"
-    : mustApply
-      ? "border-amber-300/50 bg-amber-400/25 text-amber-100"
-      : primaryReady
-        ? "border-emerald-300/40 bg-emerald-400/20 text-emerald-200"
-        : "border-cyan-300/40 bg-cyan-400/20 text-cyan-100";
-  const statusTitle = [
-    primaryAlternative?.remark ? `主料 Remark：${primaryAlternative.remark}` : "",
-    availableAlternativeCount > 0 ? `資料齊備候選 ${availableAlternativeCount}` : "",
-    group.pendingCount > 0 ? `待建明細 ${group.pendingCount}` : "",
-  ].filter(Boolean).join("\n");
   const valueClassName = primaryReady ? "text-emerald-100" : mustApply ? "text-amber-100" : "text-cyan-100";
   const iconClassName = primaryReady ? "text-emerald-300" : mustApply ? "text-amber-300" : "text-cyan-300";
   const mainRowStyle = buildTableRowStyle(colorTheme.primary, {
@@ -3721,20 +3691,6 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         {columns.partUsage && (
           <td data-material-cell="partUsage" className={MATERIAL_CELL_CLASS}>
             <PartUsageStatus record={statusRecord} />
-          </td>
-        )}
-        {columns.status && (
-          <td data-material-cell="status" className={MATERIAL_CELL_CLASS}>
-            <span className="flex min-w-0 items-center gap-1.5">
-              <span className={cn("inline-flex min-w-0 truncate rounded border px-1.5 text-xs font-black leading-5", statusClassName)} title={statusTitle || undefined}>
-                {statusLabel}
-              </span>
-              {group.pendingCount > 0 && (
-                <span className="flex-none rounded bg-slate-400/10 px-1.5 text-[11px] font-semibold leading-5 text-slate-300" title="待建明細">
-                  待建 {group.pendingCount}
-                </span>
-              )}
-            </span>
           </td>
         )}
         {columns.tracking && (
@@ -3952,11 +3908,6 @@ function CompactAlternativeRows({
             )}
             {columns.partUsage && (
               <td className={MATERIAL_CELL_CLASS}><PartUsageStatus record={record} /></td>
-            )}
-            {columns.status && (
-              <td className={MATERIAL_CELL_CLASS}>
-                <StatusPill record={record} />
-              </td>
             )}
             {columns.tracking && (
               <td className={MATERIAL_CELL_CLASS} onClick={stopRowToggle}>
@@ -4946,6 +4897,28 @@ export function MaterialRequestPage() {
     [dataset.groups]
   );
   const pendingMaterialGroups = useMemo(() => dataset.groups.filter(requiresApplication), [dataset.groups]);
+  const discouragedMaterialCount = useMemo(() => collectDiscouragedMaterialRows(dataset.records).length, [dataset.records]);
+  const [isExportingDiscouraged, setIsExportingDiscouraged] = useState(false);
+  const exportDiscouragedMaterials = async () => {
+    const rows = collectDiscouragedMaterialRows(dataset.records);
+    if (rows.length === 0) {
+      toast({ title: "沒有不建議料", description: "目前 BOM 的零件狀態沒有「不建議使用／不建議用料」的料。" });
+      return;
+    }
+    setIsExportingDiscouraged(true);
+    try {
+      const fileName = await exportDiscouragedMaterialsExcel({
+        rows,
+        workspaceName: activeWorkspace.name,
+        exportedBy: user?.displayName || user?.username || "未知使用者",
+      });
+      toast({ title: "不建議料已匯出", description: `${rows.length.toLocaleString()} 筆 · ${fileName}` });
+    } catch (error) {
+      toast({ title: "不建議料匯出失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
+    } finally {
+      setIsExportingDiscouraged(false);
+    }
+  };
   const requiredApplicationCount = pendingMaterialGroups.length;
   const pendingGroupCount = useMemo(
     () => dataset.groups.filter((group) => group.pendingCount > 0).length,
@@ -5942,6 +5915,7 @@ export function MaterialRequestPage() {
               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
               <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
               <Button type="button" variant="outline" onClick={() => setPendingDialogOpen(true)} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", requiredApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {requiredApplicationCount.toLocaleString()}</Button>
+              <Button type="button" variant="outline" onClick={() => void exportDiscouragedMaterials()} disabled={isExportingDiscouraged || isWorkspaceLoading} className="h-11 border-orange-300/30 bg-orange-400/10 text-orange-100"><FileSpreadsheet className="mr-2 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
               <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
               <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
             </div>
@@ -5978,6 +5952,9 @@ export function MaterialRequestPage() {
           <div data-material-zone="actions" className="ml-auto flex flex-wrap items-center gap-1.5">
             <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={() => setPendingDialogOpen(true)} className={cn("h-8 border-rose-300/40 bg-rose-400/15 px-2.5 text-xs font-bold text-rose-50 hover:border-rose-200/70 hover:bg-rose-400/30 hover:text-white", requiredApplicationCount > 0 && "material-attention")}>
               <TriangleAlert className="mr-1 h-3.5 w-3.5" />待處理料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong>
+            </Button>
+            <Button type="button" variant="outline" size="sm" data-testid="discouraged-export-button" onClick={() => void exportDiscouragedMaterials()} disabled={isExportingDiscouraged || isWorkspaceLoading} title="匯出零件狀態為「新設計產品不建議使用 - ODM不建議用料」等不建議料的實體料號" className="h-8 border-orange-300/40 bg-orange-400/15 px-2.5 text-xs font-bold text-orange-50 hover:border-orange-200/70 hover:bg-orange-400/30 hover:text-white disabled:cursor-wait disabled:opacity-60">
+              <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />{isExportingDiscouraged ? "匯出中…" : "不建議料匯出"} <strong className="ml-1">{discouragedMaterialCount.toLocaleString()}</strong>
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-8 border-emerald-300/40 bg-emerald-400/15 px-2.5 text-xs font-bold text-emerald-50 hover:border-emerald-200/70 hover:bg-emerald-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-emerald-950/50 disabled:bg-emerald-950/30 disabled:text-emerald-100/55">
               <Upload className="mr-1 h-3.5 w-3.5" />{isImporting ? "讀取中..." : "上傳 BOM"}
