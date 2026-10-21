@@ -75,8 +75,8 @@ test("material vendor cells keep relation metadata inside the hover card", () =>
   assert.match(identityBlock, /data-testid="material-identity-trigger"/);
   assert.match(identityBlock, /data-testid="material-primary-name"/);
   assert.match(identityBlock, /data-testid="material-primary-vendor"/);
-  assert.match(identityBlock, />REF DES</);
-  assert.match(identityBlock, />MPN</);
+  assert.match(identityBlock, /\["REF DES", refs, /);
+  assert.match(identityBlock, /\["MPN", mpns, /);
   assert.match(primaryCellBlock, /<MaterialIdentityHover/);
   assert.doesNotMatch(primaryCellBlock, /group\.displayRef/);
   assert.doesNotMatch(primaryCellBlock, /個 MPN/);
@@ -93,10 +93,12 @@ test("material hover cards expose searchable, scrollable, and explicit copy cont
   assert.match(compactHoverBlock, /data-testid="compact-hover-content"/);
   assert.match(compactHoverBlock, /data-testid="compact-hover-search"/);
   assert.match(compactHoverBlock, /data-testid="compact-hover-copy-all"/);
-  assert.match(compactHoverBlock, /<ScrollArea/);
+  assert.match(compactHoverBlock, /max-h-\[min\(240px,40vh\)\] flex-wrap gap-1 overflow-y-auto/);
+  assert.doesNotMatch(compactHoverBlock, /padStart\(2, "0"\)/, "values are chips, not numbered rows");
   assert.match(identityBlock, /data-testid="material-identity-metrics"/);
-  assert.match(identityBlock, /data-testid="material-identity-ref-list"/);
-  assert.match(identityBlock, /data-testid="material-identity-mpn-list"/);
+  assert.match(identityBlock, /"material-identity-ref-list"\]/);
+  assert.match(identityBlock, /"material-identity-mpn-list"\]/);
+  assert.match(identityBlock, /data-testid=\{testId as string\}/);
   assert.match(identityBlock, /<ScrollArea/);
 });
 
