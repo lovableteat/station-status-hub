@@ -1,13 +1,22 @@
 .data-center-workspace { font-size: 14px; }
-.dc-task-guide { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; flex-shrink: 0; gap: 8px 20px; padding: 12px 24px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--background)); color: hsl(var(--muted-foreground)); font-size: 14px; line-height: 1.6; }
-.dc-task-guide > p { flex: 1 1 340px; }
-.dc-task-guide details { flex: 0 1 auto; }
-.dc-task-guide summary { color: hsl(var(--primary)); cursor: pointer; min-height: 28px; }
-.dc-task-guide details[open] { flex-basis: 100%; }
-.dc-task-guide details > div { max-width: 75ch; max-height: 230px; overflow-y: auto; padding: 12px 0 4px; }
-.dc-task-guide ol { list-style: decimal; padding-left: 22px; margin: 12px 0; }
-.dc-task-guide li { margin: 6px 0; }
-.dc-task-guide strong { color: hsl(var(--foreground)); font-weight: 600; }
+/* Workflow strip: the page's purpose shown as five live steps instead of a paragraph. */
+.dc-task-guide { display: flex; flex-shrink: 0; align-items: center; gap: 8px 12px; padding: 10px 16px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--background)); color: hsl(var(--muted-foreground)); font-size: 14px; line-height: 1.5; }
+.dc-flow { display: flex; flex: 1 1 auto; gap: 8px; min-width: 0; margin: 0; padding: 0; list-style: none; overflow-x: auto; scrollbar-width: thin; }
+.dc-flow > li { flex: 1 1 0; min-width: 188px; max-width: 320px; }
+.dc-flow-step { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; column-gap: 10px; width: 100%; min-height: 56px; padding: 7px 12px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); color: hsl(var(--foreground)); text-align: left; cursor: pointer; transition: border-color 150ms ease, background-color 150ms ease; }
+.dc-flow-step:hover { border-color: hsl(var(--primary) / .45); background: hsl(var(--muted)); }
+.dc-flow-step[aria-current="step"] { border-color: hsl(var(--primary) / .6); background: hsl(var(--primary) / .1); }
+.dc-flow-index { grid-row: span 2; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid hsl(var(--border)); border-radius: 50%; color: hsl(var(--muted-foreground)); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dc-flow-step[data-done="true"] .dc-flow-index { border-color: hsl(var(--success) / .5); background: hsl(var(--success) / .15); color: hsl(var(--success)); }
+.dc-flow-step[aria-current="step"] .dc-flow-index { border-color: hsl(var(--primary)); background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.dc-flow-title { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; font-size: 13px; font-weight: 700; line-height: 1.3; white-space: nowrap; }
+.dc-flow-next { flex-shrink: 0; padding: 1px 6px; border-radius: 999px; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); font-size: 11px; font-style: normal; font-weight: 700; line-height: 1.4; }
+.dc-flow-value { display: block; overflow: hidden; margin-top: 2px; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
+.dc-flow-step[aria-current="step"] .dc-flow-value { color: hsl(var(--foreground)); }
+.dc-flow-help { flex-shrink: 0; margin-left: auto; gap: 6px; }
+.dc-flow-help-text { display: grid; gap: 10px; color: hsl(var(--popover-foreground)); }
+.dc-flow-help-text ol { list-style: decimal; padding-left: 22px; display: grid; gap: 4px; }
+.dc-flow-help-text strong { color: hsl(var(--foreground)); font-weight: 600; }
 .dc-nav { display: flex; flex-direction: column; gap: 16px; }
 .dc-nav-section { display: grid; gap: 4px; min-width: 0; }
 .dc-nav-section + .dc-nav-section { border-top: 1px solid hsl(var(--border)); padding-top: 12px; }
@@ -48,7 +57,7 @@ body:has([data-chat-dock="detached"]) .dc-2d-workspace { padding-bottom: 56px; }
 .dc-2d-selection { background: hsl(var(--card)); backdrop-filter: none; }
 .data-center-workspace :is(button, summary):focus-visible, .dc-dialog :is(button, input, select, textarea):focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
 .data-center-workspace ::selection, .dc-dialog ::selection { background: hsl(var(--primary) / .3); color: hsl(var(--foreground)); }
-.dc-dialog, .dc-task-guide details > div, .dc-navigation-dock { scrollbar-color: hsl(var(--border)) transparent; scrollbar-width: thin; }
+.dc-dialog, .dc-flow, .dc-progress-body, .dc-navigation-dock { scrollbar-color: hsl(var(--border)) transparent; scrollbar-width: thin; }
 /* Portaled dialogs do not inherit the workspace scope. Override shared sm:p-7
    here so the declared scrollable body, not an outer padding, owns the space. */
 .dc-dialog[data-ui="dialog"] { display: flex; flex-direction: column; gap: 0; padding: 0; width: min(calc(100vw - 32px), var(--dc-dialog-width, 680px)); max-height: min(calc(100dvh - 32px), 860px); max-width: calc(100vw - 32px); border-radius: 16px; background: hsl(var(--card)); color: hsl(var(--foreground)); font-size: 14px; line-height: 1.6; }
@@ -210,9 +219,9 @@ body:has([data-chat-dock="detached"]) .dc-2d-workspace { padding-bottom: 56px; }
   .dc-project-browser > div:last-child { overflow: visible; }
 }
 @media (max-width: 639px) {
-  .dc-task-guide { padding: 10px 12px; gap: 4px; font-size: 13px; }
-  .dc-task-guide > p { flex: 1 1 190px; }
-  .dc-task-guide summary { display: flex; align-items: center; min-height: 44px; }
+  .dc-task-guide { padding: 8px 12px; gap: 8px; }
+  .dc-flow > li { min-width: 156px; }
+  .dc-flow-help { min-height: 44px; }
   .dc-2d-toolbar { padding: 10px 12px; gap: 8px; }
   .dc-2d-actions { flex-wrap: nowrap; overflow-x: auto; width: 100%; padding-bottom: 4px; scrollbar-color: hsl(var(--border)) transparent; scrollbar-width: thin; }
   .dc-2d-actions [data-ui="button"] { flex-shrink: 0; min-height: 44px; }
@@ -253,3 +262,53 @@ body:has([data-chat-dock="detached"]) .dc-2d-workspace { padding-bottom: 56px; }
   .data-center-workspace *, .data-center-workspace *::before, .data-center-workspace *::after { animation: none !important; transition: none !important; }
   .dc-dialog, .dc-dialog *, .dc-confirmation, .dc-confirmation * { animation: none !important; transition: none !important; }
 }
+
+/* Work progress panel beside the 3D overview: configuration state, every rack, today's report. */
+.dc-progress-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--card)); color: hsl(var(--foreground)); }
+.dc-progress-head { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 10px 12px 16px; border-bottom: 1px solid hsl(var(--border)); }
+.dc-progress-head h2 { font-size: 15px; font-weight: 700; line-height: 1.4; }
+.dc-progress-head p { margin-top: 2px; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.4; }
+.dc-progress-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 16px 16px; }
+.dc-progress-section + .dc-progress-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid hsl(var(--border)); }
+.dc-progress-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.dc-progress-section-head h3 { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; line-height: 1.4; }
+.dc-progress-section-head h3 svg { color: hsl(var(--primary)); }
+.dc-progress-link { min-height: 28px; padding: 0 6px; border-radius: 6px; color: hsl(var(--primary)); font-size: 12px; font-weight: 600; }
+.dc-progress-link:hover { background: hsl(var(--primary) / .1); }
+.dc-progress-flag { display: inline-flex; align-items: center; gap: 4px; color: hsl(var(--warning)); font-size: 12px; font-weight: 600; }
+.dc-progress-muted { color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.6; }
+.dc-progress-meter { display: grid; gap: 5px; }
+.dc-progress-meter + .dc-progress-meter { margin-top: 10px; }
+.dc-progress-meter-label { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.dc-progress-meter-label span:last-child { color: hsl(var(--foreground)); font-weight: 600; font-variant-numeric: tabular-nums; }
+.dc-progress-meter-bar { height: 6px; overflow: hidden; border-radius: 999px; background: hsl(var(--muted)); }
+.dc-progress-meter-bar > span { display: block; height: 100%; border-radius: inherit; background: hsl(var(--primary)); transition: width 300ms ease; }
+.dc-progress-meter[data-tone="warning"] .dc-progress-meter-bar > span { background: hsl(var(--warning)); }
+.dc-progress-racks { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.dc-progress-rack { display: grid; grid-template-columns: minmax(0, 1fr) 32px; align-items: stretch; border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--background) / .4); transition: border-color 150ms ease, background-color 150ms ease; }
+.dc-progress-rack:hover { border-color: hsl(var(--primary) / .45); }
+.dc-progress-rack.is-selected { border-color: hsl(var(--primary) / .6); background: hsl(var(--primary) / .1); }
+.dc-progress-rack-main { display: grid; gap: 2px; min-width: 0; padding: 8px 10px; text-align: left; cursor: pointer; }
+.dc-progress-rack-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; font-weight: 700; line-height: 1.4; }
+.dc-progress-rack-name i { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: hsl(var(--success)); }
+.dc-progress-rack-name i[data-health="warning"] { background: hsl(var(--warning)); }
+.dc-progress-rack-name i[data-health="critical"] { background: hsl(var(--destructive)); }
+.dc-progress-rack-name i[data-health="offline"] { background: hsl(var(--muted-foreground)); }
+.dc-progress-rack-name small { margin-left: auto; color: hsl(var(--muted-foreground)); font-size: 11px; font-weight: 500; }
+.dc-progress-rack-meta, .dc-progress-rack-step { overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
+.dc-progress-rack-meta strong { color: hsl(var(--warning)); font-weight: 600; }
+.dc-progress-rack-open { display: flex; align-items: center; justify-content: center; border-left: 1px solid hsl(var(--border)); color: hsl(var(--muted-foreground)); cursor: pointer; }
+.dc-progress-rack-open:hover { background: hsl(var(--primary) / .12); color: hsl(var(--foreground)); }
+.dc-progress-empty { display: grid; justify-items: start; gap: 8px; padding: 12px; border: 1px dashed hsl(var(--border)); border-radius: 8px; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.6; }
+.dc-progress-today { display: grid; justify-items: start; gap: 8px; padding: 12px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--background) / .4); }
+.dc-progress-today.is-open { border-color: hsl(var(--primary) / .5); }
+.dc-progress-today.is-done { border-color: hsl(var(--success) / .4); }
+.dc-progress-today-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
+.dc-progress-today-title { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+.dc-progress-today.is-done .dc-progress-today-title { color: hsl(var(--success)); }
+.dc-progress-excerpt { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; color: hsl(var(--foreground) / .85); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.dc-progress-reports { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.dc-progress-reports button { display: grid; gap: 3px; width: 100%; padding: 8px 10px; border: 1px solid hsl(var(--border)); border-radius: 8px; text-align: left; cursor: pointer; }
+.dc-progress-reports button:hover { border-color: hsl(var(--primary) / .45); background: hsl(var(--muted)); }
+.dc-progress-report-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.dc-progress-report-meta .dc-work-status { margin-left: auto; }

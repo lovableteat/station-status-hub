@@ -127,7 +127,7 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
               <p className="truncate text-sm text-muted-foreground">@{user?.username}</p>
             </div>
             <p className="text-sm leading-6 text-foreground/70">
-              {selectedFile ? `已選擇 ${selectedFile.name}，按「儲存大頭貼」套用。` : "點上方頭像或下方按鈕選擇照片；JPG、PNG 或 WebP，5 MB 以內，會自動裁成正方形。"}
+              {selectedFile ? `已選擇 ${selectedFile.name}，按「儲存大頭貼」套用。` : "點上方頭像或下方按鈕選擇照片；支援 JPG、PNG、WebP，檔案上限 5 MB，會自動裁成正方形。"}
             </p>
           </div>
 
