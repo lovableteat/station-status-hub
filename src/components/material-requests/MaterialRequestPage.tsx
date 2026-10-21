@@ -97,7 +97,6 @@ import {
   type MaterialWorkbookPayload,
   buildMaterialDataset,
   getActionLabel,
-  getMaterialBuildRequirementLabel,
   getLatestTrackingEntry,
   isPreferredInternalPartNumber,
   normalizeMaterialSearchText,
@@ -232,7 +231,7 @@ const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:"
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const VIEW_STATE_KEY_PREFIX = "station-status-hub:material-view:v1:";
-const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v8";
+const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v9";
 const HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const MAX_BOM_TRACKER_PAGES = 500;
@@ -261,9 +260,9 @@ const BOM_PAGE_STATUS_OPTIONS: Array<{
     idleClassName: "border-violet-400/18 bg-violet-400/8 text-violet-200 hover:bg-violet-400/14",
   },
 ];
-const DEFAULT_COLUMN_WIDTHS = [96, 92, 260, 160, 260, 210, 190, 180, 160, 180, 220, 130];
-const MIN_COLUMN_WIDTHS = [80, 76, 200, 120, 180, 170, 150, 140, 140, 140, 180, 110];
-const MAX_COLUMN_WIDTHS = [148, 108, 520, 360, 520, 460, 420, 360, 320, 360, 420, 260];
+const DEFAULT_COLUMN_WIDTHS = [96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130];
+const MIN_COLUMN_WIDTHS = [80, 76, 200, 120, 180, 170, 150, 140, 140, 180, 110];
+const MAX_COLUMN_WIDTHS = [148, 108, 520, 360, 520, 460, 420, 360, 360, 420, 260];
 const DEFAULT_BOM_TABLE_COLOR_THEME: BomTableColorTheme = {
   primary: "#0F5D74",
   alternative: "#343B73",
@@ -306,7 +305,6 @@ const MATERIAL_FIELD_HELP = {
   qty: getMaterialCeFieldHelp("Qty"),
   assemblyName: { description: "Level 1 模組列所代表的模組名稱；網站保留作分類，料件列不需另填這一欄。", example: "C2 Carrier Board" },
   schematicPart: getMaterialCeFieldHelp("Schematic_Part"),
-  symbolStatus: getMaterialCeFieldHelp("Symbol"),
   pcbFootprint: getMaterialCeFieldHelp("PCB_Footprint"),
   partSpec: getMaterialCeFieldHelp("Part Spec"),
   manufacturer: getMaterialCeFieldHelp("Manufacturer"),
@@ -321,7 +319,7 @@ const MATERIAL_FIELD_HELP = {
   phaseOutStatus: getMaterialCeFieldHelp("phase out"),
   partNumber: getMaterialCeFieldHelp("實體料號"),
   partName: getMaterialCeFieldHelp("Part Name"),
-  remark: { description: "網站維護的人工申請狀態或備註，不是 CE Excel 欄位，不會由零件狀態自動建立申請。", example: "待確認實體料號、只需補 Symbol" },
+  remark: { description: "網站維護的人工申請狀態或備註，不是 CE Excel 欄位，不會由零件狀態自動建立申請。", example: "待確認實體料號、待核對原理圖符號" },
 } as const;
 
 const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>> = {
@@ -331,7 +329,6 @@ const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>
   internal: ["實體料號", "Schematic_Part", "PCB_Footprint"].map((header) => getMaterialCeFieldHelp(header).description).join("\n"),
   tx: getMaterialCeFieldHelp("虛擬料號").description,
   phaseOut: getMaterialCeFieldHelp("phase out").description,
-  symbol: getMaterialCeFieldHelp("Symbol").description,
   status: ["Sourcing Status", "零件狀態"].map((header) => getMaterialCeFieldHelp(header).description).join("\n"),
   tracking: "網站人工維護的狀態追蹤，與 CE Excel 的供應／核准狀態、phase out 及零件狀態分開。",
 };
@@ -729,13 +726,21 @@ function loadColumnWidths() {
   if (typeof window === "undefined") return DEFAULT_COLUMN_WIDTHS;
 
   try {
-    const parsed = JSON.parse(window.sessionStorage.getItem(COLUMN_WIDTHS_SESSION_KEY) ?? "null");
-    const legacyWidths = Array.isArray(parsed) && parsed.length === 11
-      ? parsed.filter((_, index) => index !== 8)
-      : parsed;
-    const widths = Array.isArray(legacyWidths) && legacyWidths.length === 10
-      ? [...legacyWidths.slice(0, 7), DEFAULT_COLUMN_WIDTHS[7], DEFAULT_COLUMN_WIDTHS[8], ...legacyWidths.slice(7)]
-      : legacyWidths;
+    const currentStored = window.sessionStorage.getItem(COLUMN_WIDTHS_SESSION_KEY);
+    const parsed = JSON.parse(currentStored ?? window.sessionStorage.getItem("station-status-hub:material-column-widths:v8") ?? "null");
+    let widths = parsed;
+    if (currentStored === null && Array.isArray(parsed)) {
+      // The former 12-column layout included Symbol between phase out and status.
+      if (parsed.length === 12) {
+        widths = parsed.filter((_, index) => index !== 8);
+      } else {
+        // Older layouts had no phase out; the 11-column version also included specification.
+        const legacyWidths = parsed.length === 11 ? parsed.filter((_, index) => index !== 8) : parsed;
+        widths = legacyWidths.length === 10
+          ? [...legacyWidths.slice(0, 7), DEFAULT_COLUMN_WIDTHS[7], ...legacyWidths.slice(7)]
+          : legacyWidths;
+      }
+    }
     if (!Array.isArray(widths) || widths.length !== DEFAULT_COLUMN_WIDTHS.length) {
       return DEFAULT_COLUMN_WIDTHS;
     }
@@ -928,7 +933,6 @@ function createRecordTemplate(group?: MaterialGroup): MaterialWorkbookRecord {
     sourcingStatus: "",
     partUsageStatus: "",
     phaseOutStatus: "",
-    symbolStatus: "",
     refGroup: group?.displayRef ?? "",
     lv: "",
     remark: "",
@@ -2763,19 +2767,6 @@ function TrackingHistoryDialog({
   );
 }
 
-function SymbolBuildStatus({ record, className }: { record: MaterialRecord; className?: string }) {
-  const value = getMaterialSourceValue(record.symbolStatus);
-  return (
-    <span
-      data-testid="material-symbol-build-status"
-      className={cn("block min-w-0 max-w-full truncate text-xs font-semibold leading-5 text-slate-200", className)}
-      title={`Symbol：${value}`}
-    >
-      {value}
-    </span>
-  );
-}
-
 function PhaseOutStatus({ record }: { record: MaterialRecord }) {
   const value = getMaterialSourceValue(record.phaseOutStatus);
   return <span data-testid="material-phase-out-status" className="block truncate text-xs font-semibold leading-5 text-slate-200" title={`phase out（零件狀態）：${value}`}>{value}</span>;
@@ -3322,12 +3313,8 @@ function MaterialRecordDialog({
               <Input id="material-assembly" disabled={readOnly} value={form.assemblyName} onChange={(event) => updateField("assemblyName", event.target.value)} />
             </div>
             <div className="space-y-1">
-              <MaterialFieldLabel field="schematicPart" htmlFor="material-symbol" label="原理圖符號名稱" />
+              <MaterialFieldLabel field="schematicPart" htmlFor="material-symbol" label="原理圖符號（Schematic_Part）" />
               <Input id="material-symbol" disabled={readOnly} value={form.schematicPart} onChange={(event) => updateField("schematicPart", event.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="symbolStatus" htmlFor="material-symbol-status" label="Symbol" />
-              <Input id="material-symbol-status" disabled={readOnly} value={form.symbolStatus ?? ""} onChange={(event) => updateField("symbolStatus", event.target.value)} placeholder="保留 Excel 原始值" />
             </div>
             <div className="space-y-1">
               <MaterialFieldLabel field="pcbFootprint" htmlFor="material-footprint" label="PCB 封裝名稱" />
@@ -3400,7 +3387,7 @@ function MaterialRecordDialog({
             </div>
             <div className="space-y-1 md:col-span-3">
               <MaterialFieldLabel field="remark" htmlFor="material-remark" label="申請狀態 / 備註" />
-              <Textarea id="material-remark" disabled={readOnly} value={form.remark} onChange={(event) => updateField("remark", event.target.value)} className="min-h-9 text-sm" rows={1} placeholder="例如 待確認實體料號、只需補 Symbol" />
+              <Textarea id="material-remark" disabled={readOnly} value={form.remark} onChange={(event) => updateField("remark", event.target.value)} className="min-h-9 text-sm" rows={1} placeholder="例如 待確認實體料號、待核對原理圖符號" />
             </div>
           </div>
         </section>
@@ -3719,7 +3706,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
               )}
               <span
                 className="truncate text-xs leading-4 text-slate-400"
-                title={`原理圖符號名稱：${statusRecord.schematicPart || "原理圖符號未提供"}\nPCB 封裝名稱：${statusRecord.pcbFootprint || "封裝未提供"}`}
+                title={`原理圖符號（Schematic_Part）：${statusRecord.schematicPart || "未提供"}\nPCB 封裝名稱：${statusRecord.pcbFootprint || "封裝未提供"}`}
               >
                 <span className="font-mono text-cyan-300/90">{statusRecord.schematicPart || "原理圖符號未提供"}</span>
                 <span className="text-slate-600"> · </span>
@@ -3741,9 +3728,6 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         )}
         {columns.phaseOut && (
           <td data-material-cell="phaseOut" className={MATERIAL_CELL_CLASS}><PhaseOutStatus record={statusRecord} /></td>
-        )}
-        {columns.symbol && (
-          <td data-material-cell="symbol" className={MATERIAL_CELL_CLASS}><SymbolBuildStatus record={statusRecord} /></td>
         )}
         {columns.status && (
           <td data-material-cell="status" className={MATERIAL_CELL_CLASS}>
@@ -3946,7 +3930,7 @@ function CompactAlternativeRows({
                   ) : (
                     <span className="text-xs font-bold leading-5 text-amber-300">實體料號未提供</span>
                   )}
-                  <span className="truncate text-xs leading-4 text-slate-500" title={`原理圖符號名稱：${record.schematicPart || "未提供"}\nPCB 封裝名稱：${record.pcbFootprint || "未提供"}`}>
+                  <span className="truncate text-xs leading-4 text-slate-500" title={`原理圖符號（Schematic_Part）：${record.schematicPart || "未提供"}\nPCB 封裝名稱：${record.pcbFootprint || "未提供"}`}>
                     <span className="font-mono text-cyan-300/80">{record.schematicPart || "原理圖符號未提供"}</span>
                     <span className="text-slate-600"> · </span>
                     <span className="font-mono text-indigo-300/80">{record.pcbFootprint || "封裝未提供"}</span>
@@ -3965,9 +3949,6 @@ function CompactAlternativeRows({
             )}
             {columns.phaseOut && (
               <td className={MATERIAL_CELL_CLASS}><PhaseOutStatus record={record} /></td>
-            )}
-            {columns.symbol && (
-              <td className={MATERIAL_CELL_CLASS}><SymbolBuildStatus record={record} /></td>
             )}
             {columns.status && (
               <td className={MATERIAL_CELL_CLASS}>
@@ -5426,8 +5407,6 @@ export function MaterialRequestPage() {
           phaseOutStatus: record.phaseOutStatus ?? "",
           specification: record.partSpec,
           symbol: record.schematicPart,
-          symbolStatus: record.symbolStatus ?? "",
-          buildRequirement: getMaterialBuildRequirementLabel(record),
           trackingOwner: latestTrackingEntry?.createdBy ?? "",
           trackingStatus: getTrackingWorkflowStatus(record),
           trackingSummary: latestTrackingEntry?.note ?? record.trackingNote ?? record.trackingStatus ?? "",
@@ -6116,7 +6095,7 @@ export function MaterialRequestPage() {
                   <button type="button" onClick={() => openRecord(mainRecord, "view")} className="min-w-0 flex-1 text-left">
                     <p className="truncate text-sm font-black leading-5 text-white">{group.name || mainRecord.name || "未命名料件"}</p>
                     <p className="truncate text-xs font-semibold text-cyan-200">{getDisplayMpn(mainRecord) || "尚未填寫 MPN"} · <span className="font-normal text-slate-400">{mainRecord.manufacturer || "未指定廠商"}</span></p>
-                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><PartUsageSummary records={group.records} /><span className="inline-flex min-w-0 items-center gap-1"><span className="text-xs text-slate-500">phase out</span><PhaseOutStatus record={mainRecord} /></span><span className="inline-flex min-w-0 items-center gap-1"><span className="text-xs text-slate-500">Symbol</span><SymbolBuildStatus record={mainRecord} /></span></div>
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><PartUsageSummary records={group.records} /><span className="inline-flex min-w-0 items-center gap-1"><span className="text-xs text-slate-500">phase out</span><PhaseOutStatus record={mainRecord} /></span></div>
                   </button>
                   <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-500" />
                 </div>
@@ -6214,7 +6193,6 @@ export function MaterialRequestPage() {
                 {columnVisibility.internal && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="internal" getOptions={getColumnFilterOptions} label="實體料號" selectedValues={columnFilters.internal} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, internal: values }))} /></th>}
                 {columnVisibility.tx && <th className="border-r border-blue-300/20 p-1.5"><ExcelFilterPopover filterKey="virtualAlternative" getOptions={getColumnFilterOptions} label="虛擬料號" selectedValues={columnFilters.virtualAlternative} onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, virtualAlternative: values }))} /></th>}
                 {columnVisibility.phaseOut && <th className="border-r border-blue-300/20 p-1.5"><div className="flex h-8 items-center justify-center text-[11px] text-slate-500">來源原文</div></th>}
-                {columnVisibility.symbol && <th className="border-r border-blue-300/20 p-1.5"><div className="flex h-8 items-center justify-center text-[11px] text-slate-500">來源原文</div></th>}
                 {columnVisibility.status && (
                   <th className="border-r border-blue-300/20 p-1.5">
                     <div className="flex h-8 items-center justify-center text-[11px] text-slate-500">—</div>

@@ -17,17 +17,14 @@ async function importRows(headers, rows) {
   return parseMaterialWorkbookFile(new File([await workbook.xlsx.writeBuffer()], "CE-symbol.xlsx"));
 }
 
-test("the shared CE examples demonstrate independent Symbol availability and source usage restrictions", async () => {
+test("the current CE examples contain no standalone Symbol status or inferred OrCAD result", async () => {
   const payload = await importRows(MATERIAL_CE_FIELDS.map(field => field.header), MATERIAL_CE_EXAMPLE_ROWS);
   const dataset = buildMaterialDataset(payload);
   assert.equal(dataset.records.length, 4);
   assert.equal(dataset.groups.length, 3);
-  assert.deepEqual(dataset.records.map(record => record.symbolStatus), ["無", "C", "有", "無"]);
-  assert.deepEqual(dataset.records.map(record => getMaterialBuildRequirements(record).status), [
-    "needs-symbol", "needs-confirmation", "complete", "needs-part-symbol",
-  ]);
-  assert.deepEqual(dataset.records.map(record => record.isReady), [false, false, true, false]);
-  assert.ok(dataset.records.every(record => record.isRisk && !record.isApproved), "Part/Symbol completeness does not override usage restrictions");
+  assert.ok(dataset.records.every(record => !Object.hasOwn(record, "symbolStatus")));
+  assert.deepEqual(dataset.records.map(record => record.isReady), [true, true, true, false]);
+  assert.ok(dataset.records.every(record => record.isRisk && !record.isApproved), "physical PN readiness does not override usage restrictions");
   assert.ok(dataset.records.every(record => record.trackingHistory.length === 0 && record.actionKind === "other"));
 });
 
@@ -122,7 +119,7 @@ test("legacy Schematic_Part stays a name and does not manufacture Symbol availab
   assert.equal(manual.isReady, false);
 });
 
-test("explicit Symbol source gaps constrain readiness while leaving manual actions and tracking intact", async () => {
+test("retained legacy Symbol codes cannot invisibly constrain readiness or preference", async () => {
   const payload = await importRows(
     ["Name", "Ref Des", "Part Number", "Symbol", "Schematic_Part"],
     [
@@ -137,8 +134,9 @@ test("explicit Symbol source gaps constrain readiness while leaving manual actio
     ...payload,
     records: payload.records.map(record => ({ ...record, remark: "OK" })),
   }).records;
-  assert.deepEqual(records.map(record => record.isReady), [false, false, true, false, false]);
-  assert.deepEqual(records.map(record => record.isPreferred), [false, false, true, false, false]);
+  assert.deepEqual(records.map(record => record.symbolStatus), ["無", "C", "有", "有", ""]);
+  assert.deepEqual(records.map(record => record.isReady), [true, true, true, true, true]);
+  assert.deepEqual(records.map(record => record.isPreferred), [true, true, true, false, true]);
   assert.ok(records.every(record => record.actionKind === "ok" && record.remark === "OK"));
   assert.ok(records.every(record => record.isPending === false), "source gaps must not rewrite manual pending or create applications");
   assert.ok(records.every(record => record.trackingHistory.length === 0));
@@ -151,4 +149,21 @@ test("explicit Symbol source gaps constrain readiness while leaving manual actio
   assert.equal(manualPending.isReady, false, "complete source fields must not erase a manual pending action");
   assert.equal(manualPending.isPending, true);
   assert.equal(manualPending.actionKind, "pending-symbol");
+});
+
+test("Schematic_Part text and legacy codes do not establish or gate an OrCAD call-up result", async () => {
+  const payload = await importRows(
+    ["Name", "Ref Des", "實體料號", "Symbol", "Schematic_Part"],
+    [
+      ["CAP", "C1", "000-CAP-00", "C", "CAP"],
+      ["CAP", "C2", "000-CAP-00", "", ""],
+      ["CAP", "C3", "", "無", "CAP"],
+    ],
+  );
+  const dataset = buildMaterialDataset(payload);
+  assert.deepEqual(dataset.records.map(record => record.isReady), [true, true, false]);
+  assert.deepEqual(dataset.records.map(record => record.isPreferred), [false, false, false]);
+  assert.deepEqual(dataset.records.map(record => record.symbolStatus), ["C", "", "無"]);
+  assert.deepEqual(dataset.records.map(record => record.schematicPart), ["CAP", "", "CAP"]);
+  assert.ok(dataset.records.every(record => record.actionKind === "other" && record.trackingHistory.length === 0));
 });

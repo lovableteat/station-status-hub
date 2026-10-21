@@ -11,7 +11,7 @@ import {
   MATERIAL_CE_EXAMPLE_ROWS,
   MATERIAL_CE_FIELDS,
   MATERIAL_CE_HEADER_ROW,
-  MATERIAL_CE_LEGACY_MEANING_FIELDS,
+  MATERIAL_CE_LEGACY_MEANING_SCHEMAS,
   MATERIAL_CE_MEANING_ROW,
 } from "../src/components/material-requests/materialUploadContract.mjs";
 
@@ -45,17 +45,20 @@ test("the CE meaning row is metadata and an otherwise blank new format has no ma
   assert.equal(MATERIAL_CE_HEADER_ROW, 4);
   assert.equal(MATERIAL_CE_MEANING_ROW, 5);
   assert.equal(MATERIAL_CE_DATA_START_ROW, 6);
-  assert.equal(ceMeanings.length, 16);
+  assert.equal(ceMeanings.length, 15);
+  assert.ok(!ceHeaders.includes("Symbol"));
+  assert.equal(ceMeanings[ceHeaders.indexOf("Schematic_Part")], "原理圖符號(orcad要能叫出原理圖符號)");
+  assert.equal(ceMeanings[ceHeaders.indexOf("PCB_Footprint")], "零件footprint");
   assert.ok(ceMeanings.every(value => typeof value === "string" && value.trim()));
   await assert.rejects(importTemplateRows([]), /找不到可解析的料號資料/);
 });
 
-test("the first CE record starts at row 6 and retains original Symbol and independent source statuses", async () => {
+test("the first CE record starts at row 6 without a Symbol property and retains independent source statuses", async () => {
   const payload = await importTemplateRows([MATERIAL_CE_EXAMPLE_ROWS[1]]);
   assert.equal(payload.recordCount, 1);
   assert.equal(payload.records[0].sourceRow, MATERIAL_CE_DATA_START_ROW);
   assert.equal(payload.records[0].manufacturerPartNumber, "DEMO-CAP-ALT");
-  assert.equal(payload.records[0].symbolStatus, "C");
+  assert.equal(Object.hasOwn(payload.records[0], "symbolStatus"), false);
   assert.equal(payload.records[0].sourcingStatus, "Approved");
   assert.match(payload.records[0].partUsageStatus, /ODM 不建議用料/);
   assert.deepEqual(payload.records[0].trackingHistory, []);
@@ -97,7 +100,7 @@ test("meaning detection follows the mapped headers if the CE columns are rearran
   assert.equal(payload.records[0].sourceRow, 6);
   assert.equal(payload.records[0].manufacturerPartNumber, "DEMO-CAP-ALT");
   assert.equal(payload.records[0].partNumber, "000-DEMO-ALT");
-  assert.equal(payload.records[0].symbolStatus, "C");
+  assert.equal(Object.hasOwn(payload.records[0], "symbolStatus"), false);
 });
 
 test("Level 0 and Level 1 context is retained after the CE meanings and in old row 5 files", async () => {
@@ -115,21 +118,24 @@ test("Level 0 and Level 1 context is retained after the CE meanings and in old r
   }
 });
 
-test("the exact previous 15-column meaning row remains metadata without inventing a phase-out field", async () => {
-  const oldHeaders = MATERIAL_CE_LEGACY_MEANING_FIELDS.map(field => field.header);
-  const oldMeanings = MATERIAL_CE_LEGACY_MEANING_FIELDS.map(field => field.meaning);
-  const currentValues = new Map(ceHeaders.map((header, index) => [header, MATERIAL_CE_EXAMPLE_ROWS[1][index]]));
-  const oldRow = oldHeaders.map(header => currentValues.get(header));
-  for (const meanings of [oldMeanings, null]) {
-    const payload = await importTemplateRows([oldRow], { headers: oldHeaders, meanings });
-    assert.equal(payload.recordCount, 1);
-    assert.equal(payload.records[0].id, "上傳資料-4");
-    assert.equal(payload.records[0].sourceRow, meanings ? 6 : 5);
-    assert.equal(payload.records[0].symbolStatus, "C");
-    assert.match(payload.records[0].partUsageStatus, /ODM 不建議用料/);
-    assert.equal(Object.hasOwn(payload.records[0], "phaseOutStatus"), false);
-  }
-});
+for (const schema of MATERIAL_CE_LEGACY_MEANING_SCHEMAS) {
+  test(`the exact previous ${schema.length}-column meaning row remains metadata and preserves legacy Symbol`, async () => {
+    const oldHeaders = schema.map(field => field.header);
+    const oldMeanings = schema.map(field => field.meaning);
+    const currentValues = new Map(ceHeaders.map((header, index) => [header, MATERIAL_CE_EXAMPLE_ROWS[1][index]]));
+    const oldRow = oldHeaders.map(header => header === "Symbol" ? "C" : currentValues.get(header));
+    for (const meanings of [oldMeanings, null]) {
+      const payload = await importTemplateRows([oldRow], { headers: oldHeaders, meanings });
+      assert.equal(payload.recordCount, 1);
+      assert.equal(payload.records[0].id, "上傳資料-4");
+      assert.equal(payload.records[0].sourceRow, meanings ? 6 : 5);
+      assert.equal(payload.records[0].symbolStatus, "C");
+      assert.match(payload.records[0].partUsageStatus, /ODM 不建議用料/);
+      assert.equal(Object.hasOwn(payload.records[0], "phaseOutStatus"), oldHeaders.includes("phase out"));
+      if (oldHeaders.includes("phase out")) assert.equal(payload.records[0].phaseOutStatus, "ACTIVE");
+    }
+  });
+}
 
 test("adding the meaning row preserves record, blue-group and imported-tracking identities", async () => {
   const headers = [...ceHeaders, "料號追蹤", "單號", "EE"];
@@ -231,7 +237,7 @@ test("phase-out values remain raw and do not change sourcing approval, readiness
   assert.deepEqual(payload.records.map(record => record.phaseOutStatus), values);
   assert.ok(payload.records.every(record => record.sourcingStatus === "Approved" && record.partUsageStatus === "" && record.symbolStatus === "C"));
   const dataset = buildMaterialDataset(payload);
-  assert.ok(dataset.records.every(record => record.isRisk === false && record.isApproved === true && record.isReady === false), "phase out must not classify or override the independent fields");
+  assert.ok(dataset.records.every(record => record.isRisk === false && record.isApproved === true && record.isReady === true), "phase out and a retained legacy Symbol code must not classify or gate readiness");
   assert.ok(dataset.records[5].searchText.includes("underreview"));
 
   const withoutSourcing = await importRows(

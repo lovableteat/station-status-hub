@@ -136,30 +136,32 @@ const readWidths = (name) => JSON.parse(source.match(new RegExp(`const ${name} =
 test("material table removes specification from headers, filters, primary and alternative rows", () => {
   assert.doesNotMatch(`${tableBlock}${rowBlock}`, /規格 \/ 備註|filterKey="specification"|group\.partSpec/);
   assert.doesNotMatch(alternativeBlock, /record\.partSpec|record\.remark/);
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 12);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 12);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 11);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 11);
   assert.doesNotMatch(source, /specification: ColumnFilterSelection|specification: null|case "specification"/);
 });
 
-test("material column geometry and fixed actions match the twelve columns", () => {
-  assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [96, 92, 260, 160, 260, 210, 190, 180, 160, 180, 220, 130]);
-  assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [80, 76, 200, 120, 180, 170, 150, 140, 140, 140, 180, 110]);
-  assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [148, 108, 520, 360, 520, 460, 420, 360, 320, 360, 420, 260]);
+test("material column geometry and fixed actions match the eleven columns", () => {
+  assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130]);
+  assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [80, 76, 200, 120, 180, 170, 150, 140, 140, 180, 110]);
+  assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [148, 108, 520, 360, 520, 460, 420, 360, 360, 420, 260]);
   assert.equal((tableBlock.match(/column\.key === "actions"/g) ?? []).length, 2);
-  assert.doesNotMatch(source, /colSpan=\{1[01]\}/);
+  assert.doesNotMatch(source, /colSpan=\{1[012]\}/);
   assert.match(source, /colSpan=\{visibleColumnCount\}/);
 });
 
-test("old ten and eleven-column widths preserve their columns when phase out and Symbol are added", () => {
+test("Symbol removal preserves every remaining width when restoring old or current layouts", () => {
   const loadBlock = source.slice(source.indexOf("function loadColumnWidths()"), source.indexOf("function clampBomTrackerPageCount("));
   const load = new Function("window", "DEFAULT_COLUMN_WIDTHS", "MIN_COLUMN_WIDTHS", "MAX_COLUMN_WIDTHS", "COLUMN_WIDTHS_SESSION_KEY", `${loadBlock}; return loadColumnWidths();`);
-  const run = (stored) => load({ sessionStorage: { getItem: () => JSON.stringify(stored) } }, readWidths("DEFAULT_COLUMN_WIDTHS"), readWidths("MIN_COLUMN_WIDTHS"), readWidths("MAX_COLUMN_WIDTHS"), "fixture");
-  const legacy = [97, 93, 261, 161, 261, 211, 191, 181, 251, 221, 131];
-  const oldTen = legacy.filter((_, index) => index !== 8);
-  const current = [...oldTen.slice(0, 7), 180, 160, ...oldTen.slice(7)];
-  assert.deepEqual(run(legacy), current);
-  assert.deepEqual(run(oldTen), current);
-  assert.deepEqual(run(current), current);
+  const run = (stored, current = false) => load({ sessionStorage: { getItem: key => key === (current ? "fixture" : "station-status-hub:material-column-widths:v8") && stored !== null ? JSON.stringify(stored) : null } }, readWidths("DEFAULT_COLUMN_WIDTHS"), readWidths("MIN_COLUMN_WIDTHS"), readWidths("MAX_COLUMN_WIDTHS"), "fixture");
+  const oldEleven = [97, 93, 261, 161, 261, 211, 191, 181, 251, 221, 131];
+  const oldTen = oldEleven.filter((_, index) => index !== 8);
+  const priorTwelve = [...oldTen.slice(0, 7), 180, 160, ...oldTen.slice(7)];
+  const expected = priorTwelve.filter((_, index) => index !== 8);
+  assert.deepEqual(run(priorTwelve), expected);
+  assert.deepEqual(run(oldEleven), expected);
+  assert.deepEqual(run(oldTen), expected);
+  assert.deepEqual(run(expected, true), expected);
   assert.deepEqual(run(null), readWidths("DEFAULT_COLUMN_WIDTHS"));
 });
 
@@ -197,7 +199,7 @@ test("material field help reads the same meanings and instructions as the CE wor
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const help = new Function("MATERIAL_CE_FIELDS", `${compiledHelp}; return MATERIAL_FIELD_HELP;`)(MATERIAL_CE_FIELDS);
-  const mapping = { name: "Name", qty: "Qty", refDes: "Ref Des", manufacturerPartNumber: "Manufacturer Part Number", manufacturer: "Manufacturer", sourcingStatus: "Sourcing Status", virtualAlternative: "虛擬料號", partNumber: "實體料號", symbolStatus: "Symbol", partName: "Part Name", partSpec: "Part Spec", schematicPart: "Schematic_Part", pcbFootprint: "PCB_Footprint", partUsageStatus: "零件狀態", phaseOutStatus: "phase out" };
+  const mapping = { name: "Name", qty: "Qty", refDes: "Ref Des", manufacturerPartNumber: "Manufacturer Part Number", manufacturer: "Manufacturer", sourcingStatus: "Sourcing Status", virtualAlternative: "虛擬料號", partNumber: "實體料號", partName: "Part Name", partSpec: "Part Spec", schematicPart: "Schematic_Part", pcbFootprint: "PCB_Footprint", partUsageStatus: "零件狀態", phaseOutStatus: "phase out" };
   for (const [key, header] of Object.entries(mapping)) {
     const field = MATERIAL_CE_FIELDS.find(field => field.header === header);
     assert.equal(help[key].header, header);
@@ -213,16 +215,14 @@ test("material field help reads the same meanings and instructions as the CE wor
 });
 
 
-test("phase out and Symbol have their own main and candidate cells rather than being hidden in combined status", () => {
+test("phase out remains independent while the removed Symbol column is absent from forms and all rows", () => {
   assert.match(rowBlock, /columns\.phaseOut &&/);
   assert.match(rowBlock, /data-material-cell="phaseOut"[^>]*><PhaseOutStatus record=\{statusRecord\}/);
-  assert.match(rowBlock, /data-material-cell="symbol"[^>]*><SymbolBuildStatus record=\{statusRecord\}/);
   assert.match(alternativeBlock, /columns\.phaseOut &&/);
   assert.match(alternativeBlock, /<PhaseOutStatus record=\{record\}/);
-  assert.match(alternativeBlock, /columns\.symbol &&/);
-  assert.match(alternativeBlock, /<SymbolBuildStatus record=\{record\}/);
-  const combined = rowBlock.slice(rowBlock.indexOf("{columns.status &&"), rowBlock.indexOf("{columns.tracking &&"));
-  assert.doesNotMatch(combined, /SymbolBuildStatus|PhaseOutStatus/);
+  assert.doesNotMatch(`${rowBlock}${alternativeBlock}`, /columns\.symbol|SymbolBuildStatus|data-material-cell="symbol"/);
+  assert.doesNotMatch(source, /field="symbolStatus"|getMaterialCeFieldHelp\("Symbol"\)|material-symbol-build-status/);
+  assert.match(source, /field="schematicPart" htmlFor="material-symbol" label="原理圖符號（Schematic_Part）"/);
   assert.match(source, /field="phaseOutStatus" htmlFor="material-phase-out" label="phase out（零件狀態）"/);
   assert.match(source, /field="partUsageStatus" htmlFor="material-part-usage" label="零件狀態"/);
 });
