@@ -5,6 +5,8 @@
                     [--pdf <B schematic.pdf>] [--base-url http://host/app/static] [--no-publish]
                     [--rail-domain rail_domain.csv] [--i2c-declared i2c_map_declared.csv]
   autocheck selftest --src <one revision folder> [--n 28 --seeds 5]
+  autocheck diagram --src <one revision folder> [--label CRB] [--out out_dir] [--no-publish]
+                    [--config cfg.yaml] [--rail-map rail_map.csv] [--i2c-declared ...] [--datasheets ...]
 """
 from __future__ import annotations
 
@@ -75,123 +77,61 @@ def write_outputs(res, out: Path, schematic_pdf: Path | None = None, base_url: s
             url = f"{base}/{tag}/{pdf_name}"
         elif base:
             url = f"{base}/{tag}/{pdf_name}"
-    # B1 power tree as boxes: standalone .html (SVG). Links open the annotated PDF at the converter's page.
-    pt = getattr(res, "power_tree", None) or {}
-    if pt.get("edges") is not None:
-        from .report.power_tree_diagram import layout, render_html
-        pmap = (sidecar or {}).get("page_map", {})
+    # A-side annotated PDF (2026-10-20, 0p9 並排瀏覽): the SAME tracking rows boxed on A's schematic PDF, so the viewer
+    # can show the A and B drawings of one key side by side. Page mapping uses A's DSN page titles (sch_pages of A);
+    # a RefDes not on the mapped page is accepted on exactly one other page (pdf_annotate.locate), which is all
+    # a CRB without DSN can offer. Parts that do not exist in A (NEW) end up unplaced -> "A 無此件" in the UI.
+    # Optional: no A PDF, or any annotate error, only drops the A side (warning), never the run.
+    sidecar_a, url_a = None, ""
+    a_pdf = res.files.get("a", {}).get("pdf")
+    if a_pdf and res.a.label == res.b.label:
+        res.warnings.append(f"annotate {res.a.label}: A and B have the same label, A-side schematic skipped "
+                            "(the two annotated PDFs would share one file name)")
+        a_pdf = None
+    if a_pdf:
+        import dataclasses
+        from .report.pdf_annotate import annotate_pdf
+        paths["schematic_a"] = _writable(out / f"AutoCheck_{tag}_schematic_{res.a.label}.pdf")
+        try:
+            # TrackRow.page is B's schematic page number; A's pages are matched by TITLE (page numbers may shift
+            # between revisions). No title match (or A without DSN) -> page None -> pdf_annotate.locate falls back
+            # to the unique-page search by RefDes; net-only rows then stay unplaced ("A 無此件") instead of landing
+            # on a wrong page.
+            a_num = {t: n for n, t in res.a.pages.items() if t}
+            rows_a = [dataclasses.replace(r, page=a_num.get(r.page_title)) for r in rows]
+            sidecar_a = annotate_pdf(Path(a_pdf), rows_a, res.a.pages, paths["schematic_a"], res.cfg,
+                                     res.a.label, res.b.label, side="A")
+            res.warnings += [f"annotate {res.a.label}: {w}" for w in sidecar_a.get("warnings", [])]
+            pub = res.cfg.get("publish", {}) or {}
+            base = (base_url or pub.get("base_url") or "").rstrip("/")
+            if base:
+                if publish:
+                    dest = ROOT / pub.get("static_dir", "static") / tag
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(paths["schematic_a"], dest / paths["schematic_a"].name)
+                    paths["published_a"] = dest / paths["schematic_a"].name
+                url_a = f"{base}/{tag}/{paths['schematic_a'].name}"
+        except Exception as e:  # noqa: BLE001
+            res.warnings.append(f"annotate {res.a.label}: A-side schematic not annotated ({type(e).__name__}: {e})")
+            paths.pop("schematic_a", None)
+            sidecar_a = None
+    pmap = (sidecar or {}).get("page_map", {})
 
-        def page_url(page):
-            n = pmap.get(str(page))
-            return f"{url}#page={n}" if (url and n) else None
-        pt_a = getattr(res, "power_tree_a", None) or None
-        diff = "edges" in (pt_a or {})
-        boxes = layout(pt, pt_a, res.a.label, res.b.label, show_internal=False)     # internal nets hidden
-        boxes_all = layout(pt, pt_a, res.a.label, res.b.label, show_internal=True)  # toggle on the page
-        html = render_html(boxes, f"Power tree 方框圖 {res.b.label}"
-                           + (f" (顏色 = {res.a.label} -> {res.b.label} 變更)" if diff else "")
-                           + f"　產生 {res.generated}", page_url, res.a.label, res.b.label, diff=diff,
-                           boxes_all=boxes_all)
-        paths["ptree_html"] = _writable(out / f"power_tree_{res.b.label}.html")
-        paths["ptree_html"].write_text(html, encoding="utf-8")
-        if publish:
-            # the UI page reads this copy from disk (Streamlit static serving sends .html as text/plain)
-            dest = ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
-            dest.mkdir(parents=True, exist_ok=True)
-            (dest / f"power_tree_{res.b.label}.html").write_text(html, encoding="utf-8")
-        # editable draw.io copy (2026-10-15, owner): same boxes, owner restyles in diagrams.net; static copy feeds the
-        # download button on pages/2. A drawing bug never costs a report, and never leaves the previous run's file.
-        dio_name = f"power_tree_{res.b.label}.drawio"
-        dio_dest = ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
-        try:
-            from .report.power_tree_drawio import render_drawio
-            dio = render_drawio(boxes, f"Power tree 方框圖 {res.b.label}"
-                                + (f" (顏色 = {res.a.label} -> {res.b.label} 變更)" if diff else "")
-                                + f"　產生 {res.generated}", page_url, res.a.label, res.b.label, diff=diff,
-                                boxes_all=boxes_all)
-            paths["ptree_drawio"] = _writable(out / dio_name)
-            paths["ptree_drawio"].write_text(dio, encoding="utf-8")
-            if publish:
-                dio_dest.mkdir(parents=True, exist_ok=True)
-                (dio_dest / dio_name).write_text(dio, encoding="utf-8")
-        except Exception as e:  # noqa: BLE001
-            res.warnings.append(f"Power tree .drawio not written ({type(e).__name__}: {e})")
-            for old in (out / dio_name,) + ((dio_dest / dio_name,) if publish else ()):
-                try:
-                    old.unlink(missing_ok=True)
-                except OSError:
-                    pass
-    # I2C map (2026-10-12, test state): table csv + boxes .html (+ static copy for pages/3_I2C_map.py)
-    im = getattr(res, "i2c_map", None) or {}
-    if im.get("buses"):
-        from .checks.i2c_map import table_rows
-        from .report.i2c_map_diagram import render_html as i2c_html
-        pmap = (sidecar or {}).get("page_map", {})
-
-        def page_url2(page):
-            n = pmap.get(str(page))
-            return f"{url}#page={n}" if (url and n) else None
-        paths["i2c_csv"] = _writable(out / f"i2c_map_{res.b.label}.csv")
-        write_csv(table_rows(im, res.a.label), paths["i2c_csv"])
-        decl = im.get("declared_file") or ""
-        note = (f"I2C Block Diagram 對照檔：{Path(decl).name}，{sum(1 for r in im.get('declared', []) if r['verdict'] == '不符')} 列不符"
-                if decl else "沒有 I2C Block Diagram 對照檔 (i2c_map_declared*.csv)，只顯示 netlist 推出的 map。")
-        html = i2c_html(im, f"I2C map {res.b.label}　產生 {res.generated}", page_url2, res.a.label, note)
-        paths["i2c_html"] = _writable(out / f"i2c_map_{res.b.label}.html")
-        paths["i2c_html"].write_text(html, encoding="utf-8")
-        if publish:
-            dest = ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
-            dest.mkdir(parents=True, exist_ok=True)
-            (dest / f"i2c_map_{res.b.label}.html").write_text(html, encoding="utf-8")
-        # 陽春版 block diagram (2026-10-13): same map, owner-sample layout; shown under the detailed map on pages/3.
-        # File name must NOT match i2c_map_*.html (pages/3 lists runs with that glob). A drawing bug never costs a report.
-        try:
-            from .report.i2c_block_diagram import render_html as i2c_block_html
-            html_b = i2c_block_html(im, f"I2C map 陽春版 {res.b.label}　產生 {res.generated}", page_url2)
-            paths["i2c_block_html"] = _writable(out / f"i2c_block_{res.b.label}.html")
-            paths["i2c_block_html"].write_text(html_b, encoding="utf-8")
-            if publish:
-                dest = ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
-                dest.mkdir(parents=True, exist_ok=True)
-                (dest / f"i2c_block_{res.b.label}.html").write_text(html_b, encoding="utf-8")
-        except Exception as e:  # noqa: BLE001
-            res.warnings.append(f"I2C map 陽春版 not drawn ({type(e).__name__}: {e})")
-            # never leave the previous run's drawing next to this run's map (same run folder name every time)
-            for old in (out / f"i2c_block_{res.b.label}.html",
-                        ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
-                        / f"i2c_block_{res.b.label}.html"):
-                try:
-                    old.unlink(missing_ok=True)
-                except OSError:
-                    pass
-        # editable draw.io copy of the 陽春版 (2026-10-15, owner): same layout(), wires glued to the parts, dark
-        # canvas; static copy feeds the download button on pages/3. Own try: never costs the report or the .html,
-        # never leaves the previous run's file behind.
-        bdio_name = f"i2c_block_{res.b.label}.drawio"
-        bdio_dest = ROOT / (res.cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
-        try:
-            from .report.i2c_block_drawio import render_drawio as i2c_block_drawio
-            bdio = i2c_block_drawio(im, f"I2C map 陽春版 {res.b.label}　產生 {res.generated}", page_url2)
-            paths["i2c_block_drawio"] = _writable(out / bdio_name)
-            paths["i2c_block_drawio"].write_text(bdio, encoding="utf-8")
-            if publish:
-                bdio_dest.mkdir(parents=True, exist_ok=True)
-                (bdio_dest / bdio_name).write_text(bdio, encoding="utf-8")
-        except Exception as e:  # noqa: BLE001
-            res.warnings.append(f"I2C map 陽春版 .drawio not written ({type(e).__name__}: {e})")
-            # QA 2026-10-15: drop the path from the printed list, and also remove a _writable() fallback name
-            written = paths.pop("i2c_block_drawio", None)
-            for old in (out / bdio_name,) + ((written,) if written else ()) + ((bdio_dest / bdio_name,) if publish else ()):
-                try:
-                    old.unlink(missing_ok=True)
-                except OSError:
-                    pass
+    def page_url(page):
+        n = pmap.get(str(page))
+        return f"{url}#page={n}" if (url and n) else None
+    paths.update(write_diagrams(getattr(res, "power_tree", None) or {}, getattr(res, "power_tree_a", None) or None,
+                                getattr(res, "i2c_map", None) or {}, res.a.label, res.b.label, res.generated, res.cfg,
+                                res.warnings, out, tag, page_url, publish))
     # RD replies: sync this run's rows into the review DB, pre-fill the Excel with replies already given
     from . import review
     db, rep = review_db(res.cfg), {}
     pdf_pages = {k: v.get("pdf_page") for k, v in (sidecar or {}).get("rows", {}).items()}
+    pdf_pages_a = {k: v.get("pdf_page") for k, v in (sidecar_a or {}).get("rows", {}).items()}
+    centres = {k: v.get("centre_top") for k, v in (sidecar or {}).get("rows", {}).items()}
+    centres_a = {k: v.get("centre_top") for k, v in (sidecar_a or {}).get("rows", {}).items()}
     try:
-        review.sync_run(db, tag, res.a.label, res.b.label, rows, pdf_pages, url)
+        review.sync_run(db, tag, res.a.label, res.b.label, rows, pdf_pages, url, pdf_pages_a, url_a, centres, centres_a)
         rep = review.replies(db, tag)
     except Exception as e:  # noqa: BLE001  (DB problems must not block the reports)
         res.warnings.append(f"review: database not updated ({type(e).__name__}: {e})")
@@ -201,9 +141,122 @@ def write_outputs(res, out: Path, schematic_pdf: Path | None = None, base_url: s
     except Exception as e:  # noqa: BLE001
         res.warnings.append(f"review: Excel template not stored ({type(e).__name__}: {e})")
     res.publish_url = url
+    res.publish_url_a = url_a
     res.run_tag = tag
     return paths
 
+
+
+def write_diagrams(pt: dict, pt_a: dict | None, im: dict, a_label: str, b_label: str, generated: str, cfg: dict,
+                   warnings: list[str], out: Path, tag: str, page_url=None, publish: bool = True) -> dict[str, Path]:
+    """Power tree (.html + .drawio) and I2C map (.csv + .html + 陽春版 .html / .drawio) of one design, written under
+    out/ and, when publish, under <ROOT>/static/<tag>/ for pages/2 and pages/3. Shared by write_outputs (compare run,
+    B side, A only for the change colours) and the single-board run (pt_a = None, im without change marks, 2026-10-19).
+    page_url(page) -> http URL of the annotated PDF page or None (no links). Drawing errors go to warnings."""
+    # B1 power tree as boxes: standalone .html (SVG). Links open the annotated PDF at the converter's page.
+    paths: dict[str, Path] = {}
+    static = ROOT / (cfg.get("publish", {}) or {}).get("static_dir", "static") / tag
+    if pt.get("edges") is not None:
+        from .report.power_tree_diagram import layout, render_html
+        pt_a = pt_a or None
+        diff = "edges" in (pt_a or {})
+        boxes = layout(pt, pt_a, a_label, b_label, show_internal=False)     # internal nets hidden
+        boxes_all = layout(pt, pt_a, a_label, b_label, show_internal=True)  # toggle on the page
+        html = render_html(boxes, f"Power tree 方框圖 {b_label}"
+                           + (f" (顏色 = {a_label} -> {b_label} 變更)" if diff else "")
+                           + f"　產生 {generated}", page_url, a_label, b_label, diff=diff,
+                           boxes_all=boxes_all)
+        paths["ptree_html"] = _writable(out / f"power_tree_{b_label}.html")
+        paths["ptree_html"].write_text(html, encoding="utf-8")
+        if publish:
+            # the UI page reads this copy from disk (Streamlit static serving sends .html as text/plain)
+            dest = static
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / f"power_tree_{b_label}.html").write_text(html, encoding="utf-8")
+        # editable draw.io copy (2026-10-15, owner): same boxes, owner restyles in diagrams.net; static copy feeds the
+        # download button on pages/2. A drawing bug never costs a report, and never leaves the previous run's file.
+        dio_name = f"power_tree_{b_label}.drawio"
+        dio_dest = static
+        try:
+            from .report.power_tree_drawio import render_drawio
+            dio = render_drawio(boxes, f"Power tree 方框圖 {b_label}"
+                                + (f" (顏色 = {a_label} -> {b_label} 變更)" if diff else "")
+                                + f"　產生 {generated}", page_url, a_label, b_label, diff=diff,
+                                boxes_all=boxes_all)
+            paths["ptree_drawio"] = _writable(out / dio_name)
+            paths["ptree_drawio"].write_text(dio, encoding="utf-8")
+            if publish:
+                dio_dest.mkdir(parents=True, exist_ok=True)
+                (dio_dest / dio_name).write_text(dio, encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            warnings.append(f"Power tree .drawio not written ({type(e).__name__}: {e})")
+            for old in (out / dio_name,) + ((dio_dest / dio_name,) if publish else ()):
+                try:
+                    old.unlink(missing_ok=True)
+                except OSError:
+                    pass
+    # I2C map (2026-10-12, test state): table csv + boxes .html (+ static copy for pages/3_I2C_map.py)
+    if im.get("buses"):
+        from .checks.i2c_map import table_rows
+        from .report.data_out import write_csv
+        from .report.i2c_map_diagram import render_html as i2c_html
+        page_url2 = page_url
+        paths["i2c_csv"] = _writable(out / f"i2c_map_{b_label}.csv")
+        write_csv(table_rows(im, a_label), paths["i2c_csv"])
+        decl = im.get("declared_file") or ""
+        note = (f"I2C Block Diagram 對照檔：{Path(decl).name}，{sum(1 for r in im.get('declared', []) if r['verdict'] == '不符')} 列不符"
+                if decl else "沒有 I2C Block Diagram 對照檔 (i2c_map_declared*.csv)，只顯示 netlist 推出的 map。")
+        html = i2c_html(im, f"I2C map {b_label}　產生 {generated}", page_url2, a_label, note)
+        paths["i2c_html"] = _writable(out / f"i2c_map_{b_label}.html")
+        paths["i2c_html"].write_text(html, encoding="utf-8")
+        if publish:
+            dest = static
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / f"i2c_map_{b_label}.html").write_text(html, encoding="utf-8")
+        # 陽春版 block diagram (2026-10-13): same map, owner-sample layout; shown under the detailed map on pages/3.
+        # File name must NOT match i2c_map_*.html (pages/3 lists runs with that glob). A drawing bug never costs a report.
+        try:
+            from .report.i2c_block_diagram import render_html as i2c_block_html
+            html_b = i2c_block_html(im, f"I2C map 陽春版 {b_label}　產生 {generated}", page_url2)
+            paths["i2c_block_html"] = _writable(out / f"i2c_block_{b_label}.html")
+            paths["i2c_block_html"].write_text(html_b, encoding="utf-8")
+            if publish:
+                dest = static
+                dest.mkdir(parents=True, exist_ok=True)
+                (dest / f"i2c_block_{b_label}.html").write_text(html_b, encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            warnings.append(f"I2C map 陽春版 not drawn ({type(e).__name__}: {e})")
+            # never leave the previous run's drawing next to this run's map (same run folder name every time)
+            for old in (out / f"i2c_block_{b_label}.html",
+                        static
+                        / f"i2c_block_{b_label}.html"):
+                try:
+                    old.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        # editable draw.io copy of the 陽春版 (2026-10-15, owner): same layout(), wires glued to the parts, dark
+        # canvas; static copy feeds the download button on pages/3. Own try: never costs the report or the .html,
+        # never leaves the previous run's file behind.
+        bdio_name = f"i2c_block_{b_label}.drawio"
+        bdio_dest = static
+        try:
+            from .report.i2c_block_drawio import render_drawio as i2c_block_drawio
+            bdio = i2c_block_drawio(im, f"I2C map 陽春版 {b_label}　產生 {generated}", page_url2)
+            paths["i2c_block_drawio"] = _writable(out / bdio_name)
+            paths["i2c_block_drawio"].write_text(bdio, encoding="utf-8")
+            if publish:
+                bdio_dest.mkdir(parents=True, exist_ok=True)
+                (bdio_dest / bdio_name).write_text(bdio, encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            warnings.append(f"I2C map 陽春版 .drawio not written ({type(e).__name__}: {e})")
+            # QA 2026-10-15: drop the path from the printed list, and also remove a _writable() fallback name
+            written = paths.pop("i2c_block_drawio", None)
+            for old in (out / bdio_name,) + ((written,) if written else ()) + ((bdio_dest / bdio_name,) if publish else ()):
+                try:
+                    old.unlink(missing_ok=True)
+                except OSError:
+                    pass
+    return paths
 
 def review_db(cfg: dict) -> Path:
     """Path of the replies database: env AUTOCHECK_REVIEW_DB, else config review.db (relative to ROOT)."""
@@ -245,6 +298,15 @@ def _compare(args) -> int:
     c = Counter((f.severity, f.status) for f in res.findings)
     print(f"{len(res.findings)} findings | NEW ERROR {c[('ERROR', 'NEW')]} | NEW WARN {c[('WARN', 'NEW')]} | "
           f"changes {sum(v for (s, st), v in c.items() if st == 'CHANGE')}")
+    cov = (res.coverage or {}).get("DECOUPLE")
+    if cov:
+        print(f"coverage DECOUPLE: {cov['supply_nets']} supply nets / {cov['supply_pins']} IC supply pins / "
+              f"{cov['ics_built']} built ICs, {cov['ics_no_supply_pin']} IC(s) with no recognised power pin, "
+              f"{cov.get('supply_pins_unnamed_net', 0)} power pin(s) on unnamed nets (skipped)")
+    cov = (res.coverage or {}).get("FET")
+    if cov:
+        print(f"coverage FET_GATE_LEVEL: {cov['fets_built']} built FET-prefix parts / {cov['transistors_listed']} transistors listed / "
+              f"{cov['fets_skipped']} part(s) not split into gate-source groups (BJT, bare-pin dual, odd pin names)")
     for w in res.warnings:
         print("warning:", w)
     for p, alt in LOCKED:
@@ -253,6 +315,40 @@ def _compare(args) -> int:
         print(f"{k:10s} {p}")
     if getattr(res, "publish_url", ""):
         print(f"links      {res.publish_url}#nameddest=<key>   (needs the Streamlit app running: uv run streamlit run app.py)")
+    return 0
+
+
+SINGLE_PREFIX = "單板_"      # static/<SINGLE_PREFIX><label>/ = diagrams of one board (pages/2 and pages/3 list it too)
+
+
+def write_single(res, out: Path, publish: bool = True) -> dict[str, Path]:
+    """Diagrams of a SingleResult (pipeline.run_single): same files as a compare run's B side, tag 單板_<label>,
+    no PDF links (a single board has no annotated schematic), no Excel / PDF report / review DB."""
+    out.mkdir(parents=True, exist_ok=True)
+    tag = f"{SINGLE_PREFIX}{res.label}"
+    paths = write_diagrams(res.power_tree or {}, None, res.i2c_map or {}, "", res.label, res.generated, res.cfg,
+                           res.warnings, out, tag, None, publish)
+    from .report.circuit_text import circuit_text
+    paths["circuit"] = _writable(out / f"circuit_{res.label}.txt")
+    paths["circuit"].write_text(circuit_text(res.design, res.cfg), encoding="utf-8")
+    return paths
+
+
+def _diagram(args) -> int:
+    from .pipeline import run_single
+
+    res = run_single(classify(files_in(args.src)), args.label, args.config, args.rail_map,
+                     getattr(args, "i2c_declared", None), getattr(args, "datasheets", None))
+    paths = write_single(res, Path(args.out), publish=not args.no_publish)
+    pt, im = res.power_tree or {}, res.i2c_map or {}
+    print(f"{res.label}: power tree {len(pt.get('rows', []))} converters / {len(pt.get('rails', {}))} rails | "
+          f"I2C {len(im.get('buses', []))} buses / {len(im.get('devices', {}))} devices")
+    for lv, msg in res.input_issues:
+        print(f"{lv}:", msg)
+    for w in res.warnings:
+        print("warning:", w)
+    for k, p in paths.items():
+        print(f"{k:10s} {p}")
     return 0
 
 
@@ -360,6 +456,16 @@ def main(argv=None) -> int:
     c.add_argument("--base-url", help="http base for Excel links (default: config publish.base_url)")
     c.add_argument("--no-publish", action="store_true", help="do not copy the annotated PDF under static/")
     c.set_defaults(func=_compare)
+    g = sub.add_parser("diagram", help="power tree + I2C map of ONE revision folder (no compare, no findings)")
+    g.add_argument("--src", required=True, help="revision folder (netlist [+ BOM + DSN + i2c_map_declared*.csv])")
+    g.add_argument("--label", default="A")
+    g.add_argument("--config")
+    g.add_argument("--rail-map")
+    g.add_argument("--i2c-declared", help="transcribed I2C block diagram csv (default: i2c_map_declared*.csv in the folder)")
+    g.add_argument("--datasheets", help="I2C datasheet PDF folder (default: config i2c.datasheets_dir)")
+    g.add_argument("--out", default="out")
+    g.add_argument("--no-publish", action="store_true", help="do not copy the diagrams under static/")
+    g.set_defaults(func=_diagram)
     s = sub.add_parser("selftest", help="fault-injection self test on one revision folder")
     s.add_argument("--src", required=True)
     s.add_argument("--n", type=int, default=28, help="faults per run")

@@ -169,7 +169,8 @@ def render_drawio(boxes: list[Box], title: str, pdf_url=None, a_label: str = "A"
     intro = ("框內：rail 名 / 電壓 / 轉換元件 RefDes / 負載 IC 數。箭頭 = 供電方向，線上字 = 轉換元件類型。"
              "滑鼠停在框上看料號、EN / PG、同組 net、負載清單。")
     if not diff:
-        intro += f"　({a_label} 的 power tree 沒有算出來，本圖沒有變更顏色)"
+        intro += (f"　({a_label} 的 power tree 沒有算出來，本圖沒有變更顏色)" if a_label
+                  else "　(單板圖，沒有比對對象，本圖沒有變更顏色)")
     pages = [("預設 (隱藏 IC 內部 net)", boxes, "")]
     n_int = sum(len(b.internal) for b in boxes)          # same rule as render_html's toggle (QA 2026-10-15)
     if boxes_all is not None and n_int:

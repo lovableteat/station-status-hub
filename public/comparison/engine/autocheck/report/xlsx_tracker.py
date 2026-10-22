@@ -163,6 +163,51 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
             wsum.cell(r, j).border = BORDER; wsum.cell(r, j).font = BODY
         r += 1
     wsum.cell(r, 1, "總列數").font = BODY; wsum.cell(r, 2, f"=COUNTA(追蹤表!$A${lo}:$A${hi})").font = BODY
+    cov = (getattr(res, "coverage", {}) or {}).get("DECOUPLE")
+    if cov:   # C1 coverage (QA 2026-10-20): what the rule looked at, so 0 finding is not mistaken for 100 % checked
+        r += 2
+        wsum.cell(r, 1, f"規則覆蓋率 DECOUPLE ({meta_b.label})").font = Font(name=FONT, bold=True, size=12); r += 1
+        _hdr(wsum, r, ["項目", "數量", "說明"]); r += 1
+        for lab, key, note in (("檢查的電源 net 數", "supply_nets", "餵上件 IC 的電源 net (排除 ground / NC / 自動命名)"),
+                               ("認到的 IC 電源腳數", "supply_pins", "pin 角色在 config netrules.decouple_roles 的上件 IC 腳"),
+                               ("電源腳接自動命名 net (未檢查)", "supply_pins_unnamed_net", "net 沒取名 (Nxxxxx)，C1 跳過；見下列"),
+                               ("上件 IC 數", "ics_built", "BOM 有的 U*"),
+                               ("沒認到任何電源腳的上件 IC 數", "ics_no_supply_pin", "這些 IC 的 #14 沒檢查到，見下列")):
+            wsum.cell(r, 1, lab); wsum.cell(r, 2, cov.get(key, 0)); wsum.cell(r, 3, note)
+            for j in range(1, 4):
+                wsum.cell(r, j).border = BORDER; wsum.cell(r, j).font = BODY
+            r += 1
+        for lab, key in (("未覆蓋 IC", "ics_no_supply_pin_list"), ("電源腳在自動命名 net", "supply_pins_unnamed_list")):
+            lst = cov.get(key) or []
+            if not lst:
+                continue
+            wsum.cell(r, 1, lab).font = BODY
+            # 20 per row: one cell holds at most 32767 chars (QA #13)
+            for i in range(0, len(lst), 20):
+                wsum.cell(r, 2, ", ".join(lst[i:i + 20])).font = BODY
+                wsum.cell(r, 2).alignment = Alignment(wrap_text=True, vertical="top")
+                wsum.merge_cells(start_row=r, start_column=2, end_row=r, end_column=7)
+                r += 1
+    cov = (getattr(res, "coverage", {}) or {}).get("FET")
+    if cov:   # C3 FET_GATE_LEVEL coverage (QA 2026-10-21 L2): which FETs got a row, which were skipped
+        r += 2
+        wsum.cell(r, 1, f"規則覆蓋率 FET_GATE_LEVEL ({meta_b.label})").font = Font(name=FONT, bold=True, size=12); r += 1
+        _hdr(wsum, r, ["項目", "數量", "說明"]); r += 1
+        for lab, key, note in (("上件 Q* 零件數", "fets_built", "RefDes 前綴在 config netrules.fet_prefixes 的上件零件 (含 BJT)"),
+                               ("列出的電晶體數", "transistors_listed", "每顆 FET (dual 每半顆) 一列 Vg / Vs / Vgs"),
+                               ("沒拆出 gate / source 的零件數", "fets_skipped", "BJT、無後綴的 dual (G/S/D x2)、腳名不在 pin_roles：未列，見下列")):
+            wsum.cell(r, 1, lab); wsum.cell(r, 2, cov.get(key, 0)); wsum.cell(r, 3, note)
+            for j in range(1, 4):
+                wsum.cell(r, j).border = BORDER; wsum.cell(r, j).font = BODY
+            r += 1
+        lst = cov.get("fets_skipped_list") or []
+        if lst:
+            wsum.cell(r, 1, "未列的零件").font = BODY
+            for i in range(0, len(lst), 20):
+                wsum.cell(r, 2, ", ".join(lst[i:i + 20])).font = BODY
+                wsum.cell(r, 2).alignment = Alignment(wrap_text=True, vertical="top")
+                wsum.merge_cells(start_row=r, start_column=2, end_row=r, end_column=7)
+                r += 1
 
     # ---- 規則說明 ----
     wr = wb.create_sheet("規則說明")

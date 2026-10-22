@@ -57,6 +57,19 @@ def stale_note(run_info: dict, started: str | None = None) -> str:
             "「看圖」連到的也是那次產生的框選線路圖。")
 
 
+# columns added after the first release (2026-10-20, 0p9 side-by-side viewer): an existing review.db is upgraded in
+# place with ALTER TABLE (SQLite has no ADD COLUMN IF NOT EXISTS), so old runs keep their replies.
+_ADDED_COLS = (("runs", "pdf_url_a", "TEXT"),      # A-side annotated PDF url ("" when A has no PDF)
+               ("runs", "last_key", "TEXT"))       # last tracking key viewed in 並排瀏覽 ("回上次審到")
+
+
+def _migrate(con: sqlite3.Connection) -> None:
+    for table, col, typ in _ADDED_COLS:
+        have = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+        if col not in have:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ} DEFAULT ''")
+
+
 @contextmanager
 def _db(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,32 +77,54 @@ def _db(path: Path):
     try:
         con.execute("PRAGMA journal_mode=WAL")
         con.executescript(_SCHEMA)
+        _migrate(con)
         yield con
         con.commit()
     finally:
         con.close()
 
 
-def row_dict(row, n: int, pdf_page) -> dict:
-    """TrackRow -> the tool-side columns of the Excel 追蹤表 (same names)."""
+def row_dict(row, n: int, pdf_page, pdf_page_a=None, centre=None, centre_a=None) -> dict:
+    """TrackRow -> the tool-side columns of the Excel 追蹤表 (same names). "PDF 頁 A" (2026-10-20) = page of the
+    same key in the A-side annotated PDF, None when A has no PDF or the part is not in A (NEW parts)."""
     return {"項次": n, "追蹤 Key": row.key, "群組 ID": row.gid, "類別": row.category, "規則": row.rule,
             "嚴重度": row.severity, "狀態": row.status, "頁": row.page, "頁名": row.page_title,
             "RefDes": ", ".join(row.refdes), "Pin": ", ".join(row.pins), "Net": ", ".join(row.nets),
             "說明 (工具)": row.title, "細節 (工具)": row.detail, "關聯 ID": ", ".join(row.related),
-            "PDF 頁": pdf_page, "PDF 目的地": row.dest}
+            "PDF 頁": pdf_page, "PDF 目的地": row.dest, "PDF 頁 A": pdf_page_a,
+            # box centre [x, y] in pt from the page top-left (None = no box): explicit zoom in the 並排 viewer
+            "PDF 中心": centre, "PDF 中心 A": centre_a}
 
 
-def sync_run(db: Path, run: str, a_label: str, b_label: str, rows: list, pdf_pages: dict, pdf_url: str) -> None:
-    """Replace the run's row snapshot (replies untouched)."""
+def sync_run(db: Path, run: str, a_label: str, b_label: str, rows: list, pdf_pages: dict, pdf_url: str,
+             pdf_pages_a: dict | None = None, pdf_url_a: str = "", centres: dict | None = None,
+             centres_a: dict | None = None) -> None:
+    """Replace the run's row snapshot (replies and last_key untouched)."""
+    pa, ce, cea = pdf_pages_a or {}, centres or {}, centres_a or {}
     with _db(db) as con:
         con.execute("DELETE FROM rows WHERE run=?", (run,))
         con.executemany("INSERT INTO rows(run, key, n, data) VALUES (?,?,?,?)",
-                        [(run, r.key, n, json.dumps(row_dict(r, n, pdf_pages.get(r.key)), ensure_ascii=False))
+                        [(run, r.key, n, json.dumps(row_dict(r, n, pdf_pages.get(r.key), pa.get(r.key), ce.get(r.key), cea.get(r.key)),
+                                                     ensure_ascii=False))
                          for n, r in enumerate(rows, 1)])
-        con.execute("INSERT INTO runs(run, a_label, b_label, updated, pdf_url) VALUES (?,?,?,?,?) "
+        con.execute("INSERT INTO runs(run, a_label, b_label, updated, pdf_url, pdf_url_a) VALUES (?,?,?,?,?,?) "
                     "ON CONFLICT(run) DO UPDATE SET a_label=excluded.a_label, b_label=excluded.b_label, "
-                    "updated=excluded.updated, pdf_url=excluded.pdf_url",
-                    (run, a_label, b_label, _now(), pdf_url))
+                    "updated=excluded.updated, pdf_url=excluded.pdf_url, pdf_url_a=excluded.pdf_url_a",
+                    (run, a_label, b_label, _now(), pdf_url, pdf_url_a or ""))
+
+
+def last_key(db: Path, run: str) -> str:
+    """Tracking key the RD last viewed in 並排瀏覽 ("" when none)."""
+    if not db.exists():
+        return ""
+    with _db(db) as con:
+        r = con.execute("SELECT last_key FROM runs WHERE run=?", (run,)).fetchone()
+        return (r[0] if r else "") or ""
+
+
+def set_last_key(db: Path, run: str, key: str) -> None:
+    with _db(db) as con:
+        con.execute("UPDATE runs SET last_key=? WHERE run=?", (key or "", run))
 
 
 def store_xlsx(db: Path, run: str, xlsx: Path) -> None:
@@ -102,8 +137,8 @@ def runs(db: Path) -> list[dict]:
     if not db.exists():
         return []
     with _db(db) as con:
-        cur = con.execute("SELECT run, a_label, b_label, updated, pdf_url FROM runs ORDER BY updated DESC")
-        return [dict(zip(["run", "a_label", "b_label", "updated", "pdf_url"], r)) for r in cur.fetchall()]
+        cur = con.execute("SELECT run, a_label, b_label, updated, pdf_url, pdf_url_a FROM runs ORDER BY updated DESC")
+        return [dict(zip(["run", "a_label", "b_label", "updated", "pdf_url", "pdf_url_a"], r)) for r in cur.fetchall()]
 
 
 def replies(db: Path, run: str) -> dict[str, dict]:
@@ -121,6 +156,9 @@ def load(db: Path, run: str) -> list[dict]:
         out = [json.loads(d) for _k, d in cur.fetchall()]
     rep = replies(db, run)
     for d in out:
+        d.setdefault("PDF 頁 A", None)                      # rows synced before 2026-10-20
+        d.setdefault("PDF 中心", None)
+        d.setdefault("PDF 中心 A", None)
         r = rep.get(d["追蹤 Key"], {})
         for f in REPLY_FIELDS + [DATE_FIELD]:
             d[f] = r.get(f, "") or ""

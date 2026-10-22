@@ -96,7 +96,11 @@ pin_roles:
   reg_gate:   'GATE\d*|HDRV|HG|UG'
   reg_en:     'EN|ENABLE|EN/UV|EN/UVLO|EN#/OVLO|CE'
   reg_pg:     'PG|PGOOD|PGD|PWRGD|POWER_?GOOD|PG/SS|PG/SYNCOUT'
-  fet_gate:   'G|GATE\d*'
+  # discrete FET pins (power tree FET edges; C3 FET_GATE_LEVEL 2026-10-21): G / GATE / GATE1, S / SOURCE / SOURCE_1..3
+  fet_gate:   'G\d*|GATE_?\d*'
+  fet_source: 'S\d*|SOURCE_?\d*'
+  fet_drain:  'D\d*|DRAIN_?\d*'
+  vbat:       'VBAT\w*'      # battery / RTC input: a power pin for C1 decoupling only, never a logic supply (A3)
   # analog / high-voltage sense pins: A3 never compares their level with the IC supply
   analog:     'SENSE\w*|ISNS\w*|IN[+-]\d*|IN[+-]|VIN_K|DIODE|CS[+-]?|FB\d*|COMP|ILIM|ILM|CL|RT|SS|TIMER|ITIMER|DVDT|REF\d*|REXT/CEXT|CEXT|INVERTING/INPUT|NON_INVERTING/INPUT'
   # pins whose role depends on the part, not the name (e.g. open-drain buffer outputs named Y). mpn / pin: regex
@@ -105,7 +109,22 @@ pin_roles:
 
 netrules:
   # A1 / A2 / A3 (DEFAULT 2026-10-09, owner approved the rule list; thresholds pending review)
-  enabled: [STRAP, OPEN_DRAIN, PULLUP_DOMAIN]
+  enabled: [STRAP, OPEN_DRAIN, PULLUP_DOMAIN, DECOUPLE, PULLUP_DOUBLE, FET_GATE_LEVEL]
+  # C3 FET_GATE_LEVEL (checklist #17, 2026-10-21): every built FET (these RefDes prefixes) gets one INFO row with
+  # Vg / Vs / Vgs from the DC level of its gate / source nets (pin_roles fet_gate / fet_source / fet_drain). Vth is
+  # not in the tool: the RD compares against the datasheet. BJTs (BASE / EMITTER) are not covered.
+  fet_prefixes: [Q, PQ]
+  # C1 DECOUPLE (checklist #14, 2026-10-20): a built IC supply net with no built cap -> WARN; caps but none in
+  # [decouple_min_f, decouple_max_f] -> INFO. Placement is not in the netlist.
+  capacitor_prefixes: [C]
+  # pin roles C1 treats as "power pin" (checklist #14). reg_in / vbat are NOT added to pin_roles.supply:
+  # supply drives A3 (supplies_of -> PULLUP_OVERVOLT compares against the highest supply) and NetGraph rails,
+  # so a controller's VIN there would silence over-voltage checks on its logic pins (QA 2026-10-20 #1).
+  # a pin that is also 'analog' (VIN_K Kelvin sense, VINMON) is skipped.
+  decouple_roles: [supply, reg_in, vbat]
+  decouple_min_f: 1.0e-8
+  decouple_max_f: 1.0e-6
+  # C2 PULLUP_DOUBLE (checklist #8 / #12): >= 2 built pull-ups on one node (I2C lines left to I2C_PU_DUPLICATE)
   ic_prefixes: [U]
   resistor_prefixes: [R, RS]   # 2-pin resistors (values: 100KOHM / 10K / 4K7 / 4.7k / 1M styles). Arrays (RN) not handled
   offboard_prefixes: [J, CN]   # an open-drain node that reaches these may have its pull-up on the other board
@@ -191,6 +210,11 @@ i2c:
     I2C_DECLARED_MISMATCH: INFO    # I2C block diagram (declared csv) disagrees with the netlist
     I2C_UNDECLARED_DEVICE: INFO    # built I2C device on the netlist but not on the I2C block diagram
     I2C_SECOND_SOURCE_UNCHECKED: INFO  # BOM main / alternate / symbol of an I2C device not in the library: strap not checked for it
+    I2C_ADDR_RESERVED: INFO        # built device decodes to a reserved 7-bit address (checklist #74)
+  # I2C-bus specification UM10204 rev 7 table 4 (https://www.nxp.com/docs/en/user-guide/UM10204.pdf):
+  # 0000 000 general call / START byte, 0000 001 CBUS, 0000 010 other bus, 0000 011 future, 0000 1XX Hs-mode
+  # master code, 1111 1XX device ID, 1111 0XX 10-bit addressing. 7-bit ranges, inclusive.
+  reserved_addr7: [[0, 7], [120, 127]]
 
 annotate:
   # schematic PDF annotation (v0.2). Boxes drawn for these severities; destinations/bookmarks for dest_severities

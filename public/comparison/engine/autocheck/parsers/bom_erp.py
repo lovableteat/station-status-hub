@@ -20,7 +20,7 @@ from pathlib import Path
 import pandas as pd
 
 from ..model import BomItem, Design, SourceFile
-from . import bom_agile, sha256_of
+from . import bom_agile, bom_nvidia, sha256_of
 
 COLS = {
     "pn": ["主件料號", "料號", "Part Number", "PN"],
@@ -91,6 +91,24 @@ def _qty(x: str) -> float | None:
     return float(m.group(1)) if m else None
 
 
+def sniff_bom(path: str | Path) -> str | None:
+    """'Agile' / 'NVIDIA' / 'ERP' when one of the parsers recognises the file's header, else None. Used by
+    loader.classify_report to tell a BOM from any other spreadsheet in a design kit (never raises)."""
+    path = Path(path)
+    try:
+        frame = _raw_frame(path)
+        if frame is not None:
+            rows = frame.fillna("").astype(str).values.tolist()
+            if bom_agile.find_header(rows) is not None:
+                return "Agile"
+            if bom_nvidia.find_header(rows) is not None:
+                return "NVIDIA"
+        _read_table(path)
+        return "ERP"
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def parse_bom(path: str | Path) -> tuple[list[BomItem], list[tuple[str, str]]]:
     path = Path(path)
     frame = _raw_frame(path)
@@ -98,6 +116,8 @@ def parse_bom(path: str | Path) -> tuple[list[BomItem], list[tuple[str, str]]]:
         rows = frame.fillna("").astype(str).values.tolist()
         if bom_agile.find_header(rows) is not None:
             return bom_agile.parse_rows(rows)
+        if bom_nvidia.find_header(rows) is not None:
+            return bom_nvidia.parse_rows(rows)
     df = _read_table(path)
     cpn, cdesc, cspec, cqty, cref = (_col(df, k) for k in ("pn", "desc", "spec", "qty", "ref"))
     items: list[BomItem] = []

@@ -4,7 +4,15 @@
   pstxprt.dat  FILE_TYPE = EXPANDEDPARTLIST -> refdes -> primitive, schematic page (P_PATH)
   pstchip.dat  FILE_TYPE = LIBRARY_PARTS    -> primitive -> pins / VALUE / JEDEC_TYPE
 
-Format verified against PSTWRITER 17.4.0 output (CATANIA PDB EVT/DVT, 2026-10).
+Format verified against PSTWRITER 17.4.0 output (CATANIA PDB EVT/DVT, 2026-10) and Packager-XL
+(Design Entry HDL / Concept, NVIDIA Vera CPU module p5032_a01, 2026-10-21). Concept differences handled here:
+  * PART_NAME line carries properties between ':' and ';' (REUSE_INSTANCE= ...), OrCAD writes ': ;'.
+  * PIN_NUMBER is a per-section vector '(0,0,A3,0,0,0)': '0' = not in that section. Zeros are dropped and the
+    remaining numbers de-duplicated (a shared GND pin is listed once per section); section index is not kept
+    because nothing downstream uses it (OrCAD '(1,4)' was always flattened the same way).
+  * long property values wrap with '~' + newline (P_PATH, REUSE_INSTANCE); joined before any regex runs.
+  * Page numbers of a hierarchical Concept design are UNVERIFIED (P_PATH top page vs sub-design PHYS_PAGE);
+    only the top-level pageNN of P_PATH is taken, as for OrCAD.
 """
 from __future__ import annotations
 
@@ -14,11 +22,12 @@ from pathlib import Path
 from ..model import Design, Part, Primitive, SourceFile
 from . import read_text, sha256_of
 
-_STAMP = re.compile(r"\{\s*Using PSTWRITER[^}]*\}")
+_STAMP = re.compile(r"\{\s*(?:Using PSTWRITER|Packager-XL run on)[^}]*\}")
 
 
 def _norm(text: str) -> str:
-    return text.replace("\r\n", "\n").replace("\r", "\n")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return text.replace("~\n", "") if "~\n" in text else text   # Concept line continuation
 
 
 def _stamp(text: str) -> str:
@@ -40,6 +49,12 @@ def parse_pstchip(text: str) -> dict[str, Primitive]:
         pin_sec, _, body_sec = body.partition("end_pin;")
         for pm in _PIN.finditer(pin_sec):
             nums = [n.strip() for n in pm.group(2).split(",") if n.strip()]
+            if len(nums) > 1:                           # section vector: Concept '0' = absent in that section;
+                seen: list[str] = []                    # a pin shared by every section ('(3,3)', GND of a dual
+                for n in nums:                          # buffer) is listed once per section -> keep it once
+                    if n != "0" and n not in seen:
+                        seen.append(n)
+                nums = seen or ["0"]
             prim.pins[pm.group(1).replace("''", "'")] = nums
         body_sec = body_sec.split("end_body;")[0]
         for bm in _PROP.finditer(body_sec):
@@ -49,7 +64,7 @@ def parse_pstchip(text: str) -> dict[str, Primitive]:
 
 
 # ---------------------------------------------------------------- pstxprt
-_PART = re.compile(r"^PART_NAME\s*\n\s*(\S+)\s+'((?:[^']|'')*)'\s*:\s*;", re.M)
+_PART = re.compile(r"^PART_NAME\s*\n\s*(\S+)\s+'((?:[^']|'')*)'\s*:", re.M)   # OrCAD ': ;' / Concept ': props ;'
 _PAGE = re.compile(r"P_PATH='[^']*?:page(\d+)_", re.I)
 
 

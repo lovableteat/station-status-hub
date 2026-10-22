@@ -26,8 +26,10 @@ RULE_LEVEL = {
     "STRAP_PU_PD_BOTH": "net", "OD_NO_PULLUP": "net", "OD_PULLUP_OFFBOARD": "net", "OD_PULLUP_STRONG": "net", "OD_PULLUP_UNKNOWN": "net",
     "PULLUP_OVERVOLT": "net", "PULLUP_BACKPOWER": "net",
     "I2C_PU_DUPLICATE": "net", "I2C_NO_PULLUP": "net",
+    "DECOUPLE_MISSING": "net", "DECOUPLE_NO_SMALL": "net", "PULLUP_DOUBLE": "net",
 }
 _PIN_KEYED_NET_RULES = ("NET_SPLIT", "NET_MERGED", "AUTO_NET_NAME")
+_KEY_AS_IS_RULES = ("FET_GATE_LEVEL",)          # part-level rules whose Finding.key already carries the pin
 _AUTO_NET = re.compile(r"^N\d+$")
 
 
@@ -112,6 +114,13 @@ def expand_rows(findings: list[Finding], cap_rows: list[dict] | None = None, des
                 rows.append(TrackRow(key=f"{f.rule}|{p}", refdes=[_rd(p)] if p else [], pins=[p] if p else [],
                                      nets=[n for n in nets if n], detail=f.detail,
                                      **{**base, "page": pg, "page_title": pt}))
+        elif f.rule in _KEY_AS_IS_RULES:
+            # one row per finding, key = Finding.key (RULE|RefDes or RULE|RefDes.<pin> for each half of a dual FET):
+            # the #n collision suffix would move with finding order (QA 2026-10-21 C1)
+            r = f.refdes[0] if f.refdes else ""
+            pg, pt = page_of(r, f.page, f.page_title)
+            rows.append(TrackRow(key=f.key, refdes=list(f.refdes), pins=list(f.pins), nets=list(f.nets),
+                                 detail=f.detail, **{**base, "page": pg, "page_title": pt}))
         else:
             refs = f.refdes or [""]
             for r in refs:

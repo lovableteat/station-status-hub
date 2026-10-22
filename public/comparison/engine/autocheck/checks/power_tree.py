@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from ..model import Design, natkey
 from ..values import SUPPLY_WORDS, net_voltage_from_name, parse_res_loose
 from .drc import _prefix, is_tie, present
-from .netrules import SIGNAL_ROLES, NetGraph, Roles
+from .netrules import SIGNAL_ROLES, NetGraph, Roles, fet_groups
 
 _AUTO = re.compile(r"^N\d+$")
 
@@ -239,6 +239,7 @@ def power_tree(d: Design, cfg: dict, g: NetGraph | None = None) -> dict:
         m = re.search(r"(\d+)$", ctx.base_name(k))
         return m.group(1) if m else ""
 
+    warn: list[str] = []
     for u in sorted((r for r in d.parts if px(r) in ic_px), key=natkey):
         ks = d.pins_of(u)
         by = defaultdict(list)
@@ -272,9 +273,20 @@ def power_tree(d: Design, cfg: dict, g: NetGraph | None = None) -> dict:
             gate_nets = set(node.nets) if node else {d.pin_net[k]}
             for (q, p), n in sorted(d.pin_net.items()):
                 if n in gate_nets and px(q) in fet_px and "fet_gate" in pin_roles.get((q, p), ()):
-                    for k2 in d.pins_of(q):
-                        if k2 == (q, p):
-                            continue
+                    # dual FET: only the source / drain of THIS gate's transistor (QA 2026-10-21 C4); a symbol
+                    # that cannot be split (bare G/S/D dual) falls back to every other pin, as before
+                    grps = fet_groups(d, pin_roles, q)
+                    n_gates = sum(1 for k2 in d.pins_of(q) if "fet_gate" in pin_roles.get(k2, ()))
+                    mine = [x for x in grps if x["gate"] == (q, p)]
+                    if n_gates == 1:
+                        others = [k2 for k2 in d.pins_of(q) if k2 != (q, p)]
+                    elif mine:
+                        others = mine[0]["sources"] + mine[0]["drains"]
+                    else:               # multi-gate symbol that cannot be split (bare S G D x2): never guess
+                        warn.append(f"power tree: {q} on {k[0]} GATE net has {n_gates} gates and no pairable pin names; "
+                                    "its output rail is not drawn (QA 2026-10-21)")
+                        continue
+                    for k2 in others:
                         rail = rg.of(d.pin_net[k2])
                         if rail not in ins:
                             outs[rail].add(q)
@@ -388,6 +400,7 @@ def power_tree(d: Design, cfg: dict, g: NetGraph | None = None) -> dict:
         vwarn = list(load_power_parts(cfg).get("warnings", []))
     except Exception as e:  # noqa: BLE001  (net-name voltages stay; the tree itself must never be lost)
         vinfo, vwarn = {}, [f"power tree voltage sources skipped ({type(e).__name__}: {e})"]
+    vwarn = warn + vwarn
 
     # tree order: roots = rails that feed something and are fed by nothing built
     fed = {e.rail_out for e in edges if e.built}
