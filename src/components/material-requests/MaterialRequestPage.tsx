@@ -2165,14 +2165,14 @@ function TrackingHistoryCell({
         cardTone.wrapper,
       )}
       title={tooltip}
+      aria-label={embedded ? `${statusLabel}，查看狀態追蹤（${historyCount} 筆）` : undefined}
     >
-      <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(workflowStatus))}>
+      <span className={cn(CHIP_BASE, embedded ? "min-w-0 max-w-full truncate" : "flex-none", getTrackingStatusTone(workflowStatus))}>
         {statusLabel}
       </span>
-      {/* The merged 狀態追蹤 / 更新 column is narrow: the note and ticket move into the tooltip there. */}
-      {embedded ? (
-        <span className="min-w-0 flex-1" aria-hidden="true" />
-      ) : (
+      {/* The merged 狀態追蹤 / 更新 column is narrow: only the status chip stays; the note, ticket and
+          history count are in the tooltip and the whole chip opens the history. */}
+      {!embedded && (
         <span className={cn("min-w-0 flex-1 truncate text-xs", latestEntry?.note ? "text-foreground" : "text-muted-foreground")}>
           {summary}
         </span>
@@ -2195,7 +2195,7 @@ function TrackingHistoryCell({
           </span>
         )
       )}
-      <History className={cn("h-3.5 w-3.5 flex-none opacity-70 transition-opacity group-hover:opacity-100", cardTone.icon)} />
+      {!embedded && <History className={cn("h-3.5 w-3.5 flex-none opacity-70 transition-opacity group-hover:opacity-100", cardTone.icon)} />}
     </button>
   );
 }
@@ -3210,7 +3210,7 @@ function PendingMaterialsDialog({
               className="h-10 rounded-xl pl-9 text-sm"
             />
           </div>
-          <Button type="button" variant="secondary" data-testid="pending-mail-button" disabled={groups.length === 0} onClick={() => setMailOpen(true)} className="h-10 px-4 text-sm font-bold" title="把待處理料依廠商整理成信件內容並匯出 HTML">
+          <Button type="button" data-testid="pending-mail-button" disabled={groups.length === 0} onClick={() => setMailOpen(true)} className="h-10 border border-info bg-info px-4 text-sm font-black text-info-foreground shadow-[0_0_0_3px_hsl(var(--info)/0.25)] hover:bg-info/85 hover:text-info-foreground" title="把待處理料依廠商整理成信件內容並匯出 HTML">
             <FileCode2 className="mr-1.5 h-4 w-4" />信件生成
           </Button>
         </div>
@@ -3485,6 +3485,7 @@ function MaterialRecordDialog({
   onModeChange,
   onOpenSpec,
   onSave,
+  onAddAlternate,
 }: {
   canEdit: boolean;
   open: boolean;
@@ -3496,6 +3497,8 @@ function MaterialRecordDialog({
   onModeChange: (mode: EditorMode) => void;
   onOpenSpec: (record: Pick<MaterialWorkbookRecord, "specDocument">) => void;
   onSave: (record: MaterialWorkbookRecord) => void;
+  /** Opens a blank alternate in this record's group; absent when creating. */
+  onAddAlternate?: () => void;
 }) {
   const [form, setForm] = useState(record);
   const [isUploadingSpec, setIsUploadingSpec] = useState(false);
@@ -3694,6 +3697,20 @@ function MaterialRecordDialog({
         </section>
 
         <DialogFooter className="gap-2">
+          {onAddAlternate && mode !== "create" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid="material-add-alternate"
+              disabled={!canEdit || (!readOnly && JSON.stringify(form) !== JSON.stringify(record))}
+              title={!readOnly && JSON.stringify(form) !== JSON.stringify(record) ? "先儲存或取消目前的修改，再新增替代料" : "在同一組位號下新增另一家廠商的替代料"}
+              onClick={onAddAlternate}
+              className="sm:mr-auto"
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />新增替代料
+            </Button>
+          )}
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             {readOnly ? "關閉" : "取消"}
           </Button>
@@ -3854,7 +3871,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   });
   const updateTitle = latestRecordUpdate
     ? `最後修改：${latestUpdater ? `${latestUpdater} · ` : ""}${formatTimestamp(latestRecordUpdate)}`
-    : "新增或更新這組料的資料";
+    : "修改這列的料件資料（廠商、MPN、實體料號、備註）";
   const expandLabel = hasAlternatives ? `${expanded ? "收合" : "展開"} ${secondaryAlternatives.length} 筆替代料` : "沒有替代料";
 
   return (
@@ -4044,7 +4061,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
               </div>
               <button
                 type="button"
-                onClick={() => actions.openCreate(group)}
+                onClick={() => actions.editRecord(statusRecord)}
                 className="flex flex-none items-center gap-0.5 border-l border-cyan-400/25 bg-cyan-400/10 px-1.5 text-xs font-bold text-cyan-200 transition-colors hover:bg-cyan-400/25 hover:text-cyan-50"
                 title={updateTitle}
                 aria-label="更新料號"
@@ -6216,7 +6233,10 @@ export function MaterialRequestPage() {
       />
       <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
       <BomManagerDialog canEdit={canEdit} activeBomId={activeBomId} activeProjectName={activeProject?.name} bomWorkspaces={activeBomWorkspaces} archivedWorkspaces={archivedBomWorkspaces} projectGroups={bomProjectGroups} projects={projects} open={bomManagerOpen} onAssignProject={(id, projectId) => void assignBomProject(id, projectId)} onSetArchived={(id, archived) => void setBomArchived(id, archived)} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
-      <MaterialRecordDialog canEdit={canEdit} open={editorOpen} mode={editorMode} record={editorRecord} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target) => void openSpecDocument(target)} onSave={handleSaveRecord} />
+      <MaterialRecordDialog canEdit={canEdit} open={editorOpen} mode={editorMode} record={editorRecord} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target) => void openSpecDocument(target)} onSave={handleSaveRecord} onAddAlternate={editorMode === "create" ? undefined : () => {
+        const group = dataset.groups.find((candidate) => candidate.records.some((item) => item.id === editorRecord.id));
+        if (group) openCreate(group);
+      }} />
       <TrackingHistoryDialog canEdit={canEdit} open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
       <MaterialExportDialog
         activeFormat={activeExportFormat}
@@ -6663,7 +6683,7 @@ export function MaterialRequestPage() {
                 ) : null}
 
                 <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-2 p-2">
-                  <Button type="button" size="sm" onClick={() => openCreate(group)} className="h-11 rounded-xl bg-cyan-300 px-3 font-black text-[#062230] hover:bg-cyan-200"><Plus className="mr-1 h-4 w-4" />更新料號</Button>
+                  <Button type="button" size="sm" onClick={() => openRecord(mainRecord, "edit")} className="h-11 rounded-xl bg-cyan-300 px-3 font-black text-[#062230] hover:bg-cyan-200"><Plus className="mr-1 h-4 w-4" />更新料號</Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => toggleExpanded(group.key)} aria-expanded={expanded} className="h-11 rounded-xl border-violet-300/25 bg-violet-400/10 px-2 text-violet-100">
                     {expanded ? <ChevronDown className="mr-1 h-4 w-4" /> : <ChevronRight className="mr-1 h-4 w-4" />}更多
                   </Button>
