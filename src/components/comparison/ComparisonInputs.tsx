@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, type InputHTMLAttributes } from "react";
+import { useId, useMemo, useRef, useState, type DragEvent, type InputHTMLAttributes } from "react";
 import { Check, FilePlus2, FolderOpen, AlertCircle, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { filePath, formatBytes, inspectRevision, INPUT_ROLES, INPUT_ROLE_DETAILS, REQUIRED_ROLES } from "./files";
 import type { InputRole } from "./types";
+import { isFileDrag, readDroppedFiles } from "@/lib/droppedFiles";
 
 export interface RevisionInput { files: File[]; selected: Partial<Record<InputRole, string>>; }
 const roles = INPUT_ROLES.map(key => ({ key, ...INPUT_ROLE_DETAILS[key], required: REQUIRED_ROLES.includes(key) }));
@@ -28,11 +29,29 @@ export function ComparisonInputs({ side, label, onLabel, value, onChange, disabl
   });
   const readyCount = rows.filter(row => row.role.required && row.chosen).length;
   const selectFiles = (list: FileList | null) => { if (list?.length) onChange({ files: Array.from(list), selected: {} }); };
+  // A folder dragged in is read without Chrome's "upload N files to this site?" confirmation.
+  const [dragging, setDragging] = useState(false);
+  const [dropError, setDropError] = useState("");
+  const handleDragOver = (event: DragEvent<HTMLElement>) => {
+    if (disabled || !isFileDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    if (!dragging) setDragging(true);
+  };
+  const handleDrop = (event: DragEvent<HTMLElement>) => {
+    if (disabled || !isFileDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    setDragging(false);
+    const dropped = readDroppedFiles(event.dataTransfer);
+    void dropped.files
+      .then(list => { setDropError(""); if (list.length) onChange({ files: list, selected: {} }); })
+      .catch(() => setDropError("這個資料夾讀不到，請改用「選擇資料夾」"));
+  };
   const directoryProps = { webkitdirectory: "" } as InputHTMLAttributes<HTMLInputElement>;
-  return <section className="comparison-input-panel" aria-label={`${side} 版資料`} data-side={side} data-has-files={value.files.length > 0}>
+  return <section className="comparison-input-panel" aria-label={`${side} 版資料`} data-side={side} data-has-files={value.files.length > 0} data-dragging={dragging || undefined} onDragOver={handleDragOver} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }} onDrop={handleDrop}>
     <div className="comparison-input-heading"><span className="comparison-revision-mark">{side}</span><div className="comparison-revision-title"><h2>{side === "A" ? "舊版資料" : "新版資料"}</h2><p>{side === "A" ? "作為比對基準的版本" : "要檢查的改版內容"}</p></div><div className="comparison-revision-name"><Label htmlFor={labelId}>版本名稱</Label><Input id={labelId} aria-label={`${side} 版名稱`} value={label} onChange={event => onLabel(event.target.value)} maxLength={64} disabled={disabled} className="comparison-revision-label" /></div></div>
     {!inventory.error && <p className="comparison-required-summary" data-ready={readyCount === REQUIRED_ROLES.length} role="status">{readyCount === REQUIRED_ROLES.length ? <Check /> : <AlertCircle />}<span>必要檔案 <strong>{readyCount}／{REQUIRED_ROLES.length}</strong></span><span>{readyCount === REQUIRED_ROLES.length ? "已選齊" : `還需 ${REQUIRED_ROLES.length - readyCount} 份`}</span></p>}
-    <div className="comparison-file-actions"><Button variant="outline" className="comparison-folder-action" disabled={disabled} onClick={() => folder.current?.click()}><FolderOpen />選擇資料夾</Button><Button variant="ghost" disabled={disabled} onClick={() => files.current?.click()}><FilePlus2 />選擇檔案</Button></div>
+    <div className="comparison-file-actions"><Button variant="outline" className="comparison-folder-action" disabled={disabled} onClick={() => folder.current?.click()}><FolderOpen />選擇資料夾</Button><Button variant="ghost" disabled={disabled} onClick={() => files.current?.click()}><FilePlus2 />選擇檔案</Button><span className="comparison-drop-hint">或把資料夾拖進來，不會跳確認視窗</span></div>{dropError && <p className="comparison-alert" role="alert">{dropError}</p>}
     <input ref={folder} {...directoryProps} type="file" multiple className="sr-only" aria-label={`選取 ${side} 版資料夾`} onChange={event => selectFiles(event.target.files)} disabled={disabled} />
     <input ref={files} type="file" multiple className="sr-only" aria-label={`選取 ${side} 版檔案`} accept=".dat,.xls,.xlsx,.csv,.htm,.html,.dsn,.pdf" onChange={event => selectFiles(event.target.files)} disabled={disabled} />
     {inventory.error ? <p className="comparison-alert" role="alert">{inventory.error}</p> : <div className="comparison-input-inventory">{rows.map(({ role, candidates, selected, chosen, state, status }) => {

@@ -101,6 +101,12 @@ test("restored results start with sources collapsed while new comparisons keep i
   assert.match(controls, /className="comparison-project-name" data-empty=\{!projectName\.trim\(\)\}/);
   assert.match(controls, /className="comparison-run-actions"/, "the run controls sit on the 比對名稱 row");
   assert.match(controls, />必填</);
+  const inputs = await readFile(new URL("../../src/components/comparison/ComparisonInputs.tsx", import.meta.url), "utf8");
+  assert.match(inputs, /onDrop=\{handleDrop\}/);
+  assert.match(inputs, /readDroppedFiles\(event\.dataTransfer\)/);
+  assert.match(inputs, /不會跳確認視窗/);
+  const datasheets = await readFile(new URL("../../src/components/comparison/DatasheetFiles.tsx", import.meta.url), "utf8");
+  assert.match(datasheets, /readDroppedFiles\(event\.dataTransfer\)\.files/);
   assert.doesNotMatch(source, /<p key=\{index\}><Badge/);
 });
 
