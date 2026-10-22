@@ -113,10 +113,11 @@ export function DirectMessageLauncher({
       onClick={onOpen}
       title="開啟聊天室"
       data-chat-launcher="platform"
-      className="platform-chat-launcher group pointer-events-auto relative ml-auto flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      data-unread={unreadCount > 0 ? "true" : undefined}
+      className="platform-chat-launcher group pointer-events-auto relative ml-auto flex h-12 items-center justify-center gap-2 rounded-2xl border border-primary bg-primary px-4 text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <MessageSquareText className="size-5 text-primary" aria-hidden="true" />
-      <span className="text-sm font-semibold">訊息</span>
+      <MessageSquareText className="size-5" aria-hidden="true" />
+      <span className="text-[15px] font-bold">訊息</span>
       {unreadCount > 0 ? (
         <span className="absolute -right-1.5 -top-1.5 flex min-h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#071421] bg-rose-500 px-1 text-[10px] font-bold leading-5 text-white shadow-[0_0_14px_rgba(244,63,94,0.65)]">
           {unreadCount > 99 ? "99+" : unreadCount}
