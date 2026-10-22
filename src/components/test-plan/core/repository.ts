@@ -80,6 +80,8 @@ export interface TestPlanDataAdapter {
   downloadObject(path: string): Promise<Blob>;
   /** Short-lived direct link (for drag-to-desktop); adapters without one fall back to a blob download. */
   createDownloadUrl?(path: string, fileName: string): Promise<string>;
+  /** Batch form used to prefetch drag-to-desktop links for the rows on screen; maps storage path to URL. */
+  createDownloadUrls?(items: ReadonlyArray<{ path: string; fileName: string }>): Promise<Map<string, string>>;
   removeObjects(paths: string[]): Promise<void>;
   listCleanupPaths(ownerId: string): Promise<string[]>;
   queueCleanupPath(ownerId: string, path: string): Promise<void>;
@@ -381,6 +383,27 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
     async getFileDownloadUrl(file: TestPlanFileRecord) {
       if (!adapter.createDownloadUrl) return null;
       return adapter.createDownloadUrl(file.storagePath, file.originalName);
+    },
+    async getFileDownloadUrls(files: readonly TestPlanFileRecord[]) {
+      const urls = new Map<string, string>();
+      if (files.length === 0) return urls;
+      if (adapter.createDownloadUrls) {
+        const byPath = await adapter.createDownloadUrls(files.map((file) => ({ path: file.storagePath, fileName: file.originalName })));
+        for (const file of files) {
+          const url = byPath.get(file.storagePath);
+          if (url) urls.set(file.id, url);
+        }
+        return urls;
+      }
+      if (!adapter.createDownloadUrl) return urls;
+      for (const file of files.slice(0, 24)) {
+        try {
+          urls.set(file.id, await adapter.createDownloadUrl(file.storagePath, file.originalName));
+        } catch {
+          // A missing link only disables drag-out for that row.
+        }
+      }
+      return urls;
     },
     async replaceFileContents(file: TestPlanFileRecord, contents: Blob) {
       const mimeType = contents.type || file.mimeType || "application/octet-stream";

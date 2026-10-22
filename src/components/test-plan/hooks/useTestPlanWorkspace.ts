@@ -14,6 +14,7 @@ import {
   type TestPlanRepository,
 } from "../core/repository";
 import { createSupabaseTestPlanAdapter } from "../core/supabaseAdapter";
+import { createMemoryTestPlanAdapter } from "../core/memoryAdapter";
 import type {
   TestPlanEntry,
   TestPlanFileRecord,
@@ -53,13 +54,20 @@ export function useTestPlanWorkspace(
 ) {
   const { user, sessionMode } = useUser();
   const { canEditModule, isAdmin } = usePermissions();
+  // The development demo keeps a browser-only library so the workspace can be
+  // shown and exercised without a Supabase sign-in; nothing leaves the tab.
+  const demoIdentity = sessionMode === "demo" && user && !options.repository
+    ? JSON.stringify({ ownerId: user.userId, displayName: user.displayName, username: user.username })
+    : "";
   const repository = useMemo(
     () =>
       options.repository
-      ?? createTestPlanRepository(createSupabaseTestPlanAdapter()),
-    [options.repository],
+      ?? (demoIdentity
+        ? createTestPlanRepository(createMemoryTestPlanAdapter(JSON.parse(demoIdentity)))
+        : createTestPlanRepository(createSupabaseTestPlanAdapter())),
+    [demoIdentity, options.repository],
   );
-  const isAuthenticated = sessionMode === "authenticated";
+  const isAuthenticated = sessionMode === "authenticated" || Boolean(demoIdentity);
   const ownerId = isAuthenticated ? user?.userId ?? null : null;
   const moduleCanEdit = isAuthenticated && canEditModule("test-plan");
   const [spaces, setSpaces] = useState<TestPlanSpace[]>([]);
@@ -553,6 +561,10 @@ export function useTestPlanWorkspace(
     async (file: TestPlanFileRecord) => repository.getFileDownloadUrl(file),
     [repository],
   );
+  const getFileDownloadUrls = useCallback(
+    async (files: readonly TestPlanFileRecord[]) => repository.getFileDownloadUrls(files),
+    [repository],
+  );
 
   const replaceFileContents = useCallback(
     (file: TestPlanFileRecord, contents: Blob) =>
@@ -597,6 +609,7 @@ export function useTestPlanWorkspace(
     deleteEntries,
     downloadFile,
     getFileDownloadUrl,
+    getFileDownloadUrls,
     replaceFileContents,
   };
 }
