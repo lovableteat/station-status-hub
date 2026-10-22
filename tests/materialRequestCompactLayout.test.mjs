@@ -233,6 +233,16 @@ test("editing an item from 待處理料 returns to the list with its tab, search
   assert.equal((source.match(/onClick=\{openPendingDialog\}/g) ?? []).length, 2, "the header buttons open a fresh list");
 });
 
+test("更新 on a table row or mobile card edits that row; 新增替代料 lives in the record dialog", () => {
+  assert.match(rowBlock, /onClick=\{\(\) => actions\.editRecord\(statusRecord\)\}/);
+  assert.doesNotMatch(rowBlock, /actions\.openCreate\(group\)/);
+  assert.match(source, /onClick=\{\(\) => openRecord\(mainRecord, "edit"\)\}[^>]*>[\s\S]{0,80}?更新料號/);
+  const dialog = slice("function MaterialRecordDialog(", "type MaterialColumnVisibility");
+  assert.match(dialog, /data-testid="material-add-alternate"/);
+  assert.match(dialog, /先儲存或取消目前的修改，再新增替代料/);
+  assert.match(source, /onAddAlternate=\{editorMode === "create" \? undefined : \(\) => \{/);
+});
+
 test("匯出報表 and 上傳說明 carry their own colours and 上傳說明 blinks", () => {
   const actions = slice('data-material-zone="actions"', '{collaborationStatus !== "remote" && (');
   assert.match(actions, /bg-info px-3[^"]*text-info-foreground[^"]*">\s*<Download[^/]*\/>匯出報表/);
