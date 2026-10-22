@@ -105,8 +105,8 @@ test("meaning detection follows the mapped headers if the CE columns are rearran
 
 test("Level 0 and Level 1 context is retained after the CE meanings and in old row 5 files", async () => {
   const hierarchy = [
-    exampleRow({ Level: 0, Name: "系統 A" }),
-    exampleRow({ Level: 1, Name: "模組 B" }),
+    exampleRow({ Level: 0, Name: "系統 A", "Ref Des": "", "Manufacturer Part Number": "", "實體料號": "" }),
+    exampleRow({ Level: 1, Name: "模組 B", "Ref Des": "", "Manufacturer Part Number": "", "實體料號": "" }),
     MATERIAL_CE_EXAMPLE_ROWS[0],
   ];
   for (const meanings of [ceMeanings, null]) {
@@ -363,18 +363,34 @@ test("an explicit 零件狀態 and manual tracking notes are never replaced by t
   assert.equal(manualRecord.isRisk, false);
 });
 
-test("rows the CE contract does not turn into parts are reported instead of vanishing", async () => {
+test("Level 1 rows with their own Ref Des and MPN are parts unless the next row repeats them", async () => {
+  // Vera_CPU_Baseboard.xlsx rows 6-13: 1/A pairs for the backplane connectors, guide pins and the RTC
+  // battery at Level 1 beside the board, then the board's own Level 1 heading and its Level 2 parts.
+  const level = (Level, Name, refDes, mpn, Manufacturer = "AMPHENOL") => exampleRow({ Level, Name, "Ref Des": refDes, "Manufacturer Part Number": mpn, Manufacturer, "實體料號": "" });
   const payload = await importTemplateRows([
-    exampleRow({ Level: 1, Name: "GUIDE PIN ML RT", "Ref Des": "JG1,JG2", "Manufacturer Part Number": "428-0281-001" }),
-    exampleRow({ Level: 3, Name: "BTY RTC CR2032W", "Ref Des": "JBAT1_CR2032", "Manufacturer Part Number": "CR2032W" }),
-    MATERIAL_CE_EXAMPLE_ROWS[0],
+    level(1, "CONN GP420", "JMP1,JMP2", "GP420-50215"),
+    level("A", "CONN GP420", "JMP1,JMP2", "GP420-50215"),
+    level(1, "CONN GP422", "JBP1,JBP2", "GP422-50010"),
+    level("A", "CONN GP422", "JBP1,JBP2", "GP422-50010"),
+    level(1, "GUIDE PIN ML RT", "JG1,JG2,JG3,JG4,JG5,JG6", "428-0281-001"),
+    level(1, "BTY RTC CR2032W", "JBAT1_CR2032,JBAT2_CR2032", "CR2032W", "MURATA"),
+    level(1, "NEUTRINO BASEBOARD", "", ""),
+    level(2, "CONN WTB", "J1", "52451-0037C-003", "ACES"),
+    level(3, "SUB PART", "J1_SUB", "SUB-001", "ACES"),
   ]);
-  assert.deepEqual(payload.records.map((item) => item.refDes), ["JBAT1_CR2032", MATERIAL_CE_EXAMPLE_ROWS[0][ceHeaders.indexOf("Ref Des")]], "a Level 3 sub-part is imported; Level 0/1 stays a heading");
-  assert.equal(payload.records[0].manufacturerPartNumber, "CR2032W");
-  assert.equal(payload.records[0].assemblyName, "GUIDE PIN ML RT", "the heading still groups what follows");
+  assert.deepEqual(payload.records.map((item) => [item.refDes, item.manufacturerPartNumber, item.assemblyName]), [
+    ["JMP1,JMP2", "GP420-50215", "CONN GP420"],
+    ["JBP1,JBP2", "GP422-50010", "CONN GP422"],
+    ["JG1,JG2,JG3,JG4,JG5,JG6", "428-0281-001", ""],
+    ["JBAT1_CR2032,JBAT2_CR2032", "CR2032W", ""],
+    ["J1", "52451-0037C-003", "NEUTRINO BASEBOARD"],
+    ["J1_SUB", "SUB-001", "NEUTRINO BASEBOARD"],
+  ]);
+  assert.deepEqual(payload.records.map((item) => item.sourceRow), [7, 9, 10, 11, 13, 14], "same rows as the real file; the A lines keep their ids and Level 1 duplicates are not imported");
+  assert.equal(payload.records[3].manufacturer, "MURATA");
   assert.equal(payload.importNotes.length, 2);
-  assert.match(payload.importNotes[0], /Level 是 0／1[\s\S]*JG1,JG2[\s\S]*請把 Level 改成 2/);
-  assert.match(payload.importNotes[1], /Level 是 3 以上[\s\S]*已當作料件匯入[\s\S]*JBAT1_CR2032（Level 3）/);
+  assert.match(payload.importNotes[0], /2 列的 Level 是 0／1[\s\S]*已當作料件匯入[\s\S]*JG1,JG2,JG3,JG4,JG5,JG6/);
+  assert.match(payload.importNotes[1], /Level 是 3 以上[\s\S]*已當作料件匯入[\s\S]*J1_SUB（Level 3）/);
   const clean = await importTemplateRows([MATERIAL_CE_EXAMPLE_ROWS[0]]);
   assert.deepEqual(clean.importNotes, []);
 });

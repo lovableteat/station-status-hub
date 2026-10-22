@@ -1010,7 +1010,16 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
 
   const useBlueGroupRows = blueGroupRows.size > 0;
   // Rows that look like parts are never dropped silently; what was reinterpreted or skipped is reported.
-  const notes = { deeperLevel: [] as string[], headingWithPart: [] as string[], skippedWithoutName: [] as string[] };
+  const notes = { deeperLevel: [] as string[], headingAsPart: [] as string[], skippedWithoutName: [] as string[] };
+  const comparable = (value: unknown) => normalizeText(value).replace(/\s+/g, "").toUpperCase();
+  // The row after index that has a name, i.e. the next row the loop below does not skip.
+  const nextNamedRow = (index: number) => {
+    for (let next = index + 1; next < rows.length; next += 1) {
+      const row = rows[next];
+      if (firstNonEmpty(getFieldValue(row, fields, "name"), getFieldValue(row, fields, "partName"), getFieldValue(row, fields, "partNumber"), getFieldValue(row, fields, "pegaPartNumber"), getFieldValue(row, fields, "mpn1"))) return row;
+    }
+    return undefined;
+  };
 
   let currentSection = "";
   let currentAssembly = "";
@@ -1041,27 +1050,40 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
       continue;
     }
 
-    // Level 0/1 rows are 系統／模組 headings. A heading that carries a Ref Des and a part number is most
-    // likely a part typed with the wrong Level, so it is reported instead of disappearing silently.
-    if ((levelValue === 0 || levelValue === 1) && rowRefDes && (mpn1 || partNumber)) notes.headingWithPart.push(rowRefDes);
+    // Level 0/1 rows are 系統／模組 headings, except a row that carries its own Ref Des and MPN or part
+    // number: multi-level BOMs put real parts (guide pins, the RTC battery) at Level 1 beside the board.
+    // When the next row repeats that Ref Des and MPN (the BOM's "A" line under it) the Level 1 row is
+    // only the heading of that line, so the part is not imported twice.
+    let headingPart = false;
+    if ((levelValue === 0 || levelValue === 1) && rowRefDes && (mpn1 || partNumber)) {
+      const next = nextNamedRow(index);
+      const repeatedBelow = Boolean(next)
+        && comparable(getFieldValue(next, fields, "refDes")) === comparable(rowRefDes)
+        && (mpn1
+          ? comparable(getFieldValue(next, fields, "mpn1")) === comparable(mpn1)
+          : comparable(firstNonPlaceholder(getFieldValue(next, fields, "partNumber"), getFieldValue(next, fields, "pegaPartNumber"))) === comparable(partNumber));
+      headingPart = !repeatedBelow;
+      if (headingPart) notes.headingAsPart.push(rowRefDes);
+    }
 
     if (levelValue === 0) {
       currentSection = name;
+      if (headingPart) currentAssembly = "";
       currentSourceGroupKey = "";
       currentGroupRef = "";
-      continue;
+      if (!headingPart) continue;
     }
 
     if (levelValue === 1) {
       currentAssembly = name;
       currentSourceGroupKey = "";
       currentGroupRef = "";
-      continue;
+      if (!headingPart) continue;
     }
 
     // Every other row is a part. Multi-level BOMs put sub-parts (guide pins under a connector, the
     // battery under its holder) at Level 3 or deeper; skipping them made real parts vanish.
-    if (levelValue !== 2) notes.deeperLevel.push(`${rowRefDes || name}（Level ${normalizeText(levelCell)}）`);
+    if (levelValue > 2) notes.deeperLevel.push(`${rowRefDes || name}（Level ${normalizeText(levelCell)}）`);
 
     const refDes = rowRefDes;
     const trackingNote = normalizeText(getFieldValue(row, fields, "trackingNote"));
@@ -1103,8 +1125,9 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
       sourceGroupKey: useBlueGroupRows ? currentSourceGroupKey : undefined,
       sourceRow: index + 1,
       isGroupStart: useBlueGroupRows ? isGroupStart : undefined,
-      sectionName: firstNonEmpty(getFieldValue(row, fields, "sectionName"), currentSection),
-      assemblyName: firstNonEmpty(getFieldValue(row, fields, "assemblyName"), currentAssembly),
+      // A part on a Level 0／1 row sits beside the 系統／模組, not inside its own name.
+      sectionName: firstNonEmpty(getFieldValue(row, fields, "sectionName"), levelValue === 0 && headingPart ? "" : currentSection),
+      assemblyName: firstNonEmpty(getFieldValue(row, fields, "assemblyName"), headingPart ? "" : currentAssembly),
       level: 2,
       name,
       qty: normalizeCellValue(getFieldValue(row, fields, "qty")),
@@ -1164,7 +1187,7 @@ export async function parseMaterialWorkbookFile(file: File): Promise<ParsedMater
     sheetName: string;
     score: number;
     records: MaterialWorkbookRecord[];
-    notes: { deeperLevel: string[]; headingWithPart: string[]; skippedWithoutName: string[] };
+    notes: { deeperLevel: string[]; headingAsPart: string[]; skippedWithoutName: string[] };
   }>;
 
   const bestMatch = candidates.sort((left, right) => right.score - left.score)[0];
@@ -1174,8 +1197,8 @@ export async function parseMaterialWorkbookFile(file: File): Promise<ParsedMater
   }
 
   const importNotes: string[] = [];
-  const { deeperLevel, headingWithPart, skippedWithoutName } = bestMatch.notes;
-  if (headingWithPart.length) importNotes.push(`${headingWithPart.length} 列的 Level 是 0／1（系統／模組標題），但有位號與料號，沒有建立料件（例如 ${examples(headingWithPart)}）；若是料件，請把 Level 改成 2 再上傳`);
+  const { deeperLevel, headingAsPart, skippedWithoutName } = bestMatch.notes;
+  if (headingAsPart.length) importNotes.push(`${headingAsPart.length} 列的 Level 是 0／1，但有自己的位號與 MPN／料號，已當作料件匯入（例如 ${examples(headingAsPart)}）`);
   if (deeperLevel.length) importNotes.push(`${deeperLevel.length} 列的 Level 是 3 以上（多階 BOM 的子料），已當作料件匯入（例如 ${examples(deeperLevel)}）`);
   if (skippedWithoutName.length) importNotes.push(`${skippedWithoutName.length} 列有位號但沒有料名、MPN 或料號（例如 ${examples(skippedWithoutName)}），沒有匯入`);
   for (const other of candidates) {
