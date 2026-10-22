@@ -181,8 +181,8 @@ const directoryInputProps = { webkitdirectory: "" } as InputHTMLAttributes<HTMLI
 type DescribeAction = { id: string; name: string; value: string };
 
 type DeleteAction =
-  | { kind: "folder"; id: string; name: string }
-  | { kind: "file"; file: TestPlanFileRecord }
+  | { kind: "folder"; id: string; name: string; spaceId: string; ownerId: string | null }
+  | { kind: "file"; file: TestPlanFileRecord; ownerId: string | null }
   | { kind: "batch"; entries: TestPlanEntry[]; scope: string; skipped: number };
 
 interface LibraryLocation {
@@ -672,12 +672,14 @@ export function TestPlanWorkspace() {
 
   useEffect(() => {
     const requested = requestedFolderRef.current;
-    setActiveFolderId(requested?.spaceId === activeSpaceId ? requested.folderId : null);
-    requestedFolderRef.current = null;
+    // The first render happens before the linked space has loaded: keep the request for it.
+    const waiting = Boolean(requested && requested.spaceId !== activeSpaceId && loading);
+    setActiveFolderId(!waiting && requested?.spaceId === activeSpaceId ? requested.folderId : null);
+    if (!waiting) requestedFolderRef.current = null;
     setSpreadsheetFile(null);
     setRenaming(null);
     setExpandedFolderIds(new Set());
-  }, [activeSpaceId]);
+  }, [activeSpaceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!activeFolderId) return;
@@ -746,8 +748,15 @@ export function TestPlanWorkspace() {
     setRenaming(null);
     setClipboard(null);
     setHistory({ stack: [], index: -1 });
+    setPeopleFilter("");
     return () => { uploadRequestRef.current += 1; };
   }, [ownerId]);
+
+  // Live values for callbacks that may run after a re-render (a stale confirm, a late response).
+  const ownerIdRef = useRef(ownerId);
+  ownerIdRef.current = ownerId;
+  const deleteActionRef = useRef<DeleteAction | null>(null);
+  deleteActionRef.current = deleteAction;
 
   useEffect(() => {
     if (!busy) return;
@@ -928,6 +937,23 @@ export function TestPlanWorkspace() {
     window.requestAnimationFrame(() => rowRefs.current.get(key)?.scrollIntoView?.({ block: "center" }));
   }, [entryByKey, loading, pendingTick, updateSelection]);
 
+  useEffect(() => {
+    if (!isDragging) return;
+    const reset = (event: Event) => {
+      if (event.type === "dragleave" && (event as globalThis.DragEvent).relatedTarget) return;
+      setIsDragging(false);
+      setDropTargetId(null);
+    };
+    window.addEventListener("dragleave", reset);
+    window.addEventListener("drop", reset);
+    window.addEventListener("dragend", reset);
+    return () => {
+      window.removeEventListener("dragleave", reset);
+      window.removeEventListener("drop", reset);
+      window.removeEventListener("dragend", reset);
+    };
+  }, [isDragging]);
+
   // After opening a folder the clicked row is gone; keep the keyboard on the list instead of the page body.
   useEffect(() => {
     if (document.activeElement === document.body) listRef.current?.focus({ preventScroll: true });
@@ -936,7 +962,11 @@ export function TestPlanWorkspace() {
   // ----- navigation -------------------------------------------------------
   const currentLocation: LibraryLocation = { spaceId: activeSpaceId, folderId: activeFolderId };
   const navigate = (location: LibraryLocation, { record = true }: { record?: boolean } = {}) => {
-    if (loading && location.spaceId === activeSpaceId) return;
+    if (busy) {
+      toast.error("目前正在處理檔案，完成後才能切換位置。");
+      return false;
+    }
+    if (loading && location.spaceId === activeSpaceId) return false;
     setRenaming(null);
     setIsSpaceDrawerOpen(false);
     if (record) {
@@ -953,47 +983,50 @@ export function TestPlanWorkspace() {
     } else {
       setActiveFolderId(location.folderId);
     }
+    return true;
   };
   const canGoBack = history.index > 0;
   const canGoForward = history.index >= 0 && history.index < history.stack.length - 1;
   const parentFolderId = activeFolderId ? folders.find(folder => folder.id === activeFolderId)?.parentId ?? null : null;
   const canGoUp = Boolean(activeSpaceId && activeFolderId);
   const goBack = () => {
-    if (!canGoBack || busy) return;
+    if (!canGoBack || busy || loading) return;
     const target = history.stack[history.index - 1];
-    setHistory((current) => ({ ...current, index: current.index - 1 }));
-    navigate(target, { record: false });
+    if (navigate(target, { record: false })) setHistory((current) => ({ ...current, index: current.index - 1 }));
   };
   const goForward = () => {
-    if (!canGoForward || busy) return;
+    if (!canGoForward || busy || loading) return;
     const target = history.stack[history.index + 1];
-    setHistory((current) => ({ ...current, index: current.index + 1 }));
-    navigate(target, { record: false });
+    if (navigate(target, { record: false })) setHistory((current) => ({ ...current, index: current.index + 1 }));
   };
   const goUp = () => {
-    if (!canGoUp || busy) return;
-    if (activeFolderId) pendingFocusRef.current = `folder:${activeFolderId}`;
-    navigate({ spaceId: activeSpaceId, folderId: parentFolderId });
+    if (!canGoUp || busy || loading) return;
+    if (navigate({ spaceId: activeSpaceId, folderId: parentFolderId }) && activeFolderId) pendingFocusRef.current = `folder:${activeFolderId}`;
   };
   const openLocation = (entry: TestPlanEntry) => {
+    if (busy || loading) return;
+    if (!navigate({ spaceId: entry.spaceId, folderId: entryParent(entry) })) return;
     pendingFocusRef.current = entryKey(entry);
     if (query) setQuery("");
-    navigate({ spaceId: entry.spaceId, folderId: entryParent(entry) });
   };
 
   // ----- uploads ----------------------------------------------------------
-  const handleUpload = async (incoming: readonly File[], preservePaths = false, target?: Pick<UploadRetry, "folderId" | "spaceId">) => {
+  const handleUpload = async (incoming: readonly File[], preservePaths = false, target?: Pick<UploadRetry, "folderId" | "spaceId">, { keepRetry = false }: { keepRetry?: boolean } = {}) => {
     if (!ownerId || !canEdit || busy || loading || incoming.length === 0) return;
     const requestId = ++uploadRequestRef.current;
     const uploadTarget = target ?? { folderId: activeFolderId, spaceId: activeSpaceId };
-    setUploadRetry(null);
+    // The second half of a mixed drop must not wipe the retry list of the first half.
+    const earlierRetry = keepRetry ? retainedUploadRetry : null;
+    if (!earlierRetry) setUploadRetry(null);
     try {
       const result = await uploadFiles(uploadTarget.folderId, incoming, { preservePaths, spaceId: uploadTarget.spaceId });
       if (requestId !== uploadRequestRef.current) return;
       if (result.uploaded.length > 0) {
         toast.success(`已上傳 ${result.uploaded.length} 個檔案`);
       }
-      if (result.failures.length > 0) {
+      if (result.failures.length > 0 && earlierRetry) {
+        toast.error(`${result.failedFiles.length} 個檔案未上傳：${result.failures[0].message}（請先處理上方的重試清單）`);
+      } else if (result.failures.length > 0) {
         setUploadRetry({ ...uploadTarget, ownerId, spaceId: result.spaceId, preservePaths, files: result.failedFiles, failures: result.failures });
         toast.error(
           `${result.failedFiles.length} 個檔案未上傳：${result.failures[0].message}`,
@@ -1002,7 +1035,7 @@ export function TestPlanWorkspace() {
     } catch (caught) {
       if (requestId !== uploadRequestRef.current) return;
       const message = caught instanceof Error ? caught.message : "上傳失敗";
-      setUploadRetry({ ...uploadTarget, ownerId, preservePaths, files: incoming, failures: [{ fileName: "", message }] });
+      if (!earlierRetry) setUploadRetry({ ...uploadTarget, ownerId, preservePaths, files: incoming, failures: [{ fileName: "", message }] });
       toast.error(message);
     }
   };
@@ -1033,7 +1066,7 @@ export function TestPlanWorkspace() {
         const inFolders = droppedFiles.filter((file) => file.webkitRelativePath?.includes("/"));
         const loose = droppedFiles.filter((file) => !file.webkitRelativePath?.includes("/"));
         if (inFolders.length > 0) await handleUpload(inFolders, true, target);
-        if (loose.length > 0) await handleUpload(loose, false, target);
+        if (loose.length > 0) await handleUpload(loose, false, target, { keepRetry: inFolders.length > 0 });
       })
       .catch(() => toast.error("這個資料夾讀不到，請改用「上傳資料夾」"));
   };
@@ -1078,7 +1111,8 @@ export function TestPlanWorkspace() {
         const blob = url
           ? await fetch(url).then((response) => { if (!response.ok) throw new Error(String(response.status)); return response.blob(); })
           : await downloadFile(file);
-        const typed = blob.type ? blob : new Blob([blob], { type: file.mimeType || "application/octet-stream" });
+        // Never trust the stored content type: a same-origin blob: page must not be able to run script.
+        const typed = new Blob([blob], { type: "application/octet-stream" });
         cache.set(file.id, URL.createObjectURL(typed), typed.size);
       } catch {
         // Drag-out falls back to the link for this file.
@@ -1191,6 +1225,7 @@ export function TestPlanWorkspace() {
     const allowed = items.filter((item) => canMoveTo(item, targetFolderId, targetSpaceId));
     if (allowed.length === 0) {
       if (items.some((item) => item.folderId !== targetFolderId)) toast.error("不能移到這裡：只能在同一個人的空間裡移動，且資料夾不能移進自己裡面。");
+      else toast.info(`已經在「${folderName(targetFolderId)}」`);
       return 0;
     }
     const { moved, failure } = await runMoves(allowed, targetFolderId);
@@ -1226,7 +1261,8 @@ export function TestPlanWorkspace() {
       setDropTargetId(targetFolderId ?? "__root__");
       return;
     }
-    if (isFileDrag(event.dataTransfer) && canEdit && !busy && !uploadRetry) {
+    const targetSpaceId = targetFolderId ? folders.find((folder) => folder.id === targetFolderId)?.spaceId ?? null : activeSpaceId;
+    if (isFileDrag(event.dataTransfer) && targetSpaceId && canEditSpace(targetSpaceId) && !busy && !uploadRetry) {
       // OS files over a folder row upload straight into that folder.
       event.preventDefault();
       event.stopPropagation();
@@ -1248,6 +1284,8 @@ export function TestPlanWorkspace() {
       return;
     }
     const target = targetFolderId ? folders.find((folder) => folder.id === targetFolderId) : null;
+    const targetSpaceId = target ? target.spaceId : activeSpaceId;
+    if (!targetSpaceId || !canEditSpace(targetSpaceId)) { toast.error(readOnlyReason); return; }
     uploadDropped(event.dataTransfer, target ? { folderId: target.id, spaceId: target.spaceId } : { folderId: null, spaceId: activeSpaceId });
   };
 
@@ -1263,7 +1301,7 @@ export function TestPlanWorkspace() {
       const url = chooseDragDownloadUrl({ blobUrl: dragBlobCacheRef.current.get(entry.id), sourceUrl: cached?.url });
       if (url) {
         event.dataTransfer.setData("DownloadURL", describeDownloadUrl(entry.mimeType, entry.originalName, url));
-        event.dataTransfer.setData("text/uri-list", cached?.url || url);
+        if (cached?.url) event.dataTransfer.setData("text/uri-list", cached.url);
       }
     }
   };
@@ -1311,15 +1349,41 @@ export function TestPlanWorkspace() {
     setRenaming({ key: entryKey(entry), value: entryName(entry), error: null });
   };
 
-  const commitRename = async () => {
+  // Focus a row (or the list) after the element that had focus went away.
+  const focusRowSoon = (key: string | null) => {
+    window.requestAnimationFrame(() => {
+      const row = key ? rowRefs.current.get(key) : null;
+      (row ?? listRef.current)?.focus({ preventScroll: true });
+    });
+  };
+
+  // Closing a menu or a confirmation puts the keyboard back on the files (not on the menu button),
+  // so arrows, Delete and F2 keep working straight away.
+  const returnFocusToList = (event: Event) => {
+    event.preventDefault();
+    focusRowSoon(selection.focus);
+  };
+
+  const cancelRename = () => {
+    const key = renaming?.key ?? null;
+    setRenaming(null);
+    focusRowSoon(key);
+  };
+
+  const commitRename = async ({ fromBlur = false }: { fromBlur?: boolean } = {}) => {
     if (!renaming || renameCommitRef.current) return;
     const entry = entryByKey.get(renaming.key);
     if (!entry) { setRenaming(null); return; }
     const value = renaming.value.trim();
     const before = entryName(entry);
-    if (!value || value === before) { setRenaming(null); return; }
+    if (!value || value === before) { if (fromBlur) setRenaming(null); else cancelRename(); return; }
+    const fail = (message: string) => {
+      // Leaving the box with an error gives up the rename, so shortcuts keep working.
+      if (fromBlur) { setRenaming(null); toast.error(`沒有重新命名：${message}`); }
+      else setRenaming((current) => current && { ...current, error: message });
+    };
     if (entry.kind === "folder" && folders.some((folder) => folder.id !== entry.id && folder.spaceId === entry.spaceId && folder.parentId === entry.parentId && folder.name.toLocaleLowerCase() === value.toLocaleLowerCase())) {
-      setRenaming({ ...renaming, error: "這裡已經有同名資料夾" });
+      fail("這裡已經有同名資料夾");
       return;
     }
     renameCommitRef.current = true;
@@ -1327,7 +1391,7 @@ export function TestPlanWorkspace() {
       if (entry.kind === "folder") await renameFolder(entry.id, value);
       else await renameFile(entry.id, value);
       setRenaming(null);
-      keyboardFocusRef.current = true;
+      if (!fromBlur) focusRowSoon(entryKey(entry));
       toast.success(`已重新命名為「${value}」`, {
         action: {
           label: "復原",
@@ -1337,7 +1401,7 @@ export function TestPlanWorkspace() {
         },
       });
     } catch (caught) {
-      setRenaming((current) => current && { ...current, error: caught instanceof Error ? caught.message : "重新命名失敗" });
+      fail(caught instanceof Error ? caught.message : "重新命名失敗");
     } finally {
       renameCommitRef.current = false;
     }
@@ -1393,8 +1457,9 @@ export function TestPlanWorkspace() {
 
   const handleMoveSubmit = async (targetFolderId: string | null) => {
     if (!moveEntriesAction?.length) return;
-    const moved = await moveItems(moveEntriesAction.map(toMoveItem), targetFolderId, moveEntriesAction[0].spaceId);
-    if (moved > 0) setMoveEntriesAction(null);
+    const items = moveEntriesAction.map(toMoveItem);
+    const moved = await moveItems(items, targetFolderId, moveEntriesAction[0].spaceId);
+    if (moved > 0 || items.every((item) => item.folderId === targetFolderId)) setMoveEntriesAction(null);
   };
 
   const requestMove = (entries: readonly TestPlanEntry[]) => {
@@ -1411,7 +1476,7 @@ export function TestPlanWorkspace() {
     if (targets.length === 0) { toast.error("選取的項目都是唯讀，不能刪除。"); return; }
     if (entries.length === 1) {
       const entry = targets[0];
-      setDeleteAction(entry.kind === "folder" ? { kind: "folder", id: entry.id, name: entry.name } : { kind: "file", file: entry });
+      setDeleteAction(entry.kind === "folder" ? { kind: "folder", id: entry.id, name: entry.name, spaceId: entry.spaceId, ownerId } : { kind: "file", file: entry, ownerId });
       return;
     }
     setDeleteAction({ kind: "batch", entries: targets, scope: selectionScope, skipped: entries.length - targets.length });
@@ -1448,19 +1513,37 @@ export function TestPlanWorkspace() {
       } finally { batchDeleteInFlight.current = false; setBatchDeleting(false); }
       return;
     }
+    const action = deleteAction;
+    // A confirmation from before an account switch (or one that was closed meanwhile) must not delete.
+    if (deleteActionRef.current !== action || action.ownerId !== ownerIdRef.current || busy || loading) return;
+    if (!canEditSpace(action.kind === "folder" ? action.spaceId : action.file.spaceId)) {
+      toast.error(readOnlyReason);
+      setDeleteAction(null);
+      return;
+    }
     try {
       let cleanupPending = false;
-      if (deleteAction.kind === "folder") {
-        cleanupPending = (await deleteFolder(deleteAction.id)).cleanupPending;
-        if (activeFolderId === deleteAction.id) setActiveFolderId(null);
+      if (action.kind === "folder") {
+        cleanupPending = (await deleteFolder(action.id)).cleanupPending;
+        if (ownerIdRef.current !== action.ownerId) return;
+        // Leaving a deleted folder (or one inside it) returns to the space root, as the batch path does.
+        let cursor = activeFolderId;
+        const visited = new Set<string>();
+        while (cursor && !visited.has(cursor)) {
+          if (cursor === action.id) { setActiveFolderId(null); break; }
+          visited.add(cursor);
+          cursor = folders.find(folder => folder.id === cursor)?.parentId ?? null;
+        }
       } else {
-        cleanupPending = (await deleteFile(deleteAction.file)).cleanupPending;
+        cleanupPending = (await deleteFile(action.file)).cleanupPending;
+        if (ownerIdRef.current !== action.ownerId) return;
       }
       if (cleanupPending) toast.warning("項目已從清單刪除，實體檔案清理待重試；重新整理時會再處理。");
       else toast.success("項目已刪除");
       setDeleteAction(null);
+      focusRowSoon(null);
     } catch (caught) {
-      toast.error(caught instanceof Error ? caught.message : "刪除失敗");
+      if (ownerIdRef.current === action.ownerId) toast.error(caught instanceof Error ? caught.message : "刪除失敗");
     }
   };
 
@@ -1507,8 +1590,17 @@ export function TestPlanWorkspace() {
     if (renaming || isTypingTarget(event.target)) return;
     const target = event.target as HTMLElement;
     if (target.closest("[role='menu'], [role='dialog'], [role='alertdialog'], [role='listbox']")) return;
+    // Only the list, the command bar and the page itself drive the file selection; the preview pane
+    // scrolls, the navigation pane and address bar keep their own keys, and menu buttons open menus.
+    if (target !== event.currentTarget && !target.closest(".test-plan-dropzone, .file-explorer-commandbar")) return;
+    if (target.closest("[aria-haspopup]")) return;
     if ((event.key === "Enter" || event.key === " ") && target.closest("button, a")) return;
+    if (busy) return;
     const ctrl = event.ctrlKey || event.metaKey;
+    // A row reached with Tab has focus but no selection yet; act on it.
+    const rowKey = target.closest<HTMLElement>("[data-entry-key]")?.dataset.entryKey;
+    const rowEntry = rowKey ? entryByKey.get(rowKey) ?? null : null;
+    const actionEntries = selectedEntries.length ? selectedEntries : rowEntry ? [rowEntry] : [];
     const move = (direction: Parameters<typeof moveSelection>[2]) => {
       keyboardFocusRef.current = true;
       updateSelection(current => moveSelection(current, orderedKeys, direction, { extend: event.shiftKey }));
@@ -1521,10 +1613,10 @@ export function TestPlanWorkspace() {
     else if (event.key === "ArrowUp") move("previous");
     else if (event.key === "Home") move("first");
     else if (event.key === "End") move("last");
-    else if (event.key === "Enter" && focusedEntry) openEntry(focusedEntry);
+    else if (event.key === "Enter" && (rowEntry ?? focusedEntry)) openEntry((rowEntry ?? focusedEntry)!);
     else if (event.key === "Backspace") { if (canGoBack) goBack(); else goUp(); }
-    else if (event.key === "F2") startRename(selectedEntry ?? focusedEntry);
-    else if (event.key === "Delete") requestDelete(selectedEntries);
+    else if (event.key === "F2") startRename(selectedEntry ?? (actionEntries.length === 1 ? actionEntries[0] : focusedEntry));
+    else if (event.key === "Delete") requestDelete(actionEntries);
     else if (event.key === "Escape") updateSelection(EMPTY_SELECTION);
     else if (ctrl && event.key.toLowerCase() === "a") updateSelection(current => selectAll(current, orderedKeys));
     else if (ctrl && event.key.toLowerCase() === "x") cutEntries(selectedEntries);
@@ -1660,9 +1752,9 @@ export function TestPlanWorkspace() {
             onKeyDown={(event) => {
               event.stopPropagation();
               if (event.key === "Enter") { event.preventDefault(); void commitRename(); }
-              if (event.key === "Escape") { event.preventDefault(); setRenaming(null); keyboardFocusRef.current = true; }
+              if (event.key === "Escape") { event.preventDefault(); cancelRename(); }
             }}
-            onBlur={() => void commitRename()}
+            onBlur={() => void commitRename({ fromBlur: true })}
           />
           {renaming.error && <span className="file-explorer-rename-error" role="alert">{renaming.error}</span>}
         </span>
@@ -1847,7 +1939,7 @@ export function TestPlanWorkspace() {
               <ArrowDownUp className="h-4 w-4" /><span>排序</span><ChevronDown className="h-3.5 w-3.5 opacity-70" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" onCloseAutoFocus={returnFocusToList}>
             <DropdownMenuLabel>排序方式</DropdownMenuLabel>
             <DropdownMenuRadioGroup value={sort} onValueChange={(value) => setSort(value as TestPlanSort)}>
               {Object.entries(SORT_LABELS).map(([value, label]) => <DropdownMenuRadioItem key={value} value={value}>{label}</DropdownMenuRadioItem>)}
@@ -1865,7 +1957,7 @@ export function TestPlanWorkspace() {
               {viewMode === "list" ? <List className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}<span>檢視</span><ChevronDown className="h-3.5 w-3.5 opacity-70" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" onCloseAutoFocus={returnFocusToList}>
             <DropdownMenuRadioGroup value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)}>
               <DropdownMenuRadioItem value="list">詳細資料</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="grid">大圖示</DropdownMenuRadioItem>
@@ -2045,7 +2137,7 @@ export function TestPlanWorkspace() {
             <button
               type="button"
               className={cn("file-library-all", activeSpaceId === null && "is-active")}
-              disabled={busy}
+              disabled={busy || loading}
               onClick={() => navigate({ spaceId: null, folderId: null })}
             >
               <Globe className="h-4 w-4" /><span>所有檔案（所有人）</span><span className="file-library-count">{activeSpaceId === null ? files.length : ""}</span>
@@ -2280,7 +2372,7 @@ export function TestPlanWorkspace() {
                     </div>
                   </div>
                 </ContextMenuTrigger>
-                <ContextMenuContent className="file-explorer-menu">
+                <ContextMenuContent className="file-explorer-menu" onCloseAutoFocus={returnFocusToList}>
                   {contextTarget === "item" && selectedEntries.length > 0 ? renderItemMenu() : renderEmptyMenu()}
                 </ContextMenuContent>
               </ContextMenu>
@@ -2363,7 +2455,7 @@ export function TestPlanWorkspace() {
         open={Boolean(visibleDeleteAction)}
         onOpenChange={(open) => !open && !batchDeleteInFlight.current && setDeleteAction(null)}
       >
-        <AlertDialogContent className="file-library-dialog">
+        <AlertDialogContent className="file-library-dialog" onCloseAutoFocus={returnFocusToList}>
           <AlertDialogHeader>
             <AlertDialogTitle>{visibleDeleteAction?.kind === "batch" ? `確定要刪除已選取的 ${visibleDeleteAction.entries.length} 項？` : "確定要刪除？"}</AlertDialogTitle>
             <AlertDialogDescription>
