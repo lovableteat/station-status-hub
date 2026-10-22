@@ -147,6 +147,9 @@ import {
   getMaterialTableWidth,
   groupBomWorkspacesByProject,
   groupPendingMaterials,
+  getPendingMaterialCategory,
+  PENDING_MATERIAL_CATEGORIES,
+  resolvePendingMaterialCategory,
   normalizeHiddenMaterialColumns,
   resizeMaterialColumnWidths,
   shouldApplyBomWorkspaceCache,
@@ -893,6 +896,7 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     sourcingStatus: record.sourcingStatus,
     partUsageStatus: record.partUsageStatus ?? "",
     specDocument: record.specDocument,
+    ...(record.pendingCategory ? { pendingCategory: record.pendingCategory } : {}),
     ...(Object.prototype.hasOwnProperty.call(record, "phaseOutStatus") ? { phaseOutStatus: record.phaseOutStatus ?? "" } : {}),
     ...(Object.prototype.hasOwnProperty.call(record, "symbolStatus") ? { symbolStatus: record.symbolStatus ?? "" } : {}),
     refGroup: record.refGroup,
@@ -3129,6 +3133,29 @@ function PendingMailDialog({
   );
 }
 
+// Ref Des prefixes decide the category by default; companies that name parts differently can override it per part.
+function PendingCategoryPicker({ group, disabled, onChange }: { group: MaterialGroup; disabled: boolean; onChange: (category: PendingMaterialCategory | null) => void }) {
+  const { category, manual } = resolvePendingMaterialCategory(group);
+  const automatic = PENDING_MATERIAL_CATEGORIES.find((item) => item.key === getPendingMaterialCategory(group.displayRef));
+  const label = PENDING_MATERIAL_CATEGORIES.find((item) => item.key === category)?.label ?? category;
+  return (
+    <Select value={manual ? category : "auto"} disabled={disabled} onValueChange={(value) => onChange(value === "auto" ? null : value as PendingMaterialCategory)}>
+      <SelectTrigger
+        data-testid="pending-category-picker"
+        aria-label={`調整 ${group.displayRef} 的分類，目前 ${label}${manual ? "（手動）" : "（依位號）"}`}
+        title={manual ? `手動分類為 ${label}；可改回依位號自動分類` : `依位號自動分類為 ${label}；分錯可在這裡改`}
+        className={cn("h-7 w-[8.5rem] flex-none gap-1 rounded-md px-2 text-xs font-bold", manual ? "border-primary/60 bg-primary/15 text-primary" : "border-border bg-secondary/60 text-foreground/80")}
+      >
+        <SelectValue>{manual ? `${label} · 手動` : label}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="auto">依位號自動（{automatic?.label ?? "其他"}）</SelectItem>
+        {PENDING_MATERIAL_CATEGORIES.map((item) => <SelectItem key={item.key} value={item.key}>{item.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function PendingMaterialsDialog({
   canEdit,
   groups,
@@ -3141,6 +3168,7 @@ function PendingMaterialsDialog({
   onOpenChange,
   onOpenCreate,
   onOpenTracking,
+  onSetCategory,
 }: {
   canEdit: boolean;
   groups: MaterialGroup[];
@@ -3154,6 +3182,8 @@ function PendingMaterialsDialog({
   onOpenChange: (open: boolean) => void;
   onOpenCreate: (group: MaterialGroup) => void;
   onOpenTracking: (record: MaterialRecord) => void;
+  /** Saves a hand-picked category for a pending part; null returns it to the Ref Des rule. */
+  onSetCategory: (group: MaterialGroup, category: PendingMaterialCategory | null) => void;
 }) {
   const [query, setQuery] = useState("");
   const [mailOpen, setMailOpen] = useState(false);
@@ -3256,6 +3286,7 @@ function PendingMaterialsDialog({
                 <div key={group.key} className={cn("flex flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
                   <span className={cn("h-2 w-2 flex-none rounded-full", stale ? "material-blink bg-destructive" : "bg-muted-foreground/40")} aria-hidden="true" />
                   <span className="w-[16rem] flex-none truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
+                  <PendingCategoryPicker group={group} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
                   <span className="min-w-0 flex-1 truncate text-base text-foreground" title={group.name}>{group.name || "未命名料件"}</span>
                   <span className="hidden w-[18rem] flex-none truncate font-mono text-sm text-foreground/75 md:block" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
                   <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(trackingStatus))}>{trackingStatus || "未追蹤"}</span>
@@ -5596,6 +5627,101 @@ export function MaterialRequestPage() {
       });
   };
 
+  const countTrackingImages = (record?: MaterialWorkbookRecord) =>
+    (record?.trackingHistory ?? []).reduce((count, entry) => count + (entry.images?.length ?? 0), 0);
+
+  // Writes several rows in one local replace, then one remote write per row, threading each row's
+  // new version into the next write. The first row decides success; the rest are best effort.
+  const saveRecordsToActiveBom = async (list: MaterialWorkbookRecord[]): Promise<{ saved: number; failed: number }> => {
+    if (list.length === 0) return { saved: 0, failed: 0 };
+    const writeScope = captureBomWrite();
+    if (!isCollaborativeReady) throw new Error("Collaborative BOM storage unavailable");
+    if (!isFullDatasetLoaded) {
+      showDatasetSyncingToast();
+      throw new Error("Full BOM dataset is still loading");
+    }
+    const byId = new Map(list.map((item) => [item.id, item] as const));
+    const previousById = new Map(basePayload.records.map((item) => [item.id, item] as const));
+    const records = [
+      ...basePayload.records.map((item) => byId.get(item.id) ?? item),
+      ...list.filter((item) => !previousById.has(item.id)),
+    ];
+    const nextWorkspace: BomWorkspace = {
+      ...activeWorkspace,
+      payload: { ...basePayload, records, recordCount: records.length },
+      updatedAt: new Date().toISOString(),
+    };
+    for (const item of list) recentLocalRecordIdsRef.current.set(item.id, Date.now());
+    replaceBomWorkspace(nextWorkspace);
+    const metas: Record<string, BomRecordSyncMeta> = {};
+    let failed = 0;
+    let savingWorkspace = nextWorkspace;
+    for (const [index, item] of list.entries()) {
+      try {
+        const recordMeta = await saveBomWorkspaceRecord(savingWorkspace, item, () => assertBomWriteCurrent(writeScope));
+        assertBomWriteCurrent(writeScope);
+        metas[item.id] = recordMeta;
+        savingWorkspace = { ...savingWorkspace, recordMeta: { ...savingWorkspace.recordMeta, [item.id]: recordMeta } };
+        const previous = previousById.get(item.id);
+        void logMaterialRecordChange({
+          action: previous ? "update" : "create",
+          actor: user,
+          imageCount: countTrackingImages(item),
+          previousImageCount: countTrackingImages(previous),
+          newUpdatedAt: recordMeta.updatedAt,
+          previousUpdatedAt: activeWorkspace.recordMeta?.[item.id]?.updatedAt,
+          recordId: item.id,
+          workspaceId: savingWorkspace.id,
+        });
+      } catch (error) {
+        if (!isBomWriteCurrent(writeScope)) throw error;
+        if (index === 0) {
+          await reloadBomWorkspaces(activeBomId).catch(() => undefined);
+          throw error;
+        }
+        failed += 1;
+      }
+    }
+    setBomWorkspaces((current) => current.map((workspace) => workspace.id === nextWorkspace.id
+      ? { ...workspace, recordMeta: { ...workspace.recordMeta, ...metas } }
+      : workspace));
+    if (failed > 0) await reloadBomWorkspaces(activeBomId).catch(() => undefined);
+    return { saved: list.length - failed, failed };
+  };
+
+  // A hand-picked 待處理料 category is written to every row of the part, so it stays put when
+  // another row becomes the main row; choosing 依位號自動 removes it from all of them.
+  const setPendingCategory = (group: MaterialGroup, category: PendingMaterialCategory | null) => {
+    if (!canEdit) return;
+    let writeScope;
+    try {writeScope = captureBomWrite();} catch {return;}
+    if (!isCollaborativeReady) {
+      showCollaborativeUnavailableToast();
+      return;
+    }
+    if (!isFullDatasetLoaded) {
+      showDatasetSyncingToast();
+      return;
+    }
+    const updates = group.records
+      .filter((record) => (record.pendingCategory ?? null) !== category)
+      .map((record) => {
+        const next = toWorkbookRecord(record);
+        if (category) next.pendingCategory = category;
+        else delete next.pendingCategory;
+        return next;
+      });
+    if (updates.length === 0) return;
+    const label = category ? PENDING_MATERIAL_CATEGORIES.find((item) => item.key === category)?.label ?? category : "依位號自動";
+    void saveRecordsToActiveBom(updates).then(() => {
+      if (!isBomWriteCurrent(writeScope)) return;
+      toast({ title: "分類已更新", description: `${group.displayRef} → ${label}` });
+    }).catch(() => {
+      if (!isBomWriteCurrent(writeScope)) return;
+      toast({ title: "分類更新失敗", description: "這筆分類還沒同步到共用資料，已重新載入最新版本。", variant: "destructive" });
+    });
+  };
+
   const handleSaveRecord = async (record: MaterialWorkbookRecord) => {
     if (!isValidBomUsage(record.qty)) {
       toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
@@ -6219,6 +6345,7 @@ export function MaterialRequestPage() {
         // 更新料號 edits the pending row itself (its 廠商, MPN and 備註 included) instead of adding a blank alternate.
         onOpenCreate={(group) => { setPendingDialogOpen(false); setReturnToPending(true); openRecord(group.primaryRecord, "edit"); }}
         onOpenTracking={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openTrackingDialog(record); }}
+        onSetCategory={setPendingCategory}
       />
       <BomTableColorDialog
         open={tableColorDialogOpen}

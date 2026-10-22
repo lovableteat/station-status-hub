@@ -249,6 +249,16 @@ test("匯出報表 and 上傳說明 carry their own colours and 上傳說明 bli
   assert.match(actions, /data-testid="material-guide-button"[\s\S]{0,120}?className="material-guide-attention[^"]*bg-\[hsl\(var\(--platform-violet\)\)\]/);
 });
 
+test("待處理料 categories can be changed by hand and survive saves of other fields", () => {
+  const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
+  assert.match(dialog, /<PendingCategoryPicker group=\{group\} disabled=\{!canEdit\} onChange=\{\(next\) => onSetCategory\(group, next\)\} \/>/);
+  assert.match(source, /data-testid="pending-category-picker"/);
+  assert.match(source, /<SelectItem value="auto">依位號自動/);
+  assert.match(source, /onSetCategory=\{setPendingCategory\}/);
+  assert.match(source, /\.\.\.\(record\.pendingCategory \? \{ pendingCategory: record\.pendingCategory \} : \{\}\)/, "toWorkbookRecord keeps the hand-picked category");
+  assert.match(source, /if \(category\) next\.pendingCategory = category;\s*else delete next\.pendingCategory;/);
+});
+
 test("pending parts keep blinking until a part number arrives or data is refreshed", () => {
   assert.match(source, /const STALE_PENDING_MS = 3 \* 24 \* 60 \* 60 \* 1000;/);
   const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");

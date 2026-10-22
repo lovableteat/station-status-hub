@@ -282,9 +282,25 @@ export function getPendingMaterialCategory(refDes: string): PendingMaterialCateg
   return "other";
 }
 
-export function groupPendingMaterials<T extends { displayRef: string }>(groups: readonly T[]) {
+export function isPendingMaterialCategory(value: unknown): value is PendingMaterialCategory {
+  return PENDING_MATERIAL_CATEGORIES.some((category) => category.key === value);
+}
+
+type PendingCategorySource = {
+  displayRef: string;
+  primaryRecord?: { pendingCategory?: string | null } | null;
+  records?: ReadonlyArray<{ pendingCategory?: string | null }>;
+};
+
+/** A category chosen by hand on any row of the part wins (the main row first); otherwise the Ref Des prefix decides. */
+export function resolvePendingMaterialCategory(group: PendingCategorySource): { category: PendingMaterialCategory; manual: boolean } {
+  const manual = [group.primaryRecord, ...(group.records ?? [])].map((record) => record?.pendingCategory).find(isPendingMaterialCategory);
+  return manual ? { category: manual, manual: true } : { category: getPendingMaterialCategory(group.displayRef), manual: false };
+}
+
+export function groupPendingMaterials<T extends PendingCategorySource>(groups: readonly T[]) {
   const buckets = new Map<PendingMaterialCategory, T[]>(PENDING_MATERIAL_CATEGORIES.map((category) => [category.key, []]));
-  for (const group of groups) buckets.get(getPendingMaterialCategory(group.displayRef))!.push(group);
+  for (const group of groups) buckets.get(resolvePendingMaterialCategory(group).category)!.push(group);
   return PENDING_MATERIAL_CATEGORIES
     .map((category) => ({ ...category, groups: buckets.get(category.key) ?? [] }))
     .filter((category) => category.groups.length > 0);

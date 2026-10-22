@@ -46,6 +46,8 @@ export interface MaterialWorkbookRecord {
   symbolStatus?: string;
   pcbFootprint: string;
   specDocument?: MaterialSpecDocument;
+  /** 待處理料 category chosen by hand when the Ref Des prefix misleads; absent means "by Ref Des". */
+  pendingCategory?: "connector" | "ic" | "rlc" | "other";
 }
 
 export type SymbolAvailability = "present" | "missing" | "unknown";
