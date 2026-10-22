@@ -13,7 +13,7 @@ import {
   createTestPlanRepository,
   type TestPlanRepository,
 } from "../core/repository";
-import { createSupabaseTestPlanAdapter, TEST_PLAN_STORAGE_ORIGIN } from "../core/supabaseAdapter";
+import { createSupabaseTestPlanAdapter } from "../core/supabaseAdapter";
 import { createMemoryTestPlanAdapter } from "../core/memoryAdapter";
 import type {
   TestPlanEntry,
@@ -611,7 +611,5 @@ export function useTestPlanWorkspace(
     getFileDownloadUrl,
     getFileDownloadUrls,
     replaceFileContents,
-    /** Storage origin the drag-to-desktop proxy worker may stream from. */
-    storageOrigin: TEST_PLAN_STORAGE_ORIGIN,
   };
 }
