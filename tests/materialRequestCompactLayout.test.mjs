@@ -233,6 +233,12 @@ test("editing an item from 待處理料 returns to the list with its tab, search
   assert.equal((source.match(/onClick=\{openPendingDialog\}/g) ?? []).length, 2, "the header buttons open a fresh list");
 });
 
+test("匯出報表 and 上傳說明 carry their own colours and 上傳說明 blinks", () => {
+  const actions = slice('data-material-zone="actions"', '{collaborationStatus !== "remote" && (');
+  assert.match(actions, /bg-info px-3[^"]*text-info-foreground[^"]*">\s*<Download[^/]*\/>匯出報表/);
+  assert.match(actions, /data-testid="material-guide-button"[\s\S]{0,120}?className="material-guide-attention[^"]*bg-\[hsl\(var\(--platform-violet\)\)\]/);
+});
+
 test("pending parts keep blinking until a part number arrives or data is refreshed", () => {
   assert.match(source, /const STALE_PENDING_MS = 3 \* 24 \* 60 \* 60 \* 1000;/);
   const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");

@@ -1839,6 +1839,12 @@ body {
   50% { opacity: 0.2; }
 }
 .material-blink { animation: material-blink 1s ease-in-out infinite; }
+/* 上傳說明: blinks so new users find the upload rules before importing a BOM. */
+@keyframes material-guide-attention {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--platform-violet) / 0); filter: brightness(1); }
+  50% { box-shadow: 0 0 0 5px hsl(var(--platform-violet) / .5); filter: brightness(1.3); }
+}
+.material-guide-attention { animation: material-guide-attention 1.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .material-attention, .material-blink { animation: none; }
+  .material-attention, .material-blink, .material-guide-attention { animation: none; }
 }

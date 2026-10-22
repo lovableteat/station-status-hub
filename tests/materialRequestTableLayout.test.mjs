@@ -146,9 +146,9 @@ test("the table shows Part Spec as its own workbook column and keeps the old spe
 });
 
 test("material column geometry and fixed actions match the sixteen columns", () => {
-  assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 300]);
-  assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 240]);
-  assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 560]);
+  assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150]);
+  assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 130]);
+  assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360]);
   assert.equal(readWidths("DEFAULT_COLUMN_WIDTHS").length, 16);
   assert.equal((tableBlock.match(/column\.key === "actions"/g) ?? []).length, 4);
   assert.doesNotMatch(source, /colSpan=\{1[012]\}/);
@@ -164,7 +164,7 @@ test("stored column widths are reused only when they match the current sixteen-c
   assert.deepEqual(run(stored), stored.map((width, index) => Math.min(readWidths("MAX_COLUMN_WIDTHS")[index], width)));
   assert.deepEqual(run([96, 92, 260, 160, 260, 210, 190, 180, 180, 220, 130]), defaults);
   assert.deepEqual(run(null), defaults);
-  assert.match(source, /COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v13"/);
+  assert.match(source, /COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v14"/);
 });
 
 test("restored material filters discard removed or invalid conditions without losing current filters", () => {
