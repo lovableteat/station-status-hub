@@ -62,7 +62,7 @@ function rowFor(tree, f, id) {
 /** Space ids per navigation group, in screen order, read from the group headings that precede them. */
 function groups(tree, f) {
   const result = { mine: [], team: [], others: [] };
-  const headings = { 我的空間: 'mine', 團隊成員: 'team', 其他使用者: 'others', 跨使用者: 'all' };
+  const headings = { 我的空間: 'mine', 管理員: 'team', 其他使用者: 'others', 跨使用者: 'all' };
   let current = null;
   for (const node of spaceList(tree).children) {
     if (typeof node === 'string') continue;
