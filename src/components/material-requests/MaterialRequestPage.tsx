@@ -271,7 +271,7 @@ const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:"
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const VIEW_STATE_KEY_PREFIX = "station-status-hub:material-view:v1:";
-const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v13";
+const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v14";
 const HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const MAX_BOM_TRACKER_PAGES = 500;
@@ -300,9 +300,9 @@ const BOM_PAGE_STATUS_OPTIONS: Array<{
     idleClassName: "text-muted-foreground hover:bg-accent hover:text-foreground",
   },
 ];
-const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 300];
-const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 240];
-const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 560];
+const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150];
+const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 130];
+const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360];
 const DEFAULT_BOM_TABLE_COLOR_THEME: BomTableColorTheme = {
   primary: "#0F5D74",
   alternative: "#343B73",
@@ -2149,7 +2149,8 @@ function TrackingHistoryCell({
   const summary = latestEntry?.note || (latestEntry ? `${historyCount} 筆紀錄` : "建立第一筆追蹤");
   const tooltip = [
     `${statusLabel} · ${historyCount} 筆${latestEntry?.createdAt ? ` · ${formatTimestamp(latestEntry.createdAt)}` : ""}`,
-    latestEntry?.note ?? "",
+    latestEntry?.note ?? (embedded && !latestEntry ? summary : ""),
+    embedded && requestMeta.ticket ? `單號 ${requestMeta.ticket}` : "",
   ].filter(Boolean).join("\n");
 
   return (
@@ -2167,10 +2168,15 @@ function TrackingHistoryCell({
       <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(workflowStatus))}>
         {statusLabel}
       </span>
-      <span className={cn("min-w-0 flex-1 truncate text-xs", latestEntry?.note ? "text-foreground" : "text-muted-foreground")}>
-        {summary}
-      </span>
-      {requestMeta.ticket && (
+      {/* The merged 狀態追蹤 / 更新 column is narrow: the note and ticket move into the tooltip there. */}
+      {embedded ? (
+        <span className="min-w-0 flex-1" aria-hidden="true" />
+      ) : (
+        <span className={cn("min-w-0 flex-1 truncate text-xs", latestEntry?.note ? "text-foreground" : "text-muted-foreground")}>
+          {summary}
+        </span>
+      )}
+      {requestMeta.ticket && !embedded && (
         requestMeta.url ? (
           <a
             href={requestMeta.url}
@@ -4038,7 +4044,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
               <button
                 type="button"
                 onClick={() => actions.openCreate(group)}
-                className="flex flex-none items-center gap-1 border-l border-cyan-400/25 bg-cyan-400/10 px-2 text-xs font-bold text-cyan-200 transition-colors hover:bg-cyan-400/25 hover:text-cyan-50"
+                className="flex flex-none items-center gap-0.5 border-l border-cyan-400/25 bg-cyan-400/10 px-1.5 text-xs font-bold text-cyan-200 transition-colors hover:bg-cyan-400/25 hover:text-cyan-50"
                 title={updateTitle}
                 aria-label="更新料號"
               >
@@ -6375,13 +6381,13 @@ export function MaterialRequestPage() {
             <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border-success/60 bg-success px-3 text-sm font-black text-success-foreground hover:bg-success/85 hover:text-success-foreground disabled:cursor-not-allowed disabled:opacity-50">
               <Upload className="mr-1 h-3.5 w-3.5" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-border bg-secondary px-3 text-sm font-black text-foreground hover:bg-accent hover:text-foreground disabled:cursor-wait disabled:opacity-60">
+            <Button type="button" variant="outline" size="sm" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-info/60 bg-info px-3 text-sm font-black text-info-foreground hover:bg-info/85 hover:text-info-foreground disabled:cursor-wait disabled:opacity-60">
               <Download className="mr-1 h-3.5 w-3.5" />匯出報表
             </Button>
             <Button type="button" size="sm" onClick={() => openCreate()} disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border border-primary/60 bg-primary px-3.5 text-sm font-black text-primary-foreground hover:bg-primary/85 hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">
               <Plus className="mr-1 h-3.5 w-3.5" />新增料件
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setGuideOpen(true)} className="h-9 border-border bg-secondary px-3 text-sm font-black text-foreground hover:bg-accent hover:text-foreground">
+            <Button type="button" variant="outline" size="sm" data-testid="material-guide-button" onClick={() => setGuideOpen(true)} className="material-guide-attention h-9 border-[hsl(var(--platform-violet)/0.6)] bg-[hsl(var(--platform-violet))] px-3 text-sm font-black text-primary-foreground hover:bg-[hsl(var(--platform-violet)/0.85)] hover:text-primary-foreground">
               <CircleHelp className="mr-1 h-3.5 w-3.5" />上傳說明
             </Button>
           </div>
