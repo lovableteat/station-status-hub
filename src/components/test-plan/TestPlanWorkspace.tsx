@@ -98,6 +98,7 @@ import { isEditableSpreadsheet } from "./core/spreadsheet";
 import { TestPlanSpreadsheetEditor } from "./TestPlanSpreadsheetEditor";
 import { TransferPanel, type TransferItem } from "./TransferPanel";
 import { downloadWithProgress } from "./core/transfers";
+import { chooseDragDownloadUrl, createBlobUrlCache, describeDownloadUrl, DRAG_BLOB_CACHE_LIMIT, DRAG_BLOB_LIMIT, type DownloadProxy } from "./core/dragDownload";
 import type {
   TestPlanEntry,
   TestPlanFileCategory,
@@ -598,6 +599,7 @@ export function TestPlanWorkspace() {
     downloadFile,
     getFileDownloadUrl,
     getFileDownloadUrls,
+    storageOrigin,
     deleteFile,
     deleteEntries,
     replaceFileContents,
@@ -609,6 +611,31 @@ export function TestPlanWorkspace() {
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const downloadUrlCacheRef = useRef(new Map<string, { url: string; expiresAt: number }>());
   const [downloads, setDownloads] = useState<TransferItem[]>([]);
+  const dragBlobCacheRef = useRef(createBlobUrlCache(DRAG_BLOB_CACHE_LIMIT));
+  const dragPrefetchRef = useRef(new Set<string>());
+  const dragDwellTimersRef = useRef(new Map<string, number>());
+  const [downloadProxy, setDownloadProxy] = useState<DownloadProxy | null>(null);
+  useEffect(() => {
+    const cache = dragBlobCacheRef.current;
+    const timers = dragDwellTimersRef.current;
+    return () => {
+      cache.clear();
+      for (const timer of timers.values()) window.clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+  // Same-origin download proxy for drag-to-desktop (see public/file-library-sw.js).
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator) || !window.isSecureContext) return;
+    if (!storageOrigin) return;
+    const base = import.meta.env.BASE_URL;
+    let cancelled = false;
+    navigator.serviceWorker.register(`${base}file-library-sw.js?origin=${encodeURIComponent(storageOrigin)}`, { scope: base })
+      .then(() => navigator.serviceWorker.ready)
+      .then(() => { if (!cancelled) setDownloadProxy({ pageOrigin: window.location.origin, base }); })
+      .catch(() => { /* without the worker, drag-out keeps using the storage link */ });
+    return () => { cancelled = true; };
+  }, [storageOrigin]);
   const dismissDownload = useCallback((id: string) => setDownloads((items) => items.filter((item) => item.id !== id)), []);
   const [retryState, setRetryState] = useState<UploadRetry | null>(() => retainedUploadRetry);
   const uploadRetry = retryState?.ownerId === ownerId ? retryState : null;
@@ -884,6 +911,42 @@ export function TestPlanWorkspace() {
       .catch(() => downloadUrlCacheRef.current.delete(file.id));
   };
 
+  // Small files are pulled into memory while the pointer rests on the row, so the
+  // drag can carry a same-origin blob: address; the proxy or raw link covers the rest.
+  const prefetchDragBlob = (file: TestPlanFileRecord) => {
+    const cache = dragBlobCacheRef.current;
+    if (file.fileSize > DRAG_BLOB_LIMIT || cache.get(file.id) || dragPrefetchRef.current.has(file.id) || dragPrefetchRef.current.size >= 3) return;
+    dragPrefetchRef.current.add(file.id);
+    void (async () => {
+      try {
+        const url = await getFileDownloadUrl(file).catch(() => null);
+        const blob = url
+          ? await fetch(url).then((response) => { if (!response.ok) throw new Error(String(response.status)); return response.blob(); })
+          : await downloadFile(file);
+        const typed = blob.type ? blob : new Blob([blob], { type: file.mimeType || "application/octet-stream" });
+        cache.set(file.id, URL.createObjectURL(typed), typed.size);
+      } catch {
+        // Drag-out falls back to the link for this file.
+      } finally {
+        dragPrefetchRef.current.delete(file.id);
+      }
+    })();
+  };
+  const scheduleDragPrefetch = (file: TestPlanFileRecord) => {
+    cancelDragPrefetch(file.id);
+    if (file.fileSize > DRAG_BLOB_LIMIT || dragBlobCacheRef.current.get(file.id)) return;
+    dragDwellTimersRef.current.set(file.id, window.setTimeout(() => {
+      dragDwellTimersRef.current.delete(file.id);
+      prefetchDragBlob(file);
+    }, 400));
+  };
+  const cancelDragPrefetch = (fileId: string) => {
+    const timer = dragDwellTimersRef.current.get(fileId);
+    if (timer === undefined) return;
+    window.clearTimeout(timer);
+    dragDwellTimersRef.current.delete(fileId);
+  };
+
   const handleEntryDragStart = (entry: TestPlanEntry, event: DragEvent<HTMLElement>) => {
     if (busy || loading) { event.preventDefault(); return; }
     const payload: EntryDragPayload = {
@@ -896,10 +959,21 @@ export function TestPlanWorkspace() {
     event.dataTransfer.setData("text/plain", entryName(entry));
     event.dataTransfer.effectAllowed = canEditSpace(entry.spaceId) ? "copyMove" : "copy";
     if (entry.kind === "file") {
+      cancelDragPrefetch(entry.id);
       const cached = downloadUrlCacheRef.current.get(entry.id);
-      if (cached?.url) {
-        event.dataTransfer.setData("DownloadURL", `${entry.mimeType || "application/octet-stream"}:${entry.originalName}:${cached.url}`);
-        event.dataTransfer.setData("text/uri-list", cached.url);
+      const proxyReady = downloadProxy && typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller);
+      const url = chooseDragDownloadUrl({
+        blobUrl: dragBlobCacheRef.current.get(entry.id),
+        sourceUrl: cached?.url,
+        proxy: proxyReady ? downloadProxy : null,
+        fileId: entry.id,
+        fileName: entry.originalName,
+        mimeType: entry.mimeType,
+        size: entry.fileSize,
+      });
+      if (url) {
+        event.dataTransfer.setData("DownloadURL", describeDownloadUrl(entry.mimeType, entry.originalName, url));
+        event.dataTransfer.setData("text/uri-list", cached?.url || url);
       }
     }
   };
@@ -948,7 +1022,9 @@ export function TestPlanWorkspace() {
     draggable: !busy && !loading,
     onDragStart: (event: DragEvent<HTMLElement>) => handleEntryDragStart(entry, event),
     onDragEnd: () => setDropTargetId(null),
-    onPointerEnter: entry.kind === "file" ? () => prefetchDownloadUrl(entry) : undefined,
+    onPointerEnter: entry.kind === "file" ? () => { prefetchDownloadUrl(entry); scheduleDragPrefetch(entry); } : undefined,
+    onPointerLeave: entry.kind === "file" ? () => cancelDragPrefetch(entry.id) : undefined,
+    onPointerDown: entry.kind === "file" ? () => { prefetchDownloadUrl(entry); prefetchDragBlob(entry); } : undefined,
     onFocus: entry.kind === "file" ? () => prefetchDownloadUrl(entry) : undefined,
     ...(entry.kind === "folder"
       ? {
