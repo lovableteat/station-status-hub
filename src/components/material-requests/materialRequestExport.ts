@@ -849,15 +849,16 @@ export async function exportVendorMailHtml({
   const message = mailHtmlToText(safeMessage);
   const signature = mailHtmlToText(safeSignature);
   const sectionHtml = sections.map((section, index) => {
-    const cell = (value: string) => `<td style="border:1px solid #c5d3dd;padding:6px 9px;font-size:13px;vertical-align:top;">${escapeHtml(value)}</td>`;
-    const head = (value: string) => `<th style="border:1px solid #c5d3dd;padding:7px 9px;font-size:13px;text-align:left;background:#155e85;color:#ffffff;">${escapeHtml(value)}</th>`;
-    const rows = section.items.map((item, itemIndex) => `<tr style="background:${itemIndex % 2 ? "#f4f8fb" : "#ffffff"};">${cell(String(itemIndex + 1))}${cell(item.refDes)}${cell(item.name)}${cell(item.manufacturerPartNumber)}${cell(item.qty)}${cell(item.partSpec)}${cell(item.partUsageStatus)}</tr>`).join("");
+    // Outlook renders with Word, which follows width attributes more reliably than CSS widths.
+    const cell = (value: string, nowrap = false) => `<td${nowrap ? " nowrap" : ""} style="border:1px solid #c5d3dd;padding:6px 9px;font-size:13px;vertical-align:top;${nowrap ? "white-space:nowrap;" : ""}">${escapeHtml(value)}</td>`;
+    const head = (value: string, width: string) => `<th width="${width}" style="width:${width};border:1px solid #c5d3dd;padding:7px 9px;font-size:13px;text-align:left;white-space:nowrap;background:#155e85;color:#ffffff;">${escapeHtml(value)}</th>`;
+    const rows = section.items.map((item, itemIndex) => `<tr style="background:${itemIndex % 2 ? "#f4f8fb" : "#ffffff"};">${cell(String(itemIndex + 1), true)}${cell(item.refDes)}${cell(item.name)}${cell(item.manufacturerPartNumber)}${cell(item.qty, true)}${cell(item.partSpec)}${cell(item.partUsageStatus)}</tr>`).join("");
     const text = renderVendorMailText(section, message, signature);
     return `<section class="mail" id="mail-${index + 1}">
 <header><h2>${escapeHtml(section.vendor)}<small>${section.items.length} 項</small></h2><div class="actions"><button type="button" data-copy="text-${index + 1}">複製純文字信件</button><button type="button" data-copy-html="mail-${index + 1}">複製表格版本</button></div></header>
 <p class="subject" style="margin:12px 0 6px;font-size:14px;"><strong>主旨：</strong>${escapeHtml(section.subject)}</p>
 ${safeMessage.trim() ? `<div class="message" style="margin:0 0 12px;font-size:14px;line-height:1.6;">${safeMessage}</div>` : ""}
-<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-family:'Noto Sans TC','Microsoft JhengHei',Arial,sans-serif;font-size:13px;border:1px solid #c5d3dd;"><thead><tr>${head("#")}${head("Ref Des")}${head("Name")}${head("Manufacturer Part Number")}${head("Qty")}${head("Part Spec")}${head("零件狀態")}</tr></thead><tbody>${rows}</tbody></table>
+<table width="100%" border="1" cellpadding="6" cellspacing="0" style="width:100%;border-collapse:collapse;font-family:'Microsoft JhengHei','Noto Sans TC',Arial,sans-serif;font-size:13px;border:1px solid #c5d3dd;"><thead><tr>${head("#", "4%")}${head("Ref Des", "16%")}${head("Name", "30%")}${head("Manufacturer Part Number", "20%")}${head("Qty", "6%")}${head("Part Spec", "14%")}${head("零件狀態", "10%")}</tr></thead><tbody>${rows}</tbody></table>
 ${safeSignature.trim() ? `<div class="signature" style="margin-top:14px;padding-top:12px;border-top:1px solid #c5d3dd;font-size:14px;line-height:1.6;">${safeSignature}</div>` : ""}
 <textarea id="text-${index + 1}" readonly aria-label="${escapeHtml(section.vendor)} 純文字信件">${escapeHtml(text)}</textarea>
 </section>`;
@@ -893,7 +894,9 @@ ${sectionHtml}
     // (inline styles, table grid, images); the async clipboard API is the fallback.
     const stage = document.createElement("div");
     stage.setAttribute("contenteditable", "true");
-    stage.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;opacity:0;background:#fff;color:#102033;";
+    // Lay the copy out at real mail width off-screen: Chrome copies the rendered layout, and a 1 px
+    // stage made every table column collapse to one word in Outlook.
+    stage.style.cssText = "position:fixed;left:-10000px;top:0;width:900px;pointer-events:none;background:#fff;color:#102033;font-family:'Microsoft JhengHei','Noto Sans TC',Arial,sans-serif;font-size:14px;";
     stage.innerHTML = html;
     document.body.appendChild(stage);
     let copied = false;

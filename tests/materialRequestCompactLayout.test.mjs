@@ -223,7 +223,7 @@ test("column filters apply on every click instead of waiting for 確定", () => 
 });
 
 test("editing an item from 待處理料 returns to the list with its tab, search and scroll kept", () => {
-  assert.match(source, /onOpenCreate=\{\(group\) => \{ setPendingDialogOpen\(false\); setReturnToPending\(true\); openCreate\(group\); \}\}/);
+  assert.match(source, /onOpenCreate=\{\(group\) => \{ setPendingDialogOpen\(false\); setReturnToPending\(true\); openRecord\(group\.primaryRecord, "edit"\); \}\}/, "更新料號 edits the pending row with its 廠商 and MPN");
   assert.match(source, /onOpenTracking=\{\(record\) => \{ setPendingDialogOpen\(false\); setReturnToPending\(true\); openTrackingDialog\(record\); \}\}/);
   assert.match(source, /if \(!returnToPending \|\| editorOpen \|\| trackingDialogOpen\) return;\s*setReturnToPending\(false\);\s*setPendingRestoreView\(true\);\s*setPendingDialogOpen\(true\);/);
   assert.match(source, /restoreView=\{pendingRestoreView\}/);

@@ -6199,7 +6199,8 @@ export function MaterialRequestPage() {
           setExpandedKey(group.key);
           setPage(1);
         }}
-        onOpenCreate={(group) => { setPendingDialogOpen(false); setReturnToPending(true); openCreate(group); }}
+        // 更新料號 edits the pending row itself (its 廠商, MPN and 備註 included) instead of adding a blank alternate.
+        onOpenCreate={(group) => { setPendingDialogOpen(false); setReturnToPending(true); openRecord(group.primaryRecord, "edit"); }}
         onOpenTracking={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openTrackingDialog(record); }}
       />
       <BomTableColorDialog

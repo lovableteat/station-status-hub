@@ -320,6 +320,14 @@ test("信件生成 groups every MPN candidate of the pending parts by manufactur
   assert.equal(sections[2].items[0].name, "CAP");
 });
 
+test("the 複製表格版本 copy keeps real column widths for Outlook", () => {
+  assert.doesNotMatch(exportSource, /stage\.style\.cssText = "[^"]*width:1px/, "a 1 px copy stage collapses every column in Outlook");
+  assert.match(exportSource, /stage\.style\.cssText = "position:fixed;left:-10000px;top:0;width:900px;/);
+  assert.match(exportSource, /<table width="100%" border="1" cellpadding="6" cellspacing="0"/);
+  assert.match(exportSource, /head\("Name", "30%"\)/);
+  assert.match(exportSource, /<th width="\$\{width\}"/);
+});
+
 test("mail HTML keeps images and links for the vendor mail but drops scripts; plain text mirrors it", () => {
   const html = '<p>您好<b>急件</b></p><img src="data:image/png;base64,AAA" alt="logo"><script>alert(1)</script><a href="javascript:evil()" onclick="x()">link</a>';
   const safe = moduleExports.sanitizeMailHtml(html);
