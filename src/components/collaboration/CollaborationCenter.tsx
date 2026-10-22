@@ -651,7 +651,7 @@ export function CollaborationCenter() {
       {isRealtimeAuthenticated ? (
         <div
           data-chat-dock="detached"
-          className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-40 w-auto sm:w-[min(430px,calc(100vw-1rem))] lg:bottom-4 lg:right-4"
+          className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-40 w-auto sm:w-[min(480px,calc(100vw-1rem))] lg:bottom-4 lg:right-4"
         >
           <section
             id="direct-messages-panel"
@@ -660,7 +660,7 @@ export function CollaborationCenter() {
             data-floating-direct-messages="true"
             data-chat-surface="detached-card"
             className={cn(
-              "fixed inset-0 flex h-[100dvh] w-screen origin-bottom-right flex-col overflow-hidden border-0 border-cyan-100/40 bg-card pt-[env(safe-area-inset-top)] shadow-[var(--app-floating-shadow)] ring-1 ring-white/[0.06] transition-[opacity,transform,visibility] duration-200 ease-out sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[min(640px,calc(100dvh-6rem))] sm:w-full sm:rounded-[24px] sm:border sm:pt-0",
+              "fixed inset-0 flex h-[100dvh] w-screen origin-bottom-right flex-col overflow-hidden border-0 border-cyan-100/40 bg-card pt-[env(safe-area-inset-top)] shadow-[var(--app-floating-shadow)] ring-1 ring-white/[0.06] transition-[opacity,transform,visibility] duration-200 ease-out sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[min(700px,calc(100dvh-6rem))] sm:w-full sm:rounded-[24px] sm:border sm:pt-0",
               messageFloatOpen
                 ? "visible pointer-events-auto translate-y-0 scale-100 opacity-100"
                 : "invisible pointer-events-none translate-y-3 scale-[0.98] opacity-0",
