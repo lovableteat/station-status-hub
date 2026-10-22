@@ -251,7 +251,7 @@ const ENTRY_DRAG_TYPE = "application/x-test-plan-entry";
 const PREVIEW_PANE_STORAGE_KEY = "file-library:preview-pane";
 const PANE_WIDTHS_STORAGE_KEY = "file-library:pane-widths";
 /** Draggable pane limits (px). The list column always keeps at least LIST_MIN_WIDTH. */
-const NAV_WIDTH = { min: 180, max: 520, default: 264 };
+const NAV_WIDTH = { min: 180, max: 520, default: 284 };
 const PREVIEW_WIDTH = { min: 280, max: 1100, default: 520 };
 const LIST_MIN_WIDTH = 360;
 
@@ -1750,9 +1750,9 @@ export function TestPlanWorkspace() {
     "minmax(0, 1fr)",
     showOwnerColumn ? "minmax(120px, 0.45fr)" : null,
     showLocationColumn ? "minmax(140px, 0.6fr)" : null,
-    "152px",
-    "112px",
-    "92px",
+    "170px",
+    "124px",
+    "100px",
   ].filter(Boolean).join(" ");
 
   const renderEntryCheckbox = (entry: TestPlanEntry) => (
