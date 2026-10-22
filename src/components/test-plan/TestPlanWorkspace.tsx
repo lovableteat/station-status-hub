@@ -98,6 +98,7 @@ import { isEditableSpreadsheet } from "./core/spreadsheet";
 import { TestPlanSpreadsheetEditor } from "./TestPlanSpreadsheetEditor";
 import { TransferPanel, type TransferItem } from "./TransferPanel";
 import { downloadWithProgress } from "./core/transfers";
+import { readDroppedFiles } from "@/lib/droppedFiles";
 import { chooseDragDownloadUrl, createBlobUrlCache, describeDownloadUrl, DRAG_BLOB_CACHE_LIMIT, DRAG_BLOB_LIMIT, DRAG_BLOB_REVOKE_DELAY } from "./core/dragDownload";
 import type {
   TestPlanEntry,
@@ -892,7 +893,21 @@ export function TestPlanWorkspace() {
       return;
     }
     if (busy || uploadRetry) return;
-    void handleUpload(Array.from(event.dataTransfer.files));
+    // A dropped folder keeps its structure and skips the browser's folder-upload confirmation;
+    // loose files dropped alongside it go up as a plain batch afterwards.
+    const dropped = readDroppedFiles(event.dataTransfer);
+    void dropped.files
+      .then(async (files) => {
+        if (!dropped.hasDirectory) {
+          await handleUpload(files);
+          return;
+        }
+        const inFolders = files.filter((file) => file.webkitRelativePath?.includes("/"));
+        const loose = files.filter((file) => !file.webkitRelativePath?.includes("/"));
+        if (inFolders.length > 0) await handleUpload(inFolders, true);
+        if (loose.length > 0) await handleUpload(loose);
+      })
+      .catch(() => toast.error("這個資料夾讀不到，請改用「上傳資料夾」"));
   };
 
   // Drag to desktop: Chrome/Edge read a "DownloadURL" entry on dragstart, which must be
@@ -1515,7 +1530,7 @@ export function TestPlanWorkspace() {
                     <Folder className="mr-2 h-4 w-4" />
                     新增資料夾
                   </Button>
-                  <Button type="button" variant="outline" className="file-library-upload" aria-label="上傳資料夾" disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onClick={() => folderInputRef.current?.click()}>
+                  <Button type="button" variant="outline" className="file-library-upload" aria-label="上傳資料夾" title="瀏覽器會再問一次是否上傳；直接把資料夾拖進清單就不會" disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onClick={() => folderInputRef.current?.click()}>
                     <FolderInput data-icon="inline-start" /><span>上傳資料夾</span>
                   </Button>
                   <Button type="button" className="file-library-upload is-primary" disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onClick={() => fileInputRef.current?.click()}>
@@ -1659,7 +1674,7 @@ export function TestPlanWorkspace() {
                 {isDragging && (
                   <div className="test-plan-drop-overlay">
                     <HardDriveUpload className="h-9 w-9" />
-                    <strong>放開以上傳到此資料夾</strong>
+                    <strong>放開以上傳到此資料夾（可直接拖整個資料夾）</strong>
                     <span>一次最多 20 個檔案，單檔 1 GB，整批合計 1 GB</span>
                   </div>
                 )}

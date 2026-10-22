@@ -1,8 +1,9 @@
-import { useId, useRef, useState, type InputHTMLAttributes } from "react";
+import { useId, useRef, useState, type DragEvent, type InputHTMLAttributes } from "react";
 import { ChevronDown, FilePlus2, FolderOpen, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { filePath, formatBytes } from "./files";
 import { DATASHEET_BATCH_LIMIT, mergeDatasheetFiles } from "./datasheetSelection";
+import { isFileDrag, readDroppedFiles } from "@/lib/droppedFiles";
 
 export interface DatasheetFilesProps {
   value: File[];
@@ -24,9 +25,22 @@ export function DatasheetFiles({ value, onChange, disabled, inputPrefix, maxTota
   const [expanded, setExpanded] = useState(false);
   const totalBytes = value.reduce((sum, file) => sum + file.size, 0);
 
+  const [dragging, setDragging] = useState(false);
   const select = (input: HTMLInputElement) => {
     const selected = input.files ? Array.from(input.files) : [];
     input.value = "";
+    addFiles(selected);
+  };
+  // Dragging a folder in skips Chrome's "upload N files to this site?" confirmation.
+  const handleDrop = (event: DragEvent<HTMLElement>) => {
+    if (disabled || !isFileDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    setDragging(false);
+    void readDroppedFiles(event.dataTransfer).files
+      .then(addFiles)
+      .catch(() => { setNotice(""); setError("這個資料夾讀不到，請改用「選擇 Datasheet 資料夾」"); });
+  };
+  const addFiles = (selected: File[]) => {
     if (disabled) return;
     try {
       const result = mergeDatasheetFiles(value, selected, { maxTotalBytes });
@@ -50,14 +64,14 @@ export function DatasheetFiles({ value, onChange, disabled, inputPrefix, maxTota
     onChange(value.filter(item => item !== file));
   };
 
-  return <section className="comparison-datasheets-picker" aria-label="Datasheet PDF 選取">
+  return <section className="comparison-datasheets-picker" aria-label="Datasheet PDF 選取" data-dragging={dragging || undefined} onDragOver={event => { if (disabled || !isFileDrag(event.dataTransfer)) return; event.preventDefault(); event.dataTransfer.dropEffect = "copy"; if (!dragging) setDragging(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }} onDrop={handleDrop}>
     <div className="comparison-datasheets-actions">
       <Button type="button" variant="outline" className="comparison-datasheets-folder" disabled={disabled} onClick={() => folder.current?.click()}><FolderOpen />選擇 Datasheet 資料夾</Button>
       <Button type="button" variant="ghost" disabled={disabled} onClick={() => files.current?.click()}><FilePlus2 />選擇 PDF 檔案</Button>
     </div>
     <input id={`${id}-folder`} ref={folder} {...directoryProps} type="file" multiple className="sr-only" aria-label="選取 Datasheet 資料夾" aria-describedby={`${id}-help${error ? ` ${id}-error` : ""}`} onChange={event => select(event.currentTarget)} disabled={disabled} />
     <input id={`${id}-files`} ref={files} type="file" multiple accept=".pdf,application/pdf" className="sr-only" aria-label="選取 Datasheet PDF 檔案" aria-describedby={`${id}-help${error ? ` ${id}-error` : ""}`} onChange={event => select(event.currentTarget)} disabled={disabled} />
-    <p id={`${id}-help`} className="comparison-datasheets-help">一次選取整個資料夾，會包含子資料夾的 PDF；可繼續加入其他資料夾，其他格式自動略過。{maxTotalBytes !== undefined && maxTotalBytes > DATASHEET_BATCH_LIMIT ? "最多 1000 份、每份 64 MiB，批次逐份處理。" : "單檔上限 64 MiB，合計 128 MiB／1000 份。"}</p>
+    <p id={`${id}-help`} className="comparison-datasheets-help">一次選取整個資料夾，會包含子資料夾的 PDF；直接把資料夾拖到這裡不會跳確認視窗；可繼續加入其他資料夾，其他格式自動略過。{maxTotalBytes !== undefined && maxTotalBytes > DATASHEET_BATCH_LIMIT ? "最多 1000 份、每份 64 MiB，批次逐份處理。" : "單檔上限 64 MiB，合計 128 MiB／1000 份。"}</p>
     <div className="comparison-datasheets-summary"><p><strong>{value.length} 份 PDF</strong><span> · {formatBytes(totalBytes)}</span></p>{value.length > 0 ? <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => { setError(""); setNotice("已清空選取的 Datasheet PDF"); onChange([]); }}><Trash2 />清空選取</Button> : null}</div>
     {notice ? <p className="comparison-datasheets-notice" role="status">{notice}</p> : null}
     {error ? <p id={`${id}-error`} className="comparison-datasheets-error" role="alert">{error}</p> : null}

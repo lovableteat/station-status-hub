@@ -424,3 +424,10 @@
   .comparison-setup-controls { flex-direction: column; align-items: stretch; }
   .comparison-setup-controls .comparison-run-actions p { white-space: normal; }
 }
+
+/* Folder drop: dragging a folder in avoids the browser's folder-upload confirmation. */
+.comparison-drop-hint { align-self: center; font-size: 12px; color: hsl(var(--muted-foreground)); }
+:is(.comparison-input-panel, .comparison-datasheets-picker) { position: relative; }
+:is(.comparison-input-panel, .comparison-datasheets-picker)[data-dragging] { outline: 2px dashed hsl(var(--primary)); outline-offset: 3px; background: hsl(var(--primary) / .08); }
+:is(.comparison-input-panel, .comparison-datasheets-picker)[data-dragging]::after { content: "放開以載入這個資料夾"; position: absolute; inset: 0; display: grid; place-items: center; border-radius: inherit; background: hsl(var(--background) / .72); color: hsl(var(--primary)); font-size: 16px; font-weight: 700; pointer-events: none; }
+@media (max-width: 767px) { .comparison-drop-hint { display: none; } }
