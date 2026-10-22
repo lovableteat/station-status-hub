@@ -28,8 +28,11 @@ test("provides spaces, nested folders, breadcrumbs, search, filters, and both vi
     "src/components/test-plan/TestPlanWorkspace.tsx",
   );
 
-  assert.match(workspace, /pinnedSpaces\.map/);
-  assert.match(workspace, /otherSpaces\.map/);
+  // Every person is listed directly in the navigation pane (no dropdown), with a type-to-filter box.
+  assert.match(workspace, /ownSpaces\.map\(renderSpaceRow\)/);
+  assert.match(workspace, /teamSpaces\.map\(renderSpaceRow\)/);
+  assert.match(workspace, /listedOtherSpaces\.map\(renderSpaceRow\)/);
+  assert.match(workspace, /aria-label="篩選其他使用者"/);
   assert.match(workspace, /使用者空間/);
   assert.doesNotMatch(workspace, /新增空間|刪除空間|編輯空間/);
   assert.match(workspace, /createFolder/);
@@ -211,7 +214,7 @@ test("provides fixed user spaces, guided uploads, selection, and the private-fil
   assert.match(workspace, /上傳檔案/);
   assert.match(workspace, /selectedEntry/);
   assert.match(workspace, /TestPlanInspector/);
-  assert.match(workspace, /selectedEntry && \(/);
+  assert.match(workspace, /showPreviewPane && \(/);
 
   assert.match(inspector, /getTestPlanPreviewKind/);
   assert.match(inspector, /downloadFile/);

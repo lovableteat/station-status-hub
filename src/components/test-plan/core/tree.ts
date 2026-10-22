@@ -52,6 +52,40 @@ interface EntryFilters {
   query: string;
   category: TestPlanFileCategory | "all";
   sort: TestPlanSort;
+  /** Flips the sort's natural direction; folders still come first. */
+  reverse?: boolean;
+}
+
+/** The direction each sort runs in before `reverse` flips it (used for header arrows). */
+export const TEST_PLAN_SORT_DIRECTION: Record<TestPlanSort, "asc" | "desc"> = {
+  name: "asc",
+  newest: "desc",
+  oldest: "asc",
+  largest: "desc",
+  type: "asc",
+};
+
+/** The folder itself plus every folder below it (null = the space root, i.e. everything). */
+export function collectFolderSubtree<T extends Pick<TestPlanFolder, "id" | "parentId">>(
+  folders: readonly T[],
+  rootId: string | null,
+): Set<string | null> {
+  const subtree = new Set<string | null>([rootId]);
+  if (rootId === null) {
+    for (const folder of folders) subtree.add(folder.id);
+    return subtree;
+  }
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const folder of folders) {
+      if (!subtree.has(folder.id) && subtree.has(folder.parentId)) {
+        subtree.add(folder.id);
+        grew = true;
+      }
+    }
+  }
+  return subtree;
 }
 
 function toTimestamp(value: string): number {
@@ -80,17 +114,23 @@ export function filterAndSortEntries(
       .map((file) => ({ ...file, kind: "file" as const })),
   ];
 
+  const direction = filters.reverse ? -1 : 1;
   return entries.sort((first, second) => {
     if (first.kind !== second.kind) return first.kind === "folder" ? -1 : 1;
+    return direction * compareEntries(first, second, filters.sort);
+  });
+}
+
+function compareEntries(first: TestPlanEntry, second: TestPlanEntry, sort: TestPlanSort): number {
     let comparison = 0;
-    if (filters.sort === "newest") {
+    if (sort === "newest") {
       comparison = toTimestamp(second.updatedAt ?? second.createdAt) - toTimestamp(first.updatedAt ?? first.createdAt);
-    } else if (filters.sort === "oldest") {
+    } else if (sort === "oldest") {
       comparison = toTimestamp(first.createdAt) - toTimestamp(second.createdAt);
-    } else if (filters.sort === "largest") {
+    } else if (sort === "largest") {
       comparison = (second.kind === "file" ? second.fileSize : 0)
         - (first.kind === "file" ? first.fileSize : 0);
-    } else if (filters.sort === "type") {
+    } else if (sort === "type") {
       const firstType = first.kind === "file" ? first.extension : "";
       const secondType = second.kind === "file" ? second.extension : "";
       comparison = firstType.localeCompare(secondType, "zh-Hant");
@@ -102,5 +142,4 @@ export function filterAndSortEntries(
       numeric: true,
       sensitivity: "base",
     });
-  });
 }

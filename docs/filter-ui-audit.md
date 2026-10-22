@@ -35,7 +35,7 @@
 
 | 模組／資料結果 | 目前元件 | 現況與應對齊項目 |
 | --- | --- | --- |
-| 檔案與資料夾結果 | `src/components/test-plan/TestPlanWorkspace.tsx` | **接近標準。** 搜尋、格式與排序已緊接結果區，但沒有 active chips、個別清除與全部清除；排序、grid/list 與重新整理屬次要工具，行動版可以收合，搜尋／格式 active chips 不可收合。資料夾 breadcrumb 是位置上下文，不列入全部清除。
+| 檔案與資料夾結果 | `src/components/test-plan/TestPlanWorkspace.tsx` | **已對齊（2026-10-22 改為 Windows 檔案總管操作）。** 路徑列在結果區正上方，依序是位置、搜尋（含搜尋範圍：目前資料夾／整個空間／所有人的檔案）與格式；搜尋、範圍、格式都以 chip 顯示並可個別清除，另有全部清除；搜尋字、格式、範圍、排序與排序方向都寫入 URL（`fileSearch`、`fileType`、`fileScope`、`fileSort`、`fileOrder`）。沒有結果時保留欄位標題，內文顯示「目前篩選條件沒有符合的檔案」。上傳、新增資料夾、剪下、貼上、重新命名、移至、下載、複製連結、刪除、排序與檢視都在上方命令列，和篩選分開；排序也可直接點欄位標題。目前空間與資料夾（`fileSpace`、`fileFolder`）是位置上下文，不列入全部清除；行動版只把命令列收成圖示，搜尋與 chip 不收合。
 
 ### 其他工作區
 

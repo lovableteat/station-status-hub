@@ -3,8 +3,10 @@ import {
   type CSSProperties,
   type DragEvent,
   type FormEvent,
-  Fragment,
   type InputHTMLAttributes,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -12,28 +14,36 @@ import {
   useState,
 } from "react";
 import {
-  Archive,
-  Box,
+  ArrowDownUp,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ChevronDown,
   ChevronRight,
+  ClipboardPaste,
   Download,
-  File,
-  FileArchive,
-  FileImage,
+  Eye,
   FileSpreadsheet,
   FileText,
+  Filter,
   Folder,
   FolderInput,
-  FolderKanban,
   FolderOpen,
-  Grid2X2,
+  FolderPlus,
+  FolderUp,
+  Globe,
   HardDriveUpload,
+  Keyboard,
+  LayoutGrid,
+  Link2,
   List,
   LockKeyhole,
-  MoreHorizontal,
+  MapPin,
   PanelLeftOpen,
+  PanelRight,
   Pencil,
-  Presentation,
   RefreshCw,
+  Scissors,
   Search,
   Trash2,
   Upload,
@@ -43,7 +53,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -57,6 +66,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -68,6 +85,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -81,24 +101,37 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
+import { readDroppedFiles } from "@/lib/droppedFiles";
 
-import {
-  formatTestPlanFileSize,
-} from "./core/files";
-import { getTestPlanErrorMessage } from "./core/errors";
+import { formatTestPlanFileSize } from "./core/files";
 import {
   buildFolderBreadcrumbs,
+  collectFolderSubtree,
   filterAndSortEntries,
   isFolderDescendant,
+  TEST_PLAN_SORT_DIRECTION,
 } from "./core/tree";
+import {
+  clickSelection,
+  contextSelection,
+  EMPTY_SELECTION,
+  moveSelection,
+  pruneSelection,
+  selectAll,
+  singleSelection,
+  typeAheadMatch,
+  type ExplorerSelection,
+} from "./core/selection";
+import { TEST_PLAN_PERSONAL_SPACE } from "./core/repository";
 import { useTestPlanWorkspace } from "./hooks/useTestPlanWorkspace";
-import { useFileLibraryFilters } from "./useFileLibraryFilters";
-import { TestPlanInspector } from "./TestPlanInspector";
+import { useFileLibraryFilters, type FileSearchScope } from "./useFileLibraryFilters";
+import { FileTypeIcon, TestPlanInspector } from "./TestPlanInspector";
+import { describeEntryType, formatEntryDate } from "./core/entryDisplay";
 import { isEditableSpreadsheet } from "./core/spreadsheet";
 import { TestPlanSpreadsheetEditor } from "./TestPlanSpreadsheetEditor";
 import { TransferPanel, type TransferItem } from "./TransferPanel";
-import { downloadWithProgress } from "./core/transfers";
-import { readDroppedFiles } from "@/lib/droppedFiles";
+import { downloadWithProgress, openDirectorySink, pickDownloadDirectory, type TransferSink } from "./core/transfers";
 import { chooseDragDownloadUrl, createBlobUrlCache, describeDownloadUrl, DRAG_BLOB_CACHE_LIMIT, DRAG_BLOB_LIMIT, DRAG_BLOB_REVOKE_DELAY } from "./core/dragDownload";
 import type {
   TestPlanEntry,
@@ -145,23 +178,32 @@ function retainUploadRetry(retry: UploadRetry | null) {
 
 const directoryInputProps = { webkitdirectory: "" } as InputHTMLAttributes<HTMLInputElement>;
 
-type TextAction =
-  | { kind: "create-folder"; parentId: string | null }
-  | { kind: "rename-folder"; id: string; value: string }
-  | { kind: "rename-file"; id: string; value: string }
-  | { kind: "describe-file"; id: string; value: string };
-
-type MoveAction =
-  | { kind: "folder"; id: string; name: string }
-  | { kind: "file"; id: string; name: string };
+type DescribeAction = { id: string; name: string; value: string };
 
 type DeleteAction =
   | { kind: "folder"; id: string; name: string }
   | { kind: "file"; file: TestPlanFileRecord }
-  | { kind: "batch"; entries: TestPlanEntry[]; scope: string };
+  | { kind: "batch"; entries: TestPlanEntry[]; scope: string; skipped: number };
+
+interface LibraryLocation {
+  spaceId: string | null;
+  folderId: string | null;
+}
+
+/** One item being moved: where it lives now, so a move can be undone. */
+interface MoveItem {
+  kind: TestPlanEntry["kind"];
+  id: string;
+  spaceId: string;
+  folderId: string | null;
+}
 
 const entryKey = (entry: TestPlanEntry) => `${entry.kind}:${entry.id}`;
 const entryName = (entry: TestPlanEntry) => entry.kind === "folder" ? entry.name : entry.originalName;
+const entryParent = (entry: TestPlanEntry) => entry.kind === "folder" ? entry.parentId : entry.folderId;
+const toMoveItem = (entry: TestPlanEntry): MoveItem => ({ kind: entry.kind, id: entry.id, spaceId: entry.spaceId, folderId: entryParent(entry) });
+const isFileEntry = (entry: TestPlanEntry): entry is Extract<TestPlanEntry, { kind: "file" }> => entry.kind === "file";
+const sameLocation = (first: LibraryLocation | undefined, second: LibraryLocation) => Boolean(first && first.spaceId === second.spaceId && first.folderId === second.folderId);
 
 const CATEGORY_LABELS: Record<TestPlanFileCategory | "all", string> = {
   all: "全部格式",
@@ -177,29 +219,46 @@ const CATEGORY_LABELS: Record<TestPlanFileCategory | "all", string> = {
 
 const SORT_LABELS: Record<TestPlanSort, string> = {
   name: "名稱",
-  newest: "最近更新",
-  oldest: "最早建立",
-  largest: "檔案大小",
-  type: "檔案類型",
+  newest: "修改日期",
+  oldest: "建立日期",
+  largest: "大小",
+  type: "類型",
 };
 
+const SCOPE_LABELS: Record<FileSearchScope | "everyone", string> = {
+  folder: "目前資料夾",
+  space: "整個空間",
+  everyone: "所有人的檔案",
+};
+
+const SHORTCUTS: [string, string][] = [
+  ["點一下 / Ctrl＋點 / Shift＋點", "選取一個 / 加選 / 連續選取"],
+  ["Ctrl＋A、Esc", "全選、取消選取"],
+  ["↑ ↓ Home End", "移動選取；Shift 可連續選取"],
+  ["Enter 或按兩下", "開啟資料夾、預覽檔案、開啟 Excel"],
+  ["Backspace / Alt＋←、Alt＋→", "返回、前進"],
+  ["Alt＋↑", "上一層"],
+  ["F2", "重新命名"],
+  ["Delete", "刪除（會先確認）"],
+  ["Ctrl＋X、Ctrl＋V", "剪下後貼到其他資料夾＝移動"],
+  ["Ctrl＋E 或 /", "搜尋"],
+  ["Alt＋P", "開關預覽窗格"],
+  ["右鍵", "顯示這個項目可用的所有操作"],
+  ["直接打字", "跳到名稱開頭相符的項目"],
+];
+
 const ENTRY_DRAG_TYPE = "application/x-test-plan-entry";
+const PREVIEW_PANE_STORAGE_KEY = "file-library:preview-pane";
 
-interface EntryDragPayload {
-  kind: TestPlanEntry["kind"];
-  id: string;
-  spaceId: string;
-  folderId: string | null;
-}
-
-function readEntryDragPayload(dataTransfer: DataTransfer | null): EntryDragPayload | null {
+function readEntryDragPayload(dataTransfer: DataTransfer | null): MoveItem[] | null {
   if (!dataTransfer) return null;
   try {
     const raw = dataTransfer.getData(ENTRY_DRAG_TYPE);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<EntryDragPayload>;
-    if (!parsed.id || !parsed.spaceId || (parsed.kind !== "file" && parsed.kind !== "folder")) return null;
-    return { kind: parsed.kind, id: parsed.id, spaceId: parsed.spaceId, folderId: parsed.folderId ?? null };
+    const parsed = JSON.parse(raw) as { items?: Partial<MoveItem>[] };
+    const items = (parsed.items ?? []).filter((item): item is MoveItem => Boolean(item?.id && item.spaceId && (item.kind === "file" || item.kind === "folder")))
+      .map((item) => ({ kind: item.kind, id: item.id, spaceId: item.spaceId, folderId: item.folderId ?? null }));
+    return items.length ? items : null;
   } catch {
     return null;
   }
@@ -207,6 +266,14 @@ function readEntryDragPayload(dataTransfer: DataTransfer | null): EntryDragPaylo
 
 function isEntryDrag(dataTransfer: DataTransfer | null) {
   return Boolean(dataTransfer && Array.from(dataTransfer.types).includes(ENTRY_DRAG_TYPE));
+}
+
+function isFileDrag(dataTransfer: DataTransfer | null) {
+  return Boolean(dataTransfer && Array.from(dataTransfer.types).includes("Files"));
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, [contenteditable='true'], [role='combobox']"));
 }
 
 // Avatar initials drawn by CSS (content: attr) so the element itself stays empty for assistive tech.
@@ -220,22 +287,27 @@ function spaceSwatch(color: string | undefined) {
   return { "--space-color": color ?? "#5b8def" } as CSSProperties;
 }
 
-function FileCategoryIcon({
-  category,
-  className,
-}: {
-  category: TestPlanFileCategory;
-  className?: string;
-}) {
-  const props = { className: cn("h-5 w-5", className) };
-  if (category === "presentation") return <Presentation {...props} />;
-  if (category === "spreadsheet") return <FileSpreadsheet {...props} />;
-  if (category === "document") return <FileText {...props} />;
-  if (category === "image") return <FileImage {...props} />;
-  if (category === "3d") return <Box {...props} />;
-  if (category === "pcb") return <File {...props} />;
-  if (category === "archive") return <FileArchive {...props} />;
-  return <File {...props} />;
+function readPreviewPreference(compact: boolean) {
+  if (compact) return false;
+  try {
+    return window.localStorage.getItem(PREVIEW_PANE_STORAGE_KEY) !== "closed";
+  } catch {
+    return true;
+  }
+}
+
+function useCompactLayout() {
+  const query = "(max-width: 1023px)";
+  const [compact, setCompact] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(query).matches);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia(query);
+    const update = () => setCompact(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+  return compact;
 }
 
 function FolderBranch({
@@ -291,7 +363,7 @@ function FolderBranch({
                 isActive && "is-active",
                 dropTargetId === folder.id && "is-drop-target",
               )}
-              style={{ paddingLeft: `${level * 14}px` }}
+              style={{ paddingLeft: `${18 + level * 14}px` }}
               onDragOver={(event) => onDragOverFolder?.(folder.id, event)}
               onDragLeave={() => onDragLeaveFolder?.()}
               onDrop={(event) => onDropOnFolder?.(folder.id, event)}
@@ -315,6 +387,13 @@ function FolderBranch({
               <button
                 type="button"
                 className="test-plan-folder-tree-item"
+                aria-current={isActive ? "location" : undefined}
+                title={[
+                  folder.name,
+                  childFolderCount > 0 ? `${childFolderCount} 個子資料夾` : "",
+                  directFileCount > 0 ? `${directFileCount} 個檔案` : "",
+                  childFolderCount === 0 && directFileCount === 0 ? "空資料夾" : "",
+                ].filter(Boolean).join(" · ")}
                 onClick={() => onOpen(folder.id)}
               >
                 {isActive ? (
@@ -322,15 +401,7 @@ function FolderBranch({
                 ) : (
                   <Folder className="h-4 w-4" />
                 )}
-                <span className="test-plan-folder-tree-label">
-                  <strong>{folder.name}</strong>
-                  <small>
-                    {childFolderCount > 0 && `${childFolderCount} 個子資料夾`}
-                    {childFolderCount > 0 && directFileCount > 0 && " · "}
-                    {directFileCount > 0 && `${directFileCount} 個檔案`}
-                    {childFolderCount === 0 && directFileCount === 0 && "空資料夾"}
-                  </small>
-                </span>
+                <span className="test-plan-folder-tree-label">{folder.name}</span>
               </button>
             </div>
             {hasChildren && isExpanded && (
@@ -356,13 +427,13 @@ function FolderBranch({
   );
 }
 
-function TextActionDialog({
+function DescribeDialog({
   action,
   busy,
   onClose,
   onSubmit,
 }: {
-  action: TextAction | null;
+  action: DescribeAction | null;
   busy: boolean;
   onClose: () => void;
   onSubmit: (value: string) => Promise<void>;
@@ -370,23 +441,11 @@ function TextActionDialog({
   const [value, setValue] = useState("");
 
   useEffect(() => {
-    setValue(action && "value" in action ? action.value : "");
+    setValue(action?.value ?? "");
   }, [action]);
-
-  const title = !action
-    ? ""
-    : action.kind === "create-folder"
-      ? "建立資料夾"
-      : action.kind === "rename-folder"
-        ? "重新命名資料夾"
-        : action.kind === "rename-file"
-          ? "重新命名檔案"
-          : "檔案說明";
-  const isDescription = action?.kind === "describe-file";
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!isDescription && !value.trim()) return;
     await onSubmit(value);
   };
 
@@ -395,37 +454,25 @@ function TextActionDialog({
       <DialogContent className="file-library-dialog">
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
+            <DialogTitle>檔案說明</DialogTitle>
             <DialogDescription>
-              {isDescription
-                ? "補充板版、用途、測試條件或交付備註。"
-                : "名稱可使用中文、英文、數字與常用符號。"}
+              {action ? `「${action.name}」：` : ""}補充板版、用途、測試條件或交付備註。
             </DialogDescription>
           </DialogHeader>
-          {isDescription ? (
-            <Textarea
-              autoFocus
-              value={value}
-              maxLength={800}
-              rows={5}
-              placeholder="輸入檔案說明（選填）"
-              onChange={(event) => setValue(event.target.value)}
-            />
-          ) : (
-            <Input
-              autoFocus
-              value={value}
-              maxLength={160}
-              placeholder="輸入名稱"
-              onChange={(event) => setValue(event.target.value)}
-            />
-          )}
+          <Textarea
+            autoFocus
+            value={value}
+            maxLength={800}
+            rows={5}
+            placeholder="輸入檔案說明（選填）"
+            onChange={(event) => setValue(event.target.value)}
+          />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               取消
             </Button>
-            <Button type="submit" disabled={busy || (!isDescription && !value.trim())}>
-              {busy ? "處理中…" : "確認"}
+            <Button type="submit" disabled={busy}>
+              {busy ? "處理中…" : "儲存說明"}
             </Button>
           </DialogFooter>
         </form>
@@ -435,47 +482,49 @@ function TextActionDialog({
 }
 
 function MoveDialog({
-  action,
+  entries,
   folders,
   busy,
   onClose,
   onSubmit,
 }: {
-  action: MoveAction | null;
+  entries: readonly TestPlanEntry[] | null;
   folders: readonly TestPlanFolder[];
   busy: boolean;
   onClose: () => void;
   onSubmit: (folderId: string | null) => Promise<void>;
 }) {
   const [targetId, setTargetId] = useState("__root__");
+  const spaceId = entries?.[0]?.spaceId;
   const options = useMemo(
     () =>
-      folders.filter(
-        (folder) =>
-          action?.kind !== "folder"
-          || !isFolderDescendant(folders, folder.id, action.id),
-      ),
-    [action, folders],
+      folders
+        .filter((folder) => folder.spaceId === spaceId)
+        .filter((folder) => !(entries ?? []).some((entry) => entry.kind === "folder" && isFolderDescendant(folders, folder.id, entry.id)))
+        .map((folder) => ({ id: folder.id, label: buildFolderBreadcrumbs(folders, folder.id).map((item) => item.name).join(" › ") }))
+        .sort((first, second) => first.label.localeCompare(second.label, "zh-Hant", { numeric: true })),
+    [entries, folders, spaceId],
   );
 
-  useEffect(() => setTargetId("__root__"), [action]);
+  useEffect(() => setTargetId("__root__"), [entries]);
+  const title = !entries?.length ? "" : entries.length === 1 ? `移動「${entryName(entries[0])}」` : `移動 ${entries.length} 個項目`;
 
   return (
-    <Dialog open={Boolean(action)} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={Boolean(entries?.length)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="file-library-dialog">
         <DialogHeader>
-          <DialogTitle>搬移「{action?.name}」</DialogTitle>
-          <DialogDescription>選擇此項目的新資料夾位置。</DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>選擇同一個空間裡的目標資料夾。也可以直接把項目拖到左側資料夾或路徑上。</DialogDescription>
         </DialogHeader>
         <Select value={targetId} onValueChange={setTargetId}>
-          <SelectTrigger>
+          <SelectTrigger aria-label="目標資料夾">
             <SelectValue placeholder="選擇位置" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__root__">空間根目錄</SelectItem>
             {options.map((folder) => (
               <SelectItem key={folder.id} value={folder.id}>
-                {folder.name}
+                {folder.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -489,7 +538,7 @@ function MoveDialog({
             disabled={busy}
             onClick={() => onSubmit(targetId === "__root__" ? null : targetId)}
           >
-            {busy ? "搬移中…" : "搬移"}
+            {busy ? "移動中…" : "移到這裡"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -497,82 +546,15 @@ function MoveDialog({
   );
 }
 
-function EntryActions({
-  entry,
-  canEdit,
-  onEditSpreadsheet,
-  onRename,
-  onMove,
-  onDescribe,
-  onDownload,
-  onDelete,
-}: {
-  entry: TestPlanEntry;
-  canEdit: boolean;
-  onEditSpreadsheet: () => void;
-  onRename: () => void;
-  onMove: () => void;
-  onDescribe: () => void;
-  onDownload: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0 text-[#9bb6c9]"
-          aria-label="開啟項目操作"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {entry.kind === "file" && isEditableSpreadsheet(entry) && (
-          <DropdownMenuItem disabled={!canEdit} onSelect={onEditSpreadsheet}>
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            直接編輯 Excel
-          </DropdownMenuItem>
-        )}
-        {entry.kind === "file" && (
-          <DropdownMenuItem onSelect={onDownload}>
-            <Download className="mr-2 h-4 w-4" />
-            下載
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem disabled={!canEdit} onSelect={onRename}>
-          <Pencil className="mr-2 h-4 w-4" />
-          重新命名
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled={!canEdit} onSelect={onMove}>
-          <FolderInput className="mr-2 h-4 w-4" />
-          搬移
-        </DropdownMenuItem>
-        {entry.kind === "file" && (
-          <DropdownMenuItem disabled={!canEdit} onSelect={onDescribe}>
-            <FileText className="mr-2 h-4 w-4" />
-            編輯說明
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          disabled={!canEdit}
-          className="text-red-300 focus:text-red-200"
-          onSelect={onDelete}
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          刪除
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 export function TestPlanWorkspace() {
-  const workspace = useTestPlanWorkspace();
+  // A shared link (複製連結) names a space, folder and item; otherwise the library opens on 我的空間.
+  const [initialLink] = useState(() => {
+    const params = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
+    return { space: params.get("fileSpace"), folder: params.get("fileFolder"), item: params.get("fileItem") };
+  });
+  const workspace = useTestPlanWorkspace({
+    initialSpaceId: initialLink.space === "all" ? null : initialLink.space || TEST_PLAN_PERSONAL_SPACE,
+  });
   const {
     spaces,
     activeSpaceId,
@@ -604,12 +586,15 @@ export function TestPlanWorkspace() {
     deleteEntries,
     replaceFileContents,
   } = workspace;
+  const compact = useCompactLayout();
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-  const { query, setQuery, categoryFilter, setCategoryFilter, sort, setSort, clearFilters } = useFileLibraryFilters();
+  const { query, setQuery, categoryFilter, setCategoryFilter, sort, setSort, reverse, setReverse, toggleSort, scope, setScope, clearFilters } = useFileLibraryFilters();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [previewOpen, setPreviewOpenState] = useState(() => readPreviewPreference(compact));
   const [isDragging, setIsDragging] = useState(false);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const downloadUrlCacheRef = useRef(new Map<string, { url: string; expiresAt: number }>());
+  const [linkVersion, setLinkVersion] = useState(0);
   const [downloads, setDownloads] = useState<TransferItem[]>([]);
   const dragBlobCacheRef = useRef(createBlobUrlCache(DRAG_BLOB_CACHE_LIMIT, (url) => window.setTimeout(() => URL.revokeObjectURL(url), DRAG_BLOB_REVOKE_DELAY)));
   const dragPrefetchRef = useRef(new Set<string>());
@@ -639,11 +624,16 @@ export function TestPlanWorkspace() {
   const [retryState, setRetryState] = useState<UploadRetry | null>(() => retainedUploadRetry);
   const uploadRetry = retryState?.ownerId === ownerId ? retryState : null;
   const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
-  const [textAction, setTextAction] = useState<TextAction | null>(null);
-  const [moveAction, setMoveAction] = useState<MoveAction | null>(null);
+  const [describeAction, setDescribeAction] = useState<DescribeAction | null>(null);
+  const [moveEntriesAction, setMoveEntriesAction] = useState<TestPlanEntry[] | null>(null);
   const [deleteAction, setDeleteAction] = useState<DeleteAction | null>(null);
-  const [selectedEntryKey, setSelectedEntryKey] = useState<string | null>(null);
-  const [checkedState, setCheckedState] = useState<{ scope: string; keys: Set<string> }>({ scope: "", keys: new Set() });
+  const [renaming, setRenaming] = useState<{ key: string; value: string; error: string | null } | null>(null);
+  const renameCommitRef = useRef(false);
+  const [clipboard, setClipboard] = useState<{ items: MoveItem[]; spaceId: string } | null>(null);
+  const [contextTarget, setContextTarget] = useState<"item" | "empty">("empty");
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [peopleFilter, setPeopleFilter] = useState("");
+  const [history, setHistory] = useState<{ stack: LibraryLocation[]; index: number }>({ stack: [], index: -1 });
   const [batchDeleting, setBatchDeleting] = useState(false);
   const busy = workspaceBusy || batchDeleting;
   const batchDeleteInFlight = useRef(false);
@@ -653,19 +643,39 @@ export function TestPlanWorkspace() {
   );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
-  const requestedFolderRef = useRef<{spaceId: string; folderId: string} | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLElement>());
+  const keyboardFocusRef = useRef(false);
+  const typeAheadRef = useRef({ text: "", at: 0 });
+  const requestedFolderRef = useRef<{spaceId: string; folderId: string | null} | null>(
+    initialLink.space && initialLink.space !== "all" && initialLink.folder ? { spaceId: initialLink.space, folderId: initialLink.folder } : null,
+  );
+  const pendingFocusRef = useRef<string | null>(initialLink.item);
+  const pendingRenameRef = useRef<string | null>(null);
+  // Bumped when a pending selection is queued after the list already updated (e.g. a new folder).
+  const [pendingTick, setPendingTick] = useState(0);
   const uploadRequestRef = useRef(0);
   const setUploadRetry = (retry: UploadRetry | null) => {
     retainUploadRetry(retry);
     setRetryState(retry);
   };
+  const setPreviewOpen = useCallback((open: boolean) => {
+    setPreviewOpenState(open);
+    if (compact) return;
+    try {
+      window.localStorage.setItem(PREVIEW_PANE_STORAGE_KEY, open ? "open" : "closed");
+    } catch {
+      // The preference is only a convenience.
+    }
+  }, [compact]);
 
   useEffect(() => {
     const requested = requestedFolderRef.current;
     setActiveFolderId(requested?.spaceId === activeSpaceId ? requested.folderId : null);
     requestedFolderRef.current = null;
-    setSelectedEntryKey(null);
     setSpreadsheetFile(null);
+    setRenaming(null);
     setExpandedFolderIds(new Set());
   }, [activeSpaceId]);
 
@@ -696,22 +706,46 @@ export function TestPlanWorkspace() {
   }), [ownerId, spaces]);
   const pinnedSpaces = userSpaces.filter(space => space.ownerId === ownerId || space.ownerRole === "admin" || space.ownerRole === "super_admin");
   const otherSpaces = userSpaces.filter(space => !pinnedSpaces.includes(space));
-  const selectedOtherSpace = otherSpaces.find(space => space.id === activeSpaceId);
   const ownSpaces = pinnedSpaces.filter(space => space.ownerId === ownerId);
   const teamSpaces = pinnedSpaces.filter(space => space.ownerId !== ownerId);
+  const normalizedPeopleFilter = peopleFilter.normalize("NFKC").trim().toLocaleLowerCase();
+  const listedOtherSpaces = otherSpaces.filter(space => !normalizedPeopleFilter
+    || space.id === activeSpaceId
+    || `${space.name} ${space.description ?? ""}`.normalize("NFKC").toLocaleLowerCase().includes(normalizedPeopleFilter));
   const isOwnSpace = Boolean(activeSpace && activeSpace.ownerId === ownerId);
   const showOwnerColumn = activeSpaceId === null;
   const spaceNameById = useMemo(() => new Map(spaces.map(space => [space.id, space.name] as const)), [spaces]);
   const spaceById = useMemo(() => new Map(spaces.map(space => [space.id, space] as const)), [spaces]);
+  const folderPathById = useMemo(() => {
+    const paths = new Map<string, string>();
+    for (const folder of folders) paths.set(folder.id, buildFolderBreadcrumbs(folders, folder.id).map(item => item.name).join(" › "));
+    return paths;
+  }, [folders]);
+  const locationLabel = useCallback((entry: TestPlanEntry) => {
+    const parent = entryParent(entry);
+    const path = parent ? folderPathById.get(parent) ?? "資料夾" : "根目錄";
+    const owner = spaceNameById.get(entry.spaceId) ?? "未知空間";
+    return `${owner} › ${path}`;
+  }, [folderPathById, spaceNameById]);
+  const folderLocation = useCallback((entry: TestPlanEntry) => {
+    const parent = entryParent(entry);
+    return parent ? folderPathById.get(parent) ?? "資料夾" : "根目錄";
+  }, [folderPathById]);
+  const folderCounts = useCallback((folderId: string) => ({
+    folders: folders.filter(folder => folder.parentId === folderId).length,
+    files: files.filter(file => file.folderId === folderId).length,
+  }), [files, folders]);
 
   useEffect(() => {
     if (retainedUploadRetry?.ownerId !== ownerId) retainUploadRetry(null);
     setRetryState(retainedUploadRetry);
-    setSelectedEntryKey(null);
     setSpreadsheetFile(null);
-    setTextAction(null);
-    setMoveAction(null);
+    setDescribeAction(null);
+    setMoveEntriesAction(null);
     setDeleteAction(null);
+    setRenaming(null);
+    setClipboard(null);
+    setHistory({ stack: [], index: -1 });
     return () => { uploadRequestRef.current += 1; };
   }, [ownerId]);
 
@@ -733,24 +767,40 @@ export function TestPlanWorkspace() {
     };
   }, [batchDeleting, busy]);
 
+  // The open space and folder live in the address bar, so refresh and Back keep the place.
+  useEffect(() => {
+    if (loading || spaces.length === 0) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("fileSpace", activeSpaceId ?? "all");
+    if (activeFolderId) url.searchParams.set("fileFolder", activeFolderId);
+    else url.searchParams.delete("fileFolder");
+    if (!pendingFocusRef.current) url.searchParams.delete("fileItem");
+    if (url.href !== window.location.href) replaceWorkspaceHistory(url);
+  }, [activeFolderId, activeSpaceId, loading, spaces.length]);
+
   const breadcrumbs = useMemo(
     () => buildFolderBreadcrumbs(folders, activeFolderId),
     [activeFolderId, folders],
   );
+  const searching = Boolean(query.trim());
   const visibleEntries = useMemo(() => {
-    const isSearching = Boolean(query.trim());
-    const visibleFolders = isSearching
-      ? folders
+    const subtree = searching && scope === "folder" && activeSpaceId ? collectFolderSubtree(folders, activeFolderId) : null;
+    const visibleFolders = searching
+      ? (subtree ? folders.filter((folder) => subtree.has(folder.parentId)) : folders)
       : folders.filter((folder) => folder.parentId === activeFolderId);
-    const visibleFiles = isSearching || (activeSpaceId === null && activeFolderId === null)
-      ? files
-      : files.filter((file) => file.folderId === activeFolderId);
+    const visibleFiles = searching
+      ? (subtree ? files.filter((file) => subtree.has(file.folderId)) : files)
+      : activeSpaceId === null && activeFolderId === null
+        ? files
+        : files.filter((file) => file.folderId === activeFolderId);
     return filterAndSortEntries(visibleFolders, visibleFiles, {
       query,
       category: categoryFilter,
       sort,
+      reverse,
     });
-  }, [activeFolderId, activeSpaceId, categoryFilter, files, folders, query, sort]);
+  }, [activeFolderId, activeSpaceId, categoryFilter, files, folders, query, reverse, scope, searching, sort]);
+  const showLocationColumn = activeSpaceId === null || searching;
   // Cross-user view: never mix owners in one run of rows. Own files first, then each owner's block.
   const listSections = useMemo(() => {
     if (!showOwnerColumn) return [{ key: "all", label: null as string | null, entries: visibleEntries }];
@@ -771,6 +821,10 @@ export function TestPlanWorkspace() {
         entries,
       }));
   }, [ownerId, showOwnerColumn, spaceNameById, spaces, visibleEntries]);
+  const orderedEntries = useMemo(() => listSections.flatMap(section => section.entries), [listSections]);
+  const orderedKeys = useMemo(() => orderedEntries.map(entryKey), [orderedEntries]);
+  const entryByKey = useMemo(() => new Map(orderedEntries.map(entry => [entryKey(entry), entry] as const)), [orderedEntries]);
+
   // Drag-to-desktop needs the signed link already at dragstart, so links for the
   // rows on screen are fetched in one batch instead of waiting for a hover.
   useEffect(() => {
@@ -789,63 +843,145 @@ export function TestPlanWorkspace() {
           if (url) cache.set(file.id, { url, expiresAt: Date.now() + 8 * 60_000 });
           else cache.delete(file.id);
         }
+        setLinkVersion((version) => version + 1);
       })
       .catch(() => {
         for (const file of pending) cache.delete(file.id);
       });
     return () => { cancelled = true; };
   }, [getFileDownloadUrls, visibleEntries]);
-  const selectionScope = JSON.stringify([ownerId, activeSpaceId, activeFolderId, query.trim(), categoryFilter]);
+
+  // Selection. Search, format and location changes start a fresh selection; sorting and the view keep it.
+  const selectionScope = JSON.stringify([ownerId, activeSpaceId, activeFolderId, query.trim(), categoryFilter, scope]);
+  const selectionScopeRef = useRef(selectionScope);
+  selectionScopeRef.current = selectionScope;
+  const [selectionState, setSelectionState] = useState<{ scope: string; value: ExplorerSelection }>({ scope: "", value: EMPTY_SELECTION });
+  const selection = selectionState.scope === selectionScope ? selectionState.value : EMPTY_SELECTION;
+  const updateSelection = useCallback((next: ExplorerSelection | ((current: ExplorerSelection) => ExplorerSelection)) => {
+    setSelectionState((state) => {
+      const scopeNow = selectionScopeRef.current;
+      const current = state.scope === scopeNow ? state.value : EMPTY_SELECTION;
+      return { scope: scopeNow, value: typeof next === "function" ? next(current) : next };
+    });
+  }, []);
+  const orderedKeySignature = orderedKeys.join("\n");
+  useEffect(() => {
+    setSelectionState((state) => {
+      if (state.scope !== selectionScope) return state;
+      const pruned = pruneSelection(state.value, orderedKeys);
+      return pruned === state.value ? state : { scope: state.scope, value: pruned };
+    });
+  }, [orderedKeySignature, selectionScope]); // eslint-disable-line react-hooks/exhaustive-deps
+  const selectedEntries = useMemo(() => orderedEntries.filter(entry => selection.keys.has(entryKey(entry))), [orderedEntries, selection.keys]);
+  const selectedEntry = selectedEntries.length === 1 ? selectedEntries[0] : null;
+  const selectedSize = selectedEntries.reduce((total, entry) => total + (entry.kind === "file" ? entry.fileSize : 0), 0);
   const eligibleEntries = visibleEntries.filter(entry => canEditSpace(entry.spaceId));
   const eligibleKeySignature = JSON.stringify(eligibleEntries.map(entryKey).sort());
-  const checkedEntries = checkedState.scope === selectionScope ? eligibleEntries.filter(entry => checkedState.keys.has(entryKey(entry))) : [];
-  const checkedKeys = new Set(checkedEntries.map(entryKey));
-  const allChecked = eligibleEntries.length > 0 && checkedEntries.length === eligibleEntries.length;
   const selectionContext = useRef({ scope: selectionScope, eligible: new Map<string, TestPlanEntry>(), disabled: false });
   selectionContext.current = { scope: selectionScope, eligible: new Map(eligibleEntries.map(entry => [entryKey(entry), entry])), disabled: busy || loading };
   const visibleDeleteAction = deleteAction?.kind === "batch" && deleteAction.scope !== selectionScope ? null : deleteAction;
   useEffect(() => {
-    setCheckedState({ scope: selectionScope, keys: new Set() });
     setDeleteAction(action => action?.kind === "batch" ? null : action);
   }, [selectionScope]);
   useEffect(() => {
     const eligibleKeys = new Set<string>(JSON.parse(eligibleKeySignature));
-    setCheckedState(state => {
-      if (state.scope !== selectionScope) return state;
-      const keys = new Set([...state.keys].filter(key => eligibleKeys.has(key)));
-      return keys.size === state.keys.size ? state : { scope: selectionScope, keys };
-    });
     if (!batchDeleteInFlight.current) {
       setDeleteAction(action => action?.kind === "batch" && action.entries.some(entry => !eligibleKeys.has(entryKey(entry))) ? null : action);
     }
-  }, [eligibleKeySignature, selectionScope]);
-  const toggleEntry = (entry: TestPlanEntry, checked: boolean) => {
-    const context = selectionContext.current;
-    if (context.disabled || context.scope !== selectionScope || !context.eligible.has(entryKey(entry))) return;
-    setCheckedState(state => {
-      const keys = new Set(state.scope === context.scope ? state.keys : []);
-      if (checked) keys.add(entryKey(entry)); else keys.delete(entryKey(entry));
-      return { scope: context.scope, keys };
-    });
-  };
-  const renderEntryCheckbox = (entry: TestPlanEntry) => <label className="file-library-entry-check" onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
-    <input type="checkbox" aria-label={`勾選 ${entryName(entry)}`} checked={checkedKeys.has(entryKey(entry))} disabled={busy || loading || !canEditSpace(entry.spaceId)} onChange={event => toggleEntry(entry, event.target.checked)} />
-  </label>;
-  const selectedEntry = useMemo<TestPlanEntry | null>(() => {
-    if (!selectedEntryKey) return null;
-    const [kind, id] = selectedEntryKey.split(":");
-    if (kind === "folder") {
-      const folder = folders.find((candidate) => candidate.id === id);
-      return folder ? { ...folder, kind: "folder" } : null;
-    }
-    const file = files.find((candidate) => candidate.id === id);
-    return file ? { ...file, kind: "file" } : null;
-  }, [files, folders, selectedEntryKey]);
+  }, [eligibleKeySignature]);
 
+  const allSelected = orderedKeys.length > 0 && selection.keys.size === orderedKeys.length;
+  const selectedEditable = selectedEntries.filter(entry => canEditSpace(entry.spaceId));
+  const selectionEditable = selectedEntries.length > 0 && selectedEditable.length === selectedEntries.length;
+  const selectionSpaces = new Set(selectedEntries.map(entry => entry.spaceId));
+  const selectionMovable = selectionEditable && selectionSpaces.size === 1;
+  const selectedFiles = selectedEntries.filter(isFileEntry);
+  const cutKeys = useMemo(() => new Set(clipboard?.items.map(item => `${item.kind}:${item.id}`) ?? []), [clipboard]);
+  const canPaste = Boolean(clipboard && activeSpaceId && clipboard.spaceId === activeSpaceId && canEditSpace(activeSpaceId) && !busy && !loading);
+  const readOnlyReason = "唯讀：可以瀏覽與下載，不能修改";
+
+  // Keyboard navigation moves the real focus with the selection.
   useEffect(() => {
-    if (selectedEntryKey && !selectedEntry) setSelectedEntryKey(null);
-  }, [selectedEntry, selectedEntryKey]);
+    if (!keyboardFocusRef.current || !selection.focus) return;
+    keyboardFocusRef.current = false;
+    // Never pull focus out of an open rename box.
+    if (document.activeElement instanceof HTMLElement && document.activeElement.classList.contains("file-explorer-rename-input")) return;
+    const row = rowRefs.current.get(selection.focus);
+    row?.focus({ preventScroll: true });
+    row?.scrollIntoView?.({ block: "nearest" });
+  }, [selection.focus]);
 
+  // After 開啟檔案位置, a shared link or a new folder: select the item once it is listed.
+  useEffect(() => {
+    const key = pendingFocusRef.current;
+    if (!key || loading) return;
+    if (!entryByKey.has(key)) return;
+    pendingFocusRef.current = null;
+    updateSelection(singleSelection(key));
+    if (pendingRenameRef.current === key) {
+      pendingRenameRef.current = null;
+      const entry = entryByKey.get(key);
+      if (entry) setRenaming({ key, value: entryName(entry), error: null });
+    } else {
+      keyboardFocusRef.current = true;
+    }
+    window.requestAnimationFrame(() => rowRefs.current.get(key)?.scrollIntoView?.({ block: "center" }));
+  }, [entryByKey, loading, pendingTick, updateSelection]);
+
+  // After opening a folder the clicked row is gone; keep the keyboard on the list instead of the page body.
+  useEffect(() => {
+    if (document.activeElement === document.body) listRef.current?.focus({ preventScroll: true });
+  }, [activeFolderId, activeSpaceId, viewMode]);
+
+  // ----- navigation -------------------------------------------------------
+  const currentLocation: LibraryLocation = { spaceId: activeSpaceId, folderId: activeFolderId };
+  const navigate = (location: LibraryLocation, { record = true }: { record?: boolean } = {}) => {
+    if (loading && location.spaceId === activeSpaceId) return;
+    setRenaming(null);
+    setIsSpaceDrawerOpen(false);
+    if (record) {
+      setHistory((current) => {
+        const base = current.index >= 0 ? current.stack.slice(0, current.index + 1) : [currentLocation];
+        if (sameLocation(base[base.length - 1], location)) return { stack: base, index: base.length - 1 };
+        const stack = [...base, location].slice(-50);
+        return { stack, index: stack.length - 1 };
+      });
+    }
+    if (location.spaceId !== activeSpaceId) {
+      requestedFolderRef.current = location.spaceId ? { spaceId: location.spaceId, folderId: location.folderId } : null;
+      void openSpace(location.spaceId);
+    } else {
+      setActiveFolderId(location.folderId);
+    }
+  };
+  const canGoBack = history.index > 0;
+  const canGoForward = history.index >= 0 && history.index < history.stack.length - 1;
+  const parentFolderId = activeFolderId ? folders.find(folder => folder.id === activeFolderId)?.parentId ?? null : null;
+  const canGoUp = Boolean(activeSpaceId && activeFolderId);
+  const goBack = () => {
+    if (!canGoBack || busy) return;
+    const target = history.stack[history.index - 1];
+    setHistory((current) => ({ ...current, index: current.index - 1 }));
+    navigate(target, { record: false });
+  };
+  const goForward = () => {
+    if (!canGoForward || busy) return;
+    const target = history.stack[history.index + 1];
+    setHistory((current) => ({ ...current, index: current.index + 1 }));
+    navigate(target, { record: false });
+  };
+  const goUp = () => {
+    if (!canGoUp || busy) return;
+    if (activeFolderId) pendingFocusRef.current = `folder:${activeFolderId}`;
+    navigate({ spaceId: activeSpaceId, folderId: parentFolderId });
+  };
+  const openLocation = (entry: TestPlanEntry) => {
+    pendingFocusRef.current = entryKey(entry);
+    if (query) setQuery("");
+    navigate({ spaceId: entry.spaceId, folderId: entryParent(entry) });
+  };
+
+  // ----- uploads ----------------------------------------------------------
   const handleUpload = async (incoming: readonly File[], preservePaths = false, target?: Pick<UploadRetry, "folderId" | "spaceId">) => {
     if (!ownerId || !canEdit || busy || loading || incoming.length === 0) return;
     const requestId = ++uploadRequestRef.current;
@@ -883,33 +1019,39 @@ export function TestPlanWorkspace() {
     void handleUpload(selected, true);
   };
 
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setIsDragging(false);
-    const payload = readEntryDragPayload(event.dataTransfer);
-    if (payload) {
-      // An entry dropped on the open area (not on a folder) goes to the folder being viewed.
-      void moveDraggedEntry(payload, activeFolderId);
-      return;
-    }
-    if (busy || uploadRetry) return;
-    // A dropped folder keeps its structure and skips the browser's folder-upload confirmation;
-    // loose files dropped alongside it go up as a plain batch afterwards.
-    const dropped = readDroppedFiles(event.dataTransfer);
+  // A dropped folder keeps its structure and skips the browser's folder-upload confirmation;
+  // loose files dropped alongside it go up as a plain batch afterwards.
+  const uploadDropped = (dataTransfer: DataTransfer, target?: Pick<UploadRetry, "folderId" | "spaceId">) => {
+    if (busy || uploadRetry || !canEdit) return;
+    const dropped = readDroppedFiles(dataTransfer);
     void dropped.files
-      .then(async (files) => {
+      .then(async (droppedFiles) => {
         if (!dropped.hasDirectory) {
-          await handleUpload(files);
+          await handleUpload(droppedFiles, false, target);
           return;
         }
-        const inFolders = files.filter((file) => file.webkitRelativePath?.includes("/"));
-        const loose = files.filter((file) => !file.webkitRelativePath?.includes("/"));
-        if (inFolders.length > 0) await handleUpload(inFolders, true);
-        if (loose.length > 0) await handleUpload(loose);
+        const inFolders = droppedFiles.filter((file) => file.webkitRelativePath?.includes("/"));
+        const loose = droppedFiles.filter((file) => !file.webkitRelativePath?.includes("/"));
+        if (inFolders.length > 0) await handleUpload(inFolders, true, target);
+        if (loose.length > 0) await handleUpload(loose, false, target);
       })
       .catch(() => toast.error("這個資料夾讀不到，請改用「上傳資料夾」"));
   };
 
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    setDropTargetId(null);
+    const payload = readEntryDragPayload(event.dataTransfer);
+    if (payload) {
+      // Items dropped on the open area (not on a folder) go to the folder being viewed.
+      void moveItems(payload, activeFolderId);
+      return;
+    }
+    uploadDropped(event.dataTransfer);
+  };
+
+  // ----- downloads and drag-out -------------------------------------------
   // Drag to desktop: Chrome/Edge read a "DownloadURL" entry on dragstart, which must be
   // synchronous, so the signed link is fetched ahead of time when the row is hovered or focused.
   const prefetchDownloadUrl = (file: TestPlanFileRecord) => {
@@ -925,7 +1067,7 @@ export function TestPlanWorkspace() {
   };
 
   // Small files are pulled into memory while the pointer rests on the row, so the
-  // drag can carry a same-origin blob: address; the proxy or raw link covers the rest.
+  // drag can carry a same-origin blob: address; the raw link covers the rest.
   const prefetchDragBlob = (file: TestPlanFileRecord) => {
     const cache = dragBlobCacheRef.current;
     if (file.fileSize > DRAG_BLOB_LIMIT || cache.get(file.id) || dragPrefetchRef.current.has(file.id) || dragPrefetchRef.current.size >= 3) return;
@@ -960,18 +1102,162 @@ export function TestPlanWorkspace() {
     dragDwellTimersRef.current.delete(fileId);
   };
 
+  // Downloads stream to disk with a visible percentage; a storage without
+  // direct links still works through the whole-blob fallback.
+  const handleDownload = async (file: TestPlanFileRecord, openSink?: (fileName: string) => Promise<TransferSink | "cancelled">) => {
+    const id = `${file.id}:${Date.now()}`;
+    const controller = new AbortController();
+    const patch = (changes: Partial<TransferItem>) => setDownloads((items) => items.map((item) => (item.id === id ? { ...item, ...changes } : item)));
+    setDownloads((items) => [...items, { id, name: file.originalName, loaded: 0, total: file.fileSize, status: "active", cancel: () => controller.abort() }]);
+    try {
+      const outcome = await downloadWithProgress({
+        fileName: file.originalName,
+        expectedSize: file.fileSize,
+        resolveUrl: () => getFileDownloadUrl(file),
+        fallback: () => downloadFile(file),
+        signal: controller.signal,
+        openSink,
+        onProgress: (loaded, total) => patch({ loaded, total }),
+      });
+      patch({ status: outcome === "saved" ? "done" : "cancelled", cancel: undefined });
+      return outcome;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "下載失敗";
+      patch({ status: "error", message, cancel: undefined });
+      toast.error(message);
+      return "error" as const;
+    }
+  };
+
+  // Several files: one folder dialog, then every file streams into it.
+  const downloadEntries = async (entries: readonly TestPlanEntry[]) => {
+    const targets = entries.filter(isFileEntry);
+    if (targets.length === 0) {
+      toast.info("資料夾不能直接下載，請開啟資料夾後選取檔案。");
+      return;
+    }
+    if (targets.length === 1) {
+      void handleDownload(targets[0]);
+      return;
+    }
+    const directory = await pickDownloadDirectory();
+    if (directory === "cancelled") return;
+    let saved = 0;
+    for (const file of targets) {
+      const outcome = await handleDownload(file, directory ? (fileName) => openDirectorySink(directory, fileName) : undefined);
+      if (outcome === "saved") saved += 1;
+    }
+    if (saved) toast.success(`已下載 ${saved} 個檔案${targets.length > saved ? `，${targets.length - saved} 個未完成` : ""}`);
+  };
+
+  const getPreviewUrl = useCallback(async (file: TestPlanFileRecord) => {
+    if (typeof getFileDownloadUrls !== "function") return null;
+    const urls = await getFileDownloadUrls([file]);
+    return urls.get(file.id) ?? null;
+  }, [getFileDownloadUrls]);
+
+  // ----- moving -----------------------------------------------------------
+  const canMoveTo = (item: MoveItem, targetFolderId: string | null, targetSpaceId: string | null) => {
+    if (!canEditSpace(item.spaceId)) return false;
+    if (item.folderId === targetFolderId) return false;
+    const targetFolder = targetFolderId ? folders.find((folder) => folder.id === targetFolderId) : null;
+    if (targetFolderId && (!targetFolder || targetFolder.spaceId !== item.spaceId)) return false;
+    if (targetFolderId === null && targetSpaceId !== item.spaceId) return false;
+    if (item.kind === "folder" && targetFolderId && (targetFolderId === item.id || isFolderDescendant(folders, targetFolderId, item.id))) return false;
+    return true;
+  };
+
+  const folderName = (folderId: string | null) => folderId ? folders.find((folder) => folder.id === folderId)?.name ?? "資料夾" : "根目錄";
+
+  const runMoves = async (items: readonly MoveItem[], targetFolderId: string | null) => {
+    const moved: MoveItem[] = [];
+    let failure: string | null = null;
+    for (const item of items) {
+      try {
+        if (item.kind === "folder") await moveFolder(item.id, targetFolderId);
+        else await moveFile(item.id, targetFolderId);
+        moved.push(item);
+      } catch (caught) {
+        failure = caught instanceof Error ? caught.message : "移動失敗";
+        break;
+      }
+    }
+    return { moved, failure };
+  };
+
+  const moveItems = async (items: readonly MoveItem[], targetFolderId: string | null, targetSpaceId: string | null = activeSpaceId) => {
+    setDropTargetId(null);
+    if (busy || loading || items.length === 0) return 0;
+    const allowed = items.filter((item) => canMoveTo(item, targetFolderId, targetSpaceId));
+    if (allowed.length === 0) {
+      if (items.some((item) => item.folderId !== targetFolderId)) toast.error("不能移到這裡：只能在同一個人的空間裡移動，且資料夾不能移進自己裡面。");
+      return 0;
+    }
+    const { moved, failure } = await runMoves(allowed, targetFolderId);
+    if (moved.length) {
+      toast.success(`已將 ${moved.length} 個項目移至「${folderName(targetFolderId)}」`, {
+        action: { label: "復原", onClick: () => void undoMoves(moved) },
+      });
+    }
+    if (failure) toast.error(failure);
+    return moved.length;
+  };
+
+  const undoMoves = async (moved: readonly MoveItem[]) => {
+    let restored = 0;
+    for (const item of moved) {
+      try {
+        if (item.kind === "folder") await moveFolder(item.id, item.folderId);
+        else await moveFile(item.id, item.folderId);
+        restored += 1;
+      } catch (caught) {
+        toast.error(caught instanceof Error ? caught.message : "復原失敗");
+        break;
+      }
+    }
+    if (restored) toast.success(`已復原 ${restored} 個項目的位置`);
+  };
+
+  const handleFolderDragOver = (targetFolderId: string | null, event: DragEvent<HTMLElement>) => {
+    if (isEntryDrag(event.dataTransfer)) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+      setDropTargetId(targetFolderId ?? "__root__");
+      return;
+    }
+    if (isFileDrag(event.dataTransfer) && canEdit && !busy && !uploadRetry) {
+      // OS files over a folder row upload straight into that folder.
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "copy";
+      setIsDragging(true);
+      setDropTargetId(targetFolderId ?? "__root__");
+    }
+  };
+
+  const handleFolderDrop = (targetFolderId: string | null, event: DragEvent<HTMLElement>) => {
+    const payload = readEntryDragPayload(event.dataTransfer);
+    if (!payload && !isFileDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    setDropTargetId(null);
+    if (payload) {
+      void moveItems(payload, targetFolderId);
+      return;
+    }
+    const target = targetFolderId ? folders.find((folder) => folder.id === targetFolderId) : null;
+    uploadDropped(event.dataTransfer, target ? { folderId: target.id, spaceId: target.spaceId } : { folderId: null, spaceId: activeSpaceId });
+  };
+
   const handleEntryDragStart = (entry: TestPlanEntry, event: DragEvent<HTMLElement>) => {
-    if (busy || loading) { event.preventDefault(); return; }
-    const payload: EntryDragPayload = {
-      kind: entry.kind,
-      id: entry.id,
-      spaceId: entry.spaceId,
-      folderId: entry.kind === "folder" ? entry.parentId : entry.folderId,
-    };
-    event.dataTransfer.setData(ENTRY_DRAG_TYPE, JSON.stringify(payload));
-    event.dataTransfer.setData("text/plain", entryName(entry));
-    event.dataTransfer.effectAllowed = canEditSpace(entry.spaceId) ? "copyMove" : "copy";
-    if (entry.kind === "file") {
+    if (busy || loading || renaming) { event.preventDefault(); return; }
+    const dragged = selection.keys.has(entryKey(entry)) && selectedEntries.length > 1 ? selectedEntries : [entry];
+    event.dataTransfer.setData(ENTRY_DRAG_TYPE, JSON.stringify({ items: dragged.map(toMoveItem) }));
+    event.dataTransfer.setData("text/plain", dragged.map(entryName).join("\n"));
+    event.dataTransfer.effectAllowed = dragged.every((item) => canEditSpace(item.spaceId)) ? "copyMove" : "copy";
+    if (dragged.length === 1 && entry.kind === "file") {
       cancelDragPrefetch(entry.id);
       const cached = downloadUrlCacheRef.current.get(entry.id);
       const url = chooseDragDownloadUrl({ blobUrl: dragBlobCacheRef.current.get(entry.id), sourceUrl: cached?.url });
@@ -982,48 +1268,8 @@ export function TestPlanWorkspace() {
     }
   };
 
-  const canDropOnFolder = (payload: EntryDragPayload, targetFolderId: string | null) => {
-    if (!canEditSpace(payload.spaceId)) return false;
-    if (payload.folderId === targetFolderId) return false;
-    const targetFolder = targetFolderId ? folders.find((folder) => folder.id === targetFolderId) : null;
-    if (targetFolderId && (!targetFolder || targetFolder.spaceId !== payload.spaceId)) return false;
-    if (targetFolderId === null && activeSpaceId !== payload.spaceId) return false;
-    if (payload.kind === "folder" && targetFolderId && (targetFolderId === payload.id || isFolderDescendant(folders, targetFolderId, payload.id))) return false;
-    return true;
-  };
-
-  const handleFolderDragOver = (targetFolderId: string | null, event: DragEvent<HTMLElement>) => {
-    if (!isEntryDrag(event.dataTransfer)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "move";
-    setDropTargetId(targetFolderId ?? "__root__");
-  };
-
-  const moveDraggedEntry = async (payload: EntryDragPayload, targetFolderId: string | null) => {
-    setDropTargetId(null);
-    if (busy || loading || !canDropOnFolder(payload, targetFolderId)) return;
-    try {
-      if (payload.kind === "folder") await moveFolder(payload.id, targetFolderId);
-      else await moveFile(payload.id, targetFolderId);
-      const targetName = targetFolderId ? folders.find((folder) => folder.id === targetFolderId)?.name ?? "資料夾" : "根目錄";
-      toast.success(`已搬移到「${targetName}」`);
-    } catch (caught) {
-      toast.error(caught instanceof Error ? caught.message : "搬移失敗");
-    }
-  };
-
-  const handleFolderDrop = (targetFolderId: string | null, event: DragEvent<HTMLElement>) => {
-    const payload = readEntryDragPayload(event.dataTransfer);
-    if (!payload) return;
-    event.preventDefault();
-    event.stopPropagation();
-    setIsDragging(false);
-    void moveDraggedEntry(payload, targetFolderId);
-  };
-
   const entryDragProps = (entry: TestPlanEntry) => ({
-    draggable: !busy && !loading,
+    draggable: !busy && !loading && renaming?.key !== entryKey(entry),
     onDragStart: (event: DragEvent<HTMLElement>) => handleEntryDragStart(entry, event),
     onDragEnd: () => setDropTargetId(null),
     onPointerEnter: entry.kind === "file" ? () => { prefetchDownloadUrl(entry); scheduleDragPrefetch(entry); } : undefined,
@@ -1039,38 +1285,136 @@ export function TestPlanWorkspace() {
       : {}),
   });
 
-  const handleTextSubmit = async (value: string) => {
-    if (!textAction) return;
+  // ----- cut, paste, rename, new folder, describe, link -------------------
+  const cutEntries = (entries: readonly TestPlanEntry[]) => {
+    if (busy || loading || entries.length === 0) return;
+    if (!entries.every((entry) => canEditSpace(entry.spaceId))) { toast.error(readOnlyReason); return; }
+    if (new Set(entries.map((entry) => entry.spaceId)).size > 1) { toast.error("一次只能剪下同一個人空間裡的項目。"); return; }
+    setClipboard({ items: entries.map(toMoveItem), spaceId: entries[0].spaceId });
+    toast(`已剪下 ${entries.length} 個項目`, { description: "開啟目標資料夾後按 Ctrl+V 或「貼上」即可移過去。" });
+  };
+
+  const pasteHere = async () => {
+    if (!clipboard) return;
+    if (!canPaste) {
+      toast.error(activeSpaceId === null ? "請先開啟要貼上的資料夾。" : "只能貼到同一個人的空間，而且需要編輯權限。");
+      return;
+    }
+    const moved = await moveItems(clipboard.items, activeFolderId);
+    if (moved > 0) setClipboard(null);
+  };
+
+  const startRename = (entry: TestPlanEntry | null) => {
+    if (!entry || busy || loading) return;
+    if (!canEditSpace(entry.spaceId)) { toast.error(readOnlyReason); return; }
+    updateSelection(singleSelection(entryKey(entry)));
+    setRenaming({ key: entryKey(entry), value: entryName(entry), error: null });
+  };
+
+  const commitRename = async () => {
+    if (!renaming || renameCommitRef.current) return;
+    const entry = entryByKey.get(renaming.key);
+    if (!entry) { setRenaming(null); return; }
+    const value = renaming.value.trim();
+    const before = entryName(entry);
+    if (!value || value === before) { setRenaming(null); return; }
+    if (entry.kind === "folder" && folders.some((folder) => folder.id !== entry.id && folder.spaceId === entry.spaceId && folder.parentId === entry.parentId && folder.name.toLocaleLowerCase() === value.toLocaleLowerCase())) {
+      setRenaming({ ...renaming, error: "這裡已經有同名資料夾" });
+      return;
+    }
+    renameCommitRef.current = true;
     try {
-      if (textAction.kind === "create-folder") {
-        await createFolder(textAction.parentId, value);
-      } else if (textAction.kind === "rename-folder") {
-        await renameFolder(textAction.id, value);
-      } else if (textAction.kind === "rename-file") {
-        await renameFile(textAction.id, value);
-      } else {
-        await updateFileDescription(textAction.id, value);
+      if (entry.kind === "folder") await renameFolder(entry.id, value);
+      else await renameFile(entry.id, value);
+      setRenaming(null);
+      keyboardFocusRef.current = true;
+      toast.success(`已重新命名為「${value}」`, {
+        action: {
+          label: "復原",
+          onClick: () => void (entry.kind === "folder" ? renameFolder(entry.id, before) : renameFile(entry.id, before))
+            .then(() => toast.success(`已改回「${before}」`))
+            .catch((caught) => toast.error(caught instanceof Error ? caught.message : "復原失敗")),
+        },
+      });
+    } catch (caught) {
+      setRenaming((current) => current && { ...current, error: caught instanceof Error ? caught.message : "重新命名失敗" });
+    } finally {
+      renameCommitRef.current = false;
+    }
+  };
+
+  const createFolderHere = async () => {
+    if (!canEdit || busy || loading) return;
+    const parentId = activeSpaceId ? activeFolderId : null;
+    const targetSpaceId = activeSpaceId ?? personalSpace?.id ?? null;
+    const siblings = new Set(folders.filter((folder) => folder.spaceId === targetSpaceId && folder.parentId === parentId).map((folder) => folder.name.toLocaleLowerCase()));
+    let name = "新增資料夾";
+    for (let index = 2; siblings.has(name.toLocaleLowerCase()); index += 1) name = `新增資料夾 (${index})`;
+    try {
+      const created = await createFolder(parentId, name);
+      toast.success(`已建立資料夾「${name}」，直接輸入新名稱`);
+      if (created?.id) {
+        pendingFocusRef.current = `folder:${created.id}`;
+        pendingRenameRef.current = `folder:${created.id}`;
+        setPendingTick((tick) => tick + 1);
       }
-      toast.success("變更已儲存");
-      setTextAction(null);
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : "建立資料夾失敗");
+    }
+  };
+
+  const handleDescribeSubmit = async (value: string) => {
+    if (!describeAction) return;
+    try {
+      await updateFileDescription(describeAction.id, value);
+      toast.success("說明已儲存");
+      setDescribeAction(null);
     } catch (caught) {
       toast.error(caught instanceof Error ? caught.message : "操作失敗");
     }
   };
 
-  const handleMoveSubmit = async (targetFolderId: string | null) => {
-    if (!moveAction) return;
+  const copyLink = async (entry: TestPlanEntry | null) => {
+    if (!entry) return;
+    const url = new URL(window.location.href);
+    for (const key of ["fileSearch", "fileType", "fileScope", "fileSort", "fileOrder"]) url.searchParams.delete(key);
+    url.searchParams.set("fileSpace", entry.spaceId);
+    const parent = entryParent(entry);
+    if (parent) url.searchParams.set("fileFolder", parent);
+    else url.searchParams.delete("fileFolder");
+    url.searchParams.set("fileItem", entryKey(entry));
     try {
-      if (moveAction.kind === "folder") {
-        await moveFolder(moveAction.id, targetFolderId);
-      } else {
-        await moveFile(moveAction.id, targetFolderId);
-      }
-      toast.success("項目已搬移");
-      setMoveAction(null);
-    } catch (caught) {
-      toast.error(caught instanceof Error ? caught.message : "搬移失敗");
+      await navigator.clipboard.writeText(url.href);
+      toast.success("已複製連結", { description: "同事打開就會直接到這個位置並選取它。" });
+    } catch {
+      toast.error("無法寫入剪貼簿，請從網址列複製。");
     }
+  };
+
+  const handleMoveSubmit = async (targetFolderId: string | null) => {
+    if (!moveEntriesAction?.length) return;
+    const moved = await moveItems(moveEntriesAction.map(toMoveItem), targetFolderId, moveEntriesAction[0].spaceId);
+    if (moved > 0) setMoveEntriesAction(null);
+  };
+
+  const requestMove = (entries: readonly TestPlanEntry[]) => {
+    if (busy || loading || entries.length === 0) return;
+    if (!entries.every((entry) => canEditSpace(entry.spaceId))) { toast.error(readOnlyReason); return; }
+    if (new Set(entries.map((entry) => entry.spaceId)).size > 1) { toast.error("一次只能移動同一個人空間裡的項目。"); return; }
+    setMoveEntriesAction([...entries]);
+  };
+
+  // ----- delete -----------------------------------------------------------
+  const requestDelete = (entries: readonly TestPlanEntry[]) => {
+    if (busy || loading || entries.length === 0) return;
+    const targets = entries.filter((entry) => canEditSpace(entry.spaceId));
+    if (targets.length === 0) { toast.error("選取的項目都是唯讀，不能刪除。"); return; }
+    if (entries.length === 1) {
+      const entry = targets[0];
+      setDeleteAction(entry.kind === "folder" ? { kind: "folder", id: entry.id, name: entry.name } : { kind: "file", file: entry });
+      return;
+    }
+    setDeleteAction({ kind: "batch", entries: targets, scope: selectionScope, skipped: entries.length - targets.length });
   };
 
   const handleDelete = async () => {
@@ -1092,13 +1436,13 @@ export function TestPlanWorkspace() {
           visited.add(cursor);
           cursor = folders.find(folder => folder.id === cursor)?.parentId ?? null;
         }
-        setCheckedState(state => ({ scope: action.scope, keys: new Set([...state.keys].filter(key => !deleted.has(key))) }));
+        updateSelection(current => ({ ...current, keys: new Set([...current.keys].filter(key => !deleted.has(key))) }));
         setDeleteAction(null);
         if (result.deletedKeys.length) {
           if (result.cleanupPending) toast.warning(`已刪除 ${result.deletedKeys.length} 項，實體檔案清理待重試；重新整理時會再處理。`);
           else toast.success(`已刪除 ${result.deletedKeys.length} 項`);
         }
-        if (result.failures.length) toast.error(`${result.failures.length} 項刪除失敗，已保留勾選：${result.failures[0].message}`);
+        if (result.failures.length) toast.error(`${result.failures.length} 項刪除失敗，已保留選取：${result.failures[0].message}`);
       } catch (caught) {
         if (selectionContext.current.scope === action.scope) toast.error(caught instanceof Error ? caught.message : "批次刪除失敗，請重試");
       } finally { batchDeleteInFlight.current = false; setBatchDeleting(false); }
@@ -1112,15 +1456,6 @@ export function TestPlanWorkspace() {
       } else {
         cleanupPending = (await deleteFile(deleteAction.file)).cleanupPending;
       }
-      if (
-        deleteAction.kind === "file"
-          ? selectedEntryKey === `file:${deleteAction.file.id}`
-          : deleteAction.kind === "folder"
-            ? selectedEntryKey === `folder:${deleteAction.id}`
-            : false
-      ) {
-        setSelectedEntryKey(null);
-      }
       if (cleanupPending) toast.warning("項目已從清單刪除，實體檔案清理待重試；重新整理時會再處理。");
       else toast.success("項目已刪除");
       setDeleteAction(null);
@@ -1129,123 +1464,333 @@ export function TestPlanWorkspace() {
     }
   };
 
-  // Downloads stream to disk with a visible percentage; a storage without
-  // direct links still works through the whole-blob fallback.
-  const handleDownload = async (file: TestPlanFileRecord) => {
-    const id = `${file.id}:${Date.now()}`;
-    const controller = new AbortController();
-    const patch = (changes: Partial<TransferItem>) => setDownloads((items) => items.map((item) => (item.id === id ? { ...item, ...changes } : item)));
-    setDownloads((items) => [...items, { id, name: file.originalName, loaded: 0, total: file.fileSize, status: "active", cancel: () => controller.abort() }]);
-    try {
-      const outcome = await downloadWithProgress({
-        fileName: file.originalName,
-        expectedSize: file.fileSize,
-        resolveUrl: () => getFileDownloadUrl(file),
-        fallback: () => downloadFile(file),
-        signal: controller.signal,
-        onProgress: (loaded, total) => patch({ loaded, total }),
-      });
-      patch({ status: outcome === "saved" ? "done" : "cancelled", cancel: undefined });
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "下載失敗";
-      patch({ status: "error", message, cancel: undefined });
-      toast.error(message);
-    }
-  };
-
+  // ----- open, select, keyboard -------------------------------------------
   const openEntry = (entry: TestPlanEntry) => {
     if (busy || loading) return;
     if (entry.kind === "folder") {
-      if (entry.spaceId !== activeSpaceId) {
-        requestedFolderRef.current = {spaceId: entry.spaceId, folderId: entry.id};
-        void openSpace(entry.spaceId);
-      } else setActiveFolderId(entry.id);
-      setSelectedEntryKey(null);
-    } else {
-      setSelectedEntryKey(`file:${entry.id}`);
-      if (isEditableSpreadsheet(entry)) setSpreadsheetFile(entry);
+      navigate({ spaceId: entry.spaceId, folderId: entry.id });
+      return;
+    }
+    updateSelection(singleSelection(entryKey(entry)));
+    if (isEditableSpreadsheet(entry)) setSpreadsheetFile(entry);
+    else setPreviewOpen(true);
+  };
+
+  const previewEntry = (entry: TestPlanEntry) => {
+    updateSelection(singleSelection(entryKey(entry)));
+    setPreviewOpen(true);
+  };
+
+  const handleRowClick = (entry: TestPlanEntry, event: ReactMouseEvent<HTMLElement>) => {
+    if (busy || loading) return;
+    const toggle = event.ctrlKey || event.metaKey;
+    const extend = event.shiftKey;
+    // Touch-sized layouts open on tap; a wide screen selects on click like File Explorer.
+    if (compact && !toggle && !extend) {
+      if (entry.kind === "folder") openEntry(entry);
+      else previewEntry(entry);
+      return;
+    }
+    updateSelection(current => clickSelection(current, orderedKeys, entryKey(entry), { toggle, extend }));
+  };
+
+  const toggleChecked = (entry: TestPlanEntry) => {
+    if (busy || loading) return;
+    updateSelection(current => clickSelection(current, orderedKeys, entryKey(entry), { toggle: true }));
+  };
+
+  const focusedEntry = selection.focus ? entryByKey.get(selection.focus) ?? null : null;
+
+  // Explorer shortcuts work anywhere in the file area, except while typing, inside menus and dialogs,
+  // and for Enter/Space on a focused button (which must press that button).
+  const handleExplorerKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (renaming || isTypingTarget(event.target)) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("[role='menu'], [role='dialog'], [role='alertdialog'], [role='listbox']")) return;
+    if ((event.key === "Enter" || event.key === " ") && target.closest("button, a")) return;
+    const ctrl = event.ctrlKey || event.metaKey;
+    const move = (direction: Parameters<typeof moveSelection>[2]) => {
+      keyboardFocusRef.current = true;
+      updateSelection(current => moveSelection(current, orderedKeys, direction, { extend: event.shiftKey }));
+    };
+    let handled = true;
+    if (event.altKey && event.key === "ArrowUp") goUp();
+    else if (event.altKey && event.key === "ArrowLeft") goBack();
+    else if (event.altKey && event.key === "ArrowRight") goForward();
+    else if (event.key === "ArrowDown") move("next");
+    else if (event.key === "ArrowUp") move("previous");
+    else if (event.key === "Home") move("first");
+    else if (event.key === "End") move("last");
+    else if (event.key === "Enter" && focusedEntry) openEntry(focusedEntry);
+    else if (event.key === "Backspace") { if (canGoBack) goBack(); else goUp(); }
+    else if (event.key === "F2") startRename(selectedEntry ?? focusedEntry);
+    else if (event.key === "Delete") requestDelete(selectedEntries);
+    else if (event.key === "Escape") updateSelection(EMPTY_SELECTION);
+    else if (ctrl && event.key.toLowerCase() === "a") updateSelection(current => selectAll(current, orderedKeys));
+    else if (ctrl && event.key.toLowerCase() === "x") cutEntries(selectedEntries);
+    else if (ctrl && event.key.toLowerCase() === "v") void pasteHere();
+    else if (!ctrl && !event.altKey && event.key.length === 1 && event.key !== " " && event.key !== "/" && event.key !== "?") {
+      const now = Date.now();
+      const text = now - typeAheadRef.current.at < 700 ? typeAheadRef.current.text + event.key : event.key;
+      typeAheadRef.current = { text, at: now };
+      const match = typeAheadMatch(orderedEntries.map(entry => ({ key: entryKey(entry), name: entryName(entry) })), selection.focus, text);
+      if (match) { keyboardFocusRef.current = true; updateSelection(singleSelection(match)); }
+    } else handled = false;
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
     }
   };
 
-  const selectEntry = (entry: TestPlanEntry) => {
-    if (busy || loading) return;
-    if (entry.kind === "folder") { openEntry(entry); return; }
-    setSelectedEntryKey(`${entry.kind}:${entry.id}`);
+  // Shortcuts that work anywhere on the page (but never while typing or inside a dialog).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isTypingTarget(event.target) || document.querySelector("[role='dialog'], [role='alertdialog'], [role='menu']")) return;
+      const ctrl = event.ctrlKey || event.metaKey;
+      if ((ctrl && event.key.toLowerCase() === "e") || (!ctrl && !event.altKey && event.key === "/")) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (event.altKey && !ctrl && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setPreviewOpen(!previewOpen);
+      } else if (!ctrl && !event.altKey && event.key === "?") {
+        event.preventDefault();
+        setHelpOpen(true);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [previewOpen, setPreviewOpen]);
+
+  // ----- context menu -----------------------------------------------------
+  const handleContextMenu = (event: ReactMouseEvent<HTMLElement>) => {
+    if (renaming && isTypingTarget(event.target)) { event.preventDefault(); return; }
+    const row = (event.target as HTMLElement).closest<HTMLElement>("[data-entry-key]");
+    const key = row?.dataset.entryKey;
+    if (key && entryByKey.has(key)) {
+      setContextTarget("item");
+      updateSelection(current => contextSelection(current, key));
+    } else {
+      setContextTarget("empty");
+      updateSelection(EMPTY_SELECTION);
+    }
   };
 
-  const requestEntryDelete = (entry: TestPlanEntry) => {
-    if (busy || loading) return;
-    setDeleteAction(entry.kind === "folder" ? { kind: "folder", id: entry.id, name: entry.name } : { kind: "file", file: entry });
+  const describeTarget = selectedEntry && selectedEntry.kind === "file" ? selectedEntry : null;
+  const locationDiffers = (entry: TestPlanEntry | null) => Boolean(entry && (activeSpaceId === null || entry.spaceId !== activeSpaceId || entryParent(entry) !== activeFolderId));
+
+  const renderItemMenu = () => {
+    const single = selectedEntry;
+    const editable = selectionEditable && !busy;
+    return (
+      <>
+        {single && <ContextMenuItem onSelect={() => openEntry(single)}><FolderOpen className="mr-2 h-4 w-4" />開啟<ContextMenuShortcut>Enter</ContextMenuShortcut></ContextMenuItem>}
+        {single?.kind === "file" && <ContextMenuItem onSelect={() => previewEntry(single)}><Eye className="mr-2 h-4 w-4" />預覽<ContextMenuShortcut>Alt+P</ContextMenuShortcut></ContextMenuItem>}
+        {selectedFiles.length > 0 && <ContextMenuItem onSelect={() => void downloadEntries(selectedEntries)}><Download className="mr-2 h-4 w-4" />下載{selectedFiles.length > 1 ? ` ${selectedFiles.length} 個檔案` : ""}</ContextMenuItem>}
+        {single?.kind === "file" && isEditableSpreadsheet(single) && <ContextMenuItem disabled={busy} onSelect={() => setSpreadsheetFile(single)}><FileSpreadsheet className="mr-2 h-4 w-4" />{canEditSpace(single.spaceId) ? "直接編輯 Excel" : "開啟 Excel"}</ContextMenuItem>}
+        <ContextMenuSeparator />
+        <ContextMenuItem disabled={!editable || !selectionMovable} onSelect={() => cutEntries(selectedEntries)}><Scissors className="mr-2 h-4 w-4" />剪下<ContextMenuShortcut>Ctrl+X</ContextMenuShortcut></ContextMenuItem>
+        <ContextMenuItem disabled={!editable || !single} onSelect={() => startRename(single)}><Pencil className="mr-2 h-4 w-4" />重新命名<ContextMenuShortcut>F2</ContextMenuShortcut></ContextMenuItem>
+        <ContextMenuItem disabled={!editable || !selectionMovable} onSelect={() => requestMove(selectedEntries)}><FolderInput className="mr-2 h-4 w-4" />移至…</ContextMenuItem>
+        {single && <ContextMenuItem onSelect={() => void copyLink(single)}><Link2 className="mr-2 h-4 w-4" />複製連結</ContextMenuItem>}
+        {single && locationDiffers(single) && <ContextMenuItem onSelect={() => openLocation(single)}><MapPin className="mr-2 h-4 w-4" />開啟檔案位置</ContextMenuItem>}
+        {describeTarget && <ContextMenuItem disabled={!canEditSpace(describeTarget.spaceId) || busy} onSelect={() => setDescribeAction({ id: describeTarget.id, name: describeTarget.originalName, value: describeTarget.description ?? "" })}><FileText className="mr-2 h-4 w-4" />編輯說明</ContextMenuItem>}
+        <ContextMenuSeparator />
+        <ContextMenuItem disabled={busy || selectedEditable.length === 0} className="text-destructive focus:text-destructive" onSelect={() => requestDelete(selectedEntries)}><Trash2 className="mr-2 h-4 w-4" />刪除<ContextMenuShortcut>Del</ContextMenuShortcut></ContextMenuItem>
+      </>
+    );
   };
 
-  const renderEntryActions = (entry: TestPlanEntry) => (
-    <EntryActions
-      entry={entry}
-      canEdit={canEditSpace(entry.spaceId)}
-      onEditSpreadsheet={() => {
-        if (entry.kind === "file" && isEditableSpreadsheet(entry)) {
-          setSpreadsheetFile(entry);
-        }
-      }}
-      onRename={() =>
-        setTextAction(
-          entry.kind === "folder"
-            ? { kind: "rename-folder", id: entry.id, value: entry.name }
-            : {
-              kind: "rename-file",
-              id: entry.id,
-              value: entry.originalName,
-            },
+  const renderEmptyMenu = () => (
+    <>
+      <ContextMenuItem disabled={!canPaste} onSelect={() => void pasteHere()}><ClipboardPaste className="mr-2 h-4 w-4" />貼上{clipboard ? ` ${clipboard.items.length} 個項目` : ""}<ContextMenuShortcut>Ctrl+V</ContextMenuShortcut></ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem disabled={!canEdit || busy || loading} onSelect={() => void createFolderHere()}><FolderPlus className="mr-2 h-4 w-4" />新增資料夾</ContextMenuItem>
+      <ContextMenuItem disabled={!canEdit || busy || loading || Boolean(uploadRetry)} onSelect={() => fileInputRef.current?.click()}><Upload className="mr-2 h-4 w-4" />上傳檔案</ContextMenuItem>
+      <ContextMenuItem disabled={!canEdit || busy || loading || Boolean(uploadRetry)} onSelect={() => folderInputRef.current?.click()}><FolderUp className="mr-2 h-4 w-4" />上傳資料夾</ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem disabled={orderedKeys.length === 0} onSelect={() => updateSelection(current => selectAll(current, orderedKeys))}>全選<ContextMenuShortcut>Ctrl+A</ContextMenuShortcut></ContextMenuItem>
+      <ContextMenuItem disabled={loading || busy} onSelect={() => void refreshWorkspace(activeSpaceId)}><RefreshCw className="mr-2 h-4 w-4" />重新整理</ContextMenuItem>
+    </>
+  );
+
+  // ----- rendering helpers ------------------------------------------------
+  const sortArrow = (column: TestPlanSort) => {
+    if (sort !== column) return null;
+    const ascending = (TEST_PLAN_SORT_DIRECTION[column] === "asc") !== reverse;
+    return <span className="file-explorer-sort-arrow" aria-hidden="true">{ascending ? "↑" : "↓"}</span>;
+  };
+  const ariaSort = (column: TestPlanSort) => sort !== column ? undefined : ((TEST_PLAN_SORT_DIRECTION[column] === "asc") !== reverse ? "ascending" as const : "descending" as const);
+  const listColumns = [
+    "34px",
+    "minmax(0, 1fr)",
+    showOwnerColumn ? "minmax(120px, 0.45fr)" : null,
+    showLocationColumn ? "minmax(140px, 0.6fr)" : null,
+    "152px",
+    "112px",
+    "92px",
+  ].filter(Boolean).join(" ");
+
+  const renderEntryCheckbox = (entry: TestPlanEntry) => (
+    <label className="file-library-entry-check" onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
+      <input type="checkbox" aria-label={`勾選 ${entryName(entry)}`} checked={selection.keys.has(entryKey(entry))} disabled={busy || loading} onChange={() => toggleChecked(entry)} />
+    </label>
+  );
+
+  const renderName = (entry: TestPlanEntry) => {
+    const key = entryKey(entry);
+    if (renaming?.key === key) {
+      return (
+        <span className="file-explorer-rename">
+          <input
+            className="file-explorer-rename-input"
+            aria-label={`重新命名 ${entryName(entry)}`}
+            autoFocus
+            value={renaming.value}
+            maxLength={160}
+            disabled={busy}
+            onFocus={(event) => {
+              const dot = entry.kind === "file" ? event.currentTarget.value.lastIndexOf(".") : -1;
+              event.currentTarget.setSelectionRange(0, dot > 0 ? dot : event.currentTarget.value.length);
+            }}
+            onClick={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onChange={(event) => setRenaming({ ...renaming, value: event.target.value, error: null })}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === "Enter") { event.preventDefault(); void commitRename(); }
+              if (event.key === "Escape") { event.preventDefault(); setRenaming(null); keyboardFocusRef.current = true; }
+            }}
+            onBlur={() => void commitRename()}
+          />
+          {renaming.error && <span className="file-explorer-rename-error" role="alert">{renaming.error}</span>}
+        </span>
+      );
+    }
+    const name = entryName(entry);
+    const dot = entry.kind === "file" ? name.lastIndexOf(".") : -1;
+    return (
+      <span className="file-library-name-cell" title={entry.kind === "file" && entry.description ? `${name}\n${entry.description}` : name}>
+        {dot > 0 ? <>{name.slice(0, dot)}<span className="file-explorer-ext">{name.slice(dot)}</span></> : name}
+      </span>
+    );
+  };
+
+  const renderQuickActions = (entry: TestPlanEntry) => (
+    <span className="file-explorer-quick" onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
+      {entry.kind === "file" ? (
+        <>
+          <button type="button" tabIndex={-1} onClick={() => void handleDownload(entry)} title="下載"><Download className="h-3.5 w-3.5" />下載</button>
+          {!previewOpen && <button type="button" tabIndex={-1} onClick={() => previewEntry(entry)} title="預覽（Alt+P）"><Eye className="h-3.5 w-3.5" />預覽</button>}
+        </>
+      ) : (
+        <button type="button" tabIndex={-1} onClick={() => openEntry(entry)} title="開啟（Enter）"><FolderOpen className="h-3.5 w-3.5" />開啟</button>
+      )}
+    </span>
+  );
+
+  const rowProps = (entry: TestPlanEntry, index: number) => {
+    const key = entryKey(entry);
+    const selected = selection.keys.has(key);
+    return {
+      "data-entry-key": key,
+      ref: (element: HTMLElement | null) => { if (element) rowRefs.current.set(key, element); else rowRefs.current.delete(key); },
+      tabIndex: selection.focus ? (selection.focus === key ? 0 : -1) : index === 0 ? 0 : -1,
+      "aria-selected": selected,
+      onClick: (event: ReactMouseEvent<HTMLElement>) => handleRowClick(entry, event),
+      onDoubleClick: () => openEntry(entry),
+      ...entryDragProps(entry),
+    };
+  };
+
+  const thumbnailUrl = (entry: TestPlanEntry) => {
+    if (entry.kind !== "file" || entry.category !== "image" || entry.extension.toLowerCase() === "svg") return null;
+    const cached = downloadUrlCacheRef.current.get(entry.id);
+    return cached?.url && cached.expiresAt > Date.now() ? cached.url : null;
+  };
+  void linkVersion;
+
+  const activeLocationName = activeSpaceId === null ? "所有檔案（所有人）" : isOwnSpace ? "我的空間" : `${activeSpace?.name ?? "載入中"} 的空間`;
+  const searchLocationName = activeSpaceId === null ? "所有人的檔案" : scope === "folder" && breadcrumbs.length ? breadcrumbs[breadcrumbs.length - 1].name : activeLocationName;
+  const uploadDisabled = !canEdit || loading || busy || Boolean(uploadRetry);
+  const dropLabel = dropTargetId && dropTargetId !== "__root__" ? folderName(dropTargetId) : activeSpaceId ? (breadcrumbs.length ? breadcrumbs[breadcrumbs.length - 1].name : activeLocationName) : "我的空間";
+  const showPreviewPane = previewOpen && (!compact || selectedEntries.length > 0);
+
+  const renderSpaceRow = (space: (typeof spaces)[number]) => (
+    <Fragment key={space.id}>
+      <div
+        className={cn(
+          "test-plan-space-row",
+          activeSpaceId === space.id && "is-active",
+          activeSpaceId === space.id && dropTargetId === "__root__" && "is-drop-target",
         )}
-      onMove={() =>
-        setMoveAction(
-          entry.kind === "folder"
-            ? { kind: "folder", id: entry.id, name: entry.name }
-            : { kind: "file", id: entry.id, name: entry.originalName },
-        )}
-      onDescribe={() => {
-        if (entry.kind === "file") {
-          setTextAction({
-            kind: "describe-file",
-            id: entry.id,
-            value: entry.description ?? "",
-          });
-        }
-      }}
-      onDownload={() => entry.kind === "file" && void handleDownload(entry)}
-      onDelete={() =>
-        setDeleteAction(
-          entry.kind === "folder"
-            ? { kind: "folder", id: entry.id, name: entry.name }
-            : { kind: "file", file: entry },
-        )}
-    />
+      >
+        <button
+          type="button"
+          disabled={busy || loading}
+          aria-label={`開啟 ${space.name}${space.description ? `（${space.description}）` : ""} 的檔案空間`}
+          aria-current={activeSpaceId === space.id ? "page" : undefined}
+          title={`${space.name} ${space.description ?? ""}`}
+          onClick={() => navigate({ spaceId: space.id, folderId: null })}
+          onDragOver={(event) => activeSpaceId === space.id && handleFolderDragOver(null, event)}
+          onDragLeave={() => setDropTargetId((current) => (current === "__root__" ? null : current))}
+          onDrop={(event) => activeSpaceId === space.id && handleFolderDrop(null, event)}
+        >
+          <span className="file-library-user-icon" aria-hidden="true" data-initials={spaceInitials(space.name)} style={spaceSwatch(space.color)} />
+          <span className="file-library-user-identity">
+            <strong>{space.name}</strong>
+            {space.description && <small>{space.description}</small>}
+          </span>
+          {space.ownerId === ownerId && <Badge variant="secondary" className="file-library-current-user">我</Badge>}
+          {space.ownerId !== ownerId && !canEditSpace(space.id) && <LockKeyhole className="file-explorer-lock" aria-label="唯讀" />}
+        </button>
+      </div>
+      {activeSpaceId === space.id && (
+        <div className="test-plan-folder-tree" aria-label={`${space.name} 的資料夾`}>
+          <FolderBranch
+            folders={folders}
+            files={files}
+            parentId={null}
+            activeFolderId={activeFolderId}
+            expandedFolderIds={expandedFolderIds}
+            onOpen={(folderId) => navigate({ spaceId: space.id, folderId })}
+            onToggle={(folderId) =>
+              setExpandedFolderIds((current) => {
+                const next = new Set(current);
+                if (next.has(folderId)) next.delete(folderId);
+                else next.add(folderId);
+                return next;
+              })}
+            dropTargetId={dropTargetId}
+            onDragOverFolder={handleFolderDragOver}
+            onDropOnFolder={handleFolderDrop}
+            onDragLeaveFolder={() => setDropTargetId(null)}
+          />
+        </div>
+      )}
+    </Fragment>
+  );
+
+  const commandButton = (props: { label: string; icon: typeof Download; onClick: () => void; disabled?: boolean; title?: string; className?: string; testId?: string; compactable?: boolean }) => (
+    <Button
+      type="button"
+      variant="ghost"
+      className={cn("file-explorer-command", props.compactable && "is-compactable", props.className)}
+      disabled={props.disabled}
+      title={props.title ?? props.label}
+      onClick={props.onClick}
+      data-testid={props.testId}
+    >
+      <props.icon className="h-4 w-4" />
+      <span>{props.label}</span>
+    </Button>
   );
 
   return (
-    <section className="test-plan-workspace file-library-workspace">
-      <header className="test-plan-header">
-        <MaintenancePageHeader
-          title="檔案上傳"
-          icon={FolderKanban}
-          wrapActionsOnMobile
-          actions={(
-            <>
-              {!canEdit && (
-                <Badge variant="outline" className="border-amber-300/30 text-amber-100">
-                  唯讀模式
-                </Badge>
-              )}
-              <Button type="button" variant="outline" disabled={!personalSpace || busy || loading || isOwnSpace} onClick={() => personalSpace && void openSpace(personalSpace.id)}>
-                <FolderOpen data-icon="inline-start" /><span>我的空間</span>
-              </Button>
-            </>
-          )}
-        />
-      </header>
-
-      <input ref={fileInputRef} className="sr-only" type="file" multiple disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onChange={handleFileSelection} />
-      <input ref={folderInputRef} className="sr-only" type="file" multiple {...directoryInputProps} disabled={!canEdit || loading || busy || Boolean(uploadRetry)} aria-label="選擇上傳資料夾" onChange={handleFolderSelection} />
+    <section className={cn("test-plan-workspace file-library-workspace file-explorer", compact && "is-compact")} onKeyDown={handleExplorerKeyDown}>
+      <input ref={fileInputRef} className="sr-only" type="file" multiple disabled={uploadDisabled} onChange={handleFileSelection} />
+      <input ref={folderInputRef} className="sr-only" type="file" multiple {...directoryInputProps} disabled={uploadDisabled} aria-label="選擇上傳資料夾" onChange={handleFolderSelection} />
       {uploadRetry && (
         <section className="file-library-upload-errors" role="alert" aria-label="上傳失敗清單">
           <div className="file-library-upload-error-heading">
@@ -1267,7 +1812,195 @@ export function TestPlanWorkspace() {
         />
       )}
 
-      <div className={cn("test-plan-shell", selectedEntry && "has-inspector")}>
+      <div className="file-explorer-commandbar" role="toolbar" aria-label="檔案操作">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="file-library-navigation-toggle"
+          aria-label="空間與資料夾"
+          aria-expanded={isSpaceDrawerOpen}
+          aria-controls="test-plan-space-drawer"
+          onClick={() => setIsSpaceDrawerOpen(true)}
+        >
+          <PanelLeftOpen className="h-4 w-4" />
+        </Button>
+        <Button type="button" className="file-explorer-command is-primary" disabled={uploadDisabled} title={activeSpaceId === null ? "上傳到我的空間" : "上傳到目前資料夾；也可以直接把檔案拖進清單"} onClick={() => fileInputRef.current?.click()}>
+          <Upload className="h-4 w-4" /><span>上傳檔案</span>
+        </Button>
+        <Button type="button" variant="ghost" className="file-explorer-command" aria-label="上傳資料夾" disabled={uploadDisabled} title="瀏覽器會再問一次是否上傳；直接把資料夾拖進清單就不會" onClick={() => folderInputRef.current?.click()}>
+          <FolderUp className="h-4 w-4" /><span>上傳資料夾</span>
+        </Button>
+        {commandButton({ label: "新增資料夾", icon: FolderPlus, disabled: !canEdit || loading || busy, onClick: () => void createFolderHere(), title: canEdit ? "在目前位置建立資料夾，並直接輸入名稱" : readOnlyReason })}
+        <span className="file-explorer-divider" aria-hidden="true" />
+        {commandButton({ compactable: true, label: "剪下", icon: Scissors, disabled: !selectionMovable || busy, onClick: () => cutEntries(selectedEntries), title: selectedEntries.length === 0 ? "先選取項目（Ctrl+X）" : selectionEditable ? "剪下（Ctrl+X），到目標資料夾再貼上" : readOnlyReason })}
+        {commandButton({ compactable: true, label: "貼上", icon: ClipboardPaste, disabled: !canPaste, onClick: () => void pasteHere(), title: clipboard ? `把剪下的 ${clipboard.items.length} 個項目移到這裡（Ctrl+V）` : "先剪下項目（Ctrl+X）" })}
+        {commandButton({ label: "重新命名", icon: Pencil, disabled: !selectedEntry || !selectionEditable || busy, onClick: () => startRename(selectedEntry), title: selectedEntry ? (selectionEditable ? "重新命名（F2）" : readOnlyReason) : "選取一個項目（F2）" })}
+        {commandButton({ label: "移至", icon: FolderInput, disabled: !selectionMovable || busy, onClick: () => requestMove(selectedEntries), title: selectedEntries.length === 0 ? "先選取項目" : selectionEditable ? "選擇目標資料夾；也可以直接拖曳" : readOnlyReason })}
+        {commandButton({ label: "下載", icon: Download, disabled: selectedFiles.length === 0, onClick: () => void downloadEntries(selectedEntries), title: selectedFiles.length > 1 ? `下載 ${selectedFiles.length} 個檔案到同一個資料夾` : "下載；也可以把檔案直接拖到桌面" })}
+        {commandButton({ compactable: true, label: "複製連結", icon: Link2, disabled: !selectedEntry, onClick: () => void copyLink(selectedEntry), title: "複製能直接打開這個位置的連結" })}
+        {commandButton({ label: "刪除", icon: Trash2, disabled: busy || loading || selectedEditable.length === 0, onClick: () => requestDelete(selectedEntries), className: "is-danger", title: selectedEntries.length && !selectedEditable.length ? readOnlyReason : "刪除（Delete）" })}
+        <span className="file-explorer-divider" aria-hidden="true" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="ghost" className="file-explorer-command is-compactable" aria-label="排序方式" title="排序方式；也可以直接點欄位標題">
+              <ArrowDownUp className="h-4 w-4" /><span>排序</span><ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>排序方式</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={sort} onValueChange={(value) => setSort(value as TestPlanSort)}>
+              {Object.entries(SORT_LABELS).map(([value, label]) => <DropdownMenuRadioItem key={value} value={value}>{label}</DropdownMenuRadioItem>)}
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuRadioGroup value={reverse ? "reverse" : "natural"} onValueChange={(value) => setReverse(value === "reverse")}>
+              <DropdownMenuRadioItem value="natural">{TEST_PLAN_SORT_DIRECTION[sort] === "asc" ? "遞增" : "遞減"}</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="reverse">{TEST_PLAN_SORT_DIRECTION[sort] === "asc" ? "遞減" : "遞增"}</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="ghost" className="file-explorer-command is-compactable" aria-label="檢視方式" title="檢視方式">
+              {viewMode === "list" ? <List className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}<span>檢視</span><ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuRadioGroup value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)}>
+              <DropdownMenuRadioItem value="list">詳細資料</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="grid">大圖示</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <span className="file-explorer-spacer" />
+        {selectedEntries.length > 0 && <span className="file-explorer-selection" role="status">已選取 {selectedEntries.length} 個項目</span>}
+        <Button
+          type="button"
+          variant="ghost"
+          className={cn("file-explorer-command file-explorer-toggle", previewOpen && "is-on")}
+          aria-pressed={previewOpen}
+          title="預覽窗格（Alt+P）"
+          onClick={() => setPreviewOpen(!previewOpen)}
+        >
+          <PanelRight className="h-4 w-4" /><span>預覽窗格</span>
+        </Button>
+      </div>
+
+      <div className="file-explorer-addressbar">
+        <div className="file-explorer-nav-buttons">
+          <Button type="button" variant="ghost" size="icon" aria-label="返回（Alt+←）" title="返回（Alt+←）" disabled={!canGoBack || busy} onClick={goBack}><ArrowLeft className="h-4 w-4" /></Button>
+          <Button type="button" variant="ghost" size="icon" aria-label="前進（Alt+→）" title="前進（Alt+→）" disabled={!canGoForward || busy} onClick={goForward}><ArrowRight className="h-4 w-4" /></Button>
+          <Button type="button" variant="ghost" size="icon" aria-label="上一層（Alt+↑）" title="上一層（Alt+↑）" disabled={!canGoUp || busy} onClick={goUp}><ArrowUp className="h-4 w-4" /></Button>
+        </div>
+        <nav className="test-plan-location" aria-label="目前位置">
+          {activeSpaceId === null ? <Globe className="file-explorer-location-icon" aria-hidden="true" /> : isOwnSpace ? <UserRound className="file-explorer-location-icon" aria-hidden="true" /> : <Users className="file-explorer-location-icon" aria-hidden="true" />}
+          <button
+            type="button"
+            className={cn(dropTargetId === "__root__" && "is-drop-target")}
+            onClick={() => navigate({ spaceId: activeSpaceId, folderId: null })}
+            onDragOver={(event) => activeSpaceId && handleFolderDragOver(null, event)}
+            onDragLeave={() => setDropTargetId((current) => (current === "__root__" ? null : current))}
+            onDrop={(event) => handleFolderDrop(null, event)}
+          >
+            {activeLocationName}
+          </button>
+          {[null, ...breadcrumbs.map((folder) => folder.id)].map((levelId, index) => {
+            const children = activeSpaceId ? folders.filter((folder) => folder.parentId === levelId).sort((first, second) => first.name.localeCompare(second.name, "zh-Hant", { numeric: true })) : [];
+            const folder = index > 0 ? breadcrumbs[index - 1] : null;
+            return (
+              <Fragment key={levelId ?? "root"}>
+                {folder && (
+                  <button
+                    type="button"
+                    className={cn(dropTargetId === folder.id && "is-drop-target")}
+                    onClick={() => navigate({ spaceId: activeSpaceId, folderId: folder.id })}
+                    onDragOver={(event) => handleFolderDragOver(folder.id, event)}
+                    onDragLeave={() => setDropTargetId((current) => (current === folder.id ? null : current))}
+                    onDrop={(event) => handleFolderDrop(folder.id, event)}
+                  >
+                    {folder.name}
+                  </button>
+                )}
+                {children.length > 0 ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button type="button" className="file-explorer-crumb-chevron" aria-label={`${folder?.name ?? activeLocationName} 底下的資料夾`}><ChevronRight className="h-3.5 w-3.5" /></button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+                      {children.map((child) => (
+                        <DropdownMenuItem key={child.id} onSelect={() => navigate({ spaceId: activeSpaceId, folderId: child.id })}>
+                          <Folder className="mr-2 h-4 w-4" />{child.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : index < breadcrumbs.length ? <ChevronRight className="file-explorer-crumb-sep h-3.5 w-3.5" aria-hidden="true" /> : null}
+              </Fragment>
+            );
+          })}
+        </nav>
+        <Button type="button" variant="ghost" size="icon" aria-label="重新整理" title="重新整理" disabled={loading || busy} onClick={() => void refreshWorkspace(activeSpaceId)}>
+          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+        </Button>
+        <div className="file-explorer-search" role="search">
+          <Search className="h-4 w-4" aria-hidden="true" />
+          <Input
+            ref={searchInputRef}
+            value={query}
+            disabled={busy}
+            aria-label="搜尋檔案與資料夾"
+            placeholder={`搜尋「${searchLocationName}」 (Ctrl+E)`}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && query) { event.preventDefault(); setQuery(""); }
+              if (event.key === "ArrowDown" || event.key === "Enter") {
+                event.preventDefault();
+                keyboardFocusRef.current = true;
+                updateSelection(current => current.focus ? current : moveSelection(current, orderedKeys, "first"));
+                const first = orderedKeys[0];
+                if (first) rowRefs.current.get(selection.focus ?? first)?.focus();
+              }
+            }}
+          />
+          <Select
+            value={activeSpaceId === null ? "everyone" : scope}
+            disabled={busy}
+            onValueChange={(value) => {
+              if (value === "everyone") { if (activeSpaceId !== null) navigate({ spaceId: null, folderId: null }); return; }
+              setScope(value as FileSearchScope);
+            }}
+          >
+            <SelectTrigger className="file-explorer-scope" aria-label="搜尋範圍">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="folder" disabled={activeSpaceId === null}>{SCOPE_LABELS.folder}</SelectItem>
+              <SelectItem value="space" disabled={activeSpaceId === null}>{SCOPE_LABELS.space}</SelectItem>
+              <SelectItem value="everyone">{SCOPE_LABELS.everyone}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Select
+          value={categoryFilter}
+          disabled={busy}
+          onValueChange={(value) =>
+            setCategoryFilter(value as TestPlanFileCategory | "all")}
+        >
+          <SelectTrigger className="file-explorer-format" aria-label="檔案格式">
+            <Filter className="h-3.5 w-3.5 opacity-70" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className={cn("test-plan-shell", showPreviewPane && "has-inspector", !previewOpen && "is-preview-closed")}>
         <aside
           id="test-plan-space-drawer"
           className={cn(
@@ -1277,9 +2010,7 @@ export function TestPlanWorkspace() {
           aria-label="使用者空間與資料夾"
         >
           <div className="test-plan-rail-heading">
-            <div>
-              <strong>使用者空間</strong>
-            </div>
+            <strong>使用者空間</strong>
             <Button
               type="button"
               variant="ghost"
@@ -1293,122 +2024,33 @@ export function TestPlanWorkspace() {
           </div>
 
           <div className="test-plan-space-list">
-            {ownSpaces.length === 0 && (
+            <p className="file-library-rail-label">我的空間</p>
+            {ownSpaces.length === 0 && <p className="file-library-rail-empty">個人空間建立中，重新整理後再試。</p>}
+            {ownSpaces.map(renderSpaceRow)}
+            {teamSpaces.length > 0 && <p className="file-library-rail-label">團隊成員</p>}
+            {teamSpaces.map(renderSpaceRow)}
+            {otherSpaces.length > 0 && (
               <>
-                <p className="file-library-rail-label">我的空間</p>
-                <p className="file-library-rail-empty">個人空間建立中，重新整理後再試。</p>
+                <p className="file-library-rail-label"><span>其他使用者</span><span className="file-explorer-count">{otherSpaces.length} 人</span></p>
+                <label className="file-explorer-people-filter">
+                  <Filter className="h-3.5 w-3.5" aria-hidden="true" />
+                  <input value={peopleFilter} onChange={(event) => setPeopleFilter(event.target.value)} placeholder="篩選人員…" aria-label="篩選其他使用者" />
+                  {peopleFilter && <button type="button" aria-label="清除人員篩選" onClick={() => setPeopleFilter("")}><X className="h-3.5 w-3.5" /></button>}
+                </label>
+                {listedOtherSpaces.map(renderSpaceRow)}
+                {listedOtherSpaces.length === 0 && <p className="file-library-rail-empty">沒有符合「{peopleFilter}」的人員</p>}
               </>
             )}
-            {pinnedSpaces.map((space, index) => (
-              <Fragment key={space.id}>
-                {index === 0 && space.ownerId === ownerId && <p className="file-library-rail-label">我的空間</p>}
-                {index === ownSpaces.length && <p className="file-library-rail-label">團隊成員</p>}
-                <div
-                  className={cn(
-                    "test-plan-space-row",
-                    activeSpaceId === space.id && "is-active",
-                  )}
-                >
-                  <button
-                    type="button"
-                    disabled={busy || loading}
-                    aria-label={`開啟 ${space.name}${space.description ? `（${space.description}）` : ""} 的檔案空間`}
-                    aria-current={activeSpaceId === space.id ? "page" : undefined}
-                    title={`${space.name} ${space.description ?? ""}`}
-                    onClick={() => {
-                      setIsSpaceDrawerOpen(false);
-                      void openSpace(space.id);
-                    }}
-                  >
-                    <span className="file-library-user-icon" aria-hidden="true" data-initials={spaceInitials(space.name)} style={spaceSwatch(space.color)} />
-                    <span className="file-library-user-identity">
-                      <strong>{space.name}</strong>
-                      {space.description && <small>{space.description}</small>}
-                    </span>
-                    {space.ownerId === ownerId && <Badge variant="secondary" className="file-library-current-user">我</Badge>}
-                  </button>
-                </div>
-              </Fragment>
-            ))}
-            {teamSpaces.length === 0 && otherSpaces.length > 0 && <p className="file-library-rail-label">團隊成員</p>}
-
-            {otherSpaces.length > 0 && (
-              <div className="file-library-other-users">
-                <span id="file-library-other-users-label">其他使用者</span>
-                <Select
-                  value={selectedOtherSpace?.id ?? ""}
-                  disabled={busy || loading}
-                  onValueChange={spaceId => {
-                    if (busy || loading || !otherSpaces.some(space => space.id === spaceId)) return;
-                    setIsSpaceDrawerOpen(false);
-                    void openSpace(spaceId);
-                  }}
-                >
-                  <SelectTrigger className="file-library-user-select" aria-label="其他使用者" aria-labelledby="file-library-other-users-label">
-                    <SelectValue placeholder="選擇其他使用者">
-                      {selectedOtherSpace && <span className="file-library-user-option"><span>{selectedOtherSpace.name}</span>{selectedOtherSpace.description && <small>{selectedOtherSpace.description}</small>}</span>}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="file-library-user-options">
-                    {otherSpaces.map(space => <SelectItem key={space.id} value={space.id} textValue={`${space.name} ${space.description ?? ""}`}>
-                      <span className="file-library-user-option"><span>{space.name}</span>{space.description && <small>{space.description}</small>}</span>
-                    </SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
             <p className="file-library-rail-label">跨使用者</p>
-            <button type="button" className={cn("file-library-all", activeSpaceId === null && "is-active")} disabled={busy} onClick={() => { setIsSpaceDrawerOpen(false); void openSpace(null); }}><Users /><span>所有檔案（所有人）</span><span className="file-library-count">{activeSpaceId === null ? files.length : ""}</span></button>
+            <button
+              type="button"
+              className={cn("file-library-all", activeSpaceId === null && "is-active")}
+              disabled={busy}
+              onClick={() => navigate({ spaceId: null, folderId: null })}
+            >
+              <Globe className="h-4 w-4" /><span>所有檔案（所有人）</span><span className="file-library-count">{activeSpaceId === null ? files.length : ""}</span>
+            </button>
           </div>
-
-          {activeSpace && (
-            <div className="test-plan-folder-tree">
-              <button
-                type="button"
-                className={cn(
-                  "test-plan-folder-tree-item",
-                  "test-plan-folder-tree-root",
-                  activeFolderId === null && "is-active",
-                  dropTargetId === "__root__" && "is-drop-target",
-                )}
-                onClick={() => {
-                  setActiveFolderId(null);
-                  setSelectedEntryKey(null);
-                  setIsSpaceDrawerOpen(false);
-                }}
-                onDragOver={(event) => handleFolderDragOver(null, event)}
-                onDragLeave={() => setDropTargetId((current) => (current === "__root__" ? null : current))}
-                onDrop={(event) => handleFolderDrop(null, event)}
-              >
-                <FolderOpen className="h-4 w-4" />
-                <span>全部檔案</span>
-              </button>
-              <FolderBranch
-                folders={folders}
-                files={files}
-                parentId={null}
-                activeFolderId={activeFolderId}
-                expandedFolderIds={expandedFolderIds}
-                onOpen={(folderId) => {
-                  setActiveFolderId(folderId);
-                  setSelectedEntryKey(null);
-                  setIsSpaceDrawerOpen(false);
-                }}
-                onToggle={(folderId) =>
-                  setExpandedFolderIds((current) => {
-                    const next = new Set(current);
-                    if (next.has(folderId)) next.delete(folderId);
-                    else next.add(folderId);
-                    return next;
-                  })}
-                dropTargetId={dropTargetId}
-                onDragOverFolder={handleFolderDragOver}
-                onDropOnFolder={handleFolderDrop}
-                onDragLeaveFolder={() => setDropTargetId(null)}
-              />
-            </div>
-          )}
         </aside>
 
         <main className={cn("test-plan-main", spaces.length === 0 && "is-empty")}>
@@ -1431,7 +2073,7 @@ export function TestPlanWorkspace() {
           ) : spaces.length === 0 && !loading ? (
             <div className="test-plan-empty">
               <span className="test-plan-empty-icon">
-                <FolderKanban className="h-8 w-8" />
+                <FolderOpen className="h-8 w-8" />
               </span>
               <h2>尚未載入使用者空間</h2>
               <p>使用者空間會在帳號啟用時自動建立，請重新整理後再試。</p>
@@ -1444,193 +2086,10 @@ export function TestPlanWorkspace() {
             </div>
           ) : (
             <>
-      <div className={cn("file-library-context", activeSpaceId === null ? "is-everyone" : isOwnSpace ? "is-mine" : "is-other")} role="status">
-        {activeSpaceId === null ? (
-          <>
-            <Users className="file-library-context-icon" aria-hidden="true" />
-            <div>
-              <strong>所有人的檔案</strong>
-              <span>每一列都標示擁有者並依擁有者分組，不會和你的檔案混在一起；在這裡上傳仍會放進你的個人空間。</span>
-            </div>
-          </>
-        ) : isOwnSpace ? (
-          <>
-            <UserRound className="file-library-context-icon" aria-hidden="true" />
-            <div>
-              <strong>我的空間</strong>
-              <span>只有你的檔案。拖到左側資料夾可搬移，拖到桌面或檔案總管可直接存檔（Chrome／Edge）；上傳資料夾會保留層級，同名檔案略過。</span>
-            </div>
-          </>
-        ) : (
-          <>
-            <LockKeyhole className="file-library-context-icon" aria-hidden="true" />
-            <div>
-              <strong>{activeSpace?.name ?? "載入中"} 的空間</strong>
-              <span>{canEdit ? "你有管理權限，可以整理這個空間；" : "唯讀：可以瀏覽與下載，不能修改；"}上傳的檔案會放進你自己的個人空間。</span>
-            </div>
-          </>
-        )}
-      </div>
-              <div className="test-plan-toolbar">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="file-library-navigation-toggle"
-                  aria-label="空間與資料夾"
-                  aria-expanded={isSpaceDrawerOpen}
-                  aria-controls="test-plan-space-drawer"
-                  onClick={() => setIsSpaceDrawerOpen(true)}
-                >
-                  <PanelLeftOpen className="h-4 w-4" />
-                </Button>
-                <div className="test-plan-location">
-                  <button
-                    type="button"
-                    className={cn(dropTargetId === "__root__" && "is-drop-target")}
-                    onClick={() => {
-                      setActiveFolderId(null);
-                      setSelectedEntryKey(null);
-                    }}
-                    onDragOver={(event) => activeSpaceId && handleFolderDragOver(null, event)}
-                    onDragLeave={() => setDropTargetId((current) => (current === "__root__" ? null : current))}
-                    onDrop={(event) => handleFolderDrop(null, event)}
-                  >
-                    {activeSpace?.name ?? "所有檔案"}
-                  </button>
-                  {breadcrumbs.map((folder) => (
-                    <span key={folder.id}>
-                      <ChevronRight className="h-3.5 w-3.5" />
-                      <button
-                        type="button"
-                        className={cn(dropTargetId === folder.id && "is-drop-target")}
-                        onClick={() => {
-                          setActiveFolderId(folder.id);
-                          setSelectedEntryKey(null);
-                        }}
-                        onDragOver={(event) => handleFolderDragOver(folder.id, event)}
-                        onDragLeave={() => setDropTargetId((current) => (current === folder.id ? null : current))}
-                        onDrop={(event) => handleFolderDrop(folder.id, event)}
-                      >
-                        {folder.name}
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="test-plan-primary-actions">
-                  <Button
-                    variant="outline"
-                    disabled={!canEdit || loading || busy}
-                    onClick={() =>
-                      setTextAction({
-                        kind: "create-folder",
-                        parentId: activeFolderId,
-                      })}
-                  >
-                    <Folder className="mr-2 h-4 w-4" />
-                    新增資料夾
-                  </Button>
-                  <Button type="button" variant="outline" className="file-library-upload" aria-label="上傳資料夾" title="瀏覽器會再問一次是否上傳；直接把資料夾拖進清單就不會" disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onClick={() => folderInputRef.current?.click()}>
-                    <FolderInput data-icon="inline-start" /><span>上傳資料夾</span>
-                  </Button>
-                  <Button type="button" className="file-library-upload is-primary" disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onClick={() => fileInputRef.current?.click()}>
-                    <Upload data-icon="inline-start" /><span>上傳檔案</span>
-                  </Button>
-                </div>
-              </div>
-
-              <div className="file-library-bulk-tools" role="toolbar" aria-label="批次檔案操作">
-                <label className="file-library-select-all"><input type="checkbox" aria-label="全選目前清單可刪除項目" checked={allChecked} aria-checked={allChecked ? "true" : checkedEntries.length ? "mixed" : "false"} ref={input => { if (input) input.indeterminate = !allChecked && checkedEntries.length > 0; }} disabled={busy || loading || !eligibleEntries.length} onChange={event => {
-                  const context = selectionContext.current;
-                  if (context.disabled || context.scope !== selectionScope) return;
-                  setCheckedState({ scope: context.scope, keys: new Set(event.target.checked ? context.eligible.keys() : []) });
-                }} /><span>全選目前清單</span></label>
-                <span className="file-library-selection-count" role="status">{checkedEntries.length > 0 ? `已勾選 ${checkedEntries.length} 項` : `${eligibleEntries.length} 個可整理項目`}</span>
-                {checkedEntries.length > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => setCheckedState({ scope: selectionScope, keys: new Set() })}>取消勾選</Button>}
-                <Button variant="outline" size="sm" className="file-library-bulk-delete" disabled={busy || loading || !checkedEntries.length} onClick={() => setDeleteAction({ kind: "batch", entries: checkedEntries, scope: selectionScope })}><Trash2 />刪除已選項目</Button>
-              </div>
-              <div className="test-plan-filterbar">
-                <label className="test-plan-search">
-                  <Search className="h-4 w-4" />
-                  <Input
-                    value={query}
-                    disabled={busy}
-                    placeholder="搜尋檔案與資料夾"
-                    onChange={(event) => setQuery(event.target.value)}
-                  />
-                </label>
-                <Select
-                  value={categoryFilter}
-                  disabled={busy}
-                  onValueChange={(value) =>
-                    setCategoryFilter(value as TestPlanFileCategory | "all")}
-                >
-                  <SelectTrigger className="w-[150px]" aria-label="檔案格式">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={sort}
-                  disabled={busy}
-                  onValueChange={(value) => setSort(value as TestPlanSort)}
-                >
-                  <SelectTrigger className="w-[145px]" aria-label="排序方式">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(SORT_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="test-plan-view-toggle">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    disabled={busy}
-                    className={cn(viewMode === "grid" && "is-active")}
-                    onClick={() => setViewMode("grid")}
-                  >
-                    <Grid2X2 className="h-4 w-4" />
-                    <span className="sr-only">卡片檢視</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    disabled={busy}
-                    className={cn(viewMode === "list" && "is-active")}
-                    onClick={() => setViewMode("list")}
-                  >
-                    <List className="h-4 w-4" />
-                    <span className="sr-only">清單檢視</span>
-                  </Button>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  disabled={loading || busy}
-                  onClick={() => void refreshWorkspace(activeSpaceId)}
-                >
-                  <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-                  <span className="sr-only">重新整理</span>
-                </Button>
-              </div>
-
               {(query.trim() || categoryFilter !== "all") && (
                 <div className="file-library-filter-chips" aria-label="目前篩選條件">
                   {query.trim() && <Button variant="secondary" size="sm" disabled={busy} onClick={() => setQuery("")} aria-label="清除搜尋條件">搜尋：{query}<X /></Button>}
+                  {query.trim() && scope === "folder" && activeSpaceId && <Button variant="secondary" size="sm" disabled={busy} onClick={() => setScope("space")} aria-label="清除範圍條件">範圍：目前資料夾<X /></Button>}
                   {categoryFilter !== "all" && <Button variant="secondary" size="sm" disabled={busy} onClick={() => setCategoryFilter("all")} aria-label="清除格式條件">格式：{CATEGORY_LABELS[categoryFilter]}<X /></Button>}
                   <Button variant="ghost" size="sm" disabled={busy} onClick={clearFilters}>全部清除</Button>
                 </div>
@@ -1650,228 +2109,212 @@ export function TestPlanWorkspace() {
                 </div>
               )}
 
-              <div
-                className={cn(
-                  "test-plan-dropzone",
-                  isDragging && "is-dragging",
-                )}
-                onDragEnter={(event) => {
-                  event.preventDefault();
-                  if (isEntryDrag(event.dataTransfer)) return;
-                  if (canEdit && !loading && !busy && !uploadRetry) setIsDragging(true);
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  if (isEntryDrag(event.dataTransfer)) event.dataTransfer.dropEffect = "move";
-                }}
-                onDragLeave={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                    setIsDragging(false);
-                  }
-                }}
-                onDrop={handleDrop}
-              >
-                {isDragging && (
-                  <div className="test-plan-drop-overlay">
-                    <HardDriveUpload className="h-9 w-9" />
-                    <strong>放開以上傳到此資料夾（可直接拖整個資料夾）</strong>
-                    <span>一次最多 20 個檔案，單檔 1 GB，整批合計 1 GB</span>
-                  </div>
-                )}
+              <ContextMenu>
+                <ContextMenuTrigger asChild disabled={loading}>
+                  <div
+                    ref={listRef}
+                    className={cn(
+                      "test-plan-dropzone",
+                      isDragging && "is-dragging",
+                      selection.keys.size > 0 && "has-selection",
+                    )}
+                    style={{ "--file-explorer-columns": listColumns } as CSSProperties}
+                    tabIndex={-1}
+                    aria-label="檔案清單"
+                    onMouseDown={(event) => {
+                      // Clicking empty space keeps keyboard shortcuts (Ctrl+V, Ctrl+A …) working on the list.
+                      if (!(event.target as HTMLElement).closest("button, input, a, [data-entry-key]")) listRef.current?.focus({ preventScroll: true });
+                    }}
+                    onContextMenu={handleContextMenu}
+                    onClick={(event) => {
+                      if (event.target === event.currentTarget || (event.target as HTMLElement).classList.contains("test-plan-entry-grid") || (event.target as HTMLElement).classList.contains("test-plan-entry-list")) updateSelection(EMPTY_SELECTION);
+                    }}
+                    onDragEnter={(event) => {
+                      event.preventDefault();
+                      if (isEntryDrag(event.dataTransfer)) return;
+                      if (canEdit && !loading && !busy && !uploadRetry) setIsDragging(true);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      if (isEntryDrag(event.dataTransfer)) event.dataTransfer.dropEffect = "move";
+                      else if (dropTargetId && dropTargetId !== "__root__" && (event.target as HTMLElement).closest?.("[data-entry-key^='folder:']") === null) setDropTargetId(null);
+                    }}
+                    onDragLeave={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                        setIsDragging(false);
+                        setDropTargetId(null);
+                      }
+                    }}
+                    onDrop={handleDrop}
+                  >
+                    {isDragging && (
+                      <div className="test-plan-drop-overlay" aria-live="polite">
+                        <HardDriveUpload className="h-9 w-9" />
+                        <strong>放開以上傳到「{dropLabel}」</strong>
+                        <span>可直接拖整個資料夾 · 一次最多 20 個檔案，單檔 1 GB，整批合計 1 GB</span>
+                      </div>
+                    )}
+                    <div className="file-explorer-scroll">
 
-                {viewMode === "list" && <div className="test-plan-list-head" data-owner-column={showOwnerColumn ? "true" : undefined}><span className="file-library-name-heading">名稱</span>{showOwnerColumn && <span>擁有者</span>}<span>格式</span><span>大小</span><span>更新時間</span><span className="sr-only">操作</span></div>}
-                {loading ? (
-                  <div className="test-plan-loading">
-                    <RefreshCw className="h-5 w-5 animate-spin" />
-                    正在載入資料儲存…
-                  </div>
-                ) : visibleEntries.length === 0 ? (
-                  <div className="test-plan-empty is-compact">
-                    <Archive className="h-8 w-8" />
-                    <h2>{query || categoryFilter !== "all" ? "目前篩選條件沒有符合的檔案" : activeFolderId ? "這個資料夾目前是空的" : activeSpaceId ? "這個使用者空間目前是空的" : "尚未上傳檔案"}</h2>
-                    <p>
-                      {query
-                        ? "請調整搜尋字詞或檔案類型。"
-                        : canEdit ? "將檔案拖到這裡，或使用右上方的上傳按鈕。" : "切換到我的空間，即可整理及上傳自己的檔案。"}
-                    </p>
-                  </div>
-                ) : viewMode === "grid" ? (
-                  <div className="test-plan-entry-grid">
-                    {listSections.flatMap((section) => [
-                      ...(section.label ? [<div key={`group:${section.key}`} className="file-library-owner-group" role="presentation"><span>{section.label}</span><small>{section.entries.length} 項</small></div>] : []),
-                      ...section.entries.map((entry) => (
-                      <article
-                        key={`${entry.kind}:${entry.id}`}
-                        className={cn(
-                          "test-plan-entry-card",
-                          selectedEntryKey === `${entry.kind}:${entry.id}` && "is-selected",
-                          checkedKeys.has(entryKey(entry)) && "is-checked",
-                          entry.kind === "folder" && dropTargetId === entry.id && "is-drop-target",
+                    {viewMode === "list" && (
+                      <div className="test-plan-list-head" role="row">
+                        <span className="file-explorer-check-cell">
+                          <input
+                            type="checkbox"
+                            aria-label="全選目前清單"
+                            checked={allSelected}
+                            aria-checked={allSelected ? "true" : selection.keys.size ? "mixed" : "false"}
+                            ref={input => { if (input) input.indeterminate = !allSelected && selection.keys.size > 0; }}
+                            disabled={busy || loading || !orderedKeys.length}
+                            onChange={(event) => updateSelection(current => event.target.checked ? selectAll(current, orderedKeys) : EMPTY_SELECTION)}
+                          />
+                        </span>
+                        <button type="button" className="file-explorer-col-head" data-sort="name" aria-sort={ariaSort("name")} onClick={() => toggleSort("name")}>名稱{sortArrow("name")}</button>
+                        {showOwnerColumn && <span className="file-explorer-col-head is-static" data-col="owner">擁有者</span>}
+                        {showLocationColumn && <span className="file-explorer-col-head is-static" data-col="location">位置</span>}
+                        <button type="button" className="file-explorer-col-head" data-col="date" data-sort="newest" aria-sort={ariaSort("newest")} onClick={() => toggleSort("newest")}>修改日期{sortArrow("newest")}</button>
+                        <button type="button" className="file-explorer-col-head" data-col="type" data-sort="type" aria-sort={ariaSort("type")} onClick={() => toggleSort("type")}>類型{sortArrow("type")}</button>
+                        <button type="button" className="file-explorer-col-head is-number" data-col="size" data-sort="largest" aria-sort={ariaSort("largest")} onClick={() => toggleSort("largest")}>大小{sortArrow("largest")}</button>
+                      </div>
+                    )}
+                    {loading ? (
+                      <div className="test-plan-loading">
+                        <RefreshCw className="h-5 w-5 animate-spin" />
+                        正在載入資料儲存…
+                      </div>
+                    ) : visibleEntries.length === 0 ? (
+                      <div className="test-plan-empty is-compact">
+                        <FolderOpen className="h-8 w-8" />
+                        <h2>{query || categoryFilter !== "all" ? "目前篩選條件沒有符合的檔案" : activeFolderId ? "這個資料夾目前是空的" : activeSpaceId ? "這個使用者空間目前是空的" : "尚未上傳檔案"}</h2>
+                        <p>
+                          {query || categoryFilter !== "all"
+                            ? "請調整搜尋字詞或檔案類型。"
+                            : canEdit ? "把檔案或整個資料夾拖到這裡，或按上方的「上傳檔案」。" : "切換到我的空間，即可整理及上傳自己的檔案。"}
+                        </p>
+                        {query && activeSpaceId !== null && (
+                          <Button type="button" variant="outline" size="sm" onClick={() => navigate({ spaceId: null, folderId: null })}>
+                            <Globe className="mr-2 h-4 w-4" />改在所有人的檔案中搜尋「{query}」
+                          </Button>
                         )}
-                        tabIndex={0}
-                        aria-selected={selectedEntryKey === `${entry.kind}:${entry.id}`}
-                        onClick={() => selectEntry(entry)}
-                        onDoubleClick={() => openEntry(entry)}
-                        onKeyDown={(event) => {
-                          if (event.target !== event.currentTarget) return;
-                          if (event.key === "Enter") openEntry(entry);
-                          if (event.key === "Delete" && canEditSpace(entry.spaceId)) requestEntryDelete(entry);
-                        }}
-                        {...entryDragProps(entry)}
-                      >
-                        {renderEntryCheckbox(entry)}
-                        <div
-                          className={cn(
-                            "test-plan-entry-icon",
-                            entry.kind === "folder"
-                              ? "is-folder"
-                              : `is-${entry.category}`,
-                          )}
-                        >
-                          {entry.kind === "folder" ? (
-                            <Folder className="h-6 w-6" />
-                          ) : (
-                            <FileCategoryIcon
-                              category={entry.category}
-                              className="h-6 w-6"
-                            />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <strong>
-                            {entry.kind === "folder"
-                              ? entry.name
-                              : entry.originalName}
-                          </strong>
-                          <span>
-                            {entry.kind === "folder"
-                              ? "資料夾"
-                              : `${CATEGORY_LABELS[entry.category]} · ${formatTestPlanFileSize(entry.fileSize)}`}
-                          </span>
-                          {entry.kind === "file" && entry.description && (
-                            <small>{entry.description}</small>
-                          )}
-                        </div>
-                        {renderEntryActions(entry)}
-                      </article>
-                      )),
-                    ])}
+                      </div>
+                    ) : viewMode === "grid" ? (
+                      <div className="test-plan-entry-grid">
+                        {listSections.flatMap((section) => [
+                          ...(section.label ? [<div key={`group:${section.key}`} className="file-library-owner-group" role="presentation"><span>{section.label}</span><small>{section.entries.length} 項</small></div>] : []),
+                          ...section.entries.map((entry) => {
+                            const key = entryKey(entry);
+                            const thumb = thumbnailUrl(entry);
+                            return (
+                              <article
+                                key={key}
+                                className={cn(
+                                  "test-plan-entry-card",
+                                  selection.keys.has(key) && "is-selected",
+                                  cutKeys.has(key) && "is-cut",
+                                  entry.kind === "folder" && dropTargetId === entry.id && "is-drop-target",
+                                )}
+                                {...rowProps(entry, orderedKeys.indexOf(key))}
+                              >
+                                {renderEntryCheckbox(entry)}
+                                <div className={cn("test-plan-entry-thumb file-type", entry.kind === "folder" ? "is-folder" : `is-${entry.category}`)}>
+                                  {thumb ? <img src={thumb} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <FileTypeIcon entry={entry} className="h-10 w-10" />}
+                                </div>
+                                {renderName(entry)}
+                                <span className="file-explorer-card-meta">
+                                  {entry.kind === "folder" ? `${folderCounts(entry.id).folders + folderCounts(entry.id).files} 個項目` : `${describeEntryType(entry)} · ${formatTestPlanFileSize(entry.fileSize)}`}
+                                </span>
+                              </article>
+                            );
+                          }),
+                        ])}
+                      </div>
+                    ) : (
+                      <div className="test-plan-entry-list" role="rowgroup">
+                        {listSections.flatMap((section) => [
+                          ...(section.label ? [<div key={`group:${section.key}`} className="file-library-owner-group" role="presentation"><span>{section.label}</span><small>{section.entries.length} 項</small></div>] : []),
+                          ...section.entries.map((entry) => {
+                            const key = entryKey(entry);
+                            return (
+                              <article
+                                key={key}
+                                role="row"
+                                className={cn(
+                                  "test-plan-list-row",
+                                  selection.keys.has(key) && "is-selected",
+                                  selection.focus === key && "is-focused",
+                                  cutKeys.has(key) && "is-cut",
+                                  entry.kind === "folder" && dropTargetId === entry.id && "is-drop-target",
+                                )}
+                                {...rowProps(entry, orderedKeys.indexOf(key))}
+                              >
+                                <span className="file-explorer-check-cell">{renderEntryCheckbox(entry)}</span>
+                                <span className="test-plan-list-name">
+                                  <span className={cn("file-library-type file-type", entry.kind === "folder" ? "is-folder" : `is-${entry.category}`)} aria-hidden="true">
+                                    <FileTypeIcon entry={entry} />
+                                  </span>
+                                  {renderName(entry)}
+                                  {renaming?.key !== key && renderQuickActions(entry)}
+                                </span>
+                                {showOwnerColumn && (
+                                  <span className="file-library-owner-cell" data-col="owner">
+                                    <span className={cn("file-library-owner-chip", spaceById.get(entry.spaceId)?.ownerId === ownerId && "is-mine")}>
+                                      <i aria-hidden="true" data-initials={spaceInitials(spaceNameById.get(entry.spaceId) ?? "?")} style={spaceSwatch(spaceById.get(entry.spaceId)?.color)} />
+                                      {spaceNameById.get(entry.spaceId) ?? "未知"}
+                                    </span>
+                                  </span>
+                                )}
+                                {showLocationColumn && (
+                                  <span className="file-explorer-location-cell" data-col="location" title={locationLabel(entry)}>
+                                    <button type="button" tabIndex={-1} onClick={(event) => { event.stopPropagation(); openLocation(entry); }} onDoubleClick={(event) => event.stopPropagation()}>{folderLocation(entry)}</button>
+                                  </span>
+                                )}
+                                <span className="is-date" data-col="date">{formatEntryDate(entry.updatedAt)}</span>
+                                <span className="is-muted" data-col="type">{describeEntryType(entry)}</span>
+                                <span className="is-number" data-col="size">{entry.kind === "folder" ? `${folderCounts(entry.id).folders + folderCounts(entry.id).files} 項` : formatTestPlanFileSize(entry.fileSize)}</span>
+                              </article>
+                            );
+                          }),
+                        ])}
+                      </div>
+                    )}
+                    </div>
                   </div>
-                ) : (
-                  <div className="test-plan-entry-list">
-                    {listSections.flatMap((section) => [
-                      ...(section.label ? [<div key={`group:${section.key}`} className="file-library-owner-group" role="presentation"><span>{section.label}</span><small>{section.entries.length} 項</small></div>] : []),
-                      ...section.entries.map((entry) => (
-                      <article
-                        key={`${entry.kind}:${entry.id}`}
-                        className={cn(
-                          "test-plan-list-row",
-                          selectedEntryKey === `${entry.kind}:${entry.id}` && "is-selected",
-                          checkedKeys.has(entryKey(entry)) && "is-checked",
-                          entry.kind === "folder" && dropTargetId === entry.id && "is-drop-target",
-                        )}
-                        data-owner-column={showOwnerColumn ? "true" : undefined}
-                        tabIndex={0}
-                        aria-selected={selectedEntryKey === `${entry.kind}:${entry.id}`}
-                        onClick={() => selectEntry(entry)}
-                        onDoubleClick={() => openEntry(entry)}
-                        onKeyDown={(event) => {
-                          if (event.target !== event.currentTarget) return;
-                          if (event.key === "Enter") openEntry(entry);
-                          if (event.key === "Delete" && canEditSpace(entry.spaceId)) requestEntryDelete(entry);
-                        }}
-                        {...entryDragProps(entry)}
-                      >
-                        <span className="test-plan-list-name">
-                          {renderEntryCheckbox(entry)}
-                          <span className={cn("file-library-type", entry.kind === "folder" ? "is-folder" : `is-${entry.category}`)} aria-hidden="true">
-                            {entry.kind === "folder" ? <Folder className="h-4 w-4" /> : <FileCategoryIcon category={entry.category} className="h-4 w-4" />}
-                          </span>
-                          <span className="file-library-name-cell">
-                            <strong>
-                              {entry.kind === "folder" ? entry.name : entry.originalName}
-                            </strong>
-                            <small>
-                              {entry.kind === "folder"
-                                ? `${folders.filter((folder) => folder.parentId === entry.id).length} 個子資料夾 · ${files.filter((file) => file.folderId === entry.id).length} 個檔案`
-                                : entry.description || CATEGORY_LABELS[entry.category]}
-                            </small>
-                          </span>
-                        </span>
-                        {showOwnerColumn && (
-                          <span className="file-library-owner-cell">
-                            <span className={cn("file-library-owner-chip", spaceById.get(entry.spaceId)?.ownerId === ownerId && "is-mine")}>
-                              <i aria-hidden="true" data-initials={spaceInitials(spaceNameById.get(entry.spaceId) ?? "?")} style={spaceSwatch(spaceById.get(entry.spaceId)?.color)} />
-                              {spaceNameById.get(entry.spaceId) ?? "未知"}
-                            </span>
-                          </span>
-                        )}
-                        <span>
-                          {entry.kind === "folder"
-                            ? "資料夾"
-                            : entry.extension.toUpperCase() || "FILE"}
-                        </span>
-                        <span>
-                          {entry.kind === "folder"
-                            ? "—"
-                            : formatTestPlanFileSize(entry.fileSize)}
-                        </span>
-                        <span>
-                          {new Date(entry.updatedAt).toLocaleDateString("zh-TW")}
-                        </span>
-                        {renderEntryActions(entry)}
-                      </article>
-                      )),
-                    ])}
-                  </div>
-                )}
-              </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="file-explorer-menu">
+                  {contextTarget === "item" && selectedEntries.length > 0 ? renderItemMenu() : renderEmptyMenu()}
+                </ContextMenuContent>
+              </ContextMenu>
 
               <footer className="test-plan-statusbar">
                 <span>{visibleEntries.length} 個項目</span>
-                <span>{folders.length} 個資料夾</span>
-                <span>{files.length} 個檔案</span>
-                <span className="file-library-drag-hint">拖曳到資料夾可搬移 · 拖到桌面或檔案總管可直接存檔</span>
-                <span className="ml-auto">
-                  {activeSpaceId === null ? "所有人的檔案 · 依擁有者分組" : isOwnSpace ? "我的空間" : `${activeSpace?.name ?? ""} 的空間`} · {canEdit ? "可編輯" : "唯讀模式"}
+                {selectedEntries.length > 0 && <span className="is-strong">已選取 {selectedEntries.length} 個項目{selectedSize ? ` · ${formatTestPlanFileSize(selectedSize)}` : ""}</span>}
+                {clipboard && <span>已剪下 {clipboard.items.length} 個項目，到目標資料夾按 Ctrl+V</span>}
+                <span className={cn("file-explorer-permission", !canEdit && "is-readonly")}>
+                  {canEdit ? <UserRound className="h-3.5 w-3.5" aria-hidden="true" /> : <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />}
+                  {activeSpaceId === null ? "所有人的檔案 · 依擁有者分組；在這裡上傳會放進我的空間" : !canEdit ? "唯讀：可以瀏覽與下載，不能修改" : isOwnSpace ? "我的空間 · 可編輯" : "你有管理權限，可以整理這個空間"}
                 </span>
+                <span className="file-library-drag-hint">右鍵看所有操作 · 拖到資料夾可移動 · 拖到桌面可直接存檔</span>
+                <button type="button" className="file-explorer-help" onClick={() => setHelpOpen(true)} aria-label="快捷鍵說明"><Keyboard className="h-3.5 w-3.5" />快捷鍵</button>
               </footer>
             </>
           )}
         </main>
-        {selectedEntry && (
+        {showPreviewPane && (
           <TestPlanInspector
             entry={selectedEntry}
-            canEdit={canEditSpace(selectedEntry.spaceId)}
+            selectedEntries={selectedEntries}
+            canEdit={selectedEntry ? canEditSpace(selectedEntry.spaceId) : false}
             busy={busy}
-            onClose={() => setSelectedEntryKey(null)}
+            onClose={() => setPreviewOpen(false)}
             downloadFile={downloadFile}
+            getPreviewUrl={getPreviewUrl}
+            ownerName={(spaceId) => spaceNameById.get(spaceId) ?? "未知空間"}
+            locationLabel={locationLabel}
+            folderCounts={folderCounts}
             onEditSpreadsheet={(file) => setSpreadsheetFile(file)}
             onDownload={(file) => void handleDownload(file)}
-            onRename={(entry) =>
-              setTextAction(
-                entry.kind === "folder"
-                  ? { kind: "rename-folder", id: entry.id, value: entry.name }
-                  : { kind: "rename-file", id: entry.id, value: entry.originalName },
-              )}
-            onMove={(entry) =>
-              setMoveAction(
-                entry.kind === "folder"
-                  ? { kind: "folder", id: entry.id, name: entry.name }
-                  : { kind: "file", id: entry.id, name: entry.originalName },
-              )}
-            onDescribe={(file) =>
-              setTextAction({
-                kind: "describe-file",
-                id: file.id,
-                value: file.description ?? "",
-              })}
-            onDelete={(entry) =>
-              setDeleteAction(
-                entry.kind === "folder"
-                  ? { kind: "folder", id: entry.id, name: entry.name }
-                  : { kind: "file", file: entry },
-              )}
+            onOpenFolder={(entry) => openEntry(entry)}
+            onDescribe={(file) => setDescribeAction({ id: file.id, name: file.originalName, value: file.description ?? "" })}
           />
         )}
       </div>
@@ -1892,32 +2335,43 @@ export function TestPlanWorkspace() {
         }}
       />
 
-      <TextActionDialog
-        action={textAction}
+      <DescribeDialog
+        action={describeAction}
         busy={busy}
-        onClose={() => setTextAction(null)}
-        onSubmit={handleTextSubmit}
+        onClose={() => setDescribeAction(null)}
+        onSubmit={handleDescribeSubmit}
       />
       <MoveDialog
-        action={moveAction}
-        folders={moveAction ? folders.filter(folder => folder.spaceId === (moveAction.kind === "file" ? files.find(file => file.id === moveAction.id)?.spaceId : folders.find(folder => folder.id === moveAction.id)?.spaceId)) : folders}
+        entries={moveEntriesAction}
+        folders={folders}
         busy={busy}
-        onClose={() => setMoveAction(null)}
+        onClose={() => setMoveEntriesAction(null)}
         onSubmit={handleMoveSubmit}
       />
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="file-library-dialog">
+          <DialogHeader>
+            <DialogTitle>快捷鍵與滑鼠操作</DialogTitle>
+            <DialogDescription>和 Windows 檔案總管相同；在清單上按 ? 也能打開這張表。</DialogDescription>
+          </DialogHeader>
+          <dl className="file-explorer-shortcuts">
+            {SHORTCUTS.map(([keys, description]) => <div key={keys}><dt>{keys}</dt><dd>{description}</dd></div>)}
+          </dl>
+        </DialogContent>
+      </Dialog>
       <AlertDialog
         open={Boolean(visibleDeleteAction)}
         onOpenChange={(open) => !open && !batchDeleteInFlight.current && setDeleteAction(null)}
       >
         <AlertDialogContent className="file-library-dialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>{visibleDeleteAction?.kind === "batch" ? `確定要刪除已勾選的 ${visibleDeleteAction.entries.length} 項？` : "確定要刪除？"}</AlertDialogTitle>
+            <AlertDialogTitle>{visibleDeleteAction?.kind === "batch" ? `確定要刪除已選取的 ${visibleDeleteAction.entries.length} 項？` : "確定要刪除？"}</AlertDialogTitle>
             <AlertDialogDescription>
               {visibleDeleteAction?.kind === "batch"
-                ? `已勾選項目將永久刪除${visibleDeleteAction.entries.some(entry => entry.kind === "folder") ? "，包含所選資料夾裡的所有子資料夾與檔案" : ""}，無法復原。`
+                ? `以下項目將永久刪除${visibleDeleteAction.entries.some(entry => entry.kind === "folder") ? "，包含所選資料夾裡的所有子資料夾與檔案" : ""}，無法復原。${visibleDeleteAction.skipped ? `另有 ${visibleDeleteAction.skipped} 個唯讀項目不會刪除。` : ""}`
                 : visibleDeleteAction?.kind === "file"
-                  ? `「${visibleDeleteAction.file.originalName}」將從儲存空間永久刪除。`
-                  : `「${visibleDeleteAction?.name ?? ""}」及其中的所有檔案都會永久刪除。`}
+                  ? `「${visibleDeleteAction.file.originalName}」將從儲存空間永久刪除，無法復原。`
+                  : `「${visibleDeleteAction?.name ?? ""}」及其中的所有檔案都會永久刪除，無法復原。`}
             </AlertDialogDescription>
             {visibleDeleteAction?.kind === "batch" && <ul className="file-library-delete-names" aria-label="待刪除項目">{visibleDeleteAction.entries.map(entry => <li key={entryKey(entry)}>{entryName(entry)}</li>)}</ul>}
           </AlertDialogHeader>
@@ -1925,7 +2379,7 @@ export function TestPlanWorkspace() {
             <AlertDialogCancel disabled={busy}>取消</AlertDialogCancel>
             <AlertDialogAction
               disabled={busy || (visibleDeleteAction?.kind === "batch" && visibleDeleteAction.entries.some(entry => !selectionContext.current.eligible.has(entryKey(entry))))}
-              className="bg-red-600 text-white hover:bg-red-500"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => void handleDelete()}
             >
               {busy ? "刪除中…" : visibleDeleteAction?.kind === "batch" ? `永久刪除 ${visibleDeleteAction.entries.length} 項` : "永久刪除"}

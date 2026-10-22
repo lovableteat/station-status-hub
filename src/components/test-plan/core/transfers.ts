@@ -57,6 +57,56 @@ export async function openDefaultSink(fileName: string): Promise<TransferSink | 
   };
 }
 
+interface DirectoryFileHandle {
+  createWritable(): Promise<{ write(chunk: Uint8Array): Promise<void>; close(): Promise<void>; abort(): Promise<void> }>;
+}
+
+export interface DownloadDirectoryHandle {
+  getFileHandle(name: string, options?: { create?: boolean }): Promise<DirectoryFileHandle>;
+}
+
+/**
+ * Asks once for a folder so a multi-file download does not open one save
+ * dialog per file. Returns null when the browser has no folder picker.
+ * Must be called inside the user's click.
+ */
+export async function pickDownloadDirectory(): Promise<DownloadDirectoryHandle | null | "cancelled"> {
+  const picker = (globalThis as { showDirectoryPicker?: (options: { mode: "readwrite" }) => Promise<DownloadDirectoryHandle> }).showDirectoryPicker;
+  if (!picker) return null;
+  try {
+    return await picker({ mode: "readwrite" });
+  } catch (error) {
+    if ((error as { name?: string })?.name === "AbortError") return "cancelled";
+    return null;
+  }
+}
+
+/** "report.pdf" -> "report (1).pdf" -> "report (2).pdf" ... */
+export function numberedFileName(fileName: string, attempt: number): string {
+  if (attempt === 0) return fileName;
+  const dot = fileName.lastIndexOf(".");
+  return dot > 0
+    ? `${fileName.slice(0, dot)} (${attempt})${fileName.slice(dot)}`
+    : `${fileName} (${attempt})`;
+}
+
+/** Writes into the picked folder without overwriting a file that is already there. */
+export async function openDirectorySink(directory: DownloadDirectoryHandle, fileName: string): Promise<TransferSink> {
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    const candidate = numberedFileName(fileName, attempt);
+    try {
+      await directory.getFileHandle(candidate);
+      continue;
+    } catch (error) {
+      if ((error as { name?: string })?.name !== "NotFoundError") throw error;
+    }
+    const handle = await directory.getFileHandle(candidate, { create: true });
+    const writable = await handle.createWritable();
+    return { write: (chunk) => writable.write(chunk), close: () => writable.close(), abort: () => writable.abort() };
+  }
+  throw new Error(`資料夾裡已有太多同名檔案：${fileName}`);
+}
+
 export interface DownloadWithProgressOptions {
   fileName: string;
   expectedSize?: number;

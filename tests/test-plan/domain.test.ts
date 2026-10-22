@@ -27,9 +27,10 @@ test("classifies browser-previewable engineering files without pretending CAD an
   assert.equal(previewModule.getTestPlanPreviewKind(createFile("matrix.csv", "text/csv")), "text");
   assert.equal(previewModule.getTestPlanPreviewKind(createFile("layout.brd")), "unsupported");
   assert.equal(previewModule.getTestPlanPreviewKind(createFile("enclosure.step")), "unsupported");
-  assert.equal(previewModule.getTestPlanPreviewKind(createFile("plan.xlsx")), "unsupported");
+  assert.equal(previewModule.getTestPlanPreviewKind(createFile("plan.xlsx")), "sheet");
 });
 
+// SVG is previewed only as a data: URL inside <img> (see TestPlanInspector), never as a blob: or same-origin page.
 test("never treats active SVG content as an inline image preview", () => {
   const svg = {
     originalName: "probe-result.svg",
@@ -37,7 +38,8 @@ test("never treats active SVG content as an inline image preview", () => {
     mimeType: "image/svg+xml",
   };
 
-  assert.equal(previewModule.getTestPlanPreviewKind(svg), "unsupported");
+  assert.equal(previewModule.getTestPlanPreviewKind(svg), "svg");
+  assert.notEqual(previewModule.getTestPlanPreviewKind(svg), "image");
 });
 
 test("classifies Office, 3D, PCB, document, image, archive, and unknown files", () => {
