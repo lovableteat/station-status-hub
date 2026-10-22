@@ -116,6 +116,8 @@ export interface MaterialRecord extends MaterialWorkbookRecord {
   isPreferred: boolean;
   isApproved: boolean;
   isRisk: boolean;
+  /** This vendor row has neither a 實體料號 nor a 虛擬料號, so it still has to be applied for. */
+  needsApplication: boolean;
   /** Set when 零件狀態 was empty and the value came from the legacy tracking column. */
   partUsageStatusSource?: "legacy-tracking";
   searchText: string;
@@ -669,6 +671,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
     isPreferred,
     isApproved,
     isRisk,
+    needsApplication: !normalizeText(raw.partNumber) && !normalizeText(raw.virtualAlternative),
     searchText: buildSearchText([
       raw.sectionName,
       raw.assemblyName,
@@ -1006,6 +1009,8 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
   }
 
   const useBlueGroupRows = blueGroupRows.size > 0;
+  // Rows that look like parts are never dropped silently; what was reinterpreted or skipped is reported.
+  const notes = { deeperLevel: [] as string[], headingWithPart: [] as string[], skippedWithoutName: [] as string[] };
 
   let currentSection = "";
   let currentAssembly = "";
@@ -1029,8 +1034,16 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
     );
     const mpn1 = normalizeText(getFieldValue(row, fields, "mpn1"));
     const name = firstNonEmpty(getFieldValue(row, fields, "name"), partName, partNumber, mpn1);
+    const rowRefDes = normalizeText(getFieldValue(row, fields, "refDes"));
 
-    if (!name) continue;
+    if (!name) {
+      if (rowRefDes) notes.skippedWithoutName.push(rowRefDes);
+      continue;
+    }
+
+    // Level 0/1 rows are 系統／模組 headings. A heading that carries a Ref Des and a part number is most
+    // likely a part typed with the wrong Level, so it is reported instead of disappearing silently.
+    if ((levelValue === 0 || levelValue === 1) && rowRefDes && (mpn1 || partNumber)) notes.headingWithPart.push(rowRefDes);
 
     if (levelValue === 0) {
       currentSection = name;
@@ -1046,11 +1059,11 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
       continue;
     }
 
-    if (levelValue !== 2) {
-      continue;
-    }
+    // Every other row is a part. Multi-level BOMs put sub-parts (guide pins under a connector, the
+    // battery under its holder) at Level 3 or deeper; skipping them made real parts vanish.
+    if (levelValue !== 2) notes.deeperLevel.push(`${rowRefDes || name}（Level ${normalizeText(levelCell)}）`);
 
-    const refDes = normalizeText(getFieldValue(row, fields, "refDes"));
+    const refDes = rowRefDes;
     const trackingNote = normalizeText(getFieldValue(row, fields, "trackingNote"));
     const requestTicket = normalizeText(getFieldValue(row, fields, "requestTicket"));
     const requestUrl = getHyperlinkValue(xlsx, worksheet, index, fields, "requestTicket")
@@ -1125,10 +1138,18 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
     sheetName,
     score: records.length + fields.size * 250,
     records,
+    notes,
   };
 }
 
-export async function parseMaterialWorkbookFile(file: File): Promise<MaterialWorkbookPayload> {
+/** Parsed workbook plus plain-language notes on rows that were reinterpreted or left out; the notes are not stored. */
+export interface ParsedMaterialWorkbook extends MaterialWorkbookPayload {
+  importNotes: string[];
+}
+
+const examples = (values: string[]) => values.slice(0, 3).join("、") + (values.length > 3 ? " 等" : "");
+
+export async function parseMaterialWorkbookFile(file: File): Promise<ParsedMaterialWorkbook> {
   const xlsx = await import("xlsx");
   const workbook = xlsx.read(await file.arrayBuffer(), {
     type: "array",
@@ -1143,6 +1164,7 @@ export async function parseMaterialWorkbookFile(file: File): Promise<MaterialWor
     sheetName: string;
     score: number;
     records: MaterialWorkbookRecord[];
+    notes: { deeperLevel: string[]; headingWithPart: string[]; skippedWithoutName: string[] };
   }>;
 
   const bestMatch = candidates.sort((left, right) => right.score - left.score)[0];
@@ -1151,11 +1173,22 @@ export async function parseMaterialWorkbookFile(file: File): Promise<MaterialWor
     throw new Error("找不到可解析的料號資料。至少需要料名欄，以及 MPN、內部料號、Ref Des 或群組欄其中一項。");
   }
 
+  const importNotes: string[] = [];
+  const { deeperLevel, headingWithPart, skippedWithoutName } = bestMatch.notes;
+  if (headingWithPart.length) importNotes.push(`${headingWithPart.length} 列的 Level 是 0／1（系統／模組標題），但有位號與料號，沒有建立料件（例如 ${examples(headingWithPart)}）；若是料件，請把 Level 改成 2 再上傳`);
+  if (deeperLevel.length) importNotes.push(`${deeperLevel.length} 列的 Level 是 3 以上（多階 BOM 的子料），已當作料件匯入（例如 ${examples(deeperLevel)}）`);
+  if (skippedWithoutName.length) importNotes.push(`${skippedWithoutName.length} 列有位號但沒有料名、MPN 或料號（例如 ${examples(skippedWithoutName)}），沒有匯入`);
+  for (const other of candidates) {
+    if (other === bestMatch || other.records.length === 0) continue;
+    importNotes.push(`工作表「${other.sheetName}」還有 ${other.records.length.toLocaleString()} 筆料沒有匯入；一次只讀料最多的工作表「${bestMatch.sheetName}」，要匯入請把它們放到同一個工作表`);
+  }
+
   return {
     sourceFile: file.name,
     sheetName: bestMatch.sheetName,
     generatedAt: new Date().toISOString(),
     recordCount: bestMatch.records.length,
     records: bestMatch.records,
+    importNotes,
   };
 }

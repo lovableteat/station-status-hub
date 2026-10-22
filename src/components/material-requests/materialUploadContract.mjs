@@ -22,7 +22,7 @@ export const MATERIAL_HANDOFF_RULES = [
 ];
 
 export const MATERIAL_CE_FIELDS = [
-  { header: "Level", meaning: "階層：0 系統／1 模組／2 料件", owner: "RD 原始／CE 保留", requirement: "料件列填 2；0 為系統、1 為模組，網站只建立 Level 2 料件。", destination: "階層／分組", example: "2", width: 12 },
+  { header: "Level", meaning: "階層：0 系統／1 模組／2 料件", owner: "RD 原始／CE 保留", requirement: "料件列填 2；0 為系統、1 為模組，只當分組標題。多階 BOM 的 3、4… 子料也會當料件匯入。", destination: "階層／分組", example: "2", width: 12 },
   { header: "Name", meaning: "設計 BOM 的料件名稱", owner: "RD 原始／CE 保留", requirement: "保留客戶 BOM 料名；每個料件列必填，不要以廠商名稱取代。", destination: "料件名稱", example: "CAP CER 0.1UF 16V X7R", width: 32 },
   { header: "Qty", meaning: "單一產品的用量", owner: "RD 原始／CE 保留", requirement: "保留設計用量；不要因展開替代料而重算或加總用量。", destination: "數量", example: "2", width: 12 },
   { header: "Ref Des", meaning: "電路位號，例如 C101、R1", owner: "RD 原始／CE 保留", requirement: "保留完整位號，逗號分隔；同組替代料使用相同位號。", destination: "位號（REF DES）", example: "C101, C102", width: 24 },

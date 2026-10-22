@@ -362,3 +362,50 @@ test("an explicit 零件狀態 and manual tracking notes are never replaced by t
   assert.equal(manualRecord.partUsageStatusSource, undefined);
   assert.equal(manualRecord.isRisk, false);
 });
+
+test("rows the CE contract does not turn into parts are reported instead of vanishing", async () => {
+  const payload = await importTemplateRows([
+    exampleRow({ Level: 1, Name: "GUIDE PIN ML RT", "Ref Des": "JG1,JG2", "Manufacturer Part Number": "428-0281-001" }),
+    exampleRow({ Level: 3, Name: "BTY RTC CR2032W", "Ref Des": "JBAT1_CR2032", "Manufacturer Part Number": "CR2032W" }),
+    MATERIAL_CE_EXAMPLE_ROWS[0],
+  ]);
+  assert.deepEqual(payload.records.map((item) => item.refDes), ["JBAT1_CR2032", MATERIAL_CE_EXAMPLE_ROWS[0][ceHeaders.indexOf("Ref Des")]], "a Level 3 sub-part is imported; Level 0/1 stays a heading");
+  assert.equal(payload.records[0].manufacturerPartNumber, "CR2032W");
+  assert.equal(payload.records[0].assemblyName, "GUIDE PIN ML RT", "the heading still groups what follows");
+  assert.equal(payload.importNotes.length, 2);
+  assert.match(payload.importNotes[0], /Level 是 0／1[\s\S]*JG1,JG2[\s\S]*請把 Level 改成 2/);
+  assert.match(payload.importNotes[1], /Level 是 3 以上[\s\S]*已當作料件匯入[\s\S]*JBAT1_CR2032（Level 3）/);
+  const clean = await importTemplateRows([MATERIAL_CE_EXAMPLE_ROWS[0]]);
+  assert.deepEqual(clean.importNotes, []);
+});
+
+test("parts on a second sheet are reported because only one sheet is imported", async () => {
+  const workbook = new ExcelJS.Workbook();
+  for (const [name, rows] of [["主 BOM", [MATERIAL_CE_EXAMPLE_ROWS[0], MATERIAL_CE_EXAMPLE_ROWS[1]]], ["機構件", [MATERIAL_CE_EXAMPLE_ROWS[0]]]]) {
+    const sheet = workbook.addWorksheet(name);
+    sheet.getRow(MATERIAL_CE_HEADER_ROW).values = ceHeaders;
+    sheet.getRow(MATERIAL_CE_MEANING_ROW).values = ceMeanings;
+    rows.forEach((row, index) => { sheet.getRow(MATERIAL_CE_DATA_START_ROW + index).values = row; });
+  }
+  const payload = await parseMaterialWorkbookFile(new File([await workbook.xlsx.writeBuffer()], "two-sheets.xlsx"));
+  assert.equal(payload.sheetName, "主 BOM");
+  assert.equal(payload.importNotes.length, 1);
+  assert.match(payload.importNotes[0], /工作表「機構件」還有 1 筆料沒有匯入/);
+});
+
+test("every vendor row without a 實體料號 or 虛擬料號 needs an application, even beside rows that have one", () => {
+  const record = (id, mpn, extra = {}) => ({ id, sourceGroupKey: "g-C291", refGroup: "C291_C1", refDes: "C291_C1", name: "CAP 22uF", qty: 1, level: 2, sectionName: "", assemblyName: "", manufacturer: "V", manufacturerPartNumber: mpn, manufacturerPartNumberAlt: "", virtualAlternative: "", sourcingStatus: "", lv: "", remark: "", partNumber: "", partName: "", partSpec: "", schematicPart: "", pcbFootprint: "", ...extra });
+  const dataset = buildMaterialDataset({
+    sourceFile: "x.xlsx", sheetName: "s", generatedAt: "2026-10-22T00:00:00Z", recordCount: 4,
+    records: [
+      record("r1", "C1608X6S226MBTS"),
+      record("r2", "AMK107BC6226MA-T", { virtualAlternative: "1A30-04GK0QS" }),
+      record("r3", "C0603S226M004T"),
+      record("r4", "GRM188", { partNumber: "1A30-0001000" }),
+    ],
+  });
+  const flags = Object.fromEntries(dataset.records.map((item) => [item.id, item.needsApplication]));
+  assert.deepEqual(flags, { r1: true, r2: false, r3: true, r4: false });
+  assert.equal(dataset.groups.length, 1);
+  assert.equal(dataset.groups[0].requiresApplication, false, "料號待補 still means the location has no number at all");
+});

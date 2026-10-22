@@ -305,3 +305,50 @@ export function groupPendingMaterials<T extends PendingCategorySource>(groups: r
     .map((category) => ({ ...category, groups: buckets.get(category.key) ?? [] }))
     .filter((category) => category.groups.length > 0);
 }
+
+type ApplicationRecord = { id: string; needsApplication?: boolean; manufacturer?: string | null; manufacturerPartNumber?: string | null; name?: string | null };
+
+export interface PendingApplication<G, R extends ApplicationRecord> {
+  key: string;
+  group: G;
+  record: R;
+  displayRef: string;
+  name: string;
+  primaryRecord: G extends { primaryRecord: infer P } ? P : never;
+  records: G extends { records: infer L } ? L : never;
+  searchText: string;
+}
+
+/**
+ * Lines for the 待處理料 dialog. By default a location is listed once, and only
+ * when none of its vendor rows has a 實體料號 or 虛擬料號. With
+ * includeAlternates every vendor row without either number gets its own line,
+ * even when another vendor of the same location already has one (each
+ * manufacturer's part is applied for separately). Locations are never merged.
+ */
+export function buildPendingApplications<
+  G extends { key: string; displayRef: string; name: string; searchText: string; primaryRecord: ApplicationRecord; records: readonly ApplicationRecord[] },
+>(groups: readonly G[], { includeAlternates = false }: { includeAlternates?: boolean } = {}): Array<PendingApplication<G, G["records"][number]>> {
+  type R = G["records"][number];
+  const result: Array<PendingApplication<G, R>> = [];
+  for (const group of groups) {
+    const seen = new Set<string>();
+    const rows = [group.primaryRecord as R, ...group.records].filter((record) => !seen.has(record.id) && seen.add(record.id));
+    const lines = includeAlternates
+      ? rows.filter((record) => record.needsApplication)
+      : rows.length > 0 && rows.every((record) => record.needsApplication) ? [group.primaryRecord as R] : [];
+    for (const record of lines) {
+      result.push({
+        key: `${group.key}::${record.id}`,
+        group,
+        record,
+        displayRef: group.displayRef,
+        name: record.name?.trim() || group.name,
+        primaryRecord: group.primaryRecord as PendingApplication<G, R>["primaryRecord"],
+        records: group.records as PendingApplication<G, R>["records"],
+        searchText: `${group.searchText} ${(record.manufacturer ?? "").toLowerCase()} ${(record.manufacturerPartNumber ?? "").toLowerCase()}`,
+      });
+    }
+  }
+  return result;
+}

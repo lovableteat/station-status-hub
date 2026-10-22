@@ -16,6 +16,7 @@
 } from "react";
 import type { CSSProperties } from "react";
 import {
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -146,6 +147,7 @@ import {
   getMaterialSourceValue,
   getMaterialTableWidth,
   groupBomWorkspacesByProject,
+  buildPendingApplications,
   groupPendingMaterials,
   getPendingMaterialCategory,
   PENDING_MATERIAL_CATEGORIES,
@@ -1253,7 +1255,7 @@ function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
     case "mpn":
       return group.records.flatMap((record) => [record.manufacturerPartNumber, record.manufacturerPartNumberAlt]);
     case "internal":
-      return group.records.flatMap((record) => [record.partNumber, record.schematicPart, record.pcbFootprint]);
+      return group.records.map((record) => record.partNumber);
     case "virtualAlternative":
       return group.records.map((record) => record.virtualAlternative ?? "");
     case "trackingStatus": {
@@ -1291,8 +1293,10 @@ function getRecordColumnValues(record: MaterialRecord, group: MaterialGroup, key
         : splitRefDesignators(record.refGroup, group.displayRef);
     case "mpn":
       return [record.manufacturerPartNumber, record.manufacturerPartNumberAlt];
+    // 實體料號 only: Schematic_Part and PCB_Footprint have their own filters, and mixing them in made
+    // a blank footprint match "實體料號 is blank" on rows that do have a PEGA P/N.
     case "internal":
-      return [record.partNumber, record.schematicPart, record.pcbFootprint];
+      return [record.partNumber];
     case "virtualAlternative":
       return [record.virtualAlternative ?? ""];
     case "qty":
@@ -3180,7 +3184,7 @@ function PendingMaterialsDialog({
   exportedBy: string;
   onLocate: (group: MaterialGroup) => void;
   onOpenChange: (open: boolean) => void;
-  onOpenCreate: (group: MaterialGroup) => void;
+  onOpenCreate: (group: MaterialGroup, record: MaterialRecord) => void;
   onOpenTracking: (record: MaterialRecord) => void;
   /** Saves a hand-picked category for a pending part; null returns it to the Ref Des rule. */
   onSetCategory: (group: MaterialGroup, category: PendingMaterialCategory | null) => void;
@@ -3188,7 +3192,19 @@ function PendingMaterialsDialog({
   const [query, setQuery] = useState("");
   const [mailOpen, setMailOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all">("all");
-  const categories = useMemo(() => groupPendingMaterials(groups), [groups]);
+  // Default: locations with no number on any vendor row (one line each). The switch adds every vendor
+  // row that has neither a 實體料號 nor a 虛擬料號, even beside vendors that already have one.
+  const [includeAlternates, setIncludeAlternates] = useState(false);
+  const locationApplications = useMemo(() => buildPendingApplications(groups), [groups]);
+  const vendorApplications = useMemo(() => buildPendingApplications(groups, { includeAlternates: true }), [groups]);
+  const applications = includeAlternates ? vendorApplications : locationApplications;
+  const categories = useMemo(() => groupPendingMaterials(applications), [applications]);
+  const mailGroups = useMemo(() => {
+    const listed = new Set(applications.map((application) => application.group.key));
+    return groups
+      .filter((group) => listed.has(group.key))
+      .map((group) => ({ ...group, records: group.records.filter((record) => record.needsApplication) }));
+  }, [applications, groups]);
   const keyword = query.trim().toLowerCase();
   // One category at a time keeps long BOMs from becoming one endless scroll; the tabs carry the counts.
   const selectedCategory = categories.some((category) => category.key === activeCategory) ? activeCategory : "all";
@@ -3218,8 +3234,9 @@ function PendingMaterialsDialog({
   const priorityCount = categories.filter((category) => category.priority).reduce((sum, category) => sum + category.groups.length, 0);
   const staleThreshold = Date.now() - STALE_PENDING_MS;
   const isStale = (group: MaterialGroup) => getPendingGroupUpdatedAt(group, recordMeta) < staleThreshold;
-  const staleCount = groups.filter(isStale).length;
-  const description = `共 ${groups.length.toLocaleString()} 筆料號待補 · CONNECTOR 與 IC 優先 ${priorityCount.toLocaleString()} 筆 · ${staleCount.toLocaleString()} 筆逾 3 天未更新`;
+  const staleCount = applications.filter((application) => isStale(application.group)).length;
+  const listedLocations = new Set(applications.map((application) => application.group.key)).size;
+  const description = `${includeAlternates ? `含替代廠商：共 ${applications.length.toLocaleString()} 筆廠商列沒有料號（${listedLocations.toLocaleString()} 組位號）` : `共 ${applications.length.toLocaleString()} 個位號完全沒有料號`} · CONNECTOR 與 IC 優先 ${priorityCount.toLocaleString()} 筆 · ${staleCount.toLocaleString()} 筆逾 3 天未更新`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -3240,14 +3257,26 @@ function PendingMaterialsDialog({
               className="h-10 rounded-xl pl-9 text-sm"
             />
           </div>
-          <Button type="button" data-testid="pending-mail-button" disabled={groups.length === 0} onClick={() => setMailOpen(true)} className="h-10 border border-info bg-info px-4 text-sm font-black text-info-foreground shadow-[0_0_0_3px_hsl(var(--info)/0.25)] hover:bg-info/85 hover:text-info-foreground" title="把待處理料依廠商整理成信件內容並匯出 HTML">
+          <Button
+            type="button"
+            variant="outline"
+            data-testid="pending-include-alternates"
+            aria-pressed={includeAlternates}
+            onClick={() => setIncludeAlternates((value) => !value)}
+            title="同一個位號裡已有廠商有實體或虛擬料號，但其他廠商什麼號碼都沒有時，把那些廠商也列出來"
+            className={cn("h-10 gap-2 px-3 text-sm font-bold", includeAlternates ? "border-warning bg-warning/15 text-warning hover:bg-warning/25 hover:text-warning" : "border-border bg-secondary/60 text-foreground hover:bg-accent")}
+          >
+            <span className={cn("flex h-4 w-4 flex-none items-center justify-center rounded border", includeAlternates ? "border-warning bg-warning text-warning-foreground" : "border-muted-foreground")} aria-hidden="true">{includeAlternates ? <Check className="h-3 w-3" /> : null}</span>
+            含沒有號碼的替代廠商 <strong className="font-mono">{vendorApplications.length.toLocaleString()}</strong>
+          </Button>
+          <Button type="button" data-testid="pending-mail-button" disabled={applications.length === 0} onClick={() => setMailOpen(true)} className="h-10 border border-info bg-info px-4 text-sm font-black text-info-foreground shadow-[0_0_0_3px_hsl(var(--info)/0.25)] hover:bg-info/85 hover:text-info-foreground" title="把待處理料依廠商整理成信件內容並匯出 HTML">
             <FileCode2 className="mr-1.5 h-4 w-4" />信件生成
           </Button>
         </div>
-        <PendingMailDialog groups={groups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
+        <PendingMailDialog groups={mailGroups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
 
         <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-2 rounded-xl border border-border bg-background/40 p-1.5">
-          {[{ key: "all" as const, label: "全部", count: groups.length, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
+          {[{ key: "all" as const, label: "全部", count: applications.length, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
             <button
               key={tab.key}
               type="button"
@@ -3269,7 +3298,7 @@ function PendingMaterialsDialog({
         <div ref={listRef} onScroll={(event) => { scrollTopRef.current = event.currentTarget.scrollTop; }} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
           {visibleCategories.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-              {groups.length === 0 ? "目前沒有待處理的料號" : "找不到符合條件的待處理料"}
+              {applications.length === 0 ? "目前沒有待處理的料號" : "找不到符合條件的待處理料"}
             </p>
           ) : visibleCategories.flatMap((category) => [
             <div key={`category:${category.key}`} className="flex items-center gap-2 px-1 pt-2 first:pt-0">
@@ -3278,23 +3307,24 @@ function PendingMaterialsDialog({
               {category.priority && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)}>優先處理</span>}
               <span className="ml-auto flex-none font-mono text-[11px] text-muted-foreground">{category.groups.length.toLocaleString()} 筆</span>
             </div>,
-            ...category.groups.map((group) => {
-              const record = group.primaryRecord;
+            ...category.groups.map((application) => {
+              const { group, record } = application;
               const trackingStatus = record.trackingStatus?.trim() || "";
               const stale = isStale(group);
               return (
-                <div key={group.key} className={cn("flex flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
+                <div key={application.key} data-testid="pending-application" className={cn("flex flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
                   <span className={cn("h-2 w-2 flex-none rounded-full", stale ? "material-blink bg-destructive" : "bg-muted-foreground/40")} aria-hidden="true" />
                   <span className="w-[16rem] flex-none truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
                   <PendingCategoryPicker group={group} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
-                  <span className="min-w-0 flex-1 truncate text-base text-foreground" title={group.name}>{group.name || "未命名料件"}</span>
+                  <span className="min-w-0 flex-1 truncate text-base text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
                   <span className="hidden w-[18rem] flex-none truncate font-mono text-sm text-foreground/75 md:block" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
+                  <span className="hidden w-[11rem] flex-none truncate text-xs text-muted-foreground lg:block" title={record.manufacturer}>{record.manufacturer || "未填廠商"}</span>
                   <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(trackingStatus))}>{trackingStatus || "未追蹤"}</span>
                   {stale && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)} title="還沒取得料號，且超過 3 天沒有更新資料">逾 3 天未更新</span>}
                   <div className="ml-auto flex flex-none items-center gap-1">
                     <Button type="button" variant="ghost" size="sm" onClick={() => onLocate(group)} className="h-7 px-2 text-xs">定位</Button>
                     <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onOpenTracking(record)} className="h-7 px-2 text-xs">追蹤</Button>
-                    <Button type="button" variant="secondary" size="sm" disabled={!canEdit} onClick={() => onOpenCreate(group)} className="h-7 px-2 text-xs">更新料號</Button>
+                    <Button type="button" variant="secondary" size="sm" disabled={!canEdit} onClick={() => onOpenCreate(group, record)} className="h-7 px-2 text-xs">更新料號</Button>
                   </div>
                 </div>
               );
@@ -5305,7 +5335,7 @@ export function MaterialRequestPage() {
     () => dataset.groups.filter((group) => !requiresApplication(group)).length,
     [dataset.groups]
   );
-  const pendingMaterialGroups = useMemo(() => dataset.groups.filter(requiresApplication), [dataset.groups]);
+  const pendingMaterialGroups = useMemo(() => dataset.groups.filter((group) => group.records.some((record) => record.needsApplication)), [dataset.groups]);
   const discouragedMaterialRows = useMemo(() => collectDiscouragedMaterialRows(dataset.records), [dataset.records]);
   const excludedDiscouragedCount = useMemo(() => countExcludedDiscouragedRows(dataset.records), [dataset.records]);
   const discouragedMaterialCount = discouragedMaterialRows.length;
@@ -5347,7 +5377,7 @@ export function MaterialRequestPage() {
       setIsExportingDiscouraged(false);
     }
   };
-  const requiredApplicationCount = pendingMaterialGroups.length;
+  const requiredApplicationCount = useMemo(() => dataset.groups.filter(requiresApplication).length, [dataset.groups]);
   const pendingGroupCount = useMemo(
     () => dataset.groups.filter((group) => group.pendingCount > 0).length,
     [dataset.groups]
@@ -5456,9 +5486,11 @@ export function MaterialRequestPage() {
       let assignedToActiveProject = 0;
       const workspaceMap = new Map(bomWorkspaces.map((workspace) => [workspace.id, workspace]));
       const importProject = toBomWorkspaceProject(activeProject);
+      const importReport: string[] = [];
 
       for (const file of files) {
-        const payload = await parseMaterialWorkbookFile(file);
+        const { importNotes, ...payload } = await parseMaterialWorkbookFile(file);
+        importReport.push(...importNotes.map((note) => (files.length > 1 ? `${file.name}：${note}` : note)));
         assertBomWriteCurrent(writeScope);
         const workspaceId = createBomId(file.name);
         const existingWorkspace = workspaceMap.get(workspaceId);
@@ -5500,6 +5532,14 @@ export function MaterialRequestPage() {
         title: files.length === 1 ? "BOM 已載入" : `${files.length} 個 BOM 已載入`,
         description: `共 ${totalRecords.toLocaleString()} 筆廠商料明細${importProject && assignedToActiveProject > 0 ? `，${assignedToActiveProject} 個新 BOM 已歸入專案「${importProject.projectName}」` : ""}，可從 BOM 切換器管理。`,
       });
+      // Anything the importer reinterpreted or left out is spelled out instead of disappearing silently.
+      if (importReport.length > 0) {
+        toast({
+          title: "匯入時有資料需要注意",
+          description: importReport.join("；"),
+          duration: 30_000,
+        });
+      }
     } catch (error) {
       if (writeScope && !isBomWriteCurrent(writeScope)) return;
       toast({
@@ -6343,7 +6383,7 @@ export function MaterialRequestPage() {
           setPage(1);
         }}
         // 更新料號 edits the pending row itself (its 廠商, MPN and 備註 included) instead of adding a blank alternate.
-        onOpenCreate={(group) => { setPendingDialogOpen(false); setReturnToPending(true); openRecord(group.primaryRecord, "edit"); }}
+        onOpenCreate={(_group, record) => { setPendingDialogOpen(false); setReturnToPending(true); openRecord(record, "edit"); }}
         onOpenTracking={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openTrackingDialog(record); }}
         onSetCategory={setPendingCategory}
       />
