@@ -97,6 +97,10 @@ test("restored results start with sources collapsed while new comparisons keep i
   assert.match(source, /className="comparison-source-settings" open=\{!session\}/);
   assert.match(source, /展開來源檔案，重新比對/);
   assert.ok(source.indexOf('className="comparison-run-actions"') < source.indexOf('className="comparison-optional"'));
+  const controls = source.slice(source.indexOf('className="comparison-setup-controls"'), source.indexOf('className="comparison-revision-grid"'));
+  assert.match(controls, /className="comparison-project-name" data-empty=\{!projectName\.trim\(\)\}/);
+  assert.match(controls, /className="comparison-run-actions"/, "the run controls sit on the 比對名稱 row");
+  assert.match(controls, />必填</);
   assert.doesNotMatch(source, /<p key=\{index\}><Badge/);
 });
 
