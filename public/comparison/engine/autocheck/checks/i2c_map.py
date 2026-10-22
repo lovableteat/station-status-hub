@@ -33,7 +33,7 @@ LIB_DEFAULT = Path(__file__).resolve().parent.parent.parent / "config" / "i2c_de
 # file, so a signed table for a part the built-in file only lists empty (MP5926) takes effect.
 LIB_USER_DEFAULT = LIB_DEFAULT.parent / "i2c_devices_user.yaml"
 DATASHEETS_DEFAULT = LIB_DEFAULT.parent.parent / "datasheets"
-RULES = ("I2C_ADDR_CONFLICT", "I2C_PU_DUPLICATE", "I2C_NO_PULLUP", "I2C_SDA_SPLIT", "I2C_ADDR_PIN_FLOAT",
+RULES = ("I2C_ADDR_RESERVED", "I2C_ADDR_CONFLICT", "I2C_PU_DUPLICATE", "I2C_NO_PULLUP", "I2C_SDA_SPLIT", "I2C_ADDR_PIN_FLOAT",
          "I2C_ADDR_UNRESOLVED", "I2C_ADDR_PART_DIFF", "I2C_LIB_MISSING", "I2C_DECLARED_MISMATCH",
          "I2C_UNDECLARED_DEVICE", "I2C_SECOND_SOURCE_UNCHECKED")
 DECLARED_FIELDS = ["kind", "label", "refdes", "mpn", "addr7", "net", "value", "rail", "dnp", "note"]
@@ -464,14 +464,21 @@ def build_map(d: Design, cfg: dict, g: NetGraph, lib: list[LibEntry] | None = No
                 dv.scl_seg.append(sid)
 
     # series / 0R parts right at each device pin (the branch resistor on the block diagram), built or DNP
+    # speed fix 2026-10-21 (HANDOVER 0p15): two-net parts indexed by net once, in natkey order (was a sort + scan of
+    # every part for every device pin); the loop below visits the same parts in the same order
+    two_on_net: dict[str, list[tuple[str, tuple[str, str]]]] = {}
+    for x in sorted(d.parts, key=natkey):
+        nn = g._two_nets(x)
+        if nn:
+            for n_ in nn:
+                two_on_net.setdefault(n_, []).append((x, nn))
     for r, dv in devices.items():
         for k, (line, port) in line_pins.items():
             if k[0] != r:
                 continue
             n = d.pin_net[k]
-            for x in sorted(d.parts, key=natkey):
-                nn = g._two_nets(x)
-                if not nn or n not in nn or x == r:
+            for x, nn in two_on_net.get(n, ()):
+                if x == r:
                     continue
                 other = nn[1] if nn[0] == n else nn[0]
                 if uf.find(other) != uf.find(n) or g.is_rail(other):
@@ -761,6 +768,16 @@ def i2c_rules(d: Design, cfg: dict, m: dict) -> list[Finding]:
                           detail="\n".join(f"{r}: {devs[r].symbol} | {' '.join(devs[r].pin_states)}" for r in rs)
                           + f"\n位址空間 (SDA segment): {sc.split(':', 1)[1]}",
                           refdes=rs, nets=[sc.split(":", 1)[1]]))
+
+    # reserved addresses (checklist #74): ranges from config i2c.reserved_addr7, spec UM10204 table 4
+    rsv = [(int(a), int(b)) for a, b in ((cfg.get("i2c", {}) or {}).get("reserved_addr7") or [])]
+    for r, dv in sorted(built.items(), key=lambda t: natkey(t[0])):
+        if dv.addr is not None and any(a <= dv.addr <= b for a, b in rsv):
+            out.append(_f(d, cfg, "I2C_ADDR_RESERVED", title=f"{r}: 0x{dv.addr:02X} 是 I2C 保留位址",
+                          detail=f"{dv.symbol} | {' '.join(dv.pin_states) or '-'}\n保留區間 (7-bit): "
+                                 + ", ".join(f"0x{a:02X}..0x{b:02X}" for a, b in rsv)
+                                 + "\nUM10204 table 4：general call / START byte / CBUS / Hs-mode / device ID / 10-bit。改 strap 避開。",
+                          refdes=[r], nets=[dv.scope.split(":", 1)[1]] if dv.scope else []))
 
     for sid, seg in sorted(m["segments"].items(), key=lambda t: natkey(t[0])):
         net = sid.split(":", 1)[1]

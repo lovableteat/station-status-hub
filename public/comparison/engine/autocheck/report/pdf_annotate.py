@@ -309,7 +309,7 @@ def _overlay(size: tuple[float, float], items: list[tuple[tuple, str, str]], pad
 
 
 def _index_pages(rows: list[TrackRow], loc: dict[str, dict], b_label: str, a_label: str,
-                 rowno: dict[str, int]) -> tuple[PdfReader, list[tuple[int, tuple, str]]]:
+                 rowno: dict[str, int], side: str = "B") -> tuple[PdfReader, list[tuple[int, tuple, str]]]:
     """Index table. Returns reader and link slots: (index_page_no, rect, key)."""
     _setup_font()
     font = _FONT["name"]
@@ -325,7 +325,9 @@ def _index_pages(rows: list[TrackRow], loc: dict[str, dict], b_label: str, a_lab
     def header():
         nonlocal y
         c.setFont(font, 13)
-        c.drawString(14, H - 30, f"AutoCheck findings on schematic {b_label} (vs {a_label}): {len(rows)} items")
+        c.drawString(14, H - 30, f"AutoCheck findings on schematic {b_label} (vs {a_label}): {len(rows)} items"
+                     if side == "B" else
+                     f"AutoCheck findings of {b_label} (vs {a_label}) boxed on the {a_label} schematic: {len(rows)} items")
         c.setFont(font, 7.5)
         c.drawString(14, H - 44, "Click a row to jump to the boxed part. Red = ERROR, orange = WARN, blue = INFO. "
                                  "Boxes are page content (print + search); comments carry the key.")
@@ -393,8 +395,12 @@ def fit_rect(box: tuple[float, float, float, float], page: tuple[float, float],
 
 def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int, str], out_pdf: Path,
                  cfg: dict | None = None, a_label: str = "A", b_label: str = "B",
-                 page_override: dict[int, int] | None = None) -> dict:
+                 page_override: dict[int, int] | None = None, side: str = "B") -> dict:
+    """side = "B" (default): schematic_pdf is B's drawing, findings are B's. side = "A" (2026-10-20, 0p9): the same
+    findings boxed on A's drawing (rows already re-paged to A's page numbers by the caller); only the index header,
+    outline root and /Title differ, the B output is byte-identical to before."""
     acfg = (cfg or {}).get("annotate", {}) or {}
+    own = b_label if side == "B" else a_label             # label of the drawing being annotated
     box_sev = set(acfg.get("box_severities", ["ERROR", "WARN"]))
     dest_sev = set(acfg.get("dest_severities", ["ERROR", "WARN", "INFO"]))
     zoom = float(acfg.get("zoom", 2.0))
@@ -419,7 +425,7 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
                         + "; ".join(norm_notes[:4]) + (" ..." if len(norm_notes) > 4 else ""))
     loc = locate(rows, index, page_map)
 
-    index_reader, links = _index_pages(rows, loc, b_label, a_label, rowno)
+    index_reader, links = _index_pages(rows, loc, b_label, a_label, rowno, side)
     n_index = len(index_reader.pages)
     norm_buf.seek(0)
     src = PdfReader(norm_buf)
@@ -439,7 +445,7 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
         writer.pages[n_index + pg].merge_page(ov.pages[0])
 
     # 2. comments, named destinations, bookmarks
-    root = writer.add_outline_item(f"AutoCheck findings ({b_label})", 0)
+    root = writer.add_outline_item(f"AutoCheck findings ({own})", 0)
     sev_nodes = {s: writer.add_outline_item(s, 0, parent=root) for s in ("ERROR", "WARN", "INFO") if s in dest_sev}
     sidecar = {"page_map": {str(k): (v + 1 + n_index if v is not None else None) for k, v in page_map.items()},
                "index_pages": n_index, "jump": jump, "run_id": run_id, "rows": {}, "warnings": warnings}
@@ -484,7 +490,12 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
         writer.add_outline_item(f"{r.key}  {r.title[:60]}", page_no, parent=sev_nodes.get(r.severity, root), fit=fit)
         sidecar["rows"][r.key] = {"n": rowno[r.key], "dest": r.dest, "pdf_page": page_no + 1, "bbox": bbox,
                                   "missing": info["missing"], "found": [b[4] for b in info["boxes"]],
-                                  "view": vout if bbox else None}
+                                  "view": vout if bbox else None,
+                                  # 2026-10-20 (0p9 viewer): page size (pt) and the box centre measured from the page's
+                                  # TOP-left in pt, for Chrome's #page=N&zoom=S,left,top open parameter
+                                  "page_size": [round(index.size[pg][0], 1), round(index.size[pg][1], 1)] if bbox else None,
+                                  "centre_top": [round((x0 + x1) / 2, 1), round(index.size[pg][1] - (y0 + y1) / 2, 1)]
+                                  if bbox else None}
 
     # 3. index links
     rowinfo = {r.key: r for r in rows}
@@ -497,7 +508,8 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
         fit = (Fit.fit_rectangle(*v) if v and len(v) == 4 else
                Fit.xyz(left=v[0], top=v[1], zoom=zoom) if v else Fit.fit())
         writer.add_annotation(page_number=ipage, annotation=Link(rect=rect, target_page_index=tgt, fit=fit))
-    writer.add_metadata({"/Title": f"AutoCheck {a_label} -> {b_label} annotated schematic", "/Producer": "AutoCheck"})
+    writer.add_metadata({"/Title": f"AutoCheck {a_label} -> {b_label} annotated schematic"
+                         + ("" if side == "B" else f" ({own} drawing)"), "/Producer": "AutoCheck"})
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
     with open(out_pdf, "wb") as fh:
         writer.write(fh)

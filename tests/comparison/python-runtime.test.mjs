@@ -143,9 +143,9 @@ with tempfile.TemporaryDirectory() as temporary:
 test('Public engine manifest includes only original Python source and safe config', async () => {
   const manifest = JSON.parse(await readFile(new URL('engine/manifest.json', publicRoot), 'utf8'));
   assert.equal(manifest.version, '0.2.0');
-  assert.equal(manifest.origin, 'User-provided AutoCheck_1015.zip');
-  assert.equal(manifest.revision, '2026-10-15');
-  assert.equal(manifest.files.length, 47);
+  assert.equal(manifest.origin, 'User-provided AutoCheck_1022.zip');
+  assert.equal(manifest.revision, '2026-10-22');
+  assert.equal(manifest.files.length, 49);
   for (const { path, sha256 } of manifest.files) {
     assert.match(path, /^(autocheck\/.+\.py|config\/(default|i2c_devices|i2c_devices_user|power_parts)\.yaml)$/);
     const bytes = await readFile(new URL(`engine/${path}`, publicRoot));

@@ -1,4 +1,4 @@
-"""Browser adapter for the user's original AutoCheck 2026-10-15 engine."""
+"""Browser adapter for the user's original AutoCheck 2026-10-22 engine."""
 import dataclasses
 import datetime
 import json
@@ -14,7 +14,6 @@ from autocheck.checks import i2c_map as i2c
 from autocheck.cli import write_outputs
 from autocheck.config import DEFAULT, load_config
 from autocheck.i2c_lib import accept_entry, draft_from_pdf, entry_yaml, page_text, validate_entry
-from autocheck.loader import classify
 from autocheck.pipeline import run
 from autocheck.report import pdf_report
 from autocheck.report.data_out import meta
@@ -132,13 +131,34 @@ def _library(payload, root):
     return {'entries': entries, 'yaml': text, 'errors': errors, 'warnings': warnings}
 
 
+_ROLE_SUFFIX = {'.xls': 'bom', '.xlsx': 'bom', '.htm': 'bom', '.html': 'bom', '.csv': 'bom', '.dsn': 'dsn', '.pdf': 'pdf'}
+
+
+def _role(path):
+    """The website already lets the user pick one file per role and sends only those, so roles follow the
+    file names (the 2026-10-15 loader rules). The 2026-10-22 engine's loader chooses by content across a
+    whole design-kit folder and needs all three netlist files together, which single-file calls never satisfy."""
+    name = path.name.lower()
+    if name.startswith('i2c_map_declared') and path.suffix.lower() == '.csv':
+        return 'i2c_declared'
+    for key in ('pstxnet', 'pstxprt', 'pstchip'):
+        if key in name and name.endswith('.dat'):
+            return key
+    if path.suffix.lower() == '.pdf' and name.startswith('autocheck'):
+        return None
+    return _ROLE_SUFFIX.get(path.suffix.lower())
+
+
 def _classified(paths, label):
     seen = {}
     for value in paths:
-        for role, path in classify([Path(value)]).items():
-            if role in seen:
-                raise ValueError(f'{label} 有多個 {role} 候選，請先選擇要使用的檔案')
-            seen[role] = path
+        path = Path(value)
+        role = _role(path)
+        if role is None:
+            continue
+        if role in seen:
+            raise ValueError(f'{label} 有多個 {role} 候選，請先選擇要使用的檔案')
+        seen[role] = path
     missing = [name for name in ('pstxnet', 'pstxprt', 'pstchip') if name not in seen]
     if missing:
         raise ValueError(f'{label} 缺少必要 netlist：{", ".join(missing)}')

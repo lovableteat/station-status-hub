@@ -102,7 +102,25 @@ class Design:
         return refdes in self.bom
 
     def pins_of(self, refdes: str) -> list[PinKey]:
-        return sorted((k for k in self.pin_net if k[0] == refdes), key=lambda k: _natkey(k[1]))
+        """Pins of one part, natural pin order. Speed fix 2026-10-21 (HANDOVER 0p15): was a scan of every pin per call
+        (CRB 7,483 parts: i2c_map stuck for > 8 min); now a refdes -> pins index built once. The index is rebuilt when
+        pin_net is replaced or its size changes (parsers / tests add pins one by one). Changing a pin's net in place
+        (ruleinject) keeps the key set, so the index stays valid. Code that deletes AND adds keys in the same dict
+        keeping its size must call invalidate_pins()."""
+        sig = (id(self.pin_net), len(self.pin_net))
+        idx = self.__dict__.get("_pins_idx")
+        if idx is None or idx[0] != sig:
+            by: dict[str, list[PinKey]] = {}
+            for k in self.pin_net:
+                by.setdefault(k[0], []).append(k)
+            for v in by.values():
+                v.sort(key=lambda k: _natkey(k[1]))
+            idx = (sig, by)
+            self.__dict__["_pins_idx"] = idx
+        return list(idx[1].get(refdes, ()))      # a copy: callers may sort / pop it
+
+    def invalidate_pins(self) -> None:
+        self.__dict__.pop("_pins_idx", None)
 
     def page_title(self, page: int | None) -> str:
         if page is None:

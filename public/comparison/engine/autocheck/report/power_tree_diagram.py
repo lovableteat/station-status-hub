@@ -24,6 +24,7 @@ import re
 from dataclasses import dataclass, field
 from html import escape
 
+from ..checks.power_tree import V_LABEL as _V_LABEL          # one label table for sheet, box and hover
 from ..model import natkey
 from .diagram_html import page
 
@@ -74,6 +75,40 @@ class Box:
 
 def _v(v) -> str:
     return "? V" if v is None else f"{v:g} V"
+
+
+# Rail voltage with its source (HANDOVER 0p3, owner choice B, 2026-10-13; restored 2026-10-21 after the 0p4 refactor
+# dropped it): "2.505 V (FB)", net-name sources need no suffix, diode feeds "≈3.3 V (diode，未扣 Vf)", disagreeing exact
+# sources get a red ⚠ in front (the hover lists every source, power_tree.rails[r]["vcands"]).
+
+
+def _vline(ri: dict) -> str:
+    v, src = ri.get("v"), (ri.get("vsrc") or "").lstrip("≈")
+    if v is None:
+        return "? V"
+    s = f"{v:.4g} V"
+    if ri.get("vapprox"):
+        s = f"≈{s} (diode，未扣 Vf)"
+    elif src and src != "名稱":
+        s += f" ({_V_LABEL.get(src, src)})"
+    return ("⚠ " + s) if ri.get("vconflict") else s
+
+
+def _vhover(ri: dict) -> list[str]:
+    """One line per distinct (source, value): '電壓來源: IC 腳名 1.8 V ×3 (U1.P0 …)'."""
+    groups: dict[tuple, list] = {}
+    for c in ri.get("vcands") or []:
+        groups.setdefault((c["src"], c["v"]), []).append(c.get("detail", ""))
+    out = []
+    for (src, v), ds in groups.items():
+        n = f" ×{len(ds)}" if len(ds) > 1 else ""
+        more = " …" if len(ds) > 1 else ""
+        lab = _V_LABEL.get(src, src)
+        where = "" if ds[0] in ("", lab) else f" ({ds[0]}{more})"      # "net 名稱" carries no extra detail
+        out.append(f"電壓來源: {lab} {v:g} V{n}{where}")
+    if ri.get("vconflict"):
+        out.append(ri["vconflict"])
+    return out
 
 
 def _a_index(pt_a: dict | None) -> dict | None:
@@ -138,6 +173,7 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
     def rail_hover(r):
         ri = rinfo(r)
         h = [ri["vnote"]] if ri.get("vnote") else []
+        h += _vhover(ri)
         if len(ri["members"]) > 1:
             h.append("同組 net: " + ", ".join(ri["members"][:12]) + (" …" if len(ri["members"]) > 12 else ""))
         if ri["loads"]:
@@ -203,7 +239,7 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
         b = new_box(kind="conv", rail=k[1], volt=rinfo(k[1])["v"], level=level, parent=parent.id, conv=main["conv"],
                     built=bool(main["built"]), status=st, page=main["page"], edge_kind=main.get("kind", ""))
         what = {"diode": " (diode)", "FET switch (discrete)": " (FET)"}.get(main.get("kind", ""), "")
-        b.lines = [k[1], _v(b.volt), f"{main['conv']}{what}{'' if main['built'] else ' (DNP)'}{tag(st)}",
+        b.lines = [k[1], _vline(rinfo(k[1])), f"{main['conv']}{what}{'' if main['built'] else ' (DNP)'}{tag(st)}",
                    load_line(k[1])]
         b.hover = [f"{main['conv']} {main['mpn']}  {main['kind']}  上件 {'Y' if main['built'] else 'DNP'}",
                    f"上游 {k[0]} ({_v(rinfo(k[0])['v'])})"]
@@ -262,7 +298,7 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
         b = new_box(kind="bias", rail=r, volt=o.get("voltage"), level=level,
                     parent=parent.id if parent else None, conv=ic, built=True,
                     section="tree" if parent else "orphan")
-        b.lines = [r, _v(b.volt), f"{ic} 內部 net" + ("" if parent else " (IC 框未畫)"), load_line(r, skip=ic)]
+        b.lines = [r, _vline(rinfo(r)), f"{ic} 內部 net" + ("" if parent else " (IC 框未畫)"), load_line(r, skip=ic)]
         b.hover = [f"工具判斷: {o.get('source', '')}"] + rail_hover(r)
         fed_by[r] = b
         grow(r, b, level + 1, path | {r})
@@ -277,7 +313,7 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
         ri = rinfo(r)
         st = "new" if ai is not None and r not in ai["rails"] else ""
         b = new_box(kind="root", rail=r, volt=ri["v"], level=0, status=st, section=section)
-        b.lines = [r, _v(b.volt), "輸入" + (" " + ", ".join(ri["conns"][:3]) if ri["conns"] else "") + tag(st),
+        b.lines = [r, _vline(rinfo(r)), "輸入" + (" " + ", ".join(ri["conns"][:3]) if ri["conns"] else "") + tag(st),
                    load_line(r)]
         b.hover = ["電源輸入 (沒有上游轉換元件)"]
         o = by_rail_orphan.get(r)
@@ -304,7 +340,7 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
             placed.add(k[0])
             ri = rinfo(k[0])
             b = new_box(kind="unreached", rail=k[0], volt=ri["v"], level=0, built=False)
-            b.lines = [k[0], _v(b.volt), "未接到任何輸入", load_line(k[0])]
+            b.lines = [k[0], _vline(rinfo(k[0])), "未接到任何輸入", load_line(k[0])]
             b.hover = ["這個 rail 只餵給轉換元件，工具串不到它的來源 (迴圈或只有 DNP 路徑)"] + rail_hover(k[0])
             fed_by[k[0]] = b
             grow(k[0], b, 1, frozenset({k[0]}))
@@ -325,7 +361,7 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
         placed.add(r)
         b = new_box(kind="orphan", rail=r, volt=o.get("voltage"), level=0, section="orphan")
         extra, hv = orphan_lines(o)
-        b.lines = [r, _v(b.volt), "來源未識別", load_line(r)] + extra
+        b.lines = [r, _vline(rinfo(r)), "來源未識別", load_line(r)] + extra
         b.hover = hv + rail_hover(r)
         fed_by[r] = b
         grow(r, b, 1, frozenset({r}))
@@ -614,7 +650,8 @@ def render_html(boxes: list[Box], title: str, pdf_url=None, a_label: str = "A", 
         f'<span class="lg"><i style="background:{SVG_FILL.get(k if k != "dnp" else "dnp", "#fff")};'
         f'border:{"2px solid #C00000" if k == "orphan" else ("1px dashed #C00000" if k == "removed" else ("1px dashed #808080" if k == "dnp" else ("1px dashed #000" if k == "diode" else "1px solid #000")))}"></i>{escape(t)}</span>'
         for k, t in LEGEND)
-    note = "" if diff else f'<p class="warn">{escape(a_label)} 的 power tree 沒有算出來，本圖沒有變更顏色。</p>'
+    note = "" if diff else (f'<p class="warn">{escape(a_label)} 的 power tree 沒有算出來，本圖沒有變更顏色。</p>' if a_label
+                            else '<p class="warn">單板圖 (沒有比對對象)，本圖沒有變更顏色。</p>')
     hint_int = ("converter 的 bias / sense 等內部 net 預設隱藏，點框內「內部 net ×N」或勾選上方選項顯示。"
                 if svg_all else "")
     toggle = (f'<label class="tg"><input type="checkbox" id="showint"> 顯示 converter 內部 net ({n_int})</label>'

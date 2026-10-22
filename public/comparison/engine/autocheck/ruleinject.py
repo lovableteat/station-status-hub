@@ -16,14 +16,17 @@ from __future__ import annotations
 
 import copy
 import random
+import re
 
-from .checks.drc import present
-from .checks.netrules import NetGraph, domain_rows, guess_domain, netrules
-from .model import BomItem, Design, Primitive
+from .checks.drc import _prefix, present
+from .checks.netrules import NetGraph, Node, domain_rows, guess_domain, netrules
+from .model import BomItem, Design, Primitive, natkey
 
-KINDS = ["STRAP_BOTH", "OD_NO_PULLUP", "OD_OFFBOARD", "OD_STRONG", "OVERVOLT", "BACKPOWER"]
+KINDS = ["STRAP_BOTH", "OD_NO_PULLUP", "OD_OFFBOARD", "OD_STRONG", "OVERVOLT", "BACKPOWER", "DECOUPLE", "PULLUP_DOUBLE",
+         "FET_GATE"]
 EXPECT = {"STRAP_BOTH": "STRAP_PU_PD_BOTH", "OD_NO_PULLUP": "OD_NO_PULLUP", "OD_OFFBOARD": "OD_PULLUP_OFFBOARD",
-          "OD_STRONG": "OD_PULLUP_STRONG", "OVERVOLT": "PULLUP_OVERVOLT", "BACKPOWER": "PULLUP_BACKPOWER"}
+          "OD_STRONG": "OD_PULLUP_STRONG", "OVERVOLT": "PULLUP_OVERVOLT", "BACKPOWER": "PULLUP_BACKPOWER",
+          "DECOUPLE": "DECOUPLE_MISSING", "PULLUP_DOUBLE": "PULLUP_DOUBLE", "FET_GATE": "FET_GATE_LEVEL"}
 
 
 def _stuff(d: Design, r: str) -> None:
@@ -60,8 +63,37 @@ def candidates(d: Design, cfg: dict, rail_map: dict | None = None) -> list[dict]
     rails = {n: g.voltage(n) for n in d.nets if g.is_rail(n) and g.voltage(n) and not g.gnd_re.fullmatch(n)}
     top = max(rails, key=lambda n: (rails[n], n)) if rails else None
     out = []
+    # C1: unstuff every built cap on a supply net that feeds a built IC
+    nr = cfg.get("netrules", {}) or {}
+    cap_px = set(nr.get("capacitor_prefixes", ["C"]))
+    nc = re.compile(cfg["drc"]["intentional_nc_net_regex"], re.I)
+    sup_nets = sorted({d.pin_net[k] for k, rl in g.pin_roles.items()
+                       if "supply" in rl and _prefix(k[0]) in g.ic_px and present(d, k[0], cfg)
+                       and not g.gnd_re.fullmatch(d.pin_net[k]) and not nc.search(d.pin_net[k])}, key=natkey)
+    for n in sup_nets:
+        caps = sorted({k[0] for k in d.nets.get(n, []) if _prefix(k[0]) in cap_px and present(d, k[0], cfg)}, key=natkey)
+        if caps:
+            out.append({"kind": "DECOUPLE", "node": Node(nets=[n]), "parts": caps,
+                        "do": lambda d, cs=caps: [_unstuff(d, c) for c in cs]})
+    # C3: stuff a DNP FET -> one FET_GATE_LEVEL row keyed on its gate net must appear
+    from .checks.netrules import fet_groups
+    fet_px = set(nr.get("fet_prefixes", ["Q", "PQ"]))
+    for q in sorted((r for r in d.parts if _prefix(r) in fet_px and not present(d, r, cfg)), key=natkey):
+        grps = fet_groups(d, g.pin_roles, q)
+        if grps:
+            out.append({"kind": "FET_GATE", "node": Node(nets=sorted({d.pin_net[x["gate"]] for x in grps})), "parts": [q],
+                        "do": lambda d, q=q: _stuff(d, q)})
+    i2c = cfg.get("i2c", {}) or {}
+    i2c_rx = [re.compile(i2c[k], re.I) for k in ("sda_pin", "scl_pin") if i2c.get(k)]
     for node in g.nodes:
         pu, pdn = g.pull_ups(node), g.pull_downs(node)
+        # C2: stuff a DNP pull-up next to a built one (non-I2C node with an IC pin)
+        smax = float((cfg.get("netrules", {}) or {}).get("series_max_ohm", 100))
+        pu_dnp0 = [p for p in g.pull_ups(node, built=False) if p.ohm and p.ohm > smax]
+        if (len(pu) == 1 and pu[0].ohm and pu[0].ohm > smax and pu_dnp0 and g.ic_pins(node)
+                and not any(rx.fullmatch(d.pin_name.get(k, "")) for k in node.pins for rx in i2c_rx)):
+            out.append({"kind": "PULLUP_DOUBLE", "node": node, "parts": [pu_dnp0[0].r],
+                        "do": lambda d, r=pu_dnp0[0].r: _stuff(d, r)})
         pu_dnp, pd_dnp = g.pull_ups(node, built=False), g.pull_downs(node, built=False)
         if g.ic_pins(node, "strap"):
             if pu and pd_dnp and not pdn:

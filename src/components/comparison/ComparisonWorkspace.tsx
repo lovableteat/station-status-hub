@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GitCompareArrows, Play, Square, Download, Upload, Plus, CheckCircle2, TriangleAlert, FileText, ChevronDown } from "lucide-react";
+import { GitCompareArrows, Play, Square, Download, Upload, Plus, CheckCircle2, TriangleAlert, FileText, ChevronDown, FilePlus2, X } from "lucide-react";
 import { useUser } from "@/components/auth/UserContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useWorkspaceMutationScope } from "@/hooks/useWorkspaceMutationScope";
@@ -32,6 +32,20 @@ type DiagramSource = { accountId: string; sessionId: string; kind: "power" | "i2
 type OptionalKey = "config" | "railMap" | "railDomain" | "i2cDeclared";
 const optionalInputs: Array<{ key: OptionalKey; label: string; accept: string }> = [{ key: "config", label: "規則設定 YAML", accept: ".yaml,.yml" }, { key: "railMap", label: "Net 電壓對照 CSV", accept: ".csv" }, { key: "railDomain", label: "電源域 CSV", accept: ".csv" }, { key: "i2cDeclared", label: "I²C Block Diagram 對照 CSV", accept: ".csv" }];
 const blankRevision = (): RevisionInput => ({ files: [], selected: {} });
+
+// Optional inputs use the same picker language as the A/B panels instead of a bare native file control.
+function OptionalFileField({ id, label, accept, file, disabled, onChange }: { id: string; label: string; accept: string; file: File | undefined; disabled: boolean; onChange: (file: File | undefined) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  return <div className="comparison-optional-field">
+    <Label htmlFor={id}>{label}</Label>
+    <div className="comparison-optional-picker" data-has-file={Boolean(file)}>
+      <input id={id} ref={input} type="file" accept={accept} className="sr-only" disabled={disabled} onChange={event => onChange(event.target.files?.[0])} />
+      <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => input.current?.click()}><FilePlus2 />{file ? "重新選擇" : "選擇檔案"}</Button>
+      <span className="comparison-optional-file" title={file?.name}>{file ? `${file.name} · ${formatBytes(file.size)}` : "未選擇，沿用內建設定"}</span>
+      {file && <Button type="button" variant="ghost" size="icon" disabled={disabled} aria-label={`移除${label}`} onClick={() => { if (input.current) input.current.value = ""; onChange(undefined); }}><X /></Button>}
+    </div>
+  </div>;
+}
 
 export default function ComparisonWorkspace() {
   const { user } = useUser();
@@ -219,7 +233,7 @@ export default function ComparisonWorkspace() {
         <div className="comparison-setup-heading"><div className="comparison-section-heading"><div><h2>A / B 版本比對</h2><p>選取舊版與新版工程檔，檢查連線、元件、BOM 與線路規則。</p></div></div><div className="comparison-project-name"><Label htmlFor="comparison-project">比對名稱</Label><Input id="comparison-project" placeholder="例如 CATANIA PDB" value={projectName} maxLength={120} disabled={!canEdit || busy} onChange={event => setProjectName(event.target.value)} /></div></div>
         <div className="comparison-revision-grid"><ComparisonInputs side="A" label={aLabel} onLabel={setALabel} value={a} onChange={setA} disabled={!canEdit || busy} /><ComparisonInputs side="B" label={bLabel} onLabel={setBLabel} value={b} onChange={setB} disabled={!canEdit || busy} /></div>
         <div className="comparison-run-actions"><div><strong>{busy ? "處理中" : !canEdit ? "唯讀" : blockers.length ? (noFilesYet ? "先選 A、B 兩版的檔案" : "還不能比對") : !projectName.trim() ? "填好比對名稱就能開始" : "可以開始比對"}</strong><p id="comparison-run-hint">{busy ? "跑完才能再操作" : !canEdit ? "這個帳號沒有編輯權限，不能選檔案或比對" : blockers.length ? (noFilesYet ? "每版都要有 Netlist 三份 .dat、BOM 用料表、電路圖 PDF" : `${blockers[0]}${blockers.length > 1 ? `，還有 ${blockers.length - 1} 項` : ""}`) : "必要資料已選齊；DSN、IC Datasheet 與規則設定是選用工具"}</p></div><Button size="lg" aria-describedby="comparison-run-hint" disabled={!canEdit || busy || !projectName.trim() || blockers.length > 0} onClick={() => void start()}><Play />{busy ? "比對中…" : session ? "重新比對" : "開始比對"}</Button></div>
-        <details className="comparison-optional"><summary>選用工具：IC Datasheet 與進階設定<ChevronDown /></summary><div className="comparison-optional-grid">{optionalInputs.map(option => <div key={option.key}><Label htmlFor={`comparison-option-${option.key}`}>{option.label}</Label><Input id={`comparison-option-${option.key}`} type="file" accept={option.accept} disabled={!canEdit || busy} onChange={event => setOptional(current => ({ ...current, [option.key]: event.target.files?.[0] }))} /></div>)}<div className="comparison-datasheets-run"><Label>IC Datasheet 規格書 PDF（選用）</Label><DatasheetFiles value={datasheets} onChange={setDatasheets} disabled={!canEdit || busy} inputPrefix="comparison-run-datasheets" /></div></div><p>已保存的使用者位址庫會自動套用；可在「位址庫」核對與管理。</p></details>
+        <details className="comparison-optional"><summary>選用工具：IC Datasheet 與進階設定<ChevronDown /></summary><div className="comparison-optional-grid">{optionalInputs.map(option => <OptionalFileField key={option.key} id={`comparison-option-${option.key}`} label={option.label} accept={option.accept} file={optional[option.key]} disabled={!canEdit || busy} onChange={file => setOptional(current => ({ ...current, [option.key]: file }))} />)}<div className="comparison-datasheets-run"><Label>IC Datasheet 規格書 PDF（選用）</Label><DatasheetFiles value={datasheets} onChange={setDatasheets} disabled={!canEdit || busy} inputPrefix="comparison-run-datasheets" /></div></div><p>已保存的使用者位址庫會自動套用；可在「位址庫」核對與管理。</p></details>
         </section>
       </details>}
       {session && filters.tab !== "library" && filters.tab !== "diagram" && <>

@@ -9,7 +9,7 @@ from . import __version__
 from .checks.capv import cap_check
 from .checks.diff import diff_designs
 from .checks.drc import bom_checks, drc, tag_new
-from .checks.netrules import NetGraph, domain_rows, load_rail_domain, netrules
+from .checks.netrules import NetGraph, decouple_coverage, domain_rows, fet_coverage, load_rail_domain, netrules
 from .checks.i2c_map import i2c_map, load_declared, mark_changes
 from .checks.power_tree import power_tree
 from .config import load_config, load_rail_map
@@ -38,7 +38,9 @@ class Result:
     rail_domain: list[dict] = field(default_factory=list)   # A3 rail table (guesses + user rows) for B
     i2c_map: dict = field(default_factory=dict)         # I2C map on B (+ "declared" comparison rows)
     i2c_map_a: dict = field(default_factory=dict)       # same on A, only for the change column / colours
+    coverage: dict = field(default_factory=dict)        # rule coverage on B, e.g. {"DECOUPLE": {...}} (0p11)
     publish_url: str = ""                               # http URL of the annotated PDF (set by write_outputs)
+    publish_url_a: str = ""                             # A-side annotated PDF url ("" = none; 2026-10-20 0p9)
     run_tag: str = ""                                   # "<A>_vs_<B>", key of the review DB run (set by write_outputs)
     generated: str = field(default_factory=lambda: _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     tool_version: str = __version__
@@ -78,6 +80,7 @@ def run(a_files: dict[str, Path], b_files: dict[str, Path], a_label: str = "A", 
     # report of everything else: it becomes a warning.
     extra_warn: list[str] = []
     ptree, drows, ptree_a, ga, gb = {}, [], {}, None, None
+    coverage: dict = {}
     try:
         doms = load_rail_domain(rail_domain)
     except Exception as e:  # noqa: BLE001
@@ -95,6 +98,10 @@ def run(a_files: dict[str, Path], b_files: dict[str, Path], a_label: str = "A", 
                               f"({type(e).__name__}: {e})")
         findings += tag_new(new_rules, old_rules)
         drows = domain_rows(gb, doms)
+        if "DECOUPLE" in set((cfg.get("netrules", {}) or {}).get("enabled", [])):
+            coverage["DECOUPLE"] = decouple_coverage(gb)
+        if "FET_GATE_LEVEL" in set((cfg.get("netrules", {}) or {}).get("enabled", [])):
+            coverage["FET"] = fet_coverage(gb)
         ptree = power_tree(b, cfg, gb)
         extra_warn += ptree.get("warnings", [])
     except Exception as e:  # noqa: BLE001
@@ -144,5 +151,63 @@ def run(a_files: dict[str, Path], b_files: dict[str, Path], a_label: str = "A", 
             folders[lab] = os.path.commonpath([str(p.parent) for p in paths])
     return Result(a=a, b=b, cfg=cfg, findings=sort_findings(findings), cap_rows=rows, rail_todo=todo,
                   warnings=wa + wb + extra_warn, power_tree=ptree, power_tree_a=ptree_a, rail_domain=drows,
-                  i2c_map=i2cb, i2c_map_a=i2ca, input_issues=input_issues(a) + input_issues(b), overview=overview,
+                  i2c_map=i2cb, i2c_map_a=i2ca, coverage=coverage, input_issues=input_issues(a) + input_issues(b), overview=overview,
                   folders=folders, files={"a": dict(a_files), "b": dict(b_files)})
+
+
+@dataclass
+class SingleResult:
+    """One design, diagrams only (power tree + I2C map), no findings. 2026-10-19 owner request: draw A or B alone
+    from pages/2 and pages/3 without a full compare."""
+    design: Design
+    cfg: dict
+    warnings: list[str]
+    power_tree: dict = field(default_factory=dict)
+    i2c_map: dict = field(default_factory=dict)
+    input_issues: list[tuple[str, str]] = field(default_factory=list)
+    generated: str = field(default_factory=lambda: _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    tool_version: str = __version__
+
+    @property
+    def label(self) -> str:
+        return self.design.label
+
+
+def run_single(files: dict[str, Path], label: str = "A", config: str | Path | None = None,
+               rail_map: str | Path | None = None, i2c_declared: str | Path | None = None,
+               datasheets_dir: str | Path | None = None) -> SingleResult:
+    """Power tree + I2C map of ONE design: same build_design / NetGraph / power_tree / i2c_map calls as run(), none of
+    the checks, so a board without a partner (CRB, a third board) can be drawn. No rail_domain (A3 only). The I2C
+    declared csv defaults to the one found in this board's folder (run() only looks in B's)."""
+    cfg = load_config(config)
+    if datasheets_dir:
+        cfg.setdefault("i2c", {})
+        cfg["i2c"] = dict(cfg["i2c"] or {}, datasheets_dir=str(Path(datasheets_dir)))
+    rmap = load_rail_map(rail_map)
+    d, warn = build_design(label, files)
+    resolve_bom_tokens(d, cfg)
+    res = SingleResult(design=d, cfg=cfg, warnings=list(warn), input_issues=input_issues(d))
+    g = None
+    try:
+        g = NetGraph(d, cfg, rmap)
+        res.power_tree = power_tree(d, cfg, g)
+        res.warnings += res.power_tree.get("warnings", [])
+    except Exception as e:  # noqa: BLE001
+        res.warnings.append(f"power tree skipped ({type(e).__name__}: {e})")
+    if (cfg.get("i2c", {}) or {}).get("enabled", True):
+        try:
+            decl_path = i2c_declared or files.get("i2c_declared")
+            try:
+                decl = load_declared(decl_path) if decl_path else []
+            except Exception as e:  # noqa: BLE001
+                decl = []
+                res.warnings.append(f"I2C declared table not read ({type(e).__name__}: {e})")
+            if decl_path and not decl:
+                res.warnings.append(f"I2C declared table {decl_path} has no rows")
+            m, fb = i2c_map(d, cfg, g or NetGraph(d, cfg, rmap), decl)
+            m["_findings"] = fb
+            m["declared_file"] = str(decl_path or "")
+            res.i2c_map = m
+        except Exception as e:  # noqa: BLE001
+            res.warnings.append(f"I2C map skipped ({type(e).__name__}: {e})")
+    return res

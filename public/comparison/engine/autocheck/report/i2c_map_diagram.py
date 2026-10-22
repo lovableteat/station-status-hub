@@ -232,6 +232,7 @@ def render_html(m: dict, title: str, pdf_url=None, a_label: str = "A", declared_
              "分支上的電阻 = 串接件，主幹上方 = pull-up；連接器框以 net name 為主，symbol pin 名只當附註。框內：RefDes (藍字 = 開線路圖該頁) / "
              "symbol 料號 / BOM 主料 / 位址 (strap 狀態 → 算出的 7-bit 位址) / 每支位址腳實際上件的 strap 電阻 (DNP 列在括號內)。"
              "strap 狀態：0 = GND、1 = 接到 rail、Z = 空接、SDA / SCL = 接自己的 SDA / SCL、X = 上下拉都上件、? = 不明。灰色虛線 = DNP。"
-             f"綠 = 新增、黃 = 變更 (相對 {escape(a_label)})；紅框 = 位址衝突；「圖不符」= 跟 I2C Block Diagram 對不上。滑鼠停在框上看細節。</p>"
+             + (f"綠 = 新增、黃 = 變更 (相對 {escape(a_label)})；" if a_label else "單板圖 (沒有比對對象，不標新增 / 變更)；")
+             + "紅框 = 位址衝突；「圖不符」= 跟 I2C Block Diagram 對不上。滑鼠停在框上看細節。</p>"
              f"<p>{escape(declared_note)}</p>")
     return page(title, intro, svg, zoom_key="autocheck_i2c_zoom")

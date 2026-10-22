@@ -10,11 +10,11 @@ const fixtureRoot = new URL('fixtures/', import.meta.url);
 const nativePython = process.env.AUTOCHECK_PYTHON;
 const nativeOnly = { skip: !nativePython && 'Set AUTOCHECK_PYTHON and PYTHONPATH for the native AutoCheck draw.io regression' };
 
-test('AutoCheck 1015 manifest includes both original draw.io renderers and verifies every deployed source', async () => {
+test('AutoCheck 1022 manifest includes both original draw.io renderers and verifies every deployed source', async () => {
   const manifest = JSON.parse(await readFile(new URL('engine/manifest.json', publicRoot), 'utf8'));
-  assert.equal(manifest.origin, 'User-provided AutoCheck_1015.zip');
-  assert.equal(manifest.revision, '2026-10-15');
-  assert.equal(manifest.sourceSha256, 'dd6ab9090ebb60fe86575a6c349355f0a0a4b3a5acca31e29df624d264ac2e35');
+  assert.equal(manifest.origin, 'User-provided AutoCheck_1022.zip');
+  assert.equal(manifest.revision, '2026-10-22');
+  assert.equal(manifest.sourceSha256, '4dac9b2e1690cc30d4ec4f571eee24fafc01b1c797d888850a3f7d1ee6a39e2b');
   const paths = manifest.files.map(file => file.path);
   assert.equal(new Set(paths).size, paths.length);
   for (const renderer of ['power_tree_drawio.py', 'i2c_block_drawio.py']) {
