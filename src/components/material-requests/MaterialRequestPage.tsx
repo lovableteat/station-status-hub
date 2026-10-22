@@ -547,16 +547,17 @@ function MaterialIdentityHover({
           data-testid="material-identity-trigger"
           aria-label={`查看${name}的 REF DES 與 MPN`}
           onClick={(event) => event.stopPropagation()}
-          className="group/identity flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
+          className="group/identity flex w-full min-w-0 items-start gap-2 rounded-md px-1 py-0.5 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
         >
+          {/* The full name always shows; long names wrap instead of being cut off. */}
           <span
             data-testid="material-primary-name"
-            className="block min-w-0 flex-1 truncate text-[13px] font-semibold leading-5 text-foreground"
+            className="block min-w-0 flex-1 whitespace-normal break-words text-[13px] font-semibold leading-5 text-foreground"
             title={name || "未命名料件"}
           >
             {name || "未命名料件"}
           </span>
-          <CircleHelp className="h-3.5 w-3.5 flex-none text-muted-foreground opacity-60 transition-opacity group-hover/identity:opacity-100" />
+          <CircleHelp className="mt-0.5 h-3.5 w-3.5 flex-none text-muted-foreground opacity-60 transition-opacity group-hover/identity:opacity-100" />
         </button>
       </HoverCardTrigger>
       <HoverCardContent
