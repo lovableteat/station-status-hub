@@ -146,9 +146,7 @@ import {
   getMaterialSourceValue,
   getMaterialTableWidth,
   groupBomWorkspacesByProject,
-  collectPartSiblingPatches,
   groupPendingMaterials,
-  mergePendingMaterialsByPart,
   normalizeHiddenMaterialColumns,
   resizeMaterialColumnWidths,
   shouldApplyBomWorkspaceCache,
@@ -3142,17 +3140,15 @@ function PendingMaterialsDialog({
   recordMeta?: Record<string, BomRecordSyncMeta>;
   workspaceName: string;
   exportedBy: string;
-  onLocate: (group: MaterialGroup, query: string) => void;
+  onLocate: (group: MaterialGroup) => void;
   onOpenChange: (open: boolean) => void;
-  onOpenCreate: (group: MaterialGroup, record: MaterialRecord) => void;
+  onOpenCreate: (group: MaterialGroup) => void;
   onOpenTracking: (record: MaterialRecord) => void;
 }) {
   const [query, setQuery] = useState("");
   const [mailOpen, setMailOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all">("all");
-  // One manufacturer plus one MPN is one application, however many locations use it.
-  const parts = useMemo(() => mergePendingMaterialsByPart(groups), [groups]);
-  const categories = useMemo(() => groupPendingMaterials(parts), [parts]);
+  const categories = useMemo(() => groupPendingMaterials(groups), [groups]);
   const keyword = query.trim().toLowerCase();
   // One category at a time keeps long BOMs from becoming one endless scroll; the tabs carry the counts.
   const selectedCategory = categories.some((category) => category.key === activeCategory) ? activeCategory : "all";
@@ -3173,9 +3169,8 @@ function PendingMaterialsDialog({
   const priorityCount = categories.filter((category) => category.priority).reduce((sum, category) => sum + category.groups.length, 0);
   const staleThreshold = Date.now() - STALE_PENDING_MS;
   const isStale = (group: MaterialGroup) => getPendingGroupUpdatedAt(group, recordMeta) < staleThreshold;
-  const isPartStale = (part: { groups: MaterialGroup[] }) => part.groups.some(isStale);
-  const staleCount = parts.filter(isPartStale).length;
-  const description = `共 ${parts.length.toLocaleString()} 顆料待申請（${groups.length.toLocaleString()} 筆位號）· 同廠商同 MPN 合併為一筆 · CONNECTOR 與 IC 優先 ${priorityCount.toLocaleString()} 顆 · ${staleCount.toLocaleString()} 顆逾 3 天未更新`;
+  const staleCount = groups.filter(isStale).length;
+  const description = `共 ${groups.length.toLocaleString()} 筆料號待補 · CONNECTOR 與 IC 優先 ${priorityCount.toLocaleString()} 筆 · ${staleCount.toLocaleString()} 筆逾 3 天未更新`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -3203,7 +3198,7 @@ function PendingMaterialsDialog({
         <PendingMailDialog groups={groups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
 
         <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-2 rounded-xl border border-border bg-background/40 p-1.5">
-          {[{ key: "all" as const, label: "全部", count: parts.length, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
+          {[{ key: "all" as const, label: "全部", count: groups.length, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
             <button
               key={tab.key}
               type="button"
@@ -3225,7 +3220,7 @@ function PendingMaterialsDialog({
         <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
           {visibleCategories.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-              {parts.length === 0 ? "目前沒有待處理的料號" : "找不到符合條件的待處理料"}
+              {groups.length === 0 ? "目前沒有待處理的料號" : "找不到符合條件的待處理料"}
             </p>
           ) : visibleCategories.flatMap((category) => [
             <div key={`category:${category.key}`} className="flex items-center gap-2 px-1 pt-2 first:pt-0">
@@ -3234,27 +3229,22 @@ function PendingMaterialsDialog({
               {category.priority && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)}>優先處理</span>}
               <span className="ml-auto flex-none font-mono text-[11px] text-muted-foreground">{category.groups.length.toLocaleString()} 筆</span>
             </div>,
-            ...category.groups.map((part) => {
-              const group = part.groups[0];
-              const record = part.record;
+            ...category.groups.map((group) => {
+              const record = group.primaryRecord;
               const trackingStatus = record.trackingStatus?.trim() || "";
-              const stale = isPartStale(part);
-              const mpn = part.manufacturerPartNumber || record.manufacturerPartNumber;
-              const locateQuery = part.groups.length > 1 && mpn ? mpn : group.displayRef;
+              const stale = isStale(group);
               return (
-                <div key={part.key} data-testid="pending-part" className={cn("flex flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
+                <div key={group.key} className={cn("flex flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
                   <span className={cn("h-2 w-2 flex-none rounded-full", stale ? "material-blink bg-destructive" : "bg-muted-foreground/40")} aria-hidden="true" />
-                  <span className="w-[16rem] flex-none truncate font-mono text-sm font-semibold text-foreground" title={part.displayRef}>{part.displayRef}</span>
-                  {part.groups.length > 1 && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.primary)} title={`這顆料用在 ${part.groups.length} 組位號，申請一次即可；料號會同步到每一列`}>{part.groups.length} 處位號</span>}
-                  <span className="min-w-[14rem] flex-1 truncate text-base text-foreground" title={part.name}>{part.name || "未命名料件"}</span>
-                  <span className="hidden w-[18rem] flex-none truncate font-mono text-sm text-foreground/75 md:block" title={`${part.manufacturer || record.manufacturer || "未填廠商"} · ${mpn || "未填 MPN"}`}>{mpn || "未填 MPN"}</span>
-                  <span className="hidden w-[10rem] flex-none truncate text-xs text-muted-foreground lg:block" title={part.manufacturer || record.manufacturer}>{part.manufacturer || record.manufacturer || "未填廠商"}</span>
+                  <span className="w-[16rem] flex-none truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
+                  <span className="min-w-0 flex-1 truncate text-base text-foreground" title={group.name}>{group.name || "未命名料件"}</span>
+                  <span className="hidden w-[18rem] flex-none truncate font-mono text-sm text-foreground/75 md:block" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
                   <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(trackingStatus))}>{trackingStatus || "未追蹤"}</span>
                   {stale && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)} title="還沒取得料號，且超過 3 天沒有更新資料">逾 3 天未更新</span>}
                   <div className="ml-auto flex flex-none items-center gap-1">
-                    <Button type="button" variant="ghost" size="sm" onClick={() => onLocate(group, locateQuery)} className="h-7 px-2 text-xs">定位</Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => onLocate(group)} className="h-7 px-2 text-xs">定位</Button>
                     <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onOpenTracking(record)} className="h-7 px-2 text-xs">追蹤</Button>
-                    <Button type="button" variant="secondary" size="sm" disabled={!canEdit} onClick={() => onOpenCreate(group, record)} className="h-7 px-2 text-xs">更新料號</Button>
+                    <Button type="button" variant="secondary" size="sm" disabled={!canEdit} onClick={() => onOpenCreate(group)} className="h-7 px-2 text-xs">更新料號</Button>
                   </div>
                 </div>
               );
@@ -5275,8 +5265,7 @@ export function MaterialRequestPage() {
       setIsExportingDiscouraged(false);
     }
   };
-  const pendingMaterialParts = useMemo(() => mergePendingMaterialsByPart(pendingMaterialGroups), [pendingMaterialGroups]);
-  const requiredApplicationCount = pendingMaterialParts.length;
+  const requiredApplicationCount = pendingMaterialGroups.length;
   const pendingGroupCount = useMemo(
     () => dataset.groups.filter((group) => group.pendingCount > 0).length,
     [dataset.groups]
@@ -5556,74 +5545,6 @@ export function MaterialRequestPage() {
       });
   };
 
-  // One manufacturer plus one MPN is one physical part, so a part number entered on any row
-  // belongs to every other row of that part whose field is still empty.
-  const collectPartSiblings = (saved: MaterialWorkbookRecord) =>
-    collectPartSiblingPatches(saved, basePayload.records).map(({ record, patch }) => ({ ...toWorkbookRecord(record), ...patch }));
-
-  const countTrackingImages = (record?: MaterialWorkbookRecord) =>
-    (record?.trackingHistory ?? []).reduce((count, entry) => count + (entry.images?.length ?? 0), 0);
-
-  // Writes one edited record plus the rows it propagates to in a single local replace, then one
-  // remote write per record. The first record is the user's own edit and decides success; the rest
-  // are best effort and reported in the outcome.
-  const saveRecordsToActiveBom = async (list: MaterialWorkbookRecord[]): Promise<{ saved: number; failed: number }> => {
-    if (list.length === 0) return { saved: 0, failed: 0 };
-    const writeScope = captureBomWrite();
-    if (!isCollaborativeReady) throw new Error("Collaborative BOM storage unavailable");
-    if (!isFullDatasetLoaded) {
-      showDatasetSyncingToast();
-      throw new Error("Full BOM dataset is still loading");
-    }
-    const byId = new Map(list.map((item) => [item.id, item] as const));
-    const previousById = new Map(basePayload.records.map((item) => [item.id, item] as const));
-    const records = [
-      ...basePayload.records.map((item) => byId.get(item.id) ?? item),
-      ...list.filter((item) => !previousById.has(item.id)),
-    ];
-    const nextWorkspace: BomWorkspace = {
-      ...activeWorkspace,
-      payload: { ...basePayload, records, recordCount: records.length },
-      updatedAt: new Date().toISOString(),
-    };
-    for (const item of list) recentLocalRecordIdsRef.current.set(item.id, Date.now());
-    replaceBomWorkspace(nextWorkspace);
-    const metas: Record<string, BomRecordSyncMeta> = {};
-    let failed = 0;
-    let savingWorkspace = nextWorkspace;
-    for (const [index, item] of list.entries()) {
-      try {
-        const recordMeta = await saveBomWorkspaceRecord(savingWorkspace, item, () => assertBomWriteCurrent(writeScope));
-        assertBomWriteCurrent(writeScope);
-        metas[item.id] = recordMeta;
-        savingWorkspace = { ...savingWorkspace, recordMeta: { ...savingWorkspace.recordMeta, [item.id]: recordMeta } };
-        const previous = previousById.get(item.id);
-        void logMaterialRecordChange({
-          action: previous ? "update" : "create",
-          actor: user,
-          imageCount: countTrackingImages(item),
-          previousImageCount: countTrackingImages(previous),
-          newUpdatedAt: recordMeta.updatedAt,
-          previousUpdatedAt: activeWorkspace.recordMeta?.[item.id]?.updatedAt,
-          recordId: item.id,
-          workspaceId: savingWorkspace.id,
-        });
-      } catch (error) {
-        if (!isBomWriteCurrent(writeScope)) throw error;
-        if (index === 0) {
-          await reloadBomWorkspaces(activeBomId).catch(() => undefined);
-          throw error;
-        }
-        failed += 1;
-      }
-    }
-    setBomWorkspaces((current) => current.map((workspace) => workspace.id === nextWorkspace.id
-      ? { ...workspace, recordMeta: { ...workspace.recordMeta, ...metas } }
-      : workspace));
-    if (failed > 0) await reloadBomWorkspaces(activeBomId).catch(() => undefined);
-    return { saved: list.length - failed, failed };
-  };
-
   const handleSaveRecord = async (record: MaterialWorkbookRecord) => {
     if (!isValidBomUsage(record.qty)) {
       toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
@@ -5631,15 +5552,15 @@ export function MaterialRequestPage() {
     }
     try {
       const writeScope = captureBomWrite();
-      const saved = { ...record, requestUrl: normalizeRequestUrl(record.requestUrl ?? "") };
-      const siblings = collectPartSiblings(saved);
-      const outcome = await saveRecordsToActiveBom([saved, ...siblings]);
+      await saveRecordToActiveBom({
+        ...record,
+        requestUrl: normalizeRequestUrl(record.requestUrl ?? ""),
+      });
       if (!isBomWriteCurrent(writeScope)) return;
       setEditorOpen(false);
-      const synced = siblings.length - outcome.failed;
       toast({
         title: editorMode === "create" ? "料件已新增" : "料件已更新",
-        description: `${record.manufacturer || "未指定廠商"} ${record.manufacturerPartNumber || record.name}${synced > 0 ? ` · 已同步套用到另外 ${synced} 列相同料號（同廠商、同 MPN）` : ""}${outcome.failed > 0 ? `；${outcome.failed} 列同步失敗，已重新載入` : ""}`,
+        description: `${record.manufacturer || "未指定廠商"} ${record.manufacturerPartNumber || record.name}`,
       });
     } catch (error) {
       if (error instanceof WorkspaceMutationScopeChangedError) return;
@@ -5665,12 +5586,7 @@ export function MaterialRequestPage() {
       showDatasetSyncingToast();
       return;
     }
-    const saved = { ...toWorkbookRecord(record), virtualAlternative: value };
-    const siblings = value.trim() ? collectPartSiblings(saved) : [];
-    void saveRecordsToActiveBom([saved, ...siblings]).then((outcome) => {
-      const synced = siblings.length - outcome.failed;
-      if (synced > 0) toast({ title: "虛擬料號已同步", description: `已套用到另外 ${synced} 列相同料號（同廠商、同 MPN）。` });
-    }).catch(() => {
+    void saveRecordToActiveBom({ ...toWorkbookRecord(record), virtualAlternative: value }).catch(() => {
       if (!isBomWriteCurrent(writeScope)) return;
       toast({
         title: "資料更新失敗",
@@ -6238,22 +6154,16 @@ export function MaterialRequestPage() {
         workspaceName={activeWorkspace.name}
         exportedBy={user?.displayName || user?.username || "未知使用者"}
         onOpenChange={setPendingDialogOpen}
-        onLocate={(group, locateQuery) => {
+        onLocate={(group) => {
           setPendingDialogOpen(false);
           setAvailability("required");
           setColumnFilters(EMPTY_COLUMN_FILTERS);
-          setSearchDraft(locateQuery);
-          setQuery(locateQuery);
+          setSearchDraft(group.displayRef);
+          setQuery(group.displayRef);
           setExpandedKey(group.key);
           setPage(1);
         }}
-        onOpenCreate={(group, record) => {
-          setPendingDialogOpen(false);
-          // A row that already names its manufacturer and MPN only needs its part number: edit that row
-          // so the number also reaches every other row of the same part.
-          if (record.manufacturerPartNumber?.trim()) openRecord(record, "edit");
-          else openCreate(group);
-        }}
+        onOpenCreate={(group) => { setPendingDialogOpen(false); openCreate(group); }}
         onOpenTracking={(record) => { setPendingDialogOpen(false); openTrackingDialog(record); }}
       />
       <BomTableColorDialog

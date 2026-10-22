@@ -730,70 +730,42 @@ export interface VendorMailSection {
 
 export const UNKNOWN_VENDOR_LABEL = "未填廠商";
 
-const compareRefs = (left: string, right: string) => left.localeCompare(right, undefined, { numeric: true });
-
-function sumQuantities(values: readonly string[]) {
-  const texts = values.map((value) => value.trim());
-  const numbers = texts.map((value) => Number(value));
-  if (texts.length > 0 && texts.every((value) => value !== "") && numbers.every((value) => Number.isFinite(value))) {
-    return String(numbers.reduce((total, value) => total + value, 0));
-  }
-  return Array.from(new Set(texts.filter(Boolean))).join(" / ");
-}
-
 /**
- * One mail per manufacturer, one line per part: a manufacturer plus MPN is one
- * application however many locations use it, so the locations are listed
- * together and their quantities added instead of repeating the part.
+ * One mail per manufacturer: every MPN candidate of the pending groups, grouped
+ * by its manufacturer so the same vendor receives a single request.
  */
 export function buildVendorMailSections(
   groups: ReadonlyArray<Pick<MaterialGroup, "displayRef" | "name" | "qty" | "records">>,
   workspaceName: string,
 ): VendorMailSection[] {
-  const byVendor = new Map<string, Map<string, { item: VendorMailItem; refs: Set<string>; quantities: Map<string, string> }>>();
+  const byVendor = new Map<string, VendorMailItem[]>();
   for (const group of groups) {
+    const seen = new Set<string>();
     for (const record of group.records) {
       const vendor = record.manufacturer?.trim() || UNKNOWN_VENDOR_LABEL;
       const mpn = record.manufacturerPartNumber?.trim() ?? "";
-      const ref = record.refDes?.trim() || group.displayRef;
-      const items = byVendor.get(vendor) ?? new Map();
-      byVendor.set(vendor, items);
-      const existing = items.get(mpn);
-      if (existing) {
-        existing.refs.add(ref);
-        existing.quantities.set(group.displayRef, String(group.qty ?? ""));
-        if (!existing.item.partSpec) existing.item.partSpec = record.partSpec ?? "";
-        if (!existing.item.partUsageStatus) existing.item.partUsageStatus = record.partUsageStatus ?? "";
-        continue;
-      }
-      items.set(mpn, {
-        item: {
-          refDes: ref,
-          name: record.name || group.name,
-          manufacturerPartNumber: mpn,
-          qty: String(group.qty ?? ""),
-          partSpec: record.partSpec ?? "",
-          partUsageStatus: record.partUsageStatus ?? "",
-        },
-        refs: new Set([ref]),
-        quantities: new Map([[group.displayRef, String(group.qty ?? "")]]),
+      const key = `${vendor}\u0000${mpn}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const items = byVendor.get(vendor) ?? [];
+      items.push({
+        refDes: record.refDes?.trim() || group.displayRef,
+        name: record.name || group.name,
+        manufacturerPartNumber: mpn,
+        qty: String(group.qty ?? ""),
+        partSpec: record.partSpec ?? "",
+        partUsageStatus: record.partUsageStatus ?? "",
       });
+      byVendor.set(vendor, items);
     }
   }
   return [...byVendor.entries()]
     .sort(([left], [right]) => (left === UNKNOWN_VENDOR_LABEL ? 1 : right === UNKNOWN_VENDOR_LABEL ? -1 : left.localeCompare(right, "zh-Hant", { numeric: true })))
-    .map(([vendor, entries]) => {
-      const items = [...entries.values()].map(({ item, refs, quantities }) => ({
-        ...item,
-        refDes: [...refs].sort(compareRefs).join(", "),
-        qty: sumQuantities([...quantities.values()]),
-      }));
-      return {
-        vendor,
-        subject: `【料號申請】${workspaceName} · ${vendor} 共 ${items.length} 項`,
-        items: items.sort((left, right) => compareRefs(left.refDes, right.refDes)),
-      };
-    });
+    .map(([vendor, items]) => ({
+      vendor,
+      subject: `【料號申請】${workspaceName} · ${vendor} 共 ${items.length} 項`,
+      items: items.sort((left, right) => left.refDes.localeCompare(right.refDes, undefined, { numeric: true })),
+    }));
 }
 
 /** Plain text of authored mail HTML: block boundaries become newlines, images become their alt/name, scripts are dropped. */
