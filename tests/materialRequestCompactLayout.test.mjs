@@ -86,7 +86,7 @@ test("main rows are memoised and keep every cell to one or two short lines", () 
   assert.match(source, /const MATERIAL_CELL_CLASS = "border-r border-white\/20 px-2 py-1\.5 align-middle"/);
   assert.doesNotMatch(rowBlock, /py-3|line-clamp|<br \/>|主料 Remark:|個 MPN/);
   const identityBlock = slice("function MaterialIdentityHover(", "function MaterialFieldLabel(");
-  assert.match(identityBlock, /data-testid="material-primary-name"\s+className="block min-w-0 flex-1 truncate/);
+  assert.match(identityBlock, /data-testid="material-primary-name"\s+className="block min-w-0 flex-1 whitespace-normal break-words/, "the Name column shows the whole name");
   assert.doesNotMatch(identityBlock, /line-clamp-2 text-\[15px\]/);
   assert.match(rowBlock, /<MaterialSourceText value=\{statusRecord\.manufacturer\} label="Manufacturer" \/>/);
   assert.match(rowBlock, /<MaterialSourceText value=\{partSpec\} label="Part Spec" \/>/);
