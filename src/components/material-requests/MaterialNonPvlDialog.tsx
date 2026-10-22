@@ -38,6 +38,7 @@ export function MaterialNonPvlDialog({
   isExporting,
   open,
   rows,
+  excludedCount = 0,
   workspaceName,
   onExportApplyList,
   onExportDetail,
@@ -46,6 +47,8 @@ export function MaterialNonPvlDialog({
   isExporting: boolean;
   open: boolean;
   rows: DiscouragedMaterialRow[];
+  /** Rows dropped because their 實體料號 does not end in 00, ZZ or ZY. */
+  excludedCount?: number;
   workspaceName: string;
   onExportApplyList: () => void;
   onExportDetail: () => void;
@@ -61,7 +64,7 @@ export function MaterialNonPvlDialog({
   ), [keyword, rows]);
   const partNumbers = useMemo(() => new Set(rows.map((row) => row.partNumber).filter(Boolean)), [rows]);
   const missingCount = rows.filter((row) => !row.partNumber).length;
-  const description = `${workspaceName} · 零件狀態為不建議用料的料共 ${rows.length.toLocaleString()} 筆 · 可申請的實體料號 ${partNumbers.size.toLocaleString()} 個${missingCount > 0 ? ` · ${missingCount.toLocaleString()} 筆還沒有實體料號` : ""}`;
+  const description = `${workspaceName} · 零件狀態為不建議用料的料共 ${rows.length.toLocaleString()} 筆 · 可申請的實體料號 ${partNumbers.size.toLocaleString()} 個${missingCount > 0 ? ` · ${missingCount.toLocaleString()} 筆還沒有實體料號` : ""}${excludedCount > 0 ? ` · 已排除 ${excludedCount.toLocaleString()} 筆實體料號尾數不是 00／ZZ／ZY` : ""}`;
   const assetBase = `${import.meta.env.BASE_URL}material-non-pvl/`;
 
   return (

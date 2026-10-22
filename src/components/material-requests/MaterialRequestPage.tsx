@@ -132,7 +132,7 @@ import type {
   MaterialExportProgress,
   MaterialReportSnapshot,
 } from "./materialRequestExport";
-import { buildVendorMailSections, collectDiscouragedMaterialRows, collectNonPvlPartNumbers, exportDiscouragedMaterialsExcel, exportNonPvlApplyList, exportVendorMailHtml, mailHtmlToText, renderVendorMailText } from "./materialRequestExport";
+import { buildVendorMailSections, collectDiscouragedMaterialRows, collectNonPvlPartNumbers, countExcludedDiscouragedRows, exportDiscouragedMaterialsExcel, exportNonPvlApplyList, exportVendorMailHtml, mailHtmlToText, renderVendorMailText } from "./materialRequestExport";
 import { MaterialNonPvlDialog } from "./MaterialNonPvlDialog";
 import {
   MATERIAL_TABLE_COLUMNS,
@@ -5252,6 +5252,7 @@ export function MaterialRequestPage() {
   );
   const pendingMaterialGroups = useMemo(() => dataset.groups.filter(requiresApplication), [dataset.groups]);
   const discouragedMaterialRows = useMemo(() => collectDiscouragedMaterialRows(dataset.records), [dataset.records]);
+  const excludedDiscouragedCount = useMemo(() => countExcludedDiscouragedRows(dataset.records), [dataset.records]);
   const discouragedMaterialCount = discouragedMaterialRows.length;
   const [nonPvlDialogOpen, setNonPvlDialogOpen] = useState(false);
   const [isExportingDiscouraged, setIsExportingDiscouraged] = useState(false);
@@ -6167,6 +6168,7 @@ export function MaterialRequestPage() {
         isExporting={isExportingDiscouraged}
         open={nonPvlDialogOpen}
         rows={discouragedMaterialRows}
+        excludedCount={excludedDiscouragedCount}
         workspaceName={activeWorkspace.name}
         onExportApplyList={() => void exportNonPvlList()}
         onExportDetail={() => void exportDiscouragedMaterials()}
