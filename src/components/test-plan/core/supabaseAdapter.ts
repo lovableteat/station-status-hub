@@ -14,14 +14,6 @@ import { toTestPlanError } from "./errors";
 import type { TestPlanDataAdapter } from "./repository";
 
 export const TEST_PLAN_STORAGE_BUCKET = "test-plan-files";
-/** Origin the drag-to-desktop proxy worker may stream from; empty when the client has no storage URL. */
-export const TEST_PLAN_STORAGE_ORIGIN = (() => {
-  try {
-    return SUPABASE_URL ? new URL(SUPABASE_URL).origin : "";
-  } catch {
-    return "";
-  }
-})();
 const RESUMABLE_UPLOAD_CHUNK_SIZE = 6 * 1024 * 1024;
 const RESUMABLE_REQUEST_TIMEOUT = 120_000;
 

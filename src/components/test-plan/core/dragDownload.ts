@@ -1,16 +1,16 @@
 /**
  * Drag-to-desktop delivery. Chrome and Edge start an OS-level download from
  * the "DownloadURL" drag item, so the address it carries decides whether a
- * corporate download policy lets it through. In order of preference:
- *   1. a blob: URL of bytes already fetched by the page (same origin, nothing
- *      for a URL filter to object to) for files up to DRAG_BLOB_LIMIT;
- *   2. a same-origin address served by public/file-library-sw.js, which
- *      streams the storage object;
- *   3. the raw storage link.
+ * corporate download policy lets it through. A blob: URL of bytes the page
+ * already holds is same-origin and passes URL-keyed download rules; the raw
+ * storage link is the fallback for files too large to hold in memory. The
+ * drag download runs in the browser process and never reaches a service
+ * worker, so no proxied same-origin address can stand in for the bytes.
  */
-export const DRAG_BLOB_LIMIT = 24 * 1024 * 1024;
-export const DRAG_BLOB_CACHE_LIMIT = 256 * 1024 * 1024;
-export const DOWNLOAD_PROXY_PREFIX = "__file-library__/download/";
+export const DRAG_BLOB_LIMIT = 64 * 1024 * 1024;
+export const DRAG_BLOB_CACHE_LIMIT = 384 * 1024 * 1024;
+/** Explorer pulls the dragged file after dragend; keep object URLs alive long enough for that. */
+export const DRAG_BLOB_REVOKE_DELAY = 5 * 60_000;
 
 /** "<mime>:<file name>:<url>"; colons would split the fields, so the name never contains one. */
 export function describeDownloadUrl(mimeType: string | null | undefined, fileName: string, url: string): string {
@@ -18,42 +18,14 @@ export function describeDownloadUrl(mimeType: string | null | undefined, fileNam
   return `${mimeType || "application/octet-stream"}:${name}:${url}`;
 }
 
-export interface DownloadProxy {
-  pageOrigin: string;
-  base: string;
-}
-
-export interface ProxyDownloadInput extends DownloadProxy {
-  fileId: string;
-  sourceUrl: string;
-  fileName: string;
-  mimeType?: string | null;
-  size?: number;
-}
-
-export function buildProxyDownloadUrl(input: ProxyDownloadInput): string {
-  const params = new URLSearchParams({ u: input.sourceUrl, n: input.fileName });
-  if (input.mimeType) params.set("t", input.mimeType);
-  if (input.size && input.size > 0) params.set("s", String(Math.floor(input.size)));
-  const base = input.base.endsWith("/") ? input.base : `${input.base}/`;
-  return `${input.pageOrigin}${base}${DOWNLOAD_PROXY_PREFIX}${encodeURIComponent(input.fileId)}/${encodeURIComponent(input.fileName)}?${params.toString()}`;
-}
-
 export interface DragDownloadChoice {
   blobUrl?: string | null;
   sourceUrl?: string | null;
-  proxy?: DownloadProxy | null;
-  fileId: string;
-  fileName: string;
-  mimeType?: string | null;
-  size?: number;
 }
 
 export function chooseDragDownloadUrl(input: DragDownloadChoice): string | null {
   if (input.blobUrl) return input.blobUrl;
-  if (!input.sourceUrl) return null;
-  if (/^(blob|data):/i.test(input.sourceUrl) || !input.proxy) return input.sourceUrl;
-  return buildProxyDownloadUrl({ ...input.proxy, fileId: input.fileId, sourceUrl: input.sourceUrl, fileName: input.fileName, mimeType: input.mimeType, size: input.size });
+  return input.sourceUrl || null;
 }
 
 export interface BlobUrlCache {

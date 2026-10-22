@@ -98,7 +98,7 @@ import { isEditableSpreadsheet } from "./core/spreadsheet";
 import { TestPlanSpreadsheetEditor } from "./TestPlanSpreadsheetEditor";
 import { TransferPanel, type TransferItem } from "./TransferPanel";
 import { downloadWithProgress } from "./core/transfers";
-import { chooseDragDownloadUrl, createBlobUrlCache, describeDownloadUrl, DRAG_BLOB_CACHE_LIMIT, DRAG_BLOB_LIMIT, type DownloadProxy } from "./core/dragDownload";
+import { chooseDragDownloadUrl, createBlobUrlCache, describeDownloadUrl, DRAG_BLOB_CACHE_LIMIT, DRAG_BLOB_LIMIT, DRAG_BLOB_REVOKE_DELAY } from "./core/dragDownload";
 import type {
   TestPlanEntry,
   TestPlanFileCategory,
@@ -599,7 +599,6 @@ export function TestPlanWorkspace() {
     downloadFile,
     getFileDownloadUrl,
     getFileDownloadUrls,
-    storageOrigin,
     deleteFile,
     deleteEntries,
     replaceFileContents,
@@ -611,10 +610,9 @@ export function TestPlanWorkspace() {
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const downloadUrlCacheRef = useRef(new Map<string, { url: string; expiresAt: number }>());
   const [downloads, setDownloads] = useState<TransferItem[]>([]);
-  const dragBlobCacheRef = useRef(createBlobUrlCache(DRAG_BLOB_CACHE_LIMIT));
+  const dragBlobCacheRef = useRef(createBlobUrlCache(DRAG_BLOB_CACHE_LIMIT, (url) => window.setTimeout(() => URL.revokeObjectURL(url), DRAG_BLOB_REVOKE_DELAY)));
   const dragPrefetchRef = useRef(new Set<string>());
   const dragDwellTimersRef = useRef(new Map<string, number>());
-  const [downloadProxy, setDownloadProxy] = useState<DownloadProxy | null>(null);
   useEffect(() => {
     const cache = dragBlobCacheRef.current;
     const timers = dragDwellTimersRef.current;
@@ -624,18 +622,18 @@ export function TestPlanWorkspace() {
       timers.clear();
     };
   }, []);
-  // Same-origin download proxy for drag-to-desktop (see public/file-library-sw.js).
+  // An earlier build registered a download-proxy worker that a drag download can never reach; retire it.
   useEffect(() => {
-    if (typeof navigator === "undefined" || !("serviceWorker" in navigator) || !window.isSecureContext) return;
-    if (!storageOrigin) return;
-    const base = import.meta.env.BASE_URL;
-    let cancelled = false;
-    navigator.serviceWorker.register(`${base}file-library-sw.js?origin=${encodeURIComponent(storageOrigin)}`, { scope: base })
-      .then(() => navigator.serviceWorker.ready)
-      .then(() => { if (!cancelled) setDownloadProxy({ pageOrigin: window.location.origin, base }); })
-      .catch(() => { /* without the worker, drag-out keeps using the storage link */ });
-    return () => { cancelled = true; };
-  }, [storageOrigin]);
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.getRegistrations()
+      .then((registrations) => {
+        for (const registration of registrations) {
+          const scriptUrl = registration.active?.scriptURL ?? registration.waiting?.scriptURL ?? registration.installing?.scriptURL ?? "";
+          if (scriptUrl.includes("file-library-sw.js")) void registration.unregister();
+        }
+      })
+      .catch(() => { /* nothing to retire */ });
+  }, []);
   const dismissDownload = useCallback((id: string) => setDownloads((items) => items.filter((item) => item.id !== id)), []);
   const [retryState, setRetryState] = useState<UploadRetry | null>(() => retainedUploadRetry);
   const uploadRetry = retryState?.ownerId === ownerId ? retryState : null;
@@ -961,16 +959,7 @@ export function TestPlanWorkspace() {
     if (entry.kind === "file") {
       cancelDragPrefetch(entry.id);
       const cached = downloadUrlCacheRef.current.get(entry.id);
-      const proxyReady = downloadProxy && typeof navigator !== "undefined" && Boolean(navigator.serviceWorker?.controller);
-      const url = chooseDragDownloadUrl({
-        blobUrl: dragBlobCacheRef.current.get(entry.id),
-        sourceUrl: cached?.url,
-        proxy: proxyReady ? downloadProxy : null,
-        fileId: entry.id,
-        fileName: entry.originalName,
-        mimeType: entry.mimeType,
-        size: entry.fileSize,
-      });
+      const url = chooseDragDownloadUrl({ blobUrl: dragBlobCacheRef.current.get(entry.id), sourceUrl: cached?.url });
       if (url) {
         event.dataTransfer.setData("DownloadURL", describeDownloadUrl(entry.mimeType, entry.originalName, url));
         event.dataTransfer.setData("text/uri-list", cached?.url || url);
