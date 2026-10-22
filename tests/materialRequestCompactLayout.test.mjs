@@ -204,7 +204,13 @@ test("待處理料 opens from the header actions and groups pending parts by cat
   assert.match(actions, /data-testid="pending-materials-button"[\s\S]*?待處理料[\s\S]*?新增料件[\s\S]*?上傳說明\s*<\/Button>\s*<\/div>/);
   assert.match(dialogSource(), /role="tablist" aria-label="待處理料分類"/);
   const dialog = slice("function PendingMaterialsDialog(", 'const UNASSIGNED_BOM_PROJECT_VALUE');
-  assert.match(dialog, /groupPendingMaterials\(groups\)/);
+  assert.match(dialog, /mergePendingMaterialsByPart\(groups\)/);
+  assert.match(dialog, /groupPendingMaterials\(parts\)/);
+  assert.match(dialog, /處位號</);
+  assert.match(source, /collectPartSiblingPatches\(saved, basePayload\.records\)/);
+  assert.match(source, /saveRecordsToActiveBom\(\[saved, \.\.\.siblings\]\)/);
+  assert.match(source, /if \(record\.manufacturerPartNumber\?\.trim\(\)\) openRecord\(record, "edit"\);/);
+  assert.match(source, /saveBomWorkspaceRecord\(savingWorkspace, item,/);
   assert.match(dialog, />優先處理</);
   assert.match(dialog, /onLocate\(group\)|onOpenTracking\(record\)|onOpenCreate\(group\)/);
   assert.match(source, /const pendingMaterialGroups = useMemo\(\(\) => dataset\.groups\.filter\(requiresApplication\)/);

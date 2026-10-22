@@ -311,6 +311,17 @@ test("信件生成 groups every MPN candidate of the pending parts by manufactur
   const text = moduleExports.renderVendorMailText(sections[0], "您好，請協助。");
   assert.match(text, /^主旨：【料號申請】Test BOM · Vendor A 共 1 項\n\n您好，請協助。\n\nVendor A 需申請料號（共 1 項）：\n1\. U9 · IC B · MPN MPN-A1（Qty 2；待確認）$/);
   assert.equal(sections[2].items[0].name, "CAP");
+  // The same manufacturer + MPN used by several locations is one line with the locations listed and quantities added.
+  const merged = moduleExports.buildVendorMailSections([
+    { displayRef: "U1_C0P1", name: "VREG", qty: 2, records: [{ refDes: "U1_C0P1", name: "VREG", manufacturer: "Renesas", manufacturerPartNumber: "RAA228942", partSpec: "", partUsageStatus: "" }] },
+    { displayRef: "U1_C0P2", name: "VREG", qty: 2, records: [{ refDes: "U1_C0P2", name: "VREG", manufacturer: "Renesas", manufacturerPartNumber: "RAA228942", partSpec: "16Ph", partUsageStatus: "" }] },
+    { displayRef: "U1_C1P1", name: "VREG", qty: 3, records: [{ refDes: "U1_C1P1", name: "VREG", manufacturer: "Infineon", manufacturerPartNumber: "XDPE1A2G7C", partSpec: "", partUsageStatus: "" }] },
+  ], "CRB");
+  assert.deepEqual(merged.map((section) => [section.vendor, section.items.map((item) => [item.refDes, item.manufacturerPartNumber, item.qty, item.partSpec])]), [
+    ["Infineon", [["U1_C1P1", "XDPE1A2G7C", "3", ""]]],
+    ["Renesas", [["U1_C0P1, U1_C0P2", "RAA228942", "4", "16Ph"]]],
+  ]);
+  assert.equal(merged[1].subject, "【料號申請】CRB · Renesas 共 1 項");
 });
 
 test("mail HTML keeps images and links for the vendor mail but drops scripts; plain text mirrors it", () => {

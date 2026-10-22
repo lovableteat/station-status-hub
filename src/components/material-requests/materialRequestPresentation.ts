@@ -289,3 +289,114 @@ export function groupPendingMaterials<T extends { displayRef: string }>(groups: 
     .map((category) => ({ ...category, groups: buckets.get(category.key) ?? [] }))
     .filter((category) => category.groups.length > 0);
 }
+
+/** Identity of a physical part: one manufacturer plus one MPN. Empty when the record has no MPN. */
+export function getPartIdentity(record: { manufacturer?: string | null; manufacturerPartNumber?: string | null }) {
+  const mpn = (record.manufacturerPartNumber ?? "").trim().replace(/\s+/g, " ").toUpperCase();
+  if (!mpn) return "";
+  const vendor = (record.manufacturer ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  return `${vendor}\u0000${mpn}`;
+}
+
+export function sumMaterialQuantities(values: readonly (string | number)[]) {
+  const texts = values.map((value) => String(value ?? "").trim());
+  const numbers = texts.map((value) => Number(value));
+  if (texts.length > 0 && texts.every((value) => value !== "") && numbers.every((value) => Number.isFinite(value))) {
+    return String(numbers.reduce((total, value) => total + value, 0));
+  }
+  return Array.from(new Set(texts.filter(Boolean))).join(" / ") || "-";
+}
+
+type PartRecord = { manufacturer?: string | null; manufacturerPartNumber?: string | null };
+
+export interface PendingPartGroup<T, R extends PartRecord = PartRecord> {
+  key: string;
+  displayRef: string;
+  name: string;
+  qty: string;
+  manufacturer: string;
+  manufacturerPartNumber: string;
+  /** The record to edit when the part number arrives: the first row of this manufacturer + MPN. */
+  record: R;
+  groups: T[];
+  searchText: string;
+}
+
+/**
+ * 待處理料 works per application, and an application is one manufacturer plus
+ * one MPN. A sub-circuit instantiated five times is one application listing
+ * its five locations; a location with two approved vendors is two
+ * applications, because each vendor's part gets its own part number. A
+ * location whose rows have no MPN stays one application of its own.
+ */
+export function mergePendingMaterialsByPart<
+  T extends { key: string; displayRef: string; name: string; qty: string; searchText: string; primaryRecord: PartRecord; records: readonly PartRecord[] },
+>(groups: readonly T[]): PendingPartGroup<T, T["records"][number]>[] {
+  type R = T["records"][number];
+  const parts = new Map<string, PendingPartGroup<T, R>>();
+  for (const group of groups) {
+    const identified = new Map<string, R>();
+    for (const record of [group.primaryRecord as R, ...group.records]) {
+      const identity = getPartIdentity(record);
+      if (identity && !identified.has(identity)) identified.set(identity, record);
+    }
+    const entries: Array<[string, R]> = identified.size > 0
+      ? [...identified.entries()].map(([identity, record]) => [`part:${identity}`, record])
+      : [[`group:${group.key}`, group.primaryRecord as R]];
+    for (const [key, record] of entries) {
+      const existing = parts.get(key);
+      if (existing) {
+        if (!existing.groups.includes(group)) existing.groups.push(group);
+        continue;
+      }
+      parts.set(key, {
+        key,
+        displayRef: group.displayRef,
+        name: group.name,
+        qty: group.qty,
+        manufacturer: (record.manufacturer ?? "").trim(),
+        manufacturerPartNumber: (record.manufacturerPartNumber ?? "").trim(),
+        record,
+        groups: [group],
+        searchText: `${group.searchText} ${(record.manufacturer ?? "").toLowerCase()} ${(record.manufacturerPartNumber ?? "").toLowerCase()}`,
+      });
+    }
+  }
+  return [...parts.values()].map((part) => (part.groups.length === 1 ? part : {
+    ...part,
+    displayRef: part.groups.map((group) => group.displayRef).join(", "),
+    name: part.groups.map((group) => group.name).find(Boolean) ?? part.name,
+    qty: sumMaterialQuantities(part.groups.map((group) => group.qty)),
+    searchText: `${part.groups.map((group) => group.searchText).join(" ")} ${part.manufacturer.toLowerCase()} ${part.manufacturerPartNumber.toLowerCase()}`,
+  }));
+}
+
+const PART_PROPAGATED_FIELDS = ["partNumber", "virtualAlternative", "partName"] as const;
+type PropagatedField = typeof PART_PROPAGATED_FIELDS[number];
+
+/**
+ * A part number belongs to the physical part (manufacturer + MPN), not to one
+ * location. Returns the other rows of the same part with the saved part
+ * number, virtual number and part name filled in where they are still empty.
+ * Values already present on another row are never overwritten.
+ */
+export function collectPartSiblingPatches<R extends PartRecord & { id: string } & Partial<Record<PropagatedField, string | null>>>(
+  saved: R,
+  candidates: readonly R[],
+): Array<{ record: R; patch: Partial<Record<PropagatedField, string>> }> {
+  const identity = getPartIdentity(saved);
+  if (!identity) return [];
+  const result: Array<{ record: R; patch: Partial<Record<PropagatedField, string>> }> = [];
+  const seen = new Set<string>([saved.id]);
+  for (const candidate of candidates) {
+    if (seen.has(candidate.id) || getPartIdentity(candidate) !== identity) continue;
+    seen.add(candidate.id);
+    const patch: Partial<Record<PropagatedField, string>> = {};
+    for (const field of PART_PROPAGATED_FIELDS) {
+      const value = saved[field]?.trim();
+      if (value && !candidate[field]?.trim()) patch[field] = saved[field] as string;
+    }
+    if (Object.keys(patch).length > 0) result.push({ record: candidate, patch });
+  }
+  return result;
+}
