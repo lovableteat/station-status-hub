@@ -630,11 +630,28 @@ const DISCOURAGED_USAGE_PATTERN = /不建議/;
  * Physical part numbers whose 零件狀態 says the part is not recommended
  * (「新設計產品不建議使用 - ODM不建議用料」 and the like), one row per record.
  */
+/** Physical part numbers that PLM's Non PVL 申請 accepts end in one of these suffixes. */
+export const NON_PVL_PART_SUFFIXES = ["00", "ZZ", "ZY"] as const;
+
+export function hasNonPvlPartSuffix(partNumber: string) {
+  const suffix = partNumber.trim().slice(-2).toUpperCase();
+  return (NON_PVL_PART_SUFFIXES as readonly string[]).includes(suffix);
+}
+
+/** Rows whose 實體料號 is filled but ends in another suffix; they are left out of 不建議料匯出. */
+export function countExcludedDiscouragedRows(
+  records: ReadonlyArray<Pick<MaterialWorkbookRecord, "partNumber" | "partUsageStatus">>,
+) {
+  return records.filter((record) => DISCOURAGED_USAGE_PATTERN.test(record.partUsageStatus ?? "") && record.partNumber?.trim() && !hasNonPvlPartSuffix(record.partNumber)).length;
+}
+
 export function collectDiscouragedMaterialRows(
   records: ReadonlyArray<Pick<MaterialWorkbookRecord, "refDes" | "refGroup" | "name" | "manufacturerPartNumber" | "manufacturer" | "partNumber" | "virtualAlternative" | "partUsageStatus">>,
 ): DiscouragedMaterialRow[] {
   return records
     .filter((record) => DISCOURAGED_USAGE_PATTERN.test(record.partUsageStatus ?? ""))
+    // A filled 實體料號 must end in 00, ZZ or ZY; rows still without one stay so they can be followed up.
+    .filter((record) => !record.partNumber?.trim() || hasNonPvlPartSuffix(record.partNumber))
     .map((record) => ({
       refDes: record.refDes?.trim() || record.refGroup?.trim() || "",
       name: record.name ?? "",
@@ -685,7 +702,7 @@ export const NON_PVL_APPLY_HEADER = "料號(必填)";
 
 /** Unique physical part numbers, in first-seen order, for the PLM Non PVL apply list. */
 export function collectNonPvlPartNumbers(rows: ReadonlyArray<Pick<DiscouragedMaterialRow, "partNumber">>) {
-  return Array.from(new Set(rows.map((row) => row.partNumber.trim()).filter(Boolean)));
+  return Array.from(new Set(rows.map((row) => row.partNumber.trim()).filter((partNumber) => partNumber && hasNonPvlPartSuffix(partNumber))));
 }
 
 /**
