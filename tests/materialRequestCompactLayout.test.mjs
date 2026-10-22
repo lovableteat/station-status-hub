@@ -222,6 +222,17 @@ test("column filters apply on every click instead of waiting for 確定", () => 
   assert.match(popover, /onOpenAutoFocus=/);
 });
 
+test("editing an item from 待處理料 returns to the list with its tab, search and scroll kept", () => {
+  assert.match(source, /onOpenCreate=\{\(group\) => \{ setPendingDialogOpen\(false\); setReturnToPending\(true\); openCreate\(group\); \}\}/);
+  assert.match(source, /onOpenTracking=\{\(record\) => \{ setPendingDialogOpen\(false\); setReturnToPending\(true\); openTrackingDialog\(record\); \}\}/);
+  assert.match(source, /if \(!returnToPending \|\| editorOpen \|\| trackingDialogOpen\) return;\s*setReturnToPending\(false\);\s*setPendingRestoreView\(true\);\s*setPendingDialogOpen\(true\);/);
+  assert.match(source, /restoreView=\{pendingRestoreView\}/);
+  const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
+  assert.match(dialog, /if \(restoreView\) \{/);
+  assert.match(dialog, /ref=\{listRef\} onScroll=/);
+  assert.equal((source.match(/onClick=\{openPendingDialog\}/g) ?? []).length, 2, "the header buttons open a fresh list");
+});
+
 test("pending parts keep blinking until a part number arrives or data is refreshed", () => {
   assert.match(source, /const STALE_PENDING_MS = 3 \* 24 \* 60 \* 60 \* 1000;/);
   const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");

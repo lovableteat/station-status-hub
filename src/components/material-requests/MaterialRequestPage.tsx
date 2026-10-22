@@ -3126,6 +3126,7 @@ function PendingMaterialsDialog({
   canEdit,
   groups,
   open,
+  restoreView = false,
   recordMeta,
   workspaceName,
   exportedBy,
@@ -3137,6 +3138,8 @@ function PendingMaterialsDialog({
   canEdit: boolean;
   groups: MaterialGroup[];
   open: boolean;
+  /** Reopened after editing one of its items: keep the tab, search and scroll position. */
+  restoreView?: boolean;
   recordMeta?: Record<string, BomRecordSyncMeta>;
   workspaceName: string;
   exportedBy: string;
@@ -3158,11 +3161,20 @@ function PendingMaterialsDialog({
       .map((category) => (keyword ? { ...category, groups: category.groups.filter((group) => group.searchText.includes(keyword)) } : category))
       .filter((category) => category.groups.length > 0)
   ), [categories, keyword, selectedCategory]);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const scrollTopRef = useRef(0);
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setActiveCategory(categories[0]?.key ?? "all");
+    if (!open) return;
+    if (restoreView) {
+      const top = scrollTopRef.current;
+      const frame = requestAnimationFrame(() => {
+        if (listRef.current) listRef.current.scrollTop = top;
+      });
+      return () => cancelAnimationFrame(frame);
     }
+    setQuery("");
+    setActiveCategory(categories[0]?.key ?? "all");
+    scrollTopRef.current = 0;
     // Only re-run when the dialog opens; the category list may change while it is open without resetting the tab.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -3217,7 +3229,7 @@ function PendingMaterialsDialog({
           ))}
         </div>
 
-        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+        <div ref={listRef} onScroll={(event) => { scrollTopRef.current = event.currentTarget.scrollTop; }} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
           {visibleCategories.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
               {groups.length === 0 ? "目前沒有待處理的料號" : "找不到符合條件的待處理料"}
@@ -4423,10 +4435,24 @@ export function MaterialRequestPage() {
   const [pendingDeleteBomId, setPendingDeleteBomId] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
+  // Set while an editor opened from 待處理料 is showing, so closing it returns to the list.
+  const [returnToPending, setReturnToPending] = useState(false);
+  const [pendingRestoreView, setPendingRestoreView] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("view");
   const [editorRecord, setEditorRecord] = useState<MaterialWorkbookRecord>(createRecordTemplate());
   const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
+  useEffect(() => {
+    if (!returnToPending || editorOpen || trackingDialogOpen) return;
+    setReturnToPending(false);
+    setPendingRestoreView(true);
+    setPendingDialogOpen(true);
+  }, [editorOpen, returnToPending, trackingDialogOpen]);
+  const openPendingDialog = () => {
+    setReturnToPending(false);
+    setPendingRestoreView(false);
+    setPendingDialogOpen(true);
+  };
   const [trackingRecord, setTrackingRecord] = useState<MaterialRecord | null>(null);
   const [pageTrackerDialogOpen, setPageTrackerDialogOpen] = useState(false);
   const [pageTrackerWorkspaceId, setPageTrackerWorkspaceId] = useState<string | null>(null);
@@ -6150,6 +6176,7 @@ export function MaterialRequestPage() {
         canEdit={canEdit}
         groups={pendingMaterialGroups}
         open={pendingDialogOpen}
+        restoreView={pendingRestoreView}
         recordMeta={activeWorkspace.recordMeta}
         workspaceName={activeWorkspace.name}
         exportedBy={user?.displayName || user?.username || "未知使用者"}
@@ -6163,8 +6190,8 @@ export function MaterialRequestPage() {
           setExpandedKey(group.key);
           setPage(1);
         }}
-        onOpenCreate={(group) => { setPendingDialogOpen(false); openCreate(group); }}
-        onOpenTracking={(record) => { setPendingDialogOpen(false); openTrackingDialog(record); }}
+        onOpenCreate={(group) => { setPendingDialogOpen(false); setReturnToPending(true); openCreate(group); }}
+        onOpenTracking={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openTrackingDialog(record); }}
       />
       <BomTableColorDialog
         open={tableColorDialogOpen}
@@ -6301,7 +6328,7 @@ export function MaterialRequestPage() {
               </Select>
               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
               <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
-              <Button type="button" variant="outline" onClick={() => setPendingDialogOpen(true)} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", requiredApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {requiredApplicationCount.toLocaleString()}</Button>
+              <Button type="button" variant="outline" onClick={openPendingDialog} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", requiredApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {requiredApplicationCount.toLocaleString()}</Button>
               <Button type="button" variant="outline" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} className="h-11 border-orange-300/30 bg-orange-400/10 text-orange-100"><FileSpreadsheet className="mr-2 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
               <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
               <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
@@ -6337,7 +6364,7 @@ export function MaterialRequestPage() {
           </div>
 
           <div data-material-zone="actions" className="ml-auto flex flex-wrap items-center gap-1.5">
-            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={() => setPendingDialogOpen(true)} className={cn("h-9 border-destructive/60 bg-destructive px-3 text-sm font-black text-destructive-foreground hover:bg-destructive/85 hover:text-destructive-foreground", requiredApplicationCount > 0 && "material-attention")}>
+            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={openPendingDialog} className={cn("h-9 border-destructive/60 bg-destructive px-3 text-sm font-black text-destructive-foreground hover:bg-destructive/85 hover:text-destructive-foreground", requiredApplicationCount > 0 && "material-attention")}>
               <TriangleAlert className="mr-1 h-3.5 w-3.5" />待處理料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong>
             </Button>
             <Button type="button" variant="outline" size="sm" data-testid="discouraged-export-button" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} title="查看依專案解除不建議使用料的申請 SOP、預覽並匯出 PLM 申請清單" className="h-9 border-warning/60 bg-warning px-3 text-sm font-black text-warning-foreground hover:bg-warning/85 hover:text-warning-foreground disabled:cursor-wait disabled:opacity-60">
