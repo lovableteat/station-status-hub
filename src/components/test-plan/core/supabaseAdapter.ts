@@ -576,6 +576,17 @@ export function createSupabaseTestPlanAdapter(): TestPlanDataAdapter {
       if (!data?.signedUrl) throw new Error("無法建立下載連結。");
       return data.signedUrl;
     },
+    async createDownloadUrls(items) {
+      const { data, error } = await supabase.storage
+        .from(TEST_PLAN_STORAGE_BUCKET)
+        .createSignedUrls(items.map((item) => item.path), 600);
+      throwIfError(error);
+      const urls = new Map<string, string>();
+      for (const row of data ?? []) {
+        if (row.path && row.signedUrl && !row.error) urls.set(row.path, row.signedUrl);
+      }
+      return urls;
+    },
     async removeObjects(paths) {
       if (paths.length === 0) return;
       const { error } = await supabase.storage

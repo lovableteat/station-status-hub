@@ -1,9 +1,11 @@
 import {
   type ChangeEvent,
+  type CSSProperties,
   type DragEvent,
   type FormEvent,
   Fragment,
   type InputHTMLAttributes,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -94,6 +96,8 @@ import { useFileLibraryFilters } from "./useFileLibraryFilters";
 import { TestPlanInspector } from "./TestPlanInspector";
 import { isEditableSpreadsheet } from "./core/spreadsheet";
 import { TestPlanSpreadsheetEditor } from "./TestPlanSpreadsheetEditor";
+import { TransferPanel, type TransferItem } from "./TransferPanel";
+import { downloadWithProgress } from "./core/transfers";
 import type {
   TestPlanEntry,
   TestPlanFileCategory,
@@ -201,6 +205,17 @@ function readEntryDragPayload(dataTransfer: DataTransfer | null): EntryDragPaylo
 
 function isEntryDrag(dataTransfer: DataTransfer | null) {
   return Boolean(dataTransfer && Array.from(dataTransfer.types).includes(ENTRY_DRAG_TYPE));
+}
+
+// Avatar initials drawn by CSS (content: attr) so the element itself stays empty for assistive tech.
+function spaceInitials(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return "?";
+  return (trimmed.charCodeAt(0) > 0x2e7f ? trimmed.slice(0, 1) : trimmed.slice(0, 2)).toUpperCase();
+}
+
+function spaceSwatch(color: string | undefined) {
+  return { "--space-color": color ?? "#5b8def" } as CSSProperties;
 }
 
 function FileCategoryIcon({
@@ -582,6 +597,7 @@ export function TestPlanWorkspace() {
     updateFileDescription,
     downloadFile,
     getFileDownloadUrl,
+    getFileDownloadUrls,
     deleteFile,
     deleteEntries,
     replaceFileContents,
@@ -592,6 +608,8 @@ export function TestPlanWorkspace() {
   const [isDragging, setIsDragging] = useState(false);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const downloadUrlCacheRef = useRef(new Map<string, { url: string; expiresAt: number }>());
+  const [downloads, setDownloads] = useState<TransferItem[]>([]);
+  const dismissDownload = useCallback((id: string) => setDownloads((items) => items.filter((item) => item.id !== id)), []);
   const [retryState, setRetryState] = useState<UploadRetry | null>(() => retainedUploadRetry);
   const uploadRetry = retryState?.ownerId === ownerId ? retryState : null;
   const [isSpaceDrawerOpen, setIsSpaceDrawerOpen] = useState(false);
@@ -658,6 +676,7 @@ export function TestPlanWorkspace() {
   const isOwnSpace = Boolean(activeSpace && activeSpace.ownerId === ownerId);
   const showOwnerColumn = activeSpaceId === null;
   const spaceNameById = useMemo(() => new Map(spaces.map(space => [space.id, space.name] as const)), [spaces]);
+  const spaceById = useMemo(() => new Map(spaces.map(space => [space.id, space] as const)), [spaces]);
 
   useEffect(() => {
     if (retainedUploadRetry?.ownerId !== ownerId) retainUploadRetry(null);
@@ -726,6 +745,30 @@ export function TestPlanWorkspace() {
         entries,
       }));
   }, [ownerId, showOwnerColumn, spaceNameById, spaces, visibleEntries]);
+  // Drag-to-desktop needs the signed link already at dragstart, so links for the
+  // rows on screen are fetched in one batch instead of waiting for a hover.
+  useEffect(() => {
+    const cache = downloadUrlCacheRef.current;
+    const pending = visibleEntries
+      .filter((entry): entry is Extract<TestPlanEntry, { kind: "file" }> => entry.kind === "file" && !((cache.get(entry.id)?.expiresAt ?? 0) > Date.now()))
+      .slice(0, 120);
+    if (pending.length === 0 || typeof getFileDownloadUrls !== "function") return;
+    let cancelled = false;
+    for (const file of pending) cache.set(file.id, { url: "", expiresAt: Date.now() + 15_000 });
+    void getFileDownloadUrls(pending)
+      .then((urls) => {
+        if (cancelled) return;
+        for (const file of pending) {
+          const url = urls.get(file.id);
+          if (url) cache.set(file.id, { url, expiresAt: Date.now() + 8 * 60_000 });
+          else cache.delete(file.id);
+        }
+      })
+      .catch(() => {
+        for (const file of pending) cache.delete(file.id);
+      });
+    return () => { cancelled = true; };
+  }, [getFileDownloadUrls, visibleEntries]);
   const selectionScope = JSON.stringify([ownerId, activeSpaceId, activeFolderId, query.trim(), categoryFilter]);
   const eligibleEntries = visibleEntries.filter(entry => canEditSpace(entry.spaceId));
   const eligibleKeySignature = JSON.stringify(eligibleEntries.map(entryKey).sort());
@@ -1006,19 +1049,27 @@ export function TestPlanWorkspace() {
     }
   };
 
+  // Downloads stream to disk with a visible percentage; a storage without
+  // direct links still works through the whole-blob fallback.
   const handleDownload = async (file: TestPlanFileRecord) => {
+    const id = `${file.id}:${Date.now()}`;
+    const controller = new AbortController();
+    const patch = (changes: Partial<TransferItem>) => setDownloads((items) => items.map((item) => (item.id === id ? { ...item, ...changes } : item)));
+    setDownloads((items) => [...items, { id, name: file.originalName, loaded: 0, total: file.fileSize, status: "active", cancel: () => controller.abort() }]);
     try {
-      const blob = await downloadFile(file);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = file.originalName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
+      const outcome = await downloadWithProgress({
+        fileName: file.originalName,
+        expectedSize: file.fileSize,
+        resolveUrl: () => getFileDownloadUrl(file),
+        fallback: () => downloadFile(file),
+        signal: controller.signal,
+        onProgress: (loaded, total) => patch({ loaded, total }),
+      });
+      patch({ status: outcome === "saved" ? "done" : "cancelled", cancel: undefined });
     } catch (caught) {
-      toast.error(caught instanceof Error ? caught.message : "下載失敗");
+      const message = caught instanceof Error ? caught.message : "下載失敗";
+      patch({ status: "error", message, cancel: undefined });
+      toast.error(message);
     }
   };
 
@@ -1115,33 +1166,6 @@ export function TestPlanWorkspace() {
 
       <input ref={fileInputRef} className="sr-only" type="file" multiple disabled={!canEdit || loading || busy || Boolean(uploadRetry)} onChange={handleFileSelection} />
       <input ref={folderInputRef} className="sr-only" type="file" multiple {...directoryInputProps} disabled={!canEdit || loading || busy || Boolean(uploadRetry)} aria-label="選擇上傳資料夾" onChange={handleFolderSelection} />
-      <div className={cn("file-library-context", activeSpaceId === null ? "is-everyone" : isOwnSpace ? "is-mine" : "is-other")} role="status">
-        {activeSpaceId === null ? (
-          <>
-            <Users className="file-library-context-icon" aria-hidden="true" />
-            <div>
-              <strong>所有人的檔案</strong>
-              <span>每一列都標示擁有者並依擁有者分組，不會和你的檔案混在一起；在這裡上傳仍會放進你的個人空間。</span>
-            </div>
-          </>
-        ) : isOwnSpace ? (
-          <>
-            <UserRound className="file-library-context-icon" aria-hidden="true" />
-            <div>
-              <strong>我的空間</strong>
-              <span>只有你的檔案。拖到左側資料夾可搬移，拖到桌面或檔案總管可直接存檔（Chrome／Edge）；上傳資料夾會保留層級，同名檔案略過。</span>
-            </div>
-          </>
-        ) : (
-          <>
-            <LockKeyhole className="file-library-context-icon" aria-hidden="true" />
-            <div>
-              <strong>{activeSpace?.name ?? "載入中"} 的空間</strong>
-              <span>{canEdit ? "你有管理權限，可以整理這個空間；" : "唯讀：可以瀏覽與下載，不能修改；"}上傳的檔案會放進你自己的個人空間。</span>
-            </div>
-          </>
-        )}
-      </div>
       {uploadRetry && (
         <section className="file-library-upload-errors" role="alert" aria-label="上傳失敗清單">
           <div className="file-library-upload-error-heading">
@@ -1216,7 +1240,7 @@ export function TestPlanWorkspace() {
                       void openSpace(space.id);
                     }}
                   >
-                    <UserRound className="file-library-user-icon" aria-hidden="true" />
+                    <span className="file-library-user-icon" aria-hidden="true" data-initials={spaceInitials(space.name)} style={spaceSwatch(space.color)} />
                     <span className="file-library-user-identity">
                       <strong>{space.name}</strong>
                       {space.description && <small>{space.description}</small>}
@@ -1340,6 +1364,33 @@ export function TestPlanWorkspace() {
             </div>
           ) : (
             <>
+      <div className={cn("file-library-context", activeSpaceId === null ? "is-everyone" : isOwnSpace ? "is-mine" : "is-other")} role="status">
+        {activeSpaceId === null ? (
+          <>
+            <Users className="file-library-context-icon" aria-hidden="true" />
+            <div>
+              <strong>所有人的檔案</strong>
+              <span>每一列都標示擁有者並依擁有者分組，不會和你的檔案混在一起；在這裡上傳仍會放進你的個人空間。</span>
+            </div>
+          </>
+        ) : isOwnSpace ? (
+          <>
+            <UserRound className="file-library-context-icon" aria-hidden="true" />
+            <div>
+              <strong>我的空間</strong>
+              <span>只有你的檔案。拖到左側資料夾可搬移，拖到桌面或檔案總管可直接存檔（Chrome／Edge）；上傳資料夾會保留層級，同名檔案略過。</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <LockKeyhole className="file-library-context-icon" aria-hidden="true" />
+            <div>
+              <strong>{activeSpace?.name ?? "載入中"} 的空間</strong>
+              <span>{canEdit ? "你有管理權限，可以整理這個空間；" : "唯讀：可以瀏覽與下載，不能修改；"}上傳的檔案會放進你自己的個人空間。</span>
+            </div>
+          </>
+        )}
+      </div>
               <div className="test-plan-toolbar">
                 <Button
                   type="button"
@@ -1417,7 +1468,6 @@ export function TestPlanWorkspace() {
                 <span className="file-library-selection-count" role="status">{checkedEntries.length > 0 ? `已勾選 ${checkedEntries.length} 項` : `${eligibleEntries.length} 個可整理項目`}</span>
                 {checkedEntries.length > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => setCheckedState({ scope: selectionScope, keys: new Set() })}>取消勾選</Button>}
                 <Button variant="outline" size="sm" className="file-library-bulk-delete" disabled={busy || loading || !checkedEntries.length} onClick={() => setDeleteAction({ kind: "batch", entries: checkedEntries, scope: selectionScope })}><Trash2 />刪除已選項目</Button>
-                <span className="file-library-drag-hint">拖曳檔案到資料夾可搬移；拖到桌面或檔案總管可直接存檔</span>
               </div>
               <div className="test-plan-filterbar">
                 <label className="test-plan-search">
@@ -1654,21 +1704,24 @@ export function TestPlanWorkspace() {
                       >
                         <span className="test-plan-list-name">
                           {renderEntryCheckbox(entry)}
-                          {entry.kind === "folder" ? (
-                            <Folder className="h-4 w-4 text-cyan-300" />
-                          ) : (
-                            <FileCategoryIcon
-                              category={entry.category}
-                              className="h-4 w-4"
-                            />
-                          )}
-                          <strong>
-                            {entry.kind === "folder" ? entry.name : entry.originalName}
-                          </strong>
+                          <span className={cn("file-library-type", entry.kind === "folder" ? "is-folder" : `is-${entry.category}`)} aria-hidden="true">
+                            {entry.kind === "folder" ? <Folder className="h-4 w-4" /> : <FileCategoryIcon category={entry.category} className="h-4 w-4" />}
+                          </span>
+                          <span className="file-library-name-cell">
+                            <strong>
+                              {entry.kind === "folder" ? entry.name : entry.originalName}
+                            </strong>
+                            <small>
+                              {entry.kind === "folder"
+                                ? `${folders.filter((folder) => folder.parentId === entry.id).length} 個子資料夾 · ${files.filter((file) => file.folderId === entry.id).length} 個檔案`
+                                : entry.description || CATEGORY_LABELS[entry.category]}
+                            </small>
+                          </span>
                         </span>
                         {showOwnerColumn && (
                           <span className="file-library-owner-cell">
-                            <span className={cn("file-library-owner-chip", spaces.find(space => space.id === entry.spaceId)?.ownerId === ownerId && "is-mine")}>
+                            <span className={cn("file-library-owner-chip", spaceById.get(entry.spaceId)?.ownerId === ownerId && "is-mine")}>
+                              <i aria-hidden="true" data-initials={spaceInitials(spaceNameById.get(entry.spaceId) ?? "?")} style={spaceSwatch(spaceById.get(entry.spaceId)?.color)} />
                               {spaceNameById.get(entry.spaceId) ?? "未知"}
                             </span>
                           </span>
@@ -1698,6 +1751,7 @@ export function TestPlanWorkspace() {
                 <span>{visibleEntries.length} 個項目</span>
                 <span>{folders.length} 個資料夾</span>
                 <span>{files.length} 個檔案</span>
+                <span className="file-library-drag-hint">拖曳到資料夾可搬移 · 拖到桌面或檔案總管可直接存檔</span>
                 <span className="ml-auto">
                   {activeSpaceId === null ? "所有人的檔案 · 依擁有者分組" : isOwnSpace ? "我的空間" : `${activeSpace?.name ?? ""} 的空間`} · {canEdit ? "可編輯" : "唯讀模式"}
                 </span>
@@ -1742,34 +1796,7 @@ export function TestPlanWorkspace() {
         )}
       </div>
 
-      {uploadProgress && (
-        <div className="test-plan-upload-progress" role="status">
-          <Upload className="h-4 w-4 animate-pulse" />
-          <span>
-            已處理 {uploadProgress.completed}／{uploadProgress.total} 個檔案
-            {uploadProgress.currentFileName
-              ? ` · ${uploadProgress.currentFileName}`
-              : ""}
-          </span>
-          <small>
-            {formatTestPlanFileSize(uploadProgress.uploadedBytes)}
-            {" / "}
-            {formatTestPlanFileSize(uploadProgress.totalBytes)}
-          </small>
-          <div>
-            <span
-              style={{
-                width: `${
-                  uploadProgress.totalBytes
-                    ? (uploadProgress.uploadedBytes / uploadProgress.totalBytes)
-                      * 100
-                    : 0
-                }%`,
-              }}
-            />
-          </div>
-        </div>
-      )}
+      <TransferPanel uploads={uploadProgress} downloads={downloads} onDismiss={dismissDownload} />
 
       <TestPlanSpreadsheetEditor
         open={Boolean(spreadsheetFile)}
