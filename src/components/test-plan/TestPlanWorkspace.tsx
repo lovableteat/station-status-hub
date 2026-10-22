@@ -6,6 +6,7 @@ import {
   type InputHTMLAttributes,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   Fragment,
   useCallback,
   useEffect,
@@ -91,7 +92,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -249,6 +249,34 @@ const SHORTCUTS: [string, string][] = [
 
 const ENTRY_DRAG_TYPE = "application/x-test-plan-entry";
 const PREVIEW_PANE_STORAGE_KEY = "file-library:preview-pane";
+const PANE_WIDTHS_STORAGE_KEY = "file-library:pane-widths";
+/** Draggable pane limits (px). The list column always keeps at least LIST_MIN_WIDTH. */
+const NAV_WIDTH = { min: 180, max: 520, default: 264 };
+const PREVIEW_WIDTH = { min: 280, max: 1100, default: 520 };
+const LIST_MIN_WIDTH = 360;
+
+interface PaneWidths {
+  nav: number | null;
+  preview: number | null;
+}
+
+function readPaneWidths(): PaneWidths {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(PANE_WIDTHS_STORAGE_KEY) ?? "{}") as Partial<PaneWidths>;
+    const valid = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
+    return { nav: valid(parsed.nav), preview: valid(parsed.preview) };
+  } catch {
+    return { nav: null, preview: null };
+  }
+}
+
+function savePaneWidths(widths: PaneWidths) {
+  try {
+    window.localStorage.setItem(PANE_WIDTHS_STORAGE_KEY, JSON.stringify(widths));
+  } catch {
+    // Remembering the widths is only a convenience.
+  }
+}
 
 function readEntryDragPayload(dataTransfer: DataTransfer | null): MoveItem[] | null {
   if (!dataTransfer) return null;
@@ -591,6 +619,9 @@ export function TestPlanWorkspace() {
   const { query, setQuery, categoryFilter, setCategoryFilter, sort, setSort, reverse, setReverse, toggleSort, scope, setScope, clearFilters } = useFileLibraryFilters();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [previewOpen, setPreviewOpenState] = useState(() => readPreviewPreference(compact));
+  // Pane widths the user dragged; null keeps the responsive default for the screen size.
+  const [paneWidths, setPaneWidths] = useState<PaneWidths>(readPaneWidths);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const downloadUrlCacheRef = useRef(new Map<string, { url: string; expiresAt: number }>());
@@ -1864,6 +1895,84 @@ export function TestPlanWorkspace() {
     </Fragment>
   );
 
+  // ----- pane splitters (drag the edge between panes, like File Explorer) --------
+  const currentPaneWidth = (pane: keyof PaneWidths) => {
+    const shell = shellRef.current;
+    const element = shell?.querySelector<HTMLElement>(pane === "nav" ? ".test-plan-space-rail" : ".test-plan-inspector");
+    return element?.getBoundingClientRect().width ?? (pane === "nav" ? NAV_WIDTH.default : PREVIEW_WIDTH.default);
+  };
+  const clampPaneWidth = (pane: keyof PaneWidths, width: number) => {
+    const limits = pane === "nav" ? NAV_WIDTH : PREVIEW_WIDTH;
+    const shellWidth = shellRef.current?.getBoundingClientRect().width ?? window.innerWidth;
+    const other = pane === "nav" ? (showPreviewPane ? currentPaneWidth("preview") : 0) : currentPaneWidth("nav");
+    const room = Math.max(limits.min, shellWidth - other - LIST_MIN_WIDTH);
+    return Math.round(Math.min(Math.max(width, limits.min), limits.max, room));
+  };
+  const setPaneWidth = (pane: keyof PaneWidths, width: number | null, persist: boolean) => {
+    setPaneWidths((current) => {
+      const next = { ...current, [pane]: width === null ? null : clampPaneWidth(pane, width) };
+      if (persist) savePaneWidths(next);
+      return next;
+    });
+  };
+  const startPaneResize = (pane: keyof PaneWidths, event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.focus({ preventScroll: true });
+    const startX = event.clientX;
+    const startWidth = currentPaneWidth(pane);
+    let latest = startWidth;
+    document.body.classList.add("file-explorer-resizing");
+    const onMove = (moveEvent: PointerEvent) => {
+      const delta = moveEvent.clientX - startX;
+      latest = pane === "nav" ? startWidth + delta : startWidth - delta;
+      setPaneWidth(pane, latest, false);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      document.body.classList.remove("file-explorer-resizing");
+      setPaneWidth(pane, latest, true);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+  const resizePaneByKey = (pane: keyof PaneWidths, event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = event.shiftKey ? 64 : 16;
+    const grow = pane === "nav" ? event.key === "ArrowRight" : event.key === "ArrowLeft";
+    const shrink = pane === "nav" ? event.key === "ArrowLeft" : event.key === "ArrowRight";
+    if (!grow && !shrink && event.key !== "Home") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === "Home") { setPaneWidth(pane, null, true); return; }
+    setPaneWidth(pane, currentPaneWidth(pane) + (grow ? step : -step), true);
+  };
+  const renderSplitter = (pane: keyof PaneWidths) => {
+    const label = pane === "nav" ? "調整左側使用者空間的寬度" : "調整預覽窗格的寬度";
+    const width = paneWidths[pane];
+    return (
+      <div
+        className={cn("file-explorer-splitter", pane === "nav" ? "is-nav" : "is-preview")}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={label}
+        aria-valuenow={width ?? undefined}
+        tabIndex={0}
+        title={`${label}：拖曳邊界；按兩下恢復預設寬度`}
+        onPointerDown={(event) => startPaneResize(pane, event)}
+        onDoubleClick={() => setPaneWidth(pane, null, true)}
+        onKeyDown={(event) => resizePaneByKey(pane, event)}
+      />
+    );
+  };
+  const shellStyle = {
+    ...(paneWidths.nav !== null ? { "--fx-nav-width": `${paneWidths.nav}px` } : {}),
+    ...(paneWidths.preview !== null ? { "--fx-preview-width": `${paneWidths.preview}px` } : {}),
+  } as CSSProperties;
+
   const commandButton = (props: { label: string; icon: typeof Download; onClick: () => void; disabled?: boolean; title?: string; className?: string; testId?: string; compactable?: boolean }) => (
     <Button
       type="button"
@@ -2036,8 +2145,11 @@ export function TestPlanWorkspace() {
         </Button>
         <div className="file-explorer-search" role="search">
           <Search className="h-4 w-4" aria-hidden="true" />
-          <Input
+          <input
             ref={searchInputRef}
+            className="file-explorer-search-input"
+            type="search"
+            data-ai-surface="true"
             value={query}
             disabled={busy}
             aria-label="搜尋檔案與資料夾"
@@ -2092,7 +2204,9 @@ export function TestPlanWorkspace() {
         </Select>
       </div>
 
-      <div className={cn("test-plan-shell", showPreviewPane && "has-inspector", !previewOpen && "is-preview-closed")}>
+      <div ref={shellRef} style={shellStyle} className={cn("test-plan-shell", showPreviewPane && "has-inspector", !previewOpen && "is-preview-closed")}>
+        {!compact && renderSplitter("nav")}
+        {!compact && showPreviewPane && renderSplitter("preview")}
         <aside
           id="test-plan-space-drawer"
           className={cn(
@@ -2119,7 +2233,7 @@ export function TestPlanWorkspace() {
             <p className="file-library-rail-label">我的空間</p>
             {ownSpaces.length === 0 && <p className="file-library-rail-empty">個人空間建立中，重新整理後再試。</p>}
             {ownSpaces.map(renderSpaceRow)}
-            {teamSpaces.length > 0 && <p className="file-library-rail-label">團隊成員</p>}
+            {teamSpaces.length > 0 && <p className="file-library-rail-label" title="管理員角色的帳號固定排在這裡；其他同事在下方「其他使用者」">管理員</p>}
             {teamSpaces.map(renderSpaceRow)}
             {otherSpaces.length > 0 && (
               <>

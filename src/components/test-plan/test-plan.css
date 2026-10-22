@@ -1106,6 +1106,9 @@
   font-size: 13.5px;
 }
 .file-explorer .file-explorer-search input:focus-visible { outline: none; box-shadow: none; }
+.file-explorer .file-explorer-search input::placeholder { color: hsl(var(--muted-foreground)); }
+.file-explorer .file-explorer-search input::-webkit-search-cancel-button { display: none; }
+.file-explorer .file-explorer-search input:disabled { opacity: .5; }
 .file-explorer .file-explorer-scope {
   height: 26px;
   width: auto;
@@ -1122,13 +1125,47 @@
 
 /* ----- three panes --------------------------------------------------------- */
 .file-explorer .test-plan-shell {
+  position: relative;
   display: grid;
   min-height: 0;
   flex: 1 1 auto;
-  grid-template-columns: var(--fx-nav-width) minmax(0, 1fr) minmax(320px, var(--fx-preview-width));
+  grid-template-columns: var(--fx-nav-width) minmax(0, 1fr) minmax(0, var(--fx-preview-width));
   gap: 0;
   overflow: hidden;
 }
+
+/* Draggable pane edges: a wide invisible grip over each border, a teal line while hovered or dragged. */
+.file-explorer .file-explorer-splitter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+.file-explorer .file-explorer-splitter.is-nav { left: calc(var(--fx-nav-width) - 5px); }
+.file-explorer .file-explorer-splitter.is-preview { right: calc(var(--fx-preview-width) - 4px); }
+.file-explorer .file-explorer-splitter::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: transparent;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+.file-explorer .file-explorer-splitter:hover::after,
+.file-explorer .file-explorer-splitter:focus-visible::after,
+.file-explorer-resizing .file-explorer .file-explorer-splitter:active::after {
+  background: hsl(var(--primary));
+  box-shadow: 0 0 0 1px hsl(var(--primary) / .35);
+}
+body.file-explorer-resizing,
+body.file-explorer-resizing * { cursor: col-resize !important; user-select: none !important; }
+body.file-explorer-resizing .file-explorer iframe { pointer-events: none; }
 .file-explorer .test-plan-shell:not(.has-inspector) { grid-template-columns: var(--fx-nav-width) minmax(0, 1fr); }
 .file-explorer .test-plan-drawer-backdrop { display: none; }
 
@@ -1263,7 +1300,10 @@
 .file-explorer .file-explorer-sort-arrow { color: hsl(var(--primary)); font-size: 12px; }
 .file-explorer .file-explorer-check-cell { display: grid; height: 100%; place-items: center; }
 .file-explorer :is(.file-explorer-check-cell, .file-library-entry-check) input { height: 15px; width: 15px; cursor: pointer; accent-color: hsl(var(--primary)); }
-.file-explorer .file-library-entry-check { display: grid; place-items: center; }
+.file-explorer .file-library-entry-check { display: grid; place-items: center; cursor: pointer; }
+/* In the list the whole first column is the checkbox: a near miss adds to the selection instead of replacing it. */
+.file-explorer .test-plan-list-row .file-explorer-check-cell .file-library-entry-check { height: 100%; width: 100%; }
+.file-explorer :is(.file-explorer-check-cell, .file-library-entry-check) input { height: 16px; width: 16px; }
 .file-explorer .test-plan-entry-list { min-width: 0; }
 .file-explorer .test-plan-list-row {
   height: var(--fx-row-height);
@@ -1283,7 +1323,6 @@
 .file-explorer .test-plan-list-row.is-cut,
 .file-explorer .test-plan-entry-card.is-cut { opacity: .45; }
 .file-explorer .test-plan-list-row.is-drop-target { background: hsl(var(--primary) / .2); box-shadow: inset 0 0 0 2px hsl(var(--primary)); }
-.file-explorer .test-plan-list-row .file-library-entry-check,
 .file-explorer .test-plan-entry-card .file-library-entry-check { opacity: 0; }
 .file-explorer :is(.test-plan-list-row, .test-plan-entry-card):is(:hover, :focus-within, .is-selected) .file-library-entry-check,
 .file-explorer .test-plan-dropzone.has-selection .file-library-entry-check { opacity: 1; }
