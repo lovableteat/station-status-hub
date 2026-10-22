@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Download,
@@ -54,6 +54,7 @@ interface SheetPreview {
 
 type PreviewData =
   | { status: "loading" }
+  | { status: "on-request" }
   | { status: "error" }
   | { status: "too-large" }
   | { status: "unsupported" }
@@ -61,6 +62,22 @@ type PreviewData =
   | { status: "text"; text: string }
   | { status: "sheet"; sheet: SheetPreview }
   | { status: "archive"; names: string[]; total: number };
+
+const RASTER_TYPES: Record<string, string> = {
+  bmp: "image/bmp",
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  webp: "image/webp",
+};
+
+function rasterImageType(file: TestPlanFileRecord) {
+  const extension = (file.extension || file.originalName.split(".").pop() || "").toLowerCase();
+  return RASTER_TYPES[extension] ?? "application/octet-stream";
+}
 
 function readAsDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -80,6 +97,12 @@ function columnName(index: number) {
 }
 
 const SHEET_PREVIEW_ROWS = 60;
+/** Spreadsheets and archives above these sizes wait for a click instead of loading on selection. */
+const AUTO_PREVIEW_LIMIT: Partial<Record<TestPlanPreviewKind, number>> = {
+  sheet: 8 * 1024 * 1024,
+  archive: 20 * 1024 * 1024,
+};
+const PREVIEW_DELAY_MS = 200;
 const SHEET_PREVIEW_COLUMNS = 18;
 
 async function readSheetPreview(blob: Blob): Promise<SheetPreview> {
@@ -94,9 +117,20 @@ async function readSheetPreview(blob: Blob): Promise<SheetPreview> {
   return { names: workbook.SheetNames, rows };
 }
 
+// zh-TW Windows writes ZIP names in Big5 without the UTF-8 flag; names with the flag stay UTF-8.
+function decodeZipName(bytes: string[] | Uint8Array | Buffer) {
+  if (typeof bytes === "string") return bytes;
+  const data = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes as unknown as ArrayLike<number>);
+  try {
+    return new TextDecoder("big5", { fatal: true }).decode(data);
+  } catch {
+    return new TextDecoder("utf-8").decode(data);
+  }
+}
+
 async function readArchivePreview(blob: Blob) {
   const { default: JSZip } = await import("jszip");
-  const zip = await JSZip.loadAsync(blob);
+  const zip = await JSZip.loadAsync(blob, { decodeFileName: decodeZipName });
   const names: string[] = [];
   zip.forEach((path, entry) => { if (!entry.dir) names.push(path); });
   return { names: names.slice(0, 300), total: names.length };
@@ -117,10 +151,20 @@ function PreviewState({
 }) {
   const [data, setData] = useState<PreviewData>({ status: "loading" });
   const [sheetName, setSheetName] = useState("");
+  const [requested, setRequested] = useState(false);
+  // The list hands over a fresh copy of the record on every sort or refresh; only a real change reloads.
+  const fileRef = useRef(file);
+  fileRef.current = file;
+  const autoLimit = AUTO_PREVIEW_LIMIT[kind];
+  const waitForClick = autoLimit !== undefined && file.fileSize > autoLimit && !requested;
+
+  useEffect(() => setRequested(false), [file.id]);
 
   useEffect(() => {
     let alive = true;
     let objectUrl: string | null = null;
+    const controller = new AbortController();
+    const file = fileRef.current;
     setData({ status: "loading" });
     setSheetName("");
     onLinkReady(null);
@@ -128,8 +172,13 @@ function PreviewState({
       setData({ status: "unsupported" });
       return () => undefined;
     }
+    if (waitForClick) {
+      setData({ status: "on-request" });
+      return () => undefined;
+    }
     const limit = TEST_PLAN_PREVIEW_LIMITS[kind];
-    void (async () => {
+    // Holding an arrow key flips through many files; only the one the user stops on is fetched.
+    const timer = window.setTimeout(() => void (async () => {
       try {
         // Raster images and PDFs stream from a short-lived storage link, so a large
         // drawing shows without first downloading the whole file into the page.
@@ -146,7 +195,12 @@ function PreviewState({
           setData({ status: "too-large" });
           return;
         }
-        const blob = await downloadFile(file);
+        // Fetch through the short-lived link when there is one, so leaving the file cancels the transfer.
+        const link = getPreviewUrl ? await getPreviewUrl(file).catch(() => null) : null;
+        if (!alive) return;
+        const blob = link
+          ? await fetch(link, { signal: controller.signal }).then((response) => { if (!response.ok) throw new Error(String(response.status)); return response.blob(); })
+          : await downloadFile(file);
         if (!alive) return;
         if (kind === "text") {
           const text = await blob.text();
@@ -162,25 +216,39 @@ function PreviewState({
           const archive = await readArchivePreview(blob);
           if (alive) setData({ status: "archive", ...archive });
         } else {
-          const typed = blob.type ? blob : new Blob([blob], { type: kind === "pdf" ? "application/pdf" : file.mimeType || "application/octet-stream" });
+          // The type comes from the file name, never from the stored object: a blob: URL has this
+          // site's origin, and an SVG or HTML body labelled as a PDF must not run as a page here.
+          const typed = new Blob([blob], { type: kind === "pdf" ? "application/pdf" : rasterImageType(file) });
           objectUrl = URL.createObjectURL(typed);
           setData({ status: "url", url: objectUrl, linked: false });
         }
       } catch {
         if (alive) setData({ status: "error" });
       }
-    })();
+    })(), PREVIEW_DELAY_MS);
     return () => {
       alive = false;
+      window.clearTimeout(timer);
+      controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [downloadFile, file, getPreviewUrl, kind, onLinkReady]);
+  }, [downloadFile, file.id, file.updatedAt, file.fileSize, getPreviewUrl, kind, onLinkReady, waitForClick]);
 
   if (data.status === "loading") {
     return (
       <div className="test-plan-preview-empty" role="status">
         <Loader2 className="h-6 w-6 animate-spin" />
         <span>正在載入預覽…</span>
+      </div>
+    );
+  }
+  if (data.status === "on-request") {
+    return (
+      <div className="test-plan-preview-empty">
+        <Info className="h-7 w-7" />
+        <strong>{kind === "sheet" ? "試算表較大" : "壓縮檔較大"}（{formatTestPlanFileSize(file.fileSize)}）</strong>
+        <span>為了不拖慢清單，按下面的按鈕再載入預覽。</span>
+        <Button type="button" size="sm" variant="outline" onClick={() => setRequested(true)}>載入預覽</Button>
       </div>
     );
   }
