@@ -512,7 +512,7 @@ test("direct chat exposes modern search, pinning, drafts, replies, emoji and med
   assert.match(panel, /setPreviewAttachment\(attachment\)/);
   assert.match(panel, /aria-label="在新分頁開啟原始圖片"/);
   assert.match(panel, /formatDirectMessageDay\(message\.createdAt\)/);
-  assert.match(center, /w-\[min\(430px,calc\(100vw-1rem\)\)\]/);
+  assert.match(center, /w-\[min\(480px,calc\(100vw-1rem\)\)\]/);
   assert.match(experience, /export function parseDirectMessageBody/);
   assert.match(experience, /export function directMessageMatchesQuery/);
   assert.match(experience, /export function sortDirectThreads/);

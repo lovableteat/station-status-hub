@@ -1848,3 +1848,21 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .material-attention, .material-blink, .material-guide-attention { animation: none; }
 }
+
+/* Top-right header controls (協作、手機開啟、帳號、登出) share one height on every screen. */
+[data-platform-controls='top-right'] :is(button, [role='button']) {
+  height: 2.75rem !important;
+  min-height: 2.75rem;
+  max-height: 2.75rem;
+  box-sizing: border-box;
+}
+
+/* Chat room: everyone found the text too small, so every size inside the floating chat is one step larger. */
+[data-floating-direct-messages='true'] .text-\[9px\] { font-size: 11px; }
+[data-floating-direct-messages='true'] .text-\[10px\] { font-size: 12px; }
+[data-floating-direct-messages='true'] .text-\[11px\] { font-size: 13px; }
+[data-floating-direct-messages='true'] .text-xs { font-size: 13px; line-height: 1.25rem; }
+[data-floating-direct-messages='true'] .text-sm { font-size: 15px; line-height: 1.45rem; }
+[data-floating-direct-messages='true'] .text-\[15px\] { font-size: 16px; }
+[data-floating-direct-messages='true'] .text-base { font-size: 17px; }
+[data-floating-direct-messages='true'] :is(input, textarea) { font-size: 15px; }

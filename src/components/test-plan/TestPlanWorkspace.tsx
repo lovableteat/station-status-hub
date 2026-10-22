@@ -16,6 +16,7 @@ import {
 } from "react";
 import {
   ArrowDownUp,
+  BookOpen,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
@@ -34,7 +35,6 @@ import {
   FolderUp,
   Globe,
   HardDriveUpload,
-  Keyboard,
   LayoutGrid,
   Link2,
   List,
@@ -131,6 +131,7 @@ import { describeEntryType, formatEntryDate } from "./core/entryDisplay";
 import { isEditableSpreadsheet } from "./core/spreadsheet";
 import { TestPlanSpreadsheetEditor } from "./TestPlanSpreadsheetEditor";
 import { TransferPanel, type TransferItem } from "./TransferPanel";
+import { FileLibraryManual, type FileLibraryManualSection } from "./FileLibraryManual";
 import { downloadWithProgress, openDirectorySink, pickDownloadDirectory, type TransferSink } from "./core/transfers";
 import { chooseDragDownloadUrl, createBlobUrlCache, describeDownloadUrl, DRAG_BLOB_CACHE_LIMIT, DRAG_BLOB_LIMIT, DRAG_BLOB_REVOKE_DELAY } from "./core/dragDownload";
 import type {
@@ -231,24 +232,18 @@ const SCOPE_LABELS: Record<FileSearchScope | "everyone", string> = {
   everyone: "所有人的檔案",
 };
 
-const SHORTCUTS: [string, string][] = [
-  ["點一下 / Ctrl＋點 / Shift＋點", "選取一個 / 加選 / 連續選取"],
-  ["Ctrl＋A、Esc", "全選、取消選取"],
-  ["↑ ↓ Home End", "移動選取；Shift 可連續選取"],
-  ["Enter 或按兩下", "開啟資料夾、預覽檔案、開啟 Excel"],
-  ["Backspace / Alt＋←、Alt＋→", "返回、前進"],
-  ["Alt＋↑", "上一層"],
-  ["F2", "重新命名"],
-  ["Delete", "刪除（會先確認）"],
-  ["Ctrl＋X、Ctrl＋V", "剪下後貼到其他資料夾＝移動"],
-  ["Ctrl＋E 或 /", "搜尋"],
-  ["Alt＋P", "開關預覽窗格"],
-  ["右鍵", "顯示這個項目可用的所有操作"],
-  ["直接打字", "跳到名稱開頭相符的項目"],
-];
 
 const ENTRY_DRAG_TYPE = "application/x-test-plan-entry";
 const PREVIEW_PANE_STORAGE_KEY = "file-library:preview-pane";
+const MANUAL_SEEN_STORAGE_KEY = "file-library:manual-seen";
+
+function readManualSeen() {
+  try {
+    return window.localStorage.getItem(MANUAL_SEEN_STORAGE_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
 const PANE_WIDTHS_STORAGE_KEY = "file-library:pane-widths";
 /** Draggable pane limits (px). The list column always keeps at least LIST_MIN_WIDTH. */
 const NAV_WIDTH = { min: 180, max: 520, default: 284 };
@@ -662,7 +657,18 @@ export function TestPlanWorkspace() {
   const renameCommitRef = useRef(false);
   const [clipboard, setClipboard] = useState<{ items: MoveItem[]; spaceId: string } | null>(null);
   const [contextTarget, setContextTarget] = useState<"item" | "empty">("empty");
-  const [helpOpen, setHelpOpen] = useState(false);
+  const [manual, setManual] = useState<{ open: boolean; section: FileLibraryManualSection }>({ open: false, section: "layout" });
+  // The 操作手冊 button pulses until this browser has opened it once.
+  const [manualSeen, setManualSeen] = useState(readManualSeen);
+  const openManual = useCallback((section: FileLibraryManualSection = "layout") => {
+    setManual({ open: true, section });
+    setManualSeen(true);
+    try {
+      window.localStorage.setItem(MANUAL_SEEN_STORAGE_KEY, "1");
+    } catch {
+      // Only a reminder.
+    }
+  }, []);
   const [peopleFilter, setPeopleFilter] = useState("");
   const [history, setHistory] = useState<{ stack: LibraryLocation[]; index: number }>({ stack: [], index: -1 });
   const [batchDeleting, setBatchDeleting] = useState(false);
@@ -1679,12 +1685,12 @@ export function TestPlanWorkspace() {
         setPreviewOpen(!previewOpen);
       } else if (!ctrl && !event.altKey && event.key === "?") {
         event.preventDefault();
-        setHelpOpen(true);
+        openManual("keys");
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [previewOpen, setPreviewOpen]);
+  }, [openManual, previewOpen, setPreviewOpen]);
 
   // ----- context menu -----------------------------------------------------
   const handleContextMenu = (event: ReactMouseEvent<HTMLElement>) => {
@@ -2084,6 +2090,15 @@ export function TestPlanWorkspace() {
           onClick={() => setPreviewOpen(!previewOpen)}
         >
           <PanelRight className="h-4 w-4" /><span>預覽窗格</span>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className={cn("file-explorer-command file-explorer-manual", !manualSeen && "is-new")}
+          title="操作手冊：上傳、找檔案、預覽、多選、移動、分享與快捷鍵（也可以按 ?）"
+          onClick={() => openManual()}
+        >
+          <BookOpen className="h-4 w-4" /><span>操作手冊</span>
         </Button>
       </div>
 
@@ -2500,7 +2515,6 @@ export function TestPlanWorkspace() {
                   {activeSpaceId === null ? "所有人的檔案 · 依擁有者分組；在這裡上傳會放進我的空間" : !canEdit ? "唯讀：可以瀏覽與下載，不能修改" : isOwnSpace ? "我的空間 · 可編輯" : "你有管理權限，可以整理這個空間"}
                 </span>
                 <span className="file-library-drag-hint">右鍵看所有操作 · 拖到資料夾可移動 · 拖到桌面可直接存檔</span>
-                <button type="button" className="file-explorer-help" onClick={() => setHelpOpen(true)} aria-label="快捷鍵說明"><Keyboard className="h-3.5 w-3.5" />快捷鍵</button>
               </footer>
             </>
           )}
@@ -2554,17 +2568,11 @@ export function TestPlanWorkspace() {
         onClose={() => setMoveEntriesAction(null)}
         onSubmit={handleMoveSubmit}
       />
-      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent className="file-library-dialog">
-          <DialogHeader>
-            <DialogTitle>快捷鍵與滑鼠操作</DialogTitle>
-            <DialogDescription>和 Windows 檔案總管相同；在清單上按 ? 也能打開這張表。</DialogDescription>
-          </DialogHeader>
-          <dl className="file-explorer-shortcuts">
-            {SHORTCUTS.map(([keys, description]) => <div key={keys}><dt>{keys}</dt><dd>{description}</dd></div>)}
-          </dl>
-        </DialogContent>
-      </Dialog>
+      <FileLibraryManual
+        open={manual.open}
+        initialSection={manual.section}
+        onOpenChange={(open) => setManual((current) => ({ ...current, open }))}
+      />
       <AlertDialog
         open={Boolean(visibleDeleteAction)}
         onOpenChange={(open) => !open && !batchDeleteInFlight.current && setDeleteAction(null)}
