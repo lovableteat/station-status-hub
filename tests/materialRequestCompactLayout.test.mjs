@@ -204,10 +204,16 @@ test("待處理料 opens from the header actions and groups pending parts by cat
   assert.match(actions, /data-testid="pending-materials-button"[\s\S]*?待處理料[\s\S]*?新增料件[\s\S]*?上傳說明\s*<\/Button>\s*<\/div>/);
   assert.match(dialogSource(), /role="tablist" aria-label="待處理料分類"/);
   const dialog = slice("function PendingMaterialsDialog(", 'const UNASSIGNED_BOM_PROJECT_VALUE');
-  assert.match(dialog, /groupPendingMaterials\(groups\)/);
+  assert.match(dialog, /const locationApplications = useMemo\(\(\) => buildPendingApplications\(groups\), \[groups\]\);/);
+  assert.match(dialog, /const vendorApplications = useMemo\(\(\) => buildPendingApplications\(groups, \{ includeAlternates: true \}\), \[groups\]\);/);
+  assert.match(dialog, /const \[includeAlternates, setIncludeAlternates\] = useState\(false\);/, "the default view is unchanged");
+  assert.match(dialog, /data-testid="pending-include-alternates"[\s\S]{0,120}?aria-pressed=\{includeAlternates\}/);
+  assert.match(dialog, /groupPendingMaterials\(applications\)/);
+  assert.match(dialog, /data-testid="pending-application"/);
   assert.match(dialog, />優先處理</);
   assert.match(dialog, /onLocate\(group\)|onOpenTracking\(record\)|onOpenCreate\(group\)/);
-  assert.match(source, /const pendingMaterialGroups = useMemo\(\(\) => dataset\.groups\.filter\(requiresApplication\)/);
+  assert.match(source, /const pendingMaterialGroups = useMemo\(\(\) => dataset\.groups\.filter\(\(group\) => group\.records\.some\(\(record\) => record\.needsApplication\)\)/);
+  assert.match(source, /const requiredApplicationCount = useMemo\(\(\) => dataset\.groups\.filter\(requiresApplication\)\.length/, "料號待補 keeps counting locations with no number at all");
   assert.match(source, /<PendingMaterialsDialog/);
   const dialogTokens = dialog;
   assert.doesNotMatch(dialogTokens, /bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);
@@ -223,7 +229,7 @@ test("column filters apply on every click instead of waiting for 確定", () => 
 });
 
 test("editing an item from 待處理料 returns to the list with its tab, search and scroll kept", () => {
-  assert.match(source, /onOpenCreate=\{\(group\) => \{ setPendingDialogOpen\(false\); setReturnToPending\(true\); openRecord\(group\.primaryRecord, "edit"\); \}\}/, "更新料號 edits the pending row with its 廠商 and MPN");
+  assert.match(source, /onOpenCreate=\{\(_group, record\) => \{ setPendingDialogOpen\(false\); setReturnToPending\(true\); openRecord\(record, "edit"\); \}\}/, "更新料號 edits that vendor row with its 廠商 and MPN");
   assert.match(source, /onOpenTracking=\{\(record\) => \{ setPendingDialogOpen\(false\); setReturnToPending\(true\); openTrackingDialog\(record\); \}\}/);
   assert.match(source, /if \(!returnToPending \|\| editorOpen \|\| trackingDialogOpen\) return;\s*setReturnToPending\(false\);\s*setPendingRestoreView\(true\);\s*setPendingDialogOpen\(true\);/);
   assert.match(source, /restoreView=\{pendingRestoreView\}/);
@@ -257,6 +263,19 @@ test("待處理料 categories can be changed by hand and survive saves of other 
   assert.match(source, /onSetCategory=\{setPendingCategory\}/);
   assert.match(source, /\.\.\.\(record\.pendingCategory \? \{ pendingCategory: record\.pendingCategory \} : \{\}\)/, "toWorkbookRecord keeps the hand-picked category");
   assert.match(source, /if \(category\) next\.pendingCategory = category;\s*else delete next\.pendingCategory;/);
+});
+
+test("the 實體料號 filter checks only the 實體料號", () => {
+  const recordValues = source.slice(source.indexOf("function getRecordColumnValues("), source.indexOf("function getRecordColumnValues(") + 2400);
+  assert.match(recordValues, /case "internal":\s*return \[record\.partNumber\];/);
+  const groupValues = source.slice(source.indexOf("function getGroupColumnValues("), source.indexOf("function getRecordColumnValues("));
+  assert.match(groupValues, /case "internal":\s*return group\.records\.map\(\(record\) => record\.partNumber\);/);
+  assert.doesNotMatch(recordValues, /record\.partNumber, record\.schematicPart, record\.pcbFootprint/);
+});
+
+test("an import shows what it did not turn into parts", () => {
+  assert.match(source, /const \{ importNotes, \.\.\.payload \} = await parseMaterialWorkbookFile\(file\);/, "the notes are never stored with the BOM");
+  assert.match(source, /title: "匯入時有資料需要注意"/);
 });
 
 test("pending parts keep blinking until a part number arrives or data is refreshed", () => {
@@ -299,7 +318,8 @@ test("待處理料 can turn the pending parts into per-vendor mail content", () 
   assert.match(source, /contentEditable/);
   const pending = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
   assert.match(pending, /data-testid="pending-mail-button"[\s\S]*?信件生成/);
-  assert.match(pending, /<PendingMailDialog groups=\{groups\}/);
+  assert.match(pending, /<PendingMailDialog groups=\{mailGroups\}/);
+  assert.match(pending, /\.filter\(\(group\) => listed\.has\(group\.key\)\)\s*\.map\(\(group\) => \(\{ \.\.\.group, records: group\.records\.filter\(\(record\) => record\.needsApplication\) \}\)\)/, "the mail follows the listed locations and only their rows still to apply for");
 });
 
 test("BOM 管理 can archive a BOM and keeps archived BOMs out of the switcher and project groups", () => {
