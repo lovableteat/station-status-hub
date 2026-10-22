@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Box,
   Download,
+  ExternalLink,
   Eye,
+  File,
+  FileArchive,
+  FileImage,
   FileSpreadsheet,
   FileText,
   Folder,
-  FolderInput,
   Info,
   Loader2,
   Pencil,
-  Trash2,
+  Presentation,
   X,
 } from "lucide-react";
 
@@ -19,107 +23,186 @@ import { cn } from "@/lib/utils";
 import { formatTestPlanFileSize } from "./core/files";
 import {
   getTestPlanPreviewKind,
+  TEST_PLAN_PREVIEW_LIMITS,
   type TestPlanPreviewKind,
 } from "./core/preview";
 import { isEditableSpreadsheet } from "./core/spreadsheet";
+import { describeEntryType, formatEntryDate } from "./core/entryDisplay";
 import type {
   TestPlanEntry,
+  TestPlanFileCategory,
   TestPlanFileRecord,
 } from "./types";
 
-interface TestPlanInspectorProps {
-  busy: boolean;
-  canEdit: boolean;
-  downloadFile: (file: TestPlanFileRecord) => Promise<Blob>;
-  entry: TestPlanEntry | null;
-  onDelete: (entry: TestPlanEntry) => void;
-  onDescribe: (file: TestPlanFileRecord) => void;
-  onDownload: (file: TestPlanFileRecord) => void;
-  onEditSpreadsheet: (file: TestPlanFileRecord) => void;
-  onMove: (entry: TestPlanEntry) => void;
-  onRename: (entry: TestPlanEntry) => void;
-  onClose?: () => void;
+export function FileTypeIcon({ entry, className }: { entry: TestPlanEntry; className?: string }) {
+  const props = { className: cn("h-4 w-4", className), "aria-hidden": true as const };
+  if (entry.kind === "folder") return <Folder {...props} />;
+  const category: TestPlanFileCategory = entry.category;
+  if (category === "presentation") return <Presentation {...props} />;
+  if (category === "spreadsheet") return <FileSpreadsheet {...props} />;
+  if (category === "document") return <FileText {...props} />;
+  if (category === "image") return <FileImage {...props} />;
+  if (category === "3d") return <Box {...props} />;
+  if (category === "archive") return <FileArchive {...props} />;
+  return <File {...props} />;
 }
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "未提供";
-  return date.toLocaleString("zh-TW", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+interface SheetPreview {
+  names: string[];
+  rows: Record<string, string[][]>;
+}
+
+type PreviewData =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "too-large" }
+  | { status: "unsupported" }
+  | { status: "url"; url: string; linked: boolean }
+  | { status: "text"; text: string }
+  | { status: "sheet"; sheet: SheetPreview }
+  | { status: "archive"; names: string[]; total: number };
+
+function readAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
   });
+}
+
+function columnName(index: number) {
+  let name = "";
+  for (let value = index + 1; value > 0; value = Math.floor((value - 1) / 26)) {
+    name = String.fromCharCode(65 + ((value - 1) % 26)) + name;
+  }
+  return name;
+}
+
+const SHEET_PREVIEW_ROWS = 60;
+const SHEET_PREVIEW_COLUMNS = 18;
+
+async function readSheetPreview(blob: Blob): Promise<SheetPreview> {
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.read(await blob.arrayBuffer(), { type: "array", sheetRows: SHEET_PREVIEW_ROWS, cellDates: true });
+  const rows: Record<string, string[][]> = {};
+  for (const name of workbook.SheetNames) {
+    const sheet = workbook.Sheets[name];
+    const values = sheet ? XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: "", blankrows: true }) : [];
+    rows[name] = values.slice(0, SHEET_PREVIEW_ROWS).map((row) => row.slice(0, SHEET_PREVIEW_COLUMNS).map((cell) => String(cell ?? "")));
+  }
+  return { names: workbook.SheetNames, rows };
+}
+
+async function readArchivePreview(blob: Blob) {
+  const { default: JSZip } = await import("jszip");
+  const zip = await JSZip.loadAsync(blob);
+  const names: string[] = [];
+  zip.forEach((path, entry) => { if (!entry.dir) names.push(path); });
+  return { names: names.slice(0, 300), total: names.length };
 }
 
 function PreviewState({
   file,
+  kind,
   downloadFile,
+  getPreviewUrl,
+  onLinkReady,
 }: {
   file: TestPlanFileRecord;
+  kind: TestPlanPreviewKind;
   downloadFile: (file: TestPlanFileRecord) => Promise<Blob>;
+  getPreviewUrl?: (file: TestPlanFileRecord) => Promise<string | null>;
+  onLinkReady: (url: string | null) => void;
 }) {
-  const previewKind = useMemo(() => getTestPlanPreviewKind(file), [file]);
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const [textPreview, setTextPreview] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [data, setData] = useState<PreviewData>({ status: "loading" });
+  const [sheetName, setSheetName] = useState("");
 
   useEffect(() => {
     let alive = true;
-    let nextObjectUrl: string | null = null;
-    setObjectUrl(null);
-    setTextPreview("");
-
-    if (previewKind === "unsupported") {
-      setStatus("idle");
+    let objectUrl: string | null = null;
+    setData({ status: "loading" });
+    setSheetName("");
+    onLinkReady(null);
+    if (kind === "unsupported") {
+      setData({ status: "unsupported" });
       return () => undefined;
     }
-
-    setStatus("loading");
-    void downloadFile(file)
-      .then(async (blob) => {
-        if (!alive) return;
-        if (previewKind === "text") {
-          const text = await blob.text();
+    const limit = TEST_PLAN_PREVIEW_LIMITS[kind];
+    void (async () => {
+      try {
+        // Raster images and PDFs stream from a short-lived storage link, so a large
+        // drawing shows without first downloading the whole file into the page.
+        if ((kind === "image" || (kind === "pdf" && file.fileSize > 20 * 1024 * 1024)) && getPreviewUrl) {
+          const url = await getPreviewUrl(file).catch(() => null);
           if (!alive) return;
-          setTextPreview(text.slice(0, 250_000));
-        } else {
-          nextObjectUrl = URL.createObjectURL(blob);
-          setObjectUrl(nextObjectUrl);
+          if (url) {
+            onLinkReady(url);
+            setData({ status: "url", url, linked: true });
+            return;
+          }
         }
-        setStatus("ready");
-      })
-      .catch(() => {
-        if (alive) setStatus("error");
-      });
-
+        if (file.fileSize > limit) {
+          setData({ status: "too-large" });
+          return;
+        }
+        const blob = await downloadFile(file);
+        if (!alive) return;
+        if (kind === "text") {
+          const text = await blob.text();
+          if (alive) setData({ status: "text", text: text.slice(0, 250_000) });
+        } else if (kind === "svg") {
+          // A data: URL inside <img> never runs the drawing's scripts and cannot be opened as a page.
+          const url = await readAsDataUrl(new Blob([blob], { type: "image/svg+xml" }));
+          if (alive) setData({ status: "url", url, linked: false });
+        } else if (kind === "sheet") {
+          const sheet = await readSheetPreview(blob);
+          if (alive) setData({ status: "sheet", sheet });
+        } else if (kind === "archive") {
+          const archive = await readArchivePreview(blob);
+          if (alive) setData({ status: "archive", ...archive });
+        } else {
+          const typed = blob.type ? blob : new Blob([blob], { type: kind === "pdf" ? "application/pdf" : file.mimeType || "application/octet-stream" });
+          objectUrl = URL.createObjectURL(typed);
+          setData({ status: "url", url: objectUrl, linked: false });
+        }
+      } catch {
+        if (alive) setData({ status: "error" });
+      }
+    })();
     return () => {
       alive = false;
-      if (nextObjectUrl) URL.revokeObjectURL(nextObjectUrl);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [downloadFile, file, previewKind]);
+  }, [downloadFile, file, getPreviewUrl, kind, onLinkReady]);
 
-  if (previewKind === "unsupported") {
+  if (data.status === "loading") {
+    return (
+      <div className="test-plan-preview-empty" role="status">
+        <Loader2 className="h-6 w-6 animate-spin" />
+        <span>正在載入預覽…</span>
+      </div>
+    );
+  }
+  if (data.status === "unsupported") {
     return (
       <div className="test-plan-preview-empty">
         <Info className="h-7 w-7" />
         <strong>此格式需使用工程軟體開啟</strong>
-        <span>可先下載，再使用對應的 Office、CAD 或 PCB 工具檢視。</span>
+        <span>按「下載」後，用對應的 Office、CAD 或 PCB 工具開啟。</span>
       </div>
     );
   }
-
-  if (status === "loading") {
+  if (data.status === "too-large") {
     return (
       <div className="test-plan-preview-empty">
-        <Loader2 className="h-6 w-6 animate-spin" />
-        <span>正在載入安全預覽…</span>
+        <Info className="h-7 w-7" />
+        <strong>檔案較大，預覽會拖慢瀏覽器</strong>
+        <span>{formatTestPlanFileSize(file.fileSize)}，請按「下載」後開啟。</span>
       </div>
     );
   }
-
-  if (status === "error") {
+  if (data.status === "error") {
     return (
       <div className="test-plan-preview-empty is-error">
         <Info className="h-6 w-6" />
@@ -128,152 +211,213 @@ function PreviewState({
       </div>
     );
   }
+  if (data.status === "text") {
+    return <pre className="file-preview-text">{data.text || "檔案沒有文字內容。"}</pre>;
+  }
+  if (data.status === "archive") {
+    return (
+      <div className="file-preview-archive">
+        <p>壓縮檔內有 {data.total.toLocaleString()} 個檔案{data.total > data.names.length ? `，顯示前 ${data.names.length} 個` : ""}</p>
+        <ul>{data.names.map((name) => <li key={name} title={name}><File className="h-3.5 w-3.5" aria-hidden="true" />{name}</li>)}</ul>
+      </div>
+    );
+  }
+  if (data.status === "sheet") {
+    const active = sheetName && data.sheet.rows[sheetName] ? sheetName : data.sheet.names[0] ?? "";
+    const rows = data.sheet.rows[active] ?? [];
+    const columns = Math.max(1, ...rows.map((row) => row.length));
+    return (
+      <div className="file-preview-sheet">
+        <div className="file-preview-sheet-grid">
+          <table>
+            <thead>
+              <tr>
+                <th aria-hidden="true" />
+                {Array.from({ length: columns }, (_, index) => <th key={index}>{columnName(index)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  <th>{rowIndex + 1}</th>
+                  {Array.from({ length: columns }, (_, index) => <td key={index} title={row[index] || undefined}>{row[index]}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="file-preview-sheet-tabs" role="tablist" aria-label="工作表">
+          {data.sheet.names.map((name) => (
+            <button key={name} type="button" role="tab" aria-selected={name === active} className={cn(name === active && "is-active")} onClick={() => setSheetName(name)}>{name}</button>
+          ))}
+          <span>預覽前 {SHEET_PREVIEW_ROWS} 列</span>
+        </div>
+      </div>
+    );
+  }
+  if (kind === "pdf") {
+    return <iframe src={data.url} title={`${file.originalName} PDF 預覽`} />;
+  }
+  return (
+    <div className="file-preview-image">
+      <img src={data.url} alt={`${file.originalName} 預覽`} referrerPolicy="no-referrer" />
+    </div>
+  );
+}
 
-  if (previewKind === "image" && objectUrl) {
-    return <img src={objectUrl} alt={`${file.originalName} 預覽`} />;
-  }
-  if (previewKind === "pdf" && objectUrl) {
-    return <iframe src={objectUrl} title={`${file.originalName} PDF 預覽`} />;
-  }
-  if (previewKind === "text" && status === "ready") {
-    return <pre>{textPreview || "檔案沒有文字內容。"}</pre>;
-  }
-  return null;
+interface TestPlanInspectorProps {
+  busy: boolean;
+  canEdit: boolean;
+  downloadFile: (file: TestPlanFileRecord) => Promise<Blob>;
+  /** Inline (not attachment) storage link for streaming previews; null when the storage has none. */
+  getPreviewUrl?: (file: TestPlanFileRecord) => Promise<string | null>;
+  /** The focused item, or null. */
+  entry: TestPlanEntry | null;
+  /** Every selected item (the preview shows a summary when there are several). */
+  selectedEntries: readonly TestPlanEntry[];
+  ownerName: (spaceId: string) => string;
+  locationLabel: (entry: TestPlanEntry) => string;
+  folderCounts: (folderId: string) => { folders: number; files: number };
+  onDescribe: (file: TestPlanFileRecord) => void;
+  onDownload: (file: TestPlanFileRecord) => void;
+  onEditSpreadsheet: (file: TestPlanFileRecord) => void;
+  onOpenFolder: (entry: TestPlanEntry) => void;
+  onClose?: () => void;
 }
 
 export function TestPlanInspector({
   busy,
   canEdit,
   downloadFile,
+  getPreviewUrl,
   entry,
-  onDelete,
+  selectedEntries,
+  ownerName,
+  locationLabel,
+  folderCounts,
   onDescribe,
   onDownload,
   onEditSpreadsheet,
-  onMove,
-  onRename,
+  onOpenFolder,
   onClose,
 }: TestPlanInspectorProps) {
+  const previewKind = useMemo(() => (entry?.kind === "file" ? getTestPlanPreviewKind(entry) : "unsupported"), [entry]);
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  const closeButton = onClose && (
+    <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 shrink-0" aria-label="關閉預覽窗格" title="關閉預覽窗格（Alt+P）"><X /></Button>
+  );
+
+  if (selectedEntries.length > 1) {
+    const files = selectedEntries.filter((item): item is Extract<TestPlanEntry, { kind: "file" }> => item.kind === "file");
+    const total = files.reduce((sum, file) => sum + file.fileSize, 0);
+    return (
+      <aside className="test-plan-inspector" aria-label="預覽窗格" data-preview-kind="multi">
+        <div className="test-plan-inspector-heading">
+          <span className="test-plan-inspector-icon"><Eye className="h-4 w-4" /></span>
+          <div><strong>已選取 {selectedEntries.length} 個項目</strong><span>{files.length} 個檔案 · 總計 {formatTestPlanFileSize(total)}</span></div>
+          {closeButton}
+        </div>
+        <ul className="file-preview-multi">
+          {selectedEntries.slice(0, 40).map((item) => (
+            <li key={`${item.kind}:${item.id}`} className={cn("file-type", item.kind === "folder" ? "is-folder" : `is-${item.category}`)}>
+              <FileTypeIcon entry={item} />
+              <span title={item.kind === "folder" ? item.name : item.originalName}>{item.kind === "folder" ? item.name : item.originalName}</span>
+              <small>{item.kind === "file" ? formatTestPlanFileSize(item.fileSize) : "資料夾"}</small>
+            </li>
+          ))}
+        </ul>
+        {selectedEntries.length > 40 && <p className="file-preview-more">還有 {selectedEntries.length - 40} 個項目</p>}
+      </aside>
+    );
+  }
+
   if (!entry) {
     return (
-      <aside className="test-plan-inspector" aria-label="項目資訊">
+      <aside className="test-plan-inspector" aria-label="預覽窗格" data-preview-kind="empty">
+        <div className="test-plan-inspector-heading is-quiet">
+          <span className="test-plan-inspector-icon"><Eye className="h-4 w-4" /></span>
+          <div><strong>預覽窗格</strong><span>Alt+P 開關</span></div>
+          {closeButton}
+        </div>
         <div className="test-plan-inspector-empty">
           <Eye className="h-7 w-7" />
-          <strong>選取項目以查看資訊</strong>
-          <span>單擊檔案即可預覽；資料夾可查看位置與更新時間。</span>
+          <strong>選取檔案就能直接看到內容</strong>
+          <span>PDF、圖片、SVG、Excel、文字檔與 ZIP 清單都能在這裡預覽；用 ↑ ↓ 逐一切換。</span>
         </div>
       </aside>
     );
   }
 
   const name = entry.kind === "folder" ? entry.name : entry.originalName;
+  const spreadsheet = entry.kind === "file" && isEditableSpreadsheet(entry);
+  const counts = entry.kind === "folder" ? folderCounts(entry.id) : null;
 
   return (
-    <aside className="test-plan-inspector" aria-label="項目資訊">
+    <aside className="test-plan-inspector" aria-label="預覽窗格" data-preview-kind={entry.kind === "folder" ? "folder" : previewKind}>
       <div className="test-plan-inspector-heading">
-        <span className={cn(
-          "test-plan-entry-icon",
-          entry.kind === "folder" ? "is-folder" : `is-${entry.category}`,
-        )}>
-          {entry.kind === "folder" ? (
-            <Folder className="h-5 w-5" />
-          ) : (
-            <FileText className="h-5 w-5" />
-          )}
+        <span className={cn("test-plan-inspector-icon file-type", entry.kind === "folder" ? "is-folder" : `is-${entry.category}`)}>
+          <FileTypeIcon entry={entry} />
         </span>
         <div>
           <strong title={name}>{name}</strong>
-          <span>{entry.kind === "folder" ? "資料夾" : `${entry.extension.toUpperCase() || "FILE"} 檔案`}</span>
+          <span>{describeEntryType(entry)}</span>
         </div>
-        {onClose && <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0" aria-label="返回檔案清單"><X /></Button>}
+        {entry.kind === "file" ? (
+          <>
+            <Button type="button" size="sm" className="file-preview-primary" onClick={() => onDownload(entry)} title="下載（也可以直接把檔案拖到桌面）">
+              <Download className="mr-1.5 h-4 w-4" />下載
+            </Button>
+            {spreadsheet && (
+              <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onEditSpreadsheet(entry)}>
+                <FileSpreadsheet className="mr-1.5 h-4 w-4" />{canEdit ? "直接編輯 Excel" : "開啟 Excel"}
+              </Button>
+            )}
+            {!spreadsheet && linkUrl && (
+              <Button type="button" size="sm" variant="outline" onClick={() => window.open(linkUrl, "_blank", "noopener,noreferrer")}>
+                <ExternalLink className="mr-1.5 h-4 w-4" />新分頁開啟
+              </Button>
+            )}
+          </>
+        ) : (
+          <Button type="button" size="sm" className="file-preview-primary" onClick={() => onOpenFolder(entry)}>
+            <Folder className="mr-1.5 h-4 w-4" />開啟
+          </Button>
+        )}
+        {closeButton}
       </div>
 
-      {entry.kind === "file" ? (
-        <div className="test-plan-preview">
-          <PreviewState file={entry} downloadFile={downloadFile} />
-        </div>
-      ) : (
-        <div className="test-plan-preview-empty">
-          <Folder className="h-8 w-8" />
-          <strong>資料夾資訊</strong>
-          <span>雙擊中央項目即可進入此資料夾。</span>
-        </div>
-      )}
+      <div className={cn("test-plan-preview", entry.kind === "file" && `is-${previewKind}`)}>
+        {entry.kind === "file" ? (
+          <PreviewState file={entry} kind={previewKind} downloadFile={downloadFile} getPreviewUrl={getPreviewUrl} onLinkReady={setLinkUrl} />
+        ) : (
+          <div className="test-plan-preview-empty">
+            <Folder className="h-9 w-9" />
+            <strong>{counts?.folders ?? 0} 個子資料夾 · {counts?.files ?? 0} 個檔案</strong>
+            <span>按兩下或按 Enter 開啟這個資料夾。</span>
+          </div>
+        )}
+      </div>
 
       <dl className="test-plan-inspector-meta">
+        <div><dt>類型</dt><dd>{describeEntryType(entry)}</dd></div>
+        {entry.kind === "file" && <div><dt>大小</dt><dd className="is-number">{formatTestPlanFileSize(entry.fileSize)}</dd></div>}
+        <div><dt>擁有者</dt><dd>{ownerName(entry.spaceId)}</dd></div>
+        <div><dt>修改日期</dt><dd className="is-number">{formatEntryDate(entry.updatedAt)}</dd></div>
+        <div className="is-wide"><dt>位置</dt><dd title={locationLabel(entry)}>{locationLabel(entry)}</dd></div>
         {entry.kind === "file" && (
-          <>
-            <div><dt>檔案大小</dt><dd>{formatTestPlanFileSize(entry.fileSize)}</dd></div>
-            <div><dt>檔案類型</dt><dd>{entry.mimeType || entry.extension.toUpperCase() || "未知"}</dd></div>
-          </>
-        )}
-        <div><dt>更新時間</dt><dd>{formatDate(entry.updatedAt)}</dd></div>
-        {entry.kind === "file" && (
-          <div><dt>說明</dt><dd>{entry.description || "尚未填寫"}</dd></div>
+          <div className="is-wide">
+            <dt>說明</dt>
+            <dd className="file-preview-description">
+              <span>{entry.description || "尚未填寫"}</span>
+              {canEdit && (
+                <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => onDescribe(entry)} aria-label="編輯說明" title="編輯說明">
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </dd>
+          </div>
         )}
       </dl>
-
-      <div className="test-plan-inspector-actions">
-        {entry.kind === "file" && isEditableSpreadsheet(entry) && (
-          <Button
-            type="button"
-            disabled={!canEdit || busy}
-            onClick={() => onEditSpreadsheet(entry)}
-          >
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            直接編輯 Excel
-          </Button>
-        )}
-        {entry.kind === "file" && (
-          <Button
-            type="button"
-            variant={isEditableSpreadsheet(entry) ? "outline" : "default"}
-            onClick={() => onDownload(entry)}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            下載檔案
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!canEdit || busy}
-          onClick={() => onRename(entry)}
-        >
-          <Pencil className="mr-2 h-4 w-4" />
-          重新命名
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!canEdit || busy}
-          onClick={() => onMove(entry)}
-        >
-          <FolderInput className="mr-2 h-4 w-4" />
-          搬移
-        </Button>
-        {entry.kind === "file" && (
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!canEdit || busy}
-            onClick={() => onDescribe(entry)}
-          >
-            <FileText className="mr-2 h-4 w-4" />
-            編輯說明
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="outline"
-          disabled={!canEdit || busy}
-          className="text-red-300 hover:text-red-200"
-          onClick={() => onDelete(entry)}
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          刪除
-        </Button>
-      </div>
     </aside>
   );
 }

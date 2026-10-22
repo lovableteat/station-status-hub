@@ -104,6 +104,9 @@ export interface TestPlanDeleteResult {
   cleanupPending: boolean;
 }
 
+/** Pass as the preferred space to open the signed-in user's own personal space. */
+export const TEST_PLAN_PERSONAL_SPACE = "__personal__";
+
 // shortcut: Retry paths require the original File; add a persisted manifest if reload recovery is needed.
 const pendingUploads = new WeakMap<File, Map<string, { storagePath: string; objectUploaded: boolean }>>();
 
@@ -137,8 +140,11 @@ export function createTestPlanRepository(adapter: TestPlanDataAdapter) {
         console.warn("Test_Plan 延後清理仍待重試。", cleanupError);
       }
       const spaces = await adapter.listSpaces(projectId);
-      const activeSpaceId = spaces.some((space) => space.id === preferredSpaceId)
-        ? preferredSpaceId!
+      const requestedSpaceId = preferredSpaceId === TEST_PLAN_PERSONAL_SPACE
+        ? spaces.find((space) => space.isPersonal && space.ownerId === ownerId)?.id ?? null
+        : preferredSpaceId;
+      const activeSpaceId = spaces.some((space) => space.id === requestedSpaceId)
+        ? requestedSpaceId!
         : projectId === null ? null : spaces[0]?.id ?? null;
       const [folders, files] = activeSpaceId
         ? await Promise.all([

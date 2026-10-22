@@ -11,6 +11,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 import {
   createTestPlanRepository,
+  TEST_PLAN_PERSONAL_SPACE,
   type TestPlanRepository,
 } from "../core/repository";
 import { createSupabaseTestPlanAdapter } from "../core/supabaseAdapter";
@@ -44,6 +45,11 @@ interface UploadProgress {
 
 interface UseTestPlanWorkspaceOptions {
   repository?: TestPlanRepository;
+  /**
+   * Space opened by the first load of each account: a space id,
+   * TEST_PLAN_PERSONAL_SPACE for the user's own space, or null (default) for 所有檔案.
+   */
+  initialSpaceId?: string | null;
 }
 
 const AUTHENTICATED_SESSION_REQUIRED =
@@ -178,9 +184,13 @@ export function useTestPlanWorkspace(
     [activeSpaceId, applyWorkspace, ownerId, repository, user],
   );
 
+  // A deep link is honoured once; a later account switch lands in that account's own space.
+  const initialSpaceRef = useRef(options.initialSpaceId ?? null);
   useEffect(() => {
     setUploadProgress(null);
-    void refreshWorkspace(null);
+    const initialSpaceId = initialSpaceRef.current;
+    if (initialSpaceId !== null && initialSpaceId !== TEST_PLAN_PERSONAL_SPACE) initialSpaceRef.current = TEST_PLAN_PERSONAL_SPACE;
+    void refreshWorkspace(initialSpaceId);
   }, [ownerId, repository]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
