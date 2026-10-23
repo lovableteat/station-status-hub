@@ -2,8 +2,10 @@
  * Drag-to-desktop delivery. Chrome and Edge start an OS-level download from
  * the "DownloadURL" drag item, so the address it carries decides whether a
  * corporate download policy lets it through. A blob: URL of bytes the page
- * already holds is same-origin and passes URL-keyed download rules; the raw
- * storage link is the fallback for files too large to hold in memory. The
+ * already holds is same-origin and passes URL-keyed download rules. The file
+ * library passes only that blob: address: on the company's managed Chrome the
+ * raw storage link is shown as 遭到貴機構封鎖, so a file that is not in memory
+ * yet (or is too large to hold) is not offered to the desktop at all. The
  * drag download runs in the browser process and never reaches a service
  * worker, so no proxied same-origin address can stand in for the bytes.
  */

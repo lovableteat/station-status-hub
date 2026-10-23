@@ -624,6 +624,10 @@ export function TestPlanWorkspace() {
   const [downloads, setDownloads] = useState<TransferItem[]>([]);
   const dragBlobCacheRef = useRef(createBlobUrlCache(DRAG_BLOB_CACHE_LIMIT, (url) => window.setTimeout(() => URL.revokeObjectURL(url), DRAG_BLOB_REVOKE_DELAY)));
   const dragPrefetchRef = useRef(new Set<string>());
+  // Files waiting for a free prefetch slot (at most three download at once).
+  const dragPrefetchQueueRef = useRef<TestPlanFileRecord[]>([]);
+  // Why the current drag carries no file for the desktop (shown if it is dropped outside the page).
+  const dragOutMissingRef = useRef<{ reason: "preparing" | "large" | "multiple" | "folder"; name: string } | null>(null);
   const dragDwellTimersRef = useRef(new Map<string, number>());
   useEffect(() => {
     const cache = dragBlobCacheRef.current;
@@ -1136,11 +1140,16 @@ export function TestPlanWorkspace() {
       .catch(() => downloadUrlCacheRef.current.delete(file.id));
   };
 
-  // Small files are pulled into memory while the pointer rests on the row, so the
-  // drag can carry a same-origin blob: address; the raw link covers the rest.
-  const prefetchDragBlob = (file: TestPlanFileRecord) => {
+  // Files are pulled into memory ahead of a drag so it can carry a same-origin blob: address.
+  // Company Chrome policy blocks drag downloads of the raw storage link, so there is no fallback to it.
+  const prefetchDragBlob = (file: TestPlanFileRecord, { urgent = true }: { urgent?: boolean } = {}) => {
     const cache = dragBlobCacheRef.current;
-    if (file.fileSize > DRAG_BLOB_LIMIT || cache.get(file.id) || dragPrefetchRef.current.has(file.id) || dragPrefetchRef.current.size >= 3) return;
+    if (file.fileSize > DRAG_BLOB_LIMIT || cache.get(file.id) || dragPrefetchRef.current.has(file.id)) return;
+    if (dragPrefetchRef.current.size >= 3) {
+      const queue = dragPrefetchQueueRef.current.filter((queued) => queued.id !== file.id);
+      dragPrefetchQueueRef.current = urgent ? [file, ...queue] : [...queue, file];
+      return;
+    }
     dragPrefetchRef.current.add(file.id);
     void (async () => {
       try {
@@ -1152,12 +1161,25 @@ export function TestPlanWorkspace() {
         const typed = new Blob([blob], { type: "application/octet-stream" });
         cache.set(file.id, URL.createObjectURL(typed), typed.size);
       } catch {
-        // Drag-out falls back to the link for this file.
+        // This file cannot be dragged to the desktop; the 下載 button still works.
       } finally {
         dragPrefetchRef.current.delete(file.id);
+        const next = dragPrefetchQueueRef.current.shift();
+        if (next) prefetchDragBlob(next, { urgent: false });
       }
     })();
   };
+  // Small files on screen are prepared right away, so even a quick drag finds them ready.
+  useEffect(() => {
+    const cache = dragBlobCacheRef.current;
+    let budget = 48 * 1024 * 1024;
+    const eager = visibleEntries
+      .filter((entry): entry is Extract<TestPlanEntry, { kind: "file" }> => entry.kind === "file" && entry.fileSize <= 8 * 1024 * 1024)
+      .filter((file) => !cache.get(file.id))
+      .slice(0, 12)
+      .filter((file) => (budget -= file.fileSize) >= 0);
+    for (const file of eager) prefetchDragBlob(file, { urgent: false });
+  }, [visibleEntries]); // eslint-disable-line react-hooks/exhaustive-deps
   const scheduleDragPrefetch = (file: TestPlanFileRecord) => {
     cancelDragPrefetch(file.id);
     if (file.fileSize > DRAG_BLOB_LIMIT || dragBlobCacheRef.current.get(file.id)) return;
@@ -1332,21 +1354,42 @@ export function TestPlanWorkspace() {
     event.dataTransfer.setData(ENTRY_DRAG_TYPE, JSON.stringify({ items: dragged.map(toMoveItem) }));
     event.dataTransfer.setData("text/plain", dragged.map(entryName).join("\n"));
     event.dataTransfer.effectAllowed = dragged.every((item) => canEditSpace(item.spaceId)) ? "copyMove" : "copy";
-    if (dragged.length === 1 && entry.kind === "file") {
+    dragOutMissingRef.current = null;
+    if (dragged.length > 1) {
+      dragOutMissingRef.current = { reason: "multiple", name: entryName(entry) };
+    } else if (entry.kind === "folder") {
+      dragOutMissingRef.current = { reason: "folder", name: entry.name };
+    } else {
       cancelDragPrefetch(entry.id);
-      const cached = downloadUrlCacheRef.current.get(entry.id);
-      const url = chooseDragDownloadUrl({ blobUrl: dragBlobCacheRef.current.get(entry.id), sourceUrl: cached?.url });
+      // Only the page-held copy: the storage link is a cross-site download that company policy blocks.
+      const url = chooseDragDownloadUrl({ blobUrl: dragBlobCacheRef.current.get(entry.id) });
       if (url) {
         event.dataTransfer.setData("DownloadURL", describeDownloadUrl(entry.mimeType, entry.originalName, url));
-        if (cached?.url) event.dataTransfer.setData("text/uri-list", cached.url);
+      } else {
+        dragOutMissingRef.current = { reason: entry.fileSize > DRAG_BLOB_LIMIT ? "large" : "preparing", name: entry.originalName };
+        prefetchDragBlob(entry);
       }
     }
+  };
+
+  // A drag that ends outside the window without a desktop copy explains what to do instead.
+  const handleEntryDragEnd = (event: DragEvent<HTMLElement>) => {
+    setDropTargetId(null);
+    const missing = dragOutMissingRef.current;
+    dragOutMissingRef.current = null;
+    if (!missing || event.dataTransfer.dropEffect === "move") return;
+    const outside = event.clientX <= 0 || event.clientY <= 0 || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight;
+    if (!outside) return;
+    if (missing.reason === "preparing") toast.info(`「${missing.name}」還在準備，約一秒後再拖一次就能存到桌面；或直接按「下載」。`);
+    else if (missing.reason === "large") toast.info(`「${missing.name}」超過 64 MB，不能拖到桌面，請按「下載」。`);
+    else if (missing.reason === "multiple") toast.info("一次只能拖一個檔案到桌面。多個檔案請按「下載」，會一起存進你選的資料夾。");
+    else toast.info("資料夾不能拖到桌面，請開啟資料夾、選取檔案後按「下載」。");
   };
 
   const entryDragProps = (entry: TestPlanEntry) => ({
     draggable: !busy && !loading && renaming?.key !== entryKey(entry),
     onDragStart: (event: DragEvent<HTMLElement>) => handleEntryDragStart(entry, event),
-    onDragEnd: () => setDropTargetId(null),
+    onDragEnd: handleEntryDragEnd,
     onPointerEnter: entry.kind === "file" ? () => { prefetchDownloadUrl(entry); scheduleDragPrefetch(entry); } : undefined,
     onPointerLeave: entry.kind === "file" ? () => cancelDragPrefetch(entry.id) : undefined,
     onPointerDown: entry.kind === "file" ? () => { prefetchDownloadUrl(entry); prefetchDragBlob(entry); } : undefined,
