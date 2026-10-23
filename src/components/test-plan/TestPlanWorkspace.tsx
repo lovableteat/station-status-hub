@@ -1928,7 +1928,7 @@ export function TestPlanWorkspace() {
           disabled={busy || loading}
           aria-label={`開啟 ${space.name}${space.description ? `（${space.description}）` : ""} 的檔案空間`}
           aria-current={activeSpaceId === space.id ? "page" : undefined}
-          title={`${space.name} ${space.description ?? ""}`}
+          title={space.name}
           onClick={() => navigate({ spaceId: space.id, folderId: null })}
           onDragOver={(event) => activeSpaceId === space.id && handleFolderDragOver(null, event)}
           onDragLeave={() => setDropTargetId((current) => (current === "__root__" ? null : current))}
@@ -1937,7 +1937,6 @@ export function TestPlanWorkspace() {
           <span className="file-library-user-icon" aria-hidden="true" data-initials={spaceInitials(space.name)} style={spaceSwatch(space.color)} />
           <span className="file-library-user-identity">
             <strong>{space.name}</strong>
-            {space.description && <small>{space.description}</small>}
           </span>
           {space.ownerId === ownerId && <Badge variant="secondary" className="file-library-current-user">我</Badge>}
           {space.ownerId !== ownerId && !canEditSpace(space.id) && <LockKeyhole className="file-explorer-lock" aria-label="唯讀" />}

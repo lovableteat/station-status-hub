@@ -130,7 +130,7 @@ test('only the current user and verified administrator roles are pinned; a misle
   assert.equal(names(tree)[0], '梁文樺');
   const impostor = rowFor(tree, f, 'space-other');
   assert.equal(impostor.findByType('strong').children.join(''), '管理員');
-  assert.equal(impostor.findByType('small').children.join(''), '@ordinary.account');
+  assert.equal(impostor.findAllByType('small').length, 0);
   assert.equal(openButton(impostor).props['aria-label'], '開啟 管理員（@ordinary.account） 的檔案空間');
   assert.equal(controls(tree, '其他使用者').length, 0, 'other users are listed directly, not behind a picker');
   assert.deepEqual(currentIds(tree, f), ['space-me'], 'no other user is open until one is clicked');
@@ -152,21 +152,23 @@ test('an administrator viewing their own space appears once and keeps the owners
   assert.deepEqual(names(tree), ['管理員', '第二管理員', '一般使用者']);
   assert.equal(rows(tree).length, 3, 'the current administrator is not duplicated by the administrator group');
   const mine = rows(tree)[0];
-  assert.equal(text(openButton(mine)), '管理員@self.admin我');
+  assert.equal(text(openButton(mine)), '管理員我');
   assert.equal(openButton(mine).props['aria-current'], 'page');
   assert.deepEqual(folderTreeOwners(tree, f), [{ id: 'space-self-admin', label: '管理員 的資料夾' }]);
   await unmount(tree);
 });
 
-test('every listed person renders the name once with a decorative icon and a distinct account name', async () => {
+test('every listed person shows only their name and ownership marker while keeping accessible account identity', async () => {
   const f = fixture([space('space-me', 'me', '梁文樺', 'liang'), space('space-admin', 'admin', '管理員', 'admin', 'admin'), space('space-peer', 'peer', '陳怡君', 'yijun')]);
   const tree = await mount(f);
   assert.equal(rows(tree).length, 3);
   for (const row of rows(tree)) {
     const button = openButton(row);
     const name = row.findByType('strong').children.join('');
-    const account = row.findByType('small').children.join('');
-    assert.equal(text(button), `${name}${account}${name === '梁文樺' ? '我' : ''}`);
+    const account = f.state.spaces.find(candidate => candidate.id === idOf(f, row)).description;
+    assert.equal(row.findAllByType('small').length, 0, 'no username subtitle in any sidebar group');
+    assert.equal(text(button), `${name}${name === '梁文樺' ? '我' : ''}`);
+    assert.equal(button.props.title, name, 'hover text does not bring the username back');
     const icons = row.findAll(node => host(node) && node.props.className === 'file-library-user-icon');
     assert.equal(icons.length, 1);
     assert.equal(icons[0].props['aria-hidden'], 'true');
@@ -190,7 +192,7 @@ test('other accounts with identical names stay distinct rows by id, open the cli
   ]);
   const tree = await mount(f);
   assert.deepEqual(groups(tree, f).others, ['space-alex-one', 'space-alex-two']);
-  assert.deepEqual(groups(tree, f).others.map(id => text(openButton(rowFor(tree, f, id)))), ['Alex Chen@alex.one', 'Alex Chen@alex.two']);
+  assert.deepEqual(groups(tree, f).others.map(id => text(openButton(rowFor(tree, f, id)))), ['Alex Chen', 'Alex Chen']);
   await open(tree, f, 'space-alex-two');
   assert.deepEqual(f.opened, ['space-alex-two']);
   assert.equal(f.state.activeSpaceId, 'space-alex-two');
@@ -278,7 +280,7 @@ test('display-name changes never confer administrator status and actual role cha
   assert.deepEqual(groups(tree, f).others.sort(), ['space-other', 'space-stable']);
   const demoted = rowFor(tree, f, 'space-other');
   assert.equal(demoted.findByType('strong').children.join(''), '已更新姓名');
-  assert.equal(demoted.findByType('small').children.join(''), '@colleague');
+  assert.equal(demoted.findAllByType('small').length, 0);
   assert.deepEqual(currentIds(tree, f), ['space-other']);
   assert.deepEqual(folderTreeOwners(tree, f).map(owner => owner.id), ['space-other']);
   assert.deepEqual(f.opened, ['space-other'], 'regrouping never reopens or switches the space');
@@ -292,7 +294,7 @@ test('switching accounts rebuilds the fixed self row without moving or duplicati
   assert.deepEqual(groups(tree, f), { mine: ['space-other'], team: ['space-admin'], others: ['space-me'] });
   assert.deepEqual(names(tree), ['使用者 B', '管理員', '使用者 A']);
   assert.equal(rows(tree).length, 3, 'no space is listed twice after the switch');
-  assert.equal(text(openButton(rows(tree)[0])), '使用者 B@user.b我');
+  assert.equal(text(openButton(rows(tree)[0])), '使用者 B我');
   assert.equal(rows(tree)[1].findAll(node => host(node) && text(node) === '我').length, 0);
   assert.equal(rowFor(tree, f, 'space-me').findAll(node => host(node) && text(node) === '我').length, 0, 'the previous account loses the ownership marker');
   assert.deepEqual(currentIds(tree, f), ['space-other']);
@@ -301,25 +303,25 @@ test('switching accounts rebuilds the fixed self row without moving or duplicati
   await unmount(tree);
 });
 
-test('long names and usernames are kept in full on rows, titles, accessible names and the address bar', async () => {
+test('long names keep full titles and location labels without displaying account usernames', async () => {
   const name = 'Christopher Alexander Williamson 工程整合測試帳號';
   const username = 'christopher.alexander.williamson';
   const f = fixture([space('space-me', 'me', name, username), space('space-other', 'other', `${name} 第二位`, `${username}.two`)]);
   const tree = await mount(f);
   const self = rowFor(tree, f, 'space-me');
   assert.equal(self.findByType('strong').children.join(''), name);
-  assert.equal(self.findByType('small').children.join(''), `@${username}`);
-  assert.equal(openButton(self).props.title, `${name} @${username}`);
+  assert.equal(self.findAllByType('small').length, 0);
+  assert.equal(openButton(self).props.title, name);
   const other = rowFor(tree, f, 'space-other');
-  assert.equal(text(openButton(other)), `${name} 第二位@${username}.two`);
-  assert.equal(openButton(other).props.title, `${name} 第二位 @${username}.two`);
+  assert.equal(text(openButton(other)), `${name} 第二位`);
+  assert.equal(openButton(other).props.title, `${name} 第二位`);
   assert.equal(openButton(other).props['aria-label'], `開啟 ${name} 第二位（@${username}.two） 的檔案空間`);
   await open(tree, f, 'space-other');
   assert.deepEqual(currentIds(tree, f), ['space-other']);
   assert.equal(locationName(tree), `${name} 第二位 的空間`);
   assert.deepEqual(folderTreeOwners(tree, f), [{ id: 'space-other', label: `${name} 第二位 的資料夾` }]);
   await filterPeople(tree, username.toUpperCase());
-  assert.equal(text(openButton(rowFor(tree, f, 'space-other'))), `${name} 第二位@${username}.two`);
+  assert.equal(text(openButton(rowFor(tree, f, 'space-other'))), `${name} 第二位`);
   await unmount(tree);
 });
 
