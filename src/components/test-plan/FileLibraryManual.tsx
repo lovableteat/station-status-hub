@@ -192,10 +192,10 @@ export function FileLibraryManual({
               <ol>
                 <li><strong>點一下檔案，右邊就會顯示內容：</strong>PDF、圖片、SVG、Excel（可切換工作表）、文字檔、ZIP 內的檔案清單都能直接看，用 ↑ ↓ 逐一切換。</li>
                 <li>預覽上方有 <Ui icon={Download}>下載</Ui>；Excel 可以按 <Ui>直接編輯 Excel</Ui> 在網頁上修改並存回原檔。</li>
-                <li>滑過清單的檔案，列尾會出現 <Ui icon={Download}>下載</Ui>，一下就能下載；64 MB 以下的檔案也可以<strong>直接拖到桌面</strong>存檔（Chrome／Edge，一次一個）。</li>
+                <li>滑過清單的檔案，列尾會出現 <Ui icon={Download}>下載</Ui>，一下就能下載；1 GB 以下的檔案也可以<strong>直接拖到桌面</strong>存檔（Chrome／Edge，一次一個）。超過 64 MB 的檔案第一次拖曳時會先準備，右下角顯示進度，準備好會提示，再拖一次就好。</li>
                 <li>選好多個檔案再按 <Ui icon={Download}>下載</Ui>，只會問一次要存到哪個資料夾，所有檔案一起存進去，同名的會自動加 (1)、(2)。</li>
               </ol>
-              <p className="file-manual-note">拖到桌面時如果出現「遭到貴機構封鎖」，是公司 Chrome 的下載政策擋下來的，請改按 <Ui icon={Download}>下載</Ui>。超過 64 MB、一次拖多個檔案或拖資料夾也請用 <Ui icon={Download}>下載</Ui>。</p>
+              <p className="file-manual-note">拖到桌面時如果出現「遭到貴機構封鎖」，是公司 Chrome 的下載政策擋下來的，請改按 <Ui icon={Download}>下載</Ui>。一次拖多個檔案或拖資料夾也請用 <Ui icon={Download}>下載</Ui>。</p>
               <p className="file-manual-note">3D、PCB、PowerPoint 等工程檔需要下載後用對應軟體開啟。特別大的試算表或壓縮檔，會先顯示「載入預覽」按鈕，避免拖慢清單。</p>
             </Section>
 

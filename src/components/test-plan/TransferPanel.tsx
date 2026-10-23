@@ -21,6 +21,8 @@ export interface TransferItem {
   status: "active" | "done" | "error" | "cancelled";
   message?: string;
   cancel?: () => void;
+  /** Small text next to the kind, e.g. 準備拖到桌面. */
+  detail?: string;
 }
 
 interface Props {
@@ -54,7 +56,7 @@ export function TransferPanel({ uploads, downloads, onDismiss }: Props) {
     });
   }
   for (const item of downloads) {
-    rows.push({ key: item.id, kind: "download", name: item.name, loaded: item.loaded, total: item.total, status: item.status, message: item.message, cancel: item.cancel, dismiss: () => onDismiss(item.id) });
+    rows.push({ key: item.id, kind: "download", name: item.name, loaded: item.loaded, total: item.total, status: item.status, message: item.message, cancel: item.cancel, dismiss: () => onDismiss(item.id), detail: item.detail });
   }
   const [lead, ...rest] = [...rows.filter((row) => row.status === "active"), ...rows.filter((row) => row.status !== "active")];
   const activeCount = rows.filter((row) => row.status === "active").length;
