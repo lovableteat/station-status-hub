@@ -133,7 +133,7 @@ import { TestPlanSpreadsheetEditor } from "./TestPlanSpreadsheetEditor";
 import { TransferPanel, type TransferItem } from "./TransferPanel";
 import { FileLibraryManual, type FileLibraryManualSection } from "./FileLibraryManual";
 import { downloadWithProgress, openDirectorySink, pickDownloadDirectory, type TransferSink } from "./core/transfers";
-import { chooseDragDownloadUrl, createBlobUrlCache, describeDownloadUrl, DRAG_BLOB_CACHE_LIMIT, DRAG_BLOB_LIMIT, DRAG_BLOB_REVOKE_DELAY } from "./core/dragDownload";
+import { chooseDragDownloadUrl, createBlobUrlCache, describeDownloadUrl, DRAG_BLOB_CACHE_LIMIT, DRAG_BLOB_LIMIT, DRAG_BLOB_REVOKE_DELAY, DRAG_HOVER_PREFETCH_LIMIT, fetchBlobWithProgress } from "./core/dragDownload";
 import type {
   TestPlanEntry,
   TestPlanFileCategory,
@@ -627,7 +627,7 @@ export function TestPlanWorkspace() {
   // Files waiting for a free prefetch slot (at most three download at once).
   const dragPrefetchQueueRef = useRef<TestPlanFileRecord[]>([]);
   // Why the current drag carries no file for the desktop (shown if it is dropped outside the page).
-  const dragOutMissingRef = useRef<{ reason: "preparing" | "large" | "multiple" | "folder"; name: string } | null>(null);
+  const dragOutMissingRef = useRef<{ reason: "preparing" | "preparing-large" | "large" | "multiple" | "folder"; name: string } | null>(null);
   const dragDwellTimersRef = useRef(new Map<string, number>());
   useEffect(() => {
     const cache = dragBlobCacheRef.current;
@@ -1151,17 +1151,33 @@ export function TestPlanWorkspace() {
       return;
     }
     dragPrefetchRef.current.add(file.id);
+    // Big files show their preparation in the transfer panel and say when they are ready to drag.
+    const visible = file.fileSize > DRAG_HOVER_PREFETCH_LIMIT;
+    const transferId = `drag-ready:${file.id}:${Date.now()}`;
+    const controller = new AbortController();
+    const patch = (changes: Partial<TransferItem>) => setDownloads((items) => items.map((item) => (item.id === transferId ? { ...item, ...changes } : item)));
+    if (visible) {
+      setDownloads((items) => [...items, { id: transferId, name: file.originalName, detail: "準備拖到桌面", loaded: 0, total: file.fileSize, status: "active", cancel: () => controller.abort() }]);
+    }
     void (async () => {
       try {
         const url = await getFileDownloadUrl(file).catch(() => null);
         const blob = url
-          ? await fetch(url).then((response) => { if (!response.ok) throw new Error(String(response.status)); return response.blob(); })
+          ? await fetchBlobWithProgress(url, { signal: controller.signal, expectedSize: file.fileSize, onProgress: visible ? (loaded, total) => patch({ loaded, total }) : undefined })
           : await downloadFile(file);
         // Never trust the stored content type: a same-origin blob: page must not be able to run script.
         const typed = new Blob([blob], { type: "application/octet-stream" });
         cache.set(file.id, URL.createObjectURL(typed), typed.size);
-      } catch {
+        if (visible) {
+          patch({ status: "done", loaded: typed.size, total: typed.size, cancel: undefined });
+          toast.success(`「${file.originalName}」已準備好，現在可以拖到桌面了`);
+        }
+      } catch (caught) {
         // This file cannot be dragged to the desktop; the 下載 button still works.
+        if (visible) {
+          const cancelled = controller.signal.aborted;
+          patch({ status: cancelled ? "cancelled" : "error", message: cancelled ? undefined : (caught instanceof Error ? caught.message : "準備失敗"), cancel: undefined });
+        }
       } finally {
         dragPrefetchRef.current.delete(file.id);
         const next = dragPrefetchQueueRef.current.shift();
@@ -1169,20 +1185,26 @@ export function TestPlanWorkspace() {
       }
     })();
   };
-  // Small files on screen are prepared right away, so even a quick drag finds them ready.
+  // Small files on screen are prepared ahead, so even a quick drag finds them ready. It waits until the
+  // list has been still for a moment and never runs during an upload or delete, so previews and
+  // transfers keep the network first.
   useEffect(() => {
-    const cache = dragBlobCacheRef.current;
-    let budget = 48 * 1024 * 1024;
-    const eager = visibleEntries
-      .filter((entry): entry is Extract<TestPlanEntry, { kind: "file" }> => entry.kind === "file" && entry.fileSize <= 8 * 1024 * 1024)
-      .filter((file) => !cache.get(file.id))
-      .slice(0, 12)
-      .filter((file) => (budget -= file.fileSize) >= 0);
-    for (const file of eager) prefetchDragBlob(file, { urgent: false });
-  }, [visibleEntries]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (busy || loading) return;
+    const timer = window.setTimeout(() => {
+      const cache = dragBlobCacheRef.current;
+      let budget = 48 * 1024 * 1024;
+      const eager = visibleEntries
+        .filter((entry): entry is Extract<TestPlanEntry, { kind: "file" }> => entry.kind === "file" && entry.fileSize <= 8 * 1024 * 1024)
+        .filter((file) => !cache.get(file.id))
+        .slice(0, 12)
+        .filter((file) => (budget -= file.fileSize) >= 0);
+      for (const file of eager) prefetchDragBlob(file, { urgent: false });
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [busy, loading, visibleEntries]); // eslint-disable-line react-hooks/exhaustive-deps
   const scheduleDragPrefetch = (file: TestPlanFileRecord) => {
     cancelDragPrefetch(file.id);
-    if (file.fileSize > DRAG_BLOB_LIMIT || dragBlobCacheRef.current.get(file.id)) return;
+    if (file.fileSize > DRAG_HOVER_PREFETCH_LIMIT || dragBlobCacheRef.current.get(file.id)) return;
     dragDwellTimersRef.current.set(file.id, window.setTimeout(() => {
       dragDwellTimersRef.current.delete(file.id);
       prefetchDragBlob(file);
@@ -1366,7 +1388,9 @@ export function TestPlanWorkspace() {
       if (url) {
         event.dataTransfer.setData("DownloadURL", describeDownloadUrl(entry.mimeType, entry.originalName, url));
       } else {
-        dragOutMissingRef.current = { reason: entry.fileSize > DRAG_BLOB_LIMIT ? "large" : "preparing", name: entry.originalName };
+        const reason = entry.fileSize > DRAG_BLOB_LIMIT ? "large" : entry.fileSize > DRAG_HOVER_PREFETCH_LIMIT ? "preparing-large" : "preparing";
+        dragOutMissingRef.current = { reason, name: entry.originalName };
+        // The first drag of a big file starts preparing it (with a visible percentage).
         prefetchDragBlob(entry);
       }
     }
@@ -1381,7 +1405,8 @@ export function TestPlanWorkspace() {
     const outside = event.clientX <= 0 || event.clientY <= 0 || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight;
     if (!outside) return;
     if (missing.reason === "preparing") toast.info(`「${missing.name}」還在準備，約一秒後再拖一次就能存到桌面；或直接按「下載」。`);
-    else if (missing.reason === "large") toast.info(`「${missing.name}」超過 64 MB，不能拖到桌面，請按「下載」。`);
+    else if (missing.reason === "preparing-large") toast.info(`「${missing.name}」較大，正在準備（右下角看進度）。準備好會提示，再拖一次就能存到桌面；或直接按「下載」。`);
+    else if (missing.reason === "large") toast.info(`「${missing.name}」超過 1 GB，不能拖到桌面，請按「下載」。`);
     else if (missing.reason === "multiple") toast.info("一次只能拖一個檔案到桌面。多個檔案請按「下載」，會一起存進你選的資料夾。");
     else toast.info("資料夾不能拖到桌面，請開啟資料夾、選取檔案後按「下載」。");
   };
@@ -1392,7 +1417,7 @@ export function TestPlanWorkspace() {
     onDragEnd: handleEntryDragEnd,
     onPointerEnter: entry.kind === "file" ? () => { prefetchDownloadUrl(entry); scheduleDragPrefetch(entry); } : undefined,
     onPointerLeave: entry.kind === "file" ? () => cancelDragPrefetch(entry.id) : undefined,
-    onPointerDown: entry.kind === "file" ? () => { prefetchDownloadUrl(entry); prefetchDragBlob(entry); } : undefined,
+    onPointerDown: entry.kind === "file" ? () => { prefetchDownloadUrl(entry); if (entry.fileSize <= DRAG_HOVER_PREFETCH_LIMIT) prefetchDragBlob(entry); } : undefined,
     onFocus: entry.kind === "file" ? () => prefetchDownloadUrl(entry) : undefined,
     ...(entry.kind === "folder"
       ? {
