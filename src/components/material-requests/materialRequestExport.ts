@@ -742,6 +742,8 @@ export interface VendorMailItem {
 export interface VendorMailSection {
   vendor: string;
   subject: string;
+  to?: string[];
+  cc?: string[];
   items: VendorMailItem[];
 }
 
@@ -812,9 +814,16 @@ export function sanitizeMailHtml(html: string) {
     .replace(/(href|src)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '$1=$2#$2');
 }
 
+const mailHeaderValue = (value: string) => value.replace(/[\r\n\u2028\u2029]+/g, " ");
+const mailRecipientList = (values?: string[]) => values?.map((value) => mailHeaderValue(value).trim()).filter(Boolean).join("; ") ?? "";
+
 export function renderVendorMailText(section: VendorMailSection, message: string, signature = "") {
+  const to = mailRecipientList(section.to);
+  const cc = mailRecipientList(section.cc);
   const lines = [
-    `主旨：${section.subject}`,
+    `主旨：${mailHeaderValue(section.subject)}`,
+    ...(to ? [`收件人：${to}`] : []),
+    ...(cc ? [`副本：${cc}`] : []),
     "",
     ...(message.trim() ? [message.trim(), ""] : []),
     `${section.vendor} 需申請料號（共 ${section.items.length} 項）：`,
@@ -854,13 +863,20 @@ export async function exportVendorMailHtml({
     const head = (value: string, width: string) => `<th width="${width}" style="width:${width};border:1px solid #c5d3dd;padding:7px 9px;font-size:13px;text-align:left;white-space:nowrap;background:#155e85;color:#ffffff;">${escapeHtml(value)}</th>`;
     const rows = section.items.map((item, itemIndex) => `<tr style="background:${itemIndex % 2 ? "#f4f8fb" : "#ffffff"};">${cell(String(itemIndex + 1), true)}${cell(item.refDes)}${cell(item.name)}${cell(item.manufacturerPartNumber)}${cell(item.qty, true)}${cell(item.partSpec)}${cell(item.partUsageStatus)}</tr>`).join("");
     const text = renderVendorMailText(section, message, signature);
+    const subject = mailHeaderValue(section.subject);
+    const to = mailRecipientList(section.to);
+    const cc = mailRecipientList(section.cc);
     return `<section class="mail" id="mail-${index + 1}">
-<header><h2>${escapeHtml(section.vendor)}<small>${section.items.length} 項</small></h2><div class="actions"><button type="button" data-copy="text-${index + 1}">複製純文字信件</button><button type="button" data-copy-html="mail-${index + 1}">複製表格版本</button></div></header>
-<p class="subject" style="margin:12px 0 6px;font-size:14px;"><strong>主旨：</strong>${escapeHtml(section.subject)}</p>
+<header><h2>${escapeHtml(section.vendor)}<small>${section.items.length} 項</small></h2><div class="actions"><button type="button" data-copy="subject-${index + 1}">複製主旨</button><button type="button" data-copy="recipients-${index + 1}"${to ? "" : " disabled"}>複製收件人</button><button type="button" data-copy="text-${index + 1}">複製純文字信件</button><button type="button" data-copy-html="mail-${index + 1}">複製表格版本</button></div></header>
+<p class="subject" style="margin:12px 0 6px;font-size:14px;"><strong>主旨：</strong>${escapeHtml(subject)}</p>
+${to ? `<p style="margin:6px 0;font-size:14px;"><strong>收件人：</strong>${escapeHtml(to)}</p>` : ""}
+${cc ? `<p style="margin:6px 0;font-size:14px;"><strong>副本：</strong>${escapeHtml(cc)}</p>` : ""}
 ${safeMessage.trim() ? `<div class="message" style="margin:0 0 12px;font-size:14px;line-height:1.6;">${safeMessage}</div>` : ""}
 <table width="100%" border="1" cellpadding="6" cellspacing="0" style="width:100%;border-collapse:collapse;font-family:'Microsoft JhengHei','Noto Sans TC',Arial,sans-serif;font-size:13px;border:1px solid #c5d3dd;"><thead><tr>${head("#", "4%")}${head("Ref Des", "16%")}${head("Name", "30%")}${head("Manufacturer Part Number", "20%")}${head("Qty", "6%")}${head("Part Spec", "14%")}${head("零件狀態", "10%")}</tr></thead><tbody>${rows}</tbody></table>
 ${safeSignature.trim() ? `<div class="signature" style="margin-top:14px;padding-top:12px;border-top:1px solid #c5d3dd;font-size:14px;line-height:1.6;">${safeSignature}</div>` : ""}
 <textarea id="text-${index + 1}" readonly aria-label="${escapeHtml(section.vendor)} 純文字信件">${escapeHtml(text)}</textarea>
+<textarea id="subject-${index + 1}" readonly aria-label="${escapeHtml(section.vendor)} 主旨">${escapeHtml(subject)}</textarea>
+<textarea id="recipients-${index + 1}" readonly aria-label="${escapeHtml(section.vendor)} 收件人">${escapeHtml(to)}</textarea>
 </section>`;
   }).join("\n");
 
@@ -869,6 +885,7 @@ ${safeSignature.trim() ? `<div class="signature" style="margin-top:14px;padding-
 <title>${escapeHtml(workspaceName)} 料號申請信件</title>
 <style>
 :root{color-scheme:light;--ink:#102033;--muted:#587086;--line:#cddce7;--blue:#155e85;--paper:#f4f8fb}*{box-sizing:border-box}body{margin:0;background:#e9f0f5;color:var(--ink);font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;font-size:14px}.page{max-width:1100px;margin:0 auto;padding:24px}.hero{padding:22px 24px;border-radius:14px;background:linear-gradient(135deg,#123a61,#17677c);color:#fff}.hero h1{margin:0;font-size:22px}.hero p{margin:8px 0 0;color:#d7eef5}.mail{margin-top:18px;border:1px solid var(--line);border-radius:14px;background:#fff;padding:18px 20px}.mail header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}.mail h2{margin:0;font-size:18px}.mail h2 small{margin-left:8px;color:var(--muted);font-size:13px;font-weight:400}.actions{display:flex;gap:8px}.actions button{border:1px solid #8ac6d5;border-radius:8px;background:#fff;color:#164e63;padding:7px 12px;font:inherit;font-weight:700;cursor:pointer}.actions button:hover{background:#dff3f7}.actions button.is-done{background:#dcfce7;border-color:#4ade80;color:#166534}.subject{margin:12px 0 6px}.message{margin:0 0 12px;padding:12px;border-left:3px solid #8ac6d5;background:var(--paper)}.message img,.signature img{max-width:100%;height:auto}.signature{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}thead th{background:var(--blue);color:#fff}tbody tr:nth-child(even){background:var(--paper)}textarea{position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0}.footer{margin-top:18px;color:var(--muted);font-size:12px}
+.actions{flex-wrap:wrap}.actions button:disabled{opacity:.5;cursor:not-allowed}
 </style></head><body><main class="page">
 <header class="hero"><h1>${escapeHtml(workspaceName)} 料號申請信件</h1><p>共 ${sections.length} 家廠商 · ${sections.reduce((sum, section) => sum + section.items.length, 0)} 項 · 由 ${escapeHtml(exportedBy)} 於 ${escapeHtml(formatDateTime(exportedAt.toISOString()))} 產生。每家廠商一封：按「複製純文字信件」貼到郵件即可群發，「複製表格版本」會連表格一起複製。</p></header>
 ${sectionHtml}

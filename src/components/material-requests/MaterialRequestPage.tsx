@@ -135,6 +135,9 @@ import type {
 } from "./materialRequestExport";
 import { buildVendorMailSections, collectDiscouragedMaterialRows, collectNonPvlPartNumbers, countExcludedDiscouragedRows, exportDiscouragedMaterialsExcel, exportNonPvlApplyList, exportVendorMailHtml, mailHtmlToText, renderVendorMailText } from "./materialRequestExport";
 import { MaterialNonPvlDialog } from "./MaterialNonPvlDialog";
+import { getVendorRecipients } from "./vendorContacts";
+import { useVendorContacts } from "./useVendorContacts";
+import { VendorContactsPanel } from "./VendorContactsPanel";
 import {
   MATERIAL_TABLE_COLUMNS,
   type BomProjectGroup,
@@ -3058,7 +3061,7 @@ function MailRichEditor({
   );
 }
 
-function PendingMailDialog({
+export function PendingMailDialog({
   groups,
   open,
   workspaceName,
@@ -3074,8 +3077,21 @@ function PendingMailDialog({
   const [messageHtml, setMessageHtml] = useState(() => loadStoredHtml(VENDOR_MAIL_MESSAGE_KEY, DEFAULT_VENDOR_MAIL_MESSAGE));
   const [signatureHtml, setSignatureHtml] = useState(() => loadStoredHtml(VENDOR_MAIL_SIGNATURE_KEY, ""));
   const [isExporting, setIsExporting] = useState(false);
+  const [contactsOpen, setContactsOpen] = useState(false);
+  const [subjectOverrides, setSubjectOverrides] = useState<Record<string, string>>({});
   const { toast } = useToast();
-  const sections = useMemo(() => buildVendorMailSections(groups, workspaceName), [groups, workspaceName]);
+  const book = useVendorContacts(open);
+  const generatedSections = useMemo(() => buildVendorMailSections(groups, workspaceName), [groups, workspaceName]);
+  const subjectKey = (vendor: string) => `${book.ownerId ?? "signed-out"}\0${workspaceName}\0${vendor}`;
+  const sections = generatedSections.map((section) => {
+    const recipients = getVendorRecipients(book.contacts, section.vendor);
+    return {
+      ...section,
+      subject: subjectOverrides[subjectKey(section.vendor)] ?? section.subject,
+      to: recipients.to ? recipients.to.split("; ") : [],
+      cc: recipients.cc ? recipients.cc.split("; ") : [],
+    };
+  });
   const itemCount = sections.reduce((sum, section) => sum + section.items.length, 0);
   const message = useMemo(() => mailHtmlToText(messageHtml), [messageHtml]);
   const signature = useMemo(() => mailHtmlToText(signatureHtml), [signatureHtml]);
@@ -3103,6 +3119,20 @@ function PendingMailDialog({
           <DialogDescription>把目前 {groups.length.toLocaleString()} 筆待處理料整理成每家廠商一封信（共 {sections.length} 家、{itemCount.toLocaleString()} 項），匯出 HTML 後逐家複製貼到郵件即可群發。</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">主旨依 BOM、廠商與項數自動生成，可在下方逐封修改。收件人由你的供應商聯絡簿帶入。</p>
+            <Button type="button" variant="outline" className="h-11 shrink-0 gap-2" aria-expanded={contactsOpen} onClick={() => setContactsOpen((value) => !value)}>
+              <Factory className="h-4 w-4" />供應商聯絡簿（{book.contacts.length}）
+            </Button>
+          </div>
+          {book.loading ? <p role="status" className="text-sm text-muted-foreground">正在載入個人聯絡簿…</p> : null}
+          {book.error ? (
+            <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+              <span>{book.error}</span>
+              <Button type="button" variant="outline" className="h-11" disabled={book.loading || book.busy} onClick={() => void book.reload().catch(() => undefined)}>重新載入聯絡簿</Button>
+            </div>
+          ) : null}
+          {contactsOpen ? <VendorContactsPanel key={book.ownerId ?? "signed-out"} book={book} /> : null}
           <section className="workspace-dialog-section space-y-5 rounded-2xl p-4">
             <MailRichEditor id="pending-mail-message" label="信件開頭" hint="每封信最上方；可貼上圖片、連結、粗體" value={messageHtml} onChange={setMessageHtml} />
             <MailRichEditor id="pending-mail-signature" label="結尾／簽名檔" hint="每封信最下方；把你的簽名檔連同 logo、banner 貼進來即可，會記住" value={signatureHtml} onChange={setSignatureHtml} />
@@ -3113,11 +3143,28 @@ function PendingMailDialog({
               <p className="mt-2 text-sm text-foreground/75">目前沒有待處理料，無法產生信件。</p>
             ) : (
               <ul className="mt-2 divide-y divide-border/60 rounded-xl border border-border">
-                {sections.map((section) => (
+                {sections.map((section, index) => (
                   <li key={section.vendor} className="px-3 py-2">
                     <div className="flex items-center gap-2">
                       <strong className="min-w-0 flex-1 truncate text-base text-foreground">{section.vendor}</strong>
                       <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.primary)}>{section.items.length} 項</span>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <Label htmlFor={`pending-mail-subject-${index}`} className="text-sm">信件主旨</Label>
+                      <div className="flex flex-wrap gap-2">
+                        <Input
+                          id={`pending-mail-subject-${index}`}
+                          aria-label={`${section.vendor} 信件主旨`}
+                          value={section.subject}
+                          maxLength={500}
+                          onChange={(event) => setSubjectOverrides((current) => ({ ...current, [subjectKey(section.vendor)]: event.target.value }))}
+                          className="h-11 min-w-0 flex-1 basis-64 text-sm"
+                        />
+                        <Button type="button" variant="outline" className="h-11 shrink-0" aria-label={`重新產生 ${section.vendor} 主旨`} onClick={() => setSubjectOverrides((current) => ({ ...current, [subjectKey(section.vendor)]: generatedSections[index].subject }))}>自動產生</Button>
+                      </div>
+                      {!section.subject.trim() ? <p className="text-sm text-destructive">請填寫主旨後再匯出。</p> : null}
+                      <p className="break-words text-sm text-muted-foreground">收件人：{section.to.length ? section.to.join("; ") : "尚未設定，可在供應商聯絡簿新增"}</p>
+                      {section.cc.length ? <p className="break-words text-sm text-muted-foreground">副本：{section.cc.join("; ")}</p> : null}
                     </div>
                     <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-lg bg-background/40 p-2 font-sans text-sm text-foreground/80">{renderVendorMailText(section, message, signature)}</pre>
                   </li>
@@ -3128,7 +3175,7 @@ function PendingMailDialog({
         </div>
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-10 px-4 text-sm">關閉</Button>
-          <Button type="button" data-testid="pending-mail-export" disabled={isExporting || sections.length === 0} onClick={() => void handleExport()} className="h-10 px-4 text-sm font-bold">
+          <Button type="button" data-testid="pending-mail-export" disabled={isExporting || sections.length === 0 || sections.some((section) => !section.subject.trim())} onClick={() => void handleExport()} className="h-10 px-4 text-sm font-bold">
             <FileCode2 className="mr-1.5 h-4 w-4" />{isExporting ? "產生中…" : "匯出信件 HTML"}
           </Button>
         </DialogFooter>

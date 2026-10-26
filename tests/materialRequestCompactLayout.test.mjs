@@ -314,6 +314,11 @@ test("待處理料 can turn the pending parts into per-vendor mail content", () 
   assert.match(dialog, /exportVendorMailHtml\(\{ sections, messageHtml, signatureHtml, workspaceName, exportedBy \}\)/);
   assert.match(dialog, /id="pending-mail-message"/);
   assert.match(dialog, /id="pending-mail-signature"/);
+  assert.match(dialog, /aria-label=\{`\$\{section.vendor\} 信件主旨`\}/);
+  assert.match(dialog, /setSubjectOverrides/);
+  assert.match(dialog, /useVendorContacts\(open\)/);
+  assert.match(dialog, /<VendorContactsPanel/);
+  assert.match(dialog, /getVendorRecipients/);
   assert.match(source, /function MailRichEditor\(/);
   assert.match(source, /contentEditable/);
   const pending = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
