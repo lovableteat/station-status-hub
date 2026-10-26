@@ -19,7 +19,7 @@ function Fixture() {
   const [workspaceVisible, setWorkspaceVisible] = useState(true);
   const selected = targets.find(target => target.id === targetId);
   useEffect(() => { const update = () => setRevision(value => value + 1); window.addEventListener('ai-qa-state', update); return () => window.removeEventListener('ai-qa-state', update); }, []);
-  return <div className="flex h-dvh min-h-0 flex-col bg-background text-foreground">
+  return <div style={{ height: '100dvh' }} className="flex min-h-0 flex-col bg-background text-foreground">
     <nav aria-label="隔離測試控制" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border p-2 text-xs">
       <Button variant="outline" onClick={() => setFixtureAccount('A')}>測試帳號 A</Button>
       <Button variant="outline" onClick={() => setFixtureAccount('B')}>測試帳號 B</Button>

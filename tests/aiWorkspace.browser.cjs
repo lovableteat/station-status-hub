@@ -11,7 +11,7 @@ const http = require('node:http');
   const style = await require('postcss')(postcssConfig.plugins).process(fs.readFileSync('src/index.css', 'utf8').replace(/@import url\([^\n]+\n/g, ''), { from: path.resolve('src/index.css') });
   const server = http.createServer((req, res) => {
     if (req.url === '/fixture.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(bundled.outputFiles[0].text); }
-    else { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(`<html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI 問答隔離驗證</title><style>${style.css}</style><div id="root"></div><script src="/fixture.js"></script></html>`); }
+    else { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(`<!doctype html><html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI 問答隔離驗證</title><style>${style.css}</style><div id="root"></div><script src="/fixture.js"></script></html>`); }
   });
   server.listen(8093, '127.0.0.1', () => console.log('Isolated AI QA: http://127.0.0.1:8093 (no production data or paid provider requests)'));
 })();
