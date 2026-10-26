@@ -2441,14 +2441,16 @@ export function ApiChatConsole({
         <Button
           type="button"
           variant="outline"
-          className="relative h-11 shrink-0 px-3 text-sm"
+          className="relative h-11 shrink-0 gap-2 px-3 text-sm"
           aria-label="開啟共享提示詞庫"
         >
           <LibraryBig className="h-4 w-4" />
           <span className="hidden sm:inline">提示詞庫</span>
-          <span className="hidden text-xs tabular-nums text-muted-foreground sm:inline">
-            {savedPrompts.length}
-          </span>
+          {savedPrompts.length > 0 ? (
+            <span className="hidden text-xs tabular-nums text-muted-foreground sm:inline">
+              {savedPrompts.length}
+            </span>
+          ) : null}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -2935,14 +2937,14 @@ export function ApiChatConsole({
             onDragLeave={handleComposerDragLeave}
             onDrop={handleComposerDrop}
             className={cn(
-              "rounded-xl border p-2 transition-colors duration-200 focus-within:ring-2",
+              "rounded-xl border p-3 transition-colors duration-150 focus-within:ring-2 motion-reduce:transition-none",
               isDragOverComposer
                 ? "border-primary bg-primary/10 ring-2 ring-primary/25"
-                : "border-border bg-background focus-within:border-primary focus-within:ring-primary/25"
+                : "border-border bg-card focus-within:border-primary focus-within:ring-primary/20"
             )}
           >
             <div className="flex min-w-0 flex-col gap-2">
-              <div className="relative min-w-0 rounded-lg px-2 py-1">
+              <div className="relative min-w-0 px-1 py-2">
                 {slashMenuOpen ? (
                   <div
                     role="listbox"
@@ -3024,29 +3026,29 @@ export function ApiChatConsole({
                 />
               </div>
 
-              <div data-ai-composer-toolbar="true" className="flex min-w-0 items-center justify-between gap-2 border-t border-border pt-2 lg:pr-32">
+              <div data-ai-composer-toolbar="true" className="flex min-w-0 items-center justify-between gap-2 border-t border-border pt-3 lg:pr-32">
                 <div className="flex shrink-0 items-center gap-2">
                   {promptLibraryControl}
-                  <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className="h-11 shrink-0 px-3">
+                  <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className="h-11 shrink-0 gap-2 px-3">
                     <Paperclip className="h-4 w-4" />
                     <span className="hidden sm:inline">上傳檔案</span>
                   </Button>
                 </div>
                 <div className="flex min-w-0 items-center gap-2">
-                <div className="hidden h-11 min-w-0 max-w-[220px] items-center rounded-lg px-3 text-sm text-muted-foreground lg:flex">
-                  <span className="truncate" title={model}>
-                  {model || "Gemini"}
+                  <span className="hidden min-w-0 max-w-[220px] truncate rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground lg:block" title={model}>
+                    {model || "Gemini"}
                   </span>
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => void handleSend()}
-                  disabled={!canSend}
-                  aria-label="送出查詢"
-                  className="h-11 w-11 shrink-0 p-0"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
+                  <Button
+                    type="button"
+                    onClick={() => void handleSend()}
+                    disabled={!canSend}
+                    aria-label="送出查詢"
+                    aria-busy={loading}
+                    className="h-11 min-w-24 shrink-0 gap-2 px-3"
+                  >
+                    <Send className="h-4 w-4" />
+                    <span>{loading ? "查詢中" : "送出"}</span>
+                  </Button>
                 </div>
               </div>
             </div>

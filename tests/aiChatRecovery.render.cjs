@@ -37,10 +37,13 @@ test('busy model changes once within the same key and route, double click cannot
   const available=[targets[0],target('gemini-3.8-flash',other),target('gemini-3.5-flash-lite',route),target('gemini-image'),...targets.slice(1)];
   const f=await fixture(async(url,init)=>{requests.push([url,JSON.parse(init.body)]);return requests.length===1?first.promise:answer();},available);
   try {
+    assert.equal(f.send().findAllByType('span').some(node => node.children.includes('送出')), true);
+    assert.equal(f.send().props.disabled, true);
     await f.draft('Keep this question');
     await act(async()=>{f.send().props.onClick();f.send().props.onClick();});
     assert.equal(requests.length,1);
     assert.equal(f.send().props.disabled,true);
+    assert.equal(f.send().findAllByType('span').some(node => node.children.includes('查詢中')), true);
     assert.match(text(f.root),/正在查詢 gemini-3.8-flash/);
     await act(async()=>{first.resolve(new Response(JSON.stringify({error:{message:'overloaded'}}),{status:503}));});
     await flush();
