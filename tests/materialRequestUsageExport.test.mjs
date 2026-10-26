@@ -374,6 +374,33 @@ test("the 複製表格版本 copy keeps real column widths for Outlook", () => {
   assert.match(exportSource, /<th width="\$\{width\}"/);
 });
 
+test("vendor mail bounds long table values with copy-safe inline layout instead of clipping data", async () => {
+  const longRef = Array.from({ length: 80 }, (_, index) => `R${2301 + index}`).join(",");
+  const longMpn = "LONG-MPN".repeat(40);
+  const html = await (await captureExport(moduleExports.exportVendorMailHtml, {
+    sections: [{ vendor: "Layout test", subject: "Long parts", items: [{
+      refDes: longRef, name: "CHIP RES 4.7KJ 1/20W 0201 ASR", manufacturerPartNumber: longMpn,
+      qty: "1234567890".repeat(8), partSpec: "SPEC".repeat(60), partUsageStatus: "不可使用".repeat(20),
+    }] }],
+    messageHtml: "<p>開頭</p>", workspaceName: "Layout BOM", exportedBy: "Test",
+  })).text();
+  const table = html.match(/<table\b[\s\S]*?<\/table>/)[0];
+  assert.match(table, /<table[^>]*style="[^"]*table-layout:fixed/);
+  assert.match(table, /<table[^>]*style="[^"]*max-width:100%/);
+  const cells = [...table.matchAll(/<(?:th|td)\b[^>]*>/g)].map(([tag]) => tag);
+  assert.equal(cells.length, 14);
+  for (const tag of cells) {
+    assert.match(tag, /style="[^"]*white-space:normal/);
+    assert.match(tag, /style="[^"]*overflow-wrap:anywhere/);
+    assert.match(tag, /style="[^"]*word-wrap:break-word/);
+    assert.doesNotMatch(tag, /nowrap|overflow:hidden|text-overflow:ellipsis/);
+  }
+  assert.ok(table.includes(",<wbr>R2302"), "comma-separated values have natural soft wrap points");
+  assert.ok(table.replaceAll("<wbr>", "").includes(longRef), "all reference designators remain unchanged in the exported table");
+  assert.ok(table.includes(longMpn), "long manufacturer part numbers are never shortened");
+  assert.match(html, /@media\(max-width:600px\)[\s\S]*?\.mail th,\.mail td\{padding:6px 3px!important;font-size:11px!important\}/, "narrow columns need smaller gutters, not clipped characters");
+});
+
 test("mail HTML keeps images and links for the vendor mail but drops scripts; plain text mirrors it", () => {
   const html = '<p>您好<b>急件</b></p><img src="data:image/png;base64,AAA" alt="logo"><script>alert(1)</script><a href="javascript:evil()" onclick="x()">link</a>';
   const safe = moduleExports.sanitizeMailHtml(html);
