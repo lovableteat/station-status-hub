@@ -1369,23 +1369,9 @@ All colors MUST be HSL for proper theming support.
     background: #fff;
   }
 
-  [data-mobile-ai-composer="true"] > div > div:first-child > button,
-  [data-mobile-ai-composer="true"] > div > div:last-child > button {
-    min-height: 44px;
-    border-color: rgb(75 117 153 / 0.7);
-    background: #16324d;
-    color: #d8efff;
-  }
-
-  [data-mobile-ai-composer="true"] > div > div:last-child > button[aria-label="送出查詢"] {
-    border-color: rgb(154 198 255 / 0.75);
-    background: #4f82cf;
-    color: #fff;
-  }
-
   [data-mobile-ai-composer="true"] :is(button, [role="button"]):focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgb(56 189 248 / 0.22);
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 
   [data-mobile-more-sheet="true"] {
