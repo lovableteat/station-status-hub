@@ -320,6 +320,52 @@ test("信件生成 groups every MPN candidate of the pending parts by manufactur
   assert.equal(sections[2].items[0].name, "CAP");
 });
 
+test("vendor mail keeps an edited subject and optional recipients as single-line headers", () => {
+  const text = moduleExports.renderVendorMailText({
+    vendor: "Vendor A",
+    subject: "手動主旨 <更新>\r\nBcc: not-a-header@example.com",
+    to: [" first@example.com ", "second@example.com\nX-Header: not-a-header"],
+    cc: ["copy@example.com"],
+    items: [],
+  }, "信件開頭", "簽名");
+  assert.match(text, /^主旨：手動主旨 <更新> Bcc: not-a-header@example.com\n收件人：first@example.com; second@example.com X-Header: not-a-header\n副本：copy@example.com\n\n信件開頭/);
+  assert.doesNotMatch(text, /\r|\nBcc:|\nX-Header:/);
+  const withoutRecipients = moduleExports.renderVendorMailText({ vendor: "Vendor A", subject: "手改主旨", to: [], cc: [" "], items: [] }, "");
+  assert.equal(withoutRecipients, "主旨：手改主旨\n\nVendor A 需申請料號（共 0 項）：");
+});
+
+test("vendor mail HTML escapes edited headers and exposes separate copy actions without sending mail", async () => {
+  const section = {
+    vendor: 'Vendor <A> "quoted"',
+    subject: '手改 <script>unsafe()</script> & "主旨"\r\nBcc: not-a-header@example.com',
+    to: ['buyer@example.com', 'attacker<img src=x onerror="unsafe()">@example.com\r\nBcc: fake@example.com'],
+    cc: ['copy+<tag>@example.com'],
+    items: [],
+  };
+  const html = await (await captureExport(moduleExports.exportVendorMailHtml, {
+    sections: [section, { vendor: "No contacts", subject: "Keep this subject", items: [] }],
+    messageHtml: "<p>開頭</p>", signatureHtml: "<p>簽名</p>",
+    workspaceName: "BOM", exportedBy: "Test", exportedAt: new Date("2026-10-26T01:00:00Z"),
+  })).text();
+  const firstSection = html.match(/<section class="mail" id="mail-1">([\s\S]*?)<\/section>/)[1];
+  assert.match(firstSection, /data-copy="subject-1">複製主旨<\/button>/);
+  assert.match(firstSection, /data-copy="recipients-1">複製收件人<\/button>/);
+  assert.match(firstSection, /data-copy="text-1">複製純文字信件<\/button>/);
+  assert.match(firstSection, /data-copy-html="mail-1">複製表格版本<\/button>/);
+  assert.match(firstSection, /<strong>主旨：<\/strong>手改 &lt;script&gt;unsafe\(\)&lt;\/script&gt; &amp; &quot;主旨&quot; Bcc: not-a-header@example.com/);
+  assert.match(firstSection, /<strong>收件人：<\/strong>buyer@example.com; attacker&lt;img src=x onerror=&quot;unsafe\(\)&quot;&gt;@example.com Bcc: fake@example.com/);
+  assert.match(firstSection, /<strong>副本：<\/strong>copy\+&lt;tag&gt;@example.com/);
+  assert.match(firstSection, /<textarea id="subject-1"[^>]*>手改 &lt;script&gt;unsafe\(\)&lt;\/script&gt; &amp; &quot;主旨&quot; Bcc: not-a-header@example.com<\/textarea>/);
+  assert.match(firstSection, /<textarea id="recipients-1"[^>]*>buyer@example.com; attacker&lt;img src=x onerror=&quot;unsafe\(\)&quot;&gt;@example.com Bcc: fake@example.com<\/textarea>/);
+  assert.match(firstSection, /<textarea id="text-1"/);
+  assert.ok(firstSection.indexOf('<textarea id="text-1"') < firstSection.indexOf('<textarea id="subject-1"'), "the HTML clipboard fallback still reads the full-mail textarea first");
+  assert.doesNotMatch(firstSection, /<script>|<img|\r|\nBcc:/);
+  const secondSection = html.match(/<section class="mail" id="mail-2">([\s\S]*?)<\/section>/)[1];
+  assert.doesNotMatch(secondSection, /<strong>收件人：|<strong>副本：/);
+  assert.match(secondSection, /data-copy="recipients-2" disabled>複製收件人<\/button>/);
+  assert.doesNotMatch(html, /mailto:|fetch\(|XMLHttpRequest/);
+});
+
 test("the 複製表格版本 copy keeps real column widths for Outlook", () => {
   assert.doesNotMatch(exportSource, /stage\.style\.cssText = "[^"]*width:1px/, "a 1 px copy stage collapses every column in Outlook");
   assert.match(exportSource, /stage\.style\.cssText = "position:fixed;left:-10000px;top:0;width:900px;/);
