@@ -2858,8 +2858,8 @@ export function ApiChatConsole({
             }}
           />
 
-          <div className={cn("mb-2.5 hidden flex-wrap items-center justify-between gap-2", isChatOnly ? "lg:flex" : "sm:flex")}>
-            <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-medium text-slate-300">
+          <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div className={cn("min-w-0 flex-wrap items-center gap-2 text-sm font-medium text-slate-300", isChatOnly ? "hidden lg:flex" : "hidden sm:flex")}>
               <span className="hidden rounded-lg border border-cyan-300/18 bg-cyan-400/8 px-2.5 py-1.5 font-bold text-cyan-100 sm:inline">
                 輸入 <kbd className="mx-1 rounded border border-cyan-200/25 bg-slate-950/40 px-1.5 py-0.5 font-mono text-xs">/</kbd> 快速套用
               </span>
@@ -2873,21 +2873,38 @@ export function ApiChatConsole({
                 type="button"
                 onClick={() => void handleConnectionTest()}
                 disabled={loading || !requestUrl}
-                className="h-10 rounded-2xl bg-emerald-500 px-4 font-bold text-slate-950 transition-all duration-200 hover:bg-emerald-400 active:scale-[0.99]"
+                className="hidden h-10 rounded-2xl bg-emerald-500 px-4 font-bold text-slate-950 transition-all duration-200 hover:bg-emerald-400 active:scale-[0.99] sm:inline-flex"
               >
                 <Sparkles className="mr-2 h-4 w-4" />
                 {loading ? "測試中..." : "測試連線"}
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={requestResetConversation}
-              className="hidden h-10 rounded-xl border-slate-500/60 bg-slate-900/30 px-4 text-sm font-bold text-slate-200 transition-all duration-200 hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-100 active:scale-[0.99] sm:inline-flex"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              清空對話
-            </Button>
+            <div data-ai-composer-actions="true" className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
+              <span className="hidden min-w-0 max-w-[220px] truncate rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground lg:block" title={model}>
+                {model || "Gemini"}
+              </span>
+              <Button
+                type="button"
+                onClick={() => void handleSend()}
+                disabled={!canSend}
+                aria-label="送出查詢"
+                aria-busy={loading}
+                className="h-11 min-w-24 shrink-0 gap-2 px-3"
+              >
+                <Send className="h-4 w-4" />
+                <span>{loading ? "查詢中" : "送出"}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={requestResetConversation}
+                aria-label="清空對話"
+                className="h-11 shrink-0 rounded-xl border-slate-500/60 bg-slate-900/30 px-4 text-sm font-bold text-slate-200 transition-all duration-200 hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-100 active:scale-[0.99]"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                清空對話
+              </Button>
+            </div>
           </div>
 
           {uploadedAttachments.length ? (
@@ -3032,22 +3049,6 @@ export function ApiChatConsole({
                   <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className="h-11 shrink-0 gap-2 px-3">
                     <Paperclip className="h-4 w-4" />
                     <span className="hidden sm:inline">上傳檔案</span>
-                  </Button>
-                </div>
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="hidden min-w-0 max-w-[220px] truncate rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground lg:block" title={model}>
-                    {model || "Gemini"}
-                  </span>
-                  <Button
-                    type="button"
-                    onClick={() => void handleSend()}
-                    disabled={!canSend}
-                    aria-label="送出查詢"
-                    aria-busy={loading}
-                    className="h-11 min-w-24 shrink-0 gap-2 px-3"
-                  >
-                    <Send className="h-4 w-4" />
-                    <span>{loading ? "查詢中" : "送出"}</span>
                   </Button>
                 </div>
               </div>

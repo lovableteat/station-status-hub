@@ -37,6 +37,11 @@ test('busy model changes once within the same key and route, double click cannot
   const available=[targets[0],target('gemini-3.8-flash',other),target('gemini-3.5-flash-lite',route),target('gemini-image'),...targets.slice(1)];
   const f=await fixture(async(url,init)=>{requests.push([url,JSON.parse(init.body)]);return requests.length===1?first.promise:answer();},available);
   try {
+    const actions = f.root.root.findByProps({'data-ai-composer-actions':'true'});
+    assert.equal(actions.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 1);
+    assert.equal(actions.findAll(node => node.type === 'stub' && node.props['aria-label'] === '清空對話').length, 1);
+    const tools = f.root.root.findByProps({'data-ai-composer-toolbar':'true'});
+    assert.equal(tools.findAll(node => node.props['aria-label'] === '送出查詢').length, 0);
     assert.equal(f.send().findAllByType('span').some(node => node.children.includes('送出')), true);
     assert.equal(f.send().props.disabled, true);
     await f.draft('Keep this question');
