@@ -17,6 +17,12 @@ test("RLC scope is determined by actual references, including PR/PC/PL", () => {
   }
 });
 
+test('board-qualified BOM references keep their actual RLC kind', () => {
+  for (const [ref, expected] of [['C354_C0P1', 'C'], ['C2_1VR8_C0P1, C3_C0P2', 'C'], ['PR12_BOARD2', 'R'], ['L1_C0P1-L9_C0P1', 'L'], ['R1_C0P1,U1_C0P1', null], ['C1_C0P1-R2_C0P1', null]]) {
+    assert.equal(domain.getRlcKind(group('board', '10K', [record('r', undefined, undefined, { refDes: ref })], ref)), expected, ref);
+  }
+});
+
 test("full specs merge references while ratings, packages and unit case remain distinct", () => {
   const groups = domain.buildRlcPriorityGroups([
     group("a"), group("b", "  RES 10K   1% 0603 0.1W  ", [record("b", "Example B", "R-B", { refDes: "R2" })], "R2"),
