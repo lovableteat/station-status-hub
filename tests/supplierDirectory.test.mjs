@@ -123,3 +123,9 @@ test('repeat imports do not add nameless or identical duplicate rows and unknown
   assert.equal(change.kind, 'changed');
   assert.equal(change.rawChanged, true);
 });
+
+test('an explicitly unavailable distributor uses the stated maker brand while retaining the original marker', () => {
+  const result = lib.parseSupplierSheet(sheet([['Brand','Disty','Name','Email'],['Brand X','N/A','Alex','a@example.com']]));
+  assert.equal(result.contacts[0].data.company, 'Brand X');
+  assert.ok(result.contacts[0].source.raw.some(x => x.label === 'Disty' && x.value === 'N/A'));
+});

@@ -92,7 +92,10 @@ export function parseSupplierSheet(sheet: SupplierSheet, mapping = detectSupplie
       }
     });
     data.name = [data.name, nameAlt].filter(Boolean).join(' / ');
-    if (!data.company) { data.company = data.aliases || data.brands; if (data.company === data.aliases) data.aliases = ''; }
+    if (!data.company || /^(?:n\/?a|不適用|無|[-—–]+)$/i.test(data.company) && (data.aliases || data.brands)) {
+      data.company = data.aliases || data.brands;
+      if (data.company === data.aliases) data.aliases = '';
+    }
     if (!data.company || aliases.has(headerKey(data.email)) && aliases.has(headerKey(data.company))) {
       issues.push({ row: r + 1, message: '公司空白或重複表頭，此列未加入' }); continue;
     }
