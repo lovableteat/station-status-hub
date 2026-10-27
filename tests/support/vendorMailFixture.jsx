@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MaterialRecordDialog, PendingMailDialog } from '../../src/components/material-requests/MaterialRequestPage';
+import { MaterialRecordDialog, PendingMailDialog, PendingMaterialsDialog } from '../../src/components/material-requests/MaterialRequestPage';
+import { buildMaterialDataset } from '../../src/components/material-requests/materialRequestUtils';
 import seed from '../../src/data/materialRequestSeed.json';
 import { Button } from '../../src/components/ui/button';
 import { Toaster } from '../../src/components/ui/toaster';
@@ -15,6 +16,8 @@ const groups = ['A', 'B'].map((suffix, index) => ({
     manufacturer: `Vendor ${suffix}`, manufacturerPartNumber: `FIXTURE-${suffix}`, partSpec: '隔離假資料', partUsageStatus: '' }],
 }));
 const rlcGroups = [{ key: 'resistor', displayRef: 'R1, R2', name: 'RES 10K 1% 0603 0.1W', qty: 2, records: ['A', 'B'].map(suffix => ({ id: `R-${suffix}`, refDes: 'R1, R2', name: 'RES 10K 1% 0603 0.1W', manufacturer: `Example ${suffix}`, manufacturerPartNumber: `R-10K-${suffix}`, partNumber: `REAL-${suffix}`, virtualAlternative: 'VIRTUAL-R', sourcingStatus: 'Approved', partUsageStatus: '' })) }];
+const pendingRecords = ['J1', 'U1', 'U2', 'R1', 'R2', 'ME'].map((refDes, index) => ({ ...seed.records[0], id: 'pending-' + index, sourceGroupKey: 'pending-' + index, isGroupStart: true, refDes, refGroup: refDes, name: '高度驗證料件 ' + refDes, qty: 1, manufacturer: 'Example ' + index, manufacturerPartNumber: 'SAMPLE-' + index, partNumber: '', virtualAlternative: '', trackingStatus: ['已完成', '處理中', '新增追蹤'][index % 3], trackingHistory: [] }));
+const pendingDataset = buildMaterialDataset({ ...seed, records: pendingRecords, recordCount: pendingRecords.length });
 
 function Fixture() {
   const [open, setOpen] = useState(false);
@@ -23,6 +26,7 @@ function Fixture() {
   const [rlcProject, setRlcProject] = useState('project-A');
   const [rules, setRules] = useState([]);
   const [recordOpen, setRecordOpen] = useState(false);
+  const [pendingOpen, setPendingOpen] = useState(false);
   const [recordMode, setRecordMode] = useState('edit');
   const [record, setRecord] = useState({ ...seed.records[0], id: 'qa-record', refDes: 'R1', refGroup: 'R1', name: 'RES 10K 1% 0603', manufacturer: 'Example A', manufacturerPartNumber: 'R-10K', trackingStatus: '處理中', trackingNote: '原有追蹤', trackingHistory: [] });
   const [revision, setRevision] = useState(0);
@@ -41,6 +45,7 @@ function Fixture() {
       <Button variant="outline" onClick={() => setRlcProject(value => value === 'project-A' ? 'project-B' : 'project-A')}>切換專案 {rlcProject}</Button>
       <Button variant="outline" onClick={() => { setRlcProject(null); setRlcOpen(true); }}>未指定專案驗證</Button>
       <Button variant="outline" onClick={() => { setRecordMode('edit'); setRecordOpen(true); }}>料件與追蹤驗證</Button>
+      <Button variant="outline" onClick={() => setPendingOpen(true)}>待處理列高驗證</Button>
       <span aria-live="polite">隔離假資料 · 帳號 {fixtureState.account} · 儲存 {fixtureState.saves} 次 · 匯入 {fixtureState.imports} 次<span className="sr-only">{revision}</span></span>
     </nav>
     <p className="p-3 text-sm text-muted-foreground">只有兩筆假料件與本機記憶體聯絡簿；重新整理會還原初始資料，不會連線正式環境或寄信。</p>
@@ -48,6 +53,7 @@ function Fixture() {
     <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
     <RlcPriorityDialog key={rlcProject} open={rlcOpen} onOpenChange={setRlcOpen} projectId={rlcProject} projectName={rlcProject === 'project-A' ? 'VERA_GPU' : rlcProject === 'project-B' ? 'VERA_CPU' : ''} workspaceName="示範 BOM（不連線正式資料）" projects={[{id:'project-A',name:'VERA_GPU'},{id:'project-B',name:'VERA_CPU'}]} onAssignProject={async id => setRlcProject(id)} groups={rlcGroups} rules={rules} canEdit={fixtureState.account === 'A'} onSaveRule={async rule => setRules(current => [...current.filter(item => item.projectId !== rule.projectId || item.specKey !== rule.specKey || item.candidateKey !== rule.candidateKey), { ...rule, updatedAt: new Date().toISOString() }])} />
     <MaterialRecordDialog canEdit open={recordOpen} mode={recordMode} initialTab="tracking" record={record} workspaceId="fixture" uploaderName="QA" onOpenChange={setRecordOpen} onModeChange={setRecordMode} onOpenSpec={() => {}} onSave={async next => { setRecord(next); setRecordOpen(false); }} />
+    <PendingMaterialsDialog canEdit groups={pendingDataset.groups} open={pendingOpen} workspaceName="隔離測試 BOM" exportedBy="QA" onOpenChange={setPendingOpen} onOpenTracking={() => {}} onSetCategory={() => {}} />
     <Toaster />
   </div>;
 }
