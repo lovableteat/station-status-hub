@@ -66,3 +66,16 @@ test('filtering away a candidate retains its unsaved project draft', async () =>
     assert.equal(f.saved.length, 0);
   } finally { await act(async () => f.view.unmount()); }
 });
+
+test('long BOM references stay in an expandable bounded detail instead of stretching each row', async () => {
+  const refs = Array.from({ length: 80 }, (_, index) => `R${index + 1}_C0P1`).join(', ');
+  const f = await fixture({ groups: [{ ...source[0], displayRef: refs, records: [{ ...source[0].records[0], refDes: refs }] }] });
+  try {
+    const details = f.view.root.findByType('details');
+    assert.equal(details.findByType('summary').children.join(''), '檢視全部位號');
+    assert.match(details.findByType('p').props.className, /max-h-32.*overflow-y-auto/);
+    assert.match(details.findByType('p').children.join(''), /R80_C0P1/);
+    const preview = f.view.root.find(node => node.type === 'span' && node.props.className?.includes('line-clamp-2'));
+    assert.equal(preview.children.join(''), 'R1_C0P1、R2_C0P1、R3_C0P1');
+  } finally { await act(async () => f.view.unmount()); }
+});

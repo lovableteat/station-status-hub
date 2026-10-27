@@ -168,7 +168,11 @@ export function RlcPriorityDialog({ open, onOpenChange, projectId, projectName, 
                 <tbody className="divide-y divide-border">
                   {loading ? <tr><td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">正在載入專案規則…</td></tr> : pageRows.length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">目前篩選條件沒有符合的 RLC 規格</td></tr> : pageRows.map(spec => <tr key={spec.key} className={cn(selected?.key === spec.key && "bg-primary/10")}>
                     <td className="max-w-[30rem] px-3 py-3"><Button type="button" variant="ghost" className="h-auto justify-start whitespace-normal p-0 text-left text-sm" aria-pressed={selected?.key === spec.key} onClick={() => setSelectedKey(spec.key)}>{spec.kind} · {spec.spec}</Button></td>
-                    <td className="max-w-[15rem] px-3 py-3"><span className="block break-words font-mono">{spec.refs.join("、") || "目前 BOM 未包含"}</span><span className="text-xs text-muted-foreground">{spec.sourceGroupKeys.length} 個群組</span></td>
+                    <td className="max-w-[15rem] px-3 py-3">
+                      <span className="line-clamp-2 break-all font-mono">{spec.refs.join('、').split(/[,;、\s]+/).filter(Boolean).slice(0, 3).join('、') || '目前 BOM 未包含'}</span>
+                      <span className="text-xs text-muted-foreground">{spec.sourceGroupKeys.length} 個群組</span>
+                      {spec.refs.length > 0 && <details className="mt-1"><summary className="cursor-pointer text-xs text-primary">檢視全部位號</summary><p className="mt-2 max-h-32 overflow-y-auto break-all font-mono text-xs leading-5">{spec.refs.join('、')}</p></details>}
+                    </td>
                     <td className="px-3 py-3">{spec.manufacturerCount} 廠商／{spec.candidates.length} 候選</td>
                     <td className={cn("max-w-[22rem] break-words px-3 py-3", spec.recommendation.status === "recommended" ? "text-primary" : "text-warning")}>{recommendationText(spec)}</td>
                   </tr>)}
