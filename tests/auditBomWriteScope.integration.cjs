@@ -34,6 +34,7 @@ function execute(name,h,overrides={}){
   getBomPageTrackerSummary:()=>({}),normalizeBomTableColorTheme:v=>v,tableColorDraft:{},
   useCallback:fn=>fn,bomAccountRef:{current:{accountId:'account-A',generation:0}},
   activeProject:null,toBomWorkspaceProject:()=>undefined,saveBomWorkspaceProject:async()=>{writes.push('project');},recentLocalWorkspaceWritesRef:{current:new Map()},
+  allProjects:[{id:'P',name:'VERA'}],bomProjectAssignmentRef:{current:null},setAssigningBomProjectId:effect('project-busy'),
   ...overrides,
  };
  assert.ok(handlers.has(name),name);
@@ -78,4 +79,35 @@ test('held callbacks and unmounted mutation scope cannot revive an old permissio
 });
 test('view-only empty directory does not auto-create a fallback BOM in shared storage',async()=>{
  const h=await mount(false);try{const c=execute('applyLoadedWorkspaces',h,{canEdit:false});c.run([]);await flush();assert.equal(c.writes.length,0);assert.ok(c.effects.includes('state'));}finally{await h.unmount();}
+});
+
+test('BOM project changes are shown only after persistence confirms the assignment',async()=>{
+ const h=await mount(),pending=deferred();try{
+  const c=execute('assignBomProject',h,{toBomWorkspaceProject:p=>p?{projectId:p.id,projectName:p.name}:undefined,saveBomWorkspaceProject:async()=>{c.writes.push('project');await pending.promise;}});
+  const request=c.run('W','P');await flush();assert.equal(c.writes.length,1);assert.equal(c.effects.includes('state'),false);
+  await assert.rejects(c.run('W','P'),/專案正在儲存/);assert.equal(c.writes.length,1);
+  pending.resolve();await request;assert.ok(c.effects.includes('state'));
+ }finally{await h.unmount();}
+});
+
+test('project assignment rejects view-only access and unknown project choices before writing',async()=>{
+ const viewer=await mount(false),editor=await mount();try{
+  const v=execute('assignBomProject',viewer);await assert.rejects(v.run('W','P'),viewer.WorkspaceMutationScopeChangedError);assert.equal(v.writes.length,0);
+  const e=execute('assignBomProject',editor);await assert.rejects(e.run('W','unknown'),/找不到選取的專案/);assert.equal(e.writes.length,0);
+ }finally{await viewer.unmount();await editor.unmount();}
+});
+
+test('a failed BOM project assignment rejects so the same-dialog form can retain its choice',async()=>{
+ const h=await mount();try{
+  const c=execute('assignBomProject',h,{toBomWorkspaceProject:p=>({projectId:p.id,projectName:p.name}),saveBomWorkspaceProject:async()=>{throw Error('offline');}});
+  await assert.rejects(c.run('W','P'));assert.equal(c.effects.includes('state'),false);
+ }finally{await h.unmount();}
+});
+
+test('late project receipts cannot change the replacement account UI',async()=>{
+ const h=await mount(),pending=deferred();try{
+  const c=execute('assignBomProject',h,{toBomWorkspaceProject:p=>({projectId:p.id,projectName:p.name}),saveBomWorkspaceProject:async()=>pending.promise});
+  const request=c.run('W','P');await flush();const before=c.effects.slice();await h.update('account-B',true);pending.resolve();
+  await assert.rejects(request,h.WorkspaceMutationScopeChangedError);assert.deepEqual(c.effects,before);
+ }finally{await h.unmount();}
 });

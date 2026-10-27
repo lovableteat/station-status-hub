@@ -39,13 +39,14 @@ function Fixture() {
       <Button variant="outline" onClick={() => setDirectoryOpen(true)}>公司供應商聯絡資料</Button>
       <Button variant="outline" onClick={() => setRlcOpen(true)}>RLC 優先順序驗證</Button>
       <Button variant="outline" onClick={() => setRlcProject(value => value === 'project-A' ? 'project-B' : 'project-A')}>切換專案 {rlcProject}</Button>
+      <Button variant="outline" onClick={() => { setRlcProject(null); setRlcOpen(true); }}>未指定專案驗證</Button>
       <Button variant="outline" onClick={() => { setRecordMode('edit'); setRecordOpen(true); }}>料件與追蹤驗證</Button>
       <span aria-live="polite">隔離假資料 · 帳號 {fixtureState.account} · 儲存 {fixtureState.saves} 次 · 匯入 {fixtureState.imports} 次<span className="sr-only">{revision}</span></span>
     </nav>
     <p className="p-3 text-sm text-muted-foreground">只有兩筆假料件與本機記憶體聯絡簿；重新整理會還原初始資料，不會連線正式環境或寄信。</p>
     <PendingMailDialog groups={groups} open={open} onOpenChange={setOpen} workspaceName="隔離測試 BOM" exportedBy="隔離測試使用者" />
     <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
-    <RlcPriorityDialog key={rlcProject} open={rlcOpen} onOpenChange={setRlcOpen} projectId={rlcProject} projectName={rlcProject} groups={rlcGroups} rules={rules} canEdit={fixtureState.account === 'A'} onSaveRule={async rule => setRules(current => [...current.filter(item => item.projectId !== rule.projectId || item.specKey !== rule.specKey || item.candidateKey !== rule.candidateKey), { ...rule, updatedAt: new Date().toISOString() }])} />
+    <RlcPriorityDialog key={rlcProject} open={rlcOpen} onOpenChange={setRlcOpen} projectId={rlcProject} projectName={rlcProject === 'project-A' ? 'VERA_GPU' : rlcProject === 'project-B' ? 'VERA_CPU' : ''} workspaceName="示範 BOM（不連線正式資料）" projects={[{id:'project-A',name:'VERA_GPU'},{id:'project-B',name:'VERA_CPU'}]} onAssignProject={async id => setRlcProject(id)} groups={rlcGroups} rules={rules} canEdit={fixtureState.account === 'A'} onSaveRule={async rule => setRules(current => [...current.filter(item => item.projectId !== rule.projectId || item.specKey !== rule.specKey || item.candidateKey !== rule.candidateKey), { ...rule, updatedAt: new Date().toISOString() }])} />
     <MaterialRecordDialog canEdit open={recordOpen} mode={recordMode} initialTab="tracking" record={record} workspaceId="fixture" uploaderName="QA" onOpenChange={setRecordOpen} onModeChange={setRecordMode} onOpenSpec={() => {}} onSave={async next => { setRecord(next); setRecordOpen(false); }} />
     <Toaster />
   </div>;
