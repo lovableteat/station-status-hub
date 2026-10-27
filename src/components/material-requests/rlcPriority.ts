@@ -64,7 +64,7 @@ export function getRlcKind(group: MaterialGroup): RlcKind | null {
   const refs = unique(group.records.map(record => text(record.refDes)).filter(Boolean));
   const tokens = (refs.join(",") || text(group.displayRef)).split(/[,;\s、/]+/).filter(Boolean);
   const kinds = tokens.map(token => {
-    const match = token.toUpperCase().match(/^P?([RLC])\d+(?:[-~](?:P?([RLC]))?\d+)?$/);
+    const match = token.toUpperCase().match(/^P?([RLC])\d+(?:_[A-Z0-9]+)*(?:[-~](?:P?([RLC]))?\d+(?:_[A-Z0-9]+)*)?$/);
     return match && (!match[2] || match[1] === match[2]) ? match[1] as RlcKind : undefined;
   });
   return kinds.length > 0 && kinds.every(kind => kind && kind === kinds[0]) ? kinds[0]! : null;
