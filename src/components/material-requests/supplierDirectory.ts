@@ -180,9 +180,12 @@ export function supplierImportChange(diff: SupplierDiff): SupplierContact {
   return { ...diff.incoming, id: diff.existing.id, version: diff.existing.version, data, imported };
 }
 
+const recipientCompanyKey = (value: string) => key(value).replace(/[.,]/g, '')
+  .replace(/(?:\s+(?:co|company|corp|corporation|inc|incorporated|ltd|limited))+$/, '').trim();
+
 export function getCompanyRecipients(contacts: readonly SupplierContact[], vendor: string) {
-  const wanted = key(vendor);
-  const matched = wanted ? contacts.filter(x => [x.data.company, ...x.data.aliases.split(/[;；\n]+/), ...x.data.brands.split(/[,，;；\n/、]+/)].some(name => key(name) === wanted)) : [];
+  const wanted = recipientCompanyKey(vendor);
+  const matched = wanted ? contacts.filter(x => [x.data.company, ...x.data.aliases.split(/[;；\n]+/), ...x.data.brands.split(/[,，;；\n/、]+/)].some(name => recipientCompanyKey(name) === wanted)) : [];
   const to = [...new Set(matched.flatMap(x => supplierEmails(x.data.email)))];
   const cc = [...new Set(matched.flatMap(x => supplierEmails(x.data.cc)))].filter(x => !to.includes(x));
   return { to: to.join('; '), cc: cc.join('; '), matched };

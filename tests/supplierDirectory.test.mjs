@@ -73,6 +73,12 @@ test('ambiguous identities never pick the first contact; recipients use exact al
   assert.equal(lib.diffSupplierImport([row, duplicate], [{ ...parsed[0], data: { ...parsed[0].data, email: 'new@example.com' } }], ['採購'])[0].kind, 'ambiguous');
 });
 
+test('recipient matching tolerates legal company suffixes without guessing regional or technical aliases', () => {
+  const contact = { data: { ...lib.emptySupplierData(), company: 'Distributor Example', brands: 'BrandX', email: 'contact@example.invalid' } };
+  for (const vendor of ['BrandX Corporation', 'BrandX Co., Ltd.', 'BRANDX, INC.']) assert.equal(lib.getCompanyRecipients([contact], vendor).to, 'contact@example.invalid', vendor);
+  for (const vendor of ['Brand', 'BrandX Technologies', 'BrandX North America', 'Other BrandX']) assert.equal(lib.getCompanyRecipients([contact], vendor).to, '', vendor);
+});
+
 test('an import preserves manual fields not changed in the source and rejects malformed manual email lists', () => {
   const row = lib.parseSupplierSheet(sheet([['Vendor', 'Name', 'Email', 'Note'], ['Example', 'Alex', 'old@example.com', 'original']])).contacts[0];
   const existing = { ...row, version: 1, data: { ...row.data, note: 'manual note' } };
