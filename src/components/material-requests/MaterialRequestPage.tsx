@@ -1,6 +1,5 @@
 ﻿import {
   type ChangeEvent,
-  type ClipboardEvent as ReactClipboardEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -20,7 +19,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ClipboardPaste,
   Columns3,
   CircleHelp,
   CircleCheck,
@@ -33,7 +31,6 @@ import {
   FileSpreadsheet,
   Filter,
   History,
-  ImagePlus,
   Layers3,
   Paperclip,
   Pencil,
@@ -83,6 +80,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { useIsCompactLayout } from "@/hooks/use-mobile";
@@ -97,7 +95,6 @@ import {
   type MaterialGroup,
   type MaterialRecord,
   type MaterialTrackingHistoryEntry,
-  type MaterialTrackingHistoryImage,
   type MaterialWorkbookRecord,
   type MaterialWorkbookPayload,
   buildMaterialDataset,
@@ -127,13 +124,18 @@ import {
 import type { BomTableColorTheme, BomWorkspaceArchive, BomWorkspaceProject } from "./materialBomStorage";
 import { loadBomWorkspaceArchives, loadBomWorkspaceProjects, saveBomWorkspaceArchive, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { UploadGuideDialog } from "./MaterialUploadGuideDialog";
+import { MaterialTrackingEditor } from "./MaterialTrackingEditor";
+import { applyMaterialTrackingDraft, createMaterialTrackingDraft } from "./materialTrackingDraft";
 import { MATERIAL_SPEC_ACCEPT, createMaterialSpecUrl, formatMaterialSpecSize, uploadMaterialSpecDocument } from "./materialSpecDocuments";
 import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
 import type {
   MaterialExportProgress,
   MaterialReportSnapshot,
 } from "./materialRequestExport";
-import { buildVendorMailSections, collectDiscouragedMaterialRows, collectNonPvlPartNumbers, countExcludedDiscouragedRows, exportDiscouragedMaterialsExcel, exportNonPvlApplyList, exportVendorMailHtml, mailHtmlToText, renderVendorMailText } from "./materialRequestExport";
+import { buildVendorMailSections, collectDiscouragedMaterialRows, collectNonPvlPartNumbers, countExcludedDiscouragedRows, DEFAULT_VENDOR_MAIL_SUBJECT, exportDiscouragedMaterialsExcel, exportNonPvlApplyList, exportVendorMailHtml, mailHtmlToText, renderVendorMailText, splitVendorMailTemplate, VENDOR_MAIL_ITEMS_TOKEN } from "./materialRequestExport";
+import { VendorMailEditor, type VendorMailEditorHandle } from './VendorMailEditor';
+import { RlcPriorityDialog } from './RlcPriorityDialog';
+import { useRlcPriority } from './useRlcPriority';
 import { MaterialNonPvlDialog } from "./MaterialNonPvlDialog";
 import { getVendorRecipients } from "./vendorContacts";
 import { useVendorContacts } from "./useVendorContacts";
@@ -146,7 +148,6 @@ import {
   type BomProjectGroup,
   type MaterialTableColumnKey,
   type PendingMaterialCategory,
-  createClipboardImageName,
   createCompactValueSummary,
   getMaterialExportScopeLabel,
   getMaterialStickyColumnClasses,
@@ -174,6 +175,7 @@ import {
 type AvailabilityFilter = "all" | "usable" | "required" | "pending" | "risk" | "single";
 type SortMode = "reference" | "alternatives" | "approved" | "pending" | "single-source";
 type EditorMode = "create" | "edit" | "view";
+type MaterialEditorTab = "details" | "tracking";
 type CollaborationStatus = BomStorageMode | "checking" | "reconnecting" | "error";
 
 const SORT_MODE_LABELS: Record<SortMode, string> = {
@@ -1493,35 +1495,6 @@ function getTrackingStatusCardTone(status: string) {
   };
 }
 
-function createTrackingHistoryId() {
-  return `tracking-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function createTrackingImageId() {
-  return `tracking-image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function readImageFile(file: File) {
-  return new Promise<MaterialTrackingHistoryImage>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        reject(new Error(`圖片「${file.name}」讀取失敗`));
-        return;
-      }
-
-      resolve({
-        id: createTrackingImageId(),
-        name: file.name,
-        mimeType: file.type || "image/*",
-        size: file.size,
-        dataUrl: reader.result,
-      });
-    };
-    reader.onerror = () => reject(new Error(`圖片「${file.name}」讀取失敗`));
-    reader.readAsDataURL(file);
-  });
-}
 
 function normalizeFilterValue(value: string) {
   const normalized = String(value ?? "").normalize("NFKC").replace(/\u3000/g, " ").trim();
@@ -2179,11 +2152,12 @@ function TrackingHistoryCell({
         cardTone.wrapper,
       )}
       title={tooltip}
-      aria-label={embedded ? `${statusLabel}，查看狀態追蹤（${historyCount} 筆）` : undefined}
+      aria-label={embedded ? `${record.manufacturerPartNumber || record.name}，${statusLabel}，追蹤與更新料件（${historyCount} 筆）` : undefined}
     >
       <span className={cn(CHIP_BASE, embedded ? "min-w-0 max-w-full truncate" : "flex-none", getTrackingStatusTone(workflowStatus))}>
         {statusLabel}
       </span>
+      {embedded && <span className="ml-auto flex-none text-xs font-semibold text-primary">更新</span>}
       {/* The merged 狀態追蹤 / 更新 column is narrow: only the status chip stays; the note, ticket and
           history count are in the tooltip and the whole chip opens the history. */}
       {!embedded && (
@@ -2214,385 +2188,6 @@ function TrackingHistoryCell({
   );
 }
 
-function TrackingHistoryDialog({
-  canEdit,
-  open,
-  record,
-  onOpenChange,
-  onSave,
-}: {
-  canEdit: boolean;
-  open: boolean;
-  record: MaterialRecord | null;
-  onOpenChange: (open: boolean) => void;
-  onSave: (record: MaterialRecord, entry: MaterialTrackingHistoryEntry) => void;
-}) {
-  const { toast } = useToast();
-  const [status, setStatus] = useState<(typeof TRACKING_STATUS_OPTIONS)[number] | "">("");
-  const [note, setNote] = useState("");
-  const [requestTicket, setRequestTicket] = useState("");
-  const [requestUrl, setRequestUrl] = useState("");
-  const [createdBy, setCreatedBy] = useState("");
-  const [requestInfo, setRequestInfo] = useState("");
-  const [images, setImages] = useState<MaterialTrackingHistoryImage[]>([]);
-  const [previewImage, setPreviewImage] = useState<MaterialTrackingHistoryImage | null>(null);
-  const latestEntry = record ? getLatestTrackingEntry(record) : null;
-  const latestWorkflowStatus = record ? getTrackingWorkflowStatus(record) : "新增追蹤";
-  const historyEntries = useMemo(() => {
-    if (!record) return [];
-
-    const entries = record.trackingHistory?.length
-      ? [...record.trackingHistory]
-      : latestEntry
-        ? [latestEntry]
-        : [];
-
-    return entries.sort((left, right) => {
-      const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
-      const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
-      return rightTime - leftTime;
-    });
-  }, [latestEntry, record]);
-
-  useEffect(() => {
-    if (!open) return;
-    setStatus("");
-    setNote("");
-    setRequestTicket(record?.requestTicket ?? "");
-    setRequestUrl(record?.requestUrl ?? "");
-    setCreatedBy("");
-    setRequestInfo("");
-    setImages([]);
-    setPreviewImage(null);
-  }, [open, record?.id, record?.requestTicket, record?.requestUrl]);
-
-  const appendImageFiles = useCallback(async (files: File[], source: "picker" | "clipboard") => {
-    if (files.length === 0) return;
-
-    const invalidFiles = files.filter((file) => !file.type.startsWith("image/"));
-    if (invalidFiles.length > 0) {
-      toast({
-        title: "只支援圖片檔案",
-        description: invalidFiles.map((file) => file.name).join("、"),
-        variant: "destructive",
-      });
-    }
-
-    const timestamp = new Date();
-    const validFiles = files
-      .filter((file) => file.type.startsWith("image/"))
-      .map((file, index) => {
-        if (source !== "clipboard") return file;
-        const baseName = createClipboardImageName(file.type, timestamp);
-        const name = index === 0 ? baseName : baseName.replace(/(\.[^.]+)$/, `-${index + 1}$1`);
-        return new File([file], name, { type: file.type, lastModified: timestamp.getTime() });
-      });
-    if (validFiles.length === 0) return;
-
-    try {
-      const nextImages = await Promise.all(validFiles.map(readImageFile));
-      setImages((current) => [...current, ...nextImages]);
-      if (source === "clipboard") {
-        toast({
-          title: `已貼上 ${nextImages.length} 張圖片`,
-          description: "圖片已加入這筆追蹤，儲存追蹤後才會正式寫入。",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "圖片讀取失敗",
-        description: error instanceof Error ? error.message : "請重新選擇圖片後再試一次。",
-        variant: "destructive",
-      });
-    }
-  }, [toast]);
-
-  const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    void appendImageFiles(files, "picker");
-    event.target.value = "";
-  };
-
-  const handleImagePaste = (event: ReactClipboardEvent<HTMLElement>) => {
-    const clipboardFiles = Array.from(event.clipboardData.items)
-      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
-      .flatMap((item) => {
-        const file = item.getAsFile();
-        return file ? [file] : [];
-      });
-    if (clipboardFiles.length === 0) return;
-
-    event.preventDefault();
-    void appendImageFiles(clipboardFiles, "clipboard");
-  };
-
-  const handleSave = () => {
-    if (!canEdit || !record || !status.trim()) return;
-
-    onSave(record, {
-      id: createTrackingHistoryId(),
-      status: status.trim(),
-      note: note.trim(),
-      requestTicket: requestTicket.trim(),
-      requestUrl: normalizeRequestUrl(requestUrl.trim()),
-      createdAt: new Date().toISOString(),
-      createdBy: createdBy.trim(),
-      requestInfo: requestInfo.trim(),
-      images,
-    });
-    onOpenChange(false);
-  };
-
-  const handleMarkCompleted = () => {
-    if (!canEdit || !record) return;
-
-    onSave(record, {
-      id: createTrackingHistoryId(),
-      status: "已完成",
-      note: latestEntry?.note?.trim() || "已手動標記完成",
-      requestTicket: requestTicket.trim() || latestEntry?.requestTicket?.trim() || record.requestTicket?.trim() || "",
-      requestUrl: normalizeRequestUrl(requestUrl.trim() || latestEntry?.requestUrl?.trim() || record.requestUrl?.trim() || ""),
-      createdAt: new Date().toISOString(),
-      createdBy: createdBy.trim(),
-      requestInfo: latestEntry?.requestInfo?.trim() || "",
-      images: [],
-    });
-    onOpenChange(false);
-  };
-
-  const requestMeta = record ? getTrackingRequestMeta(record) : { ticket: "", url: "" };
-  const fieldClassName = "h-9 rounded-xl px-3 text-sm";
-  const dialogDescription = record
-    ? `${record.name || "未命名料件"} · ${record.manufacturerPartNumber || record.partNumber || record.displayRef}`
-    : "管理目前料件的追蹤歷史與附件圖片。";
-
-  return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent onPaste={handleImagePaste} className="max-h-[94vh] w-[min(92vw,1400px)] max-w-[min(92vw,1400px)] gap-4 overflow-y-auto p-5 text-base sm:p-7">
-          <DialogHeader>
-            <DialogTitle className="text-xl">狀態追蹤</DialogTitle>
-            <DialogDescription className="truncate" title={dialogDescription}>
-              {dialogDescription}
-            </DialogDescription>
-          </DialogHeader>
-
-          {record && (
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-              <div className="space-y-4">
-                <section data-testid="tracking-current-summary" className="workspace-dialog-section rounded-2xl p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-base font-semibold text-foreground">最新狀態</h3>
-                    <span className={cn(CHIP_BASE, getTrackingStatusTone(latestWorkflowStatus))}>
-                      {getTrackingStatusDisplayLabel(latestWorkflowStatus)}
-                    </span>
-                    <span className="text-sm text-foreground/75">
-                      歷史 {historyEntries.length} 筆
-                      {latestEntry?.createdAt ? ` · ${formatTimestamp(latestEntry.createdAt)}` : ""}
-                      {latestEntry?.createdBy ? ` · ${latestEntry.createdBy}` : ""}
-                    </span>
-                    {requestMeta.ticket && (
-                      requestMeta.url
-                        ? <a href={requestMeta.url} target="_blank" rel="noreferrer" className={cn(CHIP_BASE, "hover:bg-warning/25", CHIP_TONES.warning)}>單號 {requestMeta.ticket}</a>
-                        : <span className={cn(CHIP_BASE, CHIP_TONES.warning)}>單號 {requestMeta.ticket}</span>
-                    )}
-                    {latestWorkflowStatus !== "已完成" && (
-                      <Button type="button" variant="outline" size="sm" onClick={handleMarkCompleted} disabled={!canEdit} className="ml-auto h-9 text-sm">
-                        <CircleCheck className="mr-1.5 h-3.5 w-3.5" />
-                        直接標記完成
-                      </Button>
-                    )}
-                  </div>
-                  <p className="mt-2 text-base leading-7 text-foreground/90">
-                    {latestEntry?.note || <span className="text-foreground/60">還沒有追蹤備註，建立第一筆後會顯示在這裡。</span>}
-                  </p>
-                  {latestEntry?.requestInfo && (
-                    <p className="mt-1 truncate text-sm text-foreground/75" title={latestEntry.requestInfo}>
-                      申請狀態資訊：
-                      {isExternalUrl(latestEntry.requestInfo) ? (
-                        <a href={latestEntry.requestInfo} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
-                          {latestEntry.requestInfo}
-                        </a>
-                      ) : (
-                        <span className="text-foreground">{latestEntry.requestInfo}</span>
-                      )}
-                    </p>
-                  )}
-                </section>
-
-                <section data-testid="tracking-compose-panel" className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-semibold text-foreground">新增一筆進度</h3>
-                    <span className="text-sm text-foreground/70">狀態必填，其餘可留空</span>
-                  </div>
-                  <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="tracking-status-select" className="text-sm font-semibold">最新狀態 *</Label>
-                      <Select value={status} onValueChange={(value) => setStatus(value as (typeof TRACKING_STATUS_OPTIONS)[number])}>
-                        <SelectTrigger id="tracking-status-select" className={fieldClassName}>
-                          <SelectValue placeholder="選擇狀態" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TRACKING_STATUS_OPTIONS.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {getTrackingStatusDisplayLabel(option)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="tracking-ticket-input" className="text-sm font-semibold">單號</Label>
-                      <Input id="tracking-ticket-input" value={requestTicket} onChange={(event) => setRequestTicket(event.target.value)} placeholder="Excel 單號 / ticket" className={fieldClassName} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="tracking-request-url-input" className="text-sm font-semibold">連結</Label>
-                      <Input id="tracking-request-url-input" value={requestUrl} onChange={(event) => setRequestUrl(event.target.value)} placeholder="request URL" className={fieldClassName} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="tracking-owner-input" className="text-sm font-semibold">更新人</Label>
-                      <Input id="tracking-owner-input" value={createdBy} onChange={(event) => setCreatedBy(event.target.value)} placeholder="採購 / RD / 姓名" className={fieldClassName} />
-                    </div>
-                    <div className="space-y-1 md:col-span-2 xl:col-span-4">
-                      <Label htmlFor="tracking-request-info-input" className="text-sm font-semibold">申請狀態資訊</Label>
-                      <Input id="tracking-request-info-input" value={requestInfo} onChange={(event) => setRequestInfo(event.target.value)} placeholder="Excel 單號 / ticket / request URL" className={fieldClassName} />
-                    </div>
-                    <div className="space-y-1 md:col-span-2 xl:col-span-4">
-                      <Label htmlFor="tracking-note-input" className="text-sm font-semibold">追蹤說明</Label>
-                      <Textarea id="tracking-note-input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="這次做了什麼、卡在哪、下一步" className="min-h-28 rounded-xl text-base" />
-                    </div>
-                    <div className="space-y-1.5 md:col-span-2 xl:col-span-4">
-                      <label htmlFor="tracking-images-input" className="flex h-12 cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-3 text-sm font-semibold text-foreground transition-colors hover:bg-primary/10">
-                        <span className="flex items-center gap-1.5"><Upload className="h-3.5 w-3.5 text-primary" />選擇圖片</span>
-                        <span className="text-muted-foreground">或</span>
-                        <span className="flex items-center gap-1.5"><ClipboardPaste className="h-3.5 w-3.5 text-primary" />在這個視窗按 Ctrl+V 貼上截圖</span>
-                      </label>
-                      <input id="tracking-images-input" type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
-                      {images.length > 0 && (
-                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5">
-                          {images.map((image) => (
-                            <div key={image.id} className="relative overflow-hidden rounded-xl border border-border bg-background/40">
-                              <button
-                                type="button"
-                                onClick={() => setPreviewImage(image)}
-                                className="block aspect-[4/3] w-full transition hover:opacity-90"
-                                title={`預覽圖片：${image.name} · ${(image.size / 1024).toFixed(1)} KB`}
-                              >
-                                <img src={image.dataUrl} alt={image.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
-                              </button>
-                              <button type="button" onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))} className="absolute right-1 top-1 rounded-md border border-border bg-popover/90 p-1 text-muted-foreground hover:text-destructive" title="移除圖片">
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div data-testid="tracking-dialog-footer" className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-3">
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-10 px-4 text-sm">取消</Button>
-                    <Button type="button" onClick={handleSave} disabled={!canEdit || !status.trim()} className="h-10 px-5 text-sm font-bold">儲存這次追蹤</Button>
-                  </div>
-                </section>
-              </div>
-
-              <section data-testid="tracking-history-panel" className="workspace-dialog-section rounded-2xl p-4">
-                <div className="flex items-center gap-2">
-                  <History className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-base font-semibold text-foreground">過去歷史</h3>
-                  <span className="text-sm text-foreground/70">{historyEntries.length} 筆</span>
-                </div>
-
-                <div className="mt-3 space-y-0 border-l-2 border-border pl-4">
-                  {historyEntries.length === 0 && (
-                    <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-sm text-foreground/60">還沒有歷史紀錄</p>
-                  )}
-
-                  {historyEntries.map((entry, index) => (
-                    <article key={`${entry.id}-${index}`} className="relative mb-3 rounded-xl border border-border bg-background/40 p-3 before:absolute before:-left-[1.45rem] before:top-4 before:h-3 before:w-3 before:rounded-full before:border-2 before:border-background before:bg-primary">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground/75">
-                        <span className={cn(CHIP_BASE, getTrackingStatusTone(entry.status))}>
-                          {getTrackingStatusDisplayLabel(entry.status)}
-                        </span>
-                        {index === 0 && <span className={cn(CHIP_BASE, CHIP_TONES.primary)}>最新</span>}
-                        <span>{entry.createdAt ? formatTimestamp(entry.createdAt) : "舊版狀態"}</span>
-                        {entry.createdBy && <span>· {entry.createdBy}</span>}
-                        {(entry.images?.length ?? 0) > 0 && <span>· {entry.images?.length} 張圖</span>}
-                      </div>
-
-                      {entry.note && (
-                        <p className="mt-2 whitespace-pre-wrap text-base leading-6 text-foreground/90">
-                          {entry.note}
-                        </p>
-                      )}
-
-                      {(entry.requestTicket || entry.requestInfo) && (
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-                          {entry.requestTicket && (
-                            entry.requestUrl ? (
-                              <a href={normalizeRequestUrl(entry.requestUrl)} target="_blank" rel="noreferrer" className={cn(CHIP_BASE, "hover:bg-warning/25", CHIP_TONES.warning)}>
-                                單號 {entry.requestTicket}
-                              </a>
-                            ) : (
-                              <span className={cn(CHIP_BASE, CHIP_TONES.warning)}>單號 {entry.requestTicket}</span>
-                            )
-                          )}
-                          {entry.requestInfo && (
-                            isExternalUrl(entry.requestInfo)
-                              ? <a href={entry.requestInfo} target="_blank" rel="noreferrer" className="truncate text-primary underline-offset-4 hover:underline" title={entry.requestInfo}>申請狀態連結</a>
-                              : <span className="truncate text-muted-foreground" title={entry.requestInfo}>{entry.requestInfo}</span>
-                          )}
-                        </div>
-                      )}
-
-                      {entry.images && entry.images.length > 0 && (
-                        <div className="mt-2 grid grid-cols-3 gap-1.5">
-                          {entry.images.map((image) => (
-                            <button
-                              key={image.id}
-                              type="button"
-                              onClick={() => setPreviewImage(image)}
-                              className="aspect-[4/3] overflow-hidden rounded-lg border border-border hover:border-primary/50"
-                              title={`檢視圖片：${image.name}`}
-                            >
-                              <img src={image.dataUrl} alt={image.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              </section>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(previewImage)} onOpenChange={(nextOpen) => { if (!nextOpen) setPreviewImage(null); }}>
-        <DialogContent className="max-w-4xl gap-3 p-4 sm:p-5">
-          {previewImage && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="truncate text-base">{previewImage.name}</DialogTitle>
-                <DialogDescription>{(previewImage.size / 1024).toFixed(1)} KB</DialogDescription>
-              </DialogHeader>
-              <div className="overflow-hidden rounded-xl border border-border bg-background/60">
-                <img src={previewImage.dataUrl} alt={previewImage.name} className="max-h-[70vh] w-full object-contain" />
-              </div>
-              <div className="flex justify-end">
-                <Button asChild variant="secondary" size="sm">
-                  <a href={previewImage.dataUrl} download={previewImage.name}>下載圖片</a>
-                </Button>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
 
 function PhaseOutStatus({ record }: { record: MaterialRecord }) {
   const value = getMaterialSourceValue(record.phaseOutStatus);
@@ -2945,6 +2540,8 @@ function getPendingGroupUpdatedAt(group: MaterialGroup, recordMeta?: Record<stri
 const DEFAULT_VENDOR_MAIL_MESSAGE = "<p>您好，以下料件需要申請料號／取得建料資料（規格書、Symbol、Footprint），再麻煩協助提供，謝謝。</p>";
 const VENDOR_MAIL_SIGNATURE_KEY = "station-status-hub:material-mail-signature:v1";
 const VENDOR_MAIL_MESSAGE_KEY = "station-status-hub:material-mail-message:v1";
+const VENDOR_MAIL_CONTENT_KEY = 'station-status-hub:material-mail-content:v2';
+const VENDOR_MAIL_SUBJECT_KEY = 'station-status-hub:material-mail-subject:v2';
 
 function loadStoredHtml(key: string, fallback: string) {
   if (typeof window === "undefined") return fallback;
@@ -2961,108 +2558,6 @@ function storeHtml(key: string, value: string) {
   } catch { /* storage unavailable */ }
 }
 
-function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => (typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("讀取失敗")));
-    reader.onerror = () => reject(new Error("讀取失敗"));
-    reader.readAsDataURL(file);
-  });
-}
-
-/**
- * A small rich editor for mail content: typed text, pasted rich text, pasted or
- * chosen images (kept inline as data URLs) and links all survive into the HTML.
- */
-function MailRichEditor({
-  id,
-  label,
-  hint,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  hint: string;
-  value: string;
-  onChange: (html: string) => void;
-}) {
-  const editorRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const lastValueRef = useRef<string>("");
-
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || value === lastValueRef.current) return;
-    editor.innerHTML = value;
-    lastValueRef.current = value;
-  }, [value]);
-
-  const emit = () => {
-    const html = editorRef.current?.innerHTML ?? "";
-    lastValueRef.current = html;
-    onChange(html);
-  };
-  const exec = (command: string, argument?: string) => {
-    editorRef.current?.focus();
-    document.execCommand(command, false, argument);
-    emit();
-  };
-  const insertImages = async (files: File[]) => {
-    const images = files.filter((file) => file.type.startsWith("image/"));
-    if (images.length === 0) return;
-    editorRef.current?.focus();
-    for (const file of images) {
-      const dataUrl = await readFileAsDataUrl(file);
-      document.execCommand("insertHTML", false, `<img src="${dataUrl}" alt="${file.name.replace(/"/g, "")}" style="max-width:100%;height:auto;">`);
-    }
-    emit();
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <Label htmlFor={id} className="text-base font-semibold text-foreground">{label}</Label>
-        <span className="text-sm text-foreground/70">{hint}</span>
-        <div className="ml-auto flex items-center gap-1">
-          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => exec("bold")} className="h-8 px-2 text-sm font-black" title="粗體">B</Button>
-          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => exec("underline")} className="h-8 px-2 text-sm underline" title="底線">U</Button>
-          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => exec("insertUnorderedList")} className="h-8 px-2 text-sm" title="項目符號">• 清單</Button>
-          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => { const url = window.prompt("連結網址"); if (url) exec("createLink", url); }} className="h-8 px-2 text-sm" title="插入連結">連結</Button>
-          <Button type="button" variant="secondary" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => fileInputRef.current?.click()} className="h-8 px-2 text-sm" title="插入圖片（也可直接貼上或拖進來）"><ImagePlus className="mr-1 h-4 w-4" />圖片</Button>
-          <Button type="button" variant="ghost" size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => { if (editorRef.current) { editorRef.current.innerHTML = ""; emit(); } }} className="h-8 px-2 text-sm text-destructive hover:text-destructive" title="清空">清空</Button>
-        </div>
-      </div>
-      <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void insertImages(files); }} />
-      <div
-        ref={editorRef}
-        id={id}
-        role="textbox"
-        aria-multiline="true"
-        aria-label={label}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={emit}
-        onBlur={emit}
-        onPaste={(event) => {
-          const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith("image/"));
-          if (files.length > 0) {
-            event.preventDefault();
-            void insertImages(files);
-          }
-        }}
-        onDrop={(event) => {
-          const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => file.type.startsWith("image/"));
-          if (files.length > 0) {
-            event.preventDefault();
-            void insertImages(files);
-          }
-        }}
-        className="material-mail-editor min-h-[8rem] rounded-xl border border-input bg-secondary/60 px-4 py-3 text-base leading-7 text-foreground outline-none focus-visible:border-primary/70 focus-visible:ring-2 focus-visible:ring-ring/35 [&_a]:text-primary [&_a]:underline [&_img]:my-2 [&_img]:max-h-72 [&_img]:max-w-full [&_img]:rounded-lg [&_ul]:list-disc [&_ul]:pl-6"
-      />
-    </div>
-  );
-}
 
 export function PendingMailDialog({
   groups,
@@ -3077,8 +2572,10 @@ export function PendingMailDialog({
   exportedBy: string;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [messageHtml, setMessageHtml] = useState(() => loadStoredHtml(VENDOR_MAIL_MESSAGE_KEY, DEFAULT_VENDOR_MAIL_MESSAGE));
-  const [signatureHtml, setSignatureHtml] = useState(() => loadStoredHtml(VENDOR_MAIL_SIGNATURE_KEY, ""));
+  const [contentHtml, setContentHtml] = useState(() => loadStoredHtml(VENDOR_MAIL_CONTENT_KEY, `${loadStoredHtml(VENDOR_MAIL_MESSAGE_KEY, DEFAULT_VENDOR_MAIL_MESSAGE)}<p>${VENDOR_MAIL_ITEMS_TOKEN}</p>${loadStoredHtml(VENDOR_MAIL_SIGNATURE_KEY, '')}`));
+  const [subjectFormat, setSubjectFormat] = useState(() => loadStoredHtml(VENDOR_MAIL_SUBJECT_KEY, DEFAULT_VENDOR_MAIL_SUBJECT));
+  const contentRef = useRef<VendorMailEditorHandle>(null);
+  const [editorBusy, setEditorBusy] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [contactsOpen, setContactsOpen] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(false);
@@ -3087,7 +2584,7 @@ export function PendingMailDialog({
   const { toast } = useToast();
   const book = useVendorContacts(open);
   const companyBook = useCompanySuppliers(open);
-  const generatedSections = useMemo(() => buildVendorMailSections(groups, workspaceName), [groups, workspaceName]);
+  const generatedSections = useMemo(() => buildVendorMailSections(groups, workspaceName, subjectFormat), [groups, workspaceName, subjectFormat]);
   const subjectKey = (vendor: string) => `${book.ownerId ?? "signed-out"}\0${workspaceName}\0${vendor}`;
   const sections = generatedSections.map((section) => {
     const recipients = getVendorRecipients(book.contacts, section.vendor);
@@ -3107,15 +2604,21 @@ export function PendingMailDialog({
     };
   });
   const itemCount = sections.reduce((sum, section) => sum + section.items.length, 0);
-  const message = useMemo(() => mailHtmlToText(messageHtml), [messageHtml]);
-  const signature = useMemo(() => mailHtmlToText(signatureHtml), [signatureHtml]);
-  // The opening text and signature are personal boilerplate, so they persist in this browser.
-  useEffect(() => { storeHtml(VENDOR_MAIL_MESSAGE_KEY, messageHtml); }, [messageHtml]);
-  useEffect(() => { storeHtml(VENDOR_MAIL_SIGNATURE_KEY, signatureHtml); }, [signatureHtml]);
+  const template = useMemo(() => {
+    try { return { ...splitVendorMailTemplate(contentHtml), error: '' }; }
+    catch (cause) { return { messageHtml: contentHtml, signatureHtml: '', error: cause instanceof Error ? cause.message : '請檢查料件位置標記' }; }
+  }, [contentHtml]);
+  const message = mailHtmlToText(template.messageHtml), signature = mailHtmlToText(template.signatureHtml);
+  useEffect(() => { storeHtml(VENDOR_MAIL_CONTENT_KEY, contentHtml); }, [contentHtml]);
+  useEffect(() => { storeHtml(VENDOR_MAIL_SUBJECT_KEY, subjectFormat); }, [subjectFormat]);
+  useEffect(() => { if (!open) setEditorBusy(false); }, [open]);
 
   const handleExport = async () => {
     setIsExporting(true);
     try {
+      const snapshot = contentRef.current?.snapshot() ?? contentHtml;
+      const { messageHtml, signatureHtml } = splitVendorMailTemplate(snapshot);
+      setContentHtml(snapshot);
       const fileName = await exportVendorMailHtml({ sections, messageHtml, signatureHtml, workspaceName, exportedBy });
       toast({ title: "信件 HTML 已產生", description: `${sections.length} 家廠商 · ${itemCount} 項 · ${fileName}，開啟後每家按「複製」即可貼到郵件群發。` });
     } catch (error) {
@@ -3150,9 +2653,14 @@ export function PendingMailDialog({
             </div>
           ) : null}
           {contactsOpen ? <VendorContactsPanel key={book.ownerId ?? "signed-out"} book={book} /> : null}
-          <section className="workspace-dialog-section space-y-5 rounded-2xl p-4">
-            <MailRichEditor id="pending-mail-message" label="信件開頭" hint="每封信最上方；可貼上圖片、連結、粗體" value={messageHtml} onChange={setMessageHtml} />
-            <MailRichEditor id="pending-mail-signature" label="結尾／簽名檔" hint="每封信最下方；把你的簽名檔連同 logo、banner 貼進來即可，會記住" value={signatureHtml} onChange={setSignatureHtml} />
+          <section className="workspace-dialog-section space-y-4 rounded-2xl p-4">
+            <div className="space-y-2">
+              <Label htmlFor="pending-mail-subject-format">預設主旨格式</Label>
+              <Input id="pending-mail-subject-format" value={subjectFormat} onChange={event => setSubjectFormat(event.target.value)} maxLength={500} className="h-11" />
+              <p className="text-sm text-muted-foreground">{'{廠商} 會帶入廠商名稱，{BOM} 可帶入目前 BOM。VERA_GPU 與其他文字可直接修改；逐封修改的主旨會保留。'}</p>
+            </div>
+            <VendorMailEditor ref={contentRef} value={contentHtml} onChange={setContentHtml} onBusyChange={setEditorBusy} />
+            {template.error ? <p role="alert" className="text-sm text-destructive">{template.error}</p> : null}
           </section>
           <section className="workspace-dialog-section rounded-2xl p-4">
             <h3 className="text-base font-semibold text-foreground">廠商分組預覽</h3>
@@ -3200,7 +2708,7 @@ export function PendingMailDialog({
         </div>
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-10 px-4 text-sm">關閉</Button>
-          <Button type="button" data-testid="pending-mail-export" disabled={isExporting || companyBook.loading || !!companyBook.error || sections.length === 0 || sections.some((section) => !section.subject.trim() || section.recipientErrors.length > 0)} onClick={() => void handleExport()} className="h-10 px-4 text-sm font-bold">
+          <Button type="button" data-testid="pending-mail-export" disabled={isExporting || editorBusy || !!template.error || companyBook.loading || !!companyBook.error || sections.length === 0 || sections.some((section) => !section.subject.trim() || section.recipientErrors.length > 0)} onClick={() => void handleExport()} className="h-10 px-4 text-sm font-bold">
             <FileCode2 className="mr-1.5 h-4 w-4" />{isExporting ? "產生中…" : "匯出信件 HTML"}
           </Button>
         </DialogFooter>
@@ -3241,9 +2749,7 @@ function PendingMaterialsDialog({
   recordMeta,
   workspaceName,
   exportedBy,
-  onLocate,
   onOpenChange,
-  onOpenCreate,
   onOpenTracking,
   onSetCategory,
 }: {
@@ -3255,9 +2761,7 @@ function PendingMaterialsDialog({
   recordMeta?: Record<string, BomRecordSyncMeta>;
   workspaceName: string;
   exportedBy: string;
-  onLocate: (group: MaterialGroup) => void;
   onOpenChange: (open: boolean) => void;
-  onOpenCreate: (group: MaterialGroup, record: MaterialRecord) => void;
   onOpenTracking: (record: MaterialRecord) => void;
   /** Saves a hand-picked category for a pending part; null returns it to the Ref Des rule. */
   onSetCategory: (group: MaterialGroup, category: PendingMaterialCategory | null) => void;
@@ -3398,9 +2902,7 @@ function PendingMaterialsDialog({
                   <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(trackingStatus))}>{trackingStatus || "未追蹤"}</span>
                   {stale && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)} title="還沒取得料號，且超過 3 天沒有更新資料">逾 3 天未更新</span>}
                   <div className="ml-auto flex flex-none items-center gap-1">
-                    <Button type="button" variant="ghost" size="sm" onClick={() => onLocate(group)} className="h-7 px-2 text-xs">定位</Button>
-                    <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onOpenTracking(record)} className="h-7 px-2 text-xs">追蹤</Button>
-                    <Button type="button" variant="secondary" size="sm" disabled={!canEdit} onClick={() => onOpenCreate(group, record)} className="h-7 px-2 text-xs">更新料號</Button>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="h-11 px-3 text-sm">追蹤／更新</Button>
                   </div>
                 </div>
               );
@@ -3611,13 +3113,14 @@ function BomManagerDialog({
   );
 }
 
-function MaterialRecordDialog({
+export function MaterialRecordDialog({
   canEdit,
   open,
   mode,
   record,
   uploaderName,
   workspaceId,
+  initialTab = "details",
   onOpenChange,
   onModeChange,
   onOpenSpec,
@@ -3630,60 +3133,92 @@ function MaterialRecordDialog({
   record: MaterialWorkbookRecord;
   uploaderName?: string;
   workspaceId: string;
+  initialTab?: MaterialEditorTab;
   onOpenChange: (open: boolean) => void;
   onModeChange: (mode: EditorMode) => void;
   onOpenSpec: (record: Pick<MaterialWorkbookRecord, "specDocument">) => void;
-  onSave: (record: MaterialWorkbookRecord) => void;
+  onSave: (record: MaterialWorkbookRecord) => Promise<void>;
   /** Opens a blank alternate in this record's group; absent when creating. */
   onAddAlternate?: () => void;
 }) {
-  const [form, setForm] = useState(record);
+  const [form, setForm] = useState(() => toWorkbookRecord(record));
+  const [trackingDraft, setTrackingDraft] = useState(() => createMaterialTrackingDraft(record));
+  const [activeTab, setActiveTab] = useState<MaterialEditorTab>(initialTab);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const savingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const editorScopeRef = useRef("");
+  editorScopeRef.current = `${open}:${workspaceId}:${record.id}:${canEdit}`;
   const [isUploadingSpec, setIsUploadingSpec] = useState(false);
   const specInputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
   const readOnly = mode === "view" || !canEdit;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const handleSpecFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || readOnly) return;
+    if (!file || readOnly || isSaving) return;
+    const scope = editorScopeRef.current;
     setIsUploadingSpec(true);
     try {
       const specDocument = await uploadMaterialSpecDocument({ workspaceId, recordId: form.id, file, uploadedBy: uploaderName });
+      if (!mountedRef.current || editorScopeRef.current !== scope) return;
       setForm((current) => ({ ...current, specDocument }));
       toast({ title: "SPEC 已上傳", description: `「${file.name}」會在儲存資料後跟著這顆料一起保存。` });
     } catch (error) {
+      if (!mountedRef.current || editorScopeRef.current !== scope) return;
       toast({ title: "SPEC 上傳失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
     } finally {
-      setIsUploadingSpec(false);
+      if (mountedRef.current && editorScopeRef.current === scope) setIsUploadingSpec(false);
     }
   };
-  const latestTrackingEntry = getLatestTrackingEntry(form);
-  const trackingMeta = getTrackingRequestMeta(form);
-
   useEffect(() => {
-    if (open) setForm(toWorkbookRecord(record));
+    if (!open) return;
+    setForm(toWorkbookRecord(record));
+    setTrackingDraft(createMaterialTrackingDraft(record));
+    setSaveError("");
   }, [open, record]);
 
   const updateField = (field: keyof MaterialWorkbookRecord, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const handleSave = () => {
-    if (!form.refGroup.trim() || !form.name.trim()) return;
+  const handleSave = async () => {
+    if (readOnly || savingRef.current || isUploadingSpec || !form.refGroup.trim() || !form.name.trim()) return;
     if (!isValidBomUsage(form.qty)) {
       toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
       return;
     }
-    onSave({ ...form, level: 2 });
+    setSaveError("");
+    try {
+      const next = applyMaterialTrackingDraft({ ...form, level: 2 }, trackingDraft, uploaderName);
+      savingRef.current = true;
+      setIsSaving(true);
+      await onSave(next);
+    } catch (error) {
+      if (!mountedRef.current) return;
+      const message = error instanceof Error ? error.message : "資料尚未儲存，請稍後再試。";
+      setSaveError(message);
+      toast({ title: "資料尚未儲存", description: message, variant: "destructive" });
+    } finally {
+      savingRef.current = false;
+      if (mountedRef.current) setIsSaving(false);
+    }
   };
 
   const title = mode === "create" ? "新增料件 / 替代料" : mode === "edit" ? "修改料件資料" : "料件詳細資訊";
-  const fieldClassName = "h-9 rounded-xl px-3 text-sm";
+  const fieldClassName = "h-11 rounded-xl px-3 text-sm";
+  const hasTrackingChanges = Boolean(trackingDraft.status || trackingDraft.note.trim() || trackingDraft.createdBy.trim() || trackingDraft.requestInfo.trim() || trackingDraft.images.length || trackingDraft.pendingImageReads || trackingDraft.requestTicket !== (record.requestTicket ?? "") || trackingDraft.requestUrl !== (record.requestUrl ?? ""));
+  const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(toWorkbookRecord(record)) || hasTrackingChanges;
 
   return (
     <TooltipProvider delayDuration={160}>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="material-record-dialog max-h-[94vh] w-[min(92vw,1400px)] max-w-[min(92vw,1400px)] gap-4 overflow-y-auto p-5 text-base sm:p-7">
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!savingRef.current) onOpenChange(nextOpen); }}>
+      <DialogContent className="material-record-dialog flex max-h-[94dvh] w-[min(94vw,1400px)] max-w-[min(94vw,1400px)] flex-col gap-4 overflow-hidden p-4 text-base sm:p-7">
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">
             <DialogTitle>{title}</DialogTitle>
@@ -3696,6 +3231,14 @@ function MaterialRecordDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MaterialEditorTab)} className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <TabsList className="h-12 w-full shrink-0 justify-start">
+            <TabsTrigger value="details" className="h-10">料件資料</TabsTrigger>
+            <TabsTrigger value="tracking" className="h-10">狀態追蹤{hasTrackingChanges ? " · 未儲存" : ""}</TabsTrigger>
+          </TabsList>
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <TabsContent value="details" forceMount className="space-y-4 data-[state=inactive]:hidden">
+          <fieldset disabled={isSaving} className="min-w-0 space-y-4">
         {/* Same 14 item columns, same order, as the CE workbook (Level is always 2 for an item row). */}
         <section className="workspace-dialog-section rounded-2xl p-4">
           <h3 className="mb-3 text-sm font-semibold text-foreground">CE Excel 欄位 <span className="font-normal text-muted-foreground">· 依交付格式順序</span></h3>
@@ -3779,23 +3322,6 @@ function MaterialRecordDialog({
                 <Input id="material-mpn-2" disabled={readOnly} value={form.manufacturerPartNumberAlt} onChange={(event) => updateField("manufacturerPartNumberAlt", event.target.value)} className={fieldClassName} />
               </div>
             )}
-            <div className="space-y-1">
-              <MaterialFieldLabel field="requestTicket" htmlFor="material-request-ticket" label="單號" />
-              <Input id="material-request-ticket" disabled={readOnly} value={form.requestTicket ?? ""} onChange={(event) => updateField("requestTicket", event.target.value)} placeholder="Excel 單號 / ticket" className={fieldClassName} />
-            </div>
-            <div className="space-y-1 md:col-span-2">
-              <MaterialFieldLabel field="requestUrl" htmlFor="material-request-url" label="單號連結" />
-              <Input id="material-request-url" disabled={readOnly} value={form.requestUrl ?? ""} onChange={(event) => updateField("requestUrl", event.target.value)} placeholder="request URL" className={fieldClassName} />
-            </div>
-            <div className="space-y-1 md:col-span-3">
-              <MaterialFieldLabel field="tracking" label="狀態追蹤" />
-              <div className="flex h-9 min-w-0 items-center gap-2 rounded-xl border border-border bg-background/40 px-3 text-xs" title={latestTrackingEntry?.note || "從表格的「狀態追蹤」欄位新增歷史與圖片"}>
-                <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(latestTrackingEntry?.status ?? ""))}>{latestTrackingEntry?.status || "尚未建立"}</span>
-                <span className="min-w-0 truncate text-muted-foreground">{latestTrackingEntry?.note || "從表格的「狀態追蹤」管理"}</span>
-                {latestTrackingEntry?.createdAt && <span className="flex-none text-muted-foreground">{formatTimestamp(latestTrackingEntry.createdAt)}</span>}
-                {trackingMeta.ticket && <span className="flex-none text-warning">單號 {trackingMeta.ticket}</span>}
-              </div>
-            </div>
             <div className="space-y-1 md:col-span-3">
               <MaterialFieldLabel field="specDocument" label="SPEC 文件" />
               <input ref={specInputRef} type="file" accept={MATERIAL_SPEC_ACCEPT} className="hidden" onChange={(event) => void handleSpecFile(event)} />
@@ -3833,31 +3359,42 @@ function MaterialRecordDialog({
           </div>
         </section>
 
-        <DialogFooter className="gap-2">
+          </fieldset>
+          </TabsContent>
+          <TabsContent value="tracking" forceMount className="data-[state=inactive]:hidden">
+            <section className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
+              <MaterialTrackingEditor record={form} draft={trackingDraft} onDraftChange={setTrackingDraft} disabled={readOnly || isSaving} defaultAuthor={uploaderName} />
+            </section>
+          </TabsContent>
+          </div>
+        </Tabs>
+
+        {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
+        <DialogFooter data-testid="material-record-save-footer" className="shrink-0 gap-2 border-t border-border pt-3">
           {onAddAlternate && mode !== "create" && (
             <Button
               type="button"
               variant="outline"
               size="sm"
               data-testid="material-add-alternate"
-              disabled={!canEdit || (!readOnly && JSON.stringify(form) !== JSON.stringify(record))}
-              title={!readOnly && JSON.stringify(form) !== JSON.stringify(record) ? "先儲存或取消目前的修改，再新增替代料" : "在同一組位號下新增另一家廠商的替代料"}
+              disabled={!canEdit || isSaving || isUploadingSpec || hasUnsavedChanges}
+              title={hasUnsavedChanges ? "先儲存或取消目前的修改，再新增替代料" : "在同一組位號下新增另一家廠商的替代料"}
               onClick={onAddAlternate}
-              className="sm:mr-auto"
+              className="h-11 sm:mr-auto"
             >
               <Plus className="mr-1.5 h-3.5 w-3.5" />新增替代料
             </Button>
           )}
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" size="sm" className="h-11" disabled={isSaving} onClick={() => onOpenChange(false)}>
             {readOnly ? "關閉" : "取消"}
           </Button>
           {readOnly ? (
-            <Button type="button" size="sm" disabled={!canEdit} onClick={() => onModeChange("edit")}>
+            <Button type="button" size="sm" className="h-11" disabled={!canEdit} onClick={() => onModeChange("edit")}>
               <Pencil className="mr-1.5 h-3.5 w-3.5" />修改這筆
             </Button>
           ) : (
-            <Button type="button" size="sm" onClick={handleSave} disabled={!form.refGroup.trim() || !form.name.trim()}>
-              儲存資料
+            <Button type="button" size="sm" className="h-11" onClick={() => void handleSave()} disabled={isSaving || isUploadingSpec || trackingDraft.pendingImageReads > 0 || !form.refGroup.trim() || !form.name.trim()}>
+              {isSaving ? "儲存中…" : "儲存資料與追蹤"}
             </Button>
           )}
         </DialogFooter>
@@ -3876,8 +3413,6 @@ interface MaterialRowActions {
   openTracking: (record: MaterialRecord) => void;
   openSpec: (record: MaterialRecord) => void;
   saveVirtual: (record: MaterialRecord, value: string) => void;
-  viewRecord: (record: MaterialRecord) => void;
-  editRecord: (record: MaterialRecord) => void;
 }
 
 interface VisibleGroupRow {
@@ -3983,7 +3518,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   columns: MaterialColumnVisibility;
   actions: MaterialRowActions;
 }) {
-  const { group, matchingRecords, primaryAlternative, virtualAlternativeRecord, trackingRecord, secondaryAlternatives } = row;
+  const { group, matchingRecords, primaryAlternative, virtualAlternativeRecord, secondaryAlternatives } = row;
   const mustApply = group.requiresApplication;
   const primaryReady = Boolean(primaryAlternative?.isPreferred && !primaryAlternative.isRisk);
   const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred && !record.isRisk).length;
@@ -4192,19 +3727,10 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
             data-testid="material-data-update-cell"
             onClick={stopRowToggle}
           >
-            <div className="flex min-w-0 items-stretch overflow-hidden rounded-lg border border-cyan-400/25 bg-cyan-400/5" data-testid="material-tracking-update-control">
+            <div className="flex min-w-0 items-stretch overflow-hidden rounded-lg border border-primary/30 bg-primary/5" data-testid="material-tracking-update-control" title={updateTitle}>
               <div className="min-w-0 flex-1" data-material-cell="tracking">
-                {trackingRecord && <TrackingHistoryCell record={trackingRecord} onOpen={actions.openTracking} embedded />}
+                <TrackingHistoryCell record={statusRecord} onOpen={actions.openTracking} embedded />
               </div>
-              <button
-                type="button"
-                onClick={() => actions.editRecord(statusRecord)}
-                className="flex flex-none items-center gap-0.5 border-l border-cyan-400/25 bg-cyan-400/10 px-1.5 text-xs font-bold text-cyan-200 transition-colors hover:bg-cyan-400/25 hover:text-cyan-50"
-                title={updateTitle}
-                aria-label="更新料號"
-              >
-                <Plus className="h-3.5 w-3.5" />更新
-              </button>
             </div>
             {editingNames && (
               <p className="mt-1 truncate rounded border border-amber-300/28 bg-amber-400/12 px-1 text-[10px] font-bold leading-4 text-amber-100" title={`${editingNames} 正在編輯`}>
@@ -4224,10 +3750,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
           colorTheme={colorTheme}
           columns={columns}
           primaryTxRecordId={virtualAlternativeRecord?.id ?? ""}
-          primaryTrackingRecordId={trackingRecord?.id ?? ""}
           onCopy={actions.copy}
-          onView={actions.viewRecord}
-          onEdit={actions.editRecord}
           onSaveVirtual={actions.saveVirtual}
           onOpenTracking={actions.openTracking}
         />
@@ -4245,10 +3768,7 @@ function CompactAlternativeRows({
   colorTheme,
   columns,
   primaryTxRecordId,
-  primaryTrackingRecordId,
   onCopy,
-  onView,
-  onEdit,
   onSaveVirtual,
   onOpenTracking,
 }: {
@@ -4259,12 +3779,9 @@ function CompactAlternativeRows({
   itemValue: number;
   colorTheme: BomTableColorTheme;
   columns: MaterialColumnVisibility;
-  /** Records whose 虛擬料號 editor / tracking cell already sit on the main row; they render as plain text here. */
+  /** The 虛擬料號 editor already shown on the main row renders as plain text here. */
   primaryTxRecordId: string;
-  primaryTrackingRecordId: string;
   onCopy: (value: string) => void;
-  onView: (record: MaterialRecord) => void;
-  onEdit: (record: MaterialRecord) => void;
   onSaveVirtual: (record: MaterialRecord, value: string) => void;
   onOpenTracking: (record: MaterialRecord) => void;
 }) {
@@ -4402,20 +3919,8 @@ function CompactAlternativeRows({
             )}
             {columns.actions && (
               <td className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5")} onClick={stopRowToggle}>
-                <div className="flex min-w-0 items-stretch overflow-hidden rounded-lg border border-cyan-400/25 bg-cyan-400/5">
-                  <div className="min-w-0 flex-1">
-                    {record.id === primaryTrackingRecordId ? (
-                      <span className="flex min-h-[40px] items-center truncate px-2 text-xs text-slate-400" title="這筆的狀態追蹤已顯示在主料列">同主料列</span>
-                    ) : (
-                      <TrackingHistoryCell record={record} onOpen={onOpenTracking} embedded />
-                    )}
-                  </div>
-                  <button type="button" onClick={() => onView(record)} className="flex flex-none items-center border-l border-cyan-400/25 bg-cyan-400/10 px-2 text-cyan-300 hover:bg-cyan-400/25" title="詳細資訊" aria-label="詳細資訊">
-                    <Eye className="h-3.5 w-3.5" />
-                  </button>
-                  <button type="button" disabled={!canEdit} onClick={() => onEdit(record)} className="flex flex-none items-center border-l border-cyan-400/25 bg-cyan-400/10 px-2 text-cyan-300 hover:bg-cyan-400/25 disabled:cursor-not-allowed disabled:opacity-50" title="修改" aria-label="修改">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
+                <div className="min-w-0 overflow-hidden rounded-lg border border-primary/30 bg-primary/5">
+                  <TrackingHistoryCell record={record} onOpen={onOpenTracking} embedded />
                 </div>
               </td>
             )}
@@ -4602,19 +4107,20 @@ export function MaterialRequestPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("view");
   const [editorRecord, setEditorRecord] = useState<MaterialWorkbookRecord>(createRecordTemplate());
-  const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
+  const [editorInitialTab, setEditorInitialTab] = useState<MaterialEditorTab>("details");
+  const [editorSession, setEditorSession] = useState(0);
+  const [editorContext, setEditorContext] = useState<{ workspaceId: string; accountId?: string; recordMeta?: BomRecordSyncMeta } | null>(null);
   useEffect(() => {
-    if (!returnToPending || editorOpen || trackingDialogOpen) return;
+    if (!returnToPending || editorOpen) return;
     setReturnToPending(false);
     setPendingRestoreView(true);
     setPendingDialogOpen(true);
-  }, [editorOpen, returnToPending, trackingDialogOpen]);
+  }, [editorOpen, returnToPending]);
   const openPendingDialog = () => {
     setReturnToPending(false);
     setPendingRestoreView(false);
     setPendingDialogOpen(true);
   };
-  const [trackingRecord, setTrackingRecord] = useState<MaterialRecord | null>(null);
   const [pageTrackerDialogOpen, setPageTrackerDialogOpen] = useState(false);
   const [pageTrackerWorkspaceId, setPageTrackerWorkspaceId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -4642,6 +4148,11 @@ export function MaterialRequestPage() {
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
   const { user } = useUser();
+  useEffect(() => {
+    setEditorOpen(false);
+    setReturnToPending(false);
+    setPendingDialogOpen(false);
+  }, [activeBomId, user?.userId]);
   const { canEditModule } = usePermissions();
   const canEdit = canEditModule("material-requests");
   const { activeProject, activeProjectId, allProjects, projects } = useTestProject();
@@ -4659,9 +4170,7 @@ export function MaterialRequestPage() {
   const isCompactLayout = useIsCompactLayout();
   const presenceEditingRecordId = editorOpen && editorMode !== "view"
     ? editorRecord.id
-    : trackingDialogOpen
-      ? trackingRecord?.id ?? null
-      : null;
+    : null;
   const { editorsByRecordId, onlineUserCount } = useMaterialBomPresence(
     activeBomId,
     user,
@@ -5416,6 +4925,9 @@ export function MaterialRequestPage() {
   const excludedDiscouragedCount = useMemo(() => countExcludedDiscouragedRows(dataset.records), [dataset.records]);
   const discouragedMaterialCount = discouragedMaterialRows.length;
   const [nonPvlDialogOpen, setNonPvlDialogOpen] = useState(false);
+  const [rlcPriorityOpen, setRlcPriorityOpen] = useState(false);
+  const rlcProjectId = activeWorkspace.project?.projectId ?? null;
+  const rlcRules = useRlcPriority(rlcProjectId, user?.userId ?? null, rlcPriorityOpen);
   const [isExportingDiscouraged, setIsExportingDiscouraged] = useState(false);
   const exportDiscouragedMaterials = async () => {
     const rows = discouragedMaterialRows;
@@ -5640,11 +5152,14 @@ export function MaterialRequestPage() {
       return;
     }
     setEditorRecord(createRecordTemplate(group));
+    setEditorContext({ workspaceId: activeWorkspace.id, accountId: user?.userId });
+    setEditorInitialTab("details");
+    setEditorSession((current) => current + 1);
     setEditorMode("create");
     setEditorOpen(true);
   };
 
-  const openRecord = (record: MaterialRecord, mode: EditorMode) => {
+  const openRecord = (record: MaterialRecord, mode: EditorMode, initialTab: MaterialEditorTab = "details") => {
     if (mode !== "view" && !canEdit) return;
     if (mode !== "view" && !isCollaborativeReady) {
       showCollaborativeUnavailableToast();
@@ -5655,6 +5170,9 @@ export function MaterialRequestPage() {
       return;
     }
     setEditorRecord(toWorkbookRecord(record));
+    setEditorContext({ workspaceId: activeWorkspace.id, accountId: user?.userId, recordMeta: activeWorkspace.recordMeta?.[record.id] });
+    setEditorInitialTab(initialTab);
+    setEditorSession((current) => current + 1);
     setEditorMode(mode);
     setEditorOpen(true);
   };
@@ -5670,9 +5188,7 @@ export function MaterialRequestPage() {
   };
 
   const openTrackingDialog = (record: MaterialRecord) => {
-    if (!canEdit) return;
-    setTrackingRecord(record);
-    setTrackingDialogOpen(true);
+    openRecord(record, canEdit && isCollaborativeReady && isFullDatasetLoaded ? "edit" : "view", "tracking");
   };
 
   const openBomPageTrackerDialog = (workspaceId = activeBomId) => {
@@ -5685,7 +5201,7 @@ export function MaterialRequestPage() {
     setPageTrackerDialogOpen(true);
   };
 
-  const saveRecordToActiveBom = (record: MaterialWorkbookRecord) => {
+  const saveRecordToActiveBom = (record: MaterialWorkbookRecord, expectedRecordMeta?: BomRecordSyncMeta) => {
     let writeScope;
     try {writeScope = captureBomWrite();} catch (error) {return Promise.reject(error);}
     if (!isCollaborativeReady) {
@@ -5706,6 +5222,7 @@ export function MaterialRequestPage() {
       : [...basePayload.records, record];
     const nextWorkspace: BomWorkspace = {
       ...activeWorkspace,
+      ...(expectedRecordMeta ? { recordMeta: { ...activeWorkspace.recordMeta, [record.id]: expectedRecordMeta } } : {}),
       payload: { ...basePayload, records, recordCount: records.length },
       updatedAt: new Date().toISOString(),
     };
@@ -5841,14 +5358,15 @@ export function MaterialRequestPage() {
   const handleSaveRecord = async (record: MaterialWorkbookRecord) => {
     if (!isValidBomUsage(record.qty)) {
       toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
-      return;
+      throw new Error("Qty 是單一產品用量，不能為負數");
     }
     try {
+      if (editorContext?.workspaceId !== activeWorkspace.id || editorContext.accountId !== user?.userId) throw new WorkspaceMutationScopeChangedError();
       const writeScope = captureBomWrite();
       await saveRecordToActiveBom({
         ...record,
         requestUrl: normalizeRequestUrl(record.requestUrl ?? ""),
-      });
+      }, editorContext.recordMeta);
       if (!isBomWriteCurrent(writeScope)) return;
       setEditorOpen(false);
       toast({
@@ -5856,7 +5374,7 @@ export function MaterialRequestPage() {
         description: `${record.manufacturer || "未指定廠商"} ${record.manufacturerPartNumber || record.name}`,
       });
     } catch (error) {
-      if (error instanceof WorkspaceMutationScopeChangedError) return;
+      if (error instanceof WorkspaceMutationScopeChangedError) throw error;
       toast({
         title: error instanceof BomRecordConflictError ? "偵測到版本衝突" : "同步更新失敗",
         description: error instanceof BomRecordConflictError
@@ -5864,6 +5382,7 @@ export function MaterialRequestPage() {
           : "這筆料件還沒寫進共用資料，請稍後再試一次。",
         variant: "destructive",
       });
+      throw error;
     }
   };
 
@@ -5889,40 +5408,6 @@ export function MaterialRequestPage() {
     });
   };
 
-  const saveTrackingHistory = (record: MaterialRecord, entry: MaterialTrackingHistoryEntry) => {
-    if (!canEdit) return;
-    let writeScope;
-    try {writeScope = captureBomWrite();} catch {return;}
-    if (!isCollaborativeReady) {
-      showCollaborativeUnavailableToast();
-      return;
-    }
-    if (!isFullDatasetLoaded) {
-      showDatasetSyncingToast();
-      return;
-    }
-    const currentHistory = record.trackingHistory ?? [];
-    void saveRecordToActiveBom({
-      ...toWorkbookRecord(record),
-      trackingStatus: entry.status,
-      trackingHistory: [...currentHistory, entry],
-      requestTicket: entry.requestTicket?.trim() || record.requestTicket || "",
-      requestUrl: normalizeRequestUrl(entry.requestUrl?.trim() || record.requestUrl || ""),
-    }).then(() => {
-      if (!isBomWriteCurrent(writeScope)) return;
-      toast({
-        title: "狀態追蹤已更新",
-        description: `${record.name || record.displayRef} · ${entry.status}`,
-      });
-    }).catch(() => {
-      if (!isBomWriteCurrent(writeScope)) return;
-      toast({
-        title: "狀態追蹤更新失敗",
-        description: "這筆追蹤還沒同步到共用資料，已重新載入最新版本。",
-        variant: "destructive",
-      });
-    });
-  };
 
   const saveBomPageTracker = async (workspaceId: string, pageTracker: BomPageTracker) => {
     const writeScope = captureBomWrite();
@@ -6386,8 +5871,6 @@ export function MaterialRequestPage() {
     openTracking: openTrackingDialog,
     openSpec: (record) => { void openSpecDocument(record); },
     saveVirtual: saveVirtualAlternative,
-    viewRecord: (record) => openRecord(record, "view"),
-    editRecord: (record) => openRecord(record, "edit"),
   };
   const rowActions = useMemo<MaterialRowActions>(() => ({
     toggleExpanded: (key) => rowActionsRef.current?.toggleExpanded(key),
@@ -6396,8 +5879,6 @@ export function MaterialRequestPage() {
     openTracking: (record) => rowActionsRef.current?.openTracking(record),
     openSpec: (record) => rowActionsRef.current?.openSpec(record),
     saveVirtual: (record, value) => rowActionsRef.current?.saveVirtual(record, value),
-    viewRecord: (record) => rowActionsRef.current?.viewRecord(record),
-    editRecord: (record) => rowActionsRef.current?.editRecord(record),
   }), []);
 
   if (isInitialLoading) {
@@ -6430,6 +5911,7 @@ export function MaterialRequestPage() {
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
+      <RlcPriorityDialog key={`${user?.userId}:${activeWorkspace.id}:${rlcProjectId}`} open={rlcPriorityOpen} onOpenChange={setRlcPriorityOpen} projectId={rlcProjectId} projectName={activeWorkspace.project?.projectName ?? ''} groups={dataset.groups} rules={rlcRules.rules} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} loading={rlcRules.loading || !isFullDatasetLoaded} saving={rlcRules.saving} error={rlcRules.error} onSaveRule={rlcRules.saveRule} onReload={rlcRules.reload} />
       <MaterialNonPvlDialog
         isExporting={isExportingDiscouraged}
         open={nonPvlDialogOpen}
@@ -6449,17 +5931,6 @@ export function MaterialRequestPage() {
         workspaceName={activeWorkspace.name}
         exportedBy={user?.displayName || user?.username || "未知使用者"}
         onOpenChange={setPendingDialogOpen}
-        onLocate={(group) => {
-          setPendingDialogOpen(false);
-          setAvailability("required");
-          setColumnFilters(EMPTY_COLUMN_FILTERS);
-          setSearchDraft(group.displayRef);
-          setQuery(group.displayRef);
-          setExpandedKey(group.key);
-          setPage(1);
-        }}
-        // 更新料號 edits the pending row itself (its 廠商, MPN and 備註 included) instead of adding a blank alternate.
-        onOpenCreate={(_group, record) => { setPendingDialogOpen(false); setReturnToPending(true); openRecord(record, "edit"); }}
         onOpenTracking={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openTrackingDialog(record); }}
         onSetCategory={setPendingCategory}
       />
@@ -6476,11 +5947,10 @@ export function MaterialRequestPage() {
       />
       <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
       <BomManagerDialog canEdit={canEdit} activeBomId={activeBomId} activeProjectName={activeProject?.name} bomWorkspaces={activeBomWorkspaces} archivedWorkspaces={archivedBomWorkspaces} projectGroups={bomProjectGroups} projects={projects} open={bomManagerOpen} onAssignProject={(id, projectId) => void assignBomProject(id, projectId)} onSetArchived={(id, archived) => void setBomArchived(id, archived)} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
-      <MaterialRecordDialog canEdit={canEdit} open={editorOpen} mode={editorMode} record={editorRecord} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target) => void openSpecDocument(target)} onSave={handleSaveRecord} onAddAlternate={editorMode === "create" ? undefined : () => {
+      <MaterialRecordDialog key={`${user?.userId}:${activeWorkspace.id}:${editorSession}`} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} open={editorOpen && editorContext?.workspaceId === activeWorkspace.id && editorContext.accountId === user?.userId} mode={editorMode} record={editorRecord} initialTab={editorInitialTab} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target) => void openSpecDocument(target)} onSave={handleSaveRecord} onAddAlternate={editorMode === "create" ? undefined : () => {
         const group = dataset.groups.find((candidate) => candidate.records.some((item) => item.id === editorRecord.id));
         if (group) openCreate(group);
       }} />
-      <TrackingHistoryDialog canEdit={canEdit} open={trackingDialogOpen} record={trackingRecord} onOpenChange={(open) => { setTrackingDialogOpen(open); if (!open) setTrackingRecord(null); }} onSave={saveTrackingHistory} />
       <MaterialExportDialog
         activeFormat={activeExportFormat}
         onExport={(format) => { void runExport(format); }}
@@ -6603,6 +6073,7 @@ export function MaterialRequestPage() {
               <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
               <Button type="button" variant="outline" onClick={openPendingDialog} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", requiredApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {requiredApplicationCount.toLocaleString()}</Button>
               <Button type="button" variant="outline" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} className="h-11 border-orange-300/30 bg-orange-400/10 text-orange-100"><FileSpreadsheet className="mr-2 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
+              <Button type="button" variant="outline" onClick={() => setRlcPriorityOpen(true)} className="h-11 border-primary/30 bg-primary/10 text-primary">RLC 優先順序</Button>
               <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
               <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
             </div>
@@ -6652,6 +6123,7 @@ export function MaterialRequestPage() {
             <Button type="button" size="sm" onClick={() => openCreate()} disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border border-primary/60 bg-primary px-3.5 text-sm font-black text-primary-foreground hover:bg-primary/85 hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">
               <Plus className="mr-1 h-3.5 w-3.5" />新增料件
             </Button>
+            <Button type="button" variant="outline" size="sm" data-testid="rlc-priority-button" onClick={() => setRlcPriorityOpen(true)} className="h-9 border-primary/40 bg-primary/10 px-3 text-sm font-bold text-primary">RLC 優先順序</Button>
             <Button type="button" variant="outline" size="sm" data-testid="material-guide-button" onClick={() => setGuideOpen(true)} className="material-guide-attention h-9 border-[hsl(var(--platform-violet)/0.6)] bg-[hsl(var(--platform-violet))] px-3 text-sm font-black text-primary-foreground hover:bg-[hsl(var(--platform-violet)/0.85)] hover:text-primary-foreground">
               <CircleHelp className="mr-1 h-3.5 w-3.5" />上傳說明
             </Button>
@@ -6755,7 +6227,7 @@ export function MaterialRequestPage() {
             <p className="truncate text-sm font-bold text-amber-100">
               {pendingRemoteRecordIds.length > 0 ? `有 ${pendingRemoteRecordIds.length} 筆資料已由其他使用者更新` : "BOM 設定已由其他使用者更新"}
               <span className="ml-2 font-normal text-amber-100/70">
-                {editorOpen || trackingDialogOpen ? "你正在填的內容不會被清掉，完成後再載入。" : "不會自動刷新，方便時再載入最新內容。"}
+                {editorOpen ? "你正在填的內容不會被清掉，完成後再載入。" : "不會自動刷新，方便時再載入最新內容。"}
               </span>
             </p>
           </div>
@@ -6866,7 +6338,7 @@ export function MaterialRequestPage() {
 
         {isCompactLayout && <div className="space-y-2 p-2 lg:hidden" data-testid="material-mobile-cards">
           <h2 className="sr-only">手機以料件卡片呈現，點開即可查看替代料與追蹤紀錄</h2>
-          {visibleGroupRows.map(({ group, primaryAlternative, trackingRecord, secondaryAlternatives }, rowIndex) => {
+          {visibleGroupRows.map(({ group, primaryAlternative, secondaryAlternatives }, rowIndex) => {
             const expanded = expandedKey === group.key;
             const mainRecord = primaryAlternative ?? group.primaryRecord;
             const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
@@ -6918,15 +6390,11 @@ export function MaterialRequestPage() {
                         <ChevronRight className="h-4 w-4 text-violet-200" />
                       </button>
                     )) : <p className="rounded-lg border border-dashed border-slate-600/50 px-3 py-2 text-xs text-slate-400">目前沒有替代料</p>}
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button type="button" variant="outline" size="sm" disabled={!trackingRecord} onClick={() => trackingRecord && openTrackingDialog(trackingRecord)} className="h-11 rounded-xl border-emerald-300/25 bg-emerald-400/10 px-2 text-emerald-100">狀態追蹤</Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => openRecord(mainRecord, "view")} className="h-11 rounded-xl border-slate-400/25 bg-slate-400/10 px-2 text-slate-100">完整資料</Button>
-                    </div>
                   </div>
                 ) : null}
 
                 <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-2 p-2">
-                  <Button type="button" size="sm" onClick={() => openRecord(mainRecord, "edit")} className="h-11 rounded-xl bg-cyan-300 px-3 font-black text-[#062230] hover:bg-cyan-200"><Plus className="mr-1 h-4 w-4" />更新料號</Button>
+                  <Button type="button" size="sm" onClick={() => openTrackingDialog(mainRecord)} className="h-11 rounded-xl px-3 font-bold"><Pencil className="mr-1 h-4 w-4" />追蹤／更新料件</Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => toggleExpanded(group.key)} aria-expanded={expanded} className="h-11 rounded-xl border-violet-300/25 bg-violet-400/10 px-2 text-violet-100">
                     {expanded ? <ChevronDown className="mr-1 h-4 w-4" /> : <ChevronRight className="mr-1 h-4 w-4" />}更多
                   </Button>
