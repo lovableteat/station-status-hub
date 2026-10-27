@@ -112,7 +112,7 @@ test("material identity hover shows module metadata once", () => {
 
 test("tracking table summaries remain compact instead of stretching material rows", () => {
   const cellBlock = source.match(
-    /function TrackingHistoryCell\([\s\S]*?\r?\n}\r?\n\r?\nfunction TrackingHistoryDialog/,
+    /function TrackingHistoryCell\([\s\S]*?\r?\n}\s+function PhaseOutStatus/,
   )?.[0] ?? "";
 
   assert.match(cellBlock, /data-testid="tracking-history-cell"/);
@@ -121,12 +121,14 @@ test("tracking table summaries remain compact instead of stretching material row
   assert.doesNotMatch(cellBlock, /line-clamp-2/);
 });
 
-test("tracking dialog separates current status, update form, history, and footer actions", () => {
-  assert.match(source, /data-testid="tracking-current-summary"/);
-  assert.match(source, /data-testid="tracking-compose-panel"/);
-  assert.match(source, /data-testid="tracking-history-panel"/);
-  assert.match(source, /data-testid="tracking-dialog-footer"/);
-  assert.match(source, /onPaste=\{handleImagePaste\}/);
+test("one record dialog saves the material fields and pending tracking together", () => {
+  assert.doesNotMatch(source, /function TrackingHistoryDialog|trackingDialogOpen|saveTrackingHistory/);
+  assert.match(source, /<MaterialTrackingEditor record=\{form\} draft=\{trackingDraft\}/);
+  assert.match(source, /applyMaterialTrackingDraft\(\{ \.\.\.form, level: 2 \}, trackingDraft, uploaderName\)/);
+  assert.match(source, /await onSave\(next\)/);
+  assert.match(source, /<TabsContent value="details" forceMount/);
+  assert.match(source, /<TabsContent value="tracking" forceMount/);
+  assert.match(source, /data-testid="material-record-save-footer"/);
 });
 
 const tableStart = source.indexOf('data-testid="material-table-scroll"');

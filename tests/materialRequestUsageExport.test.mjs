@@ -314,9 +314,9 @@ test("信件生成 groups every MPN candidate of the pending parts by manufactur
     ["Vendor B", ["U9:MPN-B1"]],
     [moduleExports.UNKNOWN_VENDOR_LABEL, ["C1:MPN-C"]],
   ]);
-  assert.equal(sections[0].subject, "【料號申請】Test BOM · Vendor A 共 1 項");
+  assert.equal(sections[0].subject, "[Vendor A][VERA_GPU][料號申請][蒐集]");
   const text = moduleExports.renderVendorMailText(sections[0], "您好，請協助。");
-  assert.match(text, /^主旨：【料號申請】Test BOM · Vendor A 共 1 項\n\n您好，請協助。\n\nVendor A 需申請料號（共 1 項）：\n1\. U9 · IC B · MPN MPN-A1（Qty 2；待確認）$/);
+  assert.match(text, /^主旨：\[Vendor A\]\[VERA_GPU\]\[料號申請\]\[蒐集\]\n\n您好，請協助。\n\nVendor A 需申請料號（共 1 項）：\n1\. U9 · IC B · MPN MPN-A1（Qty 2；待確認）$/);
   assert.equal(sections[2].items[0].name, "CAP");
 });
 

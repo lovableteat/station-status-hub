@@ -132,7 +132,8 @@ import { isEditableSpreadsheet } from "./core/spreadsheet";
 import { TestPlanSpreadsheetEditor } from "./TestPlanSpreadsheetEditor";
 import { TransferPanel, type TransferItem } from "./TransferPanel";
 import { FileLibraryManual, type FileLibraryManualSection } from "./FileLibraryManual";
-import { downloadWithProgress, openDirectorySink, pickDownloadDirectory, type TransferSink } from "./core/transfers";
+import { downloadWithProgress } from "./core/transfers";
+import { collectDownloadEntries, downloadZipWithProgress } from "./core/zipDownload";
 import { chooseDragDownloadUrl, createBlobUrlCache, describeDownloadUrl, DRAG_BLOB_CACHE_LIMIT, DRAG_BLOB_LIMIT, DRAG_BLOB_REVOKE_DELAY, DRAG_HOVER_PREFETCH_LIMIT, fetchBlobWithProgress } from "./core/dragDownload";
 import type {
   TestPlanEntry,
@@ -203,7 +204,6 @@ const entryKey = (entry: TestPlanEntry) => `${entry.kind}:${entry.id}`;
 const entryName = (entry: TestPlanEntry) => entry.kind === "folder" ? entry.name : entry.originalName;
 const entryParent = (entry: TestPlanEntry) => entry.kind === "folder" ? entry.parentId : entry.folderId;
 const toMoveItem = (entry: TestPlanEntry): MoveItem => ({ kind: entry.kind, id: entry.id, spaceId: entry.spaceId, folderId: entryParent(entry) });
-const isFileEntry = (entry: TestPlanEntry): entry is Extract<TestPlanEntry, { kind: "file" }> => entry.kind === "file";
 const sameLocation = (first: LibraryLocation | undefined, second: LibraryLocation) => Boolean(first && first.spaceId === second.spaceId && first.folderId === second.folderId);
 
 const CATEGORY_LABELS: Record<TestPlanFileCategory | "all", string> = {
@@ -945,7 +945,6 @@ export function TestPlanWorkspace() {
   const selectionEditable = selectedEntries.length > 0 && selectedEditable.length === selectedEntries.length;
   const selectionSpaces = new Set(selectedEntries.map(entry => entry.spaceId));
   const selectionMovable = selectionEditable && selectionSpaces.size === 1;
-  const selectedFiles = selectedEntries.filter(isFileEntry);
   const cutKeys = useMemo(() => new Set(clipboard?.items.map(item => `${item.kind}:${item.id}`) ?? []), [clipboard]);
   const canPaste = Boolean(clipboard && activeSpaceId && clipboard.spaceId === activeSpaceId && canEditSpace(activeSpaceId) && !busy && !loading);
   const readOnlyReason = "唯讀：可以瀏覽與下載，不能修改";
@@ -1219,7 +1218,7 @@ export function TestPlanWorkspace() {
 
   // Downloads stream to disk with a visible percentage; a storage without
   // direct links still works through the whole-blob fallback.
-  const handleDownload = async (file: TestPlanFileRecord, openSink?: (fileName: string) => Promise<TransferSink | "cancelled">) => {
+  const handleDownload = async (file: TestPlanFileRecord) => {
     const id = `${file.id}:${Date.now()}`;
     const controller = new AbortController();
     const patch = (changes: Partial<TransferItem>) => setDownloads((items) => items.map((item) => (item.id === id ? { ...item, ...changes } : item)));
@@ -1231,7 +1230,6 @@ export function TestPlanWorkspace() {
         resolveUrl: () => getFileDownloadUrl(file),
         fallback: () => downloadFile(file),
         signal: controller.signal,
-        openSink,
         onProgress: (loaded, total) => patch({ loaded, total }),
       });
       patch({ status: outcome === "saved" ? "done" : "cancelled", cancel: undefined });
@@ -1244,25 +1242,32 @@ export function TestPlanWorkspace() {
     }
   };
 
-  // Several files: one folder dialog, then every file streams into it.
+  // A folder or multi-selection becomes one ZIP, using the same save dialog as one file.
   const downloadEntries = async (entries: readonly TestPlanEntry[]) => {
-    const targets = entries.filter(isFileEntry);
-    if (targets.length === 0) {
-      toast.info("資料夾不能直接下載，請開啟資料夾後選取檔案。");
+    if (entries.length === 0) return;
+    if (entries.length === 1 && entries[0].kind === "file") {
+      void handleDownload(entries[0]);
       return;
     }
-    if (targets.length === 1) {
-      void handleDownload(targets[0]);
-      return;
+    const targets = collectDownloadEntries(entries, folders, files);
+    const name = entries.length === 1 ? `${targets[0].path.slice(0, -1)}.zip` : `檔案下載-${entries.length}個項目.zip`;
+    const id = `zip:${Date.now()}`;
+    const controller = new AbortController();
+    const patch = (changes: Partial<TransferItem>) => setDownloads(items => items.map(item => item.id === id ? { ...item, ...changes } : item));
+    setDownloads(items => [...items, { id, name, loaded: 0, total: targets.reduce((total, entry) => total + (entry.file?.fileSize ?? 0), 0), status: "active", cancel: () => controller.abort() }]);
+    try {
+      const outcome = await downloadZipWithProgress({
+        fileName: name, entries: targets, signal: controller.signal,
+        resolveUrl: getFileDownloadUrl, fallback: downloadFile,
+        onProgress: (loaded, total) => patch({ loaded, total }),
+      });
+      patch({ status: outcome === "saved" ? "done" : "cancelled", cancel: undefined });
+      if (outcome === "saved") toast.success(`已下載 ZIP（${targets.filter(entry => entry.file).length} 個檔案）`);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "ZIP 下載失敗";
+      patch({ status: "error", message, cancel: undefined });
+      toast.error(message);
     }
-    const directory = await pickDownloadDirectory();
-    if (directory === "cancelled") return;
-    let saved = 0;
-    for (const file of targets) {
-      const outcome = await handleDownload(file, directory ? (fileName) => openDirectorySink(directory, fileName) : undefined);
-      if (outcome === "saved") saved += 1;
-    }
-    if (saved) toast.success(`已下載 ${saved} 個檔案${targets.length > saved ? `，${targets.length - saved} 個未完成` : ""}`);
   };
 
   const getPreviewUrl = useCallback(async (file: TestPlanFileRecord) => {
@@ -1784,7 +1789,7 @@ export function TestPlanWorkspace() {
       <>
         {single && <ContextMenuItem onSelect={() => openEntry(single)}><FolderOpen className="mr-2 h-4 w-4" />開啟<ContextMenuShortcut>Enter</ContextMenuShortcut></ContextMenuItem>}
         {single?.kind === "file" && <ContextMenuItem onSelect={() => previewEntry(single)}><Eye className="mr-2 h-4 w-4" />預覽<ContextMenuShortcut>Alt+P</ContextMenuShortcut></ContextMenuItem>}
-        {selectedFiles.length > 0 && <ContextMenuItem onSelect={() => void downloadEntries(selectedEntries)}><Download className="mr-2 h-4 w-4" />下載{selectedFiles.length > 1 ? ` ${selectedFiles.length} 個檔案` : ""}</ContextMenuItem>}
+        {selectedEntries.length > 0 && <ContextMenuItem onSelect={() => void downloadEntries(selectedEntries)}><Download className="mr-2 h-4 w-4" />下載{selectedEntries.length > 1 || selectedEntries[0].kind === "folder" ? " ZIP" : ""}</ContextMenuItem>}
         {single?.kind === "file" && isEditableSpreadsheet(single) && <ContextMenuItem disabled={busy} onSelect={() => setSpreadsheetFile(single)}><FileSpreadsheet className="mr-2 h-4 w-4" />{canEditSpace(single.spaceId) ? "直接編輯 Excel" : "開啟 Excel"}</ContextMenuItem>}
         <ContextMenuSeparator />
         <ContextMenuItem disabled={!editable || !selectionMovable} onSelect={() => cutEntries(selectedEntries)}><Scissors className="mr-2 h-4 w-4" />剪下<ContextMenuShortcut>Ctrl+X</ContextMenuShortcut></ContextMenuItem>
@@ -2111,7 +2116,7 @@ export function TestPlanWorkspace() {
         {commandButton({ compactable: true, label: "貼上", icon: ClipboardPaste, disabled: !canPaste, onClick: () => void pasteHere(), title: clipboard ? `把剪下的 ${clipboard.items.length} 個項目移到這裡（Ctrl+V）` : "先剪下項目（Ctrl+X）" })}
         {commandButton({ label: "重新命名", icon: Pencil, disabled: !selectedEntry || !selectionEditable || busy, onClick: () => startRename(selectedEntry), title: selectedEntry ? (selectionEditable ? "重新命名（F2）" : readOnlyReason) : "選取一個項目（F2）" })}
         {commandButton({ label: "移至", icon: FolderInput, disabled: !selectionMovable || busy, onClick: () => requestMove(selectedEntries), title: selectedEntries.length === 0 ? "先選取項目" : selectionEditable ? "選擇目標資料夾；也可以直接拖曳" : readOnlyReason })}
-        {commandButton({ label: "下載", icon: Download, disabled: selectedFiles.length === 0, onClick: () => void downloadEntries(selectedEntries), title: selectedFiles.length > 1 ? `下載 ${selectedFiles.length} 個檔案到同一個資料夾` : "下載；也可以把檔案直接拖到桌面" })}
+        {commandButton({ label: "下載", icon: Download, disabled: selectedEntries.length === 0, onClick: () => void downloadEntries(selectedEntries), title: selectedEntries.length > 1 || selectedEntries[0]?.kind === "folder" ? "下載為一個 ZIP，保留資料夾結構" : "下載；也可以把檔案直接拖到桌面" })}
         {commandButton({ compactable: true, label: "複製連結", icon: Link2, disabled: !selectedEntry, onClick: () => void copyLink(selectedEntry), title: "複製能直接打開這個位置的連結" })}
         {commandButton({ label: "刪除", icon: Trash2, disabled: busy || loading || selectedEditable.length === 0, onClick: () => requestDelete(selectedEntries), className: "is-danger", title: selectedEntries.length && !selectedEditable.length ? readOnlyReason : "刪除（Delete）" })}
         <span className="file-explorer-divider" aria-hidden="true" />

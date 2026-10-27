@@ -96,7 +96,8 @@ test("main rows are memoised and keep every cell to one or two short lines", () 
 test("expanded alternative rows do not repeat the group star or the main row's live editors", () => {
   assert.doesNotMatch(alternativeBlock, /onToggleMarked|<Star\b/);
   assert.match(alternativeBlock, /record\.id === primaryTxRecordId \?/);
-  assert.match(alternativeBlock, /record\.id === primaryTrackingRecordId \?/);
+  assert.match(alternativeBlock, /<TrackingHistoryCell record=\{record\} onOpen=\{onOpenTracking\} embedded \/>/);
+  assert.doesNotMatch(alternativeBlock, /primaryTrackingRecordId|onClick=\{\(\) => onEdit\(record\)\}|onClick=\{\(\) => onView\(record\)\}/);
   assert.match(rowBlock, /aria-expanded=\{hasAlternatives \? expanded : undefined\}/);
   assert.match(source, /adjacentIndex = MATERIAL_TABLE_COLUMNS\.findIndex\(/);
   assert.match(source, /const REF_COLLATOR = new Intl\.Collator\(undefined, \{ numeric: true \}\)/);
@@ -125,7 +126,6 @@ test("duplicate controls were merged: one clear, one page-progress entry, delete
 test("dialogs and popovers use the page theme tokens instead of their own fixed colours", () => {
   const dialogBlocks = [
     slice("function CompactHoverValue(", "function MaterialFieldLabel("),
-    slice("function TrackingHistoryDialog(", "function PhaseOutStatus("),
     slice("function BomPageTrackerDialog(", "function MaterialRecordDialog("),
     slice("function MaterialRecordDialog(", "type MaterialColumnVisibility"),
     slice("function MaterialColumnSettings(", "const MaterialGroupRow = memo("),
@@ -211,7 +211,8 @@ test("待處理料 opens from the header actions and groups pending parts by cat
   assert.match(dialog, /groupPendingMaterials\(applications\)/);
   assert.match(dialog, /data-testid="pending-application"/);
   assert.match(dialog, />優先處理</);
-  assert.match(dialog, /onLocate\(group\)|onOpenTracking\(record\)|onOpenCreate\(group\)/);
+  assert.match(dialog, /onOpenTracking\(record\)/);
+  assert.doesNotMatch(dialog, />定位<|>更新料號<|>追蹤<|onLocate|onOpenCreate/);
   assert.match(source, /const pendingMaterialGroups = useMemo\(\(\) => dataset\.groups\.filter\(\(group\) => group\.records\.some\(\(record\) => record\.needsApplication\)\)/);
   assert.match(source, /const requiredApplicationCount = useMemo\(\(\) => dataset\.groups\.filter\(requiresApplication\)\.length/, "料號待補 keeps counting locations with no number at all");
   assert.match(source, /<PendingMaterialsDialog/);
@@ -229,9 +230,8 @@ test("column filters apply on every click instead of waiting for 確定", () => 
 });
 
 test("editing an item from 待處理料 returns to the list with its tab, search and scroll kept", () => {
-  assert.match(source, /onOpenCreate=\{\(_group, record\) => \{ setPendingDialogOpen\(false\); setReturnToPending\(true\); openRecord\(record, "edit"\); \}\}/, "更新料號 edits that vendor row with its 廠商 and MPN");
   assert.match(source, /onOpenTracking=\{\(record\) => \{ setPendingDialogOpen\(false\); setReturnToPending\(true\); openTrackingDialog\(record\); \}\}/);
-  assert.match(source, /if \(!returnToPending \|\| editorOpen \|\| trackingDialogOpen\) return;\s*setReturnToPending\(false\);\s*setPendingRestoreView\(true\);\s*setPendingDialogOpen\(true\);/);
+  assert.match(source, /if \(!returnToPending \|\| editorOpen\) return;\s*setReturnToPending\(false\);\s*setPendingRestoreView\(true\);\s*setPendingDialogOpen\(true\);/);
   assert.match(source, /restoreView=\{pendingRestoreView\}/);
   const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
   assert.match(dialog, /if \(restoreView\) \{/);
@@ -240,9 +240,9 @@ test("editing an item from 待處理料 returns to the list with its tab, search
 });
 
 test("更新 on a table row or mobile card edits that row; 新增替代料 lives in the record dialog", () => {
-  assert.match(rowBlock, /onClick=\{\(\) => actions\.editRecord\(statusRecord\)\}/);
+  assert.match(rowBlock, /<TrackingHistoryCell record=\{statusRecord\} onOpen=\{actions\.openTracking\} embedded \/>/);
   assert.doesNotMatch(rowBlock, /actions\.openCreate\(group\)/);
-  assert.match(source, /onClick=\{\(\) => openRecord\(mainRecord, "edit"\)\}[^>]*>[\s\S]{0,80}?更新料號/);
+  assert.match(source, /onClick=\{\(\) => openTrackingDialog\(mainRecord\)\}[^>]*>[\s\S]{0,80}?追蹤／更新料件/);
   const dialog = slice("function MaterialRecordDialog(", "type MaterialColumnVisibility");
   assert.match(dialog, /data-testid="material-add-alternate"/);
   assert.match(dialog, /先儲存或取消目前的修改，再新增替代料/);
@@ -310,17 +310,16 @@ test("不建議料匯出 opens the Non PVL dialog with the SOP link, preview and
 
 test("待處理料 can turn the pending parts into per-vendor mail content", () => {
   const dialog = slice("function PendingMailDialog(", "function PendingMaterialsDialog(");
-  assert.match(dialog, /buildVendorMailSections\(groups, workspaceName\)/);
+  assert.match(dialog, /buildVendorMailSections\(groups, workspaceName, subjectFormat\)/);
   assert.match(dialog, /exportVendorMailHtml\(\{ sections, messageHtml, signatureHtml, workspaceName, exportedBy \}\)/);
-  assert.match(dialog, /id="pending-mail-message"/);
-  assert.match(dialog, /id="pending-mail-signature"/);
+  assert.match(dialog, /id="pending-mail-subject-format"/);
+  assert.match(dialog, /<VendorMailEditor ref=\{contentRef\}/);
+  assert.match(dialog, /contentRef\.current\?\.snapshot\(\)/);
   assert.match(dialog, /aria-label=\{`\$\{section.vendor\} 信件主旨`\}/);
   assert.match(dialog, /setSubjectOverrides/);
   assert.match(dialog, /useVendorContacts\(open\)/);
   assert.match(dialog, /<VendorContactsPanel/);
   assert.match(dialog, /getVendorRecipients/);
-  assert.match(source, /function MailRichEditor\(/);
-  assert.match(source, /contentEditable/);
   const pending = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
   assert.match(pending, /data-testid="pending-mail-button"[\s\S]*?信件生成/);
   assert.match(pending, /<PendingMailDialog groups=\{mailGroups\}/);

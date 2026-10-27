@@ -115,3 +115,19 @@ test("a cancelled save dialog or an aborted stream never leaves a half-written f
   }), /403/);
   assert.equal(failing.aborted, true);
 });
+
+test("a 1 GiB single-file download keeps chunked disk writes without collecting a Blob", async () => {
+  const chunk = new Uint8Array(1024 * 1024);
+  const sink = memorySink();
+  let remaining = 1024;
+  const outcome = await downloadWithProgress({
+    fileName: "1GiB.bin", expectedSize: 1024 ** 3,
+    resolveUrl: async () => "https://storage.test/signed", fallback: async () => { throw new Error("must stream"); },
+    openSink: async () => sink,
+    fetchImpl: (async () => new Response(new ReadableStream({ pull(controller) { if (remaining-- > 0) controller.enqueue(chunk); else controller.close(); } }))) as typeof fetch,
+  });
+  assert.equal(outcome, "saved");
+  assert.equal(sink.written.length, 1024);
+  assert.equal(sink.written.reduce((total, length) => total + length, 0), 1024 ** 3);
+  assert.equal(sink.closed, true);
+});

@@ -753,9 +753,39 @@ export const UNKNOWN_VENDOR_LABEL = "未填廠商";
  * One mail per manufacturer: every MPN candidate of the pending groups, grouped
  * by its manufacturer so the same vendor receives a single request.
  */
+export const DEFAULT_VENDOR_MAIL_SUBJECT = '[{廠商}][VERA_GPU][料號申請][蒐集]';
+export const VENDOR_MAIL_ITEMS_TOKEN = '{{料件清單}}';
+export function renderVendorMailSubject(format = DEFAULT_VENDOR_MAIL_SUBJECT, vendor: string, workspaceName: string) {
+  return format.replace(/\{廠商\}/g, () => vendor).replace(/\{BOM\}/g, () => workspaceName).replace(/[\r\n]+/g, ' ').slice(0, 500);
+}
+
+export function splitVendorMailTemplate(html: string, doc: Document = document): { messageHtml: string; signatureHtml: string } {
+  const root = doc.createElement('div'); root.innerHTML = sanitizeMailHtml(html);
+  const walker = doc.createTreeWalker(root, 4);
+  const nodes: Text[] = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
+  const text = nodes.map(node => node.data).join('');
+  const start = text.indexOf(VENDOR_MAIL_ITEMS_TOKEN);
+  if (start < 0 || text.lastIndexOf(VENDOR_MAIL_ITEMS_TOKEN) !== start) throw new Error('信件內容需保留一個 {{料件清單}} 插入位置，其他文字不會被刪除');
+  const locate = (offset: number): [Text, number] => {
+    let cursor = 0;
+    for (const node of nodes) {
+      if (offset <= cursor + node.length) return [node, offset - cursor];
+      cursor += node.length;
+    }
+    throw new Error('無法定位料件清單，請重新插入位置標記');
+  };
+  const before = doc.createRange(), after = doc.createRange();
+  before.selectNodeContents(root); after.selectNodeContents(root);
+  before.setEnd(...locate(start)); after.setStart(...locate(start + VENDOR_MAIL_ITEMS_TOKEN.length));
+  const serialize = (range: Range) => { const fragment = doc.createElement('div'); fragment.append(range.cloneContents()); return fragment.innerHTML; };
+  return { messageHtml: serialize(before), signatureHtml: serialize(after) };
+}
+
 export function buildVendorMailSections(
   groups: ReadonlyArray<Pick<MaterialGroup, "displayRef" | "name" | "qty" | "records">>,
   workspaceName: string,
+  subjectFormat = DEFAULT_VENDOR_MAIL_SUBJECT,
 ): VendorMailSection[] {
   const byVendor = new Map<string, VendorMailItem[]>();
   for (const group of groups) {
@@ -782,7 +812,7 @@ export function buildVendorMailSections(
     .sort(([left], [right]) => (left === UNKNOWN_VENDOR_LABEL ? 1 : right === UNKNOWN_VENDOR_LABEL ? -1 : left.localeCompare(right, "zh-Hant", { numeric: true })))
     .map(([vendor, items]) => ({
       vendor,
-      subject: `【料號申請】${workspaceName} · ${vendor} 共 ${items.length} 項`,
+      subject: renderVendorMailSubject(subjectFormat, vendor, workspaceName),
       items: items.sort((left, right) => left.refDes.localeCompare(right.refDes, undefined, { numeric: true })),
     }));
 }

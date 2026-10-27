@@ -38,7 +38,7 @@ function saveBlob(blob: Blob, fileName: string) {
  * chunks and hand the blob to the download manager. Must be called inside the
  * user's click so the dialog is allowed to open.
  */
-export async function openDefaultSink(fileName: string): Promise<TransferSink | "cancelled"> {
+export async function openDefaultSink(fileName: string, maxBufferedBytes = Infinity, expectedSize = 0): Promise<TransferSink | "cancelled"> {
   const picker = (globalThis as { showSaveFilePicker?: (options: { suggestedName: string }) => Promise<SaveFilePickerHandle> }).showSaveFilePicker;
   if (picker) {
     try {
@@ -50,10 +50,17 @@ export async function openDefaultSink(fileName: string): Promise<TransferSink | 
       // No user activation or an unsupported context: fall through to the blob download.
     }
   }
+  if (expectedSize > maxBufferedBytes) throw new Error("此瀏覽器無法串流儲存大型 ZIP，請改用 Chrome／Edge，或減少選取檔案至 128 MiB 內。");
   const chunks: Uint8Array[] = [];
+  let buffered = 0;
   return {
-    write: (chunk) => { chunks.push(chunk); },
+    write: (chunk) => {
+      buffered += chunk.byteLength;
+      if (buffered > maxBufferedBytes) throw new Error("此瀏覽器的 ZIP 暫存已達 128 MiB，請改用 Chrome／Edge，或減少選取檔案。");
+      chunks.push(chunk);
+    },
     close: () => saveBlob(new Blob(chunks as BlobPart[]), fileName),
+    abort: () => { chunks.length = 0; },
   };
 }
 
@@ -142,6 +149,7 @@ export async function downloadWithProgress(options: DownloadWithProgressOptions)
       onProgress?.(0, blob.size);
       await sink.write(new Uint8Array(await blob.arrayBuffer()));
       onProgress?.(blob.size, blob.size);
+      if (signal?.aborted) return cancelled();
       await sink.close();
       return "saved";
     }
@@ -158,15 +166,23 @@ export async function downloadWithProgress(options: DownloadWithProgressOptions)
       await sink.write(new Uint8Array(await blob.arrayBuffer()));
     } else {
       const reader = response.body.getReader();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        loaded += value.byteLength;
-        if (loaded > total) total = loaded;
-        await sink.write(value);
-        onProgress?.(loaded, total);
+      try {
+        for (;;) {
+          signal?.throwIfAborted();
+          const { done, value } = await reader.read();
+          if (done) break;
+          signal?.throwIfAborted();
+          loaded += value.byteLength;
+          if (loaded > total) total = loaded;
+          await sink.write(value);
+          onProgress?.(loaded, total);
+        }
+      } finally {
+        await reader.cancel().catch(() => {});
+        reader.releaseLock();
       }
     }
+    if (signal?.aborted) return cancelled();
     onProgress?.(loaded, Math.max(total, loaded));
     await sink.close();
     return "saved";

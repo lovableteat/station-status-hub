@@ -24,7 +24,7 @@ function execute(name,h,overrides={}){
   showCollaborativeUnavailableToast:effect('connection-toast'),showDatasetSyncingToast:effect('loading-toast'),
   setIsImporting:effect('busy'),setBomWorkspaces:effect('state'),setActiveBomId:effect('selection'),setExpandedKey:effect('expand'),setPage:effect('page'),setEditorOpen:effect('editor'),setTableColorDialogOpen:effect('colors'),
   replaceBomWorkspace:effect('optimistic'),toast:effect('toast'),console,
-  parseMaterialWorkbookFile:async()=>({recordCount:1,records:[record],sheetName:'Sheet'}),
+  parseMaterialWorkbookFile:async()=>({recordCount:1,records:[record],sheetName:'Sheet',importNotes:[]}),
   createBomId:()=> 'NEW-W',mergeImportedWorkspace:(_,id,payload)=>({id,payload}),
   saveBomWorkspace:async w=>{writes.push(w);},saveBomWorkspaceRecord:async(w,r)=>{writes.push(w);return {updatedAt:'new'};},
   saveBomWorkspacePageTracker:async()=>{writes.push('tracker');},removeBomWorkspace:async()=>{writes.push('delete');},saveBomWorkspaceTableColorTheme:async()=>{writes.push('theme');},
@@ -51,7 +51,7 @@ for(const scenario of ['account-switch','logout','revoke','revoke-and-restore'])
   if(scenario==='logout')await h.update(null,false);
   if(scenario.startsWith('revoke'))await h.update('account-A',false);
   if(scenario==='revoke-and-restore')await h.update('account-A',true);
-  pending.resolve({recordCount:1,records:[{id:'A-private'}],sheetName:'Sheet'});await request;
+  pending.resolve({recordCount:1,records:[{id:'A-private'}],sheetName:'Sheet',importNotes:[]});await request;
   assert.equal(c.writes.length,0);assert.equal(c.effects.includes('optimistic'),false);assert.equal(c.effects.includes('audit'),false);assert.equal(c.effects.includes('selection'),false);
  }finally{await h.unmount();}
 });

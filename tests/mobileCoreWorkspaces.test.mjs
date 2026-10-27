@@ -88,7 +88,7 @@ test("material requests render actionable cards on compact screens and preserve 
   assert.match(source, /hidden border-t border-\[#2a526f\] lg:block/);
   assert.match(source, /手機以料件卡片呈現/);
   assert.match(source, /openRecord\(mainRecord, "view"\)/);
-  assert.match(source, /openTrackingDialog\(trackingRecord\)/);
+  assert.match(source, /openTrackingDialog\(mainRecord\)/);
   assert.match(source, /openCreate\(group\)/);
   assert.match(source, /toggleMarkedGroup\(group\.key\)/);
   assert.match(source, /aria-label=\{isSearchPending \? "搜尋中" : "搜尋"\}/);
