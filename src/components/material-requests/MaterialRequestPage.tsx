@@ -102,6 +102,9 @@ import {
   getLatestTrackingEntry,
   isPreferredInternalPartNumber,
   normalizeMaterialSearchText,
+  hasMaterialPartNumber,
+  isMeManufacturedRecord,
+  ME_APPLICATION_EXEMPTION_LABEL,
   parseMaterialWorkbookFile,
 } from "./materialRequestUtils";
 import {
@@ -2718,6 +2721,10 @@ export function PendingMailDialog({
   );
 }
 
+function MaterialApplicationExemptionBadge({ record }: { record: Pick<MaterialWorkbookRecord, 'refDes' | 'refGroup'> }) {
+  return isMeManufacturedRecord(record) ? <span data-testid="me-application-exempt" title={ME_APPLICATION_EXEMPTION_LABEL} aria-label={ME_APPLICATION_EXEMPTION_LABEL} className="shrink-0 rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">ME 免申請</span> : null;
+}
+
 // Ref Des prefixes decide the category by default; companies that name parts differently can override it per part.
 function PendingCategoryPicker({ group, disabled, onChange }: { group: MaterialGroup; disabled: boolean; onChange: (category: PendingMaterialCategory | null) => void }) {
   const { category, manual } = resolvePendingMaterialCategory(group);
@@ -2729,7 +2736,7 @@ function PendingCategoryPicker({ group, disabled, onChange }: { group: MaterialG
         data-testid="pending-category-picker"
         aria-label={`調整 ${group.displayRef} 的分類，目前 ${label}${manual ? "（手動）" : "（依位號）"}`}
         title={manual ? `手動分類為 ${label}；可改回依位號自動分類` : `依位號自動分類為 ${label}；分錯可在這裡改`}
-        className={cn("h-7 w-[8.5rem] flex-none gap-1 rounded-md px-2 text-xs font-bold", manual ? "border-primary/60 bg-primary/15 text-primary" : "border-border bg-secondary/60 text-foreground/80")}
+        className={cn("h-9 w-[8.5rem] flex-none gap-1 rounded-md px-2 text-xs font-bold", manual ? "border-primary/60 bg-primary/15 text-primary" : "border-border bg-secondary/60 text-foreground/80")}
       >
         <SelectValue>{manual ? `${label} · 手動` : label}</SelectValue>
       </SelectTrigger>
@@ -2741,7 +2748,7 @@ function PendingCategoryPicker({ group, disabled, onChange }: { group: MaterialG
   );
 }
 
-function PendingMaterialsDialog({
+export function PendingMaterialsDialog({
   canEdit,
   groups,
   open,
@@ -2892,17 +2899,19 @@ function PendingMaterialsDialog({
               const trackingStatus = record.trackingStatus?.trim() || "";
               const stale = isStale(group);
               return (
-                <div key={application.key} data-testid="pending-application" className={cn("flex flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
+                <div key={application.key} data-testid="pending-application" className={cn("flex min-h-14 flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40 lg:h-14 lg:flex-nowrap", stale ? "border-destructive/40" : "border-border")}>
                   <span className={cn("h-2 w-2 flex-none rounded-full", stale ? "material-blink bg-destructive" : "bg-muted-foreground/40")} aria-hidden="true" />
-                  <span className="w-[16rem] flex-none truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
+                  <span className="w-[calc(100%-1rem)] flex-none truncate font-mono text-sm font-semibold text-foreground sm:w-36 xl:w-48" title={group.displayRef}>{group.displayRef}</span>
                   <PendingCategoryPicker group={group} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
                   <span className="min-w-0 flex-1 truncate text-base text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
-                  <span className="hidden w-[18rem] flex-none truncate font-mono text-sm text-foreground/75 md:block" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
-                  <span className="hidden w-[11rem] flex-none truncate text-xs text-muted-foreground lg:block" title={record.manufacturer}>{record.manufacturer || "未填廠商"}</span>
-                  <span className={cn(CHIP_BASE, "flex-none", getTrackingStatusTone(trackingStatus))}>{trackingStatus || "未追蹤"}</span>
-                  {stale && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)} title="還沒取得料號，且超過 3 天沒有更新資料">逾 3 天未更新</span>}
+                  <span className="hidden w-28 flex-none truncate font-mono text-sm text-foreground/75 md:block xl:w-40" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
+                  <span className="hidden w-20 flex-none truncate text-xs text-muted-foreground lg:block xl:w-28" title={record.manufacturer}>{record.manufacturer || "未填廠商"}</span>
+                  {stale && <span className={cn(CHIP_BASE, "inline-flex h-9 flex-none items-center", CHIP_TONES.danger)} title="還沒取得料號，且超過 3 天沒有更新資料">逾 3 天未更新</span>}
                   <div className="ml-auto flex flex-none items-center gap-1">
-                    <Button type="button" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="h-11 px-3 text-sm">追蹤／更新</Button>
+                    <Button type="button" data-testid="pending-tracking-control" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="h-9 gap-0 overflow-hidden rounded-lg border border-border p-0 text-xs" aria-label={`追蹤／更新 ${group.displayRef}，目前${trackingStatus || '未追蹤'}`}>
+                      <span data-testid="pending-status-segment" className={cn("inline-flex h-full items-center px-2", getTrackingStatusTone(trackingStatus))}><span className="max-w-24 truncate">{trackingStatus || "未追蹤"}</span></span>
+                      <span data-testid="pending-update-segment" className="inline-flex h-full items-center border-l border-border px-3">追蹤／更新</span>
+                    </Button>
                   </div>
                 </div>
               );
@@ -3597,6 +3606,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                   refValues={materialRefValues}
                 />
               </div>
+              <MaterialApplicationExemptionBadge record={statusRecord} />
             </div>
           </td>
         )}
@@ -3675,7 +3685,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                 <Copy className={cn("h-3.5 w-3.5 flex-none opacity-60 group-hover:opacity-100", iconClassName)} />
               </button>
             ) : (
-              <span className="text-xs font-semibold leading-5 text-amber-300">實體料號未提供</span>
+              <span className={cn("text-xs font-semibold leading-5", isMeManufacturedRecord(statusRecord) ? 'text-primary' : 'text-amber-300')}>{isMeManufacturedRecord(statusRecord) ? ME_APPLICATION_EXEMPTION_LABEL : '實體料號未提供'}</span>
             )}
           </td>
         )}
@@ -3829,6 +3839,7 @@ function CompactAlternativeRows({
                     #{index + 1}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-[13px] text-slate-300" title={record.name || group.name}>{record.name || group.name || "未命名料件"}</span>
+                  <MaterialApplicationExemptionBadge record={record} />
                   {preferred && (
                     <span
                       className="flex-none rounded-full px-2 text-[11px] font-bold leading-5 text-slate-50"
@@ -3895,7 +3906,7 @@ function CompactAlternativeRows({
                     <Copy className="h-3.5 w-3.5 flex-none text-cyan-300 opacity-60 group-hover:opacity-100" />
                   </button>
                 ) : (
-                  <span className="text-xs font-bold leading-5 text-amber-300">實體料號未提供</span>
+                  <span className={cn("text-xs font-bold leading-5", isMeManufacturedRecord(record) ? 'text-primary' : 'text-amber-300')}>{isMeManufacturedRecord(record) ? ME_APPLICATION_EXEMPTION_LABEL : '實體料號未提供'}</span>
                 )}
               </td>
             )}
@@ -4707,7 +4718,9 @@ export function MaterialRequestPage() {
         const alternativeSearchText = noAlternative
           ? "單一料 無替代料 單一來源 single source no alternative"
           : "有替代料 multiple source alternative";
-        const applicationSearchText = mustApply
+        const applicationSearchText = group.records.every(isMeManufacturedRecord)
+          ? ME_APPLICATION_EXEMPTION_LABEL
+          : mustApply
           ? "未提供虛擬／實體料號 料號待補 完全無料 主料與替代都無料"
           : "已提供料號 已提供實體料號或虛擬料號";
 
@@ -4812,7 +4825,7 @@ export function MaterialRequestPage() {
 
     return (
       availability === "all" ||
-      (availability === "usable" && !mustApply) ||
+      (availability === "usable" && group.records.some(hasMaterialPartNumber)) ||
       (availability === "required" && mustApply) ||
       (availability === "pending" && group.pendingCount > 0) ||
       (availability === "risk" && group.riskCount > 0) ||
@@ -4917,7 +4930,7 @@ export function MaterialRequestPage() {
     [dataset.groups]
   );
   const usableGroupCount = useMemo(
-    () => dataset.groups.filter((group) => !requiresApplication(group)).length,
+    () => dataset.groups.filter((group) => group.records.some(hasMaterialPartNumber)).length,
     [dataset.groups]
   );
   const pendingMaterialGroups = useMemo(() => dataset.groups.filter((group) => group.records.some((record) => record.needsApplication)), [dataset.groups]);
@@ -6383,6 +6396,7 @@ export function MaterialRequestPage() {
 
                 <div className="flex items-center gap-1.5 overflow-x-auto border-y border-white/5 bg-[#091827]/85 px-2.5 py-1.5 text-[11px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <span className={cn("shrink-0 rounded-full border px-2 py-0.5 font-black", group.riskCount > 0 ? "border-rose-300/35 bg-rose-400/12 text-rose-100" : mustApply ? "border-amber-300/35 bg-amber-400/12 text-amber-100" : "border-slate-300/30 bg-slate-400/10 text-slate-100")}>{group.riskCount > 0 ? "料況需確認" : mustApply ? "未提供虛擬／實體料號" : mainRecord.sourcingStatus || "供應／核准狀態未提供"}</span>
+                  <MaterialApplicationExemptionBadge record={mainRecord} />
                   <span className="max-w-[11rem] shrink-0 truncate rounded-full border border-slate-500/20 bg-slate-800/35 px-2 py-0.5 text-slate-200">REF {mainRecord.refDes || mainRecord.refGroup || "-"}</span>
                   <span className={cn("shrink-0 rounded-full border px-2 py-0.5 font-bold", availableAlternativeCount > 0 ? "border-emerald-300/25 bg-emerald-400/8 text-emerald-200" : "border-slate-500/25 bg-slate-800/40 text-slate-300")}>替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
                 </div>
@@ -6393,6 +6407,7 @@ export function MaterialRequestPage() {
                       <button key={record.id} type="button" onClick={() => openRecord(record, "view")} className="flex w-full items-center gap-3 rounded-xl border border-violet-300/15 bg-violet-400/[0.07] px-3 py-2 text-left">
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-300/15 text-xs font-black text-violet-100">ALT</span>
                         <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{getDisplayMpn(record) || "未填 MPN"}</strong><span className="block truncate text-xs text-slate-400">{record.manufacturer || "未指定廠商"}</span></span>
+                        <MaterialApplicationExemptionBadge record={record} />
                         <ChevronRight className="h-4 w-4 text-violet-200" />
                       </button>
                     )) : <p className="rounded-lg border border-dashed border-slate-600/50 px-3 py-2 text-xs text-slate-400">目前沒有替代料</p>}

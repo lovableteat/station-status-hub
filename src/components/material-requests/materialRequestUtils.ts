@@ -116,7 +116,9 @@ export interface MaterialRecord extends MaterialWorkbookRecord {
   isPreferred: boolean;
   isApproved: boolean;
   isRisk: boolean;
-  /** This vendor row has neither a 實體料號 nor a 虛擬料號, so it still has to be applied for. */
+  /** An ME-made row remains visible but is exempt from part-number applications. */
+  applicationExempt?: boolean;
+  /** A non-exempt vendor row has neither a 實體料號 nor a 虛擬料號. */
   needsApplication: boolean;
   /** Set when 零件狀態 was empty and the value came from the legacy tracking column. */
   partUsageStatusSource?: "legacy-tracking";
@@ -243,6 +245,17 @@ const IMPORTED_TRACKING_ID_PREFIX = "imported-tracking-";
 
 function normalizeText(value: unknown) {
   return String(value ?? "").normalize("NFKC").replace(/\u3000/g, " ").trim();
+}
+
+export const ME_APPLICATION_EXEMPTION_LABEL = 'ME 製作・免申請';
+
+export function isMeManufacturedRecord(record: Pick<MaterialWorkbookRecord, 'refDes' | 'refGroup'>): boolean {
+  const refs = splitRefDesignators(normalizeText(record.refDes) || record.refGroup);
+  return refs.length > 0 && refs.every(ref => ref.toUpperCase() === 'ME');
+}
+
+export function hasMaterialPartNumber(record: Pick<MaterialWorkbookRecord, 'partNumber' | 'virtualAlternative'>): boolean {
+  return !!(normalizeText(record.partNumber) || normalizeText(record.virtualAlternative));
 }
 
 export function getSymbolAvailability(value: unknown): SymbolAvailability {
@@ -671,11 +684,13 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
     isPreferred,
     isApproved,
     isRisk,
-    needsApplication: !normalizeText(raw.partNumber) && !normalizeText(raw.virtualAlternative),
+    applicationExempt: isMeManufacturedRecord(raw),
+    needsApplication: !isMeManufacturedRecord(raw) && !hasMaterialPartNumber(raw),
     searchText: buildSearchText([
       raw.sectionName,
       raw.assemblyName,
       raw.name,
+      ...(isMeManufacturedRecord(raw) ? [ME_APPLICATION_EXEMPTION_LABEL] : []),
       raw.refGroup,
       raw.refDes,
       ...splitRefDesignators(raw.refDes),
@@ -740,6 +755,7 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
       })[0] ?? preferredRecord;
       const preferredPartNumber = normalizeText(primaryRecord.partNumber);
       const displayLocationTokens = Array.from(new Set(groupRecords.flatMap((item) => item.locationTokens))).sort(compareLocationTokens);
+      const applicationRecords = groupRecords.filter(record => !record.applicationExempt);
 
       return {
         key,
@@ -763,13 +779,9 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
         manufacturers: uniqueValues(groupRecords.map((item) => item.manufacturer)),
         records: groupRecords,
         primaryRecord,
-        requiresApplication: !groupRecords.some(
-          (record) =>
-            Boolean(normalizeText(record.partNumber)) ||
-            Boolean(normalizeText(record.virtualAlternative))
-        ),
+        requiresApplication: applicationRecords.length > 0 && !applicationRecords.some(hasMaterialPartNumber),
         totalCount: groupRecords.length,
-        pendingCount: groupRecords.filter((item) => item.isPending).length,
+        pendingCount: groupRecords.filter((item) => item.isPending && !item.applicationExempt).length,
         okCount: groupRecords.filter((item) => item.isReady).length,
         approvedCount: groupRecords.filter((item) => item.isApproved).length,
         riskCount: groupRecords.filter((item) => item.isRisk).length,
@@ -804,7 +816,7 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
     stats: {
       totalRecords: records.length,
       totalGroups: groups.length,
-      pendingRecords: records.filter((record) => record.isPending).length,
+      pendingRecords: records.filter((record) => record.isPending && !record.applicationExempt).length,
       readyRecords: records.filter((record) => record.isReady).length,
       approvedRecords: records.filter((record) => record.isApproved).length,
       riskRecords: records.filter((record) => record.isRisk).length,

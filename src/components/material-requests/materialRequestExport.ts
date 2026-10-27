@@ -791,6 +791,7 @@ export function buildVendorMailSections(
   for (const group of groups) {
     const seen = new Set<string>();
     for (const record of group.records) {
+      if (record.applicationExempt || record.needsApplication === false) continue;
       const vendor = record.manufacturer?.trim() || UNKNOWN_VENDOR_LABEL;
       const mpn = record.manufacturerPartNumber?.trim() ?? "";
       const key = `${vendor}\u0000${mpn}`;
