@@ -4926,6 +4926,9 @@ export function MaterialRequestPage() {
   const discouragedMaterialCount = discouragedMaterialRows.length;
   const [nonPvlDialogOpen, setNonPvlDialogOpen] = useState(false);
   const [rlcPriorityOpen, setRlcPriorityOpen] = useState(false);
+  const [assigningBomProjectId, setAssigningBomProjectId] = useState<string | null>(null);
+  const bomProjectAssignmentRef = useRef<ReturnType<typeof captureBomWrite> | null>(null);
+  useEffect(() => { setAssigningBomProjectId(null); }, [canEdit, user?.userId]);
   const rlcProjectId = activeWorkspace.project?.projectId ?? null;
   const rlcRules = useRlcPriority(rlcProjectId, user?.userId ?? null, rlcPriorityOpen);
   const [isExportingDiscouraged, setIsExportingDiscouraged] = useState(false);
@@ -5498,37 +5501,40 @@ export function MaterialRequestPage() {
   };
 
   const assignBomProject = async (workspaceId: string, projectId: string | null) => {
-    let writeScope;
-    try {writeScope = captureBomWrite();} catch {return;}
+    const writeScope = captureBomWrite();
+    if (!isCollaborativeReady) throw new Error('共用資料尚未連線，請稍後再指定專案。');
+    if (bomProjectAssignmentRef.current && isBomWriteCurrent(bomProjectAssignmentRef.current)) throw new Error('專案正在儲存，請稍候。');
     const workspace = bomWorkspaces.find((item) => item.id === workspaceId);
-    if (!workspace) return;
-    const nextProject = toBomWorkspaceProject(projectId ? allProjects.find((project) => project.id === projectId) : null) ?? null;
+    if (!workspace) throw new Error('找不到這份 BOM，請重新載入。');
+    const project = projectId ? allProjects.find((item) => item.id === projectId) : null;
+    if (projectId && !project) throw new Error('找不到選取的專案，請重新選擇。');
+    const nextProject = toBomWorkspaceProject(project) ?? null;
     if ((workspace.project?.projectId ?? null) === (nextProject?.projectId ?? null)) return;
-
-    setBomWorkspaces((current) => current.map((item) => (
-      item.id === workspaceId ? { ...item, project: nextProject ?? undefined } : item
-    )));
-
+    bomProjectAssignmentRef.current = writeScope;
+    setAssigningBomProjectId(workspaceId);
     try {
       recentLocalWorkspaceWritesRef.current.set(workspaceId, Date.now());
       await saveBomWorkspaceProject(workspaceId, nextProject, () => assertBomWriteCurrent(writeScope));
-      if (!isBomWriteCurrent(writeScope)) return;
+      assertBomWriteCurrent(writeScope);
+      setBomWorkspaces((current) => current.map((item) => (
+        item.id === workspaceId ? { ...item, project: nextProject ?? undefined } : item
+      )));
       toast({
         title: nextProject ? "BOM 已歸入專案" : "BOM 已移出專案",
         description: nextProject
           ? `「${workspace.name}」現在屬於專案「${nextProject.projectName}」，其他人也會看到相同分組。`
           : `「${workspace.name}」已改為未指定專案。`,
       });
-    } catch {
-      if (!isBomWriteCurrent(writeScope)) return;
-      setBomWorkspaces((current) => current.map((item) => (
-        item.id === workspaceId ? { ...item, project: workspace.project } : item
-      )));
-      toast({
+    } catch (error) {
+      if (isBomWriteCurrent(writeScope)) toast({
         variant: "destructive",
         title: "專案歸屬儲存失敗",
         description: "分組尚未寫入資料庫，請稍後再試。",
       });
+      throw error;
+    } finally {
+      if (bomProjectAssignmentRef.current === writeScope) bomProjectAssignmentRef.current = null;
+      if (isBomWriteCurrent(writeScope)) setAssigningBomProjectId(null);
     }
   };
 
@@ -5911,7 +5917,7 @@ export function MaterialRequestPage() {
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
-      <RlcPriorityDialog key={`${user?.userId}:${activeWorkspace.id}:${rlcProjectId}`} open={rlcPriorityOpen} onOpenChange={setRlcPriorityOpen} projectId={rlcProjectId} projectName={activeWorkspace.project?.projectName ?? ''} groups={dataset.groups} rules={rlcRules.rules} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} loading={rlcRules.loading || !isFullDatasetLoaded} saving={rlcRules.saving} error={rlcRules.error} onSaveRule={rlcRules.saveRule} onReload={rlcRules.reload} />
+      <RlcPriorityDialog key={`${user?.userId}:${activeWorkspace.id}:${rlcProjectId}`} open={rlcPriorityOpen} onOpenChange={setRlcPriorityOpen} projectId={rlcProjectId} projectName={activeWorkspace.project?.projectName ?? ''} workspaceName={activeWorkspace.name} projects={projects.map(project => ({ id: project.id, name: project.name }))} onAssignProject={projectId => assignBomProject(activeWorkspace.id, projectId)} assigningProject={assigningBomProjectId === activeWorkspace.id} groups={dataset.groups} rules={rlcRules.rules} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} loading={rlcRules.loading || !isFullDatasetLoaded} saving={rlcRules.saving} error={rlcRules.error} onSaveRule={rlcRules.saveRule} onReload={rlcRules.reload} />
       <MaterialNonPvlDialog
         isExporting={isExportingDiscouraged}
         open={nonPvlDialogOpen}
@@ -5946,7 +5952,7 @@ export function MaterialRequestPage() {
         }}
       />
       <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
-      <BomManagerDialog canEdit={canEdit} activeBomId={activeBomId} activeProjectName={activeProject?.name} bomWorkspaces={activeBomWorkspaces} archivedWorkspaces={archivedBomWorkspaces} projectGroups={bomProjectGroups} projects={projects} open={bomManagerOpen} onAssignProject={(id, projectId) => void assignBomProject(id, projectId)} onSetArchived={(id, archived) => void setBomArchived(id, archived)} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
+      <BomManagerDialog canEdit={canEdit} activeBomId={activeBomId} activeProjectName={activeProject?.name} bomWorkspaces={activeBomWorkspaces} archivedWorkspaces={archivedBomWorkspaces} projectGroups={bomProjectGroups} projects={projects} open={bomManagerOpen} onAssignProject={(id, projectId) => void assignBomProject(id, projectId).catch(() => {})} onSetArchived={(id, archived) => void setBomArchived(id, archived)} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
       <MaterialRecordDialog key={`${user?.userId}:${activeWorkspace.id}:${editorSession}`} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} open={editorOpen && editorContext?.workspaceId === activeWorkspace.id && editorContext.accountId === user?.userId} mode={editorMode} record={editorRecord} initialTab={editorInitialTab} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target) => void openSpecDocument(target)} onSave={handleSaveRecord} onAddAlternate={editorMode === "create" ? undefined : () => {
         const group = dataset.groups.find((candidate) => candidate.records.some((item) => item.id === editorRecord.id));
         if (group) openCreate(group);
