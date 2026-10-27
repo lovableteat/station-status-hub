@@ -138,6 +138,9 @@ import { MaterialNonPvlDialog } from "./MaterialNonPvlDialog";
 import { getVendorRecipients } from "./vendorContacts";
 import { useVendorContacts } from "./useVendorContacts";
 import { VendorContactsPanel } from "./VendorContactsPanel";
+import { SupplierDirectoryDialog } from "./SupplierDirectoryDialog";
+import { useCompanySuppliers } from "./useCompanySuppliers";
+import { emptySupplierData, getCompanyRecipients, supplierEmails, validateSupplierData } from "./supplierDirectory";
 import {
   MATERIAL_TABLE_COLUMNS,
   type BomProjectGroup,
@@ -3078,18 +3081,29 @@ export function PendingMailDialog({
   const [signatureHtml, setSignatureHtml] = useState(() => loadStoredHtml(VENDOR_MAIL_SIGNATURE_KEY, ""));
   const [isExporting, setIsExporting] = useState(false);
   const [contactsOpen, setContactsOpen] = useState(false);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
   const [subjectOverrides, setSubjectOverrides] = useState<Record<string, string>>({});
+  const [recipientOverrides, setRecipientOverrides] = useState<Record<string, { to: string; cc: string }>>({});
   const { toast } = useToast();
   const book = useVendorContacts(open);
+  const companyBook = useCompanySuppliers(open);
   const generatedSections = useMemo(() => buildVendorMailSections(groups, workspaceName), [groups, workspaceName]);
   const subjectKey = (vendor: string) => `${book.ownerId ?? "signed-out"}\0${workspaceName}\0${vendor}`;
   const sections = generatedSections.map((section) => {
     const recipients = getVendorRecipients(book.contacts, section.vendor);
+    const companyRecipients = getCompanyRecipients(companyBook.contacts, section.vendor);
+    const overrides = recipientOverrides[subjectKey(section.vendor)];
+    const to = overrides?.to ?? [...new Set(supplierEmails(`${companyRecipients.to}; ${recipients.to}`))].join('; ');
+    const cc = overrides?.cc ?? [...new Set(supplierEmails(`${companyRecipients.cc}; ${recipients.cc}`))].filter(email => !supplierEmails(to).includes(email)).join('; ');
     return {
       ...section,
       subject: subjectOverrides[subjectKey(section.vendor)] ?? section.subject,
-      to: recipients.to ? recipients.to.split("; ") : [],
-      cc: recipients.cc ? recipients.cc.split("; ") : [],
+      to: to.split(/[;,\n]+/).map(value => value.trim()).filter(Boolean),
+      cc: cc.split(/[;,\n]+/).map(value => value.trim()).filter(Boolean),
+      toText: to,
+      ccText: cc,
+      companyMatches: companyRecipients.matched,
+      recipientErrors: validateSupplierData({ ...emptySupplierData(), company: section.vendor, email: to, cc }),
     };
   });
   const itemCount = sections.reduce((sum, section) => sum + section.items.length, 0);
@@ -3120,12 +3134,15 @@ export function PendingMailDialog({
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">主旨依 BOM、廠商與項數自動生成，可在下方逐封修改。收件人由你的供應商聯絡簿帶入。</p>
+            <p className="text-sm text-muted-foreground">主旨可逐封修改。收件人依公司、別名與明列代理品牌帶入，請核對窗口後匯出。</p>
+            <Button type="button" variant="outline" className="h-11 gap-2" onClick={() => setDirectoryOpen(true)}><Factory className="h-4 w-4" />供應商聯絡資料</Button>
             <Button type="button" variant="outline" className="h-11 shrink-0 gap-2" aria-expanded={contactsOpen} onClick={() => setContactsOpen((value) => !value)}>
-              <Factory className="h-4 w-4" />供應商聯絡簿（{book.contacts.length}）
+              <Factory className="h-4 w-4" />個人聯絡簿（{book.contacts.length}）
             </Button>
           </div>
           {book.loading ? <p role="status" className="text-sm text-muted-foreground">正在載入個人聯絡簿…</p> : null}
+          {companyBook.loading ? <p role="status" className="text-sm text-muted-foreground">正在載入公司聯絡資料…</p> : null}
+          {companyBook.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">公司聯絡資料讀取失敗：{companyBook.error}<Button variant="outline" onClick={() => void companyBook.reload().catch(() => {})}>重新載入公司聯絡資料</Button></div> : null}
           {book.error ? (
             <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
               <span>{book.error}</span>
@@ -3163,8 +3180,16 @@ export function PendingMailDialog({
                         <Button type="button" variant="outline" className="h-11 shrink-0" aria-label={`重新產生 ${section.vendor} 主旨`} onClick={() => setSubjectOverrides((current) => ({ ...current, [subjectKey(section.vendor)]: generatedSections[index].subject }))}>自動產生</Button>
                       </div>
                       {!section.subject.trim() ? <p className="text-sm text-destructive">請填寫主旨後再匯出。</p> : null}
-                      <p className="break-words text-sm text-muted-foreground">收件人：{section.to.length ? section.to.join("; ") : "尚未設定，可在供應商聯絡簿新增"}</p>
-                      {section.cc.length ? <p className="break-words text-sm text-muted-foreground">副本：{section.cc.join("; ")}</p> : null}
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div><Label htmlFor={`pending-mail-to-${index}`}>收件人</Label><Input id={`pending-mail-to-${index}`} aria-label={`${section.vendor} 收件人`} value={section.toText} placeholder="Email，多位以分號分隔" maxLength={6000} onChange={event => setRecipientOverrides(prior => ({ ...prior, [subjectKey(section.vendor)]: { to: event.target.value, cc: section.ccText } }))} /></div>
+                        <div><Label htmlFor={`pending-mail-cc-${index}`}>副本</Label><Input id={`pending-mail-cc-${index}`} aria-label={`${section.vendor} 副本`} value={section.ccText} maxLength={6000} onChange={event => setRecipientOverrides(prior => ({ ...prior, [subjectKey(section.vendor)]: { to: section.toText, cc: event.target.value } }))} /></div>
+                      </div>
+                      {section.recipientErrors.length ? <p role="alert" className="text-sm text-destructive">{section.recipientErrors.join('；')}</p> : null}
+                      {section.companyMatches.length ? <details className="rounded-lg border border-primary/20 p-2 text-sm"><summary className="cursor-pointer text-primary">公司資料匹配 {section.companyMatches.length} 位窗口，展開選擇</summary><div className="mt-2 space-y-2">{section.companyMatches.map(contact => <label key={contact.id} className="flex items-start gap-2"><input type="checkbox" className="mt-1" disabled={!contact.data.email} checked={!!contact.data.email && supplierEmails(contact.data.email).every(email => supplierEmails(section.to.join('; ')).includes(email))} onChange={event => {
+                        const emails = supplierEmails(contact.data.email), current = supplierEmails(section.to.join('; '));
+                        const to = event.target.checked ? [...new Set([...current, ...emails])] : current.filter(email => !emails.includes(email));
+                        setRecipientOverrides(prior => ({ ...prior, [subjectKey(section.vendor)]: { to: to.join('; '), cc: section.cc.join('; ') } }));
+                      }} /><span className="break-words">{contact.data.company} · {contact.data.name || '未填姓名'} · {contact.data.title}<br /><span className="text-muted-foreground">{contact.data.email || '無有效 Email'} · {contact.source.group} / {contact.source.sheet}</span></span></label>)}</div></details> : <p className="text-sm text-muted-foreground">公司資料沒有精確匹配的窗口，可手動填寫收件人。</p>}
                     </div>
                     <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-lg bg-background/40 p-2 font-sans text-sm text-foreground/80">{renderVendorMailText(section, message, signature)}</pre>
                   </li>
@@ -3175,10 +3200,11 @@ export function PendingMailDialog({
         </div>
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-10 px-4 text-sm">關閉</Button>
-          <Button type="button" data-testid="pending-mail-export" disabled={isExporting || sections.length === 0 || sections.some((section) => !section.subject.trim())} onClick={() => void handleExport()} className="h-10 px-4 text-sm font-bold">
+          <Button type="button" data-testid="pending-mail-export" disabled={isExporting || companyBook.loading || !!companyBook.error || sections.length === 0 || sections.some((section) => !section.subject.trim() || section.recipientErrors.length > 0)} onClick={() => void handleExport()} className="h-10 px-4 text-sm font-bold">
             <FileCode2 className="mr-1.5 h-4 w-4" />{isExporting ? "產生中…" : "匯出信件 HTML"}
           </Button>
         </DialogFooter>
+        <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
       </DialogContent>
     </Dialog>
   );
@@ -3238,6 +3264,7 @@ function PendingMaterialsDialog({
 }) {
   const [query, setQuery] = useState("");
   const [mailOpen, setMailOpen] = useState(false);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all">("all");
   // Default: locations with no number on any vendor row (one line each). The switch adds every vendor
   // row that has neither a 實體料號 nor a 虛擬料號, even beside vendors that already have one.
@@ -3293,6 +3320,10 @@ function PendingMaterialsDialog({
           <DialogDescription className="truncate" title={description}>{description}</DialogDescription>
         </DialogHeader>
 
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" data-testid="pending-mail-button" disabled={applications.length === 0} onClick={() => setMailOpen(true)} className="h-10 px-4 text-sm font-bold" title="把待處理料依廠商整理成信件內容並匯出 HTML"><FileCode2 className="mr-1.5 h-4 w-4" />信件生成</Button>
+          <Button type="button" data-testid="pending-suppliers-button" variant="outline" onClick={() => setDirectoryOpen(true)} className="h-10 border-primary/40 bg-primary/10 px-4 text-sm text-primary hover:bg-primary/20"><Factory className="mr-1.5 h-4 w-4" />供應商聯絡資料</Button>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[16rem] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -3316,11 +3347,9 @@ function PendingMaterialsDialog({
             <span className={cn("flex h-4 w-4 flex-none items-center justify-center rounded border", includeAlternates ? "border-warning bg-warning text-warning-foreground" : "border-muted-foreground")} aria-hidden="true">{includeAlternates ? <Check className="h-3 w-3" /> : null}</span>
             含沒有號碼的替代廠商 <strong className="font-mono">{vendorApplications.length.toLocaleString()}</strong>
           </Button>
-          <Button type="button" data-testid="pending-mail-button" disabled={applications.length === 0} onClick={() => setMailOpen(true)} className="h-10 border border-info bg-info px-4 text-sm font-black text-info-foreground shadow-[0_0_0_3px_hsl(var(--info)/0.25)] hover:bg-info/85 hover:text-info-foreground" title="把待處理料依廠商整理成信件內容並匯出 HTML">
-            <FileCode2 className="mr-1.5 h-4 w-4" />信件生成
-          </Button>
         </div>
         <PendingMailDialog groups={mailGroups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
+        <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
 
         <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-2 rounded-xl border border-border bg-background/40 p-1.5">
           {[{ key: "all" as const, label: "全部", count: applications.length, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (

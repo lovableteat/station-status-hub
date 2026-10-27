@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { PendingMailDialog } from '../../src/components/material-requests/MaterialRequestPage';
 import { Button } from '../../src/components/ui/button';
 import { Toaster } from '../../src/components/ui/toaster';
+import { SupplierDirectoryDialog } from '../../src/components/material-requests/SupplierDirectoryDialog';
 import { fixtureState, setFixtureAccount } from './vendorMailMock';
 
 window.fetch = async () => { throw new Error('Network requests are disabled in the vendor-mail fixture'); };
@@ -14,6 +15,7 @@ const groups = ['A', 'B'].map((suffix, index) => ({
 
 function Fixture() {
   const [open, setOpen] = useState(false);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     const update = () => setRevision(value => value + 1);
@@ -25,10 +27,12 @@ function Fixture() {
       <Button variant="outline" onClick={() => setFixtureAccount('A')}>測試帳號 A</Button>
       <Button variant="outline" onClick={() => setFixtureAccount('B')}>測試帳號 B</Button>
       <Button variant="outline" onClick={() => setOpen(value => !value)}>{open ? '關閉信件視窗' : '重開信件視窗'}</Button>
+      <Button variant="outline" onClick={() => setDirectoryOpen(true)}>公司供應商聯絡資料</Button>
       <span aria-live="polite">隔離假資料 · 帳號 {fixtureState.account} · 儲存 {fixtureState.saves} 次 · 匯入 {fixtureState.imports} 次<span className="sr-only">{revision}</span></span>
     </nav>
     <p className="p-3 text-sm text-muted-foreground">只有兩筆假料件與本機記憶體聯絡簿；重新整理會還原初始資料，不會連線正式環境或寄信。</p>
     <PendingMailDialog groups={groups} open={open} onOpenChange={setOpen} workspaceName="隔離測試 BOM" exportedBy="隔離測試使用者" />
+    <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
     <Toaster />
   </div>;
 }

@@ -14,7 +14,7 @@ export function setFixtureAccount(next) {
   notify();
 }
 export function useUser() {
-  return { sessionMode: 'authenticated', user: { userId: useSyncExternalStore(
+  return { sessionMode: 'authenticated', user: { role: account === accounts.A ? 'admin' : 'engineer', userId: useSyncExternalStore(
     fn => { listeners.add(fn); return () => listeners.delete(fn); }, () => account,
   ) } };
 }
@@ -29,6 +29,12 @@ const makeRow = value => ({ ...structuredClone(value), vendor_key: value.vendor.
 
 export const supabase = {
   from(table) {
+    if (table === 'company_supplier_contacts') {
+      let range = [0, 499];
+      const query = { select() { return this; }, order() { return this; }, range(a,b) { range = [a,b]; return this; }, abortSignal() { return this; },
+        then(resolve, reject) { return Promise.resolve({ data: structuredClone(companyRows.slice(range[0], range[1] + 1)), error: null }).then(resolve, reject); } };
+      return query;
+    }
     if (table !== 'supplier_contacts') throw new Error(`Fixture disallows table ${table}`);
     const filters = {};
     const ordering = [];
@@ -100,4 +106,23 @@ export const supabase = {
     };
     return builder;
   },
+  async rpc(name, args) {
+    if (name !== 'apply_company_supplier_contacts') throw new Error('Unexpected fixture RPC');
+    if (account !== accounts.A || args.p_actor !== account) return { data: null, error: { message: '只有管理員可修改' } };
+    const next = structuredClone(companyRows);
+    for (const incoming of args.p_contacts) {
+      const at = next.findIndex(x => x.id === incoming.id);
+      if ((at < 0 && incoming.version !== 0) || at >= 0 && next[at].version !== incoming.version) return { data: null, error: { message: '資料版本已變更' } };
+      const row = { ...structuredClone(incoming), version: incoming.version + 1 };
+      if (at < 0) next.push(row); else next[at] = row;
+    }
+    companyRows = next; fixtureState.saves++; notify();
+    return { data: args.p_contacts.length, error: null };
+  },
 };
+
+const makeCompanyData = index => ({ company: index ? `示範供應商 ${String(index).padStart(2,'0')}` : 'Vendor A', aliases: index ? '' : 'Example Company', brands: index ? 'Fixture Brand' : 'Brand A', name: index ? `測試窗口 ${index}` : 'Alex 範例', title: '業務', department: '零件事業部', email: index ? `contact${index}@example.invalid` : 'company@example.invalid', cc: '', phone: '02-1234-5678', mobile: '0900-000-000', extension: '123', category: 'IC', address: '', code: '', pvl: 'Y', note: '僅供隔離測試，非公司實際資料' });
+let companyRows = Array.from({ length: 65 }, (_, i) => {
+  const data = makeCompanyData(i);
+  return { id: `10000000-0000-4000-8000-${String(i).padStart(12,'0')}`, version: 1, data, imported: { ...data }, source: { group: i % 2 ? '測試清單 B' : '測試清單 A', file: 'synthetic.xlsx', sheet: '窗口', row: i+2, slot: 1, raw: [{ label: 'Company', value: data.company }, { label: 'Unknown', value: '原始欄位保留' }] } };
+});
