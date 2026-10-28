@@ -5,7 +5,7 @@ import test from "node:test";
 const require = createRequire(import.meta.url);
 const { React, create, act, loader } = require("../../../tests/support/renderHarness.cjs");
 
-function mountEditor() {
+function mountEditor(overrides = {}) {
   const readers = [];
   class FileReader {
     readAsDataURL() { readers.push(this); }
@@ -14,7 +14,7 @@ function mountEditor() {
   const load = loader({ globals: { FileReader, File } });
   const { MaterialTrackingEditor } = load("src/components/material-requests/MaterialTrackingEditor.tsx");
   const { createMaterialTrackingDraft } = load("src/components/material-requests/materialTrackingDraft.ts");
-  let record = { id: "record-A", requestTicket: "A-1", trackingStatus: "處理中", trackingNote: "原有備註" };
+  let record = { id: "record-A", requestTicket: "A-1", trackingStatus: "處理中", trackingNote: "原有備註", ...overrides };
   let draft = createMaterialTrackingDraft(record);
   let root;
   let disabled = false;
@@ -42,6 +42,38 @@ test("image reads remain pending and keep notes typed while they load", async ()
   assert.equal(editor.draft().pendingImageReads, 0);
   assert.equal(editor.draft().note, "讀圖時繼續填寫");
   assert.equal(editor.draft().images.length, 1);
+  act(() => editor.root.unmount());
+});
+
+test("saved status and history show explicit status, author, time and request information", () => {
+  const editor = mountEditor({ trackingHistory: [{ id: 'past', status: '新增追蹤', createdAt: '2026-10-27T02:13:40Z', createdBy: 'CE', requestInfo: '已發信', note: '等候廠商回覆' }] });
+  const text = JSON.stringify(editor.root.toJSON());
+  assert.match(text, /目前狀態/);
+  assert.match(text, /最新紀錄/);
+  assert.match(text, /更新人/);
+  assert.match(text, /更新時間/);
+  assert.match(text, /已發信/);
+  const badges = editor.root.root.findAllByProps({ 'data-testid': 'tracking-status-badge' }).filter(node => node.type === 'span');
+  assert.ok(badges.some(node => node.props['data-status'] === '新增追蹤'));
+  act(() => editor.root.unmount());
+});
+
+test("an unknown or negative status keeps its source wording instead of becoming completed", () => {
+  const editor = mountEditor({ trackingHistory: [{ id: 'unknown', status: '未完成', createdAt: '', note: '' }] });
+  const badges = editor.root.root.findAllByProps({ 'data-testid': 'tracking-status-badge' }).filter(node => node.type === 'span');
+  assert.ok(badges.length > 0);
+  assert.ok(badges.every(node => node.props['data-status'] === '未完成'));
+  act(() => editor.root.unmount());
+});
+
+test("selecting a new status labels the draft as unsaved and leaves the saved summary unchanged", () => {
+  const editor = mountEditor();
+  act(() => editor.root.root.findAll(node => node.type === 'stub' && typeof node.props.onValueChange === 'function')[0].props.onValueChange('已完成'));
+  assert.equal(editor.draft().status, '已完成');
+  assert.match(JSON.stringify(editor.root.toJSON()), /尚未儲存/);
+  const current = editor.root.root.findByProps({ 'data-testid': 'tracking-current-summary' });
+  assert.equal(current.findAllByProps({ 'data-testid': 'tracking-status-badge' }).find(node => node.type === 'span').props['data-status'], '處理中');
+  assert.equal(editor.root.root.findAllByType('details').length, 1);
   act(() => editor.root.unmount());
 });
 

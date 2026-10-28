@@ -93,9 +93,10 @@ test("main rows are memoised and keep every cell to one or two short lines", () 
   assert.match(rowBlock, /<PartUsageStatus record=\{statusRecord\} \/>/);
 });
 
-test("expanded alternative rows do not repeat the group star or the main row's live editors", () => {
+test("expanded alternative rows keep their own copyable virtual number without inline editors", () => {
   assert.doesNotMatch(alternativeBlock, /onToggleMarked|<Star\b/);
-  assert.match(alternativeBlock, /record\.id === primaryTxRecordId \?/);
+  assert.match(alternativeBlock, /<VirtualAlternativeValue value=\{record\.virtualAlternative/);
+  assert.doesNotMatch(alternativeBlock, /InlineVirtualAlternativeEditor|onSaveVirtual/);
   assert.match(alternativeBlock, /<TrackingHistoryCell record=\{record\} onOpen=\{onOpenTracking\} embedded \/>/);
   assert.doesNotMatch(alternativeBlock, /primaryTrackingRecordId|onClick=\{\(\) => onEdit\(record\)\}|onClick=\{\(\) => onView\(record\)\}/);
   assert.match(rowBlock, /aria-expanded=\{hasAlternatives \? expanded : undefined\}/);
@@ -104,9 +105,9 @@ test("expanded alternative rows do not repeat the group star or the main row's l
   assert.match(source, /const markedFilterSet = showMarkedOnly \? markedGroupKeySet : null/);
 });
 
-test("the 虛擬料號 confirm dialog only mounts while confirming", () => {
-  const editorBlock = slice("function InlineVirtualAlternativeEditor(", "function TrackingHistoryCell(");
-  assert.match(editorBlock, /\{confirmOpen && \(\s*<Dialog open onOpenChange/);
+test("virtual numbers have no inline write or empty-value confirmation flow", () => {
+  assert.doesNotMatch(source, /InlineVirtualAlternativeEditor|saveVirtualAlternative|saveVirtual:|虛擬料號尚未填入資訊/);
+  assert.match(rowBlock, /<VirtualAlternativeValue/);
 });
 
 test("duplicate controls were merged: one clear, one page-progress entry, delete only inside BOM management", () => {
@@ -281,7 +282,7 @@ test("an import shows what it did not turn into parts", () => {
 test("pending parts keep blinking until a part number arrives or data is refreshed", () => {
   assert.match(source, /const STALE_PENDING_MS = 3 \* 24 \* 60 \* 60 \* 1000;/);
   const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
-  assert.match(dialog, /stale \? "material-blink bg-destructive"/);
+  assert.match(dialog, /stale && <span className="material-blink [^"]*bg-destructive"/);
   assert.match(dialog, />逾 3 天未更新</);
   assert.match(source, /data-testid="pending-materials-button"[\s\S]{0,400}?requiredApplicationCount > 0 && "material-attention"/);
   assert.match(source, /id="material-internal-pn"[\s\S]{0,400}?placeholder:!text-warning/);

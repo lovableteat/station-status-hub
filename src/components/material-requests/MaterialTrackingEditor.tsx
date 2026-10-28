@@ -1,5 +1,5 @@
 import { type ClipboardEvent, useEffect, useId, useRef, useState } from "react";
-import { ClipboardPaste, History, ImagePlus, X } from "lucide-react";
+import { ChevronRight, CircleCheck, CircleDot, ClipboardPaste, History, ImagePlus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -20,10 +20,17 @@ export interface MaterialTrackingEditorProps {
 }
 
 function statusLabel(status: string, hasContent = false) {
-  const normalized = status.trim().toLowerCase();
-  if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((word) => normalized.includes(word))) return "已完成";
-  if (["處理中", "進行", "progress", "working", "wip"].some((word) => normalized.includes(word)) || hasContent) return "處理中";
-  return "無狀態";
+  return status.trim() || (hasContent ? "處理中" : "未追蹤");
+}
+
+function TrackingStatusBadge({ status }: { status: string }) {
+  const label = statusLabel(status);
+  const tone = label === "已完成" ? "border-success/35 bg-success/15 text-success"
+    : label === "處理中" ? "border-warning/35 bg-warning/15 text-warning"
+    : label === "新增追蹤" ? "border-primary/35 bg-primary/15 text-primary"
+    : "border-border bg-secondary text-secondary-foreground";
+  const Icon = label === "已完成" ? CircleCheck : CircleDot;
+  return <span data-testid="tracking-status-badge" data-status={label} className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm font-semibold ${tone}`}><Icon className="h-4 w-4" aria-hidden="true" />{label}</span>;
 }
 
 function formatTime(value: string) {
@@ -133,14 +140,18 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
 
   return (
     <section data-testid="material-tracking-editor" className="min-w-0 space-y-4" onPaste={handlePaste} aria-label="狀態追蹤">
-      <div data-testid="tracking-current-summary" className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-base font-semibold">狀態追蹤</h3>
-          <Badge variant="secondary">{latestStatus}</Badge>
-          <span className="text-sm text-muted-foreground">{history.length} 筆紀錄{latest?.createdAt ? ` · ${formatTime(latest.createdAt)}` : ""}{latest?.createdBy ? ` · ${latest.createdBy}` : ""}</span>
+      <div data-testid="tracking-current-summary" className="space-y-3 rounded-lg border border-border border-l-4 border-l-primary bg-background/40 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">目前狀態</h3>
+          <TrackingStatusBadge status={latestStatus} />
         </div>
-        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground">{latest?.note || "還沒有追蹤說明。"}</p>
-        <RequestLink ticket={draft.requestTicket} url={draft.requestUrl} />
+        <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+          <div><dt className="text-xs text-muted-foreground">更新時間</dt><dd className="mt-1">{latest?.createdAt ? formatTime(latest.createdAt) : latest ? "舊版紀錄未提供時間" : "尚無紀錄"}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">更新人</dt><dd className="mt-1">{latest?.createdBy || "未提供"}</dd></div>
+        </dl>
+        {latest?.requestInfo && <div className="space-y-1"><p className="text-xs text-muted-foreground">申請狀態資訊</p><p className="break-words text-sm font-medium">{normalizeMaterialRequestUrl(latest.requestInfo) ? <RequestLink url={latest.requestInfo} /> : latest.requestInfo}</p></div>}
+        {latest?.note && <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground">{latest.note}</p>}
+        <RequestLink ticket={record.requestTicket} url={record.requestUrl} />
       </div>
 
       <fieldset disabled={disabled} className="min-w-0 space-y-4 border-t border-border pt-4">
@@ -149,9 +160,9 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
           <div className="space-y-1.5"><Label htmlFor={`${id}-ticket`}>單號</Label><Input id={`${id}-ticket`} className="h-11" value={draft.requestTicket} onChange={(event) => updateDraft({ requestTicket: event.target.value })} placeholder="Excel 單號 / ticket" /></div>
           <div className="space-y-1.5"><Label htmlFor={`${id}-url`}>連結</Label><Input id={`${id}-url`} className="h-11" value={draft.requestUrl} onChange={(event) => updateDraft({ requestUrl: event.target.value })} placeholder="request URL" /></div>
         </div>
-        <div className="space-y-1"><h4 className="text-sm font-semibold">新增這次進度</h4><p className="text-sm text-muted-foreground">選擇狀態後，說明與圖片會隨主視窗的「儲存」一起新增；只修改單號或連結不會新增歷程。</p></div>
+        <div className="space-y-1"><div className="flex flex-wrap items-center gap-2"><h4 className="text-sm font-semibold">本次新增紀錄</h4>{draft.status && <Badge variant="outline" className="border-warning/35 text-warning">尚未儲存</Badge>}</div><p className="text-sm text-muted-foreground">選擇本次狀態，再按底部「儲存資料與追蹤」才會更新目前狀態。只修改單號或連結不新增紀錄。</p></div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5"><Label htmlFor={`${id}-status`}>追蹤狀態</Label><Select disabled={disabled} value={draft.status || "none"} onValueChange={(value) => updateDraft({ status: value === "none" ? "" : value })}><SelectTrigger id={`${id}-status`} className="h-11" aria-invalid={hasUnselectedProgress}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">不新增進度</SelectItem>{MATERIAL_TRACKING_STATUS_OPTIONS.map((status) => <SelectItem key={status} value={status}>{statusLabel(status)}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-1.5"><Label htmlFor={`${id}-status`}>本次狀態</Label><Select disabled={disabled} value={draft.status || "none"} onValueChange={(value) => updateDraft({ status: value === "none" ? "" : value })}><SelectTrigger id={`${id}-status`} className="h-11" aria-invalid={hasUnselectedProgress}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">不新增紀錄（保留目前狀態）</SelectItem>{MATERIAL_TRACKING_STATUS_OPTIONS.map((status) => <SelectItem key={status} value={status}>{statusLabel(status)}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-1.5"><Label htmlFor={`${id}-author`}>更新人</Label><Input id={`${id}-author`} className="h-11" value={draft.createdBy} onChange={(event) => updateDraft({ createdBy: event.target.value })} placeholder={defaultAuthor || "採購 / RD / 姓名"} /></div>
         </div>
         <div className="space-y-1.5"><Label htmlFor={`${id}-info`}>申請狀態資訊</Label><Input id={`${id}-info`} className="h-11" value={draft.requestInfo} onChange={(event) => updateDraft({ requestInfo: event.target.value })} placeholder="申請狀態或相關連結" /></div>
@@ -167,14 +178,20 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
       </fieldset>
 
       <div data-testid="tracking-history-panel" className="space-y-3 border-t border-border pt-4">
-        <h4 className="flex items-center gap-2 text-sm font-semibold"><History className="h-4 w-4 text-muted-foreground" />過去歷史 · {history.length} 筆</h4>
+        <h4 className="flex items-center gap-2 text-sm font-semibold"><History className="h-4 w-4 text-muted-foreground" />歷史紀錄 <span className="text-xs font-normal text-muted-foreground">{history.length} 筆 · 由新到舊</span></h4>
         {history.length === 0 && <p className="text-sm text-muted-foreground">還沒有歷史紀錄</p>}
-        {history.map((entry, index) => <details key={`${entry.id}-${index}`} open={index === 0} className="rounded-lg border border-border p-3">
-          <summary className="min-h-10 cursor-pointer text-sm leading-6"><span className="font-medium">{statusLabel(entry.status)}</span><span className="ml-2 text-muted-foreground">{formatTime(entry.createdAt)}{entry.createdBy ? ` · ${entry.createdBy}` : ""}{entry.images?.length ? ` · ${entry.images.length} 張圖` : ""}</span></summary>
-          <div className="space-y-2 pt-2">
-            {entry.note && <p className="whitespace-pre-wrap break-words text-sm leading-6">{entry.note}</p>}
+        {history.map((entry, index) => <details key={`${entry.id}-${index}`} open={index === 0} className="group rounded-lg border border-border bg-background/30">
+          <summary className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="mt-1.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" aria-hidden="true" />
+            <span className="min-w-0 flex-1 space-y-2">
+              <span className="flex flex-wrap items-center gap-2"><TrackingStatusBadge status={entry.status} />{index === 0 && <span className="text-xs font-medium text-primary">最新紀錄</span>}{!!entry.images?.length && <span className="text-xs text-muted-foreground">{entry.images.length} 張圖片</span>}</span>
+              <span className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground"><span>更新時間：{formatTime(entry.createdAt)}</span><span>更新人：<span className="text-foreground">{entry.createdBy || "未提供"}</span></span></span>
+            </span>
+          </summary>
+          <div className="space-y-3 border-t border-border px-4 py-3 sm:pl-10">
+            {entry.note && <div className="space-y-1"><p className="text-xs text-muted-foreground">追蹤說明</p><p className="whitespace-pre-wrap break-words text-sm leading-6">{entry.note}</p></div>}
             <RequestLink ticket={entry.requestTicket} url={entry.requestUrl} />
-            {entry.requestInfo && <p className="break-words text-sm text-muted-foreground">申請狀態資訊：{normalizeMaterialRequestUrl(entry.requestInfo) ? <RequestLink url={entry.requestInfo} /> : entry.requestInfo}</p>}
+            {entry.requestInfo && <div className="space-y-1"><p className="text-xs text-muted-foreground">申請狀態資訊</p><p className="break-words text-sm font-medium">{normalizeMaterialRequestUrl(entry.requestInfo) ? <RequestLink url={entry.requestInfo} /> : entry.requestInfo}</p></div>}
             {!!entry.images?.length && thumbnails(entry.images)}
           </div>
         </details>)}
