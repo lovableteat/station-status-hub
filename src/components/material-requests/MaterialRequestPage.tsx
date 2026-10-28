@@ -5533,8 +5533,8 @@ export function MaterialRequestPage() {
           specification: record.partSpec,
           symbol: record.schematicPart,
           trackingOwner: latestTrackingEntry?.createdBy ?? "",
-          trackingStatus: getTrackingWorkflowStatus(record),
-          trackingSummary: latestTrackingEntry?.note ?? record.trackingNote ?? record.trackingStatus ?? "",
+          trackingStatus: latestTrackingEntry?.status?.trim() || record.trackingStatus?.trim() || "未追蹤",
+          trackingSummary: latestTrackingEntry?.note ?? record.trackingNote ?? "",
           trackingUpdatedAt: latestTrackingEntry?.createdAt ?? "",
           tx: record.virtualAlternative ?? "",
         };
