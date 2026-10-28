@@ -1,6 +1,5 @@
 ﻿import {
   type ChangeEvent,
-  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   memo,
@@ -2007,113 +2006,13 @@ function ResizableHeader({
   );
 }
 
-function InlineVirtualAlternativeEditor({
-  canEdit,
-  value,
-  onSave,
-}: {
-  canEdit: boolean;
-  value: string;
-  onSave: (value: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingValue, setPendingValue] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!editing) setDraft(value);
-  }, [editing, value]);
-
-  const commit = () => {
-    const nextValue = draft.trim();
-
-    if (!nextValue) {
-      const confirmed = window.confirm("虛擬料號尚未填入資訊，確定要維持空白嗎？");
-      if (!confirmed) {
-        requestAnimationFrame(() => inputRef.current?.focus());
-        return;
-      }
-    }
-
-    setEditing(false);
-    if (nextValue !== value) {
-      setPendingValue(nextValue);
-      setConfirmOpen(true);
-    }
-  };
-
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") event.currentTarget.blur();
-    if (event.key === "Escape") {
-      setDraft(value);
-      setEditing(false);
-    }
-  };
-
-  const closeConfirmation = () => {
-    setConfirmOpen(false);
-    setPendingValue(null);
-    setDraft(value);
-  };
-
-  const confirmSave = () => {
-    if (!canEdit || pendingValue == null) return;
-    onSave(pendingValue);
-    setConfirmOpen(false);
-    setPendingValue(null);
-  };
-
-  if (editing) {
-    return (
-      <Input
-        autoFocus
-        ref={inputRef}
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commit}
-        onKeyDown={handleKeyDown}
-        className="h-8 rounded-lg px-2 font-mono text-[13px] font-semibold"
-        placeholder="輸入虛擬料號"
-      />
-    );
-  }
-
+export function VirtualAlternativeValue({ value, onCopy }: { value: string; onCopy: (value: string) => void }) {
+  if (!value.trim()) return <span className="block text-[13px] text-muted-foreground/70" title="虛擬料號：未提供">未提供</span>;
   return (
-    <>
-      <button
-        type="button"
-        disabled={!canEdit}
-        onClick={() => setEditing(true)}
-        className="group flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-border bg-secondary/60 px-2 text-left transition-colors hover:border-primary/40 hover:bg-secondary disabled:cursor-default disabled:hover:border-border disabled:hover:bg-secondary/60"
-        title={value ? `虛擬料號：${value}（點擊修改）` : "點擊填寫虛擬料號"}
-      >
-        <span className={cn("min-w-0 truncate font-mono text-[13px] font-semibold", value ? "text-foreground" : "text-muted-foreground")}>{value || "填寫虛擬料號"}</span>
-        <Pencil className="h-3.5 w-3.5 flex-none text-muted-foreground opacity-60 group-hover:opacity-100" />
-      </button>
-      {/* Mounted only while confirming so a page of rows does not carry a dialog each. */}
-      {confirmOpen && (
-        <Dialog open onOpenChange={(open) => { if (!open) closeConfirmation(); }}>
-          <DialogContent className="max-w-sm gap-4 p-5 sm:p-6">
-            <DialogHeader>
-              <DialogTitle>確認更新虛擬料號</DialogTitle>
-              <DialogDescription>送出後會寫入共用資料。</DialogDescription>
-            </DialogHeader>
-            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-xl border border-border bg-background/40 px-3 py-2.5 text-sm">
-              <dt className="text-muted-foreground">原本</dt>
-              <dd className="break-all font-mono font-semibold text-foreground">{value || "空白"}</dd>
-              <dt className="text-muted-foreground">更新後</dt>
-              <dd className="break-all font-mono font-semibold text-primary">{pendingValue || "空白"}</dd>
-            </dl>
-            <DialogFooter className="gap-2 sm:justify-end">
-              <Button type="button" variant="outline" size="sm" onClick={closeConfirmation}>取消</Button>
-              <Button type="button" size="sm" onClick={confirmSave}>確認更新</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-    </>
+    <button type="button" onClick={() => onCopy(value)} aria-label={`複製虛擬料號：${value}`} title={`複製虛擬料號：${value}`} className="group flex w-full min-w-0 items-center gap-1.5 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <span className="min-w-0 truncate font-mono text-[13px] font-semibold leading-5 text-primary">{value}</span>
+      <Copy className="h-3.5 w-3.5 flex-none text-primary opacity-60 group-hover:opacity-100" aria-hidden="true" />
+    </button>
   );
 }
 
@@ -2759,6 +2658,8 @@ export function PendingMaterialsDialog({
   onOpenChange,
   onOpenTracking,
   onSetCategory,
+  markedGroupKeys,
+  onToggleMarked,
 }: {
   canEdit: boolean;
   groups: MaterialGroup[];
@@ -2772,17 +2673,20 @@ export function PendingMaterialsDialog({
   onOpenTracking: (record: MaterialRecord) => void;
   /** Saves a hand-picked category for a pending part; null returns it to the Ref Des rule. */
   onSetCategory: (group: MaterialGroup, category: PendingMaterialCategory | null) => void;
+  markedGroupKeys: ReadonlySet<string>;
+  onToggleMarked: (groupKey: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [mailOpen, setMailOpen] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all">("all");
+  const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all" | "marked">("all");
   // Default: locations with no number on any vendor row (one line each). The switch adds every vendor
   // row that has neither a 實體料號 nor a 虛擬料號, even beside vendors that already have one.
   const [includeAlternates, setIncludeAlternates] = useState(false);
   const locationApplications = useMemo(() => buildPendingApplications(groups), [groups]);
   const vendorApplications = useMemo(() => buildPendingApplications(groups, { includeAlternates: true }), [groups]);
   const applications = includeAlternates ? vendorApplications : locationApplications;
+  const markedCount = applications.filter(application => markedGroupKeys.has(application.group.key)).length;
   const categories = useMemo(() => groupPendingMaterials(applications), [applications]);
   const mailGroups = useMemo(() => {
     const listed = new Set(applications.map((application) => application.group.key));
@@ -2792,13 +2696,13 @@ export function PendingMaterialsDialog({
   }, [applications, groups]);
   const keyword = query.trim().toLowerCase();
   // One category at a time keeps long BOMs from becoming one endless scroll; the tabs carry the counts.
-  const selectedCategory = categories.some((category) => category.key === activeCategory) ? activeCategory : "all";
+  const selectedCategory = activeCategory === "marked" || categories.some((category) => category.key === activeCategory) ? activeCategory : "all";
   const visibleCategories = useMemo(() => (
     categories
-      .filter((category) => selectedCategory === "all" || category.key === selectedCategory)
-      .map((category) => (keyword ? { ...category, groups: category.groups.filter((group) => group.searchText.includes(keyword)) } : category))
+      .filter((category) => selectedCategory === "all" || selectedCategory === "marked" || category.key === selectedCategory)
+      .map((category) => ({ ...category, groups: category.groups.filter(application => (!keyword || application.searchText.includes(keyword)) && (selectedCategory !== "marked" || markedGroupKeys.has(application.group.key))) }))
       .filter((category) => category.groups.length > 0)
-  ), [categories, keyword, selectedCategory]);
+  ), [categories, keyword, markedGroupKeys, selectedCategory]);
   const listRef = useRef<HTMLDivElement | null>(null);
   const scrollTopRef = useRef(0);
   useEffect(() => {
@@ -2863,29 +2767,36 @@ export function PendingMaterialsDialog({
         <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
 
         <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-2 rounded-xl border border-border bg-background/40 p-1.5">
-          {[{ key: "all" as const, label: "全部", count: applications.length, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
+          {[{ key: "all" as const, label: "全部", count: applications.length, priority: false }, { key: "marked" as const, label: "特別標記", count: markedCount, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
             <button
               key={tab.key}
               type="button"
               role="tab"
               aria-selected={selectedCategory === tab.key}
               onClick={() => setActiveCategory(tab.key)}
+              title={tab.key === "marked" ? "點每列星號加入或取消；依位號標記，同組替代廠商共用。標記保存在此瀏覽器，依 BOM 分開。" : undefined}
               className={cn(
                 "inline-flex h-11 items-center gap-2 rounded-lg border px-5 text-base font-bold transition-colors",
                 selectedCategory === tab.key ? "border-primary bg-primary text-primary-foreground shadow-[0_0_0_2px_hsl(var(--primary)/0.35)]" : "border-border bg-secondary/60 text-foreground/80 hover:bg-accent hover:text-foreground",
               )}
             >
-              {tab.label}
+              {tab.key === "marked" && <Star className="h-4 w-4 fill-current" aria-hidden="true" />}{tab.label}
               {tab.priority && <span className="h-2 w-2 rounded-full bg-destructive" aria-hidden="true" />}
               <span className={cn("rounded-full px-2 font-mono text-sm leading-5", selectedCategory === tab.key ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background/60 text-foreground/80")}>{tab.count.toLocaleString()}</span>
             </button>
           ))}
         </div>
+        {(query.trim() || includeAlternates || selectedCategory !== "all") && <div className="flex flex-wrap items-center gap-2" aria-label="待處理料作用中條件">
+          {query.trim() && <Button type="button" variant="outline" size="sm" aria-label="清除待處理料搜尋條件" onClick={() => setQuery("")}>搜尋：{query.trim()}<X className="ml-1 h-3 w-3" aria-hidden="true" /></Button>}
+          {selectedCategory !== "all" && <Button type="button" variant="outline" size="sm" aria-label="清除待處理料分類條件" onClick={() => setActiveCategory("all")}>分類：{selectedCategory === "marked" ? "特別標記" : categories.find(category => category.key === selectedCategory)?.label}<X className="ml-1 h-3 w-3" aria-hidden="true" /></Button>}
+          {includeAlternates && <Button type="button" variant="outline" size="sm" aria-label="清除待處理料替代廠商條件" onClick={() => setIncludeAlternates(false)}>含沒有號碼的替代廠商<X className="ml-1 h-3 w-3" aria-hidden="true" /></Button>}
+          <Button type="button" variant="ghost" size="sm" onClick={() => { setQuery(""); setActiveCategory("all"); setIncludeAlternates(false); }}>全部清除</Button>
+        </div>}
 
         <div ref={listRef} onScroll={(event) => { scrollTopRef.current = event.currentTarget.scrollTop; }} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
           {visibleCategories.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-              {applications.length === 0 ? "目前沒有待處理的料號" : "找不到符合條件的待處理料"}
+              {applications.length === 0 ? "目前沒有待處理的料號" : selectedCategory === "marked" && markedCount === 0 && !keyword ? "尚未特別標記待處理料，請到「全部」點選每列星號" : "目前篩選條件沒有符合的待處理料"}
             </p>
           ) : visibleCategories.flatMap((category) => [
             <div key={`category:${category.key}`} className="flex items-center gap-2 px-1 pt-2 first:pt-0">
@@ -2898,10 +2809,11 @@ export function PendingMaterialsDialog({
               const { group, record } = application;
               const trackingStatus = record.trackingStatus?.trim() || "";
               const stale = isStale(group);
+              const marked = markedGroupKeys.has(group.key);
               return (
                 <div key={application.key} data-testid="pending-application" className={cn("flex min-h-14 flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40 lg:h-14 lg:flex-nowrap", stale ? "border-destructive/40" : "border-border")}>
-                  <span className={cn("h-2 w-2 flex-none rounded-full", stale ? "material-blink bg-destructive" : "bg-muted-foreground/40")} aria-hidden="true" />
-                  <span className="w-[calc(100%-1rem)] flex-none truncate font-mono text-sm font-semibold text-foreground sm:w-36 xl:w-48" title={group.displayRef}>{group.displayRef}</span>
+                  <Button type="button" variant="ghost" size="icon" data-testid="pending-mark-toggle" aria-pressed={marked} aria-label={`${marked ? '取消特別標記' : '特別標記'} ${group.displayRef}`} title="標記此位號；同組替代廠商共用，保存在此瀏覽器" onClick={() => onToggleMarked(group.key)} className={cn("relative h-9 w-9 flex-none", marked ? "bg-warning/15 text-warning hover:text-warning" : "text-muted-foreground hover:text-warning")}><Star className={cn("h-4 w-4", marked && "fill-current")} aria-hidden="true" />{stale && <span className="material-blink absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}</Button>
+                  <span className="w-[calc(100%-3.25rem)] flex-none truncate font-mono text-sm font-semibold text-foreground sm:w-28 xl:w-40" title={group.displayRef}>{group.displayRef}</span>
                   <PendingCategoryPicker group={group} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
                   <span className="min-w-0 flex-1 truncate text-base text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
                   <span className="hidden w-28 flex-none truncate font-mono text-sm text-foreground/75 md:block xl:w-40" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
@@ -3421,7 +3333,6 @@ interface MaterialRowActions {
   openCreate: (group: MaterialGroup) => void;
   openTracking: (record: MaterialRecord) => void;
   openSpec: (record: MaterialRecord) => void;
-  saveVirtual: (record: MaterialRecord, value: string) => void;
 }
 
 interface VisibleGroupRow {
@@ -3508,7 +3419,6 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   row,
   itemValue,
   expanded,
-  canEdit,
   editingNames,
   latestRecordUpdate,
   latestUpdater,
@@ -3519,7 +3429,6 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   row: VisibleGroupRow;
   itemValue: number;
   expanded: boolean;
-  canEdit: boolean;
   editingNames: string;
   latestRecordUpdate: string;
   latestUpdater: string;
@@ -3661,11 +3570,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         {columns.virtual && (
           <td data-material-cell="virtual" className={MATERIAL_CELL_CLASS} onClick={stopRowToggle}>
             {virtualAlternativeRecord && (
-              <InlineVirtualAlternativeEditor
-                canEdit={canEdit}
-                value={virtualAlternativeRecord.virtualAlternative ?? ""}
-                onSave={(value) => actions.saveVirtual(virtualAlternativeRecord, value)}
-              />
+              <VirtualAlternativeValue value={virtualAlternativeRecord.virtualAlternative ?? ""} onCopy={actions.copy} />
             )}
           </td>
         )}
@@ -3752,16 +3657,13 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
       </tr>
       {expanded && (
         <CompactAlternativeRows
-          canEdit={canEdit}
           group={group}
           records={matchingRecords}
           primaryRecord={primaryAlternative}
           itemValue={itemValue}
           colorTheme={colorTheme}
           columns={columns}
-          primaryTxRecordId={virtualAlternativeRecord?.id ?? ""}
           onCopy={actions.copy}
-          onSaveVirtual={actions.saveVirtual}
           onOpenTracking={actions.openTracking}
         />
       )}
@@ -3770,29 +3672,22 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
 });
 
 function CompactAlternativeRows({
-  canEdit,
   group,
   records,
   primaryRecord,
   itemValue,
   colorTheme,
   columns,
-  primaryTxRecordId,
   onCopy,
-  onSaveVirtual,
   onOpenTracking,
 }: {
-  canEdit: boolean;
   group: MaterialGroup;
   records: MaterialRecord[];
   primaryRecord: MaterialRecord;
   itemValue: number;
   colorTheme: BomTableColorTheme;
   columns: MaterialColumnVisibility;
-  /** The 虛擬料號 editor already shown on the main row renders as plain text here. */
-  primaryTxRecordId: string;
   onCopy: (value: string) => void;
-  onSaveVirtual: (record: MaterialRecord, value: string) => void;
   onOpenTracking: (record: MaterialRecord) => void;
 }) {
   const alternatives = records.filter((record) => record.id !== primaryRecord.id);
@@ -3891,11 +3786,7 @@ function CompactAlternativeRows({
             )}
             {columns.virtual && (
               <td className={MATERIAL_CELL_CLASS}>
-                {record.id === primaryTxRecordId ? (
-                  <span className="block truncate font-mono text-[13px] font-bold text-teal-200/70" title="這筆的虛擬料號已顯示在主料列，請在主料列修改">{record.virtualAlternative || "—"}</span>
-                ) : (
-                  <InlineVirtualAlternativeEditor canEdit={canEdit} value={record.virtualAlternative ?? ""} onSave={(value) => onSaveVirtual(record, value)} />
-                )}
+                <VirtualAlternativeValue value={record.virtualAlternative ?? ""} onCopy={onCopy} />
               </td>
             )}
             {columns.physical && (
@@ -5402,29 +5293,6 @@ export function MaterialRequestPage() {
     }
   };
 
-  const saveVirtualAlternative = (record: MaterialRecord, value: string) => {
-    if (!canEdit) return;
-    let writeScope;
-    try {writeScope = captureBomWrite();} catch {return;}
-    if (!isCollaborativeReady) {
-      showCollaborativeUnavailableToast();
-      return;
-    }
-    if (!isFullDatasetLoaded) {
-      showDatasetSyncingToast();
-      return;
-    }
-    void saveRecordToActiveBom({ ...toWorkbookRecord(record), virtualAlternative: value }).catch(() => {
-      if (!isBomWriteCurrent(writeScope)) return;
-      toast({
-        title: "資料更新失敗",
-        description: "虛擬料號尚未同步到共用資料，已重新載入最新版本。",
-        variant: "destructive",
-      });
-    });
-  };
-
-
   const saveBomPageTracker = async (workspaceId: string, pageTracker: BomPageTracker) => {
     const writeScope = captureBomWrite();
     const workspace = bomWorkspaces.find((item) => item.id === workspaceId);
@@ -5889,7 +5757,6 @@ export function MaterialRequestPage() {
     openCreate,
     openTracking: openTrackingDialog,
     openSpec: (record) => { void openSpecDocument(record); },
-    saveVirtual: saveVirtualAlternative,
   };
   const rowActions = useMemo<MaterialRowActions>(() => ({
     toggleExpanded: (key) => rowActionsRef.current?.toggleExpanded(key),
@@ -5897,7 +5764,6 @@ export function MaterialRequestPage() {
     openCreate: (group) => rowActionsRef.current?.openCreate(group),
     openTracking: (record) => rowActionsRef.current?.openTracking(record),
     openSpec: (record) => rowActionsRef.current?.openSpec(record),
-    saveVirtual: (record, value) => rowActionsRef.current?.saveVirtual(record, value),
   }), []);
 
   if (isInitialLoading) {
@@ -5952,6 +5818,8 @@ export function MaterialRequestPage() {
         onOpenChange={setPendingDialogOpen}
         onOpenTracking={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openTrackingDialog(record); }}
         onSetCategory={setPendingCategory}
+        markedGroupKeys={markedGroupKeySet}
+        onToggleMarked={toggleMarkedGroup}
       />
       <BomTableColorDialog
         open={tableColorDialogOpen}
@@ -6502,7 +6370,6 @@ export function MaterialRequestPage() {
                   row={row}
                   itemValue={getGroupItemValue(row.group, (page - 1) * pageSize + rowIndex + 1)}
                   expanded={expandedKey === row.group.key}
-                  canEdit={canEdit}
                   editingNames={editingNames}
                   latestRecordUpdate={latestRecordUpdate}
                   latestUpdater={latestUpdater}
