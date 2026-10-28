@@ -234,10 +234,12 @@ test("page snapshots and actual exports keep each physical candidate's own CE fi
     { name: "CAP B", manufacturer: "Maker B", manufacturerPartNumber: "MPN-B", partNumber: "PHYSICAL-B", partName: "實體料 B", partSpec: "100nF", schematicPart: "CAP_B", pcbFootprint: "0402_B", symbolStatus: "C", phaseOutStatus: "PHASEOUT" },
     { name: "CAP C", manufacturer: "Maker C", manufacturerPartNumber: "MPN-C", partNumber: "", partName: "", partSpec: "", schematicPart: "", pcbFootprint: "", symbolStatus: "待確認", phaseOutStatus: "UNDERREVIEW" },
   ].map((record, index) => ({ ...record, id: `candidate-${index}`, virtualAlternative: "SHARED-VIRTUAL", refDes: "C101", trackingHistory: [], partUsageStatus: "待確認", sourcingStatus: "Approved", manufacturerPartNumberAlt: "" }));
+  candidates[0].trackingStatus = '新增追蹤';
+  candidates[0].trackingHistory = [{ status: '新增追蹤', note: '舊進度', createdAt: '2026-10-27T02:00:00Z' }, { status: '已完成', note: '最新已取得料號', requestInfo: 'CE 核對完成', createdBy: 'QA', createdAt: '2026-10-29T02:00:00Z' }];
   const group = { key: "shared-group", records: candidates, primaryRecord: candidates[0], assemblyName: "Module", name: "GROUP NAME MUST NOT REPLACE ROW", qty: 1, schematicPart: "GROUP SYMBOL MUST NOT FILL BLANKS", footprint: "GROUP FOOTPRINT MUST NOT FILL BLANKS", partName: "GROUP NAME MUST NOT BECOME SPEC", partSpec: "GROUP SPEC MUST NOT FILL BLANKS", displayRef: "C101" };
   const bindings = {
     filteredGroups: [group], getMatchingRecords: value => value.records,
-    getLatestTrackingEntry: () => undefined, getTrackingRequestMeta: () => ({ ticket: "", url: "" }),
+    getLatestTrackingEntry: record => record.trackingHistory.at(-1), getTrackingRequestMeta: () => ({ ticket: "", url: "" }),
     getActionLabel: () => "", getGroupItemValue: () => 1, markedGroupKeySet: new Set(),
     getMaterialBuildRequirementLabel: () => "待確認", getTrackingWorkflowStatus: () => "",
     activeFilterChips: [], user: { displayName: "Test" }, SORT_MODE_LABELS: { reference: "Ref" }, sortMode: "reference",
@@ -246,6 +248,12 @@ test("page snapshots and actual exports keep each physical candidate's own CE fi
     setExportSnapshot() {}, setExportProgress() {}, setExportDialogOpen() {},
   };
   const report = new Function(...Object.keys(bindings), `${compileSnapshot}; return createExportSnapshot();`)(...Object.values(bindings));
+  assert.equal(report.rows[0].trackingStatus, '已完成');
+  assert.equal(report.rows[0].trackingSummary, '最新已取得料號');
+  assert.equal(report.rows[0].requestInfo, 'CE 核對完成');
+  assert.equal(report.rows[0].trackingOwner, 'QA');
+  assert.equal(report.rows[0].trackingUpdatedAt, '2026-10-29T02:00:00Z');
+  assert.equal(report.rows[2].trackingStatus, '未追蹤', 'no history must not manufacture a new tracking status');
   const sheet = await exportedSheet(report.rows);
   const html = await (await captureExport(exportMaterialReportHtml, report)).text();
   candidates.forEach((record, index) => {
@@ -329,9 +337,41 @@ test("visible-column export uses only the selected headers in order and keeps or
   await workbook.xlsx.load(await blob.arrayBuffer());
   const sheet = workbook.worksheets[0];
   assert.deepEqual(sheet.getRow(1).values.slice(1), columns.map(column => column.label));
-  assert.deepEqual(sheet.getRow(2).values.slice(1), ['=not-a-formula', '0010-0000100', '', '處理中']);
+  assert.deepEqual(sheet.getRow(2).values.slice(1, 4), ['=not-a-formula', '0010-0000100', '']);
+  assert.match(sheet.getCell('D2').value, /^處理中\n進度：RD 持續追蹤\n申請資訊：申請中\n更新人：測試工程師$/);
   assert.equal(sheet.columnCount, 4);
   assert.equal(typeof sheet.getCell('A2').value, 'string');
+});
+
+test('visible-column Excel bounds row heights, groups vendor rows visually and retains complete refs and latest progress', async () => {
+  const refs = Array.from({ length: 80 }, (_, index) => 'C' + (1000 + index)).join(',');
+  const note = '最新處理結果'.repeat(45);
+  const report = snapshot([
+    reportRow({ item: '1', refDes: refs, trackingSummary: note, trackingUpdatedAt: '2026-10-29T02:00:00Z' }),
+    reportRow({ item: '1', refDes: refs, manufacturer: 'Alternate' }),
+    reportRow({ item: '2', refDes: 'LB48', trackingStatus: '未追蹤', trackingSummary: '', requestInfo: '', trackingOwner: '' }),
+  ]);
+  const columns = [{ key: 'item', label: 'Item' }, { key: 'name', label: 'Name' }, { key: 'qty', label: 'Qty' }, { key: 'refDes', label: 'Ref Des' }, { key: 'actions', label: '狀態追蹤 / 更新' }];
+  const blob = await captureExport(value => moduleExports.exportMaterialVisibleColumns(value, columns), report);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await blob.arrayBuffer());
+  const sheet = workbook.worksheets[0];
+  assert.equal(sheet.columnCount, columns.length);
+  assert.equal(sheet.getColumn(1).width, 7);
+  assert.equal(sheet.getColumn(3).width, 8);
+  assert.equal(sheet.getColumn(4).width, 42);
+  assert.equal(sheet.getCell('D2').value, refs);
+  assert.equal(sheet.getCell('D2').note, refs);
+  assert.equal(sheet.getCell('D2').alignment.wrapText, true);
+  for (const row of [2, 3, 4]) assert.ok(sheet.getRow(row).height <= 78);
+  assert.deepEqual(sheet.getCell('B2').fill, sheet.getCell('B3').fill);
+  assert.notDeepEqual(sheet.getCell('B2').fill, sheet.getCell('B4').fill);
+  assert.equal(sheet.getCell('B2').font.bold, true);
+  assert.match(sheet.getCell('E2').value, new RegExp(note));
+  assert.match(sheet.getCell('E2').value, /更新：/);
+  assert.doesNotMatch(sheet.getCell('E4').value, /新增追蹤/);
+  assert.equal(sheet.views[0].ySplit, 1);
+  assert.ok(sheet.autoFilter);
 });
 
 test("信件生成 groups every MPN candidate of the pending parts by manufacturer", () => {

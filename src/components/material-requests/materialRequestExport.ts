@@ -754,11 +754,42 @@ export async function exportMaterialVisibleColumns(
   if (!columns.length || columns.some(column => !fields[column.key])) throw new Error("匯出欄位無效，請重新選擇。");
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("顯示欄位");
-  sheet.columns = columns.map(column => ({ header: column.label, width: column.key === "name" ? 38 : 24 }));
-  snapshot.rows.forEach(row => sheet.addRow(columns.map(column => String(row[fields[column.key]] ?? ""))));
-  sheet.getRow(1).font = { bold: true };
-  sheet.eachRow(row => { row.alignment = { vertical: "top", wrapText: true }; });
+  workbook.creator = snapshot.exportedBy;
+  const sheet = workbook.addWorksheet("顯示欄位", { properties: { defaultRowHeight: 30 }, pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+  const widths: Record<string, number> = { item: 7, name: 40, qty: 8, refDes: 42, mpn: 32, manufacturer: 24, sourcingStatus: 20, virtual: 22, physical: 22, partName: 36, partSpec: 36, schematicPart: 26, footprint: 26, phaseOut: 16, partUsage: 30, actions: 58 };
+  sheet.columns = columns.map(column => ({ header: column.label, width: widths[column.key] }));
+  let groupIndex = -1;
+  snapshot.rows.forEach((source, index) => {
+    const firstInGroup = index === 0 || source.item !== snapshot.rows[index - 1].item;
+    if (firstInGroup) groupIndex += 1;
+    const latestProgress = [
+      source.trackingStatus || "未追蹤",
+      source.trackingSummary ? `進度：${source.trackingSummary}` : "",
+      source.requestInfo ? `申請資訊：${source.requestInfo}` : "",
+      source.trackingUpdatedAt ? `更新：${formatDateTime(source.trackingUpdatedAt)}${source.trackingOwner ? ` · ${source.trackingOwner}` : ""}` : source.trackingOwner ? `更新人：${source.trackingOwner}` : "",
+    ].filter(Boolean).join("\n");
+    const row = sheet.addRow(columns.map(column => column.key === "actions" ? latestProgress : String(source[fields[column.key]] ?? "")));
+    row.height = columns.some(column => column.key === "actions") && latestProgress.includes("\n") ? 78 : 32;
+    row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+      const key = columns[columnNumber - 1].key;
+      cell.font = { name: "Microsoft JhengHei", size: 10, bold: firstInGroup && (key === "item" || key === "name"), color: { argb: "FF172B3A" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: groupIndex % 2 === 0 ? "FFF0F8F7" : "FFFFFFFF" } };
+      cell.border = { right: { style: "hair", color: { argb: "FFD8E4E8" } }, bottom: { style: "hair", color: { argb: "FFD8E4E8" } }, ...(firstInGroup ? { top: { style: "thin" as const, color: { argb: "FF93BDB7" } } } : {}) };
+      cell.alignment = { vertical: "top", horizontal: key === "item" || key === "qty" ? "center" : "left", wrapText: true, indent: 1 };
+      const value = String(cell.value ?? "");
+      if (key === "refDes" || value.length > 100 || key === "actions" && latestProgress.includes("\n")) cell.note = value;
+      if (key === "actions") cell.font = { ...cell.font, bold: true, color: { argb: source.trackingStatus === "已完成" ? "FF087348" : source.trackingStatus === "處理中" ? "FF945D00" : "FF284D68" } };
+    });
+  });
+  const header = sheet.getRow(1);
+  header.height = 32;
+  header.eachCell(cell => {
+    cell.font = { name: "Microsoft JhengHei", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF176B65" } };
+    cell.alignment = { vertical: "middle", wrapText: true };
+    cell.note = "依目前欄位與篩選匯出。每個主料群組使用同一底色；長內容保留在儲存格及註解，點選可看完整原文。狀態欄包含最新已儲存進度。";
+  });
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, sheet.rowCount), column: columns.length } };
   sheet.views = [{ state: "frozen", ySplit: 1 }];
   const fileName = `${sanitizeFileName(snapshot.workspaceName)}_顯示欄位_${getTimestamp(new Date(snapshot.exportedAt))}.xlsx`;
   downloadBlob(new Blob([await workbook.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), fileName);
