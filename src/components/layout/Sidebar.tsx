@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   FileSliders,
@@ -50,6 +50,7 @@ export function Sidebar({
     return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
   });
   const { canViewModule } = usePermissions();
+  const mobileNavigationRef = useRef<HTMLElement>(null);
   const isCompact = !isMobile && collapsed;
   const canViewNavigationItem = (moduleId: string) =>
     moduleId === "test-tracker"
@@ -62,6 +63,12 @@ export function Sidebar({
     }
   }, [collapsed, isMobile]);
 
+  useEffect(() => {
+    if (isMobile) {
+      mobileNavigationRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }, [activeModule, canViewModule, isMobile]);
+
   const handleToggle = () => {
     if (isMobile) onToggle?.();
     else setCollapsed((value) => !value);
@@ -70,9 +77,10 @@ export function Sidebar({
   if (isMobile) {
     return (
       <nav
+        ref={mobileNavigationRef}
         aria-label="維修中心功能"
         data-mobile-maintenance-nav="true"
-        className="sticky top-[var(--mobile-header-height)] z-30 grid w-full shrink-0 grid-cols-2 gap-1 rounded-xl border border-cyan-200/20 bg-[#071522]/96 p-1 shadow-[0_14px_34px_-28px_rgba(34,211,238,0.75)] backdrop-blur-xl sm:top-[72px] [@media(max-width:1023px)_and_(max-height:500px)]:static"
+        className="sticky top-[var(--mobile-header-height)] z-30 flex w-full min-w-0 shrink-0 flex-nowrap gap-1 overflow-x-auto overflow-y-hidden rounded-xl border border-cyan-200/20 bg-[#071522]/96 p-1 shadow-[0_14px_34px_-28px_rgba(34,211,238,0.75)] backdrop-blur-xl sm:top-[72px] [@media(max-width:1023px)_and_(max-height:500px)]:static"
       >
         {navigationItems.map((item) => {
           if (!canViewNavigationItem(item.id)) return null;
@@ -86,11 +94,11 @@ export function Sidebar({
               data-mobile-maintenance-module={item.id}
               onClick={() => onModuleChange(item.id)}
               className={cn(
-                "flex min-h-11 w-full min-w-0 items-center gap-2 rounded-lg border px-3 text-xs font-black transition-colors",
+                "flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-3 text-xs font-black transition-colors",
                 isActive && "font-black",
               )}
             >
-              <Icon className="h-4.5 w-4.5" />
+              <Icon className="h-4.5 w-4.5 shrink-0" />
               <span>{item.label}</span>
             </button>
           );
