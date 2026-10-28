@@ -23,6 +23,15 @@ test('board-qualified BOM references keep their actual RLC kind', () => {
   }
 });
 
+test("LB and PLB inductors keep the same L scope, including board suffixes and ranges", () => {
+  for (const ref of ['LB48', 'lb48', 'PLB48_C0P1', 'LB48, L49', 'LB48-LB50', 'LB48~50']) {
+    assert.equal(domain.getRlcKind(group('lb', 'CHIP BEAD 33OHM', [record('lb', undefined, undefined, { refDes: ref })], ref)), 'L', ref);
+  }
+  for (const ref of ['LB48, R49', 'LBL48', 'RB48', 'CB48', 'LB48-C50']) {
+    assert.equal(domain.getRlcKind(group('bad', 'CHIP BEAD', [record('bad', undefined, undefined, { refDes: ref })], ref)), null, ref);
+  }
+});
+
 test("full specs merge references while ratings, packages and unit case remain distinct", () => {
   const groups = domain.buildRlcPriorityGroups([
     group("a"), group("b", "  RES 10K   1% 0603 0.1W  ", [record("b", "Example B", "R-B", { refDes: "R2" })], "R2"),

@@ -6,10 +6,11 @@ const http = require('node:http');
 (async () => {
   const bundled = await require('esbuild').build({
     entryPoints: ['tests/support/vendorMailFixture.jsx'], bundle: true, write: false,
-    jsx: 'automatic', format: 'iife', platform: 'browser',
+    jsx: 'automatic', format: 'iife', platform: 'browser', outdir: 'qa-fixture',
     define: { 'import.meta.env.DEV': 'false', 'import.meta.env.BASE_URL': '"/"' },
     plugins: [{ name: 'vendor-mail-fixture', setup(build) {
       build.onResolve({ filter: /^@\/(components\/auth\/UserContext|integrations\/supabase\/client)$/ }, () => ({ path: path.resolve('tests/support/vendorMailMock.js') }));
+      build.onResolve({ filter: /^@\/hooks\/usePermissions$/ }, () => ({ path: path.resolve('tests/support/vendorMailMock.js') }));
       build.onResolve({ filter: /^@\// }, args => build.resolve(path.resolve('src', args.path.slice(2)), { resolveDir: process.cwd(), kind: args.kind }));
     } }],
   });
@@ -22,10 +23,10 @@ const http = require('node:http');
     res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'");
     if (req.url === '/fixture.js') {
       res.setHeader('Content-Type', 'text/javascript');
-      res.end(bundled.outputFiles[0].text);
+      res.end(bundled.outputFiles.find(file => file.path.endsWith('.js')).text);
     } else if (req.url === '/') {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.end(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>供應商信件隔離驗證</title><style>${style.css}</style></head><body style="margin:0;height:100dvh"><div id="root" style="height:100dvh"></div><script src="/fixture.js"></script></body></html>`);
+      res.end(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>供應商信件隔離驗證</title><style>${style.css}\n${bundled.outputFiles.filter(file => file.path.endsWith('.css')).map(file => file.text).join('\n')}</style></head><body style="margin:0;height:100dvh"><div id="root" style="height:100dvh"></div><script src="/fixture.js"></script></body></html>`);
     } else {
       res.writeHead(404);
       res.end('Not found');

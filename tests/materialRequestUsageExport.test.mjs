@@ -223,8 +223,8 @@ for (const format of ["html", "zip"]) {
 
 test("page snapshots and actual exports keep each physical candidate's own CE fields, including blanks", async () => {
   const pageSource = await readFile(new URL("../src/components/material-requests/MaterialRequestPage.tsx", import.meta.url), "utf8");
-  const start = pageSource.indexOf("  const createExportSnapshot = () => {");
-  const end = pageSource.indexOf("  const prepareExportSnapshot = async () => {", start);
+  const start = pageSource.indexOf("  const createExportSnapshot = (openDialog = true) => {");
+  const end = pageSource.indexOf("  const [exportingVisibleColumns", start);
   assert.ok(start > 0 && end > start);
   const compileSnapshot = ts.transpileModule(pageSource.slice(start, end), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -296,7 +296,42 @@ test("the PLM Non PVL apply list keeps unique non-empty part numbers under the �
     { partNumber: "0600-00010ZZ" }, { partNumber: " 0200-00EA0ZY " }, { partNumber: "" }, { partNumber: "0600-00010ZZ" },
   ]), ["0600-00010ZZ", "0200-00EA0ZY"]);
   assert.match(exportSource, /bookType: "biff8"/);
-  assert.match(exportSource, /applyNonPvlParts_/);
+  assert.match(exportSource, /const fileName = "applyNonPvlParts.xls"/);
+});
+
+test("official Non PVL XLS has only Sheet1 and the exact one-column header with selected unique text values", async () => {
+  const blob = await captureExport(moduleExports.exportNonPvlApplyList, { partNumbers: ['0010-0000100', '0010-0000100', '0600-00010ZZ', '', 'INVALID'] });
+  const bytes = Buffer.from(await blob.arrayBuffer());
+  assert.equal(bytes.subarray(0, 8).toString('hex'), 'd0cf11e0a1b11ae1');
+  const xlsx = createRequire(import.meta.url)('xlsx');
+  const workbook = xlsx.read(bytes, { type: 'buffer', cellStyles: true });
+  assert.deepEqual(workbook.SheetNames, ['Sheet1']);
+  const sheet = workbook.Sheets.Sheet1;
+  assert.equal(sheet['!ref'], 'A1:A3');
+  assert.deepEqual(xlsx.utils.sheet_to_json(sheet, { header: 1 }), [['料號(必填)'], ['0010-0000100'], ['0600-00010ZZ']]);
+  assert.ok(Math.abs(sheet['!cols'][0].wch - 29.5) < 0.1);
+  assert.equal(sheet['!autofilter'], undefined);
+  assert.ok(sheet['!cols'].every(column => !column.hidden));
+  assert.equal(sheet.A2.t, 's');
+});
+
+test("PLM errors match full part numbers only, deduplicate and leave unknown numbers for review", () => {
+  const result = moduleExports.matchNonPvlRejections('廢止料:1A20-0000100 需先重啟\n1a20-0000100(CATANIA_VR/CARD)：已有此設定\n1A20-00001000:其他料\n1022-00001ZZ：已有此設定', ['1A20-0000100', '1022-00001ZZ']);
+  assert.deepEqual(result.matched, ['1A20-0000100', '1022-00001ZZ']);
+  assert.deepEqual(result.unmatched, ['1A20-00001000']);
+});
+
+test("visible-column export uses only the selected headers in order and keeps original blank virtual numbers", async () => {
+  const columns = [{ key: 'name', label: 'Name' }, { key: 'physical', label: '實體料號' }, { key: 'virtual', label: '虛擬料號' }, { key: 'actions', label: '狀態追蹤 / 更新' }];
+  const report = snapshot([reportRow({ tx: '', internalPartNumber: '0010-0000100', materialName: '=not-a-formula' })]);
+  const blob = await captureExport(value => moduleExports.exportMaterialVisibleColumns(value, columns), report);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await blob.arrayBuffer());
+  const sheet = workbook.worksheets[0];
+  assert.deepEqual(sheet.getRow(1).values.slice(1), columns.map(column => column.label));
+  assert.deepEqual(sheet.getRow(2).values.slice(1), ['=not-a-formula', '0010-0000100', '', '處理中']);
+  assert.equal(sheet.columnCount, 4);
+  assert.equal(typeof sheet.getCell('A2').value, 'string');
 });
 
 test("信件生成 groups every MPN candidate of the pending parts by manufacturer", () => {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ExternalLink, FileSpreadsheet, Search } from "lucide-react";
+import { ExternalLink, FileSpreadsheet, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,9 +11,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-import type { DiscouragedMaterialRow } from "./materialRequestExport";
+import { collectNonPvlPartNumbers, matchNonPvlRejections, type DiscouragedMaterialRow } from "./materialRequestExport";
 
 export const NON_PVL_SOP_URL = "https://sp.pegatroncorp.com/plm/FAQ/Part/[PART]%20%E4%BE%9D%E5%B0%88%E6%A1%88%E8%A7%A3%E9%99%A4%E4%B8%8D%E5%BB%BA%E8%AD%B0%E4%BD%BF%E7%94%A8%E6%96%99%E7%94%B3%E8%AB%8B%E8%AA%AA%E6%98%8E.aspx";
 export const NON_PVL_SOP_TITLE = "[PART] 依專案解除不建議使用料申請說明";
@@ -50,21 +52,27 @@ export function MaterialNonPvlDialog({
   /** Rows dropped because their 實體料號 does not end in 00, ZZ or ZY. */
   excludedCount?: number;
   workspaceName: string;
-  onExportApplyList: () => void;
+  onExportApplyList: (partNumbers: string[]) => void;
   onExportDetail: () => void;
   onOpenChange: (open: boolean) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [showSop, setShowSop] = useState(true);
+  const [showSop, setShowSop] = useState(false);
+  const [excludedParts, setExcludedParts] = useState<Set<string>>(() => new Set());
+  const [rejectionText, setRejectionText] = useState("");
+  const [rejectionReview, setRejectionReview] = useState<ReturnType<typeof matchNonPvlRejections> | null>(null);
   const keyword = query.trim().toLowerCase();
   const visibleRows = useMemo(() => (
     keyword
       ? rows.filter((row) => [row.refDes, row.name, row.manufacturerPartNumber, row.manufacturer, row.partNumber, row.virtualAlternative, row.partUsageStatus].join(" ").toLowerCase().includes(keyword))
       : rows
   ), [keyword, rows]);
-  const partNumbers = useMemo(() => new Set(rows.map((row) => row.partNumber).filter(Boolean)), [rows]);
+  const partNumbers = useMemo(() => collectNonPvlPartNumbers(rows), [rows]);
+  const selectedParts = partNumbers.filter(part => !excludedParts.has(part));
+  const excludeParts = (parts: string[]) => setExcludedParts(current => new Set([...current, ...parts]));
+  const togglePart = (part: string) => setExcludedParts(current => { const next = new Set(current); if (next.has(part)) next.delete(part); else next.add(part); return next; });
   const missingCount = rows.filter((row) => !row.partNumber).length;
-  const description = `${workspaceName} · 零件狀態為不建議用料的料共 ${rows.length.toLocaleString()} 筆 · 可申請的實體料號 ${partNumbers.size.toLocaleString()} 個${missingCount > 0 ? ` · ${missingCount.toLocaleString()} 筆還沒有實體料號` : ""}${excludedCount > 0 ? ` · 已排除 ${excludedCount.toLocaleString()} 筆實體料號尾數不是 00／ZZ／ZY` : ""}`;
+  const description = `${workspaceName} · 不建議料 ${rows.length.toLocaleString()} 筆 · 本次匯出 ${selectedParts.length} / ${partNumbers.length} 個實體料號${missingCount > 0 ? ` · ${missingCount.toLocaleString()} 筆還沒有實體料號` : ""}${excludedCount > 0 ? ` · 已排除 ${excludedCount.toLocaleString()} 筆實體料號尾數不是 00／ZZ／ZY` : ""}`;
   const assetBase = `${import.meta.env.BASE_URL}material-non-pvl/`;
 
   return (
@@ -119,21 +127,39 @@ export function MaterialNonPvlDialog({
             )}
           </section>
 
+          <section className="workspace-dialog-section space-y-3 rounded-xl p-4" aria-label="PLM 退件批次排除">
+            <div><h3 className="text-base font-semibold">貼上 PLM 退件訊息</h3><p className="mt-1 text-sm text-muted-foreground">把紅字錯誤清單整段貼上，先比對料號，再排除已設定、廢止或其他退件料。只調整本次匯出，不刪除 BOM。</p></div>
+            <Textarea aria-label="PLM 退件訊息" value={rejectionText} onChange={event => { setRejectionText(event.target.value); setRejectionReview(null); }} placeholder="例如：1A20-0000100(專案) 已有此設定" className="min-h-24 text-sm" disabled={isExporting} />
+            <Button type="button" variant="outline" disabled={!rejectionText.trim() || isExporting} onClick={() => setRejectionReview(matchNonPvlRejections(rejectionText, partNumbers))}>比對退件料號</Button>
+            {rejectionReview && <div className="space-y-2 rounded-lg border border-border p-3" role="status">
+              <p className="text-sm">精確匹配 {rejectionReview.matched.length} 個 · 未匹配 {rejectionReview.unmatched.length} 個</p>
+              {rejectionReview.matched.length > 0 && <p className="break-words font-mono text-sm text-warning">{rejectionReview.matched.join("、")}</p>}
+              {rejectionReview.unmatched.length > 0 && <details><summary className="cursor-pointer text-sm">查看未匹配料號（不會排除）</summary><p className="mt-2 break-words font-mono text-xs">{rejectionReview.unmatched.join("、")}</p></details>}
+              <Button type="button" disabled={!rejectionReview.matched.length || isExporting} onClick={() => { excludeParts(rejectionReview.matched); setRejectionReview(null); }}>排除已匹配的 {rejectionReview.matched.length} 個料號</Button>
+            </div>}
+          </section>
+
           <section className="workspace-dialog-section rounded-2xl p-4">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-lg font-semibold text-foreground">匯出預覽</h3>
-              <span className="text-sm text-foreground/75">{visibleRows.length.toLocaleString()} / {rows.length.toLocaleString()} 筆</span>
+              <span className="text-sm text-foreground/75">本次選取 {selectedParts.length} 個 · 排除 {partNumbers.length - selectedParts.length} 個</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => setExcludedParts(new Set())} disabled={isExporting || selectedParts.length === partNumbers.length}>全部選取</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => excludeParts(collectNonPvlPartNumbers(visibleRows))} disabled={isExporting || !collectNonPvlPartNumbers(visibleRows).some(part => !excludedParts.has(part))}>排除搜尋結果</Button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="relative ml-auto w-full sm:w-64">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋位號、料名、MPN 或料號" aria-label="搜尋不建議料" className="h-8 rounded-lg pl-9 text-xs" />
               </div>
+              {query.trim() && <><Button type="button" variant="outline" size="sm" aria-label="清除不建議料搜尋條件" onClick={() => setQuery("")}>搜尋：{query.trim()}<X className="ml-1 h-3 w-3" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => setQuery("")}>全部清除</Button></>}
             </div>
             <div className="mt-2 overflow-x-auto rounded-xl border border-border">
-              <table className="w-full min-w-[960px] table-fixed text-left text-sm">
+              <table className="w-full min-w-[1440px] table-fixed text-left text-sm">
                 <thead className="bg-background/60 text-muted-foreground">
                   <tr>
+                    <th className="w-24 px-3 py-2 font-semibold">本次匯出</th>
                     <th className="w-[13rem] px-3 py-2 font-semibold">Ref Des</th>
-                    <th className="px-3 py-2 font-semibold">Name</th>
+                    <th className="w-72 px-3 py-2 font-semibold">Name</th>
                     <th className="w-[15rem] px-3 py-2 font-semibold">MPN</th>
                     <th className="w-[15rem] px-3 py-2 font-semibold">實體料號</th>
                     <th className="w-[22rem] px-3 py-2 font-semibold">零件狀態</th>
@@ -141,9 +167,10 @@ export function MaterialNonPvlDialog({
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   {visibleRows.length === 0 ? (
-                    <tr><td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">{rows.length === 0 ? "目前 BOM 沒有零件狀態為不建議用料的料" : "找不到符合條件的料"}</td></tr>
+                    <tr><td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">{rows.length === 0 ? "目前 BOM 沒有零件狀態為不建議用料的料" : "目前篩選條件沒有符合的不建議料"}</td></tr>
                   ) : visibleRows.map((row, index) => (
                     <tr key={`${row.refDes}-${row.manufacturerPartNumber}-${index}`} className={cn(!row.partNumber && "text-muted-foreground")}>
+                      <td className="px-3 py-2"><Checkbox checked={!!row.partNumber && !excludedParts.has(row.partNumber)} disabled={isExporting || !row.partNumber} onCheckedChange={() => togglePart(row.partNumber)} aria-label={`匯出料號 ${row.partNumber || '未提供'} ${row.refDes}`} />{row.partNumber && excludedParts.has(row.partNumber) && <span className="ml-1 text-xs text-muted-foreground">已排除</span>}</td>
                       <td className="truncate px-3 py-1.5 font-mono" title={row.refDes}>{row.refDes || "—"}</td>
                       <td className="truncate px-3 py-1.5" title={row.name}>{row.name || "—"}</td>
                       <td className="truncate px-3 py-1.5 font-mono" title={row.manufacturerPartNumber}>{row.manufacturerPartNumber || "—"}</td>
@@ -159,15 +186,15 @@ export function MaterialNonPvlDialog({
 
         <DialogFooter className="gap-3 sm:justify-between">
           <div className="grid gap-1 text-sm text-foreground/80">
-            <p><strong className="text-foreground">PLM 申請清單（.xls）</strong>：只有「料號(必填)」一欄、一列一個實體料號，拿去 PLM 的 Non PVL 申請直接上傳。</p>
+            <p><strong className="text-foreground">官方 PLM 格式（.xls）</strong>：Sheet1、只有「料號(必填)」一欄。依勾選匯出，重複料號只留一筆。</p>
             <p><strong className="text-foreground">完整明細（.xlsx）</strong>：上面預覽的全部欄位（位號、料名、MPN、廠商、實體／虛擬料號、零件狀態），給自己或同事核對用。</p>
           </div>
           <div className="flex flex-none flex-wrap gap-2">
             <Button type="button" variant="outline" disabled={isExporting || rows.length === 0} onClick={onExportDetail} className="h-10 px-4 text-sm">
               <FileSpreadsheet className="mr-1.5 h-4 w-4" />匯出完整明細 (.xlsx)
             </Button>
-            <Button type="button" data-testid="non-pvl-export-apply" disabled={isExporting || partNumbers.size === 0} onClick={onExportApplyList} className="h-10 px-4 text-sm font-bold">
-              <FileSpreadsheet className="mr-1.5 h-4 w-4" />{isExporting ? "匯出中…" : `匯出 PLM 申請清單 (.xls · ${partNumbers.size.toLocaleString()} 個料號)`}
+            <Button type="button" data-testid="non-pvl-export-apply" disabled={isExporting || selectedParts.length === 0} onClick={() => onExportApplyList(selectedParts)} className="h-10 px-4 text-sm font-bold">
+              <FileSpreadsheet className="mr-1.5 h-4 w-4" />{isExporting ? "匯出中…" : `匯出 PLM 申請清單 (.xls · ${selectedParts.length.toLocaleString()} 個料號)`}
             </Button>
           </div>
         </DialogFooter>
