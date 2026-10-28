@@ -10,6 +10,10 @@ Observed format (CATANIA PDB EVT/DVT, 2026-10):
 Also accepts a real .xlsx / .csv with the same column headers.
 An Agile PLM export (real BIFF .xls / .xlsx, "Level / Find Num / Item Number / Ref Des" header) is
 detected first and handed to bom_agile.py; the ERP path below is unchanged.
+2026-10-22: OrCAD Capture 'Bill of Materials' report (.BOM text or its Excel copy, header Item / Quantity /
+Reference / Part below a title block) and other flat EDA exports go to bom_orcad.py. Tried LAST, after the ERP
+header AND all five ERP columns resolve, so a company BOM is never re-read as a flat one. ERP header scan widened
+from 10 to 30 rows.
 """
 from __future__ import annotations
 
@@ -20,7 +24,7 @@ from pathlib import Path
 import pandas as pd
 
 from ..model import BomItem, Design, SourceFile
-from . import bom_agile, bom_nvidia, sha256_of
+from . import bom_agile, bom_nvidia, bom_orcad, read_text, sha256_of
 
 COLS = {
     "pn": ["主件料號", "料號", "Part Number", "PN"],
@@ -67,7 +71,7 @@ def _read_table(path: Path) -> pd.DataFrame:
     else:
         df = pd.read_excel(path, header=None, dtype=str)
     # locate header row
-    for i in range(min(10, len(df))):
+    for i in range(min(30, len(df))):
         row = [str(x).strip() for x in df.iloc[i].tolist()]
         if any(c in row for c in COLS["pn"]) and any(c in row for c in COLS["ref"]):
             df.columns = row
@@ -91,6 +95,28 @@ def _qty(x: str) -> float | None:
     return float(m.group(1)) if m else None
 
 
+def _erp_cols(df: pd.DataFrame) -> tuple[str, ...]:
+    return tuple(_col(df, k) for k in ("pn", "desc", "spec", "qty", "ref"))
+
+
+def _flat_rows(path: Path) -> list[list[str]] | None:
+    """Header-less rows for the OrCAD / flat parser: .BOM / .txt text report, real Excel, .csv, HTML table."""
+    suf = path.suffix.lower()
+    if suf in (".bom", ".txt"):
+        return bom_orcad.text_rows(read_text(path))
+    frame = _raw_frame(path)
+    if frame is None:
+        raw = path.read_bytes()
+        if b"<table" in raw[:4000].lower():
+            frame = max(pd.read_html(io.StringIO(_decode_html(raw)), header=None), key=len)
+        elif suf == ".csv":
+            import csv
+            return [r for r in csv.reader(io.StringIO(read_text(path)))]
+        else:
+            return None
+    return frame.fillna("").astype(str).values.tolist()
+
+
 def sniff_bom(path: str | Path) -> str | None:
     """'Agile' / 'NVIDIA' / 'ERP' when one of the parsers recognises the file's header, else None. Used by
     loader.classify_report to tell a BOM from any other spreadsheet in a design kit (never raises)."""
@@ -103,10 +129,26 @@ def sniff_bom(path: str | Path) -> str | None:
                 return "Agile"
             if bom_nvidia.find_header(rows) is not None:
                 return "NVIDIA"
-        _read_table(path)
-        return "ERP"
     except Exception:  # noqa: BLE001
-        return None
+        pass
+    if path.suffix.lower() not in (".bom", ".txt"):
+        try:
+            _erp_cols(_read_table(path))
+            return "ERP"
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        if path.suffix.lower() in (".bom", ".txt"):     # sniff the head only: a kit may hold big .txt logs
+            with open(path, "rb") as f:
+                head = f.read(65536)
+            rows = bom_orcad.text_rows(head.decode("utf-8", errors="replace") if b"\0" not in head else "")
+        else:
+            rows = _flat_rows(path)
+        if rows is not None and bom_orcad.find_header(rows) is not None:
+            return "OrCAD"
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 def parse_bom(path: str | Path) -> tuple[list[BomItem], list[tuple[str, str]]]:
@@ -118,8 +160,17 @@ def parse_bom(path: str | Path) -> tuple[list[BomItem], list[tuple[str, str]]]:
             return bom_agile.parse_rows(rows)
         if bom_nvidia.find_header(rows) is not None:
             return bom_nvidia.parse_rows(rows)
-    df = _read_table(path)
-    cpn, cdesc, cspec, cqty, cref = (_col(df, k) for k in ("pn", "desc", "spec", "qty", "ref"))
+    try:
+        df = _read_table(path) if path.suffix.lower() not in (".bom", ".txt") else None
+        cols = _erp_cols(df) if df is not None else None
+    except ValueError:
+        df = cols = None
+    if cols is None:
+        rows = _flat_rows(path)
+        if rows is not None and bom_orcad.find_header(rows) is not None:
+            return bom_orcad.parse_rows(rows)
+        raise ValueError(f"BOM header not recognised in {path.name} (ERP / Agile / NVIDIA / OrCAD)")
+    cpn, cdesc, cspec, cqty, cref = cols
     items: list[BomItem] = []
     problems: list[tuple[str, str]] = []
     stack: dict[int, BomItem] = {}  # depth -> last real item at that depth
@@ -161,6 +212,7 @@ def parse_bom(path: str | Path) -> tuple[list[BomItem], list[tuple[str, str]]]:
 
 def load_bom(design: Design, path: str | Path) -> None:
     items, problems = parse_bom(path)
+    design.bom_format = sniff_bom(path) or ""
     design.sources.append(SourceFile(role="bom", path=str(path), sha256=sha256_of(path)))
     design.bom_items = items
     design.bom = {r: it for it in items for r in it.refdes}

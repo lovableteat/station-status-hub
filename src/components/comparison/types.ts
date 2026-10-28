@@ -25,6 +25,12 @@ export interface TrackRow {
   detail: string;
   related: string[];
   dest: string;
+  /** 2026-10-27 engine: net-level evidence used by the PDF annotator (A/B net names, pins, sides). */
+  evidence?: Record<string, unknown>;
+  /** Tracking key of the root-cause row this row is a consequence of; "" or absent for top-level rows. */
+  parent?: string;
+  /** Keys of the rows grouped under this root cause. */
+  children?: string[];
 }
 
 export interface ReviewReply { disp: string; owner: string; target_rev: string; note: string; filled: string }
@@ -55,6 +61,8 @@ export interface ComparisonResult {
   warnings: string[];
   library: Record<string, unknown>[];
   artifacts: Artifact[];
+  /** 2026-10-27 engine: {parents, children, annotate: {rows, located, boxed, ...}} from the root-cause pass. */
+  rootcause?: Record<string, unknown>;
 }
 
 export interface ComparisonSession {

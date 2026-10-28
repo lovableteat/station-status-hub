@@ -14,6 +14,16 @@ parts:
   # mechanical / non-electrical BOM items that legitimately have no netlist entry   (DEFAULT)
   mechanical_refdes_regex: '^(TIM|TTP|MEC|H|LBL|HS|SCREW|NUT|PCB)\d*$'
 
+dnp:
+  # CONFIRMED (owner, 2026-10-22): the naming rule marks a not-installed part NI; Capture CIS stores it in the part
+  # instance property Optional (values seen: NI / I / N/A; CATANIA EVT also one 'NOBOM', not treated as DNP: DEFAULT).
+  dsn_property: [Optional]
+  dsn_values: [NI]
+  # with these BOM formats the BOM alone decides DNP and DSN NI is only cross-checked (BOM_NI_CONFLICT);
+  # any other BOM (OrCAD Capture report lists every placed part) or no BOM: DSN NI parts are DNP
+  company_bom_formats: [ERP, Agile, NVIDIA]
+  conflict_severity: WARN
+
 ground:
   main: GND
   # nets treated as ground (0 V). Full-match regex.                                (DEFAULT)
@@ -39,6 +49,13 @@ capacitor:
   mlcc_primitive_regex: '^C_TX_C\d{4}'
   # CONFIRMED: non-MLCC (polymer / electrolytic / tantalum) are reported as INFO ratio only
   non_mlcc_report: info
+  # 2026-10-22: when the BOM text gives no type (OrCAD Capture BOM = value only, or no BOM) the DSN CIS property text
+  # is searched with mlcc_bom_regex (Pegatron CIS: Component_Name 'MLCC 0.1UF/16V X7R 5%')            (DEFAULT)
+  mlcc_dsn_properties: [Component_Name, Description]
+  # besides the summary row, one CAP_UNRESOLVED row per unresolved net carrying its caps, so each can be found on
+  # the PDF (destination + bookmark; boxed only if the severity is in annotate.box_severities)          (DEFAULT)
+  unresolved_per_net: true
+  unresolved_severity: INFO
 
 net_voltage:
   # A voltage token in a net name (3V3, P12V, 4V85) is ignored when ANY token in the name
@@ -53,6 +70,10 @@ net_voltage:
               NC, SNN, N, P]
   # propagate a known voltage across stuffed tie parts (0R, fuse, net-tie, bead)
   propagate: true
+  # capacitor check only (2026-10-22, QA): VDD_12V / VCC_3V3 style names (supply word FIRST, voltage token right
+  # after it) give a voltage marked 'legacy prefix, unverified'; an MLCC fail resting on it is WARN. The naming
+  # rule v0.2 writes rails P<voltage> (P12V), so these names are pre-rule boards.                     (DEFAULT)
+  legacy_prefix_words: [VDD, VCC]
 
 naming:
   enabled: false             # company naming rule not yet enforced on this board family
@@ -65,6 +86,13 @@ drc:
   floating_after_dnp: true
   # nets / pins that are deliberately unconnected: single-pin and floating checks report INFO
   intentional_nc_net_regex: '^(SNN|NC)_'
+  # CONFIRMED (owner, 2026-10-22): a wire without a net name is not an electrical error and CRB designs have many,
+  # so AUTO_NET_NAME is INFO (was WARN). A net that BECOMES tool-named between revisions is still WARN (NET_RENAMED).
+  auto_net_severity: INFO
+  # CONFIRMED (owner, 2026-10-27): a net holding only capacitors is a normal filter-cap drawing (source elsewhere), so
+  # CAP_ONLY_NET is INFO: in the Excel list, no PDF box. "auto" = ERROR (parallel caps on a dead rail) / WARN (series
+  # mid-point) / INFO (all DNP) as before.
+  cap_only_severity: INFO
   nc_pin_name_regex: '^(NC|N\.C\.|DNC|RSVD|RESERVED)(_?\d+)?$'
 
 bom:
@@ -77,6 +105,31 @@ bom:
     min_pin_ratio: 0.5    # candidate must have >= this x socket pin count (keeps 2-pin R / C out)
     min_pins: 3           # distinctive pins (not ground, not no-connect) the candidate must have
     ignore_net_regex: '^(NC|N\.C\.|DNC|NC_.*|SNN_.*)$'   # no-connect nets, dropped like ground.regex nets
+
+bomchk:
+  # Existing rule BOM_MPN_NOT_FOUND (U / Q symbol MPN not in BOM text). Owner 2026-10-22: INFO -> WARN for now,
+  # revisit after RD feedback. CONFIRMED
+  mpn_not_found_severity: WARN
+  # G0 BOM_NETLIST_MISMATCH (power tree v4.6 §G0, owner decisions 2026-10-22). One row per part that is in the BOM
+  # AND the netlist. Key: netlist part property (Concept NV_PN) vs BOM Number + AML alternates; without that
+  # property (OrCAD), symbol VALUE vs BOM text (passives by value, others by MPN text).
+  #   value or part type differs                      -> value_diff_severity (all prefixes)       CONFIRMED
+  #   PN / MPN differs, value not comparable          -> strong_severity for strong_prefixes, else other_severity
+  #   PN differs, same type and value (2nd source)    -> statistics only, no finding            CONFIRMED
+  # A part already reported by BOM_VALUE_MISMATCH / BOM_MPN_NOT_FOUND gets no second finding.
+  netlist_pn_props: [NV_PN]
+  strong_prefixes: [U, Q, L, RS]        # CONFIRMED: also the power tree ⚠ set (converter IC + L / FET / shunt)
+  value_diff_severity: WARN
+  strong_severity: WARN
+  other_severity: INFO
+  skip_prefixes: [H, TP, VS, NT, MH, FID]   # copper / mechanical, never compared (mechanical_refdes_regex too) DEFAULT
+  # value kind per RefDes prefix (prefix = letters before the first digit)                              DEFAULT
+  value_kind: {C: cap, R: res, RS: res, L: ind}
+  # BOM description words that name a part type (full description searched, case-insensitive)          DEFAULT
+  type_regex:
+    cap: '\bCAP\b|\bMLCC\b|CAPACITOR|\bCAP\.'
+    res: '\bRES\b|RESISTOR|\bRES\.'
+    ind: '\bIND\b|INDUCTOR|\bCHOKE\b'
 
 pin_roles:
   # Netlist rules (2026-10-09, HANDOVER 0u): what a pin IS, judged from its pstchip pin name.
@@ -219,7 +272,31 @@ i2c:
 annotate:
   # schematic PDF annotation (v0.2). Boxes drawn for these severities; destinations/bookmarks for dest_severities
   box_severities: [ERROR, WARN]
+  # 2026-10-22 (owner): power / connectivity findings also box the net-name text near their parts (nearest N per
+  # net per page, ground nets never). Only pages that already carry a part box of the row.
+  # 2026-10-27 (owner, 丙): NET_SHORTED boxes ONE net label = a net of the NEW super-net (the nets column holds the old
+  # names plus every new net; old names are the key). Before: three labels per short. Code: pdf_annotate.locate.
+  net_label_rules: [CAP_ONLY_NET, NET_SPLIT, NET_MERGED, NET_SHORTED, CAP_UNRESOLVED]
+  net_label_max_per_page: 1
+  # 2026-10-27 (owner): net-level findings list every part on the net as evidence (NET_SHORTED on the TPM kit boxed R2803,
+  # R2808, TP108, U280, J55 ... all as '#2'). These rules box ONLY the first located RefDes (the jump target); the full
+  # list stays in the Excel RefDes column. Reviewers' eyes first, evidence second.
+  anchor_only_rules: [NET_SHORTED, CAP_ONLY_NET, NET_SPLIT, NET_MERGED]
+  # 2026-10-27 15:09 (owner): NET_SPLIT / NET_MERGED box the net label ONLY (B = new name, A = old name), the anchor part
+  # is boxed only when no label is found nearby. NET_SHORTED already works this way through its own branch.
+  label_only_rules: [NET_SPLIT, NET_MERGED]
+  net_label_max_dist_pt: 160   # a same-named label farther than this from the parts is not boxed
+  # findings about ONE pin of an active part (parts.active_prefixes: U / J / Q ...) box that pin's net name next to the part instead of the RefDes
+  # (fallback: the RefDes) so findings on J55.3 / J55.4 / J55.9 are separate boxes (owner 2026-10-22)
+  pin_label_rules: [SINGLE_PIN_NET, PIN_ISOLATED, PIN_MOVED, PIN_DISCONNECTED, PIN_CONNECTED]
   dest_severities: [ERROR, WARN, INFO]
+  # 2026-10-27 B-full root-cause grouping (owner decision A): a child row (tracking.link_root_causes, see rootcause:) is not
+  # boxed when its parent is boxed on the same drawing and the child is not more severe than the parent. The child keeps
+  # its named destination / bookmark / Excel link; the parent's comment lists its children. Rules listed in
+  # child_keep_box_rules always keep their box: PIN_ISOLATED marks the OPEN end of a short, which sits elsewhere on the
+  # page and the parent's net-label boxes do not mark it.
+  hide_child_boxes: true
+  child_keep_box_rules: [PIN_ISOLATED]
   # Jump to a box (Excel PDF column, 審查回覆「看圖」, index page links):
   #   fitr (default): /FitR = the view_pt area centred on the box; the viewer scales it to fill its own window,
   #                   so every screen / Windows scale / window size shows the same area (zoom differs per screen).
@@ -229,6 +306,7 @@ annotate:
   jump: fitr
   zoom: 2.0                  # xyz only: viewer zoom when jumping to a box
   box_padding: 3.0           # points around the RefDes text
+  box_line_width: 0.6        # pt, ERROR / WARN boxes; INFO boxes use half. Owner 2026-10-27: halved from 1.2 (too loud)
   # page area (w, h, PDF points) shown around the box. 460 x 275 = what the test laptop showed at 200 %
   # (1920x1200, Windows 125 %, Chrome maximised, thumbnails open), measured 2026-10-09. Bigger = more context.
   view_pt: [460, 275]
@@ -245,3 +323,15 @@ review:
   # RD replies (web page 審查回覆): one SQLite file, keyed by run + tracking key, survives re-runs.
   # Env AUTOCHECK_REVIEW_DB overrides (tests use it). Relative to the AutoCheck folder.
   db: review/review.db
+
+# Root-cause grouping of tracking rows (2026-10-27 B-full; tracking.link_root_causes, after expand_rows). parent rule ->
+# child rules it may claim. A child has ONE parent (the lowest 項次 that matches), a parent-rule row is never a child, and
+# every row keeps its own key / severity / status / title / detail (regression rule). Shown as the Excel 父項 column and
+# the 「同根因 → #n」 prefix (rendered, not stored), folded by default on the web review page (owner decision B 乙: replies are
+# NOT copied to children; the progress counts just leave children out). Matching rules: tracking.py DEFAULT_PARENTS.
+rootcause:
+  enabled: true
+  # only NET_SHORTED and CAP_ONLY_NET have matching code (tracking._is_child_of); another parent rule listed here never matches
+  parents:
+    NET_SHORTED: [NET_SPLIT, NET_MERGED, PIN_MOVED, PIN_DISCONNECTED, PIN_CONNECTED, PIN_ISOLATED, SINGLE_PIN_NET]
+    CAP_ONLY_NET: [MLCC_DERATING, CAP_UNRESOLVED, NET_SPLIT]

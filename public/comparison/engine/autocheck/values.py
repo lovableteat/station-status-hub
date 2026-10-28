@@ -36,6 +36,21 @@ def parse_res(text: str) -> float | None:
     return float(m.group(1)) * mult
 
 
+_IND = re.compile(r"(?<![\w.\-])([\d.]+)\s*([PNUµM])H(?![A-Za-z])", re.I)   # '10uH8.6A' OK; unit prefix required
+#                                                                         (board inductors; 'SOT23-6H' is no inductance)
+
+
+def parse_ind(text: str) -> float | None:
+    """'15uH' -> 1.5e-5; 'INDUCTOR 10uH8.6A20%' -> 1e-5 (first H token; G0 2026-10-22). 'MH' = milli-henry."""
+    m = _IND.search(text or "")
+    if not m:
+        return None
+    try:
+        return float(m.group(1)) * _MULT[m.group(2).upper()]
+    except ValueError:
+        return None
+
+
 def close(a: float | None, b: float | None, rel: float = 0.01) -> bool:
     if a is None or b is None:
         return a is b

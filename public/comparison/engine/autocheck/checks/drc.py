@@ -92,7 +92,7 @@ def drc(d: Design, cfg: dict) -> list[Finding]:
                           detail=("named as an intentional no-connect" if intended else
                                   "dangling net: missing wire / net label, or an intentional stub to document"),
                           refdes=[k[0]], nets=[net], pins=[f"{k[0]}.{k[1]}"]))
-        elif cfg["drc"]["floating_after_dnp"] and d.bom is not None:
+        elif cfg["drc"]["floating_after_dnp"] and (d.bom is not None or (d.ni_applies and d.ni)):
             stuffed = [p for p in pins if present(d, p[0], cfg)]
             if (len(stuffed) == 1 and _prefix(stuffed[0][0]) in active and not gnd_re.fullmatch(net)
                     and not nc_pin.match(d.pin_name.get(stuffed[0], "")) and present(d, stuffed[0][0], cfg)):
@@ -104,8 +104,29 @@ def drc(d: Design, cfg: dict) -> list[Finding]:
                               detail=f"DNP on this net: {', '.join(dnp)}. Confirm the pin may be left open "
                                      f"(datasheet: internal pull / NC allowed).",
                               refdes=[k[0]], nets=[net], pins=[f"{k[0]}.{k[1]}"]))
+        caps = [p for p in pins if re.match(r"C\d", p[0])]
+        if len(pins) >= 2 and len(caps) == len(pins) and not gnd_re.fullmatch(net) and not nc_net.search(net):
+            # every pin on the net is a capacitor pin: nothing drives or uses the node (2026-10-22, B)
+            crefs = sorted({p[0] for p in caps}, key=natkey)
+            built = [r for r in crefs if d.stuffed(r)]
+            # far ends of the caps: all on one net = parallel caps hanging on a dead rail (ERROR); different nets =
+            # a series chain mid-point (high-voltage MLCC stacks, AC coupling pairs) = WARN (QA 2026-10-22)
+            far = {d.pin_net[k] for r in crefs for k in d.pins_of(r) if d.pin_net[k] != net}
+            sev = ("ERROR" if len(far) <= 1 else "WARN") if built else "INFO"
+            # owner 2026-10-27: filter caps hung on a power symbol whose source sits elsewhere are standard practice,
+            # so the rule is INFO (config drc.cap_only_severity, listed in Excel, no PDF box). Set to "auto" for the
+            # ERROR / WARN / INFO split above.
+            fixed = str(cfg["drc"].get("cap_only_severity", "auto")).upper()
+            if fixed in ("ERROR", "WARN", "INFO"):
+                sev = fixed
+            out.append(_f(d, category="DRC", rule="CAP_ONLY_NET", severity=sev,
+                          title=f"net {net} connects only capacitors ({len(crefs)}): no source, no load",
+                          detail=f"pins: {', '.join(f'{p[0]}.{p[1]}' for p in sorted(pins, key=lambda p: natkey(p[0] + '.' + p[1])))}"
+                                 + ("" if built else " (all DNP)")
+                                 + ". A rail / signal label is probably wrong or a wire is missing.",
+                          refdes=crefs, nets=[net], key=f"CAP_ONLY_NET|{net}"))
         if auto_re.fullmatch(net):
-            out.append(_f(d, category="DRC", rule="AUTO_NET_NAME", severity="WARN",
+            out.append(_f(d, category="DRC", rule="AUTO_NET_NAME", severity=cfg["drc"].get("auto_net_severity", "INFO"),
                           title=f"unnamed net {net} (tool-generated name)",
                           detail=f"pins: {', '.join(f'{p[0]}.{p[1]}' for p in pins)}. "
                                  "Usually a wire without net label; check for a broken connection.",
@@ -185,6 +206,27 @@ def bom_checks(d: Design, cfg: dict) -> list[Finding]:
                                  + (f"; candidates {', '.join(ln['candidates'])}" if ln["candidates"] else "")
                                  + f"; BOM row {ln['row']}. The part it stands for counts as DNP.",
                           key=f"BOM_REF_UNRESOLVED|{ln['token']}|{ln['pn']}"))
+    # company BOM vs DSN NI (2026-10-22): the BOM decides DNP, a disagreement with the schematic marking is reported
+    if d.dsn_props and not d.ni_applies:
+        dc = cfg.get("dnp", {}) or {}
+        prop = (dc.get("dsn_property") or ["Optional"])[0]
+        sev = dc.get("conflict_severity", "WARN")
+        skip = set(cfg["parts"].get("always_built_prefixes", []))
+        for r in sorted(d.dsn_props, key=natkey):
+            if mech.match(r) or _prefix(r) in skip or is_nettie(d, r, cfg):
+                continue
+            val = str(d.dsn_props[r].get(prop, "")).strip()
+            if r in d.ni and r in d.bom:
+                out.append(_f(d, category="BOMCHK", rule="BOM_NI_CONFLICT", severity=sev,
+                              title=f"{r} marked {prop}={val} on the schematic but listed in the BOM ({d.bom[r].pn})",
+                              refdes=[r], detail=f"BOM row {d.bom[r].row}: {d.bom[r].desc}. The BOM decides: counted as stuffed.",
+                              key=f"BOM_NI_CONFLICT|{r}"))
+            elif val and r not in d.ni and r not in d.bom:
+                out.append(_f(d, category="BOMCHK", rule="BOM_NI_CONFLICT", severity=sev,
+                              title=f"{r} not in the BOM but the schematic marks it {prop}={val} (not NI)",
+                              refdes=[r], detail="The BOM decides: counted as DNP. Either the BOM misses it or the "
+                                                 "schematic should mark it NI.",
+                              key=f"BOM_NI_CONFLICT|{r}"))
     for r in sorted(set(d.bom) - set(d.parts), key=natkey):
         if mech.match(r):
             continue
@@ -214,12 +256,19 @@ def bom_checks(d: Design, cfg: dict) -> list[Finding]:
                               title=f"{r} schematic {val} vs BOM {it.desc}", refdes=[r],
                               detail=f"BOM {it.pn}", evidence={"schematic": val, "BOM": it.desc}))
         elif px in ("U", "Q"):
+            part = d.parts.get(r)
+            pn_props = ((cfg.get("bomchk", {}) or {}).get("netlist_pn_props") or [])
+            npn = next((part.props[p] for p in pn_props if part is not None and part.props.get(p)), "")
+            if npn and (npn == it.pn or npn in {x[0] for x in it.alternates}):
+                continue    # G0 2026-10-22: the netlist PN property (Concept NV_PN) proves the match; the symbol
+                #             VALUE there is a spec string (CRB Q86 '1B1C1E-3906,-40V,...'), not an MPN
             pr = d.prim(r)
             mpn = (pr.value if pr else "") or (pr.name.split("_")[-1] if pr else "")
             blob = " ".join([it.desc, it.spec] + [f"{x[1]} {x[2]}" for x in it.alternates]).upper()
             if mpn and mpn.upper() not in blob:
                 sub = f" (under sub-assembly {it.parent_pn}; its alternates are not itemised)" if it.parent_pn else ""
-                out.append(_f(d, category="BOMCHK", rule="BOM_MPN_NOT_FOUND", severity="INFO",
+                sev = str((cfg.get("bomchk", {}) or {}).get("mpn_not_found_severity", "INFO")).upper()
+                out.append(_f(d, category="BOMCHK", rule="BOM_MPN_NOT_FOUND", severity=sev,
                               title=f"{r} symbol MPN {mpn} not among BOM main/alternates", refdes=[r],
                               detail=f"BOM main {it.pn}: {it.desc} | {it.spec}{sub}",
                               key=f"BOM_MPN_NOT_FOUND|{r}|{mpn}|{it.pn}"))

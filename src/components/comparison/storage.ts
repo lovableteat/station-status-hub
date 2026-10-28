@@ -62,7 +62,8 @@ export function parseSessionSnapshot(value: unknown): ComparisonSession {
   require(value.version === 1 && text(value.projectName, true, 120) && text(value.id, true, 1024) && timestamp(value.savedAt), "版本、比對名稱、識別碼或儲存時間");
   require(value.libraryYaml === undefined || (text(value.libraryYaml, false, 2 * 1024 * 1024) && new TextEncoder().encode(value.libraryYaml).byteLength <= 2 * 1024 * 1024), "位址庫 YAML 不可超過 2 MiB");
   const result = value.result;
-  require(record(result) && keys(result, ["meta", "findings", "rows", "overview", "capRows", "railTodo", "railDomain", "powerTree", "powerTreeA", "i2cMap", "i2cMapA", "inputIssues", "warnings", "library", "artifacts"]), "比對結果結構");
+  require(record(result) && keys(result, ["meta", "findings", "rows", "overview", "capRows", "railTodo", "railDomain", "powerTree", "powerTreeA", "i2cMap", "i2cMapA", "inputIssues", "warnings", "library", "artifacts"], ["rootcause"]), "比對結果結構");
+  require(result.rootcause === undefined || jsonRecord(result.rootcause), "根因摘要");
   const meta = result.meta;
   require(record(meta) && keys(meta, ["tool_version", "generated", "a", "b"], ["rules_version", "config_hash", "warnings"]), "報表中繼資料");
   require(text(meta.tool_version, true, 120) && text(meta.generated, true, 80), "工具版本或產生時間");
@@ -82,7 +83,11 @@ export function parseSessionSnapshot(value: unknown): ComparisonSession {
   require(Array.isArray(result.rows) && result.rows.length <= MAX_ROWS, "追蹤列數不可超過 100000");
   const rowKeys = new Set<string>();
   for (const row of result.rows) {
-    require(record(row) && keys(row, ["key", "gid", "category", "rule", "severity", "status", "page", "page_title", "refdes", "pins", "nets", "title", "detail", "related", "dest"]), "追蹤列結構");
+    // The 2026-10-27 engine adds evidence / parent / children; sessions saved by earlier engines have none of them.
+    require(record(row) && keys(row, ["key", "gid", "category", "rule", "severity", "status", "page", "page_title", "refdes", "pins", "nets", "title", "detail", "related", "dest"], ["evidence", "parent", "children"]), "追蹤列結構");
+    require(row.evidence === undefined || jsonRecord(row.evidence), "追蹤列證據");
+    require(row.parent === undefined || text(row.parent, false, 1024), "追蹤列父項");
+    require(row.children === undefined || strings(row.children), "追蹤列子項");
     require(["key", "gid", "category", "rule", "severity", "status", "page_title", "title", "detail", "dest"].every(field => text(row[field], field === "key")), "追蹤列文字欄位");
     require(["category", "status", "severity"].every(field => text(row[field], true, 120) && !["__proto__", "constructor", "prototype"].includes(row[field] as string)), "追蹤列分類、狀態或嚴重度");
     require(row.page === null || (Number.isSafeInteger(row.page) && (row.page as number) > 0), "追蹤列頁碼");

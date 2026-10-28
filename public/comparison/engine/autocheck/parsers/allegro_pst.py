@@ -66,6 +66,7 @@ def parse_pstchip(text: str) -> dict[str, Primitive]:
 # ---------------------------------------------------------------- pstxprt
 _PART = re.compile(r"^PART_NAME\s*\n\s*(\S+)\s+'((?:[^']|'')*)'\s*:", re.M)   # OrCAD ': ;' / Concept ': props ;'
 _PAGE = re.compile(r"P_PATH='[^']*?:page(\d+)_", re.I)
+_PPROP = re.compile(r"^\s*([A-Z_][A-Z0-9_]*)='((?:[^']|'')*)'[,;]", re.M)   # NV_PN='032-0561-000', (G0 2026-10-22)
 
 
 def parse_pstxprt(text: str) -> dict[str, Part]:
@@ -81,7 +82,10 @@ def parse_pstxprt(text: str) -> dict[str, Part]:
             if n not in pages:
                 pages.append(n)
         refdes = m.group(1)
-        parts[refdes] = Part(refdes=refdes, primitive=m.group(2).replace("''", "'"), pages=pages)
+        props: dict[str, str] = {}
+        for pm in _PPROP.finditer(block):      # first section wins (a property repeated per section is the same)
+            props.setdefault(pm.group(1), pm.group(2).replace("''", "'"))
+        parts[refdes] = Part(refdes=refdes, primitive=m.group(2).replace("''", "'"), pages=pages, props=props)
     return parts
 
 

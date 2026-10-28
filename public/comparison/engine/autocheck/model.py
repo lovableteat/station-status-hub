@@ -41,6 +41,9 @@ class Part:
     refdes: str
     primitive: str
     pages: list[int] = field(default_factory=list)  # schematic page numbers from P_PATH
+    # per-instance properties of the part's first section in pstxprt (Concept: NV_PN, VALUE, ASSEMBLY, ROOM ...;
+    # OrCAD writes only C_PATH / P_PATH / PRIM_FILE / SECTION). Added 2026-10-22 for G0 (BOM vs netlist PN).
+    props: dict[str, str] = field(default_factory=dict)
 
     @property
     def page(self) -> int | None:
@@ -85,6 +88,13 @@ class Design:
     pages: dict[int, str] = field(default_factory=dict)               # page number -> title
     change_history: list[tuple[str, list[str]]] = field(default_factory=list)  # (page title, lines)
     sources: list[SourceFile] = field(default_factory=list)
+    # 2026-10-22: DSN part instance properties (CIS: Optional / Part Number / Component_Name ...) and the DNP decision
+    # source. ni = parts the DSN marks not installed (config dnp.dsn_property / dsn_values); used by stuffed() only when
+    # the BOM is not a company BOM (OrCAD Capture report lists every placed part, or no BOM at all).
+    dsn_props: dict[str, dict[str, str]] = field(default_factory=dict)
+    bom_format: str = ""                     # ERP / Agile / NVIDIA / OrCAD ("" = no BOM)
+    ni: set[str] = field(default_factory=set)
+    ni_applies: bool = False                 # True: DSN NI decides DNP (see dnp.apply_ni)
 
     # ---- convenience -------------------------------------------------
     def prim(self, refdes: str) -> Primitive | None:
@@ -96,7 +106,11 @@ class Design:
         return pr.value if pr else ""
 
     def stuffed(self, refdes: str) -> bool:
-        """Company rule: a part not present in the BOM is DNP / DNI / NI."""
+        """Company rule: a part not present in the BOM is DNP / DNI / NI. With a company BOM (ERP / Agile / NVIDIA)
+        the BOM alone decides (DSN NI only cross-checked, drc.bom_checks BOM_NI_CONFLICT). With an OrCAD Capture
+        BOM (lists every placed part) or no BOM, a part the DSN marks NI is DNP as well (2026-10-22, owner)."""
+        if self.ni_applies and refdes in self.ni:
+            return False
         if self.bom is None:
             return True
         return refdes in self.bom

@@ -6,8 +6,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import __version__
+from .checks import bom_consistency
 from .checks.capv import cap_check
 from .checks.diff import diff_designs
+from .checks.shortopen import short_open
 from .checks.drc import bom_checks, drc, tag_new
 from .checks.netrules import NetGraph, decouple_coverage, domain_rows, fet_coverage, load_rail_domain, netrules
 from .checks.i2c_map import i2c_map, load_declared, mark_changes
@@ -39,16 +41,21 @@ class Result:
     i2c_map: dict = field(default_factory=dict)         # I2C map on B (+ "declared" comparison rows)
     i2c_map_a: dict = field(default_factory=dict)       # same on A, only for the change column / colours
     coverage: dict = field(default_factory=dict)        # rule coverage on B, e.g. {"DECOUPLE": {...}} (0p11)
+    bom_check: dict = field(default_factory=dict)       # G0 per side: {"A": classify(), "B": classify()} (0p18)
     publish_url: str = ""                               # http URL of the annotated PDF (set by write_outputs)
     publish_url_a: str = ""                             # A-side annotated PDF url ("" = none; 2026-10-20 0p9)
     run_tag: str = ""                                   # "<A>_vs_<B>", key of the review DB run (set by write_outputs)
+    rootcause: dict = field(default_factory=dict)       # B-full: {"parents", "children", "annotate": sidecar summary} (write_outputs)
     generated: str = field(default_factory=lambda: _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     tool_version: str = __version__
 
 
 def input_issues(d: Design) -> list[tuple[str, str]]:
     out = []
-    if d.bom is None:
+    if d.bom is None and d.ni:
+        out.append(("WARN", f"{d.label}: no BOM found. DNP taken from the DSN only ({len(d.ni)} part(s) marked NI); "
+                            "BOM checks skipped. Point the folder at the revision root that contains the BOM."))
+    elif d.bom is None:
         out.append(("ERROR", f"{d.label}: no BOM found. DNP rule disabled (every part treated as stuffed), "
                              "BOM checks skipped, capacitor results include DNP parts. Point the folder at the "
                              "revision root that contains the BOM."))
@@ -66,8 +73,8 @@ def run(a_files: dict[str, Path], b_files: dict[str, Path], a_label: str = "A", 
         cfg.setdefault("i2c", {})
         cfg["i2c"] = dict(cfg["i2c"] or {}, datasheets_dir=str(Path(datasheets_dir)))
     rmap = load_rail_map(rail_map)
-    a, wa = build_design(a_label, a_files)
-    b, wb = build_design(b_label, b_files)
+    a, wa = build_design(a_label, a_files, cfg)
+    b, wb = build_design(b_label, b_files, cfg)
     resolve_bom_tokens(a, cfg)   # BOM "FOR J2" style entries -> netlist RefDes (no-op for plain BOMs)
     resolve_bom_tokens(b, cfg)
 
@@ -75,12 +82,30 @@ def run(a_files: dict[str, Path], b_files: dict[str, Path], a_label: str = "A", 
     # single-design checks on B, tagged NEW / EXISTING against the same checks on A
     cap_b, rows, todo = cap_check(b, cfg, rmap)
     cap_a, _, _ = cap_check(a, cfg, rmap)
-    findings += tag_new(drc(b, cfg) + bom_checks(b, cfg) + cap_b, drc(a, cfg) + bom_checks(a, cfg) + cap_a)
+    bchk_b, bchk_a = bom_checks(b, cfg), bom_checks(a, cfg)
+    findings += tag_new(drc(b, cfg) + bchk_b + cap_b, drc(a, cfg) + bchk_a + cap_a)
+    try:                                                   # root-cause NET_SHORTED / PIN_ISOLATED (2026-10-22)
+        findings += short_open(a, b, cfg, prior=findings)
+    except Exception as e:  # noqa: BLE001
+        short_err = f"short / open check skipped ({type(e).__name__}: {e})"
+    else:
+        short_err = ""
     # netlist rules from pin names (A1 / A2 / A3) and the B1 power tree. A failure here must not cost the
     # report of everything else: it becomes a warning.
-    extra_warn: list[str] = []
+    extra_warn: list[str] = [short_err] if short_err else []
     ptree, drows, ptree_a, ga, gb = {}, [], {}, None, None
     coverage: dict = {}
+    # G0 BOM / netlist consistency (power tree v4.6 §G0, 2026-10-22): both sides classified (Excel sheet lists both),
+    # findings on B tagged NEW / EXISTING against A like every single-design check
+    g0: dict = {}
+    try:
+        g0 = {"A": bom_consistency.classify(a, cfg), "B": bom_consistency.classify(b, cfg)}
+        findings += tag_new(bom_consistency.findings(b, cfg, g0["B"], bom_consistency.covered_refdes(bchk_b)),
+                            bom_consistency.findings(a, cfg, g0["A"], bom_consistency.covered_refdes(bchk_a)))
+        if b.bom is not None or a.bom is not None:
+            coverage["BOM"] = {a_label: g0["A"]["stats"], b_label: g0["B"]["stats"]}
+    except Exception as e:  # noqa: BLE001
+        extra_warn.append(f"BOM / netlist consistency (G0) skipped ({type(e).__name__}: {e})")
     try:
         doms = load_rail_domain(rail_domain)
     except Exception as e:  # noqa: BLE001
@@ -131,6 +156,8 @@ def run(a_files: dict[str, Path], b_files: dict[str, Path], a_label: str = "A", 
             i2cb["declared_file"] = str(decl_path or "")
         except Exception as e:  # noqa: BLE001
             extra_warn.append(f"I2C map skipped ({type(e).__name__}: {e})")
+    if ptree and g0.get("B"):
+        bom_consistency.tag_power_tree(ptree, g0["B"], b)
     if ptree:                             # A side only for the EVT -> DVT colouring of the power tree diagram
         try:
             ptree_a = power_tree(a, cfg, ga or NetGraph(a, cfg, rmap))
@@ -151,7 +178,7 @@ def run(a_files: dict[str, Path], b_files: dict[str, Path], a_label: str = "A", 
             folders[lab] = os.path.commonpath([str(p.parent) for p in paths])
     return Result(a=a, b=b, cfg=cfg, findings=sort_findings(findings), cap_rows=rows, rail_todo=todo,
                   warnings=wa + wb + extra_warn, power_tree=ptree, power_tree_a=ptree_a, rail_domain=drows,
-                  i2c_map=i2cb, i2c_map_a=i2ca, coverage=coverage, input_issues=input_issues(a) + input_issues(b), overview=overview,
+                  i2c_map=i2cb, i2c_map_a=i2ca, coverage=coverage, bom_check=g0, input_issues=input_issues(a) + input_issues(b), overview=overview,
                   folders=folders, files={"a": dict(a_files), "b": dict(b_files)})
 
 
@@ -164,6 +191,7 @@ class SingleResult:
     warnings: list[str]
     power_tree: dict = field(default_factory=dict)
     i2c_map: dict = field(default_factory=dict)
+    bom_check: dict = field(default_factory=dict)       # G0 classify() of this design (0p18)
     input_issues: list[tuple[str, str]] = field(default_factory=list)
     generated: str = field(default_factory=lambda: _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     tool_version: str = __version__
@@ -184,7 +212,7 @@ def run_single(files: dict[str, Path], label: str = "A", config: str | Path | No
         cfg.setdefault("i2c", {})
         cfg["i2c"] = dict(cfg["i2c"] or {}, datasheets_dir=str(Path(datasheets_dir)))
     rmap = load_rail_map(rail_map)
-    d, warn = build_design(label, files)
+    d, warn = build_design(label, files, cfg)
     resolve_bom_tokens(d, cfg)
     res = SingleResult(design=d, cfg=cfg, warnings=list(warn), input_issues=input_issues(d))
     g = None
@@ -194,6 +222,12 @@ def run_single(files: dict[str, Path], label: str = "A", config: str | Path | No
         res.warnings += res.power_tree.get("warnings", [])
     except Exception as e:  # noqa: BLE001
         res.warnings.append(f"power tree skipped ({type(e).__name__}: {e})")
+    try:
+        res.bom_check = bom_consistency.classify(d, cfg)
+        if res.power_tree:
+            bom_consistency.tag_power_tree(res.power_tree, res.bom_check, d)
+    except Exception as e:  # noqa: BLE001
+        res.warnings.append(f"BOM / netlist consistency (G0) skipped ({type(e).__name__}: {e})")
     if (cfg.get("i2c", {}) or {}).get("enabled", True):
         try:
             decl_path = i2c_declared or files.get("i2c_declared")
