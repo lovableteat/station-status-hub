@@ -1262,8 +1262,8 @@ All colors MUST be HSL for proper theming support.
   }
 
   [data-mobile-maintenance-module]:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgb(103 148 223 / 0.38);
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 1px;
   }
 
   [data-mobile-maintenance-module][aria-current="page"] {

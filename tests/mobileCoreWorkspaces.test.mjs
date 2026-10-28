@@ -35,7 +35,7 @@ test("mobile header exposes a bundled website QR and a thumb-friendly workspace 
   assert.match(sonner, /max-sm:!w-\[min\(250px,calc\(100vw-7\.5rem\)\)\]/);
 });
 
-test("maintenance center keeps compact module navigation visible in a wrapped grid", async () => {
+test("maintenance center keeps compact module navigation in one scrollable row", async () => {
   const [sidebar, scopeBar, hook] = await Promise.all([
     read("src/components/layout/Sidebar.tsx"),
     read("src/components/test-projects/ProjectScopeBar.tsx"),
@@ -43,8 +43,8 @@ test("maintenance center keeps compact module navigation visible in a wrapped gr
   ]);
 
   assert.match(sidebar, /data-mobile-maintenance-nav="true"/);
-  assert.match(sidebar, /grid-cols-2/);
-  assert.doesNotMatch(sidebar, /overflow-x-auto/);
+  assert.match(sidebar, /flex-nowrap/);
+  assert.match(sidebar, /overflow-x-auto/);
   assert.match(sidebar, /aria-current=\{isActive \? "page"/);
   assert.match(scopeBar, /grid-cols-\[minmax\(0,1fr\)_auto\]/);
   assert.match(scopeBar, /data-mobile-project-primary-actions="true"/);
