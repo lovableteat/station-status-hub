@@ -30,12 +30,22 @@ INPUT_FILL = PatternFill("solid", fgColor="FFF2CC")
 SEV_FILL = {"ERROR": PatternFill("solid", fgColor="F8CBAD"), "WARN": PatternFill("solid", fgColor="FFE699"),
             "INFO": PatternFill("solid", fgColor="E2EFDA")}
 
-HEADERS = ["項次", "追蹤 Key", "群組 ID", "類別", "規則", "嚴重度", "狀態", "頁", "頁名", "RefDes", "Pin", "Net",
+# 2026-10-27 B-full: 父項 column after 狀態 (= #n of the root-cause row this row is a consequence of; blank = top level).
+# Every column position below is derived from HEADERS by NAME (COL): never hard-code a column letter or number here,
+# review.fill_replies reads the sheet's own header row so older workbooks stay correct.
+HEADERS = ["項次", "追蹤 Key", "群組 ID", "類別", "規則", "嚴重度", "狀態", "父項", "頁", "頁名", "RefDes", "Pin", "Net",
            "說明 (工具)", "細節 (工具)", "關聯 ID", "PDF", "PDF 頁", "處置", "負責人", "預計版次", "備註", "填寫日期",
            "PDF 目的地"]
-WIDTHS = [6, 30, 14, 10, 20, 9, 10, 5, 22, 10, 12, 26, 48, 60, 22, 6, 7, 10, 10, 10, 30, 11, 30]
-INPUT_COLS = {18, 19, 20, 21, 22}
+WIDTHS = [6, 30, 14, 10, 20, 9, 10, 7, 5, 22, 10, 12, 26, 48, 60, 22, 6, 7, 10, 10, 10, 30, 11, 30]
+assert len(WIDTHS) == len(HEADERS)
 COL = {h: i + 1 for i, h in enumerate(HEADERS)}
+INPUT_COLS = {COL[h] for h in ("處置", "負責人", "預計版次", "備註", "填寫日期")}
+WRAP_COLS = {COL[h] for h in ("Net", "說明 (工具)", "細節 (工具)", "備註")}
+PARENT_PREFIX = "同根因 → #{n}："      # rendered in front of a child row's 說明 (Excel + web); TrackRow.title itself is untouched
+
+
+def _letter(h: str) -> str:
+    return get_column_letter(COL[h])
 BASE_URL_CELL = "$B$5"      # on 版本資訊
 
 
@@ -76,6 +86,12 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
     for d in (meta_a, meta_b):
         for s in d.sources:
             kv(r, f"{d.label} {s.role}", f"{Path(s.path).name}  |  SHA-256 {s.sha256[:12]}  |  {s.stamp}"); r += 1
+    g0 = getattr(res, "bom_check", None) or {}
+    for side, d in (("A", meta_a), ("B", meta_b)):      # G0 BOM / netlist consistency, both sides (owner 2026-10-22)
+        line = _g0_line((g0.get(side) or {}).get("stats"), d.bom is not None)
+        if line:
+            bad = ((g0.get(side) or {}).get("stats") or {}).get("strong")
+            kv(r, f"{d.label} BOM vs netlist", line, PatternFill("solid", fgColor="FCE4D6") if bad else None); r += 1
     r += 1
     ws.cell(r, 1, "填寫說明").font = Font(name=FONT, bold=True, size=12); r += 1
     for k, v in [
@@ -86,6 +102,8 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
         ("群組 ID", "PDF 報告中的 finding ID，同一根因的多顆零件共用；成員一變 ID 就變，只拿來對照報告，不能當追蹤鍵。"),
         ("PDF 欄", "點「PDF」跳到標註 PDF 的該筆位置 (需 base URL 正確且瀏覽器開啟)。「PDF 頁」是標註 PDF 的頁碼 (含索引頁)。"),
         ("狀態", "NEW 本版新增 / EXISTING 舊版已存在 / CHANGE 改版差異 (A->B)。"),
+        ("父項", "同根因的根源列 #n (例：短路 NET_SHORTED 底下的 NET_SPLIT / PIN_MOVED / 單腳 net)。子項說明前加「同根因 → #n」，"
+                "PDF 上不另外框 (嚴重度高於父項者與 PIN_ISOLATED 例外)；處置各列獨立填，統計表進度不含子項。篩「父項 = 空白」只看根源列。"),
         ("嚴重度", "ERROR 疑似缺陷 / WARN 需審查 / INFO 備查 (預設可不處置)。"),
     ]:
         kv(r, k, v); r += 1
@@ -96,14 +114,19 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
     wt.row_dimensions[1].height = 30
     wt.cell(1, COL["追蹤 Key"]).comment = Comment("waiver 回讀用的穩定鍵。", "AutoCheck")
     wt.cell(1, COL["處置"]).comment = Comment("下拉選單：" + " / ".join(DISPOSITIONS), "AutoCheck")
+    rowno = {r.key: i for i, r in enumerate(rows, 1)}
+    wt.cell(1, COL["父項"]).comment = Comment("同根因的根源列 #n；空白 = 最上層。子項不在 PDF 上另外框 (嚴重度高於父項者除外)。", "AutoCheck")
     for i, row in enumerate(rows, 2):
         n = i - 1
-        vals = [n, row.key, row.gid, row.category, row.rule, row.severity, row.status, row.page, row.page_title,
-                ", ".join(row.refdes), ", ".join(row.pins), ", ".join(row.nets), row.title, row.detail,
-                ", ".join(row.related), None, pdf_pages.get(row.key), "", "", "", "", "", row.dest]
+        pn = rowno.get(row.parent) if getattr(row, "parent", "") else None
+        title = (PARENT_PREFIX.format(n=pn) + row.title) if pn else row.title
+        vals = [n, row.key, row.gid, row.category, row.rule, row.severity, row.status, f"#{pn}" if pn else "",
+                row.page, row.page_title, ", ".join(row.refdes), ", ".join(row.pins), ", ".join(row.nets), title,
+                row.detail, ", ".join(row.related), None, pdf_pages.get(row.key), "", "", "", "", "", row.dest]
+        assert len(vals) == len(HEADERS)
         for j, v in enumerate(vals, 1):
             c = wt.cell(i, j, v); c.font = BODY; c.border = BORDER
-            c.alignment = Alignment(wrap_text=(j in (12, 13, 14, 21)), vertical="top")
+            c.alignment = Alignment(wrap_text=(j in WRAP_COLS), vertical="top")
             if j in INPUT_COLS:
                 c.fill = INPUT_FILL
         wt.cell(i, COL["嚴重度"]).fill = SEV_FILL.get(row.severity, SEV_FILL["INFO"])
@@ -119,7 +142,7 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
     dv = DataValidation(type="list", formula1='"' + ",".join(DISPOSITIONS) + '"', allow_blank=True)
     wt.add_data_validation(dv)
     dv.add(f"{get_column_letter(COL['處置'])}2:{get_column_letter(COL['處置'])}{max(last, 2000)}")
-    wt.freeze_panes = "K2"
+    wt.freeze_panes = f"{_letter('Pin')}2"          # frozen through RefDes: Pin is the first scrolling column (was "K2")
     wt.auto_filter.ref = f"A1:{get_column_letter(len(HEADERS))}{max(last, 2)}"
     wt.column_dimensions[get_column_letter(COL["PDF 目的地"])].hidden = True
     if replies:
@@ -134,8 +157,9 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
     wsum.cell(1, 1, "發現數 (追蹤表列數，群組已展開)").font = Font(name=FONT, bold=True, size=12)
     _hdr(wsum, 2, ["類別", "ERROR", "WARN", "INFO", "小計", "NEW (ERROR+WARN)"])
     lo, hi = 2, max(last, 2)
-    T = f"追蹤表!$D${lo}:$D${hi}"; S = f"追蹤表!$F${lo}:$F${hi}"; ST = f"追蹤表!$G${lo}:$G${hi}"
-    P = f"追蹤表!${get_column_letter(COL['處置'])}${lo}:${get_column_letter(COL['處置'])}${hi}"
+    def rng(h: str) -> str:
+        return f"追蹤表!${_letter(h)}${lo}:${_letter(h)}${hi}"
+    T, S, ST, P, PA = rng("類別"), rng("嚴重度"), rng("狀態"), rng("處置"), rng("父項")
     r = 3
     for cat, zh in CAT_ZH.items():
         wsum.cell(r, 1, f"{cat} {zh}")
@@ -151,18 +175,20 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
         col = get_column_letter(j)
         c = wsum.cell(r, j, f"=SUM({col}3:{col}{r - 1})"); c.font = Font(name=FONT, bold=True, size=9); c.border = BORDER
     r += 2
-    wsum.cell(r, 1, "處置進度").font = Font(name=FONT, bold=True, size=12); r += 1
+    wsum.cell(r, 1, "處置進度 (不含子項：父項欄非空白的列，同根因只算根源那一列)").font = Font(name=FONT, bold=True, size=12); r += 1
     _hdr(wsum, r, ["處置", "列數", "其中 ERROR", "其中 WARN"]); r += 1
     for disp in DISPOSITIONS + ["(未填)"]:
         q = '""' if disp == "(未填)" else f'"{disp}"'
         wsum.cell(r, 1, disp)
-        wsum.cell(r, 2, f"=COUNTBLANK({P})" if disp == "(未填)" else f"=COUNTIF({P},{q})")
-        wsum.cell(r, 3, f'=COUNTIFS({S},"ERROR",{P},{q})')
-        wsum.cell(r, 4, f'=COUNTIFS({S},"WARN",{P},{q})')
+        wsum.cell(r, 2, f'=COUNTIFS({P},{q},{PA},"")')
+        wsum.cell(r, 3, f'=COUNTIFS({S},"ERROR",{P},{q},{PA},"")')
+        wsum.cell(r, 4, f'=COUNTIFS({S},"WARN",{P},{q},{PA},"")')
         for j in range(1, 5):
             wsum.cell(r, j).border = BORDER; wsum.cell(r, j).font = BODY
         r += 1
     wsum.cell(r, 1, "總列數").font = BODY; wsum.cell(r, 2, f"=COUNTA(追蹤表!$A${lo}:$A${hi})").font = BODY
+    r += 1
+    wsum.cell(r, 1, "其中子項列數").font = BODY; wsum.cell(r, 2, f'=COUNTIF({PA},"#*")').font = BODY
     cov = (getattr(res, "coverage", {}) or {}).get("DECOUPLE")
     if cov:   # C1 coverage (QA 2026-10-20): what the rule looked at, so 0 finding is not mistaken for 100 % checked
         r += 2
@@ -213,7 +239,7 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
     wr = wb.create_sheet("規則說明")
     _hdr(wr, 1, ["規則", "類別", "追蹤粒度", "中文名稱", "為什麼 / 怎麼查", "本次筆數"], [24, 10, 10, 22, 90, 10])
     for i, (rule, (cat, level, zh, why)) in enumerate(RULES.items(), 2):
-        for j, v in enumerate([rule, cat, LEVEL_ZH[level], zh, why, f'=COUNTIF(追蹤表!$E${lo}:$E${hi},A{i})'], 1):
+        for j, v in enumerate([rule, cat, LEVEL_ZH[level], zh, why, f'=COUNTIF({rng("規則")},A{i})'], 1):
             c = wr.cell(i, j, v); c.font = BODY; c.border = BORDER; c.alignment = Alignment(wrap_text=True, vertical="top")
 
     # ---- 電容耐壓表 ----
@@ -225,6 +251,9 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
             for ci, k in enumerate(fields, 1):
                 c = wc.cell(ri, ci, row.get(k)); c.font = BODY; c.border = BORDER
         wc.freeze_panes = "B2"; wc.auto_filter.ref = f"A1:{get_column_letter(len(fields))}{len(res.cap_rows) + 1}"
+
+    # ---- BOM 一致性 (G0, 2026-10-22): every part whose BOM line and netlist disagree, A and B ----
+    _g0_sheet(wb, [(meta_a.label, (g0.get("A") or {})), (meta_b.label, (g0.get("B") or {}))])
 
     # ---- Power tree (B1) ----
     pt = getattr(res, "power_tree", None) or {}
@@ -280,7 +309,7 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
             wg = wb.create_sheet(f"Power tree 圖 ({meta_b.label})"[:31])     # Excel sheet names: max 31 chars
             render_xlsx(wg, boxes, f"Power tree 方框圖 ({meta_b.label})" + (
                 f"，顏色 = {meta_a.label} -> {meta_b.label} 變更" if diff else ""), link, meta_a.label, meta_b.label,
-                diff=diff)
+                diff=diff, banner=(pt.get("bom_check") or {}).get("banner", ""))
 
     # ---- I2C map (2026-10-12, test state) ----
     im = getattr(res, "i2c_map", None) or {}
@@ -376,3 +405,44 @@ def write_tracker(res, rows: list[TrackRow], out: Path, base_url: str = "", pdf_
     out.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out)
     return out
+
+
+def _g0_line(st: dict | None, has_bom: bool) -> str:
+    """One 版本資訊 line of G0 statistics ("" when the side has no BOM)."""
+    if not st or not has_bom:
+        return ""
+    c = st.get("status") or {}
+    px = ", ".join(f"{k} {v}" for k, v in (st.get("by_prefix") or {}).items())
+    s = (f"比對 {st.get('compared', 0)} 顆 (BOM 與 netlist 都有)：料號相同 {c.get('OK_PN', 0)}、值相同 {c.get('OK_VALUE', 0)}、"
+         f"同值換料號 {c.get('SAME_VALUE', 0)}、不符 {st.get('mismatch', 0)} (值不同 {c.get('VALUE_DIFF', 0)} / "
+         f"類型不同 {c.get('TYPE_DIFF', 0)} / 料號不同 {c.get('PN_DIFF', 0)})、無法比對 {c.get('UNCHECKED', 0)}")
+    if px:
+        s += f"；不符依前綴 {px}"
+    strong = st.get("strong") or []
+    if strong:
+        s += (f"；{'/'.join(st.get('strong_prefixes') or [])} 不符 {len(strong)} 顆 = power tree ⚠"
+              f" ({', '.join(strong[:12])}{' …' if len(strong) > 12 else ''})")
+    s += f"；netlist 有 BOM 無 (DNP) {st.get('netlist_not_in_bom', 0)}、BOM 有 netlist 無 {st.get('bom_not_in_netlist', 0)}"
+    return s
+
+
+def _g0_sheet(wb, sides: list[tuple[str, dict]]) -> None:
+    from ..checks.bom_consistency import STATUS_ZH, sheet_rows
+    rows = sheet_rows(sides)
+    if not any((chk or {}).get("rows") for _, chk in sides):
+        return
+    ws = wb.create_sheet("BOM 一致性")
+    ws.cell(1, 1, "BOM 與 netlist 逐顆比對 (G0)。只列不是「料號相同 / 值相同」的料；同值換料號只是統計，不進追蹤表。"
+                  "比法：有 NV_PN 等料號屬性比 BOM 料號 + AML 替代料，沒有就比符號值 / MPN 文字。").font = Font(name=FONT, size=9)
+    heads = ["板", "RefDes", "狀態", "差異", "比對方式", "netlist 料號", "netlist 值", "netlist 換算", "BOM 料號",
+             "BOM 描述", "BOM 規格 / 廠牌", "BOM 換算", "AML 替代料", "BOM 列", "頁"]
+    _hdr(ws, 2, heads, [8, 14, 12, 18, 9, 16, 22, 12, 16, 40, 28, 12, 22, 7, 5])
+    for i, x in enumerate(rows, 3):
+        vals = [x["side"], x["refdes"], STATUS_ZH.get(x["status"], x["status"]), x.get("what", ""),
+                "料號" if x["mode"] == "pn" else "文字 / 值", x.get("netlist_pn", ""), x.get("netlist_value", ""),
+                x.get("netlist_fmt", ""), x.get("bom_pn", ""), x.get("bom_desc", ""), x.get("bom_spec", ""),
+                x.get("bom_fmt", ""), ", ".join(x.get("alternates") or []), x.get("bom_row"), x.get("page")]
+        for j, v in enumerate(vals, 1):
+            c = ws.cell(i, j, v); c.font = BODY; c.border = BORDER
+    ws.freeze_panes = "C3"
+    ws.auto_filter.ref = f"A2:{get_column_letter(len(heads))}{max(len(rows) + 2, 3)}"

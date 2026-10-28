@@ -57,22 +57,28 @@ def group_findings(fs: list[Finding], a: Design, b: Design) -> list[Finding]:
     fs = _group(fs, "PART_SYMBOL_CHANGED", lambda f: (f.page, f.severity), sym)
 
     def mlcc(k, g):
-        stress, rated, need, st, status = k
+        stress, rated, need, st, status, _weak = k
         refs = [x for f in g for x in f.refdes]
         nets = sorted({n for f in g for n in f.nets})
         pages = sorted({f.page for f in g if f.page})
-        return Finding(category="CAPV", rule="MLCC_DERATING", severity="ERROR" if st else "WARN",
+        weak = bool(g[0].evidence.get("weak"))
+        why = ([("voltage from a legacy net name only (未驗證), fill rail_map.csv to confirm")]
+               if any(f.evidence.get("legacy") for f in g) else [])
+        why += (["a net has only capacitors (no source, see CAP_ONLY_NET)"] if any(f.evidence.get("nosrc") for f in g)
+                else [])
+        return Finding(category="CAPV", rule="MLCC_DERATING", severity="ERROR" if st and not weak else "WARN",
                        title=f"{len(refs)} x {rated:g} V MLCC on {stress:g} V (required >= {need:g} V)"
                              + ("" if st else " [DNP]"),
                        detail=f"RefDes: {', '.join(refs)}\nnets: {', '.join(nets[:12])}"
-                              + (" ..." if len(nets) > 12 else "") + f"\npages: {', '.join(map(str, pages))}",
+                              + (" ..." if len(nets) > 12 else "") + f"\npages: {', '.join(map(str, pages))}"
+                              + "".join(f"\nWARN, not ERROR: {w}" for w in why),
                        refdes=refs, nets=nets, page=pages[0] if pages else None,
                        page_title=b.page_title(pages[0]) if pages else "", status=status,
                        evidence={"rated": rated, "stress": stress, "required": need},
                        key=f"MLCC_DERATING|{stress}|{rated}|{st}|{status}|{','.join(refs)}").finalize()
 
     fs = _group(fs, "MLCC_DERATING", lambda f: (f.evidence["stress"], f.evidence["rated"], f.evidence["required"],
-                                                f.evidence["stuffed"], f.status), mlcc)
+                                                f.evidence["stuffed"], f.status, bool(f.evidence.get("weak"))), mlcc)
 
     def nonm(k, g):
         stress, rated, st = k

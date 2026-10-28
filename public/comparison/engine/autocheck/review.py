@@ -84,11 +84,20 @@ def _db(path: Path):
         con.close()
 
 
-def row_dict(row, n: int, pdf_page, pdf_page_a=None, centre=None, centre_a=None) -> dict:
+def row_dict(row, n: int, pdf_page, pdf_page_a=None, centre=None, centre_a=None, rowno: dict | None = None,
+             boxed=None) -> dict:
     """TrackRow -> the tool-side columns of the Excel 追蹤表 (same names). "PDF 頁 A" (2026-10-20) = page of the
-    same key in the A-side annotated PDF, None when A has no PDF or the part is not in A (NEW parts)."""
+    same key in the A-side annotated PDF, None when A has no PDF or the part is not in A (NEW parts).
+    B-full (2026-10-27): "父項" = 項次 of the root-cause row (None = top level), "父項 Key" its tracking key,
+    "子項" = 項次 list of the rows grouped under this one. rowno: key -> 項次 of the whole run. "PDF 框" = whether the
+    B-side annotated PDF carries a box for this row (None = no PDF): a row that is boxed on the drawing is never folded
+    away in the web table (owner 2026-10-27 12:13: "#2 #3 沒有在下面秀出來")."""
+    rowno = rowno or {}
+    parent = getattr(row, "parent", "") or ""
+    kids = [rowno[k] for k in (getattr(row, "children", None) or []) if k in rowno]
     return {"項次": n, "追蹤 Key": row.key, "群組 ID": row.gid, "類別": row.category, "規則": row.rule,
             "嚴重度": row.severity, "狀態": row.status, "頁": row.page, "頁名": row.page_title,
+            "父項": rowno.get(parent) if parent else None, "父項 Key": parent, "子項": kids, "PDF 框": boxed,
             "RefDes": ", ".join(row.refdes), "Pin": ", ".join(row.pins), "Net": ", ".join(row.nets),
             "說明 (工具)": row.title, "細節 (工具)": row.detail, "關聯 ID": ", ".join(row.related),
             "PDF 頁": pdf_page, "PDF 目的地": row.dest, "PDF 頁 A": pdf_page_a,
@@ -98,14 +107,15 @@ def row_dict(row, n: int, pdf_page, pdf_page_a=None, centre=None, centre_a=None)
 
 def sync_run(db: Path, run: str, a_label: str, b_label: str, rows: list, pdf_pages: dict, pdf_url: str,
              pdf_pages_a: dict | None = None, pdf_url_a: str = "", centres: dict | None = None,
-             centres_a: dict | None = None) -> None:
-    """Replace the run's row snapshot (replies and last_key untouched)."""
-    pa, ce, cea = pdf_pages_a or {}, centres or {}, centres_a or {}
+             centres_a: dict | None = None, boxed: dict | None = None) -> None:
+    """Replace the run's row snapshot (replies and last_key untouched). boxed: key -> bool from the B-side sidecar."""
+    pa, ce, cea, bx = pdf_pages_a or {}, centres or {}, centres_a or {}, boxed or {}
+    rowno = {r.key: n for n, r in enumerate(rows, 1)}
     with _db(db) as con:
         con.execute("DELETE FROM rows WHERE run=?", (run,))
         con.executemany("INSERT INTO rows(run, key, n, data) VALUES (?,?,?,?)",
-                        [(run, r.key, n, json.dumps(row_dict(r, n, pdf_pages.get(r.key), pa.get(r.key), ce.get(r.key), cea.get(r.key)),
-                                                     ensure_ascii=False))
+                        [(run, r.key, n, json.dumps(row_dict(r, n, pdf_pages.get(r.key), pa.get(r.key), ce.get(r.key),
+                                                              cea.get(r.key), rowno, bx.get(r.key)), ensure_ascii=False))
                          for n, r in enumerate(rows, 1)])
         con.execute("INSERT INTO runs(run, a_label, b_label, updated, pdf_url, pdf_url_a) VALUES (?,?,?,?,?,?) "
                     "ON CONFLICT(run) DO UPDATE SET a_label=excluded.a_label, b_label=excluded.b_label, "
@@ -159,6 +169,10 @@ def load(db: Path, run: str) -> list[dict]:
         d.setdefault("PDF 頁 A", None)                      # rows synced before 2026-10-20
         d.setdefault("PDF 中心", None)
         d.setdefault("PDF 中心 A", None)
+        d.setdefault("父項", None)                         # rows synced before 2026-10-27 (B-full)
+        d.setdefault("父項 Key", "")
+        d.setdefault("子項", [])
+        d.setdefault("PDF 框", None)
         r = rep.get(d["追蹤 Key"], {})
         for f in REPLY_FIELDS + [DATE_FIELD]:
             d[f] = r.get(f, "") or ""
@@ -211,15 +225,20 @@ def export_xlsx(db: Path, run: str) -> tuple[str, bytes] | None:
 
 
 def fill_replies(ws, rep: dict[str, dict]) -> int:
-    """Write replies into the 追蹤表 sheet by matching the 追蹤 Key column. Returns rows filled."""
-    from .report.xlsx_tracker import COL
+    """Write replies into the 追蹤表 sheet by matching the 追蹤 Key column. Returns rows filled.
+    Column positions come from the sheet's OWN header row, not from xlsx_tracker.COL: export_xlsx fills a workbook stored
+    when the run was made, whose columns may predate a later layout change (2026-10-27: 父項 inserted; QA)."""
+    col = {str(ws.cell(1, j).value).strip(): j for j in range(1, ws.max_column + 1) if ws.cell(1, j).value}
+    missing = [h for h in ["追蹤 Key", *REPLY_FIELDS, DATE_FIELD] if h not in col]
+    if missing:
+        raise ValueError(f"追蹤表 header lacks {missing}")
     n = 0
     for i in range(2, ws.max_row + 1):
-        r = rep.get(ws.cell(i, COL["追蹤 Key"]).value)
+        r = rep.get(ws.cell(i, col["追蹤 Key"]).value)
         if not r:
             continue
         for f in REPLY_FIELDS + [DATE_FIELD]:
-            ws.cell(i, COL[f]).value = r.get(f) or None
+            ws.cell(i, col[f]).value = r.get(f) or None
         n += 1
     return n
 

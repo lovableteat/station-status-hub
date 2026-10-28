@@ -35,6 +35,11 @@ RULE_HELP = {
                      "(3.3V->6.3V, 5V->10V, 12V->25V, 48V->100V). Working voltage = |V(net1)-V(net2)|.",
     "NON_MLCC_RATIO": "No derating rule defined for polymer / electrolytic / tantalum yet: ratio for review.",
     "CAP_UNRESOLVED": "Net voltage could not be derived from the name. Fill rail_map_todo.csv and re-run.",
+    "CAP_ONLY_NET": "Every pin on the net belongs to a capacitor: nothing drives or uses it. Usually a wrong rail label.",
+    "NET_SHORTED": "Two nets that were separate in the old revision are now one (through 0R / bead / series R). "
+                   "One root cause behind the split / moved / single-pin findings listed in the detail.",
+    "PIN_ISOLATED": "A pin that had connections in the old revision is now alone on its net (open).",
+    "BOM_NI_CONFLICT": "Company BOM and the schematic NI marking (DSN Optional) disagree; the BOM decides DNP.",
     "NET_RENAMED": "Pure rename is harmless unless the new name is tool-generated or breaks a naming rule.",
     "NET_SPLIT": "Pins left the net they shared in the old revision. Typical cause: deleted wire / lost label.",
     "NET_MERGED": "Two nets became one. Check for an accidental short via label or wire.",
@@ -52,6 +57,8 @@ RULE_HELP = {
     "BOM_REF_NOT_IN_NETLIST": "BOM places a part the schematic does not have.",
     "BOM_VALUE_MISMATCH": "Schematic value and BOM part disagree: one of them is wrong.",
     "BOM_MPN_NOT_FOUND": "Symbol MPN not among BOM main/alternates. Often a generic symbol; confirm pin-compatibility.",
+    "BOM_NETLIST_MISMATCH": "G0: BOM and netlist disagree on this part (PN property vs BOM Number + AML, else symbol "
+                            "value / MPN vs BOM text). Many of them = BOM and netlist of different revisions.",
     "BOM_QTY_MISMATCH": "BOM quantity does not match the RefDes count on the line.",
     "BOM_DUP_REFDES": "Same RefDes on two BOM lines.",
     "BOM_SOCKET_LINKED": "BOM wrote the location as 'FOR <socket>'; the part stacked on that socket in the netlist "

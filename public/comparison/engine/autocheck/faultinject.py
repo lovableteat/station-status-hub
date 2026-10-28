@@ -227,8 +227,10 @@ def score(key: list[dict], findings) -> dict:
     # findings on any faulted refdes / net count as explained (secondary effects of the same fault)
     touched_r = {r for k in key for r in k["refdes"]}
     touched_n = {n for k in key for n in k["nets"]}
+    # PIN_ISOLATED (2026-10-22): a pin left alone because its old companion was removed / moved is the same fault
     unexplained = [f for f in change if f.id not in explained
-                   and not (set(f.refdes) & touched_r) and not (set(f.nets) & touched_n)]
+                   and not (set(f.refdes) & touched_r) and not (set(f.nets) & touched_n)
+                   and not (set((f.evidence or {}).get("A_parts", [])) & touched_r)]
     return {"planted": len(key), "detected": hit, "recall": hit / len(key) if key else 1.0,
             "missed": missed, "unexplained": [f"{f.rule}: {f.title}" for f in unexplained]}
 

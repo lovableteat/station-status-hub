@@ -31,7 +31,7 @@ def write_outputs(res, out: Path, schematic_pdf: Path | None = None, base_url: s
     from .report.data_out import write_csv, write_json
     from .report.pdf_report import build_pdf
     from .report.xlsx_tracker import write_tracker
-    from .tracking import expand_rows
+    from .tracking import expand_rows, link_root_causes
 
     out.mkdir(parents=True, exist_ok=True)
     tag = f"{res.a.label}_vs_{res.b.label}"
@@ -60,12 +60,17 @@ def write_outputs(res, out: Path, schematic_pdf: Path | None = None, base_url: s
     paths["circuit_a"].write_text(circuit_text(res.a, res.cfg), encoding="utf-8")
 
     rows = expand_rows(res.findings, res.cap_rows, res.b)
+    # B-full (2026-10-27): mark consequence rows of a root cause (NET_SHORTED / CAP_ONLY_NET) as children; rows keep their
+    # key / severity / title, the Excel gets a 父項 column, the web page folds them, the PDF boxes only the parent
+    n_child = link_root_causes(rows, res.cfg)
+    res.rootcause = {"children": n_child, "parents": sum(1 for r in rows if r.children)}
     sidecar, url, pdf_name = None, "", ""
     if schematic_pdf:
         from .report.pdf_annotate import annotate_pdf
         sidecar = annotate_pdf(Path(schematic_pdf), rows, res.b.pages, paths["schematic"], res.cfg,
                                res.a.label, res.b.label)
         res.warnings += [f"annotate: {w}" for w in sidecar.get("warnings", [])]
+        res.rootcause["annotate"] = sidecar.get("summary", {})
         pdf_name = paths["schematic"].name
         pub = res.cfg.get("publish", {}) or {}
         base = (base_url or pub.get("base_url") or "").rstrip("/")
@@ -130,8 +135,10 @@ def write_outputs(res, out: Path, schematic_pdf: Path | None = None, base_url: s
     pdf_pages_a = {k: v.get("pdf_page") for k, v in (sidecar_a or {}).get("rows", {}).items()}
     centres = {k: v.get("centre_top") for k, v in (sidecar or {}).get("rows", {}).items()}
     centres_a = {k: v.get("centre_top") for k, v in (sidecar_a or {}).get("rows", {}).items()}
+    boxed = {k: v.get("boxed") for k, v in (sidecar or {}).get("rows", {}).items()}
     try:
-        review.sync_run(db, tag, res.a.label, res.b.label, rows, pdf_pages, url, pdf_pages_a, url_a, centres, centres_a)
+        review.sync_run(db, tag, res.a.label, res.b.label, rows, pdf_pages, url, pdf_pages_a, url_a, centres, centres_a,
+                        boxed)
         rep = review.replies(db, tag)
     except Exception as e:  # noqa: BLE001  (DB problems must not block the reports)
         res.warnings.append(f"review: database not updated ({type(e).__name__}: {e})")
@@ -165,7 +172,7 @@ def write_diagrams(pt: dict, pt_a: dict | None, im: dict, a_label: str, b_label:
         html = render_html(boxes, f"Power tree 方框圖 {b_label}"
                            + (f" (顏色 = {a_label} -> {b_label} 變更)" if diff else "")
                            + f"　產生 {generated}", page_url, a_label, b_label, diff=diff,
-                           boxes_all=boxes_all)
+                           boxes_all=boxes_all, banner=(pt.get("bom_check") or {}).get("banner", ""))
         paths["ptree_html"] = _writable(out / f"power_tree_{b_label}.html")
         paths["ptree_html"].write_text(html, encoding="utf-8")
         if publish:
@@ -182,7 +189,7 @@ def write_diagrams(pt: dict, pt_a: dict | None, im: dict, a_label: str, b_label:
             dio = render_drawio(boxes, f"Power tree 方框圖 {b_label}"
                                 + (f" (顏色 = {a_label} -> {b_label} 變更)" if diff else "")
                                 + f"　產生 {generated}", page_url, a_label, b_label, diff=diff,
-                                boxes_all=boxes_all)
+                                boxes_all=boxes_all, banner=(pt.get("bom_check") or {}).get("banner", ""))
             paths["ptree_drawio"] = _writable(out / dio_name)
             paths["ptree_drawio"].write_text(dio, encoding="utf-8")
             if publish:
@@ -298,11 +305,18 @@ def _compare(args) -> int:
     c = Counter((f.severity, f.status) for f in res.findings)
     print(f"{len(res.findings)} findings | NEW ERROR {c[('ERROR', 'NEW')]} | NEW WARN {c[('WARN', 'NEW')]} | "
           f"changes {sum(v for (s, st), v in c.items() if st == 'CHANGE')}")
+    rc = getattr(res, "rootcause", None) or {}
+    if rc:
+        an = rc.get("annotate") or {}
+        print(f"root cause: {rc.get('parents', 0)} parent rows / {rc.get('children', 0)} child rows"
+              + (f" | annotated rows {an.get('rows')} located {an.get('located')} boxed {an.get('boxed')}" if an else ""))
     cov = (res.coverage or {}).get("DECOUPLE")
     if cov:
         print(f"coverage DECOUPLE: {cov['supply_nets']} supply nets / {cov['supply_pins']} IC supply pins / "
               f"{cov['ics_built']} built ICs, {cov['ics_no_supply_pin']} IC(s) with no recognised power pin, "
               f"{cov.get('supply_pins_unnamed_net', 0)} power pin(s) on unnamed nets (skipped)")
+    for lab, st in ((res.coverage or {}).get("BOM") or {}).items():
+        print(_g0_print(lab, st))
     cov = (res.coverage or {}).get("FET")
     if cov:
         print(f"coverage FET_GATE_LEVEL: {cov['fets_built']} built FET-prefix parts / {cov['transistors_listed']} transistors listed / "
@@ -316,6 +330,14 @@ def _compare(args) -> int:
     if getattr(res, "publish_url", ""):
         print(f"links      {res.publish_url}#nameddest=<key>   (needs the Streamlit app running: uv run streamlit run app.py)")
     return 0
+
+
+def _g0_print(label: str, st: dict) -> str:
+    c = st.get("status") or {}
+    return (f"BOM vs netlist {label}: {st.get('compared', 0)} compared | same PN {c.get('OK_PN', 0)} | same value "
+            f"{c.get('OK_VALUE', 0)} | 2nd-source same value {c.get('SAME_VALUE', 0)} | mismatch {st.get('mismatch', 0)} "
+            f"(value {c.get('VALUE_DIFF', 0)} / type {c.get('TYPE_DIFF', 0)} / PN {c.get('PN_DIFF', 0)}) | "
+            f"{'/'.join(st.get('strong_prefixes') or [])} mismatch {len(st.get('strong') or [])} (power tree ⚠)")
 
 
 SINGLE_PREFIX = "單板_"      # static/<SINGLE_PREFIX><label>/ = diagrams of one board (pages/2 and pages/3 list it too)
@@ -343,6 +365,8 @@ def _diagram(args) -> int:
     pt, im = res.power_tree or {}, res.i2c_map or {}
     print(f"{res.label}: power tree {len(pt.get('rows', []))} converters / {len(pt.get('rails', {}))} rails | "
           f"I2C {len(im.get('buses', []))} buses / {len(im.get('devices', {}))} devices")
+    if (res.bom_check or {}).get("rows"):
+        print(_g0_print(res.label, res.bom_check["stats"]))
     for lv, msg in res.input_issues:
         print(f"{lv}:", msg)
     for w in res.warnings:

@@ -1,204 +1,216 @@
 {
-  "origin": "User-provided AutoCheck_1022.zip",
-  "sourceSha256": "4dac9b2e1690cc30d4ec4f571eee24fafc01b1c797d888850a3f7d1ee6a39e2b",
-  "files": [
-    {
-      "path": "autocheck/__init__.py",
-      "sha256": "87bc112dcbf08939857c60548cf643a397df8de117e14e2d90e721d295e4daf9"
-    },
-    {
-      "path": "autocheck/bom_socket.py",
-      "sha256": "5464575143371d93ad600eb19c4656a281576c15a593313c943d7e6e8f375a53"
-    },
-    {
-      "path": "autocheck/checks/__init__.py",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    {
-      "path": "autocheck/checks/capv.py",
-      "sha256": "94ac1d3cfa97aaadfce268387bd5c23a21ef5a8109052e6e79fe0222693565a2"
-    },
-    {
-      "path": "autocheck/checks/diff.py",
-      "sha256": "2216ba57e87f6eb19fbd7bef0dc380aef35b3270602c4ea8e68d24eeba43a4b7"
-    },
-    {
-      "path": "autocheck/checks/drc.py",
-      "sha256": "18dad7458fcf973f14328ede8f2642b3ffe54bbaa1bc1fe56e5ab77ac9957554"
-    },
-    {
-      "path": "autocheck/checks/i2c_map.py",
-      "sha256": "77979a1ca50e5a1a28ab066dbcfb697bc5f2f2928e8a30a437e913eb38d714f0"
-    },
-    {
-      "path": "autocheck/checks/netrules.py",
-      "sha256": "98a21b314547bd69ddf796e9e463d8e4977b76cb27c7bb11739b4b492cabe569"
-    },
-    {
-      "path": "autocheck/checks/power_tree.py",
-      "sha256": "11f853bf728b005f3892634218d32f48e09d65fe4525a1dfa78edb14cdc509c3"
-    },
-    {
-      "path": "autocheck/cli.py",
-      "sha256": "c259d3157d36d1c7c6fc45be97737ebd44351f3c51651072c52aaccf8b3cfc46"
-    },
-    {
-      "path": "autocheck/config.py",
-      "sha256": "4ed11831c2f68c657eb2a6d797b6c9b243bd7fed77c6a43d99ee707b3d500475"
-    },
-    {
-      "path": "autocheck/fakeschem.py",
-      "sha256": "471e2e151b4a25b6c3a404ada606c9a0ea81f3292b0996402c1c09406d4b4744"
-    },
-    {
-      "path": "autocheck/faultinject.py",
-      "sha256": "1deb92f288d740dac12b01fcb01e20bff67cd26138fc75da300739c02460a2d5"
-    },
-    {
-      "path": "autocheck/findings.py",
-      "sha256": "c9f78eab8e2c458d38cbbb93c699aa5eef8f2a52d346ae0e81507264d7dc029c"
-    },
-    {
-      "path": "autocheck/grouping.py",
-      "sha256": "659af4bb713de8ae8989d33f428cd2b9dea2d075c20252227673de5dbc58f7d3"
-    },
-    {
-      "path": "autocheck/i2c_lib.py",
-      "sha256": "857bf52d20e4b4d9a9dffda1c57cf6466deac07f8dcd715507301bc4840d2e24"
-    },
-    {
-      "path": "autocheck/loader.py",
-      "sha256": "601593257ec8b9b3aaeed02c241c6ec90087c34d79e619c57180eac323b3cd0e"
-    },
-    {
-      "path": "autocheck/model.py",
-      "sha256": "2c9830150d964a8f790ed39a6535548db63a80cee3ff2803aabbcd03ab74f83e"
-    },
-    {
-      "path": "autocheck/parsers/__init__.py",
-      "sha256": "82f20681e9d55eba445fb8473db65308c1349d3bbd5fae947b8a2ba5690be604"
-    },
-    {
-      "path": "autocheck/parsers/allegro_pst.py",
-      "sha256": "2b42e68483d3265b05924d024c8536925501b73ea20d90957aa0352440f823f9"
-    },
-    {
-      "path": "autocheck/parsers/bom_agile.py",
-      "sha256": "11915e9cfd8b5a098f1a99ea47c6ba6ea882ecd3d78f5dd85b6792ee504897fd"
-    },
-    {
-      "path": "autocheck/parsers/bom_erp.py",
-      "sha256": "8088b5904312073ccd69502d1a46bb13c0878f7e7baac67a6246c934fd00a0be"
-    },
-    {
-      "path": "autocheck/parsers/bom_nvidia.py",
-      "sha256": "dd428fa4a96e20e861a0f0c6b2e8b84a606d90ca9f8bd7c691f738ec577b0d0a"
-    },
-    {
-      "path": "autocheck/parsers/dsn.py",
-      "sha256": "e3d915a95d1d5bdfc8e682a3eacafa032e4db0c593f556c6671cda086994a031"
-    },
-    {
-      "path": "autocheck/pipeline.py",
-      "sha256": "6b8ce1565ac2a35ac72aba9548588e4dca693efad002d5521013d8288dec722d"
-    },
-    {
-      "path": "autocheck/report/__init__.py",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    {
-      "path": "autocheck/report/circuit_text.py",
-      "sha256": "c7db9731f1419233332ac9378a06f31277f65cebe037fde314ba184531d3b78a"
-    },
-    {
-      "path": "autocheck/report/data_out.py",
-      "sha256": "7d92c560f1c68425cb604243e93cf806ad2e4ac4a3e0674c19bc7384fa98e09b"
-    },
-    {
-      "path": "autocheck/report/diagram_html.py",
-      "sha256": "e06f05f69f9efc965a6e7702daf23410c22e5edd4ff35b739040170b1c43e22f"
-    },
-    {
-      "path": "autocheck/report/i2c_block_diagram.py",
-      "sha256": "03c57d4f7c39522af16a0f095bb2ee8cfd611041000931b05aacb11dcd88ec9f"
-    },
-    {
-      "path": "autocheck/report/i2c_block_drawio.py",
-      "sha256": "0e07ff7883ef7081be33337a6c526984e5432eabc4c520988b03b636b80bb7c3"
-    },
-    {
-      "path": "autocheck/report/i2c_map_diagram.py",
-      "sha256": "685a707b9c10cea4806dbe44f73ab5fd908f709da95af044f46f686895dcdc38"
-    },
-    {
-      "path": "autocheck/report/pdf_annotate.py",
-      "sha256": "a839bcb647f82471871b15e70e00f9c7df20b7c5f70f7fa6b897503037acd788"
-    },
-    {
-      "path": "autocheck/report/pdf_report.py",
-      "sha256": "0adf0f2b206489fa867ee4aaf3bc8f3a6a9de784b93ed3a75625651386fcd7f3"
-    },
-    {
-      "path": "autocheck/report/power_tree_diagram.py",
-      "sha256": "95b4f3c3842ecd330b1d2fc8ee531be03453699c19d2df442088a23ea10b57af"
-    },
-    {
-      "path": "autocheck/report/power_tree_drawio.py",
-      "sha256": "ca9572b22e62a24a641dbb773d0c82c769f8dbf1f3e5d2ccb29f8d6880c6413e"
-    },
-    {
-      "path": "autocheck/report/xlsx_tracker.py",
-      "sha256": "d213e20425922669a97cbf58412c1eaefe3d62718214bbee235ee16c84c87bee"
-    },
-    {
-      "path": "autocheck/review.py",
-      "sha256": "a35ef7bd1507b5ef4c41725b2084f48d96c02adfc8e5e1f428ab9b3c85c52af7"
-    },
-    {
-      "path": "autocheck/ruleinject.py",
-      "sha256": "36067d8430acadfdb886d30e85e1e42794365da908e2a66bd5c6f7400a54719d"
-    },
-    {
-      "path": "autocheck/rules_zh.py",
-      "sha256": "41d6f337d4eb069ea63369dc4c9cf6427f6b7dda8a53f774d02d8a2e666bc919"
-    },
-    {
-      "path": "autocheck/tracking.py",
-      "sha256": "f9e0353ec360ec2790d27be9ba74bf22ddaace899fa992f10adf1065f3f289b6"
-    },
-    {
-      "path": "autocheck/ui_nav.py",
-      "sha256": "3e65bb8ba8e61f1a308d2981812ae7773837da8720f62aa176b0d3573e0e5bd8"
-    },
-    {
-      "path": "autocheck/ui_pick.py",
-      "sha256": "a4feae4d744808a0dd5e94ab75a34d28c5ed352a02ec4367d2ed07b1158ee51d"
-    },
-    {
-      "path": "autocheck/ui_viewer.py",
-      "sha256": "f7fbd06d2dbd868268b20370e8896eb19c6f5126146c4d0f77a08fb92d4a5983"
-    },
-    {
-      "path": "autocheck/values.py",
-      "sha256": "6ff70a13d21e18afa5dbdd7dd41ba33cc0ac8fdf1132b46af7967dc870fc7662"
-    },
-    {
-      "path": "config/default.yaml",
-      "sha256": "6c6e88fc64b2c5166e294e85a1b30bf7be9e83508a576486ec738914c1e4885c"
-    },
-    {
-      "path": "config/i2c_devices.yaml",
-      "sha256": "ec66808f77d63b919b7d00ba9a8bd12ca5d788858a1bcbfe1c2c78e8e452e3a8"
-    },
-    {
-      "path": "config/i2c_devices_user.yaml",
-      "sha256": "1d48bc1d0ea0d339cef894a8fcd0bea948094b2800332fd7258932728c5b4a21"
-    },
-    {
-      "path": "config/power_parts.yaml",
-      "sha256": "b270c15564ee8d3ef8b479d54eb8673e418509f70f3a2b2935aa68d015f866cb"
-    }
-  ],
-  "version": "0.2.0",
-  "revision": "2026-10-22"
+ "origin": "User-provided AutoCheck_1027.zip",
+ "sourceSha256": "b6449e6b08c64c6bf3fb69511ec5b44a87cbbc2852ed32f19358180270196bd5",
+ "files": [
+  {
+   "path": "autocheck/__init__.py",
+   "sha256": "87bc112dcbf08939857c60548cf643a397df8de117e14e2d90e721d295e4daf9"
+  },
+  {
+   "path": "autocheck/bom_socket.py",
+   "sha256": "5464575143371d93ad600eb19c4656a281576c15a593313c943d7e6e8f375a53"
+  },
+  {
+   "path": "autocheck/checks/__init__.py",
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "path": "autocheck/checks/bom_consistency.py",
+   "sha256": "54cffbbc0138c53eb20659a19c5307c8087560ab83df55af1ded518f14e7a012"
+  },
+  {
+   "path": "autocheck/checks/capv.py",
+   "sha256": "dce01dccd9133f94d52f7554b3182a36ae75e2801ac62e41b179c1e90d1d5c26"
+  },
+  {
+   "path": "autocheck/checks/diff.py",
+   "sha256": "2216ba57e87f6eb19fbd7bef0dc380aef35b3270602c4ea8e68d24eeba43a4b7"
+  },
+  {
+   "path": "autocheck/checks/drc.py",
+   "sha256": "4c2bf96e52f05a684197558c7b31ee1cc7759e8d6e82ed916c3cbbb54d70235e"
+  },
+  {
+   "path": "autocheck/checks/i2c_map.py",
+   "sha256": "77979a1ca50e5a1a28ab066dbcfb697bc5f2f2928e8a30a437e913eb38d714f0"
+  },
+  {
+   "path": "autocheck/checks/netrules.py",
+   "sha256": "98a21b314547bd69ddf796e9e463d8e4977b76cb27c7bb11739b4b492cabe569"
+  },
+  {
+   "path": "autocheck/checks/power_tree.py",
+   "sha256": "11f853bf728b005f3892634218d32f48e09d65fe4525a1dfa78edb14cdc509c3"
+  },
+  {
+   "path": "autocheck/checks/shortopen.py",
+   "sha256": "901c47f7e7bf7d8ca80b93cf37fe4828fc9dd800d7204cbeccc9e9f6ccce6f0c"
+  },
+  {
+   "path": "autocheck/cli.py",
+   "sha256": "17ac1ea302d765c03b74cac771a2a6d6d3f0f62458329e456bf96478462844a7"
+  },
+  {
+   "path": "autocheck/config.py",
+   "sha256": "4ed11831c2f68c657eb2a6d797b6c9b243bd7fed77c6a43d99ee707b3d500475"
+  },
+  {
+   "path": "autocheck/fakeschem.py",
+   "sha256": "471e2e151b4a25b6c3a404ada606c9a0ea81f3292b0996402c1c09406d4b4744"
+  },
+  {
+   "path": "autocheck/faultinject.py",
+   "sha256": "8ebcc119f6a4d41abf285ca2d170e449cbded0675a80886760a9449d98e9d842"
+  },
+  {
+   "path": "autocheck/findings.py",
+   "sha256": "962467a0caabbdb744f50ea7292a6ca6dc77c859c592138db7cbc084c2904bae"
+  },
+  {
+   "path": "autocheck/grouping.py",
+   "sha256": "3b7c3a428ddf69bcf8c8b2cf3ef86851819c38027e5333f958fb3e64b0ccb9f0"
+  },
+  {
+   "path": "autocheck/i2c_lib.py",
+   "sha256": "857bf52d20e4b4d9a9dffda1c57cf6466deac07f8dcd715507301bc4840d2e24"
+  },
+  {
+   "path": "autocheck/loader.py",
+   "sha256": "1419269fe29744b32253485f6065d9cb620e564e11f75fff41573c6784dc0c4e"
+  },
+  {
+   "path": "autocheck/model.py",
+   "sha256": "f79595124552f08c977cf98a95e42b02c6b7423f395449587c4f1d60aeedccdf"
+  },
+  {
+   "path": "autocheck/parsers/__init__.py",
+   "sha256": "82f20681e9d55eba445fb8473db65308c1349d3bbd5fae947b8a2ba5690be604"
+  },
+  {
+   "path": "autocheck/parsers/allegro_pst.py",
+   "sha256": "6fad99885f8d9f11e56f4a0e6ed67555db37352b19f36447f301d1909c782c7b"
+  },
+  {
+   "path": "autocheck/parsers/bom_agile.py",
+   "sha256": "11915e9cfd8b5a098f1a99ea47c6ba6ea882ecd3d78f5dd85b6792ee504897fd"
+  },
+  {
+   "path": "autocheck/parsers/bom_erp.py",
+   "sha256": "dde25fe9d74eb3aed722a6eb441686a345a5ffe0e787e70ed339774fadd3f34e"
+  },
+  {
+   "path": "autocheck/parsers/bom_nvidia.py",
+   "sha256": "dd428fa4a96e20e861a0f0c6b2e8b84a606d90ca9f8bd7c691f738ec577b0d0a"
+  },
+  {
+   "path": "autocheck/parsers/bom_orcad.py",
+   "sha256": "1941b6aeaf77aa73d272e511ee11a63dd05352dde9b050a9f22846c7d0021b32"
+  },
+  {
+   "path": "autocheck/parsers/dsn.py",
+   "sha256": "09130d5d62c0d398008cec84bcfbb947d38bb678d9c64ade02d6ecb813d275e1"
+  },
+  {
+   "path": "autocheck/pipeline.py",
+   "sha256": "87b52fe2de4b3e0e25e55fdc3bc6ac6c2a3088e6b00126a6bc67d9b3e1d97392"
+  },
+  {
+   "path": "autocheck/report/__init__.py",
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "path": "autocheck/report/circuit_text.py",
+   "sha256": "c7db9731f1419233332ac9378a06f31277f65cebe037fde314ba184531d3b78a"
+  },
+  {
+   "path": "autocheck/report/data_out.py",
+   "sha256": "7d92c560f1c68425cb604243e93cf806ad2e4ac4a3e0674c19bc7384fa98e09b"
+  },
+  {
+   "path": "autocheck/report/diagram_html.py",
+   "sha256": "e06f05f69f9efc965a6e7702daf23410c22e5edd4ff35b739040170b1c43e22f"
+  },
+  {
+   "path": "autocheck/report/i2c_block_diagram.py",
+   "sha256": "03c57d4f7c39522af16a0f095bb2ee8cfd611041000931b05aacb11dcd88ec9f"
+  },
+  {
+   "path": "autocheck/report/i2c_block_drawio.py",
+   "sha256": "0e07ff7883ef7081be33337a6c526984e5432eabc4c520988b03b636b80bb7c3"
+  },
+  {
+   "path": "autocheck/report/i2c_map_diagram.py",
+   "sha256": "685a707b9c10cea4806dbe44f73ab5fd908f709da95af044f46f686895dcdc38"
+  },
+  {
+   "path": "autocheck/report/pdf_annotate.py",
+   "sha256": "795065455f32373d8cdd86c0bc577de61bdf5e86400c7464cb685e4080585d69"
+  },
+  {
+   "path": "autocheck/report/pdf_report.py",
+   "sha256": "0adf0f2b206489fa867ee4aaf3bc8f3a6a9de784b93ed3a75625651386fcd7f3"
+  },
+  {
+   "path": "autocheck/report/power_tree_diagram.py",
+   "sha256": "63df281ae94beeba8ad832db239961be38d38292f662c5a49639b9738354a7d2"
+  },
+  {
+   "path": "autocheck/report/power_tree_drawio.py",
+   "sha256": "cf2f95866b0d259ce771845fe1cc8c8fef347069741f9fef64c27da38cc94839"
+  },
+  {
+   "path": "autocheck/report/xlsx_tracker.py",
+   "sha256": "66a674e77f8c9b2d761c66ba0a164ec87927bd2fe8c503154ca11def87a463e1"
+  },
+  {
+   "path": "autocheck/review.py",
+   "sha256": "f99431a3025d59d12be56709543abfc48215849c8a339bc6ef660db15fbf1330"
+  },
+  {
+   "path": "autocheck/ruleinject.py",
+   "sha256": "36067d8430acadfdb886d30e85e1e42794365da908e2a66bd5c6f7400a54719d"
+  },
+  {
+   "path": "autocheck/rules_zh.py",
+   "sha256": "61839c481ab8e7b7ae1cdb110a3bc4c43486436decdf75e863aad85dec217dee"
+  },
+  {
+   "path": "autocheck/tracking.py",
+   "sha256": "eae52b308b41ecdc01e56f543ebf9d572921be9dd85de6662624b1e0b9f8841f"
+  },
+  {
+   "path": "autocheck/ui_nav.py",
+   "sha256": "3e65bb8ba8e61f1a308d2981812ae7773837da8720f62aa176b0d3573e0e5bd8"
+  },
+  {
+   "path": "autocheck/ui_pick.py",
+   "sha256": "a4feae4d744808a0dd5e94ab75a34d28c5ed352a02ec4367d2ed07b1158ee51d"
+  },
+  {
+   "path": "autocheck/ui_viewer.py",
+   "sha256": "92d6f9155fd1ba77e683515061e739a90985d4cf7e22bcffc12cbc2e484179ab"
+  },
+  {
+   "path": "autocheck/values.py",
+   "sha256": "e8829a5bb74955c9b9498c0f012178b98fdabc4b115c2ae87f0db1e38f43aaa1"
+  },
+  {
+   "path": "config/default.yaml",
+   "sha256": "7f4a103a47b14ea0e7e1708db8d4ece6c1fd04bd4c8ca3366bc93fa263b5bf83"
+  },
+  {
+   "path": "config/i2c_devices.yaml",
+   "sha256": "ec66808f77d63b919b7d00ba9a8bd12ca5d788858a1bcbfe1c2c78e8e452e3a8"
+  },
+  {
+   "path": "config/i2c_devices_user.yaml",
+   "sha256": "1d48bc1d0ea0d339cef894a8fcd0bea948094b2800332fd7258932728c5b4a21"
+  },
+  {
+   "path": "config/power_parts.yaml",
+   "sha256": "b270c15564ee8d3ef8b479d54eb8673e418509f70f3a2b2935aa68d015f866cb"
+  }
+ ],
+ "version": "0.2.0",
+ "revision": "2026-10-27"
 }

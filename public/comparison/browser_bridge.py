@@ -1,4 +1,4 @@
-"""Browser adapter for the user's original AutoCheck 2026-10-22 engine."""
+"""Browser adapter for the user's original AutoCheck 2026-10-27 engine."""
 import dataclasses
 import datetime
 import json
@@ -17,7 +17,7 @@ from autocheck.i2c_lib import accept_entry, draft_from_pdf, entry_yaml, page_tex
 from autocheck.pipeline import run
 from autocheck.report import pdf_report
 from autocheck.report.data_out import meta
-from autocheck.tracking import TrackRow, expand_rows
+from autocheck.tracking import TrackRow, expand_rows, link_root_causes
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 
@@ -223,8 +223,13 @@ def _drawio_outputs(result, out, paths):
 def _safe_workbook(workbook):
     from openpyxl.cell.cell import Cell
     from openpyxl.formula import Tokenizer
-    from autocheck.report.xlsx_tracker import COL
-    base = workbook['版本資訊']['B5']
+    from openpyxl.utils import get_column_letter
+    from autocheck.report.xlsx_tracker import BASE_URL_CELL, COL
+    # Column letters follow the workbook layout the engine writes (2026-10-27 inserted 父項 after 狀態), never a
+    # hard-coded letter, so an engine update cannot silently turn the PDF links into plain text.
+    dest_col, rule_col = get_column_letter(COL['PDF 目的地']), get_column_letter(COL['規則'])
+    base_ref = BASE_URL_CELL.replace('$', '')
+    base = workbook['版本資訊'][base_ref]
     if not isinstance(base.value, str) or not re.fullmatch(r'[^/\\:\x00-\x1f]{1,240}\.pdf', base.value):
         base.value = ''
     base.data_type = 's'
@@ -248,12 +253,14 @@ def _safe_workbook(workbook):
                     except Exception:
                         pass
                 elif sheet.title == '規則說明' and cell.column == 6:
-                    trusted = bool(re.fullmatch(r'=COUNTIF\(追蹤表!\$E\$2:\$E\$[1-9]\d*,A[1-9]\d*\)', cell.value))
+                    trusted = bool(re.fullmatch(r'=COUNTIF\(追蹤表!\$' + rule_col + r'\$2:\$' + rule_col + r'\$[1-9]\d*,A[1-9]\d*\)', cell.value))
                 elif sheet.title == '追蹤表' and cell.column == COL['PDF']:
                     r = cell.row
-                    trusted = cell.value == f'=IF(OR(版本資訊!$B$5="",W{r}=""),"",HYPERLINK(版本資訊!$B$5&"#nameddest="&W{r},"PDF"))'
+                    trusted = cell.value == (f'=IF(OR(版本資訊!{BASE_URL_CELL}="",{dest_col}{r}=""),"",'
+                                             f'HYPERLINK(版本資訊!{BASE_URL_CELL}&"#nameddest="&{dest_col}{r},"PDF"))')
                 elif sheet.title.startswith('Power tree 圖 ('):
-                    trusted = bool(re.fullmatch(r'=IF\(版本資訊!\$B\$5="","((?:[^"]|"")*)",HYPERLINK\(版本資訊!\$B\$5&"#page=[1-9]\d*","\1"\)\)', cell.value))
+                    cell_ref = re.escape(BASE_URL_CELL)
+                    trusted = bool(re.fullmatch(r'=IF\(版本資訊!' + cell_ref + r'="","((?:[^"]|"")*)",HYPERLINK\(版本資訊!' + cell_ref + r'&"#page=[1-9]\d*","\1"\)\)', cell.value))
                 if not trusted:
                     cell.data_type = 's'
 
@@ -285,6 +292,9 @@ def _run(payload, root, progress):
                  option('i2cDeclared'), root / 'datasheets')
     result.warnings.extend(library['warnings'])
     rows = expand_rows(result.findings, result.cap_rows, result.b)
+    # 2026-10-27 B-full: consequence rows of a NET_SHORTED / CAP_ONLY_NET root cause point at their parent, exactly as
+    # cli.write_outputs links the rows it writes to Excel, so the website rows and the workbook agree.
+    link_root_causes(rows, result.cfg)
     out = root / 'out'
     progress('產生原始 PDF、Excel、JSON、CSV、圖表與可編輯 draw.io')
     paths = {}
@@ -333,16 +343,31 @@ def _run(payload, root, progress):
                 'power_drawio_b': f'power_tree_{b_label}.drawio', 'i2c_drawio_b': f'i2c_block_{b_label}.drawio'}
     known = {str(out / name): key for key, name in expected.items()}
     known.update({str(path): key for key, path in paths.items()})
-    artifacts = [_artifact(path, known.get(str(path), 'annotations' if path.name.endswith('.annotations.json') else None))
-                 for path in sorted(out.iterdir()) if path.is_file() and path.stat().st_size
-                 and path != failed_schematic and path != (failed_schematic.with_suffix('.annotations.json') if failed_schematic else None)]
+    # The 2026-10-20+ engine writes a sidecar per annotated schematic (B and A); keys must stay unique because the
+    # page uses them as React keys and looks artifacts up by key.
+    known[str(out / f'AutoCheck_{a_label}_vs_{b_label}_schematic_{b_label}.annotations.json')] = 'annotations'
+    known[str(out / f'AutoCheck_{a_label}_vs_{b_label}_schematic_{a_label}.annotations.json')] = 'annotations_a'
+    artifacts = []
+    used = set()
+    for path in sorted(out.iterdir()):
+        if not path.is_file() or not path.stat().st_size or path == failed_schematic:
+            continue
+        if failed_schematic and path == failed_schematic.with_suffix('.annotations.json'):
+            continue
+        key = known.get(str(path)) or ('annotations' if path.name.endswith('.annotations.json') else path.stem)
+        unique, n = key, 2
+        while unique in used:
+            unique, n = f'{key}_{n}', n + 1
+        used.add(unique)
+        artifacts.append(_artifact(path, unique))
     return {'meta': meta(result), 'findings': [f.to_dict() for f in result.findings],
             'rows': [dict(dataclasses.asdict(row), dest=row.dest) for row in rows], 'overview': result.overview,
             'capRows': result.cap_rows, 'railTodo': result.rail_todo, 'railDomain': result.rail_domain,
             'powerTree': result.power_tree, 'powerTreeA': result.power_tree_a,
             'i2cMap': result.i2c_map, 'i2cMapA': result.i2c_map_a,
             'inputIssues': result.input_issues, 'warnings': result.warnings,
-            'library': library['entries'], 'artifacts': artifacts}
+            'library': library['entries'], 'artifacts': artifacts,
+            'rootcause': getattr(result, 'rootcause', None) or {}}
 
 
 def _tracker(payload, root):

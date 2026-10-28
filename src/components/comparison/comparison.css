@@ -431,3 +431,6 @@
 :is(.comparison-input-panel, .comparison-datasheets-picker)[data-dragging] { outline: 2px dashed hsl(var(--primary)); outline-offset: 3px; background: hsl(var(--primary) / .08); }
 :is(.comparison-input-panel, .comparison-datasheets-picker)[data-dragging]::after { content: "放開以載入這個資料夾"; position: absolute; inset: 0; display: grid; place-items: center; border-radius: inherit; background: hsl(var(--background) / .72); color: hsl(var(--primary)); font-size: 16px; font-weight: 700; pointer-events: none; }
 @media (max-width: 767px) { .comparison-drop-hint { display: none; } }
+
+/* 2026-10-27 engine: root-cause markers in the results table */
+.comparison-result-table .comparison-rootcause { display: block; margin-bottom: 2px; color: hsl(var(--warning)); font-weight: 600; }

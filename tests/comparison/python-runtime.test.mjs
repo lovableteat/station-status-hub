@@ -143,9 +143,9 @@ with tempfile.TemporaryDirectory() as temporary:
 test('Public engine manifest includes only original Python source and safe config', async () => {
   const manifest = JSON.parse(await readFile(new URL('engine/manifest.json', publicRoot), 'utf8'));
   assert.equal(manifest.version, '0.2.0');
-  assert.equal(manifest.origin, 'User-provided AutoCheck_1022.zip');
-  assert.equal(manifest.revision, '2026-10-22');
-  assert.equal(manifest.files.length, 49);
+  assert.equal(manifest.origin, 'User-provided AutoCheck_1027.zip');
+  assert.equal(manifest.revision, '2026-10-27');
+  assert.equal(manifest.files.length, 52);
   for (const { path, sha256 } of manifest.files) {
     assert.match(path, /^(autocheck\/.+\.py|config\/(default|i2c_devices|i2c_devices_user|power_parts)\.yaml)$/);
     const bytes = await readFile(new URL(`engine/${path}`, publicRoot));
@@ -232,6 +232,12 @@ c.save()
   assert.ok(run.result.findings.some(finding => finding.status === 'CHANGE'));
   assert.ok(run.result.i2cMap.buses.length);
   assert.ok(run.result.rows.every(row => row.dest && row.key));
+  // Keys are React keys and lookup keys on the page; the session store rejects duplicates (報表 Key 或檔名重複).
+  assert.equal(new Set(run.result.artifacts.map(artifact => artifact.key)).size, run.result.artifacts.length, 'artifact keys are unique');
+  assert.equal(new Set(run.result.artifacts.map(artifact => artifact.name)).size, run.result.artifacts.length, 'artifact names are unique');
+  assert.ok(run.result.artifacts.some(artifact => artifact.key === 'annotations'), 'the B schematic sidecar is exposed (this fixture has no A schematic)');
+  assert.ok(run.result.rows.every(row => typeof row.parent === 'string' && Array.isArray(row.children)), 'rows carry root-cause links');
+  assert.ok(run.result.rootcause && typeof run.result.rootcause.parents === 'number', 'root-cause summary returned');
   const artifacts = new Map(run.result.artifacts.map(artifact => [artifact.key, artifact]));
   for (const key of ['power_drawio_a', 'power_drawio_b', 'i2c_drawio_a', 'i2c_drawio_b']) {
     const artifact = artifacts.get(key);
@@ -265,8 +271,9 @@ c.save()
   });
   assert.equal(tracker.type, 'result', tracker.message);
   python.FS.writeFile('/fixture/replied.xlsx', new Uint8Array(tracker.result.bytes));
-  assert.equal(python.runPython(`from openpyxl import load_workbook\nw=load_workbook('/fixture/replied.xlsx')\nassert any(row[18] == 'Synthetic RD' for row in w['追蹤表'].iter_rows(values_only=True))\nTrue`), true);
-  assert.equal(python.runPython(`assert any(row[20].value == '=1+1' and row[20].data_type == 's' for row in w['追蹤表'].iter_rows())\nTrue`), true);
+  // Columns are found by header name: the 2026-10-27 layout inserted 父項 after 狀態, which moved every later column.
+  assert.equal(python.runPython(`from openpyxl import load_workbook\nw=load_workbook('/fixture/replied.xlsx')\nhead=[c.value for c in w['追蹤表'][1]]\nassert '父項' in head and '處置' in head\nowner, note = head.index('負責人'), head.index('備註')\nassert any(row[owner] == 'Synthetic RD' for row in w['追蹤表'].iter_rows(values_only=True))\nTrue`), true);
+  assert.equal(python.runPython(`assert any(row[note].value == '=1+1' and row[note].data_type == 's' for row in w['追蹤表'].iter_rows())\nassert any(c.data_type == 'f' for row in w['追蹤表'].iter_rows(min_row=2) for c in row if c.column == head.index('PDF') + 1), 'PDF link formulas survive the safety pass'\nTrue`), true);
   const datasheet = await bridge.dispatch('datasheet', { file: { path: 'TMP9999.pdf', bytes: python.FS.readFile('/fixture/datasheet.pdf').slice().buffer }, name: 'TMP9999', mpn: 'TMP9999' });
   assert.equal(datasheet.type, 'result', datasheet.message);
   assert.equal(Object.keys(datasheet.result.entry.table).length, 4);

@@ -70,6 +70,39 @@ def _frame(src: str, height: int, title: str) -> None:
                 unsafe_allow_html=True)
 
 
+def with_parents(view: list[dict], rows: list[dict]) -> list[dict]:
+    """A child in the view pulls its parent in, whatever the filter dropped it for (owner 2026-10-27 13:49: five rows
+    pointing at an INFO #15 that the default ERROR / WARN filter had hidden made the chain unreadable)."""
+    shown = {d["項次"] for d in view}
+    need = {d["父項"] for d in view if d.get("父項") and d["父項"] not in shown}
+    if not need:
+        return view
+    extra = [d for d in rows if d["項次"] in need]
+    return sorted(view + extra, key=lambda d: d["項次"])
+
+
+def fold_children(view: list[dict], fold: bool) -> list[dict]:
+    """B-full (2026-10-27): hide child rows whose parent is in the view. A child whose parent is filtered out (an INFO
+    CAP_ONLY_NET parent under the default ERROR / WARN filter, say) stays visible, so folding never hides a WARN.
+    A child that carries its own box on the annotated PDF ("PDF 框", e.g. PIN_ISOLATED = the open end of a short) is never
+    folded either: every #n drawn on the schematic must be findable in the table (owner 2026-10-27 12:13)."""
+    if not fold:
+        return view
+    shown = {d["項次"] for d in view}
+    return [d for d in view if not (d.get("父項") and d["父項"] in shown and not d.get("PDF 框"))]
+
+
+def parent_label(d: dict, fold: bool = True) -> str:
+    """說明 (工具) with the root-cause prefix / child count rendered in (the stored text stays untouched)."""
+    t = d.get("說明 (工具)") or ""
+    if d.get("父項"):
+        return f"同根因 → #{d['父項']}：{t}"
+    kids = d.get("子項") or []
+    if kids:        # in FRONT of the title: a long title would push a suffix out of the cell (owner screenshot 2026-10-27)
+        return f"[含 {len(kids)} 筆子項 #{' #'.join(str(k) for k in kids)}] {t}" if fold else f"[{len(kids)} 筆子項] {t}"
+    return t
+
+
 def side_by_side(db: Path, run: str, info: dict, rows: list[dict]) -> None:
     """info = one entry of review.runs(); rows = review.load(db, run) (tool columns + replies)."""
     ss = st.session_state
@@ -87,6 +120,7 @@ def side_by_side(db: Path, run: str, info: dict, rows: list[dict]) -> None:
     status = f3.multiselect("狀態", STATUSES, key="sb_status", placeholder="全部")
     disp = f4.selectbox("處置", ["全部", "未填", "已填", *DISPOSITIONS], key="sb_disp")
     q = f5.text_input("搜尋 (RefDes / Net / 規則 / 負責人 / 說明)", key="sb_q").strip().upper()
+    fold = st.checkbox("摺疊子項 (同根因的子項藏在父項底下)", True, key="sb_fold")   # not part of sb_sig: no frame reload
 
     def keep(d: dict) -> bool:
         if d["嚴重度"] not in sev or (rule and d["規則"] not in rule) or (status and d["狀態"] not in status):
@@ -100,7 +134,19 @@ def side_by_side(db: Path, run: str, info: dict, rows: list[dict]) -> None:
             return q in hay.upper()
         return True
 
-    view = [d for d in rows if keep(d)]
+    view = fold_children(with_parents([d for d in rows if keep(d)], rows), fold)
+    ss.setdefault("sb_run", run)
+    if ss["sb_run"] != run:                            # switched compare: start over, drop the other run's drawings
+        ss["sb_run"], ss["sb_key"] = run, None
+        ss.pop("sb_src_a", None)
+        ss.pop("sb_src_b", None)
+    lk = review.last_key(db, run)                      # read once per run (also feeds the 回上次審到 button)
+    want = ss.get("sb_key") or lk                      # first visit: the key the RD stopped at
+    if fold and want and want not in {d["追蹤 Key"] for d in view}:
+        # 回上次審到 / a jump landed on a folded child: show it anyway instead of falling back to the first row
+        hidden = next((d for d in rows if d["追蹤 Key"] == want and d.get("父項")), None)
+        if hidden is not None and keep(hidden):
+            view = sorted(view + [hidden], key=lambda d: d["項次"])
     if not view:
         st.info("篩選後沒有列。")
         return
@@ -109,12 +155,6 @@ def side_by_side(db: Path, run: str, info: dict, rows: list[dict]) -> None:
 
     # ------------------------------------------------------------------ current row
     ss.setdefault("sb_v", 0)                           # ?v counter: +1 whenever the shown key changes (see below)
-    ss.setdefault("sb_run", run)
-    if ss["sb_run"] != run:                            # switched compare: start over, drop the other run's drawings
-        ss["sb_run"], ss["sb_key"] = run, None
-        ss.pop("sb_src_a", None)
-        ss.pop("sb_src_b", None)
-    lk = review.last_key(db, run)                      # read once per run (also feeds the 回上次審到 button)
     if ss.get("sb_key") is None:                       # first visit of this run: resume where the RD stopped
         ss["sb_key"] = lk if lk in keys else keys[0]
     cur_key = ss["sb_key"]
@@ -188,7 +228,19 @@ def side_by_side(db: Path, run: str, info: dict, rows: list[dict]) -> None:
     st.caption(f'目前 #{cur["項次"]} / {len(view)} 列　{cur["嚴重度"]}　{_rule_name(cur["規則"])}　{cur["RefDes"]}　'
                f'頁 {a_label} {pa or "-"}　頁 {b_label} {pb or "-"}　狀態 {cur["狀態"]}　key {cur["追蹤 Key"]}'
                + ("" if cur.get("PDF 中心") or not zoom else "　(此列沒有框，退回 PDF 目的地，不放大)"))
-    st.markdown(f'**{cur["說明 (工具)"]}**' + (f'　{cur["細節 (工具)"]}' if cur.get("細節 (工具)") else ""))
+    st.markdown(f'**{parent_label(cur, False)}**' + (f'　{cur["細節 (工具)"]}' if cur.get("細節 (工具)") else ""))
+    if cur.get("子項"):
+        byn = {d["項次"]: d for d in rows}
+        with st.expander(f"同根因的子項 {len(cur['子項'])} 筆 (PDF 上不另外框，除嚴重度高於父項者)", expanded=False):
+            kid_rows = [byn[k] for k in cur["子項"] if k in byn]
+            st.dataframe(pd.DataFrame([{"項次": d["項次"], "嚴重度": d["嚴重度"], "規則": _rule_name(d["規則"]),
+                                        "RefDes": d["RefDes"], "Net": d["Net"], "處置": d["處置"] or BLANK,
+                                        "說明 (工具)": d["說明 (工具)"]} for d in kid_rows]),
+                         hide_index=True, width="stretch", height=min(300, 40 + 35 * len(kid_rows)),
+                         key=f"sb_kids_{run}_{cur['追蹤 Key']}")
+            kc = st.columns(len(kid_rows[:8]) or 1)
+            for j, d in enumerate(kid_rows[:8]):
+                kc[j].button(f"看 #{d['項次']}", key=f"sb_kid_{run}_{d['追蹤 Key']}", on_click=jump_to, args=(d["追蹤 Key"],))
 
     # ------------------------------------------------------------------ viewers
     if show:
@@ -250,11 +302,14 @@ def side_by_side(db: Path, run: str, info: dict, rows: list[dict]) -> None:
     df = pd.DataFrame([{
         "項次": d["項次"], "嚴重度": d["嚴重度"], "規則": _rule_name(d["規則"]), "RefDes": d["RefDes"],
         a_label: "✔" if d.get("PDF 頁 A") else "✖", b_label: "✔" if d.get("PDF 頁") else "✖",
-        "頁 B": d["PDF 頁"], "狀態": d["狀態"], "處置": d["處置"] or BLANK, "負責人": d["負責人"],
-        "說明 (工具)": d["說明 (工具)"], "追蹤 Key": d["追蹤 Key"],
+        "頁 B": d["PDF 頁"], "狀態": d["狀態"], "父項": f'#{d["父項"]}' if d.get("父項") else "",
+        "處置": d["處置"] or BLANK, "負責人": d["負責人"],
+        "說明 (工具)": parent_label(d, fold), "追蹤 Key": d["追蹤 Key"],
     } for d in view])
     st.caption(f"勾選列首的方框跳到該筆 (兩邊同步)。顯示 {len(view)} / {len(rows)} 列；"
-               f"{a_label} / {b_label} 欄 ✔ = 該側 PDF 有定位到。")
+               f"{a_label} / {b_label} 欄 ✔ = 該側 PDF 有定位到。"
+               + "　子項在表裡時父項一律跟著顯示 (不受嚴重度篩選)。"
+               + ("　摺疊中：子項藏在父項底下 (父項說明開頭列出 #n)；圖上有框的子項不摺。" if fold else ""))
     st.dataframe(df, hide_index=True, on_select=on_table, selection_mode="single-row",
                  key=f"sb_df_{run}_{ss['sb_v']}", height=min(460, 40 + 35 * len(view)),
                  column_config={"項次": st.column_config.NumberColumn(width="small"),

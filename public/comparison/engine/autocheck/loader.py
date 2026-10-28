@@ -8,7 +8,8 @@ the tool at the parent folder of a whole design kit and must still get the right
            the winner's is a packaged sub-design (Concept HDL s_power/sub_*/packaged) and is dropped silently; what is left is listed as an
            alternative the user may want instead (a parent folder holding EVT\\ and DVT\\ at once: DVT's RefDes are
            a subset of EVT's too, size is what tells a revision from a sub-design).
-  bom      a .xls/.xlsx/.csv/.htm(l) file whose header one of the BOM parsers recognises (ERP / Agile / NVIDIA).
+  bom      a .xls/.xlsx/.csv/.htm(l)/.bom/.txt file whose header one of the BOM parsers recognises (ERP / Agile /
+           NVIDIA / OrCAD Capture report, 2026-10-22: .bom/.txt added for the Capture text report).
            Concept schematic pages (sch_*/page*.csv), i2c_map_declared*.csv and AutoCheck's own csv outputs are never
            candidates. Several recognised BOMs: the one whose RefDes are found in the chosen netlist (BOM -> netlist,
            never the other way round: netlist-only parts are the DNPs) wins.
@@ -27,7 +28,8 @@ from .parsers.allegro_pst import load_netlist
 from .parsers.bom_erp import load_bom, sniff_bom
 from .parsers.dsn import load_dsn
 
-BOM_EXT = {".xls", ".xlsx", ".htm", ".html", ".csv"}
+_COMPANY_BOM = ("ERP", "Agile", "NVIDIA")
+BOM_EXT = {".xls", ".xlsx", ".htm", ".html", ".csv", ".bom", ".txt"}
 _PART_RE = re.compile(r"^PART_NAME\s*\n\s*(\S+)", re.M)
 _SCH_PAGE_CSV = re.compile(r"^page\d+\.csv$", re.I)
 _OUR_CSV = re.compile(r"^(autocheck|rail_map|rail_domain|cap_table|i2c_map)[_.]", re.I)
@@ -124,14 +126,15 @@ def classify_report(paths: list[Path]) -> tuple[dict[str, Path], dict[str, str]]
             except Exception:  # noqa: BLE001
                 rd = set()
             hit = len(rd & net_rd) / len(rd) if rd else 0.0
-            scored.append((hit, _closeness(p, anchor), p, fmt))
-        scored.sort(key=lambda t: (-t[0], -t[1], str(t[2])))
-        hit, _, p, fmt = scored[0]
+            # company BOM before an OrCAD Capture report (QA 2026-10-22: a 3-line .BOM scored 100 % and hid the ERP BOM)
+            scored.append((0 if fmt in _COMPANY_BOM else 1, hit, _closeness(p, anchor), p, fmt))
+        scored.sort(key=lambda t: (t[0], -t[1], -t[2], str(t[3])))
+        _, hit, _, p, fmt = scored[0]
         found["bom"] = p
-        why["bom"] = (f"{len(recognised)} 個 BOM 候選，選 RefDes 命中 netlist 最高的 ({hit:.0%}，格式 {fmt})"
-                      if net_rd else f"{len(recognised)} 個 BOM 候選，無 netlist 可比對，取最近的")
+        why["bom"] = (f"{len(recognised)} 個 BOM 候選，公司 BOM 優先，再選 RefDes 命中 netlist 最高的 ({hit:.0%}，格式 {fmt})"
+                      if net_rd else f"{len(recognised)} 個 BOM 候選，無 netlist 可比對，公司 BOM 優先、再取最近的 (格式 {fmt})")
     elif bom_cands:
-        why["bom"] = f"{len(bom_cands)} 個試算表都不是已知 BOM 格式 (ERP / Agile / NVIDIA)"
+        why["bom"] = f"{len(bom_cands)} 個表格/報表檔都不是已知 BOM 格式 (ERP / Agile / NVIDIA / OrCAD)"
     # ---------------------------------------------------------------- PDF / DSN
     pdfs = [p for p in paths if p.suffix.lower() == ".pdf" and not p.name.lower().startswith("autocheck")]
     kept = [p for p in pdfs if not _PDF_SKIP.search(p.name)] or pdfs
@@ -157,7 +160,16 @@ def files_in(folder: str | Path) -> list[Path]:
     return sorted(p for p in Path(folder).rglob("*") if p.is_file())
 
 
-def build_design(label: str, files: dict[str, Path]) -> tuple[Design, list[str]]:
+def apply_ni(d: Design, cfg: dict) -> None:
+    """DSN NI -> Design.ni; ni_applies when the BOM is not a company BOM (config dnp, owner 2026-10-22)."""
+    dc = cfg.get("dnp", {}) or {}
+    names = list(dc.get("dsn_property", ["Optional"]))
+    vals = {str(v).strip().upper() for v in dc.get("dsn_values", ["NI"])}
+    d.ni = {r for r, p in d.dsn_props.items() if any(str(p.get(k, "")).strip().upper() in vals for k in names)}
+    d.ni_applies = d.bom is None or d.bom_format not in set(dc.get("company_bom_formats", ["ERP", "Agile", "NVIDIA"]))
+
+
+def build_design(label: str, files: dict[str, Path], cfg: dict | None = None) -> tuple[Design, list[str]]:
     d = Design(label=label)
     warnings: list[str] = []
     need = [k for k in ("pstxnet", "pstxprt", "pstchip") if k not in files]
@@ -170,4 +182,11 @@ def build_design(label: str, files: dict[str, Path]) -> tuple[Design, list[str]]
         warnings.append(f"{label}: no BOM supplied; every part treated as stuffed")
     if "dsn" in files:
         warnings += load_dsn(d, files["dsn"])
+    if cfg is None:
+        from .config import load_config
+        cfg = load_config()
+    apply_ni(d, cfg)
+    if d.ni_applies and d.ni:
+        src = f"{d.bom_format} BOM lists every placed part" if d.bom is not None else "no BOM"
+        warnings.append(f"{label}: DNP from DSN NI ({src}): {len(d.ni)} part(s) treated as not stuffed")
     return d, [f"{label}: {w}" if not w.startswith(label) else w for w in warnings]

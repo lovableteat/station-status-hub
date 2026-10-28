@@ -239,7 +239,8 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
         b = new_box(kind="conv", rail=k[1], volt=rinfo(k[1])["v"], level=level, parent=parent.id, conv=main["conv"],
                     built=bool(main["built"]), status=st, page=main["page"], edge_kind=main.get("kind", ""))
         what = {"diode": " (diode)", "FET switch (discrete)": " (FET)"}.get(main.get("kind", ""), "")
-        b.lines = [k[1], _vline(rinfo(k[1])), f"{main['conv']}{what}{'' if main['built'] else ' (DNP)'}{tag(st)}",
+        warn = "⚠ " if main.get("bom_mismatch") else ""      # G0 2026-10-22: converter / L / FET / shunt BOM != netlist
+        b.lines = [k[1], _vline(rinfo(k[1])), f"{warn}{main['conv']}{what}{'' if main['built'] else ' (DNP)'}{tag(st)}",
                    load_line(k[1])]
         b.hover = [f"{main['conv']} {main['mpn']}  {main['kind']}  上件 {'Y' if main['built'] else 'DNP'}",
                    f"上游 {k[0]} ({_v(rinfo(k[0])['v'])})"]
@@ -253,11 +254,13 @@ def layout(pt: dict, pt_a: dict | None = None, a_label: str = "A", b_label: str 
             b.hover.append("經過: " + ", ".join(main["via"]))
         if main["page"] is not None:
             b.hover.append(f"線路圖第 {main['page']} 頁")
+        b.hover += list(main.get("bom_note") or [])
         if note:
             b.hover.append(f"{a_label} -> {b_label}: {note}")
         for alt in es[1:]:
             ast, anote = _edge_status(alt, ai)
-            b.lines.append(f"alt {alt['conv']}{'' if alt['built'] else ' (DNP)'}{tag(ast)}")
+            b.lines.append(f"alt {'⚠ ' if alt.get('bom_mismatch') else ''}{alt['conv']}{'' if alt['built'] else ' (DNP)'}{tag(ast)}")
+            b.hover += [n for n in (alt.get("bom_note") or []) if n not in b.hover]   # shared L / shunt: once
             b.hover.append(f"alt {alt['conv']} {alt['mpn']} 上件 {'Y' if alt['built'] else 'DNP'}"
                            + (f"; {a_label} -> {b_label}: {anote}" if anote else ""))
             if ast and not b.status:
@@ -458,7 +461,7 @@ SECTION_TITLE = {"orphan": "有負載但來源未識別的 rail (紅框)：列�
 
 # ------------------------------------------------------------------------------------------------------- Excel
 def render_xlsx(ws, boxes: list[Box], title: str, pdf_link=None, a_label: str = "A", b_label: str = "B",
-                diff: bool = True) -> None:
+                diff: bool = True, banner: str = "") -> None:
     """pdf_link(page, text) -> Excel formula (with its leading '=') or None. Box column of level L = 2 + 3L,
     connectors in the 2 columns after it. Text line i of a box sits in row top0 + top + i."""
     from openpyxl.comments import Comment
@@ -477,6 +480,8 @@ def render_xlsx(ws, boxes: list[Box], title: str, pdf_link=None, a_label: str = 
     lg = ws.cell(3, 1, "圖例：" + "　".join(t for _, t in LEGEND) + ("" if diff else f"　({a_label} 的 power tree 沒有算出來，"
                                                                                       "本圖沒有變更顏色)"))
     lg.font = Font(name=FONT, size=9, color="595959")
+    if banner:          # G0 BOM != netlist (2026-10-22); row 4 is free (boxes start at top0 = 6)
+        ws.cell(4, 1, banner).font = Font(name=FONT, bold=True, size=10, color="C00000")
     maxlvl = max((b.level for b in boxes), default=0)
     ws.column_dimensions["A"].width = 2
     for lv in range(maxlvl + 1):
@@ -639,7 +644,7 @@ def _clip(t: str, n: float = 33) -> str:
 
 
 def render_html(boxes: list[Box], title: str, pdf_url=None, a_label: str = "A", b_label: str = "B",
-                diff: bool = True, boxes_all: list[Box] | None = None) -> str:
+                diff: bool = True, boxes_all: list[Box] | None = None, banner: str = "") -> str:
     """boxes = the default view. boxes_all (layout(show_internal=True)) adds a "顯示內部 net" toggle; the page
     holds both SVGs and switches between them (no client-side relayout). Page frame (zoom bar, fit width,
     Ctrl + wheel, height = drawing) comes from report/diagram_html.py, shared with the I2C map."""
@@ -658,5 +663,7 @@ def render_html(boxes: list[Box], title: str, pdf_url=None, a_label: str = "A", 
               if svg_all else "")
     intro = ("<p>框內：rail 名 / 電壓 / 轉換元件 RefDes (藍字 = 點擊開線路圖該頁) / 負載 IC 數。"
              f"滑鼠停在框上看料號、EN / PG、同組 net、負載清單。{hint_int}</p>")
+    if banner:          # G0 BOM != netlist (2026-10-22)
+        note = f'<p class="warn">{escape(banner)}</p>' + note
     return page(title, intro, svg, zoom_key="autocheck_pt_zoom", svg_expanded=svg_all, toggle=toggle,
                 legend=f"<div>{legend}</div>", note=note)

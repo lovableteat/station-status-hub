@@ -7,7 +7,7 @@ export class ComparisonRuntime {
 
   request<T>(type: string, payload: unknown, progress?: (message: string) => void): Promise<T> {
     if (!this.worker) {
-      this.worker = new Worker(`${import.meta.env.BASE_URL}comparison/autocheck.worker.js?revision=2026-10-22`);
+      this.worker = new Worker(`${import.meta.env.BASE_URL}comparison/autocheck.worker.js?revision=2026-10-27`);
       this.worker.onmessage = ({ data }) => {
         const pending = this.pending.get(data.id);
         if (!pending) return;

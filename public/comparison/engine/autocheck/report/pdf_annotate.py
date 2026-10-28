@@ -27,7 +27,7 @@ from pypdf.generic import Fit
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.pdfgen import canvas
 
-from ..tracking import TrackRow
+from ..tracking import TrackRow, child_boxed
 from .pdf_report import _FONT, _setup_font
 
 SEV_RGB = {"ERROR": (0.78, 0.09, 0.09), "WARN": (0.90, 0.50, 0.0), "INFO": (0.16, 0.42, 0.75)}
@@ -256,11 +256,104 @@ def map_pages(index: PageIndex, sch_pages: dict[int, str], override: dict[int, i
 
 
 # ----------------------------------------------------------------------------------- locate
-def locate(rows: list[TrackRow], index: PageIndex, page_map: dict[int, int | None]) -> dict[str, dict]:
-    """key -> {pdf_page, boxes:[(x0,y0,x1,y1,refdes)], missing:[refdes]}"""
+def _net_label_boxes(r: TrackRow, index: PageIndex, boxes: list, pdf_page: int | None, max_per_net: int,
+                     skip_net, max_dist: float | None = None, nets: list[str] | None = None,
+                     ref_boxes: list | None = None) -> list:
+    """Net-name text near the row's part boxes (2026-10-22: power findings box the rail label too). Only pages that
+    already hold a part box of the row (or its mapped page); whole-token match; nearest max_per_net hits per page,
+    and only within max_dist points of the part boxes' centre (a same-named label elsewhere on the page is not it).
+    ref_boxes (2026-10-27, owner: "#11 胡說八道"): for anchor-only rows the drawn box is ONE part, but the label must be
+    the one nearest to ANY part of the finding (min distance over ref_boxes), not nearest to the anchor: C1 alone picked
+    the untouched VDD_3V3 at R2806 instead of the power symbol feeding the four moved caps."""
+    pages = sorted({b[5] for b in boxes}) or ([pdf_page] if pdf_page is not None else [])
+    out = []
+    for net in dict.fromkeys(r.nets if nets is None else nets):      # ordered, no duplicate (A net == B net)
+        if not net or (skip_net and skip_net.fullmatch(net)):
+            continue
+        for pg in pages:
+            hits = index.words[pg].get(net) or []
+            if not hits:
+                continue
+            ref = [b for b in (ref_boxes if ref_boxes is not None else boxes) if b[5] == pg]
+            cx = sum((b[0] + b[2]) / 2 for b in ref) / len(ref) if ref else 0.0
+            cy = sum((b[1] + b[3]) / 2 for b in ref) / len(ref) if ref else 0.0
+
+            def dist(h):
+                hx, hy = (h[0] + h[2]) / 2, (h[1] + h[3]) / 2
+                if ref_boxes is not None and ref:            # nearest to any part of the finding
+                    return min(((hx - (b[0] + b[2]) / 2) ** 2 + (hy - (b[1] + b[3]) / 2) ** 2) ** 0.5 for b in ref)
+                return ((hx - cx) ** 2 + (hy - cy) ** 2) ** 0.5
+            near = sorted(hits, key=lambda h: (dist(h), h))
+            if max_dist is not None and ref:
+                near = [h for h in near if dist(h) <= max_dist]
+            out += [(*h, net, pg) for h in near[:max_per_net]]
+    return out
+
+
+def _nearest_label(index: PageIndex, part_boxes: list, net: str, max_dist: float | None):
+    """The occurrence of `net` closest to ANY of part_boxes (min over boxes, not the centroid: a side of a short holds
+    the IC and the series R, and the label sits next to the R). Same page as that box; None if farther than max_dist."""
+    best = None
+    for b in part_boxes:
+        cx, cy, pg = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2, b[5]
+        for h in index.words[pg].get(net) or []:
+            d = (((h[0] + h[2]) / 2 - cx) ** 2 + ((h[1] + h[3]) / 2 - cy) ** 2) ** 0.5
+            if (max_dist is None or d <= max_dist) and (best is None or d < best[0]):
+                best = (d, (*h, net, pg))
+    return best[1] if best else None
+
+
+def locate(rows: list[TrackRow], index: PageIndex, page_map: dict[int, int | None],
+           net_rules: set[str] | None = None, max_per_net: int = 2, skip_net=None,
+           pin_rules: set[str] | None = None, max_dist: float | None = None,
+           pin_prefixes: set[str] | None = None, anchor_rules: set[str] | None = None,
+           side: str = "B", label_only_rules: set[str] | None = None) -> dict[str, dict]:
+    """key -> {pdf_page, boxes:[(x0,y0,x1,y1,refdes,pg)], missing:[refdes], net_boxes:[(x0,y0,x1,y1,net,pg)]}.
+    Rows whose rule is in net_rules also box the net-name text near their parts; kept apart from `boxes` so the jump
+    target, the sidecar 'found' list and every existing row stay as before (QA 2026-10-22).
+    Rows whose rule is in anchor_rules (owner 2026-10-27: net-level findings such as NET_SHORTED list every part on the
+    net as evidence) box ONLY the first located RefDes of the row (the jump target anyway); the other parts stay in the
+    Excel RefDes column but get no box, so one short does not paint eight '#2' on the page.
+    Rows whose rule is in label_only_rules (owner 2026-10-27 15:09, "C1 為啥要再被框一次": NET_SPLIT / NET_MERGED box the
+    net label ONLY, like NET_SHORTED) take the net label as their box (jump target, comment, located) when one was found;
+    the anchor part box is only the fallback when no label is near (tool-named net, label too far)."""
     out: dict[str, dict] = {}
+
+    def part_boxes(refs, pdf_page):
+        boxes, missing = [], []
+        for rd in refs:
+            pg = pdf_page
+            hits = index.find(pg, rd) if pg is not None else []
+            if not hits:
+                # not on the mapped page: accept a unique hit elsewhere (page map may be off)
+                pages = index.pages_with(rd)
+                if len(pages) == 1:
+                    pg = pages[0]
+                    hits = index.find(pg, rd)
+            if hits:
+                boxes += [(*b, rd, pg) for b in hits]
+            else:
+                missing.append(rd)
+        return boxes, missing
+
     for r in rows:
         pdf_page = page_map.get(r.page) if r.page else None
+        sides = r.evidence.get("sides") if r.rule == "NET_SHORTED" else None
+        if sides:
+            # NET_SHORTED (owner 2026-10-27): box the net label on EACH side of the short, nothing else. B drawing: the
+            # new net's label nearest to that side's moved parts; A drawing: that side's old net label. A side whose
+            # label is not found within max_dist falls back to its first located part so the row still has a box.
+            boxes, missing = [], []
+            for sd in sides:
+                pb, miss = part_boxes(sd.get("parts", []), pdf_page)
+                missing += miss
+                net = sd.get("old", "") if side == "A" else r.evidence.get("new", "")
+                lab = _nearest_label(index, pb, net, max_dist) if net and pb else None
+                boxes += [lab] if lab else pb[:1]
+            if pdf_page is None and boxes:
+                pdf_page = boxes[0][5]
+            out[r.key] = {"pdf_page": pdf_page, "boxes": boxes, "missing": missing, "net_boxes": []}
+            continue
         boxes, missing = [], []
         for rd in r.refdes:
             pg = pdf_page
@@ -277,31 +370,77 @@ def locate(rows: list[TrackRow], index: PageIndex, page_map: dict[int, int | Non
                 missing.append(rd)
         if pdf_page is None and boxes:
             pdf_page = boxes[0][5]
-        out[r.key] = {"pdf_page": pdf_page, "boxes": boxes, "missing": missing}
+        all_boxes = None
+        if anchor_rules and r.rule in anchor_rules and boxes:
+            anchor = boxes[0][4]                              # first located RefDes in r.refdes order
+            all_boxes = boxes                                 # every located part: reference for the net-label search
+            boxes = [b for b in boxes if b[4] == anchor]
+        if net_rules and r.rule in net_rules:
+            nets = None
+            ev = r.evidence.get(side, "")
+            if r.rule != "NET_SHORTED" and isinstance(ev, str) and ev:
+                # NET_SPLIT / NET_MERGED (owner 2026-10-27): on B's drawing box the NEW net's label, on A's drawing the
+                # OLD net's label, nearest to the anchor part. Boxing the other label marked the part that did not move.
+                nets = [] if re.fullmatch(r"N\d+", ev) else [ev]
+            elif r.rule == "NET_SHORTED":
+                # owner 2026-10-27 (丙): the root cause of a short is the net it was joined into. The key carries the
+                # old names (NET_SHORTED|old1,old2); every other net of the row is the new super-net. Box ONE of those.
+                old = set(r.key.split("|", 1)[1].split(",")) if "|" in r.key else set()
+                nets = [n for n in r.nets if n not in old and not re.fullmatch(r"N\d+", n)][:1]
+            nb = _net_label_boxes(r, index, boxes, pdf_page, max_per_net, skip_net, max_dist, nets=nets,
+                                  ref_boxes=all_boxes)
+            if label_only_rules and r.rule in label_only_rules and nb:
+                boxes, nb = nb[:1], []                        # the label IS the box; the part is not boxed again
+        else:
+            nb = []
+        multi = bool(r.pins) and (pin_prefixes is None or re.match(r"[A-Za-z_]+", r.pins[0]) is not None
+                                  and re.match(r"[A-Za-z_]+", r.pins[0]).group(0).upper() in pin_prefixes)
+        if pin_rules and r.rule in pin_rules and multi and boxes:
+            # one pin of a multi-pin part (J55.3): box that pin's net name next to the part instead of the RefDes,
+            # so five findings on five J55 pins are five different boxes (owner 2026-10-22). No label found nearby
+            # (tool-named net N123, label far away) -> the RefDes box stays.
+            lab = _net_label_boxes(r, index, boxes, pdf_page, 1, skip_net, max_dist,
+                                   nets=[n for n in r.nets if not re.fullmatch(r"N\d+", n)])
+            if lab:
+                boxes = [(*b[:4], r.pins[0], b[5]) for b in lab]
+                out[r.key] = {"pdf_page": pdf_page, "boxes": boxes, "missing": missing, "net_boxes": nb,
+                              "pin_label": True}
+                continue
+        out[r.key] = {"pdf_page": pdf_page, "boxes": boxes, "missing": missing, "net_boxes": nb}
     return out
 
 
 # ----------------------------------------------------------------------------------- drawing
-def _overlay(size: tuple[float, float], items: list[tuple[tuple, str, str]], pad: float) -> PdfReader:
-    """items: ((x0,y0,x1,y1), severity, label). Boxes sharing a bbox are nested (inner = most severe)
-    and their labels stacked, so one part hit by several rules stays readable."""
+def _overlay(size: tuple[float, float], items: list[tuple], pad: float, lw: float = 0.6) -> PdfReader:
+    """items: ((x0,y0,x1,y1), severity, label). Boxes sharing a bbox are drawn ONCE in the most severe colour with
+    every row number on one label line ('#3 #9 #16'), wrapped every 6 numbers (owner 2026-10-22: nested boxes on
+    J55 were unreadable)."""
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=size)
     order = {"ERROR": 0, "WARN": 1, "INFO": 2}
     groups: dict[tuple, list] = defaultdict(list)
-    for bbox, sev, label in items:
-        groups[tuple(round(v, 1) for v in bbox)].append((sev, label))
-    for (x0, y0, x1, y1), members in groups.items():
+    for it in items:
+        bbox, sev, label = it[:3]
+        side = it[3] if len(it) > 3 else "top"
+        groups[(tuple(round(v, 1) for v in bbox), side)].append((sev, label))
+    for ((x0, y0, x1, y1), side), members in groups.items():
         members.sort(key=lambda m: order.get(m[0], 9))
-        for k, (sev, label) in enumerate(members):
-            rgb = SEV_RGB.get(sev, SEV_RGB["INFO"])
-            p = pad + 2.2 * k
-            c.setStrokeColorRGB(*rgb)
-            c.setLineWidth(1.2 if sev != "INFO" else 0.6)
-            c.rect(x0 - p, y0 - p, (x1 - x0) + 2 * p, (y1 - y0) + 2 * p, stroke=1, fill=0)
-            c.setFillColorRGB(*rgb)
-            c.setFont("Helvetica-Bold", 5.5)
-            c.drawString(x0 - pad, y1 + pad + 1.5 + 6 * k, label)
+        sev = members[0][0]
+        rgb = SEV_RGB.get(sev, SEV_RGB["INFO"])
+        p = pad if side == "top" else min(pad, 1.0)       # pin net-name rows sit ~4 pt apart: tight box
+        c.setStrokeColorRGB(*rgb)
+        c.setLineWidth(lw if sev != "INFO" else lw / 2)      # owner 2026-10-27: halved (was 1.2 / 0.6), config annotate.box_line_width
+        c.rect(x0 - p, y0 - p, (x1 - x0) + 2 * p, (y1 - y0) + 2 * p, stroke=1, fill=0)
+        labels = sorted({m[1] for m in members}, key=lambda t: int(t[1:]) if t[1:].isdigit() else 0)
+        c.setFillColorRGB(*rgb)
+        c.setFont("Helvetica-Bold", 5.5)
+        if side == "left":                                # label on the same line, left of the net name
+            txt = " ".join(labels)
+            c.drawRightString(x0 - p - 1.5, (y0 + y1) / 2 - 1.8, txt)
+            continue
+        lines = [" ".join(labels[i:i + 6]) for i in range(0, len(labels), 6)]
+        for k, line in enumerate(reversed(lines)):
+            c.drawString(x0 - p, y1 + p + 1.5 + 6 * k, line)
     c.showPage()
     c.save()
     buf.seek(0)
@@ -355,6 +494,8 @@ def _index_pages(rows: list[TrackRow], loc: dict[str, dict], b_label: str, a_lab
         c.drawString(cols[4][0], y, str(r.page or ""))
         c.drawString(cols[5][0], y, ", ".join(r.refdes)[:14])
         title = r.title if _FONT["cjk"] else r.title.encode("latin-1", "replace").decode("latin-1")
+        if r.parent and r.parent in rowno:          # B-full: consequence of a root-cause row
+            title = f"-> #{rowno[r.parent]}  {title}"
         c.drawString(cols[6][0], y, title[:105] + ("" if found else "   [not located]"))
         if info.get("pdf_page") is not None:
             links.append((page_no, (12, y - 2.5, W - 12, y + 7.5), r.key))
@@ -405,6 +546,7 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
     dest_sev = set(acfg.get("dest_severities", ["ERROR", "WARN", "INFO"]))
     zoom = float(acfg.get("zoom", 2.0))
     pad = float(acfg.get("box_padding", 3.0))
+    lw = float(acfg.get("box_line_width", 0.6))
     view = tuple(float(v) for v in (acfg.get("view_pt") or (460.0, 275.0)))
     jump = str(acfg.get("jump", "fitr")).lower()      # fitr: viewer fits view_pt to its window; xyz: fixed zoom
     if jump not in ("fitr", "xyz"):
@@ -423,7 +565,14 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
     if norm_notes:
         warnings.append(f"normalised {len(norm_notes)} page(s) (rotate/cropbox/userunit baked into content): "
                         + "; ".join(norm_notes[:4]) + (" ..." if len(norm_notes) > 4 else ""))
-    loc = locate(rows, index, page_map)
+    gre = ((cfg or {}).get("ground", {}) or {}).get("regex")
+    loc = locate(rows, index, page_map, net_rules=set(acfg.get("net_label_rules", []) or []),
+                 max_per_net=int(acfg.get("net_label_max_per_page", 1)), skip_net=re.compile(gre) if gre else None,
+                 pin_rules=set(acfg.get("pin_label_rules", []) or []),
+                 max_dist=float(acfg["net_label_max_dist_pt"]) if acfg.get("net_label_max_dist_pt") else None,
+                 pin_prefixes={p.upper() for p in ((cfg or {}).get("parts", {}) or {}).get("active_prefixes", [])},
+                 anchor_rules=set(acfg.get("anchor_only_rules", []) or []), side=side,
+                 label_only_rules=set(acfg.get("label_only_rules", []) or []))
 
     index_reader, links = _index_pages(rows, loc, b_label, a_label, rowno, side)
     n_index = len(index_reader.pages)
@@ -433,15 +582,36 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
     writer.append(index_reader)
     writer.append(src)
 
+    # B-full (2026-10-27): a child row is boxed only when tracking.child_boxed says so (parent boxed on THIS drawing, child
+    # not more severe, rule not in child_keep_box_rules). locate() ran for every row, so the child keeps its own
+    # destination / FitR / centre; only the overlay box and the comment are dropped.
+    byk = {r.key: r for r in rows}
+
+    def pages_of(key: str) -> set[int]:
+        info = loc.get(key) or {}
+        return {b[5] for b in info.get("boxes") or []} | {b[5] for b in info.get("net_boxes") or []}
+
+    def boxed(r: TrackRow) -> bool:
+        if r.severity not in box_sev:
+            return False
+        par = byk.get(r.parent) if r.parent else None
+        # "parent boxed on the same drawing" = the parent has a box on a page where this child has one (QA 2026-10-27:
+        # a left-behind pin on another page would otherwise carry no mark at all)
+        same_page = par is not None and bool(pages_of(par.key) & pages_of(r.key))
+        return child_boxed(r, par, same_page, cfg)
+
     # 1. boxes as page content (one overlay per schematic page)
     per_page: dict[int, list] = defaultdict(list)
     for r in rows:
-        if r.severity not in box_sev:
+        if not boxed(r):
             continue
+        side = "left" if loc[r.key].get("pin_label") else "top"
         for x0, y0, x1, y1, rd, pg in loc[r.key]["boxes"]:
-            per_page[pg].append(((x0, y0, x1, y1), r.severity, f"#{rowno[r.key]}"))
+            per_page[pg].append(((x0, y0, x1, y1), r.severity, f"#{rowno[r.key]}", side))
+        for x0, y0, x1, y1, rd, pg in loc[r.key].get("net_boxes", []):
+            per_page[pg].append(((x0, y0, x1, y1), r.severity, f"#{rowno[r.key]}", "top"))
     for pg, items in per_page.items():
-        ov = _overlay(index.size[pg], items, pad)
+        ov = _overlay(index.size[pg], items, pad, lw)
         writer.pages[n_index + pg].merge_page(ov.pages[0])
 
     # 2. comments, named destinations, bookmarks
@@ -452,7 +622,8 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
     for r in rows:
         info = loc[r.key]
         if info["pdf_page"] is None and not info["boxes"]:
-            sidecar["rows"][r.key] = {"dest": r.dest, "pdf_page": None, "bbox": None, "missing": info["missing"]}
+            sidecar["rows"][r.key] = {"dest": r.dest, "pdf_page": None, "bbox": None, "missing": info["missing"],
+                                      "parent": rowno.get(r.parent, "") if r.parent else "", "boxed": False}
             continue
         if info["boxes"]:
             x0, y0, x1, y1, _rd, pg = info["boxes"][0]
@@ -470,13 +641,16 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
                                     FloatObject(left), FloatObject(top), FloatObject(zoom)])
                 vout = [left, top]
             bbox = [round(x0 - pad, 1), round(y0 - pad, 1), round(x1 + pad, 1), round(y1 + pad, 1)]
-            if r.severity in box_sev:
+            if boxed(r):
+                kids = [f"#{rowno[k]}" for k in r.children if k in rowno]
                 ann = Rectangle(rect=(x0 - pad, y0 - pad, x1 + pad, y1 + pad), title_bar="AutoCheck")
                 ann[NameObject("/C")] = ArrayObject([FloatObject(v) for v in SEV_RGB[r.severity]])
                 ann[NameObject("/CA")] = FloatObject(0.0)
                 ann[NameObject("/BS")] = DictionaryObject({NameObject("/W"): NumberObject(0)})
                 ann[NameObject("/Contents")] = TextStringObject(
-                    f"#{rowno[r.key]} {r.key}\n{r.severity} {r.status}\n{r.title}\n{r.detail}")
+                    f"#{rowno[r.key]} {r.key}\n{r.severity} {r.status}\n{r.title}\n{r.detail}"
+                    + (f"\n子項 (同根因，圖上不另框): {' '.join(kids)}" if kids else "")
+                    + (f"\n同根因 → #{rowno[r.parent]}" if r.parent in rowno else ""))
                 ann[NameObject("/Subj")] = TextStringObject(r.key)
                 ann[NameObject("/NM")] = TextStringObject(f"AutoCheck:{run_id}:{r.key}")
                 writer.add_annotation(page_number=page_no, annotation=ann)
@@ -491,6 +665,9 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
         sidecar["rows"][r.key] = {"n": rowno[r.key], "dest": r.dest, "pdf_page": page_no + 1, "bbox": bbox,
                                   "missing": info["missing"], "found": [b[4] for b in info["boxes"]],
                                   "view": vout if bbox else None,
+                                  # B-full: #n of the root-cause row ("" top-level) and whether a box was drawn
+                                  "parent": rowno.get(r.parent, "") if r.parent else "",
+                                  "boxed": bool(bbox) and boxed(r),
                                   # 2026-10-20 (0p9 viewer): page size (pt) and the box centre measured from the page's
                                   # TOP-left in pt, for Chrome's #page=N&zoom=S,left,top open parameter
                                   "page_size": [round(index.size[pg][0], 1), round(index.size[pg][1], 1)] if bbox else None,
@@ -514,12 +691,14 @@ def annotate_pdf(schematic_pdf: Path, rows: list[TrackRow], sch_pages: dict[int,
     with open(out_pdf, "wb") as fh:
         writer.write(fh)
 
-    located = sum(1 for v in sidecar["rows"].values() if v.get("bbox"))
+    located = sum(1 for v in sidecar["rows"].values() if v.get("bbox"))     # definition unchanged (baseline numbers)
+    n_boxed = sum(1 for v in sidecar["rows"].values() if v.get("boxed"))
+    n_child = sum(1 for r in rows if r.parent)
     mismatch = verify_boxes(out_pdf, sidecar)
     if mismatch:
         warnings.append(f"BOX_MISMATCH on {len(mismatch)} row(s): the written comment box does not enclose the "
                         f"part text when the output is re-read: {mismatch[:5]}" + (" ..." if len(mismatch) > 5 else ""))
-    sidecar["summary"] = {"rows": len(rows), "located": located,
+    sidecar["summary"] = {"rows": len(rows), "located": located, "boxed": n_boxed, "children": n_child,
                           "page_only": sum(1 for v in sidecar["rows"].values() if v["pdf_page"] and not v.get("bbox")),
                           "unplaced": sum(1 for v in sidecar["rows"].values() if not v["pdf_page"]),
                           "box_mismatch": len(mismatch)}

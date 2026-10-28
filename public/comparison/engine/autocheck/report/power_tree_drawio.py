@@ -69,7 +69,8 @@ def _label(b: Box) -> str:
     return "<br>".join(rows)
 
 
-def _page(boxes: list[Box], title: str, intro: str, pdf_url, a_label: str, b_label: str, pid: str) -> str:
+def _page(boxes: list[Box], title: str, intro: str, pdf_url, a_label: str, b_label: str, pid: str,
+          banner: str = "") -> str:
     by_id = {b.id: b for b in boxes}
     bw = max([230.0] + [_tw(t, FONT, i == 0) + 18 for b in boxes for i, t in enumerate(b.lines)])
     bw = float(int(bw + 9) // 10 * 10)
@@ -93,11 +94,13 @@ def _page(boxes: list[Box], title: str, intro: str, pdf_url, a_label: str, b_lab
 
     cells: list[str] = []
     # header box (title + how to read) and legend box: framed, as the owner asked for diagram headers
-    head_h = 64
-    cells.append(f'<mxCell id="hdr" value="{_q("<b>" + escape(title) + "</b><br>" + escape(intro))}" '
+    hw = max(width, legend_w, 900)
+    head_h = 64 + (18 * max(1, -(-int(_tw(banner, 13, bold=True)) // int(hw - 16))) if banner else 0)   # G0 red line(s)
+    red = f'<br><font color="#C00000"><b>{escape(banner)}</b></font>' if banner else ""
+    cells.append(f'<mxCell id="hdr" value="{_q("<b>" + escape(title) + "</b>" + red + "<br>" + escape(intro))}" '
                  f'style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;spacingLeft=8;fontSize=13;'
                  f'fillColor=#FFFFFF;strokeColor=#000000;" vertex="1" parent="1">'
-                 f'<mxGeometry x="{X0}" y="10" width="{max(width, legend_w, 900):.0f}" height="{head_h}" as="geometry"/></mxCell>')
+                 f'<mxGeometry x="{X0}" y="10" width="{hw:.0f}" height="{head_h}" as="geometry"/></mxCell>')
     ly = 10 + head_h + 10
     lx = X0
     for k, (sk, txt) in enumerate(LEGEND):
@@ -163,7 +166,7 @@ def _page(boxes: list[Box], title: str, intro: str, pdf_url, a_label: str, b_lab
 
 
 def render_drawio(boxes: list[Box], title: str, pdf_url=None, a_label: str = "A", b_label: str = "B",
-                  diff: bool = True, boxes_all: list[Box] | None = None) -> str:
+                  diff: bool = True, boxes_all: list[Box] | None = None, banner: str = "") -> str:
     """boxes = default view (layout(show_internal=False)); boxes_all = layout(show_internal=True) -> page 2 when
     the default view hides internal nets. Deterministic: no timestamps beyond the title, no set iteration."""
     intro = ("框內：rail 名 / 電壓 / 轉換元件 RefDes / 負載 IC 數。箭頭 = 供電方向，線上字 = 轉換元件類型。"
@@ -178,6 +181,6 @@ def render_drawio(boxes: list[Box], title: str, pdf_url=None, a_label: str = "A"
     out = ['<mxfile host="AutoCheck" type="device">']
     for k, (name, bx, pid) in enumerate(pages):
         out.append(f'<diagram id="pt{k}" name="{_q(name)}">'
-                   + _page(bx, title, intro, pdf_url, a_label, b_label, pid) + "</diagram>")
+                   + _page(bx, title, intro, pdf_url, a_label, b_label, pid, banner) + "</diagram>")
     out.append("</mxfile>")
     return "".join(out)
