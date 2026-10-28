@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ENGINE_SETTINGS_KEY, defaultEngineSettings, engineHost, normalizeEngineUrl, readEngineSettings, writeEngineSettings } from "../../src/components/comparison/engineSettings.ts";
+import { ENGINE_SETTINGS_KEY, defaultEngineSettings, engineHost, mixedContentProblem, normalizeEngineUrl, readEngineSettings, writeEngineSettings } from "../../src/components/comparison/engineSettings.ts";
 
 function storage(initial: Record<string, string> = {}) {
   const map = new Map(Object.entries(initial));
@@ -37,6 +37,17 @@ test("a saved server choice round-trips and unusable saved values fall back to t
   assert.deepEqual(readEngineSettings(store), { mode: "browser", url: "", token: "" });
   store.setItem(ENGINE_SETTINGS_KEY, JSON.stringify({ mode: "server", url: "http://h", token: "x".repeat(600) }));
   assert.deepEqual(readEngineSettings(store), { mode: "server", url: "http://h", token: "" });
+});
+
+test("mixedContentProblem explains why an https page cannot reach an http server off this computer", () => {
+  assert.match(mixedContentProblem("http://autocheck.local:8000", "https:"), /https.*autocheck\.local:8000.*localhost:8000/);
+  assert.match(mixedContentProblem("http://10.0.0.5", "https:"), /localhost:8000/);
+  assert.equal(mixedContentProblem("http://localhost:8000", "https:"), "");
+  assert.equal(mixedContentProblem("http://127.0.0.1:8765", "https:"), "");
+  assert.equal(mixedContentProblem("http://[::1]:8000", "https:"), "");
+  assert.equal(mixedContentProblem("https://autocheck.local", "https:"), "");
+  assert.equal(mixedContentProblem("http://autocheck.local:8000", "http:"), "");
+  assert.equal(mixedContentProblem("nonsense", "https:"), "");
 });
 
 test("engineHost shows the host for the badge", () => {
