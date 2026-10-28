@@ -18,6 +18,23 @@
 .comparison-session-picker > label { flex-shrink: 0; }
 .comparison-session-picker [role=combobox] { max-width: 440px; min-width: 0; background: hsl(var(--card)); }
 .comparison-session-picker > span { color: hsl(var(--muted-foreground)); font-size: 12px; }
+.comparison-engine-badge { height: 28px; gap: 6px; font-size: 12px; font-weight: 600; color: hsl(var(--muted-foreground)); }
+.comparison-engine-badge svg { width: 14px; height: 14px; }
+.comparison-engine-dialog { max-width: 560px; }
+.comparison-engine-modes { display: grid; gap: 10px; }
+.comparison-engine-modes label { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid hsl(var(--border)); border-radius: 12px; cursor: pointer; }
+.comparison-engine-modes label[data-selected=true] { border-color: hsl(var(--primary) / .6); background: hsl(var(--primary) / .08); }
+.comparison-engine-modes input { accent-color: hsl(var(--primary)); }
+.comparison-engine-modes svg { width: 18px; height: 18px; color: hsl(var(--primary)); }
+.comparison-engine-modes span { display: grid; gap: 2px; }
+.comparison-engine-modes small { color: hsl(var(--muted-foreground)); font-size: 12px; }
+.comparison-engine-fields { display: grid; gap: 12px; }
+.comparison-engine-fields label { display: block; margin-bottom: 6px; }
+.comparison-engine-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.comparison-engine-dialog p[role=status] { margin: 0; font-size: 13px; }
+.comparison-engine-dialog p[role=status][data-tone=ok] { color: hsl(var(--primary)); }
+.comparison-engine-dialog p[role=status][data-tone=error] { color: hsl(var(--destructive)); }
+.comparison-engine-footer { display: flex; justify-content: flex-end; gap: 8px; }
 .comparison-section { padding: 20px; }
 .comparison-run-settings { padding: 0; border: 0; background: transparent; }
 .comparison-source-settings { min-width: 0; }

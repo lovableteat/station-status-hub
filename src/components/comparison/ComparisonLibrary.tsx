@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
-import type { ComparisonRuntime } from "./runtime";
+import type { EngineRuntime } from "./runtime";
 import type { InputFile } from "./types";
 import { downloadLocal } from "./downloads";
 import { DatasheetFiles } from "./DatasheetFiles";
@@ -26,7 +26,7 @@ function emptyDraft(file: File, index: number): DraftWork {
   return { name: path.length <= 120 ? path : `${path.slice(0, 100)}…${index + 1}`, mpn: stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), draft: null, candidate: "", confirmed: false, state: "new", error: "" };
 }
 function text(value: unknown) { return value === undefined || value === null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value); }
-export function ComparisonLibrary({ runtime, yaml, entries, onEntries, onSave, canEdit, signedBy, busy, runJob }: { runtime: ComparisonRuntime; yaml: string; entries: Record<string, unknown>[]; onEntries: (entries: Record<string, unknown>[]) => void; onSave: (yaml: string) => Promise<void>; canEdit: boolean; signedBy: string; busy: boolean; runJob: <T>(work: () => Promise<T>) => Promise<T | undefined> }) {
+export function ComparisonLibrary({ runtime, yaml, entries, onEntries, onSave, canEdit, signedBy, busy, runJob }: { runtime: EngineRuntime; yaml: string; entries: Record<string, unknown>[]; onEntries: (entries: Record<string, unknown>[]) => void; onSave: (yaml: string) => Promise<void>; canEdit: boolean; signedBy: string; busy: boolean; runJob: <T>(work: () => Promise<T>) => Promise<T | undefined> }) {
   const [editor, setEditor] = useState(yaml);
   const [pdfs, setPdfs] = useState<File[]>([]);
   const [activePath, setActivePath] = useState("");
