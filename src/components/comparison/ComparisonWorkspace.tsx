@@ -15,7 +15,9 @@ import { ComparisonLibrary } from "./ComparisonLibrary";
 import { DatasheetFiles } from "./DatasheetFiles";
 import { downloadLocal } from "./downloads";
 import { ComparisonCharts } from "./ComparisonCharts";
-import { ComparisonRuntime } from "./runtime";
+import { createRuntime, type EngineRuntime } from "./runtime";
+import { engineHost, readEngineSettings, writeEngineSettings, type EngineSettings } from "./engineSettings";
+import { EngineSettingsControl } from "./EngineSettingsControl";
 import { inspectRevision, readRevision, validateRevision, selectedRevisionFiles, formatBytes, filePath } from "./files";
 import { exportBackup, importBackup } from "./backup";
 import { listSessions, saveSession, readLibrary, saveLibrary } from "./storage";
@@ -75,12 +77,19 @@ export default function ComparisonWorkspace() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const runtimeRef = useRef(new ComparisonRuntime());
+  const [engine, setEngine] = useState<EngineSettings>(() => readEngineSettings());
+  const runtimeRef = useRef<EngineRuntime>(createRuntime(engine));
   const epoch = useRef(0);
   const importInput = useRef<HTMLInputElement>(null);
   const allArtifacts = session?.result.artifacts;
   const setCurrent = useCallback((next: ComparisonSession | null) => { sessionRef.current = next; setSession(next); }, []);
   const invalidateRuntime = useCallback(() => { ++epoch.current; runtimeRef.current.cancel(); }, []);
+  // Switching where the engine runs replaces the runtime; the page code above it is the same for both.
+  const changeEngine = (next: EngineSettings) => {
+    if (busyRef.current) return;
+    runtimeRef.current.cancel(); runtimeRef.current = createRuntime(next); writeEngineSettings(next); setEngine(next); setError("");
+    setNotice(next.mode === "server" ? `之後的比對會送到 ${engineHost(next.url)} 處理；結果仍只存在這台電腦的瀏覽器` : "之後的比對在這台電腦的瀏覽器處理");
+  };
 
   useEffect(() => {
     const currentEpoch = ++epoch.current;
@@ -221,11 +230,11 @@ export default function ComparisonWorkspace() {
   return <div className="comparison-workspace" data-comparison-workspace="true">
     <section className="comparison-page-header"><MaintenancePageHeader title="AutoCheck" description="線路改版比對與審查追蹤" icon={GitCompareArrows} wrapActionsOnMobile actions={<><ComparisonGuide /><ComparisonFeedback tab={filters.tab === "diagram" ? "compare" : filters.tab} projectName={feedbackProjectName} revisionA={aLabel} revisionB={bLabel} /><Button variant="ghost" disabled={!session || busy} onClick={() => void exportSession()}><Download />匯出備份</Button><Button variant="ghost" disabled={!canEdit || busy} onClick={() => importInput.current?.click()}><Upload />匯入備份</Button><Button variant="outline" disabled={!canEdit || busy} onClick={() => { setCurrent(null); setProjectName(""); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice(""); update("tab", "compare"); }}><Plus />新比對</Button></>} /></section>
     <input ref={importInput} type="file" accept=".zip" className="sr-only" aria-label="匯入 AutoCheck 備份" onChange={event => { const file = event.target.files?.[0]; if (file) void importSession(file); event.target.value = ""; }} />
-    <div className="comparison-workspace-nav"><nav aria-label="比對系統頁面">{Object.entries(tabLabels).map(([key, label]) => <Button key={key} variant={filters.tab === key ? "secondary" : "ghost"} aria-current={filters.tab === key ? "page" : undefined} onClick={() => update("tab", key as keyof typeof tabLabels)}>{label}</Button>)}</nav><Badge variant="outline">{canEdit ? "本機處理" : "唯讀"}</Badge></div>
+    <div className="comparison-workspace-nav"><nav aria-label="比對系統頁面">{Object.entries(tabLabels).map(([key, label]) => <Button key={key} variant={filters.tab === key ? "secondary" : "ghost"} aria-current={filters.tab === key ? "page" : undefined} onClick={() => update("tab", key as keyof typeof tabLabels)}>{label}</Button>)}</nav>{canEdit ? <EngineSettingsControl settings={engine} onChange={changeEngine} disabled={busy} /> : <Badge variant="outline">唯讀</Badge>}</div>
     {!!sessions.length && <div className="comparison-session-picker"><Label>已儲存的比對</Label><Select value={session?.id ?? "new"} disabled={busy} onValueChange={chooseSession}><SelectTrigger aria-label="已儲存的比對"><SelectValue placeholder="選擇比對" /></SelectTrigger><SelectContent>{!session && <SelectItem value="new" disabled>新比對</SelectItem>}{sessions.map(item => <SelectItem key={item.id} value={item.id}>{item.projectName} · {item.result.meta.a.label} → {item.result.meta.b.label}</SelectItem>)}</SelectContent></Select><span>儲存於目前帳號與瀏覽器</span></div>}
     {error && <div className="comparison-alert" role="alert"><TriangleAlert /><p>{error}</p><Button variant="ghost" size="icon" aria-label="關閉錯誤訊息" onClick={() => setError("")}>×</Button></div>}
     {notice && <div className="comparison-notice" role="status"><CheckCircle2 /><p>{notice}</p></div>}
-    {busy && <div className="comparison-progress" role="status" aria-live="polite"><div><span className="comparison-progress-indicator" /><p>{progress || "正在處理…"}</p><small>首次使用會下載執行套件；工程檔案留在本機</small></div><Button variant="outline" onClick={() => runtimeRef.current.cancel()}><Square />取消</Button></div>}
+    {busy && <div className="comparison-progress" role="status" aria-live="polite"><div><span className="comparison-progress-indicator" /><p>{progress || "正在處理…"}</p><small>{engine.mode === "server" ? `檔案已上傳到 ${engineHost(engine.url)} 處理；結果仍只存在這台電腦的瀏覽器` : "首次使用會下載執行套件；工程檔案留在本機"}</small></div><Button variant="outline" onClick={() => runtimeRef.current.cancel()}><Square />取消</Button></div>}
     {restoring ? <div className="comparison-loading" role="status">正在讀取本機比對紀錄…</div> : <>
       {filters.tab === "compare" && <details key={session?.id ?? "new"} className="comparison-source-settings" open={!session} data-new={!session}>
         <summary>展開來源檔案，重新比對<ChevronDown /></summary>
