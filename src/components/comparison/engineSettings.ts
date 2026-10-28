@@ -29,6 +29,15 @@ export function engineHost(url: string): string {
   catch { return url; }
 }
 
+/** An https page cannot call an http server except on this computer; say so before the browser silently blocks it. */
+export function mixedContentProblem(url: string, pageProtocol: string = typeof location === "undefined" ? "https:" : location.protocol): string {
+  try {
+    const parsed = new URL(url);
+    if (pageProtocol !== "https:" || parsed.protocol !== "http:" || ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname)) return "";
+    return `這個網站是 https，瀏覽器不會讓它連到 http 的伺服器（${parsed.host}）。請給伺服器 https 位址（反向代理加憑證），或在這台電腦執行伺服器並填 http://localhost:${parsed.port || "8000"}`;
+  } catch { return ""; }
+}
+
 /** The build can preset a server (VITE_AUTOCHECK_API); a browser-level choice saved on this computer wins over it. */
 export function defaultEngineSettings(): EngineSettings {
   let url = "";

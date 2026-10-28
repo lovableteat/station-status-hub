@@ -48,6 +48,14 @@ Google Cloud Run、Azure Container Apps、Fly.io、Render 等容器服務都能�
 
 比對系統右上角「本機處理」→ 選「送到比對伺服器處理」→ 填位址（例如 `http://autocheck.company.local:8000`）與 token →「測試連線」→「儲存設定」。設定只存在那台電腦的瀏覽器。要讓全站預設走伺服器，建置時設定 `VITE_AUTOCHECK_API=<位址>`（GitHub Actions 的 repository variable，並加進 `.github/workflows/main.yml` 的 `env`）；使用者仍可在自己的瀏覽器改回本機處理。
 
+## 正式網站是 https，伺服器也要讓 https 頁面連得到
+
+GitHub Pages 的正式站是 `https://…`，瀏覽器不允許 https 頁面連到 `http://` 的伺服器（mixed content），只有 `http://localhost` 例外；網頁的「測試連線」會直接指出這種位址。三種做法：
+
+1. 伺服器裝在自己的電腦上，網頁填 `http://localhost:8000`（最簡單，但只有這台電腦能用）。
+2. 內部伺服器前面加反向代理與憑證（Caddy、nginx、IIS 都可以），網頁填 `https://autocheck.company.local`；憑證可用公司內部 CA 簽發並派發到使用者電腦。
+3. 雲端容器服務通常自帶 https 網址，直接填即可。
+
 ## 限制與行為
 
 - 與瀏覽器模式相同：最多 1000 個檔案、單檔 64 MiB、總計 128 MiB；超過回 400。

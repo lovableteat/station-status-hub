@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { engineHost, normalizeEngineUrl, type EngineMode, type EngineSettings } from "./engineSettings";
+import { engineHost, mixedContentProblem, normalizeEngineUrl, type EngineMode, type EngineSettings } from "./engineSettings";
 import { checkEngineServer } from "./runtime";
 
 type Status = { tone: "ok" | "error" | "busy"; text: string } | null;
@@ -18,10 +18,11 @@ export function EngineSettingsControl({ settings, onChange, disabled }: { settin
   const [status, setStatus] = useState<Status>(null);
   useEffect(() => { if (open) { setMode(settings.mode); setUrl(settings.url); setToken(settings.token); setStatus(null); } }, [open, settings]);
 
+  const reachable = (value: string) => { const problem = mixedContentProblem(value); if (problem) throw new Error(problem); return value; };
   const test = async () => {
     try {
       setStatus({ tone: "busy", text: "連線中…" });
-      const info = await checkEngineServer({ url: normalizeEngineUrl(url), token: token.trim() }, AbortSignal.timeout(8000));
+      const info = await checkEngineServer({ url: reachable(normalizeEngineUrl(url)), token: token.trim() }, AbortSignal.timeout(8000));
       setStatus({ tone: "ok", text: `連線成功：引擎 ${info.revision}（${info.files} 個檔案）${info.auth === "token" ? "，token 正確" : ""}` });
     } catch (error) { setStatus({ tone: "error", text: error instanceof Error ? error.message : String(error) }); }
   };
@@ -29,6 +30,7 @@ export function EngineSettingsControl({ settings, onChange, disabled }: { settin
     try {
       const next: EngineSettings = { mode, url: normalizeEngineUrl(url), token: token.trim() };
       if (next.mode === "server" && !next.url) throw new Error("請填寫伺服器位址");
+      if (next.mode === "server") reachable(next.url);
       onChange(next);
       setOpen(false);
     } catch (error) { setStatus({ tone: "error", text: error instanceof Error ? error.message : String(error) }); }
