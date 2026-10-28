@@ -705,6 +705,16 @@ export function collectNonPvlPartNumbers(rows: ReadonlyArray<Pick<DiscouragedMat
   return Array.from(new Set(rows.map((row) => row.partNumber.trim()).filter((partNumber) => partNumber && hasNonPvlPartSuffix(partNumber))));
 }
 
+/** Match whole part-number tokens, never a substring of another part or project. */
+export function matchNonPvlRejections(message: string, candidates: readonly string[]) {
+  const known = new Map(candidates.map(value => [value.trim().toUpperCase(), value.trim()]));
+  const tokens = Array.from(new Set((message.normalize("NFKC").toUpperCase().match(/[A-Z0-9]+(?:-[A-Z0-9]+)+/g) ?? [])));
+  return {
+    matched: tokens.filter(token => known.has(token)).map(token => known.get(token)!),
+    unmatched: tokens.filter(token => !known.has(token)),
+  };
+}
+
 /**
  * PLM's Non PVL 申請 only accepts the sample file layout: one 料號(必填) column,
  * one part number per row, saved as Excel 97-2003 (.xls) with no filter or
@@ -712,21 +722,46 @@ export function collectNonPvlPartNumbers(rows: ReadonlyArray<Pick<DiscouragedMat
  */
 export async function exportNonPvlApplyList({
   partNumbers,
-  workspaceName,
-  exportedAt = new Date(),
 }: {
   partNumbers: string[];
-  workspaceName: string;
+  workspaceName?: string;
   exportedAt?: Date;
 }) {
   const xlsx = await import("xlsx");
-  const sheet = xlsx.utils.aoa_to_sheet([[NON_PVL_APPLY_HEADER], ...partNumbers.map((partNumber) => [partNumber])]);
-  sheet["!cols"] = [{ wch: 24 }];
+  const uniqueParts = collectNonPvlPartNumbers(partNumbers.map(partNumber => ({ partNumber })));
+  if (!uniqueParts.length) throw new Error("請至少選擇一個可申請的實體料號。");
+  const sheet = xlsx.utils.aoa_to_sheet([[NON_PVL_APPLY_HEADER], ...uniqueParts.map((partNumber) => [partNumber])]);
+  // Official applyNonPvlParts.xls supplied 2026-10-29: Sheet1, A1, one text column.
+  sheet["!cols"] = [{ wch: 29.5 }];
   const workbook = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(workbook, sheet, "Sheet1");
   const output = xlsx.write(workbook, { bookType: "biff8", type: "array" }) as ArrayBuffer;
-  const fileName = `applyNonPvlParts_${sanitizeFileName(workspaceName)}_${getTimestamp(exportedAt)}.xls`;
+  const fileName = "applyNonPvlParts.xls";
   downloadBlob(new Blob([output], { type: "application/vnd.ms-excel" }), fileName);
+  return fileName;
+}
+
+export async function exportMaterialVisibleColumns(
+  snapshot: MaterialReportSnapshot,
+  columns: ReadonlyArray<{ key: string; label: string }>,
+) {
+  const fields: Record<string, keyof MaterialReportRow> = {
+    item: "item", name: "materialName", qty: "qty", refDes: "refDes", mpn: "manufacturerPartNumber",
+    manufacturer: "manufacturer", sourcingStatus: "sourcingStatus", virtual: "tx", physical: "internalPartNumber",
+    partName: "partName", partSpec: "specification", schematicPart: "symbol", footprint: "footprint",
+    phaseOut: "phaseOutStatus", partUsage: "partUsageStatus", actions: "trackingStatus",
+  };
+  if (!columns.length || columns.some(column => !fields[column.key])) throw new Error("匯出欄位無效，請重新選擇。");
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("顯示欄位");
+  sheet.columns = columns.map(column => ({ header: column.label, width: column.key === "name" ? 38 : 24 }));
+  snapshot.rows.forEach(row => sheet.addRow(columns.map(column => String(row[fields[column.key]] ?? ""))));
+  sheet.getRow(1).font = { bold: true };
+  sheet.eachRow(row => { row.alignment = { vertical: "top", wrapText: true }; });
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+  const fileName = `${sanitizeFileName(snapshot.workspaceName)}_顯示欄位_${getTimestamp(new Date(snapshot.exportedAt))}.xlsx`;
+  downloadBlob(new Blob([await workbook.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), fileName);
   return fileName;
 }
 

@@ -4856,8 +4856,9 @@ export function MaterialRequestPage() {
       setIsExportingDiscouraged(false);
     }
   };
-  const exportNonPvlList = async () => {
-    const partNumbers = collectNonPvlPartNumbers(discouragedMaterialRows);
+  const exportNonPvlList = async (selectedParts: string[]) => {
+    const allowed = new Set(collectNonPvlPartNumbers(discouragedMaterialRows));
+    const partNumbers = [...new Set(selectedParts)].filter(partNumber => allowed.has(partNumber));
     if (partNumbers.length === 0) {
       toast({ title: "沒有可申請的實體料號", description: "不建議料都還沒有實體料號，先補料號再匯出 PLM 申請清單。" });
       return;
@@ -5490,7 +5491,7 @@ export function MaterialRequestPage() {
     await deleteBomWorkspaceById(targetBomId);
   };
 
-  const createExportSnapshot = () => {
+  const createExportSnapshot = (openDialog = true) => {
     const rows = filteredGroups.flatMap((group, groupIndex) =>
       getMatchingRecords(group).map((record) => {
         const latestTrackingEntry = getLatestTrackingEntry(record);
@@ -5572,10 +5573,28 @@ export function MaterialRequestPage() {
       workspaceName: activeWorkspace.name,
     };
 
-    setExportSnapshot(snapshot);
-    setExportProgress({ phase: "snapshot" });
-    setExportDialogOpen(true);
+    if (openDialog) {
+      setExportSnapshot(snapshot);
+      setExportProgress({ phase: "snapshot" });
+      setExportDialogOpen(true);
+    }
     return snapshot;
+  };
+
+  const [exportingVisibleColumns, setExportingVisibleColumns] = useState(false);
+  const exportVisibleColumns = async () => {
+    if (exportingVisibleColumns || !isFullDatasetLoaded || isSearchPending || isWorkspaceLoading) return;
+    const snapshot = createExportSnapshot(false);
+    if (!snapshot) return;
+    const columns = MATERIAL_TABLE_COLUMNS.filter(column => columnVisibility[column.key]);
+    setExportingVisibleColumns(true);
+    try {
+      const { exportMaterialVisibleColumns } = await import("./materialRequestExport");
+      const fileName = await exportMaterialVisibleColumns(snapshot, columns);
+      toast({ title: "顯示欄位已匯出", description: `${columns.length} 欄 · ${snapshot.rows.length} 筆明細 · ${fileName}` });
+    } catch (error) {
+      toast({ title: "匯出失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
+    } finally { setExportingVisibleColumns(false); }
   };
 
   const prepareExportSnapshot = async () => {
@@ -5798,12 +5817,13 @@ export function MaterialRequestPage() {
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
       <RlcPriorityDialog key={`${user?.userId}:${activeWorkspace.id}:${rlcProjectId}`} open={rlcPriorityOpen} onOpenChange={setRlcPriorityOpen} projectId={rlcProjectId} projectName={activeWorkspace.project?.projectName ?? ''} workspaceName={activeWorkspace.name} projects={projects.map(project => ({ id: project.id, name: project.name }))} onAssignProject={projectId => assignBomProject(activeWorkspace.id, projectId)} assigningProject={assigningBomProjectId === activeWorkspace.id} groups={dataset.groups} rules={rlcRules.rules} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} loading={rlcRules.loading || !isFullDatasetLoaded} saving={rlcRules.saving} error={rlcRules.error} onSaveRule={rlcRules.saveRule} onReload={rlcRules.reload} />
       <MaterialNonPvlDialog
+        key={activeWorkspace.id}
         isExporting={isExportingDiscouraged}
         open={nonPvlDialogOpen}
         rows={discouragedMaterialRows}
         excludedCount={excludedDiscouragedCount}
         workspaceName={activeWorkspace.name}
-        onExportApplyList={() => void exportNonPvlList()}
+        onExportApplyList={parts => void exportNonPvlList(parts)}
         onExportDetail={() => void exportDiscouragedMaterials()}
         onOpenChange={setNonPvlDialogOpen}
       />
@@ -6196,6 +6216,7 @@ export function MaterialRequestPage() {
                 setTableColorDialogOpen(true);
               }}
             />
+            <Button type="button" variant="outline" size="sm" data-testid="material-export-visible" className="h-9 gap-1.5 px-2.5 text-xs" disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} onClick={() => void exportVisibleColumns()} title="依目前顯示欄位與順序匯出所有符合篩選的廠商明細，不受分頁限制；狀態欄匯出文字"><Download className="h-3.5 w-3.5" />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}</Button>
             <span className="ml-auto text-xs text-slate-400">
               {isPreviewDataset
                 ? <>先顯示 <strong className="text-cyan-200">{visibleGroupRows.length.toLocaleString()}</strong> 個主料，完整清單同步中</>

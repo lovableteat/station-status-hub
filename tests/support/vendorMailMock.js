@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+export const usePermissions = () => ({ canEditModule: () => true, canViewModule: () => true });
 
 const accounts = { A: '00000000-0000-4000-8000-000000000001', B: '00000000-0000-4000-8000-000000000002' };
 let account = accounts.A;

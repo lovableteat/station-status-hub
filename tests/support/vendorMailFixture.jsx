@@ -8,6 +8,9 @@ import { Toaster } from '../../src/components/ui/toaster';
 import { SupplierDirectoryDialog } from '../../src/components/material-requests/SupplierDirectoryDialog';
 import { fixtureState, setFixtureAccount } from './vendorMailMock';
 import { RlcPriorityDialog } from '../../src/components/material-requests/RlcPriorityDialog';
+import { MaterialNonPvlDialog } from '../../src/components/material-requests/MaterialNonPvlDialog';
+import { exportNonPvlApplyList } from '../../src/components/material-requests/materialRequestExport';
+import ComparisonWorkspace from '../../src/components/comparison/ComparisonWorkspace';
 
 window.fetch = async () => { throw new Error('Network requests are disabled in the vendor-mail fixture'); };
 const groups = ['A', 'B'].map((suffix, index) => ({
@@ -21,6 +24,8 @@ const pendingDataset = buildMaterialDataset({ ...seed, records: pendingRecords, 
 
 function Fixture() {
   const [open, setOpen] = useState(false);
+  const [nonPvlOpen, setNonPvlOpen] = useState(false);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [rlcOpen, setRlcOpen] = useState(false);
   const [rlcProject, setRlcProject] = useState('project-A');
@@ -48,11 +53,15 @@ function Fixture() {
       <Button variant="outline" onClick={() => { setRlcProject(null); setRlcOpen(true); }}>未指定專案驗證</Button>
       <Button variant="outline" onClick={() => { setRecordMode('edit'); setRecordOpen(true); }}>料件與追蹤驗證</Button>
       <Button variant="outline" onClick={() => setPendingOpen(true)}>待處理列高驗證</Button>
+      <Button variant="outline" onClick={() => setNonPvlOpen(true)}>官方格式與退件驗證</Button>
+      <Button variant="outline" onClick={() => setComparisonOpen(value => !value)}>AutoCheck 高度驗證</Button>
       <span aria-live="polite">隔離假資料 · 帳號 {fixtureState.account} · 儲存 {fixtureState.saves} 次 · 匯入 {fixtureState.imports} 次<span className="sr-only">{revision}</span></span>
     </nav>
     <p className="p-3 text-sm text-muted-foreground">只有兩筆假料件與本機記憶體聯絡簿；重新整理會還原初始資料，不會連線正式環境或寄信。</p>
     <div className="mx-3 max-w-sm space-y-3 border-y border-border py-3" aria-label="虛擬料號複製驗證"><p className="text-xs text-muted-foreground">虛擬料號</p><VirtualAlternativeValue value="000-VIRTUAL-A" onCopy={value => { void navigator.clipboard.writeText(value).then(() => setCopiedVirtual(value)); }} /><VirtualAlternativeValue value="" onCopy={() => { throw new Error('Empty values must not copy'); }} /><p role="status">{copiedVirtual ? `已複製：${copiedVirtual}` : ''}</p></div>
     <PendingMailDialog groups={groups} open={open} onOpenChange={setOpen} workspaceName="隔離測試 BOM" exportedBy="隔離測試使用者" />
+    {comparisonOpen && <div className="min-h-0 flex-1 overflow-auto"><ComparisonWorkspace /></div>}
+    <MaterialNonPvlDialog open={nonPvlOpen} onOpenChange={setNonPvlOpen} isExporting={false} rows={['1A20-0000100', '1022-00001ZZ', ''].map((partNumber, index) => ({ refDes: 'R' + index, name: '隔離測試電阻', manufacturer: 'Example', manufacturerPartNumber: 'QA-' + index, partNumber, virtualAlternative: '', partUsageStatus: 'ODM 不建議用料' }))} workspaceName="隔離驗證 BOM" onExportApplyList={parts => { void exportNonPvlApplyList({ partNumbers: parts }); }} onExportDetail={() => {}} />
     <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
     <RlcPriorityDialog key={rlcProject} open={rlcOpen} onOpenChange={setRlcOpen} projectId={rlcProject} projectName={rlcProject === 'project-A' ? 'VERA_GPU' : rlcProject === 'project-B' ? 'VERA_CPU' : ''} workspaceName="示範 BOM（不連線正式資料）" projects={[{id:'project-A',name:'VERA_GPU'},{id:'project-B',name:'VERA_CPU'}]} onAssignProject={async id => setRlcProject(id)} groups={rlcGroups} rules={rules} canEdit={fixtureState.account === 'A'} onSaveRule={async rule => setRules(current => [...current.filter(item => item.projectId !== rule.projectId || item.specKey !== rule.specKey || item.candidateKey !== rule.candidateKey), { ...rule, updatedAt: new Date().toISOString() }])} />
     <MaterialRecordDialog canEdit open={recordOpen} mode={recordMode} initialTab="tracking" record={record} workspaceId="fixture" uploaderName="QA" onOpenChange={setRecordOpen} onModeChange={setRecordMode} onOpenSpec={() => {}} onSave={async next => { setRecord(next); setRecordOpen(false); }} />
