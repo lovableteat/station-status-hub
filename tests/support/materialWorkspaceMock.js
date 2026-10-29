@@ -1,4 +1,5 @@
 import seed from '../../src/data/materialRequestSeed.json';
+import { supplierSearchContacts } from './supplierSearchCases.js';
 import { supabase as baseSupabase } from './vendorMailMock';
 
 const user = { userId: '00000000-0000-4000-8000-000000000001', username: 'qa', displayName: 'QA 目前使用者', role: 'admin' };
@@ -13,7 +14,12 @@ export const useMaterialBomPresence = () => ({ editorsByRecordId, onlineUserCoun
 export const logMaterialRecordChange = () => {};
 export const logMaterialReportExport = () => {};
 export const logMaterialWorkspaceAction = () => {};
-export const supabase = { ...baseSupabase, rpc: async name => name === "list_active_collaboration_members" ? { data: [{user_id:user.userId, username:user.username, display_name:user.displayName}, {user_id:"00000000-0000-4000-8000-000000000002", username:"ce", display_name:"CE 王同學"}], error:null } : { data: [], error:null }, storage: { from() { return {
+export const supabase = { ...baseSupabase, from(table) {
+  if (table !== 'company_supplier_contacts') return baseSupabase.from(table);
+  let range = [0, 499];
+  return { select() { return this; }, order() { return this; }, range(a,b) { range=[a,b]; return this; }, abortSignal() { return this; },
+    then(resolve,reject) { return Promise.resolve({data:structuredClone(supplierSearchContacts.slice(range[0],range[1]+1)),error:null}).then(resolve,reject); } };
+}, rpc: async name => name === "list_active_collaboration_members" ? { data: [{user_id:user.userId, username:user.username, display_name:user.displayName}, {user_id:"00000000-0000-4000-8000-000000000002", username:"ce", display_name:"CE 王同學"}], error:null } : { data: [], error:null }, storage: { from() { return {
   async upload(path, file) { files.set(path, file); return { error: null }; },
   async createSignedUrl(path) { return files.has(path) ? { data: { signedUrl: URL.createObjectURL(files.get(path)) } } : { error: new Error('QA file not found') }; },
   async remove(paths) { paths.forEach(path => files.delete(path)); return { error: null }; },
