@@ -10,6 +10,7 @@ import {
   createProgressiveBomRecordFetchPlan,
 } from "./materialBomPerformance";
 import { canReuseBomWorkspaceCache, runBomReadWithRetry } from "./materialBomSyncPolicy";
+import { normalizeBomVersion, type BomWorkspaceVersion } from "./bomVersioning";
 
 export type BomPageTrackerStatus = "done" | "pending" | "done_missing";
 
@@ -53,6 +54,8 @@ export interface BomWorkspace {
   tableColorTheme?: BomTableColorTheme;
   project?: BomWorkspaceProject;
   archive?: BomWorkspaceArchive;
+  /** Series / version metadata; absent for a BOM uploaded before versioning (treated as V1 of its own series). */
+  version?: BomWorkspaceVersion;
   isLoaded?: boolean;
   updatedAt: string;
 }
@@ -132,7 +135,8 @@ const PAGE_TRACKER_KEY_PREFIX = "material-bom-page-tracker:";
 const TABLE_COLOR_THEME_KEY_PREFIX = "material-bom-table-color-theme:";
 const PROJECT_KEY_PREFIX = "material-bom-project:";
 const ARCHIVE_KEY_PREFIX = "material-bom-archive:";
-const BOM_PREFERENCE_KEY_PREFIXES = [PREFERENCE_KEY_PREFIX, PAGE_TRACKER_KEY_PREFIX, TABLE_COLOR_THEME_KEY_PREFIX, PROJECT_KEY_PREFIX, ARCHIVE_KEY_PREFIX];
+const VERSION_KEY_PREFIX = "material-bom-version:";
+const BOM_PREFERENCE_KEY_PREFIXES = [PREFERENCE_KEY_PREFIX, PAGE_TRACKER_KEY_PREFIX, TABLE_COLOR_THEME_KEY_PREFIX, PROJECT_KEY_PREFIX, ARCHIVE_KEY_PREFIX, VERSION_KEY_PREFIX];
 const RECORD_BATCH_SIZE = 200;
 const REMOTE_RECORD_FETCH_BATCH_SIZE = 1000;
 const REMOTE_RECORD_FETCH_CONCURRENCY = 8;
@@ -172,6 +176,10 @@ function getPreferenceRowKey(workspaceId: string) {
 
 function getPageTrackerRowKey(workspaceId: string) {
   return `${PAGE_TRACKER_KEY_PREFIX}${workspaceId}`;
+}
+
+function getVersionRowKey(workspaceId: string) {
+  return `${VERSION_KEY_PREFIX}${workspaceId}`;
 }
 
 function openRenderCacheDatabase() {
@@ -534,6 +542,7 @@ function buildWorkspaceFromRows(
   project?: BomWorkspaceProject,
   archive?: BomWorkspaceArchive,
   isComplete = true,
+  version?: BomWorkspaceVersion,
 ): BomWorkspace {
   const records = [...recordRows]
     .sort((left, right) => left.order_index - right.order_index)
@@ -556,6 +565,7 @@ function buildWorkspaceFromRows(
     tableColorTheme,
     project,
     archive,
+    version,
     // Only a complete remote record set is safe for client-side grouping,
     // filtering, and pagination. Partial pages remain summary workspaces.
     isLoaded: isComplete || workspaceRow.record_count === 0,
@@ -569,6 +579,7 @@ function buildWorkspaceSummary(
   tableColorTheme?: BomTableColorTheme,
   project?: BomWorkspaceProject,
   archive?: BomWorkspaceArchive,
+  version?: BomWorkspaceVersion,
 ): BomWorkspace {
   return {
     id: workspaceRow.id,
@@ -585,6 +596,7 @@ function buildWorkspaceSummary(
     tableColorTheme,
     project,
     archive,
+    version,
     isLoaded: workspaceRow.record_count === 0,
     updatedAt: workspaceRow.updated_at,
   };
@@ -597,6 +609,7 @@ function buildWorkspaceFromCache(
   tableColorTheme?: BomTableColorTheme,
   project?: BomWorkspaceProject,
   archive?: BomWorkspaceArchive,
+  version?: BomWorkspaceVersion,
 ): BomWorkspace {
   return {
     ...cachedWorkspace,
@@ -613,6 +626,7 @@ function buildWorkspaceFromCache(
     tableColorTheme,
     project,
     archive,
+    version,
     isLoaded: true,
     updatedAt: workspaceRow.updated_at,
   };
@@ -775,11 +789,32 @@ async function loadArchiveMap() {
   return archiveByWorkspace;
 }
 
+async function loadVersionMap() {
+  const data = await runBomReadWithRetry(async () => {
+    const { data: preferenceRows, error } = await supabaseClient
+      .from(PREFERENCE_TABLE)
+      .select("table_key, column_order, updated_at")
+      .like("table_key", `${VERSION_KEY_PREFIX}%`);
+
+    if (error) throw error;
+    return preferenceRows;
+  });
+
+  const versionByWorkspace = new Map<string, BomWorkspaceVersion>();
+  for (const row of (data ?? []) as BomPreferenceRow[]) {
+    const workspaceId = row.table_key.replace(VERSION_KEY_PREFIX, "");
+    if (!workspaceId) continue;
+    const version = normalizeBomVersion(row.column_order, row.updated_at);
+    if (version) versionByWorkspace.set(workspaceId, version);
+  }
+  return versionByWorkspace;
+}
+
 async function loadRemoteBomWorkspaces(
   preferredWorkspaceId?: string,
   options: BomWorkspaceLoadOptions = {},
 ) {
-  const [workspaceRows, pageTrackerByWorkspace, tableColorThemeByWorkspace, loadedProjectByWorkspace, loadedArchiveByWorkspace] = await Promise.all([
+  const [workspaceRows, pageTrackerByWorkspace, tableColorThemeByWorkspace, loadedProjectByWorkspace, loadedArchiveByWorkspace, loadedVersionByWorkspace] = await Promise.all([
     runBomReadWithRetry(async () => {
       const { data, error } = await supabaseClient
       .from(WORKSPACE_TABLE)
@@ -793,6 +828,7 @@ async function loadRemoteBomWorkspaces(
     loadTableColorThemeMap().catch(() => new Map<string, BomTableColorTheme>()),
     loadProjectMap().catch(() => null),
     loadArchiveMap().catch(() => null),
+    loadVersionMap().catch(() => null),
   ]);
   // An unreadable project map must not regroup every BOM as unassigned (and cache that); keep the cached projects instead.
   const projectByWorkspace = loadedProjectByWorkspace ?? new Map<string, BomWorkspaceProject>(
@@ -800,6 +836,10 @@ async function loadRemoteBomWorkspaces(
   );
   const archiveByWorkspace = loadedArchiveByWorkspace ?? new Map<string, BomWorkspaceArchive>(
     (options.cachedResult?.workspaces ?? []).flatMap((workspace) => (workspace.archive ? [[workspace.id, workspace.archive] as const] : [])),
+  );
+  // An unreadable version map must not turn every version back into its own series; keep the cached metadata.
+  const versionByWorkspace = loadedVersionByWorkspace ?? new Map<string, BomWorkspaceVersion>(
+    (options.cachedResult?.workspaces ?? []).flatMap((workspace) => (workspace.version ? [[workspace.id, workspace.version] as const] : [])),
   );
   const activeWorkspaceId = preferredWorkspaceId && workspaceRows.some((row) => row.id === preferredWorkspaceId)
     ? preferredWorkspaceId
@@ -834,6 +874,7 @@ async function loadRemoteBomWorkspaces(
             tableColorThemeByWorkspace.get(workspaceRow.id),
             projectByWorkspace.get(workspaceRow.id),
             archiveByWorkspace.get(workspaceRow.id),
+            versionByWorkspace.get(workspaceRow.id),
           )
         : buildWorkspaceFromRows(
           workspaceRow,
@@ -843,6 +884,7 @@ async function loadRemoteBomWorkspaces(
           projectByWorkspace.get(workspaceRow.id),
           archiveByWorkspace.get(workspaceRow.id),
           isComplete,
+          versionByWorkspace.get(workspaceRow.id),
         )
       : buildWorkspaceSummary(
           workspaceRow,
@@ -850,6 +892,7 @@ async function loadRemoteBomWorkspaces(
           tableColorThemeByWorkspace.get(workspaceRow.id),
           projectByWorkspace.get(workspaceRow.id),
           archiveByWorkspace.get(workspaceRow.id),
+          versionByWorkspace.get(workspaceRow.id),
         )),
   );
   const activeRecordRows = activeWorkspaceId && !canReuseCache
@@ -1029,6 +1072,23 @@ async function removeRemoteWorkspaceProject(id: string) {
   if (error) throw error;
 }
 
+async function saveRemoteWorkspaceVersion(workspaceId: string, version: BomWorkspaceVersion) {
+  const { error } = await supabaseClient
+    .from(PREFERENCE_TABLE)
+    .upsert({ table_key: getVersionRowKey(workspaceId), column_order: version }, { onConflict: "table_key" });
+
+  if (error) throw error;
+}
+
+async function removeRemoteWorkspaceVersion(id: string) {
+  const { error } = await supabaseClient
+    .from(PREFERENCE_TABLE)
+    .delete()
+    .eq("table_key", getVersionRowKey(id));
+
+  if (error) throw error;
+}
+
 async function migrateLegacyBomWorkspaces(
   currentWorkspaces: BomWorkspace[],
   saveWorkspace: (workspace: BomWorkspace) => Promise<void>,
@@ -1180,19 +1240,27 @@ export async function saveBomWorkspace(workspace: BomWorkspace, assertWrite: () 
   assertWrite();
   await upsertWorkspaceRow(workspace);
   assertWrite();
-  const { data: existingRows, error: existingRowsError } = await supabaseClient
-    .from(RECORD_TABLE)
-    .select("record_id")
-    .eq("workspace_id", workspace.id);
+  // PostgREST caps an unbounded select at 1000 rows; page so obsolete rows of a large BOM are never missed.
+  const existingRows: Array<{ record_id: string }> = [];
+  for (let from = 0; ; from += REMOTE_RECORD_FETCH_BATCH_SIZE) {
+    const { data: batch, error: existingRowsError } = await supabaseClient
+      .from(RECORD_TABLE)
+      .select("record_id")
+      .eq("workspace_id", workspace.id)
+      .order("record_id", { ascending: true })
+      .range(from, from + REMOTE_RECORD_FETCH_BATCH_SIZE - 1);
 
-  if (existingRowsError) throw existingRowsError;
+    if (existingRowsError) throw existingRowsError;
+    existingRows.push(...((batch ?? []) as Array<{ record_id: string }>));
+    if ((batch ?? []).length < REMOTE_RECORD_FETCH_BATCH_SIZE) break;
+  }
   assertWrite();
 
   await upsertRecordRows(toRecordRows(workspace), assertWrite);
   assertWrite();
 
   const nextRecordIds = new Set(workspace.payload.records.map((record) => record.id));
-  const obsoleteRecordIds = ((existingRows ?? []) as Array<{ record_id: string }>).flatMap((row) =>
+  const obsoleteRecordIds = existingRows.flatMap((row) =>
     nextRecordIds.has(row.record_id) ? [] : [row.record_id]
   );
 
@@ -1346,6 +1414,37 @@ export async function saveBomWorkspaceProject(workspaceId: string, project: BomW
   void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, project: project ?? undefined }), assertWrite);
 }
 
+export async function loadBomWorkspaceVersions() {
+  return loadVersionMap();
+}
+
+export async function saveBomWorkspaceVersion(workspaceId: string, version: BomWorkspaceVersion, assertWrite: () => void = () => {}) {
+  assertWrite();
+  await saveRemoteWorkspaceVersion(workspaceId, version);
+  assertWrite();
+  void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, version }), assertWrite);
+}
+
+/**
+ * Loads every row of one BOM (for example an older version to compare) without
+ * touching the active workspace or the IndexedDB render cache.
+ */
+export async function loadBomWorkspaceRecords(workspaceId: string): Promise<MaterialWorkbookRecord[]> {
+  const header = await runBomReadWithRetry(async () => {
+    const { data, error } = await supabaseClient
+      .from(WORKSPACE_TABLE)
+      .select("id, record_count")
+      .eq("id", workspaceId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data as { id: string; record_count: number } | null;
+  });
+  if (!header) throw new Error("找不到這個版本的 BOM，可能已被其他人刪除。");
+  const rows = await loadRemoteRecordRowsForWorkspace(workspaceId, header.record_count ?? 0, { loadAllRecords: true });
+  return [...rows].sort((left, right) => left.order_index - right.order_index).map((row) => row.data);
+}
+
 export async function removeBomWorkspace(id: string, assertWrite: () => void = () => {}) {
   assertWrite();
   const { error } = await supabaseClient
@@ -1362,6 +1461,7 @@ export async function removeBomWorkspace(id: string, assertWrite: () => void = (
     removeRemoteTableColorTheme(id),
     removeRemoteWorkspaceProject(id),
     removeRemoteWorkspaceArchive(id),
+    removeRemoteWorkspaceVersion(id),
   ]);
   assertWrite();
   await removeLegacyBomWorkspace(id, assertWrite);

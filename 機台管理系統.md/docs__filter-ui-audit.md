@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/filter-ui-audit.md`；程式參考基準：`06c686951b17afa920cf325ddfec9114590aeee0`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/filter-ui-audit.md`；程式參考基準：`22f669036d89108fe73cf4b74d4117f3e332739f`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 跨工作區篩選 UI 稽核
 
@@ -45,6 +45,7 @@
 | --- | --- | --- |
 | 比對系統的檢查結果、審查追蹤與位址庫 | `src/components/comparison/ComparisonWorkspace.tsx` | **採用現行標準。** 比對結果與審查表的持久篩選列位於結果正上方，依搜尋 → 狀態 → 負責人 → 嚴重性／檢查分類排列；作用中條件可個別或全部清除，零筆結果保留表頭。`compareSearch`、`compareStatus`、`compareOwner`、`compareSeverity`、`compareCategory`、`comparePage` 保存結果條件，`librarySearch`、`librarySigned` 保存位址庫條件；清除不得移除 `workspace=comparison`、`module=comparison` 與頁面上下文 `comparisonTab`。新入口沿用 AI 問答授權，來源與結果只保存在本機瀏覽器。 |
 | 料號申請的 BOM workspace、料件表與行動卡片 | `src/components/material-requests/MaterialRequestPage.tsx` | **符合標準。** 搜尋、主料／待申請、排序在表格正上方同一列；active chips 可個別移除並附一個「全部清除」；欄位篩選位於表頭篩選列，點選即套用（標記欄已移除，只保留行動版卡片的我的標記）；桌面零筆結果留在表格 body（`目前篩選條件沒有符合的料件`）並保留欄位 header；欄位顯示／欄寬／配色集中在「欄位」彈窗，匯出與上傳在頁首動作區。
+| 料號申請 BOM 版本管理的差異檢視 | `src/components/material-requests/BomDiffView.tsx` | **符合標準。** 篩選列（搜尋 → 變更類型 → 影響 → 追蹤未帶入）緊接差異表正上方；作用中條件含預設的「隱藏未變更 N 筆」都以 chip 顯示，可個別移除並附「全部清除」；零筆結果留在表格 body（`目前篩選條件沒有符合的差異`）並保留表頭；匯出差異 Excel 位於篩選列尾端的次要層級。左欄系列清單的搜尋也在結果正上方，封存系列另列可展開區段。 |
 | Data-center 的共享專案卡片清單 | `src/components/data-center/DeploymentPlanningCenter.tsx` | 共享專案庫若提供搜尋或篩選，應使用持久列、active chips 與清除規則。場景中的機櫃搜尋、圖層與模型庫屬操作上下文，依下節保留專用 UI；例外不應擴張到一般專案結果清單。
 | PCB 專案、模板與元件庫結果 | `src/components/pcb-designer/PcbLeftRail.tsx` | **待對齊。** 左 rail 已固定顯示搜尋與狀態／來源／類型下拉，但沒有 active chips 或全部清除。rail 可以維持窄欄布局，作用中條件仍必須一直看得到且可逐一清除；畫布與圖層工具不套用資料清單外觀。
 | 後台工程師／使用者清單 | `src/components/user-management/UserManagement.tsx` | **待對齊。** 搜尋與團隊條件位於卡片清單上方，但缺少 active chips、個別清除、全部清除與一致的零筆骨架。相對順序應維持搜尋在前，團隊是領域條件。
