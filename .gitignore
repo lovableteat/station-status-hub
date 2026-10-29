@@ -39,3 +39,6 @@ tmp_preflight_*.sql
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code personal tool config (machine-specific paths)
+.claude/

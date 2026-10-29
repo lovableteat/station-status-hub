@@ -2,7 +2,13 @@
 
 **Station Status Hub** 是提供測試站、硬體工程與管理團隊共同使用的整合工作平台。它把機台維修、工程檔案、A／B 工程比對、BOM 與料號、Data Center、PCB 設計、權限管理、AI 資料查詢和績效考核收進同一套登入、權限、即時同步與響應式介面。
 
-[開啟線上版本](https://lovableteat.github.io/station-status-hub/) · [閱讀完整架構](./docs/architecture.md) · [查看最新交接](./docs/codex-handoff-2026-08-10.md)
+[開啟線上版本](https://lovableteat.github.io/station-status-hub/) · [閱讀完整架構](./docs/architecture.md) · [跨電腦重建與交接](./docs/跨電腦重建與交接.md)
+
+## 2026-10-20 文件交接入口
+
+要在另一台電腦做功能相似的網站，先讀 [文件包導讀](./docs/文件包導讀.md)、[功能與使用手冊](./docs/系統功能與使用手冊.md)、[資料邏輯](./docs/系統架構與資料邏輯.md) 和 [UI 設計規則](./docs/UI設計風格與互動規則.md)。全部專案 Markdown 的集中副本放在 repo 根目錄 `機台管理系統.md` 資料夾，原始文件保留不移動；同名檔案以原路徑前綴區分。
+
+這是文件包，不含原始碼、正式資料、附件、帳密或 API 金鑰。現有程式核對基準為 `c6629250`；歷史計畫不是全部已實作的承諾，另一台電腦／新後端的部署與全流程仍需獨立驗證。不要把新系統連到原正式資料做試寫。
 
 ## 平台內容
 
@@ -17,7 +23,7 @@
 | Data Center | 機櫃與設備配置、2D 規劃、3D 數位孿生與場景管理 | `data-center` |
 | PCB Designer | PCB 專案、2D 編輯、3D 檢視、STEP 模型、元件庫、禁制區與切板 | `pcb-designer` |
 | 後台管理 | 帳號、角色、工作區權限、公告、在線狀態與 API 金鑰 | `user-management` |
-| 資料查詢空間 | AI 對話、附件、圖片與文件分析、知識搜尋和引用來源 | `ai-chat` |
+| AI 問答 | AI 對話、附件、圖片與文件分析、知識搜尋和引用來源 | `ai-chat` |
 | 績效考核系統 | 考核週期、目標進度、主管回饋、評分、團隊檢視與報表 | `performance` |
 
 全站聊天室、私訊、在線狀態、公告中心、手機開啟 QR Code 與帳號資料是跨工作區共用能力。
@@ -76,10 +82,10 @@ station-status-hub/
 
 ## 本機啟動
 
-需求：Node.js 20 以上與 npm。
+文件整理時本機為 Node.js `24.14.0` 與 npm `11.9.0`；隔離測試 workflow 使用 Node 24，Pages build 仍使用 Node 20。完整測試包含直接執行 TypeScript，不能把「Node 20 可建置」當成「所有 Node 測試可執行」。
 
 ```bash
-npm install --legacy-peer-deps
+npm ci --legacy-peer-deps
 npm run dev
 ```
 
@@ -94,6 +100,7 @@ http://localhost:8080/station-status-hub/
 ```dotenv
 VITE_SUPABASE_URL=your-project-url
 VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_SUPABASE_SCHEMA=workspace
 VITE_REALTIME_COLLABORATION_V2=true
 ```
 
@@ -103,7 +110,8 @@ VITE_REALTIME_COLLABORATION_V2=true
 
 ```bash
 npm run lint
-npx tsc --noEmit
+npm run typecheck
+npm test
 npm run build
 npm run test:pcb
 ```
@@ -125,6 +133,9 @@ npm run test:pcb
 - 應用資料表統一歸檔在 `workspace` schema；Supabase 管理的 `auth`、`storage`、`realtime` schema 不修改。Hosted Supabase 的 API Exposed schemas 必須加入 `workspace`，再套用對應 migration。
 - 權限新增或調整時，必須同步檢查入口顯示、workspace access、細部 module 權限、RLS/RPC 與手機導覽。
 - API 金鑰只顯示遮罩值；建立、測試、停用與刪除流程不得把明文寫入前端 log 或文件。
+- 現有 AI console 會在授權後由瀏覽器使用 provider key，遮罩不等於伺服器端保密；新網站若要求金鑰不抵達前端，需要另行設計與驗證後端代理。
+- AutoCheck、部分 Cabinet/L11 設定與未送出草稿有本機瀏覽器儲存邊界，不能假設登入即可跨機恢復；先依各功能備份／匯出，再移轉。
+- 檔案庫單檔及批次總量為 1 GiB；其他工作區各有上傳限制。TUS 重試與 metadata 完成確認已修正，但未宣稱正式 1 GiB 實測成功，也未宣稱先前失敗 PDF 已找回。
 
 ## 部署方式
 
@@ -134,6 +145,11 @@ npm run test:pcb
 
 ## 深入文件
 
+- [文件包導讀](./docs/文件包導讀.md)：集中資料夾、閱讀順序、收錄範圍與重新產生方式。
+- [系統功能與使用手冊](./docs/系統功能與使用手冊.md)：九工作區與共用功能的實際使用流程。
+- [系統架構與資料邏輯](./docs/系統架構與資料邏輯.md)：登入、權限、資料實體、同步與儲存邊界。
+- [UI 設計風格與互動規則](./docs/UI設計風格與互動規則.md)：設計 token、操作層級、篩選契約與桌面／行動驗收。
+- [跨電腦重建與交接](./docs/跨電腦重建與交接.md)：隔離設定、版本、啟動、移轉、部署及已知限制。
 - [`docs/architecture.md`](./docs/architecture.md)：完整架構、工作區資料流、RWD、PCB、Supabase、測試與排錯指南。
 - [`docs/supabase-production-migration-runbook.md`](./docs/supabase-production-migration-runbook.md)：正式 Supabase 登入、OAuth 過期復原、安全遷移、驗證與登出流程。
-- [`docs/codex-handoff-2026-08-10.md`](./docs/codex-handoff-2026-08-10.md)：近期交付內容、驗證結果與儲存庫狀態。
+- [`docs/codex-handoff-2026-08-10.md`](./docs/codex-handoff-2026-08-10.md)：2026-08-10 歷史交付與當時儲存庫狀態，不是目前新機部署指令。

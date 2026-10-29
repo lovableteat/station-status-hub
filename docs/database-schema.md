@@ -1,5 +1,7 @@
 # Database schema layout
 
+2026-10-20 documentation update: this file keeps the original schema-move history below. For the current code-backed entity and persistence map, see [系統架構與資料邏輯](./系統架構與資料邏輯.md) and [跨電腦重建與交接](./跨電腦重建與交接.md). No production schema query or blank-database rebuild was performed for this documentation update.
+
 Application data lives in the exposed `workspace` schema. Supabase-managed `auth`, `storage`, and `realtime` schemas remain unchanged.
 
 The migration [`20260822120000_archive_workspace_schema.sql`](../supabase/migrations/20260822120000_archive_workspace_schema.sql) moves existing application tables without resetting data, preserves RLS/policies/triggers, and exposes workspace copies of the application RPC functions.
@@ -14,9 +16,10 @@ The migration [`20260822120000_archive_workspace_schema.sql`](../supabase/migrat
 | Data Center | `data_center_projects`, `circuit_*` |
 | PCB Designer | `pcb_designer_*`, `component_*`, `custom_components`, `manufacturers` |
 | Collaboration and notifications | `chat_*`, `notification_*`, `user_notifications`, `user_mentions`, `announcements` |
-| AI and API management | `api_keys`, `ai_workspace_conversations` |
-| Test Plan | `test_plan_*` |
-| Performance | `performance_reviews` |
+| AI and API management | `api_keys`, `ai_workspace_conversations`, `ai_model_usage_events`, `ai_model_usage_tracking_state` |
+| File library | `test_plan_spaces`, `test_plan_folders`, `test_plan_files`, account/storage cleanup queues |
+| Comparison feedback | `comparison_feedback` and private feedback Storage; AutoCheck engineering inputs/results/replies remain browser-local, not in this table |
+| Performance | `performance_reviews`, `performance_org_members`, group protection/unlocks/attempts, `performance_section_reports`, `performance_submission_receipts`, `performance_self_assessment_backups` (some newer tables are migration-defined rather than fully represented in generated TypeScript types) |
 | Shared legacy/application tables | `bugs`, `bug_attachments`, `issues`, `issue_attachments`, `projects`, `project_*`, `tasks`, `task_status`, `columns`, `hyperlinks`, `export_logs`, `production_*`, `ui_table_preferences`, `keep_alive_check` |
 
 ## Hosted Supabase setup
