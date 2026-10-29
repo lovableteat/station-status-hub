@@ -10,7 +10,7 @@ const transpiled = ts.transpileModule(source, {
     module: ts.ModuleKind.ESNext,
     target: ts.ScriptTarget.ES2022,
   },
-}).outputText;
+}).outputText.replace('"./materialTrackingStatus.ts"', JSON.stringify(new URL("./materialTrackingStatus.ts", import.meta.url).href));
 const presentation = await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`);
 
 test("long table values are summarized without losing the full hover content", () => {

@@ -6,7 +6,7 @@ import ts from "typescript";
 const presentationSource = await readFile(new URL("../src/components/material-requests/materialRequestPresentation.ts", import.meta.url), "utf8");
 const transpiled = ts.transpileModule(presentationSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText;
+}).outputText.replace('"./materialTrackingStatus.ts"', JSON.stringify(new URL("../src/components/material-requests/materialTrackingStatus.ts", import.meta.url).href));
 const { groupPendingMaterials, isPendingMaterialCategory, resolvePendingMaterialCategory } = await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`);
 
 const group = (displayRef, primaryCategory, otherCategories = []) => ({

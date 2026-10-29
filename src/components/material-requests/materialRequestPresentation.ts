@@ -1,3 +1,5 @@
+import { isExplicitMaterialApplication } from "./materialTrackingStatus.ts";
+
 export interface CompactValueSummary {
   fullText: string;
   isTruncated: boolean;
@@ -306,7 +308,7 @@ export function groupPendingMaterials<T extends PendingCategorySource>(groups: r
     .filter((category) => category.groups.length > 0);
 }
 
-type ApplicationRecord = { id: string; needsApplication?: boolean; applicationExempt?: boolean; manufacturer?: string | null; manufacturerPartNumber?: string | null; name?: string | null };
+type ApplicationRecord = { id: string; needsApplication?: boolean; applicationExempt?: boolean; manufacturer?: string | null; manufacturerPartNumber?: string | null; name?: string | null; trackingStatus?: string; requestOwnerName?: string };
 
 export interface PendingApplication<G, R extends ApplicationRecord> {
   key: string;
@@ -334,9 +336,13 @@ export function buildPendingApplications<
   for (const group of groups) {
     const seen = new Set<string>();
     const rows = [group.primaryRecord as R, ...group.records].filter((record) => !record.applicationExempt && !seen.has(record.id) && seen.add(record.id));
+    const explicit = rows.filter(record => isExplicitMaterialApplication(record.trackingStatus));
     const lines = includeAlternates
-      ? rows.filter((record) => record.needsApplication)
-      : rows.length > 0 && rows.every((record) => record.needsApplication) ? [rows.find(record => record.id === group.primaryRecord.id) ?? rows[0]] : [];
+      ? rows.filter((record) => record.needsApplication || isExplicitMaterialApplication(record.trackingStatus))
+      : [...new Map([
+        ...(rows.length > 0 && rows.every(record => record.needsApplication) ? [rows.find(record => record.id === group.primaryRecord.id) ?? rows[0]] : []),
+        ...explicit,
+      ].map(record => [record.id, record])).values()];
     for (const record of lines) {
       result.push({
         key: `${group.key}::${record.id}`,
@@ -346,7 +352,7 @@ export function buildPendingApplications<
         name: record.name?.trim() || group.name,
         primaryRecord: group.primaryRecord as PendingApplication<G, R>["primaryRecord"],
         records: group.records as PendingApplication<G, R>["records"],
-        searchText: `${group.searchText} ${(record.manufacturer ?? "").toLowerCase()} ${(record.manufacturerPartNumber ?? "").toLowerCase()}`,
+        searchText: `${group.searchText} ${(record.manufacturer ?? "").toLowerCase()} ${(record.manufacturerPartNumber ?? "").toLowerCase()} ${(record.requestOwnerName ?? "").toLowerCase()} ${(record.trackingStatus ?? "").toLowerCase()}`,
       });
     }
   }

@@ -1,3 +1,4 @@
+import { MATERIAL_TRACKING_STATUS_OPTIONS } from "./materialTrackingStatus.ts";
 import type { CellObject, WorkSheet } from "xlsx";
 import { MATERIAL_CE_FIELDS, MATERIAL_CE_LEGACY_MEANING_SCHEMAS } from "./materialUploadContract.mjs";
 
@@ -46,6 +47,9 @@ export interface MaterialWorkbookRecord {
   symbolStatus?: string;
   pcbFootprint: string;
   specDocument?: MaterialSpecDocument;
+  specDocuments?: MaterialSpecDocument[];
+  requestOwnerId?: string;
+  requestOwnerName?: string;
   /** 待處理料 category chosen by hand when the Ref Des prefix misleads; absent means "by Ref Des". */
   pendingCategory?: "connector" | "ic" | "rlc" | "other";
 }
@@ -444,7 +448,7 @@ function getImportedTrackingStatusAndNote(value: unknown) {
     return { status: "", note: "" };
   }
 
-  if (["新增追蹤", "處理中", "已完成"].includes(text)) {
+  if ([...MATERIAL_TRACKING_STATUS_OPTIONS, "新增追蹤", "處理中"].includes(text)) {
     return { status: text, note: "" };
   }
 
@@ -699,6 +703,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
       manufacturerPartNumberAlt,
       raw.virtualAlternative,
       trackingStatus,
+      raw.requestOwnerName,
       raw.trackingNote,
       raw.requestTicket,
       raw.requestUrl,

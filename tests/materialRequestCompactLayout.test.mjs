@@ -9,7 +9,7 @@ const presentationSource = await readFile(new URL("../src/components/material-re
 const storageSource = (await readFile(new URL("../src/components/material-requests/materialBomStorage.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const transpiled = ts.transpileModule(presentationSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText;
+}).outputText.replace('"./materialTrackingStatus.ts"', JSON.stringify(new URL("../src/components/material-requests/materialTrackingStatus.ts", import.meta.url).href));
 const presentation = await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`);
 
 const slice = (from, to) => {
@@ -214,7 +214,7 @@ test("待處理料 opens from the header actions and groups pending parts by cat
   assert.match(dialog, />優先處理</);
   assert.match(dialog, /onOpenTracking\(record\)/);
   assert.doesNotMatch(dialog, />定位<|>更新料號<|>追蹤<|onLocate|onOpenCreate/);
-  assert.match(source, /const pendingMaterialGroups = useMemo\(\(\) => dataset\.groups\.filter\(\(group\) => group\.records\.some\(\(record\) => record\.needsApplication\)\)/);
+  assert.match(source, /const pendingMaterialGroups = useMemo\(\(\) => dataset\.groups\.filter\(\(group\) => group\.records\.some\(\(record\) => record\.needsApplication \|\| isExplicitMaterialApplication\(record\.trackingStatus\)\)\)/);
   assert.match(source, /const requiredApplicationCount = useMemo\(\(\) => dataset\.groups\.filter\(requiresApplication\)\.length/, "料號待補 keeps counting locations with no number at all");
   assert.match(source, /<PendingMaterialsDialog/);
   const dialogTokens = dialog;
@@ -284,7 +284,7 @@ test("pending parts keep blinking until a part number arrives or data is refresh
   const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
   assert.match(dialog, /stale && <span className="material-blink [^"]*bg-destructive"/);
   assert.match(dialog, />逾 3 天未更新</);
-  assert.match(source, /data-testid="pending-materials-button"[\s\S]{0,400}?requiredApplicationCount > 0 && "material-attention"/);
+  assert.match(source, /data-testid="pending-materials-button"[\s\S]{0,400}?pendingApplicationCount > 0 && "material-attention"/);
   assert.match(source, /key: "partNumber", id: "material-internal-pn"/);
   assert.match(source, /field\.key === "partNumber" && !form\.partNumber\.trim\(\) && "material-pn-missing"/);
 });
@@ -292,10 +292,10 @@ test("pending parts keep blinking until a part number arrives or data is refresh
 test("a SPEC document can be attached to a record and opened from the Part Spec cell", () => {
   const dialog = slice("function MaterialRecordDialog(", "type MaterialColumnVisibility");
   assert.match(dialog, /data-testid="material-spec-document"/);
-  assert.match(dialog, /uploadMaterialSpecDocument\(\{ workspaceId, recordId: form\.id, file, uploadedBy: uploaderName \}\)/);
+  assert.match(dialog, /uploadMaterialSpecDocuments\(\{ workspaceId, recordId: form\.id, files, uploadedBy: uploaderName,/);
   assert.match(dialog, /accept=\{MATERIAL_SPEC_ACCEPT\}/);
-  assert.match(dialog, /"上傳 SPEC"/);
-  assert.match(rowBlock, /statusRecord\.specDocument && \(/);
+  assert.match(dialog, /"新增 SPEC 檔案"/);
+  assert.match(rowBlock, /getMaterialSpecDocuments\(statusRecord\)\.length > 0 && \(/);
   assert.match(source, /specDocument: record\.specDocument,/);
   assert.match(rowBlock, /<MaterialSourceText value=\{partSpec\} label="Part Spec" \/>/);
 });
@@ -325,7 +325,7 @@ test("待處理料 can turn the pending parts into per-vendor mail content", () 
   const pending = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
   assert.match(pending, /data-testid="pending-mail-button"[\s\S]*?信件生成/);
   assert.match(pending, /<PendingMailDialog groups=\{mailGroups\}/);
-  assert.match(pending, /\.filter\(\(group\) => listed\.has\(group\.key\)\)\s*\.map\(\(group\) => \(\{ \.\.\.group, records: group\.records\.filter\(\(record\) => record\.needsApplication\) \}\)\)/, "the mail follows the listed locations and only their rows still to apply for");
+  assert.match(pending, /\.filter\(\(group\) => listed\.has\(group\.key\)\)\s*\.map\(\(group\) => \(\{ \.\.\.group, records: group\.records\.filter\(\(record\) => record\.needsApplication \|\| isExplicitMaterialApplication\(record\.trackingStatus\)\) \}\)\)/, "the mail follows the listed locations and only their rows still to apply for");
 });
 
 test("BOM 管理 can archive a BOM and keeps archived BOMs out of the switcher and project groups", () => {

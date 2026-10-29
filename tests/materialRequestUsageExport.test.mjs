@@ -1,3 +1,4 @@
+import { getMaterialSpecDocuments } from "../src/components/material-requests/materialAttachments.ts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -238,7 +239,7 @@ test("page snapshots and actual exports keep each physical candidate's own CE fi
   candidates[0].trackingHistory = [{ status: '新增追蹤', note: '舊進度', createdAt: '2026-10-27T02:00:00Z' }, { status: '已完成', note: '最新已取得料號', requestInfo: 'CE 核對完成', createdBy: 'QA', createdAt: '2026-10-29T02:00:00Z' }];
   const group = { key: "shared-group", records: candidates, primaryRecord: candidates[0], assemblyName: "Module", name: "GROUP NAME MUST NOT REPLACE ROW", qty: 1, schematicPart: "GROUP SYMBOL MUST NOT FILL BLANKS", footprint: "GROUP FOOTPRINT MUST NOT FILL BLANKS", partName: "GROUP NAME MUST NOT BECOME SPEC", partSpec: "GROUP SPEC MUST NOT FILL BLANKS", displayRef: "C101" };
   const bindings = {
-    filteredGroups: [group], getMatchingRecords: value => value.records,
+    getMaterialSpecDocuments, filteredGroups: [group], getMatchingRecords: value => value.records,
     getLatestTrackingEntry: record => record.trackingHistory.at(-1), getTrackingRequestMeta: () => ({ ticket: "", url: "" }),
     getActionLabel: () => "", getGroupItemValue: () => 1, markedGroupKeySet: new Set(),
     getMaterialBuildRequirementLabel: () => "待確認", getTrackingWorkflowStatus: () => "",

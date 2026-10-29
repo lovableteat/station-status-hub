@@ -1,7 +1,7 @@
 import { getLatestTrackingEntry } from "./materialRequestUtils";
 import type { MaterialTrackingHistoryImage, MaterialWorkbookRecord } from "./materialRequestUtils";
-
-export const MATERIAL_TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
+import { MATERIAL_TRACKING_STATUS_OPTIONS } from "./materialTrackingStatus";
+export { MATERIAL_TRACKING_STATUS_OPTIONS } from "./materialTrackingStatus";
 
 export interface MaterialTrackingDraft {
   sessionId: string;

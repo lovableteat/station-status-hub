@@ -18,7 +18,11 @@ function mountDialog(overrides = {}, uploadSpec = () => Promise.resolve({ name: 
   const load = loader({
     mocks: {
       "@/hooks/use-toast": { useToast: () => ({ toast: (entry) => toasts.push(entry) }) },
-      "./materialSpecDocuments": { MATERIAL_SPEC_ACCEPT: ".pdf", uploadMaterialSpecDocument: uploadSpec, formatMaterialSpecSize: () => "1 KB" },
+      "./materialSpecDocuments": { MATERIAL_SPEC_ACCEPT: ".pdf", MATERIAL_SPEC_MAX_BYTES: 52428800, uploadMaterialSpecDocuments: async ({ files, ...context }) => {
+        const documents = [], failures = [];
+        for (const file of files) { try { documents.push(await uploadSpec({ ...context, file })); } catch (error) { failures.push({file,error:error.message}); } }
+        return { documents, failures };
+      }, formatMaterialSpecSize: () => "1 KB" },
     },
     globals: { Error, MaterialFieldLabel: ui.Label, CHIP_BASE: "chip", CHIP_TONES: { neutral: "neutral", primary: "primary" } },
     transform(source, file) {
@@ -29,7 +33,7 @@ function mountDialog(overrides = {}, uploadSpec = () => Promise.resolve({ name: 
         if (ts.isVariableStatement(node)) return node.declarationList.declarations.some(declaration => declaration.name.getText(ast) === "MATERIAL_CE_EDITOR_FIELDS");
         if (!ts.isImportDeclaration(node)) return false;
         const spec = node.moduleSpecifier.text;
-        return spec === "react" || spec === "lucide-react" || spec.startsWith("@/components/ui/") || ["@/hooks/use-toast", "@/lib/utils", "@/lib/inputValidation", "./materialSpecDocuments", "./MaterialTrackingEditor", "./materialTrackingDraft", "./materialUploadContract.mjs"].includes(spec);
+        return spec === "react" || spec === "lucide-react" || spec.startsWith("@/components/ui/") || ["@/hooks/use-toast", "@/lib/utils", "@/lib/inputValidation", "./materialSpecDocuments", "./materialAttachments", "./MaterialTrackingEditor", "./materialTrackingDraft", "./materialUploadContract.mjs"].includes(spec);
       });
       return retained.map((node) => node.getText(ast)).join("\n") + "\nexport { MaterialRecordDialog };";
     },
@@ -65,11 +69,12 @@ test("one main save persists both the material edits and the pending progress wi
   editor.unmount();
 });
 
-test("all 15 CE fields remain editable in Excel order without a horizontal table and retain internal values", async () => {
+test("all 15 CE fields remain editable in Excel order in one horizontal table row and retain internal values", async () => {
   const editor = mountDialog({ record: { ...baseRecord, assemblyName: "original module", remark: "original note", manufacturerPartNumberAlt: "OLD-MPN" } });
-  const fields = editor.root.root.findAll(node => node.type === "stub" && node.props["data-testid"] === "material-ce-field");
+  const fields = editor.root.root.findAll(node => node.type === "td" && node.props["data-testid"] === "material-ce-field");
   assert.equal(fields.length, 15);
-  assert.equal(editor.root.root.findAllByType("table").length, 0);
+  assert.equal(editor.root.root.findAllByType("table").length, 1);
+  assert.equal(editor.root.root.findByType("tbody").findAllByType("tr").length, 1);
   assert.deepEqual(fields.map(field => field.findAll(node => node.type === "stub" && node.props.id?.startsWith("material-"))[0].props.id), ["material-level", "material-name", "material-qty", "material-ref-des", "material-mpn", "material-maker", "material-sourcing", "material-virtual-alternative", "material-internal-pn", "material-part-name", "material-spec", "material-symbol", "material-footprint", "material-phase-out", "material-part-usage"]);
   for (const id of ["material-ref", "material-assembly", "material-remark"]) assert.equal(editor.root.root.findAllByProps({ id }).length, 0);
   const author = editor.root.root.findAll(node => node.type === "stub" && String(node.props.id).endsWith("-author"))[0];
@@ -100,7 +105,7 @@ test("a freshly uploaded SPEC appears immediately with an explicit download acti
   const upload = editor.root.root.find(node => node.type === "input" && node.props.type === "file" && node.props.accept === ".pdf");
   await act(async () => { upload.props.onChange({ target: { files: [{ name: "spec.pdf" }], value: "" } }); await Promise.resolve(); });
   assert.match(JSON.stringify(editor.root.toJSON()), /spec\.pdf/);
-  const download = editor.root.root.find(node => node.type === "stub" && node.children.includes("下載 SPEC"));
+  const download = editor.root.root.find(node => node.type === "stub" && node.props["aria-label"] === "下載 SPEC spec.pdf");
   act(() => download.props.onClick());
   assert.equal(opened[0][0].specDocument.name, "spec.pdf");
   assert.equal(opened[0][1], true);
@@ -130,16 +135,27 @@ test("dropping a file uploads once, preserves the material draft and saves its d
   editor.unmount();
 });
 
-test("multi-file and folder drops report errors instead of silently replacing the existing SPEC", async () => {
-  let uploads = 0;
-  const editor = mountDialog({ record: { ...baseRecord, specDocument: { name: "old.pdf", path: "old" } } }, async () => { uploads++; });
-  await act(async () => dropSpec(editor, [{ name: "a.pdf" }, { name: "b.pdf" }]));
-  await act(async () => dropSpec(editor, [{ name: "folder" }], [{ webkitGetAsEntry: () => ({ isDirectory: true }) }]));
-  assert.equal(uploads, 0);
-  assert.match(JSON.stringify(editor.toasts), /一次上傳一份 SPEC/);
-  assert.match(JSON.stringify(editor.toasts), /請拖入文件/);
+test("ten raw file drops append all files, persist after reopening, and keep the old attachment", async () => {
+  const uploads = [];
+  const editor = mountDialog({ record: { ...baseRecord, specDocument: { name: "old.pdf", path: "old" } } }, async args => { uploads.push(args.file); return {name:args.file.name,path: "W/part-A/"+args.file.name}; });
+  const files = Array.from({length:10}, (_,index) => ({name:`part-${index}.${index % 2 ? 'stp' : 'glb'}`}));
+  await act(async () => dropSpec(editor, files));
+  assert.equal(uploads.length, 10);
   await act(async () => editor.button().props.onClick());
+  assert.equal(editor.writes[0].specDocuments.length, 11);
   assert.equal(editor.writes[0].specDocument.path, "old");
+  editor.update({open:false}); editor.update({open:true,record:editor.writes[0]});
+  assert.equal(editor.root.root.findAll(node=>node.type==='stub' && node.props['aria-label']?.startsWith('下載 SPEC ')).length,11);
+  assert.doesNotMatch(JSON.stringify(editor.toasts), /先壓縮|一次上傳一份/);
+  editor.unmount();
+});
+
+test("partial upload failures retain successful files and list the failed filename for retry", async () => {
+  const editor = mountDialog({}, async ({file}) => { if(file.name==='bad.stp') throw new Error('Network failed'); return {name:file.name,path:'W/'+file.name}; });
+  await act(async () => dropSpec(editor, [{name:'good.glb'},{name:'bad.stp'}]));
+  assert.match(JSON.stringify(editor.root.toJSON()),/bad.stp.*Network failed/);
+  await act(async () => editor.button().props.onClick());
+  assert.equal(JSON.stringify(editor.writes[0].specDocuments.map(file=>file.name)), JSON.stringify(['good.glb']));
   editor.unmount();
 });
 
@@ -176,7 +192,7 @@ test("a failed save retains fields and progress; duplicate clicks cannot start a
   let calls = 0;
   const editor = mountDialog({ onSave: () => { calls += 1; return pending.promise; } });
   editor.changeName("Unsaved material");
-  editor.setTracking({ status: "處理中", note: "Unsaved tracking" });
+  editor.setTracking({ status: "已發信", note: "Unsaved tracking" });
   const click = editor.button().props.onClick;
   act(() => { click(); click(); });
   assert.equal(calls, 1);
