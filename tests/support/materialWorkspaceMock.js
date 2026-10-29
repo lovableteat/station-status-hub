@@ -19,11 +19,11 @@ export const supabase = { ...baseSupabase, rpc: async name => name === "list_act
   async remove(paths) { paths.forEach(path => files.delete(path)); return { error: null }; },
 }; } } };
 
-const records = ['R1', 'R1', 'PR1', 'R10', 'R1_C0P1', 'LB48', 'C1', 'J1', 'U1'].map((ref, index) => ({
+const records = ['R1', 'R1', 'PR1', 'R10', 'R1_C0P1', 'LB48', 'C1', 'J1', 'U1', 'J2', 'J2'].map((ref, index) => ({
   ...seed.records[0], id: `qa-${index}`, level: 2, sourceGroupKey: ref, isGroupStart: true,
   refGroup: ref, refDes: ref, name: index === 5 ? 'IND 3.5uH 0402' : `RES 10K 1% 0402 ${ref}`, qty: 1,
   manufacturer: index % 2 ? 'QA Vendor B' : 'QA Vendor A', manufacturerPartNumber: `QA-MPN-${index}`,
-  virtualAlternative: (index > 1 && index !== 7) ? '000-VIRTUAL' : '', partNumber: (index > 1 && index !== 7) ? `000-PHYSICAL-${index}` : '',
+  virtualAlternative: (index > 1 && index !== 7 && index !== 10) ? '000-VIRTUAL' : '', partNumber: (index > 1 && index !== 7 && index !== 10) ? `000-PHYSICAL-${index}` : '',
   requestOwnerId: index === 8 ? '00000000-0000-4000-8000-000000000002' : undefined, requestOwnerName: index === 8 ? 'CE 王同學' : undefined, partName: 'QA 公司料名', partSpec: '10K 1% 0402', assemblyName: 'QA 原始模組', remark: 'QA 原始備註保留',
   trackingStatus: index === 8 ? 'SYMBOL申請中' : '', trackingHistory: [], trackingNote: '', sourcingStatus: 'Approved',
 }));
