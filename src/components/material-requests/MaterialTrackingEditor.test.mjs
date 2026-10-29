@@ -5,6 +5,16 @@ import test from "node:test";
 const require = createRequire(import.meta.url);
 const { React, create, act, loader } = require("../../../tests/support/renderHarness.cjs");
 
+function findJsonByTestId(node, testId) {
+  if (!node || typeof node !== "object") return null;
+  if (node.props?.["data-testid"] === testId) return node;
+  for (const child of Array.isArray(node.children) ? node.children : []) {
+    const match = findJsonByTestId(child, testId);
+    if (match) return match;
+  }
+  return null;
+}
+
 function mountEditor(overrides = {}) {
   const readers = [];
   class FileReader {
@@ -55,6 +65,32 @@ test("saved status and history show explicit status, author, time and request in
   assert.match(text, /已發信/);
   const badges = editor.root.root.findAllByProps({ 'data-testid': 'tracking-status-badge' }).filter(node => node.type === 'span');
   assert.ok(badges.some(node => node.props['data-status'] === '新增追蹤'));
+  act(() => editor.root.unmount());
+});
+
+test("current summary shows only request information while the full note remains in history", () => {
+  const editor = mountEditor({
+    requestTicket: 'REQ-88',
+    requestUrl: 'https://example.invalid/request/88',
+    trackingHistory: [{
+      id: 'latest',
+      status: '已發信',
+      createdAt: '2026-10-29T06:37:54Z',
+      createdBy: 'Vincent',
+      requestInfo: '已申請 REALTEK 帳號，等待授權',
+      note: '此內容只應出現在歷史紀錄',
+      requestTicket: 'REQ-88',
+      requestUrl: 'https://example.invalid/request/88',
+    }],
+  });
+  const rendered = editor.root.toJSON();
+  const summaryText = JSON.stringify(findJsonByTestId(rendered, 'tracking-current-summary'));
+  assert.match(summaryText, /申請狀態資訊/);
+  assert.match(summaryText, /已申請 REALTEK 帳號.*等待授權/);
+  assert.doesNotMatch(summaryText, /此內容只應出現在歷史紀錄/);
+  assert.doesNotMatch(summaryText, /REQ-88/);
+  const historyText = JSON.stringify(findJsonByTestId(rendered, 'tracking-history-panel'));
+  assert.match(historyText, /此內容只應出現在歷史紀錄/);
   act(() => editor.root.unmount());
 });
 

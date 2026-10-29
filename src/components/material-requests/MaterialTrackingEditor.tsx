@@ -149,8 +149,6 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
           <div><dt className="text-xs text-muted-foreground">更新人</dt><dd className="mt-1">{latest?.createdBy || "未提供"}</dd></div>
         </dl>
         {latest?.requestInfo && <div className="space-y-1"><p className="text-xs text-muted-foreground">申請狀態資訊</p><p className="break-words text-sm font-medium">{normalizeMaterialRequestUrl(latest.requestInfo) ? <RequestLink url={latest.requestInfo} /> : latest.requestInfo}</p></div>}
-        {latest?.note && <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground">{latest.note}</p>}
-        <RequestLink ticket={record.requestTicket} url={record.requestUrl} />
       </div>
 
       <fieldset disabled={disabled} className="material-tracking-fields min-w-0 space-y-4 border-t border-border pt-4">
