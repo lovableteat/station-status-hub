@@ -963,6 +963,30 @@ All colors MUST be HSL for proper theming support.
   font-size: 14px;
 }
 
+.pending-materials-actions .pending-action--export {
+  background-color: color-mix(in srgb, hsl(var(--foreground)) 18%, hsl(var(--secondary)));
+  border-color: hsl(var(--foreground) / 0.3);
+  color: hsl(var(--foreground));
+}
+.pending-materials-actions .pending-action--export:hover {
+  background-color: color-mix(in srgb, hsl(var(--foreground)) 26%, hsl(var(--secondary)));
+}
+.pending-materials-actions .pending-action--mail {
+  background-color: color-mix(in srgb, hsl(var(--primary)) 86%, white);
+  color: hsl(var(--primary-foreground));
+}
+.pending-materials-actions .pending-action--mail:hover {
+  background-color: color-mix(in srgb, hsl(var(--primary)) 76%, white);
+}
+.pending-materials-actions .pending-action--suppliers {
+  background-color: color-mix(in srgb, hsl(var(--primary)) 35%, hsl(var(--secondary)));
+  border-color: hsl(var(--primary) / 0.65);
+  color: hsl(var(--foreground));
+}
+.pending-materials-actions .pending-action--suppliers:hover {
+  background-color: color-mix(in srgb, hsl(var(--primary)) 48%, hsl(var(--secondary)));
+}
+
 .material-record-dialog .app-dialog-header { flex: 0 0 auto; padding-right: 46px; }
 .material-record-dialog .material-record-scroll { overflow-x: hidden; padding: 0 4px 2px 0; scrollbar-gutter: stable; }
 .material-record-dialog .material-ce-section,
