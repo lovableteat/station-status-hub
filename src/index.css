@@ -967,32 +967,33 @@ All colors MUST be HSL for proper theming support.
 .material-record-dialog .material-record-scroll { overflow-x: hidden; padding: 0 4px 2px 0; scrollbar-gutter: stable; }
 .material-record-dialog .material-ce-section,
 .material-record-dialog .material-spec-section { padding: 16px; }
-.material-record-dialog .material-ce-fields { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: start; gap: 16px 18px; }
-.material-record-dialog .material-ce-field { min-width: 0; gap: 7px; }
-.material-record-dialog .material-ce-field > :first-child { min-height: 25px; flex-wrap: wrap; font-size: 13px; }
+.material-record-dialog .material-ce-table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid hsl(var(--border)); border-radius: 8px; scrollbar-gutter: stable; }
+.material-record-dialog .material-ce-table-scroll:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.material-record-dialog .material-ce-table { table-layout: fixed; width: 3524px; border-collapse: collapse; }
+.material-record-dialog .material-ce-table th { padding: 12px; text-align: left; font-size: 13px; background: hsl(var(--secondary)); }
+.material-record-dialog .material-ce-table th > :first-child { min-height: 24px; flex-wrap: nowrap; }
+.material-record-dialog .material-ce-table td { padding: 10px; vertical-align: top; }
+.material-record-dialog .material-ce-table :is(td, th) { border-right: 1px solid hsl(var(--border)); }
 .material-record-dialog .material-ce-control { min-height: 64px; height: auto; padding: 10px 12px; border-radius: 8px; font-size: 14px; line-height: 1.5; }
 .material-record-dialog textarea.material-ce-control { field-sizing: content; overflow-wrap: anywhere; resize: vertical; }
 .material-record-dialog .material-spec-section { transition: border-color 120ms ease, background-color 120ms ease; }
 .material-record-dialog .material-spec-section[data-drag-active="true"] { border-color: hsl(var(--primary)); background: hsl(var(--primary) / 0.1); outline: 2px dashed hsl(var(--primary)); outline-offset: -6px; }
+.material-record-dialog .material-spec-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr)); gap: 10px; }
 .material-record-dialog .material-spec-file { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--background) / 0.4); }
-.material-record-dialog .material-spec-file-open { display: flex; flex: 1 1 280px; min-width: 0; align-items: center; gap: 13px; padding: 4px; border-radius: 6px; text-align: left; }
+.material-record-dialog .material-spec-file-open { display: flex; flex: 1 1 220px; min-width: 0; align-items: center; gap: 13px; padding: 4px; border-radius: 6px; text-align: left; }
 .material-record-dialog .material-spec-file-open:hover { background: hsl(var(--primary) / 0.08); }
 .material-record-dialog .material-spec-file-open:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
 .material-record-dialog .material-spec-file-icon { width: 44px; height: 44px; flex: 0 0 44px; color: hsl(var(--primary)); stroke-width: 1.5; }
 .material-record-dialog .material-spec-file-copy { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
 .material-record-dialog .material-spec-file-copy strong { overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
 .material-record-dialog .material-spec-file-copy > span { color: hsl(var(--muted-foreground)); font-size: 12px; }
-.material-record-dialog .material-spec-empty { display: flex; min-height: 82px; align-items: center; justify-content: center; gap: 12px; padding: 16px; border: 1px dashed hsl(var(--border)); border-radius: 8px; color: hsl(var(--muted-foreground)); }
+.material-record-dialog .material-spec-empty { grid-column: 1 / -1; display: flex; min-height: 82px; align-items: center; justify-content: center; gap: 12px; padding: 16px; border: 1px dashed hsl(var(--border)); border-radius: 8px; color: hsl(var(--muted-foreground)); }
 .material-record-dialog .material-spec-empty svg { width: 24px; height: 24px; flex-shrink: 0; color: hsl(var(--primary)); }
 .material-record-dialog .app-dialog-footer { flex-shrink: 0; }
 
-@media (max-width: 1099px) {
-  .material-record-dialog .material-ce-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 
 @media (max-width: 639px) {
   .material-record-dialog[data-ui="dialog"] { width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); gap: 12px; padding: 16px 12px 12px; border-radius: 16px; }
-  .material-record-dialog .material-ce-fields { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .material-record-dialog .material-ce-section,
   .material-record-dialog .material-spec-section { padding: 12px; }
   .material-record-dialog .material-ce-control { font-size: 16px; }

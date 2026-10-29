@@ -65,7 +65,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Field, FieldGroup } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -130,7 +129,12 @@ import { loadBomWorkspaceArchives, loadBomWorkspaceProjects, saveBomWorkspaceArc
 import { UploadGuideDialog } from "./MaterialUploadGuideDialog";
 import { MaterialTrackingEditor } from "./MaterialTrackingEditor";
 import { applyMaterialTrackingDraft, createMaterialTrackingDraft } from "./materialTrackingDraft";
-import { MATERIAL_SPEC_ACCEPT, createMaterialSpecUrl, formatMaterialSpecSize, uploadMaterialSpecDocument } from "./materialSpecDocuments";
+import { MATERIAL_SPEC_ACCEPT, MATERIAL_SPEC_MAX_BYTES, createMaterialSpecUrl, formatMaterialSpecSize, uploadMaterialSpecDocuments } from "./materialSpecDocuments";
+import { getMaterialSpecDocuments, withMaterialSpecDocuments } from "./materialAttachments";
+import { getMaterialTrackingStatusMeaning, isExplicitMaterialApplication, materialTrackingStatusTone } from "./materialTrackingStatus";
+import { MaterialRequestOwnerPicker, type MaterialRequestOwner } from "./MaterialRequestOwnerPicker";
+import { useMaterialRequestOwners } from "./useMaterialRequestOwners";
+import { exportPendingMaterialsExcel } from "./pendingMaterialsExport";
 import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
 import { isMaterialReferenceQuery, matchesMaterialReference } from "./materialSearch";
 import { clearMaterialCrosshair, markMaterialCrosshair } from "./materialTableCrosshair";
@@ -914,6 +918,9 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     sourcingStatus: record.sourcingStatus,
     partUsageStatus: record.partUsageStatus ?? "",
     specDocument: record.specDocument,
+    specDocuments: record.specDocuments,
+    requestOwnerId: record.requestOwnerId,
+    requestOwnerName: record.requestOwnerName,
     ...(record.pendingCategory ? { pendingCategory: record.pendingCategory } : {}),
     ...(Object.prototype.hasOwnProperty.call(record, "phaseOutStatus") ? { phaseOutStatus: record.phaseOutStatus ?? "" } : {}),
     ...(Object.prototype.hasOwnProperty.call(record, "symbolStatus") ? { symbolStatus: record.symbolStatus ?? "" } : {}),
@@ -2642,7 +2649,7 @@ function PendingCategoryPicker({ group, disabled, onChange }: { group: MaterialG
         data-testid="pending-category-picker"
         aria-label={`調整 ${group.displayRef} 的分類，目前 ${label}${manual ? "（手動）" : "（依位號）"}`}
         title={manual ? `手動分類為 ${label}；可改回依位號自動分類` : `依位號自動分類為 ${label}；分錯可在這裡改`}
-        className={cn("h-9 w-[8.5rem] flex-none gap-1 rounded-md px-2 text-xs font-bold", manual ? "border-primary/60 bg-primary/15 text-primary" : "border-border bg-secondary/60 text-foreground/80")}
+        className={cn("order-2 h-9 w-[8.5rem] flex-none gap-1 rounded-md lg:order-none px-2 text-xs font-bold", manual ? "border-primary/60 bg-primary/15 text-primary" : "border-border bg-secondary/60 text-foreground/80")}
       >
         <SelectValue>{manual ? `${label} · 手動` : label}</SelectValue>
       </SelectTrigger>
@@ -2665,6 +2672,8 @@ export function PendingMaterialsDialog({
   onOpenChange,
   onOpenTracking,
   onSetCategory,
+  accountId,
+  onSetOwner,
   markedGroupKeys,
   onToggleMarked,
 }: {
@@ -2680,11 +2689,16 @@ export function PendingMaterialsDialog({
   onOpenTracking: (record: MaterialRecord) => void;
   /** Saves a hand-picked category for a pending part; null returns it to the Ref Des rule. */
   onSetCategory: (group: MaterialGroup, category: PendingMaterialCategory | null) => void;
+  accountId?: string;
+  onSetOwner: (record: MaterialRecord, owner: MaterialRequestOwner | null) => Promise<void>;
   markedGroupKeys: ReadonlySet<string>;
   onToggleMarked: (groupKey: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [mailOpen, setMailOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const ownerDirectory = useMaterialRequestOwners(open, accountId);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all" | "marked">("all");
   // Default: locations with no number on any vendor row (one line each). The switch adds every vendor
@@ -2699,7 +2713,7 @@ export function PendingMaterialsDialog({
     const listed = new Set(applications.map((application) => application.group.key));
     return groups
       .filter((group) => listed.has(group.key))
-      .map((group) => ({ ...group, records: group.records.filter((record) => record.needsApplication) }));
+      .map((group) => ({ ...group, records: group.records.filter((record) => record.needsApplication || isExplicitMaterialApplication(record.trackingStatus)) }));
   }, [applications, groups]);
   const keyword = query.trim().toLowerCase();
   // One category at a time keeps long BOMs from becoming one endless scroll; the tabs carry the counts.
@@ -2732,7 +2746,16 @@ export function PendingMaterialsDialog({
   const isStale = (group: MaterialGroup) => getPendingGroupUpdatedAt(group, recordMeta) < staleThreshold;
   const staleCount = applications.filter((application) => isStale(application.group)).length;
   const listedLocations = new Set(applications.map((application) => application.group.key)).size;
-  const description = `${includeAlternates ? `含替代廠商：共 ${applications.length.toLocaleString()} 筆廠商列沒有料號（${listedLocations.toLocaleString()} 組位號）` : `共 ${applications.length.toLocaleString()} 個位號完全沒有料號`} · CONNECTOR 與 IC 優先 ${priorityCount.toLocaleString()} 筆 · ${staleCount.toLocaleString()} 筆逾 3 天未更新`;
+  const description = `共 ${applications.length.toLocaleString()} 筆待處理（${listedLocations.toLocaleString()} 組位號） · 含手動料號／SYMBOL申請 · 優先 ${priorityCount.toLocaleString()} 筆 · ${staleCount.toLocaleString()} 筆逾 3 天未更新`;
+  const exportRows = visibleCategories.flatMap(category => category.groups.map(application => ({ category: category.label, displayRef: application.displayRef, record: toWorkbookRecord(application.record) })));
+  const exportVisible = async () => {
+    if (exporting || !exportRows.length) return;
+    setExporting(true); setExportError("");
+    try {
+      await exportPendingMaterialsExcel({ rows: exportRows, workspaceName, exportedBy, scope: [selectedCategory === "all" ? "全部分類" : selectedCategory === "marked" ? "特別標記" : categories.find(category => category.key === selectedCategory)?.label, keyword ? `搜尋：${query.trim()}` : "", includeAlternates ? "含沒有號碼的替代廠商" : "位號及手動申請"].filter(Boolean).join(" · ") });
+    } catch { setExportError("匯出失敗，請重試。資料未被更動。"); }
+    finally { setExporting(false); }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2743,6 +2766,7 @@ export function PendingMaterialsDialog({
         </DialogHeader>
 
         <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" data-testid="pending-export-button" disabled={exporting || !exportRows.length} onClick={() => void exportVisible()} className="h-10 px-4 text-sm"><Download className="mr-1.5 h-4 w-4" />{exporting ? "匯出中…" : `匯出表格（${exportRows.length}）`}</Button>
           <Button type="button" data-testid="pending-mail-button" disabled={applications.length === 0} onClick={() => setMailOpen(true)} className="h-10 px-4 text-sm font-bold" title="把待處理料依廠商整理成信件內容並匯出 HTML"><FileCode2 className="mr-1.5 h-4 w-4" />信件生成</Button>
           <Button type="button" data-testid="pending-suppliers-button" variant="outline" onClick={() => setDirectoryOpen(true)} className="h-10 border-primary/40 bg-primary/10 px-4 text-sm text-primary hover:bg-primary/20"><Factory className="mr-1.5 h-4 w-4" />供應商聯絡資料</Button>
         </div>
@@ -2752,7 +2776,7 @@ export function PendingMaterialsDialog({
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜尋位號、料名、MPN 或追蹤狀態"
+              placeholder="搜尋位號、料名、MPN、狀態或填單人"
               aria-label="搜尋待處理料"
               className="h-10 rounded-xl pl-9 text-sm"
             />
@@ -2770,6 +2794,7 @@ export function PendingMaterialsDialog({
             含沒有號碼的替代廠商 <strong className="font-mono">{vendorApplications.length.toLocaleString()}</strong>
           </Button>
         </div>
+        {(exportError || ownerDirectory.error) && <p role="alert" className="text-sm text-destructive">{exportError || ownerDirectory.error}</p>}
         <PendingMailDialog groups={mailGroups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
         <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
 
@@ -2818,17 +2843,18 @@ export function PendingMaterialsDialog({
               const stale = isStale(group);
               const marked = markedGroupKeys.has(group.key);
               return (
-                <div key={application.key} data-testid="pending-application" className={cn("flex min-h-14 flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40 lg:h-14 lg:flex-nowrap", stale ? "border-destructive/40" : "border-border")}>
+                <div key={application.key} data-testid="pending-application" className={cn("flex min-h-14 flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40 lg:flex-nowrap", stale ? "border-destructive/40" : "border-border")}>
                   <Button type="button" variant="ghost" size="icon" data-testid="pending-mark-toggle" aria-pressed={marked} aria-label={`${marked ? '取消特別標記' : '特別標記'} ${group.displayRef}`} title="標記此位號；同組替代廠商共用，保存在此瀏覽器" onClick={() => onToggleMarked(group.key)} className={cn("relative h-9 w-9 flex-none", marked ? "bg-warning/15 text-warning hover:text-warning" : "text-muted-foreground hover:text-warning")}><Star className={cn("h-4 w-4", marked && "fill-current")} aria-hidden="true" />{stale && <span className="material-blink absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}</Button>
                   <span className="w-[calc(100%-3.25rem)] flex-none truncate font-mono text-sm font-semibold text-foreground sm:w-28 xl:w-40" title={group.displayRef}>{group.displayRef}</span>
                   <PendingCategoryPicker group={group} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
-                  <span className="min-w-0 flex-1 truncate text-base text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
+                  <span className="order-1 w-full min-w-0 flex-none whitespace-normal break-words text-base text-foreground lg:order-none lg:w-auto lg:flex-1 lg:truncate" title={application.name}>{application.name || "未命名料件"}</span>
                   <span className="hidden w-28 flex-none truncate font-mono text-sm text-foreground/75 md:block xl:w-40" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
                   <span className="hidden w-20 flex-none truncate text-xs text-muted-foreground lg:block xl:w-28" title={record.manufacturer}>{record.manufacturer || "未填廠商"}</span>
-                  {stale && <span className={cn(CHIP_BASE, "inline-flex h-9 flex-none items-center", CHIP_TONES.danger)} title="還沒取得料號，且超過 3 天沒有更新資料">逾 3 天未更新</span>}
-                  <div className="ml-auto flex flex-none items-center gap-1">
-                    <Button type="button" data-testid="pending-tracking-control" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="h-9 gap-0 overflow-hidden rounded-lg border border-border p-0 text-xs" aria-label={`追蹤／更新 ${group.displayRef}，目前${trackingStatus || '未追蹤'}`}>
-                      <span data-testid="pending-status-segment" className={cn("inline-flex h-full items-center px-2", getTrackingStatusTone(trackingStatus))}><span className="max-w-24 truncate">{trackingStatus || "未追蹤"}</span></span>
+                  <MaterialRequestOwnerPicker record={record} owners={ownerDirectory.owners} disabled={!canEdit} onChange={owner => onSetOwner(record, owner)} />
+                  {stale && <span className={cn(CHIP_BASE, "order-4 inline-flex h-9 flex-none items-center lg:order-none", CHIP_TONES.danger)} title="還沒取得料號，且超過 3 天沒有更新資料">逾 3 天未更新</span>}
+                  <div className="order-5 ml-auto flex flex-none items-center gap-1 lg:order-none">
+                    <Button type="button" data-testid="pending-tracking-control" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="h-9 gap-0 overflow-hidden rounded-lg border border-border p-0 text-xs" aria-label={`追蹤／更新 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
+                      <span data-testid="pending-status-segment" className={cn("inline-flex h-full flex-col justify-center px-2", materialTrackingStatusTone(trackingStatus))}><span>{trackingStatus || "未處理"}</span>{getMaterialTrackingStatusMeaning(trackingStatus) && <span className="text-[10px] font-normal">{getMaterialTrackingStatusMeaning(trackingStatus)}</span>}</span>
                       <span data-testid="pending-update-segment" className="inline-flex h-full items-center border-l border-border px-3">追蹤／更新</span>
                     </Button>
                   </div>
@@ -3098,6 +3124,8 @@ export function MaterialRecordDialog({
   editorScopeRef.current = `${open}:${workspaceId}:${record.id}:${canEdit}`;
   const [isUploadingSpec, setIsUploadingSpec] = useState(false);
   const [isDraggingSpec, setIsDraggingSpec] = useState(false);
+  const [specProgress, setSpecProgress] = useState({ completed: 0, total: 0 });
+  const [specFailures, setSpecFailures] = useState<Array<{ file: File; error: string }>>([]);
   const specUploadRef = useRef(false);
   const specDragDepthRef = useRef(0);
   const specGenerationRef = useRef(0);
@@ -3114,32 +3142,28 @@ export function MaterialRecordDialog({
     specDragDepthRef.current = 0;
     setIsUploadingSpec(false);
     setIsDraggingSpec(false);
+    setSpecFailures([]);
+    setSpecProgress({ completed: 0, total: 0 });
   }, [open, workspaceId, record.id, readOnly]);
   const uploadSpecFile = async (files: File[]) => {
     if (!open || !files.length || readOnly || savingRef.current || specUploadRef.current) return;
-    if (files.length !== 1) {
-      toast({ title: "一次上傳一份 SPEC", description: "請選擇一份文件；多份文件可先壓縮成 ZIP。現有 SPEC 不會被更動。", variant: "destructive" });
-      return;
-    }
-    const file = files[0];
     const scope = editorScopeRef.current;
     const generation = specGenerationRef.current;
     const isCurrent = () => mountedRef.current && editorScopeRef.current === scope && specGenerationRef.current === generation;
     specUploadRef.current = true;
     setIsUploadingSpec(true);
+    setSpecFailures([]);
+    setSpecProgress({ completed: 0, total: files.length });
     try {
-      const specDocument = await uploadMaterialSpecDocument({ workspaceId, recordId: form.id, file, uploadedBy: uploaderName });
+      const result = await uploadMaterialSpecDocuments({ workspaceId, recordId: form.id, files, uploadedBy: uploaderName,
+        onProgress: (completed, total) => { if (isCurrent()) setSpecProgress({ completed, total }); },
+      });
       if (!isCurrent()) return;
-      setForm((current) => ({ ...current, specDocument }));
-      toast({ title: "SPEC 已上傳", description: `「${file.name}」會在儲存資料後跟著這顆料一起保存。` });
-    } catch (error) {
-      if (!isCurrent()) return;
-      toast({ title: "SPEC 上傳失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
+      if (result.documents.length) setForm(current => withMaterialSpecDocuments(current, [...getMaterialSpecDocuments(current), ...result.documents]));
+      setSpecFailures(result.failures);
+      toast({ title: result.failures.length ? `已上傳 ${result.documents.length} 份，${result.failures.length} 份失敗` : `SPEC 已上傳 ${result.documents.length} 份`, description: "成功的檔案已加入清單；按「儲存資料與追蹤」保存到料件。", variant: result.failures.length ? "destructive" : undefined });
     } finally {
-      if (isCurrent()) {
-        specUploadRef.current = false;
-        setIsUploadingSpec(false);
-      }
+      if (isCurrent()) { specUploadRef.current = false; setIsUploadingSpec(false); }
     }
   };
   const handleSpecFile = (event: ChangeEvent<HTMLInputElement>) => {
@@ -3215,19 +3239,21 @@ export function MaterialRecordDialog({
           <fieldset disabled={isSaving} className="flex min-w-0 flex-col gap-4">
         <section className="workspace-dialog-section material-ce-section min-w-0 rounded-xl">
           <h3 id="material-ce-grid-title" className="mb-3 text-sm font-semibold">CE Excel 欄位 · 依交付格式順序</h3>
-          <FieldGroup className="material-ce-fields" role="region" aria-labelledby="material-ce-grid-title">
-            {MATERIAL_CE_EDITOR_FIELDS.map((field, index) => (
-              <Field key={field.key} data-testid="material-ce-field" className="material-ce-field" data-disabled={readOnly || undefined}>
-                <MaterialFieldLabel field={field.key} htmlFor={field.id} label={MATERIAL_CE_FIELDS[index].header} required={field.key === "name"} />
+          <div className="material-ce-table-scroll" role="region" aria-labelledby="material-ce-grid-title" tabIndex={0}>
+            <table className="material-ce-table">
+              <colgroup>{MATERIAL_CE_EDITOR_FIELDS.map(field => <col key={field.key} style={{ width: field.width }} />)}</colgroup>
+              <thead><tr>{MATERIAL_CE_EDITOR_FIELDS.map((field, index) => <th key={field.key} scope="col"><MaterialFieldLabel field={field.key} htmlFor={field.id} label={MATERIAL_CE_FIELDS[index].header} required={field.key === "name"} /></th>)}</tr></thead>
+              <tbody><tr>{MATERIAL_CE_EDITOR_FIELDS.map((field, index) => <td key={field.key} data-testid="material-ce-field">
                 {field.key === "level" || field.key === "qty" ? (
-                  <Input id={field.id} disabled={readOnly} readOnly={field.key === "level"} value={field.key === "level" ? "2" : String(form[field.key] ?? "")} onChange={(event) => updateField(field.key, event.target.value)} inputMode={field.key === "qty" ? "decimal" : undefined} className="material-ce-control" />
+                  <Input id={field.id} disabled={readOnly} readOnly={field.key === "level"} value={field.key === "level" ? "2" : String(form[field.key] ?? "")} onChange={event => updateField(field.key, event.target.value)} inputMode={field.key === "qty" ? "decimal" : undefined} className="material-ce-control" />
                 ) : (
-                  <Textarea id={field.id} disabled={readOnly} value={String(form[field.key] ?? "")} onChange={(event) => updateField(field.key, event.target.value)} rows={2} placeholder={MATERIAL_CE_FIELDS[index].meaning} className={cn("material-ce-control", (field.key === "virtualAlternative" || field.key === "partNumber") && "material-pn-input", field.key === "partNumber" && !form.partNumber.trim() && "material-pn-missing")} />
+                  <Textarea id={field.id} disabled={readOnly} value={String(form[field.key] ?? "")} onChange={event => updateField(field.key, event.target.value)} rows={2} placeholder={MATERIAL_CE_FIELDS[index].meaning} className={cn("material-ce-control", (field.key === "virtualAlternative" || field.key === "partNumber") && "material-pn-input", field.key === "partNumber" && !form.partNumber.trim() && "material-pn-missing")} />
                 )}
                 {field.key === "partUsageStatus" && (record as Partial<MaterialRecord>).partUsageStatusSource === "legacy-tracking" && <p className="text-xs text-muted-foreground">取自舊格式匯入追蹤原文；原追蹤保留。</p>}
-              </Field>
-            ))}
-          </FieldGroup>
+              </td>)}</tr></tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">全部 15 欄維持同一排，可左右捲動檢視及編輯。</p>
         </section>
 
         <section
@@ -3259,7 +3285,7 @@ export function MaterialRecordDialog({
             setIsDraggingSpec(false);
             if (readOnly || isSaving || isUploadingSpec) return;
             if (Array.from(event.dataTransfer.items ?? []).some((item) => item.webkitGetAsEntry?.()?.isDirectory)) {
-              toast({ title: "請拖入文件，而不是資料夾", description: "多份文件可先壓縮成 ZIP 再上傳。", variant: "destructive" });
+              toast({ title: "請拖入文件，而不是資料夾", description: "請開啟資料夾，選取裡面的檔案一起拖入；不必壓縮。", variant: "destructive" });
               return;
             }
             void uploadSpecFile(Array.from(event.dataTransfer.files));
@@ -3267,23 +3293,26 @@ export function MaterialRecordDialog({
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">SPEC 文件</h3>
-            <input ref={specInputRef} type="file" accept={MATERIAL_SPEC_ACCEPT} className="hidden" onChange={(event) => void handleSpecFile(event)} />
-            {!readOnly && <Button type="button" variant="secondary" disabled={isSaving || isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-11"><Upload data-icon="inline-start" />{isUploadingSpec ? "上傳中…" : form.specDocument ? "更換 SPEC" : "上傳 SPEC"}</Button>}
+            <input ref={specInputRef} type="file" accept={MATERIAL_SPEC_ACCEPT} multiple className="hidden" onChange={(event) => void handleSpecFile(event)} />
+            {!readOnly && <Button type="button" variant="secondary" disabled={isSaving || isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-11"><Upload data-icon="inline-start" />{isUploadingSpec ? `上傳中 ${specProgress.completed}/${specProgress.total}` : "新增 SPEC 檔案"}</Button>}
           </div>
           <div data-testid="material-spec-document" className="material-spec-files mt-3" aria-live="polite">
-            {form.specDocument ? <>
-              <div className="material-spec-file">
-                <button type="button" className="material-spec-file-open" onClick={() => onOpenSpec(form)} aria-label={`開啟 ${form.specDocument.name}`}>
-                  <FileText className="material-spec-file-icon" aria-hidden="true" />
-                  <span className="material-spec-file-copy"><strong>{form.specDocument.name}</strong><span>{formatMaterialSpecSize(form.specDocument.size)} · {formatTimestamp(form.specDocument.uploadedAt)}{form.specDocument.uploadedBy ? ` · ${form.specDocument.uploadedBy}` : ""}</span></span>
-                </button>
-                <Button type="button" variant="outline" className="h-11" onClick={() => onOpenSpec(form, true)}><Download data-icon="inline-start" />下載 SPEC</Button>
-                {!readOnly && <Button type="button" variant="ghost" className="h-11" disabled={isSaving || isUploadingSpec} onClick={() => setForm(current => ({ ...current, specDocument: undefined }))}>移除關聯</Button>}
+            {getMaterialSpecDocuments(form).map(document => <div className="material-spec-file" key={document.path}>
+              <button type="button" className="material-spec-file-open" onClick={() => onOpenSpec({ specDocument: document })} aria-label={`開啟 ${document.name}`}>
+                <FileText className="material-spec-file-icon" aria-hidden="true" />
+                <span className="material-spec-file-copy"><strong>{document.name}</strong><span>{formatMaterialSpecSize(document.size)} · {document.uploadedBy || "未提供上傳人"}</span></span>
+              </button>
+              <div className="flex w-full justify-end gap-1 border-t border-border pt-2">
+                <Button type="button" variant="outline" size="sm" className="h-9" aria-label={`下載 SPEC ${document.name}`} onClick={() => onOpenSpec({ specDocument: document }, true)}><Download data-icon="inline-start" />下載</Button>
+                {!readOnly && <Button type="button" variant="ghost" size="sm" className="h-9" aria-label={`移除 ${document.name}`} disabled={isSaving || isUploadingSpec} onClick={() => setForm(current => withMaterialSpecDocuments(current, getMaterialSpecDocuments(current).filter(item => item.path !== document.path)))}>移除關聯</Button>}
               </div>
-              {!readOnly && form.specDocument.path !== record.specDocument?.path && <p className="mt-2 text-xs text-warning">檔案已上傳，可直接下載；按「儲存資料與追蹤」才會保存到這筆料件。</p>}
-            </> : <div className="material-spec-empty"><Upload aria-hidden="true" /><span>{readOnly ? "尚未上傳 SPEC" : isDraggingSpec ? "放開滑鼠以上傳 SPEC" : "將 SPEC 檔案拖放到這裡，或按「上傳 SPEC」"}</span></div>}
+            </div>)}
+            {getMaterialSpecDocuments(form).length === 0 && <div className="material-spec-empty"><Upload aria-hidden="true" /><span>{readOnly ? "尚未上傳 SPEC" : isDraggingSpec ? "放開滑鼠以上傳所有檔案" : "將多個檔案一起拖放到這裡，或按「新增 SPEC 檔案」"}</span></div>}
           </div>
-          {!readOnly && <p className="mt-2 text-xs text-muted-foreground">支援 PDF、Office、圖片、ZIP，單檔最高 25 MB。{form.specDocument ? "拖入新檔案可更換 SPEC。" : ""}</p>}
+          {isUploadingSpec && <p role="status" className="mt-2 text-sm">上傳進度 {specProgress.completed}／{specProgress.total}，完成後即可儲存。</p>}
+          {specFailures.length > 0 && <div role="alert" className="mt-3 space-y-2 rounded-lg border border-destructive/40 p-3 text-sm"><p>以下檔案未上傳，其他成功檔案已保留：</p><ul className="list-inside list-disc">{specFailures.map((failure, index) => <li key={`${failure.file.name}:${index}`}>{failure.file.name}：{failure.error}</li>)}</ul><Button type="button" variant="outline" size="sm" disabled={readOnly || isSaving || isUploadingSpec} onClick={() => void uploadSpecFile(specFailures.map(failure => failure.file))}>重試失敗檔案</Button></div>}
+          {!readOnly && <p className="mt-3 text-xs text-muted-foreground">可一次拖入 10 份以上，不需壓縮。支援 GLB、GLTF、STP、STEP、STL、DWG、DXF、PDF、Office、圖片等；單檔上限 {formatMaterialSpecSize(MATERIAL_SPEC_MAX_BYTES)}。新增檔案會加入清單，不會取代舊檔。</p>}
+          {!readOnly && JSON.stringify(getMaterialSpecDocuments(form)) !== JSON.stringify(getMaterialSpecDocuments(record)) && <p className="mt-2 text-xs text-warning">附件清單尚未儲存，請按「儲存資料與追蹤」。</p>}
         </section>
 
           </fieldset>
@@ -3609,12 +3638,12 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
           <td data-material-cell="partSpec" className={MATERIAL_CELL_CLASS}>
             <div className="flex min-w-0 items-center gap-1">
               <MaterialSourceText value={partSpec} label="Part Spec" />
-              {statusRecord.specDocument && (
+              {getMaterialSpecDocuments(statusRecord).length > 0 && (
                 <button
                   type="button"
                   onClick={(event) => { event.stopPropagation(); actions.openSpec(statusRecord); }}
-                  title={`開啟 SPEC：${statusRecord.specDocument.name}`}
-                  aria-label={`開啟 SPEC ${statusRecord.specDocument.name}`}
+                  title={`開啟 ${getMaterialSpecDocuments(statusRecord).length} 份 SPEC：${getMaterialSpecDocuments(statusRecord).map(document => document.name).join("、")}`}
+                  aria-label={`開啟 ${getMaterialSpecDocuments(statusRecord).length} 份 SPEC`}
                   className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-md border border-primary/35 bg-primary/15 text-primary hover:bg-primary/25"
                 >
                   <Paperclip className="h-3.5 w-3.5" />
@@ -4846,7 +4875,7 @@ export function MaterialRequestPage() {
     () => dataset.groups.filter((group) => group.records.some(hasMaterialPartNumber)).length,
     [dataset.groups]
   );
-  const pendingMaterialGroups = useMemo(() => dataset.groups.filter((group) => group.records.some((record) => record.needsApplication)), [dataset.groups]);
+  const pendingMaterialGroups = useMemo(() => dataset.groups.filter((group) => group.records.some((record) => record.needsApplication || isExplicitMaterialApplication(record.trackingStatus))), [dataset.groups]);
   const discouragedMaterialRows = useMemo(() => collectDiscouragedMaterialRows(dataset.records), [dataset.records]);
   const excludedDiscouragedCount = useMemo(() => countExcludedDiscouragedRows(dataset.records), [dataset.records]);
   const discouragedMaterialCount = discouragedMaterialRows.length;
@@ -4896,6 +4925,7 @@ export function MaterialRequestPage() {
     }
   };
   const requiredApplicationCount = useMemo(() => dataset.groups.filter(requiresApplication).length, [dataset.groups]);
+  const pendingApplicationCount = useMemo(() => buildPendingApplications(pendingMaterialGroups).length, [pendingMaterialGroups]);
   const pendingGroupCount = useMemo(
     () => dataset.groups.filter((group) => group.pendingCount > 0).length,
     [dataset.groups]
@@ -5290,6 +5320,14 @@ export function MaterialRequestPage() {
     });
   };
 
+  const setPendingOwner = async (record: MaterialRecord, owner: MaterialRequestOwner | null) => {
+    if (!canEdit || !isCollaborativeReady || !isFullDatasetLoaded) throw new Error("尚未同步，請稍後重試。");
+    const writeScope = captureBomWrite();
+    await saveRecordToActiveBom({ ...toWorkbookRecord(record), requestOwnerId: owner?.id ?? "", requestOwnerName: owner?.name ?? "" }, activeWorkspace.recordMeta?.[record.id]);
+    if (!isBomWriteCurrent(writeScope)) return;
+    toast({ title: "填單人已儲存", description: `${record.refDes || record.name} → ${owner?.name ?? "未指定"}` });
+  };
+
   const handleSaveRecord = async (record: MaterialWorkbookRecord) => {
     if (!isValidBomUsage(record.qty)) {
       toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
@@ -5300,6 +5338,7 @@ export function MaterialRequestPage() {
       const writeScope = captureBomWrite();
       await saveRecordToActiveBom({
         ...record,
+        ...(record.requestOwnerId === undefined && record.requestOwnerName === undefined ? { requestOwnerId: user?.userId, requestOwnerName: user?.displayName || user?.username } : {}),
         requestUrl: normalizeRequestUrl(record.requestUrl ?? ""),
       }, editorContext.recordMeta);
       if (!isBomWriteCurrent(writeScope)) return;
@@ -5550,7 +5589,7 @@ export function MaterialRequestPage() {
           partName: record.partName,
           qty: String(group.qty),
           remark: record.remark ?? "",
-          specDocumentName: record.specDocument?.name ?? "",
+          specDocumentName: getMaterialSpecDocuments(record).map(document => document.name).join("、"),
           refDes: record.refDes || group.primaryRecord.refDes,
           refGroup: group.displayRef,
           requestInfo: latestTrackingEntry?.requestInfo ?? "",
@@ -5807,7 +5846,7 @@ export function MaterialRequestPage() {
     copy: (value) => { void handleCopy(value); },
     openCreate,
     openTracking: openTrackingDialog,
-    openSpec: (record) => { void openSpecDocument(record); },
+    openSpec: (record) => { if (getMaterialSpecDocuments(record).length > 1) openRecord(record, canEdit && isCollaborativeReady && isFullDatasetLoaded ? "edit" : "view", "details"); else void openSpecDocument({ specDocument: getMaterialSpecDocuments(record)[0] }); },
   };
   const rowActions = useMemo<MaterialRowActions>(() => ({
     toggleExpanded: (key) => rowActionsRef.current?.toggleExpanded(key),
@@ -5872,7 +5911,7 @@ export function MaterialRequestPage() {
         onOpenChange={setNonPvlDialogOpen}
       />
       <PendingMaterialsDialog
-        canEdit={canEdit}
+        canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded}
         groups={pendingMaterialGroups}
         open={pendingDialogOpen}
         restoreView={pendingRestoreView}
@@ -5882,6 +5921,8 @@ export function MaterialRequestPage() {
         onOpenChange={setPendingDialogOpen}
         onOpenTracking={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openTrackingDialog(record); }}
         onSetCategory={setPendingCategory}
+        accountId={user?.userId}
+        onSetOwner={setPendingOwner}
         markedGroupKeys={markedGroupKeySet}
         onToggleMarked={toggleMarkedGroup}
       />
@@ -5979,7 +6020,7 @@ export function MaterialRequestPage() {
               </Select>
               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
               <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
-              <Button type="button" variant="outline" onClick={openPendingDialog} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", requiredApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {requiredApplicationCount.toLocaleString()}</Button>
+              <Button type="button" variant="outline" onClick={openPendingDialog} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", pendingApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {pendingApplicationCount.toLocaleString()}</Button>
               <Button type="button" variant="outline" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} className="h-11 border-orange-300/30 bg-orange-400/10 text-orange-100"><FileSpreadsheet className="mr-2 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
               <Button type="button" variant="outline" onClick={() => setRlcPriorityOpen(true)} className="h-11 border-primary/30 bg-primary/10 text-primary">RLC 優先順序</Button>
               <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
@@ -6061,8 +6102,8 @@ export function MaterialRequestPage() {
           </div>
 
           <div data-material-zone="actions" className="ml-auto flex flex-wrap items-center gap-1.5">
-            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={openPendingDialog} className={cn("h-9 border-destructive/60 bg-destructive px-3 text-sm font-black text-destructive-foreground hover:bg-destructive/85 hover:text-destructive-foreground", requiredApplicationCount > 0 && "material-attention")}>
-              <TriangleAlert className="mr-1 h-3.5 w-3.5" />待處理料 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong>
+            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={openPendingDialog} className={cn("h-9 border-destructive/60 bg-destructive px-3 text-sm font-black text-destructive-foreground hover:bg-destructive/85 hover:text-destructive-foreground", pendingApplicationCount > 0 && "material-attention")}>
+              <TriangleAlert className="mr-1 h-3.5 w-3.5" />待處理料 <strong className="ml-1">{pendingApplicationCount.toLocaleString()}</strong>
             </Button>
             <Button type="button" variant="outline" size="sm" data-testid="discouraged-export-button" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} title="查看依專案解除不建議使用料的申請 SOP、預覽並匯出 PLM 申請清單" className="h-9 border-warning/60 bg-warning px-3 text-sm font-black text-warning-foreground hover:bg-warning/85 hover:text-warning-foreground disabled:cursor-wait disabled:opacity-60">
               <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />{isExportingDiscouraged ? "匯出中…" : "不建議料匯出"} <strong className="ml-1">{discouragedMaterialCount.toLocaleString()}</strong>

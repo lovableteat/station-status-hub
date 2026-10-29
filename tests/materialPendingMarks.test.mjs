@@ -6,7 +6,8 @@ import ts from 'typescript';
 const require = createRequire(import.meta.url);
 const { React, create, act, loader, ui } = require('./support/renderHarness.cjs');
 const load = loader({
-  globals: { PendingCategoryPicker: ui.Select, PendingMailDialog: ui.Dialog, SupplierDirectoryDialog: ui.Dialog,
+  mocks: { './useMaterialRequestOwners': {useMaterialRequestOwners:()=>({owners:[],error:''})}, './MaterialRequestOwnerPicker': { MaterialRequestOwnerPicker: ui.Select } },
+  globals: { toWorkbookRecord: record=>record, PendingCategoryPicker: ui.Select, PendingMailDialog: ui.Dialog, SupplierDirectoryDialog: ui.Dialog,
     STALE_PENDING_MS: 3 * 86400000, getPendingGroupUpdatedAt: () => Date.now(), getTrackingStatusTone: () => '',
     CHIP_BASE: '', CHIP_TONES: { danger: '' }, requestAnimationFrame: () => 1, cancelAnimationFrame() {} },
   transform(source, file) {
@@ -15,7 +16,7 @@ const load = loader({
     return ast.statements.filter(node =>
       ts.isFunctionDeclaration(node) && ['PendingMaterialsDialog', 'loadMarkedGroups', 'saveMarkedGroups', 'getMarkedGroupsStorageKey'].includes(node.name?.text)
       || ts.isVariableStatement(node) && node.getText(ast).startsWith('const MARKED_GROUPS_KEY_PREFIX')
-      || ts.isImportDeclaration(node) && ['react', 'lucide-react', '@/lib/utils', './materialRequestPresentation'].includes(node.moduleSpecifier.text)
+      || ts.isImportDeclaration(node) && ['react', 'lucide-react', '@/lib/utils', './materialRequestPresentation', './MaterialRequestOwnerPicker', './useMaterialRequestOwners', './materialTrackingStatus', './pendingMaterialsExport'].includes(node.moduleSpecifier.text)
       || ts.isImportDeclaration(node) && node.moduleSpecifier.text.startsWith('@/components/ui/')
     ).map(node => node.getText(ast)).join('\n') + '\nexport { loadMarkedGroups, saveMarkedGroups };';
   },

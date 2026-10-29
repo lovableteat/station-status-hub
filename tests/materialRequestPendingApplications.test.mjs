@@ -6,11 +6,20 @@ import ts from "typescript";
 const presentationSource = await readFile(new URL("../src/components/material-requests/materialRequestPresentation.ts", import.meta.url), "utf8");
 const transpiled = ts.transpileModule(presentationSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText;
+}).outputText.replace('"./materialTrackingStatus.ts"', JSON.stringify(new URL("../src/components/material-requests/materialTrackingStatus.ts", import.meta.url).href));
 const { buildPendingApplications, groupPendingMaterials } = await import(`data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`);
 
 const record = (id, mpn, needsApplication, extra = {}) => ({ id, manufacturer: `Vendor ${id}`, manufacturerPartNumber: mpn, needsApplication, name: "", ...extra });
 const group = (key, displayRef, records, extra = {}) => ({ key, displayRef, name: `Part ${key}`, searchText: displayRef.toLowerCase(), primaryRecord: records[0], records, ...extra });
+
+test("manual SYMBOL applications with an existing part number remain visible and searchable by their assignee", () => {
+  const symbol = record("symbol", "0000123", false, {trackingStatus:"SYMBOL申請中", requestOwnerName:"CE 王同學"});
+  const normal = record("normal", "0000456", false, {schematicPart:"", symbolStatus:"missing"});
+  const items = buildPendingApplications([group("U1","U1",[symbol]),group("U2","U2",[normal])]);
+  assert.equal(items.length,1);
+  assert.equal(items[0].record.id,"symbol");
+  assert.match(items[0].searchText,/ce 王同學/);
+});
 
 test("by default only locations with no number on any vendor row are listed, once each", () => {
   const c291 = group("g1", "C291_C1", [record("a", "C1608", true), record("b", "AMK107", false), record("c", "C0603", true)]);

@@ -32,6 +32,10 @@ begin
       and name = 'qa-spec-rollback/permission-test/spec-updated.pdf') <> 1 then
     raise exception 'Editor update failed';
   end if;
+  insert into storage.objects (bucket_id, name) values
+    ('material-spec-documents', 'qa-spec-rollback/permission-test/model.glb'),
+    ('material-spec-documents', 'qa-spec-rollback/permission-test/model.STP'),
+    ('material-spec-documents', 'qa-spec-rollback/permission-test/board.kicad_pcb');
   begin
     insert into storage.objects (bucket_id, name)
     values ('material-spec-documents', 'qa-spec-rollback/permission-test/unsafe.exe');

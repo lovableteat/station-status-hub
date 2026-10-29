@@ -168,7 +168,7 @@ function sanitizeFileName(value: string) {
     .replace(/^-|-$/g, "") || "料號申請篩選報表";
 }
 
-function downloadBlob(blob: Blob, fileName: string) {
+export function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
