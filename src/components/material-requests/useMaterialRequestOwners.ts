@@ -10,8 +10,8 @@ export function useMaterialRequestOwners(enabled: boolean, accountId?: string) {
     // Existing authenticated directory exposes public account identities, never credentials.
     void Promise.resolve(supabase.rpc("list_active_collaboration_members")).then(({ data, error }) => {
       if (!active) return;
-      setState({ accountId, owners: (data ?? []).map(member => ({ id: member.user_id, name: member.display_name?.trim() || member.username, username: member.username })), error: error ? "填單人名單載入失敗，請關閉後重新開啟。" : "" });
-    }).catch(() => { if (active) setState({ accountId, owners: [], error: "填單人名單載入失敗，請關閉後重新開啟。" }); });
+      setState({ accountId, owners: (data ?? []).map(member => ({ id: member.user_id, name: member.display_name?.trim() || member.username, username: member.username })), error: error ? "負責人名單載入失敗，請關閉後重新開啟。" : "" });
+    }).catch(() => { if (active) setState({ accountId, owners: [], error: "負責人名單載入失敗，請關閉後重新開啟。" }); });
     return () => { active = false; };
   }, [enabled, accountId]);
   return state.accountId === accountId ? state : { owners: [], error: "" };

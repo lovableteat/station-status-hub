@@ -4,7 +4,7 @@ import { getMaterialSpecDocuments } from "./materialAttachments";
 import { getMaterialTrackingStatusMeaning } from "./materialTrackingStatus";
 import { downloadBlob } from "./materialRequestExport";
 
-export const PENDING_MATERIAL_EXPORT_HEADERS = ["分類", "Ref Des", "Name", "Qty", "Manufacturer Part Number", "Manufacturer", "虛擬料號", "實體料號", "目前狀態", "申請類型說明", "填單人", "最後更新人", "更新時間", "單號", "連結", "申請狀態資訊", "追蹤說明", "SPEC 文件"];
+export const PENDING_MATERIAL_EXPORT_HEADERS = ["分類", "Ref Des", "Name", "Qty", "Manufacturer Part Number", "Manufacturer", "虛擬料號", "實體料號", "目前狀態", "申請類型說明", "負責人", "最後更新人", "更新時間", "單號", "連結", "申請狀態資訊", "追蹤說明", "SPEC 文件"];
 
 export async function createPendingMaterialsWorkbook({ rows, workspaceName, exportedBy, scope, exportedAt = new Date() }: {
   rows: Array<{ category: string; displayRef: string; record: MaterialWorkbookRecord }>;
