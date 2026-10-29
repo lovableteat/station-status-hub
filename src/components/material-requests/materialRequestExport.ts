@@ -705,6 +705,63 @@ export async function exportDiscouragedMaterialsExcel({
 
 export const NON_PVL_APPLY_HEADER = "料號(必填)";
 
+/** SheetJS CE's BIFF8 writer drops font styles. Give A1 its own real FONT/XF
+ * records instead of changing the shared default font (and every part number).
+ * FONT.bls=700 and XF.fAtrFnt follow Microsoft's MS-XLS specification.
+ * This only handles the single-sheet, text-only workbook generated below. */
+function boldNonPvlHeader(xlsx: typeof import("xlsx"), output: ArrayBuffer) {
+  const compound = xlsx.CFB.read(new Uint8Array(output), { type: "array" });
+  const stream = xlsx.CFB.find(compound, "/Workbook");
+  if (!stream?.content) throw new Error("無法設定 PLM 表頭粗體：找不到工作表資料。");
+  const bytes = new Uint8Array(stream.content);
+  const view = new DataView(bytes.buffer);
+  const fonts: number[] = [], formats: number[] = [], sheets: number[] = [];
+  const recordEnd = (offset: number) => offset + 4 + view.getUint16(offset + 2, true);
+  for (let offset = 0; offset + 4 <= bytes.length; offset = recordEnd(offset)) {
+    const type = view.getUint16(offset, true);
+    if (recordEnd(offset) > bytes.length) throw new Error("PLM 工作表格式不完整。");
+    if (type === 0x0031) fonts.push(offset); // FONT
+    if (type === 0x00e0) formats.push(offset); // XF
+    if (type === 0x0085) sheets.push(offset); // BoundSheet8
+    if (type === 0x000a) break; // End of workbook globals
+  }
+  if (!fonts.length || !formats.length || sheets.length !== 1) throw new Error("PLM 匯出必須是單一工作表。");
+  const sheetStart = view.getUint32(sheets[0] + 4, true);
+  let header = -1;
+  for (let offset = sheetStart; offset + 10 <= bytes.length; offset = recordEnd(offset)) {
+    const type = view.getUint16(offset, true);
+    if (type === 0x000a) break;
+    if ((type === 0x0204 || type === 0x00fd) // LABEL / LABELSST
+      && view.getUint16(offset + 4, true) === 0 && view.getUint16(offset + 6, true) === 0) {
+      header = offset;
+      break;
+    }
+  }
+  const formatOffset = header < 0 ? undefined : formats[view.getUint16(header + 8, true)];
+  if (formatOffset === undefined) throw new Error("PLM 匯出缺少 A1 表頭格式。");
+  const fontIndex = view.getUint16(formatOffset + 4, true);
+  const fontOffset = fonts[fontIndex > 4 ? fontIndex - 1 : fontIndex];
+  if (fontOffset === undefined) throw new Error("PLM 匯出缺少表頭字型。");
+  const boldFont = bytes.slice(fontOffset, recordEnd(fontOffset));
+  new DataView(boldFont.buffer).setUint16(10, 700, true); // FONT.bls (payload + 6)
+  const boldFormat = bytes.slice(formatOffset, recordEnd(formatOffset));
+  new DataView(boldFormat.buffer).setUint16(4, fonts.length < 4 ? fonts.length : fonts.length + 1, true);
+  boldFormat[13] |= 0x08; // CellXF.fAtrFnt: use this font, not the parent style
+  view.setUint16(header + 8, formats.length, true);
+  const extraLength = boldFont.length + boldFormat.length;
+  view.setUint32(sheets[0] + 4, sheetStart + extraLength, true);
+  const fontEnd = recordEnd(fonts[fonts.length - 1]);
+  const formatEnd = recordEnd(formats[formats.length - 1]);
+  const styled = new Uint8Array(bytes.length + extraLength);
+  let cursor = 0;
+  for (const part of [bytes.subarray(0, fontEnd), boldFont, bytes.subarray(fontEnd, formatEnd), boldFormat, bytes.subarray(formatEnd)]) {
+    styled.set(part, cursor);
+    cursor += part.length;
+  }
+  xlsx.CFB.utils.cfb_add(compound, "/Workbook", styled);
+  return Uint8Array.from(xlsx.CFB.write(compound, { type: "array" }));
+}
+
 /** Unique physical part numbers, in first-seen order, for the PLM Non PVL apply list. */
 export function collectNonPvlPartNumbers(rows: ReadonlyArray<Pick<DiscouragedMaterialRow, "partNumber">>) {
   return Array.from(new Set(rows.map((row) => row.partNumber.trim()).filter((partNumber) => partNumber && hasNonPvlPartSuffix(partNumber))));
@@ -742,7 +799,7 @@ export async function exportNonPvlApplyList({
   xlsx.utils.book_append_sheet(workbook, sheet, "Sheet1");
   const output = xlsx.write(workbook, { bookType: "biff8", type: "array" }) as ArrayBuffer;
   const fileName = "applyNonPvlParts.xls";
-  downloadBlob(new Blob([output], { type: "application/vnd.ms-excel" }), fileName);
+  downloadBlob(new Blob([boldNonPvlHeader(xlsx, output)], { type: "application/vnd.ms-excel" }), fileName);
   return fileName;
 }
 
