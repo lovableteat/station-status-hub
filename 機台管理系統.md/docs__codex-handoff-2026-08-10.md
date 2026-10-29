@@ -1,0 +1,424 @@
+> 集中副本；原始路徑：`docs/codex-handoff-2026-08-10.md`；程式參考基準：`06c686951b17afa920cf325ddfec9114590aeee0`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+
+# Bringup project handoff - 2026-08-10
+
+> 2026-10-20 文件整理註：以下保留 2026-08-10 的歷史環境、路徑與待辦，不代表目前部署狀態。跨電腦建立類似網站請先讀 [目前交接手冊](./docs__%E8%B7%A8%E9%9B%BB%E8%85%A6%E9%87%8D%E5%BB%BA%E8%88%87%E4%BA%A4%E6%8E%A5.md) 與 [文件包導讀](./00_%E9%96%B1%E8%AE%80%E6%8C%87%E5%8D%97.md)；不得將本文件中的舊路徑、正式 ref 或歷史任務直接當成新專案的執行指令。
+
+## How to continue
+
+Open this file in a new Codex task and continue directly from the repository state. Inspect the current files and Git status before editing. Do not ask the user to repeat the history recorded here.
+
+## Project baseline
+
+- Repository: `C:\Users\pega_user\Desktop\bringup\station-status-hub`
+- Branch: `main`
+- Remote: `origin/main`
+- Remote commit at handoff: `0c71c6b fix: recover material BOM cloud sync`
+- Production site: `https://lovableteat.github.io/station-status-hub/`
+- Material request page: `https://lovableteat.github.io/station-status-hub/?workspace=station-status&module=material-request`
+
+## Non-negotiable rules
+
+1. Preserve all existing website functions, data, permissions, IDs, and user workflows. A fix is not complete if it breaks another finished feature.
+2. Never reset, revert, delete, or overwrite unrelated user changes. The worktree contains intentional local and generated files.
+3. Stage and commit only files that belong to the current task. Do not commit temporary folders, generated model files, Supabase temporary files, or unrelated lock/workspace files.
+4. Every completed change must be committed and pushed to remote `main`. A local commit is not delivery.
+5. Run focused tests, lint, and the production build before pushing. After pushing, verify the remote commit and wait for GitHub Pages before checking the production site.
+6. Realtime updates must never reload the whole page, replace the route key, or call `window.location.reload()`. Update only the affected state.
+7. Do not report success from local code alone. Verify the deployed behavior whenever the task affects the website UI.
+
+## Priority A: fix the bottom-right chat bar
+
+### User requirement
+
+The collapsed `聊天室` launcher must attach to the exact bottom-right corner of the browser. The right side currently leaves visible empty space.
+
+- Use a fixed bottom-right position with no right or bottom gap.
+- Do not reserve page width or alter the width of tables and page content.
+- Keep chat collapsed by default. The user must click the bar before chat content appears.
+- Preserve the early-Facebook-style corner chat behavior.
+- Show an unread numeric badge when messages are waiting.
+- Do not show message text in an automatic preview toast.
+- Opening and closing chat must not reload the page.
+- Check desktop and narrow viewport alignment.
+
+### Relevant files
+
+- `src/components/collaboration/CollaborationCenter.tsx`
+- `src/components/collaboration/DirectMessagesPanel.tsx`
+- `tests/globalCollaborationCenter.test.mjs`
+
+The floating launcher and panel are in `CollaborationCenter.tsx`. Search for:
+
+- `DirectMessageLauncher`
+- `data-floating-direct-messages`
+- `aria-label="聊天室"`
+- `aria-controls="direct-messages-panel"`
+
+The latest screenshot showing the unwanted right gap is:
+
+`C:\Users\PEGA_U~1\AppData\Local\Temp\codex-clipboard-1f78279b-d2e6-4394-803f-bb2bc2451257.png`
+
+Related history that may help explain the current implementation:
+
+- `1cc0c13 fix: keep direct messages collapsed in chat bar`
+- `5a85844 fix: collapse direct messages into chat bar`
+- `bdb1562 fix: keep direct messages in corner panel`
+
+Older preview-card specifications are superseded by the current requirement. The closed state is a corner bar only, with no automatic message preview.
+
+### Acceptance checks
+
+- Closed launcher touches the viewport's right and bottom edges.
+- No blank strip remains to its right or below it.
+- Page content keeps its full width.
+- Chat content appears only after clicking the launcher.
+- Unread count is visible without exposing message content.
+- Existing collaboration, presence, notifications, and direct-message functions still work.
+
+## Priority B: finish the incomplete material BOM recovery
+
+Two local source files contain an unfinished fix and must not be lost:
+
+- `src/components/material-requests/materialBomStorage.ts`
+- `src/components/material-requests/materialBomSyncPolicy.ts`
+
+These changes are currently uncommitted. Preserve them and complete the work before committing the BOM fix.
+
+### Confirmed root cause
+
+The production material page can show `雲端同步異常`, remain on `正在切換 BOM`, disable controls, and display only a small partial set of groups.
+
+1. A partial remote record page was treated as a fully loaded BOM.
+2. The partial row count overwrote the remote workspace `record_count`, making an incomplete set appear complete.
+3. Client-side grouping, filtering, searching, and pagination require the complete record set.
+4. Concurrent asynchronous loads share one busy state, so a stale request can clear or replace the state of the latest request.
+
+### Existing unfinished changes
+
+`materialBomStorage.ts` now keeps a partial workspace as not fully loaded and no longer replaces `record_count` with the partial page length.
+
+`materialBomSyncPolicy.ts` now contains:
+
+```ts
+export function isLatestBomWorkspaceLoad(completedRequestId: number, latestRequestId: number) {
+  return completedRequestId === latestRequestId;
+}
+```
+
+### Remaining implementation
+
+Complete the fix in these files:
+
+- `src/components/material-requests/MaterialRequestPage.tsx`
+- `src/components/material-requests/materialBomStorage.ts`
+- `src/components/material-requests/materialBomSyncPolicy.ts`
+- `tests/materialBomEgressPolicy.test.mjs`
+
+Required behavior:
+
+- Import and use `isLatestBomWorkspaceLoad` in the page.
+- Track workspace loads with a monotonically increasing request ID.
+- Only the latest request may clear the current loading state.
+- Mark a workspace as `full` only when all remote records were actually loaded.
+- Active BOM loads, retries, initial loads, latest reloads, and export snapshots must request the complete record set.
+- Remove obsolete partial hydration behavior that can expose incomplete groups.
+- Apply search, grouping, filtering, and pagination only after the full record set is available.
+- A temporary network failure must show a retryable state without permanently disabling the entire page or reloading it.
+
+### BOM verification
+
+Run:
+
+```powershell
+node --test tests/materialBomEgressPolicy.test.mjs
+pnpm exec eslint src/components/material-requests/MaterialRequestPage.tsx src/components/material-requests/materialBomStorage.ts src/components/material-requests/materialBomSyncPolicy.ts
+pnpm build
+```
+
+Tests must cover:
+
+- Active BOM requests complete records.
+- Partial records do not overwrite the remote total count.
+- Only the latest load request can clear the busy state.
+
+Production acceptance:
+
+- No permanent `雲端同步異常` banner.
+- No permanent `正在切換 BOM` state.
+- The selected HPM BOM shows approximately 1,027 main groups and 6,606 vendor rows.
+- Upload, add, manage, search, filter, paginate, and export controls remain usable.
+
+## Current worktree warning
+
+At handoff, only these two tracked files are intentionally modified for the unfinished BOM fix:
+
+```text
+M src/components/material-requests/materialBomStorage.ts
+M src/components/material-requests/materialBomSyncPolicy.ts
+```
+
+There are many unrelated untracked files, including `.preview-current/`, `supabase/.temp/`, `tmp/`, model `.glb` files, and local pnpm workspace files. Do not add them to a commit unless the user explicitly assigns a task that requires them.
+
+## Delivery checklist
+
+For each completed task:
+
+1. Review the scoped diff and confirm no unrelated files are staged.
+2. Run the relevant tests, lint, and `pnpm build`.
+3. Commit the scoped files on `main`.
+4. Push with `git push origin main`.
+5. Confirm the remote `main` SHA matches the local commit.
+6. Wait for GitHub Pages deployment and verify the production page.
+7. Report the commit SHA, remote push result, tests, build, and deployed behavior.
+
+## Latest delivery - 2026-08-20
+
+The mobile-workspace audit and responsive rebuild are complete. Commit `98b6c14 fix: rebuild core mobile workflows` and the later mobile workspace integration commits (`db249e9`, `fd384fa`, `f936736`) are present on the current delivery line. GitHub Pages deployment `#525` for the integrated delivery completed successfully; the earlier core rebuild deployment was `#522`.
+
+### Mobile experience completed
+
+- AI 查詢頁改成手機優先的訊息區：對話內容先呈現，模型、歷史、新對話、資料來源、專案範圍與附件入口集中成可觸控工具列，輸入列固定在可用空間底部。
+- AI 查詢頁在 360、390、430、768px 寬度完成畫面檢查，對話區約為 419、463、551px（依視窗高度變化），沒有水平溢出或被底部聊天室遮住的情況。
+- 機台維修紀錄中心的資料來源改為單列精簡工具列，專案範圍保留在彈出面板內，手機與平板按鈕維持至少 44px 觸控尺寸。
+- 料號申請頁、聊天室與詳情／編輯對話框完成手機尺寸檢查；對話框層級高於手機底部工作列，平板聊天室與底部工作列保留安全間距。
+- 通知改放在手機左側窄版提示區，保留右上角 QR、個人帳號與主要操作的可用空間。
+
+### Verification
+
+- 整合後手機／工作區／協作／通知 focused tests：36/36 通過。
+- `pnpm build` 通過（3490 modules transformed）。
+- 本次涉及頁面的 scoped ESLint 通過；全域 ESLint 現況為 109 errors、29 warnings，主要是專案既有的 `any` 與規則技術債，並非本次交接文件造成。
+- 全量測試為 407/410 通過；剩餘 3 個是未涉及本次修改的既有失敗：automatic recovery lock expiry、dynamic system metadata migration、Supabase quota error wording。
+- 部署網址 `https://lovableteat.github.io/station-status-hub/` 回傳最新 JavaScript／CSS 資產；390px 寬度實際載入檢查沒有水平溢出。未登入部署環境時會正確停在登入殼層，需登入後才能驗證權限工作區內頁。
+
+### Repository state
+
+- `main` 與 `origin/main` 已同步，包含核心手機修正、後續 workspace 整合與本次交接文件更新。
+- 既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案仍未追蹤，刻意保留且未加入提交。
+
+### Latest delivery - 2026-08-20 PCB Designer reliability
+
+本次完成 PCB Designer 七項修正：
+
+- STEP／STP 匯入改為共用並可重試的 OCCT WebAssembly 載入流程，補上副檔名、空檔案與解析失敗提示，避免重複初始化造成匯入失敗。
+- 自訂元件與板設定改用可視化原生色彩選擇器，不再要求使用者猜十六進位色碼。
+- 元件庫新增圓形 `Screw Hole / 螺絲孔`，並讓 Screw／Scew／Hole／螺絲／孔等匯入名稱自動辨識為圓形元件；2D、3D 與軟體 3D fallback 均以圓形呈現。
+- 修正 2D 到 3D 的底層座標映射，底層元件只位於板下，不再對 X／Z footprint 做鏡射。
+- 背景遠端同步不再覆蓋使用者目前選取的專案、縮放、中心點、圖層與右側分頁，避免專案跳回與 2D 縮放自動還原。
+- 禁制區支援右側旋轉欄位與 90 度旋轉按鈕，2D、3D、預覽及 DRC 均採用旋轉後幾何。
+
+### PCB verification
+
+- `pnpm exec tsc --noEmit` 通過。
+- PCB Designer tests：`188/188` 通過。
+- 本次涉及檔案 scoped ESLint 通過。
+- `pnpm build` 通過，3490 modules transformed；STEP／OCCT WASM 資產已輸出。
+- 已在本機瀏覽器實際操作元件庫、圓形 Screw Hole 放置、自訂顏色選擇、禁制區拖曳與旋轉，並檢查 3D 畫面沒有鏡射。
+
+### PCB repository state
+
+- 只提交本次 PCB Designer、STEP 匯入、回歸測試與本交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。
+
+### Latest delivery - 2026-08-20 RWD and control-room visual audit
+
+本輪完成全站主要工作區的響應式檢查與指定畫面重排，重點不是單純縮小桌面版，而是讓手機、平板與桌面各自保留可理解、可觸控、可捲動的操作區：
+
+- PCB Designer 移除頂部重複的 DRC 操作；DRC 改由右側屬性／DRC 面板統一查看與重新計算，手機版也不再把 DRC 塞進工具列。
+- 料號申請保留手機優先的快查、篩選與卡片清單；共用 BOM、狀態與主要操作在窄版不互相擠壓。
+- 後台 API 控制台改用清楚的「驗證方式／使用範圍／狀態」中文資訊卡；API 金鑰資料未刪除，金鑰表在手機保留遮罩、查看、複製、測試、編輯、啟用／停用與刪除操作，完整欄位改由表格內層水平滑動查看。
+- 權限設定視窗改成窄版單欄、寬版雙欄；工作區卡片在手機單欄、平板以上雙欄，超寬桌面才分出左右明細區，避免左下大面積空白與三欄選項被壓縮。
+- 手機 Sonner 通知改為左右安全邊距，顯示提示時不再把聊天室或頁面內容往外推。
+
+### RWD verification
+
+- 已用本機瀏覽器實際查看 `390×844` 手機、`768×1024` 平板、`1280×720` 桌面與 `1610×905` 寬桌面。
+- 已檢查機台維修紀錄中心、料號申請、Data Center、PCB Designer、後台用戶管理、後台 API 控制台與權限設定視窗。
+- 已確認 API 金鑰表的手機內層表格實際為 `1147px` 欄位寬、由 `320px` 可視區水平滑動，不再被外層裁切；金鑰仍維持遮罩，未執行刪除。
+- 已確認 PCB 桌面版右側 `DRC 0` 面板可切換並顯示重新計算；手機版沒有頂部 DRC 按鈕。
+- PCB Designer tests、後台 UI tests：`194/194` 通過。
+- `pnpm exec tsc --noEmit` 通過；本輪修改檔案 scoped ESLint 通過。
+- `pnpm build` 通過，`3490 modules transformed`。
+
+### RWD repository state
+
+- 本輪只提交 RWD、後台版面、PCB DRC 入口與對應回歸測試／交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。
+
+### Latest delivery - 2026-08-20 chat trailing spacing
+
+本次修正訊息顯示後底部多出一行空白的原因：AI 資料查詢與右下角私訊都把自動捲動定位用的空元素放在 `space-y` 訊息清單內，CSS 會替該空元素套用額外的尾端間距。現在定位錨點移到訊息清單外，只保留清單本身需要的底部留白，因此不會再因訊息定位元素多出一整行。
+
+- AI 資料查詢的訊息清單與右下角聊天室共用相同的無尾端間距結構。
+- 桌面版右下角「訊息」浮動列貼齊瀏覽器右下角；手機版仍避讓底部工作列與安全區，避免遮住主要操作。
+- 未改動訊息內容、附件、回覆、刪除、未讀數或聊天同步流程。
+
+### Chat verification
+
+- focused collaboration、AI Markdown、手機核心工作區測試：`19/19` 通過。
+- 本次涉及檔案 scoped ESLint 通過。
+- `pnpm exec tsc --noEmit` 通過。
+- 本輪只提交聊天間距、浮動列定位、回歸測試與本交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。
+
+### Latest delivery - 2026-08-20 annotated UI review
+
+針對瀏覽器標記的六個畫面逐一完成修正：
+
+- PCB Designer 移除頂部「執行 DRC」入口，DRC 統一保留在右側檢查器，避免同一功能分散在兩處。
+- 料號申請將標題、共享狀態、常用操作與 BOM 工作區拆成獨立區塊，降低標題列與操作按鈕的擁擠。
+- 後台協作公告編輯區改為可伸展佈局，補上「發布前檢查」流程，避免左下出現無用途的大空白。
+- API 控制台改成「管理金鑰 → 直接測試 → 提供文件」三步驟導覽，保留既有 API 金鑰與所有操作，並以一致的管理工作區視覺呈現。
+- 使用者權限視窗改為快速套用、工作區權限、細部頁面權限的左右分區；一般桌面即採雙欄，減少不必要的巢狀框與壓縮。
+- 相關元件補上可讀的區域標記與回歸測試，後續調整可直接定位到對應畫面區塊。
+
+### Annotated UI verification
+
+- 本機瀏覽器實際查看料號申請、後台協作、API 控制台、網站權限視窗與 PCB Designer；確認料號區塊分明、後台空間有內容、API 金鑰仍存在、權限視窗可用雙欄、PCB 畫面沒有「執行 DRC」。
+- `pnpm exec tsc --noEmit` 通過。
+- 後台、料號與協作 focused tests：`25/25` 通過；PCB Designer tests：`188/188` 通過。
+- `pnpm build` 通過，`3490 modules transformed`；既有 OCCT 外部化與大型 chunk 警告仍屬既有建置提示。
+
+### Annotated UI repository state
+
+- 本輪只提交標記畫面相關的料號、後台協作、API 控制台、權限視窗、回歸測試與本交接文件；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤。
+
+### Latest delivery - 2026-08-20 performance appraisal workspace
+
+新增第七個工作區「績效考核系統」，沿用既有 workspace shell、深色平台基底與權限矩陣，不另造一套登入或管理流程。頁面提供 2026 Q3／歷史週期、總覽／我的考核／團隊考核、搜尋、狀態篩選、目標進度、員工與主管回饋、評分、完成審核、CSV 匯出，以及桌面表格和手機卡片兩種閱讀方式。
+
+### Performance implementation
+
+- `src/components/performance/PerformanceAppraisalPage.tsx`：第七工作區主頁、詳情、建立／編輯、完成與匯出。
+- `src/components/performance/performanceData.mjs`：種子資料、正規化、統計與 CSV 純邏輯。
+- `src/components/performance/performance.css`：工作區色彩、狀態、進度與手機版版面。
+- `supabase/migrations/20260820123000_add_performance_workspace.sql`：`performance_reviews`、索引、RLS、realtime 與權限儲存 RPC 更新。
+- `src/lib/workspacePermissions.ts`、`src/pages/Index.tsx`、`UserPermissionsDialog`、`MobileWorkspaceDock`：新增 `performance_view`／`performance_edit` 與第七入口。
+
+資料流程採雲端優先、本機兜底：頁面先使用 localStorage 讓現場快速看到資料，再嘗試 Supabase；雲端同步失敗會保留本機資料並提示使用者，不會白屏或把剛輸入的內容清掉。migration 尚未部署的環境仍可檢視與本機保存；套用 migration 後會使用共用的 `performance_reviews` 表。
+
+### Performance verification
+
+- `tests/performanceAppraisal.test.mjs`：週期統計、snake_case 雲端資料正規化、進度邊界和 CSV 引號跳脫。
+- focused tests：39/39 通過，涵蓋績效資料、七工作區權限、手機殼層、後台與既有工作區回歸。
+- scoped ESLint 通過；production build 通過，`3493 modules transformed`。建置仍只出現既有 OCCT 外部化與大型 chunk 提示。
+- TypeScript 全專案仍有既有 Supabase generic 型別技術債；本次新增的績效頁與主要路由整合沒有新增型別錯誤。
+- 本機瀏覽器實看桌面 `1440x900` 與手機 `390x844`：桌面七項導覽完整、無水平溢出，手機切換五張考核卡片、底部操作列可用，無水平溢出，且不再有巢狀 `main`。
+
+### Performance repository state
+
+- 只應提交績效頁、權限整合、Supabase migration、Database type、回歸測試與本交接文件。
+- 既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤，不可一併加入。
+
+### Latest delivery - 2026-08-20 PCB 2D/3D alignment, panel cuts and shared library
+
+本輪修正 PCB Designer 的三個核心問題：2D 與 3D 使用不同座標感受、板框與切板需求、以及自訂元件只出現在建立者瀏覽器。所有修正都保留既有專案資料格式，舊資料沒有 `cuts` 欄位時仍可正常載入。
+
+### PCB implementation
+
+- `src/components/pcb-designer/core/viewSync.ts` 統一 2D `X/Y` 與 3D `X/Z` 對應，`src/components/pcb-designer/core/software3d.ts` 與 `Pcb3DCanvas.tsx` 將預設視角改為可直接對照 2D 的正投影俯視；拖曳後仍可進入立體角度。
+- `PcbBoard.cuts` 與 `core/boardCuts.ts` 保存切板線；`PcbInspector.tsx` 提供左右／上下分板數、套用與清除，`PcbCanvas.tsx`、WebGL 3D 與 software 3D 使用相同資料畫出切板線。
+- `supabase/migrations/20260820140000_share_pcb_designer_library.sql` 新增共用自訂／BOM 元件庫與刪除 tombstone；`core/accountRemoteSync.ts` 優先使用 shared RPC，舊部署則合併所有帳號快照並選取最新版本。套用 migration 後，其他使用者可在元件庫看到同一份元件。
+- 不改動既有內建元件、STEP 匯入與模型資產；元件仍由 canonical project record 同步到 2D、WebGL 3D 與 software 3D。
+
+### PCB verification
+
+- 本機瀏覽器 `1440x900` 實看同一專案的 2D 與 3D：元件相對位置一致，3D 初始為對照用正投影，切換視角後仍可查看高度。
+- 2D 套用 `2 x 2` 切板後，畫面顯示一條垂直與一條水平切板線；切換到 3D 後同一個十字位置仍存在，右側顯示 `2 條分板線`。
+- PCB focused tests：`191/191` 通過（含切板範圍、重複 ID、2D/3D 座標與多人 fallback）。
+- production build 通過（`3494 modules transformed`）；建置仍只有既有 OCCT 外部化與大型 chunk 警告。全專案 `tsc --noEmit` 仍被既有 Supabase 泛型／相依版本錯誤擋住，錯誤集中在 `admin`、`hooks` 與 Supabase client，未指向本輪 PCB 檔案。
+
+### PCB repository state
+
+- 本輪只應提交 PCB Designer core、renderer、Inspector、共享元件 migration、PCB tests 與本文件／架構指南。
+- 既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、模型 `.glb` 與 pnpm 暫存／工作區檔案維持未追蹤，不可一併加入。
+
+### Latest delivery - 2026-08-20 PCB type-safety audit
+
+完成 PCB Designer 的專屬 TypeScript 稽核，處理先前全專案 typecheck 顯示的六個 PCB 錯誤：模型 metadata 數值縮窄、專案板框正規化、旋轉放置選項、圓形元件 pointer event，以及選取複製按鈕的事件簽名。這些修改只修正型別邊界，不改動既有專案、元件或模型資料。
+
+### PCB type-safety verification
+
+- PCB scoped TypeScript error filter：`0` 個錯誤。
+- PCB focused tests：`191/191` 通過。
+- 本輪四個修改檔案的 scoped ESLint 通過。
+- 本機瀏覽器實際操作：圓形 screw hole 可用 `R` 旋轉 90° 後放置、選取、複製，右側屬性顯示正確，切換 3D 後元件仍存在。
+- 全專案 typecheck 仍有 PCB 以外的既有 Supabase／後台／共用 hooks 型別技術債；PCB Designer 已不再出現在錯誤輸出。
+
+### Latest delivery - 2026-08-20 responsive administration and dialogs
+
+本輪針對實際桌機、筆電、平板與手機版面補齊 RWD，而不是單純縮小字體。平台頂部導覽與後台主要內容在超寬螢幕保留背景延展，但可閱讀內容限制於 1920px 並置中；1180px 以下的後台側欄改用抽屜，避免中等寬度仍硬塞三欄。公告編輯區不再被右側紀錄高度強制拉長，因此不會留下大片無用途空白。
+
+通用 `Dialog`、`AlertDialog` 與 `MobileDialog` 現在都有視窗安全邊距、`dvh` 高度限制、垂直捲動與手機安全區。網站權限視窗使用固定頁首／頁尾與獨立捲動內容，依寬度切換摘要、工作區與細部權限欄數；手機改為單欄操作，取消原本三個權限選項被壓成一字一行的情況。摘要名稱也改為中文，降低現場判讀成本。
+
+### Responsive verification
+
+- 本機瀏覽器實際查看後台「用戶管理」、「通知與在線」、「API 管理」、新增用戶、網站權限與新增 API 金鑰視窗；確認內容可讀、按鈕保留、彈窗不超出可視範圍且可捲動。
+- RWD、手機核心工作區、七工作區權限、後台與彈窗 focused tests：`51/51` 通過。
+- 本輪修改檔案 scoped ESLint、全專案 TypeScript 與 production build 通過（`3494 modules transformed`）；未刪除或改動既有帳號、API 金鑰、專案、模型與使用者資料。
+
+### Latest delivery - 2026-08-20 compact permission management
+
+網站權限視窗已由大型摘要儀表板改為高密度權限管理面板。四張重複摘要卡與固定 `960px` 高度已移除，工作區權限改為一列一個入口的「未授權／檢視／管理」三段切換；摘要數字與全站快速套用收進標題區，開窗後可直接開始設定，不再浪費首屏。
+
+- 桌機視窗最大寬度縮為 `1160px`，內容依容器寬度切換單欄或工作區／細部權限雙欄；頁首、內容與頁尾各自負責摘要、捲動與儲存，不會互相擠壓。
+- 細部權限只保留維修中心與後台管理，且工作區未授權時不展開冗長選項；已啟用時以緊湊列提供檢視、管理、全選與清除，既有資料庫儲存與權限同步流程不變。
+- 手機 `390x844` 實測：視窗寬 `382px`、無頁面或視窗水平溢位，七個工作區完整保留，內容獨立垂直捲動，取消與儲存按鈕固定可見。
+- 桌機 `1366x768` 實測：視窗完整落在可視範圍，兩欄對齊且沒有固定高度造成的空白。
+- 後台、RWD、手機核心工作區與七工作區權限 focused tests：`51/51` 通過；全專案 TypeScript、本次元件 scoped ESLint 與 production build 通過（`3494 modules transformed`）。
+
+### Latest delivery - 2026-08-20 compact API control header
+
+後台 API 控制台頂部已移除三張狀態摘要與三張重複流程卡，改為單列資訊列：左側只保留頁名與一句管理範圍，右側以四個緊湊狀態顯示「金鑰管理 → 直接測試 → 串接文件」及金鑰遮罩狀態，下方立即接功能分頁。
+
+- 桌機 `1600x900` 實測：頂部區塊高度由原本數百像素縮為約 `64px`，說明維持單行，三個功能步驟同列，無水平溢位。
+- 手機 `390x844` 實測：頂部約 `143px`，三步驟仍在同列、安全狀態獨立成一行，功能分頁全部可見且沒有水平跑版。
+- 既有 API 金鑰、遮罩、建立、編輯、測試、停用、刪除與文件功能均未改動。
+- 後台與手機 focused tests：`21/21` 通過；全專案 TypeScript、頁面 scoped ESLint 與 production build 通過（`3494 modules transformed`）。
+
+### Latest delivery - 2026-08-20 API key functional palette
+
+API 金鑰管理清單已由單一灰藍配色改為可直接辨識用途的功能色系，資料與操作流程不變：建立與啟用使用薄荷綠、遮罩金鑰使用琥珀、Provider 與讀取權限使用青藍、可編輯與停用使用橘色、刪除與過期使用珊瑚紅。表頭、資料列、金鑰值、狀態、模型、權限和四個操作按鈕都有獨立層次，不再混成同一片深藍。
+
+- `ApiKeyManagement.tsx` 只加入語意化視覺 class 與圖示按鈕的可讀標籤；建立、查看、複製、測試、編輯、啟停、刪除、權限判斷及 Supabase 資料流程均未修改。
+- 桌機 `1600x900` 實看：清單內容與八個欄位完整對齊，金鑰仍維持遮罩，操作風險可由顏色快速辨識。
+- 手機 `390x844` 實看：頁面無水平溢位，金鑰表格保留獨立橫向滑動，滑到最右側仍可操作測試、編輯、停用與刪除。
+- 後台配色、權限保護 focused tests：`15/15` 通過；全專案 TypeScript、元件 scoped ESLint 與 production build 通過（`3494 modules transformed`）。
+
+### Latest delivery - 2026-08-20 adaptive workspace navigation width
+
+桌機頂部工作區導覽不再被 Grid 中間欄強制拉滿。`xl` 以上改為依目前可見工作區頁籤的實際內容寬度收合並置中，同時保留 `max-width: 100%` 與水平捲動；因此寬螢幕不會在最後一個頁籤後留下空殼，窄螢幕或頁籤增加時也不會推擠品牌與帳號操作區。手機仍使用原有底部工作區導覽，功能與路由未修改。
+
+### Latest delivery - 2026-08-20 compact material request command center
+
+料號申請桌面版頂部已從五層大型資訊卡重組為三條連續控制列：第一列整合頁名、共享狀態與五個常用操作；第二列整合 BOM 切換、頁數摘要、管理與刪除；第三列整合頁數進度與資料統計。收合狀態不再保留頁數說明大卡，只有主動展開後才顯示完整的頁數設定、進度條與逐頁備註功能。
+
+- `1440x900` 實測：頂部總高度由 `586px` 降為 `187px`，縮減約 `68%`，頁面與區塊均無水平溢位。
+- `1024x768` 實測：頂部高度 `279px`，五個常用操作、BOM 控制與三項統計完整顯示，無水平溢位。
+- `390x844` 實測：桌面控制台正確隱藏，既有手機專用「料號快查」完整顯示，頁面無水平溢位。
+- 頁數進度可正常展開，總頁數、目前頁、儲存進度與逐頁勾選／備註仍可使用；新增、上傳、匯出、標記、BOM 管理與刪除沿用原事件與權限條件。
+- 料號相關回歸測試 `33/33`、本次檔案 scoped ESLint、全專案 TypeScript 與 production build 通過（`3494 modules transformed`）；建置只有既有 OCCT 外部化與大型 chunk 提示。
+
+### Latest delivery - 2026-08-20 performance workspace sidebar
+
+績效考核頁已由單一全寬頁面改成與後台管理、維修中心一致的工作區架構。桌面左側新增可收合的績效側邊欄，統一放置「績效總覽／我的考核／團隊考核」、考核週期、資料重新整理、CSV 匯出與新增考核；主內容移除重複頁籤，保留摘要、搜尋、狀態篩選、考核清單與週期洞察。
+
+- 側邊欄使用網站既有深海軍藍基底與青藍邊框，主檢視使用亮青藍，資料同步與新增使用薄荷綠，週期與匯出使用琥珀色；既有權限、資料來源、考核建立／編輯／完成與匯出事件均未更動。
+- `1180px` 以下改為遮罩抽屜，不占用主畫面寬度；點選導覽後會自動關閉。手機頁首只保留 40px 工作區選單、頁名與必要狀態，不直接搬運桌面側欄。
+- 桌面側欄可收合為 `68px` 圖示列，主內容會由 `left 260px` 自動擴張至 `left 92px`，不留下無用途空間。
+- 本機瀏覽器實看 `1440x900` 桌面、`843x639` 平板與 `390x844` 手機；三種尺寸水平溢位皆為 `0`，頁首由舊版約 `308px` 降為桌面約 `121px`、平板 `114px`、手機約 `67px`。
+- 已操作側欄收合、手機抽屜開關與「我的考核」切換；抽屜點選後正確關閉並顯示 1 筆個人考核。
+- 績效、七工作區權限回歸測試 `23/23` 通過；元件與測試 scoped ESLint、全專案 TypeScript、production build 均通過（`3494 modules transformed`）。建置只保留既有 OCCT 外部化與大型 chunk 提示。
+
+### Latest delivery - 2026-08-20 AI workspace viewport fit
+
+資料查詢頁已移除桌面版 `100dvh - 164px` 的額外高度扣除。外層主內容本來就已排除全站頁首，舊計算再次扣除頁首後，會在聊天輸入區下方留下無用途空白；現在聊天殼層直接繼承主內容剩餘高度，桌面、平板與手機皆貼合可視範圍。
+
+- 新增穩定的 viewport-fit 標記與回歸測試，防止固定高度計算再次被加入。
+
+### Latest delivery - 2026-08-20 GitHub repository introduction
+
+GitHub 首頁 README 已依目前 `main` 的實際產品與架構重寫，不再把全站聊天室誤列為工作區，也補上新增的第七個工作區「績效考核系統」。新成員可由首頁直接理解平台用途、七個 workspace ID、全站協作能力、核心資料流與主要程式目錄。
+
+- 新增 GitHub 可直接顯示的架構流程圖，說明 Workspace Shell、頁面分派、Provider 與 Supabase 的關係。
+- 補上七個工作區、專案目錄、本機啟動、環境變數、驗證清單、資料／權限邊界及 GitHub Pages 部署方式。
+- 明確說明聊天室、私訊、在線狀態、公告與手機 QR Code 是跨工作區能力。
+- 本次只有 README 與交接文件需要提交；既有 `.preview-current/`、`tmp/`、`supabase/.temp/`、未審核模型與本機 pnpm 檔案保持未追蹤，避免把轉檔與執行環境產物推入正式 `main`。

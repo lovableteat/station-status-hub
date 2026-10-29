@@ -1,15 +1,15 @@
 # 工作整合平台架構指南
 
-這份文件是 `station-status-hub` 的開發交接入口。新成員應先閱讀本文件，再依照功能領域進入對應的 `src`、`supabase` 與 `tests` 目錄。文件描述的是目前 `main` 分支的實際架構，不是早期 Lovable 範本的預設說明。
+這份文件是 `station-status-hub` 的開發交接入口。新成員應先閱讀本文件，再依照功能領域進入對應的 `src`、`supabase` 與 `tests` 目錄。2026-10-20 核對基準為本機程式快照 `c6629250`；本次沒有查詢正式資料庫、部署或實際使用者資料。詳細資料模型、保存與失敗語意見 [系統架構與資料邏輯](./系統架構與資料邏輯.md)。
 
 ## 1. 專案定位
 
-工作整合平台把測試站維修、工程檔案、A／B 工程比對、料號與 BOM、Data Center、PCB Designer、後台管理、AI 資料查詢、績效考核和即時協作集中在同一個平台。平台同時支援桌面、平板與手機，功能頁以 workspace 為單位切換，登入與權限由 Supabase 和前端 provider 統一管理；比對系統的工程輸入與結果留在本機瀏覽器。
+工作整合平台把測試站維修、工程檔案、A／B 工程比對、料號與 BOM、Data Center、PCB Designer、後台管理、AI 問答、績效考核和即時協作集中在同一個平台。平台同時支援桌面、平板與手機，功能頁以 workspace 為單位切換，登入與權限由 Supabase 和前端 provider 統一管理；比對系統的工程輸入與結果留在本機瀏覽器。
 
 主要設計原則：
 
 - 工作區是產品功能的邊界，頁面不應各自建立一套登入、權限或即時同步邏輯。
-- 伺服器資料以 Supabase 為準，前端快取只負責顯示速度與編輯體驗。
+- 共用伺服器資料以 Supabase 為準；比對結果等明確的本機功能另有保存邊界，不能把瀏覽器快取、未送出草稿或本機資料誤稱為雲端成功。
 - 影響資料的操作必須有明確的儲存、同步、錯誤和重新整理策略。
 - 桌面版和手機版是同一套功能的不同操作編排，不是把桌面版縮小。
 - 複雜運算先放入可測試的 `core` 純邏輯，再由 React 元件接上畫面與事件。
@@ -78,7 +78,7 @@ station-status-hub/
 | Data Center | `data-center` | `src/components/data-center`、`src/components/cabinet` |
 | PCB Designer | `pcb-designer` | `src/components/pcb-designer`、`src/components/pcb-designer/core` |
 | 後台管理 | `user-management` | `src/components/admin`、`src/components/api-management` |
-| 資料查詢空間 | `ai-chat` | `src/components/api-management/ApiChatWorkspacePage.tsx`、`ApiChatConsole.tsx` |
+| AI 問答 | `ai-chat` | `src/components/api-management/ApiChatWorkspacePage.tsx`、`ApiChatConsole.tsx` |
 | 績效考核系統 | `performance` | `src/components/performance`、`supabase/migrations/*performance*` |
 | 全站聊天室 | 全域 overlay | `src/components/collaboration/CollaborationCenter.tsx`、`DirectMessagesPanel.tsx` |
 
@@ -92,14 +92,15 @@ main.tsx
       └─ App.tsx
           ├─ QueryClientProvider
           ├─ UserProvider
-          ├─ PermissionsProvider
-          ├─ TestProjectProvider
-          ├─ UnifiedDataProvider
-          ├─ UserPresenceProvider
+          ├─ TooltipProvider / Toaster
           └─ ApplicationSessionGate
               ├─ loading      -> AppLoadingScreen
               ├─ 未登入       -> LoginPage
-              └─ 已登入       -> HashRouter
+              └─ 已登入       -> UserPresenceProvider
+                                -> PermissionsProvider
+                                -> TestProjectProvider
+                                -> UnifiedDataProvider
+                                -> HashRouter
                                   ├─ /       -> pages/Index.tsx
                                   ├─ /test-tracker
                                   ├─ /api-management
@@ -114,15 +115,17 @@ main.tsx
 | --- | --- | --- |
 | `station-status` | `dashboard`、`test-tracker`、`flow-info`、`monitor`、`issues`、`tools` | 維修、測試流程、問題追蹤與工具管理 |
 | `file-uploads` | `test-plan` | 工程檔案上傳、分類、資料夾與文件預覽；沿用維修中心資料儲存權限 |
-| `comparison` | `comparison` | A／B 比對、審查追蹤、Power Tree、I²C Map、位址庫；沿用資料查詢空間權限 |
+| `comparison` | `comparison` | A／B 比對、審查追蹤、Power Tree、I²C Map、位址庫；沿用 AI 問答權限 |
 | `material-requests` | `material-requests` | 料號總表、BOM、替代料、申請與匯出 |
 | `data-center` | `data-center` | 機櫃、設備、部署規劃和 2D / 3D 視圖 |
 | `pcb-designer` | `pcb-designer` | PCB 專案、2D 編輯、3D 檢視、元件與 BOM |
 | `user-management` | `users`、`collaboration`、`api-management` | 使用者、公告、API 金鑰與權限 |
-| `ai-chat` | `ai-chat` | AI 資料查詢、附件、知識檢索與對話 |
+| `ai-chat` | `ai-chat` | AI 問答、附件、知識檢索與對話 |
 | `performance` | `performance` | 考核週期、目標進度、主管回饋、評分與報表 |
 
 切換工作區時，`pushWorkspaceLocation()` 會更新 query string、保留可分享的頁面狀態，並透過 workspace navigation event 通知 shell；不應使用整頁 reload 來完成一般切換。新增工作區或 module 時，要同步更新 `moduleWorkspaceMap`、權限規則、可見入口與回歸測試。績效頁沒有額外 module，直接以 `workspace=performance` 開啟。
+
+這裡的九個畫面入口不等於九個資料庫權限群組。`workspacePermissions.ts` 定義七組權限工作區；`file-uploads` 由 `test-plan` 繼承 `station-status`，`comparison` 的入口與 render guard 由 `ai-chat` 授權。畫面用的 `Index.tsx` WorkspaceId 與權限用的 WorkspaceId 不能直接互換。
 
 比對系統可由 `workspace=comparison&module=comparison` 直接進入，首頁與 render guard 都使用 `ai-chat` 授權，沒有另加資料庫權限 key。`comparisonTab` 保存五個功能頁；結果條件使用 `compareSearch`、`compareStatus`、`compareOwner`、`compareSeverity`、`compareCategory`、`comparePage`，位址庫使用 `librarySearch`、`librarySigned`。意見收集清單使用 `feedbackSearch`、`feedbackStatus`、`feedbackOwner`、`feedbackCategory`。切換全站工作區時清除這些頁內條件，結果列表的「全部清除」保留 workspace、module 與功能頁上下文。
 
@@ -134,7 +137,7 @@ main.tsx
 - `src/hooks/usePermissions.ts` 提供元件使用的 `canViewModule`、`canEditModule` 等判斷。
 - `src/lib/workspacePermissions.ts` 是 workspace、子頁與繼承權限的集中定義；不要在單一按鈕內複製一套權限字串。
 - `PermissionGuard` 負責在畫面層阻擋沒有權限的 workspace，但真正的資料安全仍由 Supabase RLS 與 RPC 保證。
-- Supabase client 使用瀏覽器可公開的 publishable anon key；service role key 絕不可放在前端或 Git。
+- Supabase client 使用瀏覽器可公開的 anon／publishable key，預設 schema 為 `workspace`。應用程式 `user.userId` 是 `system_users.id`，不是 Supabase Auth UID；對應關係由 `system_users.auth_user_id` 建立。service role key 絕不可放在前端或 Git。
 
 ### 5.2 資料與即時協作
 
@@ -155,15 +158,15 @@ main.tsx
 - PCB 專案、元件、禁制區、遠端同步和共用專案權限。
 - AI 私有 conversation、maintenance knowledge search、引用來源與附件。
 - 使用者 profile、頭像、presence、私訊與訊息媒體。
-- 後台 API 金鑰 metadata。金鑰內容需遵守既有遮罩和 server-side 使用邊界。
-- 績效考核資料、考核週期、目標 JSON、主管與員工回饋；前端在 migration 尚未部署時會先以 localStorage 維持可用，雲端表啟用後以 `performance_reviews` 為準。
-- 比對系統使用 Pyodide Web Worker 執行 AutoCheck Python 引擎，原始工程檔不傳往 Supabase 或 AI 服務。結果與審查回覆依登入帳號保存在本機瀏覽器，並以含 JSON 及報表的 ZIP 備份匯入／匯出移轉；這項本機資料不提供跨裝置即時同步。
+- 後台 API 金鑰及用量事件。現行 AI 程式會在授權瀏覽器中使用選定的 `api_keys.api_key`，並由 `aiUsageTelemetry.ts` 直接呼叫 provider；UI 遮罩不表示金鑰僅存在伺服器。金鑰不得寫入文件、log 或移轉包；若新網站要求隱藏 provider key，需另設計後端代理。
+- 績效以受 RLS 保護的 `performance_reviews` 與提交 RPC 回執為準；正式模式讀取失敗會顯示錯誤，不會從 localStorage 恢復考核。未送出表單以記憶體與目前分頁的 sessionStorage 保護，並不等於已存入雲端。
+- 比對系統使用 Pyodide Web Worker 執行 AutoCheck Python 引擎，原始工程檔不傳往 Supabase 或 AI 服務。結果、報表與審查回覆依登入帳號保存在本機 IndexedDB，並以含 JSON 及報表的 ZIP 備份匯入／匯出移轉；這項本機資料不提供跨裝置即時同步。ZIP 不包含 A／B 原始工程輸入，位址庫也需另存 YAML。
 - 比對頁首的「意見收集」另將使用者主動送出的問題說明與截圖保存至 `workspace.comparison_feedback` 與私人 Storage bucket `comparison-feedback`。一般帳號只讀取自己的回報；管理員可查看全部已完成上傳的回報、更新處理狀態／備註，並匯出 Excel 清單與全部截圖的 ZIP。寫入經過驗證 Auth 身分與 `ai-chat` 查看權限的 RPC，draft 在所有附件確認完成前不進管理員清單；工程原始檔仍留在本機。
 
 ### 5.4 Migration 工作規則
 
 1. 先確認功能需要的 table、index、policy、RPC 與 realtime channel。
-2. 新增一個時間戳 migration，保持可重複執行或在 SQL 中安全檢查既有物件。
+2. 使用 `supabase migration new <name>` 建立 migration，保持可重複執行或在 SQL 中安全檢查既有物件；不要自行猜測正式環境缺少哪些遷移。
 3. 更新 Supabase Database type 與對應 hooks。
 4. 用最小權限測試讀取、寫入、更新、刪除和跨使用者隔離。
 5. 不要在正式環境直接 reset、刪除整個 schema 或重播歷史 migration。
@@ -185,7 +188,7 @@ main.tsx
 
 ### 6.3 Data Center
 
-Data Center 的 2D / 3D 部分由 planner、equipment、rack、model 與 project 元件組成。3D 資產來源、STEP 匯入和 GLB 轉換工具位於 `scripts` 與 `src/components/data-center`。大型模型轉換是離線工作，不應在瀏覽器首次載入時阻塞整個 workspace。
+Data Center 的目前入口是 `DeploymentPlanningCenter`，2D / 3D 部分由 planner、equipment、rack、model 與 project 元件組成，共用文件存於 `data_center_projects.document`。`src/components/cabinet` 仍有獨立的舊版 localStorage 實作，不能由目錄存在推論它就是目前入口或已上雲。3D 資產來源、STEP 匯入和 GLB 轉換工具位於 `scripts` 與 `src/components/data-center`；目前新匯入模型的二進位資料是 object URL／記憶體資產，不會因專案已同步就自動永久保存。
 
 視圖修改時要保留同一份幾何資料來源，確認 2D 座標、3D 座標、旋轉、層面、選取和儲存後重載一致。模型檔只有在檔案大小、授權和部署需求確認後才加入 `public/models`。
 
@@ -218,9 +221,9 @@ PCB 常見回歸檢查：
 
 ### 6.5 後台管理
 
-後台由 users、collaboration 和 API management 組成。API 控制台的金鑰資料要保留既有遮罩、編輯、停用、測試和刪除語意；UI 可以重排，但不能把金鑰明文寫入 log、localStorage 或文件。使用者權限視窗應以工作區卡片和頁面權限分組，讓「檢視」與「管理」的差異清楚可見。
+後台由 users、collaboration 和 API management 組成。API 控制台的金鑰資料要保留既有遮罩、編輯、停用、測試和刪除語意；UI 可以重排，但不能把金鑰明文寫入 log、localStorage 或文件。現行 provider 請求由瀏覽器送出，不能把顯示遮罩當成後端密鑰隔離。使用者權限視窗應以工作區卡片和頁面權限分組，讓「檢視」與「管理」的差異清楚可見。
 
-### 6.6 資料查詢空間與聊天室
+### 6.6 AI 問答與聊天室
 
 AI 工作區負責模型選擇、提示詞、知識來源、附件、對話與引用。全域聊天室是 overlay，不得改變主頁內容的 layout height，也不得因訊息、toast 或圖片載入讓主畫面產生水平溢出或底部空白。
 
@@ -230,12 +233,14 @@ AI 工作區負責模型選擇、提示詞、知識來源、附件、對話與�
 
 績效頁由 `PerformanceAppraisalPage` 組成，資料與純邏輯拆在 `src/components/performance`：
 
-- `performanceData.mjs`：考核週期、狀態、種子資料、資料正規化、統計與 CSV 匯出。
-- `performance.css`：沿用深色平台底色，使用青綠、琥珀和紫色做資訊層級，不把所有狀態做成同一種藍色。
-- `PerformanceAppraisalPage.tsx`：總覽、我的考核、團隊考核、搜尋／狀態篩選、詳情、建立／編輯、完成與匯出。
-- `supabase/migrations/*performance*`：`performance_reviews` 表、索引、RLS、realtime 和 `performance_view`／`performance_edit` 權限。
+- `PerformanceAppraisalPage.tsx`／`AssessmentEditor.tsx`：RD2 自評、主管評核、組織／部門流程、紀錄與匯出。
+- `rd2Assessment.mjs`／`rd2Standards.mjs`：RD2 結構、驗證、評分標準；版本化 JSON 以 `RD2_SELF_V1`／`RD2_MANAGER_V1` 前綴保存於原有 feedback 文字欄位。
+- `assessmentRefresh.mjs`：先讀受 RLS 限制的輕量索引，編輯、詳情及明確匯出時才讀完整內容。
+- `assessmentPersistence.mjs`：版本條件更新、自評草稿與 `submit_performance_assessment` 冪等提交及回執驗證。
+- `assessmentDrafts.mjs`：記憶體與 sessionStorage 的未送出表單保護；`performance-bright.css` 為 RD2 局部內容與控制樣式，檔名保留 bright，但目前採深色配色。
+- `supabase/migrations/*performance*`、`*assessment*`：考核、組織階層、隱私、提交回執、自評備份、RLS 與權限。
 
-頁面先載入本機快取以保持快速可用，再嘗試讀取雲端；雲端成功後會覆蓋本機快取。新增或編輯考核先即時更新畫面，再嘗試同步，失敗會明確提示「已保存在本機瀏覽器」，避免使用者以為資料消失。新增工作區權限時，要同時檢查 `workspacePermissions.ts`、`UserPermissionsDialog`、桌面首頁入口與 `MobileWorkspaceDock`。
+正式模式以伺服器確認為成功條件：草稿更新比對 `updated_at`，提交攜帶預期版本、請求 UUID 與內容摘要，並檢查回傳狀態；退回還必須有通知 ID。版本衝突、權限變更與未確認回應會保留輸入並報錯，不會假裝已成功。既有 localStorage 正式考核快取會被清除，只有開發 demo 使用本機示例快取。主管角色須有明確指派、組織範圍與隱私授權，平台管理員沒有考核內容的通用繞過權限。新增工作區權限時，要同時檢查 `workspacePermissions.ts`、`UserPermissionsDialog`、桌面首頁入口與 `MobileWorkspaceDock`。
 
 ## 7. RWD 與操作設計規則
 

@@ -1,5 +1,7 @@
 # Bringup project handoff - 2026-08-10
 
+> 2026-10-20 文件整理註：以下保留 2026-08-10 的歷史環境、路徑與待辦，不代表目前部署狀態。跨電腦建立類似網站請先讀 [目前交接手冊](./跨電腦重建與交接.md) 與 [文件包導讀](./文件包導讀.md)；不得將本文件中的舊路徑、正式 ref 或歷史任務直接當成新專案的執行指令。
+
 ## How to continue
 
 Open this file in a new Codex task and continue directly from the repository state. Inspect the current files and Git status before editing. Do not ask the user to repeat the history recorded here.
