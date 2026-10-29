@@ -175,7 +175,7 @@ test("BOMs are grouped by project in BOM 管理 and in the header switcher", () 
   assert.match(versionCenter, /此專案還沒有 BOM/);
   assert.match(desktopHeader, /<SelectGroup key=\{group\.key\}>/);
   assert.match(desktopHeader, /<SelectLabel/);
-  assert.match(desktopHeader, />非目前專案</);
+  assert.doesNotMatch(desktopHeader, />非目前專案</);
   assert.match(desktopHeader, /value=\{series\.current\.workspace\.id\}/, "the switcher lists series by their current version");
   assert.match(source, /project: previous\?\.workspace\.project \?\? importProject,/);
   assert.match(source, /saveBomWorkspaceProject\(workspaceId, nextProject, \(\) => assertBomWriteCurrent\(writeScope\)\)/);
@@ -197,7 +197,7 @@ test("the project row has one writer and realtime keeps the bom: prefix of works
   assert.match(source, /change\.recordIds\.length === 0 && now - localWorkspaceWriteAt > 5000/);
   const compactHeader = slice('data-testid="material-mobile-command-center"', 'data-material-zone="overview"');
   assert.match(compactHeader, /activeWorkspaceProjectLabel/);
-  assert.match(compactHeader, />非目前專案</);
+  assert.doesNotMatch(compactHeader, />非目前專案</);
 });
 
 test("待處理料 opens from the header actions and groups pending parts by category", () => {

@@ -3303,8 +3303,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   const valueClassName = primaryReady ? "text-emerald-100" : mustApply ? "text-amber-100" : "text-cyan-100";
   const iconClassName = primaryReady ? "text-emerald-300" : mustApply ? "text-amber-300" : "text-cyan-300";
   const mainRowStyle = buildTableRowStyle(colorTheme.primary, {
-    backgroundAlpha: mustApply ? 0.2 : primaryReady ? 0.17 : 0.14,
-    hoverAlpha: mustApply ? 0.28 : primaryReady ? 0.23 : 0.19,
+    backgroundAlpha: mustApply ? 0.56 : primaryReady ? 0.52 : 0.48,
+    hoverAlpha: mustApply ? 0.64 : primaryReady ? 0.6 : 0.56,
     accentAlpha: 0.95,
   });
   const updateTitle = latestRecordUpdate
@@ -3315,12 +3315,13 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   return (
     <tbody>
       <tr
+        data-material-kind="primary"
         onClick={() => hasAlternatives && actions.toggleExpanded(group.key)}
         style={mainRowStyle}
         className={cn(
           "group/material-row border-b border-white/20 text-slate-200 transition-colors",
           hasAlternatives ? "cursor-pointer" : "cursor-default",
-          "bg-[var(--material-row-bg)] hover:bg-[var(--material-row-hover)]",
+          "bg-[var(--material-row-solid)] hover:bg-[var(--material-row-hover-solid)]",
         )}
       >
         {columns.item && (
@@ -3559,21 +3560,19 @@ function CompactAlternativeRows({
         return (
           <tr
             key={record.id}
+            data-material-kind="alternative"
             style={rowStyle}
             className={cn(
               "group/material-row border-b border-white/15 text-slate-200 transition-colors",
-              "bg-[var(--material-row-bg)] hover:bg-[var(--material-row-hover)]"
+              "bg-[var(--material-row-solid)] hover:bg-[var(--material-row-hover-solid)]"
             )}
           >
             {columns.item && (
-              <td className={cn(MATERIAL_CELL_CLASS, "text-center")}>
-                <span className="font-mono text-[13px] font-black text-slate-100">{itemValue}</span>
-                <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-violet-300/85">Alt</span>
-              </td>
+              <td className={MATERIAL_CELL_CLASS} aria-label={`主料 ${itemValue} 的替代料 ${index + 1}`} />
             )}
             {columns.name && (
               <td className={MATERIAL_CELL_CLASS}>
-                <div className="flex min-w-0 items-center gap-2 pl-1">
+                <div className="flex min-w-0 items-center gap-2 pl-4">
                   <span
                     className={cn("flex h-6 min-w-6 flex-none items-center justify-center rounded-md px-1 font-mono text-[11px] font-black", preferred ? "text-slate-950" : "text-slate-100")}
                     style={{ backgroundColor: preferred ? withAlpha(colorTheme.alternative, 0.92) : withAlpha(colorTheme.secondary, 0.46) }}
@@ -3960,7 +3959,6 @@ export function MaterialRequestPage() {
   const activeWorkspaceProjectLabel = activeWorkspace.project
     ? projectNames.get(activeWorkspace.project.projectId) ?? activeWorkspace.project.projectName
     : "";
-  const isActiveWorkspaceOutsideProject = Boolean(activeProjectId && activeWorkspace.project && activeWorkspace.project.projectId !== activeProjectId);
   const isFullDatasetLoaded = activeWorkspace.isLoaded !== false
     && activeWorkspace.payload.records.length >= activeWorkspace.payload.recordCount;
   const isPreviewDataset = !isFullDatasetLoaded && activeWorkspace.payload.records.length > 0;
@@ -4672,7 +4670,7 @@ export function MaterialRequestPage() {
     const chips: Array<{ key: string; label: string }> = [];
 
     if (query) chips.push({ key: "query", label: `關鍵字：${query}` });
-    if (searchColumn !== "all") chips.push({ key: "searchColumn", label: `搜尋欄位：${COLUMN_FILTER_LABELS[searchColumn]}` });
+    if (searchColumn !== "all") chips.push({ key: "searchColumn", label: `搜尋篩選工具：${COLUMN_FILTER_LABELS[searchColumn]}` });
     if (availability !== "all") {
       chips.push({ key: "availability", label: `狀態：${AVAILABILITY_FILTER_LABELS[availability]}` });
     }
@@ -5948,7 +5946,7 @@ export function MaterialRequestPage() {
 
   const searchColumnControl = (
     <Select value={searchColumn} onValueChange={value => { setSearchColumn(value as ColumnFilterKey | "all"); setPage(1); setExpandedKey(null); }}>
-      <SelectTrigger aria-label="搜尋欄位" className="h-11 w-40 shrink-0 text-sm [&>span]:truncate lg:h-9 lg:text-xs"><SelectValue /></SelectTrigger>
+      <SelectTrigger aria-label="搜尋篩選工具" className="h-11 w-40 shrink-0 text-sm [&>span]:truncate lg:h-9 lg:text-xs"><SelectValue>{searchColumn === "all" ? "搜尋篩選工具" : COLUMN_FILTER_LABELS[searchColumn]}</SelectValue></SelectTrigger>
       <SelectContent><SelectItem value="all">全部欄位</SelectItem>{FILTER_KEYS.map(key => <SelectItem key={key} value={key}>{COLUMN_FILTER_LABELS[key]}</SelectItem>)}</SelectContent>
     </Select>
   );
@@ -6092,7 +6090,6 @@ export function MaterialRequestPage() {
             <p className="flex max-w-[48vw] items-center gap-1 text-[11px] text-slate-400">
               {activeWorkspaceProjectLabel && <span className="min-w-0 truncate text-cyan-200/70">{activeWorkspaceProjectLabel} /</span>}
               <span className="min-w-0 truncate">{activeSeriesName}{isHistoricalVersion && activeVersionInfo ? ` · ${activeVersionInfo.version.displayNumber}（歷史）` : ""}</span>
-              {isActiveWorkspaceOutsideProject && <span className="flex-none rounded-full border border-amber-300/35 bg-amber-400/16 px-1.5 text-[9px] font-black leading-4 text-amber-100">非目前專案</span>}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -6304,9 +6301,6 @@ export function MaterialRequestPage() {
               )}
             </SelectContent>
           </Select>
-          {isActiveWorkspaceOutsideProject && (
-            <span title="這份 BOM 屬於其他專案，可在 BOM 管理中調整歸屬" className="flex-none rounded-full border border-amber-300/35 bg-amber-400/16 px-1.5 text-[10px] font-black leading-4 text-amber-100">非目前專案</span>
-          )}
           <Button
             type="button"
             variant="outline"
@@ -6455,8 +6449,9 @@ export function MaterialRequestPage() {
             return (
               <article
                 key={group.key}
+                style={buildTableRowStyle(activeTableColorTheme.primary, { backgroundAlpha: 0.48 })}
                 className={cn(
-                  "overflow-hidden rounded-xl border bg-[linear-gradient(145deg,rgba(16,38,58,0.98),rgba(8,24,40,0.98))] shadow-[0_18px_40px_-30px_rgba(34,211,238,0.7)]",
+                  "overflow-hidden rounded-xl border bg-[var(--material-row-solid)]",
                   mustApply ? "border-amber-300/35" : "border-cyan-200/20",
                 )}
               >
@@ -6491,7 +6486,7 @@ export function MaterialRequestPage() {
                 {expanded ? (
                   <div className="space-y-2 border-b border-cyan-200/10 bg-[#071522] p-2.5">
                     {secondaryAlternatives.length ? secondaryAlternatives.map((record) => (
-                      <button key={record.id} type="button" onClick={() => openRecord(record, "view")} className="flex w-full items-center gap-3 rounded-xl border border-violet-300/15 bg-violet-400/[0.07] px-3 py-2 text-left">
+                      <button key={record.id} type="button" onClick={() => openRecord(record, "view")} style={{ backgroundColor: blendWithSurface(record.isPreferred && !record.isRisk ? activeTableColorTheme.alternative : activeTableColorTheme.secondary, 0.2) }} className="flex w-full items-center gap-3 rounded-xl border border-violet-300/15 px-3 py-2 text-left">
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-300/15 text-xs font-black text-violet-100">ALT</span>
                         <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{getDisplayMpn(record) || "未填 MPN"}</strong><span className="block truncate text-xs text-slate-400">{record.manufacturer || "未指定廠商"}</span></span>
                         <MaterialApplicationExemptionBadge record={record} />
