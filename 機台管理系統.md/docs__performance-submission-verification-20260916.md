@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/performance-submission-verification-20260916.md`；程式參考基準：`22f669036d89108fe73cf4b74d4117f3e332739f`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/performance-submission-verification-20260916.md`；程式參考基準：`0b0dee080f02ceb8d58b38744fabe3b5d5f4bcfd`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 績效送退件復驗 — 2026-09-16
 
@@ -39,7 +39,7 @@ node tests/performanceSubmission.integration.mjs <PGlite package directory>
 
 ## 2026-09-20 正式環境更新
 
-- 已套用 [`20260920120000_complete_performance_feedback_workflow.sql`](https://github.com/lovableteat/station-status-hub/blob/22f669036d89108fe73cf4b74d4117f3e332739f/supabase/migrations/20260920120000_complete_performance_feedback_workflow.sql)，補齊部長逐項回覆附件、回覆歷程、送回後重送清除本次回覆，以及原子化審核 RPC。
+- 已套用 [`20260920120000_complete_performance_feedback_workflow.sql`](https://github.com/lovableteat/station-status-hub/blob/0b0dee080f02ceb8d58b38744fabe3b5d5f4bcfd/supabase/migrations/20260920120000_complete_performance_feedback_workflow.sql)，補齊部長逐項回覆附件、回覆歷程、送回後重送清除本次回覆，以及原子化審核 RPC。
 - 遠端查詢確認新增欄位、RPC、重送 trigger 與附件 validator 均已生效；空附件可接受，非物件及不安全附件資料會拒絕。
 - 相關測試 56 項通過；最終 scoped regression 10 項通過，production build 與 ESLint 通過。
 - 前端修復提交為 `e034550d`，migration transaction 補強提交為 `6bee6a1e`，均已推送至 `main`；GitHub Pages run `35499403820` 成功。
