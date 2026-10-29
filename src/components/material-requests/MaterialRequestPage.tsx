@@ -3068,21 +3068,21 @@ function BomManagerDialog({
 }
 
 const MATERIAL_CE_EDITOR_FIELDS = [
-  { key: "level", id: "material-level", width: 88 },
-  { key: "name", id: "material-name", width: 320 },
-  { key: "qty", id: "material-qty", width: 96 },
-  { key: "refDes", id: "material-ref-des", width: 240 },
-  { key: "manufacturerPartNumber", id: "material-mpn", width: 280 },
-  { key: "manufacturer", id: "material-maker", width: 220 },
-  { key: "sourcingStatus", id: "material-sourcing", width: 220 },
-  { key: "virtualAlternative", id: "material-virtual-alternative", width: 240 },
-  { key: "partNumber", id: "material-internal-pn", width: 240 },
-  { key: "partName", id: "material-part-name", width: 260 },
-  { key: "partSpec", id: "material-spec", width: 280 },
-  { key: "schematicPart", id: "material-symbol", width: 240 },
-  { key: "pcbFootprint", id: "material-footprint", width: 220 },
-  { key: "phaseOutStatus", id: "material-phase-out", width: 200 },
-  { key: "partUsageStatus", id: "material-part-usage", width: 320 },
+  { key: "level", id: "material-level", width: 80 },
+  { key: "name", id: "material-name", width: 240 },
+  { key: "qty", id: "material-qty", width: 72 },
+  { key: "refDes", id: "material-ref-des", width: 180 },
+  { key: "manufacturerPartNumber", id: "material-mpn", width: 220 },
+  { key: "manufacturer", id: "material-maker", width: 144 },
+  { key: "sourcingStatus", id: "material-sourcing", width: 140 },
+  { key: "virtualAlternative", id: "material-virtual-alternative", width: 160 },
+  { key: "partNumber", id: "material-internal-pn", width: 160 },
+  { key: "partName", id: "material-part-name", width: 180 },
+  { key: "partSpec", id: "material-spec", width: 200 },
+  { key: "schematicPart", id: "material-symbol", width: 160 },
+  { key: "pcbFootprint", id: "material-footprint", width: 160 },
+  { key: "phaseOutStatus", id: "material-phase-out", width: 120 },
+  { key: "partUsageStatus", id: "material-part-usage", width: 200 },
 ] as const;
 
 export function MaterialRecordDialog({
@@ -3240,7 +3240,7 @@ export function MaterialRecordDialog({
         <section className="workspace-dialog-section material-ce-section min-w-0 rounded-xl">
           <h3 id="material-ce-grid-title" className="mb-3 text-sm font-semibold">CE Excel 欄位 · 依交付格式順序</h3>
           <div className="material-ce-table-scroll" role="region" aria-labelledby="material-ce-grid-title" tabIndex={0}>
-            <table className="material-ce-table">
+            <table className="material-ce-table" style={{ width: MATERIAL_CE_EDITOR_FIELDS.reduce((sum, field) => sum + field.width, 0) }}>
               <colgroup>{MATERIAL_CE_EDITOR_FIELDS.map(field => <col key={field.key} style={{ width: field.width }} />)}</colgroup>
               <thead><tr>{MATERIAL_CE_EDITOR_FIELDS.map((field, index) => <th key={field.key} scope="col"><MaterialFieldLabel field={field.key} htmlFor={field.id} label={MATERIAL_CE_FIELDS[index].header} required={field.key === "name"} /></th>)}</tr></thead>
               <tbody><tr>{MATERIAL_CE_EDITOR_FIELDS.map((field, index) => <td key={field.key} data-testid="material-ce-field">
