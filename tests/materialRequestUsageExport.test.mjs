@@ -324,6 +324,36 @@ test("official Non PVL XLS has only Sheet1 and the exact one-column header with 
   assert.equal(sheet['!autofilter'], undefined);
   assert.ok(sheet['!cols'].every(column => !column.hidden));
   assert.equal(sheet.A2.t, 's');
+
+  // Read the actual BIFF8 font bindings; a JS cell.s setting alone is discarded
+  // by the CE writer and would make an in-memory formatting assertion pass.
+  const stream = xlsx.CFB.find(xlsx.CFB.read(bytes, { type: 'buffer' }), '/Workbook');
+  const biff = Buffer.from(stream.content);
+  const fonts = [], formats = [], cells = new Map();
+  for (let offset = 0; offset + 4 <= biff.length; offset += 4 + biff.readUInt16LE(offset + 2)) {
+    const type = biff.readUInt16LE(offset);
+    if (type === 0x0031) fonts.push(biff.readUInt16LE(offset + 10));
+    if (type === 0x00e0) formats.push(biff.readUInt16LE(offset + 4));
+    if (type === 0x0204 || type === 0x00fd) cells.set(`${biff.readUInt16LE(offset + 4)},${biff.readUInt16LE(offset + 6)}`, biff.readUInt16LE(offset + 8));
+  }
+  const weight = row => {
+    const font = formats[cells.get(`${row},0`)];
+    return fonts[font > 4 ? font - 1 : font];
+  };
+  assert.equal(weight(0), 700, 'A1 must use a real bold font in the downloaded XLS');
+  assert.equal(weight(1), 400, 'part numbers must keep the existing regular font');
+  assert.equal(weight(2), 400);
+});
+
+test("a 444-part PLM XLS retains every text value after adding the bold header format", async () => {
+  const parts = Array.from({ length: 444 }, (_, index) => `0010-${String(index).padStart(6, '0')}00`);
+  const blob = await captureExport(moduleExports.exportNonPvlApplyList, { partNumbers: parts });
+  const xlsx = createRequire(import.meta.url)('xlsx');
+  const workbook = xlsx.read(Buffer.from(await blob.arrayBuffer()), { type: 'buffer' });
+  assert.deepEqual(workbook.SheetNames, ['Sheet1']);
+  const sheet = workbook.Sheets.Sheet1;
+  assert.equal(sheet['!ref'], 'A1:A445');
+  assert.deepEqual(xlsx.utils.sheet_to_json(sheet, { header: 1 }), [[moduleExports.NON_PVL_APPLY_HEADER], ...parts.map(part => [part])]);
 });
 
 test("PLM errors match full part numbers only, deduplicate and leave unknown numbers for review", () => {
