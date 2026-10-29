@@ -25,7 +25,7 @@ const records = ['R1', 'R1', 'PR1', 'R10', 'R1_C0P1', 'LB48', 'C1', 'J1', 'U1', 
   manufacturer: index % 2 ? 'QA Vendor B' : 'QA Vendor A', manufacturerPartNumber: `QA-MPN-${index}`,
   virtualAlternative: (index > 1 && index !== 7 && index !== 10) ? '000-VIRTUAL' : '', partNumber: (index > 1 && index !== 7 && index !== 10) ? `000-PHYSICAL-${index}` : '',
   requestOwnerId: index === 8 ? '00000000-0000-4000-8000-000000000002' : undefined, requestOwnerName: index === 8 ? 'CE 王同學' : undefined, partName: 'QA 公司料名', partSpec: '10K 1% 0402', assemblyName: 'QA 原始模組', remark: 'QA 原始備註保留',
-  trackingStatus: index === 8 ? 'SYMBOL申請中' : '', trackingHistory: [], trackingNote: '', sourcingStatus: 'Approved',
+  trackingStatus: index === 8 ? 'SYMBOL申請中' : index === 0 ? '處理中' : '', trackingHistory: [], trackingNote: '', sourcingStatus: 'Approved',
 }));
 const workspace = { id: 'bom:qa-workspace', name: 'QA BOM（僅隔離資料）', updatedAt: new Date().toISOString(), project: { projectId: project.id, projectName: project.name }, payload: { ...seed, sourceFile: 'QA BOM.xlsx', sheetName: 'QA', records, recordCount: records.length }, recordMeta: {} };
 export class BomRecordConflictError extends Error {}

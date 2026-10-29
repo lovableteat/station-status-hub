@@ -2649,7 +2649,7 @@ function PendingCategoryPicker({ group, disabled, onChange }: { group: MaterialG
         data-testid="pending-category-picker"
         aria-label={`調整 ${group.displayRef} 的分類，目前 ${label}${manual ? "（手動）" : "（依位號）"}`}
         title={manual ? `手動分類為 ${label}；可改回依位號自動分類` : `依位號自動分類為 ${label}；分錯可在這裡改`}
-        className={cn("order-2 h-9 w-[8.5rem] flex-none gap-1 rounded-md lg:order-none px-2 text-xs font-bold", manual ? "border-primary/60 bg-primary/15 text-primary" : "border-border bg-secondary/60 text-foreground/80")}
+        className={cn("pending-row-category h-9 gap-1 rounded-md px-2 text-xs font-bold", manual ? "border-primary/60 bg-primary/15 text-primary" : "border-border bg-secondary/60 text-foreground/80")}
       >
         <SelectValue>{manual ? `${label} · 手動` : label}</SelectValue>
       </SelectTrigger>
@@ -2845,19 +2845,19 @@ export function PendingMaterialsDialog({
               const stale = isStale(group);
               const marked = markedGroupKeys.has(group.key);
               return (
-                <div key={application.key} data-testid="pending-application" className={cn("flex min-h-14 flex-wrap items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40 lg:flex-nowrap", stale ? "border-destructive/40" : "border-border")}>
-                  <Button type="button" variant="ghost" size="icon" data-testid="pending-mark-toggle" aria-pressed={marked} aria-label={`${marked ? '取消特別標記' : '特別標記'} ${group.displayRef}`} title="標記此位號；同組替代廠商共用，保存在此瀏覽器" onClick={() => onToggleMarked(group.key)} className={cn("relative h-9 w-9 flex-none", marked ? "bg-warning/15 text-warning hover:text-warning" : "text-muted-foreground hover:text-warning")}><Star className={cn("h-4 w-4", marked && "fill-current")} aria-hidden="true" />{stale && <span className="material-blink absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}</Button>
-                  <span className="w-[calc(100%-3.25rem)] flex-none truncate font-mono text-sm font-semibold text-foreground sm:w-28 xl:w-40" title={group.displayRef}>{group.displayRef}</span>
+                <div key={application.key} data-testid="pending-application" className={cn("pending-material-row rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
+                  <Button type="button" variant="ghost" size="icon" data-testid="pending-mark-toggle" aria-pressed={marked} aria-label={`${marked ? '取消特別標記' : '特別標記'} ${group.displayRef}`} title="標記此位號；同組替代廠商共用，保存在此瀏覽器" onClick={() => onToggleMarked(group.key)} className={cn("pending-row-mark relative h-9 w-8", marked ? "bg-warning/15 text-warning hover:text-warning" : "text-muted-foreground hover:text-warning")}><Star className={cn("h-4 w-4", marked && "fill-current")} aria-hidden="true" />{stale && <span className="material-blink absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}</Button>
+                  <span className="pending-row-reference min-w-0 truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
                   <PendingCategoryPicker group={group} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
-                  <span className="order-1 w-full min-w-0 flex-none whitespace-normal break-words text-base text-foreground lg:order-none lg:w-auto lg:flex-1 lg:truncate" title={application.name}>{application.name || "未命名料件"}</span>
-                  <span className="hidden w-28 flex-none truncate font-mono text-sm text-foreground/75 md:block xl:w-40" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
-                  <span className="hidden w-20 flex-none truncate text-xs text-muted-foreground lg:block xl:w-28" title={record.manufacturer}>{record.manufacturer || "未填廠商"}</span>
+                  <span className="pending-row-name min-w-0 text-base text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
+                  <span className="pending-row-mpn min-w-0 truncate font-mono text-sm text-foreground/75" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
+                  <span className="pending-row-manufacturer min-w-0 truncate text-xs text-muted-foreground" title={record.manufacturer}>{record.manufacturer || "未填廠商"}</span>
                   <MaterialRequestOwnerPicker record={record} owners={ownerDirectory.owners} disabled={!canEdit} onChange={owner => onSetOwner(record, owner)} />
-                  {stale && <span className={cn(CHIP_BASE, "order-4 inline-flex h-9 flex-none items-center lg:order-none", CHIP_TONES.danger)} title="還沒取得料號，且超過 3 天沒有更新資料">逾 3 天未更新</span>}
-                  <div className="order-5 ml-auto flex flex-none items-center gap-1 lg:order-none">
-                    <Button type="button" data-testid="pending-tracking-control" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="h-9 gap-0 overflow-hidden rounded-lg border border-border p-0 text-xs" aria-label={`追蹤／更新 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
-                      <span data-testid="pending-status-segment" className={cn("inline-flex h-full flex-col justify-center px-2", materialTrackingStatusTone(trackingStatus))}><span>{trackingStatus || "未處理"}</span>{getMaterialTrackingStatusMeaning(trackingStatus) && <span className="text-[10px] font-normal">{getMaterialTrackingStatusMeaning(trackingStatus)}</span>}</span>
-                      <span data-testid="pending-update-segment" className="inline-flex h-full items-center border-l border-border px-3">追蹤／更新</span>
+                  <div className="pending-row-warning" data-testid="pending-stale-slot" aria-hidden={!stale || undefined}>{stale && <span className="pending-stale-badge" role="img" aria-label="逾 3 天未更新" title="這筆待處理料已超過 3 天沒有更新資料"><TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="pending-stale-label" aria-hidden="true">逾 3 天未更新</span></span>}</div>
+                  <div className="pending-row-status">
+                    <Button type="button" data-testid="pending-tracking-control" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full gap-0 overflow-hidden rounded-lg border border-border p-0 text-xs" aria-label={`追蹤／更新 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
+                      <span data-testid="pending-status-segment" className={cn("inline-flex h-full min-w-0 flex-col items-center justify-center px-2", materialTrackingStatusTone(trackingStatus))}><span className="block w-full truncate" title={trackingStatus || "未處理"}>{trackingStatus || "未處理"}</span>{getMaterialTrackingStatusMeaning(trackingStatus) && <span className="block w-full truncate text-[10px] font-normal" title={getMaterialTrackingStatusMeaning(trackingStatus)}>{getMaterialTrackingStatusMeaning(trackingStatus)}</span>}</span>
+                      <span data-testid="pending-update-segment" className="inline-flex h-full min-w-0 items-center justify-center whitespace-nowrap border-l border-border px-1.5">追蹤／更新</span>
                     </Button>
                   </div>
                 </div>
