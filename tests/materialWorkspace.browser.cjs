@@ -11,9 +11,10 @@ const http = require('node:http');
   } }] });
   const { default: config } = await import('../postcss.config.js');
   const style = await require('postcss')(config.plugins).process(fs.readFileSync('src/index.css', 'utf8').replace(/@import url\([^\n]+\n/g, ''), { from: path.resolve('src/index.css') });
+  const port = Number(process.env.MATERIAL_QA_PORT || 8096);
   http.createServer((req, res) => {
     res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; font-src data:; base-uri 'none'");
     res.setHeader('Content-Type', req.url === '/fixture.js' ? 'text/javascript' : 'text/html; charset=utf-8');
     res.end(req.url === '/fixture.js' ? bundle.outputFiles[0].text : `<!doctype html><html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><title>料號工作區隔離驗證</title><style>${style.css}</style><div id="root"></div><script src="/fixture.js"></script></html>`);
-  }).listen(8096, '127.0.0.1', () => console.log('Material QA ready: http://127.0.0.1:8096 (no production reads or writes)'));
+  }).listen(port, '127.0.0.1', () => console.log(`Material QA ready: http://127.0.0.1:${port} (no production reads or writes)`));
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -1381,6 +1381,35 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
   return recordMeta;
 }
 
+/** Patch only Note on the server; never send a stale copy of the BOM row. */
+export async function saveBomWorkspaceNote(workspace: BomWorkspace, record: MaterialWorkbookRecord, note: string, assertWrite: () => void = () => {}) {
+  assertWrite();
+  const { data, error } = await supabaseClient.rpc("save_material_bom_note", {
+    p_workspace_id: workspace.id,
+    p_record_id: record.id,
+    p_note: note,
+    p_expected_note: record.note ?? "",
+  });
+  if (error) {
+    if (error.code === "40001") throw new BomRecordConflictError(record.id);
+    throw error;
+  }
+  assertWrite();
+  if (!data?.data || !data.updated_at) throw new Error("Note 儲存未完成，請重試。");
+  const savedRecord = data.data as MaterialWorkbookRecord;
+  const recordMeta = { updatedAt: data.updated_at as string } satisfies BomRecordSyncMeta;
+  void patchCachedWorkspace({
+    ...workspace,
+    updatedAt: recordMeta.updatedAt,
+    payload: {
+      ...workspace.payload,
+      records: workspace.payload.records.map((item) => item.id === record.id ? savedRecord : item),
+    },
+    recordMeta: { ...workspace.recordMeta, [record.id]: recordMeta },
+  }, assertWrite);
+  return { record: savedRecord, recordMeta };
+}
+
 export async function saveBomWorkspacePageTracker(workspaceId: string, pageTracker: BomPageTracker, assertWrite: () => void = () => {}) {
   assertWrite();
   await saveRemotePageTracker(workspaceId, pageTracker);

@@ -147,12 +147,11 @@ test("the table shows Part Spec as its own workbook column and keeps the old spe
   assert.doesNotMatch(source, /specification: ColumnFilterSelection|specification: null|case "specification"/);
 });
 
-test("material column geometry keeps Note as the seventeenth and final fixed column", () => {
+test("material column geometry keeps Note as the seventeenth and final column", () => {
   assert.deepEqual(readWidths("DEFAULT_COLUMN_WIDTHS"), [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150, 220]);
   assert.deepEqual(readWidths("MIN_COLUMN_WIDTHS"), [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 130, 160]);
   assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 520]);
   assert.equal(readWidths("DEFAULT_COLUMN_WIDTHS").length, 17);
-  assert.match(tableBlock, /column\.key === "note"/);
   assert.match(rowBlock, /data-material-cell="note"/);
   assert.match(alternativeBlock, /columns\.note/);
   assert.match(source, /data-testid="material-note-input"/);
