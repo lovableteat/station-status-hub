@@ -188,7 +188,7 @@ test("restored material filters discard removed or invalid conditions without lo
 
 test("specification data remains available in the material form and exports", async () => {
   assert.match(source, /key: "partSpec", id: "material-spec"/);
-  assert.match(source, /field\.key === "partSpec"[\s\S]*?value=\{form\.partSpec\}/);
+  assert.match(source, /<Textarea id=\{field\.id\} disabled=\{readOnly\} value=\{String\(form\[field\.key\] \?\? ""\)\} onChange=\{event => updateField\(field\.key, event\.target\.value\)\}/, "Part Spec uses the shared CE field value and update binding");
   assert.match(source, /specification: record\.partSpec,/);
   assert.doesNotMatch(source, /specification: record\.partSpec \|\|/);
   const exportSource = await readFile(new URL("../src/components/material-requests/materialRequestExport.ts", import.meta.url), "utf8");
