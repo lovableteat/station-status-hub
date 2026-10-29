@@ -124,7 +124,7 @@ test("tracking table summaries remain compact instead of stretching material row
 test("one record dialog saves the material fields and pending tracking together", () => {
   assert.doesNotMatch(source, /function TrackingHistoryDialog|trackingDialogOpen|saveTrackingHistory/);
   assert.match(source, /<MaterialTrackingEditor record=\{form\} draft=\{trackingDraft\}/);
-  assert.match(source, /applyMaterialTrackingDraft\(\{ \.\.\.form, level: 2 \}, trackingDraft, uploaderName\)/);
+  assert.match(source, /applyMaterialTrackingDraft\(\{[\s\S]*?level: 2,[\s\S]*?\}, trackingDraft, uploaderName\)/);
   assert.match(source, /await onSave\(next\)/);
   assert.match(source, /<TabsContent value="details" forceMount/);
   assert.match(source, /<TabsContent value="tracking" forceMount/);
@@ -183,11 +183,12 @@ test("restored material filters discard removed or invalid conditions without lo
     { columnFilters: { material: ["IC"], internal: [42], virtualAlternative: [] } },
     empty, Object.keys(empty), (value) => { restored = value; },
   );
-  assert.deepEqual(restored, { ...empty, material: ["IC"] });
+  assert.deepEqual(restored, { ...empty, material: ["IC"], virtualAlternative: [] });
 });
 
 test("specification data remains available in the material form and exports", async () => {
-  assert.match(source, /htmlFor="material-spec" label="Part Spec（料件規格）"/);
+  assert.match(source, /key: "partSpec", id: "material-spec"/);
+  assert.match(source, /field\.key === "partSpec"[\s\S]*?value=\{form\.partSpec\}/);
   assert.match(source, /specification: record\.partSpec,/);
   assert.doesNotMatch(source, /specification: record\.partSpec \|\|/);
   const exportSource = await readFile(new URL("../src/components/material-requests/materialRequestExport.ts", import.meta.url), "utf8");
@@ -213,7 +214,7 @@ test("material field help reads the same meanings and instructions as the CE wor
   }
   assert.match(help.refGroup.description, /不是 CE Excel 欄位/);
   assert.match(help.manufacturerPartNumberAlt.description, /舊檔.*新 CE Excel 沒有/);
-  assert.match(source, /label="內部分組（網站）"/);
+  assert.doesNotMatch(source, /label="內部分組（網站）"/);
   assert.doesNotMatch(source, /No Footprint|尚未建立實體料號/);
   assert.match(source, /實體料號未提供/);
 });
@@ -226,7 +227,8 @@ test("phase out remains independent while the removed Symbol column is absent fr
   assert.match(alternativeBlock, /<PhaseOutStatus record=\{record\}/);
   assert.doesNotMatch(`${rowBlock}${alternativeBlock}`, /columns\.symbol|SymbolBuildStatus|data-material-cell="symbol"/);
   assert.doesNotMatch(source, /field="symbolStatus"|getMaterialCeFieldHelp\("Symbol"\)|material-symbol-build-status/);
-  assert.match(source, /field="schematicPart" htmlFor="material-symbol" label="Schematic_Part（原理圖符號）"/);
-  assert.match(source, /field="phaseOutStatus" htmlFor="material-phase-out" label="phase out（零件狀態）"/);
-  assert.match(source, /field="partUsageStatus" htmlFor="material-part-usage" label="零件狀態"/);
+  assert.match(source, /key: "schematicPart", id: "material-symbol"/);
+  assert.match(source, /key: "phaseOutStatus", id: "material-phase-out"/);
+  assert.match(source, /key: "partUsageStatus", id: "material-part-usage"/);
+  assert.match(source, /label=\{MATERIAL_CE_FIELDS\[index\]\.header\}/);
 });

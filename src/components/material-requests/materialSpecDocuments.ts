@@ -67,8 +67,8 @@ export async function uploadMaterialSpecDocument({
   };
 }
 
-export async function createMaterialSpecUrl(path: string) {
-  const { data, error } = await supabase.storage.from(MATERIAL_SPEC_BUCKET).createSignedUrl(path, SIGNED_URL_SECONDS);
+export async function createMaterialSpecUrl(path: string, downloadName?: string) {
+  const { data, error } = await supabase.storage.from(MATERIAL_SPEC_BUCKET).createSignedUrl(path, SIGNED_URL_SECONDS, { download: downloadName ?? false });
   if (error || !data?.signedUrl) throw new Error(describeStorageError(error ?? { message: "無法取得 SPEC 連結。" }));
   return data.signedUrl;
 }

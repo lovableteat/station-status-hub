@@ -342,7 +342,7 @@ function uniqueValues(values: unknown[]) {
   return Array.from(new Set(values.map(normalizeText).filter(Boolean)));
 }
 
-function splitRefDesignators(value: unknown) {
+export function splitRefDesignators(value: unknown) {
   return Array.from(new Set(
     normalizeText(value)
       .split(/[\s,，、;；\n\r\t]+/g)

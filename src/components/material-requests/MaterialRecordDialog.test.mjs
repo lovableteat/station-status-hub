@@ -26,9 +26,10 @@ function mountDialog(overrides = {}) {
       const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
       const retained = ast.statements.filter((node) => {
         if (ts.isFunctionDeclaration(node)) return ["MaterialRecordDialog", "toWorkbookRecord", "formatTimestamp"].includes(node.name?.text);
+        if (ts.isVariableStatement(node)) return node.declarationList.declarations.some(declaration => declaration.name.getText(ast) === "MATERIAL_CE_EDITOR_FIELDS");
         if (!ts.isImportDeclaration(node)) return false;
         const spec = node.moduleSpecifier.text;
-        return spec === "react" || spec === "lucide-react" || spec.startsWith("@/components/ui/") || ["@/hooks/use-toast", "@/lib/utils", "@/lib/inputValidation", "./materialSpecDocuments", "./MaterialTrackingEditor", "./materialTrackingDraft"].includes(spec);
+        return spec === "react" || spec === "lucide-react" || spec.startsWith("@/components/ui/") || ["@/hooks/use-toast", "@/lib/utils", "@/lib/inputValidation", "./materialSpecDocuments", "./MaterialTrackingEditor", "./materialTrackingDraft", "./materialUploadContract.mjs"].includes(spec);
       });
       return retained.map((node) => node.getText(ast)).join("\n") + "\nexport { MaterialRecordDialog };";
     },
@@ -61,6 +62,46 @@ test("one main save persists both the material edits and the pending progress wi
   assert.equal(editor.writes[0].trackingHistory.at(-1).note, "done");
   assert.equal(editor.writes[0].trackingHistory.at(-1).createdBy, "CE");
   assert.equal(editor.writes[0].trackingHistory[0].note, "original note");
+  editor.unmount();
+});
+
+test("CE row has all 15 source columns, hides internal controls and retains their existing values", async () => {
+  const editor = mountDialog({ record: { ...baseRecord, assemblyName: "original module", remark: "original note", manufacturerPartNumberAlt: "OLD-MPN" } });
+  assert.equal(editor.root.root.findAllByType("th").length, 15);
+  for (const id of ["material-ref", "material-assembly", "material-remark"]) assert.equal(editor.root.root.findAllByProps({ id }).length, 0);
+  const author = editor.root.root.findAll(node => node.type === "stub" && String(node.props.id).endsWith("-author"))[0];
+  assert.equal(author.props.value, "CE");
+  assert.equal(editor.tracking().createdBy, "", "displaying the default author is not a new progress draft");
+  editor.changeName("new name");
+  await act(async () => editor.button().props.onClick());
+  assert.equal(editor.writes[0].assemblyName, "original module");
+  assert.equal(editor.writes[0].remark, "original note");
+  assert.equal(editor.writes[0].refGroup, "C1");
+  assert.equal(editor.writes[0].manufacturerPartNumberAlt, "OLD-MPN");
+  assert.equal(editor.writes[0].trackingHistory.length, 0);
+  editor.unmount();
+});
+
+test("new records do not require a hidden group field and derive it only from entered references", async () => {
+  const editor = mountDialog({ mode: "create", record: { ...baseRecord, refGroup: "", refDes: "R1", trackingStatus: "", trackingNote: "" } });
+  assert.equal(editor.button().props.disabled, false);
+  await act(async () => editor.button().props.onClick());
+  assert.equal(editor.writes[0].refGroup, "R1");
+  assert.equal(editor.writes[0].sourceGroupKey, baseRecord.id);
+  editor.unmount();
+});
+
+test("a freshly uploaded SPEC appears immediately with an explicit download action before record save", async () => {
+  const opened = [];
+  const editor = mountDialog({ onOpenSpec: (...args) => opened.push(args) });
+  const upload = editor.root.root.find(node => node.type === "input" && node.props.type === "file" && node.props.accept === ".pdf");
+  await act(async () => { upload.props.onChange({ target: { files: [{ name: "spec.pdf" }], value: "" } }); await Promise.resolve(); });
+  assert.match(JSON.stringify(editor.root.toJSON()), /spec\.pdf/);
+  const download = editor.root.root.find(node => node.type === "stub" && node.children.includes("下載 SPEC"));
+  act(() => download.props.onClick());
+  assert.equal(opened[0][0].specDocument.name, "spec.pdf");
+  assert.equal(opened[0][1], true);
+  assert.equal(editor.writes.length, 0);
   editor.unmount();
 });
 
