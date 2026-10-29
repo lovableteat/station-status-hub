@@ -7,6 +7,8 @@ import { MATERIAL_CE_FIELDS } from "../src/components/material-requests/material
 const source = (await readFile(new URL("../src/components/material-requests/MaterialRequestPage.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const presentationSource = await readFile(new URL("../src/components/material-requests/materialRequestPresentation.ts", import.meta.url), "utf8");
 const storageSource = (await readFile(new URL("../src/components/material-requests/materialBomStorage.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const versionCenter = (await readFile(new URL("../src/components/material-requests/BomVersionCenter.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const uploadDialog = (await readFile(new URL("../src/components/material-requests/BomUploadDialog.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const transpiled = ts.transpileModule(presentationSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText.replace('"./materialTrackingStatus.ts"', JSON.stringify(new URL("../src/components/material-requests/materialTrackingStatus.ts", import.meta.url).href));
@@ -119,9 +121,10 @@ test("duplicate controls were merged: one clear, one page-progress entry, delete
   assert.doesNotMatch(filterRow, /showMarkedOnly|column\.key === "marked"/);
   assert.doesNotMatch(toolbar, /columnVisibility\.marked|只看我的標記/);
   assert.doesNotMatch(source, /function AlternativeRows\(|function SummaryTile\(|saveQuickBomPageTracker|pageTrackerPanelCollapsed/);
-  const bomManager = slice("function BomManagerDialog(", "function MaterialRecordDialog(");
-  assert.match(bomManager, />刪除</);
-  assert.doesNotMatch(bomManager, /BOM ID<\/p>|歷史 BOM 清單/);
+  assert.doesNotMatch(source, /function BomManagerDialog\(/, "the flat BOM list was replaced by the version center");
+  assert.match(versionCenter, />刪除</);
+  assert.match(versionCenter, /刪除系列/);
+  assert.doesNotMatch(versionCenter, /BOM ID<\/p>|歷史 BOM 清單/);
 });
 
 test("dialogs and popovers use the page theme tokens instead of their own fixed colours", () => {
@@ -136,7 +139,7 @@ test("dialogs and popovers use the page theme tokens instead of their own fixed 
   assert.doesNotMatch(dialogBlocks, /#0[0-9a-f]{5}|bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d|bg-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);
   assert.match(dialogBlocks, /workspace-dialog-section/);
   assert.match(source, /const CHIP_TONES = \{/);
-  const pageTracker = slice("function BomPageTrackerDialog(", "function BomManagerDialog(");
+  const pageTracker = slice("function BomPageTrackerDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
   assert.match(pageTracker, /className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border bg-background\/40"/);
   assert.match(pageTracker, /role="group" aria-label=\{`第 \$\{page\.pageNumber\} 頁狀態`\}/);
   assert.match(slice("function MaterialRecordDialog(", "const MaterialGroupRow = memo("), /CE Excel 欄位/);
@@ -162,21 +165,19 @@ test("the desktop empty state keeps the table skeleton and the standard wording"
 
 test("BOMs are grouped by project in BOM 管理 and in the header switcher", () => {
   assert.match(source, /import \{ useTestProject \} from "@\/components\/test-projects\/TestProjectProvider"/);
-  assert.match(source, /const bomProjectGroups = useMemo\(\s*\(\) => groupBomWorkspacesByProject\(activeBomWorkspaces, \{ activeProjectId, activeProjectName: activeProject\?\.name, projectNames \}\)/);
-  const bomManager = slice("function BomManagerDialog(", "function MaterialRecordDialog(");
-  assert.match(bomManager, /projectGroups: BomProjectGroup<BomWorkspace>\[\]/);
-  assert.match(bomManager, /visibleGroups\.flatMap\(\(group\) => \[/);
-  assert.match(bomManager, /<div key=\{`project:\$\{group\.key\}`\}/);
-  assert.doesNotMatch(bomManager, /<section key=\{group\.key\}/);
-  assert.match(bomManager, /請有編輯權限的同事上傳 Excel 或指定專案/);
-  assert.match(bomManager, /className="h-11 w-\[11rem\] rounded-md px-2 text-sm md:h-8"/);
-  assert.match(bomManager, />目前專案</);
-  assert.match(bomManager, /onAssignProject\(workspace\.id, value === UNASSIGNED_BOM_PROJECT_VALUE \? null : value\)/);
-  assert.match(bomManager, /此專案還沒有 BOM/);
+  assert.match(source, /const bomSeriesGroups = useMemo\(\s*\(\) => groupBomWorkspacesByProject\(activeSeriesList, \{ activeProjectId, activeProjectName: activeProject\?\.name, projectNames \}\)/);
+  assert.match(versionCenter, /groupBomWorkspacesByProject\(liveSeries, \{ activeProjectId, activeProjectName, projectNames \}\)/);
+  assert.match(versionCenter, /groups\.flatMap\(\(group\) => \[/);
+  assert.match(versionCenter, /<div key=\{`project:\$\{group\.key\}`\}/);
+  assert.match(versionCenter, /請有編輯權限的同事上傳 Excel 或指定專案/);
+  assert.match(versionCenter, />目前專案</);
+  assert.match(versionCenter, /onAssignProject\(selectedSeries, value === UNASSIGNED_VALUE \? null : value\)/);
+  assert.match(versionCenter, /此專案還沒有 BOM/);
   assert.match(desktopHeader, /<SelectGroup key=\{group\.key\}>/);
   assert.match(desktopHeader, /<SelectLabel/);
   assert.match(desktopHeader, />非目前專案</);
-  assert.match(source, /project: existingWorkspace\?\.project \?\? importProject \}/);
+  assert.match(desktopHeader, /value=\{series\.current\.workspace\.id\}/, "the switcher lists series by their current version");
+  assert.match(source, /project: previous\?\.workspace\.project \?\? importProject,/);
   assert.match(source, /saveBomWorkspaceProject\(workspaceId, nextProject, \(\) => assertBomWriteCurrent\(writeScope\)\)/);
 });
 
@@ -190,7 +191,7 @@ test("the project row has one writer and realtime keeps the bom: prefix of works
   assert.match(storageSource, /export async function loadBomWorkspaceProjects\(\)/);
   assert.match(storageSource, /export async function saveBomWorkspaceArchive\(/);
   assert.match(storageSource, /column_order: archive \?\? \{ archived: false, archivedAt: "", archivedBy: "" \}/);
-  assert.match(source, /if \(!existingWorkspace && importProject\) \{\s*recentLocalWorkspaceWritesRef\.current\.set\(workspaceId, Date\.now\(\)\);\s*await saveBomWorkspaceProject\(workspaceId, importProject,/);
+  assert.match(source, /if \(workspace\.project\) \{\s*recentLocalWorkspaceWritesRef\.current\.set\(workspaceId, Date\.now\(\)\);\s*await saveBomWorkspaceProject\(workspaceId, workspace\.project,/);
   assert.match(source, /if \(!activeProjectId \|\| !workspaceListSettled\) return;/);
   assert.match(source, /if \(change\.recordIds\.length === 0 && change\.workspaceIds\.length > 0\) void refreshBomProjects\(\);/);
   assert.match(source, /change\.recordIds\.length === 0 && now - localWorkspaceWriteAt > 5000/);
@@ -200,11 +201,11 @@ test("the project row has one writer and realtime keeps the bom: prefix of works
 });
 
 test("待處理料 opens from the header actions and groups pending parts by category", () => {
-  const dialogSource = () => slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
+  const dialogSource = () => slice("function PendingMaterialsDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
   const actions = slice('data-material-zone="actions"', '{collaborationStatus !== "remote" && (');
   assert.match(actions, /data-testid="pending-materials-button"[\s\S]*?待處理料[\s\S]*?新增料件[\s\S]*?上傳說明\s*<\/Button>\s*<\/div>/);
   assert.match(dialogSource(), /role="tablist" aria-label="待處理料分類"/);
-  const dialog = slice("function PendingMaterialsDialog(", 'const UNASSIGNED_BOM_PROJECT_VALUE');
+  const dialog = slice("function PendingMaterialsDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
   assert.match(dialog, /const locationApplications = useMemo\(\(\) => buildPendingApplications\(groups\), \[groups\]\);/);
   assert.match(dialog, /const vendorApplications = useMemo\(\(\) => buildPendingApplications\(groups, \{ includeAlternates: true \}\), \[groups\]\);/);
   assert.match(dialog, /const \[includeAlternates, setIncludeAlternates\] = useState\(false\);/, "the default view is unchanged");
@@ -234,7 +235,7 @@ test("editing an item from 待處理料 returns to the list with its tab, search
   assert.match(source, /onOpenTracking=\{\(record\) => \{ setPendingDialogOpen\(false\); setReturnToPending\(true\); openTrackingDialog\(record\); \}\}/);
   assert.match(source, /if \(!returnToPending \|\| editorOpen\) return;\s*setReturnToPending\(false\);\s*setPendingRestoreView\(true\);\s*setPendingDialogOpen\(true\);/);
   assert.match(source, /restoreView=\{pendingRestoreView\}/);
-  const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
+  const dialog = slice("function PendingMaterialsDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
   assert.match(dialog, /if \(restoreView\) \{/);
   assert.match(dialog, /ref=\{listRef\} onScroll=/);
   assert.equal((source.match(/onClick=\{openPendingDialog\}/g) ?? []).length, 2, "the header buttons open a fresh list");
@@ -257,7 +258,7 @@ test("匯出報表 and 上傳說明 carry their own colours and 上傳說明 bli
 });
 
 test("待處理料 categories can be changed by hand and survive saves of other fields", () => {
-  const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
+  const dialog = slice("function PendingMaterialsDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
   assert.match(dialog, /<PendingCategoryPicker group=\{group\} disabled=\{!canEdit\} onChange=\{\(next\) => onSetCategory\(group, next\)\} \/>/);
   assert.match(source, /data-testid="pending-category-picker"/);
   assert.match(source, /<SelectItem value="auto">依位號自動/);
@@ -276,12 +277,14 @@ test("the 實體料號 filter checks only the 實體料號", () => {
 
 test("an import shows what it did not turn into parts", () => {
   assert.match(source, /const \{ importNotes, \.\.\.payload \} = await parseMaterialWorkbookFile\(file\);/, "the notes are never stored with the BOM");
-  assert.match(source, /title: "匯入時有資料需要注意"/);
+  assert.match(source, /importNotes,\s*target: inferred\?\.id \?\? NEW_BOM_SERIES_TARGET,/, "the notes travel with the staged upload");
+  assert.match(uploadDialog, /upload\.importNotes\.map\(/, "the confirmation dialog lists them before anything is written");
+  assert.match(source, /title: "上傳時有資料需要注意"/);
 });
 
 test("pending parts keep blinking until a part number arrives or data is refreshed", () => {
   assert.match(source, /const STALE_PENDING_MS = 3 \* 24 \* 60 \* 60 \* 1000;/);
-  const dialog = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
+  const dialog = slice("function PendingMaterialsDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
   assert.match(dialog, /stale && <span className="material-blink [^"]*bg-destructive"/);
   assert.match(dialog, />逾 3 天未更新</);
   assert.match(source, /data-testid="pending-materials-button"[\s\S]{0,400}?pendingApplicationCount > 0 && "material-attention"/);
@@ -322,19 +325,18 @@ test("待處理料 can turn the pending parts into per-vendor mail content", () 
   assert.match(dialog, /useVendorContacts\(open\)/);
   assert.match(dialog, /<VendorContactsPanel/);
   assert.match(dialog, /getVendorRecipients/);
-  const pending = slice("function PendingMaterialsDialog(", "const UNASSIGNED_BOM_PROJECT_VALUE");
+  const pending = slice("function PendingMaterialsDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
   assert.match(pending, /data-testid="pending-mail-button"[\s\S]*?信件生成/);
   assert.match(pending, /<PendingMailDialog groups=\{mailGroups\}/);
   assert.match(pending, /\.filter\(\(group\) => listed\.has\(group\.key\)\)\s*\.map\(\(group\) => \(\{ \.\.\.group, records: group\.records\.filter\(\(record\) => record\.needsApplication \|\| isExplicitMaterialApplication\(record\.trackingStatus\)\) \}\)\)/, "the mail follows the listed locations and only their rows still to apply for");
 });
 
 test("BOM 管理 can archive a BOM and keeps archived BOMs out of the switcher and project groups", () => {
-  const bomManager = slice("function BomManagerDialog(", "function MaterialRecordDialog(");
-  assert.match(bomManager, />封存</);
-  assert.match(bomManager, />解除封存</);
-  assert.match(bomManager, /data-testid="bom-archive-section"/);
-  assert.match(source, /const activeBomWorkspaces = useMemo\(\(\) => orderedBomWorkspaces\.filter\(\(workspace\) => !workspace\.archive\)/);
-  assert.match(source, /groupBomWorkspacesByProject\(activeBomWorkspaces, /);
+  assert.match(versionCenter, /"封存系列"/);
+  assert.match(versionCenter, /"解除封存"/);
+  assert.match(versionCenter, /data-testid="bom-archive-section"/);
+  assert.match(source, /const activeSeriesList = useMemo\(\(\) => seriesList\.filter\(\(series\) => !series\.archive\)/);
+  assert.match(source, /groupBomWorkspacesByProject\(activeSeriesList, /);
   assert.match(source, /!workspace\.archive && workspace\.project\?\.projectId === activeProjectId/);
   assert.match(source, /saveBomWorkspaceArchive\(workspaceId, nextArchive, \(\) => assertBomWriteCurrent\(writeScope\)\)/);
 });

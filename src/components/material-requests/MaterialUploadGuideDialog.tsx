@@ -113,7 +113,7 @@ export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpe
               <li>Schematic_Part：原理圖符號(orcad要能叫出原理圖符號)。由 CE 核對後填寫，不再另外填 Symbol 欄。</li>
               <li>舊 BOM 仍可匯入，phase out 缺值顯示未提供；既有追蹤與來源原值繼續保留。</li>
               <li>只保留一張要匯入的資料工作表。網站會自動挑資料最完整的工作表，因此空白範本與示範資料分成兩個檔案。</li>
-              <li>相同檔名重新上傳會更新原 BOM；要保留不同版本請先另存不同檔名。匯入後核對位號、虛實料號、原理圖符號、phase out、零件狀態與分組，再繼續作業。</li>
+              <li>每次上傳都會保存為獨立版本，不會覆蓋舊資料。同一塊板再上傳即成為新版本：選檔後在確認視窗指定「作為既有系列的新版本」，RD 的追蹤紀錄會依位號與料號帶到新版，並可在 BOM 管理比對新舊版差異、匯出差異 Excel 給工廠。匯入後核對位號、虛實料號、原理圖符號、phase out、零件狀態與分組，再繼續作業。</li>
             </ul>
           </section>
         </div>

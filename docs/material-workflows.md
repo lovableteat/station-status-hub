@@ -52,6 +52,17 @@
 
 驗證：`tests/vendorMailTemplate.test.mjs`、`tests/VendorMailEditor.test.mjs`、RLC／Tracking 同目錄測試、`tests/test-plan/zip-download*`。實際資料庫權限與 CAS 用 `tests/sql/rlc-priority-rollback-probe.sql` 驗證，整個交易回滾。
 
+## BOM 版本控制與新舊版差異（2026-10-29）
+
+- 每次上傳都是獨立版本，不再依檔名覆蓋。選檔後先出現「確認上傳 BOM」視窗：每個檔案可選「建立新 BOM 系列」或「作為〈系列〉的新版本」，網站依來源檔名與去掉版本／日期尾綴的字根預選；可填版本標籤與版本說明。確認後才寫入。
+- 同一塊板的版本收在一個系列下，只有一個「目前版本」；切換器列出系列（顯示目前版本號），歷史版本只能在「BOM 管理」檢視與比對。檢視歷史版本時頁面上方有唯讀提示與「回到目前版本」，料件、追蹤與上傳都不可在歷史版本操作。
+- 上傳新版本時，RD 的追蹤紀錄、單號、SPEC、待處理分類與備註依「位號群組＋實體料號／廠商＋MPN」帶到新版，不靠列號；舊版手動新增的料件整列沿用。帶不過去的追蹤在版本列顯示「未帶入 N」，差異檢視可用「追蹤未帶入」篩選；舊版本完整保留。
+- 「BOM 管理」改為兩欄：左欄系列清單（依專案分組、可搜尋、封存區可展開），右欄版本時間軸（版本、標籤／說明、來源檔、筆數、上傳人、追蹤帶入、狀態、操作）。操作含檢視、設為目前版本（可勾選把目前版本的追蹤帶過去）、比對、頁數、原檔下載、編輯說明、刪除版本；系列層級可改名、指定專案、封存、刪除整個系列。目前版本在系列還有其他版本時不可直接刪除。
+- 差異比對以位號群組配對（完全相同優先，其次位號重疊最多者），群組內廠商明細依實體料號 → 廠商＋MPN → MPN 配對；列序調動不算差異。變更類型：新增、移除、位號、數量、主料、替代料、狀態（Sourcing Status／phase out／零件狀態）、規格（料名、規格、符號、封裝、虛擬料號、分組）；影響分為「影響生產」「狀態變更」「文字變更」。差異表篩選列為搜尋 → 變更類型 → 影響 → 追蹤未帶入，預設隱藏未變更並以 chip 顯示可移除。
+- 「匯出差異 Excel」含摘要、差異明細（一列一個欄位變更或整列新增／移除）、新增料件與移除料件（完整 CE 15 欄），檔名 `BOM差異_<系列>_<舊>_vs_<新>_<時間>.xlsx`，可直接交給工廠核對。
+- 版本中繼資料存在 `ui_table_preferences` 的 `material-bom-version:<BOM id>`，版本內容沿用 `material_bom_workspaces`／`material_bom_records`，不需 migration；原始 Excel 保存在 `material-spec-documents` bucket 的 `<BOM id>/_bom-source/` 下，以簽名網址下載。舊 BOM 沒有版本列即視為單一版本系列，畫面與資料不變。
+- 驗證：`tests/bomDiff.test.ts`、`tests/bomVersioning.test.ts`、`tests/bomDiffExport.test.ts`、`tests/bomVersionCenter.test.mjs`、`tests/auditBomWriteScope.integration.cjs`；隔離頁 `node tests/materialWorkspace.browser.cjs` 內建兩個版本的 QA 資料可走完整流程。
+
 ## 顯示欄位與官方 Non PVL 匯出（2026-10-29）
 
 - 在「欄位」旁按「匯出顯示欄位」下載 Excel，只含目前可見欄位並維持欄位順序。資料範圍是目前搜尋、篩選、排序後的全部廠商明細，不受當前分頁限制；狀態追蹤欄匯出文字，空白虛擬料號不借用實體料號。原完整報表入口保留。

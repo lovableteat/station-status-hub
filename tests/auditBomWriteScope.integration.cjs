@@ -13,20 +13,26 @@ async function mount(editable=true){
   update:async(next,edit=canEdit)=>{account=next;canEdit=edit;await act(async()=>root.update(React.createElement(Probe)));await flush();},
   unmount:()=>act(async()=>root.unmount())};
 }
+const upload=(name)=>({key:name,file:{name,size:10,lastModified:1},payload:{sourceFile:name,sheetName:'Sheet',generatedAt:'2026-10-29T00:00:00.000Z',recordCount:1,records:[{id:'r'}]},importNotes:[],target:'__new-series__',seriesName:name});
 function execute(name,h,overrides={}){
  const effects=[],writes=[],workspace={id:'W',name:'fixture',payload:{records:[],recordCount:0}},record={id:'r',qty:'1'};
  const effect=(name)=>()=>effects.push(name);
- const context={canEdit:true,isCollaborativeReady:true,isFullDatasetLoaded:true,user:{userId:'account-A'},
+ const context={canEdit:true,canEditModuleAccess:overrides.canEdit??true,isCollaborativeReady:true,isFullDatasetLoaded:true,user:{userId:'account-A'},
   captureBomWrite:h.scope.capture,isBomWriteCurrent:h.scope.isCurrent,assertBomWriteCurrent:h.scope.assertCurrent,
   WorkspaceMutationScopeChangedError:h.WorkspaceMutationScopeChangedError,
   activeBomId:'W',bomWorkspaces:[workspace],activeWorkspace:workspace,basePayload:workspace.payload,
   isValidBomUsage:()=>true,normalizeRequestUrl:v=>v,canManageBomPageTracker:true,
   showCollaborativeUnavailableToast:effect('connection-toast'),showDatasetSyncingToast:effect('loading-toast'),
   setIsImporting:effect('busy'),setBomWorkspaces:effect('state'),setActiveBomId:effect('selection'),setExpandedKey:effect('expand'),setPage:effect('page'),setEditorOpen:effect('editor'),setTableColorDialogOpen:effect('colors'),
+  setPendingUploads:effect('staged'),setUploadDialogOpen:effect('upload-dialog'),setBomManagerOpen:effect('manager'),
   replaceBomWorkspace:effect('optimistic'),toast:effect('toast'),console,
   parseMaterialWorkbookFile:async()=>({recordCount:1,records:[record],sheetName:'Sheet',importNotes:[]}),
-  createBomId:()=> 'NEW-W',mergeImportedWorkspace:(_,id,payload)=>({id,payload}),
+  seriesList:[],uploadTargetSeriesRef:{current:null},inferBomSeriesForFile:()=>null,bomFileBaseName:n=>n,NEW_BOM_SERIES_TARGET:'__new-series__',
+  pendingUploads:[upload('A-private.xlsx'),upload('second.xlsx')],buildBomSeriesList:()=>[],nextBomVersionNumber:()=>1,createBomSeriesId:()=>'series:new',createBomVersionWorkspaceId:(name,n)=>`bom:${name}:v${n}`,
+  carryBomTracking:(_,next)=>({records:next,matched:0,orphaned:[],manual:0}),loadVersionRecords:async()=>[],
+  BOM_SERIES_NAME_LIMIT:120,BOM_VERSION_LABEL_LIMIT:60,BOM_VERSION_NOTE_LIMIT:500,
   saveBomWorkspace:async w=>{writes.push(w);},saveBomWorkspaceRecord:async(w,r)=>{writes.push(w);return {updatedAt:'new'};},
+  saveBomWorkspaceVersion:async()=>{writes.push('version');},uploadBomSourceFile:async()=>({name:'x.xlsx',path:'p',size:1,mimeType:'m'}),
   saveBomWorkspacePageTracker:async()=>{writes.push('tracker');},removeBomWorkspace:async()=>{writes.push('delete');},saveBomWorkspaceTableColorTheme:async()=>{writes.push('theme');},
   logMaterialWorkspaceAction:async()=>effects.push('audit'),logMaterialRecordChange:async()=>effects.push('audit'),
   reloadBomWorkspaces:async()=>effects.push('reload'),switchActiveBom:effect('selection'),
@@ -41,9 +47,13 @@ function execute(name,h,overrides={}){
  vm.runInNewContext(ts.transpileModule('var run='+handlers.get(name),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,context);
  return {run:context.run,writes,effects,context,record};
 }
-const fileEvent=()=>({target:{files:[{name:'A-private.xlsx'},{name:'second.xlsx'}],value:'file'}});
+const fileEvent=()=>({target:{files:[{name:'A-private.xlsx',size:10,lastModified:1},{name:'second.xlsx',size:10,lastModified:1}],value:'file'}});
+const fileWrites=(c)=>c.writes.filter(w=>typeof w==='object');
 test('actual BOM import handler rejects view-only accounts before parsing or writing',async()=>{
  const h=await mount(false);try{const c=execute('handleWorkbookImport',h,{canEdit:false,parseMaterialWorkbookFile:async()=>{throw Error('must not parse');}});await c.run(fileEvent());assert.equal(c.writes.length,0);assert.deepEqual(c.effects,[]);}finally{await h.unmount();}
+});
+test('parsing an upload stages it for confirmation and never writes by itself',async()=>{
+ const h=await mount();try{const c=execute('handleWorkbookImport',h);await c.run(fileEvent());assert.equal(c.writes.length,0);assert.ok(c.effects.includes('staged'));assert.ok(c.effects.includes('upload-dialog'));assert.equal(c.effects.includes('optimistic'),false);assert.equal(c.effects.includes('selection'),false);}finally{await h.unmount();}
 });
 for(const scenario of ['account-switch','logout','revoke','revoke-and-restore'])test(`actual BOM import prepared before ${scenario} cannot initiate a write after parsing`,async()=>{
  const h=await mount(),pending=deferred();try{
@@ -56,14 +66,21 @@ for(const scenario of ['account-switch','logout','revoke','revoke-and-restore'])
   assert.equal(c.writes.length,0);assert.equal(c.effects.includes('optimistic'),false);assert.equal(c.effects.includes('audit'),false);assert.equal(c.effects.includes('selection'),false);
  }finally{await h.unmount();}
 });
-test('completed BOM insert after account replacement has no new-account UI effects or trailing file writes',async()=>{
- const h=await mount(),pending=deferred();try{
-  const c=execute('handleWorkbookImport',h,{saveBomWorkspace:async w=>{c.writes.push(w);await pending.promise;}});const request=c.run(fileEvent());await flush();assert.equal(c.writes.length,1,'first request was already issued under A');
-  await h.update('account-B',true);pending.resolve();await request;assert.equal(c.writes.length,1,'no second file initiated');assert.deepEqual(c.effects,['busy'],'late receipt cannot log/select/clear current-account UI');
+for(const scenario of ['logout','revoke'])test(`a confirmed upload prepared before ${scenario} cannot write`,async()=>{
+ const h=await mount();try{
+  await (scenario==='logout'?h.update(null,false):h.update('account-A',false));
+  const c=execute('confirmBomUploads',h);await c.run({label:'',note:''});
+  assert.equal(c.writes.length,0);assert.deepEqual(c.effects,[]);
  }finally{await h.unmount();}
 });
-test('legitimate current-account BOM import still writes all files and updates the directory',async()=>{
- const h=await mount();try{const c=execute('handleWorkbookImport',h);await c.run(fileEvent());assert.equal(c.writes.length,2);assert.ok(c.effects.includes('optimistic'));assert.ok(c.effects.includes('reload'));assert.ok(c.effects.includes('selection'));}finally{await h.unmount();}
+test('completed BOM version write after account replacement has no new-account UI effects or trailing file writes',async()=>{
+ const h=await mount(),pending=deferred();try{
+  const c=execute('confirmBomUploads',h,{saveBomWorkspace:async w=>{c.writes.push(w);await pending.promise;}});const request=c.run({label:'',note:''});await flush();assert.equal(fileWrites(c).length,1,'first version was already issued under A');
+  await h.update('account-B',true);pending.resolve();await request;assert.equal(fileWrites(c).length,1,'no second file initiated');assert.deepEqual(c.effects,['busy'],'late receipt cannot log/select/clear current-account UI');
+ }finally{await h.unmount();}
+});
+test('legitimate current-account BOM upload still writes every file as its own version and updates the directory',async()=>{
+ const h=await mount();try{const c=execute('confirmBomUploads',h);await c.run({label:'EVT',note:''});assert.equal(fileWrites(c).length,2);assert.ok(c.writes.includes('version'));assert.ok(c.effects.includes('optimistic'));assert.ok(c.effects.includes('reload'));assert.ok(c.effects.includes('selection'));assert.ok(c.effects.includes('audit'));}finally{await h.unmount();}
 });
 for(const name of ['saveRecordToActiveBom','saveBomPageTracker','deleteBomWorkspaceById','applyTableColorTheme'])test(`actual ${name} denies view-only invocation before local or backend mutation`,async()=>{
  const h=await mount(false);try{
@@ -109,5 +126,14 @@ test('late project receipts cannot change the replacement account UI',async()=>{
   const c=execute('assignBomProject',h,{toBomWorkspaceProject:p=>({projectId:p.id,projectName:p.name}),saveBomWorkspaceProject:async()=>pending.promise});
   const request=c.run('W','P');await flush();const before=c.effects.slice();await h.update('account-B',true);pending.resolve();
   await assert.rejects(request,h.WorkspaceMutationScopeChangedError);assert.deepEqual(c.effects,before);
+ }finally{await h.unmount();}
+});
+
+test('setting another version current rejects view-only access before any write',async()=>{
+ const h=await mount(false);try{
+  const version={workspace:{id:'V1',payload:{records:[],recordCount:0}},version:{seriesId:'s',seriesName:'n',versionNumber:1,isCurrent:false},stored:true,isCurrent:false,displayNumber:'V1'};
+  const series={id:'s',name:'n',versions:[version],current:version};
+  const c=execute('applyCurrentBomVersion',h,{canEdit:false,pendingCurrent:{version,series},setPendingCurrent:()=>{},carryOnSwitch:true});
+  await c.run();assert.equal(c.writes.length,0);assert.deepEqual(c.effects,[]);
  }finally{await h.unmount();}
 });

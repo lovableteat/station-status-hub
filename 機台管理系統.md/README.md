@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`README.md`；程式參考基準：`06c686951b17afa920cf325ddfec9114590aeee0`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`README.md`；程式參考基準：`22f669036d89108fe73cf4b74d4117f3e332739f`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 工作整合平台
 
@@ -97,7 +97,7 @@ Vite 預設入口：
 http://localhost:8080/station-status-hub/
 ```
 
-本機需要 Supabase 時，請複製 [`.env.example`](https://github.com/lovableteat/station-status-hub/blob/06c686951b17afa920cf325ddfec9114590aeee0/.env.example) 為 `.env`，再填入瀏覽器可公開的專案 URL 與 anon key。`.env` 只存在本機，不得加入 Git：
+本機需要 Supabase 時，請複製 [`.env.example`](https://github.com/lovableteat/station-status-hub/blob/22f669036d89108fe73cf4b74d4117f3e332739f/.env.example) 為 `.env`，再填入瀏覽器可公開的專案 URL 與 anon key。`.env` 只存在本機，不得加入 Git：
 
 ```dotenv
 VITE_SUPABASE_URL=your-project-url
@@ -130,7 +130,7 @@ npm run test:pcb
 
 - 前端由 `UserProvider`、`PermissionsProvider`、`TestProjectProvider`、`UnifiedDataProvider` 與 `UserPresenceProvider` 統一管理登入、權限、專案和協作狀態。
 - Supabase 是雲端正式資料來源，涵蓋 Auth、Postgres、RLS、Realtime、Storage 與 Edge Functions；比對系統的上傳檔案由瀏覽器內的 Python Worker 處理，結果與回覆依帳號保存在本機，可透過 ZIP 備份移轉，不上傳原始工程資料。
-- Migration 放在 [`supabase/migrations`](https://github.com/lovableteat/station-status-hub/tree/06c686951b17afa920cf325ddfec9114590aeee0/supabase/migrations)，正式環境不可 reset、刪除 schema 或任意重播歷史 migration。
+- Migration 放在 [`supabase/migrations`](https://github.com/lovableteat/station-status-hub/tree/22f669036d89108fe73cf4b74d4117f3e332739f/supabase/migrations)，正式環境不可 reset、刪除 schema 或任意重播歷史 migration。
 - 正式環境登入、OAuth 過期復原、migration history 不一致時的單檔安全套用與驗證，統一依照 [`docs/supabase-production-migration-runbook.md`](./docs__supabase-production-migration-runbook.md)。
 - 應用資料表統一歸檔在 `workspace` schema；Supabase 管理的 `auth`、`storage`、`realtime` schema 不修改。Hosted Supabase 的 API Exposed schemas 必須加入 `workspace`，再套用對應 migration。
 - 權限新增或調整時，必須同步檢查入口顯示、workspace access、細部 module 權限、RLS/RPC 與手機導覽。
@@ -141,7 +141,7 @@ npm run test:pcb
 
 ## 部署方式
 
-`main` 分支推送後，[GitHub Actions](https://github.com/lovableteat/station-status-hub/blob/06c686951b17afa920cf325ddfec9114590aeee0/.github/workflows/main.yml) 會使用 Node.js 20 安裝依賴、建立 production bundle，並部署到 GitHub Pages。`VITE_SUPABASE_URL` 與 `VITE_SUPABASE_ANON_KEY` 由 GitHub Secrets 提供，`VITE_REALTIME_COLLABORATION_V2` 由 GitHub Variables 提供，不存放在儲存庫。這個 workflow 不會套用資料庫 migration；正式資料庫變更需另外依照 [Supabase 正式環境遷移操作手冊](./docs__supabase-production-migration-runbook.md) 執行與驗證。
+`main` 分支推送後，[GitHub Actions](https://github.com/lovableteat/station-status-hub/blob/22f669036d89108fe73cf4b74d4117f3e332739f/.github/workflows/main.yml) 會使用 Node.js 20 安裝依賴、建立 production bundle，並部署到 GitHub Pages。`VITE_SUPABASE_URL` 與 `VITE_SUPABASE_ANON_KEY` 由 GitHub Secrets 提供，`VITE_REALTIME_COLLABORATION_V2` 由 GitHub Variables 提供，不存放在儲存庫。這個 workflow 不會套用資料庫 migration；正式資料庫變更需另外依照 [Supabase 正式環境遷移操作手冊](./docs__supabase-production-migration-runbook.md) 執行與驗證。
 
 提交前請確認 `git status`，只加入本次正式程式、測試、migration 與文件。`.preview-current/`、`tmp/`、`supabase/.temp/`、本機轉檔產物和未經審核的大型模型不可一併提交。
 
