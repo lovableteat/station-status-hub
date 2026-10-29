@@ -66,7 +66,11 @@ const snapshot = (preferredId) => [...store.values()].map(item => structuredClon
 
 export class BomRecordConflictError extends Error {}
 export const loadCachedBomWorkspacesDetailed = async () => null;
-export const loadBomWorkspacesDetailed = async (preferredId) => ({ mode: 'remote', workspaces: snapshot(store.has(preferredId) ? preferredId : undefined) });
+export const loadBomWorkspacesDetailed = async (preferredId, options = {}) => {
+  const result = { mode: 'remote', workspaces: snapshot(store.has(preferredId) ? preferredId : undefined) };
+  options.onPreview?.(result);
+  return result;
+};
 export const loadBomWorkspaceArchives = async () => new Map([...store.values()].flatMap(item => (item.archive ? [[item.id, item.archive]] : [])));
 export const loadBomWorkspaceProjects = async () => new Map([...store.values()].flatMap(item => (item.project ? [[item.id, item.project]] : [])));
 export const loadBomWorkspaceVersions = async () => new Map([...store.values()].flatMap(item => (item.version ? [[item.id, item.version]] : [])));
@@ -77,7 +81,10 @@ export const saveBomWorkspacePageTracker = async (id, pageTracker) => { const it
 export const saveBomWorkspaceArchive = async (id, archive) => { const item = store.get(id); if (item) item.archive = archive ?? undefined; };
 export const saveBomWorkspaceProject = async (id, nextProject) => { const item = store.get(id); if (item) item.project = nextProject ?? undefined; };
 export const saveBomWorkspaceVersion = async (id, version) => { const item = store.get(id); if (item) item.version = structuredClone(version); };
-export const saveBomWorkspaceTableColorTheme = async () => {};
+export const saveBomWorkspaceTableColorTheme = async (id, theme) => {
+  if (globalThis.__qaFailTableThemeSave) throw new Error('QA simulated save failure');
+  const item = store.get(id); if (item) item.tableColorTheme = structuredClone(theme);
+};
 export const removeBomWorkspace = async (id) => { store.delete(id); fullRecords.delete(id); };
 export const saveBomWorkspaceRecord = async (target, record) => {
   const list = fullRecords.get(target.id) ?? [];

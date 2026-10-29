@@ -134,7 +134,7 @@ test("one record dialog saves the material fields and pending tracking together"
 const tableStart = source.indexOf('data-testid="material-table-scroll"');
 const tableBlock = source.slice(tableStart, source.indexOf("</table>", tableStart));
 const rowBlock = source.slice(source.indexOf("const MaterialGroupRow = memo("), source.indexOf("function CompactAlternativeRows("));
-const alternativeBlock = source.slice(source.indexOf("function CompactAlternativeRows("), source.indexOf("function BomTableColorDialog("));
+const alternativeBlock = source.slice(source.indexOf("function CompactAlternativeRows("), source.indexOf("function MaterialExportDialog("));
 const readWidths = (name) => JSON.parse(source.match(new RegExp(`const ${name} = (\\[[^;]+\\]);`))[1]);
 
 test("the table shows Part Spec as its own workbook column and keeps the old specification filter out", () => {
