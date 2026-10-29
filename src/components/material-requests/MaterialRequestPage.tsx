@@ -28,6 +28,7 @@ import {
   FileArchive,
   FileCode2,
   FileSpreadsheet,
+  FileText,
   Filter,
   History,
   Layers3,
@@ -64,6 +65,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Field, FieldGroup } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -3095,6 +3097,10 @@ export function MaterialRecordDialog({
   const editorScopeRef = useRef("");
   editorScopeRef.current = `${open}:${workspaceId}:${record.id}:${canEdit}`;
   const [isUploadingSpec, setIsUploadingSpec] = useState(false);
+  const [isDraggingSpec, setIsDraggingSpec] = useState(false);
+  const specUploadRef = useRef(false);
+  const specDragDepthRef = useRef(0);
+  const specGenerationRef = useRef(0);
   const specInputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
   const readOnly = mode === "view" || !canEdit;
@@ -3102,23 +3108,44 @@ export function MaterialRecordDialog({
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
-  const handleSpecFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || readOnly || isSaving) return;
+  useEffect(() => {
+    specGenerationRef.current += 1;
+    specUploadRef.current = false;
+    specDragDepthRef.current = 0;
+    setIsUploadingSpec(false);
+    setIsDraggingSpec(false);
+  }, [open, workspaceId, record.id, readOnly]);
+  const uploadSpecFile = async (files: File[]) => {
+    if (!open || !files.length || readOnly || savingRef.current || specUploadRef.current) return;
+    if (files.length !== 1) {
+      toast({ title: "一次上傳一份 SPEC", description: "請選擇一份文件；多份文件可先壓縮成 ZIP。現有 SPEC 不會被更動。", variant: "destructive" });
+      return;
+    }
+    const file = files[0];
     const scope = editorScopeRef.current;
+    const generation = specGenerationRef.current;
+    const isCurrent = () => mountedRef.current && editorScopeRef.current === scope && specGenerationRef.current === generation;
+    specUploadRef.current = true;
     setIsUploadingSpec(true);
     try {
       const specDocument = await uploadMaterialSpecDocument({ workspaceId, recordId: form.id, file, uploadedBy: uploaderName });
-      if (!mountedRef.current || editorScopeRef.current !== scope) return;
+      if (!isCurrent()) return;
       setForm((current) => ({ ...current, specDocument }));
       toast({ title: "SPEC 已上傳", description: `「${file.name}」會在儲存資料後跟著這顆料一起保存。` });
     } catch (error) {
-      if (!mountedRef.current || editorScopeRef.current !== scope) return;
+      if (!isCurrent()) return;
       toast({ title: "SPEC 上傳失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
     } finally {
-      if (mountedRef.current && editorScopeRef.current === scope) setIsUploadingSpec(false);
+      if (isCurrent()) {
+        specUploadRef.current = false;
+        setIsUploadingSpec(false);
+      }
     }
+  };
+  const handleSpecFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    return uploadSpecFile(files);
   };
   useEffect(() => {
     if (!open) return;
@@ -3132,7 +3159,7 @@ export function MaterialRecordDialog({
   };
 
   const handleSave = async () => {
-    if (readOnly || savingRef.current || isUploadingSpec || !form.name.trim()) return;
+    if (readOnly || savingRef.current || specUploadRef.current || !form.name.trim()) return;
     if (!isValidBomUsage(form.qty)) {
       toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
       return;
@@ -3159,14 +3186,13 @@ export function MaterialRecordDialog({
   };
 
   const title = mode === "create" ? "新增料件 / 替代料" : mode === "edit" ? "修改料件資料" : "料件詳細資訊";
-  const fieldClassName = "h-11 rounded-xl px-3 text-sm";
   const hasTrackingChanges = Boolean(trackingDraft.status || trackingDraft.note.trim() || trackingDraft.createdBy.trim() || trackingDraft.requestInfo.trim() || trackingDraft.images.length || trackingDraft.pendingImageReads || trackingDraft.requestTicket !== (record.requestTicket ?? "") || trackingDraft.requestUrl !== (record.requestUrl ?? ""));
   const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(toWorkbookRecord(record)) || hasTrackingChanges;
 
   return (
     <TooltipProvider delayDuration={160}>
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!savingRef.current) onOpenChange(nextOpen); }}>
-      <DialogContent className="material-record-dialog flex max-h-[94dvh] w-[min(94vw,1400px)] max-w-[min(94vw,1400px)] flex-col gap-4 overflow-hidden p-4 text-base sm:p-7">
+      <DialogContent className="material-record-dialog flex flex-col overflow-hidden" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}>
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">
             <DialogTitle>{title}</DialogTitle>
@@ -3175,59 +3201,89 @@ export function MaterialRecordDialog({
             </span>
           </div>
           <DialogDescription>
-            欄位順序與 CE Excel 相同；<span className="text-destructive">*</span> 為必填，? 有各欄意思與範例。
+            依 CE Excel 順序排列全部 15 個欄位；<span className="text-destructive">*</span> 為必填。
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MaterialEditorTab)} className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MaterialEditorTab)} className="material-record-tabs flex min-h-0 min-w-0 flex-1 flex-col">
           <TabsList className="h-12 w-full shrink-0 justify-start">
             <TabsTrigger value="details" className="h-10">料件資料</TabsTrigger>
             <TabsTrigger value="tracking" className="h-10">狀態追蹤{hasTrackingChanges ? " · 未儲存" : ""}</TabsTrigger>
           </TabsList>
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-          <TabsContent value="details" forceMount className="space-y-4 data-[state=inactive]:hidden">
-          <fieldset disabled={isSaving} className="min-w-0 space-y-4">
-        <section className="workspace-dialog-section min-w-0 rounded-2xl p-4">
+          <div className="material-record-scroll min-h-0 flex-1 overflow-y-auto">
+          <TabsContent value="details" forceMount className="flex flex-col gap-4 data-[state=inactive]:hidden">
+          <fieldset disabled={isSaving} className="flex min-w-0 flex-col gap-4">
+        <section className="workspace-dialog-section material-ce-section min-w-0 rounded-xl">
           <h3 id="material-ce-grid-title" className="mb-3 text-sm font-semibold">CE Excel 欄位 · 依交付格式順序</h3>
-          <div role="region" aria-labelledby="material-ce-grid-title" tabIndex={0} className="max-w-full overflow-x-auto rounded-lg border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <table className="material-ce-table table-fixed border-collapse text-sm" style={{ width: MATERIAL_CE_EDITOR_FIELDS.reduce((total, field) => total + field.width, 0) }}>
-              <colgroup>{MATERIAL_CE_EDITOR_FIELDS.map(field => <col key={field.key} style={{ width: field.width }} />)}</colgroup>
-              <thead><tr>{MATERIAL_CE_EDITOR_FIELDS.map((field, index) => (
-                <th key={field.key} scope="col" className={cn("border-r border-border bg-secondary px-3 py-2 text-left align-bottom", (field.key === "virtualAlternative" || field.key === "partNumber") && "material-pn-header")}>
-                  <MaterialFieldLabel field={field.key} htmlFor={field.id} label={MATERIAL_CE_FIELDS[index].header} required={field.key === "name"} />
-                </th>
-              ))}</tr></thead>
-              <tbody><tr>{MATERIAL_CE_EDITOR_FIELDS.map((field, index) => (
-                <td key={field.key} className="border-r border-border p-2 align-top" style={{ minWidth: field.width }}>
-                  {field.key === "partSpec" ? (
-                    <Textarea id={field.id} disabled={readOnly} value={form.partSpec} onChange={(event) => updateField("partSpec", event.target.value)} rows={1} className="min-h-11 rounded-lg text-sm" />
-                  ) : (
-                    <Input id={field.id} disabled={readOnly} readOnly={field.key === "level"} value={field.key === "level" ? "2" : String(form[field.key] ?? "")} onChange={(event) => updateField(field.key, event.target.value)} placeholder={field.key === "level" ? undefined : MATERIAL_CE_FIELDS[index].meaning} className={cn(fieldClassName, (field.key === "virtualAlternative" || field.key === "partNumber") && "material-pn-input", field.key === "partNumber" && !form.partNumber.trim() && "material-pn-missing")} />
-                  )}
-                  {field.key === "partUsageStatus" && (record as Partial<MaterialRecord>).partUsageStatusSource === "legacy-tracking" && <p className="mt-1 text-xs text-muted-foreground">取自舊格式匯入追蹤原文；原追蹤保留。</p>}
-                </td>
-              ))}</tr></tbody>
-            </table>
-          </div>
+          <FieldGroup className="material-ce-fields" role="region" aria-labelledby="material-ce-grid-title">
+            {MATERIAL_CE_EDITOR_FIELDS.map((field, index) => (
+              <Field key={field.key} data-testid="material-ce-field" className="material-ce-field" data-disabled={readOnly || undefined}>
+                <MaterialFieldLabel field={field.key} htmlFor={field.id} label={MATERIAL_CE_FIELDS[index].header} required={field.key === "name"} />
+                {field.key === "level" || field.key === "qty" ? (
+                  <Input id={field.id} disabled={readOnly} readOnly={field.key === "level"} value={field.key === "level" ? "2" : String(form[field.key] ?? "")} onChange={(event) => updateField(field.key, event.target.value)} inputMode={field.key === "qty" ? "decimal" : undefined} className="material-ce-control" />
+                ) : (
+                  <Textarea id={field.id} disabled={readOnly} value={String(form[field.key] ?? "")} onChange={(event) => updateField(field.key, event.target.value)} rows={2} placeholder={MATERIAL_CE_FIELDS[index].meaning} className={cn("material-ce-control", (field.key === "virtualAlternative" || field.key === "partNumber") && "material-pn-input", field.key === "partNumber" && !form.partNumber.trim() && "material-pn-missing")} />
+                )}
+                {field.key === "partUsageStatus" && (record as Partial<MaterialRecord>).partUsageStatusSource === "legacy-tracking" && <p className="text-xs text-muted-foreground">取自舊格式匯入追蹤原文；原追蹤保留。</p>}
+              </Field>
+            ))}
+          </FieldGroup>
         </section>
 
-        <section className="workspace-dialog-section rounded-2xl p-4">
+        <section
+          aria-label="SPEC 檔案區"
+          aria-busy={isUploadingSpec}
+          data-testid="material-spec-dropzone"
+          data-drag-active={isDraggingSpec}
+          className="workspace-dialog-section material-spec-section rounded-xl"
+          onDragEnter={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            event.preventDefault();
+            specDragDepthRef.current += 1;
+            if (!readOnly && !isSaving && !isUploadingSpec) setIsDraggingSpec(true);
+          }}
+          onDragOver={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = readOnly || isSaving || isUploadingSpec ? "none" : "copy";
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            specDragDepthRef.current = Math.max(0, specDragDepthRef.current - 1);
+            if (!specDragDepthRef.current) setIsDraggingSpec(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            specDragDepthRef.current = 0;
+            setIsDraggingSpec(false);
+            if (readOnly || isSaving || isUploadingSpec) return;
+            if (Array.from(event.dataTransfer.items ?? []).some((item) => item.webkitGetAsEntry?.()?.isDirectory)) {
+              toast({ title: "請拖入文件，而不是資料夾", description: "多份文件可先壓縮成 ZIP 再上傳。", variant: "destructive" });
+              return;
+            }
+            void uploadSpecFile(Array.from(event.dataTransfer.files));
+          }}
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">SPEC 文件</h3>
             <input ref={specInputRef} type="file" accept={MATERIAL_SPEC_ACCEPT} className="hidden" onChange={(event) => void handleSpecFile(event)} />
-            {!readOnly && <Button type="button" variant="secondary" disabled={isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-11"><Upload className="mr-2 h-4 w-4" />{isUploadingSpec ? "上傳中…" : form.specDocument ? "更換 SPEC" : "上傳 SPEC"}</Button>}
+            {!readOnly && <Button type="button" variant="secondary" disabled={isSaving || isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-11"><Upload data-icon="inline-start" />{isUploadingSpec ? "上傳中…" : form.specDocument ? "更換 SPEC" : "上傳 SPEC"}</Button>}
           </div>
-          <div data-testid="material-spec-document" className="mt-3 rounded-lg border border-border bg-background/40 p-3">
+          <div data-testid="material-spec-document" className="material-spec-files mt-3" aria-live="polite">
             {form.specDocument ? <>
-              <div className="flex min-w-0 items-start gap-2"><Paperclip className="mt-1 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0 flex-1"><p className="break-all font-semibold">{form.specDocument.name}</p><p className="mt-1 text-xs text-muted-foreground">{formatMaterialSpecSize(form.specDocument.size)} · {formatTimestamp(form.specDocument.uploadedAt)}{form.specDocument.uploadedBy ? ` · ${form.specDocument.uploadedBy}` : ""}</p></div></div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" variant="outline" className="h-11" onClick={() => onOpenSpec(form)}>開啟文件</Button>
-                <Button type="button" variant="secondary" className="h-11" onClick={() => onOpenSpec(form, true)}><Download className="mr-2 h-4 w-4" />下載 SPEC</Button>
-                {!readOnly && <Button type="button" variant="ghost" className="h-11 text-destructive" disabled={isUploadingSpec} onClick={() => setForm(current => ({ ...current, specDocument: undefined }))}>移除關聯</Button>}
+              <div className="material-spec-file">
+                <button type="button" className="material-spec-file-open" onClick={() => onOpenSpec(form)} aria-label={`開啟 ${form.specDocument.name}`}>
+                  <FileText className="material-spec-file-icon" aria-hidden="true" />
+                  <span className="material-spec-file-copy"><strong>{form.specDocument.name}</strong><span>{formatMaterialSpecSize(form.specDocument.size)} · {formatTimestamp(form.specDocument.uploadedAt)}{form.specDocument.uploadedBy ? ` · ${form.specDocument.uploadedBy}` : ""}</span></span>
+                </button>
+                <Button type="button" variant="outline" className="h-11" onClick={() => onOpenSpec(form, true)}><Download data-icon="inline-start" />下載 SPEC</Button>
+                {!readOnly && <Button type="button" variant="ghost" className="h-11" disabled={isSaving || isUploadingSpec} onClick={() => setForm(current => ({ ...current, specDocument: undefined }))}>移除關聯</Button>}
               </div>
               {!readOnly && form.specDocument.path !== record.specDocument?.path && <p className="mt-2 text-xs text-warning">檔案已上傳，可直接下載；按「儲存資料與追蹤」才會保存到這筆料件。</p>}
-            </> : <p className="text-sm text-muted-foreground">尚未上傳 SPEC</p>}
+            </> : <div className="material-spec-empty"><Upload aria-hidden="true" /><span>{readOnly ? "尚未上傳 SPEC" : isDraggingSpec ? "放開滑鼠以上傳 SPEC" : "將 SPEC 檔案拖放到這裡，或按「上傳 SPEC」"}</span></div>}
           </div>
+          {!readOnly && <p className="mt-2 text-xs text-muted-foreground">支援 PDF、Office、圖片、ZIP，單檔最高 25 MB。{form.specDocument ? "拖入新檔案可更換 SPEC。" : ""}</p>}
         </section>
 
           </fieldset>

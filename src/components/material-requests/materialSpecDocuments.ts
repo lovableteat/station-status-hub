@@ -7,6 +7,17 @@ export const MATERIAL_SPEC_MAX_BYTES = 25 * 1024 * 1024;
 export const MATERIAL_SPEC_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.zip";
 const SIGNED_URL_SECONDS = 60 * 60;
 
+export function validateMaterialSpecFile(file: Pick<File, "name" | "size">) {
+  const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+  if (!file.name.includes(".") || !MATERIAL_SPEC_ACCEPT.split(",").includes(extension)) {
+    throw new Error("不支援這種檔案格式，請使用 PDF、Office、PNG／JPG 圖片或 ZIP。");
+  }
+  if (file.size === 0) throw new Error("檔案內容是空的，請確認文件後再上傳。");
+  if (file.size > MATERIAL_SPEC_MAX_BYTES) {
+    throw new Error(`檔案超過上限 ${formatMaterialSpecSize(MATERIAL_SPEC_MAX_BYTES)}。`);
+  }
+}
+
 function toPathSegment(value: string) {
   const cleaned = value.normalize("NFKC").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
   return cleaned || "item";
@@ -48,9 +59,7 @@ export async function uploadMaterialSpecDocument({
   file: File;
   uploadedBy?: string;
 }): Promise<MaterialSpecDocument> {
-  if (file.size > MATERIAL_SPEC_MAX_BYTES) {
-    throw new Error(`檔案超過上限 ${formatMaterialSpecSize(MATERIAL_SPEC_MAX_BYTES)}。`);
-  }
+  validateMaterialSpecFile(file);
   const path = buildMaterialSpecPath(workspaceId, recordId, file.name);
   const { error } = await supabase.storage
     .from(MATERIAL_SPEC_BUCKET)

@@ -12,13 +12,13 @@ const baseRecord = {
   manufacturerPartNumber: "MPN-A", trackingStatus: "處理中", trackingNote: "original note", trackingHistory: [],
 };
 
-function mountDialog(overrides = {}) {
+function mountDialog(overrides = {}, uploadSpec = () => Promise.resolve({ name: "spec.pdf", path: "W/part/spec.pdf" })) {
   const writes = [];
   const toasts = [];
   const load = loader({
     mocks: {
       "@/hooks/use-toast": { useToast: () => ({ toast: (entry) => toasts.push(entry) }) },
-      "./materialSpecDocuments": { MATERIAL_SPEC_ACCEPT: ".pdf", uploadMaterialSpecDocument: () => Promise.resolve({ name: "spec.pdf" }), formatMaterialSpecSize: () => "1 KB" },
+      "./materialSpecDocuments": { MATERIAL_SPEC_ACCEPT: ".pdf", uploadMaterialSpecDocument: uploadSpec, formatMaterialSpecSize: () => "1 KB" },
     },
     globals: { Error, MaterialFieldLabel: ui.Label, CHIP_BASE: "chip", CHIP_TONES: { neutral: "neutral", primary: "primary" } },
     transform(source, file) {
@@ -65,9 +65,12 @@ test("one main save persists both the material edits and the pending progress wi
   editor.unmount();
 });
 
-test("CE row has all 15 source columns, hides internal controls and retains their existing values", async () => {
+test("all 15 CE fields remain editable in Excel order without a horizontal table and retain internal values", async () => {
   const editor = mountDialog({ record: { ...baseRecord, assemblyName: "original module", remark: "original note", manufacturerPartNumberAlt: "OLD-MPN" } });
-  assert.equal(editor.root.root.findAllByType("th").length, 15);
+  const fields = editor.root.root.findAll(node => node.type === "stub" && node.props["data-testid"] === "material-ce-field");
+  assert.equal(fields.length, 15);
+  assert.equal(editor.root.root.findAllByType("table").length, 0);
+  assert.deepEqual(fields.map(field => field.findAll(node => node.type === "stub" && node.props.id?.startsWith("material-"))[0].props.id), ["material-level", "material-name", "material-qty", "material-ref-des", "material-mpn", "material-maker", "material-sourcing", "material-virtual-alternative", "material-internal-pn", "material-part-name", "material-spec", "material-symbol", "material-footprint", "material-phase-out", "material-part-usage"]);
   for (const id of ["material-ref", "material-assembly", "material-remark"]) assert.equal(editor.root.root.findAllByProps({ id }).length, 0);
   const author = editor.root.root.findAll(node => node.type === "stub" && String(node.props.id).endsWith("-author"))[0];
   assert.equal(author.props.value, "CE");
@@ -102,6 +105,57 @@ test("a freshly uploaded SPEC appears immediately with an explicit download acti
   assert.equal(opened[0][0].specDocument.name, "spec.pdf");
   assert.equal(opened[0][1], true);
   assert.equal(editor.writes.length, 0);
+  editor.unmount();
+});
+
+function dropSpec(editor, files, items = []) {
+  const zone = editor.root.root.find(node => node.type === "section" && node.props["data-testid"] === "material-spec-dropzone");
+  return zone.props.onDrop({ preventDefault() {}, stopPropagation() {}, dataTransfer: { files, items, types: ["Files"] } });
+}
+
+test("dropping a file uploads once, preserves the material draft and saves its downloadable attachment", async () => {
+  const pending = deferred();
+  const uploads = [];
+  const editor = mountDialog({}, args => { uploads.push(args); return pending.promise; });
+  editor.changeName("Keep edited name");
+  act(() => { dropSpec(editor, [{ name: "datasheet.pdf" }]); dropSpec(editor, [{ name: "second.pdf" }]); });
+  assert.equal(uploads.length, 1);
+  assert.equal(uploads[0].workspaceId, "W");
+  assert.equal(uploads[0].recordId, "part-A");
+  assert.equal(editor.button().props.disabled, true);
+  await act(async () => pending.resolve({ name: "datasheet.pdf", path: "W/part-A/spec.pdf" }));
+  await act(async () => editor.button().props.onClick());
+  assert.equal(editor.writes[0].name, "Keep edited name");
+  assert.equal(editor.writes[0].specDocument.path, "W/part-A/spec.pdf");
+  editor.unmount();
+});
+
+test("multi-file and folder drops report errors instead of silently replacing the existing SPEC", async () => {
+  let uploads = 0;
+  const editor = mountDialog({ record: { ...baseRecord, specDocument: { name: "old.pdf", path: "old" } } }, async () => { uploads++; });
+  await act(async () => dropSpec(editor, [{ name: "a.pdf" }, { name: "b.pdf" }]));
+  await act(async () => dropSpec(editor, [{ name: "folder" }], [{ webkitGetAsEntry: () => ({ isDirectory: true }) }]));
+  assert.equal(uploads, 0);
+  assert.match(JSON.stringify(editor.toasts), /一次上傳一份 SPEC/);
+  assert.match(JSON.stringify(editor.toasts), /請拖入文件/);
+  await act(async () => editor.button().props.onClick());
+  assert.equal(editor.writes[0].specDocument.path, "old");
+  editor.unmount();
+});
+
+test("read-only drops never upload and late uploads do not attach to another editor session", async () => {
+  let uploads = 0;
+  const pending = deferred();
+  const editor = mountDialog({ mode: "view" }, () => { uploads++; return pending.promise; });
+  act(() => dropSpec(editor, [{ name: "ignored.pdf" }]));
+  assert.equal(uploads, 0);
+  editor.update({ mode: "edit" });
+  act(() => dropSpec(editor, [{ name: "late.pdf" }]));
+  editor.update({ open: false });
+  editor.update({ open: true, record: { ...baseRecord, id: "part-B", name: "Other material" } });
+  await act(async () => pending.resolve({ name: "late.pdf", path: "old-record/late.pdf" }));
+  assert.doesNotMatch(JSON.stringify(editor.root.toJSON()), /late\.pdf/);
+  assert.equal(editor.button().props.disabled, false);
   editor.unmount();
 });
 
