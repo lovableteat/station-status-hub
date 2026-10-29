@@ -130,6 +130,8 @@ import { MaterialTrackingEditor } from "./MaterialTrackingEditor";
 import { applyMaterialTrackingDraft, createMaterialTrackingDraft } from "./materialTrackingDraft";
 import { MATERIAL_SPEC_ACCEPT, createMaterialSpecUrl, formatMaterialSpecSize, uploadMaterialSpecDocument } from "./materialSpecDocuments";
 import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
+import { isMaterialReferenceQuery, matchesMaterialReference } from "./materialSearch";
+import { clearMaterialCrosshair, markMaterialCrosshair } from "./materialTableCrosshair";
 import type {
   MaterialExportProgress,
   MaterialReportSnapshot,
@@ -363,6 +365,7 @@ function getMaterialCeFieldHelp(header: string) {
 }
 
 const MATERIAL_FIELD_HELP = {
+  level: getMaterialCeFieldHelp("Level"),
   refGroup: { description: "網站內部分組參考，不是 CE Excel 欄位。新格式以 Ref Des 填寫位號，不需額外準備代碼；相同虛擬料號不會合併不同位號。", example: "C101" },
   refDes: getMaterialCeFieldHelp("Ref Des"),
   name: getMaterialCeFieldHelp("Name"),
@@ -391,6 +394,7 @@ const MATERIAL_FIELD_HELP = {
 // contract text stays the source of truth for meanings and exports; this only
 // explains the same thing in everyday words.
 const MATERIAL_FIELD_PLAIN: Record<keyof typeof MATERIAL_FIELD_HELP, string> = {
+  level: "這裡新增或修改的是料件列，階層固定為 2。",
   refGroup: "網站用來把同一個位號的主料和替代料放在一起的分組代碼，通常直接填位號，例如 C101。這不是 CE Excel 的欄位，CE 不用填。",
   refDes: "這顆料在電路圖上的位號，例如 C101、R1。同一顆料用在好幾個位置，就用逗號分開，例如 C101, C102。",
   name: "設計 BOM 上的料件名稱，照原本的寫法填，例如 CAP CER 0.1UF 16V X7R。",
@@ -1756,13 +1760,13 @@ function ExcelFilterPopover({
     const next = searchHasValue
       ? options.filter((option) => {
           const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
-          return searchTokens.every((token) => searchableText.includes(token));
+          return searchTokens.every((token) => filterKey === "refDes" ? matchesMaterialReference(option.value, token) : searchableText.includes(token));
         })
       : options;
     return [...next].sort((left, right) => sortDirection === "asc"
       ? left.label.localeCompare(right.label, undefined, { numeric: true })
       : right.label.localeCompare(left.label, undefined, { numeric: true }));
-  }, [options, searchHasValue, searchTokens, sortDirection]);
+  }, [filterKey, options, searchHasValue, searchTokens, sortDirection]);
   const visibleValues = useMemo(() => filteredOptions.map((option) => option.value), [filteredOptions]);
   const visibleCheckedCount = filteredOptions.filter((option) => selectedSet.has(option.value)).length;
   const allOptionsChecked = selected === null || (hiddenSelectedCount === 0 && options.length > 0 && options.every((option) => selectedSet.has(option.value)));
@@ -1886,6 +1890,7 @@ function ExcelFilterPopover({
                     <span className="text-xs text-muted-foreground">{selectedList.length - hiddenSelectedCount}/{options.length}</span>
                   </label>
                 )}
+                <button type="button" onClick={() => apply([])} className="shrink-0 rounded-md border border-border px-2 text-xs font-semibold leading-6 hover:bg-accent">取消全選</button>
                 {selected !== null && (
                   <button type="button" onClick={() => apply(null)} className="ml-auto rounded-md px-2 text-xs font-semibold leading-6 text-muted-foreground hover:bg-accent hover:text-foreground">清除</button>
                 )}
@@ -3034,6 +3039,24 @@ function BomManagerDialog({
   );
 }
 
+const MATERIAL_CE_EDITOR_FIELDS = [
+  { key: "level", id: "material-level", width: 88 },
+  { key: "name", id: "material-name", width: 320 },
+  { key: "qty", id: "material-qty", width: 96 },
+  { key: "refDes", id: "material-ref-des", width: 240 },
+  { key: "manufacturerPartNumber", id: "material-mpn", width: 280 },
+  { key: "manufacturer", id: "material-maker", width: 220 },
+  { key: "sourcingStatus", id: "material-sourcing", width: 220 },
+  { key: "virtualAlternative", id: "material-virtual-alternative", width: 240 },
+  { key: "partNumber", id: "material-internal-pn", width: 240 },
+  { key: "partName", id: "material-part-name", width: 260 },
+  { key: "partSpec", id: "material-spec", width: 280 },
+  { key: "schematicPart", id: "material-symbol", width: 240 },
+  { key: "pcbFootprint", id: "material-footprint", width: 220 },
+  { key: "phaseOutStatus", id: "material-phase-out", width: 200 },
+  { key: "partUsageStatus", id: "material-part-usage", width: 320 },
+] as const;
+
 export function MaterialRecordDialog({
   canEdit,
   open,
@@ -3057,7 +3080,7 @@ export function MaterialRecordDialog({
   initialTab?: MaterialEditorTab;
   onOpenChange: (open: boolean) => void;
   onModeChange: (mode: EditorMode) => void;
-  onOpenSpec: (record: Pick<MaterialWorkbookRecord, "specDocument">) => void;
+  onOpenSpec: (record: Pick<MaterialWorkbookRecord, "specDocument">, download?: boolean) => void;
   onSave: (record: MaterialWorkbookRecord) => Promise<void>;
   /** Opens a blank alternate in this record's group; absent when creating. */
   onAddAlternate?: () => void;
@@ -3109,14 +3132,18 @@ export function MaterialRecordDialog({
   };
 
   const handleSave = async () => {
-    if (readOnly || savingRef.current || isUploadingSpec || !form.refGroup.trim() || !form.name.trim()) return;
+    if (readOnly || savingRef.current || isUploadingSpec || !form.name.trim()) return;
     if (!isValidBomUsage(form.qty)) {
       toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
       return;
     }
     setSaveError("");
     try {
-      const next = applyMaterialTrackingDraft({ ...form, level: 2 }, trackingDraft, uploaderName);
+      const next = applyMaterialTrackingDraft({
+        ...form,
+        ...(mode === "create" && !form.refGroup.trim() ? { refGroup: form.refDes.trim(), sourceGroupKey: form.sourceGroupKey || form.id } : {}),
+        level: 2,
+      }, trackingDraft, uploaderName);
       savingRef.current = true;
       setIsSaving(true);
       await onSave(next);
@@ -3160,123 +3187,46 @@ export function MaterialRecordDialog({
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           <TabsContent value="details" forceMount className="space-y-4 data-[state=inactive]:hidden">
           <fieldset disabled={isSaving} className="min-w-0 space-y-4">
-        {/* Same 14 item columns, same order, as the CE workbook (Level is always 2 for an item row). */}
-        <section className="workspace-dialog-section rounded-2xl p-4">
-          <h3 className="mb-3 text-sm font-semibold text-foreground">CE Excel 欄位 <span className="font-normal text-muted-foreground">· 依交付格式順序</span></h3>
-          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
-            <div className="space-y-1 md:col-span-2">
-              <MaterialFieldLabel field="name" htmlFor="material-name" label="Name（料件名稱）" required />
-              <Input id="material-name" disabled={readOnly} value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="例如 CAP CER 0.1UF 16V X7R" className={fieldClassName} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="qty" htmlFor="material-qty" label="Qty（用量）" />
-              <Input id="material-qty" disabled={readOnly} value={String(form.qty)} onChange={(event) => updateField("qty", event.target.value)} className={fieldClassName} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="refDes" htmlFor="material-ref-des" label="Ref Des（位號）" />
-              <Input id="material-ref-des" disabled={readOnly} value={form.refDes} onChange={(event) => updateField("refDes", event.target.value)} placeholder="例如 C101, C102" className={fieldClassName} />
-            </div>
-            <div className="space-y-1 md:col-span-2">
-              <MaterialFieldLabel field="manufacturerPartNumber" htmlFor="material-mpn" label="Manufacturer Part Number（MPN）" />
-              <Input id="material-mpn" disabled={readOnly} value={form.manufacturerPartNumber} onChange={(event) => updateField("manufacturerPartNumber", event.target.value)} className={fieldClassName} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="manufacturer" htmlFor="material-maker" label="Manufacturer（廠商）" />
-              <Input id="material-maker" disabled={readOnly} value={form.manufacturer} onChange={(event) => updateField("manufacturer", event.target.value)} className={fieldClassName} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="sourcingStatus" htmlFor="material-sourcing" label="Sourcing Status" />
-              <Input id="material-sourcing" disabled={readOnly} value={form.sourcingStatus} onChange={(event) => updateField("sourcingStatus", event.target.value)} placeholder="Approved / NRND / Obsolete" className={fieldClassName} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="virtualAlternative" htmlFor="material-virtual-alternative" label="虛擬料號" />
-              <Input id="material-virtual-alternative" disabled={readOnly} value={form.virtualAlternative ?? ""} onChange={(event) => updateField("virtualAlternative", event.target.value)} placeholder="可共用實體料的上層料號" className={fieldClassName} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="partNumber" htmlFor="material-internal-pn" label="實體料號" />
-              <Input id="material-internal-pn" disabled={readOnly} value={form.partNumber} onChange={(event) => updateField("partNumber", event.target.value)} placeholder="填入實體料號：單一廠商、單一 MPN" className={cn(fieldClassName, !form.partNumber.trim() && !readOnly && "!border-warning/70 !bg-warning/10 placeholder:!text-warning")} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="partName" htmlFor="material-part-name" label="Part Name（公司料名）" />
-              <Input id="material-part-name" disabled={readOnly} value={form.partName} onChange={(event) => updateField("partName", event.target.value)} className={fieldClassName} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="partSpec" htmlFor="material-spec" label="Part Spec（料件規格）" />
-              <Textarea id="material-spec" disabled={readOnly} value={form.partSpec} onChange={(event) => updateField("partSpec", event.target.value)} className="min-h-9 rounded-xl text-sm" rows={1} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="schematicPart" htmlFor="material-symbol" label="Schematic_Part（原理圖符號）" />
-              <Input id="material-symbol" disabled={readOnly} value={form.schematicPart} onChange={(event) => updateField("schematicPart", event.target.value)} placeholder="OrCAD 要能叫出的符號" className={fieldClassName} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="pcbFootprint" htmlFor="material-footprint" label="PCB_Footprint" />
-              <Input id="material-footprint" disabled={readOnly} value={form.pcbFootprint} onChange={(event) => updateField("pcbFootprint", event.target.value)} className={fieldClassName} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="phaseOutStatus" htmlFor="material-phase-out" label="phase out（零件狀態）" />
-              <Input id="material-phase-out" disabled={readOnly} value={form.phaseOutStatus ?? ""} onChange={(event) => updateField("phaseOutStatus", event.target.value)} placeholder="保留原文，例如 ACTIVE／PHASEOUT" className={fieldClassName} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="partUsageStatus" htmlFor="material-part-usage" label="零件狀態" />
-              <Input id="material-part-usage" disabled={readOnly} value={form.partUsageStatus ?? ""} onChange={(event) => updateField("partUsageStatus", event.target.value)} placeholder="新設計使用限制；不明填待確認" className={fieldClassName} />
-              {(record as Partial<MaterialRecord>).partUsageStatusSource === "legacy-tracking" && (
-                <p className="text-[11px] leading-4 text-muted-foreground">舊格式沒有零件狀態欄，此值取自匯入的料號追蹤首句；儲存後會正式寫入零件狀態。</p>
-              )}
-            </div>
+        <section className="workspace-dialog-section min-w-0 rounded-2xl p-4">
+          <h3 id="material-ce-grid-title" className="mb-3 text-sm font-semibold">CE Excel 欄位 · 依交付格式順序</h3>
+          <div role="region" aria-labelledby="material-ce-grid-title" tabIndex={0} className="max-w-full overflow-x-auto rounded-lg border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <table className="material-ce-table table-fixed border-collapse text-sm" style={{ width: MATERIAL_CE_EDITOR_FIELDS.reduce((total, field) => total + field.width, 0) }}>
+              <colgroup>{MATERIAL_CE_EDITOR_FIELDS.map(field => <col key={field.key} style={{ width: field.width }} />)}</colgroup>
+              <thead><tr>{MATERIAL_CE_EDITOR_FIELDS.map((field, index) => (
+                <th key={field.key} scope="col" className={cn("border-r border-border bg-secondary px-3 py-2 text-left align-bottom", (field.key === "virtualAlternative" || field.key === "partNumber") && "material-pn-header")}>
+                  <MaterialFieldLabel field={field.key} htmlFor={field.id} label={MATERIAL_CE_FIELDS[index].header} required={field.key === "name"} />
+                </th>
+              ))}</tr></thead>
+              <tbody><tr>{MATERIAL_CE_EDITOR_FIELDS.map((field, index) => (
+                <td key={field.key} className="border-r border-border p-2 align-top" style={{ minWidth: field.width }}>
+                  {field.key === "partSpec" ? (
+                    <Textarea id={field.id} disabled={readOnly} value={form.partSpec} onChange={(event) => updateField("partSpec", event.target.value)} rows={1} className="min-h-11 rounded-lg text-sm" />
+                  ) : (
+                    <Input id={field.id} disabled={readOnly} readOnly={field.key === "level"} value={field.key === "level" ? "2" : String(form[field.key] ?? "")} onChange={(event) => updateField(field.key, event.target.value)} placeholder={field.key === "level" ? undefined : MATERIAL_CE_FIELDS[index].meaning} className={cn(fieldClassName, (field.key === "virtualAlternative" || field.key === "partNumber") && "material-pn-input", field.key === "partNumber" && !form.partNumber.trim() && "material-pn-missing")} />
+                  )}
+                  {field.key === "partUsageStatus" && (record as Partial<MaterialRecord>).partUsageStatusSource === "legacy-tracking" && <p className="mt-1 text-xs text-muted-foreground">取自舊格式匯入追蹤原文；原追蹤保留。</p>}
+                </td>
+              ))}</tr></tbody>
+            </table>
           </div>
         </section>
 
-        <section className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
-          <h3 className="mb-3 text-sm font-semibold text-foreground">網站維護欄位 <span className="font-normal text-muted-foreground">· 不在 CE Excel 裡</span></h3>
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="space-y-1">
-              <MaterialFieldLabel field="refGroup" htmlFor="material-ref" label="內部分組（網站）" required />
-              <Input id="material-ref" disabled={readOnly} value={form.refGroup} onChange={(event) => updateField("refGroup", event.target.value)} placeholder="例如 C101；僅供網站分組" className={fieldClassName} />
-            </div>
-            <div className="space-y-1">
-              <MaterialFieldLabel field="assemblyName" htmlFor="material-assembly" label="模組" />
-              <Input id="material-assembly" disabled={readOnly} value={form.assemblyName} onChange={(event) => updateField("assemblyName", event.target.value)} className={fieldClassName} />
-            </div>
-            {form.manufacturerPartNumberAlt.trim() && (
-              <div className="space-y-1">
-                <MaterialFieldLabel field="manufacturerPartNumberAlt" htmlFor="material-mpn-2" label="舊檔第二 MPN" />
-                <Input id="material-mpn-2" disabled={readOnly} value={form.manufacturerPartNumberAlt} onChange={(event) => updateField("manufacturerPartNumberAlt", event.target.value)} className={fieldClassName} />
+        <section className="workspace-dialog-section rounded-2xl p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">SPEC 文件</h3>
+            <input ref={specInputRef} type="file" accept={MATERIAL_SPEC_ACCEPT} className="hidden" onChange={(event) => void handleSpecFile(event)} />
+            {!readOnly && <Button type="button" variant="secondary" disabled={isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-11"><Upload className="mr-2 h-4 w-4" />{isUploadingSpec ? "上傳中…" : form.specDocument ? "更換 SPEC" : "上傳 SPEC"}</Button>}
+          </div>
+          <div data-testid="material-spec-document" className="mt-3 rounded-lg border border-border bg-background/40 p-3">
+            {form.specDocument ? <>
+              <div className="flex min-w-0 items-start gap-2"><Paperclip className="mt-1 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0 flex-1"><p className="break-all font-semibold">{form.specDocument.name}</p><p className="mt-1 text-xs text-muted-foreground">{formatMaterialSpecSize(form.specDocument.size)} · {formatTimestamp(form.specDocument.uploadedAt)}{form.specDocument.uploadedBy ? ` · ${form.specDocument.uploadedBy}` : ""}</p></div></div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" variant="outline" className="h-11" onClick={() => onOpenSpec(form)}>開啟文件</Button>
+                <Button type="button" variant="secondary" className="h-11" onClick={() => onOpenSpec(form, true)}><Download className="mr-2 h-4 w-4" />下載 SPEC</Button>
+                {!readOnly && <Button type="button" variant="ghost" className="h-11 text-destructive" disabled={isUploadingSpec} onClick={() => setForm(current => ({ ...current, specDocument: undefined }))}>移除關聯</Button>}
               </div>
-            )}
-            <div className="space-y-1 md:col-span-3">
-              <MaterialFieldLabel field="specDocument" label="SPEC 文件" />
-              <input ref={specInputRef} type="file" accept={MATERIAL_SPEC_ACCEPT} className="hidden" onChange={(event) => void handleSpecFile(event)} />
-              <div data-testid="material-spec-document" className="flex min-h-9 min-w-0 flex-wrap items-center gap-2 rounded-xl border border-border bg-background/40 px-3 py-1 text-xs">
-                {form.specDocument ? (
-                  <>
-                    <Paperclip className="h-3.5 w-3.5 flex-none text-primary" aria-hidden="true" />
-                    <button type="button" onClick={() => onOpenSpec(form)} className="min-w-0 flex-1 truncate text-left font-semibold text-foreground underline-offset-2 hover:underline" title={`開啟 ${form.specDocument.name}`}>
-                      {form.specDocument.name}
-                    </button>
-                    <span className="flex-none text-muted-foreground">{formatMaterialSpecSize(form.specDocument.size)} · {formatTimestamp(form.specDocument.uploadedAt)}{form.specDocument.uploadedBy ? ` · ${form.specDocument.uploadedBy}` : ""}</span>
-                    {!readOnly && (
-                      <>
-                        <Button type="button" variant="ghost" size="sm" disabled={isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-7 px-2 text-xs">{isUploadingSpec ? "上傳中…" : "更換"}</Button>
-                        <Button type="button" variant="ghost" size="sm" disabled={isUploadingSpec} onClick={() => setForm((current) => ({ ...current, specDocument: undefined }))} className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive">移除</Button>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{readOnly ? "尚未上傳 SPEC" : "尚未上傳 SPEC；上傳後按「儲存資料」才會保存"}</span>
-                    {!readOnly && (
-                      <Button type="button" variant="secondary" size="sm" disabled={isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-7 px-2.5 text-xs">
-                        <Upload className="mr-1 h-3.5 w-3.5" />{isUploadingSpec ? "上傳中…" : "上傳 SPEC"}
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="space-y-1 md:col-span-3">
-              <MaterialFieldLabel field="remark" htmlFor="material-remark" label="申請狀態 / 備註" />
-              <Textarea id="material-remark" disabled={readOnly} value={form.remark} onChange={(event) => updateField("remark", event.target.value)} className="min-h-9 rounded-xl text-sm" rows={1} placeholder="例如 待確認實體料號、待核對原理圖符號" />
-            </div>
+              {!readOnly && form.specDocument.path !== record.specDocument?.path && <p className="mt-2 text-xs text-warning">檔案已上傳，可直接下載；按「儲存資料與追蹤」才會保存到這筆料件。</p>}
+            </> : <p className="text-sm text-muted-foreground">尚未上傳 SPEC</p>}
           </div>
         </section>
 
@@ -3314,7 +3264,7 @@ export function MaterialRecordDialog({
               <Pencil className="mr-1.5 h-3.5 w-3.5" />修改這筆
             </Button>
           ) : (
-            <Button type="button" size="sm" className="h-11" onClick={() => void handleSave()} disabled={isSaving || isUploadingSpec || trackingDraft.pendingImageReads > 0 || !form.refGroup.trim() || !form.name.trim()}>
+            <Button type="button" size="sm" className="h-11" onClick={() => void handleSave()} disabled={isSaving || isUploadingSpec || trackingDraft.pendingImageReads > 0 || !form.name.trim()}>
               {isSaving ? "儲存中…" : "儲存資料與追蹤"}
             </Button>
           )}
@@ -3371,7 +3321,7 @@ function MaterialColumnSettings({
           variant="outline"
           size="sm"
           data-testid="material-column-visibility"
-          className="h-9 px-2.5 text-xs"
+          className="material-action-highlight h-9 px-2.5 text-xs"
         >
           <Columns3 className="mr-1.5 h-3.5 w-3.5" />
           欄位
@@ -3989,6 +3939,7 @@ export function MaterialRequestPage() {
   const [showMarkedOnly, setShowMarkedOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
+  const [searchColumn, setSearchColumn] = useState<ColumnFilterKey | "all">("all");
   const [columnFilters, setColumnFilters] = useState<MaterialColumnFilters>(EMPTY_COLUMN_FILTERS);
   const [availability, setAvailability] = useState<AvailabilityFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("reference");
@@ -4430,11 +4381,13 @@ export function MaterialRequestPage() {
           page: number;
           pageSize: number;
           query: string;
+          searchColumn: ColumnFilterKey | "all";
           sortMode: SortMode;
         }>;
         const restoredQuery = typeof parsed.query === "string" ? parsed.query : "";
         setQuery(restoredQuery);
         setSearchDraft(restoredQuery);
+        setSearchColumn(parsed.searchColumn && FILTER_KEYS.includes(parsed.searchColumn as ColumnFilterKey) ? parsed.searchColumn : "all");
         if (parsed.columnFilters && typeof parsed.columnFilters === "object") {
           const restoredFilters = { ...EMPTY_COLUMN_FILTERS };
           for (const key of FILTER_KEYS) {
@@ -4442,7 +4395,7 @@ export function MaterialRequestPage() {
             const validValues = Array.isArray(values)
               ? values.filter((value) => typeof value === "string")
               : [];
-            restoredFilters[key] = validValues.length ? validValues : null;
+            restoredFilters[key] = Array.isArray(values) && (values.length === 0 || validValues.length > 0) ? validValues : null;
           }
           setColumnFilters(restoredFilters);
         }
@@ -4472,6 +4425,7 @@ export function MaterialRequestPage() {
           page,
           pageSize,
           query,
+          searchColumn,
           sortMode,
         }));
       } catch {
@@ -4480,7 +4434,7 @@ export function MaterialRequestPage() {
     }, 250);
 
     return () => window.clearTimeout(timerId);
-  }, [activeBomId, availability, columnFilters, page, pageSize, query, sortMode, user?.userId]);
+  }, [activeBomId, availability, columnFilters, page, pageSize, query, searchColumn, sortMode, user?.userId]);
 
   useEffect(() => {
     setMarkedGroupKeys(loadMarkedGroups(activeBomId));
@@ -4587,7 +4541,7 @@ export function MaterialRequestPage() {
   }, [activeBomId, activeProjectId, bomWorkspaces, orderedBomWorkspaces, workspaceListSettled]);
 
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
-  const hasActiveColumnFilters = Object.values(columnFilters).some((values) => Boolean(values?.length));
+  const hasActiveColumnFilters = Object.values(columnFilters).some((values) => values != null);
 
   const groupRuntimeIndex = useMemo(() => {
     const searchableTextByGroup = new Map<string, string>();
@@ -4693,12 +4647,22 @@ export function MaterialRequestPage() {
     [columnFilters],
   );
 
+  const matchesRecordSearch = useCallback((record: MaterialRecord, group: MaterialGroup) => {
+    if (searchColumn === "all" || searchTokens.length === 0) return true;
+    const values = searchColumn === "material" ? [record.name] : getRecordColumnValues(record, group, searchColumn);
+    return searchTokens.every(token => values.some(value => searchColumn === "refDes"
+      ? matchesMaterialReference(value, token)
+      : normalizeMaterialSearchText(value).includes(token)));
+  }, [searchColumn, searchTokens]);
+
   const matchesSearch = useCallback((group: MaterialGroup) => {
     if (searchTokens.length === 0) return true;
+    if (searchColumn !== "all") return group.records.some(record => matchesRecordSearch(record, group));
     const searchableText = groupRuntimeIndex.searchableTextByGroup.get(group.key) ?? group.searchText;
     const refTokens = groupRuntimeIndex.refTokensByGroup.get(group.key) ?? [];
 
     return searchTokens.every((token) => {
+      if (isMaterialReferenceQuery(token)) return refTokens.some(ref => matchesMaterialReference(ref, token)) || matchesMaterialReference(searchableText, token);
       const shouldMatchRefPrefix = (
         token.length === 1
         || /\d/.test(token)
@@ -4708,7 +4672,7 @@ export function MaterialRequestPage() {
         ? refTokens.some((refToken) => refToken.startsWith(token))
         : searchableText.includes(token);
     });
-  }, [groupRuntimeIndex, searchTokens]);
+  }, [groupRuntimeIndex, matchesRecordSearch, searchColumn, searchTokens]);
 
   const matchesAvailability = useCallback((group: MaterialGroup) => {
     const noAlternative = (groupRuntimeIndex.uniqueMpnCountByGroup.get(group.key) ?? 0) <= 1;
@@ -4733,9 +4697,10 @@ export function MaterialRequestPage() {
 
   const getMatchingRecords = useCallback((group: MaterialGroup, ignoredKey?: ColumnFilterKey) => {
     const sortedRecords = groupRuntimeIndex.sortedRecordsByGroup.get(group.key) ?? getSortedAlternatives(group);
-    if (!hasActiveColumnFilters) return sortedRecords;
+    const searchedRecords = searchColumn === "all" ? sortedRecords : sortedRecords.filter(record => matchesRecordSearch(record, group));
+    if (!hasActiveColumnFilters) return searchedRecords;
 
-    return sortedRecords.filter((record) =>
+    return searchedRecords.filter((record) =>
       FILTER_KEYS.every((key) => {
         if (key === ignoredKey) return true;
 
@@ -4750,7 +4715,7 @@ export function MaterialRequestPage() {
         return true;
       })
     );
-  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters]);
+  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters, matchesRecordSearch, searchColumn]);
 
   const searchAvailabilityGroups = useMemo(
     () => dataset.groups.filter((group) => matchesMarkedState(group) && matchesSearch(group) && matchesAvailability(group)),
@@ -4797,6 +4762,7 @@ export function MaterialRequestPage() {
     const chips: Array<{ key: string; label: string }> = [];
 
     if (query) chips.push({ key: "query", label: `關鍵字：${query}` });
+    if (searchColumn !== "all") chips.push({ key: "searchColumn", label: `搜尋欄位：${COLUMN_FILTER_LABELS[searchColumn]}` });
     if (availability !== "all") {
       chips.push({ key: "availability", label: `狀態：${AVAILABILITY_FILTER_LABELS[availability]}` });
     }
@@ -4804,14 +4770,14 @@ export function MaterialRequestPage() {
 
     FILTER_KEYS.forEach((key) => {
       const values = columnFilters[key];
-      if (!values?.length) return;
+      if (values == null) return;
       const preview = values.slice(0, 2).join("、");
       const remainder = values.length > 2 ? ` 等 ${values.length} 項` : "";
-      chips.push({ key: `column:${key}`, label: `${COLUMN_FILTER_LABELS[key]}：${preview}${remainder}` });
+      chips.push({ key: `column:${key}`, label: `${COLUMN_FILTER_LABELS[key]}：${values.length ? `${preview}${remainder}` : "未選任何值"}` });
     });
 
     return chips;
-  }, [availability, columnFilters, query, showMarkedOnly]);
+  }, [availability, columnFilters, query, searchColumn, showMarkedOnly]);
 
   const totalPages = isFullDatasetLoaded
     ? Math.max(1, Math.ceil(filteredGroups.length / pageSize))
@@ -5085,11 +5051,16 @@ export function MaterialRequestPage() {
     setEditorOpen(true);
   };
 
-  const openSpecDocument = async (record: Pick<MaterialWorkbookRecord, "specDocument">) => {
+  const openSpecDocument = async (record: Pick<MaterialWorkbookRecord, "specDocument">, download = false) => {
     if (!record.specDocument) return;
     try {
-      const url = await createMaterialSpecUrl(record.specDocument.path);
-      window.open(url, "_blank", "noopener");
+      const url = await createMaterialSpecUrl(record.specDocument.path, download ? record.specDocument.name : undefined);
+      if (download) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = record.specDocument.name;
+        link.click();
+      } else window.open(url, "_blank", "noopener");
     } catch (error) {
       toast({ title: "無法開啟 SPEC", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
     }
@@ -5344,6 +5315,7 @@ export function MaterialRequestPage() {
     setHasPendingWorkspaceUpdate(false);
     setQuery("");
     setSearchDraft("");
+    setSearchColumn("all");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
     setAvailability("all");
     setShowMarkedOnly(false);
@@ -5423,6 +5395,7 @@ export function MaterialRequestPage() {
   const applyAvailabilityFilter = (nextAvailability: AvailabilityFilter) => {
     setQuery("");
     setSearchDraft("");
+    setSearchColumn("all");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
     setAvailability((current) => current === nextAvailability ? "all" : nextAvailability);
     setExpandedKey(null);
@@ -5674,6 +5647,7 @@ export function MaterialRequestPage() {
 
   const clearFilters = () => {
     setQuery("");
+    setSearchColumn("all");
     setSearchDraft("");
     setColumnFilters(EMPTY_COLUMN_FILTERS);
     setAvailability("all");
@@ -5686,6 +5660,8 @@ export function MaterialRequestPage() {
     if (key === "query") {
       setQuery("");
       setSearchDraft("");
+    } else if (key === "searchColumn") {
+      setSearchColumn("all");
     } else if (key === "availability") {
       setAvailability("all");
     } else if (key === "marked") {
@@ -5810,6 +5786,18 @@ export function MaterialRequestPage() {
     );
   }
 
+  const searchColumnControl = (
+    <Select value={searchColumn} onValueChange={value => { setSearchColumn(value as ColumnFilterKey | "all"); setPage(1); setExpandedKey(null); }}>
+      <SelectTrigger aria-label="搜尋欄位" className="h-11 w-40 shrink-0 text-sm [&>span]:truncate lg:h-9 lg:text-xs"><SelectValue /></SelectTrigger>
+      <SelectContent><SelectItem value="all">全部欄位</SelectItem>{FILTER_KEYS.map(key => <SelectItem key={key} value={key}>{COLUMN_FILTER_LABELS[key]}</SelectItem>)}</SelectContent>
+    </Select>
+  );
+  const activeFilterControls = activeFilterChips.length > 0 && (
+    <div data-testid="material-active-filters" className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+      {activeFilterChips.map(chip => <button key={chip.key} type="button" onClick={() => removeFilterChip(chip.key)} aria-label={`移除篩選：${chip.label}`} className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-foreground lg:min-h-8"><span className="max-w-[20rem] truncate">{chip.label}</span><X className="h-3 w-3 shrink-0" /></button>)}
+      <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="min-h-11 text-destructive lg:min-h-8">全部清除</Button>
+    </div>
+  );
   return (
     <div className="material-sheet-theme maintenance-workspace min-h-full w-full min-w-0 overflow-x-clip bg-[radial-gradient(circle_at_8%_0%,rgba(34,211,238,0.10),transparent_26rem),radial-gradient(circle_at_88%_2%,rgba(251,191,36,0.08),transparent_24rem),#06111f] p-2 text-slate-100 sm:p-3 lg:p-4">
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
@@ -5854,7 +5842,7 @@ export function MaterialRequestPage() {
       />
       <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
       <BomManagerDialog canEdit={canEdit} activeBomId={activeBomId} activeProjectName={activeProject?.name} bomWorkspaces={activeBomWorkspaces} archivedWorkspaces={archivedBomWorkspaces} projectGroups={bomProjectGroups} projects={projects} open={bomManagerOpen} onAssignProject={(id, projectId) => void assignBomProject(id, projectId).catch(() => {})} onSetArchived={(id, archived) => void setBomArchived(id, archived)} onDelete={setPendingDeleteBomId} onOpenChange={setBomManagerOpen} onOpenPageTracker={openBomPageTrackerDialog} onSelect={(id) => { switchActiveBom(id); setBomManagerOpen(false); }} />
-      <MaterialRecordDialog key={`${user?.userId}:${activeWorkspace.id}:${editorSession}`} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} open={editorOpen && editorContext?.workspaceId === activeWorkspace.id && editorContext.accountId === user?.userId} mode={editorMode} record={editorRecord} initialTab={editorInitialTab} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target) => void openSpecDocument(target)} onSave={handleSaveRecord} onAddAlternate={editorMode === "create" ? undefined : () => {
+      <MaterialRecordDialog key={`${user?.userId}:${activeWorkspace.id}:${editorSession}`} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} open={editorOpen && editorContext?.workspaceId === activeWorkspace.id && editorContext.accountId === user?.userId} mode={editorMode} record={editorRecord} initialTab={editorInitialTab} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target, download) => void openSpecDocument(target, download)} onSave={handleSaveRecord} onAddAlternate={editorMode === "create" ? undefined : () => {
         const group = dataset.groups.find((candidate) => candidate.records.some((item) => item.id === editorRecord.id));
         if (group) openCreate(group);
       }} />
@@ -5891,10 +5879,10 @@ export function MaterialRequestPage() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-base font-black text-white">料號快查</h1>
-              <span className={cn("inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-black", collaborationStatusMeta.badgeClassName)}>
+              {collaborationStatus !== "remote" && <span className={cn("inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-black", collaborationStatusMeta.badgeClassName)}>
                 <span className={cn("h-1.5 w-1.5 rounded-full", collaborationStatusMeta.dotClassName)} />
                 {collaborationStatusMeta.label}
-              </span>
+              </span>}
             </div>
             <p className="flex max-w-[48vw] items-center gap-1 text-[11px] text-slate-400">
               {activeWorkspaceProjectLabel && <span className="min-w-0 truncate text-cyan-200/70">{activeWorkspaceProjectLabel} /</span>}
@@ -5923,6 +5911,25 @@ export function MaterialRequestPage() {
         </div>
 
         <div data-mobile-material-primary-controls="true" className="space-y-2 p-2.5">
+          <details data-mobile-material-tools="true" className="group rounded-xl border border-slate-600/60 bg-slate-950/25 [&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-sm font-black text-slate-200">
+              <span className="flex min-w-0 items-center gap-2"><Layers3 className="h-4 w-4 text-violet-200" /><span className="truncate">排序與工具</span></span>
+              <span className="flex items-center gap-2 text-[11px] text-slate-400">{SORT_MODE_LABELS[sortMode]}<ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></span>
+            </summary>
+            <div className="grid grid-cols-2 gap-2 border-t border-white/8 p-2.5">
+              <Select value={sortMode} onValueChange={(value) => { setSortMode(value as SortMode); setPage(1); }}>
+                <SelectTrigger aria-label="料號排序" className="col-span-2 h-11 rounded-xl border-slate-600/70 bg-[#071522] text-sm text-slate-100"><SelectValue /></SelectTrigger>
+                <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">{Object.entries(SORT_MODE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+              </Select>
+              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
+              <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
+              <Button type="button" variant="outline" onClick={openPendingDialog} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", requiredApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {requiredApplicationCount.toLocaleString()}</Button>
+              <Button type="button" variant="outline" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} className="h-11 border-orange-300/30 bg-orange-400/10 text-orange-100"><FileSpreadsheet className="mr-2 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
+              <Button type="button" variant="outline" onClick={() => setRlcPriorityOpen(true)} className="h-11 border-primary/30 bg-primary/10 text-primary">RLC 優先順序</Button>
+              <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
+              <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
+            </div>
+          </details>
           <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-cyan-300" />
@@ -5960,31 +5967,14 @@ export function MaterialRequestPage() {
             </Button>
           </div>
 
+          {searchColumnControl}
           <div className="flex snap-x gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <button type="button" onClick={clearFilters} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", availability === "all" && !showMarkedOnly ? "border-sky-200/50 bg-sky-300 text-sky-950" : "border-sky-300/20 bg-sky-400/10 text-sky-100")}>全部 {dataset.stats.totalGroups.toLocaleString()}</button>
             <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", availability === "required" ? "border-amber-200/60 bg-amber-300 text-amber-950" : "border-amber-300/25 bg-amber-400/10 text-amber-100")}>料號待補 {requiredApplicationCount.toLocaleString()}</button>
             <button type="button" onClick={() => setShowMarkedOnly((current) => !current)} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", showMarkedOnly ? "border-lime-200/60 bg-lime-300 text-lime-950" : "border-lime-300/20 bg-lime-400/10 text-lime-100")}><Star className={cn("mr-1 inline h-3.5 w-3.5", showMarkedOnly && "fill-current")} />標記 {markedGroupCount}</button>
           </div>
 
-          <details data-mobile-material-tools="true" className="group rounded-xl border border-slate-600/60 bg-slate-950/25 [&_summary::-webkit-details-marker]:hidden">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-sm font-black text-slate-200">
-              <span className="flex min-w-0 items-center gap-2"><Layers3 className="h-4 w-4 text-violet-200" /><span className="truncate">排序與工具</span></span>
-              <span className="flex items-center gap-2 text-[11px] text-slate-400">{SORT_MODE_LABELS[sortMode]}<ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></span>
-            </summary>
-            <div className="grid grid-cols-2 gap-2 border-t border-white/8 p-2.5">
-              <Select value={sortMode} onValueChange={(value) => { setSortMode(value as SortMode); setPage(1); }}>
-                <SelectTrigger aria-label="料號排序" className="col-span-2 h-11 rounded-xl border-slate-600/70 bg-[#071522] text-sm text-slate-100"><SelectValue /></SelectTrigger>
-                <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">{Object.entries(SORT_MODE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
-              </Select>
-              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
-              <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
-              <Button type="button" variant="outline" onClick={openPendingDialog} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", requiredApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {requiredApplicationCount.toLocaleString()}</Button>
-              <Button type="button" variant="outline" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} className="h-11 border-orange-300/30 bg-orange-400/10 text-orange-100"><FileSpreadsheet className="mr-2 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
-              <Button type="button" variant="outline" onClick={() => setRlcPriorityOpen(true)} className="h-11 border-primary/30 bg-primary/10 text-primary">RLC 優先順序</Button>
-              <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
-              <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
-            </div>
-          </details>
+          {activeFilterControls}
         </div>
       </section>}
 
@@ -5996,10 +5986,10 @@ export function MaterialRequestPage() {
             </span>
             <h1 className="shrink-0 text-base font-black text-white">料號申請</h1>
             <div data-material-zone="collaboration" className="flex min-w-0 items-center gap-1.5">
-              <Badge className={cn("h-6 shrink-0 border px-2 text-[11px] font-black", collaborationStatusMeta.badgeClassName)} title={collaborationStatusMeta.description}>
+              {collaborationStatus !== "remote" && <Badge className={cn("h-6 shrink-0 border px-2 text-[11px] font-black", collaborationStatusMeta.badgeClassName)} title={collaborationStatusMeta.description}>
                 <span className={cn("mr-1.5 h-1.5 w-1.5 rounded-full", collaborationStatusMeta.dotClassName)} />
                 {collaborationStatusMeta.label}
-              </Badge>
+              </Badge>}
               <span className="h-6 shrink-0 rounded-full border border-emerald-300/20 bg-emerald-400/[0.08] px-2 text-[11px] font-black leading-6 text-emerald-100">
                 {onlineUserCount} 人在線
               </span>
@@ -6030,7 +6020,7 @@ export function MaterialRequestPage() {
             <Button type="button" size="sm" onClick={() => openCreate()} disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border border-primary/60 bg-primary px-3.5 text-sm font-black text-primary-foreground hover:bg-primary/85 hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">
               <Plus className="mr-1 h-3.5 w-3.5" />新增料件
             </Button>
-            <Button type="button" variant="outline" size="sm" data-testid="rlc-priority-button" onClick={() => setRlcPriorityOpen(true)} className="h-9 border-primary/40 bg-primary/10 px-3 text-sm font-bold text-primary">RLC 優先順序</Button>
+            <Button type="button" variant="outline" size="sm" data-testid="rlc-priority-button" onClick={() => setRlcPriorityOpen(true)} className="material-action-highlight h-9 border-primary/40 bg-primary/10 px-3 text-sm font-bold text-primary">RLC 優先順序</Button>
             <Button type="button" variant="outline" size="sm" data-testid="material-guide-button" onClick={() => setGuideOpen(true)} className="material-guide-attention h-9 border-[hsl(var(--platform-violet)/0.6)] bg-[hsl(var(--platform-violet))] px-3 text-sm font-black text-primary-foreground hover:bg-[hsl(var(--platform-violet)/0.85)] hover:text-primary-foreground">
               <CircleHelp className="mr-1 h-3.5 w-3.5" />上傳說明
             </Button>
@@ -6108,7 +6098,7 @@ export function MaterialRequestPage() {
             disabled={!canManageBomPageTracker}
             title="設定總頁數、目前頁與逐頁狀態"
             className={cn(
-              "h-8 px-2.5 text-xs font-bold disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500",
+              "material-action-highlight h-8 px-2.5 text-xs font-bold disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500",
               activePageTrackerSummary.totalPages > 0
                 ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/20 hover:text-emerald-50"
                 : "border-slate-400/25 bg-slate-500/10 text-slate-300 hover:bg-slate-500/20 hover:text-slate-100",
@@ -6119,11 +6109,10 @@ export function MaterialRequestPage() {
               ? `${activePageTrackerSummary.currentPage > 0 ? `第 ${activePageTrackerSummary.currentPage}/${activePageTrackerSummary.totalPages} 頁 · ` : ""}已完成 ${activePageTrackerSummary.completedPages}/${activePageTrackerSummary.totalPages} 頁${activePageTrackerSummary.missingPages > 0 ? ` · 缺料 ${activePageTrackerSummary.missingPages}` : ""}`
               : "頁數進度未設定"}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="h-8 border-violet-300/45 bg-violet-400/20 px-2.5 text-xs font-bold text-violet-50 hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-violet-950/50 disabled:bg-violet-950/25 disabled:text-violet-100/50">
+          <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady} className="material-action-highlight h-8 border-violet-300/45 bg-violet-400/20 px-2.5 text-xs font-bold text-violet-50 hover:border-violet-200/70 hover:bg-violet-400/30 hover:text-white disabled:cursor-not-allowed disabled:border-violet-950/50 disabled:bg-violet-950/25 disabled:text-violet-100/50">
             <Layers3 className="mr-1.5 h-3.5 w-3.5" />BOM 管理
             <span className="ml-1.5 rounded-full border border-current/25 px-1.5 text-[10px] leading-4">{bomWorkspaces.length}</span>
           </Button>
-          <span className="ml-auto min-w-0 truncate text-[11px] text-slate-400" title={`${activeWorkspace.payload.sheetName} · ${formatTimestamp(activeWorkspace.updatedAt)}`}>{activeWorkspace.payload.sheetName} · {formatTimestamp(activeWorkspace.updatedAt)}</span>
         </div>
       </header>}
 
@@ -6162,7 +6151,7 @@ export function MaterialRequestPage() {
 
         <div data-testid="material-table-toolbar" className="hidden bg-[#0c1f33] px-3 py-2 lg:block">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[18rem] flex-1">
+            <div className="relative min-w-[12rem] flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300" />
               <Input
                 value={searchDraft}
@@ -6190,12 +6179,13 @@ export function MaterialRequestPage() {
                 <RotateCcw className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-cyan-300" aria-label="搜尋中" />
               )}
             </div>
+            {searchColumnControl}
             <div data-material-zone="summary-filters" className="flex items-center gap-1">
               <button type="button" onClick={clearFilters} aria-pressed={availability === "all" && !showMarkedOnly} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "all" ? "border-sky-300/34 bg-sky-400/18 text-sky-50" : "border-slate-500/28 bg-slate-900/42 text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-sky-100")}>主料 <strong className="ml-1">{dataset.stats.totalGroups.toLocaleString()}</strong></button>
               <button type="button" onClick={() => applyAvailabilityFilter("required")} aria-pressed={availability === "required"} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "required" ? "border-amber-300/50 bg-amber-400/20 text-amber-50" : "border-amber-300/28 bg-amber-400/10 text-amber-100 hover:bg-amber-400/18 hover:text-amber-50")}>料號待補 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
             </div>
             <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-              <SelectTrigger aria-label="排序" className="h-9 w-48 border-[#2a526f] bg-[#071522] text-xs text-slate-200">
+              <SelectTrigger aria-label="排序" className="h-9 w-32 border-[#2a526f] bg-[#071522] text-xs text-slate-200">
                 <SelectValue>{SORT_MODE_LABELS[sortMode]}</SelectValue>
               </SelectTrigger>
               <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
@@ -6216,32 +6206,14 @@ export function MaterialRequestPage() {
                 setTableColorDialogOpen(true);
               }}
             />
-            <Button type="button" variant="outline" size="sm" data-testid="material-export-visible" className="h-9 gap-1.5 px-2.5 text-xs" disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} onClick={() => void exportVisibleColumns()} title="依目前顯示欄位與順序匯出所有符合篩選的廠商明細，不受分頁限制；狀態欄匯出文字"><Download className="h-3.5 w-3.5" />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}</Button>
+            <Button type="button" variant="outline" size="sm" data-testid="material-export-visible" className="material-action-highlight h-9 gap-1.5 px-2.5 text-xs" disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} onClick={() => void exportVisibleColumns()} title="依目前顯示欄位與順序匯出所有符合篩選的廠商明細，不受分頁限制；狀態欄匯出文字"><Download className="h-3.5 w-3.5" />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}</Button>
             <span className="ml-auto text-xs text-slate-400">
               {isPreviewDataset
                 ? <>先顯示 <strong className="text-cyan-200">{visibleGroupRows.length.toLocaleString()}</strong> 個主料，完整清單同步中</>
                 : <>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料 · {dataset.stats.totalRecords.toLocaleString()} 筆廠商明細</>}
             </span>
           </div>
-          {activeFilterChips.length > 0 && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
-              {activeFilterChips.map((chip) => (
-                <button
-                  key={chip.key}
-                  type="button"
-                  onClick={() => removeFilterChip(chip.key)}
-                  className="inline-flex max-w-full items-center gap-1 rounded-md border border-sky-300/24 bg-sky-400/10 px-2 text-xs font-semibold leading-6 text-sky-100 hover:bg-sky-400/18"
-                  title="移除此條件"
-                >
-                  <span className="max-w-[20rem] truncate">{chip.label}</span>
-                  <X className="h-3 w-3 flex-none" />
-                </button>
-              ))}
-              <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="h-6 px-2 text-xs text-rose-200 hover:bg-rose-400/10 hover:text-rose-100">
-                全部清除
-              </Button>
-            </div>
-          )}
+          {activeFilterControls}
         </div>
 
         {isCompactLayout && <div className="space-y-2 p-2 lg:hidden" data-testid="material-mobile-cards">
@@ -6322,7 +6294,7 @@ export function MaterialRequestPage() {
           className="relative max-h-[72vh] overflow-auto"
           data-testid="material-table-scroll"
         >
-          <table className="table-fixed border-collapse text-[13px]" style={{ width: `max(100%, ${tableWidth}px)`, minWidth: tableWidth }}>
+          <table className="material-table-crosshair table-fixed border-collapse text-[13px]" style={{ width: `max(100%, ${tableWidth}px)`, minWidth: tableWidth }} onPointerOver={event => markMaterialCrosshair(event.currentTarget, event.target)} onPointerLeave={event => clearMaterialCrosshair(event.currentTarget)} onFocusCapture={event => markMaterialCrosshair(event.currentTarget, event.target)} onBlurCapture={event => { if (!event.currentTarget.matches(":hover") && !event.currentTarget.contains(event.relatedTarget as Node | null)) clearMaterialCrosshair(event.currentTarget); }}>
             <thead className="sticky top-0 z-20">
               <tr className="bg-[#0d2137] text-left text-[13px] font-bold text-white">
                 {MATERIAL_TABLE_COLUMNS.map((column, columnIndex) => columnVisibility[column.key] && (

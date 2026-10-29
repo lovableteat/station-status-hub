@@ -114,7 +114,7 @@ test("duplicate controls were merged: one clear, one page-progress entry, delete
   assert.doesNotMatch(desktopHeader, /刪除 BOM|逐頁勾選|我的標記|頁數進度<\/Button>|收合頁數設定/);
   assert.equal((desktopHeader.match(/data-material-zone="page-progress"/g) ?? []).length, 1);
   assert.doesNotMatch(toolbar, /條件邏輯|尚未套用搜尋|aria-label=\{isSearchPending \? "搜尋中" : "搜尋"\}/);
-  assert.equal((toolbar.match(/全部清除/g) ?? []).length, 1);
+  assert.match(toolbar, /\{activeFilterControls\}/);
   assert.doesNotMatch(filterRow, />清除</);
   assert.doesNotMatch(filterRow, /showMarkedOnly|column\.key === "marked"/);
   assert.doesNotMatch(toolbar, /columnVisibility\.marked|只看我的標記/);
@@ -285,7 +285,8 @@ test("pending parts keep blinking until a part number arrives or data is refresh
   assert.match(dialog, /stale && <span className="material-blink [^"]*bg-destructive"/);
   assert.match(dialog, />逾 3 天未更新</);
   assert.match(source, /data-testid="pending-materials-button"[\s\S]{0,400}?requiredApplicationCount > 0 && "material-attention"/);
-  assert.match(source, /id="material-internal-pn"[\s\S]{0,400}?placeholder:!text-warning/);
+  assert.match(source, /key: "partNumber", id: "material-internal-pn"/);
+  assert.match(source, /field\.key === "partNumber" && !form\.partNumber\.trim\(\) && "material-pn-missing"/);
 });
 
 test("a SPEC document can be attached to a record and opened from the Part Spec cell", () => {
