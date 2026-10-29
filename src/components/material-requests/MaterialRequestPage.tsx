@@ -122,6 +122,7 @@ import {
   saveBomWorkspace,
   saveBomWorkspacePageTracker,
   saveBomWorkspaceRecord,
+  saveBomWorkspaceNote,
   subscribeBomWorkspaceChanges,
 } from "./materialBomStorage";
 import type { BomTableColorTheme, BomWorkspaceArchive, BomWorkspaceProject } from "./materialBomStorage";
@@ -172,7 +173,6 @@ import {
   type PendingMaterialCategory,
   createCompactValueSummary,
   getMaterialExportScopeLabel,
-  getMaterialStickyColumnClasses,
   getMaterialSourceValue,
   getMaterialTableWidth,
   groupBomWorkspacesByProject,
@@ -682,7 +682,7 @@ const MATERIAL_TABLE_COLUMN_MEANING: Partial<Record<MaterialTableColumnKey, stri
       .filter((column) => column.ceHeader)
       .map((column) => [column.key, MATERIAL_CE_HELP_BY_HEADER.get(column.ceHeader)?.meaning ?? ""]),
   ),
-  note: "網站自由紀錄",
+  note: "共用紀錄 · Enter 儲存",
 };
 
 const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>> = {
@@ -695,8 +695,6 @@ const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>
   actions: "網站人工維護的狀態追蹤與資料更新，與 CE Excel 的供應／核准狀態、phase out 及零件狀態分開。",
   note: "網站內部自由紀錄；匯入 BOM 時不讀取，匯出時包含。",
 };
-
-const MATERIAL_STICKY_COLUMN_CLASSES = getMaterialStickyColumnClasses();
 
 function getMarkedGroupsStorageKey(bomId: string) {
   return `${MARKED_GROUPS_KEY_PREFIX}${bomId}`;
@@ -3111,7 +3109,6 @@ export function MaterialRecordDialog({
 type MaterialColumnVisibility = Record<MaterialTableColumnKey, boolean>;
 
 interface MaterialRowActions {
-  canEditNote: boolean;
   toggleExpanded: (key: string) => void;
   copy: (value: string) => void;
   openCreate: (group: MaterialGroup) => void;
@@ -3161,7 +3158,7 @@ function MaterialNoteCell({
 
   const commit = async () => {
     const next = valueRef.current.trim().slice(0, MATERIAL_NOTE_MAX_LENGTH);
-    if (saveState === "saving" || next === savedRef.current) return;
+    if (disabled || saveState === "saving" || next === savedRef.current) return;
     valueRef.current = next;
     setValue(next);
     setSaveState("saving");
@@ -3187,7 +3184,7 @@ function MaterialNoteCell({
         disabled={disabled || saveState === "saving"}
         maxLength={MATERIAL_NOTE_MAX_LENGTH}
         placeholder={disabled ? "僅供檢視" : "新增 Note"}
-        title={value || "新增 Note"}
+        title={value || (disabled ? "僅供檢視" : "共用紀錄；按 Enter 或離開欄位儲存")}
         value={value}
         onBlur={() => { void commit(); }}
         onChange={(event) => {
@@ -3231,6 +3228,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   latestUpdater,
   colorTheme,
   columns,
+  canEditNote,
   actions,
 }: {
   row: VisibleGroupRow;
@@ -3241,6 +3239,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   latestUpdater: string;
   colorTheme: BomTableColorTheme;
   columns: MaterialColumnVisibility;
+  canEditNote: boolean;
   actions: MaterialRowActions;
 }) {
   const { group, matchingRecords, primaryAlternative, virtualAlternativeRecord, secondaryAlternatives } = row;
@@ -3463,9 +3462,9 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
           </td>
         )}
         {columns.note && (
-          <td data-material-cell="note" className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5")} onClick={stopRowToggle}>
+          <td data-material-cell="note" className={MATERIAL_CELL_CLASS} onClick={stopRowToggle}>
             <MaterialNoteCell
-              disabled={!actions.canEditNote}
+              disabled={!canEditNote}
               onSave={actions.saveNote}
               record={statusRecord}
             />
@@ -3483,7 +3482,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
           onCopy={actions.copy}
           onOpenTracking={actions.openTracking}
           onSaveNote={actions.saveNote}
-          noteDisabled={!actions.canEditNote}
+          noteDisabled={!canEditNote}
         />
       )}
     </tbody>
@@ -3648,7 +3647,7 @@ function CompactAlternativeRows({
               </td>
             )}
             {columns.note && (
-              <td className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5")} onClick={stopRowToggle}>
+              <td className={MATERIAL_CELL_CLASS} onClick={stopRowToggle}>
                 <MaterialNoteCell disabled={noteDisabled} onSave={onSaveNote} record={record} />
               </td>
             )}
@@ -3822,8 +3821,9 @@ export function MaterialRequestPage() {
     setReturnToPending(false);
     setPendingDialogOpen(false);
   }, [activeBomId, user?.userId]);
-  const { canEditModule } = usePermissions();
+  const { canEditModule, canViewModule } = usePermissions();
   const canEditModuleAccess = canEditModule("material-requests");
+  const canViewModuleAccess = canViewModule("material-requests");
   // Versions of one board form a series; only the series' current version accepts record edits.
   const seriesList = useMemo(() => buildBomSeriesList(bomWorkspaces), [bomWorkspaces]);
   const activeVersionInfo = useMemo(() => findBomSeriesByWorkspace(seriesList, activeBomId), [seriesList, activeBomId]);
@@ -3833,6 +3833,8 @@ export function MaterialRequestPage() {
   const projectNames = useMemo(() => new Map(allProjects.map((project) => [project.id, project.name])), [allProjects]);
   const {capture: captureBomWrite, isCurrent: isBomWriteCurrent, assertCurrent: assertBomWriteCurrent}
     = useWorkspaceMutationScope(user?.userId ?? null, canEditModuleAccess);
+  const { capture: captureNoteWrite, assertCurrent: assertNoteWriteCurrent }
+    = useWorkspaceMutationScope(user?.userId ?? null, canViewModuleAccess);
   const bomAccountRef = useRef({accountId: user?.userId, generation: 0});
   if (bomAccountRef.current.accountId !== user?.userId) {
     bomAccountRef.current = {accountId: user?.userId, generation: bomAccountRef.current.generation + 1};
@@ -5292,15 +5294,29 @@ export function MaterialRequestPage() {
   };
 
   const saveMaterialNote = async (record: MaterialRecord, note: string) => {
-    if (!canEdit || !isCollaborativeReady || !isFullDatasetLoaded) {
+    if (!canViewModuleAccess || isHistoricalVersion || !isCollaborativeReady || !isFullDatasetLoaded) {
       throw new Error("尚未同步，請稍後重試。");
     }
+    const writeScope = captureNoteWrite();
+    const workspaceId = activeWorkspace.id;
     try {
-      await saveRecordToActiveBom(
-        { ...toWorkbookRecord(record), note: note.slice(0, MATERIAL_NOTE_MAX_LENGTH) },
-        activeWorkspace.recordMeta?.[record.id],
+      const saved = await saveBomWorkspaceNote(
+        activeWorkspace, toWorkbookRecord(record), note.slice(0, MATERIAL_NOTE_MAX_LENGTH),
+        () => assertNoteWriteCurrent(writeScope),
       );
+      assertNoteWriteCurrent(writeScope);
+      recentLocalRecordIdsRef.current.set(record.id, Date.now());
+      setBomWorkspaces((current) => current.map((workspace) => workspace.id === workspaceId ? {
+        ...workspace,
+        updatedAt: saved.recordMeta.updatedAt,
+        payload: {
+          ...workspace.payload,
+          records: workspace.payload.records.map((item) => item.id === record.id ? saved.record : item),
+        },
+        recordMeta: { ...workspace.recordMeta, [record.id]: saved.recordMeta },
+      } : workspace));
     } catch (error) {
+      if (error instanceof BomRecordConflictError) await reloadBomWorkspaces(workspaceId).catch(() => undefined);
       toast({
         title: error instanceof BomRecordConflictError ? "Note 已有更新" : "Note 儲存失敗",
         description: error instanceof BomRecordConflictError
@@ -5807,9 +5823,10 @@ export function MaterialRequestPage() {
 
   // Rows receive one stable actions object; the ref always points at the
   // handlers from the latest render, so memoised rows never call stale closures.
+  // Rendered capabilities must be primitive props so memo sees readiness/account changes.
+  const canEditNote = canViewModuleAccess && !isHistoricalVersion && isCollaborativeReady && isFullDatasetLoaded;
   const rowActionsRef = useRef<MaterialRowActions | null>(null);
   rowActionsRef.current = {
-    canEditNote: canEdit && isCollaborativeReady && isFullDatasetLoaded,
     toggleExpanded,
     copy: (value) => { void handleCopy(value); },
     openCreate,
@@ -5818,7 +5835,6 @@ export function MaterialRequestPage() {
     saveNote: saveMaterialNote,
   };
   const rowActions = useMemo<MaterialRowActions>(() => ({
-    get canEditNote() { return rowActionsRef.current?.canEditNote ?? false; },
     toggleExpanded: (key) => rowActionsRef.current?.toggleExpanded(key),
     copy: (value) => rowActionsRef.current?.copy(value),
     openCreate: (group) => rowActionsRef.current?.openCreate(group),
@@ -5877,7 +5893,7 @@ export function MaterialRequestPage() {
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
       <RlcPriorityDialog key={`${user?.userId}:${activeWorkspace.id}:${rlcProjectId}`} open={rlcPriorityOpen} onOpenChange={setRlcPriorityOpen} projectId={rlcProjectId} projectName={activeWorkspace.project?.projectName ?? ''} workspaceName={activeWorkspace.name} projects={projects.map(project => ({ id: project.id, name: project.name }))} onAssignProject={projectId => assignBomProject(activeWorkspace.id, projectId)} assigningProject={assigningBomProjectId === activeWorkspace.id} groups={dataset.groups} rules={rlcRules.rules} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} loading={rlcRules.loading || !isFullDatasetLoaded} saving={rlcRules.saving} error={rlcRules.error} onSaveRule={rlcRules.saveRule} onReload={rlcRules.reload} />
       <MaterialNonPvlDialog
-        key={activeWorkspace.id}
+        key={`non-pvl:${activeWorkspace.id}`}
         isExporting={isExportingDiscouraged}
         open={nonPvlDialogOpen}
         rows={discouragedMaterialRows}
@@ -5904,7 +5920,7 @@ export function MaterialRequestPage() {
         onToggleMarked={toggleMarkedGroup}
       />
       <MaterialTableSettingsDialog
-        key={activeWorkspace.id}
+        key={`table-settings:${activeWorkspace.id}`}
         open={tableSettingsOpen}
         onOpenChange={setTableSettingsOpen}
         workspaceName={activeWorkspace.name}
@@ -6392,7 +6408,8 @@ export function MaterialRequestPage() {
                   <span className="text-xs font-black text-slate-400">Note</span>
                   <MaterialNoteCell
                     compact
-                    disabled={!rowActions.canEditNote}
+                    key={`${user?.userId}:${activeWorkspace.id}:${mainRecord.id}`}
+                    disabled={!canEditNote}
                     onSave={rowActions.saveNote}
                     record={mainRecord}
                   />
@@ -6408,7 +6425,7 @@ export function MaterialRequestPage() {
                           <MaterialApplicationExemptionBadge record={record} />
                           <ChevronRight className="h-4 w-4 text-violet-200" />
                         </button>
-                        <MaterialNoteCell compact disabled={!rowActions.canEditNote} onSave={rowActions.saveNote} record={record} />
+                        <MaterialNoteCell key={`${user?.userId}:${activeWorkspace.id}:${record.id}`} compact disabled={!canEditNote} onSave={rowActions.saveNote} record={record} />
                       </div>
                     )) : <p className="rounded-lg border border-dashed border-slate-600/50 px-3 py-2 text-xs text-slate-400">目前沒有替代料</p>}
                   </div>
@@ -6443,9 +6460,6 @@ export function MaterialRequestPage() {
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
                     onResize={(width) => resizeColumn(columnIndex, width)}
-                    className={column.key === "note"
-                      ? MATERIAL_STICKY_COLUMN_CLASSES.header
-                      : undefined}
                   >
                     <span
                       data-testid={column.key === "actions" ? "material-data-update-header" : undefined}
@@ -6477,7 +6491,7 @@ export function MaterialRequestPage() {
                   }
                   const meaning = MATERIAL_TABLE_COLUMN_MEANING[column.key] ?? "";
                   return (
-                    <th key={column.key} className={column.key === "note" ? MATERIAL_STICKY_COLUMN_CLASSES.filter : "border-r border-white/20 p-1.5"}>
+                    <th key={column.key} className="border-r border-white/20 p-1.5">
                       <div className="flex h-8 items-center justify-center truncate px-1 text-[10px] font-normal leading-4 text-slate-500" title={meaning || undefined}>
                         {meaning || "—"}
                       </div>
@@ -6498,7 +6512,7 @@ export function MaterialRequestPage() {
 
               return (
                 <MaterialGroupRow
-                  key={row.group.key}
+                  key={`${user?.userId}:${activeWorkspace.id}:${row.group.key}`}
                   row={row}
                   itemValue={getGroupItemValue(row.group, (page - 1) * pageSize + rowIndex + 1)}
                   expanded={expandedKey === row.group.key}
@@ -6507,6 +6521,7 @@ export function MaterialRequestPage() {
                   latestUpdater={latestUpdater}
                   colorTheme={activeTableColorTheme}
                   columns={columnVisibility}
+                  canEditNote={canEditNote}
                   actions={rowActions}
                 />
               );

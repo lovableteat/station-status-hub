@@ -1,14 +1,25 @@
 import seed from '../../src/data/materialRequestSeed.json';
+import { useSyncExternalStore } from 'react';
 import { supplierSearchContacts } from './supplierSearchCases.js';
 import { supabase as baseSupabase } from './vendorMailMock';
 
-const user = { userId: '00000000-0000-4000-8000-000000000001', username: 'qa', displayName: 'QA 目前使用者', role: 'admin' };
+let user = { userId: '00000000-0000-4000-8000-000000000001', username: 'qa', displayName: 'QA 目前使用者', role: 'admin', access: 'edit' };
+const accountListeners = new Set();
+const subscribeAccount = listener => { accountListeners.add(listener); return () => accountListeners.delete(listener); };
+const getAccount = () => user;
+export const setQaMaterialAccount = (access, secondAccount = false) => {
+  user = { ...user, access, userId: secondAccount ? '00000000-0000-4000-8000-000000000002' : '00000000-0000-4000-8000-000000000001', displayName: secondAccount ? 'QA 第二位同仁' : 'QA 目前使用者', role: access === 'edit' ? 'admin' : 'engineer' };
+  accountListeners.forEach(listener => listener());
+};
 const project = { id: 'qa-project', name: 'QA 專案', status: 'active' };
 const projects = [project];
 const editorsByRecordId = new Map();
 const files = new Map();
-export const useUser = () => ({ user, sessionMode: 'authenticated', isRealtimeAuthenticated: true });
-export const usePermissions = () => ({ canEditModule: () => true, canViewModule: () => true });
+export const useUser = () => ({ user: useSyncExternalStore(subscribeAccount, getAccount), sessionMode: 'authenticated', isRealtimeAuthenticated: true });
+export const usePermissions = () => {
+  const account = useSyncExternalStore(subscribeAccount, getAccount);
+  return { canEditModule: () => account.access === 'edit', canViewModule: () => account.access !== 'none' };
+};
 export const useTestProject = () => ({ activeProject: project, activeProjectId: project.id, allProjects: projects, projects });
 export const useMaterialBomPresence = () => ({ editorsByRecordId, onlineUserCount: 2 });
 export const logMaterialRecordChange = () => {};
@@ -92,4 +103,14 @@ export const saveBomWorkspaceRecord = async (target, record) => {
   if (index >= 0) list[index] = structuredClone(record); else list.push(structuredClone(record));
   fullRecords.set(target.id, list);
   return { updatedAt: new Date().toISOString(), updatedBy: user.displayName, version: 1 };
+};
+export const saveBomWorkspaceNote = async (target, record, note, assertWrite = () => {}) => {
+  assertWrite();
+  if (user.access === 'none' || target.version?.isCurrent === false) throw new Error('Note access denied');
+  const list = fullRecords.get(target.id) ?? [];
+  const current = list.find(item => item.id === record.id);
+  if (!current || (current.note ?? '') !== (record.note ?? '')) throw new BomRecordConflictError();
+  const saved = { ...current, note };
+  fullRecords.set(target.id, list.map(item => item.id === record.id ? saved : item));
+  return { record: structuredClone(saved), recordMeta: { updatedAt: new Date().toISOString() } };
 };
