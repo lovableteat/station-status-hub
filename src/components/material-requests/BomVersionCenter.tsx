@@ -23,6 +23,17 @@ import type { MaterialWorkbookRecord } from "./materialRequestUtils";
 const UNASSIGNED_VALUE = "__unassigned__";
 export const BOM_SERIES_EMPTY_TEXT = "找不到符合條件的 BOM 系列";
 
+function UploadTimestamp({ value }: { value: string }) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return <span className="font-semibold text-foreground">{value || "—"}</span>;
+  return (
+    <time dateTime={date.toISOString()} aria-label={formatBomTimestamp(value)} className="inline-flex flex-col gap-0.5 whitespace-nowrap rounded-md border border-primary/25 bg-primary/5 px-2 py-1 tabular-nums">
+      <span className="text-sm font-bold leading-5 text-foreground">{date.toLocaleDateString("zh-TW", { year: "numeric", month: "2-digit", day: "2-digit" })}</span>
+      <span className="text-[13px] font-semibold leading-5 text-primary">{date.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })}</span>
+    </time>
+  );
+}
+
 export interface BomVersionCenterProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -238,7 +249,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
       >
         <div className="flex min-w-0 items-center gap-2">
           <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground" title={series.name}>{series.name}</p>
-          <span className={cn(CHIP, "flex-none", CHIP_TONE.primary)}>{series.current.displayNumber}</span>
+          <span className={cn(CHIP, "h-6 min-w-9 flex-none justify-center font-mono text-sm font-bold tabular-nums", CHIP_TONE.primary)}>{series.current.displayNumber}</span>
           {isActive && <span className={cn(CHIP, "flex-none", activeSeries?.version.isCurrent ? CHIP_TONE.success : CHIP_TONE.warning)}>{activeSeries?.version.isCurrent ? "使用中" : `檢視 ${activeSeries?.version.displayNumber}`}</span>}
           {archived && <span className={cn(CHIP, "flex-none", CHIP_TONE.neutral)}>已封存</span>}
         </div>
@@ -296,7 +307,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
               <th className="whitespace-nowrap px-2 py-2 font-semibold">標籤／說明</th>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">來源檔</th>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">筆數</th>
-              <th className="whitespace-nowrap px-2 py-2 font-semibold">上傳</th>
+              <th className="whitespace-nowrap px-2 py-2 font-semibold">上傳時間</th>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">追蹤帶入</th>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">狀態</th>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">操作</th>
@@ -312,7 +323,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
                 : selectedSeries.current;
               return [
                 <tr key={item.workspace.id} data-version-id={item.workspace.id} className={cn("border-t border-border/60 align-top", item.isCurrent && "bg-primary/5")}>
-                  <td className="px-2 py-2 whitespace-nowrap"><span className={cn(CHIP, item.isCurrent ? CHIP_TONE.primary : CHIP_TONE.neutral)}>{item.displayNumber}</span></td>
+                  <td className="px-2 py-2 whitespace-nowrap"><span className={cn("inline-flex h-9 min-w-14 items-center justify-center rounded-md border px-2 font-mono text-base font-bold tabular-nums", item.isCurrent ? "border-primary bg-primary text-primary-foreground" : "border-primary/40 bg-primary/10 text-foreground")}>{item.displayNumber}</span></td>
                   <td className="max-w-[22rem] px-2 py-2 text-xs">
                     <p className="font-semibold text-foreground">{item.version.label || <span className="font-normal text-muted-foreground">未設定標籤</span>}</p>
                     {item.version.note && <p className="mt-0.5 whitespace-pre-wrap break-words text-foreground/80">{item.version.note}</p>}
@@ -320,7 +331,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
                   </td>
                   <td className="max-w-[16rem] px-2 py-2 text-xs text-foreground/85"><span className="line-clamp-2 break-all" title={`${item.workspace.payload.sourceFile} · ${item.workspace.payload.sheetName}`}>{item.workspace.payload.sourceFile}</span></td>
                   <td className="px-2 py-2 text-xs tabular-nums text-foreground/85">{item.workspace.payload.recordCount.toLocaleString()}</td>
-                  <td className="px-2 py-2 text-xs text-foreground/85"><span className="block">{formatBomTimestamp(item.version.uploadedAt)}</span>{item.version.uploadedBy && <span className="text-muted-foreground">{item.version.uploadedBy}</span>}</td>
+                  <td className="px-2 py-2 text-xs"><UploadTimestamp value={item.version.uploadedAt} />{item.version.uploadedBy && <span className="mt-1 block text-muted-foreground">{item.version.uploadedBy}</span>}</td>
                   <td className="px-2 py-2 text-xs">
                     {carry ? (
                       <span className="flex flex-wrap gap-1">
