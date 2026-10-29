@@ -2736,7 +2736,7 @@ export function PendingMaterialsDialog({
         <PendingMailDialog groups={mailGroups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
         <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
 
-        <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-2 rounded-xl border border-border bg-background/40 p-1.5">
+        <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-background/40 p-1">
           {[{ key: "all" as const, label: "全部", count: applications.length, priority: false }, { key: "marked" as const, label: "特別標記", count: markedCount, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
             <button
               key={tab.key}
@@ -2746,13 +2746,13 @@ export function PendingMaterialsDialog({
               onClick={() => setActiveCategory(tab.key)}
               title={tab.key === "marked" ? "點每列星號加入或取消；依位號標記，同組替代廠商共用。標記保存在此瀏覽器，依 BOM 分開。" : undefined}
               className={cn(
-                "inline-flex h-11 items-center gap-2 rounded-lg border px-5 text-base font-bold transition-colors",
+                "inline-flex h-9 items-center gap-1.5 rounded-md border px-4 text-sm font-bold transition-colors",
                 selectedCategory === tab.key ? "border-primary bg-primary text-primary-foreground shadow-[0_0_0_2px_hsl(var(--primary)/0.35)]" : "border-border bg-secondary/60 text-foreground/80 hover:bg-accent hover:text-foreground",
               )}
             >
               {tab.key === "marked" && <Star className="h-4 w-4 fill-current" aria-hidden="true" />}{tab.label}
               {tab.priority && <span className="h-2 w-2 rounded-full bg-destructive" aria-hidden="true" />}
-              <span className={cn("rounded-full px-2 font-mono text-sm leading-5", selectedCategory === tab.key ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background/60 text-foreground/80")}>{tab.count.toLocaleString()}</span>
+              <span className={cn("rounded-full px-1.5 font-mono text-xs leading-4", selectedCategory === tab.key ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background/60 text-foreground/80")}>{tab.count.toLocaleString()}</span>
             </button>
           ))}
         </div>

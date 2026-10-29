@@ -10,6 +10,7 @@ const storageSource = (await readFile(new URL("../src/components/material-reques
 const versionCenter = (await readFile(new URL("../src/components/material-requests/BomVersionCenter.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const uploadDialog = (await readFile(new URL("../src/components/material-requests/BomUploadDialog.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const settingsDialog = await readFile(new URL("../src/components/material-requests/MaterialTableSettingsDialog.tsx", import.meta.url), "utf8");
+const styles = (await readFile(new URL("../src/index.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const transpiled = ts.transpileModule(presentationSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText.replace('"./materialTrackingStatus.ts"', JSON.stringify(new URL("../src/components/material-requests/materialTrackingStatus.ts", import.meta.url).href));
@@ -221,6 +222,16 @@ test("待處理料 opens from the header actions and groups pending parts by cat
   assert.match(source, /<PendingMaterialsDialog/);
   const dialogTokens = dialog;
   assert.doesNotMatch(dialogTokens, /bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);
+});
+
+test("待處理料 keeps its category controls compact and gives export a clear filled treatment", () => {
+  const dialog = slice("function PendingMaterialsDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
+  assert.match(dialog, /role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-1\.5 rounded-lg border border-border bg-background\/40 p-1"/);
+  assert.match(dialog, /inline-flex h-9 items-center gap-1\.5 rounded-md border px-4 text-sm font-bold/);
+  assert.match(dialog, /rounded-full px-1\.5 font-mono text-xs leading-4/);
+  assert.match(source, /pending-row-category h-9 gap-1 rounded-md px-2 text-xs font-bold/);
+  assert.match(styles, /grid-template-columns: 32px 84px 88px minmax\(90px, 1fr\)/);
+  assert.match(styles, /pending-action--export[\s\S]{0,220}?hsl\(var\(--primary\)\) 58%/);
 });
 
 test("column filters apply on every click instead of waiting for 確定", () => {
