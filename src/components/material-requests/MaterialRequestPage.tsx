@@ -306,7 +306,7 @@ const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:"
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const VIEW_STATE_KEY_PREFIX = "station-status-hub:material-view:v1:";
-const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v14";
+const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v15";
 const HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1";
 const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const MAX_BOM_TRACKER_PAGES = 500;
@@ -335,9 +335,10 @@ const BOM_PAGE_STATUS_OPTIONS: Array<{
     idleClassName: "text-muted-foreground hover:bg-accent hover:text-foreground",
   },
 ];
-const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150];
-const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 130];
-const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360];
+const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150, 220];
+const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 130, 160];
+const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 520];
+const MATERIAL_NOTE_MAX_LENGTH = 4_000;
 const FILTER_OPTION_ROW_HEIGHT = 38;
 const FILTER_OPTION_LIST_HEIGHT = 224;
 const FILTER_OPTION_OVERSCAN = 8;
@@ -391,6 +392,7 @@ const MATERIAL_FIELD_HELP = {
   partName: getMaterialCeFieldHelp("Part Name"),
   remark: { description: "網站維護的人工申請狀態或備註，不是 CE Excel 欄位，不會由零件狀態自動建立申請。", example: "待確認實體料號、待核對原理圖符號" },
   specDocument: { description: "這顆料的 SPEC／datasheet 檔案，存在網站的檔案空間，不是 CE Excel 欄位。表格的 Part Spec 欄會出現迴紋針，點了直接開啟。", example: "PDF、Word、Excel、圖片或 zip，單檔 25 MB 以內" },
+  note: { description: "網站內部的自由紀錄，不屬於 CE Excel。上傳或重新匯入 BOM 時一律保持空白；網站匯出時才會包含。", example: "已與 RD 確認，待 11/03 回覆" },
 } as const;
 
 // Plain-language version of each field's help for the record dialog. The CE
@@ -420,6 +422,7 @@ const MATERIAL_FIELD_PLAIN: Record<keyof typeof MATERIAL_FIELD_HELP, string> = {
   tracking: "這顆料最新的追蹤進度。要新增紀錄、貼圖片或改狀態，請用表格最右邊的「狀態追蹤」。",
   remark: "人工備註，例如「待確認實體料號」。只給網站上的人看，不會自動建立申請。",
   specDocument: "這顆料的規格書／datasheet 檔案。上傳後存在網站上，表格的 Part Spec 欄會多一個迴紋針，點了直接開。",
+  note: "網站內部自由紀錄。Excel 匯入不會讀取這欄，只有網站儲存與匯出會保留。",
 };
 
 function CompactHoverValue({
@@ -673,11 +676,14 @@ const MATERIAL_COLUMN_FILTER_KEYS: Partial<Record<MaterialTableColumnKey, Column
 };
 
 // Row 5 of the CE workbook (the Chinese meaning) shown under each workbook column header.
-const MATERIAL_TABLE_COLUMN_MEANING: Partial<Record<MaterialTableColumnKey, string>> = Object.fromEntries(
-  MATERIAL_TABLE_COLUMNS
-    .filter((column) => column.ceHeader)
-    .map((column) => [column.key, MATERIAL_CE_HELP_BY_HEADER.get(column.ceHeader)?.meaning ?? ""]),
-);
+const MATERIAL_TABLE_COLUMN_MEANING: Partial<Record<MaterialTableColumnKey, string>> = {
+  ...Object.fromEntries(
+    MATERIAL_TABLE_COLUMNS
+      .filter((column) => column.ceHeader)
+      .map((column) => [column.key, MATERIAL_CE_HELP_BY_HEADER.get(column.ceHeader)?.meaning ?? ""]),
+  ),
+  note: "網站自由紀錄",
+};
 
 const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>> = {
   ...Object.fromEntries(
@@ -687,6 +693,7 @@ const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>
   ),
   item: "網站列號，依目前排序與分頁編號。",
   actions: "網站人工維護的狀態追蹤與資料更新，與 CE Excel 的供應／核准狀態、phase out 及零件狀態分開。",
+  note: "網站內部自由紀錄；匯入 BOM 時不讀取，匯出時包含。",
 };
 
 const MATERIAL_STICKY_COLUMN_CLASSES = getMaterialStickyColumnClasses();
@@ -857,6 +864,7 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     specDocuments: record.specDocuments,
     requestOwnerId: record.requestOwnerId,
     requestOwnerName: record.requestOwnerName,
+    note: record.note ?? "",
     ...(record.pendingCategory ? { pendingCategory: record.pendingCategory } : {}),
     ...(Object.prototype.hasOwnProperty.call(record, "phaseOutStatus") ? { phaseOutStatus: record.phaseOutStatus ?? "" } : {}),
     ...(Object.prototype.hasOwnProperty.call(record, "symbolStatus") ? { symbolStatus: record.symbolStatus ?? "" } : {}),
@@ -904,6 +912,7 @@ function createRecordTemplate(group?: MaterialGroup): MaterialWorkbookRecord {
     partSpec: group?.partSpec ?? "",
     schematicPart: group?.schematicPart ?? "",
     pcbFootprint: group?.footprint ?? "",
+    note: "",
   };
 }
 
@@ -3102,11 +3111,13 @@ export function MaterialRecordDialog({
 type MaterialColumnVisibility = Record<MaterialTableColumnKey, boolean>;
 
 interface MaterialRowActions {
+  canEditNote: boolean;
   toggleExpanded: (key: string) => void;
   copy: (value: string) => void;
   openCreate: (group: MaterialGroup) => void;
   openTracking: (record: MaterialRecord) => void;
   openSpec: (record: MaterialRecord) => void;
+  saveNote: (record: MaterialRecord, note: string) => Promise<void>;
 }
 
 interface VisibleGroupRow {
@@ -3123,6 +3134,93 @@ interface VisibleGroupRow {
 const MATERIAL_CELL_CLASS = "border-r border-white/20 px-2 py-1.5 align-middle";
 
 const stopRowToggle = (event: { stopPropagation: () => void }) => event.stopPropagation();
+
+function MaterialNoteCell({
+  compact = false,
+  disabled,
+  onSave,
+  record,
+}: {
+  compact?: boolean;
+  disabled: boolean;
+  onSave: (record: MaterialRecord, note: string) => Promise<void>;
+  record: MaterialRecord;
+}) {
+  const savedNote = record.note ?? "";
+  const [value, setValue] = useState(savedNote);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const valueRef = useRef(savedNote);
+  const savedRef = useRef(savedNote);
+
+  useEffect(() => {
+    valueRef.current = savedNote;
+    savedRef.current = savedNote;
+    setValue(savedNote);
+    setSaveState("idle");
+  }, [savedNote]);
+
+  const commit = async () => {
+    const next = valueRef.current.trim().slice(0, MATERIAL_NOTE_MAX_LENGTH);
+    if (saveState === "saving" || next === savedRef.current) return;
+    valueRef.current = next;
+    setValue(next);
+    setSaveState("saving");
+    try {
+      await onSave(record, next);
+      savedRef.current = next;
+      setSaveState("saved");
+      window.setTimeout(() => setSaveState((current) => current === "saved" ? "idle" : current), 1400);
+    } catch {
+      setSaveState("error");
+    }
+  };
+
+  return (
+    <div
+      className={cn("relative min-w-0", compact && "w-full")}
+      onClick={stopRowToggle}
+      onPointerDown={stopRowToggle}
+    >
+      <Input
+        aria-label={`編輯 ${record.refDes || record.name || "料件"} Note`}
+        data-testid="material-note-input"
+        disabled={disabled || saveState === "saving"}
+        maxLength={MATERIAL_NOTE_MAX_LENGTH}
+        placeholder={disabled ? "僅供檢視" : "新增 Note"}
+        title={value || "新增 Note"}
+        value={value}
+        onBlur={() => { void commit(); }}
+        onChange={(event) => {
+          valueRef.current = event.target.value;
+          setValue(event.target.value);
+          if (saveState === "error" || saveState === "saved") setSaveState("idle");
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void commit();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            valueRef.current = savedRef.current;
+            setValue(savedRef.current);
+            setSaveState("idle");
+            event.currentTarget.blur();
+          }
+        }}
+        className={cn(
+          "h-8 min-w-0 border-white/20 bg-black/15 pr-7 text-xs text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/35 focus-visible:border-cyan-300 focus-visible:ring-cyan-300/25",
+          saveState === "error" && "border-rose-400/70 focus-visible:border-rose-300 focus-visible:ring-rose-400/25",
+          compact && "h-10 bg-[#071522] text-sm",
+        )}
+      />
+      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2" aria-live="polite">
+        {saveState === "saving" && <RotateCcw className="h-3.5 w-3.5 animate-spin text-cyan-300 motion-reduce:animate-none" aria-label="Note 儲存中" />}
+        {saveState === "saved" && <Check className="h-3.5 w-3.5 text-emerald-300" aria-label="Note 已儲存" />}
+        {saveState === "error" && <TriangleAlert className="h-3.5 w-3.5 text-rose-300" aria-label="Note 儲存失敗" />}
+      </span>
+    </div>
+  );
+}
 
 const MaterialGroupRow = memo(function MaterialGroupRow({
   row,
@@ -3348,7 +3446,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         {columns.actions && (
           <td
             data-material-cell="actions"
-            className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5")}
+            className="border-r border-white/20 px-2 py-1.5"
             data-testid="material-data-update-cell"
             onClick={stopRowToggle}
           >
@@ -3364,6 +3462,15 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
             )}
           </td>
         )}
+        {columns.note && (
+          <td data-material-cell="note" className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5")} onClick={stopRowToggle}>
+            <MaterialNoteCell
+              disabled={!actions.canEditNote}
+              onSave={actions.saveNote}
+              record={statusRecord}
+            />
+          </td>
+        )}
       </tr>
       {expanded && (
         <CompactAlternativeRows
@@ -3375,6 +3482,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
           columns={columns}
           onCopy={actions.copy}
           onOpenTracking={actions.openTracking}
+          onSaveNote={actions.saveNote}
+          noteDisabled={!actions.canEditNote}
         />
       )}
     </tbody>
@@ -3390,6 +3499,8 @@ function CompactAlternativeRows({
   columns,
   onCopy,
   onOpenTracking,
+  onSaveNote,
+  noteDisabled,
 }: {
   group: MaterialGroup;
   records: MaterialRecord[];
@@ -3399,6 +3510,8 @@ function CompactAlternativeRows({
   columns: MaterialColumnVisibility;
   onCopy: (value: string) => void;
   onOpenTracking: (record: MaterialRecord) => void;
+  onSaveNote: (record: MaterialRecord, note: string) => Promise<void>;
+  noteDisabled: boolean;
 }) {
   const alternatives = records.filter((record) => record.id !== primaryRecord.id);
   const groupRefDes = primaryRecord.refDes || primaryRecord.refGroup || "-";
@@ -3528,10 +3641,15 @@ function CompactAlternativeRows({
               <td className={MATERIAL_CELL_CLASS}><PartUsageStatus record={record} /></td>
             )}
             {columns.actions && (
-              <td className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5")} onClick={stopRowToggle}>
+              <td className="border-r border-white/20 px-2 py-1.5" onClick={stopRowToggle}>
                 <div className="min-w-0 overflow-hidden rounded-lg border border-primary/30 bg-primary/5">
                   <TrackingHistoryCell record={record} onOpen={onOpenTracking} embedded />
                 </div>
+              </td>
+            )}
+            {columns.note && (
+              <td className={cn(MATERIAL_STICKY_COLUMN_CLASSES.row, "px-2 py-1.5")} onClick={stopRowToggle}>
+                <MaterialNoteCell disabled={noteDisabled} onSave={onSaveNote} record={record} />
               </td>
             )}
           </tr>
@@ -5173,6 +5291,27 @@ export function MaterialRequestPage() {
     toast({ title: "負責人已儲存", description: `${record.refDes || record.name} → ${owner?.name ?? "未指定"}` });
   };
 
+  const saveMaterialNote = async (record: MaterialRecord, note: string) => {
+    if (!canEdit || !isCollaborativeReady || !isFullDatasetLoaded) {
+      throw new Error("尚未同步，請稍後重試。");
+    }
+    try {
+      await saveRecordToActiveBom(
+        { ...toWorkbookRecord(record), note: note.slice(0, MATERIAL_NOTE_MAX_LENGTH) },
+        activeWorkspace.recordMeta?.[record.id],
+      );
+    } catch (error) {
+      toast({
+        title: error instanceof BomRecordConflictError ? "Note 已有更新" : "Note 儲存失敗",
+        description: error instanceof BomRecordConflictError
+          ? "其他人剛更新過這筆資料，系統沒有覆蓋；請確認最新內容後再儲存。"
+          : "這筆 Note 還沒寫入共用資料，內容仍留在欄位內，請再試一次。",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
   const handleSaveRecord = async (record: MaterialWorkbookRecord) => {
     if (!isValidBomUsage(record.qty)) {
       toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
@@ -5436,6 +5575,7 @@ export function MaterialRequestPage() {
           manufacturer: record.manufacturer,
           manufacturerPartNumber: record.manufacturerPartNumber,
           materialName: record.name,
+          note: record.note ?? "",
           partName: record.partName,
           qty: String(group.qty),
           remark: record.remark ?? "",
@@ -5669,18 +5809,22 @@ export function MaterialRequestPage() {
   // handlers from the latest render, so memoised rows never call stale closures.
   const rowActionsRef = useRef<MaterialRowActions | null>(null);
   rowActionsRef.current = {
+    canEditNote: canEdit && isCollaborativeReady && isFullDatasetLoaded,
     toggleExpanded,
     copy: (value) => { void handleCopy(value); },
     openCreate,
     openTracking: openTrackingDialog,
     openSpec: (record) => { if (getMaterialSpecDocuments(record).length > 1) openRecord(record, canEdit && isCollaborativeReady && isFullDatasetLoaded ? "edit" : "view", "details"); else void openSpecDocument({ specDocument: getMaterialSpecDocuments(record)[0] }); },
+    saveNote: saveMaterialNote,
   };
   const rowActions = useMemo<MaterialRowActions>(() => ({
+    get canEditNote() { return rowActionsRef.current?.canEditNote ?? false; },
     toggleExpanded: (key) => rowActionsRef.current?.toggleExpanded(key),
     copy: (value) => rowActionsRef.current?.copy(value),
     openCreate: (group) => rowActionsRef.current?.openCreate(group),
     openTracking: (record) => rowActionsRef.current?.openTracking(record),
     openSpec: (record) => rowActionsRef.current?.openSpec(record),
+    saveNote: (record, note) => rowActionsRef.current?.saveNote(record, note) ?? Promise.reject(new Error("Note editor unavailable")),
   }), []);
 
   if (isInitialLoading) {
@@ -6244,15 +6388,28 @@ export function MaterialRequestPage() {
                   <span className={cn("shrink-0 rounded-full border px-2 py-0.5 font-bold", availableAlternativeCount > 0 ? "border-emerald-300/25 bg-emerald-400/8 text-emerald-200" : "border-slate-500/25 bg-slate-800/40 text-slate-300")}>替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
                 </div>
 
+                <div className="grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-b border-white/5 bg-[#091827]/60 px-2.5 py-2">
+                  <span className="text-xs font-black text-slate-400">Note</span>
+                  <MaterialNoteCell
+                    compact
+                    disabled={!rowActions.canEditNote}
+                    onSave={rowActions.saveNote}
+                    record={mainRecord}
+                  />
+                </div>
+
                 {expanded ? (
                   <div className="space-y-2 border-b border-cyan-200/10 bg-[#071522] p-2.5">
                     {secondaryAlternatives.length ? secondaryAlternatives.map((record) => (
-                      <button key={record.id} type="button" onClick={() => openRecord(record, "view")} style={{ backgroundColor: blendWithSurface(record.isPreferred && !record.isRisk ? activeTableColorTheme.alternative : activeTableColorTheme.secondary, 0.2) }} className="flex w-full items-center gap-3 rounded-xl border border-violet-300/15 px-3 py-2 text-left">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-300/15 text-xs font-black text-violet-100">ALT</span>
-                        <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{getDisplayMpn(record) || "未填 MPN"}</strong><span className="block truncate text-xs text-slate-400">{record.manufacturer || "未指定廠商"}</span></span>
-                        <MaterialApplicationExemptionBadge record={record} />
-                        <ChevronRight className="h-4 w-4 text-violet-200" />
-                      </button>
+                      <div key={record.id} style={{ backgroundColor: blendWithSurface(record.isPreferred && !record.isRisk ? activeTableColorTheme.alternative : activeTableColorTheme.secondary, 0.2) }} className="rounded-xl border border-violet-300/15 p-2">
+                        <button type="button" onClick={() => openRecord(record, "view")} className="flex w-full items-center gap-3 px-1 pb-2 text-left">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-300/15 text-xs font-black text-violet-100">ALT</span>
+                          <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{getDisplayMpn(record) || "未填 MPN"}</strong><span className="block truncate text-xs text-slate-400">{record.manufacturer || "未指定廠商"}</span></span>
+                          <MaterialApplicationExemptionBadge record={record} />
+                          <ChevronRight className="h-4 w-4 text-violet-200" />
+                        </button>
+                        <MaterialNoteCell compact disabled={!rowActions.canEditNote} onSave={rowActions.saveNote} record={record} />
+                      </div>
                     )) : <p className="rounded-lg border border-dashed border-slate-600/50 px-3 py-2 text-xs text-slate-400">目前沒有替代料</p>}
                   </div>
                 ) : null}
@@ -6286,7 +6443,7 @@ export function MaterialRequestPage() {
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
                     onResize={(width) => resizeColumn(columnIndex, width)}
-                    className={column.key === "actions"
+                    className={column.key === "note"
                       ? MATERIAL_STICKY_COLUMN_CLASSES.header
                       : undefined}
                   >
@@ -6307,7 +6464,7 @@ export function MaterialRequestPage() {
                   const filterKey = MATERIAL_COLUMN_FILTER_KEYS[column.key];
                   if (filterKey) {
                     return (
-                      <th key={column.key} className={column.key === "actions" ? MATERIAL_STICKY_COLUMN_CLASSES.filter : "border-r border-white/20 p-1.5"}>
+                      <th key={column.key} className="border-r border-white/20 p-1.5">
                         <ExcelFilterPopover
                           filterKey={filterKey}
                           getOptions={getColumnFilterOptions}
@@ -6320,7 +6477,7 @@ export function MaterialRequestPage() {
                   }
                   const meaning = MATERIAL_TABLE_COLUMN_MEANING[column.key] ?? "";
                   return (
-                    <th key={column.key} className="border-r border-white/20 p-1.5">
+                    <th key={column.key} className={column.key === "note" ? MATERIAL_STICKY_COLUMN_CLASSES.filter : "border-r border-white/20 p-1.5"}>
                       <div className="flex h-8 items-center justify-center truncate px-1 text-[10px] font-normal leading-4 text-slate-500" title={meaning || undefined}>
                         {meaning || "—"}
                       </div>

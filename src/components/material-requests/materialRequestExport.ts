@@ -20,6 +20,7 @@ export interface MaterialReportRow {
   /** Legacy snapshots only; the 標記 column no longer exists. */
   marked?: boolean;
   materialName: string;
+  note?: string;
   remark?: string;
   specDocumentName?: string;
   partName?: string;
@@ -103,9 +104,10 @@ const EXCEL_HEADERS = [
   "備註",
   "SPEC 文件",
   "圖片",
+  "Note",
 ] as const;
 
-const EXCEL_COLUMN_WIDTHS = [8, 34, 7, 22, 28, 24, 16, 16, 16, 24, 30, 20, 20, 14, 30, 12, 34, 16, 28, 24, 14, 18, 16, 28, 24, 18];
+const EXCEL_COLUMN_WIDTHS = [8, 34, 7, 22, 28, 24, 16, 16, 16, 24, 30, 20, 20, 14, 30, 12, 34, 16, 28, 24, 14, 18, 16, 28, 24, 18, 36];
 const EXCEL_CENTERED_COLUMNS = new Set(
   (["Item", "Qty", "phase out", "零件狀態", "狀態追蹤"] as const)
     .map((header) => EXCEL_HEADERS.indexOf(header) + 1),
@@ -140,6 +142,7 @@ const EXCEL_HEADER_NOTES: Partial<Record<(typeof EXCEL_HEADERS)[number], string>
   備註: "網站維護的申請狀態／備註",
   "SPEC 文件": "附在料件上的 SPEC 檔名",
   圖片: "追蹤紀錄的第一張圖片（HTML 匯出含全部圖片）",
+  Note: "網站內部自由紀錄；不從 BOM 匯入，只在網站儲存與匯出時帶出",
 };
 
 function formatDateTime(value: string) {
@@ -269,6 +272,7 @@ function rowToValues(row: MaterialReportRow) {
     row.remark ?? "",
     row.specDocumentName ?? "",
     row.images.length > 0 ? `${row.images[0].name}${row.images.length > 1 ? `（共 ${row.images.length} 張）` : ""}` : "",
+    row.note ?? "",
   ];
 }
 
@@ -472,6 +476,7 @@ function buildHtmlReport(snapshot: MaterialReportSnapshot, imagePathById?: Map<s
       <td>${escapeHtml(row.remark)}</td>
       <td>${escapeHtml(row.specDocumentName)}</td>
       <td>${images}</td>
+      <td>${escapeHtml(row.note)}</td>
     </tr>`;
   }).join("");
 
@@ -492,7 +497,7 @@ body.image-preview-open{overflow:hidden}
 <section class="meta"><div><span>匯出範圍</span><strong>${escapeHtml(snapshot.scopeLabel)}</strong></div><div><span>匯出人員</span><strong>${escapeHtml(snapshot.exportedBy)}</strong></div><div><span>匯出時間</span><strong>${escapeHtml(formatDateTime(snapshot.exportedAt))}</strong></div><div><span>來源</span><strong>${escapeHtml(snapshot.sourceFile)} / ${escapeHtml(snapshot.sheetName)}</strong></div><div><span>原始主料數</span><strong>${snapshot.originalGroupCount.toLocaleString()}</strong></div><div><span>篩選後主料數</span><strong>${snapshot.filteredGroupCount.toLocaleString()}</strong></div><div><span>匯出明細數</span><strong>${snapshot.rows.length.toLocaleString()}</strong></div></section>
 <section class="filters">${filterBadges}</section><section class="stats">${statusCards}</section>
 <section class="report-actions"><span class="report-actions__hint">長內容已預設收合，可逐筆展開或一次控制全部資料。</span><div class="report-actions__buttons"><button type="button" data-details-action="expand">全部展開</button><button type="button" data-details-action="collapse">全部收合</button></div></section>
-<div class="table-wrap"><table><thead><tr><th>Item</th><th>Name</th><th>Qty</th><th>Ref Des</th><th>Manufacturer Part Number</th><th>Manufacturer</th><th>Sourcing Status</th><th>虛擬料號</th><th>實體料號</th><th>Part Name</th><th>Part Spec</th><th>Schematic_Part</th><th>PCB_Footprint</th><th>phase out</th><th>零件狀態</th><th>狀態追蹤</th><th>單號</th><th>備註</th><th>SPEC 文件</th><th>圖片</th></tr></thead><tbody>${bodyRows}</tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Name</th><th>Qty</th><th>Ref Des</th><th>Manufacturer Part Number</th><th>Manufacturer</th><th>Sourcing Status</th><th>虛擬料號</th><th>實體料號</th><th>Part Name</th><th>Part Spec</th><th>Schematic_Part</th><th>PCB_Footprint</th><th>phase out</th><th>零件狀態</th><th>狀態追蹤</th><th>單號</th><th>備註</th><th>SPEC 文件</th><th>圖片</th><th>Note</th></tr></thead><tbody>${bodyRows}</tbody></table></div>
 <footer class="footer">報表識別：${escapeHtml(snapshot.id)} · 本報表為 ${escapeHtml(formatDateTime(snapshot.dataAsOf))} 的固定查詢快照，不會隨系統後續更新自動改變。</footer>
 </main>
 <div class="image-lightbox" id="image-lightbox" hidden role="dialog" aria-modal="true" aria-label="圖片放大預覽">
@@ -749,14 +754,14 @@ export async function exportMaterialVisibleColumns(
     item: "item", name: "materialName", qty: "qty", refDes: "refDes", mpn: "manufacturerPartNumber",
     manufacturer: "manufacturer", sourcingStatus: "sourcingStatus", virtual: "tx", physical: "internalPartNumber",
     partName: "partName", partSpec: "specification", schematicPart: "symbol", footprint: "footprint",
-    phaseOut: "phaseOutStatus", partUsage: "partUsageStatus", actions: "trackingStatus",
+    phaseOut: "phaseOutStatus", partUsage: "partUsageStatus", actions: "trackingStatus", note: "note",
   };
   if (!columns.length || columns.some(column => !fields[column.key])) throw new Error("匯出欄位無效，請重新選擇。");
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   workbook.creator = snapshot.exportedBy;
   const sheet = workbook.addWorksheet("顯示欄位", { properties: { defaultRowHeight: 30 }, pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
-  const widths: Record<string, number> = { item: 7, name: 40, qty: 8, refDes: 42, mpn: 32, manufacturer: 24, sourcingStatus: 20, virtual: 22, physical: 22, partName: 36, partSpec: 36, schematicPart: 26, footprint: 26, phaseOut: 16, partUsage: 30, actions: 58 };
+  const widths: Record<string, number> = { item: 7, name: 40, qty: 8, refDes: 42, mpn: 32, manufacturer: 24, sourcingStatus: 20, virtual: 22, physical: 22, partName: 36, partSpec: 36, schematicPart: 26, footprint: 26, phaseOut: 16, partUsage: 30, actions: 58, note: 36 };
   sheet.columns = columns.map(column => ({ header: column.label, width: widths[column.key] }));
   let groupIndex = -1;
   snapshot.rows.forEach((source, index) => {
