@@ -9,6 +9,7 @@ const presentationSource = await readFile(new URL("../src/components/material-re
 const storageSource = (await readFile(new URL("../src/components/material-requests/materialBomStorage.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const versionCenter = (await readFile(new URL("../src/components/material-requests/BomVersionCenter.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const uploadDialog = (await readFile(new URL("../src/components/material-requests/BomUploadDialog.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const settingsDialog = await readFile(new URL("../src/components/material-requests/MaterialTableSettingsDialog.tsx", import.meta.url), "utf8");
 const transpiled = ts.transpileModule(presentationSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText.replace('"./materialTrackingStatus.ts"', JSON.stringify(new URL("../src/components/material-requests/materialTrackingStatus.ts", import.meta.url).href));
@@ -22,7 +23,7 @@ const slice = (from, to) => {
   return source.slice(start, end);
 };
 const rowBlock = slice("const MaterialGroupRow = memo(", "function CompactAlternativeRows(");
-const alternativeBlock = slice("function CompactAlternativeRows(", "function BomTableColorDialog(");
+const alternativeBlock = slice("function CompactAlternativeRows(", "function MaterialExportDialog(");
 const desktopHeader = slice('data-material-zone="overview"', 'data-testid="material-table-card"');
 const toolbar = slice('data-testid="material-table-toolbar"', 'data-testid="material-mobile-cards"');
 const filterRow = slice("</ResizableHeader>", "</thead>");
@@ -132,8 +133,8 @@ test("dialogs and popovers use the page theme tokens instead of their own fixed 
     slice("function CompactHoverValue(", "function MaterialFieldLabel("),
     slice("function BomPageTrackerDialog(", "function MaterialRecordDialog("),
     slice("function MaterialRecordDialog(", "type MaterialColumnVisibility"),
-    slice("function MaterialColumnSettings(", "const MaterialGroupRow = memo("),
-    slice("function BomTableColorDialog(", "export function MaterialRequestPage() {"),
+    settingsDialog,
+    slice("function MaterialExportDialog(", "export function MaterialRequestPage() {"),
     slice("  return (\n    <Popover open={open} onOpenChange={setOpen}>", "function ResizableHeader("),
   ].join("\n");
   assert.doesNotMatch(dialogBlocks, /#0[0-9a-f]{5}|bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d|bg-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);

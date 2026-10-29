@@ -32,6 +32,7 @@ export interface BomTableColorTheme {
   primary: string;
   alternative: string;
   secondary: string;
+  crosshair?: string;
 }
 
 export interface BomWorkspaceProject {
@@ -381,6 +382,7 @@ function normalizeTableColorTheme(raw: unknown) {
   const primary = normalizeColor(candidate.primary);
   const alternative = normalizeColor(candidate.alternative);
   const secondary = normalizeColor(candidate.secondary);
+  const crosshair = normalizeColor(candidate.crosshair);
 
   if (!primary || !alternative || !secondary) return undefined;
 
@@ -388,6 +390,7 @@ function normalizeTableColorTheme(raw: unknown) {
     primary,
     alternative,
     secondary,
+    ...(crosshair ? { crosshair } : {}),
   } satisfies BomTableColorTheme;
 }
 

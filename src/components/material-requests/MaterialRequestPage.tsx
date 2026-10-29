@@ -148,6 +148,8 @@ import { exportPendingMaterialsExcel } from "./pendingMaterialsExport";
 import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
 import { isMaterialReferenceQuery, matchesMaterialReference } from "./materialSearch";
 import { clearMaterialCrosshair, markMaterialCrosshair } from "./materialTableCrosshair";
+import { MaterialTableSettingsDialog, type MaterialTableSettings } from "./MaterialTableSettingsDialog";
+import { DEFAULT_BOM_TABLE_COLOR_THEME, normalizeBomTableColorTheme, blendWithSurface, withAlpha, buildTableRowStyle, buildMaterialCrosshairStyle } from "./materialTableTheme";
 import type {
   MaterialExportProgress,
   MaterialReportSnapshot,
@@ -336,11 +338,6 @@ const BOM_PAGE_STATUS_OPTIONS: Array<{
 const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150];
 const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 130];
 const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360];
-const DEFAULT_BOM_TABLE_COLOR_THEME: BomTableColorTheme = {
-  primary: "#0F5D74",
-  alternative: "#343B73",
-  secondary: "#10243D",
-};
 const FILTER_OPTION_ROW_HEIGHT = 38;
 const FILTER_OPTION_LIST_HEIGHT = 224;
 const FILTER_OPTION_OVERSCAN = 8;
@@ -355,16 +352,6 @@ const CHIP_TONES = {
   warning: "border-warning/35 bg-warning/15 text-warning",
   danger: "border-destructive/35 bg-destructive/15 text-destructive",
 } as const;
-
-const BOM_TABLE_COLOR_FIELDS: Array<{
-  key: keyof BomTableColorTheme;
-  label: string;
-  description: string;
-}> = [
-  { key: "primary", label: "主料", description: "主料列與首筆主資料背景。" },
-  { key: "alternative", label: "替代料", description: "替代料列與已建料候選背景。" },
-  { key: "secondary", label: "其餘料", description: "其他替代料或未首選列背景。" },
-];
 
 const MATERIAL_CE_HELP_BY_HEADER = new Map<string, { header: string; meaning: string; requirement: string; example: string }>(
   MATERIAL_CE_FIELDS.map((field) => [field.header, field]),
@@ -701,67 +688,6 @@ const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>
   item: "網站列號，依目前排序與分頁編號。",
   actions: "網站人工維護的狀態追蹤與資料更新，與 CE Excel 的供應／核准狀態、phase out 及零件狀態分開。",
 };
-
-function normalizeBomTableColorTheme(theme: Partial<BomTableColorTheme> | null | undefined): BomTableColorTheme {
-  const pickColor = (value: unknown, fallback: string) => (
-    typeof value === "string" && /^#([0-9a-f]{6})$/i.test(value.trim())
-      ? value.trim().toUpperCase()
-      : fallback
-  );
-
-  return {
-    primary: pickColor(theme?.primary, DEFAULT_BOM_TABLE_COLOR_THEME.primary),
-    alternative: pickColor(theme?.alternative, DEFAULT_BOM_TABLE_COLOR_THEME.alternative),
-    secondary: pickColor(theme?.secondary, DEFAULT_BOM_TABLE_COLOR_THEME.secondary),
-  };
-}
-
-function hexToRgb(value: string) {
-  const normalized = value.replace("#", "");
-  const parsed = Number.parseInt(normalized, 16);
-
-  return {
-    r: (parsed >> 16) & 255,
-    g: (parsed >> 8) & 255,
-    b: parsed & 255,
-  };
-}
-
-function withAlpha(value: string, alpha: number) {
-  const { r, g, b } = hexToRgb(value);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-function blendWithSurface(value: string, alpha: number) {
-  const foreground = hexToRgb(value);
-  const surface = hexToRgb("#0B1B2D");
-  const blend = (foregroundValue: number, surfaceValue: number) => (
-    Math.round((foregroundValue * alpha) + (surfaceValue * (1 - alpha)))
-  );
-
-  return `rgb(${blend(foreground.r, surface.r)}, ${blend(foreground.g, surface.g)}, ${blend(foreground.b, surface.b)})`;
-}
-
-function buildTableRowStyle(
-  color: string,
-  options?: {
-    backgroundAlpha?: number;
-    hoverAlpha?: number;
-    accentAlpha?: number;
-  },
-): CSSProperties {
-  const backgroundAlpha = options?.backgroundAlpha ?? 0.16;
-  const hoverAlpha = options?.hoverAlpha ?? 0.24;
-  const accentAlpha = options?.accentAlpha ?? 0.92;
-
-  return {
-    "--material-row-bg": withAlpha(color, backgroundAlpha),
-    "--material-row-solid": blendWithSurface(color, backgroundAlpha),
-    "--material-row-hover": withAlpha(color, hoverAlpha),
-    "--material-row-hover-solid": blendWithSurface(color, hoverAlpha),
-    "--material-row-accent": withAlpha(color, accentAlpha),
-  } as CSSProperties;
-}
 
 const MATERIAL_STICKY_COLUMN_CLASSES = getMaterialStickyColumnClasses();
 
@@ -3198,71 +3124,6 @@ const MATERIAL_CELL_CLASS = "border-r border-white/20 px-2 py-1.5 align-middle";
 
 const stopRowToggle = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
-function MaterialColumnSettings({
-  hiddenColumns,
-  onToggle,
-  onShowAll,
-  onResetWidths,
-  onOpenColors,
-}: {
-  hiddenColumns: MaterialTableColumnKey[];
-  onToggle: (key: MaterialTableColumnKey) => void;
-  onShowAll: () => void;
-  onResetWidths: () => void;
-  onOpenColors: () => void;
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-testid="material-column-visibility"
-          className="material-action-highlight h-9 px-2.5 text-xs"
-        >
-          <Columns3 className="mr-1.5 h-3.5 w-3.5" />
-          欄位
-          {hiddenColumns.length > 0 && (
-            <span className={cn(CHIP_BASE, "ml-1.5", CHIP_TONES.primary)}>隱藏 {hiddenColumns.length}</span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" collisionPadding={12} className="w-64 rounded-2xl border-border bg-popover p-2 text-popover-foreground shadow-lg">
-        <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">顯示欄位</p>
-        <div className="max-h-[min(420px,60vh)] space-y-0.5 overflow-y-auto">
-          {MATERIAL_TABLE_COLUMNS.map((column) => {
-            const visible = !hiddenColumns.includes(column.key);
-            return (
-              <label
-                key={column.key}
-                className={cn(
-                  "flex h-8 items-center gap-2.5 rounded-lg px-2 text-[13px]",
-                  column.locked ? "cursor-default text-muted-foreground" : "cursor-pointer text-foreground hover:bg-accent",
-                )}
-              >
-                <Checkbox
-                  checked={visible}
-                  disabled={column.locked}
-                  onCheckedChange={() => onToggle(column.key)}
-                />
-                <span className="min-w-0 flex-1 truncate">{column.label}</span>
-                {"ceHeader" in column && column.ceHeader ? <span className="text-[10px] text-muted-foreground">Excel</span> : null}
-                {column.locked && <span className="text-[10px] text-muted-foreground">固定</span>}
-              </label>
-            );
-          })}
-        </div>
-        <div className="mt-2 grid grid-cols-3 gap-1 border-t border-border pt-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onShowAll} disabled={hiddenColumns.length === 0} className="h-7 px-1 text-xs">全部顯示</Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onResetWidths} className="h-7 px-1 text-xs">重設欄寬</Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onOpenColors} className="h-7 px-1 text-xs">配色</Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 const MaterialGroupRow = memo(function MaterialGroupRow({
   row,
   itemValue,
@@ -3680,70 +3541,6 @@ function CompactAlternativeRows({
   );
 }
 
-function BomTableColorDialog({
-  open,
-  theme,
-  workspaceName,
-  onOpenChange,
-  onThemeChange,
-  onReset,
-  onApply,
-}: {
-  open: boolean;
-  theme: BomTableColorTheme;
-  workspaceName: string;
-  onOpenChange: (open: boolean) => void;
-  onThemeChange: (key: keyof BomTableColorTheme, value: string) => void;
-  onReset: () => void;
-  onApply: () => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md gap-4 p-5 sm:p-6">
-        <DialogHeader>
-          <DialogTitle>表格配色</DialogTitle>
-          <DialogDescription>
-            只套用到「{workspaceName}」，開啟同一份 BOM 的人會看到同樣的配色。
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="divide-y divide-border rounded-2xl border border-border bg-background/40">
-          {BOM_TABLE_COLOR_FIELDS.map((field) => (
-            <div key={field.key} className="flex items-center gap-3 px-3 py-2">
-              <span className="h-7 w-7 flex-none rounded-md border border-border" style={{ backgroundColor: theme[field.key] }} />
-              <div className="min-w-0 flex-1">
-                <Label className="text-sm font-semibold text-foreground">{field.label}</Label>
-                <p className="truncate text-xs text-muted-foreground" title={field.description}>{field.description}</p>
-              </div>
-              <Input
-                type="color"
-                value={theme[field.key]}
-                onChange={(event) => onThemeChange(field.key, event.target.value)}
-                aria-label={`${field.label}顏色`}
-                className="h-9 w-12 flex-none cursor-pointer rounded-lg p-1"
-              />
-              <Input
-                value={theme[field.key]}
-                readOnly
-                aria-label={`${field.label}色碼`}
-                className="h-9 w-24 flex-none rounded-lg px-2 font-mono text-sm"
-              />
-            </div>
-          ))}
-        </div>
-
-        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
-          <Button type="button" variant="ghost" size="sm" onClick={onReset}>還原預設</Button>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>取消</Button>
-            <Button type="button" size="sm" onClick={onApply}>套用到目前 BOM</Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function MaterialExportDialog({
   activeFormat,
   onExport,
@@ -3844,8 +3641,7 @@ export function MaterialRequestPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [columnWidths, setColumnWidths] = useState(loadColumnWidths);
-  const [tableColorDialogOpen, setTableColorDialogOpen] = useState(false);
-  const [tableColorDraft, setTableColorDraft] = useState<BomTableColorTheme>(DEFAULT_BOM_TABLE_COLOR_THEME);
+  const [tableSettingsOpen, setTableSettingsOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [bomManagerOpen, setBomManagerOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ title: string; description: string; workspaceIds: string[] } | null>(null);
@@ -3978,10 +3774,6 @@ export function MaterialRequestPage() {
     [basePayload]
   );
 
-  useEffect(() => {
-    if (!tableColorDialogOpen) return;
-    setTableColorDraft(activeTableColorTheme);
-  }, [activeTableColorTheme, tableColorDialogOpen]);
   const validGroupKeys = useMemo(
     () => new Set(dataset.groups.map((group) => group.key)),
     [dataset.groups],
@@ -4386,11 +4178,6 @@ export function MaterialRequestPage() {
     [hiddenColumns],
   );
   const visibleColumnCount = MATERIAL_TABLE_COLUMNS.length - hiddenColumns.length;
-  const toggleHiddenColumn = (key: MaterialTableColumnKey) => {
-    setHiddenColumns((current) => normalizeHiddenMaterialColumns(
-      current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
-    ));
-  };
   const tableWidth = getMaterialTableWidth(columnWidths, hiddenColumns);
 
   const resizeColumn = (index: number, width: number) => {
@@ -5859,46 +5646,23 @@ export function MaterialRequestPage() {
       : [...current, groupKey]);
   };
 
-  const handleTableColorFieldChange = (key: keyof BomTableColorTheme, value: string) => {
-    const nextValue = value.trim().toUpperCase();
-    setTableColorDraft((current) => ({
-      ...current,
-      [key]: /^#([0-9A-F]{6})$/.test(nextValue) ? nextValue : current[key],
-    }));
-  };
-
-  const resetTableColorTheme = () => {
-    setTableColorDraft(DEFAULT_BOM_TABLE_COLOR_THEME);
-  };
-
-  const applyTableColorTheme = async () => {
-    let writeScope;
-    try {writeScope = captureBomWrite();} catch {return;}
-    const nextTheme = normalizeBomTableColorTheme(tableColorDraft);
-
-    setBomWorkspaces((current) => current.map((workspace) => (
-      workspace.id === activeWorkspace.id
-        ? { ...workspace, tableColorTheme: nextTheme }
-        : workspace
-    )));
-    setTableColorDialogOpen(false);
-
-    try {
+  const applyTableSettings = async (settings: MaterialTableSettings) => {
+    const nextTheme = normalizeBomTableColorTheme(settings.theme);
+    const colorsChanged = (Object.keys(nextTheme) as Array<keyof typeof nextTheme>).some(key => nextTheme[key] !== activeTableColorTheme[key]);
+    if (colorsChanged) {
+      const writeScope = captureBomWrite();
+      if (!isCollaborativeReady) throw new Error("尚未連上共享資料，請稍後再套用配色。");
       recentLocalWorkspaceWritesRef.current.set(activeWorkspace.id, Date.now());
-      await saveBomWorkspaceTableColorTheme(activeWorkspace.id, nextTheme, () => assertBomWriteCurrent(writeScope));
-      if (!isBomWriteCurrent(writeScope)) return;
-      toast({
-        title: "表格配色已更新",
-        description: `已套用到 BOM「${activeWorkspace.name}」，其他人開啟同一份 BOM 也會看到相同配色。`,
-      });
-    } catch {
-      if (!isBomWriteCurrent(writeScope)) return;
-      toast({
-        variant: "destructive",
-        title: "表格配色儲存失敗",
-        description: "共享配色尚未寫入資料庫，請稍後再試。",
-      });
+      try {
+        await saveBomWorkspaceTableColorTheme(activeWorkspace.id, nextTheme, () => assertBomWriteCurrent(writeScope));
+      } catch {
+        throw new Error("配色尚未儲存，請保留此視窗並重試。");
+      }
+      assertBomWriteCurrent(writeScope);
+      setBomWorkspaces(current => current.map(workspace => workspace.id === activeWorkspace.id ? { ...workspace, tableColorTheme: nextTheme } : workspace));
     }
+    setHiddenColumns(settings.hiddenColumns);
+    if (settings.resetWidths) setColumnWidths([...DEFAULT_COLUMN_WIDTHS]);
   };
 
   // Rows receive one stable actions object; the ref always points at the
@@ -5950,6 +5714,12 @@ export function MaterialRequestPage() {
       <SelectContent><SelectItem value="all">全部欄位</SelectItem>{FILTER_KEYS.map(key => <SelectItem key={key} value={key}>{COLUMN_FILTER_LABELS[key]}</SelectItem>)}</SelectContent>
     </Select>
   );
+  const tableSettingsControl = (
+    <Button type="button" variant="outline" size="sm" data-testid="material-column-visibility" aria-haspopup="dialog" aria-expanded={tableSettingsOpen} onClick={() => setTableSettingsOpen(true)} className="h-11 gap-1.5 border-border bg-background/40 px-3 text-sm font-medium text-foreground hover:bg-secondary lg:h-9 lg:px-2.5 lg:text-xs">
+      <Columns3 className="h-4 w-4" />欄位設定
+      {hiddenColumns.length > 0 && <span className="rounded bg-secondary px-1.5 text-xs tabular-nums text-muted-foreground">隱藏 {hiddenColumns.length}</span>}
+    </Button>
+  );
   const activeFilterControls = activeFilterChips.length > 0 && (
     <div data-testid="material-active-filters" className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
       {activeFilterChips.map(chip => <button key={chip.key} type="button" onClick={() => removeFilterChip(chip.key)} aria-label={`移除篩選：${chip.label}`} className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-foreground lg:min-h-8"><span className="max-w-[20rem] truncate">{chip.label}</span><X className="h-3 w-3 shrink-0" /></button>)}
@@ -5989,16 +5759,15 @@ export function MaterialRequestPage() {
         markedGroupKeys={markedGroupKeySet}
         onToggleMarked={toggleMarkedGroup}
       />
-      <BomTableColorDialog
-        open={tableColorDialogOpen}
-        theme={tableColorDraft}
+      <MaterialTableSettingsDialog
+        key={activeWorkspace.id}
+        open={tableSettingsOpen}
+        onOpenChange={setTableSettingsOpen}
         workspaceName={activeWorkspace.name}
-        onOpenChange={setTableColorDialogOpen}
-        onThemeChange={handleTableColorFieldChange}
-        onReset={resetTableColorTheme}
-        onApply={() => {
-          void applyTableColorTheme();
-        }}
+        hiddenColumns={hiddenColumns}
+        theme={activeTableColorTheme}
+        canEditColors={canEdit && isCollaborativeReady}
+        onApply={applyTableSettings}
       />
       <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
       <BomVersionCenter
@@ -6129,6 +5898,7 @@ export function MaterialRequestPage() {
               <Button type="button" variant="outline" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} className="h-11 border-orange-300/30 bg-orange-400/10 text-orange-100"><FileSpreadsheet className="mr-2 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
               <Button type="button" variant="outline" onClick={() => setRlcPriorityOpen(true)} className="h-11 border-primary/30 bg-primary/10 text-primary">RLC 優先順序</Button>
               <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
+              {tableSettingsControl}
               <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
             </div>
           </details>
@@ -6416,16 +6186,7 @@ export function MaterialRequestPage() {
                 <SelectItem value="pending">{SORT_MODE_LABELS.pending}</SelectItem>
               </SelectContent>
             </Select>
-            <MaterialColumnSettings
-              hiddenColumns={hiddenColumns}
-              onToggle={toggleHiddenColumn}
-              onShowAll={() => setHiddenColumns([])}
-              onResetWidths={() => setColumnWidths([...DEFAULT_COLUMN_WIDTHS])}
-              onOpenColors={() => {
-                setTableColorDraft(activeTableColorTheme);
-                setTableColorDialogOpen(true);
-              }}
-            />
+            {tableSettingsControl}
             <Button type="button" variant="outline" size="sm" data-testid="material-export-visible" className="material-action-highlight h-9 gap-1.5 px-2.5 text-xs" disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} onClick={() => void exportVisibleColumns()} title="依目前顯示欄位與順序匯出所有符合篩選的廠商明細，不受分頁限制；狀態欄匯出文字"><Download className="h-3.5 w-3.5" />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}</Button>
             <span className="ml-auto text-xs text-slate-400">
               {isPreviewDataset
@@ -6515,7 +6276,7 @@ export function MaterialRequestPage() {
           className="relative max-h-[72vh] overflow-auto"
           data-testid="material-table-scroll"
         >
-          <table className="material-table-crosshair table-fixed border-collapse text-[13px]" style={{ width: `max(100%, ${tableWidth}px)`, minWidth: tableWidth }} onPointerOver={event => markMaterialCrosshair(event.currentTarget, event.target)} onPointerLeave={event => clearMaterialCrosshair(event.currentTarget)} onFocusCapture={event => markMaterialCrosshair(event.currentTarget, event.target)} onBlurCapture={event => { if (!event.currentTarget.matches(":hover") && !event.currentTarget.contains(event.relatedTarget as Node | null)) clearMaterialCrosshair(event.currentTarget); }}>
+          <table className="material-table-crosshair table-fixed border-collapse text-[13px]" style={{ ...buildMaterialCrosshairStyle(activeTableColorTheme.crosshair), width: `max(100%, ${tableWidth}px)`, minWidth: tableWidth }} onPointerOver={event => markMaterialCrosshair(event.currentTarget, event.target)} onPointerLeave={event => clearMaterialCrosshair(event.currentTarget)} onFocusCapture={event => markMaterialCrosshair(event.currentTarget, event.target)} onBlurCapture={event => { if (!event.currentTarget.matches(":hover") && !event.currentTarget.contains(event.relatedTarget as Node | null)) clearMaterialCrosshair(event.currentTarget); }}>
             <thead className="sticky top-0 z-20">
               <tr className="bg-[#0d2137] text-left text-[13px] font-bold text-white">
                 {MATERIAL_TABLE_COLUMNS.map((column, columnIndex) => columnVisibility[column.key] && (
