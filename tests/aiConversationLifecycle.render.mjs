@@ -294,3 +294,18 @@ test('full-page unload warns only while account-owned changes remain pending, in
     assert.equal(warning(), false);
   } finally { await f.unmount(); }
 });
+
+test('compact chat keeps one send action inside the composer and opens the shared messenger with its unread count', async () => {
+  const f = await fixture({ rows: [] });
+  try {
+    const send = f.root.root.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢');
+    assert.equal(send.length, 1);
+    const composer = f.root.root.find(node => node.props['data-mobile-ai-composer'] === 'true');
+    assert.equal(composer.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 1);
+    let opened = 0;
+    f.win.addEventListener('open-global-direct-messages', () => opened++);
+    await act(async () => f.win.dispatchEvent(new CustomEvent('collaboration-unread-change', { detail: { count: 9, directMessageCount: 3 } })));
+    await f.click('開啟聊天室，3 則未讀');
+    assert.equal(opened, 1);
+  } finally { await f.unmount(); }
+});

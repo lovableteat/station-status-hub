@@ -67,14 +67,14 @@ export function AiQuotaStatus({ apiKeyId, provider, model }: { apiKeyId: string 
   const count = (value: number | null) => unavailable ? "—" : value?.toLocaleString("zh-TW");
   return (
     <section aria-label="全員共用 API 額度與用量" className="shrink-0 border-b border-border bg-muted/30 px-3 text-foreground sm:px-6">
-      <div className="flex flex-wrap items-center gap-x-3 text-xs">
+      <div className="grid grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-x-1 text-[11px] lg:flex lg:flex-wrap lg:gap-x-3 lg:text-xs">
         <h3 className="sr-only font-semibold xl:not-sr-only">全員共用 API 額度</h3>
-        <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="flex min-h-11 min-w-0 items-center gap-x-2 whitespace-nowrap lg:flex-wrap lg:gap-x-3">
           <p><span className="text-muted-foreground">分鐘 </span><strong>{count(minute)}</strong>{profile ? ` / ${profile.rpm} 次` : " 次"}</p>
           <p><span className="text-muted-foreground">今日 </span><strong>{count(day)}</strong>{profile ? ` / ${profile.rpd} 次` : " 次"}</p>
         </div>
         <Button variant="ghost" size="icon" disabled={loading || !apiKeyId} onClick={() => setRefresh(value => value + 1)} aria-label="更新全員 API 用量" title={loading ? "更新中" : "更新全員 API 用量"} className="ml-auto h-11 w-11 shrink-0"><RefreshCw className={loading ? 'h-4 w-4 animate-spin motion-reduce:animate-none' : 'h-4 w-4'} /></Button>
-        <details className="text-xs leading-5 text-muted-foreground [&[open]]:basis-full">
+        <details className="text-xs leading-5 text-muted-foreground [&[open]]:col-span-full [&[open]]:basis-full">
         <summary className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">詳情</summary>
         <div className="space-y-1 pb-3">
         {!apiKeyId && <p>選擇系統 API 後可查看全員用量。</p>}

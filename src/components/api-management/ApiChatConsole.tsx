@@ -48,6 +48,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useUser } from "@/components/auth/UserContext";
+import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
@@ -782,14 +783,14 @@ function MessageCard({ message }: { message: ChatMessage }) {
   return (
     <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
       {!isUser ? (
-        <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-400/16 bg-cyan-400/10 text-cyan-100">
+        <div className="mt-1 hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-400/16 bg-cyan-400/10 text-cyan-100 md:flex">
           <Bot className="h-4.5 w-4.5" />
         </div>
       ) : null}
 
       <div
         className={cn(
-          "max-w-[92%] rounded-[24px] border px-5 py-4 text-[15px] leading-7 shadow-[0_16px_36px_rgba(2,8,23,0.18)] md:max-w-[86%]",
+          "min-w-0 max-w-full rounded-xl border px-3 py-3 text-[15px] leading-7 md:max-w-[86%] md:rounded-[24px] md:px-5 md:py-4 md:shadow-[0_16px_36px_rgba(2,8,23,0.18)]",
           isUser
             ? "border-blue-300/18 bg-[linear-gradient(135deg,rgba(59,130,246,0.22),rgba(37,99,235,0.14))] text-slate-50"
             : message.state === "error"
@@ -881,7 +882,7 @@ function MessageCard({ message }: { message: ChatMessage }) {
       </div>
 
       {isUser ? (
-        <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-blue-300/16 bg-blue-500/12 text-blue-100">
+        <div className="mt-1 hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-blue-300/16 bg-blue-500/12 text-blue-100 md:flex">
           <User className="h-4.5 w-4.5" />
         </div>
       ) : null}
@@ -990,6 +991,16 @@ export function ApiChatConsole({
   }, [currentMaintenanceProjectId, maintenanceProjects]);
 
   const isChatOnly = mode === "chat-only";
+  const isCompactLayout = useIsCompactLayout();
+  const compactChat = isChatOnly && isCompactLayout;
+  const [directMessageUnreadCount, setDirectMessageUnreadCount] = useState(0);
+  useEffect(() => {
+    if (!isChatOnly) return;
+    const update = (event: Event) => setDirectMessageUnreadCount((event as CustomEvent<{ directMessageCount?: number }>).detail?.directMessageCount ?? 0);
+    window.addEventListener("collaboration-unread-change", update);
+    window.dispatchEvent(new CustomEvent("collaboration-unread-request"));
+    return () => window.removeEventListener("collaboration-unread-change", update);
+  }, [isChatOnly]);
   const slashPromptQuery = useMemo(() => getSlashPromptQuery(draftMessage), [draftMessage]);
   const slashPromptResults = useMemo(
     () => filterSharedPrompts(savedPrompts, slashPromptQuery ?? "").slice(0, 6),
@@ -2674,6 +2685,18 @@ export function ApiChatConsole({
     </Popover>
   );
 
+  const composerActions = (
+    <div data-ai-composer-actions="true" className="ml-auto flex min-w-0 max-w-full items-center justify-end gap-2">
+      <span className="hidden min-w-0 max-w-[220px] truncate rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground lg:block" title={model}>{model || "Gemini"}</span>
+      <Button type="button" onClick={() => void handleSend()} disabled={!canSend} aria-label="送出查詢" aria-busy={loading} className={cn("h-11 shrink-0 gap-2 px-3", !compactChat && "min-w-24")}>
+        <Send className="h-4 w-4" /><span>{loading ? "查詢中" : "送出"}</span>
+      </Button>
+      <Button type="button" variant="outline" onClick={requestResetConversation} aria-label="清空對話" title="清空對話" className={cn("h-11 shrink-0 rounded-xl", compactChat ? "order-first w-11 p-0" : "gap-2 px-4")}>
+        <Trash2 className="h-4 w-4" /><span className={compactChat ? "sr-only" : undefined}>清空對話</span>
+      </Button>
+    </div>
+  );
+
   const conversationPanel = (
     <div
       ref={chatConsoleRef}
@@ -2778,7 +2801,7 @@ export function ApiChatConsole({
         </div>
       ) : null}
 
-      <div className={cn("flex min-h-0 flex-col", isChatOnly ? "shrink-0 gap-0 lg:flex-1" : "flex-1 mt-4 gap-4")}>
+      <div className={cn("flex min-h-0 flex-col", isChatOnly ? "flex-1 gap-0" : "flex-1 mt-4 gap-4")}>
         {connectionState ? (
           <ConnectionBanner result={connectionState} onDismiss={() => setConnectionState(null)} />
         ) : null}
@@ -2790,12 +2813,12 @@ export function ApiChatConsole({
           )}
         >
           <div className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto", isChatOnly ? "pr-2" : "pr-1", chatHeightClass)}>
-            <div className="space-y-4">
+            <div className={cn("space-y-4", isChatOnly && messages.length === 0 && "flex min-h-full flex-col")}>
               {messages.length === 0 ? (
                 isChatOnly ? (
-                  <div data-mobile-ai-empty-state="true" className="flex min-h-0 flex-1 items-start justify-center px-1 pt-5 md:min-h-[300px] md:items-center md:px-6 md:py-5 2xl:py-0">
-                    <div className="flex w-full max-w-xl items-center gap-3 rounded-2xl border border-emerald-300/15 bg-emerald-400/[0.04] p-3 text-left md:block md:max-w-3xl md:border-0 md:bg-transparent md:p-0 md:text-center">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-400/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.16),rgba(5,8,10,0.12))] text-emerald-100 shadow-[0_18px_45px_-22px_rgba(16,185,129,0.45)] md:mx-auto md:h-14 md:w-14 md:rounded-[18px] 2xl:h-10 2xl:w-10 2xl:rounded-xl">
+                  <div data-mobile-ai-empty-state="true" className="flex min-h-0 flex-1 items-center justify-center px-3 py-5 md:min-h-[300px] md:px-6 2xl:py-0">
+                    <div className="w-full max-w-xl text-center md:max-w-3xl">
+                      <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 text-primary md:h-14 md:w-14 2xl:h-10 2xl:w-10">
                         <Search className="h-5 w-5 md:h-6 md:w-6 2xl:h-4.5 2xl:w-4.5" />
                       </div>
                       <div className="min-w-0">
@@ -2858,7 +2881,7 @@ export function ApiChatConsole({
             }}
           />
 
-          <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div className={cn("mb-2.5 flex flex-wrap items-center justify-between gap-2", compactChat && "hidden")}>
             <div className={cn("min-w-0 flex-wrap items-center gap-2 text-sm font-medium text-slate-300", isChatOnly ? "hidden lg:flex" : "hidden sm:flex")}>
               <span className="hidden rounded-lg border border-cyan-300/18 bg-cyan-400/8 px-2.5 py-1.5 font-bold text-cyan-100 sm:inline">
                 輸入 <kbd className="mx-1 rounded border border-cyan-200/25 bg-slate-950/40 px-1.5 py-0.5 font-mono text-xs">/</kbd> 快速套用
@@ -2879,36 +2902,11 @@ export function ApiChatConsole({
                 {loading ? "測試中..." : "測試連線"}
               </Button>
             ) : null}
-            <div data-ai-composer-actions="true" className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
-              <span className="hidden min-w-0 max-w-[220px] truncate rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground lg:block" title={model}>
-                {model || "Gemini"}
-              </span>
-              <Button
-                type="button"
-                onClick={() => void handleSend()}
-                disabled={!canSend}
-                aria-label="送出查詢"
-                aria-busy={loading}
-                className="h-11 min-w-24 shrink-0 gap-2 px-3"
-              >
-                <Send className="h-4 w-4" />
-                <span>{loading ? "查詢中" : "送出"}</span>
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={requestResetConversation}
-                aria-label="清空對話"
-                className="h-11 shrink-0 rounded-xl border-slate-500/60 bg-slate-900/30 px-4 text-sm font-bold text-slate-200 transition-all duration-200 hover:border-rose-400/40 hover:bg-rose-500/10 hover:text-rose-100 active:scale-[0.99]"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                清空對話
-              </Button>
-            </div>
+            {!compactChat && composerActions}
           </div>
 
           {uploadedAttachments.length ? (
-            <div className="mb-3 grid max-h-[232px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="mb-3 grid max-h-[20dvh] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:max-h-[232px] xl:grid-cols-3">
               {uploadedAttachments.map((attachment, index) => (
                 <div
                   key={attachment.id}
@@ -2937,7 +2935,7 @@ export function ApiChatConsole({
                   <button
                     type="button"
                     onClick={() => removeUploadedAttachment(attachment.id)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/8 text-slate-200 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/8 text-slate-200 transition-colors hover:bg-rose-500/20 hover:text-rose-100 md:h-8 md:w-8"
                     aria-label={`移除附件 ${index + 1}`}
                   >
                     <X className="h-3.5 w-3.5" />
@@ -2954,14 +2952,14 @@ export function ApiChatConsole({
             onDragLeave={handleComposerDragLeave}
             onDrop={handleComposerDrop}
             className={cn(
-              "rounded-xl border p-3 transition-colors duration-150 focus-within:ring-2 motion-reduce:transition-none",
+              "rounded-xl border p-2 lg:p-3 transition-colors duration-150 focus-within:ring-2 motion-reduce:transition-none",
               isDragOverComposer
                 ? "border-primary bg-primary/10 ring-2 ring-primary/25"
                 : "border-border bg-card focus-within:border-primary focus-within:ring-primary/20"
             )}
           >
             <div className="flex min-w-0 flex-col gap-2">
-              <div className="relative min-w-0 px-1 py-2">
+              <div className="relative min-w-0 px-1 py-1 lg:py-2">
                 {slashMenuOpen ? (
                   <div
                     role="listbox"
@@ -3039,11 +3037,11 @@ export function ApiChatConsole({
                   placeholder="輸入問題"
                   rows={2}
                   disabled={isChatOnly && !conversationRemoteReadyRef.current}
-                  className="min-h-10 max-h-24 resize-y rounded-none border-0 !bg-transparent px-0 py-0 text-base leading-6 text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+                  className="min-h-10 max-h-24 resize-none rounded-none border-0 !bg-transparent px-0 py-0 text-base leading-6 text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0 lg:resize-y"
                 />
               </div>
 
-              <div data-ai-composer-toolbar="true" className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border pr-28 pt-3 lg:flex-nowrap lg:pr-32">
+              <div data-ai-composer-toolbar="true" className={cn("flex min-w-0 items-center justify-between gap-2 border-t border-border", compactChat ? "flex-nowrap pt-2" : "flex-wrap pr-28 pt-3 lg:flex-nowrap lg:pr-32")}>
                 <div className="flex shrink-0 items-center gap-2">
                   {promptLibraryControl}
                   <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className="h-11 shrink-0 gap-2 px-3">
@@ -3051,6 +3049,7 @@ export function ApiChatConsole({
                     <span className="hidden sm:inline">上傳檔案</span>
                   </Button>
                 </div>
+                {compactChat && composerActions}
               </div>
             </div>
 
@@ -3261,7 +3260,7 @@ export function ApiChatConsole({
           </aside>
 
           <div className="order-1 flex min-h-0 min-w-0 flex-col gap-2 lg:order-2">
-            <div data-mobile-ai-command-bar="true" className="grid h-11 shrink-0 grid-cols-[44px_minmax(0,1fr)_44px] gap-1.5 lg:hidden">
+            <div data-mobile-ai-command-bar="true" className="grid h-11 shrink-0 grid-cols-[44px_minmax(0,1fr)_44px_44px] gap-2 lg:hidden">
               <Button
                 type="button"
                 variant="outline"
@@ -3280,7 +3279,7 @@ export function ApiChatConsole({
                   aria-label="選擇 API 金鑰與模型"
                   className="h-11 min-w-0 rounded-xl border-blue-300/30 bg-[#13243b] px-3 text-left text-sm font-bold text-white shadow-none focus:ring-2 focus:ring-cyan-300/35 [&>span]:truncate"
                 >
-                  <SelectValue placeholder="選擇模型" />
+                  <SelectValue placeholder="選擇模型">{model ? model.replace(/^gemini-/i, "").replace(/-/g, " ") : "選擇模型"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
                   {availableApiKeyTargets.map((target) => {
@@ -3293,6 +3292,10 @@ export function ApiChatConsole({
                   })}
                 </SelectContent>
               </Select>
+              <Button type="button" variant="outline" aria-label={`開啟聊天室${directMessageUnreadCount ? `，${directMessageUnreadCount} 則未讀` : ""}`} title="訊息" className="relative h-11 w-11 p-0" onClick={() => window.dispatchEvent(new CustomEvent("open-global-direct-messages"))}>
+                <MessageSquareText className="h-4 w-4" />
+                {directMessageUnreadCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-destructive px-1 text-[10px] text-destructive-foreground">{directMessageUnreadCount > 99 ? "99+" : directMessageUnreadCount}</span>}
+              </Button>
               <Button
                 type="button"
                 onClick={requestResetConversation}

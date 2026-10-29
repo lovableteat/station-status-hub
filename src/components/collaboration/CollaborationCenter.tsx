@@ -217,6 +217,7 @@ export function CollaborationCenter() {
   const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
   const [messageFloatOpen, setMessageFloatOpen] = useState(false);
   const [directMessageUnreadCount, setDirectMessageUnreadCount] = useState(0);
+  const messageReturnFocus = useRef<HTMLElement | null>(null);
   const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
   const [memberQuery, setMemberQuery] = useState("");
   const [directoryMembers, setDirectoryMembers] = useState<CollaborationDirectoryMember[]>([]);
@@ -265,9 +266,12 @@ export function CollaborationCenter() {
       setOpen(true);
     };
     window.addEventListener("open-global-collaboration", openCenter);
+    const openMessages = () => { messageReturnFocus.current = document.activeElement as HTMLElement; setOpen(false); setMessageFloatOpen(true); };
+    window.addEventListener("open-global-direct-messages", openMessages);
     window.addEventListener("open-global-notifications", openLegacyNotifications);
     return () => {
       window.removeEventListener("open-global-collaboration", openCenter);
+      window.removeEventListener("open-global-direct-messages", openMessages);
       window.removeEventListener("open-global-notifications", openLegacyNotifications);
     };
   }, []);
@@ -333,11 +337,11 @@ export function CollaborationCenter() {
   }, [loading, notifications]);
 
   useEffect(() => {
-    const publishUnread = () => window.dispatchEvent(new CustomEvent("collaboration-unread-change", { detail: { count: unreadCount } }));
+    const publishUnread = () => window.dispatchEvent(new CustomEvent("collaboration-unread-change", { detail: { count: unreadCount, directMessageCount: directMessageUnreadCount } }));
     window.addEventListener("collaboration-unread-request", publishUnread);
     publishUnread();
     return () => window.removeEventListener("collaboration-unread-request", publishUnread);
-  }, [unreadCount]);
+  }, [unreadCount, directMessageUnreadCount]);
 
   const markAsRead = async (notification: NotificationRow) => {
     if (notification.is_read) return true;
@@ -678,7 +682,7 @@ export function CollaborationCenter() {
               </div>
               <button
                 type="button"
-                onClick={() => setMessageFloatOpen(false)}
+                onClick={() => { setMessageFloatOpen(false); if (messageReturnFocus.current?.isConnected) messageReturnFocus.current.focus(); messageReturnFocus.current = null; }}
                 className="flex size-11 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="最小化聊天室"
               >
