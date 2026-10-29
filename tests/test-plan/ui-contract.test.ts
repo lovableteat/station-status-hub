@@ -24,9 +24,10 @@ test("renders a platform-sized Test_Plan engineering file workspace", async () =
 });
 
 test("provides spaces, nested folders, breadcrumbs, search, filters, and both views", async () => {
-  const workspace = await source(
-    "src/components/test-plan/TestPlanWorkspace.tsx",
-  );
+  const [workspace, styles] = await Promise.all([
+    source("src/components/test-plan/TestPlanWorkspace.tsx"),
+    source("src/components/test-plan/test-plan.css"),
+  ]);
 
   // Every person is listed directly in the navigation pane (no dropdown), with a type-to-filter box.
   assert.match(workspace, /ownSpaces\.map\(renderSpaceRow\)/);
@@ -47,6 +48,11 @@ test("provides spaces, nested folders, breadcrumbs, search, filters, and both vi
   assert.match(workspace, /aria-expanded=\{isExpanded\}/);
   assert.match(workspace, /收合 \$\{folder\.name\}/);
   assert.match(workspace, /個子資料夾/);
+  assert.match(
+    styles,
+    /\.test-plan-space-list\s*\{[^}]*display:\s*block;[^}]*overflow-y:\s*auto;/s,
+    "the user list scrolls as normal document flow so an open folder tree cannot shrink over the next user",
+  );
 });
 
 test("edits uploaded spreadsheets in place without forcing a download workflow", async () => {
