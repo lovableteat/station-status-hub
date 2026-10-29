@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 (async () => {
-  const bundled = await require('esbuild').build({ entryPoints: ['tests/support/aiWorkspaceFixture.jsx'], bundle: true, write: false, jsx: 'automatic', format: 'iife', platform: 'browser', define: { 'import.meta.env.DEV': 'false' }, plugins: [{ name: 'ai-fixture', setup(build) {
+  const bundled = await require('esbuild').build({ entryPoints: ['tests/support/aiWorkspaceFixture.jsx'], bundle: true, write: false, jsx: 'automatic', format: 'iife', platform: 'browser', define: { 'import.meta.env.DEV': 'false', 'import.meta.env.VITE_REALTIME_COLLABORATION_V2': '"false"' }, plugins: [{ name: 'ai-fixture', setup(build) {
     build.onResolve({ filter: /^@\/(components\/auth\/UserContext|integrations\/supabase\/client)$/ }, () => ({ path: path.resolve('tests/support/aiWorkspaceMock.js') }));
     build.onResolve({ filter: /^@\// }, args => build.resolve(path.resolve('src', args.path.slice(2)), { resolveDir: process.cwd(), kind: args.kind }));
   } }] });

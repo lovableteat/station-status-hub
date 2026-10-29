@@ -1646,6 +1646,9 @@ html { color-scheme: dark; }
 @keyframes platform-chat-halo { 0% { opacity: .9; transform: scale(1); } 60%, 100% { opacity: 0; transform: scale(1.18); } }
 .platform-chat-launcher:active { transform: scale(.97); }
 .platform-chat-launcher:focus-visible { outline-offset: 3px; }
+@media (max-width: 1023px) {
+  body:has([data-ai-chat-shell="viewport-fit"]) [data-chat-launcher="platform"] { display: none; }
+}
 .file-upload-workspace > .test-plan-workspace { height: auto; min-height: 0; flex: 1; border-radius: var(--app-radius-card); }
 @media (prefers-reduced-motion: reduce) { .platform-chat-launcher { transition: none; } .platform-chat-launcher:active { transform: none; } .platform-chat-launcher::after { animation: none; opacity: .6; } }
 body {

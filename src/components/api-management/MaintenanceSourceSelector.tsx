@@ -54,7 +54,7 @@ export function MaintenanceSourceSelector({
   return (
     <section
       data-testid="maintenance-source-selector"
-      className="rounded-lg border border-cyan-300/20 bg-[linear-gradient(110deg,rgba(8,47,73,0.66),rgba(15,23,42,0.9))] px-1.5 py-1 shadow-[0_10px_28px_rgba(2,132,199,0.08)] sm:rounded-xl sm:px-3 sm:py-2"
+      className="px-2 py-1 lg:rounded-xl lg:border lg:border-cyan-300/20 lg:bg-card lg:px-3 lg:py-2"
     >
       <div className="flex min-h-10 items-center gap-2">
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-300/12 text-cyan-100 sm:h-9 sm:w-9">
@@ -91,7 +91,7 @@ export function MaintenanceSourceSelector({
                 className="h-9 w-[88px] shrink-0 justify-between border-cyan-300/25 bg-slate-950/45 px-2 text-[11px] font-bold text-slate-100 hover:bg-slate-800/80 sm:w-[190px] sm:px-3 sm:text-xs"
               >
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <Database className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                  <Database className="hidden h-3.5 w-3.5 shrink-0 text-cyan-300 sm:block" />
                   <span className="truncate sm:hidden">{selectedProjectIds.length} 專案</span>
                   <span className="hidden truncate sm:inline">
                     {selectedNames.length
@@ -179,6 +179,7 @@ export function MaintenanceSourceSelector({
           </Popover>
         ) : null}
 
+        <label className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center">
         <Switch
           data-mobile-ai-source-toggle="true"
           checked={enabled}
@@ -186,6 +187,7 @@ export function MaintenanceSourceSelector({
           aria-describedby="maintenance-source-help"
           aria-label="啟用機台維修紀錄來源"
         />
+        </label>
       </div>
 
       <p

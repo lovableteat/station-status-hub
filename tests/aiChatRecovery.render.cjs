@@ -30,6 +30,17 @@ async function fixture(fetch, available = targets, win = browser(), options = {}
   return {root,rpcCalls,win,draft,send};
 }
 
+test('desktop keeps its send and clear controls outside the lower composer toolbar', async () => {
+  const win = browser();
+  win.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+  const f = await fixture(async () => answer(), targets, win);
+  try {
+    const tools = f.root.root.findByProps({ 'data-ai-composer-toolbar': 'true' });
+    assert.equal(tools.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 0);
+    assert.equal(f.root.root.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 1);
+  } finally { await act(async () => f.root.unmount()); }
+});
+
 test('busy model changes once within the same key and route, double click cannot duplicate a request, subsequent sends honor cooldown', async () => {
   const first=deferred(), requests=[];
   const other={...record,id:'other',api_key:'other-key'};
@@ -41,7 +52,7 @@ test('busy model changes once within the same key and route, double click cannot
     assert.equal(actions.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 1);
     assert.equal(actions.findAll(node => node.type === 'stub' && node.props['aria-label'] === '清空對話').length, 1);
     const tools = f.root.root.findByProps({'data-ai-composer-toolbar':'true'});
-    assert.equal(tools.findAll(node => node.props['aria-label'] === '送出查詢').length, 0);
+    assert.equal(tools.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 1);
     assert.equal(f.send().findAllByType('span').some(node => node.children.includes('送出')), true);
     assert.equal(f.send().props.disabled, true);
     await f.draft('Keep this question');
