@@ -153,7 +153,7 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
         <RequestLink ticket={record.requestTicket} url={record.requestUrl} />
       </div>
 
-      <fieldset disabled={disabled} className="min-w-0 space-y-4 border-t border-border pt-4">
+      <fieldset disabled={disabled} className="material-tracking-fields min-w-0 space-y-4 border-t border-border pt-4">
         <legend className="sr-only">編輯追蹤資料</legend>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5"><Label htmlFor={`${id}-ticket`}>單號</Label><Input id={`${id}-ticket`} className="h-11" value={draft.requestTicket} onChange={(event) => updateDraft({ requestTicket: event.target.value })} placeholder="Excel 單號 / ticket" /></div>
@@ -161,7 +161,7 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
         </div>
         <div className="space-y-1"><div className="flex flex-wrap items-center gap-2"><h4 className="text-sm font-semibold">本次新增紀錄</h4>{draft.status && <Badge variant="outline" className="border-warning/35 text-warning">尚未儲存</Badge>}</div><p className="text-sm text-muted-foreground">選擇本次狀態，再按底部「儲存資料與追蹤」才會更新目前狀態。只修改單號或連結不新增紀錄。</p></div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5"><Label htmlFor={`${id}-status`}>本次狀態</Label><Select disabled={disabled} value={draft.status || "none"} onValueChange={(value) => updateDraft({ status: value === "none" ? "" : value })}><SelectTrigger id={`${id}-status`} className="h-11" aria-invalid={hasUnselectedProgress}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">不新增紀錄（保留目前狀態）</SelectItem>{MATERIAL_TRACKING_STATUS_OPTIONS.map((status) => <SelectItem key={status} value={status}>{statusLabel(status)}{getMaterialTrackingStatusMeaning(status) ? `（${getMaterialTrackingStatusMeaning(status)}）` : ""}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-1.5"><Label htmlFor={`${id}-status`}>本次狀態</Label><Select disabled={disabled} value={draft.status || "none"} onValueChange={(value) => updateDraft({ status: value === "none" ? "" : value })}><SelectTrigger id={`${id}-status`} className="h-11" aria-invalid={hasUnselectedProgress}><SelectValue /></SelectTrigger><SelectContent className="material-tracking-status-menu"><SelectItem value="none">不新增紀錄（保留目前狀態）</SelectItem>{MATERIAL_TRACKING_STATUS_OPTIONS.map((status) => <SelectItem key={status} value={status}>{statusLabel(status)}{getMaterialTrackingStatusMeaning(status) ? `（${getMaterialTrackingStatusMeaning(status)}）` : ""}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-1.5"><Label htmlFor={`${id}-author`}>更新人</Label><Input id={`${id}-author`} className="h-11" value={draft.createdBy || defaultAuthor} onChange={(event) => updateDraft({ createdBy: event.target.value })} placeholder="更新人姓名" /></div>
         </div>
         <div className="space-y-1.5"><Label htmlFor={`${id}-info`}>申請狀態資訊</Label><Input id={`${id}-info`} className="h-11" value={draft.requestInfo} onChange={(event) => updateDraft({ requestInfo: event.target.value })} placeholder="申請狀態或相關連結" /></div>

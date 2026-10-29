@@ -2752,7 +2752,7 @@ export function PendingMaterialsDialog({
     if (exporting || !exportRows.length) return;
     setExporting(true); setExportError("");
     try {
-      await exportPendingMaterialsExcel({ rows: exportRows, workspaceName, exportedBy, scope: [selectedCategory === "all" ? "全部分類" : selectedCategory === "marked" ? "特別標記" : categories.find(category => category.key === selectedCategory)?.label, keyword ? `搜尋：${query.trim()}` : "", includeAlternates ? "含沒有號碼的替代廠商" : "位號及手動申請"].filter(Boolean).join(" · ") });
+      await exportPendingMaterialsExcel({ rows: exportRows, workspaceName, exportedBy, scope: [selectedCategory === "all" ? "全部分類" : selectedCategory === "marked" ? "特別標記" : categories.find(category => category.key === selectedCategory)?.label, keyword ? `搜尋：${query.trim()}` : "", includeAlternates ? "含缺料號的替代廠商" : "位號及手動申請"].filter(Boolean).join(" · ") });
     } catch { setExportError("匯出失敗，請重試。資料未被更動。"); }
     finally { setExporting(false); }
   };
@@ -2786,14 +2786,16 @@ export function PendingMaterialsDialog({
             variant="outline"
             data-testid="pending-include-alternates"
             aria-pressed={includeAlternates}
+            aria-describedby="pending-alternates-help"
             onClick={() => setIncludeAlternates((value) => !value)}
             title="同一個位號裡已有廠商有實體或虛擬料號，但其他廠商什麼號碼都沒有時，把那些廠商也列出來"
             className={cn("h-10 gap-2 px-3 text-sm font-bold", includeAlternates ? "border-warning bg-warning/15 text-warning hover:bg-warning/25 hover:text-warning" : "border-border bg-secondary/60 text-foreground hover:bg-accent")}
           >
             <span className={cn("flex h-4 w-4 flex-none items-center justify-center rounded border", includeAlternates ? "border-warning bg-warning text-warning-foreground" : "border-muted-foreground")} aria-hidden="true">{includeAlternates ? <Check className="h-3 w-3" /> : null}</span>
-            含沒有號碼的替代廠商 <strong className="font-mono">{vendorApplications.length.toLocaleString()}</strong>
+            含缺料號的替代廠商 <span className="text-xs font-normal">勾選後 <strong className="font-mono">{vendorApplications.length.toLocaleString()}</strong> 筆</span>
           </Button>
         </div>
+        <p id="pending-alternates-help" className="text-xs leading-5 text-muted-foreground">例：同一位號 A 廠已有料號、B 廠還沒有；勾選後也會列出 B 廠。數字是整份 BOM 的勾選後總筆數（分類／搜尋前），不是新增筆數。</p>
         {(exportError || ownerDirectory.error) && <p role="alert" className="text-sm text-destructive">{exportError || ownerDirectory.error}</p>}
         <PendingMailDialog groups={mailGroups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
         <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
@@ -2821,7 +2823,7 @@ export function PendingMaterialsDialog({
         {(query.trim() || includeAlternates || selectedCategory !== "all") && <div className="flex flex-wrap items-center gap-2" aria-label="待處理料作用中條件">
           {query.trim() && <Button type="button" variant="outline" size="sm" aria-label="清除待處理料搜尋條件" onClick={() => setQuery("")}>搜尋：{query.trim()}<X className="ml-1 h-3 w-3" aria-hidden="true" /></Button>}
           {selectedCategory !== "all" && <Button type="button" variant="outline" size="sm" aria-label="清除待處理料分類條件" onClick={() => setActiveCategory("all")}>分類：{selectedCategory === "marked" ? "特別標記" : categories.find(category => category.key === selectedCategory)?.label}<X className="ml-1 h-3 w-3" aria-hidden="true" /></Button>}
-          {includeAlternates && <Button type="button" variant="outline" size="sm" aria-label="清除待處理料替代廠商條件" onClick={() => setIncludeAlternates(false)}>含沒有號碼的替代廠商<X className="ml-1 h-3 w-3" aria-hidden="true" /></Button>}
+          {includeAlternates && <Button type="button" variant="outline" size="sm" aria-label="清除待處理料替代廠商條件" onClick={() => setIncludeAlternates(false)}>含缺料號的替代廠商<X className="ml-1 h-3 w-3" aria-hidden="true" /></Button>}
           <Button type="button" variant="ghost" size="sm" onClick={() => { setQuery(""); setActiveCategory("all"); setIncludeAlternates(false); }}>全部清除</Button>
         </div>}
 
