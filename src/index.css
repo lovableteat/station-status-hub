@@ -963,6 +963,47 @@ All colors MUST be HSL for proper theming support.
   font-size: 14px;
 }
 
+.pending-material-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 144px;
+  grid-template-areas: "mark reference reference" "name name name" "category category owner" "warning status status";
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+}
+.pending-material-row > * { order: 0; min-width: 0; }
+.pending-row-mark { grid-area: mark; }
+.pending-row-reference { grid-area: reference; width: auto; }
+.pending-row-category { grid-area: category; width: 100%; }
+.pending-row-name { grid-area: name; overflow-wrap: anywhere; }
+.pending-row-mpn { grid-area: mpn; display: none; }
+.pending-row-manufacturer { grid-area: manufacturer; display: none; }
+.pending-material-row [data-testid="pending-owner-picker"] { grid-area: owner; width: 100%; }
+.pending-row-warning { grid-area: warning; width: 100%; }
+.pending-stale-badge { display: flex; height: 32px; align-items: center; justify-content: center; gap: 4px; border: 1px solid hsl(var(--destructive) / 0.4); border-radius: 6px; background: hsl(var(--destructive) / 0.12); color: hsl(var(--destructive)); }
+.pending-stale-label { display: none; white-space: nowrap; font-size: 11px; }
+.pending-row-status { grid-area: status; justify-self: end; width: 216px; max-width: 100%; }
+.pending-row-status .pending-tracking-button { display: grid; grid-template-columns: minmax(0, 1fr) 76px; }
+@media (min-width: 768px) and (max-width: 1099px) {
+  .pending-material-row { grid-template-areas: "mark reference reference" "name name name" "mpn mpn mpn" "category category owner" "warning status status"; }
+  .pending-row-mpn { display: block; }
+}
+@media (min-width: 1100px) {
+  .pending-material-row {
+    grid-template-columns: 32px 84px 104px minmax(90px, 1fr) 104px 64px 144px 24px 216px;
+    grid-template-areas: "mark reference category name mpn manufacturer owner warning status";
+  }
+  .pending-row-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .pending-row-mpn, .pending-row-manufacturer { display: block; }
+}
+@media (min-width: 1280px) {
+  .pending-material-row { grid-template-columns: 32px 112px 112px minmax(120px, 1fr) 144px 88px 160px 24px 216px; }
+}
+@media (min-width: 1600px) {
+  .pending-material-row { grid-template-columns: 32px 144px 120px minmax(140px, 1fr) 160px 96px 160px 112px 216px; }
+  .pending-stale-label { display: inline; }
+}
+
 .pending-materials-actions .pending-action--export {
   background-color: color-mix(in srgb, hsl(var(--foreground)) 18%, hsl(var(--secondary)));
   border-color: hsl(var(--foreground) / 0.3);
