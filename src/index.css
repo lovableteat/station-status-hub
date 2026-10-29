@@ -934,22 +934,69 @@ All colors MUST be HSL for proper theming support.
     border-color: rgb(96 125 171 / 0.28) !important;
   }
 
-  .material-sheet-theme input::placeholder,
+  .material-sheet-theme input::placeholder { color: #6f819e; }
+
   .material-record-dialog input::placeholder,
   .material-record-dialog textarea::placeholder {
-    color: #6f819e;
+    color: hsl(var(--muted-foreground));
   }
 
   .material-record-dialog :is(input, textarea) {
-    border-color: rgb(96 165 250 / 0.25);
-    background-color: #091426;
-    color: #e8efff;
+    border-color: hsl(var(--input));
+    background-color: hsl(var(--secondary));
+    color: hsl(var(--foreground));
   }
 
   .material-record-dialog :is(input, textarea):disabled {
     cursor: default;
     opacity: 0.82;
   }
+}
+
+.material-record-dialog[data-ui="dialog"] {
+  width: calc(100vw - 32px);
+  max-width: 1800px;
+  height: calc(100dvh - 32px);
+  max-height: 1040px;
+  gap: 14px;
+  padding: 22px;
+  font-size: 14px;
+}
+
+.material-record-dialog .app-dialog-header { flex: 0 0 auto; padding-right: 46px; }
+.material-record-dialog .material-record-scroll { overflow-x: hidden; padding: 0 4px 2px 0; scrollbar-gutter: stable; }
+.material-record-dialog .material-ce-section,
+.material-record-dialog .material-spec-section { padding: 16px; }
+.material-record-dialog .material-ce-fields { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: start; gap: 16px 18px; }
+.material-record-dialog .material-ce-field { min-width: 0; gap: 7px; }
+.material-record-dialog .material-ce-field > :first-child { min-height: 25px; flex-wrap: wrap; font-size: 13px; }
+.material-record-dialog .material-ce-control { min-height: 64px; height: auto; padding: 10px 12px; border-radius: 8px; font-size: 14px; line-height: 1.5; }
+.material-record-dialog textarea.material-ce-control { field-sizing: content; overflow-wrap: anywhere; resize: vertical; }
+.material-record-dialog .material-spec-section { transition: border-color 120ms ease, background-color 120ms ease; }
+.material-record-dialog .material-spec-section[data-drag-active="true"] { border-color: hsl(var(--primary)); background: hsl(var(--primary) / 0.1); outline: 2px dashed hsl(var(--primary)); outline-offset: -6px; }
+.material-record-dialog .material-spec-file { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--background) / 0.4); }
+.material-record-dialog .material-spec-file-open { display: flex; flex: 1 1 280px; min-width: 0; align-items: center; gap: 13px; padding: 4px; border-radius: 6px; text-align: left; }
+.material-record-dialog .material-spec-file-open:hover { background: hsl(var(--primary) / 0.08); }
+.material-record-dialog .material-spec-file-open:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.material-record-dialog .material-spec-file-icon { width: 44px; height: 44px; flex: 0 0 44px; color: hsl(var(--primary)); stroke-width: 1.5; }
+.material-record-dialog .material-spec-file-copy { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.material-record-dialog .material-spec-file-copy strong { overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.material-record-dialog .material-spec-file-copy > span { color: hsl(var(--muted-foreground)); font-size: 12px; }
+.material-record-dialog .material-spec-empty { display: flex; min-height: 82px; align-items: center; justify-content: center; gap: 12px; padding: 16px; border: 1px dashed hsl(var(--border)); border-radius: 8px; color: hsl(var(--muted-foreground)); }
+.material-record-dialog .material-spec-empty svg { width: 24px; height: 24px; flex-shrink: 0; color: hsl(var(--primary)); }
+.material-record-dialog .app-dialog-footer { flex-shrink: 0; }
+
+@media (max-width: 1099px) {
+  .material-record-dialog .material-ce-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 639px) {
+  .material-record-dialog[data-ui="dialog"] { width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); gap: 12px; padding: 16px 12px 12px; border-radius: 16px; }
+  .material-record-dialog .material-ce-fields { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .material-record-dialog .material-ce-section,
+  .material-record-dialog .material-spec-section { padding: 12px; }
+  .material-record-dialog .material-ce-control { font-size: 16px; }
+  .material-record-dialog .app-dialog-footer { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; }
 }
 
 .app-shell {
@@ -1652,15 +1699,13 @@ html { color-scheme: dark; }
   color: hsl(var(--primary-foreground)) !important;
 }
 .material-sheet-theme .material-action-highlight:hover { background: hsl(var(--primary)) !important; }
-.material-ce-table th { white-space: nowrap; }
-.material-ce-table .material-pn-header { background: hsl(var(--primary) / .3); }
-.material-record-dialog .material-ce-table input.material-pn-input {
+.material-record-dialog .material-ce-control.material-pn-input {
   border-color: hsl(var(--primary) / .8) !important;
   background: hsl(var(--primary) / .2) !important;
   color: hsl(var(--foreground)) !important;
   font-weight: 700;
 }
-.material-record-dialog .material-ce-table input.material-pn-missing { border-color: hsl(var(--warning)) !important; }
+.material-record-dialog .material-ce-control.material-pn-missing { border-color: hsl(var(--warning)) !important; }
 .material-table-crosshair [data-crosshair-row] > :is(td, th),
 .material-table-crosshair [data-crosshair-column] { box-shadow: inset 0 0 0 9999px hsl(var(--primary) / .12); }
 .material-table-crosshair [data-crosshair-active] { box-shadow: inset 0 0 0 9999px hsl(var(--primary) / .25); outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
