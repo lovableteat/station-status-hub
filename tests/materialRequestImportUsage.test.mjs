@@ -188,7 +188,7 @@ test("the shared CE example imports four rows and three groups while keeping sou
   assert.equal(record.partUsageStatus, "新設計產品不建議使用-ODM 不建議用料");
   assert.equal(payload.records[0].partUsageStatus, "待確認");
   assert.ok(payload.records.every(item => item.trackingHistory.length === 0));
-  assert.ok(payload.records.every(item => item.trackingStatus === "" && item.trackingNote === "" && item.remark === ""));
+  assert.ok(payload.records.every(item => item.trackingStatus === "" && item.trackingNote === "" && item.remark === "" && item.note === ""));
 
   const dataset = buildMaterialDataset(payload);
   assert.equal(dataset.groups.length, 3);
@@ -196,6 +196,17 @@ test("the shared CE example imports four rows and three groups while keeping sou
   assert.ok(dataset.records.every(item => !item.isApproved), "Approved/Active cannot override a CE usage restriction or 待確認");
   assert.ok(dataset.records[1].searchText.includes("odm 不建議用料"));
   assert.equal(dataset.stats.riskRecords, 4);
+});
+
+test("website Note is never imported from a source workbook", async () => {
+  const payload = await importRows(
+    [...ceHeaders, "Note"],
+    [[...exampleRow({ Name: "匯入測試料件", "Ref Des": "U1", "Manufacturer Part Number": "NOTE-001" }), "這段來源 Note 不可匯入"]],
+  );
+
+  assert.equal(payload.recordCount, 1);
+  assert.equal(payload.records[0].note, "");
+  assert.ok(!buildMaterialDataset(payload).records[0].searchText.includes("這段來源 Note 不可匯入"));
 });
 
 for (const alias of ["新設計使用限制", "零件狀態", "Part Usage Status", "Design Usage Status", "新設計使用狀態"]) {

@@ -30,19 +30,21 @@ const toolbar = slice('data-testid="material-table-toolbar"', 'data-testid="mate
 const filterRow = slice("</ResizableHeader>", "</thead>");
 const COLUMN_KEYS = [
   "item", "name", "qty", "refDes", "mpn", "manufacturer", "sourcingStatus", "virtual", "physical",
-  "partName", "partSpec", "schematicPart", "footprint", "phaseOut", "partUsage", "actions",
+  "partName", "partSpec", "schematicPart", "footprint", "phaseOut", "partUsage", "actions", "note",
 ];
 
-test("the table mirrors the CE workbook: its 14 item columns in workbook order, between the website columns, with no 標記 column", () => {
+test("the table mirrors the CE workbook and keeps the website-only Note column last", () => {
   assert.ok(!presentation.MATERIAL_TABLE_COLUMNS.some((column) => ["marked", "status", "tracking"].includes(column.key)));
-  assert.equal(presentation.MATERIAL_TABLE_COLUMNS.at(-1).label, "狀態追蹤 / 更新");
+  assert.equal(presentation.MATERIAL_TABLE_COLUMNS.at(-2).label, "狀態追蹤 / 更新");
+  assert.equal(presentation.MATERIAL_TABLE_COLUMNS.at(-1).label, "Note");
+  assert.equal(presentation.MATERIAL_TABLE_COLUMNS.at(-1).ceHeader, "");
   assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.map((column) => column.key), COLUMN_KEYS);
   const workbookHeaders = MATERIAL_CE_FIELDS.map((field) => field.header).filter((header) => header !== "Level");
   assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.filter((column) => column.ceHeader).map((column) => column.ceHeader), workbookHeaders);
   presentation.MATERIAL_TABLE_COLUMNS.filter((column) => column.ceHeader).forEach((column) => assert.equal(column.label, column.ceHeader));
   assert.deepEqual(
     presentation.MATERIAL_TABLE_COLUMNS.filter((column) => column.locked).map((column) => column.key),
-    ["name", "actions"],
+    ["name", "actions", "note"],
   );
 });
 
@@ -66,8 +68,8 @@ test("every main-row and alternative-row cell follows the column list and its vi
     assert.match(rowBlock, new RegExp(`data-material-cell="${key}"`));
     assert.match(alternativeBlock, new RegExp(`\\{columns\\.${key} && `), `alternative cell ${key} must be toggleable`);
   }
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 16);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 16);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 17);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 17);
   assert.match(rowBlock, /data-material-cell="actions"[\s\S]*?data-material-cell="tracking"[\s\S]*?<TrackingHistoryCell/, "tracking lives inside the sticky update cell");
   assert.match(source, /data-testid="material-column-visibility"/);
   assert.match(source, /HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1"/);

@@ -50,6 +50,8 @@ export interface MaterialWorkbookRecord {
   specDocuments?: MaterialSpecDocument[];
   requestOwnerId?: string;
   requestOwnerName?: string;
+  /** Website-only free-form record. Never populated from an imported workbook; included in website exports. */
+  note?: string;
   /** 待處理料 category chosen by hand when the Ref Des prefix misleads; absent means "by Ref Des". */
   pendingCategory?: "connector" | "ic" | "rlc" | "other";
 }
@@ -704,6 +706,7 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
       raw.virtualAlternative,
       trackingStatus,
       raw.requestOwnerName,
+      raw.note,
       raw.trackingNote,
       raw.requestTicket,
       raw.requestUrl,
@@ -1171,6 +1174,9 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
       schematicPart: normalizeText(getFieldValue(row, fields, "schematicPart")),
       ...(fields.has("symbolStatus") ? { symbolStatus: normalizeText(getFieldValue(row, fields, "symbolStatus")) } : {}),
       pcbFootprint: normalizeText(getFieldValue(row, fields, "pcbFootprint")),
+      // Note is maintained only inside the website. Even if an uploaded workbook
+      // happens to contain a column named Note, a new import always starts blank.
+      note: "",
     });
   }
 

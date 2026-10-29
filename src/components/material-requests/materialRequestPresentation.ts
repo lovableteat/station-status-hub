@@ -173,6 +173,7 @@ export const MATERIAL_TABLE_COLUMNS = [
   { key: "phaseOut", label: "phase out", locked: false, ceHeader: "phase out" },
   { key: "partUsage", label: "零件狀態", locked: false, ceHeader: "零件狀態" },
   { key: "actions", label: "狀態追蹤 / 更新", locked: true, ceHeader: "" },
+  { key: "note", label: "Note", locked: true, ceHeader: "" },
 ] as const;
 
 export type MaterialTableColumnKey = (typeof MATERIAL_TABLE_COLUMNS)[number]["key"];

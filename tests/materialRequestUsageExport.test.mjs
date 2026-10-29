@@ -47,6 +47,7 @@ function reportRow(overrides = {}) {
     internalPartNumber: "TEST-0001",
     partName: "公司實體電阻料名",
     specification: "10 kΩ",
+    note: "網站內部 Note",
     images: [],
     ...overrides,
   };
@@ -124,7 +125,7 @@ function columnFor(sheet, header) {
   return index;
 }
 
-const EXPECTED_HEADERS = ["Item", "Name", "Qty", "Ref Des", "Manufacturer Part Number", "Manufacturer", "Sourcing Status", "虛擬料號", "實體料號", "Part Name", "Part Spec", "Schematic_Part", "PCB_Footprint", "phase out", "零件狀態", "狀態追蹤", "追蹤內容", "單號", "單號連結", "申請資訊", "最後更新人", "最後追蹤時間", "模組", "備註", "SPEC 文件", "圖片"];
+const EXPECTED_HEADERS = ["Item", "Name", "Qty", "Ref Des", "Manufacturer Part Number", "Manufacturer", "Sourcing Status", "虛擬料號", "實體料號", "Part Name", "Part Spec", "Schematic_Part", "PCB_Footprint", "phase out", "零件狀態", "狀態追蹤", "追蹤內容", "單號", "單號連結", "申請資訊", "最後更新人", "最後追蹤時間", "模組", "備註", "SPEC 文件", "圖片", "Note"];
 
 test("Excel mirrors the 料號申請 table: CE workbook columns first, then the website tracking columns", async () => {
   const row = reportRow({ remark: "待核對", specDocumentName: "spec.pdf", trackingUpdatedAt: "2026-10-20T01:02:03.000Z" });
@@ -153,13 +154,14 @@ test("Excel mirrors the 料號申請 table: CE workbook columns first, then the 
   assert.equal(values.getCell(columnFor(sheet, "模組")).value, "主板");
   assert.equal(values.getCell(columnFor(sheet, "備註")).value, "待核對");
   assert.equal(values.getCell(columnFor(sheet, "SPEC 文件")).value, "spec.pdf");
+  assert.equal(values.getCell(columnFor(sheet, "Note")).value, "網站內部 Note");
   assert.ok(!sheet.getRow(11).values.includes("標記"));
   assert.ok(!sheet.getRow(11).values.includes("建料狀態"));
   assert.ok(!sheet.getRow(11).values.includes("舊檔第二 MPN"));
   assert.ok(!sheet.getRow(12).values.includes("TEST-ALT"));
   assert.equal(sheet.getRow(11).getCell(columnFor(sheet, "零件狀態")).note?.texts?.[0]?.text ?? sheet.getRow(11).getCell(columnFor(sheet, "零件狀態")).note, "新設計使用限制；不明填待確認");
-  assert.equal(sheet.autoFilter, "A11:Z11");
-  assert.equal(sheet.getCell("Z1").master.address, "A1");
+  assert.equal(sheet.autoFilter, "A11:AA11");
+  assert.equal(sheet.getCell("AA1").master.address, "A1");
   assert.equal(sheet.views[0].ySplit, 11);
   assert.equal(sheet.views[0].xSplit, 2);
 });
@@ -167,7 +169,7 @@ test("Excel mirrors the 料號申請 table: CE workbook columns first, then the 
 test("Excel insertion preserves widths, status alignment and image placement", async () => {
   const row = reportRow({ images: [{ id: "image-1", name: "測試圖片.jpg", mimeType: "image/jpeg", dataUrl: "data:image/jpeg;base64,/9j/2Q==" }] });
   const sheet = await exportedSheet([row], { includeImage: true });
-  assert.deepEqual(sheet.columns.map((column) => column.width ?? 9), [8, 34, 7, 22, 28, 24, 16, 16, 16, 24, 30, 20, 20, 14, 30, 12, 34, 16, 28, 24, 14, 18, 16, 28, 24, 18]);
+  assert.deepEqual(sheet.columns.map((column) => column.width ?? 9), [8, 34, 7, 22, 28, 24, 16, 16, 16, 24, 30, 20, 20, 14, 30, 12, 34, 16, 28, 24, 14, 18, 16, 28, 24, 18, 36]);
   for (const header of ["Item", "Qty", "phase out", "零件狀態", "狀態追蹤"]) {
     assert.equal(sheet.getRow(12).getCell(columnFor(sheet, header)).alignment.horizontal, "center");
   }
@@ -205,7 +207,7 @@ for (const format of ["html", "zip"]) {
     const html = format === "zip"
       ? await (await JSZip.loadAsync(await blob.arrayBuffer())).file("料號申請篩選報表.html").async("string")
       : await blob.text();
-    assert.match(html, /<thead><tr><th>Item<\/th><th>Name<\/th><th>Qty<\/th><th>Ref Des<\/th><th>Manufacturer Part Number<\/th><th>Manufacturer<\/th><th>Sourcing Status<\/th><th>虛擬料號<\/th><th>實體料號<\/th><th>Part Name<\/th><th>Part Spec<\/th><th>Schematic_Part<\/th><th>PCB_Footprint<\/th><th>phase out<\/th><th>零件狀態<\/th><th>狀態追蹤<\/th><th>單號<\/th><th>備註<\/th><th>SPEC 文件<\/th><th>圖片<\/th><\/tr><\/thead>/);
+    assert.match(html, /<thead><tr><th>Item<\/th><th>Name<\/th><th>Qty<\/th><th>Ref Des<\/th><th>Manufacturer Part Number<\/th><th>Manufacturer<\/th><th>Sourcing Status<\/th><th>虛擬料號<\/th><th>實體料號<\/th><th>Part Name<\/th><th>Part Spec<\/th><th>Schematic_Part<\/th><th>PCB_Footprint<\/th><th>phase out<\/th><th>零件狀態<\/th><th>狀態追蹤<\/th><th>單號<\/th><th>備註<\/th><th>SPEC 文件<\/th><th>圖片<\/th><th>Note<\/th><\/tr><\/thead>/);
     assert.match(html, /<td>RES &lt;name&gt;<\/td>/);
     assert.match(html, /<td>DNP &lt;script&gt;alert\(&quot;usage&quot;\)&lt;\/script&gt; &amp; &#039;quoted&#039;<\/td>/);
     assert.match(html, /<td>CE &lt;Approved&gt; &amp; sourcing<\/td>/);
@@ -216,7 +218,7 @@ for (const format of ["html", "zip"]) {
     assert.doesNotMatch(html, /<script>alert\("phase"\)<\/script>|<script>alert\("usage"\)<\/script>|<th>標記<\/th>|<th>建料狀態<\/th>|TEST-ALT/);
     const headerCount = (html.match(/<th>/g) ?? []).length;
     const body = html.match(/<tbody>([\s\S]*?)<\/tbody>/)[1];
-    assert.equal(headerCount, 20);
+    assert.equal(headerCount, 21);
     assert.equal((body.match(/<td(?:\s[^>]*)?>/g) ?? []).length, headerCount);
   });
 }
