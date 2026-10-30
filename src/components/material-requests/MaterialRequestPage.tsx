@@ -142,7 +142,8 @@ import { MaterialTrackingEditor } from "./MaterialTrackingEditor";
 import { applyMaterialTrackingDraft, createMaterialTrackingDraft } from "./materialTrackingDraft";
 import { MATERIAL_SPEC_ACCEPT, MATERIAL_SPEC_MAX_BYTES, createMaterialSpecUrl, formatMaterialSpecSize, uploadMaterialSpecDocuments } from "./materialSpecDocuments";
 import { getMaterialSpecDocuments, withMaterialSpecDocuments } from "./materialAttachments";
-import { getMaterialTrackingStatusMeaning, isExplicitMaterialApplication, materialTrackingStatusTone } from "./materialTrackingStatus";
+import { getMaterialTrackingStatusMeaning, isExplicitMaterialApplication, MATERIAL_TRACKING_STATUS_OPTIONS, materialTrackingStatusTone, materialTrackingStatusPresentation, normalizeMaterialTrackingStatus } from "./materialTrackingStatus";
+import { restoreMaterialColumnSort, sortMaterialTableRows, type MaterialColumnSort } from "./materialTableSort";
 import { MaterialRequestOwnerPicker, type MaterialRequestOwner } from "./MaterialRequestOwnerPicker";
 import { useMaterialRequestOwners } from "./useMaterialRequestOwners";
 import { exportPendingMaterialsExcel } from "./pendingMaterialsExport";
@@ -297,6 +298,10 @@ const EMPTY_COLUMN_FILTERS: MaterialColumnFilters = {
 };
 
 const FILTER_KEYS = Object.keys(EMPTY_COLUMN_FILTERS) as ColumnFilterKey[];
+const COLUMN_SORT_OPTIONS = FILTER_KEYS.flatMap(key => (["asc", "desc"] as const).map(direction => ({
+  value: `column:${key}:${direction}`,
+  label: `${COLUMN_FILTER_LABELS[key]} ${direction === "asc" ? "A → Z" : "Z → A"}`,
+})));
 
 const DEFAULT_BOM_ID = "bom:申請carrier料.xlsx";
 const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
@@ -308,7 +313,6 @@ const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const VIEW_STATE_KEY_PREFIX = "station-status-hub:material-view:v1:";
 const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v15";
 const HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1";
-const TRACKING_STATUS_OPTIONS = ["新增追蹤", "處理中", "已完成"] as const;
 const MAX_BOM_TRACKER_PAGES = 500;
 const BOM_PAGE_STATUS_OPTIONS: Array<{
   value: BomPageTrackerStatus;
@@ -1394,63 +1398,12 @@ function getCollaborationStatusMeta(status: CollaborationStatus) {
 }
 
 function getTrackingStatusTone(status: string) {
-  const normalized = status.trim().toLowerCase();
-  if (!normalized) return CHIP_TONES.neutral;
-  if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return CHIP_TONES.success;
-  }
-  if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return CHIP_TONES.warning;
-  }
-  if (["無狀態", "新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return CHIP_TONES.neutral;
-  }
-  return CHIP_TONES.primary;
+  return materialTrackingStatusTone(status);
 }
 
 function getTrackingStatusCardTone(status: string) {
-  const normalized = status.trim().toLowerCase();
-  const neutral = {
-    wrapper: "border-border bg-secondary/60 hover:bg-secondary",
-    accent: "bg-muted-foreground/60",
-    note: "bg-background/40 text-foreground",
-    meta: "text-muted-foreground",
-    icon: "text-muted-foreground",
-  };
-
-  if (!normalized) return neutral;
-
-  if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return {
-      wrapper: "border-success/30 bg-success/10 hover:bg-success/15",
-      accent: "bg-success",
-      note: "bg-background/40 text-foreground",
-      meta: "text-success",
-      icon: "text-success",
-    };
-  }
-
-  if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return {
-      wrapper: "border-warning/30 bg-warning/10 hover:bg-warning/15",
-      accent: "bg-warning",
-      note: "bg-background/40 text-foreground",
-      meta: "text-warning",
-      icon: "text-warning",
-    };
-  }
-
-  if (["無狀態", "新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return neutral;
-  }
-
-  return {
-    wrapper: "border-primary/30 bg-primary/10 hover:bg-primary/15",
-    accent: "bg-primary",
-    note: "bg-background/40 text-foreground",
-    meta: "text-primary",
-    icon: "text-primary",
-  };
+  const tone = materialTrackingStatusPresentation(status);
+  return { wrapper: tone.surface, icon: tone.text };
 }
 
 
@@ -1493,8 +1446,7 @@ function inferFilterOptionTone(value: string): ExcelFilterTone {
 }
 
 function getTrackingStatusDisplayLabel(status: string) {
-  const workflowStatus = normalizeTrackingWorkflowStatus(status);
-  return workflowStatus === "新增追蹤" ? "無狀態" : workflowStatus;
+  return normalizeMaterialTrackingStatus(status);
 }
 
 function buildExcelFilterOptions(valueGroups: string[][]) {
@@ -1518,21 +1470,7 @@ function buildExcelFilterOptions(valueGroups: string[][]) {
 }
 
 function normalizeTrackingWorkflowStatus(status: string) {
-  const normalized = status.trim().toLowerCase();
-
-  if (["完成", "已完成", "ok", "approved", "完成申請", "結案"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "已完成" as const;
-  }
-
-  if (["處理中", "進行", "progress", "working", "wip"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "處理中" as const;
-  }
-
-  if (["無狀態", "新增追蹤", "待", "申請", "確認", "排程", "追蹤", "pending"].some((keyword) => normalized.includes(keyword.toLowerCase()))) {
-    return "新增追蹤" as const;
-  }
-
-  return "新增追蹤" as const;
+  return normalizeMaterialTrackingStatus(status);
 }
 
 function getTrackingWorkflowStatus(record: MaterialRecord) {
@@ -1544,7 +1482,7 @@ function getTrackingWorkflowStatus(record: MaterialRecord) {
       || latestEntry?.requestInfo?.trim()
   );
 
-  return workflowStatus === "新增追蹤" && hasImportedStatusContent ? "處理中" : workflowStatus;
+  return !(latestEntry?.status || record.trackingStatus)?.trim() && hasImportedStatusContent ? "處理中" : workflowStatus;
 }
 
 function normalizeRequestUrl(value: string) {
@@ -1597,16 +1535,14 @@ function workspaceHasTrackingActivity(workspace: BomWorkspace) {
 }
 
 function buildTrackingStatusFilterOptions(valueGroups: string[][]) {
-  const counter = new Map<(typeof TRACKING_STATUS_OPTIONS)[number], number>(
-    TRACKING_STATUS_OPTIONS.map((status) => [status, 0]),
-  );
+  const counter = new Map<string, number>(MATERIAL_TRACKING_STATUS_OPTIONS.map((status) => [status, 0]));
 
   valueGroups.forEach((values) => {
     const status = normalizeTrackingWorkflowStatus(values[0] ?? "");
     counter.set(status, (counter.get(status) ?? 0) + 1);
   });
 
-  return TRACKING_STATUS_OPTIONS
+  return [...counter.keys()]
     .filter((status) => (counter.get(status) ?? 0) > 0)
     .map((status) => ({
       label: getTrackingStatusDisplayLabel(status),
@@ -1667,17 +1603,22 @@ function ExcelFilterPopover({
   label,
   selectedValues,
   onSelectedValuesChange,
+  activeSort,
+  onSortChange,
 }: {
   filterKey: ColumnFilterKey;
   getOptions: (key: ColumnFilterKey) => ExcelFilterOption[];
   label: string;
   selectedValues: ColumnFilterSelection;
   onSelectedValuesChange: (values: ColumnFilterSelection) => void;
+  activeSort: MaterialColumnSort<ColumnFilterKey> | null;
+  onSortChange: (sort: MaterialColumnSort<ColumnFilterKey>) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [isPanelReady, setIsPanelReady] = useState(false);
   const [options, setOptions] = useState<ExcelFilterOption[]>([]);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const isSorted = activeSort?.key === filterKey;
+  const sortDirection = isSorted ? activeSort.direction : "asc";
   const [searchValue, setSearchValue] = useState("");
   const [scrollTop, setScrollTop] = useState(0);
   const deferredSearchValue = useDeferredValue(searchValue);
@@ -1765,10 +1706,12 @@ function ExcelFilterPopover({
               : "border-primary/45 bg-primary/15 text-foreground",
           )}
           title={selected === null ? `篩選${label}` : `${label}：已選 ${selected.length} 項`}
+          aria-label={`篩選${label}${isSorted ? `，${sortDirection === "asc" ? "A 到 Z" : "Z 到 A"}排序` : ""}`}
         >
           <span className="inline-flex min-w-0 items-center gap-1.5">
             <Filter className={cn("h-3.5 w-3.5 flex-none", selected === null ? "text-muted-foreground" : "text-primary")} />
             <span className="truncate">{label}</span>
+            {isSorted && <span className="shrink-0 text-primary">{sortDirection === "asc" ? "↑" : "↓"}</span>}
           </span>
           {selected !== null && (
             <span className="ml-1 flex-none rounded bg-primary/20 px-1.5 text-[10px] leading-4 text-primary">
@@ -1792,15 +1735,11 @@ function ExcelFilterPopover({
           <div className="flex items-center gap-2 px-1">
             <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{label}</p>
             <span className="font-mono text-[11px] text-muted-foreground">{appliedCount}/{options.length}</span>
-            <button
-              type="button"
-              onClick={() => setSortDirection((current) => (current === "asc" ? "desc" : "asc"))}
-              aria-label={sortDirection === "asc" ? "改為 Z 到 A 排序" : "改為 A 到 Z 排序"}
-              title={sortDirection === "asc" ? "目前 A → Z，點擊改為 Z → A" : "目前 Z → A，點擊改為 A → Z"}
-              className="rounded-md border border-border bg-secondary/60 px-1.5 font-mono text-[11px] leading-5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-            >
-              {sortDirection === "asc" ? "A→Z" : "Z→A"}
-            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5" role="group" aria-label={`${label}表格排序`}>
+            {(["asc", "desc"] as const).map(direction => <button key={direction} type="button" onClick={() => onSortChange({ key: filterKey, direction })} aria-pressed={isSorted && sortDirection === direction} className={cn("h-8 rounded-md border text-xs font-semibold", isSorted && sortDirection === direction ? "border-primary/60 bg-primary/20 text-primary" : "border-border bg-secondary/60 text-foreground hover:border-primary/50")}>
+              {direction === "asc" ? "A → Z" : "Z → A"}
+            </button>)}
           </div>
 
           <div className="relative">
@@ -1869,12 +1808,14 @@ function ExcelFilterPopover({
                           <span
                             className={cn(
                               "h-2 w-2 flex-none rounded-full",
+                              filterKey === "trackingStatus" && materialTrackingStatusPresentation(option.value).text,
                               tone === "emerald" && "bg-success",
                               tone === "amber" && "bg-warning",
                               tone === "sky" && "bg-primary",
                               tone === "rose" && "bg-destructive",
                               tone === "slate" && "bg-muted-foreground/60",
                             )}
+                            style={filterKey === "trackingStatus" ? { backgroundColor: "currentColor" } : undefined}
                           />
                           <span className="min-w-0 flex-1 truncate">{option.label}</span>
                           <span className="rounded-full bg-secondary px-2 text-[11px] leading-5 text-muted-foreground">{option.count}</span>
@@ -1913,6 +1854,7 @@ function ResizableHeader({
   resizable = true,
   onResize,
   className,
+  sortDirection,
 }: {
   children: ReactNode;
   width: number;
@@ -1921,6 +1863,7 @@ function ResizableHeader({
   resizable?: boolean;
   onResize: (width: number) => void;
   className?: string;
+  sortDirection?: "asc" | "desc";
 }) {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -1945,6 +1888,7 @@ function ResizableHeader({
 
   return (
     <th
+      aria-sort={sortDirection ? sortDirection === "asc" ? "ascending" : "descending" : undefined}
       className={cn("relative border-r border-blue-300/20 px-2 py-2", className)}
       style={{ width, minWidth, maxWidth: width }}
     >
@@ -3118,6 +3062,7 @@ interface MaterialRowActions {
 }
 
 interface VisibleGroupRow {
+  standalone?: boolean;
   group: MaterialGroup;
   matchingRecords: MaterialRecord[];
   primaryAlternative: MaterialRecord;
@@ -3242,7 +3187,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   canEditNote: boolean;
   actions: MaterialRowActions;
 }) {
-  const { group, matchingRecords, primaryAlternative, virtualAlternativeRecord, secondaryAlternatives } = row;
+  const { group, matchingRecords, primaryAlternative, virtualAlternativeRecord, secondaryAlternatives, standalone } = row;
+  const isAlternateRow = Boolean(standalone && primaryAlternative.id !== group.primaryRecord.id);
   const mustApply = group.requiresApplication;
   const primaryReady = Boolean(primaryAlternative?.isPreferred && !primaryAlternative.isRisk);
   const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred && !record.isRisk).length;
@@ -3257,12 +3203,12 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   // The main row shows the same Excel columns as the CE workbook, read from the
   // first matching record of the group (the alternatives expand below it).
   const statusRecord = primaryAlternative ?? group.primaryRecord;
-  const partSpec = statusRecord.partSpec || group.partSpec || "";
+  const partSpec = standalone ? statusRecord.partSpec || "" : statusRecord.partSpec || group.partSpec || "";
   const valueClassName = primaryReady ? "text-emerald-100" : mustApply ? "text-amber-100" : "text-cyan-100";
   const iconClassName = primaryReady ? "text-emerald-300" : mustApply ? "text-amber-300" : "text-cyan-300";
-  const mainRowStyle = buildTableRowStyle(colorTheme.primary, {
-    backgroundAlpha: mustApply ? 0.56 : primaryReady ? 0.52 : 0.48,
-    hoverAlpha: mustApply ? 0.64 : primaryReady ? 0.6 : 0.56,
+  const mainRowStyle = buildTableRowStyle(isAlternateRow ? colorTheme.alternative : colorTheme.primary, {
+    backgroundAlpha: isAlternateRow ? 0.18 : mustApply ? 0.56 : primaryReady ? 0.52 : 0.48,
+    hoverAlpha: isAlternateRow ? 0.26 : mustApply ? 0.64 : primaryReady ? 0.6 : 0.56,
     accentAlpha: 0.95,
   });
   const updateTitle = latestRecordUpdate
@@ -3273,7 +3219,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   return (
     <tbody>
       <tr
-        data-material-kind="primary"
+        data-material-kind={isAlternateRow ? "alternative" : "primary"}
+        data-record-id={primaryAlternative.id}
         onClick={() => hasAlternatives && actions.toggleExpanded(group.key)}
         style={mainRowStyle}
         className={cn(
@@ -3283,8 +3230,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         )}
       >
         {columns.item && (
-          <td data-material-cell="item" className={cn(MATERIAL_CELL_CLASS, "text-center font-mono text-[13px] font-black text-slate-100")}>
-            {itemValue}
+          <td data-material-cell="item" aria-label={isAlternateRow ? `主料 ${itemValue} 的替代料` : undefined} className={cn(MATERIAL_CELL_CLASS, "text-center font-mono text-[13px] font-black text-slate-100")}>
+            {!isAlternateRow && itemValue}
           </td>
         )}
         {columns.name && (
@@ -3317,7 +3264,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                   assemblyName={group.assemblyName || ""}
                   manufacturer={primaryAlternative?.manufacturer || group.primaryRecord.manufacturer || ""}
                   mpnValues={materialMpnValues}
-                  name={group.name || ""}
+                  name={(standalone ? statusRecord.name : group.name) || ""}
                   qty={group.qty}
                   refValues={materialRefValues}
                 />
@@ -3754,6 +3701,23 @@ export function MaterialRequestPage() {
   const [columnFilters, setColumnFilters] = useState<MaterialColumnFilters>(EMPTY_COLUMN_FILTERS);
   const [availability, setAvailability] = useState<AvailabilityFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("reference");
+  const [columnSort, setColumnSort] = useState<MaterialColumnSort<ColumnFilterKey> | null>(null);
+  const sortLabel = columnSort ? `${COLUMN_FILTER_LABELS[columnSort.key]} ${columnSort.direction === "asc" ? "A → Z" : "Z → A"}` : SORT_MODE_LABELS[sortMode];
+  const sortSelectValue = columnSort ? `column:${columnSort.key}:${columnSort.direction}` : sortMode;
+  const selectTableSort = (value: string) => {
+    if (value.startsWith("column:")) {
+      const [, key, direction] = value.split(":");
+      setColumnSort(restoreMaterialColumnSort({ key, direction }, FILTER_KEYS));
+    } else if (value in SORT_MODE_LABELS) {
+      setSortMode(value as SortMode);
+      setColumnSort(null);
+    }
+    setPage(1);
+  };
+  const sortSelectItems = <>
+    <SelectGroup><SelectLabel>主料排序</SelectLabel>{Object.entries(SORT_MODE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup>
+    <SelectGroup><SelectLabel>全部廠商明細排序</SelectLabel>{COLUMN_SORT_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectGroup>
+  </>;
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -4204,6 +4168,7 @@ export function MaterialRequestPage() {
           query: string;
           searchColumn: ColumnFilterKey | "all";
           sortMode: SortMode;
+          columnSort: MaterialColumnSort<ColumnFilterKey>;
         }>;
         const restoredQuery = typeof parsed.query === "string" ? parsed.query : "";
         setQuery(restoredQuery);
@@ -4224,11 +4189,13 @@ export function MaterialRequestPage() {
           setAvailability(parsed.availability);
         }
         if (parsed.sortMode && parsed.sortMode in SORT_MODE_LABELS) setSortMode(parsed.sortMode);
+        setColumnSort(restoreMaterialColumnSort(parsed.columnSort, FILTER_KEYS));
         if (PAGE_SIZE_OPTIONS.includes(Number(parsed.pageSize))) setPageSize(Number(parsed.pageSize));
         if (Number.isFinite(parsed.page) && Number(parsed.page) > 0) setPage(Math.trunc(Number(parsed.page)));
-      }
+      } else setColumnSort(null);
     } catch {
       // Invalid per-user view state must never block the shared production data.
+      setColumnSort(null);
     } finally {
       loadedViewStateKeyRef.current = key;
     }
@@ -4248,6 +4215,7 @@ export function MaterialRequestPage() {
           query,
           searchColumn,
           sortMode,
+          columnSort,
         }));
       } catch {
         // View preferences are optional; shared BOM data is unaffected.
@@ -4255,7 +4223,7 @@ export function MaterialRequestPage() {
     }, 250);
 
     return () => window.clearTimeout(timerId);
-  }, [activeBomId, availability, columnFilters, page, pageSize, query, searchColumn, sortMode, user?.userId]);
+  }, [activeBomId, availability, columnFilters, columnSort, page, pageSize, query, searchColumn, sortMode, user?.userId]);
 
   useEffect(() => {
     setMarkedGroupKeys(loadMarkedGroups(activeBomId));
@@ -4573,6 +4541,15 @@ export function MaterialRequestPage() {
     });
   }, [getMatchingRecords, groupRuntimeIndex.uniqueMpnCountByGroup, searchAvailabilityGroups, sortMode]);
 
+  // Column sorting is Excel-style: vendor rows from different parts must be able
+  // to sit together. Keeping alternates nested would break Manufacturer order.
+  const orderedRecordRows = useMemo(() => {
+    const rows = filteredGroups.flatMap((group, groupIndex) => getMatchingRecords(group).map(record => ({ group, record, groupIndex })));
+    if (!columnSort) return rows;
+    return sortMaterialTableRows(rows, columnSort.direction, ({ group, record }) =>
+      columnSort.key === "material" ? record.name || group.name : getRecordColumnValues(record, group, columnSort.key)[0]);
+  }, [columnSort, filteredGroups, getMatchingRecords]);
+
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: string; label: string }> = [];
 
@@ -4595,7 +4572,7 @@ export function MaterialRequestPage() {
   }, [availability, columnFilters, query, searchColumn, showMarkedOnly]);
 
   const totalPages = isFullDatasetLoaded
-    ? Math.max(1, Math.ceil(filteredGroups.length / pageSize))
+    ? Math.max(1, Math.ceil((columnSort ? orderedRecordRows.length : filteredGroups.length) / pageSize))
     : 1;
   const noAlternativeCount = useMemo(
     () => dataset.groups.filter(hasNoAlternative).length,
@@ -4670,8 +4647,10 @@ export function MaterialRequestPage() {
   }, [filteredGroups, isFullDatasetLoaded, page, pageSize]);
 
   const visibleGroupRows = useMemo(
-    () => visibleGroups.map((group) => {
-      const matchingRecords = getMatchingRecords(group);
+    () => (columnSort
+      ? orderedRecordRows.slice(isFullDatasetLoaded ? (page - 1) * pageSize : 0, (isFullDatasetLoaded ? (page - 1) * pageSize : 0) + pageSize)
+      : visibleGroups.map(group => ({ group, record: null }))).map(({ group, record }) => {
+      const matchingRecords = record ? [record] : getMatchingRecords(group);
       const primaryAlternative = matchingRecords[0] ?? group.primaryRecord;
       const virtualAlternativeRecord = getBestVirtualAlternativeRecord(
         matchingRecords.length > 0 ? matchingRecords : group.records,
@@ -4681,6 +4660,7 @@ export function MaterialRequestPage() {
       const trackingRecord = getBestTrackingRecord(matchingRecords.length > 0 ? matchingRecords : group.records, primaryAlternative);
 
       return {
+        standalone: Boolean(record),
         group,
         matchingRecords,
         primaryAlternative,
@@ -4690,12 +4670,12 @@ export function MaterialRequestPage() {
         uniqueMpnCount: getUniqueMpnCountForRecords(matchingRecords),
       };
     }),
-    [getMatchingRecords, visibleGroups],
+    [columnSort, getMatchingRecords, isFullDatasetLoaded, orderedRecordRows, page, pageSize, visibleGroups],
   );
 
   useEffect(() => {
     setPage(1);
-  }, [availability, columnFilters, deferredQuery, pageSize, showMarkedOnly, sortMode]);
+  }, [availability, columnFilters, columnSort, deferredQuery, pageSize, showMarkedOnly, sortMode]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -5565,8 +5545,7 @@ export function MaterialRequestPage() {
   };
 
   const createExportSnapshot = (openDialog = true) => {
-    const rows = filteredGroups.flatMap((group, groupIndex) =>
-      getMatchingRecords(group).map((record) => {
+    const rows = orderedRecordRows.map(({ group, record, groupIndex }) => {
         const latestTrackingEntry = getLatestTrackingEntry(record);
         const requestMeta = getTrackingRequestMeta(record);
         const images = Array.from(
@@ -5612,8 +5591,7 @@ export function MaterialRequestPage() {
           trackingUpdatedAt: latestTrackingEntry?.createdAt ?? "",
           tx: record.virtualAlternative ?? "",
         };
-      }),
-    );
+    });
 
     if (!rows.length) {
       toast({ title: "沒有可匯出的資料", description: "請調整搜尋或篩選條件後再試。", variant: "destructive" });
@@ -5634,7 +5612,7 @@ export function MaterialRequestPage() {
       filteredGroupCount: filteredGroups.length,
       filterSummary: [
         ...(activeFilterLabels.length > 0 ? activeFilterLabels : ["全部資料"]),
-        `排序：${SORT_MODE_LABELS[sortMode]}`,
+        `排序：${sortLabel}`,
       ],
       id: typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `material-export-${Date.now()}`,
       originalGroupCount: dataset.stats.totalGroups,
@@ -5754,6 +5732,7 @@ export function MaterialRequestPage() {
     setAvailability("all");
     setShowMarkedOnly(false);
     setSortMode("reference");
+    setColumnSort(null);
     setExpandedKey(null);
   };
 
@@ -6045,12 +6024,12 @@ export function MaterialRequestPage() {
           <details data-mobile-material-tools="true" className="group rounded-xl border border-slate-600/60 bg-slate-950/25 [&_summary::-webkit-details-marker]:hidden">
             <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-sm font-black text-slate-200">
               <span className="flex min-w-0 items-center gap-2"><Layers3 className="h-4 w-4 text-violet-200" /><span className="truncate">排序與工具</span></span>
-              <span className="flex items-center gap-2 text-[11px] text-slate-400">{SORT_MODE_LABELS[sortMode]}<ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></span>
+              <span className="flex items-center gap-2 text-[11px] text-slate-400">{sortLabel}<ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></span>
             </summary>
             <div className="grid grid-cols-2 gap-2 border-t border-white/8 p-2.5">
-              <Select value={sortMode} onValueChange={(value) => { setSortMode(value as SortMode); setPage(1); }}>
+              <Select value={sortSelectValue} onValueChange={selectTableSort}>
                 <SelectTrigger aria-label="料號排序" className="col-span-2 h-11 rounded-xl border-slate-600/70 bg-[#071522] text-sm text-slate-100"><SelectValue /></SelectTrigger>
-                <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">{Object.entries(SORT_MODE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+                <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">{sortSelectItems}</SelectContent>
               </Select>
               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
               <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
@@ -6334,16 +6313,12 @@ export function MaterialRequestPage() {
               <button type="button" onClick={clearFilters} aria-pressed={availability === "all" && !showMarkedOnly} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "all" ? "border-sky-300/34 bg-sky-400/18 text-sky-50" : "border-slate-500/28 bg-slate-900/42 text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-sky-100")}>主料 <strong className="ml-1">{dataset.stats.totalGroups.toLocaleString()}</strong></button>
               <button type="button" onClick={() => applyAvailabilityFilter("required")} aria-pressed={availability === "required"} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "required" ? "border-amber-300/50 bg-amber-400/20 text-amber-50" : "border-amber-300/28 bg-amber-400/10 text-amber-100 hover:bg-amber-400/18 hover:text-amber-50")}>料號待補 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
             </div>
-            <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-              <SelectTrigger aria-label="排序" className="h-9 w-32 border-[#2a526f] bg-[#071522] text-xs text-slate-200">
-                <SelectValue>{SORT_MODE_LABELS[sortMode]}</SelectValue>
+            <Select value={sortSelectValue} onValueChange={selectTableSort}>
+              <SelectTrigger aria-label="排序" className="h-9 w-44 border-[#2a526f] bg-[#071522] text-xs text-slate-200" title={sortLabel}>
+                <SelectValue>{sortLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
-                <SelectItem value="reference">{SORT_MODE_LABELS.reference}</SelectItem>
-                <SelectItem value="single-source">{SORT_MODE_LABELS["single-source"]}</SelectItem>
-                <SelectItem value="alternatives">{SORT_MODE_LABELS.alternatives}</SelectItem>
-                <SelectItem value="approved">{SORT_MODE_LABELS.approved}</SelectItem>
-                <SelectItem value="pending">{SORT_MODE_LABELS.pending}</SelectItem>
+                {sortSelectItems}
               </SelectContent>
             </Select>
             {tableSettingsControl}
@@ -6351,6 +6326,7 @@ export function MaterialRequestPage() {
             <span className="ml-auto text-xs text-slate-400">
               {isPreviewDataset
                 ? <>先顯示 <strong className="text-cyan-200">{visibleGroupRows.length.toLocaleString()}</strong> 個主料，完整清單同步中</>
+                : columnSort ? <>顯示 <strong className="text-cyan-200">{orderedRecordRows.length.toLocaleString()}</strong> 筆廠商明細 · {filteredGroups.length.toLocaleString()} 個主料</>
                 : <>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料 · {dataset.stats.totalRecords.toLocaleString()} 筆廠商明細</>}
             </span>
           </div>
@@ -6369,8 +6345,8 @@ export function MaterialRequestPage() {
 
             return (
               <article
-                key={group.key}
-                style={buildTableRowStyle(activeTableColorTheme.primary, { backgroundAlpha: 0.48 })}
+                key={`${group.key}:${mainRecord.id}`}
+                style={buildTableRowStyle(mainRecord.id !== group.primaryRecord.id ? activeTableColorTheme.alternative : activeTableColorTheme.primary, { backgroundAlpha: 0.48 })}
                 className={cn(
                   "overflow-hidden rounded-xl border bg-[var(--material-row-solid)]",
                   mustApply ? "border-amber-300/35" : "border-cyan-200/20",
@@ -6459,6 +6435,7 @@ export function MaterialRequestPage() {
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
+                    sortDirection={columnSort?.key === MATERIAL_COLUMN_FILTER_KEYS[column.key] ? columnSort.direction : undefined}
                     onResize={(width) => resizeColumn(columnIndex, width)}
                   >
                     <span
@@ -6485,6 +6462,8 @@ export function MaterialRequestPage() {
                           label={column.key === "actions" ? "狀態追蹤" : column.label}
                           selectedValues={columnFilters[filterKey]}
                           onSelectedValuesChange={(values) => setColumnFilters((current) => ({ ...current, [filterKey]: values }))}
+                          activeSort={columnSort}
+                          onSortChange={setColumnSort}
                         />
                       </th>
                     );
@@ -6512,7 +6491,7 @@ export function MaterialRequestPage() {
 
               return (
                 <MaterialGroupRow
-                  key={`${user?.userId}:${activeWorkspace.id}:${row.group.key}`}
+                  key={`${user?.userId}:${activeWorkspace.id}:${row.group.key}:${row.standalone ? row.primaryAlternative.id : "group"}`}
                   row={row}
                   itemValue={getGroupItemValue(row.group, (page - 1) * pageSize + rowIndex + 1)}
                   expanded={expandedKey === row.group.key}
