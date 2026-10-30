@@ -104,7 +104,7 @@ test("an unknown or negative status keeps its source wording instead of becoming
 
 test("selecting a new status labels the draft as unsaved and leaves the saved summary unchanged", () => {
   const editor = mountEditor();
-  act(() => editor.root.root.findAll(node => node.type === 'stub' && typeof node.props.onValueChange === 'function')[0].props.onValueChange('已完成'));
+  act(() => editor.root.root.findByProps({ type: 'radio', value: '已完成' }).props.onChange());
   assert.equal(editor.draft().status, '已完成');
   assert.match(JSON.stringify(editor.root.toJSON()), /尚未儲存/);
   const current = editor.root.root.findByProps({ 'data-testid': 'tracking-current-summary' });
@@ -115,16 +115,33 @@ test("selecting a new status labels the draft as unsaved and leaves the saved su
 
 test("the three new statuses are selectable without replacing the saved summary or history", () => {
   const editor = mountEditor();
-  const select = () => editor.root.root.findAll(node => node.type === 'stub' && typeof node.props.onValueChange === 'function')[0];
   for (const status of ['未回應再次發信', '與廠商溝通中', '申請料被退回']) {
-    const option = editor.root.root.findAll(node => node.type === 'stub' && node.props.value === status && node.props.textValue === status);
+    const option = editor.root.root.findAllByProps({ type: 'radio', value: status });
     assert.equal(option.length, 1);
-    act(() => select().props.onValueChange(status));
+    act(() => option[0].props.onChange());
     assert.equal(editor.draft().status, status);
     const current = editor.root.root.findByProps({ 'data-testid': 'tracking-current-summary' });
     assert.equal(current.findAllByProps({ 'data-testid': 'tracking-status-badge' }).find(node => node.type === 'span').props['data-status'], '處理中');
     assert.equal(editor.root.root.findAllByType('details').length, 1);
   }
+  act(() => editor.root.unmount());
+});
+
+test("inline status choices keep all nine values and the no-new-entry choice without changing saved data", () => {
+  const editor = mountEditor();
+  const radios = editor.root.root.findAllByProps({ type: 'radio' });
+  assert.equal(radios.length, 10);
+  assert.equal(radios.filter(node => node.props.checked).length, 1);
+  assert.equal(radios.find(node => node.props.checked).props.value, 'none');
+  for (const option of radios.filter(node => node.props.value !== 'none')) {
+    act(() => option.props.onChange());
+    assert.equal(editor.draft().status, option.props.value);
+  }
+  act(() => editor.root.root.findByProps({ type: 'radio', value: 'none' }).props.onChange());
+  assert.equal(editor.draft().status, '');
+  assert.equal(editor.root.root.findByProps({ 'data-testid': 'tracking-current-summary' }).findAllByProps({ 'data-testid': 'tracking-status-badge' }).find(node => node.type === 'span').props['data-status'], '處理中');
+  editor.disable();
+  assert.ok(editor.root.root.findAllByProps({ type: 'radio' }).every(node => node.props.disabled));
   act(() => editor.root.unmount());
 });
 
