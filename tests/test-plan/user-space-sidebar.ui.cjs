@@ -81,12 +81,9 @@ function groups(tree, f) {
 }
 /** The rows marked as the open space. */
 function currentIds(tree, f) { return rows(tree).filter(row => openButton(row).props['aria-current'] === 'page').map(row => idOf(f, row)); }
-/** The space whose row the folder tree is attached to (the tree follows the open space's row). */
-function folderTreeOwners(tree, f) {
-  const children = spaceList(tree).children.filter(node => typeof node !== 'string');
-  return children.flatMap((node, index) => node.type === 'div' && hasClass(node, 'test-plan-folder-tree')
-    ? [{ id: idOf(f, children[index - 1]), label: node.props['aria-label'] }]
-    : []);
+/** The people-only rail must never expose a folder tree. */
+function sidebarFolderTrees(tree) {
+  return spaceList(tree).findAll(node => node.type === 'div' && hasClass(node, 'test-plan-folder-tree'));
 }
 function control(tree, label) {
   const matches = tree.root.findAll(node => host(node) && node.props['aria-label'] === label);
@@ -113,6 +110,24 @@ const rerender = async (tree, f) => act(async () => tree.update(React.createElem
 async function open(tree, f, id) { await act(async () => openButton(rowFor(tree, f, id)).props.onClick()); await rerender(tree, f); }
 async function filterPeople(tree, value) { await act(async () => peopleFilter(tree).props.onChange({ target: { value } })); }
 async function unmount(tree) { await act(async () => tree.unmount()); }
+
+test('the rail lists people only while folders remain navigable in the main file list', async () => {
+  const f = fixture([space('space-me', 'me', '我的帳號', 'mine')]);
+  f.state.folders = [
+    { id: 'folder-root', spaceId: 'space-me', parentId: null, name: '工程文件', createdAt: stamp, updatedAt: stamp },
+    { id: 'folder-child', spaceId: 'space-me', parentId: 'folder-root', name: '規格書', createdAt: stamp, updatedAt: stamp },
+  ];
+  const tree = await mount(f);
+  assert.deepEqual(names(tree), ['我的帳號']);
+  assert.deepEqual(sidebarFolderTrees(tree), []);
+  assert.ok(!text(spaceList(tree)).includes('工程文件'));
+  const folderRow = tree.root.find(node => host(node) && node.props['data-entry-key'] === 'folder:folder-root');
+  await act(async () => folderRow.props.onDoubleClick());
+  assert.ok(text(control(tree, '目前位置')).includes('工程文件'));
+  assert.ok(tree.root.findAll(node => host(node) && node.props['data-entry-key'] === 'folder:folder-child').length);
+  assert.deepEqual(sidebarFolderTrees(tree), []);
+  await unmount(tree);
+});
 
 test('only the current user and verified administrator roles are pinned; a misleading display name stays among the other users', async () => {
   const f = fixture([
@@ -154,7 +169,7 @@ test('an administrator viewing their own space appears once and keeps the owners
   const mine = rows(tree)[0];
   assert.equal(text(openButton(mine)), '管理員我');
   assert.equal(openButton(mine).props['aria-current'], 'page');
-  assert.deepEqual(folderTreeOwners(tree, f), [{ id: 'space-self-admin', label: '管理員 的資料夾' }]);
+  assert.deepEqual(sidebarFolderTrees(tree), []);
   await unmount(tree);
 });
 
@@ -184,7 +199,7 @@ test('every listed person shows only their name and ownership marker while keepi
   await unmount(pinnedTree);
 });
 
-test('other accounts with identical names stay distinct rows by id, open the clicked account, and carry the folder tree under that row', async () => {
+test('other accounts with identical names stay distinct rows by id, open the clicked account, and keep folders out of the rail', async () => {
   const f = fixture([
     space('space-me', 'me', '我的帳號', 'mine'),
     space('space-alex-one', 'alex-one', 'Alex Chen', 'alex.one'),
@@ -198,17 +213,17 @@ test('other accounts with identical names stay distinct rows by id, open the cli
   assert.equal(f.state.activeSpaceId, 'space-alex-two');
   assert.deepEqual(currentIds(tree, f), ['space-alex-two']);
   assert.equal(openButton(rowFor(tree, f, 'space-me')).props['aria-current'], undefined);
-  assert.deepEqual(folderTreeOwners(tree, f), [{ id: 'space-alex-two', label: 'Alex Chen 的資料夾' }]);
+  assert.deepEqual(sidebarFolderTrees(tree), []);
   assert.equal(locationName(tree), 'Alex Chen 的空間');
   await open(tree, f, 'space-alex-one');
   assert.deepEqual(f.opened, ['space-alex-two', 'space-alex-one']);
   assert.deepEqual(currentIds(tree, f), ['space-alex-one']);
-  assert.deepEqual(folderTreeOwners(tree, f).map(owner => owner.id), ['space-alex-one']);
+  assert.deepEqual(sidebarFolderTrees(tree), []);
   assert.deepEqual(groups(tree, f).others, ['space-alex-one', 'space-alex-two'], 'opening a person does not reorder or drop the namesake');
   await unmount(tree);
 });
 
-test('returning to a pinned user, an administrator or 所有檔案 moves the current marker and folder tree off the other user', async () => {
+test('returning to a pinned user, an administrator or 所有檔案 moves the current marker without listing folders', async () => {
   const f = fixture([
     space('space-me', 'me', '我的帳號', 'mine'),
     space('space-admin', 'admin', '管理員', 'admin', 'admin'),
@@ -222,14 +237,14 @@ test('returning to a pinned user, an administrator or 所有檔案 moves the cur
     assert.equal(f.state.activeSpaceId, id);
     assert.deepEqual(currentIds(tree, f), [id]);
     assert.equal(openButton(rowFor(tree, f, 'space-other')).props['aria-current'], undefined);
-    assert.deepEqual(folderTreeOwners(tree, f).map(owner => owner.id), [id]);
+    assert.deepEqual(sidebarFolderTrees(tree), []);
   }
   await open(tree, f, 'space-other');
   await act(async () => allFilesButton(tree).props.onClick()); await rerender(tree, f);
   assert.equal(f.opened.at(-1), null);
   assert.equal(f.state.activeSpaceId, null);
   assert.deepEqual(currentIds(tree, f), []);
-  assert.deepEqual(folderTreeOwners(tree, f), []);
+  assert.deepEqual(sidebarFolderTrees(tree), []);
   assert.ok(hasClass(allFilesButton(tree), 'is-active'));
   assert.deepEqual(groups(tree, f), { mine: ['space-me'], team: ['space-admin'], others: ['space-other'] });
   await unmount(tree);
@@ -271,7 +286,7 @@ test('display-name changes never confer administrator status and actual role cha
   assert.deepEqual(groups(tree, f), { mine: ['space-me'], team: ['space-other'], others: ['space-stable'] });
   assert.deepEqual(names(tree), ['我的帳號', '管理員', '其他同事']);
   assert.deepEqual(currentIds(tree, f), ['space-other'], 'the open space follows its owner into the administrator group');
-  assert.deepEqual(folderTreeOwners(tree, f), [{ id: 'space-other', label: '管理員 的資料夾' }]);
+  assert.deepEqual(sidebarFolderTrees(tree), []);
 
   f.state.spaces = f.state.spaces.map(candidate => candidate.id === 'space-other' ? { ...candidate, ownerRole: 'engineer', name: '已更新姓名' } : candidate);
   f.state.activeSpace = f.state.spaces[1]; await rerender(tree, f);
@@ -282,7 +297,7 @@ test('display-name changes never confer administrator status and actual role cha
   assert.equal(demoted.findByType('strong').children.join(''), '已更新姓名');
   assert.equal(demoted.findAllByType('small').length, 0);
   assert.deepEqual(currentIds(tree, f), ['space-other']);
-  assert.deepEqual(folderTreeOwners(tree, f).map(owner => owner.id), ['space-other']);
+  assert.deepEqual(sidebarFolderTrees(tree), []);
   assert.deepEqual(f.opened, ['space-other'], 'regrouping never reopens or switches the space');
   await unmount(tree);
 });
@@ -319,7 +334,7 @@ test('long names keep full titles and location labels without displaying account
   await open(tree, f, 'space-other');
   assert.deepEqual(currentIds(tree, f), ['space-other']);
   assert.equal(locationName(tree), `${name} 第二位 的空間`);
-  assert.deepEqual(folderTreeOwners(tree, f), [{ id: 'space-other', label: `${name} 第二位 的資料夾` }]);
+  assert.deepEqual(sidebarFolderTrees(tree), []);
   await filterPeople(tree, username.toUpperCase());
   assert.equal(text(openButton(rowFor(tree, f, 'space-other'))), `${name} 第二位`);
   await unmount(tree);
@@ -376,7 +391,7 @@ test('the open other-user space stays listed while filtered out, and filtering n
   await filterPeople(tree, 'alex');
   assert.deepEqual([...groups(tree, f).others].sort(), ['space-alex', 'space-datong']);
   assert.deepEqual(currentIds(tree, f), ['space-datong']);
-  assert.deepEqual(folderTreeOwners(tree, f).map(owner => owner.id), ['space-datong']);
+  assert.deepEqual(sidebarFolderTrees(tree), []);
   await filterPeople(tree, 'zzz');
   assert.deepEqual(groups(tree, f).others, ['space-datong'], 'the open space is never filtered out of view');
   assert.deepEqual(emptyNotice(tree), [], 'the list is not empty while the open space is shown');

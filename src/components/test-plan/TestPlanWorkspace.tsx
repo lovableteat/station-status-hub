@@ -333,123 +333,6 @@ function useCompactLayout() {
   return compact;
 }
 
-function FolderBranch({
-  folders,
-  files,
-  parentId,
-  activeFolderId,
-  expandedFolderIds,
-  onOpen,
-  onToggle,
-  dropTargetId = null,
-  onDragOverFolder,
-  onDropOnFolder,
-  onDragLeaveFolder,
-  level = 0,
-}: {
-  folders: readonly TestPlanFolder[];
-  files: readonly TestPlanFileRecord[];
-  parentId: string | null;
-  activeFolderId: string | null;
-  expandedFolderIds: ReadonlySet<string>;
-  onOpen: (folderId: string) => void;
-  onToggle: (folderId: string) => void;
-  dropTargetId?: string | null;
-  onDragOverFolder?: (folderId: string, event: DragEvent<HTMLElement>) => void;
-  onDropOnFolder?: (folderId: string, event: DragEvent<HTMLElement>) => void;
-  onDragLeaveFolder?: () => void;
-  level?: number;
-}) {
-  const children = folders
-    .filter((folder) => folder.parentId === parentId)
-    .sort((first, second) =>
-      first.name.localeCompare(second.name, "zh-Hant", { numeric: true }));
-
-  return (
-    <>
-      {children.map((folder) => {
-        const childFolderCount = folders.filter(
-          (candidate) => candidate.parentId === folder.id,
-        ).length;
-        const directFileCount = files.filter(
-          (file) => file.folderId === folder.id,
-        ).length;
-        const hasChildren = childFolderCount > 0;
-        const isExpanded = expandedFolderIds.has(folder.id);
-        const isActive = activeFolderId === folder.id;
-
-        return (
-          <div className="test-plan-folder-tree-node" key={folder.id}>
-            <div
-              className={cn(
-                "test-plan-folder-tree-row",
-                isActive && "is-active",
-                dropTargetId === folder.id && "is-drop-target",
-              )}
-              style={{ paddingLeft: `${18 + level * 14}px` }}
-              onDragOver={(event) => onDragOverFolder?.(folder.id, event)}
-              onDragLeave={() => onDragLeaveFolder?.()}
-              onDrop={(event) => onDropOnFolder?.(folder.id, event)}
-            >
-              {hasChildren ? (
-                <button
-                  type="button"
-                  className={cn(
-                    "test-plan-folder-tree-toggle",
-                    isExpanded && "is-expanded",
-                  )}
-                  aria-label={isExpanded ? `收合 ${folder.name}` : `展開 ${folder.name}`}
-                  aria-expanded={isExpanded}
-                  onClick={() => onToggle(folder.id)}
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              ) : (
-                <span className="test-plan-folder-tree-toggle-spacer" />
-              )}
-              <button
-                type="button"
-                className="test-plan-folder-tree-item"
-                aria-current={isActive ? "location" : undefined}
-                title={[
-                  folder.name,
-                  childFolderCount > 0 ? `${childFolderCount} 個子資料夾` : "",
-                  directFileCount > 0 ? `${directFileCount} 個檔案` : "",
-                  childFolderCount === 0 && directFileCount === 0 ? "空資料夾" : "",
-                ].filter(Boolean).join(" · ")}
-                onClick={() => onOpen(folder.id)}
-              >
-                {isActive ? (
-                  <FolderOpen className="h-4 w-4" />
-                ) : (
-                  <Folder className="h-4 w-4" />
-                )}
-                <span className="test-plan-folder-tree-label">{folder.name}</span>
-              </button>
-            </div>
-            {hasChildren && isExpanded && (
-              <FolderBranch
-                folders={folders}
-                files={files}
-                parentId={folder.id}
-                activeFolderId={activeFolderId}
-                expandedFolderIds={expandedFolderIds}
-                onOpen={onOpen}
-                onToggle={onToggle}
-                dropTargetId={dropTargetId}
-                onDragOverFolder={onDragOverFolder}
-                onDropOnFolder={onDropOnFolder}
-                onDragLeaveFolder={onDragLeaveFolder}
-                level={level + 1}
-              />
-            )}
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
 function DescribeDialog({
   action,
   busy,
@@ -537,7 +420,7 @@ function MoveDialog({
       <DialogContent className="file-library-dialog">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>選擇同一個空間裡的目標資料夾。也可以直接把項目拖到左側資料夾或路徑上。</DialogDescription>
+          <DialogDescription>選擇同一個空間裡的目標資料夾。也可以直接把項目拖到清單中的資料夾或路徑上。</DialogDescription>
         </DialogHeader>
         <Select value={targetId} onValueChange={setTargetId}>
           <SelectTrigger aria-label="目標資料夾">
@@ -679,9 +562,6 @@ export function TestPlanWorkspace() {
   const busy = workspaceBusy || batchDeleting;
   const batchDeleteInFlight = useRef(false);
   const [spreadsheetFile, setSpreadsheetFile] = useState<TestPlanFileRecord | null>(null);
-  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(
-    new Set(),
-  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -719,28 +599,7 @@ export function TestPlanWorkspace() {
     if (!waiting) requestedFolderRef.current = null;
     setSpreadsheetFile(null);
     setRenaming(null);
-    setExpandedFolderIds(new Set());
   }, [activeSpaceId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!activeFolderId) return;
-    const parentById = new Map(
-      folders.map((folder) => [folder.id, folder.parentId] as const),
-    );
-    setExpandedFolderIds((current) => {
-      const next = new Set(current);
-      let cursor: string | null = activeFolderId;
-      let changed = false;
-      while (cursor) {
-        if (!next.has(cursor)) {
-          next.add(cursor);
-          changed = true;
-        }
-        cursor = parentById.get(cursor) ?? null;
-      }
-      return changed ? next : current;
-    });
-  }, [activeFolderId, folders]);
 
   const personalSpace = spaces.find(space => space.isPersonal && space.ownerId === ownerId);
   const userSpaces = useMemo(() => [...spaces].sort((first, second) => {
@@ -1920,57 +1779,33 @@ export function TestPlanWorkspace() {
   const showPreviewPane = previewOpen && (!compact || selectedEntries.length > 0);
 
   const renderSpaceRow = (space: (typeof spaces)[number]) => (
-    <Fragment key={space.id}>
-      <div
-        className={cn(
-          "test-plan-space-row",
-          activeSpaceId === space.id && "is-active",
-          activeSpaceId === space.id && dropTargetId === "__root__" && "is-drop-target",
-        )}
-      >
-        <button
-          type="button"
-          disabled={busy || loading}
-          aria-label={`開啟 ${space.name}${space.description ? `（${space.description}）` : ""} 的檔案空間`}
-          aria-current={activeSpaceId === space.id ? "page" : undefined}
-          title={space.name}
-          onClick={() => navigate({ spaceId: space.id, folderId: null })}
-          onDragOver={(event) => activeSpaceId === space.id && handleFolderDragOver(null, event)}
-          onDragLeave={() => setDropTargetId((current) => (current === "__root__" ? null : current))}
-          onDrop={(event) => activeSpaceId === space.id && handleFolderDrop(null, event)}
-        >
-          <span className="file-library-user-icon" aria-hidden="true" data-initials={spaceInitials(space.name)} style={spaceSwatch(space.color)} />
-          <span className="file-library-user-identity">
-            <strong>{space.name}</strong>
-          </span>
-          {space.ownerId === ownerId && <Badge variant="secondary" className="file-library-current-user">我</Badge>}
-          {space.ownerId !== ownerId && !canEditSpace(space.id) && <LockKeyhole className="file-explorer-lock" aria-label="唯讀" />}
-        </button>
-      </div>
-      {activeSpaceId === space.id && (
-        <div className="test-plan-folder-tree" aria-label={`${space.name} 的資料夾`}>
-          <FolderBranch
-            folders={folders}
-            files={files}
-            parentId={null}
-            activeFolderId={activeFolderId}
-            expandedFolderIds={expandedFolderIds}
-            onOpen={(folderId) => navigate({ spaceId: space.id, folderId })}
-            onToggle={(folderId) =>
-              setExpandedFolderIds((current) => {
-                const next = new Set(current);
-                if (next.has(folderId)) next.delete(folderId);
-                else next.add(folderId);
-                return next;
-              })}
-            dropTargetId={dropTargetId}
-            onDragOverFolder={handleFolderDragOver}
-            onDropOnFolder={handleFolderDrop}
-            onDragLeaveFolder={() => setDropTargetId(null)}
-          />
-        </div>
+    <div
+      key={space.id}
+      className={cn(
+        "test-plan-space-row",
+        activeSpaceId === space.id && "is-active",
+        activeSpaceId === space.id && dropTargetId === "__root__" && "is-drop-target",
       )}
-    </Fragment>
+    >
+      <button
+        type="button"
+        disabled={busy || loading}
+        aria-label={`開啟 ${space.name}${space.description ? `（${space.description}）` : ""} 的檔案空間`}
+        aria-current={activeSpaceId === space.id ? "page" : undefined}
+        title={space.name}
+        onClick={() => navigate({ spaceId: space.id, folderId: null })}
+        onDragOver={(event) => activeSpaceId === space.id && handleFolderDragOver(null, event)}
+        onDragLeave={() => setDropTargetId((current) => (current === "__root__" ? null : current))}
+        onDrop={(event) => activeSpaceId === space.id && handleFolderDrop(null, event)}
+      >
+        <span className="file-library-user-icon" aria-hidden="true" data-initials={spaceInitials(space.name)} style={spaceSwatch(space.color)} />
+        <span className="file-library-user-identity">
+          <strong>{space.name}</strong>
+        </span>
+        {space.ownerId === ownerId && <Badge variant="secondary" className="file-library-current-user">我</Badge>}
+        {space.ownerId !== ownerId && !canEditSpace(space.id) && <LockKeyhole className="file-explorer-lock" aria-label="唯讀" />}
+      </button>
+    </div>
   );
 
   // ----- pane splitters (drag the edge between panes, like File Explorer) --------
@@ -2300,7 +2135,7 @@ export function TestPlanWorkspace() {
             "test-plan-space-rail",
             isSpaceDrawerOpen && "is-mobile-open",
           )}
-          aria-label="使用者空間與資料夾"
+          aria-label="使用者空間"
         >
           <div className="test-plan-rail-heading">
             <strong>使用者空間</strong>

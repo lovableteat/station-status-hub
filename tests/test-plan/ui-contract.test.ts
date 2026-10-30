@@ -44,10 +44,8 @@ test("provides spaces, nested folders, breadcrumbs, search, filters, and both vi
   assert.match(workspace, /sort/);
   assert.match(workspace, /"grid"/);
   assert.match(workspace, /"list"/);
-  assert.match(workspace, /expandedFolderIds/);
-  assert.match(workspace, /aria-expanded=\{isExpanded\}/);
-  assert.match(workspace, /收合 \$\{folder\.name\}/);
-  assert.match(workspace, /個子資料夾/);
+  assert.doesNotMatch(workspace, /FolderBranch|expandedFolderIds|test-plan-folder-tree/);
+  assert.match(workspace, /aria-label="使用者空間"/);
   assert.match(
     styles,
     /\.test-plan-space-list\s*\{[^}]*display:\s*block;[^}]*overflow-y:\s*auto;/s,
@@ -113,7 +111,7 @@ test("edits uploaded spreadsheets in place without forcing a download workflow",
   assert.match(styles, /\.test-plan-sheet-corner button::after/);
   assert.match(styles, /background: transparent !important/);
   assert.match(styles, /box-shadow: none !important/);
-  assert.match(styles, /\.test-plan-folder-tree-toggle\.is-expanded/);
+  assert.doesNotMatch(styles, /\.test-plan-folder-tree/);
 });
 
 test("surfaces insertion failures without marking the workbook dirty", async () => {
