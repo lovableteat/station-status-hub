@@ -2749,7 +2749,7 @@ export function PendingMaterialsDialog({
                   <PendingCategoryPicker group={group} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
                   <span className="pending-row-name min-w-0 text-base text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
                   <span className="pending-row-mpn min-w-0 truncate font-mono text-sm text-foreground/75" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
-                  <span className="pending-row-manufacturer min-w-0 truncate text-xs text-muted-foreground" title={record.manufacturer}>{record.manufacturer || "未填廠商"}</span>
+                  <span className="pending-row-manufacturer min-w-0 truncate text-xs font-semibold" title={record.manufacturer}>{record.manufacturer || "未填廠商"}</span>
                   <MaterialRequestOwnerPicker record={record} owners={ownerDirectory.owners} disabled={!canEdit} onChange={owner => onSetOwner(record, owner)} />
                   <div className="pending-row-timing">
                     <span data-testid="pending-application-elapsed" className="pending-application-elapsed" title={describeMaterialApplicationTiming(timing, timingNow)}>
@@ -2759,9 +2759,9 @@ export function PendingMaterialsDialog({
                     <div className="pending-row-warning" data-testid="pending-stale-slot" aria-hidden={!stale || undefined}>{stale && <span className="pending-stale-badge" role="img" aria-label="逾 3 天未更新" title="這筆待處理料已超過 3 天沒有更新資料"><TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="pending-stale-label" aria-hidden="true">逾 3 天未更新</span></span>}</div>
                   </div>
                   <div className="pending-row-status">
-                    <Button type="button" data-testid="pending-tracking-control" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full gap-0 overflow-hidden rounded-lg border border-border p-0 text-xs" aria-label={`追蹤／更新 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
-                      <span data-testid="pending-status-segment" className={cn("inline-flex h-full min-w-0 flex-col items-center justify-center px-1", materialTrackingStatusTone(trackingStatus))}><span className="block w-full truncate" title={trackingStatus || "未處理"}>{trackingStatus || "未處理"}</span>{getMaterialTrackingStatusMeaning(trackingStatus) && <span className="block w-full truncate text-[10px] font-normal" title={getMaterialTrackingStatusMeaning(trackingStatus)}>{getMaterialTrackingStatusMeaning(trackingStatus)}</span>}</span>
-                      <span data-testid="pending-update-segment" className="inline-flex h-full min-w-0 items-center justify-center whitespace-nowrap border-l border-border px-1">追蹤／更新</span>
+                    <span data-testid="pending-status-segment" aria-label={`目前狀態：${trackingStatus || '未處理'}`} className={cn("pending-status-indicator inline-flex h-10 min-w-0 flex-col items-center justify-center rounded-md border px-1 text-xs font-semibold", materialTrackingStatusTone(trackingStatus))}><span className="block w-full truncate" title={trackingStatus || "未處理"}>{trackingStatus || "未處理"}</span>{getMaterialTrackingStatusMeaning(trackingStatus) && <span className="block w-full truncate text-[10px] font-normal" title={getMaterialTrackingStatusMeaning(trackingStatus)}>{getMaterialTrackingStatusMeaning(trackingStatus)}</span>}</span>
+                    <Button type="button" data-testid="pending-tracking-control" variant="outline" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full rounded-md border-primary/40 bg-primary/15 px-1 text-xs font-semibold text-primary hover:bg-primary/25 hover:text-primary" aria-label={`追蹤／更新 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
+                      <span data-testid="pending-update-segment">追蹤／更新</span>
                     </Button>
                   </div>
                 </div>
