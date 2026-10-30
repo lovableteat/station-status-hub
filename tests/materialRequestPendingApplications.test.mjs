@@ -21,6 +21,18 @@ test("manual SYMBOL applications with an existing part number remain visible and
   assert.match(items[0].searchText,/ce 王同學/);
 });
 
+test("follow-up, supplier communication and returned requests stay pending even with an existing part number", () => {
+  for (const status of ["未回應再次發信", "與廠商溝通中", "申請料被退回"]) {
+    const active = record("request", "MPN-1", false, { trackingStatus: status, partNumber: "REAL-1" });
+    const done = record("done", "MPN-2", false, { trackingStatus: "已完成", partNumber: "REAL-2" });
+    const items = buildPendingApplications([group("active", "U1", [active]), group("done", "U2", [done])]);
+    assert.equal(items.length, 1);
+    assert.equal(items[0].record.trackingStatus, status);
+    assert.ok(items[0].searchText.includes(status));
+    assert.equal(buildPendingApplications([group("active", "U1", [active])], { includeAlternates: true }).length, 1);
+  }
+});
+
 test("by default only locations with no number on any vendor row are listed, once each", () => {
   const c291 = group("g1", "C291_C1", [record("a", "C1608", true), record("b", "AMK107", false), record("c", "C0603", true)]);
   const empty = group("g2", "C5", [record("d", "X", true), record("e", "Y", true)]);

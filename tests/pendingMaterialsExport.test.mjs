@@ -17,10 +17,11 @@ test("pending Excel round-trips full references, leading-zero part numbers, assi
   const row={category:"CONNECTOR",displayRef:"J1…",record:{id:"one",name:"完整料件名稱",refDes:ref,qty:8,manufacturerPartNumber:"000012345",manufacturer:"廠商",partNumber:"001-234",requestOwnerName:"負責人 CE",trackingStatus:"SYMBOL申請中",trackingHistory:[{id:"progress",status:"SYMBOL申請中",createdBy:"真正操作者",createdAt:"2026-10-29T02:00:00Z",note:"等 SYMBOL"}],specDocument:{name:"old.pdf",path:"old"},specDocuments:[{name:"old.pdf",path:"old"},{name:"part.glb",path:"model"}]}};
   const exportedAt = new Date("2026-10-30T14:00:00Z");
   const undated = { ...row, record: { ...row.record, trackingHistory: [{ id: 'imported', status: '已發信', createdAt: '' }] } };
-  const workbook=await createPendingMaterialsWorkbook({rows:[row, undated],workspaceName:"篩選的 BOM",exportedBy:"匯出者",scope:"分類：CONNECTOR · 搜尋：J1", exportedAt});
+  const followUps = ["未回應再次發信", "與廠商溝通中", "申請料被退回"].map(status => ({ ...row, record: { ...row.record, trackingStatus: status, trackingHistory: [{ ...row.record.trackingHistory[0], status }] } }));
+  const workbook=await createPendingMaterialsWorkbook({rows:[row, undated, ...followUps],workspaceName:"篩選的 BOM",exportedBy:"匯出者",scope:"分類：CONNECTOR · 搜尋：J1", exportedAt});
   const reopened=new ExcelJS.Workbook();await reopened.xlsx.load(await workbook.xlsx.writeBuffer());
   const sheet=reopened.getWorksheet("待處理料");
-  assert.equal(sheet.rowCount,6);
+  assert.equal(sheet.rowCount,9);
   const headers=sheet.getRow(4).values;
   const value=label=>sheet.getRow(5).getCell(headers.indexOf(label)).value;
   assert.equal(value("Ref Des"),ref);
@@ -36,6 +37,10 @@ test("pending Excel round-trips full references, leading-zero part numbers, assi
   assert.equal(sheet.getRow(5).getCell(headers.indexOf("累計申請天數")).numFmt, "0.00");
   assert.equal(sheet.getRow(6).getCell(headers.indexOf("首次更新時間")).value, "");
   assert.equal(sheet.getRow(6).getCell(headers.indexOf("累計申請天數")).value, null);
+  for (let i = 0; i < followUps.length; i++) {
+    assert.equal(sheet.getRow(i + 7).getCell(headers.indexOf("目前狀態")).value, followUps[i].record.trackingStatus);
+    assert.equal(sheet.getRow(i + 7).getCell(headers.indexOf("累計申請天數")).value, 1.5);
+  }
   assert.match(sheet.getCell("A3").value,/分類：CONNECTOR · 搜尋：J1/);
   assert.equal(sheet.views[0].ySplit,4);
 });
