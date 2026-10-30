@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
 
 const require = createRequire(import.meta.url);
 const { React, create, act, loader, ui, deferred } = require("../../../tests/support/renderHarness.cjs");
@@ -69,18 +70,25 @@ test("one main save persists both the material edits and the pending progress wi
   editor.unmount();
 });
 
-test("all 15 CE fields remain editable in Excel order in one horizontal table row and retain internal values", async () => {
+test("form and single-row views share all 15 original CE fields and retain edits and internal values", async () => {
   const editor = mountDialog({ record: { ...baseRecord, assemblyName: "original module", remark: "original note", manufacturerPartNumberAlt: "OLD-MPN" } });
+  assert.equal(editor.root.root.findAll(node => node.type === "div" && node.props["data-testid"] === "material-ce-field").length, 15);
+  assert.deepEqual(editor.root.root.findAll(node => node.type === "div" && node.props["data-testid"] === "material-ce-field").map(field => field.find(node => node.type === "stub" && node.props.htmlFor).props.label), MATERIAL_CE_FIELDS.map(field => field.header));
+  editor.changeName("new name");
+  act(() => editor.root.root.find(node => node.type === "stub" && node.props.children === "表格（一列）").props.onClick());
   const fields = editor.root.root.findAll(node => node.type === "td" && node.props["data-testid"] === "material-ce-field");
   assert.equal(fields.length, 15);
   assert.equal(editor.root.root.findAllByType("table").length, 1);
   assert.equal(editor.root.root.findByType("tbody").findAllByType("tr").length, 1);
+  assert.equal(editor.root.root.findAllByProps({ id: "material-name" }).find(node => node.type === "stub").props.value, "new name");
   assert.deepEqual(fields.map(field => field.findAll(node => node.type === "stub" && node.props.id?.startsWith("material-"))[0].props.id), ["material-level", "material-name", "material-qty", "material-ref-des", "material-mpn", "material-maker", "material-sourcing", "material-virtual-alternative", "material-internal-pn", "material-part-name", "material-spec", "material-symbol", "material-footprint", "material-phase-out", "material-part-usage"]);
   for (const id of ["material-ref", "material-assembly", "material-remark"]) assert.equal(editor.root.root.findAllByProps({ id }).length, 0);
   const author = editor.root.root.findAll(node => node.type === "stub" && String(node.props.id).endsWith("-author"))[0];
   assert.equal(author.props.value, "CE");
   assert.equal(editor.tracking().createdBy, "", "displaying the default author is not a new progress draft");
-  editor.changeName("new name");
+  act(() => editor.root.root.find(node => node.type === "stub" && node.props.children === "表單").props.onClick());
+  assert.equal(editor.root.root.findAll(node => node.type === "div" && node.props["data-testid"] === "material-ce-field").length, 15);
+  assert.equal(editor.root.root.findAllByProps({ id: "material-name" }).find(node => node.type === "stub").props.value, "new name");
   await act(async () => editor.button().props.onClick());
   assert.equal(editor.writes[0].assemblyName, "original module");
   assert.equal(editor.writes[0].remark, "original note");

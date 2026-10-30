@@ -955,11 +955,11 @@ All colors MUST be HSL for proper theming support.
 
 .material-record-dialog[data-ui="dialog"] {
   width: calc(100vw - 32px);
-  max-width: 1800px;
-  height: calc(100dvh - 32px);
-  max-height: 1040px;
-  gap: 14px;
-  padding: 22px;
+  max-width: 1240px;
+  height: min(740px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  gap: 12px;
+  padding: 18px;
   font-size: 14px;
 }
 
@@ -1063,32 +1063,54 @@ All colors MUST be HSL for proper theming support.
 .material-record-dialog .material-tracking-fields [aria-invalid="true"] {
   border-color: hsl(var(--destructive)) !important;
 }
-.material-tracking-status-trigger {
-  --material-tracking-field-bg: color-mix(in srgb, hsl(var(--primary)) 18%, hsl(var(--secondary)));
+.material-tracking-layout { display: grid; grid-template-areas: "current" "fields" "history"; gap: 12px; min-width: 0; }
+.material-tracking-panel { min-width: 0; padding: 12px; border: 1px solid hsl(var(--border)); border-radius: 10px; background-color: hsl(var(--card)); }
+.material-tracking-current { grid-area: current; display: flex; flex-direction: column; gap: 12px; overflow-wrap: anywhere; }
+.material-tracking-fields { grid-area: fields; display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; }
+.material-tracking-compose { display: flex; flex: 1; flex-direction: column; gap: 14px; }
+.material-tracking-fields label { font-size: 12px; }
+.material-tracking-status-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.material-tracking-status-choice { position: relative; min-width: 0; cursor: pointer; }
+.material-tracking-status-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.material-tracking-status-choice > span { display: flex; min-height: 44px; align-items: center; justify-content: center; gap: 6px; padding: 5px 8px; border: 1px solid hsl(var(--border)); border-radius: 20px; background: hsl(var(--background) / .2); font-weight: 600; white-space: nowrap; }
+.material-tracking-status-choice i { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
+.material-tracking-status-choice:has(input:checked) > span { border-color: hsl(var(--material-status, var(--primary)) / .8); background: hsl(var(--material-status, var(--primary)) / .15); }
+.material-tracking-status-choice input:focus-visible + span { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.material-tracking-status-choice:has(input:disabled) { cursor: default; opacity: .6; }
+.material-tracking-status-help { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.material-tracking-status-help strong { font-weight: 500; }
+.material-tracking-info-grid { display: grid; gap: 12px; }
+.material-tracking-note { flex: 1; }
+.material-tracking-note textarea { height: 96px; resize: vertical; }
+.material-tracking-fields :is([data-ui="input"], [data-ui="textarea"]) { font-size: 14px; border-radius: 6px; }
+.material-tracking-history { grid-area: history; display: flex; min-height: 0; flex-direction: column; gap: 14px; }
+.material-tracking-timeline { min-height: 0; overflow-y: auto; padding: 0 4px 0 10px; scrollbar-gutter: stable; }
+.material-tracking-history-entry { position: relative; padding: 0 0 12px 14px; border-left: 1px solid hsl(var(--border)); }
+.material-tracking-history-entry:last-child { border-left-color: transparent; }
+.material-tracking-history-heading { display: flex; min-height: 44px; cursor: pointer; align-items: flex-start; gap: 6px; list-style: none; }
+.material-tracking-timeline-dot { position: absolute; top: 9px; left: -4px; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.material-tracking-history .material-tracking-badge { padding: 0; border: 0; border-radius: 0; background: none; }
+.material-tracking-history .material-tracking-badge > svg { display: none; }
+.material-tracking-history-body { padding: 8px 0 0; overflow-wrap: anywhere; }
+.material-tracking-history-body img { max-height: 90px; }
+@media (min-width: 640px) {
+  .material-tracking-status-choices { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .material-tracking-info-grid { grid-template-columns: minmax(0, 2fr) minmax(140px, 1fr); }
 }
-.material-tracking-status-menu[data-ui="select-menu"] {
-  width: var(--radix-select-trigger-width);
-  max-width: calc(100vw - 24px);
-  max-height: min(320px, var(--radix-select-content-available-height));
-  border-radius: 10px;
-  background-color: color-mix(in srgb, hsl(var(--primary)) 6%, hsl(var(--secondary)));
-  border-color: hsl(var(--primary) / 0.32);
+@media (min-width: 1000px) {
+  .material-tracking-tab { height: 100%; margin-top: 0; padding-top: 12px; }
+  .material-tracking-layout { height: 100%; grid-template-columns: minmax(0, 2.1fr) minmax(280px, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "fields current" "fields history"; align-items: stretch; }
+  .material-tracking-current { max-height: 230px; overflow-y: auto; }
+  .material-tracking-fields { overflow-y: auto; padding-right: 3px; scrollbar-gutter: stable; }
+  .material-tracking-status-choice > span { min-height: 34px; }
+  .material-tracking-fields [data-ui="input"] { height: 36px; min-height: 36px; padding: 6px 10px; }
+  .material-tracking-compose { gap: 10px; }
+  .material-tracking-fields button[data-ui="button"] { min-height: 36px; height: 36px; font-size: 12px; }
+  .material-tracking-fields .inline-flex.text-sm { font-size: 12px; }
+  .material-record-dialog[data-material-tab="tracking"] .app-dialog-footer { padding-top: 12px; }
 }
-.material-tracking-status-menu .material-tracking-status-option {
-  min-height: 36px;
-  padding-top: 6px;
-  padding-bottom: 6px;
-  border-radius: 6px;
-}
-.material-tracking-status-option-content {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 12px;
-}
-.material-tracking-status-menu [data-highlighted] {
-  background-color: hsl(var(--primary) / 0.16);
-  color: hsl(var(--foreground));
+@media (max-width: 639px) {
+  .material-tracking-fields :is([data-ui="input"], [data-ui="textarea"]) { font-size: 16px; }
 }
 
 /* Application stages keep their semantic colours through the charcoal palette pass.
@@ -1117,6 +1139,30 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 
 .material-record-dialog .app-dialog-header { flex: 0 0 auto; padding-right: 46px; }
 .material-record-dialog .material-record-scroll { overflow-x: hidden; padding: 0 4px 2px 0; scrollbar-gutter: stable; }
+.material-details-layout { display: grid; min-width: 0; gap: 12px; }
+.material-ce-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+.material-ce-view-switch { display: flex; flex-shrink: 0; padding: 2px; border: 1px solid hsl(var(--border)); border-radius: 7px; }
+.material-ce-view-switch [data-ui="button"] { height: 32px; padding: 0 8px; font-size: 12px; }
+.material-ce-view-switch [aria-pressed="true"] { background: hsl(var(--primary) / .16); color: hsl(var(--primary)); }
+.material-ce-form { display: grid; min-width: 0; gap: 12px; }
+.material-ce-form > div { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
+.material-ce-form > div > :first-child { min-height: 30px; align-items: flex-end; font-size: 12px; }
+.material-record-dialog .material-ce-form .material-ce-control { height: 44px; min-height: 44px; padding: 4px 8px; line-height: 18px; }
+@media (min-width: 640px) {
+  .material-ce-form { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .material-ce-form > [data-ce-key="name"] { grid-column: span 2; }
+}
+@media (min-width: 1000px) {
+  .material-record-dialog .material-record-tablist { width: fit-content; height: 40px; padding: 3px; }
+  .material-record-dialog .material-record-tablist > button { height: 34px; font-size: 13px; }
+  .material-details-tab { height: 100%; }
+  .material-details-layout { min-height: 100%; }
+  .material-details-layout { grid-template-columns: minmax(0, 1fr) 300px; align-items: stretch; }
+  .material-details-layout > section { margin: 0; }
+  .material-details-layout > .material-spec-section { min-width: 0; }
+  .material-details-layout .material-spec-empty { min-height: 144px; flex-direction: column; text-align: center; }
+  .material-details-layout .material-spec-files { max-height: 320px; overflow-y: auto; }
+}
 .material-record-dialog .material-ce-section,
 .material-record-dialog .material-spec-section { padding: 16px; }
 .material-record-dialog .material-ce-table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid hsl(var(--border)); border-radius: 8px; scrollbar-gutter: stable; }

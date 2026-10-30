@@ -2823,6 +2823,7 @@ export function MaterialRecordDialog({
   const [form, setForm] = useState(() => toWorkbookRecord(record));
   const [trackingDraft, setTrackingDraft] = useState(() => createMaterialTrackingDraft(record));
   const [activeTab, setActiveTab] = useState<MaterialEditorTab>(initialTab);
+  const [detailsView, setDetailsView] = useState<"form" | "table">("form");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const savingRef = useRef(false);
@@ -2919,11 +2920,19 @@ export function MaterialRecordDialog({
   const title = mode === "create" ? "新增料件 / 替代料" : mode === "edit" ? "修改料件資料" : "料件詳細資訊";
   const hasTrackingChanges = Boolean(trackingDraft.status || trackingDraft.note.trim() || trackingDraft.createdBy.trim() || trackingDraft.requestInfo.trim() || trackingDraft.images.length || trackingDraft.pendingImageReads || trackingDraft.requestTicket !== (record.requestTicket ?? "") || trackingDraft.requestUrl !== (record.requestUrl ?? ""));
   const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(toWorkbookRecord(record)) || hasTrackingChanges;
+  const renderCeControl = (field: (typeof MATERIAL_CE_EDITOR_FIELDS)[number], index: number) => <>
+    {field.key === "level" || field.key === "qty" ? (
+      <Input id={field.id} disabled={readOnly} readOnly={field.key === "level"} value={field.key === "level" ? "2" : String(form[field.key] ?? "")} onChange={event => updateField(field.key, event.target.value)} inputMode={field.key === "qty" ? "decimal" : undefined} className="material-ce-control" />
+    ) : (
+      <Textarea id={field.id} disabled={readOnly} value={String(form[field.key] ?? "")} onChange={event => updateField(field.key, event.target.value)} rows={2} placeholder={MATERIAL_CE_FIELDS[index].meaning} className={cn("material-ce-control", (field.key === "virtualAlternative" || field.key === "partNumber") && "material-pn-input", field.key === "partNumber" && !form.partNumber.trim() && "material-pn-missing")} />
+    )}
+    {field.key === "partUsageStatus" && (record as Partial<MaterialRecord>).partUsageStatusSource === "legacy-tracking" && <p className="text-xs text-muted-foreground">取自舊格式匯入追蹤原文；原追蹤保留。</p>}
+  </>;
 
   return (
     <TooltipProvider delayDuration={160}>
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!savingRef.current) onOpenChange(nextOpen); }}>
-      <DialogContent className="material-record-dialog flex flex-col overflow-hidden" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}>
+      <DialogContent data-material-tab={activeTab} className="material-record-dialog flex flex-col overflow-hidden" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }} onDrop={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}>
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">
             <DialogTitle>{title}</DialogTitle>
@@ -2931,36 +2940,42 @@ export function MaterialRecordDialog({
               {readOnly ? "唯讀" : "編輯中"}
             </span>
           </div>
-          <DialogDescription>
+          <DialogDescription className={activeTab === "tracking" ? "sr-only" : undefined}>
             依 CE Excel 順序排列全部 15 個欄位；<span className="text-destructive">*</span> 為必填。
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MaterialEditorTab)} className="material-record-tabs flex min-h-0 min-w-0 flex-1 flex-col">
-          <TabsList className="h-12 w-full shrink-0 justify-start">
+          <TabsList className="material-record-tablist h-12 w-full shrink-0 justify-start">
             <TabsTrigger value="details" className="h-10">料件資料</TabsTrigger>
             <TabsTrigger value="tracking" className="h-10">狀態追蹤{hasTrackingChanges ? " · 未儲存" : ""}</TabsTrigger>
           </TabsList>
           <div className="material-record-scroll min-h-0 flex-1 overflow-y-auto">
-          <TabsContent value="details" forceMount className="flex flex-col gap-4 data-[state=inactive]:hidden">
-          <fieldset disabled={isSaving} className="flex min-w-0 flex-col gap-4">
-        <section className="workspace-dialog-section material-ce-section min-w-0 rounded-xl">
-          <h3 id="material-ce-grid-title" className="mb-3 text-sm font-semibold">CE Excel 欄位 · 依交付格式順序</h3>
-          <div className="material-ce-table-scroll" role="region" aria-labelledby="material-ce-grid-title" tabIndex={0}>
+          <TabsContent value="details" forceMount className="material-details-tab flex flex-col gap-4 data-[state=inactive]:hidden">
+          <fieldset disabled={isSaving} className="material-details-layout">
+        <section data-details-view={detailsView} className="workspace-dialog-section material-ce-section min-w-0 rounded-xl">
+          <div className="material-ce-heading">
+            <h3 id="material-ce-grid-title" className="text-sm font-semibold">CE Excel 欄位 · 依交付格式順序</h3>
+            <div className="material-ce-view-switch" role="group" aria-label="料件資料檢視">
+              <Button type="button" size="sm" variant="ghost" aria-pressed={detailsView === "form"} onClick={() => setDetailsView("form")}>表單</Button>
+              <Button type="button" size="sm" variant="ghost" aria-pressed={detailsView === "table"} onClick={() => setDetailsView("table")}>表格（一列）</Button>
+            </div>
+          </div>
+          {detailsView === "form" ? <div className="material-ce-form" aria-labelledby="material-ce-grid-title">
+            {MATERIAL_CE_EDITOR_FIELDS.map((field, index) => <div key={field.key} data-testid="material-ce-field" data-ce-key={field.key}>
+              <MaterialFieldLabel field={field.key} htmlFor={field.id} label={MATERIAL_CE_FIELDS[index].header} required={field.key === "name"} />
+              {renderCeControl(field, index)}
+            </div>)}
+          </div> : <div className="material-ce-table-scroll" role="region" aria-labelledby="material-ce-grid-title" tabIndex={0}>
             <table className="material-ce-table" style={{ width: MATERIAL_CE_EDITOR_FIELDS.reduce((sum, field) => sum + field.width, 0) }}>
               <colgroup>{MATERIAL_CE_EDITOR_FIELDS.map(field => <col key={field.key} style={{ width: field.width }} />)}</colgroup>
               <thead><tr>{MATERIAL_CE_EDITOR_FIELDS.map((field, index) => <th key={field.key} scope="col"><MaterialFieldLabel field={field.key} htmlFor={field.id} label={MATERIAL_CE_FIELDS[index].header} required={field.key === "name"} /></th>)}</tr></thead>
               <tbody><tr>{MATERIAL_CE_EDITOR_FIELDS.map((field, index) => <td key={field.key} data-testid="material-ce-field">
-                {field.key === "level" || field.key === "qty" ? (
-                  <Input id={field.id} disabled={readOnly} readOnly={field.key === "level"} value={field.key === "level" ? "2" : String(form[field.key] ?? "")} onChange={event => updateField(field.key, event.target.value)} inputMode={field.key === "qty" ? "decimal" : undefined} className="material-ce-control" />
-                ) : (
-                  <Textarea id={field.id} disabled={readOnly} value={String(form[field.key] ?? "")} onChange={event => updateField(field.key, event.target.value)} rows={2} placeholder={MATERIAL_CE_FIELDS[index].meaning} className={cn("material-ce-control", (field.key === "virtualAlternative" || field.key === "partNumber") && "material-pn-input", field.key === "partNumber" && !form.partNumber.trim() && "material-pn-missing")} />
-                )}
-                {field.key === "partUsageStatus" && (record as Partial<MaterialRecord>).partUsageStatusSource === "legacy-tracking" && <p className="text-xs text-muted-foreground">取自舊格式匯入追蹤原文；原追蹤保留。</p>}
+                {renderCeControl(field, index)}
               </td>)}</tr></tbody>
             </table>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">全部 15 欄維持同一排，可左右捲動檢視及編輯。</p>
+          </div>}
+          {detailsView === "table" && <p className="mt-2 text-xs text-muted-foreground">全部 15 欄維持同一排，可左右捲動檢視及編輯。</p>}
         </section>
 
         <section
@@ -3024,10 +3039,8 @@ export function MaterialRecordDialog({
 
           </fieldset>
           </TabsContent>
-          <TabsContent value="tracking" forceMount className="data-[state=inactive]:hidden">
-            <section className="workspace-dialog-section workspace-dialog-section--teal rounded-2xl p-4">
+          <TabsContent value="tracking" forceMount className="material-tracking-tab data-[state=inactive]:hidden">
               <MaterialTrackingEditor record={form} draft={trackingDraft} onDraftChange={setTrackingDraft} disabled={readOnly || isSaving} defaultAuthor={uploaderName} />
-            </section>
           </TabsContent>
           </div>
         </Tabs>
