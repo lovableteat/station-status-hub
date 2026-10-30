@@ -242,6 +242,7 @@ test("page snapshots and actual exports keep each physical candidate's own CE fi
   const group = { key: "shared-group", records: candidates, primaryRecord: candidates[0], assemblyName: "Module", name: "GROUP NAME MUST NOT REPLACE ROW", qty: 1, schematicPart: "GROUP SYMBOL MUST NOT FILL BLANKS", footprint: "GROUP FOOTPRINT MUST NOT FILL BLANKS", partName: "GROUP NAME MUST NOT BECOME SPEC", partSpec: "GROUP SPEC MUST NOT FILL BLANKS", displayRef: "C101" };
   const bindings = {
     getMaterialSpecDocuments, filteredGroups: [group], getMatchingRecords: value => value.records,
+    orderedRecordRows: candidates.map(record => ({ group, record, groupIndex: 0 })), sortLabel: "Ref",
     getLatestTrackingEntry: record => record.trackingHistory.at(-1), getTrackingRequestMeta: () => ({ ticket: "", url: "" }),
     getActionLabel: () => "", getGroupItemValue: () => 1, markedGroupKeySet: new Set(),
     getMaterialBuildRequirementLabel: () => "待確認", getTrackingWorkflowStatus: () => "",
@@ -278,6 +279,12 @@ test("page snapshots and actual exports keep each physical candidate's own CE fi
   assert.match(html, /<td>實體料 A<\/td>/);
   assert.match(html, /<td>實體料 B<\/td>/);
   assert.doesNotMatch(html, /GROUP (?:NAME|SYMBOL|FOOTPRINT|SPEC) MUST/);
+  bindings.orderedRecordRows.reverse();
+  bindings.sortLabel = "Manufacturer Z → A";
+  const sortedReport = new Function(...Object.keys(bindings), `${compileSnapshot}; return createExportSnapshot();`)(...Object.values(bindings));
+  assert.deepEqual(sortedReport.rows.map(row => row.manufacturer), ['Maker C', 'Maker B', 'Maker A']);
+  assert.ok(sortedReport.rows.every(row => row.item === '1'), 'sorting retains the original part relationship');
+  assert.ok(sortedReport.filterSummary.includes('排序：Manufacturer Z → A'));
 });
 
 test("不建議料匯出 collects the physical part numbers whose 零件狀態 is a usage restriction", () => {

@@ -12,9 +12,32 @@ export function isExplicitMaterialApplication(status?: string) {
 }
 
 export function materialTrackingStatusTone(status?: string) {
-  if (status === "已完成") return "border-success/35 bg-success/15 text-success";
-  if (status === "料號申請中") return "border-warning/40 bg-warning/20 text-warning";
-  if (status === "SYMBOL申請中") return "border-primary/50 bg-primary/20 text-primary";
-  if (status === "已發信" || status === "文件已收齊" || status === "處理中" || status === "新增追蹤") return "border-primary/30 bg-primary/10 text-primary";
-  return "border-border bg-secondary text-secondary-foreground";
+  return materialTrackingStatusPresentation(status).badge;
+}
+
+// Fixed semantic colours keep the six application stages distinct even when the site accent changes.
+export function materialTrackingStatusPresentation(status?: string) {
+  switch (status?.trim()) {
+    case "已發信": return statusClasses("sent");
+    case "文件已收齊": return statusClasses("documents");
+    case "料號申請中": return statusClasses("part");
+    case "SYMBOL申請中": return statusClasses("symbol");
+    case "已完成": return statusClasses("completed");
+    case "處理中": return statusClasses("legacy-progress");
+    default: return statusClasses("unprocessed");
+  }
+}
+
+function statusClasses(tone: string) {
+  const colour = `material-status--${tone}`;
+  return { badge: `material-status-badge ${colour}`, surface: `material-status-surface ${colour}`, text: `material-status-text ${colour}` };
+}
+
+/** Display legacy wording without collapsing the six manual stages or guessing from substrings. */
+export function normalizeMaterialTrackingStatus(status?: string) {
+  const value = status?.trim() ?? "";
+  if (!value || value === "無狀態") return "未處理";
+  if (/^(ok|approved|完成申請|結案|完成)$/i.test(value)) return "已完成";
+  if (/^(progress|working|wip)$/i.test(value)) return "處理中";
+  return value;
 }

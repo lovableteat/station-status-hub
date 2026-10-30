@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { createClipboardImageName } from "./materialRequestPresentation";
 import { getLatestTrackingEntry, type MaterialTrackingHistoryImage, type MaterialWorkbookRecord } from "./materialRequestUtils";
 import { MATERIAL_TRACKING_STATUS_OPTIONS, normalizeMaterialRequestUrl, type MaterialTrackingDraft } from "./materialTrackingDraft";
-import { getMaterialTrackingStatusMeaning, materialTrackingStatusTone } from "./materialTrackingStatus";
+import { getMaterialTrackingStatusMeaning, materialTrackingStatusTone, materialTrackingStatusPresentation } from "./materialTrackingStatus";
 
 export interface MaterialTrackingEditorProps {
   record: MaterialWorkbookRecord;
@@ -139,7 +139,7 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
 
   return (
     <section data-testid="material-tracking-editor" className="min-w-0 space-y-4" onPaste={handlePaste} aria-label="狀態追蹤">
-      <div data-testid="tracking-current-summary" className="space-y-3 rounded-lg border border-primary/50 bg-primary/20 p-4">
+      <div data-testid="tracking-current-summary" className={`space-y-3 rounded-lg border p-4 ${materialTrackingStatusPresentation(latestStatus).surface}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">目前狀態</h3>
           <TrackingStatusBadge status={latestStatus} />
@@ -159,7 +159,19 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
         </div>
         <div className="space-y-1"><div className="flex flex-wrap items-center gap-2"><h4 className="text-sm font-semibold">本次新增紀錄</h4>{draft.status && <Badge variant="outline" className="border-warning/35 text-warning">尚未儲存</Badge>}</div><p className="text-sm text-muted-foreground">選擇本次狀態，再按底部「儲存資料與追蹤」才會更新目前狀態。只修改單號或連結不新增紀錄。</p></div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5"><Label htmlFor={`${id}-status`}>本次狀態</Label><Select disabled={disabled} value={draft.status || "none"} onValueChange={(value) => updateDraft({ status: value === "none" ? "" : value })}><SelectTrigger id={`${id}-status`} className="h-11" aria-invalid={hasUnselectedProgress}><SelectValue /></SelectTrigger><SelectContent className="material-tracking-status-menu"><SelectItem value="none">不新增紀錄（保留目前狀態）</SelectItem>{MATERIAL_TRACKING_STATUS_OPTIONS.map((status) => <SelectItem key={status} value={status}>{statusLabel(status)}{getMaterialTrackingStatusMeaning(status) ? `（${getMaterialTrackingStatusMeaning(status)}）` : ""}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${id}-status`}>本次狀態</Label>
+            <Select disabled={disabled} value={draft.status || "none"} onValueChange={(value) => updateDraft({ status: value === "none" ? "" : value })}>
+              <SelectTrigger id={`${id}-status`} className="h-11" aria-invalid={hasUnselectedProgress}><SelectValue /></SelectTrigger>
+              <SelectContent className="material-tracking-status-menu">
+                <SelectItem value="none">不新增紀錄（保留目前狀態）</SelectItem>
+                {MATERIAL_TRACKING_STATUS_OPTIONS.map(status => <SelectItem key={status} value={status}>
+                  <span data-status={status} className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-sm font-semibold ${materialTrackingStatusTone(status)}`}><CircleDot className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{statusLabel(status)}</span>
+                  {getMaterialTrackingStatusMeaning(status) && <span className="ml-2 text-xs text-muted-foreground">{getMaterialTrackingStatusMeaning(status)}</span>}
+                </SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1.5"><Label htmlFor={`${id}-author`}>更新人</Label><Input id={`${id}-author`} className="h-11" value={draft.createdBy || defaultAuthor} onChange={(event) => updateDraft({ createdBy: event.target.value })} placeholder="更新人姓名" /></div>
         </div>
         <div className="space-y-1.5"><Label htmlFor={`${id}-info`}>申請狀態資訊</Label><Input id={`${id}-info`} className="h-11" value={draft.requestInfo} onChange={(event) => updateDraft({ requestInfo: event.target.value })} placeholder="申請狀態或相關連結" /></div>

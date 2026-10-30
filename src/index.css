@@ -1069,6 +1069,27 @@ All colors MUST be HSL for proper theming support.
   color: hsl(var(--foreground));
 }
 
+/* Application stages keep their semantic colours through the charcoal palette pass.
+   Numeric HSL tokens are resolved at runtime rather than recoloured as authored fills. */
+.material-status--unprocessed { --material-status: 215 20% 76%; }
+.material-status--sent { --material-status: 204 94% 76%; }
+.material-status--documents { --material-status: 174 65% 67%; }
+.material-status--part { --material-status: 38 92% 69%; }
+.material-status--symbol { --material-status: 263 90% 81%; }
+.material-status--completed { --material-status: 142 66% 72%; }
+.material-status--legacy-progress { --material-status: 24 92% 72%; }
+.material-status-badge {
+  color: hsl(var(--material-status));
+  border-color: hsl(var(--material-status) / 0.55);
+  background-color: hsl(var(--material-status) / 0.16);
+}
+.material-status-surface {
+  border-color: hsl(var(--material-status) / 0.36);
+  background-color: hsl(var(--material-status) / 0.10);
+}
+button.material-status-surface:hover { background-color: hsl(var(--material-status) / 0.18); }
+.material-status-text { color: hsl(var(--material-status)); }
+
 .material-record-dialog .app-dialog-header { flex: 0 0 auto; padding-right: 46px; }
 .material-record-dialog .material-record-scroll { overflow-x: hidden; padding: 0 4px 2px 0; scrollbar-gutter: stable; }
 .material-record-dialog .material-ce-section,
