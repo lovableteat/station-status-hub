@@ -1038,6 +1038,8 @@
 .file-explorer .file-explorer-spacer { min-width: 8px; flex: 1 1 auto; }
 .file-explorer .file-explorer-selection { margin-right: 6px; color: hsl(var(--primary)); font-size: 14px; font-weight: 700; white-space: nowrap; }
 .file-explorer .file-library-navigation-toggle { display: none; }
+.file-explorer-mobile-title, .file-explorer-mobile-meta { display: none; }
+.file-explorer-entry-text { display: contents; }
 
 /* ----- address bar (location, search, format) ---------------------------- */
 .file-explorer .file-explorer-addressbar {
@@ -1536,6 +1538,30 @@ body.file-explorer-resizing .file-explorer iframe { pointer-events: none; }
 }
 
 @media (max-width: 1023px) {
+  .file-explorer .file-explorer-commandbar { gap: 6px; padding: 8px; overflow: visible; }
+  .file-explorer .file-explorer-commandbar > button { height: 44px; }
+  .file-explorer .file-library-navigation-toggle, .file-explorer .file-explorer-mobile-tools-trigger { width: 44px; flex: 0 0 44px; }
+  .file-explorer .file-explorer-mobile-title { display: block; min-width: 0; flex: 1; margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; }
+  .file-explorer .file-explorer-command.is-primary { margin: 0; padding-inline: 10px; font-size: 13px; }
+  .file-explorer .file-explorer-addressbar { gap: 6px; padding: 8px; }
+  .file-explorer .file-explorer-nav-buttons > button:not(:last-child) { display: none; }
+  .file-explorer .file-explorer-addressbar > button, .file-explorer .file-explorer-nav-buttons > button { width: 44px; height: 44px; }
+  .file-explorer .test-plan-location { height: 44px; border-color: transparent; background: transparent; padding-inline: 0; }
+  .file-explorer .file-explorer-search { height: 44px; }
+  .file-explorer .file-explorer-search input { font-size: 16px; }
+  .file-explorer .file-explorer-scope { height: 40px; font-size: 12px; }
+  .file-explorer .file-explorer-format { min-height: 44px; }
+  .file-explorer .test-plan-list-row { min-height: 68px; }
+  .file-explorer .file-explorer-entry-text { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+  .file-explorer .file-library-name-cell { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+  .file-explorer .file-explorer-mobile-meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: hsl(var(--muted-foreground)); font-size: 11px; }
+  .file-explorer-mobile-tools-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
+  .file-explorer-mobile-tools .file-explorer-command { display: flex; align-items: center; justify-content: flex-start; gap: 8px; min-height: 44px; padding: 8px; border-radius: 8px; font-size: 13px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+  .file-explorer-mobile-tools .file-explorer-command > svg { width: 16px; height: 16px; }
+  .file-explorer-mobile-tools .file-explorer-command.is-danger { color: hsl(var(--destructive)); }
+  .file-explorer-mobile-tools .file-explorer-divider, .file-explorer-mobile-tools .file-explorer-spacer, .file-explorer-mobile-tools .file-explorer-selection { display: none; }
+  .file-explorer-mobile-history { display: flex; grid-column: 1 / -1; gap: 6px; padding-top: 8px; border-top: 1px solid hsl(var(--border)); }
+  .file-explorer-mobile-history > button { min-height: 44px; flex: 1; gap: 8px; }
   .file-library-workspace.file-explorer { border-radius: 0; border-inline: 0; }
   .file-explorer .file-library-navigation-toggle { display: inline-flex; flex: 0 0 auto; }
   .file-explorer .file-explorer-command:not(.is-primary):not(.file-explorer-manual) > span {

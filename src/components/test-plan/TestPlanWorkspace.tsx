@@ -40,6 +40,7 @@ import {
   List,
   LockKeyhole,
   MapPin,
+  MoreHorizontal,
   PanelLeftOpen,
   PanelRight,
   Pencil,
@@ -66,6 +67,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -1952,47 +1954,7 @@ export function TestPlanWorkspace() {
     </Button>
   );
 
-  return (
-    <section className={cn("test-plan-workspace file-library-workspace file-explorer", compact && "is-compact")} onKeyDown={handleExplorerKeyDown}>
-      <input ref={fileInputRef} className="sr-only" type="file" multiple disabled={uploadDisabled} onChange={handleFileSelection} />
-      <input ref={folderInputRef} className="sr-only" type="file" multiple {...directoryInputProps} disabled={uploadDisabled} aria-label="選擇上傳資料夾" onChange={handleFolderSelection} />
-      {uploadRetry && (
-        <section className="file-library-upload-errors" role="alert" aria-label="上傳失敗清單">
-          <div className="file-library-upload-error-heading">
-            <strong>{uploadRetry.files.length} 個檔案未上傳</strong>
-            <Button variant="outline" size="sm" aria-label="重試未上傳檔案" disabled={!canEdit || loading || busy} onClick={() => void handleUpload(uploadRetry.files, uploadRetry.preservePaths, uploadRetry)}>重試未上傳檔案</Button>
-            <Button variant="ghost" size="icon" aria-label="關閉上傳失敗清單" disabled={busy} onClick={() => setUploadRetry(null)}><X className="h-4 w-4" /></Button>
-          </div>
-          <p>成功的檔案已保留，重試會使用原空間與資料夾</p>
-          <p>原檔仍在你的電腦；同頁按「重試未上傳檔案」可重試，大檔案傳輸中斷時可續傳。切換工作區後回來仍可重試；重新整理或關閉頁面後，須重新選取原檔。</p>
-          <ul>{uploadRetry.failures.map((failure, index) => <li key={`${failure.fileName}:${index}`}><strong>{failure.fileName || "整批上傳"}</strong><span>{failure.message}</span></li>)}</ul>
-        </section>
-      )}
-      {isSpaceDrawerOpen && (
-        <button
-          type="button"
-          className="test-plan-drawer-backdrop"
-          aria-label="關閉空間選單"
-          onClick={() => setIsSpaceDrawerOpen(false)}
-        />
-      )}
-
-      <div className="file-explorer-commandbar" role="toolbar" aria-label="檔案操作">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="file-library-navigation-toggle"
-          aria-label="空間與資料夾"
-          aria-expanded={isSpaceDrawerOpen}
-          aria-controls="test-plan-space-drawer"
-          onClick={() => setIsSpaceDrawerOpen(true)}
-        >
-          <PanelLeftOpen className="h-4 w-4" />
-        </Button>
-        <Button type="button" className="file-explorer-command is-primary" disabled={uploadDisabled} title={activeSpaceId === null ? "上傳到我的空間" : "上傳到目前資料夾；也可以直接把檔案拖進清單"} onClick={() => fileInputRef.current?.click()}>
-          <Upload className="h-4 w-4" /><span>上傳檔案</span>
-        </Button>
+  const secondaryCommands = <>
         <Button type="button" variant="ghost" className="file-explorer-command" aria-label="上傳資料夾" disabled={uploadDisabled} title="瀏覽器會再問一次是否上傳；直接把資料夾拖進清單就不會" onClick={() => folderInputRef.current?.click()}>
           <FolderUp className="h-4 w-4" /><span>上傳資料夾</span>
         </Button>
@@ -2058,6 +2020,61 @@ export function TestPlanWorkspace() {
         >
           <BookOpen className="h-4 w-4" /><span>操作手冊</span>
         </Button>
+        {compact && <div className="file-explorer-mobile-history">
+          <Button type="button" variant="ghost" disabled={!canGoBack || busy} onClick={goBack}><ArrowLeft className="h-4 w-4" />返回</Button>
+          <Button type="button" variant="ghost" disabled={!canGoForward || busy} onClick={goForward}><ArrowRight className="h-4 w-4" />前進</Button>
+        </div>}
+  </>;
+
+  return (
+    <section className={cn("test-plan-workspace file-library-workspace file-explorer", compact && "is-compact")} onKeyDown={handleExplorerKeyDown}>
+      <input ref={fileInputRef} className="sr-only" type="file" multiple disabled={uploadDisabled} onChange={handleFileSelection} />
+      <input ref={folderInputRef} className="sr-only" type="file" multiple {...directoryInputProps} disabled={uploadDisabled} aria-label="選擇上傳資料夾" onChange={handleFolderSelection} />
+      {uploadRetry && (
+        <section className="file-library-upload-errors" role="alert" aria-label="上傳失敗清單">
+          <div className="file-library-upload-error-heading">
+            <strong>{uploadRetry.files.length} 個檔案未上傳</strong>
+            <Button variant="outline" size="sm" aria-label="重試未上傳檔案" disabled={!canEdit || loading || busy} onClick={() => void handleUpload(uploadRetry.files, uploadRetry.preservePaths, uploadRetry)}>重試未上傳檔案</Button>
+            <Button variant="ghost" size="icon" aria-label="關閉上傳失敗清單" disabled={busy} onClick={() => setUploadRetry(null)}><X className="h-4 w-4" /></Button>
+          </div>
+          <p>成功的檔案已保留，重試會使用原空間與資料夾</p>
+          <p>原檔仍在你的電腦；同頁按「重試未上傳檔案」可重試，大檔案傳輸中斷時可續傳。切換工作區後回來仍可重試；重新整理或關閉頁面後，須重新選取原檔。</p>
+          <ul>{uploadRetry.failures.map((failure, index) => <li key={`${failure.fileName}:${index}`}><strong>{failure.fileName || "整批上傳"}</strong><span>{failure.message}</span></li>)}</ul>
+        </section>
+      )}
+      {isSpaceDrawerOpen && (
+        <button
+          type="button"
+          className="test-plan-drawer-backdrop"
+          aria-label="關閉空間選單"
+          onClick={() => setIsSpaceDrawerOpen(false)}
+        />
+      )}
+
+      <div className="file-explorer-commandbar" role="toolbar" aria-label="檔案操作">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="file-library-navigation-toggle"
+          aria-label="空間與資料夾"
+          aria-expanded={isSpaceDrawerOpen}
+          aria-controls="test-plan-space-drawer"
+          onClick={() => setIsSpaceDrawerOpen(true)}
+        >
+          <PanelLeftOpen className="h-4 w-4" />
+        </Button>
+        <h1 className="file-explorer-mobile-title">檔案上傳</h1>
+        <Button type="button" className="file-explorer-command is-primary" disabled={uploadDisabled} title={activeSpaceId === null ? "上傳到我的空間" : "上傳到目前資料夾；也可以直接把檔案拖進清單"} onClick={() => fileInputRef.current?.click()}>
+          <Upload className="h-4 w-4" /><span>上傳檔案</span>
+        </Button>
+        {compact ? <Popover>
+          <PopoverTrigger asChild><Button type="button" variant="outline" size="icon" className="file-explorer-mobile-tools-trigger" aria-label="檔案操作與檢視"><MoreHorizontal className="h-5 w-5" /></Button></PopoverTrigger>
+          <PopoverContent align="end" className="file-explorer-mobile-tools w-[min(360px,calc(100vw-24px))] p-3">
+            <p className="mb-3 text-sm font-semibold">檔案操作{selectedEntries.length > 0 && <span className="ml-2 text-primary">已選取 {selectedEntries.length} 個項目</span>}</p>
+            <div className="file-explorer-mobile-tools-grid">{secondaryCommands}</div>
+          </PopoverContent>
+        </Popover> : secondaryCommands}
       </div>
 
       <div className="file-explorer-addressbar">
@@ -2126,7 +2143,7 @@ export function TestPlanWorkspace() {
             value={query}
             disabled={busy}
             aria-label="搜尋檔案與資料夾"
-            placeholder={`搜尋「${searchLocationName}」 (Ctrl+E)`}
+            placeholder={compact ? "搜尋檔案與資料夾" : `搜尋「${searchLocationName}」 (Ctrl+E)`}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Escape" && query) { event.preventDefault(); setQuery(""); }
@@ -2431,7 +2448,10 @@ export function TestPlanWorkspace() {
                                   <span className={cn("file-library-type file-type", entry.kind === "folder" ? "is-folder" : `is-${entry.category}`)} aria-hidden="true">
                                     <FileTypeIcon entry={entry} />
                                   </span>
-                                  {renderName(entry)}
+                                  <span className="file-explorer-entry-text">
+                                    {renderName(entry)}
+                                    {renaming?.key !== key && <small className="file-explorer-mobile-meta">{describeEntryType(entry)} · {formatEntryDate(entry.updatedAt)}</small>}
+                                  </span>
                                   {renaming?.key !== key && renderQuickActions(entry)}
                                 </span>
                                 {showOwnerColumn && (
