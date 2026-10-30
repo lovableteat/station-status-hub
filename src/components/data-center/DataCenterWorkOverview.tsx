@@ -1,5 +1,5 @@
-import { useEffect, useRef, type ReactNode } from "react";
-import { AlertTriangle, Check, ChevronRight, CircleHelp, ClipboardCheck, ListChecks, PanelRightClose, Server } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, CircleHelp, ClipboardCheck, ListChecks, PanelRightClose, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ export interface WorkflowStep {
 }
 
 interface WorkflowStripProps {
+  compact?: boolean;
   steps: WorkflowStep[];
   nextStepId: string | null;
   onStep: (id: string) => void;
@@ -22,18 +23,19 @@ interface WorkflowStripProps {
 }
 
 /** The page's purpose as five live steps; the first unfinished one is the suggested next action. */
-export function WorkflowStrip({ steps, nextStepId, onStep, help }: WorkflowStripProps) {
+export function WorkflowStrip({ compact = false, steps, nextStepId, onStep, help }: WorkflowStripProps) {
   const listRef = useRef<HTMLOListElement | null>(null);
-  // On narrow screens the strip scrolls; keep the suggested next step in view without moving the page.
+  const [flowOpen, setFlowOpen] = useState(false);
+  const nextStep = steps.find(step => step.id === nextStepId) ?? steps[steps.length - 1];
+  const completed = steps.filter(step => step.done).length;
+  // Keep the suggested step visible when the full strip overflows without moving the page.
   useEffect(() => {
     const list = listRef.current;
     const current = list?.querySelector<HTMLElement>('[aria-current="step"]');
     if (!list || !current || list.scrollWidth <= list.clientWidth) return;
     list.scrollLeft = Math.max(0, current.offsetLeft - 12);
-  }, [nextStepId]);
-  return (
-    <>
-      <ol ref={listRef} className="dc-flow" aria-label="機房配置工作流程">
+  }, [nextStepId, compact]);
+  const stepList = <ol ref={listRef} className={compact ? "dc-flow-menu" : "dc-flow"} aria-label="機房配置工作流程">
         {steps.map((step, index) => {
           const isNext = step.id === nextStepId;
           return (
@@ -45,7 +47,7 @@ export function WorkflowStrip({ steps, nextStepId, onStep, help }: WorkflowStrip
                 data-done={step.done ? "true" : "false"}
                 aria-current={isNext ? "step" : undefined}
                 aria-label={`${step.title}：${step.value}${isNext ? "（建議下一步）" : step.done ? "（已完成）" : ""}`}
-                onClick={() => onStep(step.id)}
+                onClick={() => { setFlowOpen(false); onStep(step.id); }}
               >
                 <span className="dc-flow-index" aria-hidden="true">{step.done ? <Check className="h-4 w-4" /> : index + 1}</span>
                 <span className="dc-flow-title">{step.title}{isNext ? <em className="dc-flow-next">下一步</em> : null}</span>
@@ -54,10 +56,25 @@ export function WorkflowStrip({ steps, nextStepId, onStep, help }: WorkflowStrip
             </li>
           );
         })}
-      </ol>
+      </ol>;
+  return (
+    <>
+      {compact ? <Popover open={flowOpen} onOpenChange={setFlowOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" className="dc-flow-current" aria-label={`工作流程：${completed}／${steps.length} 已完成${nextStepId ? `，下一步 ${nextStep?.title}` : ""}`}>
+            <span className="dc-flow-count">{completed}<span>／{steps.length}</span></span>
+            <span className="dc-flow-current-text"><strong>{nextStepId ? "下一步" : "工作流程"} · {nextStep?.title}</strong><span>{nextStep?.value}</span></span>
+            <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" sideOffset={8} className="dc-flow-popover w-[min(420px,calc(100vw-24px))] p-3">
+          <p className="mb-3 text-sm font-semibold">機房配置工作流程<span className="ml-2 text-xs font-normal text-muted-foreground">已完成 {completed}／{steps.length}</span></p>
+          {stepList}
+        </PopoverContent>
+      </Popover> : stepList}
       <Popover>
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" className="dc-flow-help h-9 px-3 text-sm"><CircleHelp className="h-4 w-4" />使用說明</Button>
+          <Button type="button" variant="outline" aria-label="使用說明" className="dc-flow-help h-9 px-3 text-sm"><CircleHelp className="h-4 w-4" /><span>使用說明</span></Button>
         </PopoverTrigger>
         <PopoverContent align="end" sideOffset={8} className="dc-flow-help-content w-[min(92vw,30rem)] text-sm leading-6">
           {help}
