@@ -6014,7 +6014,7 @@ export function MaterialRequestPage() {
 
       {isCompactLayout && <section
         data-testid="material-mobile-command-center"
-        className="overflow-hidden rounded-2xl border border-cyan-200/25 bg-[radial-gradient(circle_at_0%_0%,rgba(34,211,238,0.16),transparent_16rem),radial-gradient(circle_at_100%_100%,rgba(251,191,36,0.09),transparent_14rem),#0d2033] shadow-[0_20px_46px_-32px_rgba(34,211,238,0.75)] lg:hidden"
+        className="material-mobile-command-center overflow-hidden rounded-xl border border-border bg-card lg:hidden"
       >
         <div className="flex items-center justify-between gap-2 border-b border-cyan-200/10 px-2.5 py-2">
           <div className="min-w-0">
@@ -6051,26 +6051,7 @@ export function MaterialRequestPage() {
         </div>
 
         <div data-mobile-material-primary-controls="true" className="space-y-2 p-2.5">
-          <details data-mobile-material-tools="true" className="group rounded-xl border border-slate-600/60 bg-slate-950/25 [&_summary::-webkit-details-marker]:hidden">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 text-sm font-black text-slate-200">
-              <span className="flex min-w-0 items-center gap-2"><Layers3 className="h-4 w-4 text-violet-200" /><span className="truncate">排序與工具</span></span>
-              <span className="flex items-center gap-2 text-[11px] text-slate-400">{sortLabel}<ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></span>
-            </summary>
-            <div className="grid grid-cols-2 gap-2 border-t border-white/8 p-2.5">
-              <Select value={sortSelectValue} onValueChange={selectTableSort}>
-                <SelectTrigger aria-label="料號排序" className="col-span-2 h-11 rounded-xl border-slate-600/70 bg-[#071522] text-sm text-slate-100"><SelectValue /></SelectTrigger>
-                <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">{sortSelectItems}</SelectContent>
-              </Select>
-              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
-              <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
-              <Button type="button" variant="outline" onClick={openPendingDialog} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", pendingApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {pendingApplicationCount.toLocaleString()}</Button>
-              <Button type="button" variant="outline" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} className="h-11 border-orange-300/30 bg-orange-400/10 text-orange-100"><FileSpreadsheet className="mr-2 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
-              <Button type="button" variant="outline" onClick={() => setRlcPriorityOpen(true)} className="h-11 border-primary/30 bg-primary/10 text-primary">RLC 優先順序</Button>
-              <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
-              {tableSettingsControl}
-              <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
-            </div>
-          </details>
+
           <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-cyan-300" />
@@ -6108,7 +6089,27 @@ export function MaterialRequestPage() {
             </Button>
           </div>
 
-          {searchColumnControl}
+          <div className="material-mobile-utility-row flex items-center gap-2">{searchColumnControl}
+          <Popover>
+            <PopoverTrigger asChild><Button type="button" variant="secondary" className="h-11 shrink-0 gap-2 px-3" aria-label="排序與工具"><Layers3 className="h-4 w-4" />排序與工具<ChevronDown className="h-3.5 w-3.5" /></Button></PopoverTrigger>
+            <PopoverContent data-mobile-material-tools="true" align="end" className="w-[min(360px,calc(100vw-24px))] p-0">
+            <div className="grid grid-cols-2 gap-2 border-t border-white/8 p-2.5">
+              <Select value={sortSelectValue} onValueChange={selectTableSort}>
+                <SelectTrigger aria-label="料號排序" className="col-span-2 h-11 rounded-xl border-slate-600/70 bg-[#071522] text-sm text-slate-100"><SelectValue /></SelectTrigger>
+                <SelectContent className="border-cyan-400/25 bg-[#101a2d] text-slate-100">{sortSelectItems}</SelectContent>
+              </Select>
+              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 border-emerald-300/30 bg-emerald-400/10 text-emerald-100"><Upload className="mr-2 h-4 w-4" />上傳 BOM</Button>
+              <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11 border-sky-300/30 bg-sky-400/10 text-sky-100"><CircleCheck className="mr-2 h-4 w-4" />頁數進度</Button>
+              <Button type="button" variant="outline" onClick={openPendingDialog} className={cn("h-11 border-rose-300/30 bg-rose-400/10 text-rose-100", pendingApplicationCount > 0 && "material-attention")}><TriangleAlert className="mr-2 h-4 w-4" />待處理料 {pendingApplicationCount.toLocaleString()}</Button>
+              <Button type="button" variant="outline" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} className="h-11 border-orange-300/30 bg-orange-400/10 text-orange-100"><FileSpreadsheet className="mr-2 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
+              <Button type="button" variant="outline" onClick={() => setRlcPriorityOpen(true)} className="h-11 border-primary/30 bg-primary/10 text-primary">RLC 優先順序</Button>
+              <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11 border-violet-300/30 bg-violet-400/10 text-violet-100"><CircleHelp className="mr-2 h-4 w-4" />使用說明</Button>
+              {tableSettingsControl}
+              <Button type="button" variant="outline" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 border-amber-300/30 bg-amber-400/10 text-amber-100"><Download className="mr-2 h-4 w-4" />匯出報表</Button>
+            </div>
+            </PopoverContent>
+          </Popover>
+          </div>
           <div className="flex snap-x gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <button type="button" onClick={clearFilters} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", availability === "all" && !showMarkedOnly ? "border-sky-200/50 bg-sky-300 text-sky-950" : "border-sky-300/20 bg-sky-400/10 text-sky-100")}>全部 {dataset.stats.totalGroups.toLocaleString()}</button>
             <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", availability === "required" ? "border-amber-200/60 bg-amber-300 text-amber-950" : "border-amber-300/25 bg-amber-400/10 text-amber-100")}>料號待補 {requiredApplicationCount.toLocaleString()}</button>
@@ -6378,7 +6379,7 @@ export function MaterialRequestPage() {
                 key={`${group.key}:${mainRecord.id}`}
                 style={buildTableRowStyle(mainRecord.id !== group.primaryRecord.id ? activeTableColorTheme.alternative : activeTableColorTheme.primary, { backgroundAlpha: 0.48 })}
                 className={cn(
-                  "overflow-hidden rounded-xl border bg-[var(--material-row-solid)]",
+                  "material-mobile-record overflow-hidden rounded-xl border bg-[var(--material-row-solid)]",
                   mustApply ? "border-amber-300/35" : "border-cyan-200/20",
                 )}
               >
@@ -6396,7 +6397,7 @@ export function MaterialRequestPage() {
                     {itemValue}
                   </button>
                   <button type="button" onClick={() => openRecord(mainRecord, "view")} className="min-w-0 flex-1 text-left">
-                    <p className="truncate text-sm font-black leading-5 text-white">{group.name || mainRecord.name || "未命名料件"}</p>
+                    <p className="line-clamp-2 break-words text-base font-semibold leading-6 text-white">{group.name || mainRecord.name || "未命名料件"}</p>
                     <p className="truncate text-xs font-semibold text-cyan-200">{getDisplayMpn(mainRecord) || "尚未填寫 MPN"} · <span className="font-normal text-slate-400">{mainRecord.manufacturer || "未指定廠商"}</span></p>
                     <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><PartUsageSummary records={group.records} /><span className="inline-flex min-w-0 items-center gap-1"><span className="text-xs text-slate-500">phase out</span><PhaseOutStatus record={mainRecord} /></span></div>
                   </button>
@@ -6410,8 +6411,9 @@ export function MaterialRequestPage() {
                   <span className={cn("shrink-0 rounded-full border px-2 py-0.5 font-bold", availableAlternativeCount > 0 ? "border-emerald-300/25 bg-emerald-400/8 text-emerald-200" : "border-slate-500/25 bg-slate-800/40 text-slate-300")}>替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
                 </div>
 
-                <div className="grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-b border-white/5 bg-[#091827]/60 px-2.5 py-2">
-                  <span className="text-xs font-black text-slate-400">Note</span>
+                <details className="material-mobile-note border-b border-border px-3">
+                  <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-xs text-muted-foreground"><span className="font-semibold">Note</span><span className="min-w-0 flex-1 truncate">{mainRecord.note || "新增 Note"}</span><ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></summary>
+                  <div className="pb-3">
                   <MaterialNoteCell
                     compact
                     key={`${user?.userId}:${activeWorkspace.id}:${mainRecord.id}`}
@@ -6419,7 +6421,8 @@ export function MaterialRequestPage() {
                     onSave={rowActions.saveNote}
                     record={mainRecord}
                   />
-                </div>
+                  </div>
+                </details>
 
                 {expanded ? (
                   <div className="space-y-2 border-b border-cyan-200/10 bg-[#071522] p-2.5">

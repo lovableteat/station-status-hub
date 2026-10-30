@@ -2701,7 +2701,7 @@ export function ApiChatConsole({
     <div
       ref={chatConsoleRef}
       className={cn(
-        "flex flex-col overflow-hidden border border-border bg-background",
+        "ai-conversation-panel flex flex-col overflow-hidden border border-border bg-background",
         isChatOnly
           ? "h-full min-h-0 rounded-2xl"
           : "min-h-[720px] rounded-[34px] p-5"
@@ -2778,7 +2778,7 @@ export function ApiChatConsole({
       <div className={cn("flex min-h-0 flex-1 flex-col", isChatOnly && "overflow-y-auto lg:overflow-visible")}>
       <AiQuotaStatus apiKeyId={selectedApiKey?.id ?? null} provider={provider} model={model} />
       {isChatOnly ? (
-        <div className="shrink-0 border-b border-blue-300/15 bg-[#111e31] px-1.5 py-1 sm:px-3 sm:py-2 lg:px-6 lg:py-3">
+        <div className="ai-source-context shrink-0 border-b border-blue-300/15 bg-[#111e31] px-1.5 py-1 sm:px-3 sm:py-2 lg:px-6 lg:py-3">
           <MaintenanceSourceSelector
             enabled={maintenanceSourceEnabled}
             onEnabledChange={(enabled) => {
@@ -3260,7 +3260,8 @@ export function ApiChatConsole({
           </aside>
 
           <div className="order-1 flex min-h-0 min-w-0 flex-col gap-2 lg:order-2">
-            <div data-mobile-ai-command-bar="true" className="grid h-11 shrink-0 grid-cols-[44px_minmax(0,1fr)_44px_44px] gap-2 lg:hidden">
+            <div data-mobile-ai-command-bar="true" className="grid shrink-0 grid-cols-[minmax(0,1fr)_44px_44px_44px] gap-2 lg:hidden">
+              <h1 className="flex min-w-0 items-center text-lg font-semibold text-foreground">AI 問答</h1>
               <Button
                 type="button"
                 variant="outline"
@@ -3271,6 +3272,7 @@ export function ApiChatConsole({
                 <History className="h-4 w-4" />
                 <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-cyan-300 px-1 text-[9px] font-black leading-4 tabular-nums text-slate-950">{savedConversations.length}</span>
               </Button>
+              <div className="order-last col-span-full min-w-0">
               <Select
                 value={selectedApiKeyTargetId ?? ""}
                 onValueChange={(value) => onSelectApiKeyTarget?.(value)}
@@ -3292,6 +3294,7 @@ export function ApiChatConsole({
                   })}
                 </SelectContent>
               </Select>
+              </div>
               <Button type="button" variant="outline" aria-label={`開啟聊天室${directMessageUnreadCount ? `，${directMessageUnreadCount} 則未讀` : ""}`} title="訊息" className="relative h-11 w-11 p-0" onClick={() => window.dispatchEvent(new CustomEvent("open-global-direct-messages"))}>
                 <MessageSquareText className="h-4 w-4" />
                 {directMessageUnreadCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-destructive px-1 text-[10px] text-destructive-foreground">{directMessageUnreadCount > 99 ? "99+" : directMessageUnreadCount}</span>}
