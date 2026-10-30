@@ -5,21 +5,56 @@ import ts from 'typescript';
 
 const require = createRequire(import.meta.url);
 const { React, create, act, loader, ui } = require('./support/renderHarness.cjs');
+const clock = { now: Date.parse('2026-10-30T04:15:00Z'), intervals: new Map() };
+class TestDate extends Date { static now() { return clock.now; } }
 const load = loader({
   mocks: { './useMaterialRequestOwners': {useMaterialRequestOwners:()=>({owners:[],error:''})}, './MaterialRequestOwnerPicker': { MaterialRequestOwnerPicker: ui.Select } },
   globals: { toWorkbookRecord: record=>record, PendingCategoryPicker: ui.Select, PendingMailDialog: ui.Dialog, SupplierDirectoryDialog: ui.Dialog,
     STALE_PENDING_MS: 3 * 86400000, getPendingGroupUpdatedAt: () => Date.now(), getTrackingStatusTone: () => '',
-    CHIP_BASE: '', CHIP_TONES: { danger: '' }, requestAnimationFrame: () => 1, cancelAnimationFrame() {} },
+    CHIP_BASE: '', CHIP_TONES: { danger: '' }, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, Date: TestDate,
+    setInterval(callback) { const key = Symbol(); clock.intervals.set(key, callback); return key; },
+    clearInterval(key) { clock.intervals.delete(key); } },
   transform(source, file) {
     if (!file.endsWith('MaterialRequestPage.tsx')) return source;
     const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     return ast.statements.filter(node =>
       ts.isFunctionDeclaration(node) && ['PendingMaterialsDialog', 'loadMarkedGroups', 'saveMarkedGroups', 'getMarkedGroupsStorageKey'].includes(node.name?.text)
       || ts.isVariableStatement(node) && node.getText(ast).startsWith('const MARKED_GROUPS_KEY_PREFIX')
-      || ts.isImportDeclaration(node) && ['react', 'lucide-react', '@/lib/utils', './materialRequestPresentation', './MaterialRequestOwnerPicker', './useMaterialRequestOwners', './materialTrackingStatus', './pendingMaterialsExport'].includes(node.moduleSpecifier.text)
+      || ts.isImportDeclaration(node) && ['react', 'lucide-react', '@/lib/utils', './materialRequestPresentation', './MaterialRequestOwnerPicker', './useMaterialRequestOwners', './materialTrackingStatus', './pendingMaterialsExport', './materialApplicationTiming'].includes(node.moduleSpecifier.text)
       || ts.isImportDeclaration(node) && node.moduleSpecifier.text.startsWith('@/components/ui/')
     ).map(node => node.getText(ast)).join('\n') + '\nexport { loadMarkedGroups, saveMarkedGroups };';
   },
+});
+
+test('pending rows show first-update age, refresh while open, and keep opening the same record', () => {
+  const { PendingMaterialsDialog } = load('src/components/material-requests/MaterialRequestPage.tsx');
+  const start = clock.now;
+  const record = { ...groups[0].primaryRecord, trackingHistory: [{ id: 'first', status: '已發信', createdAt: new Date(start - 25 * 3600000).toISOString() }] };
+  const timedGroup = { ...groups[0], records: [record], primaryRecord: record };
+  let root, opened, open = true;
+  const render = () => React.createElement(PendingMaterialsDialog, { groups: [timedGroup, groups[1]], canEdit: true, open, workspaceName: 'QA', exportedBy: 'QA',
+    onOpenChange() {}, onOpenTracking(value) { opened = value; }, onSetCategory() {}, onSetOwner() {}, markedGroupKeys: new Set(), onToggleMarked() {},
+  });
+  try {
+    act(() => { root = create(render()); });
+    const values = () => root.root.findAllByProps({ 'data-testid': 'pending-application-elapsed' }).map(node => node.props.children[1].props.children);
+    assert.deepEqual(values(), ['1 天', '尚無紀錄']);
+    assert.match(root.root.findAllByProps({ 'data-testid': 'pending-application-elapsed' })[0].props.title, /1 天 1 小時 0 分鐘/);
+    act(() => root.root.findAll(node => node.type === 'stub' && node.props['data-testid'] === 'pending-tracking-control')[0].props.onClick());
+    assert.equal(opened, record);
+    clock.now += 86400000;
+    act(() => { for (const refresh of clock.intervals.values()) refresh(); });
+    assert.deepEqual(values(), ['2 天', '尚無紀錄']);
+    act(() => { open = false; root.update(render()); });
+    assert.equal(clock.intervals.size, 0, 'closed dialogs stop their clock');
+    clock.now += 86400000;
+    act(() => { open = true; root.update(render()); });
+    assert.deepEqual(values(), ['3 天', '尚無紀錄']);
+  } finally {
+    act(() => root?.unmount());
+    clock.now = start;
+  }
+  assert.equal(clock.intervals.size, 0, 'unmount clears the refresh timer');
 });
 
 const groups = ['J1', 'R1'].map(ref => {

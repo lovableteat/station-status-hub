@@ -15,10 +15,12 @@ test("pending Excel round-trips full references, leading-zero part numbers, assi
   const {createPendingMaterialsWorkbook}=exports;
   const ref=Array.from({length:50},(_,i)=>`J${i+1}`).join(",");
   const row={category:"CONNECTOR",displayRef:"J1…",record:{id:"one",name:"完整料件名稱",refDes:ref,qty:8,manufacturerPartNumber:"000012345",manufacturer:"廠商",partNumber:"001-234",requestOwnerName:"負責人 CE",trackingStatus:"SYMBOL申請中",trackingHistory:[{id:"progress",status:"SYMBOL申請中",createdBy:"真正操作者",createdAt:"2026-10-29T02:00:00Z",note:"等 SYMBOL"}],specDocument:{name:"old.pdf",path:"old"},specDocuments:[{name:"old.pdf",path:"old"},{name:"part.glb",path:"model"}]}};
-  const workbook=await createPendingMaterialsWorkbook({rows:[row],workspaceName:"篩選的 BOM",exportedBy:"匯出者",scope:"分類：CONNECTOR · 搜尋：J1"});
+  const exportedAt = new Date("2026-10-30T14:00:00Z");
+  const undated = { ...row, record: { ...row.record, trackingHistory: [{ id: 'imported', status: '已發信', createdAt: '' }] } };
+  const workbook=await createPendingMaterialsWorkbook({rows:[row, undated],workspaceName:"篩選的 BOM",exportedBy:"匯出者",scope:"分類：CONNECTOR · 搜尋：J1", exportedAt});
   const reopened=new ExcelJS.Workbook();await reopened.xlsx.load(await workbook.xlsx.writeBuffer());
   const sheet=reopened.getWorksheet("待處理料");
-  assert.equal(sheet.rowCount,5);
+  assert.equal(sheet.rowCount,6);
   const headers=sheet.getRow(4).values;
   const value=label=>sheet.getRow(5).getCell(headers.indexOf(label)).value;
   assert.equal(value("Ref Des"),ref);
@@ -28,6 +30,12 @@ test("pending Excel round-trips full references, leading-zero part numbers, assi
   assert.equal(value("最後更新人"),"真正操作者");
   assert.equal(value("申請類型說明"),"已有料號，需申請 SYMBOL");
   assert.equal(value("SPEC 文件"),"old.pdf\npart.glb");
+  assert.equal(value("首次更新時間"), "2026-10-29T02:00:00.000Z");
+  assert.equal(value("累計申請天數"), 1.5, "export stores numeric 24-hour days, including the partial day");
+  assert.equal(value("統計截至時間"), exportedAt.toISOString());
+  assert.equal(sheet.getRow(5).getCell(headers.indexOf("累計申請天數")).numFmt, "0.00");
+  assert.equal(sheet.getRow(6).getCell(headers.indexOf("首次更新時間")).value, "");
+  assert.equal(sheet.getRow(6).getCell(headers.indexOf("累計申請天數")).value, null);
   assert.match(sheet.getCell("A3").value,/分類：CONNECTOR · 搜尋：J1/);
   assert.equal(sheet.views[0].ySplit,4);
 });

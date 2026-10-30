@@ -147,6 +147,7 @@ import { restoreMaterialColumnSort, sortMaterialTableRows, type MaterialColumnSo
 import { MaterialRequestOwnerPicker, type MaterialRequestOwner } from "./MaterialRequestOwnerPicker";
 import { useMaterialRequestOwners } from "./useMaterialRequestOwners";
 import { exportPendingMaterialsExcel } from "./pendingMaterialsExport";
+import { describeMaterialApplicationTiming, formatMaterialApplicationDays, getMaterialApplicationTiming } from "./materialApplicationTiming";
 import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
 import { isMaterialReferenceQuery, matchesMaterialReference } from "./materialSearch";
 import { clearMaterialCrosshair, markMaterialCrosshair } from "./materialTableCrosshair";
@@ -2585,6 +2586,7 @@ export function PendingMaterialsDialog({
   const [mailOpen, setMailOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
+  const [timingNow, setTimingNow] = useState(Date.now);
   const ownerDirectory = useMaterialRequestOwners(open, accountId);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all" | "marked">("all");
@@ -2615,6 +2617,14 @@ export function PendingMaterialsDialog({
   const scrollTopRef = useRef(0);
   useEffect(() => {
     if (!open) return;
+    const refresh = () => setTimingNow(Date.now());
+    refresh();
+    const interval = setInterval(refresh, 60_000);
+    window.addEventListener("focus", refresh);
+    return () => { clearInterval(interval); window.removeEventListener("focus", refresh); };
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
     if (restoreView) {
       const top = scrollTopRef.current;
       const frame = requestAnimationFrame(() => {
@@ -2629,7 +2639,7 @@ export function PendingMaterialsDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const priorityCount = categories.filter((category) => category.priority).reduce((sum, category) => sum + category.groups.length, 0);
-  const staleThreshold = Date.now() - STALE_PENDING_MS;
+  const staleThreshold = timingNow - STALE_PENDING_MS;
   const isStale = (group: MaterialGroup) => getPendingGroupUpdatedAt(group, recordMeta) < staleThreshold;
   const staleCount = applications.filter((application) => isStale(application.group)).length;
   const listedLocations = new Set(applications.map((application) => application.group.key)).size;
@@ -2729,6 +2739,7 @@ export function PendingMaterialsDialog({
             ...category.groups.map((application) => {
               const { group, record } = application;
               const trackingStatus = record.trackingStatus?.trim() || "";
+              const timing = getMaterialApplicationTiming(record, timingNow);
               const stale = isStale(group);
               const marked = markedGroupKeys.has(group.key);
               return (
@@ -2740,11 +2751,17 @@ export function PendingMaterialsDialog({
                   <span className="pending-row-mpn min-w-0 truncate font-mono text-sm text-foreground/75" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
                   <span className="pending-row-manufacturer min-w-0 truncate text-xs text-muted-foreground" title={record.manufacturer}>{record.manufacturer || "未填廠商"}</span>
                   <MaterialRequestOwnerPicker record={record} owners={ownerDirectory.owners} disabled={!canEdit} onChange={owner => onSetOwner(record, owner)} />
-                  <div className="pending-row-warning" data-testid="pending-stale-slot" aria-hidden={!stale || undefined}>{stale && <span className="pending-stale-badge" role="img" aria-label="逾 3 天未更新" title="這筆待處理料已超過 3 天沒有更新資料"><TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="pending-stale-label" aria-hidden="true">逾 3 天未更新</span></span>}</div>
+                  <div className="pending-row-timing">
+                    <span data-testid="pending-application-elapsed" className="pending-application-elapsed" title={describeMaterialApplicationTiming(timing, timingNow)}>
+                      <span className="block text-[10px] text-muted-foreground">申請耗時</span>
+                      <span className="block text-xs font-semibold tabular-nums text-foreground">{formatMaterialApplicationDays(timing)}</span>
+                    </span>
+                    <div className="pending-row-warning" data-testid="pending-stale-slot" aria-hidden={!stale || undefined}>{stale && <span className="pending-stale-badge" role="img" aria-label="逾 3 天未更新" title="這筆待處理料已超過 3 天沒有更新資料"><TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="pending-stale-label" aria-hidden="true">逾 3 天未更新</span></span>}</div>
+                  </div>
                   <div className="pending-row-status">
                     <Button type="button" data-testid="pending-tracking-control" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full gap-0 overflow-hidden rounded-lg border border-border p-0 text-xs" aria-label={`追蹤／更新 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
-                      <span data-testid="pending-status-segment" className={cn("inline-flex h-full min-w-0 flex-col items-center justify-center px-2", materialTrackingStatusTone(trackingStatus))}><span className="block w-full truncate" title={trackingStatus || "未處理"}>{trackingStatus || "未處理"}</span>{getMaterialTrackingStatusMeaning(trackingStatus) && <span className="block w-full truncate text-[10px] font-normal" title={getMaterialTrackingStatusMeaning(trackingStatus)}>{getMaterialTrackingStatusMeaning(trackingStatus)}</span>}</span>
-                      <span data-testid="pending-update-segment" className="inline-flex h-full min-w-0 items-center justify-center whitespace-nowrap border-l border-border px-1.5">追蹤／更新</span>
+                      <span data-testid="pending-status-segment" className={cn("inline-flex h-full min-w-0 flex-col items-center justify-center px-1", materialTrackingStatusTone(trackingStatus))}><span className="block w-full truncate" title={trackingStatus || "未處理"}>{trackingStatus || "未處理"}</span>{getMaterialTrackingStatusMeaning(trackingStatus) && <span className="block w-full truncate text-[10px] font-normal" title={getMaterialTrackingStatusMeaning(trackingStatus)}>{getMaterialTrackingStatusMeaning(trackingStatus)}</span>}</span>
+                      <span data-testid="pending-update-segment" className="inline-flex h-full min-w-0 items-center justify-center whitespace-nowrap border-l border-border px-1">追蹤／更新</span>
                     </Button>
                   </div>
                 </div>
