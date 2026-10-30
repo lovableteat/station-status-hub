@@ -12,6 +12,8 @@ test("issue dashboard uses a responsive metric grid and bounded issue and owner 
   assert.match(source, /min-h-11/);
   assert.match(source, /focus-visible:ring-2/);
   assert.match(source, /<TableHeader>/);
+  assert.match(source, /data-testid="dashboard-mobile-issues"/);
+  assert.match(source, /issue-dashboard-mobile-row/);
   assert.doesNotMatch(source, /station-capacity-flow|bottleneckStation|stationRows/);
 });
 

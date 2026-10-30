@@ -116,11 +116,25 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             </button>)}
           </div>
 
-          <section className="overflow-hidden rounded-lg border border-border bg-card" aria-labelledby="issue-follow-up-heading">
+          <section className="issue-dashboard-follow-up overflow-hidden rounded-lg border border-border bg-card" aria-labelledby="issue-follow-up-heading">
             <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border px-4 py-3">
               <div><h2 id="issue-follow-up-heading" className="text-base font-semibold">優先追蹤問題</h2><p className="mt-1 text-xs text-muted-foreground">依嚴重度與未更新天數排序，顯示前 8 件未結問題</p></div>
               <Button variant="ghost" size="sm" className="h-11 sm:h-9" onClick={() => openIssues({ issueStatus: "pending" })}>全部未結問題<ArrowRight className="ml-1.5 h-4 w-4" /></Button>
             </div>
+            <div className="issue-dashboard-mobile-list lg:hidden" data-testid="dashboard-mobile-issues">
+              {pendingIssues.slice(0, 8).map(issue => {
+                const priority = issue.priority as keyof typeof priorityLabels;
+                const days = getIssueIdleDays(issue);
+                return <button key={issue.id} type="button" onClick={() => openIssues({ openIssue: issue.id })} className="issue-dashboard-mobile-row">
+                  <span className="flex items-center justify-between gap-3"><Badge variant="outline" className={cn("rounded-md", priorityTones[priority])}>{priorityLabels[priority]}</Badge><span className="text-xs text-muted-foreground">{issue.status === "in_progress" ? "處理中" : "待處理"}</span></span>
+                  <span className="block break-words text-base font-semibold leading-6">{issue.title || "未命名問題"}</span>
+                  <span className="block break-words text-xs text-muted-foreground">{[issue.system_name, issue.station_name].filter(Boolean).join(" · ") || "未關聯機台"}</span>
+                  <span className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-xs"><span className="inline-flex min-w-0 items-center gap-1.5"><UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="break-words">{issue.assigned_to?.trim() || "未指派"}</span></span><span className={cn("inline-flex shrink-0 items-center gap-1.5 tabular-nums", days !== null && days >= 7 ? "text-amber-200" : "text-muted-foreground")}><Clock3 className="h-3.5 w-3.5" aria-hidden="true" />未更新 {days === null ? "時間未提供" : `${days} 天`}</span></span>
+                </button>;
+              })}
+              {!pendingIssues.length && <div className="px-4 py-8 text-center"><CheckCircle2 className="mx-auto mb-2 h-5 w-5 text-primary" /><p className="text-sm font-medium">目前沒有未結問題</p><p className="mt-1 text-xs text-muted-foreground">{issues.length ? `${counts.resolved} 件問題已解決或關閉` : "此專案尚未建立問題"}</p></div>}
+            </div>
+            <div className="hidden lg:block">
             <Table>
               <TableHeader><TableRow><TableHead>問題／機台</TableHead><TableHead>嚴重度</TableHead><TableHead>狀態</TableHead><TableHead>負責人</TableHead><TableHead className="text-right">未更新</TableHead></TableRow></TableHeader>
               <TableBody>
@@ -138,6 +152,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 {!pendingIssues.length && <TableRow><TableCell colSpan={5} className="py-12 text-center"><CheckCircle2 className="mx-auto mb-2 h-5 w-5 text-primary" /><p className="text-sm font-medium">目前沒有未結問題</p><p className="mt-1 text-xs text-muted-foreground">{issues.length ? `${counts.resolved} 件問題已解決或關閉` : "此專案尚未建立問題"}</p></TableCell></TableRow>}
               </TableBody>
             </Table>
+            </div>
           </section>
 
           <div className="grid gap-4 lg:grid-cols-2">

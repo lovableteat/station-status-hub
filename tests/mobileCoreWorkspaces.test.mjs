@@ -70,7 +70,9 @@ test("AI query workspace uses the available mobile height and keeps every compos
   assert.match(consoleSource, /關閉資料查詢選單/);
   assert.match(consoleSource, /最近對話/);
   assert.match(consoleSource, /fixed inset-x-3[\s\S]*lg:static/);
-  assert.match(consoleSource, /grid-cols-\[44px_minmax\(0,1fr\)_44px_44px\]/);
+  assert.match(consoleSource, /grid-cols-\[minmax\(0,1fr\)_44px_44px_44px\]/);
+  assert.match(consoleSource, /order-last col-span-full min-w-0/);
+  assert.match(consoleSource, />AI 問答<\/h1>/);
   assert.match(consoleSource, /data-mobile-ai-command-bar="true"/);
   assert.match(consoleSource, /data-mobile-ai-composer="true"/);
   assert.match(consoleSource, /data-ai-composer-toolbar="true"[^\n]*compactChat \? "flex-nowrap pt-2"/);
