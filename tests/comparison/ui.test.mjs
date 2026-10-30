@@ -99,7 +99,8 @@ test("restored results start with sources collapsed while new comparisons keep i
   assert.ok(source.indexOf('className="comparison-run-actions"') < source.indexOf('className="comparison-optional"'));
   const controls = source.slice(source.indexOf('className="comparison-setup-controls"'), source.indexOf('className="comparison-revision-grid"'));
   assert.match(controls, /className="comparison-project-name" data-empty=\{!projectName\.trim\(\)\}/);
-  assert.match(controls, /className="comparison-run-actions"/, "the run controls sit on the 比對名稱 row");
+  assert.match(controls, /\{!compact && runActions\}/, "desktop run controls stay on the 比對名稱 row");
+  assert.ok(source.indexOf('{compact && runActions}') > source.indexOf('className="comparison-revision-grid"'), "mobile run controls follow both revision inputs");
   assert.match(controls, />必填</);
   const inputs = await readFile(new URL("../../src/components/comparison/ComparisonInputs.tsx", import.meta.url), "utf8");
   assert.match(inputs, /onDrop=\{handleDrop\}/);
