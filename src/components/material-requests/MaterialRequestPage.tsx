@@ -578,7 +578,7 @@ function MaterialIdentityHover({
           onClick={(event) => event.stopPropagation()}
           className="group/identity flex w-full min-w-0 items-start gap-2 rounded-md px-1 py-0.5 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {/* The full name always shows; long names wrap instead of being cut off. */}
+          {/* Long names remain complete and scroll inside the fixed-height table row. */}
           <span
             data-testid="material-primary-name"
             className="block min-w-0 flex-1 whitespace-normal break-words text-[13px] font-semibold leading-5 text-foreground"
@@ -596,7 +596,7 @@ function MaterialIdentityHover({
         collisionPadding={16}
         className={cn("w-auto min-w-[16rem] max-w-[min(820px,calc(100vw-24px))] rounded-xl border-border bg-popover p-3 text-popover-foreground shadow-lg", refs.length + mpns.length > 8 && "w-[min(820px,calc(100vw-24px))]")}
       >
-        <p className="truncate text-sm font-semibold text-foreground">{name || "未命名料件"}</p>
+        <p data-testid="material-full-name" className="max-h-40 overflow-y-auto whitespace-normal break-words text-sm font-semibold leading-5 text-foreground">{name || "未命名料件"}</p>
         <p data-testid="material-primary-vendor" className="truncate text-xs text-muted-foreground">
           {manufacturer || "未填廠商"} · 模組：<span className="text-foreground">{assemblyName || "未指定"}</span>
         </p>
@@ -3402,7 +3402,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
               </div>
             </div>
             {editingNames && (
-              <p className="mt-1 truncate rounded border border-amber-300/28 bg-amber-400/12 px-1 text-[10px] font-bold leading-4 text-amber-100" title={`${editingNames} 正在編輯`}>
+              <p data-testid="material-row-editing" className="truncate rounded border border-amber-300/28 bg-amber-400/12 px-1 text-[10px] font-bold leading-4 text-amber-100" title={`${editingNames} 正在編輯`}>
                 {editingNames.split("、")[0]} 編輯中
               </p>
             )}
