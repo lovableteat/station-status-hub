@@ -1899,6 +1899,34 @@ html { color-scheme: dark; }
   color: hsl(var(--primary-foreground)) !important;
 }
 .material-sheet-theme .material-action-highlight:hover { background: hsl(var(--primary)) !important; }
+@media (min-width: 1024px) {
+  .material-sheet-theme [data-testid="material-table-toolbar"] {
+    --material-toolbar-surface: 171 17% 21%;
+    --material-toolbar-search: 171 16% 88%;
+    --material-toolbar-search-ink: 171 12% 31%;
+    background: hsl(var(--material-toolbar-surface));
+    border-bottom: 1px solid hsl(var(--primary) / .65);
+  }
+  .material-sheet-theme [data-testid="material-table-toolbar"] [data-ui="input"] {
+    background: hsl(var(--material-toolbar-search)) !important;
+    border-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground)) !important;
+    -webkit-text-fill-color: currentColor !important;
+    caret-color: currentColor;
+  }
+  .material-sheet-theme [data-testid="material-table-toolbar"] [data-ui="input"]::placeholder { color: hsl(var(--material-toolbar-search-ink)); }
+  .material-sheet-theme [data-testid="material-table-toolbar"] > div:first-child > div:first-child > svg { color: hsl(var(--material-toolbar-search-ink)); }
+  .material-sheet-theme [data-testid="material-table-toolbar"] :is([role="combobox"], [data-testid="material-column-visibility"]) {
+    background: hsl(240 4% 30%);
+    border-color: hsl(var(--muted-foreground));
+    color: hsl(var(--foreground));
+  }
+  .material-sheet-theme [data-testid="material-table-toolbar"] :is([role="combobox"], [data-testid="material-column-visibility"]):hover { background: hsl(240 4% 37%); }
+  .material-sheet-theme [data-testid="material-table-toolbar"] [data-material-zone="summary-filters"] > button:first-child[aria-pressed="true"] { background: hsl(var(--primary)); border-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+  .material-sheet-theme [data-testid="material-table-toolbar"] [data-material-zone="summary-filters"] > button:last-child { background: hsl(var(--warning) / .2); border-color: hsl(var(--warning) / .65); color: hsl(var(--warning)); }
+  .material-sheet-theme [data-testid="material-table-toolbar"] :is([data-ui="input"], [role="combobox"]):focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+  .material-sheet-theme [data-testid="material-table-toolbar"] > div:first-child > span { color: hsl(171 15% 85%); }
+}
 .material-record-dialog .material-ce-control.material-pn-input {
   border-color: hsl(var(--primary) / .8) !important;
   background: hsl(var(--primary) / .2) !important;
