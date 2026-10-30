@@ -2760,7 +2760,7 @@ export function PendingMaterialsDialog({
                   </div>
                   <div className="pending-row-status">
                     <span data-testid="pending-status-segment" aria-label={`目前狀態：${trackingStatus || '未處理'}`} className={cn("pending-status-indicator inline-flex h-10 min-w-0 flex-col items-center justify-center rounded-md border px-1 text-xs font-semibold", materialTrackingStatusTone(trackingStatus))}><span className="block w-full truncate" title={trackingStatus || "未處理"}>{trackingStatus || "未處理"}</span>{getMaterialTrackingStatusMeaning(trackingStatus) && <span className="block w-full truncate text-[10px] font-normal" title={getMaterialTrackingStatusMeaning(trackingStatus)}>{getMaterialTrackingStatusMeaning(trackingStatus)}</span>}</span>
-                    <Button type="button" data-testid="pending-tracking-control" variant="outline" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full rounded-md border-primary/40 bg-primary/15 px-1 text-xs font-semibold text-primary hover:bg-primary/25 hover:text-primary" aria-label={`追蹤／更新 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
+                    <Button type="button" data-testid="pending-tracking-control" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full rounded-md border border-border px-1 text-xs font-semibold" aria-label={`追蹤／更新 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
                       <span data-testid="pending-update-segment">追蹤／更新</span>
                     </Button>
                   </div>
