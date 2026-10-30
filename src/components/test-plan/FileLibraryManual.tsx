@@ -169,7 +169,7 @@ export function FileLibraryManual({
 
             <Section id="upload" title="上傳檔案" icon={Upload}>
               <ol>
-                <li>先在左邊選到要放的位置（例如 <Ui>我的空間</Ui> 裡的某個資料夾）。</li>
+                <li>先在左邊選擇使用者空間，再從右側清單進入要放檔案的資料夾。</li>
                 <li>按 <Ui icon={Upload}>上傳檔案</Ui> 選檔案；整個資料夾就按 <Ui icon={FolderUp}>上傳資料夾</Ui>，裡面的層級會保留。</li>
                 <li><strong>更快的做法：</strong>直接把電腦裡的檔案或資料夾<strong>拖進清單</strong>。拖到某個資料夾上會直接傳進那個資料夾，畫面會寫「放開以上傳到「○○」」。</li>
                 <li>上傳時右下角會顯示大大的百分比與進度條，可以按取消。</li>
@@ -179,7 +179,7 @@ export function FileLibraryManual({
 
             <Section id="find" title="找檔案、找同事的檔案" icon={Search}>
               <ol>
-                <li>左邊列出每一個人：<Ui>我的空間</Ui>、<Ui>管理員</Ui>、<Ui>其他使用者</Ui>。人很多時在 <Ui>篩選人員…</Ui> 打名字或帳號。點一下就打開那個人的空間，底下會展開他的資料夾。</li>
+                <li>左邊只列人名：<Ui>我的空間</Ui>、<Ui>管理員</Ui>、<Ui>其他使用者</Ui>。人很多時在 <Ui>篩選人員…</Ui> 打名字或帳號。點一下就打開那個人的空間，資料夾與檔案顯示在右側清單。</li>
                 <li>搜尋框打關鍵字就會即時篩選。旁邊的範圍可以選 <Ui>目前資料夾</Ui>、<Ui>整個空間</Ui> 或 <Ui icon={Users}>所有人的檔案</Ui>。</li>
                 <li>搜尋結果會多一欄 <strong>位置</strong>，告訴你檔案在哪個資料夾；點位置或按右鍵 <Ui>開啟檔案位置</Ui>，就會跳到那個資料夾並選好檔案。</li>
                 <li>用 <Ui>全部格式</Ui> 只看 PDF、Excel、圖片、3D 圖檔等；點欄位標題（名稱、修改日期、類型、大小）排序，再點一次反過來。</li>

@@ -1237,22 +1237,6 @@ body.file-explorer-resizing .file-explorer iframe { pointer-events: none; }
 .file-explorer .file-library-all.is-active { background: var(--fx-selected); box-shadow: inset 2px 0 0 hsl(var(--primary)); font-weight: 600; }
 .file-explorer .file-library-count { margin-left: auto; color: hsl(var(--muted-foreground)); font-size: 13px; font-weight: 500; }
 
-/* folder tree under the open space */
-.file-explorer .test-plan-folder-tree { min-height: 0; padding: 1px 0 4px; }
-.file-explorer .test-plan-folder-tree-node { min-width: 0; }
-.file-explorer .test-plan-folder-tree-row { display: flex; height: 32px; min-width: 0; align-items: center; border-radius: 6px; padding-right: 6px; }
-.file-explorer .test-plan-folder-tree-row:hover { background: var(--fx-hover); }
-.file-explorer .test-plan-folder-tree-row.is-active { background: var(--fx-selected); }
-.file-explorer .test-plan-folder-tree-row.is-drop-target { background: var(--fx-selected); box-shadow: inset 0 0 0 2px hsl(var(--primary)); }
-.file-explorer .test-plan-folder-tree-toggle,
-.file-explorer .test-plan-folder-tree-toggle-spacer { display: grid; height: 20px; width: 20px; flex: 0 0 auto; place-items: center; border-radius: 4px; color: hsl(var(--muted-foreground)); }
-.file-explorer .test-plan-folder-tree-toggle:hover { color: hsl(var(--foreground)); }
-.file-explorer .test-plan-folder-tree-toggle svg { transition: transform 120ms ease; }
-.file-explorer .test-plan-folder-tree-toggle.is-expanded svg { transform: rotate(90deg); }
-.file-explorer .test-plan-folder-tree-item { display: flex; height: 100%; min-width: 0; flex: 1 1 auto; align-items: center; gap: 7px; color: hsl(var(--foreground)); font-size: 14px; text-align: left; }
-.file-explorer .test-plan-folder-tree-item svg { flex: 0 0 auto; color: hsl(var(--primary)); }
-.file-explorer .test-plan-folder-tree-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
 /* ----- details list ---------------------------------------------------------- */
 .file-explorer .test-plan-main { display: flex; min-width: 0; flex-direction: column; overflow: hidden; padding: 0; }
 .file-explorer .test-plan-main.is-empty { grid-column: 2 / -1; }
@@ -1604,8 +1588,7 @@ body.file-explorer-resizing .file-explorer iframe { pointer-events: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .file-explorer .test-plan-space-rail,
-  .file-explorer .test-plan-folder-tree-toggle svg { transition: none; }
+  .file-explorer .test-plan-space-rail { transition: none; }
 }
 
 /* ----- 操作手冊 ----------------------------------------------------------------- */
