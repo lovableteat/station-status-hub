@@ -101,7 +101,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
+import { pushWorkspaceHistory, replaceWorkspaceHistory, WORKSPACE_HISTORY_NAVIGATED } from "@/lib/workspaceHistory";
 import { readDroppedFiles } from "@/lib/droppedFiles";
 
 import { formatTestPlanFileSize } from "./core/files";
@@ -205,6 +205,23 @@ const entryName = (entry: TestPlanEntry) => entry.kind === "folder" ? entry.name
 const entryParent = (entry: TestPlanEntry) => entry.kind === "folder" ? entry.parentId : entry.folderId;
 const toMoveItem = (entry: TestPlanEntry): MoveItem => ({ kind: entry.kind, id: entry.id, spaceId: entry.spaceId, folderId: entryParent(entry) });
 const sameLocation = (first: LibraryLocation | undefined, second: LibraryLocation) => Boolean(first && first.spaceId === second.spaceId && first.folderId === second.folderId);
+
+function libraryLocationUrl(location: LibraryLocation) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("workspace", "file-uploads");
+  url.searchParams.set("module", "test-plan");
+  url.searchParams.set("fileSpace", location.spaceId ?? "all");
+  if (location.folderId) url.searchParams.set("fileFolder", location.folderId);
+  else url.searchParams.delete("fileFolder");
+  url.searchParams.delete("fileItem");
+  return url;
+}
+
+function commitLibraryLocation(location: LibraryLocation, index: number, replace = false) {
+  const url = libraryLocationUrl(location);
+  const position = replace ? replaceWorkspaceHistory(url) : pushWorkspaceHistory(url);
+  window.history.replaceState({ ...window.history.state, fileLibraryHistory: { ...location, index, position } }, "", window.location.href);
+}
 
 const CATEGORY_LABELS: Record<TestPlanFileCategory | "all", string> = {
   all: "全部格式",
@@ -557,7 +574,9 @@ export function TestPlanWorkspace() {
     }
   }, []);
   const [peopleFilter, setPeopleFilter] = useState("");
-  const [history, setHistory] = useState<{ stack: LibraryLocation[]; index: number }>({ stack: [], index: -1 });
+  const [history, setHistory] = useState({ index: 0, last: 0 });
+  const historyInitializedRef = useRef(false);
+  const navigationTargetRef = useRef<LibraryLocation | null>(initialLink.space && initialLink.space !== "all" && initialLink.folder ? { spaceId: initialLink.space, folderId: initialLink.folder } : null);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const busy = workspaceBusy || batchDeleting;
   const batchDeleteInFlight = useRef(false);
@@ -647,7 +666,9 @@ export function TestPlanWorkspace() {
     setDeleteAction(null);
     setRenaming(null);
     setClipboard(null);
-    setHistory({ stack: [], index: -1 });
+    setHistory({ index: 0, last: 0 });
+    if (historyInitializedRef.current) navigationTargetRef.current = null;
+    historyInitializedRef.current = false;
     setPeopleFilter("");
     return () => { uploadRequestRef.current += 1; };
   }, [ownerId]);
@@ -679,13 +700,27 @@ export function TestPlanWorkspace() {
   // The open space and folder live in the address bar, so refresh and Back keep the place.
   useEffect(() => {
     if (loading || spaces.length === 0) return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("fileSpace", activeSpaceId ?? "all");
-    if (activeFolderId) url.searchParams.set("fileFolder", activeFolderId);
-    else url.searchParams.delete("fileFolder");
-    if (!pendingFocusRef.current) url.searchParams.delete("fileItem");
+    const location = { spaceId: activeSpaceId, folderId: activeFolderId };
+    if (navigationTargetRef.current && !sameLocation(navigationTargetRef.current, location)) return;
+    navigationTargetRef.current = null;
+    const url = libraryLocationUrl(location);
+    if (pendingFocusRef.current) url.searchParams.set("fileItem", pendingFocusRef.current);
+    if (!historyInitializedRef.current) {
+      historyInitializedRef.current = true;
+      const marker = window.history.state?.fileLibraryHistory;
+      const position = replaceWorkspaceHistory(url);
+      if (sameLocation(marker, location) && marker.position === position && Number.isInteger(marker.index) && marker.index >= 0) {
+        setHistory({ index: marker.index, last: marker.index });
+      } else {
+        // A shared nested link needs real parent entries; do not seed them again on refresh.
+        const path: LibraryLocation[] = [{ spaceId: activeSpaceId, folderId: null }, ...buildFolderBreadcrumbs(folders, activeFolderId).map(folder => ({ spaceId: activeSpaceId, folderId: folder.id }))];
+        if (!sameLocation(path[path.length - 1], location)) path.push(location);
+        path.forEach((entry, index) => commitLibraryLocation(entry, index, index === 0));
+        setHistory({ index: path.length - 1, last: path.length - 1 });
+      }
+    }
     if (url.href !== window.location.href) replaceWorkspaceHistory(url);
-  }, [activeFolderId, activeSpaceId, loading, spaces.length]);
+  }, [activeFolderId, activeSpaceId, folders, loading, spaces.length]);
 
   const breadcrumbs = useMemo(
     () => buildFolderBreadcrumbs(folders, activeFolderId),
@@ -860,7 +895,7 @@ export function TestPlanWorkspace() {
 
   // ----- navigation -------------------------------------------------------
   const currentLocation: LibraryLocation = { spaceId: activeSpaceId, folderId: activeFolderId };
-  const navigate = (location: LibraryLocation, { record = true }: { record?: boolean } = {}) => {
+  const navigate = (location: LibraryLocation) => {
     if (busy) {
       toast.error("目前正在處理檔案，完成後才能切換位置。");
       return false;
@@ -868,14 +903,11 @@ export function TestPlanWorkspace() {
     if (loading && location.spaceId === activeSpaceId) return false;
     setRenaming(null);
     setIsSpaceDrawerOpen(false);
-    if (record) {
-      setHistory((current) => {
-        const base = current.index >= 0 ? current.stack.slice(0, current.index + 1) : [currentLocation];
-        if (sameLocation(base[base.length - 1], location)) return { stack: base, index: base.length - 1 };
-        const stack = [...base, location].slice(-50);
-        return { stack, index: stack.length - 1 };
-      });
-    }
+    if (sameLocation(currentLocation, location)) return true;
+    navigationTargetRef.current = location;
+    const nextIndex = history.index + 1;
+    commitLibraryLocation(location, nextIndex);
+    setHistory({ index: nextIndex, last: nextIndex });
     if (location.spaceId !== activeSpaceId) {
       requestedFolderRef.current = location.spaceId ? { spaceId: location.spaceId, folderId: location.folderId } : null;
       void openSpace(location.spaceId);
@@ -884,19 +916,38 @@ export function TestPlanWorkspace() {
     }
     return true;
   };
+  useEffect(() => {
+    const restore = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("workspace") !== "file-uploads") return;
+      const space = params.get("fileSpace");
+      const location = { spaceId: space === "all" ? null : space, folderId: params.get("fileFolder") };
+      const marker = window.history.state?.fileLibraryHistory;
+      const index = Number.isInteger(marker?.index) && marker.index >= 0 ? marker.index : 0;
+      setHistory(current => ({ index, last: Math.max(current.last, index) }));
+      navigationTargetRef.current = location;
+      pendingFocusRef.current = params.get("fileItem");
+      setRenaming(null);
+      setIsSpaceDrawerOpen(false);
+      if (location.spaceId !== activeSpaceId) {
+        requestedFolderRef.current = location.spaceId ? { spaceId: location.spaceId, folderId: location.folderId } : null;
+        void openSpace(location.spaceId);
+      } else setActiveFolderId(location.folderId);
+    };
+    window.addEventListener(WORKSPACE_HISTORY_NAVIGATED, restore);
+    return () => window.removeEventListener(WORKSPACE_HISTORY_NAVIGATED, restore);
+  }, [activeSpaceId, openSpace]);
   const canGoBack = history.index > 0;
-  const canGoForward = history.index >= 0 && history.index < history.stack.length - 1;
+  const canGoForward = history.index < history.last;
   const parentFolderId = activeFolderId ? folders.find(folder => folder.id === activeFolderId)?.parentId ?? null : null;
   const canGoUp = Boolean(activeSpaceId && activeFolderId);
   const goBack = () => {
     if (!canGoBack || busy || loading) return;
-    const target = history.stack[history.index - 1];
-    if (navigate(target, { record: false })) setHistory((current) => ({ ...current, index: current.index - 1 }));
+    window.history.back();
   };
   const goForward = () => {
     if (!canGoForward || busy || loading) return;
-    const target = history.stack[history.index + 1];
-    if (navigate(target, { record: false })) setHistory((current) => ({ ...current, index: current.index + 1 }));
+    window.history.forward();
   };
   const goUp = () => {
     if (!canGoUp || busy || loading) return;
