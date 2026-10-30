@@ -1976,6 +1976,7 @@ export function DataCenter3DPlanner(props: DataCenter3DPlannerProps) {
         左鍵旋轉 · 右鍵平移 · 滾輪縮放 · 點選設備或 L10 查看狀態
       </div>
       <Canvas
+        className="dc-planner-canvas"
         shadows={!isMobile}
         frameloop="demand"
         dpr={isMobile ? 1 : [1, 1.3]}

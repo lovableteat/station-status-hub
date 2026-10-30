@@ -3976,6 +3976,7 @@ export function DeploymentPlanningCenter() {
 
         {!showDailyReports && <section data-testid="data-center-task-guide" className="dc-task-guide" aria-label="機房配置工作流程">
           <WorkflowStrip
+            compact={!isDesktopLayout}
             steps={workflow.steps}
             nextStepId={workflow.nextStepId}
             onStep={runWorkflowStep}
@@ -4273,7 +4274,7 @@ export function DeploymentPlanningCenter() {
           </aside> : null}
         </div>
         ) : (
-        <div className="relative flex min-h-0 flex-1 bg-black">
+        <div className="relative flex min-h-0 flex-1 flex-col bg-black">
           {showDailyReports && reportPanel}
           <div className="dc-mobile-scene" hidden={showDailyReports}>
           {workspaceMode === "3d" ? (
