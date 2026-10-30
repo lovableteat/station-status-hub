@@ -2623,7 +2623,7 @@ export function PendingMaterialsDialog({
       return () => cancelAnimationFrame(frame);
     }
     setQuery("");
-    setActiveCategory(categories[0]?.key ?? "all");
+    setActiveCategory("all");
     scrollTopRef.current = 0;
     // Only re-run when the dialog opens; the category list may change while it is open without resetting the tab.
     // eslint-disable-next-line react-hooks/exhaustive-deps
