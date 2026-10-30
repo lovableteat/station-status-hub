@@ -27,6 +27,41 @@ const groups = ['J1', 'R1'].map(ref => {
   return { key: 'group-' + ref, displayRef: ref, name: ref, searchText: ref.toLowerCase(), primaryRecord: record, records: [record, { ...record, id: ref + '-alternate' }] };
 });
 
+test('fresh opens show all categories and clear search; returning from an editor retains the chosen view', () => {
+  const { PendingMaterialsDialog } = load('src/components/material-requests/MaterialRequestPage.tsx');
+  let open = true, restoreView = false, root;
+  const render = () => React.createElement(PendingMaterialsDialog, {
+    groups, canEdit: false, open, restoreView, workspaceName: 'QA', exportedBy: 'QA',
+    onOpenChange() {}, onOpenTracking() {}, onSetCategory() {}, markedGroupKeys: new Set(['group-J1']), onToggleMarked() {},
+  });
+  act(() => { root = create(render()); });
+  const selectedTab = () => root.root.find(node => node.type === 'button' && node.props.role === 'tab' && node.props['aria-selected']).props.children;
+  const rows = () => root.root.findAllByProps({ 'data-testid': 'pending-application' });
+  const search = () => root.root.find(node => node.type === 'stub' && node.props['aria-label'] === '搜尋待處理料');
+  const selectTab = name => act(() => root.root.find(node => node.type === 'button' && node.props.role === 'tab' && node.props.children.includes(name)).props.onClick());
+  const reopen = restore => {
+    act(() => { open = false; root.update(render()); });
+    act(() => { open = true; restoreView = restore; root.update(render()); });
+  };
+  assert.ok(selectedTab().includes('全部'));
+  assert.equal(rows().length, 2, 'initial open includes CONNECTOR and RLC');
+  selectTab('CONNECTOR');
+  act(() => search().props.onChange({ target: { value: 'j1' } }));
+  assert.equal(rows().length, 1);
+  reopen(false);
+  assert.ok(selectedTab().includes('全部'));
+  assert.equal(search().props.value, '');
+  assert.equal(rows().length, 2);
+  assert.ok(root.root.find(node => node.type === 'stub' && node.props['data-testid'] === 'pending-export-button').props.children.includes('匯出表格（2）'));
+  selectTab('RLC 被動元件');
+  act(() => search().props.onChange({ target: { value: 'r1' } }));
+  reopen(true);
+  assert.ok(selectedTab().includes('RLC 被動元件'));
+  assert.equal(search().props.value, 'r1');
+  assert.equal(rows().length, 1, 'editor return preserves the filtered list');
+  act(() => root.unmount());
+});
+
 test('marks filter by location, survive clearing filters, and unmarking the last row stays in the empty marked view', () => {
   const { PendingMaterialsDialog } = load('src/components/material-requests/MaterialRequestPage.tsx');
   let marks = new Set();
