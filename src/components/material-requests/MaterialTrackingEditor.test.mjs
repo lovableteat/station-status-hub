@@ -113,6 +113,21 @@ test("selecting a new status labels the draft as unsaved and leaves the saved su
   act(() => editor.root.unmount());
 });
 
+test("the three new statuses are selectable without replacing the saved summary or history", () => {
+  const editor = mountEditor();
+  const select = () => editor.root.root.findAll(node => node.type === 'stub' && typeof node.props.onValueChange === 'function')[0];
+  for (const status of ['未回應再次發信', '與廠商溝通中', '申請料被退回']) {
+    const option = editor.root.root.findAll(node => node.type === 'stub' && node.props.value === status && node.props.textValue === status);
+    assert.equal(option.length, 1);
+    act(() => select().props.onValueChange(status));
+    assert.equal(editor.draft().status, status);
+    const current = editor.root.root.findByProps({ 'data-testid': 'tracking-current-summary' });
+    assert.equal(current.findAllByProps({ 'data-testid': 'tracking-status-badge' }).find(node => node.type === 'span').props['data-status'], '處理中');
+    assert.equal(editor.root.root.findAllByType('details').length, 1);
+  }
+  act(() => editor.root.unmount());
+});
+
 test("image reads from the old record or replaced account session never enter the next draft", async () => {
   for (const replacement of ["replaceRecord", "replaceSession"]) {
     const editor = mountEditor();

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createClipboardImageName } from "./materialRequestPresentation";
 import { getLatestTrackingEntry, type MaterialTrackingHistoryImage, type MaterialWorkbookRecord } from "./materialRequestUtils";
@@ -162,13 +162,17 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
           <div className="space-y-1.5">
             <Label htmlFor={`${id}-status`}>本次狀態</Label>
             <Select disabled={disabled} value={draft.status || "none"} onValueChange={(value) => updateDraft({ status: value === "none" ? "" : value })}>
-              <SelectTrigger id={`${id}-status`} className="h-11" aria-invalid={hasUnselectedProgress}><SelectValue /></SelectTrigger>
-              <SelectContent className="material-tracking-status-menu">
-                <SelectItem value="none">不新增紀錄（保留目前狀態）</SelectItem>
-                {MATERIAL_TRACKING_STATUS_OPTIONS.map(status => <SelectItem key={status} value={status}>
-                  <span data-status={status} className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-sm font-semibold ${materialTrackingStatusTone(status)}`}><CircleDot className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{statusLabel(status)}</span>
-                  {getMaterialTrackingStatusMeaning(status) && <span className="ml-2 text-xs text-muted-foreground">{getMaterialTrackingStatusMeaning(status)}</span>}
-                </SelectItem>)}
+              <SelectTrigger id={`${id}-status`} data-testid="tracking-status-trigger" className="material-tracking-status-trigger h-11" aria-invalid={hasUnselectedProgress}><SelectValue>{draft.status || "不新增紀錄（保留目前狀態）"}</SelectValue></SelectTrigger>
+              <SelectContent data-testid="tracking-status-menu" className="material-tracking-status-menu" position="popper" side="bottom" align="start" sideOffset={4} avoidCollisions={false} collisionPadding={12}>
+                <SelectGroup>
+                  <SelectItem value="none" className="material-tracking-status-option">不新增紀錄（保留目前狀態）</SelectItem>
+                  {MATERIAL_TRACKING_STATUS_OPTIONS.map(status => <SelectItem key={status} value={status} textValue={status} className="material-tracking-status-option">
+                    <span className="material-tracking-status-option-content">
+                      <span data-status={status} className={`inline-flex shrink-0 items-center gap-2 text-sm font-semibold ${materialTrackingStatusPresentation(status).text}`}><CircleDot className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{statusLabel(status)}</span>
+                      {getMaterialTrackingStatusMeaning(status) && <span className="text-xs text-muted-foreground">{getMaterialTrackingStatusMeaning(status)}</span>}
+                    </span>
+                  </SelectItem>)}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>

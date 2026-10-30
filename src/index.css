@@ -1011,7 +1011,8 @@ All colors MUST be HSL for proper theming support.
   background-color: color-mix(in srgb, hsl(var(--primary)) 58%, hsl(var(--secondary)));
   border-color: hsl(var(--primary) / 0.78);
   box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.08), 0 8px 18px -14px hsl(var(--primary) / 0.9);
-  color: hsl(var(--foreground));
+  color: hsl(0 0% 5%);
+  font-weight: 700;
 }
 .pending-materials-actions .pending-action--export:hover {
   background-color: color-mix(in srgb, hsl(var(--primary)) 72%, hsl(var(--secondary)));
@@ -1025,19 +1026,20 @@ All colors MUST be HSL for proper theming support.
   background-color: color-mix(in srgb, hsl(var(--primary)) 76%, white);
 }
 .pending-materials-actions .pending-action--suppliers {
-  background-color: color-mix(in srgb, hsl(var(--primary)) 35%, hsl(var(--secondary)));
+  background-color: color-mix(in srgb, hsl(var(--primary)) 70%, white);
   border-color: hsl(var(--primary) / 0.65);
-  color: hsl(var(--foreground));
+  color: hsl(0 0% 5%);
+  font-weight: 700;
 }
 .pending-materials-actions .pending-action--suppliers:hover {
-  background-color: color-mix(in srgb, hsl(var(--primary)) 48%, hsl(var(--secondary)));
+  background-color: color-mix(in srgb, hsl(var(--primary)) 60%, white);
 }
 
 .material-record-dialog .material-tracking-fields :is([data-ui="input"], [data-ui="textarea"], [data-ui="select-trigger"]) {
-  background-color: hsl(var(--secondary)) !important;
+  background-color: var(--material-tracking-field-bg, hsl(var(--secondary))) !important;
   border-color: color-mix(in srgb, hsl(var(--primary)) 28%, hsl(var(--border))) !important;
   box-shadow:
-    inset 0 0 0 1000px hsl(var(--secondary)),
+    inset 0 0 0 1000px var(--material-tracking-field-bg, hsl(var(--secondary))),
     inset 0 1px 0 hsl(0 0% 100% / 0.05) !important;
   color: hsl(var(--foreground));
 }
@@ -1048,22 +1050,41 @@ All colors MUST be HSL for proper theming support.
 .material-record-dialog .material-tracking-fields :is([data-ui="input"], [data-ui="textarea"], [data-ui="select-trigger"]):not(:disabled):hover {
   border-color: hsl(var(--primary) / 0.48) !important;
   box-shadow:
-    inset 0 0 0 1000px hsl(var(--secondary)),
+    inset 0 0 0 1000px var(--material-tracking-field-bg, hsl(var(--secondary))),
     inset 0 1px 0 hsl(0 0% 100% / 0.05) !important;
 }
 .material-record-dialog .material-tracking-fields :is([data-ui="input"], [data-ui="textarea"], [data-ui="select-trigger"]):focus-visible {
   border-color: hsl(var(--primary) / 0.72) !important;
   box-shadow:
-    inset 0 0 0 1000px hsl(var(--secondary)),
+    inset 0 0 0 1000px var(--material-tracking-field-bg, hsl(var(--secondary))),
     inset 0 1px 0 hsl(0 0% 100% / 0.05),
     0 0 0 2px hsl(var(--primary) / 0.16) !important;
 }
 .material-record-dialog .material-tracking-fields [aria-invalid="true"] {
   border-color: hsl(var(--destructive)) !important;
 }
+.material-tracking-status-trigger {
+  --material-tracking-field-bg: color-mix(in srgb, hsl(var(--primary)) 18%, hsl(var(--secondary)));
+}
 .material-tracking-status-menu[data-ui="select-menu"] {
-  background-color: hsl(var(--popover));
-  border-color: hsl(var(--primary) / 0.42);
+  width: var(--radix-select-trigger-width);
+  max-width: calc(100vw - 24px);
+  max-height: min(320px, var(--radix-select-content-available-height));
+  border-radius: 10px;
+  background-color: color-mix(in srgb, hsl(var(--primary)) 6%, hsl(var(--secondary)));
+  border-color: hsl(var(--primary) / 0.32);
+}
+.material-tracking-status-menu .material-tracking-status-option {
+  min-height: 36px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  border-radius: 6px;
+}
+.material-tracking-status-option-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
 }
 .material-tracking-status-menu [data-highlighted] {
   background-color: hsl(var(--primary) / 0.16);
@@ -1074,6 +1095,9 @@ All colors MUST be HSL for proper theming support.
    Numeric HSL tokens are resolved at runtime rather than recoloured as authored fills. */
 .material-status--unprocessed { --material-status: 215 20% 76%; }
 .material-status--sent { --material-status: 204 94% 76%; }
+.material-status--reminder { --material-status: 48 95% 68%; }
+.material-status--communicating { --material-status: 225 94% 79%; }
+.material-status--returned { --material-status: 0 82% 76%; }
 .material-status--documents { --material-status: 174 65% 67%; }
 .material-status--part { --material-status: 38 92% 69%; }
 .material-status--symbol { --material-status: 263 90% 81%; }

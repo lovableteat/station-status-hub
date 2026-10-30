@@ -13,9 +13,9 @@ const pageStatus = new Function('normalizeMaterialTrackingStatus', 'MATERIAL_TRA
 
 test('each application stage has its own colour in cards and badges', () => {
   const colours = MATERIAL_TRACKING_STATUS_OPTIONS.map(status => materialTrackingStatusPresentation(status));
-  assert.equal(new Set(colours.map(tone => tone.badge)).size, 6);
-  assert.equal(new Set(colours.map(tone => tone.surface)).size, 6);
-  assert.equal(new Set(colours.map(tone => tone.text)).size, 6);
+  assert.equal(new Set(colours.map(tone => tone.badge)).size, 9);
+  assert.equal(new Set(colours.map(tone => tone.surface)).size, 9);
+  assert.equal(new Set(colours.map(tone => tone.text)).size, 9);
   MATERIAL_TRACKING_STATUS_OPTIONS.forEach((status, index) => assert.equal(materialTrackingStatusTone(status), colours[index].badge));
 });
 
@@ -29,7 +29,7 @@ test('the table preserves every manual stage, even with notes and older records'
   assert.equal(normalizeMaterialTrackingStatus('未完成'), '未完成', 'negative or unknown labels must never become completed');
 });
 
-test('the status column filter keeps the six stages separate and retains legacy options', () => {
+test('the status column filter keeps all nine stages separate and retains legacy options', () => {
   const statuses = [...MATERIAL_TRACKING_STATUS_OPTIONS, '新增追蹤', '處理中', '未完成', '已發信'];
   const options = pageStatus.buildTrackingStatusFilterOptions(statuses.map(status => [status]));
   assert.deepEqual(options.map(option => option.value), statuses.slice(0, -1));
