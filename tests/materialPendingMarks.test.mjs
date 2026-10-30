@@ -40,6 +40,14 @@ test('pending rows show first-update age, refresh while open, and keep opening t
     const values = () => root.root.findAllByProps({ 'data-testid': 'pending-application-elapsed' }).map(node => node.props.children[1].props.children);
     assert.deepEqual(values(), ['1 天', '尚無紀錄']);
     assert.match(root.root.findAllByProps({ 'data-testid': 'pending-application-elapsed' })[0].props.title, /1 天 1 小時 0 分鐘/);
+    const status = root.root.findAllByProps({ 'data-testid': 'pending-status-segment' })[0];
+    assert.equal(status.type, 'span', 'current status is a non-interactive indicator');
+    assert.equal(status.props.onClick, undefined);
+    assert.equal(status.props['aria-label'], '目前狀態：未處理');
+    const tracking = root.root.findAll(node => node.type === 'stub' && node.props['data-testid'] === 'pending-tracking-control')[0];
+    assert.equal(tracking.findAllByProps({ 'data-testid': 'pending-status-segment' }).length, 0, 'status is outside the update button');
+    assert.equal(status.parent.props.className, 'pending-row-status');
+    assert.ok(status.parent.findAll(node => node === tracking).length, 'indicator and action remain in the same fixed slot');
     act(() => root.root.findAll(node => node.type === 'stub' && node.props['data-testid'] === 'pending-tracking-control')[0].props.onClick());
     assert.equal(opened, record);
     clock.now += 86400000;
