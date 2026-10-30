@@ -6435,7 +6435,7 @@ export function MaterialRequestPage() {
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
-                    sortDirection={columnSort?.key === MATERIAL_COLUMN_FILTER_KEYS[column.key] ? columnSort.direction : undefined}
+                    sortDirection={columnSort && columnSort.key === MATERIAL_COLUMN_FILTER_KEYS[column.key] ? columnSort.direction : undefined}
                     onResize={(width) => resizeColumn(columnIndex, width)}
                   >
                     <span

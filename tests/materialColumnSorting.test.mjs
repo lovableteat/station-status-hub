@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
 import { sortMaterialTableRows, restoreMaterialColumnSort } from '../src/components/material-requests/materialTableSort.ts';
 
 test('Manufacturer sorting brings vendors from different components and alternates together before pagination', () => {
@@ -30,4 +32,24 @@ test('saved column sort restores only a supported column and direction', () => {
   for (const value of [null, [], 'manufacturer', { key: 'removed', direction: 'asc' }, { key: 'manufacturer', direction: 'invalid' }]) {
     assert.equal(restoreMaterialColumnSort(value, ['manufacturer']), null);
   }
+});
+
+test('the real table header renders with no selected sort, including columns without a filter', async () => {
+  const source = await readFile(new URL('../src/components/material-requests/MaterialRequestPage.tsx', import.meta.url), 'utf8');
+  const ast = ts.createSourceFile('page.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let expression;
+  function visit(node) {
+    if (ts.isJsxAttribute(node) && node.name.getText(ast) === 'sortDirection' && ts.isJsxExpression(node.initializer)) expression = node.initializer.expression.getText(ast);
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  assert.ok(expression, 'the live ResizableHeader sort binding must be exercised');
+  const direction = new Function('columnSort', 'column', 'MATERIAL_COLUMN_FILTER_KEYS', `return (${expression});`);
+  const mapping = { manufacturer: 'manufacturer', actions: 'trackingStatus' };
+  for (const key of ['item', 'name', 'manufacturer', 'actions', 'note']) {
+    assert.equal(direction(null, { key }, mapping), undefined);
+  }
+  assert.equal(direction({ key: 'manufacturer', direction: 'asc' }, { key: 'manufacturer' }, mapping), 'asc');
+  assert.equal(direction({ key: 'manufacturer', direction: 'desc' }, { key: 'manufacturer' }, mapping), 'desc');
+  assert.equal(direction({ key: 'manufacturer', direction: 'asc' }, { key: 'item' }, mapping), undefined);
 });
