@@ -1902,20 +1902,18 @@ html { color-scheme: dark; }
 @media (min-width: 1024px) {
   .material-sheet-theme [data-testid="material-table-toolbar"] {
     --material-toolbar-surface: 171 17% 21%;
-    --material-toolbar-search: 171 16% 88%;
-    --material-toolbar-search-ink: 171 12% 31%;
     background: hsl(var(--material-toolbar-surface));
     border-bottom: 1px solid hsl(var(--primary) / .65);
   }
   .material-sheet-theme [data-testid="material-table-toolbar"] [data-ui="input"] {
-    background: hsl(var(--material-toolbar-search)) !important;
+    background: hsl(var(--secondary)) !important;
     border-color: hsl(var(--primary));
-    color: hsl(var(--primary-foreground)) !important;
+    color: hsl(var(--foreground)) !important;
     -webkit-text-fill-color: currentColor !important;
     caret-color: currentColor;
   }
-  .material-sheet-theme [data-testid="material-table-toolbar"] [data-ui="input"]::placeholder { color: hsl(var(--material-toolbar-search-ink)); }
-  .material-sheet-theme [data-testid="material-table-toolbar"] > div:first-child > div:first-child > svg { color: hsl(var(--material-toolbar-search-ink)); }
+  .material-sheet-theme [data-testid="material-table-toolbar"] [data-ui="input"]::placeholder { color: hsl(var(--muted-foreground)); }
+  .material-sheet-theme [data-testid="material-table-toolbar"] > div:first-child > div:first-child > svg { color: hsl(var(--primary)); }
   .material-sheet-theme [data-testid="material-table-toolbar"] :is([role="combobox"], [data-testid="material-column-visibility"]) {
     background: hsl(240 4% 30%);
     border-color: hsl(var(--muted-foreground));
