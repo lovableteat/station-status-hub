@@ -192,15 +192,16 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
           <summary className="material-tracking-history-heading focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
             <span className={`material-tracking-timeline-dot ${materialTrackingStatusPresentation(entry.status).text}`} aria-hidden="true" />
             <span className="min-w-0 flex-1 space-y-1.5">
-              <span className="flex flex-wrap items-center gap-2"><TrackingStatusBadge status={entry.status} />{index === 0 && <span className="text-xs text-primary">最新紀錄</span>}{!!entry.images?.length && <span className="text-xs text-muted-foreground">{entry.images.length} 張圖片</span>}</span>
-              <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>更新時間：{formatTime(entry.createdAt)}</span><span>更新人：<span className="text-foreground">{entry.createdBy || "未提供"}</span></span></span>
+              <span className="block text-xs text-muted-foreground">更新時間：{formatTime(entry.createdAt)}</span>
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1"><TrackingStatusBadge status={entry.status} />{!!entry.images?.length && <span className="text-xs text-muted-foreground">{entry.images.length} 張圖片</span>}</span>
+              <span className="flex items-start gap-2 text-xs text-muted-foreground">{index === 0 && <span className="shrink-0 text-primary">最新紀錄</span>}<span className="min-w-0 break-words">更新人：<span className="text-foreground">{entry.createdBy || "未提供"}</span></span></span>
             </span>
             <ChevronRight className="mt-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" aria-hidden="true" />
           </summary>
           <div className="material-tracking-history-body space-y-3">
             {entry.note && <div className="space-y-1"><p className="text-xs text-muted-foreground">追蹤說明</p><p className="whitespace-pre-wrap break-words text-sm leading-6">{entry.note}</p></div>}
             <RequestLink ticket={entry.requestTicket} url={entry.requestUrl} />
-            {entry.requestInfo && <div className="space-y-1"><p className="text-xs text-muted-foreground">申請狀態資訊</p><p className="break-words text-sm font-medium">{normalizeMaterialRequestUrl(entry.requestInfo) ? <RequestLink url={entry.requestInfo} /> : entry.requestInfo}</p></div>}
+            {entry.requestInfo && <div className={`space-y-1 rounded-md border p-2 ${materialTrackingStatusPresentation(entry.status).surface}`}><p className={`text-xs ${materialTrackingStatusPresentation(entry.status).text}`}>申請狀態資訊</p><p className={`break-words text-sm font-medium ${materialTrackingStatusPresentation(entry.status).text}`}>{normalizeMaterialRequestUrl(entry.requestInfo) ? <RequestLink url={entry.requestInfo} /> : entry.requestInfo}</p></div>}
             {!!entry.images?.length && thumbnails(entry.images)}
           </div>
         </details>)}

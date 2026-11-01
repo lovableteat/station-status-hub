@@ -48,6 +48,10 @@ const makeRecord = (ref, index, overrides = {}) => ({
   trackingStatus: index === 8 ? 'SYMBOL申請中' : index === 0 ? '處理中' : '', trackingHistory: [], trackingNote: '', sourcingStatus: 'Approved', ...overrides,
 });
 const records = ['R1', 'R1', 'PR1', 'R10', 'R1_C0P1', 'LB48', 'C1', 'J1', 'U1', 'J2', 'J2'].map((ref, index) => makeRecord(ref, index));
+records[0].trackingHistory = [
+  { id: 'qa-history-old', status: '已發信', createdAt: '2026-10-27T02:13:40Z', createdBy: 'QA 同仁', requestInfo: '等待廠商回覆', note: 'QA 歷史紀錄保留' },
+  { id: 'qa-history-latest', status: '文件已收齊', createdAt: '2026-10-30T09:10:56Z', createdBy: 'QA 工程師（跨部門料件申請與追蹤測試）', requestInfo: '文件已收齊，準備申請', note: '' },
+];
 // V1 of the same board: C1/J1/U1/J2 are missing, R10 had qty 2 and an old vendor, and a tracked U9 was dropped in V2.
 const previousRecords = [
   ...['R1', 'R1', 'PR1'].map((ref, index) => makeRecord(ref, index)),
