@@ -241,7 +241,7 @@ test("column filters apply on every click instead of waiting for 確定", () => 
   assert.doesNotMatch(popover, /draftSelectedValues|commitSelection|cancelSelection|mergeSearchSelection|>確定<|>取消</);
   assert.match(popover, /const toggleValue = \(value: string, checked: boolean\) => \{\s*apply\(/);
   assert.match(popover, /if \(event\.key === "Enter" && searchHasValue && filteredOptions\.length > 0\)/);
-  for (const text of [">只留符合<", ">加入符合<", ">移除符合<", ">全選<", ">清除<", ">完成<"]) assert.ok(popover.includes(text), text);
+  for (const text of [">只留符合<", ">加入符合<", ">移除符合<", "全選</button>", "全不選</button>", ">完成<"]) assert.ok(popover.includes(text), text);
   assert.match(popover, /onOpenAutoFocus=/);
 });
 

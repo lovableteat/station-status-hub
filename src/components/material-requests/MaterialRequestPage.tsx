@@ -1764,27 +1764,20 @@ function ExcelFilterPopover({
 
           {isPanelReady ? (
             <div className="rounded-xl border border-border bg-background/40">
-              <div className="flex items-center gap-1 border-b border-border p-1.5">
-                {searchHasValue ? (
+              <div className="space-y-2 border-b border-border p-2">
+                <div className="grid grid-cols-2 gap-2" role="group" aria-label={`${label}選取操作`}>
+                  <button type="button" onClick={() => apply(null)} aria-pressed={allOptionsChecked} className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-primary bg-primary px-3 text-[13px] font-semibold text-primary-foreground hover:bg-primary/85"><Check className="h-4 w-4 shrink-0" />全選</button>
+                  <button type="button" onClick={() => apply([])} aria-pressed={selected !== null && selectedList.length === 0} className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-muted-foreground/60 bg-secondary px-3 text-[13px] font-semibold text-foreground hover:bg-accent"><X className="h-4 w-4 shrink-0" />全不選</button>
+                </div>
+                {searchHasValue && (
                   <>
-                    <span className="px-1 text-[11px] text-muted-foreground">符合 {filteredOptions.length} 筆</span>
-                    <button type="button" onClick={keepOnlyVisible} disabled={filteredOptions.length === 0} className="rounded-md border border-primary/40 bg-primary/15 px-2 text-xs font-semibold leading-6 text-foreground hover:bg-primary/25 disabled:opacity-50">只留符合</button>
-                    <button type="button" onClick={addVisible} disabled={filteredOptions.length === 0} className="rounded-md border border-border bg-secondary/60 px-2 text-xs font-semibold leading-6 text-foreground hover:bg-secondary disabled:opacity-50">加入符合</button>
-                    <button type="button" onClick={removeVisible} disabled={visibleCheckedCount === 0} className="rounded-md border border-border bg-secondary/60 px-2 text-xs font-semibold leading-6 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50">移除符合</button>
+                    <p className="whitespace-nowrap text-xs text-muted-foreground">符合 {filteredOptions.length} 筆</p>
+                    <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={`${label}搜尋結果操作`}>
+                      <button type="button" onClick={keepOnlyVisible} disabled={filteredOptions.length === 0} className="h-8 whitespace-nowrap rounded-md border border-primary/60 bg-primary/15 px-1 text-xs font-semibold text-primary hover:bg-primary/25 disabled:opacity-50">只留符合</button>
+                      <button type="button" onClick={addVisible} disabled={filteredOptions.length === 0} className="h-8 whitespace-nowrap rounded-md border border-muted-foreground/60 bg-secondary px-1 text-xs font-semibold text-foreground hover:bg-accent disabled:opacity-50">加入符合</button>
+                      <button type="button" onClick={removeVisible} disabled={visibleCheckedCount === 0} className="h-8 whitespace-nowrap rounded-md border border-muted-foreground/60 bg-secondary px-1 text-xs font-semibold text-foreground hover:bg-accent disabled:opacity-50">移除符合</button>
+                    </div>
                   </>
-                ) : (
-                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1 text-[13px] font-semibold text-foreground hover:bg-accent">
-                    <Checkbox
-                      checked={allOptionsChecked ? true : (selectedList.length > 0 ? "indeterminate" : false)}
-                      onCheckedChange={(value) => apply(value === true ? null : [])}
-                    />
-                    <span className="min-w-0 flex-1 truncate">全選</span>
-                    <span className="text-xs text-muted-foreground">{selectedList.length - hiddenSelectedCount}/{options.length}</span>
-                  </label>
-                )}
-                <button type="button" onClick={() => apply([])} className="shrink-0 rounded-md border border-border px-2 text-xs font-semibold leading-6 hover:bg-accent">取消全選</button>
-                {selected !== null && (
-                  <button type="button" onClick={() => apply(null)} className="ml-auto rounded-md px-2 text-xs font-semibold leading-6 text-muted-foreground hover:bg-accent hover:text-foreground">清除</button>
                 )}
               </div>
 
