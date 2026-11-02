@@ -127,11 +127,28 @@ test("the three new statuses are selectable without replacing the saved summary 
   act(() => editor.root.unmount());
 });
 
-test("inline status choices keep all eleven values and the no-new-entry choice without changing saved data", () => {
+test("the independent required dropdown has one business option and does not change the progress draft", () => {
+  const editor = mountEditor();
+  try {
+    const select = editor.root.root.findByProps({ "aria-label": "需申請" });
+    assert.equal(select.type, "select");
+    assert.deepEqual(select.findAllByType("option").filter(option => option.props.value).map(option => option.props.children), ["需申請"]);
+    act(() => select.props.onChange({ target: { value: "required" } }));
+    assert.equal(editor.draft().applicationRequired, true);
+    assert.equal(editor.draft().status, "");
+    act(() => editor.root.root.findByProps({ "aria-label": "需申請" }).props.onChange({ target: { value: "" } }));
+    assert.equal(editor.draft().applicationRequired, false);
+    assert.equal(editor.draft().status, "");
+    editor.disable();
+    assert.equal(editor.root.root.findByProps({ "aria-label": "需申請" }).props.disabled, true);
+  } finally { act(() => editor.root.unmount()); }
+});
+
+test("inline status choices keep all ten values and the no-new-entry choice without changing saved data", () => {
   const editor = mountEditor();
   const radios = editor.root.root.findAllByProps({ type: 'radio' });
-  assert.equal(radios.length, 12);
-  assert.equal(radios.filter(node => node.props.value === '需申請').length, 1);
+  assert.equal(radios.length, 11);
+  assert.equal(radios.filter(node => node.props.value === '需申請').length, 0);
   assert.equal(radios.filter(node => node.props.checked).length, 1);
   assert.equal(radios.find(node => node.props.checked).props.value, 'none');
   for (const option of radios.filter(node => node.props.value !== 'none')) {

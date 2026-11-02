@@ -22,13 +22,15 @@ test("manual SYMBOL applications with an existing part number remain visible and
 });
 
 test("an explicitly required application remains pending with existing numbers in both views and is searchable", () => {
-  const required = record("required", "MPN-REQUIRED", false, { partNumber: "REAL-REQUIRED", virtualAlternative: "VIRTUAL-REQUIRED", trackingStatus: "需申請" });
+  const required = record("required", "MPN-REQUIRED", false, { partNumber: "REAL-REQUIRED", virtualAlternative: "VIRTUAL-REQUIRED", trackingStatus: "已發信", applicationRequired: true });
   const g = group("required-group", "J200", [record("normal", "MPN-NORMAL", false), required]);
   for (const options of [undefined, { includeAlternates: true }]) {
     const applications = buildPendingApplications([g], options);
     assert.equal(applications.length, 1);
     assert.equal(applications[0].record, required);
     assert.match(applications[0].searchText, /需申請/);
+    assert.equal(applications[0].record.trackingStatus, "已發信");
+    assert.equal(buildPendingApplications([{ ...g, records: g.records.map(row => ({ ...row, applicationRequired: false })) }], options).length, 0);
   }
 });
 

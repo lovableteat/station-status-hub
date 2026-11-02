@@ -20,7 +20,7 @@ test('each application stage has its own colour in cards and badges', () => {
 });
 
 test('the table preserves every manual stage, even with notes and older records', () => {
-  for (const status of [...MATERIAL_TRACKING_STATUS_OPTIONS, '新增追蹤', '處理中', '未完成']) {
+  for (const status of [...MATERIAL_TRACKING_STATUS_OPTIONS, '需申請', '新增追蹤', '處理中', '未完成']) {
     assert.equal(pageStatus.getTrackingWorkflowStatus({ trackingStatus: status, trackingHistory: [{ status, note: '備註', createdBy: 'CE' }] }), status);
     assert.equal(pageStatus.getTrackingWorkflowStatus({ trackingStatus: status }), status);
   }

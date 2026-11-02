@@ -319,6 +319,7 @@ export function bomRecordHasTracking(record: MaterialWorkbookRecord) {
   const latest = latestEntry(record.trackingHistory);
   return Boolean(
     (record.trackingHistory?.length ?? 0) > 0
+    || record.applicationRequired === true
     || normalizeBomText(record.trackingStatus)
     || normalizeBomText(record.trackingNote)
     || normalizeBomText(record.requestTicket)
@@ -492,6 +493,7 @@ function carryLine(previous: MaterialWorkbookRecord, next: MaterialWorkbookRecor
     remark: normalizeBomText(next.remark) ? next.remark : previous.remark ?? "",
     specDocument: next.specDocument ?? previous.specDocument,
     pendingCategory: next.pendingCategory ?? previous.pendingCategory,
+    ...(typeof (next.applicationRequired ?? previous.applicationRequired) === "boolean" ? { applicationRequired: next.applicationRequired ?? previous.applicationRequired } : {}),
   };
 }
 
