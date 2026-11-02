@@ -13,9 +13,9 @@ const pageStatus = new Function('normalizeMaterialTrackingStatus', 'MATERIAL_TRA
 
 test('each application stage has its own colour in cards and badges', () => {
   const colours = MATERIAL_TRACKING_STATUS_OPTIONS.map(status => materialTrackingStatusPresentation(status));
-  assert.equal(new Set(colours.map(tone => tone.badge)).size, 9);
-  assert.equal(new Set(colours.map(tone => tone.surface)).size, 9);
-  assert.equal(new Set(colours.map(tone => tone.text)).size, 9);
+  assert.equal(new Set(colours.map(tone => tone.badge)).size, MATERIAL_TRACKING_STATUS_OPTIONS.length);
+  assert.equal(new Set(colours.map(tone => tone.surface)).size, MATERIAL_TRACKING_STATUS_OPTIONS.length);
+  assert.equal(new Set(colours.map(tone => tone.text)).size, MATERIAL_TRACKING_STATUS_OPTIONS.length);
   MATERIAL_TRACKING_STATUS_OPTIONS.forEach((status, index) => assert.equal(materialTrackingStatusTone(status), colours[index].badge));
 });
 

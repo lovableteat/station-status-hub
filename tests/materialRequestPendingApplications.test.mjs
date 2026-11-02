@@ -71,3 +71,13 @@ test("the primary row is not listed twice and lines keep their location's catego
   const categories = groupPendingMaterials(applications);
   assert.deepEqual(categories.map((category) => [category.key, category.groups.length]), [["connector", 2]]);
 });
+
+test("a numbered part waiting for CIS stays pending in both location and vendor views", () => {
+  const cis = record("cis", "000-MPN-CIS", false, { partNumber: "000-REAL", trackingStatus: "已取得料號待CIS申請" });
+  const g = group("cis-group", "J100", [cis]);
+  for (const options of [undefined, { includeAlternates: true }]) {
+    const applications = buildPendingApplications([g], options);
+    assert.equal(applications.length, 1);
+    assert.equal(applications[0].record, cis);
+  }
+});

@@ -127,10 +127,10 @@ test("the three new statuses are selectable without replacing the saved summary 
   act(() => editor.root.unmount());
 });
 
-test("inline status choices keep all nine values and the no-new-entry choice without changing saved data", () => {
+test("inline status choices keep all ten values and the no-new-entry choice without changing saved data", () => {
   const editor = mountEditor();
   const radios = editor.root.root.findAllByProps({ type: 'radio' });
-  assert.equal(radios.length, 10);
+  assert.equal(radios.length, 11);
   assert.equal(radios.filter(node => node.props.checked).length, 1);
   assert.equal(radios.find(node => node.props.checked).props.value, 'none');
   for (const option of radios.filter(node => node.props.value !== 'none')) {

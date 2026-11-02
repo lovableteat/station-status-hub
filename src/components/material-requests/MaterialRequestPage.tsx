@@ -147,6 +147,7 @@ import { applyMaterialTrackingDraft, createMaterialTrackingDraft } from "./mater
 import { MATERIAL_SPEC_ACCEPT, MATERIAL_SPEC_MAX_BYTES, createMaterialSpecUrl, formatMaterialSpecSize, uploadMaterialSpecDocuments } from "./materialSpecDocuments";
 import { getMaterialSpecDocuments, withMaterialSpecDocuments } from "./materialAttachments";
 import { getMaterialTrackingStatusMeaning, isExplicitMaterialApplication, MATERIAL_TRACKING_STATUS_OPTIONS, materialTrackingStatusTone, materialTrackingStatusPresentation, normalizeMaterialTrackingStatus } from "./materialTrackingStatus";
+import { MaterialWeeklyProgressDialog } from "./MaterialWeeklyProgressDialog";
 import { restoreMaterialColumnSort, sortMaterialTableRows, type MaterialColumnSort } from "./materialTableSort";
 import { MaterialRequestOwnerPicker, type MaterialRequestOwner } from "./MaterialRequestOwnerPicker";
 import { useMaterialRequestOwners } from "./useMaterialRequestOwners";
@@ -2554,6 +2555,7 @@ export function PendingMaterialsDialog({
   onOpenChange,
   onOpenTracking,
   onCopy,
+  onOpenWeeklyProgress,
   onSetCategory,
   accountId,
   onSetOwner,
@@ -2571,6 +2573,7 @@ export function PendingMaterialsDialog({
   onOpenChange: (open: boolean) => void;
   onOpenTracking: (record: MaterialRecord) => void;
   onCopy: (value: string) => void;
+  onOpenWeeklyProgress?: () => void;
   /** Saves a hand-picked category for a pending part; null returns it to the Ref Des rule. */
   onSetCategory: (group: MaterialGroup, category: PendingMaterialCategory | null) => void;
   accountId?: string;
@@ -2659,6 +2662,7 @@ export function PendingMaterialsDialog({
         </DialogHeader>
 
         <div className="pending-materials-actions flex flex-wrap justify-end gap-2">
+          {onOpenWeeklyProgress && <Button type="button" variant="outline" data-testid="pending-weekly-button" onClick={onOpenWeeklyProgress} className="h-10 border-primary/50 px-4 text-sm text-primary"><FileSpreadsheet className="mr-1.5 h-4 w-4" />每週申請進度</Button>}
           <Button type="button" variant="outline" data-testid="pending-export-button" disabled={exporting || !exportRows.length} onClick={() => void exportVisible()} className="pending-action--export h-10 px-4 text-sm"><Download className="mr-1.5 h-4 w-4" />{exporting ? "匯出中…" : `匯出表格（${exportRows.length}）`}</Button>
           <Button type="button" data-testid="pending-mail-button" disabled={applications.length === 0} onClick={() => setMailOpen(true)} className="pending-action--mail h-10 px-4 text-sm font-bold" title="把待處理料依廠商整理成信件內容並匯出 HTML"><FileCode2 className="mr-1.5 h-4 w-4" />信件生成</Button>
           <Button type="button" data-testid="pending-suppliers-button" variant="outline" onClick={() => setDirectoryOpen(true)} className="pending-action--suppliers h-10 px-4 text-sm"><Factory className="mr-1.5 h-4 w-4" />供應商聯絡資料</Button>
@@ -3771,6 +3775,7 @@ export function MaterialRequestPage() {
   const uploadTargetSeriesRef = useRef<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
+  const [weeklyProgressOpen, setWeeklyProgressOpen] = useState(false);
   // Set while an editor opened from 待處理料 is showing, so closing it returns to the list.
   const [returnToPending, setReturnToPending] = useState(false);
   const [pendingRestoreView, setPendingRestoreView] = useState(false);
@@ -3822,6 +3827,7 @@ export function MaterialRequestPage() {
     setEditorOpen(false);
     setReturnToPending(false);
     setPendingDialogOpen(false);
+    setWeeklyProgressOpen(false);
   }, [activeBomId, user?.userId]);
   const { canEditModule, canViewModule } = usePermissions();
   const canEditModuleAccess = canEditModule("material-requests");
@@ -5933,12 +5939,22 @@ export function MaterialRequestPage() {
         onOpenChange={setPendingDialogOpen}
         onOpenTracking={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openTrackingDialog(record); }}
         onCopy={value => void handleCopy(value)}
+        onOpenWeeklyProgress={() => { setPendingDialogOpen(false); setWeeklyProgressOpen(true); }}
         onSetCategory={setPendingCategory}
         accountId={user?.userId}
         onSetOwner={setPendingOwner}
         markedGroupKeys={markedGroupKeySet}
         onToggleMarked={toggleMarkedGroup}
       />
+      {weeklyProgressOpen && <MaterialWeeklyProgressDialog
+        key={`weekly:${user?.userId}:${activeWorkspace.id}`}
+        records={dataset.records}
+        workspaceName={activeWorkspace.name}
+        exportedBy={user?.displayName || user?.username || "未知使用者"}
+        open={weeklyProgressOpen}
+        ready={isFullDatasetLoaded && !isWorkspaceLoading}
+        onOpenChange={open => { setWeeklyProgressOpen(open); if (!open) { setPendingRestoreView(true); setPendingDialogOpen(true); } }}
+      />}
       <MaterialTableSettingsDialog
         key={`table-settings:${activeWorkspace.id}`}
         open={tableSettingsOpen}
