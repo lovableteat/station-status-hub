@@ -3,6 +3,8 @@
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   memo,
+  lazy,
+  Suspense,
   startTransition,
   useCallback,
   useDeferredValue,
@@ -41,6 +43,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  ScanText,
   Star,
   TriangleAlert,
   Upload,
@@ -148,6 +151,7 @@ import { MATERIAL_SPEC_ACCEPT, MATERIAL_SPEC_MAX_BYTES, createMaterialSpecUrl, f
 import { getMaterialSpecDocuments, withMaterialSpecDocuments } from "./materialAttachments";
 import { getMaterialTrackingStatusMeaning, isExplicitMaterialApplication, MATERIAL_TRACKING_STATUS_OPTIONS, materialTrackingStatusTone, materialTrackingStatusPresentation, normalizeMaterialTrackingStatus } from "./materialTrackingStatus";
 import { MaterialWeeklyProgressDialog } from "./MaterialWeeklyProgressDialog";
+const MaterialSpecFillDialog = lazy(() => import("./MaterialSpecFillDialog").then(module => ({ default: module.MaterialSpecFillDialog })));
 import { restoreMaterialColumnSort, sortMaterialTableRows, type MaterialColumnSort } from "./materialTableSort";
 import { MaterialRequestOwnerPicker, type MaterialRequestOwner } from "./MaterialRequestOwnerPicker";
 import { useMaterialRequestOwners } from "./useMaterialRequestOwners";
@@ -2556,6 +2560,7 @@ export function PendingMaterialsDialog({
   onOpenTracking,
   onCopy,
   onOpenWeeklyProgress,
+  onOpenSpecFill,
   onSetCategory,
   accountId,
   onSetOwner,
@@ -2574,6 +2579,7 @@ export function PendingMaterialsDialog({
   onOpenTracking: (record: MaterialRecord) => void;
   onCopy: (value: string) => void;
   onOpenWeeklyProgress?: (includeAlternates: boolean) => void;
+  onOpenSpecFill?: (records: MaterialWorkbookRecord[]) => void;
   /** Saves a hand-picked category for a pending part; null returns it to the Ref Des rule. */
   onSetCategory: (group: MaterialGroup, category: PendingMaterialCategory | null) => void;
   accountId?: string;
@@ -2662,6 +2668,7 @@ export function PendingMaterialsDialog({
         </DialogHeader>
 
         <div className="pending-materials-actions flex flex-wrap justify-end gap-2">
+          {onOpenSpecFill && <Button type="button" variant="outline" data-testid="pending-spec-fill-button" disabled={!applications.length} onClick={() => onOpenSpecFill(applications.map(application => application.record))} className="h-10 border-primary/50 px-4 text-sm text-primary"><ScanText className="mr-1.5 h-4 w-4" />AI 依照片填表</Button>}
           {onOpenWeeklyProgress && <Button type="button" variant="outline" data-testid="pending-weekly-button" onClick={() => onOpenWeeklyProgress(includeAlternates)} className="h-10 border-primary/50 px-4 text-sm text-primary"><FileSpreadsheet className="mr-1.5 h-4 w-4" />每週申請進度</Button>}
           <Button type="button" variant="outline" data-testid="pending-export-button" disabled={exporting || !exportRows.length} onClick={() => void exportVisible()} className="pending-action--export h-10 px-4 text-sm"><Download className="mr-1.5 h-4 w-4" />{exporting ? "匯出中…" : `匯出表格（${exportRows.length}）`}</Button>
           <Button type="button" data-testid="pending-mail-button" disabled={applications.length === 0} onClick={() => setMailOpen(true)} className="pending-action--mail h-10 px-4 text-sm font-bold" title="把待處理料依廠商整理成信件內容並匯出 HTML"><FileCode2 className="mr-1.5 h-4 w-4" />信件生成</Button>
@@ -3776,6 +3783,7 @@ export function MaterialRequestPage() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
   const [weeklyProgressOpen, setWeeklyProgressOpen] = useState(false);
+  const [specFillContext, setSpecFillContext] = useState<{ records: MaterialWorkbookRecord[]; accountId?: string; workspaceId: string } | null>(null);
   const [weeklyIncludeAlternates, setWeeklyIncludeAlternates] = useState(false);
   // Set while an editor opened from 待處理料 is showing, so closing it returns to the list.
   const [returnToPending, setReturnToPending] = useState(false);
@@ -3829,6 +3837,7 @@ export function MaterialRequestPage() {
     setReturnToPending(false);
     setPendingDialogOpen(false);
     setWeeklyProgressOpen(false);
+    setSpecFillContext(null);
   }, [activeBomId, user?.userId]);
   const { canEditModule, canViewModule } = usePermissions();
   const canEditModuleAccess = canEditModule("material-requests");
@@ -5942,6 +5951,7 @@ export function MaterialRequestPage() {
         onOpenTracking={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openTrackingDialog(record); }}
         onCopy={value => void handleCopy(value)}
         onOpenWeeklyProgress={includeAlternates => { setWeeklyIncludeAlternates(includeAlternates); setPendingDialogOpen(false); setWeeklyProgressOpen(true); }}
+        onOpenSpecFill={records => { setSpecFillContext({ records, accountId: user?.userId, workspaceId: activeWorkspace.id }); setPendingDialogOpen(false); }}
         onSetCategory={setPendingCategory}
         accountId={user?.userId}
         onSetOwner={setPendingOwner}
@@ -5957,6 +5967,13 @@ export function MaterialRequestPage() {
         ready={isFullDatasetLoaded && !isWorkspaceLoading}
         onOpenChange={open => { setWeeklyProgressOpen(open); if (!open) { setPendingRestoreView(true); setPendingDialogOpen(true); } }}
       />}
+      {specFillContext && specFillContext.accountId === user?.userId && specFillContext.workspaceId === activeWorkspace.id && canViewModuleAccess && <Suspense fallback={<div role="status" className="fixed inset-0 z-50 grid place-items-center bg-background/90">正在開啟依照片填表…</div>}><MaterialSpecFillDialog
+        key={`spec-fill:${user?.userId}:${activeWorkspace.id}`}
+        records={specFillContext.records}
+        workspaceName={activeWorkspace.name}
+        open
+        onOpenChange={open => { if (!open) { setSpecFillContext(null); setPendingRestoreView(true); setPendingDialogOpen(true); } }}
+      /></Suspense>}
       <MaterialTableSettingsDialog
         key={`table-settings:${activeWorkspace.id}`}
         open={tableSettingsOpen}
