@@ -219,7 +219,7 @@ test("待處理料 opens from the header actions and groups pending parts by cat
   assert.match(dialog, />優先處理</);
   assert.match(dialog, /onOpenTracking\(record\)/);
   assert.doesNotMatch(dialog, />定位<|>更新料號<|>追蹤<|onLocate|onOpenCreate/);
-  assert.match(source, /const pendingMaterialGroups = useMemo\(\(\) => dataset\.groups\.filter\(\(group\) => group\.records\.some\(\(record\) => record\.needsApplication \|\| isExplicitMaterialApplication\(record\.trackingStatus, record\.applicationRequired\)\)\)/);
+  assert.match(source, /const pendingMaterialGroups = useMemo\(\(\) => dataset\.groups\.filter\(\(group\) => group\.records\.some\(\(record\) => record\.needsApplication \|\| isTrackedMaterialApplication\(record\)\)\)/);
   assert.match(source, /const requiredApplicationCount = useMemo\(\(\) => dataset\.groups\.filter\(requiresApplication\)\.length/, "料號待補 keeps counting locations with no number at all");
   assert.match(source, /<PendingMaterialsDialog/);
   const dialogTokens = dialog;
@@ -341,7 +341,7 @@ test("待處理料 can turn the pending parts into per-vendor mail content", () 
   const pending = slice("function PendingMaterialsDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
   assert.match(pending, /data-testid="pending-mail-button"[\s\S]*?信件生成/);
   assert.match(pending, /<PendingMailDialog groups=\{mailGroups\}/);
-  assert.match(pending, /\.filter\(\(group\) => listed\.has\(group\.key\)\)\s*\.map\(\(group\) => \(\{ \.\.\.group, records: group\.records\.filter\(\(record\) => record\.needsApplication \|\| isExplicitMaterialApplication\(record\.trackingStatus, record\.applicationRequired\)\) \}\)\)/, "the mail follows the listed locations and only their rows still to apply for");
+  assert.match(pending, /getTrackingWorkflowStatus\(record\) !== "已完成" && \(record\.needsApplication \|\| isTrackedMaterialApplication\(record\)\)/, "completed records are retained for history, not for another application email");
 });
 
 test("BOM 管理 can archive a BOM and keeps archived BOMs out of the switcher and project groups", () => {

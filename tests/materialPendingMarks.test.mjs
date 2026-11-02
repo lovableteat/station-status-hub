@@ -10,7 +10,7 @@ class TestDate extends Date { static now() { return clock.now; } }
 const load = loader({
   mocks: { './useMaterialRequestOwners': {useMaterialRequestOwners:()=>({owners:[],error:''})}, './MaterialRequestOwnerPicker': { MaterialRequestOwnerPicker: ui.Select } },
   globals: { toWorkbookRecord: record=>record, PendingCategoryPicker: ui.Select, PendingMailDialog: ui.Dialog, SupplierDirectoryDialog: ui.Dialog,
-    STALE_PENDING_MS: 3 * 86400000, getPendingGroupUpdatedAt: () => Date.now(), getTrackingStatusTone: () => '',
+    STALE_PENDING_MS: 3 * 86400000, getPendingGroupUpdatedAt: group => Date.now() - (group.stale ? 4 * 86400000 : 0), getTrackingStatusTone: () => '',
     CHIP_BASE: '', CHIP_TONES: { danger: '' }, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, Date: TestDate,
     setInterval(callback) { const key = Symbol(); clock.intervals.set(key, callback); return key; },
     clearInterval(key) { clock.intervals.delete(key); } },
@@ -18,9 +18,9 @@ const load = loader({
     if (!file.endsWith('MaterialRequestPage.tsx')) return source;
     const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     return ast.statements.filter(node =>
-      ts.isFunctionDeclaration(node) && ['PendingMaterialsDialog', 'loadMarkedGroups', 'saveMarkedGroups', 'getMarkedGroupsStorageKey'].includes(node.name?.text)
+      ts.isFunctionDeclaration(node) && ['PendingMaterialsDialog', 'loadMarkedGroups', 'saveMarkedGroups', 'getMarkedGroupsStorageKey', 'getTrackingWorkflowStatus', 'normalizeTrackingWorkflowStatus'].includes(node.name?.text)
       || ts.isVariableStatement(node) && node.getText(ast).startsWith('const MARKED_GROUPS_KEY_PREFIX')
-      || ts.isImportDeclaration(node) && ['react', 'lucide-react', '@/lib/utils', './materialRequestPresentation', './MaterialRequestOwnerPicker', './useMaterialRequestOwners', './materialTrackingStatus', './pendingMaterialsExport', './materialApplicationTiming'].includes(node.moduleSpecifier.text)
+      || ts.isImportDeclaration(node) && ['react', 'lucide-react', '@/lib/utils', './materialRequestUtils', './materialRequestPresentation', './MaterialRequestOwnerPicker', './useMaterialRequestOwners', './materialTrackingStatus', './pendingMaterialsExport', './materialApplicationTiming'].includes(node.moduleSpecifier.text)
       || ts.isImportDeclaration(node) && node.moduleSpecifier.text.startsWith('@/components/ui/')
     ).map(node => node.getText(ast)).join('\n') + '\nexport { loadMarkedGroups, saveMarkedGroups };';
   },
@@ -199,4 +199,19 @@ test('existing mark storage restores the marked locations for the same BOM witho
   saveMarkedGroups('qa-BOM-A', ['group-J1', 'group-J1']);
   assert.deepEqual([...loadMarkedGroups('qa-BOM-A')], ['group-J1']);
   assert.deepEqual([...loadMarkedGroups('qa-BOM-B')], []);
+});
+
+test('completed applications remain listed without overdue warnings and the summary distinguishes them from pending work', () => {
+  const { PendingMaterialsDialog } = load('src/components/material-requests/MaterialRequestPage.tsx');
+  const record = { ...groups[0].primaryRecord, needsApplication: false, trackingStatus: '已完成', trackingHistory: [{ id: 'tracking-done', status: '已完成', createdAt: '2026-10-01T00:00:00Z' }] };
+  const completed = { ...groups[0], stale: true, primaryRecord: record, records: [record] };
+  let root;
+  try {
+    act(() => { root = create(React.createElement(PendingMaterialsDialog, { groups: [completed], canEdit: true, open: true, workspaceName: 'QA', exportedBy: 'QA', onOpenChange() {}, onOpenTracking() {}, onSetCategory() {}, onSetOwner() {}, markedGroupKeys: new Set(), onToggleMarked() {} })); });
+    assert.equal(root.root.findAllByProps({ 'data-testid': 'pending-application' }).length, 1);
+    assert.equal(root.root.findAllByProps({ 'aria-label': '逾 3 天未更新' }).length, 0);
+    assert.match(JSON.stringify(root.toJSON()), /已完成 1 筆（保留紀錄）/);
+    assert.match(JSON.stringify(root.toJSON()), /待處理 0 筆/);
+    assert.ok(root.root.findAllByProps({ 'data-testid': 'pending-mail-button' }).every(node => node.props.disabled), 'completed history must not generate another application email');
+  } finally { if (root) act(() => root.unmount()); }
 });

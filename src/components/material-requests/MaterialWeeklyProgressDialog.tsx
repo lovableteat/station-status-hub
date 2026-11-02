@@ -48,7 +48,7 @@ export function MaterialWeeklyProgressDialog({ records, workspaceName, exportedB
     { value: status, label: "目前狀態", clear: () => changeFilter(setStatus, "") },
     { value: owner, label: "負責人", clear: () => changeFilter(setOwner, "") },
   ];
-  const scope = ["目前 BOM 待申請料（與待處理料清單同範圍）", query.trim() && `搜尋：${query.trim()}`, status && `目前狀態：${status}`, owner && `負責人：${owner}`].filter(Boolean).join(" · ");
+  const scope = ["目前 BOM 申請追蹤料（含已完成，與待處理料清單同範圍）", query.trim() && `搜尋：${query.trim()}`, status && `目前狀態：${status}`, owner && `負責人：${owner}`].filter(Boolean).join(" · ");
   const undated = rows.filter(row => row.undatedCount > 0).length;
   const exportReport = async () => {
     if (exporting || !ready || !weeks.length || !filtered.length) return;
@@ -66,7 +66,7 @@ export function MaterialWeeklyProgressDialog({ records, workspaceName, exportedB
     <DialogContent className="material-weekly-dialog flex flex-col overflow-hidden" data-testid="material-weekly-dialog">
       <DialogHeader className="pr-11">
         <DialogTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-primary" />每週申請進度</DialogTitle>
-        <DialogDescription className="break-words">{workspaceName} · {ready ? `${records.length.toLocaleString()} 筆待申請料` : "正在載入待申請料…"}</DialogDescription>
+        <DialogDescription className="break-words">{workspaceName} · {ready ? `${records.length.toLocaleString()} 筆申請追蹤料（含已完成紀錄）` : "正在載入申請追蹤料…"}</DialogDescription>
       </DialogHeader>
       <div className="material-weekly-tools">
         <label className="material-weekly-control">截至週別<Input type="date" aria-label="截至週別" value={endDate} max={taipeiProgressDate(asOf)} onChange={event => { setEndDate(event.target.value); setPage(1); }} className="h-10 w-40" /></label>
@@ -103,7 +103,7 @@ export function MaterialWeeklyProgressDialog({ records, workspaceName, exportedB
               <tr><th scope="row" className="material-weekly-part">首次更新料件</th>{indexes.map(index => <td key={index}>{summary[index].startedCount}</td>)}</tr>
               <tr><th scope="row" className="material-weekly-part">本週有更新料件</th>{indexes.map(index => <td key={index}>{summary[index].updatedCount}</td>)}</tr>
               {Object.keys(summary[0].counts).map(value => <tr key={value}><th scope="row" className="material-weekly-part">{renderStatus(value)}</th>{indexes.map(index => <td key={index}>{summary[index].counts[value]}</td>)}</tr>)}
-              <tr><th scope="row" className="material-weekly-part">全部待申請料</th>{indexes.map(index => <td key={index}>{filtered.length}</td>)}</tr>
+              <tr><th scope="row" className="material-weekly-part">全部申請追蹤料</th>{indexes.map(index => <td key={index}>{filtered.length}</td>)}</tr>
             </>}
           </tbody></table>}
         </div>
