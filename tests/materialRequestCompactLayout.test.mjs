@@ -226,14 +226,18 @@ test("待處理料 opens from the header actions and groups pending parts by cat
   assert.doesNotMatch(dialogTokens, /bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);
 });
 
-test("待處理料 keeps its category controls compact and gives export a clear filled treatment", () => {
+test("待處理料 keeps compact category controls and fills every toolbar action with its own colour", () => {
   const dialog = slice("function PendingMaterialsDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
   assert.match(dialog, /role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-1\.5 rounded-lg border border-border bg-background\/40 p-1"/);
   assert.match(dialog, /inline-flex h-9 items-center gap-1\.5 rounded-md border px-4 text-sm font-bold/);
   assert.match(dialog, /rounded-full px-1\.5 font-mono text-xs leading-4/);
   assert.match(source, /pending-row-category h-9 gap-1 rounded-md px-2 text-xs font-bold/);
   assert.match(styles, /grid-template-columns: 32px 84px 88px minmax\(90px, 1fr\)/);
-  assert.match(styles, /pending-action--export[\s\S]{0,220}?hsl\(var\(--primary\)\) 58%/);
+  for (const action of ['spec-fill', 'weekly', 'export', 'mail', 'suppliers']) {
+    assert.ok(dialog.includes(`pending-action--${action}`));
+    assert.ok(styles.includes(`.pending-action--${action} { --pending-action-color:`));
+  }
+  assert.match(styles, /background-color: hsl\(var\(--pending-action-color\)\)/);
 });
 
 test("column filters stage checkbox changes and expose Excel-style apply and cancel", () => {
