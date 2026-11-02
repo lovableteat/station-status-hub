@@ -107,6 +107,52 @@ test("new records do not require a hidden group field and derive it only from en
   editor.unmount();
 });
 
+test("the header shows the complete current MPN on both tabs and resets when another record opens", () => {
+  const fullMpn = '0000123456789-' + 'FULL-MPN-'.repeat(16);
+  const editor = mountDialog({ record: { ...baseRecord, manufacturerPartNumber: fullMpn } });
+  const headerMpn = () => editor.root.root.findByProps({ 'data-testid': 'material-record-mpn' }).findAllByType('span')[1].props.children;
+  assert.equal(headerMpn(), fullMpn);
+  const mpnField = () => editor.root.root.findAllByProps({ id: 'material-mpn' }).find(node => node.type === 'stub');
+  act(() => mpnField().props.onChange({ target: { value: '000-EDITED-MPN' } }));
+  assert.equal(headerMpn(), '000-EDITED-MPN');
+  act(() => editor.root.root.find(node => node.type === 'stub' && node.props.value === 'details' && typeof node.props.onValueChange === 'function').props.onValueChange('tracking'));
+  assert.equal(headerMpn(), '000-EDITED-MPN');
+  editor.update({ record: { ...baseRecord, id: 'part-B', manufacturerPartNumber: '' } });
+  assert.equal(headerMpn(), '尚未填寫');
+  assert.equal(editor.writes.length, 0);
+  editor.unmount();
+});
+
+test("empty hints are not treated as filled numbers, while leading zeros and zero quantity remain real values", async () => {
+  const editor = mountDialog({ record: { ...baseRecord, qty: 0, virtualAlternative: '', partNumber: '' } });
+  const field = id => editor.root.root.findAllByProps({ id }).find(node => node.type === 'stub');
+  assert.equal(field('material-qty').props.value, '0');
+  assert.equal(field('material-qty').props['data-has-value'], true);
+  for (const id of ['material-virtual-alternative', 'material-internal-pn']) {
+    assert.equal(field(id).props.value, '');
+    assert.equal(field(id).props['data-has-value'], false);
+    assert.doesNotMatch(field(id).props.className, /material-pn-input/);
+    assert.ok(field(id).props.placeholder.length > 0);
+  }
+  act(() => field('material-virtual-alternative').props.onChange({ target: { value: '000-VIRTUAL' } }));
+  act(() => field('material-internal-pn').props.onChange({ target: { value: '000-PHYSICAL' } }));
+  for (const id of ['material-virtual-alternative', 'material-internal-pn']) {
+    assert.equal(field(id).props['data-has-value'], true);
+    assert.match(field(id).props.className, /material-pn-input/);
+  }
+  act(() => editor.root.root.find(node => node.type === 'stub' && node.props.children === '表格（一列）').props.onClick());
+  assert.equal(field('material-internal-pn').props.value, '000-PHYSICAL');
+  assert.equal(field('material-internal-pn').props['data-has-value'], true);
+  act(() => field('material-internal-pn').props.onChange({ target: { value: '' } }));
+  assert.equal(field('material-internal-pn').props['data-has-value'], false);
+  assert.doesNotMatch(field('material-internal-pn').props.className, /material-pn-input/);
+  await act(async () => editor.button().props.onClick());
+  assert.equal(editor.writes[0].partNumber, '', 'placeholder is never saved as actual data');
+  assert.equal(editor.writes[0].virtualAlternative, '000-VIRTUAL');
+  assert.equal(editor.writes[0].qty, 0);
+  editor.unmount();
+});
+
 test("a freshly uploaded SPEC appears immediately with an explicit download action before record save", async () => {
   const opened = [];
   const editor = mountDialog({ onOpenSpec: (...args) => opened.push(args) });
