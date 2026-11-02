@@ -70,6 +70,25 @@ test("one main save persists both the material edits and the pending progress wi
   editor.unmount();
 });
 
+test("required-application status saves and reopens with both part numbers, old history and Note intact", async () => {
+  const source = { ...baseRecord, partNumber: "000-REAL", virtualAlternative: "000-VIRTUAL", note: "共同筆記", trackingHistory: [{ id: "old", status: "已發信", createdAt: "2026-10-29T01:00:00Z", createdBy: "原更新人" }] };
+  const editor = mountDialog({ record: source });
+  try {
+    editor.setTracking({ status: "需申請", requestInfo: "待送申請" });
+    await act(async () => editor.button().props.onClick());
+    const saved = editor.writes[0];
+    assert.equal(saved.trackingStatus, "需申請");
+    assert.equal(saved.trackingHistory.at(-1).createdBy, "CE");
+    assert.deepEqual(saved.trackingHistory[0], source.trackingHistory[0]);
+    assert.equal(saved.partNumber, "000-REAL");
+    assert.equal(saved.virtualAlternative, "000-VIRTUAL");
+    assert.equal(saved.note, "共同筆記");
+    editor.update({ open: false }); editor.update({ record: saved, open: true, initialTab: "tracking" });
+    assert.equal(editor.tracking().status, "", "reopening does not queue a duplicate history entry");
+    assert.ok(editor.root.root.findAllByProps({ "data-testid": "tracking-status-badge", "data-status": "需申請" }).length > 0);
+  } finally { editor.unmount(); }
+});
+
 test("form and single-row views share all 15 original CE fields and retain edits and internal values", async () => {
   const editor = mountDialog({ record: { ...baseRecord, assemblyName: "original module", remark: "original note", manufacturerPartNumberAlt: "OLD-MPN" } });
   assert.equal(editor.root.root.findAll(node => node.type === "div" && node.props["data-testid"] === "material-ce-field").length, 15);

@@ -1117,6 +1117,7 @@ All colors MUST be HSL for proper theming support.
 /* Application stages keep their semantic colours through the charcoal palette pass.
    Numeric HSL tokens are resolved at runtime rather than recoloured as authored fills. */
 .material-status--unprocessed { --material-status: 215 20% 76%; }
+.material-status--required { --material-status: 320 78% 79%; }
 .material-status--sent { --material-status: 204 94% 76%; }
 .material-status--reminder { --material-status: 48 95% 68%; }
 .material-status--communicating { --material-status: 225 94% 79%; }
