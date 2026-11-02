@@ -31,3 +31,6 @@ verify_jwt = true
 
 [functions.account-self-service]
 verify_jwt = true
+
+[functions.openai-proxy]
+verify_jwt = true

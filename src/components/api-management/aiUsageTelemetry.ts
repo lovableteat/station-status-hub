@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { classifyAiUsageOutcome } from "./aiUsageSummary";
 import { withReadDeadline } from '@/lib/readDeadline';
 import { AiRequestFailure } from './aiRequestRecovery';
+import { fetchAiProvider } from './aiProviderTransport';
 export const AI_USAGE_RECORDED_EVENT = "ai-usage-recorded";
 export const AI_PROVIDER_REQUEST_TIMEOUT_MS = 120000;
 export type AiUsageSource = "ai-chat" | "api-test";
@@ -80,7 +81,7 @@ export async function trackedProviderFetch({ apiKeyId, provider, model, source, 
     });
     try {
         const response = await Promise.race([Promise.resolve().then(async () => {
-                const upstream = await fetch(url, { ...init, signal: controller.signal });
+                const upstream = await fetchAiProvider(provider, url, { ...init, signal: controller.signal }, apiKeyId);
                 // Keep the deadline active through the body, not just response headers.
                 const body = await upstream.arrayBuffer();
                 return new Response([204, 205, 304].includes(upstream.status) ? null : body, {
