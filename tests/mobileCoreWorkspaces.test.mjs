@@ -96,15 +96,24 @@ test("material requests render actionable cards on compact screens and preserve 
   assert.match(source, /aria-label=\{isSearchPending \? "搜尋中" : "搜尋"\}/);
 });
 
-test("material mobile controls expose management, Excel filters and both result views", async () => {
+test("material mobile home keeps filters visible and secondary operations in a bottom sheet", async () => {
   const source = await read("src/components/material-requests/MaterialRequestPage.tsx");
   const mobile = source.slice(source.indexOf('{isCompactLayout && <section'), source.indexOf('{!isCompactLayout && <header'));
   assert.match(mobile, /data-testid="material-mobile-actions"/);
   for (const label of ['上傳 BOM', '匯出報表', '待處理料', '不建議料匯出']) assert.ok(mobile.includes(label));
-  assert.match(mobile, /<details[^>]*data-mobile-material-tools/);
+  assert.match(mobile, /<Drawer open=\{mobileToolsOpen\}/);
+  assert.match(mobile, /<DrawerContent[^>]*data-testid="material-mobile-tools"/);
+  assert.match(mobile, /<DrawerTitle>排序與工具<\/DrawerTitle>/);
+  assert.match(mobile, /<DrawerClose asChild>/);
+  assert.doesNotMatch(mobile, /bg-(?:destructive|success|info|warning)\b/);
   assert.doesNotMatch(mobile, /<Popover>/);
   assert.match(mobile, /exportVisibleColumns/);
   assert.match(mobile, /data-testid="material-mobile-column-filters"/);
+  assert.ok(mobile.indexOf('</Drawer>') < mobile.indexOf('data-testid="material-mobile-column-filters"'), 'result filters remain outside the tools sheet');
+  assert.doesNotMatch(mobile, /FILTER_KEYS\.filter[^\n]*\.map\(key => <div/);
+  assert.match(mobile, /aria-label="篩選欄位"/);
+  assert.match(mobile, /filterKey=\{mobileFilterColumn\}/);
+  assert.match(mobile, /filterKey="trackingStatus"/);
   assert.match(mobile, /<ExcelFilterPopover/);
   assert.match(mobile, /onSelectedValuesChange=\{\(values\) => setColumnFilters/);
   assert.match(mobile, /aria-label="料件檢視"/);

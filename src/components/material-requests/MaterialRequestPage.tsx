@@ -38,6 +38,7 @@ import {
   History,
   Layers3,
   Minus,
+  MoreHorizontal,
   Paperclip,
   Pencil,
   Plus,
@@ -72,6 +73,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Label } from "@/components/ui/label";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1612,6 +1614,7 @@ function ExcelFilterPopover({
   filterKey,
   getOptions,
   label,
+  triggerLabel,
   selectedValues,
   onSelectedValuesChange,
   activeSort,
@@ -1620,6 +1623,7 @@ function ExcelFilterPopover({
   filterKey: ColumnFilterKey;
   getOptions: (key: ColumnFilterKey) => ExcelFilterOption[];
   label: string;
+  triggerLabel?: string;
   selectedValues: ColumnFilterSelection;
   onSelectedValuesChange: (values: ColumnFilterSelection) => void;
   activeSort: MaterialColumnSort<ColumnFilterKey> | null;
@@ -1726,10 +1730,10 @@ function ExcelFilterPopover({
         >
           <span className="inline-flex min-w-0 items-center gap-1.5">
             <Filter className={cn("h-3.5 w-3.5 flex-none", selected === null ? "text-muted-foreground" : "text-primary")} />
-            <span className="truncate">{label}</span>
+            <span className="truncate">{triggerLabel ?? label}</span>
             {isSorted && <span className="shrink-0 text-primary">{sortDirection === "asc" ? "↑" : "↓"}</span>}
           </span>
-          {selected !== null && (
+          {selected !== null && !triggerLabel && (
             <span className="ml-1 flex-none rounded bg-primary/20 px-1.5 text-[10px] leading-4 text-primary">
               {triggerSummary}
             </span>
@@ -3744,6 +3748,8 @@ function MaterialExportDialog({
 export function MaterialRequestPage() {
   const isCompactLayout = useIsCompactLayout();
   const [mobileView, setMobileView] = useState<"cards" | "table">("cards");
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [mobileFilterColumn, setMobileFilterColumn] = useState<ColumnFilterKey>("manufacturer");
   const [bomWorkspaces, setBomWorkspaces] = useState<BomWorkspace[]>(() => [createDefaultBomWorkspace()]);
   const [collaborationStatus, setCollaborationStatus] = useState<CollaborationStatus>("checking");
   const [activeBomId, setActiveBomId] = useState(loadActiveBomId);
@@ -3837,6 +3843,7 @@ export function MaterialRequestPage() {
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
   const { user } = useUser();
+  useEffect(() => { setMobileToolsOpen(false); }, [activeBomId, isCompactLayout, user?.userId]);
   useEffect(() => {
     setEditorOpen(false);
     setReturnToPending(false);
@@ -5902,6 +5909,8 @@ export function MaterialRequestPage() {
     );
   }
 
+  const selectedMobileFilter = columnFilters[mobileFilterColumn];
+  const mobileFilterValueLabel = selectedMobileFilter === null ? "全部" : selectedMobileFilter.length === 1 ? selectedMobileFilter[0] : selectedMobileFilter.length ? `已選 ${selectedMobileFilter.length} 項` : "全不選";
   const searchColumnControl = (
     <Select value={searchColumn} onValueChange={value => { setSearchColumn(value as ColumnFilterKey | "all"); setPage(1); setExpandedKey(null); }}>
       <SelectTrigger aria-label="搜尋篩選工具" className="h-11 w-40 shrink-0 text-sm [&>span]:truncate lg:h-9 lg:text-xs"><SelectValue>{searchColumn === "all" ? "搜尋篩選工具" : COLUMN_FILTER_LABELS[searchColumn]}</SelectValue></SelectTrigger>
@@ -6058,12 +6067,12 @@ export function MaterialRequestPage() {
 
       {isCompactLayout && <section
         data-testid="material-mobile-command-center"
-        className="material-mobile-command-center overflow-hidden rounded-xl border border-border bg-card lg:hidden"
+        className="material-mobile-command-center lg:hidden"
       >
         <div className="flex items-center justify-between gap-2 border-b border-cyan-200/10 px-2.5 py-2">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-black text-white">料號快查</h1>
+              <h1 className="text-lg font-semibold text-foreground">料號快查</h1>
               {collaborationStatus !== "remote" && <span className={cn("inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-black", collaborationStatusMeta.badgeClassName)}>
                 <span className={cn("h-1.5 w-1.5 rounded-full", collaborationStatusMeta.dotClassName)} />
                 {collaborationStatusMeta.label}
@@ -6078,7 +6087,7 @@ export function MaterialRequestPage() {
             <button
               type="button"
               onClick={() => setBomManagerOpen(true)}
-              className="flex h-11 items-center gap-1.5 rounded-xl border border-violet-300/30 bg-violet-400/12 px-2.5 text-[11px] font-black text-violet-100"
+              className="material-mobile-bom flex h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-medium"
             >
               <Layers3 className="h-4 w-4" />{seriesList.length} BOM
             </button>
@@ -6087,39 +6096,52 @@ export function MaterialRequestPage() {
               onClick={() => openCreate()}
               disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded}
               aria-label="新增料號"
-              className="h-11 w-11 rounded-xl bg-[linear-gradient(135deg,#bef264,#67e8f9)] p-0 text-[#062230] disabled:opacity-50"
+              className="h-11 w-11 rounded-xl p-0"
             >
               <Plus className="h-5 w-5" />
             </Button>
+            <Drawer open={mobileToolsOpen} onOpenChange={setMobileToolsOpen} shouldScaleBackground={false}>
+              <DrawerTrigger asChild><Button type="button" variant="ghost" className="h-11 w-11 rounded-xl p-0" aria-label="排序與工具"><MoreHorizontal className="h-5 w-5" /></Button></DrawerTrigger>
+              <DrawerContent data-testid="material-mobile-tools" className="material-mobile-tools-sheet" onCloseAutoFocus={event => { if (pendingDialogOpen || exportDialogOpen || nonPvlDialogOpen || pageTrackerDialogOpen || rlcPriorityOpen || guideOpen || tableSettingsOpen) event.preventDefault(); }}>
+                <DrawerHeader className="material-mobile-tools-heading">
+                  <div><DrawerTitle>排序與工具</DrawerTitle><DrawerDescription>{activeSeriesName}</DrawerDescription></div>
+                  <DrawerClose asChild><Button type="button" variant="ghost" className="h-11 w-11 rounded-full p-0" aria-label="關閉排序與工具"><X className="h-5 w-5" /></Button></DrawerClose>
+                </DrawerHeader>
+                <div className="material-mobile-tools-body">
+                  <div data-testid="material-mobile-actions" className="material-mobile-tool-list">
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={openPendingDialog}><TriangleAlert className="text-destructive" />待處理料<span>{pendingApplicationCount.toLocaleString()}</span><ChevronRight /></Button></DrawerClose>
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded}><Upload className="text-success" />{isImporting ? "讀取中..." : "上傳 BOM"}<ChevronRight /></Button></DrawerClose>
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading}><Download className="text-info" />匯出報表<ChevronRight /></Button></DrawerClose>
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading}><FileSpreadsheet className="text-warning" />不建議料匯出<span>{discouragedMaterialCount.toLocaleString()}</span><ChevronRight /></Button></DrawerClose>
+                  </div>
+                  <div className="material-mobile-tool-settings">
+                    <Select value={sortSelectValue} onValueChange={selectTableSort}>
+                      <SelectTrigger aria-label="料號排序" className="h-11 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>{sortSelectItems}</SelectContent>
+                    </Select>
+                    {searchColumnControl}
+                    <div role="group" aria-label="料件檢視" className="material-mobile-view-switch">
+                      <Button type="button" variant="ghost" aria-pressed={mobileView === "cards"} onClick={() => setMobileView("cards")}>卡片</Button>
+                      <Button type="button" variant="ghost" aria-pressed={mobileView === "table"} onClick={() => setMobileView("table")}>表格</Button>
+                    </div>
+                  </div>
+                  <div className="material-mobile-tool-list">
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker}><CircleCheck />頁數進度<ChevronRight /></Button></DrawerClose>
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => setRlcPriorityOpen(true)}><Layers3 />RLC 優先順序<ChevronRight /></Button></DrawerClose>
+                    <DrawerClose asChild>{tableSettingsControl}</DrawerClose>
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => void exportVisibleColumns()} disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending}><Download />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}<ChevronRight /></Button></DrawerClose>
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => setGuideOpen(true)}><CircleHelp />使用說明<ChevronRight /></Button></DrawerClose>
+                  </div>
+                </div>
+              </DrawerContent>
+            </Drawer>
           </div>
-        </div>
-
-        <div data-testid="material-mobile-actions" className="grid grid-cols-2 gap-2 border-b border-border p-2.5">
-          <Button type="button" onClick={openPendingDialog} className="h-11 bg-destructive text-destructive-foreground hover:bg-destructive/85"><TriangleAlert className="mr-1.5 h-4 w-4" />待處理料 {pendingApplicationCount.toLocaleString()}</Button>
-          <Button type="button" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-11 bg-success text-success-foreground hover:bg-success/85"><Upload className="mr-1.5 h-4 w-4" />{isImporting ? "讀取中..." : "上傳 BOM"}</Button>
-          <Button type="button" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-11 bg-info text-info-foreground hover:bg-info/85"><Download className="mr-1.5 h-4 w-4" />匯出報表</Button>
-          <Button type="button" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} className="h-11 bg-warning text-warning-foreground hover:bg-warning/85"><FileSpreadsheet className="mr-1.5 h-4 w-4" />不建議料匯出 {discouragedMaterialCount.toLocaleString()}</Button>
-          <details data-mobile-material-tools="true" className="col-span-2 rounded-lg border border-border bg-secondary/40">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-semibold"><Layers3 className="h-4 w-4" />排序與工具<ChevronDown className="ml-auto h-4 w-4" /></summary>
-            <div className="grid grid-cols-2 gap-2 border-t border-border p-2.5">
-              <Select value={sortSelectValue} onValueChange={selectTableSort}>
-                <SelectTrigger aria-label="料號排序" className="col-span-2 h-11 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>{sortSelectItems}</SelectContent>
-              </Select>
-              <Button type="button" variant="outline" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker} className="h-11"><CircleCheck className="mr-1.5 h-4 w-4" />頁數進度</Button>
-              <Button type="button" variant="outline" onClick={() => setRlcPriorityOpen(true)} className="h-11">RLC 優先順序</Button>
-              <Button type="button" variant="outline" onClick={() => setGuideOpen(true)} className="h-11"><CircleHelp className="mr-1.5 h-4 w-4" />使用說明</Button>
-              {tableSettingsControl}
-              <Button type="button" variant="outline" onClick={() => void exportVisibleColumns()} disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} className="col-span-2 h-11"><Download className="mr-1.5 h-4 w-4" />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}</Button>
-            </div>
-          </details>
         </div>
 
         <div data-mobile-material-primary-controls="true" className="space-y-2 p-2.5">
 
-          <div className="grid grid-cols-[minmax(0,1fr)_44px] gap-2">
+          <div className="material-mobile-search">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-cyan-300" />
               <Input
                 value={searchDraft}
                 onChange={(event) => {
@@ -6141,35 +6163,33 @@ export function MaterialRequestPage() {
                 enterKeyHint="search"
                 placeholder="掃料名、MPN、REF DES、實體料號"
                 aria-label="快速搜尋料號"
-                className="h-11 rounded-xl border-cyan-300/35 bg-[#071522] pl-10 pr-3 text-base text-white placeholder:text-slate-500 focus-visible:ring-cyan-300"
+                className="h-11 rounded-xl pl-3 pr-12 text-base"
               />
             </div>
             <Button
               type="button"
+              variant="ghost"
               onClick={() => void applySearch()}
               aria-label={isSearchPending ? "搜尋中" : "搜尋"}
-              className="h-11 w-11 rounded-xl bg-cyan-300 p-0 text-[#062230] hover:bg-cyan-200"
+              className="h-11 w-11 rounded-xl p-0 text-primary"
             >
               {isSearchPending ? <RotateCcw className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
             </Button>
           </div>
 
-          <div className="material-mobile-utility-row flex items-center gap-2">{searchColumnControl}
-            <div role="group" aria-label="料件檢視" className="flex shrink-0 gap-1">
-              <Button type="button" variant={mobileView === "cards" ? "default" : "outline"} aria-pressed={mobileView === "cards"} onClick={() => setMobileView("cards")} className="h-11 px-3">卡片</Button>
-              <Button type="button" variant={mobileView === "table" ? "default" : "outline"} aria-pressed={mobileView === "table"} onClick={() => setMobileView("table")} className="h-11 px-3">表格</Button>
-            </div>
-          </div>
-          <div className="flex snap-x gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button type="button" onClick={clearFilters} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", availability === "all" && !showMarkedOnly ? "border-sky-200/50 bg-sky-300 text-sky-950" : "border-sky-300/20 bg-sky-400/10 text-sky-100")}>全部 {dataset.stats.totalGroups.toLocaleString()}</button>
-            <button type="button" onClick={() => applyAvailabilityFilter("required")} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", availability === "required" ? "border-amber-200/60 bg-amber-300 text-amber-950" : "border-amber-300/25 bg-amber-400/10 text-amber-100")}>料號待補 {requiredApplicationCount.toLocaleString()}</button>
-            <button type="button" onClick={() => setShowMarkedOnly((current) => !current)} className={cn("h-11 min-w-[96px] snap-start rounded-xl border px-3 text-xs font-black", showMarkedOnly ? "border-lime-200/60 bg-lime-300 text-lime-950" : "border-lime-300/20 bg-lime-400/10 text-lime-100")}><Star className={cn("mr-1 inline h-3.5 w-3.5", showMarkedOnly && "fill-current")} />標記 {markedGroupCount}</button>
+          <div className="material-mobile-scope" role="group" aria-label="料件範圍">
+            <button type="button" onClick={clearFilters} aria-pressed={availability === "all" && !showMarkedOnly}>全部 <span>{dataset.stats.totalGroups.toLocaleString()}</span></button>
+            <button type="button" onClick={() => applyAvailabilityFilter("required")} aria-pressed={availability === "required"}>料號待補 <span>{requiredApplicationCount.toLocaleString()}</span></button>
+            <button type="button" onClick={() => setShowMarkedOnly((current) => !current)} aria-pressed={showMarkedOnly}><Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />標記 <span>{markedGroupCount}</span></button>
           </div>
 
-          <div data-testid="material-mobile-column-filters" role="group" aria-label="料件欄位篩選" className="flex gap-2 overflow-x-auto pb-1 [&>div]:shrink-0 [&>div]:min-w-28 [&_button]:h-11">
-            {(["trackingStatus", "manufacturer", ...FILTER_KEYS.filter(key => key !== "trackingStatus" && key !== "manufacturer")] as ColumnFilterKey[]).map(key => <div key={key}>
-              <ExcelFilterPopover filterKey={key} getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS[key]} selectedValues={columnFilters[key]} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, [key]: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
-            </div>)}
+          <div data-testid="material-mobile-column-filters" role="group" aria-label="料件欄位篩選" className="material-mobile-column-filters">
+            <ExcelFilterPopover filterKey="trackingStatus" getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, trackingStatus: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
+            <Select value={mobileFilterColumn} onValueChange={value => setMobileFilterColumn(value as ColumnFilterKey)}>
+              <SelectTrigger aria-label="篩選欄位" className="h-11 min-w-0 text-xs [&>span]:truncate"><SelectValue /></SelectTrigger>
+              <SelectContent>{FILTER_KEYS.filter(key => key !== "trackingStatus").map(key => <SelectItem key={key} value={key}>{COLUMN_FILTER_LABELS[key]}</SelectItem>)}</SelectContent>
+            </Select>
+            <ExcelFilterPopover filterKey={mobileFilterColumn} getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS[mobileFilterColumn]} triggerLabel={mobileFilterValueLabel} selectedValues={selectedMobileFilter} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, [mobileFilterColumn]: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
           </div>
           {activeFilterControls}
         </div>
@@ -6452,19 +6472,21 @@ export function MaterialRequestPage() {
                     {itemValue}
                   </button>
                   <button type="button" onClick={() => openRecord(mainRecord, "view")} className="min-w-0 flex-1 text-left">
-                    <p className="line-clamp-2 break-words text-base font-semibold leading-6 text-white">{group.name || mainRecord.name || "未命名料件"}</p>
-                    <p className="truncate text-xs font-semibold text-cyan-200">{getDisplayMpn(mainRecord) || "尚未填寫 MPN"} · <span className="font-normal text-slate-400">{mainRecord.manufacturer || "未指定廠商"}</span></p>
+                    <p className="line-clamp-2 break-words text-[.9375rem] font-semibold leading-[1.4] text-foreground">{group.name || mainRecord.name || "未命名料件"}</p>
+                    <p className="mt-1 truncate text-[.8125rem] text-muted-foreground">{getDisplayMpn(mainRecord) || "尚未填寫 MPN"} · <span>{mainRecord.manufacturer || "未指定廠商"}</span></p>
                     <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><PartUsageSummary records={group.records} /><span className="inline-flex min-w-0 items-center gap-1"><span className="text-xs text-slate-500">phase out</span><PhaseOutStatus record={mainRecord} /></span></div>
                   </button>
                   <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-500" />
                 </div>
 
-                <div className="flex items-center gap-1.5 overflow-x-auto border-y border-white/5 bg-[#091827]/85 px-2.5 py-1.5 text-[11px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  <span className={cn("shrink-0 rounded-full border px-2 py-0.5 font-black", group.riskCount > 0 ? "border-rose-300/35 bg-rose-400/12 text-rose-100" : mustApply ? "border-amber-300/35 bg-amber-400/12 text-amber-100" : "border-slate-300/30 bg-slate-400/10 text-slate-100")}>{group.riskCount > 0 ? "料況需確認" : mustApply ? "未提供虛擬／實體料號" : mainRecord.sourcingStatus || "供應／核准狀態未提供"}</span>
+                <div className="material-mobile-summary">
                   <MaterialApplicationExemptionBadge record={mainRecord} />
                   <span className={cn(CHIP_BASE, "shrink-0", getTrackingStatusTone(getTrackingWorkflowStatus(mainRecord)))}>{getTrackingStatusDisplayLabel(getTrackingWorkflowStatus(mainRecord))}</span>
-                  <span className="max-w-[11rem] shrink-0 truncate rounded-full border border-slate-500/20 bg-slate-800/35 px-2 py-0.5 text-slate-200">REF {mainRecord.refDes || mainRecord.refGroup || "-"}</span>
-                  <span className={cn("shrink-0 rounded-full border px-2 py-0.5 font-bold", availableAlternativeCount > 0 ? "border-emerald-300/25 bg-emerald-400/8 text-emerald-200" : "border-slate-500/25 bg-slate-800/40 text-slate-300")}>替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
+                  <span className={cn("min-w-0 text-xs", group.riskCount > 0 ? "text-destructive" : mustApply ? "text-warning" : "text-muted-foreground")}>{group.riskCount > 0 ? "料況需確認" : mustApply ? "未提供虛擬／實體料號" : mainRecord.sourcingStatus || "供應／核准狀態未提供"}</span>
+                </div>
+                <div className="material-mobile-reference">
+                  <span className="min-w-0 flex-1 truncate">REF {mainRecord.refDes || mainRecord.refGroup || "-"}</span>
+                  <span className="shrink-0">替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
                 </div>
 
                 <details className="material-mobile-note border-b border-border px-3">
@@ -6505,9 +6527,9 @@ export function MaterialRequestPage() {
                   </div>
                 ) : null}
 
-                <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-2 p-2">
-                  <Button type="button" size="sm" onClick={() => openTrackingDialog(mainRecord)} className="h-11 rounded-xl px-3 font-bold"><Pencil className="mr-1 h-4 w-4" />追蹤／更新料件</Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => toggleExpanded(group.key)} aria-expanded={expanded} className="h-11 rounded-xl border-violet-300/25 bg-violet-400/10 px-2 text-violet-100">
+                <div className="material-mobile-record-footer">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => openTrackingDialog(mainRecord)} className="h-11 justify-start px-2"><Pencil className="h-4 w-4 text-primary" />追蹤／更新料件</Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => toggleExpanded(group.key)} aria-expanded={expanded} className="h-11 px-2 text-muted-foreground">
                     {expanded ? <ChevronDown className="mr-1 h-4 w-4" /> : <ChevronRight className="mr-1 h-4 w-4" />}更多
                   </Button>
                 </div>

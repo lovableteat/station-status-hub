@@ -6,7 +6,7 @@ import ts from "typescript";
 const require = createRequire(import.meta.url);
 const { React, create, act, loader } = require("../../../tests/support/renderHarness.cjs");
 
-function mountFilter(initial = null) {
+function mountFilter(initial = null, triggerLabel) {
   const writes = [];
   const load = loader({
     window: { requestAnimationFrame: callback => { callback(); return 1; }, cancelAnimationFrame() {} },
@@ -25,7 +25,7 @@ function mountFilter(initial = null) {
   let root;
   const getOptions = () => ["ACES", "AMPHENOL", "NXP"].map(value => ({ value, label: value, count: 1 }));
   const render = () => React.createElement(ExcelFilterPopover, {
-    filterKey: "manufacturer", label: "Manufacturer", selectedValues, getOptions, activeSort: null, onSortChange() {},
+    filterKey: "manufacturer", label: "Manufacturer", triggerLabel, selectedValues, getOptions, activeSort: null, onSortChange() {},
     onSelectedValuesChange(values) { writes.push(values); selectedValues = values; root.update(render()); },
   });
   act(() => { root = create(render()); });
@@ -39,6 +39,17 @@ function mountFilter(initial = null) {
     check(label, checked) { act(() => checkbox(label).props.onCheckedChange(checked)); },
   };
 }
+
+test("a compact value trigger keeps the actual field name accessible and avoids duplicate counts", () => {
+  const filter = mountFilter(["ACES"], "ACES");
+  const trigger = filter.root.root.findByProps({ 'aria-label': '篩選Manufacturer' });
+  const spans = trigger.findAllByType('span');
+  assert.ok(spans.some(span => span.props.children === 'ACES'));
+  assert.ok(!spans.some(span => span.props.children === '1項'));
+  filter.open();
+  assert.equal(filter.checkbox('ACES').props.checked, true);
+  act(() => filter.root.unmount());
+});
 
 test("column selections stay local until 確定 and only then update the applied filter", () => {
   const filter = mountFilter();
