@@ -41,3 +41,24 @@ test('a late initial key read cannot override the newest realtime refresh', asyn
     assert.deepEqual(f.keys(), ['latest-key']);
   } finally { await f.unmount(); }
 });
+
+test('chat offers configured providers alongside Gemini and excludes incomplete settings', async () => {
+  const providers = ['gemini', 'openai', 'anthropic', 'openai-compatible'];
+  const records = providers.map(provider => ({
+    ...key(provider),
+    permissions: { metadata: { provider, model: `${provider}-model`, baseUrl: 'https://fixture.invalid' } },
+  }));
+  const incomplete = ['provider', 'model', 'baseUrl'].map(field => ({
+    ...key(`missing-${field}`),
+    permissions: { metadata: { ...records[1].permissions.metadata, [field]: ' ' } },
+  }));
+  const f = await fixture(() => ({ data: [...records, ...incomplete], error: null }));
+  try {
+    assert.deepEqual(f.keys(), providers);
+    const props = f.root.root.find(node => node.type === 'stub' && node.props.availableApiKeyTargets).props;
+    assert.deepEqual(
+      Array.from(props.availableApiKeyTargets).filter(target => target.keyId === 'openai').map(target => target.model),
+      ['openai-model'],
+    );
+  } finally { await f.unmount(); }
+});

@@ -69,7 +69,7 @@ export function ApiChatWorkspacePage() {
         const availableKeys = ((data ?? []) as ApiKeyRecord[]).filter((record) => {
           const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
           return (
-            metadata.provider.trim().toLowerCase() === "gemini" &&
+            Boolean(metadata.provider.trim()) &&
             Boolean(metadata.model.trim()) &&
             Boolean(metadata.baseUrl.trim())
           );
