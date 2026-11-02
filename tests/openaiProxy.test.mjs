@@ -6,12 +6,12 @@ import ts from 'typescript';
 
 const source = fs.readFileSync('supabase/functions/openai-proxy/index.ts', 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-function fixture({ authenticated = true, permitted = true, keyPatch = {}, upstreamStatus = 200 } = {}) {
+function fixture({ permitted = true, keyPatch = {}, upstreamStatus = 200 } = {}) {
   let handler;
   const calls = [], permissions = [];
   const key = { api_key: 'fixture-openai-secret', is_active: true, expires_at: null, permissions: { metadata: { provider: 'openai', model: 'gpt-5.4', baseUrl: 'https://api.openai.com/v1' } }, ...keyPatch };
   const query = { select() { return this; }, eq() { return this; }, async maybeSingle() { return { data: key, error: null }; } };
-  const client = { auth: { getUser: async () => ({ data: { user: authenticated ? { id: 'user' } : null }, error: null }) }, rpc: async (_name, args) => { permissions.push(args); return { data: permitted, error: null }; }, from: () => query };
+  const client = { rpc: async (_name, args) => { permissions.push(args); return { data: permitted, error: null }; }, from: () => query };
   vm.runInNewContext('(function(require,module,exports){' + compiled + '\n})', {
     Deno: { env: { get: name => name === 'SUPABASE_URL' ? 'https://fixture.supabase.co' : 'fixture-anon' }, serve: fn => { handler = fn; } },
     Request, Response, Headers, TextDecoder, AbortController, Date, setTimeout, clearTimeout,
@@ -20,10 +20,10 @@ function fixture({ authenticated = true, permitted = true, keyPatch = {}, upstre
   return { calls, permissions, run: (body = { operation: 'chat', apiKeyId: 'key', request: { model: 'gpt-5.4', messages: [{ role: 'user', content: 'hello' }] } }, { authorization = 'Bearer fixture-user', method = 'POST' } = {}) => handler(new Request('https://fixture.supabase.co/functions/v1/openai-proxy', { method, headers: authorization ? { Authorization: authorization } : {}, body: method === 'POST' ? JSON.stringify(body) : undefined })) };
 }
 
-test('proxy requires a verified user and current workspace permission before any provider call', async () => {
+test('proxy requires a JWT and linked active-account workspace permission before any provider call', async () => {
+  assert.match(fs.readFileSync('supabase/config.toml', 'utf8'), /\[functions\.openai-proxy\]\s+verify_jwt = true/);
   for (const [options, request, expected] of [
     [{}, { authorization: '' }, 401],
-    [{ authenticated: false }, {}, 401],
     [{ permitted: false }, {}, 403],
   ]) {
     const f = fixture(options);
