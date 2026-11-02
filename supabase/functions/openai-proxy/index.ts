@@ -42,14 +42,13 @@ Deno.serve(async (request: Request) => {
       global: { headers: { Authorization: authorization } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: identity, error: authError } = await caller.auth.getUser(token);
-    if (authError || !identity.user || identity.user.is_anonymous) return respond('登入已失效，請重新登入。', 401);
     let body: Record<string, unknown>;
     try { body = await readBody(request); }
     catch (error) { return respond(error instanceof RangeError ? '附件與對話內容超過 100MB。' : '請求格式錯誤。', error instanceof RangeError ? 413 : 400); }
     if (!['models', 'chat'].includes(String(body.operation))) return respond('不支援的操作。', 400);
 
     const savedKey = typeof body.apiKeyId === 'string' && body.apiKeyId.trim() !== '';
+    // The gateway verifies JWTs; this RPC checks the linked active account and current workspace access.
     const { data: permitted, error: permissionError } = await caller.rpc('current_user_can_workspace', {
       p_workspace: 'ai-chat', p_action: savedKey ? 'view' : 'edit',
     });
