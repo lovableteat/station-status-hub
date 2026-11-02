@@ -70,6 +70,20 @@ const groups = ['J1', 'R1'].map(ref => {
   return { key: 'group-' + ref, displayRef: ref, name: ref, searchText: ref.toLowerCase(), primaryRecord: record, records: [record, { ...record, id: ref + '-alternate' }] };
 });
 
+test('weekly progress receives the same alternate-vendor scope as the pending list', () => {
+  const { PendingMaterialsDialog } = load('src/components/material-requests/MaterialRequestPage.tsx');
+  const opened = [];
+  let root;
+  act(() => { root = create(React.createElement(PendingMaterialsDialog, { groups, canEdit: false, open: true, workspaceName: 'QA', exportedBy: 'QA', onOpenChange() {}, onOpenTracking() {}, onCopy() {}, onOpenWeeklyProgress: value => opened.push(value), onSetCategory() {}, onSetOwner() {}, markedGroupKeys: new Set(), onToggleMarked() {} })); });
+  try {
+    const button = id => root.root.find(node => node.type === 'stub' && node.props['data-testid'] === id);
+    act(() => button('pending-weekly-button').props.onClick());
+    act(() => button('pending-include-alternates').props.onClick());
+    act(() => button('pending-weekly-button').props.onClick());
+    assert.deepEqual(opened, [false, true]);
+  } finally { act(() => root.unmount()); }
+});
+
 test('MPN copy uses the complete source value in read-only mode and never copies the empty reminder', () => {
   const { PendingMaterialsDialog } = load('src/components/material-requests/MaterialRequestPage.tsx');
   const fullMpn = '0000123456789-' + 'FULL-MANUFACTURER-PART-NUMBER-'.repeat(5);
