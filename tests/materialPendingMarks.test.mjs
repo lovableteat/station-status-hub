@@ -70,6 +70,30 @@ const groups = ['J1', 'R1'].map(ref => {
   return { key: 'group-' + ref, displayRef: ref, name: ref, searchText: ref.toLowerCase(), primaryRecord: record, records: [record, { ...record, id: ref + '-alternate' }] };
 });
 
+test('MPN copy uses the complete source value in read-only mode and never copies the empty reminder', () => {
+  const { PendingMaterialsDialog } = load('src/components/material-requests/MaterialRequestPage.tsx');
+  const fullMpn = '0000123456789-' + 'FULL-MANUFACTURER-PART-NUMBER-'.repeat(5);
+  const record = { ...groups[0].primaryRecord, manufacturerPartNumber: fullMpn };
+  const empty = { ...groups[1].primaryRecord, manufacturerPartNumber: '' };
+  const copied = [], opened = [];
+  let root;
+  act(() => { root = create(React.createElement(PendingMaterialsDialog, {
+    groups: [{ ...groups[0], records: [record], primaryRecord: record }, { ...groups[1], records: [empty], primaryRecord: empty }],
+    open: true, canEdit: false, workspaceName: 'QA', exportedBy: 'QA', onOpenChange() {}, onOpenTracking: value => opened.push(value),
+    onCopy: value => copied.push(value), onSetCategory() {}, onSetOwner() {}, markedGroupKeys: new Set(), onToggleMarked() {},
+  })); });
+  try {
+    const buttons = root.root.findAllByProps({ 'data-testid': 'pending-mpn-copy' });
+    assert.equal(buttons.length, 1, 'empty MPN has no copy button');
+    assert.equal(buttons[0].type, 'button', 'native button supports mouse, Enter and Space');
+    assert.ok(buttons[0].props['aria-label'].includes(fullMpn));
+    act(() => buttons[0].props.onClick());
+    assert.deepEqual(copied, [fullMpn]);
+    assert.equal(opened.length, 0, 'copy never opens the editor');
+    assert.match(JSON.stringify(root.toJSON()), /未填 MPN/);
+  } finally { act(() => root.unmount()); }
+});
+
 test('fresh opens show all categories and clear search; returning from an editor retains the chosen view', () => {
   const { PendingMaterialsDialog } = load('src/components/material-requests/MaterialRequestPage.tsx');
   let open = true, restoreView = false, root;

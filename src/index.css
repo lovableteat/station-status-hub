@@ -966,7 +966,7 @@ All colors MUST be HSL for proper theming support.
 .pending-material-row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) 166px;
-  grid-template-areas: "mark reference reference" "name name name" "category category owner" "timing timing status";
+  grid-template-areas: "mark reference reference" "name name name" "mpn mpn mpn" "category category owner" "timing timing status";
   align-items: center;
   gap: 8px;
   min-height: 56px;
@@ -976,7 +976,7 @@ All colors MUST be HSL for proper theming support.
 .pending-row-reference { grid-area: reference; width: auto; }
 .pending-row-category { grid-area: category; width: 100%; }
 .pending-row-name { grid-area: name; overflow-wrap: anywhere; }
-.pending-row-mpn { grid-area: mpn; display: none; }
+.pending-row-mpn { grid-area: mpn; display: block; }
 .pending-row-manufacturer { grid-area: manufacturer; display: none; border: 1px solid hsl(var(--primary) / .3); border-radius: 5px; padding: 4px 6px; background: hsl(var(--primary) / .12); color: hsl(var(--primary)); }
 .pending-material-row [data-testid="pending-owner-picker"] { grid-area: owner; width: 100%; }
 .pending-row-timing { grid-area: timing; display: flex; align-items: center; gap: 4px; min-height: 40px; }
@@ -1139,6 +1139,7 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 .material-status-text { color: hsl(var(--material-status)); }
 
 .material-record-dialog .app-dialog-header { flex: 0 0 auto; padding-right: 46px; }
+.material-record-mpn { display: flex; flex: 1 1 180px; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; margin-left: 6px; }
 .material-record-dialog .material-record-scroll { overflow-x: hidden; padding: 0 4px 2px 0; scrollbar-gutter: stable; }
 .material-details-layout { display: grid; min-width: 0; gap: 12px; }
 .material-ce-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
@@ -1174,9 +1175,17 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 .material-record-dialog .material-ce-table td { padding: 6px; vertical-align: top; }
 .material-record-dialog .material-ce-table :is(td, th) { border-right: 1px solid hsl(var(--border)); }
 .material-record-dialog .material-ce-control { min-height: 56px; height: 56px; padding: 6px 8px; border-radius: 6px; font-size: 14px; line-height: 20px; }
+.material-record-dialog .material-ce-control::placeholder {
+  color: color-mix(in srgb, hsl(var(--muted-foreground)) 88%, black) !important;
+  -webkit-text-fill-color: color-mix(in srgb, hsl(var(--muted-foreground)) 88%, black) !important;
+  font-weight: 400;
+  font-style: italic;
+  opacity: 1;
+}
 .material-record-dialog textarea.material-ce-control { field-sizing: fixed; overflow-y: auto; overflow-wrap: anywhere; resize: vertical; }
-.material-record-dialog .material-spec-section { transition: border-color 120ms ease, background-color 120ms ease; }
-.material-record-dialog .material-spec-section[data-drag-active="true"] { border-color: hsl(var(--primary)); background: hsl(var(--primary) / 0.1); outline: 2px dashed hsl(var(--primary)); outline-offset: -6px; }
+.material-record-dialog .material-spec-section { border-color: hsl(var(--primary) / 0.6); background: color-mix(in srgb, hsl(var(--primary)) 12%, hsl(var(--card))); transition: border-color 120ms ease, background-color 120ms ease; }
+.material-record-dialog .material-spec-section:focus-within { border-color: hsl(var(--primary) / 0.85); }
+.material-record-dialog .material-spec-section[data-drag-active="true"] { border-color: hsl(var(--primary)); background: hsl(var(--primary) / 0.18); outline: 2px dashed hsl(var(--primary)); outline-offset: -6px; }
 .material-record-dialog .material-spec-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr)); gap: 10px; }
 .material-record-dialog .material-spec-file { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--background) / 0.4); }
 .material-record-dialog .material-spec-file-open { display: flex; flex: 1 1 220px; min-width: 0; align-items: center; gap: 13px; padding: 4px; border-radius: 6px; text-align: left; }
@@ -1186,7 +1195,7 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 .material-record-dialog .material-spec-file-copy { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
 .material-record-dialog .material-spec-file-copy strong { overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
 .material-record-dialog .material-spec-file-copy > span { color: hsl(var(--muted-foreground)); font-size: 12px; }
-.material-record-dialog .material-spec-empty { grid-column: 1 / -1; display: flex; min-height: 82px; align-items: center; justify-content: center; gap: 12px; padding: 16px; border: 1px dashed hsl(var(--border)); border-radius: 8px; color: hsl(var(--muted-foreground)); }
+.material-record-dialog .material-spec-empty { grid-column: 1 / -1; display: flex; min-height: 82px; align-items: center; justify-content: center; gap: 12px; padding: 16px; border: 1px dashed hsl(var(--primary) / 0.6); border-radius: 8px; background: hsl(var(--primary) / 0.07); color: hsl(var(--foreground) / 0.85); }
 .material-record-dialog .material-spec-empty svg { width: 24px; height: 24px; flex-shrink: 0; color: hsl(var(--primary)); }
 .material-record-dialog .app-dialog-footer { flex-shrink: 0; }
 
@@ -1196,6 +1205,7 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
   .material-record-dialog .material-ce-section,
   .material-record-dialog .material-spec-section { padding: 12px; }
   .material-record-dialog .material-ce-control { font-size: 16px; }
+  .material-record-mpn { flex-basis: 100%; margin-left: 0; }
   .material-record-dialog .app-dialog-footer { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; }
 }
 

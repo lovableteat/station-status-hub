@@ -2552,6 +2552,7 @@ export function PendingMaterialsDialog({
   exportedBy,
   onOpenChange,
   onOpenTracking,
+  onCopy,
   onSetCategory,
   accountId,
   onSetOwner,
@@ -2568,6 +2569,7 @@ export function PendingMaterialsDialog({
   exportedBy: string;
   onOpenChange: (open: boolean) => void;
   onOpenTracking: (record: MaterialRecord) => void;
+  onCopy: (value: string) => void;
   /** Saves a hand-picked category for a pending part; null returns it to the Ref Des rule. */
   onSetCategory: (group: MaterialGroup, category: PendingMaterialCategory | null) => void;
   accountId?: string;
@@ -2741,7 +2743,11 @@ export function PendingMaterialsDialog({
                   <span className="pending-row-reference min-w-0 truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
                   <PendingCategoryPicker group={group} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
                   <span className="pending-row-name min-w-0 text-base text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
-                  <span className="pending-row-mpn min-w-0 truncate font-mono text-sm text-foreground/75" title={record.manufacturerPartNumber}>{record.manufacturerPartNumber || "未填 MPN"}</span>
+                  <div className="pending-row-mpn min-w-0 font-mono text-sm text-foreground/85">
+                    {record.manufacturerPartNumber?.trim() ? <button type="button" data-testid="pending-mpn-copy" className="group/mpn flex min-h-9 w-full min-w-0 items-center gap-1 rounded px-0.5 text-left hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`複製廠商料號 ${record.manufacturerPartNumber}`} title={`複製完整廠商料號：${record.manufacturerPartNumber}`} onClick={() => onCopy(record.manufacturerPartNumber)}>
+                      <span className="min-w-0 select-text truncate">{record.manufacturerPartNumber}</span><Copy className="h-3 w-3 shrink-0 text-primary opacity-70 group-hover/mpn:opacity-100" aria-hidden="true" />
+                    </button> : <span className="text-muted-foreground">未填 MPN</span>}
+                  </div>
                   <span className="pending-row-manufacturer min-w-0 truncate text-xs font-semibold" title={record.manufacturer}>{record.manufacturer || "未填廠商"}</span>
                   <MaterialRequestOwnerPicker record={record} owners={ownerDirectory.owners} disabled={!canEdit} onChange={owner => onSetOwner(record, owner)} />
                   <div className="pending-row-timing">
@@ -2913,14 +2919,18 @@ export function MaterialRecordDialog({
   const title = mode === "create" ? "新增料件 / 替代料" : mode === "edit" ? "修改料件資料" : "料件詳細資訊";
   const hasTrackingChanges = Boolean(trackingDraft.status || trackingDraft.note.trim() || trackingDraft.createdBy.trim() || trackingDraft.requestInfo.trim() || trackingDraft.images.length || trackingDraft.pendingImageReads || trackingDraft.requestTicket !== (record.requestTicket ?? "") || trackingDraft.requestUrl !== (record.requestUrl ?? ""));
   const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(toWorkbookRecord(record)) || hasTrackingChanges;
-  const renderCeControl = (field: (typeof MATERIAL_CE_EDITOR_FIELDS)[number], index: number) => <>
+  const renderCeControl = (field: (typeof MATERIAL_CE_EDITOR_FIELDS)[number], index: number) => {
+    const value = field.key === "level" ? "2" : String(form[field.key] ?? "");
+    const hasValue = Boolean(value.trim());
+    return <>
     {field.key === "level" || field.key === "qty" ? (
-      <Input id={field.id} disabled={readOnly} readOnly={field.key === "level"} value={field.key === "level" ? "2" : String(form[field.key] ?? "")} onChange={event => updateField(field.key, event.target.value)} inputMode={field.key === "qty" ? "decimal" : undefined} className="material-ce-control" />
+      <Input id={field.id} disabled={readOnly} readOnly={field.key === "level"} value={value} data-has-value={hasValue} onChange={event => updateField(field.key, event.target.value)} inputMode={field.key === "qty" ? "decimal" : undefined} className="material-ce-control" />
     ) : (
-      <Textarea id={field.id} disabled={readOnly} value={String(form[field.key] ?? "")} onChange={event => updateField(field.key, event.target.value)} rows={2} placeholder={MATERIAL_CE_FIELDS[index].meaning} className={cn("material-ce-control", (field.key === "virtualAlternative" || field.key === "partNumber") && "material-pn-input", field.key === "partNumber" && !form.partNumber.trim() && "material-pn-missing")} />
+      <Textarea id={field.id} disabled={readOnly} value={value} data-has-value={hasValue} onChange={event => updateField(field.key, event.target.value)} rows={2} placeholder={MATERIAL_CE_FIELDS[index].meaning} className={cn("material-ce-control", hasValue && (field.key === "virtualAlternative" || field.key === "partNumber") && "material-pn-input", field.key === "partNumber" && !hasValue && "material-pn-missing")} />
     )}
     {field.key === "partUsageStatus" && (record as Partial<MaterialRecord>).partUsageStatusSource === "legacy-tracking" && <p className="text-xs text-muted-foreground">取自舊格式匯入追蹤原文；原追蹤保留。</p>}
-  </>;
+    </>;
+  };
 
   return (
     <TooltipProvider delayDuration={160}>
@@ -2932,6 +2942,10 @@ export function MaterialRecordDialog({
             <span className={cn(CHIP_BASE, readOnly ? CHIP_TONES.neutral : CHIP_TONES.primary)}>
               {readOnly ? "唯讀" : "編輯中"}
             </span>
+            <div data-testid="material-record-mpn" className="material-record-mpn">
+              <span className="text-xs text-muted-foreground">廠商料號</span>
+              <span className="min-w-0 select-text break-all font-mono text-sm font-semibold text-foreground">{form.manufacturerPartNumber?.trim() ? form.manufacturerPartNumber : "尚未填寫"}</span>
+            </div>
           </div>
           <DialogDescription className={activeTab === "tracking" ? "sr-only" : undefined}>
             依 CE Excel 順序排列全部 15 個欄位；<span className="text-destructive">*</span> 為必填。
@@ -3009,7 +3023,7 @@ export function MaterialRecordDialog({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">SPEC 文件</h3>
             <input ref={specInputRef} type="file" accept={MATERIAL_SPEC_ACCEPT} multiple className="hidden" onChange={(event) => void handleSpecFile(event)} />
-            {!readOnly && <Button type="button" variant="secondary" disabled={isSaving || isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-11"><Upload data-icon="inline-start" />{isUploadingSpec ? `上傳中 ${specProgress.completed}/${specProgress.total}` : "新增 SPEC 檔案"}</Button>}
+            {!readOnly && <Button type="button" data-testid="material-spec-add" disabled={isSaving || isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-11"><Upload data-icon="inline-start" />{isUploadingSpec ? `上傳中 ${specProgress.completed}/${specProgress.total}` : "新增 SPEC 檔案"}</Button>}
           </div>
           <div data-testid="material-spec-document" className="material-spec-files mt-3" aria-live="polite">
             {getMaterialSpecDocuments(form).map(document => <div className="material-spec-file" key={document.path}>
@@ -5915,6 +5929,7 @@ export function MaterialRequestPage() {
         exportedBy={user?.displayName || user?.username || "未知使用者"}
         onOpenChange={setPendingDialogOpen}
         onOpenTracking={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openTrackingDialog(record); }}
+        onCopy={value => void handleCopy(value)}
         onSetCategory={setPendingCategory}
         accountId={user?.userId}
         onSetOwner={setPendingOwner}
