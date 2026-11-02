@@ -127,21 +127,20 @@ test("the three new statuses are selectable without replacing the saved summary 
   act(() => editor.root.unmount());
 });
 
-test("inline status choices keep all eleven values and the no-new-entry choice without changing saved data", () => {
-  const editor = mountEditor();
+test("inline choices show the ten current stages while preserving legacy required-application history", () => {
+  const editor = mountEditor({ trackingStatus: '需申請' });
   assert.equal(editor.root.root.findAllByType('select').length, 0, 'no separate required-application field');
   const radios = editor.root.root.findAllByProps({ type: 'radio' });
-  assert.equal(radios.length, 12);
-  assert.equal(radios.filter(node => node.props.value === '需申請').length, 1);
-  assert.equal(radios.filter(node => node.props.checked).length, 1);
-  assert.equal(radios.find(node => node.props.checked).props.value, 'none');
-  for (const option of radios.filter(node => node.props.value !== 'none')) {
+  assert.deepEqual(radios.map(node => node.props.value), ['未處理', '已發信', '未回應再次發信', '與廠商溝通中', '文件已收齊', '料號申請中', '已取得料號待CIS申請', 'SYMBOL申請中', '申請料被退回', '已完成']);
+  assert.equal(radios.filter(node => node.props.checked).length, 0);
+  assert.equal(editor.draft().status, '');
+  for (const option of radios) {
     act(() => option.props.onChange());
     assert.equal(editor.draft().status, option.props.value);
   }
-  act(() => editor.root.root.findByProps({ type: 'radio', value: 'none' }).props.onChange());
+  editor.replaceSession();
   assert.equal(editor.draft().status, '');
-  assert.equal(editor.root.root.findByProps({ 'data-testid': 'tracking-current-summary' }).findAllByProps({ 'data-testid': 'tracking-status-badge' }).find(node => node.type === 'span').props['data-status'], '處理中');
+  assert.equal(editor.root.root.findByProps({ 'data-testid': 'tracking-current-summary' }).findAllByProps({ 'data-testid': 'tracking-status-badge' }).find(node => node.type === 'span').props['data-status'], '需申請');
   editor.disable();
   assert.ok(editor.root.root.findAllByProps({ type: 'radio' }).every(node => node.props.disabled));
   act(() => editor.root.unmount());

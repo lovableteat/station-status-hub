@@ -161,9 +161,9 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
           <div className="space-y-1.5">
             <p id={`${id}-status-label`} className="text-xs font-medium text-muted-foreground">本次狀態</p>
             <div className="material-tracking-status-choices" role="radiogroup" aria-labelledby={`${id}-status-label`} aria-invalid={hasUnselectedProgress}>
-              {["none", ...MATERIAL_TRACKING_STATUS_OPTIONS].map(status => <label key={status} className={`material-tracking-status-choice ${status === "none" ? "" : materialTrackingStatusPresentation(status).text}`}>
-                <input type="radio" name={`${id}-status`} value={status} aria-label={status === "none" ? "不新增紀錄（保留目前狀態）" : status} checked={(draft.status || "none") === status} disabled={disabled} onChange={() => updateDraft({ status: status === "none" ? "" : status })} />
-                <span title={status === "none" ? "不新增紀錄（保留目前狀態）" : undefined}>{status !== "none" && <i aria-hidden="true" />}{status === "none" ? "不新增紀錄" : status}</span>
+              {MATERIAL_TRACKING_STATUS_OPTIONS.filter(status => status !== "需申請").map(status => <label key={status} className={`material-tracking-status-choice ${materialTrackingStatusPresentation(status).text}`}>
+                <input type="radio" name={`${id}-status`} value={status} aria-label={status} checked={draft.status === status} disabled={disabled} onChange={() => updateDraft({ status })} />
+                <span><i aria-hidden="true" />{status}</span>
               </label>)}
             </div>
             <p className="material-tracking-status-help"><span><strong className={materialTrackingStatusPresentation("料號申請中").text}>料號申請中</strong>：全新料號</span><span><strong className={materialTrackingStatusPresentation("SYMBOL申請中").text}>SYMBOL申請中</strong>：已有料號，需申請 SYMBOL</span></p>
