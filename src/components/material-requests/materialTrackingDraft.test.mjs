@@ -13,8 +13,8 @@ const image = { id: "image-1", name: "original.png", mimeType: "image/png", size
 const history = [{ id: "old", status: "處理中", note: "原追蹤", createdAt: "2026-01-01T00:00:00.000Z", images: [image] }];
 const record = { id: "row-1", trackingHistory: history, trackingStatus: "處理中", trackingNote: "來源註記", requestTicket: "A-1", requestUrl: "https://example.com/old", partUsageStatus: "不建議使用", sourcingStatus: "Approved", partNumber: "real-1" };
 
-test("all nine stages preserve old history and use the acting account instead of the assigned request owner", () => {
-  for (const status of ["未處理", "已發信", "未回應再次發信", "與廠商溝通中", "文件已收齊", "料號申請中", "SYMBOL申請中", "申請料被退回", "已完成"]) {
+test("all ten stages preserve old history and use the acting account instead of the assigned request owner", () => {
+  for (const status of ["未處理", "已發信", "未回應再次發信", "與廠商溝通中", "文件已收齊", "料號申請中", "已取得料號待CIS申請", "SYMBOL申請中", "申請料被退回", "已完成"]) {
     const assigned = {...record,requestOwnerId:"other-user",requestOwnerName:"指定的 CE"};
     const result = applyMaterialTrackingDraft(assigned,{...createMaterialTrackingDraft(assigned),status},"目前登入者");
     assert.equal(result.trackingHistory.at(-1).status,status);

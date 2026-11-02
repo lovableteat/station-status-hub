@@ -1073,7 +1073,7 @@ All colors MUST be HSL for proper theming support.
 .material-tracking-status-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .material-tracking-status-choice { position: relative; min-width: 0; cursor: pointer; }
 .material-tracking-status-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.material-tracking-status-choice > span { display: flex; min-height: 44px; align-items: center; justify-content: center; gap: 6px; padding: 5px 8px; border: 1px solid hsl(var(--border)); border-radius: 20px; background: hsl(var(--background) / .2); font-weight: 600; white-space: nowrap; }
+.material-tracking-status-choice > span { display: flex; min-height: 44px; height: 100%; align-items: center; justify-content: center; gap: 6px; padding: 5px 8px; border: 1px solid hsl(var(--border)); border-radius: 20px; background: hsl(var(--background) / .2); font-weight: 600; text-align: center; line-height: 1.3; overflow-wrap: anywhere; }
 .material-tracking-status-choice i { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
 .material-tracking-status-choice:has(input:checked) > span { border-color: hsl(var(--material-status, var(--primary)) / .8); background: hsl(var(--material-status, var(--primary)) / .15); }
 .material-tracking-status-choice input:focus-visible + span { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
@@ -1095,7 +1095,7 @@ All colors MUST be HSL for proper theming support.
 .material-tracking-history-body { padding: 8px 0 0; overflow-wrap: anywhere; }
 .material-tracking-history-body img { max-height: 90px; }
 @media (min-width: 640px) {
-  .material-tracking-status-choices { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .material-tracking-status-choices { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .material-tracking-info-grid { grid-template-columns: minmax(0, 2fr) minmax(140px, 1fr); }
 }
 @media (min-width: 1000px) {
@@ -1124,6 +1124,7 @@ All colors MUST be HSL for proper theming support.
 .material-status--documents { --material-status: 174 65% 67%; }
 .material-status--part { --material-status: 38 92% 69%; }
 .material-status--symbol { --material-status: 263 90% 81%; }
+.material-status--cis { --material-status: 190 85% 72%; }
 .material-status--completed { --material-status: 142 66% 72%; }
 .material-status--legacy-progress { --material-status: 24 92% 72%; }
 .material-status-badge {
@@ -1139,6 +1140,30 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 .material-status-text { color: hsl(var(--material-status)); }
 
 .material-record-dialog .app-dialog-header { flex: 0 0 auto; padding-right: 46px; }
+.workspace-dialog-surface.material-weekly-dialog { width: calc(100vw - 32px); max-width: 1760px; height: calc(100dvh - 32px); max-height: 920px; padding: 20px; gap: 10px; }
+.material-weekly-dialog .app-dialog-header { flex-shrink: 0; }
+.material-weekly-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.material-weekly-control { display: flex; align-items: center; gap: 8px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.material-weekly-dialog select { min-width: 0; max-width: 230px; height: 40px; padding: 0 28px 0 10px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 13px; }
+.material-weekly-dialog select:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.material-weekly-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex-shrink: 0; padding: 10px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--card)); }
+.material-weekly-filters > div:first-child { flex-basis: 200px; }
+.material-weekly-table { width: max-content; min-width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.material-weekly-table :is(th, td) { width: 180px; min-width: 180px; max-width: 220px; padding: 8px 10px; border-bottom: 1px solid hsl(var(--border)); border-right: 1px solid hsl(var(--border)); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.material-weekly-table thead th { position: sticky; top: 0; z-index: 2; background: hsl(var(--secondary)); font-weight: 600; }
+.material-weekly-table .material-weekly-part { position: sticky; left: 0; z-index: 1; width: 200px; min-width: 200px; max-width: 200px; background: hsl(var(--card)); box-shadow: 1px 0 hsl(var(--border)); }
+.material-weekly-table[data-testid="material-weekly-parts"] :is(th, td):nth-child(3) { width: 160px; min-width: 160px; max-width: 180px; }
+.material-weekly-table thead .material-weekly-part { z-index: 3; background: hsl(var(--secondary)); }
+.material-weekly-table .material-weekly-updated { background: hsl(var(--primary) / .045); }
+.material-weekly-status { display: inline-block; max-width: 100%; padding: 3px 7px; border: 1px solid hsl(var(--material-status) / .5); border-radius: 5px; background: hsl(var(--material-status) / .1); color: hsl(var(--material-status)); font-size: 12px; line-height: 1.4; font-weight: 600; }
+@media (max-width: 639px) {
+  .workspace-dialog-surface.material-weekly-dialog { width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); padding: 12px; gap: 8px; border-radius: 16px; }
+  .material-weekly-tools { gap: 6px; }
+  .material-weekly-tools > button { padding-left: 10px; padding-right: 10px; }
+  .material-weekly-filters > div:first-child { flex-basis: 100%; }
+  .material-weekly-filters > select { flex: 1 1 100px; }
+  .material-weekly-table .material-weekly-part { width: 150px; min-width: 150px; max-width: 150px; }
+}
 .material-record-mpn { display: flex; flex: 1 1 180px; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; margin-left: 6px; }
 .material-record-dialog .material-record-scroll { overflow-x: hidden; padding: 0 4px 2px 0; scrollbar-gutter: stable; }
 .material-details-layout { display: grid; min-width: 0; gap: 12px; }

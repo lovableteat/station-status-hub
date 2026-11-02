@@ -1,14 +1,15 @@
-export const MATERIAL_TRACKING_STATUS_OPTIONS = ["未處理", "已發信", "未回應再次發信", "與廠商溝通中", "文件已收齊", "料號申請中", "SYMBOL申請中", "申請料被退回", "已完成"] as const;
+export const MATERIAL_TRACKING_STATUS_OPTIONS = ["未處理", "已發信", "未回應再次發信", "與廠商溝通中", "文件已收齊", "料號申請中", "已取得料號待CIS申請", "SYMBOL申請中", "申請料被退回", "已完成"] as const;
 
 export function getMaterialTrackingStatusMeaning(status?: string) {
   if (status === "料號申請中") return "全新料號";
   if (status === "SYMBOL申請中") return "已有料號，需申請 SYMBOL";
+  if (status === "已取得料號待CIS申請") return "已取得料號，等待 CIS 申請";
   return "";
 }
 
 /** Manual application progress is independent of CE's imported Schematic_Part text. */
 export function isExplicitMaterialApplication(status?: string) {
-  return status === "料號申請中" || status === "SYMBOL申請中"
+  return status === "料號申請中" || status === "SYMBOL申請中" || status === "已取得料號待CIS申請"
     || status === "未回應再次發信" || status === "與廠商溝通中" || status === "申請料被退回";
 }
 
@@ -26,6 +27,7 @@ export function materialTrackingStatusPresentation(status?: string) {
     case "文件已收齊": return statusClasses("documents");
     case "料號申請中": return statusClasses("part");
     case "SYMBOL申請中": return statusClasses("symbol");
+    case "已取得料號待CIS申請": return statusClasses("cis");
     case "已完成": return statusClasses("completed");
     case "處理中": return statusClasses("legacy-progress");
     default: return statusClasses("unprocessed");
