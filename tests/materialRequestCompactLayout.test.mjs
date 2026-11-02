@@ -138,7 +138,7 @@ test("dialogs and popovers use the page theme tokens instead of their own fixed 
     slice("function MaterialRecordDialog(", "type MaterialColumnVisibility"),
     settingsDialog,
     slice("function MaterialExportDialog(", "export function MaterialRequestPage() {"),
-    slice("  return (\n    <Popover open={open} onOpenChange={setOpen}>", "function ResizableHeader("),
+    slice("  return (\n    <Popover open={open} onOpenChange={handleOpenChange}>", "function ResizableHeader("),
   ].join("\n");
   assert.doesNotMatch(dialogBlocks, /#0[0-9a-f]{5}|bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d|bg-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);
   assert.match(dialogBlocks, /workspace-dialog-section/);
@@ -236,12 +236,11 @@ test("待處理料 keeps its category controls compact and gives export a clear 
   assert.match(styles, /pending-action--export[\s\S]{0,220}?hsl\(var\(--primary\)\) 58%/);
 });
 
-test("column filters apply on every click instead of waiting for 確定", () => {
+test("column filters stage checkbox changes and expose Excel-style apply and cancel", () => {
   const popover = slice("function ExcelFilterPopover(", "function ResizableHeader(");
-  assert.doesNotMatch(popover, /draftSelectedValues|commitSelection|cancelSelection|mergeSearchSelection|>確定<|>取消</);
-  assert.match(popover, /const toggleValue = \(value: string, checked: boolean\) => \{\s*apply\(/);
-  assert.match(popover, /if \(event\.key === "Enter" && searchHasValue && filteredOptions\.length > 0\)/);
-  for (const text of [">只留符合<", ">加入符合<", ">移除符合<", "全選</button>", "全不選</button>", ">完成<"]) assert.ok(popover.includes(text), text);
+  assert.match(popover, /const toggleValue = \(value: string, checked: boolean\) => \{\s*setDraftValues\(/);
+  assert.match(popover, /onClick=\{commitSelection\}/);
+  for (const text of ["（全選）", ">全不選<", ">確定<", ">取消<", "中的篩選"]) assert.ok(popover.includes(text), text);
   assert.match(popover, /onOpenAutoFocus=/);
 });
 

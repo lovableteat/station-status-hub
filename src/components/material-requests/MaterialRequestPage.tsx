@@ -14,6 +14,8 @@
 } from "react";
 import type { CSSProperties } from "react";
 import {
+  ArrowDownAZ,
+  ArrowUpAZ,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -30,8 +32,10 @@ import {
   FileSpreadsheet,
   FileText,
   Filter,
+  FilterX,
   History,
   Layers3,
+  Minus,
   Paperclip,
   Pencil,
   Plus,
@@ -1622,14 +1626,19 @@ function ExcelFilterPopover({
   const sortDirection = isSorted ? activeSort.direction : "asc";
   const [searchValue, setSearchValue] = useState("");
   const [scrollTop, setScrollTop] = useState(0);
+  const [draftValues, setDraftValues] = useState<ColumnFilterSelection>(null);
   const deferredSearchValue = useDeferredValue(searchValue);
-  // Every click applies immediately: the table is the preview, so no draft, 取消 or 確定.
   const selected = useMemo(() => normalizeColumnFilterSelection(selectedValues), [selectedValues]);
   const allOptionValues = useMemo(() => options.map((option) => option.value), [options]);
   const optionValueSet = useMemo(() => new Set(allOptionValues), [allOptionValues]);
-  const selectedList = useMemo(() => (selected === null ? allOptionValues : selected), [allOptionValues, selected]);
+  const selectedList = useMemo(() => (draftValues === null ? allOptionValues : draftValues), [allOptionValues, draftValues]);
   const selectedSet = useMemo(() => new Set(selectedList), [selectedList]);
-  const hiddenSelectedCount = selected === null ? 0 : selected.filter((value) => !optionValueSet.has(value)).length;
+  const hiddenSelectedCount = draftValues === null ? 0 : draftValues.filter((value) => !optionValueSet.has(value)).length;
+  const isSearching = searchValue !== deferredSearchValue;
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) setDraftValues(selected);
+    setOpen(nextOpen);
+  };
 
   useEffect(() => {
     if (!open) {
@@ -1663,7 +1672,7 @@ function ExcelFilterPopover({
   }, [filterKey, options, searchHasValue, searchTokens, sortDirection]);
   const visibleValues = useMemo(() => filteredOptions.map((option) => option.value), [filteredOptions]);
   const visibleCheckedCount = filteredOptions.filter((option) => selectedSet.has(option.value)).length;
-  const allOptionsChecked = selected === null || (hiddenSelectedCount === 0 && options.length > 0 && options.every((option) => selectedSet.has(option.value)));
+  const allVisibleChecked = filteredOptions.length > 0 && visibleCheckedCount === filteredOptions.length;
 
   useEffect(() => {
     setScrollTop(0);
@@ -1673,30 +1682,30 @@ function ExcelFilterPopover({
   const virtualEndIndex = Math.min(filteredOptions.length, Math.ceil((scrollTop + FILTER_OPTION_LIST_HEIGHT) / FILTER_OPTION_ROW_HEIGHT) + FILTER_OPTION_OVERSCAN);
   const visibleOptionSlice = filteredOptions.slice(virtualStartIndex, virtualEndIndex);
 
-  const apply = (values: string[] | null) => {
-    if (values === null) {
-      onSelectedValuesChange(null);
-      return;
-    }
-    const normalized = normalizeColumnFilterSelection(values) ?? [];
-    const isEverything = hiddenSelectedCount === 0
+  const commitSelection = () => {
+    const values = searchHasValue ? selectedList.filter(value => visibleValues.includes(value)) : draftValues;
+    const normalized = normalizeColumnFilterSelection(values);
+    const isEverything = normalized === null || (normalized.every(value => optionValueSet.has(value))
       && options.length > 0
       && normalized.length === options.length
-      && options.every((option) => normalized.includes(option.value));
+      && options.every((option) => normalized.includes(option.value)));
     onSelectedValuesChange(isEverything ? null : normalized);
+    setOpen(false);
   };
   const toggleValue = (value: string, checked: boolean) => {
-    apply(checked ? Array.from(new Set([...selectedList, value])) : selectedList.filter((item) => item !== value));
+    setDraftValues(checked ? Array.from(new Set([...selectedList, value])) : selectedList.filter((item) => item !== value));
   };
-  const keepOnlyVisible = () => apply(visibleValues);
-  const addVisible = () => apply(Array.from(new Set([...selectedList, ...visibleValues])));
-  const removeVisible = () => apply(selectedList.filter((value) => !visibleValues.includes(value)));
-
-  const appliedCount = selected === null ? options.length : selected.length;
+  const toggleVisible = (checked: boolean) => {
+    if (!searchHasValue) {
+      setDraftValues(checked ? null : []);
+      return;
+    }
+    setDraftValues(checked ? Array.from(new Set([...selectedList, ...visibleValues])) : selectedList.filter(value => !visibleValues.includes(value)));
+  };
   const triggerSummary = selected === null ? "全部" : `${selected.length}項`;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -1730,63 +1739,57 @@ function ExcelFilterPopover({
           event.preventDefault();
           (event.currentTarget as HTMLElement | null)?.querySelector<HTMLInputElement>("input")?.focus();
         }}
-        className="w-[min(320px,calc(100vw-24px))] rounded-2xl border border-border bg-popover p-2.5 text-popover-foreground shadow-lg"
+        className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-24px))] flex-col overflow-hidden rounded-lg border border-border bg-popover p-2.5 text-popover-foreground shadow-lg"
       >
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 px-1">
+        <div className="min-h-0 space-y-2 overflow-y-auto">
+          <div className="flex shrink-0 items-center gap-2 px-1">
             <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{label}</p>
-            <span className="font-mono text-[11px] text-muted-foreground">{appliedCount}/{options.length}</span>
+            <span className="shrink-0 text-xs text-muted-foreground">已選 {visibleCheckedCount}/{filteredOptions.length}</span>
           </div>
-          <div className="grid grid-cols-2 gap-1.5" role="group" aria-label={`${label}表格排序`}>
-            {(["asc", "desc"] as const).map(direction => <button key={direction} type="button" onClick={() => onSortChange({ key: filterKey, direction })} aria-pressed={isSorted && sortDirection === direction} className={cn("h-8 rounded-md border text-xs font-semibold", isSorted && sortDirection === direction ? "border-primary/60 bg-primary/20 text-primary" : "border-border bg-secondary/60 text-foreground hover:border-primary/50")}>
-              {direction === "asc" ? "A → Z" : "Z → A"}
+          <div className="shrink-0 space-y-1 border-b border-border pb-2" role="group" aria-label={`${label}篩選工具`}>
+            {(["asc", "desc"] as const).map(direction => <button key={direction} type="button" onClick={() => { onSortChange({ key: filterKey, direction }); setOpen(false); }} aria-pressed={isSorted && sortDirection === direction} className={cn("flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm", isSorted && sortDirection === direction ? "bg-primary/15 text-primary" : "text-foreground hover:bg-accent")}>
+              {direction === "asc" ? <ArrowDownAZ className="h-4 w-4 shrink-0" /> : <ArrowUpAZ className="h-4 w-4 shrink-0" />}{direction === "asc" ? "從 A 到 Z 排序" : "從 Z 到 A 排序"}
             </button>)}
+            <button type="button" disabled={selected === null} onClick={() => { onSelectedValuesChange(null); setOpen(false); }} className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground hover:bg-accent disabled:cursor-default disabled:opacity-40"><FilterX className="h-4 w-4 shrink-0" /><span className="break-words">清除「{label}」中的篩選</span></button>
           </div>
 
-          <div className="relative">
+          <div className="relative shrink-0">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchValue}
               onChange={(event) => setSearchValue(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && searchHasValue && filteredOptions.length > 0) {
+                if (event.key === "Enter" && isPanelReady && !isSearching) {
                   event.preventDefault();
-                  keepOnlyVisible();
+                  commitSelection();
                 } else if (event.key === "Escape") {
                   setOpen(false);
                 }
               }}
-              placeholder="輸入關鍵字；Enter 只留符合的值"
+              placeholder="搜尋篩選值"
               aria-label={`搜尋${label}篩選值`}
               className="h-9 rounded-lg pl-8 pr-3 text-[13px]"
             />
           </div>
 
           {isPanelReady ? (
-            <div className="rounded-xl border border-border bg-background/40">
-              <div className="space-y-2 border-b border-border p-2">
-                <div className="grid grid-cols-2 gap-2" role="group" aria-label={`${label}選取操作`}>
-                  <button type="button" onClick={() => apply(null)} aria-pressed={allOptionsChecked} className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-primary bg-primary px-3 text-[13px] font-semibold text-primary-foreground hover:bg-primary/85"><Check className="h-4 w-4 shrink-0" />全選</button>
-                  <button type="button" onClick={() => apply([])} aria-pressed={selected !== null && selectedList.length === 0} className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-muted-foreground/60 bg-secondary px-3 text-[13px] font-semibold text-foreground hover:bg-accent"><X className="h-4 w-4 shrink-0" />全不選</button>
-                </div>
-                {searchHasValue && (
-                  <>
-                    <p className="whitespace-nowrap text-xs text-muted-foreground">符合 {filteredOptions.length} 筆</p>
-                    <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={`${label}搜尋結果操作`}>
-                      <button type="button" onClick={keepOnlyVisible} disabled={filteredOptions.length === 0} className="h-8 whitespace-nowrap rounded-md border border-primary/60 bg-primary/15 px-1 text-xs font-semibold text-primary hover:bg-primary/25 disabled:opacity-50">只留符合</button>
-                      <button type="button" onClick={addVisible} disabled={filteredOptions.length === 0} className="h-8 whitespace-nowrap rounded-md border border-muted-foreground/60 bg-secondary px-1 text-xs font-semibold text-foreground hover:bg-accent disabled:opacity-50">加入符合</button>
-                      <button type="button" onClick={removeVisible} disabled={visibleCheckedCount === 0} className="h-8 whitespace-nowrap rounded-md border border-muted-foreground/60 bg-secondary px-1 text-xs font-semibold text-foreground hover:bg-accent disabled:opacity-50">移除符合</button>
-                    </div>
-                  </>
-                )}
+            <div className="flex min-h-0 flex-col rounded-xl border border-border bg-background/40">
+              <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border p-2">
+                <label className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 px-0.5 text-[13px] font-semibold text-foreground">
+                  <span className="relative inline-flex shrink-0 items-center justify-center">
+                    <Checkbox aria-label={`全選${label}篩選值`} className="h-5 w-5 rounded-[3px] data-[state=indeterminate]:bg-primary [&[data-state=indeterminate]_svg]:invisible" checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false} onCheckedChange={checked => toggleVisible(checked === true)} />
+                    {visibleCheckedCount > 0 && !allVisibleChecked && <Minus className="pointer-events-none absolute h-3.5 w-3.5 text-primary-foreground" aria-hidden="true" />}
+                  </span>
+                  <span>{searchHasValue ? "（全選搜尋結果）" : "（全選）"}</span>
+                </label>
+                <button type="button" onClick={() => setDraftValues([])} className="min-h-8 shrink-0 whitespace-nowrap rounded-md border border-muted-foreground/60 bg-secondary px-2 text-xs font-semibold text-foreground hover:bg-accent">全不選</button>
               </div>
 
               {filteredOptions.length > 0 ? (
-                <div className="h-56 overflow-y-auto" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+                <div className="min-h-0 overflow-y-auto" style={{ height: Math.min(filteredOptions.length * FILTER_OPTION_ROW_HEIGHT, FILTER_OPTION_LIST_HEIGHT) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
                   <div className="relative" style={{ height: filteredOptions.length * FILTER_OPTION_ROW_HEIGHT }}>
                     {visibleOptionSlice.map((option, index) => {
                       const checked = selectedSet.has(option.value);
-                      const tone = option.tone ?? "slate";
                       const offsetY = (virtualStartIndex + index) * FILTER_OPTION_ROW_HEIGHT;
 
                       return (
@@ -1798,19 +1801,14 @@ function ExcelFilterPopover({
                           )}
                           style={{ top: offsetY, height: FILTER_OPTION_ROW_HEIGHT }}
                         >
-                          <Checkbox checked={checked} onCheckedChange={(value) => toggleValue(option.value, value === true)} />
-                          <span
+                          <Checkbox aria-label={option.label} className="h-5 w-5 rounded-[3px]" checked={checked} onCheckedChange={(value) => toggleValue(option.value, value === true)} />
+                          {filterKey === "trackingStatus" && <span
                             className={cn(
                               "h-2 w-2 flex-none rounded-full",
-                              filterKey === "trackingStatus" && materialTrackingStatusPresentation(option.value).text,
-                              tone === "emerald" && "bg-success",
-                              tone === "amber" && "bg-warning",
-                              tone === "sky" && "bg-primary",
-                              tone === "rose" && "bg-destructive",
-                              tone === "slate" && "bg-muted-foreground/60",
+                              materialTrackingStatusPresentation(option.value).text,
                             )}
                             style={filterKey === "trackingStatus" ? { backgroundColor: "currentColor" } : undefined}
-                          />
+                          />}
                           <span className="min-w-0 flex-1 truncate">{option.label}</span>
                           <span className="rounded-full bg-secondary px-2 text-[11px] leading-5 text-muted-foreground">{option.count}</span>
                         </label>
@@ -1828,11 +1826,14 @@ function ExcelFilterPopover({
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-2 px-1">
-            <p className="min-w-0 truncate text-[11px] text-muted-foreground">
-              {hiddenSelectedCount > 0 ? `另有 ${hiddenSelectedCount} 個已選值不在目前清單，仍會保留` : "點一下立即套用，表格同步更新"}
-            </p>
-            <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)} className="h-7 px-3 text-xs">完成</Button>
+        </div>
+        <div className="mt-2 shrink-0 space-y-2 border-t border-border px-1 pt-2">
+          <p className="text-xs text-muted-foreground">
+            {hiddenSelectedCount > 0 && !searchHasValue ? `另有 ${hiddenSelectedCount} 個已選值不在目前清單，仍會保留` : searchHasValue ? "確定後僅顯示勾選的搜尋結果" : "勾選完成後按「確定」套用"}
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)} className="h-9 min-w-20 text-sm">取消</Button>
+            <Button type="button" size="sm" disabled={!isPanelReady || isSearching} onClick={commitSelection} className="h-9 min-w-20 text-sm">確定</Button>
           </div>
         </div>
       </PopoverContent>
@@ -4242,7 +4243,7 @@ export function MaterialRequestPage() {
     const key = `${VIEW_STATE_KEY_PREFIX}${user?.userId || "guest"}:${activeBomId}`;
     if (loadedViewStateKeyRef.current !== key) return undefined;
 
-    const timerId = window.setTimeout(() => {
+    const saveViewState = () => {
       try {
         window.sessionStorage.setItem(key, JSON.stringify({
           availability,
@@ -4257,9 +4258,11 @@ export function MaterialRequestPage() {
       } catch {
         // View preferences are optional; shared BOM data is unaffected.
       }
-    }, 250);
+    };
+    const timerId = window.setTimeout(saveViewState, 250);
+    window.addEventListener("pagehide", saveViewState);
 
-    return () => window.clearTimeout(timerId);
+    return () => { window.clearTimeout(timerId); window.removeEventListener("pagehide", saveViewState); };
   }, [activeBomId, availability, columnFilters, columnSort, page, pageSize, query, searchColumn, sortMode, user?.userId]);
 
   useEffect(() => {
