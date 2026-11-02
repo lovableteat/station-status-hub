@@ -21,7 +21,7 @@ export async function createMaterialWeeklyWorkbook(options: MaterialWeeklyExport
     const sheet = workbook.addWorksheet(name);
     sheet.columns = widths.map(width => ({ width }));
     sheet.addRow([`${workspaceName} · ${name}`]);
-    sheet.addRow([`範圍：${scope} · ${rows.length} 筆廠商明細 · 匯出：${exportedBy} · 統計截至 ${new Date(asOf).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false })}（台北時間）`]);
+    sheet.addRow([`範圍：${scope} · ${rows.length} 筆待申請料 · 匯出：${exportedBy} · 統計截至 ${new Date(asOf).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false })}（台北時間）`]);
     sheet.addRow(["每週狀態依當週最後一筆有效追蹤紀錄；無日期資料不回填舊週。負責人、料號及 Note 為目前資料。"]);
     for (let i = 1; i <= 3; i++) sheet.mergeCells(i, 1, i, headers.length);
     sheet.getRow(1).font = { bold: true, size: 16 };
