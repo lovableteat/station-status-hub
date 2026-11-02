@@ -59,6 +59,7 @@ import {
   resolveAiProviderPreset,
 } from "./aiProviderCatalog";
 import type { AiProviderPresetId } from "./aiProviderCatalog";
+import { fetchAiProvider } from "./aiProviderTransport";
 import {
   ApiKeyRecord,
   buildApiKeyPermissions,
@@ -293,7 +294,7 @@ export function CreateApiKeyDialog({
         baseUrl,
         apiKey,
       });
-      const response = await fetch(request.url, {
+      const response = await fetchAiProvider(formData.provider || activePreset.providerValue, request.url, {
         method: request.method,
         headers: request.headers,
         signal: controller.signal,
