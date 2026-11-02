@@ -28,6 +28,34 @@ const pending = () => new Promise(() => {});
 const builder = promise => Object.assign(promise, { abortSignal(signal) { this.signal = signal; return this; } });
 const input = { apiKeyId: 'key', provider: 'gemini', model: 'gemini-3.8-flash', source: 'ai-chat', attemptNumber: 1, url: 'https://provider.invalid', init: { method: 'POST' }, timeoutMs: 100 };
 
+test('cancel before or during the telemetry gate never sends a provider request', async () => {
+  let fetches = 0, release;
+  const f = fixture({ rpc: () => builder(new Promise(resolve => { release = resolve; })), fetch: async () => { fetches++; return new Response('{}'); } });
+  try {
+    const before = new AbortController(); before.abort();
+    await assert.rejects(f.trackedProviderFetch({ ...input, init: { signal: before.signal } }), e => e.name === 'AbortError');
+    const during = new AbortController();
+    const request = f.trackedProviderFetch({ ...input, init: { signal: during.signal } });
+    while (!release) await new Promise(resolve => setTimeout(resolve, 1));
+    during.abort(); release({ error: null });
+    await assert.rejects(request, e => e.name === 'AbortError');
+    assert.equal(fetches, 0);
+  } finally { f.dispose(); }
+});
+
+test('caller cancellation aborts an in-flight provider fetch', async () => {
+  let signal;
+  const f = fixture({ rpc: () => builder(Promise.resolve({ error: null })), fetch: (_url, init) => { signal = init.signal; return new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason))); } });
+  try {
+    const controller = new AbortController();
+    const request = f.trackedProviderFetch({ ...input, init: { signal: controller.signal } });
+    while (!signal) await new Promise(resolve => setTimeout(resolve, 1));
+    controller.abort();
+    await assert.rejects(request, e => e.name === 'AbortError');
+    assert.equal(signal.aborted, true);
+  } finally { f.dispose(); }
+});
+
 test('headers arriving without a body cannot hold the UI forever; fetch is aborted and timeout recorded', async () => {
   const records = []; let signal;
   const f = fixture({ rpc: (name, args) => { records.push([name, args]); return builder(Promise.resolve({ error: null })); }, fetch: async (_url, init) => { signal = init.signal; return { status: 200, arrayBuffer: pending }; } });

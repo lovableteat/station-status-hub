@@ -41,6 +41,7 @@ async function finishAttempt(eventId: string | null, outcome: AiUsageOutcome, ht
     notifyUsageRecorded();
 }
 export async function trackedProviderFetch({ apiKeyId, provider, model, source, attemptNumber, url, init, timeoutMs = AI_PROVIDER_REQUEST_TIMEOUT_MS, }: TrackedProviderFetchInput) {
+    init.signal?.throwIfAborted();
     const requestedAt = Date.now();
     const eventId = apiKeyId ? globalThis.crypto.randomUUID() : null;
     let trackedEventId: string | null = null;
@@ -70,6 +71,9 @@ export async function trackedProviderFetch({ apiKeyId, provider, model, source, 
     }
     const startedAt = Date.now();
     const controller = new AbortController();
+    const cancel = () => controller.abort(init.signal?.reason);
+    init.signal?.addEventListener('abort', cancel, { once: true });
+    if (init.signal?.aborted) cancel();
     let timedOut = false;
     let timer: ReturnType<typeof setTimeout>;
     const deadline = new Promise<never>((_, reject) => {
@@ -81,6 +85,7 @@ export async function trackedProviderFetch({ apiKeyId, provider, model, source, 
     });
     try {
         const response = await Promise.race([Promise.resolve().then(async () => {
+                controller.signal.throwIfAborted();
                 const upstream = await fetchAiProvider(provider, url, { ...init, signal: controller.signal }, apiKeyId);
                 // Keep the deadline active through the body, not just response headers.
                 const body = await upstream.arrayBuffer();
@@ -103,5 +108,6 @@ export async function trackedProviderFetch({ apiKeyId, provider, model, source, 
     }
     finally {
         globalThis.clearTimeout(timer!);
+        init.signal?.removeEventListener('abort', cancel);
     }
 }
