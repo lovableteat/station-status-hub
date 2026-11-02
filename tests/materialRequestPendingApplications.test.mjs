@@ -12,6 +12,45 @@ const { buildPendingApplications, groupPendingMaterials } = await import(`data:t
 const record = (id, mpn, needsApplication, extra = {}) => ({ id, manufacturer: `Vendor ${id}`, manufacturerPartNumber: mpn, needsApplication, name: "", ...extra });
 const group = (key, displayRef, records, extra = {}) => ({ key, displayRef, name: `Part ${key}`, searchText: displayRef.toLowerCase(), primaryRecord: records[0], records, ...extra });
 
+test("completed applications reappear from existing history even after numbers are filled, without adding ordinary BOM rows", () => {
+  const progress = [
+    { id: "tracking-1793085268476-qu0bxe", status: "處理中", createdAt: "2026-10-27T07:14:28.476Z" },
+    { id: "tracking-first-completion", status: "已完成", createdAt: "2026-11-02T02:30:10.207Z" },
+    { id: "tracking-required", status: "需申請", createdAt: "2026-11-02T07:58:37.333Z" },
+    { id: "tracking-final-completion", status: "已完成", createdAt: "2026-11-02T08:24:13.739Z" },
+  ];
+  const completed = record("recovered", "WFCP06125L000FE66", false, { partNumber: "10Z2-01BL0ZY", trackingStatus: "已完成", trackingHistory: progress });
+  const before = structuredClone(completed);
+  const normal = record("ordinary", "NORMAL", false, { trackingStatus: "已完成", trackingHistory: [{ id: "imported-tracking-normal", status: "已完成" }] });
+  const untracked = record("untracked", "READY", false, { trackingStatus: "已完成" });
+  for (const options of [undefined, { includeAlternates: true }]) {
+    const items = buildPendingApplications([group("g", "RS50", [normal, completed]), group("ready", "R1", [untracked])], options);
+    assert.deepEqual(items.map(item => item.key), ["g::recovered"]);
+    assert.equal(items[0].record, completed);
+    assert.match(items[0].searchText, /已完成/);
+  }
+  assert.deepEqual(completed, before, "recovery only changes visibility; stored history remains intact");
+});
+
+test("a recorded application stays in the same board and vendor row through every stage including completion and reopening", () => {
+  const statuses = ["需申請", "已發信", "文件已收齊", "料號申請中", "已取得料號待CIS申請", "已完成", "申請料被退回"];
+  let current = record("vendor-a", "MPN-A", true, { trackingHistory: [] });
+  for (const status of statuses) {
+    current = { ...current, needsApplication: false, partNumber: "000-REAL", trackingStatus: status, trackingHistory: [...current.trackingHistory, { id: `tracking-${status}`, status }] };
+    for (const options of [undefined, { includeAlternates: true }]) {
+      const items = buildPendingApplications([group("board-1-location", "U1", [record("ready-vendor", "MPN-B", false), current])], options);
+      assert.deepEqual(items.map(item => [item.key, item.record.trackingStatus]), [["board-1-location::vendor-a", status]]);
+    }
+  }
+});
+
+test("older manual completion entries and application stages stay visible, while ME exemptions still apply", () => {
+  const completed = record("completed", "OLD", false, { trackingStatus: "已完成", trackingHistory: [{ id: "tracking-1793085199180-aya11v", status: "處理中" }, { id: "tracking-done", status: "已完成" }] });
+  const direct = record("direct", "DIRECT", false, { trackingStatus: "已完成", trackingHistory: [{ id: "tracking-done-only", status: "已完成" }] });
+  const exempt = { ...completed, id: "me", applicationExempt: true };
+  assert.deepEqual(buildPendingApplications([group("g", "U370", [completed, direct, exempt])]).map(item => item.record.id), ["completed", "direct"]);
+});
+
 test("manual SYMBOL applications with an existing part number remain visible and searchable by their assignee", () => {
   const symbol = record("symbol", "0000123", false, {trackingStatus:"SYMBOL申請中", requestOwnerName:"CE 王同學"});
   const normal = record("normal", "0000456", false, {schematicPart:"", symbolStatus:"missing"});

@@ -1,5 +1,5 @@
 import { type ClipboardEvent, useEffect, useId, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, CircleCheck, CircleDot, ClipboardPaste, History, ImagePlus, X } from "lucide-react";
+import { ChevronRight, CircleCheck, CircleDot, ClipboardPaste, History, ImagePlus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -121,7 +121,6 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
   const latest = getLatestTrackingEntry(record);
   const history = record.trackingHistory?.length ? [...record.trackingHistory].reverse() : latest ? [latest] : [];
   const latestStatus = statusLabel(latest?.status || record.trackingStatus || "", Boolean(latest?.note?.trim() || latest?.createdBy?.trim() || latest?.requestInfo?.trim()));
-  const requiredChanged = Boolean(draft.applicationRequired) !== Boolean(record.applicationRequired);
   const hasUnselectedProgress = !draft.status && Boolean(draft.note.trim() || draft.createdBy.trim() || draft.requestInfo.trim() || draft.images.length);
   const thumbnails = (images: MaterialTrackingHistoryImage[], removable = false) => (
     <div className="flex flex-wrap gap-2">
@@ -158,17 +157,7 @@ export function MaterialTrackingEditor({ record, draft, onDraftChange, disabled 
           <div className="space-y-1.5"><Label htmlFor={`${id}-url`}>連結</Label><Input id={`${id}-url`} className="h-11" value={draft.requestUrl} onChange={(event) => updateDraft({ requestUrl: event.target.value })} placeholder="request URL" /></div>
         </div>
         <div className="material-tracking-compose material-tracking-panel">
-          <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-semibold">本次新增紀錄</h4>{draft.status || requiredChanged ? <Badge variant="outline" className="border-warning/35 text-warning">尚未儲存</Badge> : <span className="text-xs text-muted-foreground">選狀態才新增紀錄</span>}</div>
-          <div className="max-w-48 space-y-1.5">
-            <Label htmlFor={`${id}-application-required`}>需申請</Label>
-            <div className="relative">
-              <select id={`${id}-application-required`} aria-label="需申請" data-ui="select-trigger" className="h-10 w-full rounded-md border border-input bg-background pl-3 pr-9 text-sm" disabled={disabled} value={draft.applicationRequired === true ? "required" : ""} onChange={event => updateDraft({ applicationRequired: event.target.value === "required" })}>
-                <option value="">未設定</option>
-                <option value="required">需申請</option>
-              </select>
-              <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            </div>
-          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-semibold">本次新增紀錄</h4>{draft.status ? <Badge variant="outline" className="border-warning/35 text-warning">尚未儲存</Badge> : <span className="text-xs text-muted-foreground">選狀態才新增紀錄</span>}</div>
           <div className="space-y-1.5">
             <p id={`${id}-status-label`} className="text-xs font-medium text-muted-foreground">本次狀態</p>
             <div className="material-tracking-status-choices" role="radiogroup" aria-labelledby={`${id}-status-label`} aria-invalid={hasUnselectedProgress}>

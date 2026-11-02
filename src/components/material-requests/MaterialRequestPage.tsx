@@ -149,7 +149,7 @@ import { MaterialTrackingEditor } from "./MaterialTrackingEditor";
 import { applyMaterialTrackingDraft, createMaterialTrackingDraft } from "./materialTrackingDraft";
 import { MATERIAL_SPEC_ACCEPT, MATERIAL_SPEC_MAX_BYTES, createMaterialSpecUrl, formatMaterialSpecSize, uploadMaterialSpecDocuments } from "./materialSpecDocuments";
 import { getMaterialSpecDocuments, withMaterialSpecDocuments } from "./materialAttachments";
-import { getMaterialTrackingStatusMeaning, isExplicitMaterialApplication, MATERIAL_TRACKING_STATUS_OPTIONS, materialTrackingStatusTone, materialTrackingStatusPresentation, normalizeMaterialTrackingStatus } from "./materialTrackingStatus";
+import { getMaterialTrackingStatusMeaning, isTrackedMaterialApplication, MATERIAL_TRACKING_STATUS_OPTIONS, materialTrackingStatusTone, materialTrackingStatusPresentation, normalizeMaterialTrackingStatus } from "./materialTrackingStatus";
 import { MaterialWeeklyProgressDialog } from "./MaterialWeeklyProgressDialog";
 const MaterialSpecFillDialog = lazy(() => import("./MaterialSpecFillDialog").then(module => ({ default: module.MaterialSpecFillDialog })));
 import { restoreMaterialColumnSort, sortMaterialTableRows, type MaterialColumnSort } from "./materialTableSort";
@@ -2608,7 +2608,8 @@ export function PendingMaterialsDialog({
     const listed = new Set(applications.map((application) => application.group.key));
     return groups
       .filter((group) => listed.has(group.key))
-      .map((group) => ({ ...group, records: group.records.filter((record) => record.needsApplication || isExplicitMaterialApplication(record.trackingStatus, record.applicationRequired)) }));
+      .map((group) => ({ ...group, records: group.records.filter((record) => getTrackingWorkflowStatus(record) !== "已完成" && (record.needsApplication || isTrackedMaterialApplication(record))) }))
+      .filter(group => group.records.length > 0);
   }, [applications, groups]);
   const keyword = query.trim().toLowerCase();
   // One category at a time keeps long BOMs from becoming one endless scroll; the tabs carry the counts.
@@ -2644,12 +2645,13 @@ export function PendingMaterialsDialog({
     // Only re-run when the dialog opens; the category list may change while it is open without resetting the tab.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-  const priorityCount = categories.filter((category) => category.priority).reduce((sum, category) => sum + category.groups.length, 0);
+  const priorityCount = categories.filter((category) => category.priority).reduce((sum, category) => sum + category.groups.filter(application => getTrackingWorkflowStatus(application.record) !== "已完成").length, 0);
   const staleThreshold = timingNow - STALE_PENDING_MS;
-  const isStale = (group: MaterialGroup) => getPendingGroupUpdatedAt(group, recordMeta) < staleThreshold;
-  const staleCount = applications.filter((application) => isStale(application.group)).length;
+  const isStale = (group: MaterialGroup, record: MaterialRecord) => getTrackingWorkflowStatus(record) !== "已完成" && getPendingGroupUpdatedAt(group, recordMeta) < staleThreshold;
+  const staleCount = applications.filter((application) => isStale(application.group, application.record)).length;
+  const completedCount = applications.filter(application => getTrackingWorkflowStatus(application.record) === "已完成").length;
   const listedLocations = new Set(applications.map((application) => application.group.key)).size;
-  const description = `共 ${applications.length.toLocaleString()} 筆待處理（${listedLocations.toLocaleString()} 組位號） · 含手動料號／SYMBOL申請 · 優先 ${priorityCount.toLocaleString()} 筆 · ${staleCount.toLocaleString()} 筆逾 3 天未更新`;
+  const description = `共 ${applications.length.toLocaleString()} 筆申請追蹤（${listedLocations.toLocaleString()} 組位號） · 待處理 ${(applications.length - completedCount).toLocaleString()} 筆 · 已完成 ${completedCount.toLocaleString()} 筆（保留紀錄） · 優先 ${priorityCount.toLocaleString()} 筆 · ${staleCount.toLocaleString()} 筆逾 3 天未更新`;
   const exportRows = visibleCategories.flatMap(category => category.groups.map(application => ({ category: category.label, displayRef: application.displayRef, record: toWorkbookRecord(application.record) })));
   const exportVisible = async () => {
     if (exporting || !exportRows.length) return;
@@ -2672,7 +2674,7 @@ export function PendingMaterialsDialog({
           {onOpenSpecFill && <Button type="button" variant="outline" data-testid="pending-spec-fill-button" disabled={!applications.length} onClick={() => onOpenSpecFill(applications.map(application => application.record))} className="h-10 border-primary/50 px-4 text-sm text-primary"><ScanText className="mr-1.5 h-4 w-4" />AI 依照片填表</Button>}
           {onOpenWeeklyProgress && <Button type="button" variant="outline" data-testid="pending-weekly-button" onClick={() => onOpenWeeklyProgress(includeAlternates)} className="h-10 border-primary/50 px-4 text-sm text-primary"><FileSpreadsheet className="mr-1.5 h-4 w-4" />每週申請進度</Button>}
           <Button type="button" variant="outline" data-testid="pending-export-button" disabled={exporting || !exportRows.length} onClick={() => void exportVisible()} className="pending-action--export h-10 px-4 text-sm"><Download className="mr-1.5 h-4 w-4" />{exporting ? "匯出中…" : `匯出表格（${exportRows.length}）`}</Button>
-          <Button type="button" data-testid="pending-mail-button" disabled={applications.length === 0} onClick={() => setMailOpen(true)} className="pending-action--mail h-10 px-4 text-sm font-bold" title="把待處理料依廠商整理成信件內容並匯出 HTML"><FileCode2 className="mr-1.5 h-4 w-4" />信件生成</Button>
+          <Button type="button" data-testid="pending-mail-button" disabled={mailGroups.length === 0} onClick={() => setMailOpen(true)} className="pending-action--mail h-10 px-4 text-sm font-bold" title="把未完成的待處理料依廠商整理成信件內容並匯出 HTML"><FileCode2 className="mr-1.5 h-4 w-4" />信件生成</Button>
           <Button type="button" data-testid="pending-suppliers-button" variant="outline" onClick={() => setDirectoryOpen(true)} className="pending-action--suppliers h-10 px-4 text-sm"><Factory className="mr-1.5 h-4 w-4" />供應商聯絡資料</Button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -2706,7 +2708,7 @@ export function PendingMaterialsDialog({
         <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
 
         <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-background/40 p-1">
-          {[{ key: "all" as const, label: "全部", count: applications.length, priority: false }, { key: "marked" as const, label: "特別標記", count: markedCount, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
+          {[{ key: "all" as const, label: "全部", count: applications.length, priority: false }, { key: "marked" as const, label: "特別標記", count: markedCount, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority && category.groups.some(application => getTrackingWorkflowStatus(application.record) !== "已完成") }))].map((tab) => (
             <button
               key={tab.key}
               type="button"
@@ -2741,14 +2743,14 @@ export function PendingMaterialsDialog({
             <div key={`category:${category.key}`} className="flex items-center gap-2 px-1 pt-2 first:pt-0">
               <h3 className="text-xs font-bold text-foreground">{category.label}</h3>
               <span className="text-[11px] text-muted-foreground">{category.hint}</span>
-              {category.priority && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)}>優先處理</span>}
+              {category.priority && category.groups.some(application => getTrackingWorkflowStatus(application.record) !== "已完成") && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)}>優先處理</span>}
               <span className="ml-auto flex-none font-mono text-[11px] text-muted-foreground">{category.groups.length.toLocaleString()} 筆</span>
             </div>,
             ...category.groups.map((application) => {
               const { group, record } = application;
               const trackingStatus = record.trackingStatus?.trim() || "";
               const timing = getMaterialApplicationTiming(record, timingNow);
-              const stale = isStale(group);
+              const stale = isStale(group, record);
               const marked = markedGroupKeys.has(group.key);
               return (
                 <div key={application.key} data-testid="pending-application" className={cn("pending-material-row rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
@@ -2930,7 +2932,7 @@ export function MaterialRecordDialog({
   };
 
   const title = mode === "create" ? "新增料件 / 替代料" : mode === "edit" ? "修改料件資料" : "料件詳細資訊";
-  const hasTrackingChanges = Boolean(trackingDraft.status || Boolean(trackingDraft.applicationRequired) !== Boolean(record.applicationRequired) || trackingDraft.note.trim() || trackingDraft.createdBy.trim() || trackingDraft.requestInfo.trim() || trackingDraft.images.length || trackingDraft.pendingImageReads || trackingDraft.requestTicket !== (record.requestTicket ?? "") || trackingDraft.requestUrl !== (record.requestUrl ?? ""));
+  const hasTrackingChanges = Boolean(trackingDraft.status || trackingDraft.note.trim() || trackingDraft.createdBy.trim() || trackingDraft.requestInfo.trim() || trackingDraft.images.length || trackingDraft.pendingImageReads || trackingDraft.requestTicket !== (record.requestTicket ?? "") || trackingDraft.requestUrl !== (record.requestUrl ?? ""));
   const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(toWorkbookRecord(record)) || hasTrackingChanges;
   const renderCeControl = (field: (typeof MATERIAL_CE_EDITOR_FIELDS)[number], index: number) => {
     const value = field.key === "level" ? "2" : String(form[field.key] ?? "");
@@ -4639,7 +4641,7 @@ export function MaterialRequestPage() {
     () => dataset.groups.filter((group) => group.records.some(hasMaterialPartNumber)).length,
     [dataset.groups]
   );
-  const pendingMaterialGroups = useMemo(() => dataset.groups.filter((group) => group.records.some((record) => record.needsApplication || isExplicitMaterialApplication(record.trackingStatus, record.applicationRequired))), [dataset.groups]);
+  const pendingMaterialGroups = useMemo(() => dataset.groups.filter((group) => group.records.some((record) => record.needsApplication || isTrackedMaterialApplication(record))), [dataset.groups]);
   const weeklyPendingRecords = useMemo(() => buildPendingApplications(pendingMaterialGroups, { includeAlternates: weeklyIncludeAlternates }).map(application => application.record), [pendingMaterialGroups, weeklyIncludeAlternates]);
   const discouragedMaterialRows = useMemo(() => collectDiscouragedMaterialRows(dataset.records), [dataset.records]);
   const excludedDiscouragedCount = useMemo(() => countExcludedDiscouragedRows(dataset.records), [dataset.records]);

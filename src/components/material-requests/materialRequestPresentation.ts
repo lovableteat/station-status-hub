@@ -1,4 +1,4 @@
-import { isExplicitMaterialApplication } from "./materialTrackingStatus.ts";
+import { isTrackedMaterialApplication } from "./materialTrackingStatus.ts";
 
 export interface CompactValueSummary {
   fullText: string;
@@ -301,7 +301,7 @@ export function groupPendingMaterials<T extends PendingCategorySource>(groups: r
     .filter((category) => category.groups.length > 0);
 }
 
-type ApplicationRecord = { id: string; needsApplication?: boolean; applicationRequired?: boolean; applicationExempt?: boolean; manufacturer?: string | null; manufacturerPartNumber?: string | null; name?: string | null; trackingStatus?: string; requestOwnerName?: string };
+type ApplicationRecord = { id: string; needsApplication?: boolean; applicationRequired?: boolean; applicationExempt?: boolean; manufacturer?: string | null; manufacturerPartNumber?: string | null; name?: string | null; trackingStatus?: string; trackingHistory?: readonly { id: string; status: string }[]; requestOwnerName?: string };
 
 export interface PendingApplication<G, R extends ApplicationRecord> {
   key: string;
@@ -319,7 +319,8 @@ export interface PendingApplication<G, R extends ApplicationRecord> {
  * when none of its vendor rows has a 實體料號 or 虛擬料號. With
  * includeAlternates every vendor row without either number gets its own line,
  * even when another vendor of the same location already has one (each
- * manufacturer's part is applied for separately). Locations are never merged.
+ * manufacturer's part is applied for separately). Recorded applications, including
+ * completed ones, remain in either view. Locations are never merged.
  */
 export function buildPendingApplications<
   G extends { key: string; displayRef: string; name: string; searchText: string; primaryRecord: ApplicationRecord; records: readonly ApplicationRecord[] },
@@ -329,9 +330,9 @@ export function buildPendingApplications<
   for (const group of groups) {
     const seen = new Set<string>();
     const rows = [group.primaryRecord as R, ...group.records].filter((record) => !record.applicationExempt && !seen.has(record.id) && seen.add(record.id));
-    const explicit = rows.filter(record => isExplicitMaterialApplication(record.trackingStatus, record.applicationRequired));
+    const explicit = rows.filter(isTrackedMaterialApplication);
     const lines = includeAlternates
-      ? rows.filter((record) => record.needsApplication || isExplicitMaterialApplication(record.trackingStatus, record.applicationRequired))
+      ? rows.filter((record) => record.needsApplication || isTrackedMaterialApplication(record))
       : [...new Map([
         ...(rows.length > 0 && rows.every(record => record.needsApplication) ? [rows.find(record => record.id === group.primaryRecord.id) ?? rows[0]] : []),
         ...explicit,

@@ -33,7 +33,7 @@ export interface MaterialWorkbookRecord {
   trackingNote?: string;
   requestTicket?: string;
   requestUrl?: string;
-  /** Website-only independent selection; not a progress status or an imported CE field. */
+  /** Legacy independent flag, preserved for application history and version compatibility. New updates use trackingStatus. */
   applicationRequired?: boolean;
   manufacturer: string;
   sourcingStatus: string;
