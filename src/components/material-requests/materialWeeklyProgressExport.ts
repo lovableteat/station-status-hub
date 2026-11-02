@@ -32,8 +32,8 @@ export async function createMaterialWeeklyWorkbook(options: MaterialWeeklyExport
     sheet.views = [{ state: "frozen", xSplit: 1, ySplit: 4 }];
     return sheet;
   };
-  const matrix = prepare("各料每週進度", ["Ref Des", "Name", "Qty", "Manufacturer Part Number", "Manufacturer", "虛擬料號", "實體料號", "負責人（目前）", "目前狀態", "無日期紀錄數", ...[...weeks].reverse().map(week => `${week.label}${week.isCurrent ? "（本週）" : ""}`), "Note"], [30, 48, 10, 34, 26, 28, 28, 24, 28, 18, ...weeks.map(() => 30), 50]);
-  for (const row of rows) matrix.addRow([row.record.refDes, row.record.name, row.record.qty, row.record.manufacturerPartNumber, row.record.manufacturer, row.record.virtualAlternative || "", row.record.partNumber || "", row.record.requestOwnerName || "未指定", row.currentStatus, row.undatedCount, ...[...row.cells].reverse().map(cell => cell.status), row.record.note || ""]);
+  const matrix = prepare("各料每週進度", ["Ref Des", "Name", "Qty", "Manufacturer Part Number", "Manufacturer", "虛擬料號", "實體料號", "負責人（目前）", "目前狀態", "無日期紀錄數", ...[...weeks].reverse().map(week => `${week.label}${week.isCurrent ? "（本週）" : ""}`), "需申請（目前）", "Note"], [30, 48, 10, 34, 26, 28, 28, 24, 28, 18, ...weeks.map(() => 30), 18, 50]);
+  for (const row of rows) matrix.addRow([row.record.refDes, row.record.name, row.record.qty, row.record.manufacturerPartNumber, row.record.manufacturer, row.record.virtualAlternative || "", row.record.partNumber || "", row.record.requestOwnerName || "未指定", row.currentStatus, row.undatedCount, ...[...row.cells].reverse().map(cell => cell.status), row.record.applicationRequired === true ? "需申請" : "", row.record.note || ""]);
   const summaries = summarizeMaterialWeeklyProgress(rows, weeks);
   const statuses = summaries[0] ? Object.keys(summaries[0].counts) : [];
   const summary = prepare("每週彙總", ["週別（週一至週日）", "首次更新料件數", "本週有更新料件數", ...statuses, "總筆數"], [30, 22, 22, ...statuses.map(() => 23), 14]);

@@ -70,22 +70,29 @@ test("one main save persists both the material edits and the pending progress wi
   editor.unmount();
 });
 
-test("required-application status saves and reopens with both part numbers, old history and Note intact", async () => {
+test("the independent required field saves, reopens and clears without adding history or changing status", async () => {
   const source = { ...baseRecord, partNumber: "000-REAL", virtualAlternative: "000-VIRTUAL", note: "共同筆記", trackingHistory: [{ id: "old", status: "已發信", createdAt: "2026-10-29T01:00:00Z", createdBy: "原更新人" }] };
   const editor = mountDialog({ record: source });
   try {
-    editor.setTracking({ status: "需申請", requestInfo: "待送申請" });
+    editor.setTracking({ applicationRequired: true });
     await act(async () => editor.button().props.onClick());
     const saved = editor.writes[0];
-    assert.equal(saved.trackingStatus, "需申請");
-    assert.equal(saved.trackingHistory.at(-1).createdBy, "CE");
-    assert.deepEqual(saved.trackingHistory[0], source.trackingHistory[0]);
+    assert.equal(saved.applicationRequired, true);
+    assert.equal(saved.trackingStatus, source.trackingStatus);
+    assert.deepEqual(saved.trackingHistory, source.trackingHistory);
     assert.equal(saved.partNumber, "000-REAL");
     assert.equal(saved.virtualAlternative, "000-VIRTUAL");
     assert.equal(saved.note, "共同筆記");
     editor.update({ open: false }); editor.update({ record: saved, open: true, initialTab: "tracking" });
     assert.equal(editor.tracking().status, "", "reopening does not queue a duplicate history entry");
-    assert.ok(editor.root.root.findAllByProps({ "data-testid": "tracking-status-badge", "data-status": "需申請" }).length > 0);
+    assert.equal(editor.root.root.findByProps({ "aria-label": "需申請" }).props.value, "required");
+    editor.setTracking({ applicationRequired: false });
+    await act(async () => editor.button().props.onClick());
+    const cleared = editor.writes[1];
+    assert.equal(cleared.applicationRequired, false);
+    assert.deepEqual(cleared.trackingHistory, source.trackingHistory);
+    editor.update({ open: false }); editor.update({ record: cleared, open: true });
+    assert.equal(editor.root.root.findByProps({ "aria-label": "需申請" }).props.value, "");
   } finally { editor.unmount(); }
 });
 

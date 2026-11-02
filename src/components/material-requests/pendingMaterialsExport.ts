@@ -5,7 +5,7 @@ import { getMaterialTrackingStatusMeaning } from "./materialTrackingStatus";
 import { downloadBlob } from "./materialRequestExport";
 import { getMaterialApplicationTiming } from "./materialApplicationTiming";
 
-export const PENDING_MATERIAL_EXPORT_HEADERS = ["分類", "Ref Des", "Name", "Qty", "Manufacturer Part Number", "Manufacturer", "虛擬料號", "實體料號", "目前狀態", "申請類型說明", "負責人", "最後更新人", "更新時間", "首次更新時間", "累計申請天數", "統計截至時間", "單號", "連結", "申請狀態資訊", "追蹤說明", "SPEC 文件"];
+export const PENDING_MATERIAL_EXPORT_HEADERS = ["分類", "Ref Des", "Name", "Qty", "Manufacturer Part Number", "Manufacturer", "虛擬料號", "實體料號", "目前狀態", "申請類型說明", "負責人", "最後更新人", "更新時間", "首次更新時間", "累計申請天數", "統計截至時間", "單號", "連結", "申請狀態資訊", "追蹤說明", "SPEC 文件", "需申請"];
 
 export async function createPendingMaterialsWorkbook({ rows, workspaceName, exportedBy, scope, exportedAt = new Date() }: {
   rows: Array<{ category: string; displayRef: string; record: MaterialWorkbookRecord }>;
@@ -19,7 +19,7 @@ export async function createPendingMaterialsWorkbook({ rows, workspaceName, expo
   workbook.creator = exportedBy;
   workbook.created = exportedAt;
   const sheet = workbook.addWorksheet("待處理料");
-  sheet.columns = [14, 30, 52, 10, 32, 26, 26, 26, 20, 30, 20, 20, 24, 26, 18, 26, 24, 44, 44, 52, 44].map(width => ({ width }));
+  sheet.columns = [14, 30, 52, 10, 32, 26, 26, 26, 20, 30, 20, 20, 24, 26, 18, 26, 24, 44, 44, 52, 44, 16].map(width => ({ width }));
   sheet.addRow([`${workspaceName} · 待處理料`]);
   sheet.addRow([`匯出：${exportedBy} · ${exportedAt.toLocaleString("zh-TW", { hour12: false })} · ${rows.length} 筆`]);
   sheet.addRow([`範圍：${scope}`]);
@@ -33,7 +33,7 @@ export async function createPendingMaterialsWorkbook({ rows, workspaceName, expo
     const latest = getLatestTrackingEntry(record);
     const timing = getMaterialApplicationTiming(record, exportedAt.getTime());
     const status = latest?.status || record.trackingStatus || "未處理";
-    const row = sheet.addRow([category, record.refDes || displayRef, record.name, record.qty, record.manufacturerPartNumber, record.manufacturer, record.virtualAlternative || "", record.partNumber, status, getMaterialTrackingStatusMeaning(status), record.requestOwnerName || "未指定", latest?.createdBy || "", latest?.createdAt || "", timing?.startedAt || "", timing ? Number(timing.elapsedDays.toFixed(4)) : null, exportedAt.toISOString(), record.requestTicket || "", record.requestUrl || "", latest?.requestInfo || "", latest?.note || record.trackingNote || "", getMaterialSpecDocuments(record).map(document => document.name).join("\n")]);
+    const row = sheet.addRow([category, record.refDes || displayRef, record.name, record.qty, record.manufacturerPartNumber, record.manufacturer, record.virtualAlternative || "", record.partNumber, status, getMaterialTrackingStatusMeaning(status), record.requestOwnerName || "未指定", latest?.createdBy || "", latest?.createdAt || "", timing?.startedAt || "", timing ? Number(timing.elapsedDays.toFixed(4)) : null, exportedAt.toISOString(), record.requestTicket || "", record.requestUrl || "", latest?.requestInfo || "", latest?.note || record.trackingNote || "", getMaterialSpecDocuments(record).map(document => document.name).join("\n"), record.applicationRequired === true ? "需申請" : ""]);
     row.alignment = { vertical: "top", wrapText: true };
     row.eachCell(cell => { if (typeof cell.value === "string") cell.numFmt = "@"; });
     row.getCell(PENDING_MATERIAL_EXPORT_HEADERS.indexOf("累計申請天數") + 1).numFmt = "0.00";

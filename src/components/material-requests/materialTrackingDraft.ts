@@ -6,6 +6,7 @@ export { MATERIAL_TRACKING_STATUS_OPTIONS } from "./materialTrackingStatus";
 export interface MaterialTrackingDraft {
   sessionId: string;
   status: string;
+  applicationRequired?: boolean;
   note: string;
   requestTicket: string;
   requestUrl: string;
@@ -26,6 +27,7 @@ export function createMaterialTrackingDraft(record: MaterialWorkbookRecord): Mat
   return {
     sessionId: crypto.randomUUID(),
     status: "",
+    applicationRequired: record.applicationRequired === true,
     note: "",
     requestTicket: record.requestTicket ?? "",
     requestUrl: record.requestUrl ?? "",
@@ -46,6 +48,7 @@ export function applyMaterialTrackingDraft(record: MaterialWorkbookRecord, draft
   const requestUrl = normalizeMaterialRequestUrl(draft.requestUrl);
   if (draft.requestUrl.trim() && !requestUrl) throw new Error('連結請填寫有效的 http／https 網址，或清空後再儲存。');
   const next = { ...record, requestTicket: draft.requestTicket.trim(), requestUrl };
+  if (typeof draft.applicationRequired === "boolean" && (draft.applicationRequired || record.applicationRequired !== undefined)) next.applicationRequired = draft.applicationRequired;
   if (!status) return next;
 
   const legacy = !record.trackingHistory?.length ? getLatestTrackingEntry(record) : null;

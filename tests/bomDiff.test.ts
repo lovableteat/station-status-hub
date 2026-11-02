@@ -132,6 +132,15 @@ test("tracking on removed vendor lines is reported as lost", () => {
   assert.equal(result.entries.find((entry) => entry.displayRef === "U9")?.trackingLost, 1);
 });
 
+test("independent required selections carry to matching revisions and are not silently lost with removed lines", () => {
+  const previous = row({ id: "required-old", refDes: "U1", applicationRequired: true });
+  const next = row({ id: "required-new", refDes: "U1" });
+  const carried = carryBomTracking([previous], [next]);
+  assert.equal(carried.records[0].applicationRequired, true);
+  assert.equal(carryBomTracking([previous], [row({ id: "cleared", refDes: "U1", applicationRequired: false })]).records[0].applicationRequired, false);
+  assert.equal(carryBomTracking([previous], []).orphaned.length, 1);
+});
+
 test("carry-over moves tracking by content, keeps new imported entries first and reports orphans", () => {
   const previous = [
     row({ id: "old-1", refDes: "C1", trackingStatus: "處理中", requestTicket: "REQ-1", trackingHistory: [{ id: "tracking-a", status: "處理中", note: "RD 手動", createdAt: "2026-10-01T00:00:00.000Z" }], specDocument: { name: "spec.pdf", path: "x/spec.pdf", mimeType: "application/pdf", size: 1, uploadedAt: "2026-10-01T00:00:00.000Z" } }),

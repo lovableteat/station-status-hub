@@ -15,6 +15,7 @@ test("pending Excel round-trips full references, leading-zero part numbers, assi
   const {createPendingMaterialsWorkbook}=exports;
   const ref=Array.from({length:50},(_,i)=>`J${i+1}`).join(",");
   const row={category:"CONNECTOR",displayRef:"J1…",record:{id:"one",name:"完整料件名稱",refDes:ref,qty:8,manufacturerPartNumber:"000012345",manufacturer:"廠商",partNumber:"001-234",requestOwnerName:"負責人 CE",trackingStatus:"SYMBOL申請中",trackingHistory:[{id:"progress",status:"SYMBOL申請中",createdBy:"真正操作者",createdAt:"2026-10-29T02:00:00Z",note:"等 SYMBOL"}],specDocument:{name:"old.pdf",path:"old"},specDocuments:[{name:"old.pdf",path:"old"},{name:"part.glb",path:"model"}]}};
+  row.record.applicationRequired = true;
   const exportedAt = new Date("2026-10-30T14:00:00Z");
   const undated = { ...row, record: { ...row.record, trackingHistory: [{ id: 'imported', status: '已發信', createdAt: '' }] } };
   const followUps = ["未回應再次發信", "與廠商溝通中", "申請料被退回"].map(status => ({ ...row, record: { ...row.record, trackingStatus: status, trackingHistory: [{ ...row.record.trackingHistory[0], status }] } }));
@@ -28,6 +29,8 @@ test("pending Excel round-trips full references, leading-zero part numbers, assi
   assert.equal(value("Manufacturer Part Number"),"000012345");
   assert.equal(value("Qty"),8);
   assert.equal(value("負責人"),"負責人 CE");
+  assert.equal(value("需申請"), "需申請");
+  assert.equal(value("目前狀態"), "SYMBOL申請中", "independent field never replaces workflow status in exports");
   assert.equal(value("最後更新人"),"真正操作者");
   assert.equal(value("申請類型說明"),"已有料號，需申請 SYMBOL");
   assert.equal(value("SPEC 文件"),"old.pdf\npart.glb");

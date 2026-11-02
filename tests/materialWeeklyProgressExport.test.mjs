@@ -17,7 +17,7 @@ test("weekly workbook round-trips all filtered rows, chronological snapshots, fu
   const asOf = Date.parse("2026-11-02T04:00:00Z");
   const weeks = getMaterialProgressWeeks("2026-11-02", 4, asOf);
   const record = { id: "J1", refDes: Array.from({ length: 80 }, (_, i) => `J${i + 1}`).join(", "), name: "完整料件名稱", qty: 0, manufacturerPartNumber: "00001234", manufacturer: "Vendor A", partNumber: "000-REAL", requestOwnerName: "指派 CE", note: "網站 Note", trackingHistory: [{ id: "a", status: "已發信", createdAt: "2026-10-25T16:00:00Z", createdBy: "真正操作者", requestInfo: "已聯繫", note: "完整\n追蹤說明", requestTicket: "000-TICKET", requestUrl: "https://example.invalid/request" }, { id: "b", status: "已取得料號待CIS申請", createdAt: "2026-11-02T03:00:00Z", createdBy: "CE" }] };
-  const records = Array.from({ length: 61 }, (_, i) => ({ ...record, id: String(i) }));
+  const records = Array.from({ length: 61 }, (_, i) => ({ ...record, id: String(i), applicationRequired: true }));
   const rows = buildMaterialWeeklyProgress(records, weeks, asOf);
   const workbook = await exports.createMaterialWeeklyWorkbook({ rows, weeks, asOf, workspaceName: "BOM A", exportedBy: "QA", scope: "全部料件 · 負責人：指派 CE" });
   const reopened = new ExcelJS.Workbook();
@@ -32,6 +32,8 @@ test("weekly workbook round-trips all filtered rows, chronological snapshots, fu
   assert.equal(value("Qty"), 0);
   assert.equal(value("負責人（目前）"), "指派 CE");
   assert.equal(value("Note"), "網站 Note");
+  assert.equal(value("需申請（目前）"), "需申請");
+  assert.equal(value("目前狀態"), "已取得料號待CIS申請");
   assert.equal(value(weeks[3].label + "（本週）"), "已取得料號待CIS申請");
   assert.equal(value(weeks[2].label), "已發信");
   assert.equal(matrix.getRow(4).font.bold, true);

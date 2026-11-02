@@ -869,6 +869,7 @@ function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecor
     trackingNote: record.trackingNote ?? "",
     requestTicket: record.requestTicket ?? "",
     requestUrl: record.requestUrl ?? "",
+    ...(typeof record.applicationRequired === "boolean" ? { applicationRequired: record.applicationRequired } : {}),
     manufacturer: record.manufacturer,
     sourcingStatus: record.sourcingStatus,
     partUsageStatus: record.partUsageStatus ?? "",
@@ -2607,7 +2608,7 @@ export function PendingMaterialsDialog({
     const listed = new Set(applications.map((application) => application.group.key));
     return groups
       .filter((group) => listed.has(group.key))
-      .map((group) => ({ ...group, records: group.records.filter((record) => record.needsApplication || isExplicitMaterialApplication(record.trackingStatus)) }));
+      .map((group) => ({ ...group, records: group.records.filter((record) => record.needsApplication || isExplicitMaterialApplication(record.trackingStatus, record.applicationRequired)) }));
   }, [applications, groups]);
   const keyword = query.trim().toLowerCase();
   // One category at a time keeps long BOMs from becoming one endless scroll; the tabs carry the counts.
@@ -2929,7 +2930,7 @@ export function MaterialRecordDialog({
   };
 
   const title = mode === "create" ? "新增料件 / 替代料" : mode === "edit" ? "修改料件資料" : "料件詳細資訊";
-  const hasTrackingChanges = Boolean(trackingDraft.status || trackingDraft.note.trim() || trackingDraft.createdBy.trim() || trackingDraft.requestInfo.trim() || trackingDraft.images.length || trackingDraft.pendingImageReads || trackingDraft.requestTicket !== (record.requestTicket ?? "") || trackingDraft.requestUrl !== (record.requestUrl ?? ""));
+  const hasTrackingChanges = Boolean(trackingDraft.status || Boolean(trackingDraft.applicationRequired) !== Boolean(record.applicationRequired) || trackingDraft.note.trim() || trackingDraft.createdBy.trim() || trackingDraft.requestInfo.trim() || trackingDraft.images.length || trackingDraft.pendingImageReads || trackingDraft.requestTicket !== (record.requestTicket ?? "") || trackingDraft.requestUrl !== (record.requestUrl ?? ""));
   const hasUnsavedChanges = JSON.stringify(form) !== JSON.stringify(toWorkbookRecord(record)) || hasTrackingChanges;
   const renderCeControl = (field: (typeof MATERIAL_CE_EDITOR_FIELDS)[number], index: number) => {
     const value = field.key === "level" ? "2" : String(form[field.key] ?? "");
@@ -4638,7 +4639,7 @@ export function MaterialRequestPage() {
     () => dataset.groups.filter((group) => group.records.some(hasMaterialPartNumber)).length,
     [dataset.groups]
   );
-  const pendingMaterialGroups = useMemo(() => dataset.groups.filter((group) => group.records.some((record) => record.needsApplication || isExplicitMaterialApplication(record.trackingStatus))), [dataset.groups]);
+  const pendingMaterialGroups = useMemo(() => dataset.groups.filter((group) => group.records.some((record) => record.needsApplication || isExplicitMaterialApplication(record.trackingStatus, record.applicationRequired))), [dataset.groups]);
   const weeklyPendingRecords = useMemo(() => buildPendingApplications(pendingMaterialGroups, { includeAlternates: weeklyIncludeAlternates }).map(application => application.record), [pendingMaterialGroups, weeklyIncludeAlternates]);
   const discouragedMaterialRows = useMemo(() => collectDiscouragedMaterialRows(dataset.records), [dataset.records]);
   const excludedDiscouragedCount = useMemo(() => countExcludedDiscouragedRows(dataset.records), [dataset.records]);

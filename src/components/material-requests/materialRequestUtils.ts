@@ -33,6 +33,8 @@ export interface MaterialWorkbookRecord {
   trackingNote?: string;
   requestTicket?: string;
   requestUrl?: string;
+  /** Website-only independent selection; not a progress status or an imported CE field. */
+  applicationRequired?: boolean;
   manufacturer: string;
   sourcingStatus: string;
   phaseOutStatus?: string;
@@ -450,7 +452,7 @@ function getImportedTrackingStatusAndNote(value: unknown) {
     return { status: "", note: "" };
   }
 
-  if ([...MATERIAL_TRACKING_STATUS_OPTIONS, "新增追蹤", "處理中"].includes(text)) {
+  if ([...MATERIAL_TRACKING_STATUS_OPTIONS, "新增追蹤", "處理中", "需申請"].includes(text)) {
     return { status: text, note: "" };
   }
 

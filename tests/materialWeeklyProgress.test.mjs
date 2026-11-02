@@ -7,13 +7,14 @@ const weeks = getMaterialProgressWeeks("2026-11-04", 4, asOf);
 const entry = (id, status, createdAt, extra = {}) => ({ id, status, createdAt, ...extra });
 const record = (id, history = [], extra = {}) => ({ id, name: "IC DRIVER", refDes: id, manufacturerPartNumber: "00001234", manufacturer: "Vendor A", requestOwnerName: "CE A", trackingHistory: history, ...extra });
 
-test("required applications are available as a distinct current-week filter and summary count", () => {
-  const rows = buildMaterialWeeklyProgress([record("J-required", [entry("required", "需申請", "2026-11-03T02:00:00Z")], { trackingStatus: "需申請" }), record("J-sent", [entry("sent", "已發信", "2026-11-03T02:00:00Z")])], weeks, asOf);
-  const filtered = filterMaterialWeeklyProgress(rows, "", "需申請", "");
+test("independent required selections preserve the actual weekly progress status", () => {
+  const rows = buildMaterialWeeklyProgress([record("J-required", [entry("required", "文件已收齊", "2026-11-03T02:00:00Z")], { trackingStatus: "文件已收齊", applicationRequired: true }), record("J-sent", [entry("sent", "已發信", "2026-11-03T02:00:00Z")])], weeks, asOf);
+  const filtered = filterMaterialWeeklyProgress(rows, "", "文件已收齊", "");
   assert.equal(filtered.length, 1);
   assert.equal(filtered[0].record.id, "J-required");
-  assert.equal(filtered[0].cells.at(-1).status, "需申請");
-  assert.equal(summarizeMaterialWeeklyProgress(filtered, weeks).at(-1).counts["需申請"], 1);
+  assert.equal(filtered[0].record.applicationRequired, true);
+  assert.equal(filtered[0].cells.at(-1).status, "文件已收齊");
+  assert.equal(summarizeMaterialWeeklyProgress(filtered, weeks).at(-1).counts["文件已收齊"], 1);
 });
 
 test("weeks use Taipei Mondays, including UTC Sunday, year boundaries and unfinished current weeks", () => {
