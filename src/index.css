@@ -1122,7 +1122,7 @@ All colors MUST be HSL for proper theming support.
 .material-status--reminder { --material-status: 48 95% 68%; }
 .material-status--communicating { --material-status: 225 94% 79%; }
 .material-status--returned { --material-status: 0 82% 76%; }
-.material-status--documents { --material-status: 174 65% 67%; }
+.material-status--documents { --material-status: 218 100% 74%; }
 .material-status--part { --material-status: 38 92% 69%; }
 .material-status--symbol { --material-status: 263 90% 81%; }
 .material-status--cis { --material-status: 190 85% 72%; }
