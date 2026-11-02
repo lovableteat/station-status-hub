@@ -87,13 +87,39 @@ test("material requests render actionable cards on compact screens and preserve 
 
   assert.match(source, /data-testid="material-mobile-cards"/);
   assert.match(source, /lg:hidden/);
-  assert.match(source, /hidden border-t border-\[#2a526f\] lg:block/);
+  assert.match(source, /!isCompactLayout \|\| mobileView === "table"/);
   assert.match(source, /手機以料件卡片呈現/);
   assert.match(source, /openRecord\(mainRecord, "view"\)/);
   assert.match(source, /openTrackingDialog\(mainRecord\)/);
   assert.match(source, /openCreate\(group\)/);
   assert.match(source, /toggleMarkedGroup\(group\.key\)/);
   assert.match(source, /aria-label=\{isSearchPending \? "搜尋中" : "搜尋"\}/);
+});
+
+test("material mobile controls expose management, Excel filters and both result views", async () => {
+  const source = await read("src/components/material-requests/MaterialRequestPage.tsx");
+  const mobile = source.slice(source.indexOf('{isCompactLayout && <section'), source.indexOf('{!isCompactLayout && <header'));
+  assert.match(mobile, /data-testid="material-mobile-actions"/);
+  for (const label of ['上傳 BOM', '匯出報表', '待處理料', '不建議料匯出']) assert.ok(mobile.includes(label));
+  assert.match(mobile, /<details[^>]*data-mobile-material-tools/);
+  assert.doesNotMatch(mobile, /<Popover>/);
+  assert.match(mobile, /exportVisibleColumns/);
+  assert.match(mobile, /data-testid="material-mobile-column-filters"/);
+  assert.match(mobile, /<ExcelFilterPopover/);
+  assert.match(mobile, /onSelectedValuesChange=\{\(values\) => setColumnFilters/);
+  assert.match(mobile, /aria-label="料件檢視"/);
+  assert.match(mobile, /setMobileView\("table"\)/);
+  assert.match(mobile, /setMobileView\("cards"\)/);
+});
+
+test("material pagination belongs to both result views and never overrides a chosen page size", async () => {
+  const source = await read("src/components/material-requests/MaterialRequestPage.tsx");
+  const start = source.indexOf('data-testid="material-pagination"');
+  assert.ok(start > 0, 'mobile users need the same pagination as desktop users');
+  assert.match(source.slice(start - 100, start), /<\/div>\}/, 'desktop-only wrapper ends before shared pagination');
+  assert.match(source.slice(start), /onClick=\{\(\) => setPage\(\(current\) => Math\.min/);
+  assert.match(source, /useState\(\(\) => isCompactLayout \? 25 : 50\)/);
+  assert.doesNotMatch(source, /if \(!isCompactLayout \|\| pageSize <= 25\) return/);
 });
 
 test("direct chat becomes full-screen on phones and respects the keyboard safe area", async () => {

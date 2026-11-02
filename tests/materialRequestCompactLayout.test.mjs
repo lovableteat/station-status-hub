@@ -148,7 +148,7 @@ test("dialogs and popovers use the page theme tokens instead of their own fixed 
   assert.match(pageTracker, /role="group" aria-label=\{`第 \$\{page\.pageNumber\} 頁狀態`\}/);
   assert.match(slice("function MaterialRecordDialog(", "const MaterialGroupRow = memo("), /CE Excel 欄位/);
   assert.match(source, /<AlertDialogContent data-dialog-tone="danger"/);
-  assert.match(source, /px-3 py-1\.5 lg:pr-28"/);
+  assert.match(source, /px-3 py-2 lg:py-1\.5 lg:pr-28"/);
 });
 
 test("phase out stays an independent source value and the Symbol column is gone", () => {
@@ -238,6 +238,10 @@ test("待處理料 keeps compact category controls and fills every toolbar actio
     assert.ok(styles.includes(`.pending-action--${action} { --pending-action-color:`));
   }
   assert.match(styles, /background-color: hsl\(var\(--pending-action-color\)\)/);
+  assert.match(dialog, /data-testid="pending-materials-list"/);
+  const shortViewport = styles.slice(styles.indexOf('@media (max-width: 1023px) and (max-height: 500px)'));
+  assert.match(shortViewport, /\[data-testid="pending-materials-dialog"\]\[role="dialog"\] \{\s*overflow-y: auto/);
+  assert.match(shortViewport, /\[data-testid="pending-materials-list"\] \{\s*flex: none;\s*overflow: visible/);
 });
 
 test("column filters stage checkbox changes and expose Excel-style apply and cancel", () => {

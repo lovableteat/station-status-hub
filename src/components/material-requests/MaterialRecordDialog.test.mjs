@@ -87,7 +87,7 @@ test("required application and completion save and reopen as ordinary status upd
     assert.equal(saved.applicationRequired, true, "legacy saved flag is not erased with the removed control");
     editor.update({ open: false }); editor.update({ record: saved, open: true, initialTab: "tracking" });
     assert.equal(editor.tracking().status, "", "reopening does not queue another update");
-    assert.equal(editor.root.root.findByProps({ type: "radio", value: "需申請" }).props.checked, false);
+    assert.equal(editor.root.root.findAllByProps({ type: "radio", value: "需申請" }).length, 0, "legacy status remains in history without reappearing as a new choice");
     editor.setTracking({ status: "已完成" });
     await act(async () => editor.button().props.onClick());
     const completed = editor.writes[1];
