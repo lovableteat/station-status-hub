@@ -21,6 +21,17 @@ test("manual SYMBOL applications with an existing part number remain visible and
   assert.match(items[0].searchText,/ce 王同學/);
 });
 
+test("an explicitly required application remains pending with existing numbers in both views and is searchable", () => {
+  const required = record("required", "MPN-REQUIRED", false, { partNumber: "REAL-REQUIRED", virtualAlternative: "VIRTUAL-REQUIRED", trackingStatus: "需申請" });
+  const g = group("required-group", "J200", [record("normal", "MPN-NORMAL", false), required]);
+  for (const options of [undefined, { includeAlternates: true }]) {
+    const applications = buildPendingApplications([g], options);
+    assert.equal(applications.length, 1);
+    assert.equal(applications[0].record, required);
+    assert.match(applications[0].searchText, /需申請/);
+  }
+});
+
 test("follow-up, supplier communication and returned requests stay pending even with an existing part number", () => {
   for (const status of ["未回應再次發信", "與廠商溝通中", "申請料被退回"]) {
     const active = record("request", "MPN-1", false, { trackingStatus: status, partNumber: "REAL-1" });
