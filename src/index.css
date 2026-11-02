@@ -1269,6 +1269,15 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 }
 
 @media (max-width: 1023px) and (max-height: 500px) {
+  [data-testid="pending-materials-dialog"][role="dialog"] {
+    overflow-y: auto;
+  }
+
+  [data-testid="pending-materials-dialog"] > [data-testid="pending-materials-list"] {
+    flex: none;
+    overflow: visible;
+  }
+
   /* Keep short maintenance pages on the document scroller. */
   body:has(.maintenance-workspace) {
     overflow-x: clip;
@@ -2156,7 +2165,10 @@ body {
   .material-mobile-command-center > div:first-child h1 { font-size: 18px; font-weight: 600; }
   .material-mobile-command-center [data-mobile-material-primary-controls] { padding: 0 4px 12px; }
   .material-mobile-utility-row > [data-ui="select-trigger"] { width: 0; min-width: 0; flex: 1; }
-  .material-mobile-utility-row > button:last-child { font-size: 13px; }
+  [data-mobile-material-tools] > summary::-webkit-details-marker { display: none; }
+  [data-mobile-material-tools][open] > summary > svg:last-child { transform: rotate(180deg); }
+  [data-testid="material-table-scroll"] thead button { min-height: 44px; }
+  [data-testid="material-table-scroll"] [data-testid="tracking-history-cell"] { min-height: 44px; }
   [data-testid="material-mobile-cards"] { padding: 0; }
   .material-mobile-record { border-color: hsl(var(--border)); background: hsl(var(--card)); }
   .material-mobile-record > div:first-child { padding: 12px; background: color-mix(in srgb, var(--material-row-solid) 28%, hsl(var(--card))); }
