@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { ChevronDown, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getGeminiFreeModelProfile, resolveAiProviderPreset } from "./aiProviderCatalog";
 import { AI_USAGE_RECORDED_EVENT } from "./aiUsageTelemetry";
 import { buildObservedQuotaRange, parseAiModelUsageSummary, type AiModelUsageSummary } from "./aiUsageSummary";
 
 /** Shared counts are fetched through the AI-view RPC, never API-management access. */
-export function AiQuotaStatus({ apiKeyId, provider, model }: { apiKeyId: string | null; provider: string; model: string }) {
+export function AiQuotaStatus({ apiKeyId, provider, model, compact = false }: { apiKeyId: string | null; provider: string; model: string; compact?: boolean }) {
   const [snapshot, setSnapshot] = useState<{ scope: string; value: AiModelUsageSummary } | null>(null);
   const scope = `${apiKeyId}::${provider}::${model}`;
   const summary = snapshot?.scope === scope ? snapshot.value : null;
@@ -65,7 +66,7 @@ export function AiQuotaStatus({ apiKeyId, provider, model }: { apiKeyId: string 
   const day = summary ? target?.pacificDayAttempts ?? 0 : null;
   const unavailable = !apiKeyId || !summary || !!error;
   const count = (value: number | null) => unavailable ? "—" : value?.toLocaleString("zh-TW");
-  return (
+  const panel = (
     <section aria-label="全員共用 API 額度與用量" className="shrink-0 border-b border-border bg-muted/30 px-3 text-foreground sm:px-6">
       <div className="grid grid-cols-[minmax(0,1fr)_44px_44px] items-center gap-x-1 text-[11px] lg:flex lg:flex-wrap lg:gap-x-3 lg:text-xs">
         <h3 className="sr-only font-semibold xl:not-sr-only">全員共用 API 額度</h3>
@@ -90,4 +91,5 @@ export function AiQuotaStatus({ apiKeyId, provider, model }: { apiKeyId: string 
       {error && <p role="alert" className="pb-2 text-xs text-amber-300">{error}</p>}
     </section>
   );
+  return compact ? <Popover><PopoverTrigger asChild><Button variant="outline" aria-label="全員共用 API 額度與用量" title={error || "全員共用 API 額度與用量"} className="h-11 shrink-0 gap-2 whitespace-nowrap px-2 text-xs"><span className={error ? "text-amber-300" : "text-muted-foreground"}>分鐘 <strong className="text-foreground">{count(minute)}</strong>{profile ? ` / ${profile.rpm}` : " 次"}</span><span className="text-muted-foreground">今日 <strong className="text-foreground">{count(day)}</strong>{profile ? ` / ${profile.rpd}` : " 次"}</span><ChevronDown className="h-3 w-3" /></Button></PopoverTrigger><PopoverContent align="end" className="w-[min(480px,calc(100vw-24px))] p-0">{panel}</PopoverContent></Popover> : panel;
 }
