@@ -10,7 +10,7 @@ const sources = Array.from({ length: 10 }, (_, i) => ({ id: "spec-" + (i + 1), n
 const result = { title: "filled", partMatch: "matched", columns: ["Voltage"], rows: [[{ kind: "source", value: "1.2 V", sourceId: "spec-1", page: "1", quote: "voltage 1.2 V" }]], warnings: [] };
 function service(run = async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(result) }] } }] }))) {
   const calls = [];
-  const load = loader({ mocks: {
+  const load = loader({ transform: source => source.replaceAll("import.meta.url", '"file:///qa/"'), mocks: {
     "@/integrations/supabase/client": { supabase: {} },
     "../api-management/aiUsageTelemetry": { trackedProviderFetch: async input => { calls.push(input); return run(input); } },
   }, globals: { Blob, TextDecoder, TextEncoder, btoa, Response } });
@@ -92,4 +92,25 @@ test("bad or oversized photo batches never send; a response omitting photos is n
   assert.equal(f.calls.length,0);
   await assert.rejects(f.analyzeSpecFillPhotos(base),/未完整/);
   assert.equal(f.calls.length,1);
+});
+
+test("follow-up includes prior questions, checked tables and selected documents without losing context", async () => {
+  for (const provider of ["gemini", "openai", "anthropic"]) {
+  const text=JSON.stringify({reply:"已保留原條件，補上單位",tables:[{...result,templateId:"template"}]});
+  const payload=provider==="gemini"?{candidates:[{content:{parts:[{text}]}}]}:provider==="openai"?{choices:[{message:{content:text}}]}:{content:[{type:"text",text}]};
+  const f = service(async () => new Response(JSON.stringify(payload)));
+  const selected={...model,record:{...model.record,permissions:{read:true,metadata:{provider,model:"qa-vision",baseUrl:provider==="gemini"?"https://generativelanguage.googleapis.com/v1beta":provider==="openai"?"https://api.openai.com/v1":"https://api.anthropic.com/v1"}}}};
+  const first = { question: "填寫電壓", reply: "找到 1.2 V", tables: [{ ...result, templateId: "template", templateName: "form.png" }] };
+  const answer = await f.analyzeSpecFillConversation({ part, photos: [photo], sources, model:selected, note: "保留 Min/Typ/Max", question: "單位呢？", history: [first], signal: new AbortController().signal });
+  assert.equal(answer.reply, "已保留原條件，補上單位");
+  assert.equal(answer.tables[0].rows[0][0].value, "1.2 V");
+  assert.equal(answer.sources.length, 10);
+  const body = JSON.parse(f.calls[0].init.body);
+  assert.ok((body.contents??body.messages).some(message => message.role === (provider==="gemini"?"model":"assistant") && JSON.stringify(message).includes("找到 1.2 V")));
+  assert.match(f.calls[0].init.body, /填寫電壓/);
+  assert.match(f.calls[0].init.body, /單位呢/);
+  assert.match(f.calls[0].init.body, /spec-10/);
+  await assert.rejects(f.analyzeSpecFillConversation({ part, photos: [photo], sources, model, note: "", question: "again", history: Array(13).fill(first), signal: new AbortController().signal }), /對話/);
+  assert.equal(f.calls.length, 1);
+  }
 });

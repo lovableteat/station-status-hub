@@ -7,7 +7,8 @@ const record = id => ({ id, manufacturerPartNumber: "MPN-" + id, manufacturer: "
 const answer = { templateId: "template-1", templateName: "form.png", title: "Answer", columns: ["Voltage"], rows: [[{ value: "1.20 V", kind: "label" }]], warnings: [], partMatch: "matched" };
 function fixture() {
   const calls = [], jobs = [], createdUrls = [], revokedUrls = [];
-  const mocks = { analyzeSpecFillPhotos: input => { calls.push(input); const job = deferred(); jobs.push(job); return job.promise; },
+  const run = input => { calls.push(input); const job = deferred(); jobs.push(job); return job.promise; };
+  const mocks = { analyzeSpecFillPhotos: run, analyzeSpecFillConversation: input => run(input).then(tables => ({tables, reply: "已依 SPEC 填寫，請核對來源。", sources: input.sources.map(({id,name})=>({id,name})), preparedSources: input.sources, warnings: []})),
     loadSpecFillModels: async () => [{ id: "m", label: "QA", record: {} }],
     downloadSpecForFill: async () => new Blob(["SPEC"]), canReadSpecForFill: () => true, SPEC_FILL_ACCEPT: ".pdf", SPEC_FILL_MAX_BYTES: 18 * 1024 * 1024, SPEC_FILL_MAX_PHOTOS: 20 };
   const load = loader({ mocks: { "./materialSpecFillService": mocks }, globals: { Blob, File, URL: {createObjectURL(file) { const url = 'blob:qa-'+createdUrls.length; createdUrls.push({file,url}); return url; }, revokeObjectURL(url) { revokedUrls.push(url); }} } });
@@ -15,7 +16,7 @@ function fixture() {
   let root;
   act(() => { root = create(React.createElement(MaterialSpecFillDialog, { records: [record("1"), record("2")], workspaceName: "QA", open: true, onOpenChange() {} })); });
   const nodes = () => root.root;
-  const button = name => nodes().findAll(node => node.type === "stub" && node.props.onClick && React.Children.toArray(node.props.children).some(child => typeof child === "string" && child.includes(name)))[0];
+  const button = name => nodes().findAll(node => node.type === "stub" && node.props.onClick && (node.props["aria-label"] === name || React.Children.toArray(node.props.children).filter(child => typeof child === "string" || typeof child === "number").join("").includes(name)))[0];
   const photo = new File(["test"], "form.png", { type: "image/png" });
   const prepare = () => act(() => { nodes().findByProps({ "aria-label": "選擇表格照片檔案" }).props.onChange({ target: { files: [photo], value: "" } }); nodes().findAllByType("input").find(node => node.props.type === "checkbox").props.onChange({ target: { checked: true } }); });
   const add = files => act(() => nodes().findByProps({ "aria-label": "選擇表格照片檔案" }).props.onChange({ target: { files, value: "" } }));
@@ -42,6 +43,27 @@ test("requires a template photo and selected SPEC; cancellation and part changes
     assert.equal(f.button("開始依照片填表").props.disabled, true, "old SPEC selection is cleared for another part");
     assert.equal(f.nodes().findByProps({ "aria-label": "指定料件" }).props.value, "2");
   } finally { act(() => f.root.unmount()); }
+});
+
+test("follow-ups preserve successful results on failures and retain every successful turn", async () => {
+  const f=fixture(); await flush(); f.prepare();
+  try {
+    act(()=>f.button('開始依照片填表').props.onClick()); await flush(); f.jobs[0].resolve([answer]); await flush();
+    const ask=value=>act(()=>f.nodes().findByProps({'aria-label':'接續提問'}).props.onChange({target:{value}}));
+    ask('請補單位'); act(()=>f.button('送出追問').props.onClick()); await flush();
+    assert.equal(f.calls[1].history.length,1);
+    assert.equal(f.calls[1].question,'請補單位');
+    assert.equal(f.calls[1].history[0].tables[0].rows[0][0].value,'1.20 V');
+    f.jobs[1].reject(new Error('QA network failed')); await flush();
+    assert.equal(f.nodes().findAllByProps({'aria-label':'依照片填表結果'}).length,1);
+    assert.equal(f.nodes().findByProps({'aria-label':'接續提問'}).props.value,'請補單位');
+    act(()=>f.button('送出追問').props.onClick()); await flush(); f.jobs[2].resolve([{...answer,title:'Second answer'}]); await flush();
+    assert.equal(f.calls[2].history.length,1,'failed turns are never treated as assistant answers');
+    assert.match(JSON.stringify(f.root.toJSON()),/Second answer/);
+    assert.ok(f.button('查看第 1 次結果'));
+    act(()=>f.button('查看第 1 次結果').props.onClick());
+    assert.match(JSON.stringify(f.root.toJSON()),/Answer/);
+  } finally { act(()=>f.root.unmount()); }
 });
 
 test("closing/account remount aborts pending work and never carries a result into another account", async () => {
@@ -107,6 +129,7 @@ test("all photo results retain independent columns and removing a photo invalida
     const second={...answer,templateId:'template-2',templateName:'second.png',columns:['Pins','Package'],rows:[[{value:'16',kind:'label'},{value:'QFN',kind:'label'}]]};
     f.jobs[0].resolve([answer,second]); await flush();
     assert.equal(f.nodes().findAllByProps({'aria-label':'第 1 張填表結果'}).length,1);
+    act(()=>f.nodes().findByProps({'aria-label':'選擇結果表格'}).findAll(node=>node.type==='stub'&&node.props.onClick)[1].props.onClick());
     assert.equal(f.nodes().findAllByProps({'aria-label':'第 2 張填表結果'}).length,1);
     assert.match(JSON.stringify(f.root.toJSON()),/Package/);
     assert.ok(f.button('複製全部表格'));
