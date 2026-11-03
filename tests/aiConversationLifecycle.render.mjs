@@ -9,6 +9,9 @@ const record = { id: 'key', key_name: 'Fixture Gemini', api_key: 'fake-key', per
 const target = { id: 'key::gemini-2.5-flash', model: 'gemini-2.5-flash', record };
 const row = (id, title, draft = '') => ({ conversation_key: id, title, saved_at: 1234, draft_message: draft, messages: [{ id: `${id}-u`, role: 'user', content: `${title} question`, createdAt: 1234 }], provider: 'gemini', model: target.model, key_label: record.key_name });
 const answer = text => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }), { status: 200 });
+const editName = async (f,title) => act(async()=>f.root.root.find(node=>node.type==='button'&&node.props['aria-label']===`編輯對話名稱：${title}`).props.onClick());
+const typeName = async (f,value) => act(async()=>f.root.root.findByProps({'aria-label':'對話名稱'}).props.onChange({target:{value}}));
+const saveName = async f => act(async()=>f.root.root.findByProps({'aria-label':'編輯對話名稱'}).props.onSubmit({preventDefault(){}}));
 
 async function fixture({ rows = [row('conversation-active-workspace', 'Current'), row('historic-id', 'History')], read, save, fetch = async () => answer('Fixture answer'), globals = {} } = {}) {
   let ownerId = 'account-a';
@@ -217,6 +220,61 @@ test('an established conversation title cannot change when typing an unsubmitted
     await f.select('History'); await f.draft('Unsubmitted draft must not rename history'); await flush(950);
     assert.equal(f.writes.at(-1).p_items.find(item => item.id === 'historic-id').title, 'History');
   } finally { await f.unmount(); }
+});
+
+test('renaming history validates its name, preserves content/order and survives later questions',async()=>{
+  const f=await fixture();
+  try{
+    await editName(f,'History');await typeName(f,'   ');await saveName(f);await flush(950);assert.equal(f.writes.length,0);
+    await typeName(f,'x'.repeat(161));await saveName(f);await flush();assert.equal(f.writes.length,0);
+    await typeName(f,'  供應商 SPEC 討論  ');await saveName(f);await flush(950);
+    const items=f.writes.at(-1).p_items;const history=items.find(item=>item.id==='historic-id');
+    assert.equal(history.title,'供應商 SPEC 討論');assert.equal(history.savedAt,1234);assert.equal(history.messages[0].content,'History question');
+    assert.deepEqual(items.map(item=>item.id),['conversation-active-workspace','historic-id']);
+    assert.equal(f.root.root.find(node=>node.type==='button'&&node.props['aria-current']==='true').findAll(node=>node.type==='p')[0].children[0],'Current');
+    await f.select('供應商 SPEC 討論');await f.draft('Follow-up question');await f.click('送出查詢');await flush(950);
+    assert.equal(f.writes.at(-1).p_items.find(item=>item.id==='historic-id').title,'供應商 SPEC 討論');
+  }finally{await f.unmount();}
+});
+
+test('a renamed draft-only conversation keeps its name after cloud reload and its first answer',async()=>{
+  let cloud=[];
+  const f=await fixture({rows:[],read:()=>({data:cloud,error:null}),save:args=>{cloud=args.p_items.map(item=>({conversation_key:item.id,title:item.title,saved_at:item.savedAt,draft_message:item.draftMessage,messages:item.messages,provider:item.provider,model:item.model,key_label:item.keyLabel}));return Promise.resolve({data:cloud.length,error:null})}});
+  try{
+    await f.draft('Draft title');await editName(f,'Draft title');await typeName(f,'自訂草稿名稱');await saveName(f);
+    await f.draft('New draft content');await flush(950);assert.equal(cloud[0].title,'自訂草稿名稱');
+    await f.remount();await f.draft('Question after reload');await f.click('送出查詢');await flush(950);
+    assert.equal(cloud[0].title,'自訂草稿名稱');assert.match(f.rendered(),/Fixture answer/);
+  }finally{await f.unmount();}
+});
+
+test('account switching closes rename and rejects a stale rename submission with the same conversation ID',async()=>{
+  const f=await fixture({read:owner=>({data:[row('conversation-active-workspace',owner)],error:null})});
+  try{
+    await editName(f,'account-a');await typeName(f,'Private account A name');
+    const stale=f.root.root.findByProps({'aria-label':'編輯對話名稱'}).props.onSubmit;
+    await f.account('account-b');await act(async()=>stale({preventDefault(){}}));await flush(950);
+    assert.match(f.rendered(),/account-b/);assert.doesNotMatch(f.rendered(),/Private account A name/);assert.equal(f.writes.length,0);
+  }finally{await f.unmount();}
+});
+
+test('failed rename sync retains the edited name and retries through the existing cloud flow',async()=>{
+  let attempts=0;const f=await fixture({save:()=>Promise.resolve(++attempts===1?{error:new Error('Fixture offline')}:{data:2,error:null})});
+  try{
+    await editName(f,'History');await typeName(f,'待同步的新名稱');await saveName(f);await flush(950);
+    assert.match(f.rendered(),/同步失敗/);assert.match(f.rendered(),/待同步的新名稱/);
+    await f.click('重試對話同步');await flush(950);assert.equal(f.writes.at(-1).p_items.find(item=>item.id==='historic-id').title,'待同步的新名稱');
+  }finally{await f.unmount();}
+});
+
+test('renaming while AI is replying preserves both the chosen name and the incoming answer',async()=>{
+  const pending=deferred();const f=await fixture({fetch:()=>pending.promise});
+  try{
+    await f.draft('Pending question');await f.click('送出查詢');await editName(f,'Current');await typeName(f,'等待回覆的對話');await saveName(f);
+    await act(async()=>pending.resolve(answer('Answer after rename')));await flush(950);
+    const item=f.writes.at(-1).p_items.find(item=>item.id==='conversation-active-workspace');
+    assert.equal(item.title,'等待回覆的對話');assert.equal(item.messages.at(-1).content,'Answer after rename');
+  }finally{await f.unmount();}
 });
 
 test('starting a new conversation releases an old attachment read and ignores its late completion', async () => {

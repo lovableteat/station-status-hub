@@ -924,6 +924,7 @@ export function ApiChatConsole({
   const [savedPrompts, setSavedPrompts] = useState<SavedWorkspaceItem[]>([]);
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState(AUTO_SAVED_CONVERSATION_ID);
+  const [renamingConversation, setRenamingConversation] = useState<{ id: string; title: string; generation: number } | null>(null);
   const [newConversationDialogOpen, setNewConversationDialogOpen] = useState(false);
   const [savePromptDialogOpen, setSavePromptDialogOpen] = useState(false);
   const [libraryApplyDialogOpen, setLibraryApplyDialogOpen] = useState(false);
@@ -995,6 +996,7 @@ export function ApiChatConsole({
   const lastSyncedConversationsRef = useRef("");
   const desiredConversationsRef = useRef("");
   const conversationBaselineIdsRef = useRef<string[]>([]);
+  const preservedConversationTitleIdsRef = useRef(new Set<string>());
   const pendingAccountConversationsRef = useRef(PENDING_ACCOUNT_CONVERSATIONS);
   const conversationRemoteReadyRef = useRef(false);
   const conversationSyncGenerationRef = useRef(0);
@@ -1146,6 +1148,8 @@ export function ApiChatConsole({
     setConversationsLoaded(false);
     setConversationCloudState("loading");
     setSavedConversations([]);
+    setRenamingConversation(null);
+    preservedConversationTitleIdsRef.current.clear();
     setActiveConversationId(AUTO_SAVED_CONVERSATION_ID);
     invalidateConversationRequest();
     setMessages([]);
@@ -1207,6 +1211,7 @@ export function ApiChatConsole({
           if (index < 0 && merged.length < 24) merged.push(item);
           else if (index >= 0 && item.savedAt >= merged[index].savedAt) merged[index] = item;
         }
+        preservedConversationTitleIdsRef.current = new Set(merged.map(item => item.id));
         setSavedConversations([...merged].sort((left, right) => right.savedAt - left.savedAt));
         setActiveConversationId(pending?.activeId ?? AUTO_SAVED_CONVERSATION_ID);
         conversationRemoteReadyRef.current = true;
@@ -1492,10 +1497,11 @@ export function ApiChatConsole({
       keyLabel: activeKeyLabel,
     });
 
+    const previous = savedConversations.find(item => item.id === id);
     return {
       ...snapshot,
       id: id ?? snapshot.id,
-      title: savedConversations.find(item => item.id === id && item.messages.length)?.title || snapshot.title,
+      title: previous && (previous.messages.length || preservedConversationTitleIdsRef.current.has(previous.id)) ? previous.title : snapshot.title,
     };
   }, [activeKeyLabel, draftMessage, messages, model, provider, savedConversations]);
 
@@ -1987,6 +1993,7 @@ export function ApiChatConsole({
   };
 
   const removeSavedConversation = (id: string) => {
+    preservedConversationTitleIdsRef.current.delete(id);
     if (id === activeConversationId) {
       invalidateConversationRequest();
       setActiveConversationId(createCurrentConversationSnapshot().id);
@@ -1995,6 +2002,17 @@ export function ApiChatConsole({
       setConnectionState(null);
     }
     setSavedConversations((current) => current.filter((item) => item.id !== id));
+  };
+
+  const renameConversation = () => {
+    if (!renamingConversation || !conversationRemoteReadyRef.current || renamingConversation.generation !== conversationSyncGenerationRef.current) return;
+    const title = renamingConversation.title.trim();
+    if (!title || title.length > 160) return;
+    preservedConversationTitleIdsRef.current.add(renamingConversation.id);
+    setSavedConversations(current => renamingConversation.generation === conversationSyncGenerationRef.current
+      ? current.map(item => item.id === renamingConversation.id ? { ...item, title } : item)
+      : current);
+    setRenamingConversation(null);
   };
 
   const appendUploadedFiles = async (files: File[]) => {
@@ -2258,6 +2276,25 @@ export function ApiChatConsole({
 
   const workspaceDialogs = (
     <>
+      <Dialog open={Boolean(renamingConversation)} onOpenChange={open => { if (!open) setRenamingConversation(null); }}>
+        <DialogContent className="w-[calc(100vw-24px)] max-w-md border-border bg-card text-foreground">
+          <DialogHeader>
+            <DialogTitle>編輯對話名稱</DialogTitle>
+            <DialogDescription>只修改名稱，聊天內容與草稿會保留。</DialogDescription>
+          </DialogHeader>
+          <form aria-label="編輯對話名稱" className="space-y-4" onSubmit={event => { event.preventDefault(); renameConversation(); }}>
+            <div className="space-y-2">
+              <Label htmlFor="conversation-rename-title">對話名稱</Label>
+              <Input id="conversation-rename-title" aria-label="對話名稱" autoFocus required maxLength={160} value={renamingConversation?.title ?? ""} onChange={event => { const title = event.target.value; setRenamingConversation(current => current ? { ...current, title } : null); }} />
+              <p className="text-xs text-muted-foreground">最多 160 字元，儲存後會同步到目前帳號。</p>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setRenamingConversation(null)}>取消</Button>
+              <Button type="submit" disabled={!renamingConversation?.title.trim() || renamingConversation.title.trim().length > 160 || !conversationRemoteReadyRef.current}>儲存名稱</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       <Dialog open={newConversationDialogOpen} onOpenChange={setNewConversationDialogOpen}>
         <DialogContent className="max-h-[calc(100dvh-32px)] max-w-2xl overflow-y-auto border-blue-400/35 bg-[linear-gradient(180deg,#17243a_0%,#0f1b2e_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.58)]">
           <DialogHeader className="space-y-3">
@@ -3271,10 +3308,19 @@ export function ApiChatConsole({
                             }}
                             className="min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                           >
-                            <p className="truncate text-base font-bold text-slate-100">{item.title}</p>
+                            <p className="truncate text-base font-bold text-slate-100" title={item.title}>{item.title}</p>
                             <p className="mt-1 truncate text-xs text-slate-300">
                               {formatSavedItemTime(item.savedAt)} · {item.model}
                             </p>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setRenamingConversation({ id: item.id, title: item.title, generation: conversationSyncGenerationRef.current }); setMobileSidebarOpen(false); }}
+                            aria-label={`編輯對話名稱：${item.title}`}
+                            title="編輯對話名稱"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <Pencil className="h-4 w-4" />
                           </button>
                           <button
                             type="button"
