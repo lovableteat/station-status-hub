@@ -21,7 +21,7 @@ export function MaterialWeeklyProgressDialog({ records, workspaceName, exportedB
   const [asOf, setAsOf] = useState(Date.now);
   const [endDate, setEndDate] = useState(() => taipeiProgressDate(Date.now()));
   const [weekCount, setWeekCount] = useState(6);
-  const [view, setView] = useState<"parts" | "summary">("parts");
+  const [view, setView] = useState<"parts" | "summary" | "simple">("parts");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [owner, setOwner] = useState("");
@@ -31,7 +31,7 @@ export function MaterialWeeklyProgressDialog({ records, workspaceName, exportedB
   const weeks = useMemo(() => getMaterialProgressWeeks(endDate, weekCount, asOf), [endDate, weekCount, asOf]);
   const rows = useMemo(() => ready ? buildMaterialWeeklyProgress(records, weeks, asOf) : [], [records, weeks, asOf, ready]);
   const filtered = useMemo(() => filterMaterialWeeklyProgress(rows, query, status, owner), [rows, query, status, owner]);
-  const summary = useMemo(() => summarizeMaterialWeeklyProgress(filtered, weeks), [filtered, weeks]);
+  const summary = useMemo(() => summarizeMaterialWeeklyProgress(filtered, weeks, view === "simple"), [filtered, weeks, view]);
   const statuses = useMemo(() => {
     const present = new Set(rows.map(row => row.currentStatus));
     const known = new Set<string>(MATERIAL_TRACKING_STATUS_OPTIONS);
@@ -75,9 +75,10 @@ export function MaterialWeeklyProgressDialog({ records, workspaceName, exportedB
         <Button data-testid="material-weekly-export" className="h-10 sm:ml-auto" disabled={exporting || !ready || !filtered.length || !weeks.length} onClick={() => void exportReport()}><Download className="h-4 w-4" />{exporting ? "匯出中…" : `匯出 Excel（${filtered.length.toLocaleString()}）`}</Button>
       </div>
       <p className="text-xs leading-5 text-muted-foreground">週一至週日・台北時間・由新到舊。每週取最後一筆有效追蹤，無更新則延續前週。{undated > 0 && ` ${undated.toLocaleString()} 筆料含無日期資料，僅列目前狀態，不回填舊週。`}</p>
-      <div className="flex gap-1 border-b border-border" role="group" aria-label="週報檢視">
-        {([ ["parts", "各料進度"], ["summary", "每週彙總"] ] as const).map(([value, label]) => <Button key={value} variant="ghost" aria-pressed={view === value} className={`h-9 rounded-b-none border-b-2 px-4 ${view === value ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`} onClick={() => setView(value)}>{label}</Button>)}
+      <div className="flex flex-wrap gap-1 border-b border-border" role="group" aria-label="週報檢視">
+        {([ ["parts", "各料進度"], ["summary", "每週彙總"], ["simple", "五狀態彙總"] ] as const).map(([value, label]) => <Button key={value} variant="ghost" aria-pressed={view === value} className={`h-9 rounded-b-none border-b-2 px-4 ${view === value ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`} onClick={() => setView(value)}>{label}</Button>)}
       </div>
+      {view === "simple" && <p className="text-xs leading-5 text-muted-foreground">其他狀態統一計入「料號申請中」；無有效追蹤紀錄不計入該週，原始狀態不變。</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div className="material-weekly-results flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
         <div className="material-weekly-filters">
@@ -89,7 +90,7 @@ export function MaterialWeeklyProgressDialog({ records, workspaceName, exportedB
             <button className="min-h-8 px-2 text-destructive" onClick={() => { setQuery(""); setStatus(""); setOwner(""); setPage(1); }}>全部清除</button>
           </div>}
         </div>
-        <div className="min-h-0 flex-1 overflow-auto" tabIndex={0} role="region" aria-label={view === "parts" ? "每週料件進度表（可左右捲動）" : "每週申請彙總表（可左右捲動）"}>
+        <div className="min-h-0 flex-1 overflow-auto" tabIndex={0} role="region" aria-label={view === "parts" ? "每週料件進度表（可左右捲動）" : view === "simple" ? "每週五狀態彙總表（可左右捲動）" : "每週申請彙總表（可左右捲動）"}>
           {view === "parts" ? <table className="material-weekly-table" data-testid="material-weekly-parts">
             <thead><tr><th scope="col" className="material-weekly-part">料件／位號</th><th scope="col">廠商料號／廠商</th><th scope="col">負責人／目前狀態</th>{indexes.map(index => <th key={weeks[index].key} scope="col">{weeks[index].label}{weeks[index].isCurrent && <span className="ml-2 text-primary">本週</span>}<span className="block text-xs font-normal text-muted-foreground">{weeks[index].isCurrent ? `截至 ${new Date(asOf).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false })}` : "週末狀態"}</span></th>)}</tr></thead>
             <tbody>{!ready || !weeks.length || !pageRows.length ? <tr><td colSpan={3 + weeks.length} className="p-8 text-center text-muted-foreground">{!ready ? "正在載入完整 BOM，完成後才會產生週報" : !weeks.length ? "請選擇截至週別" : "目前篩選條件沒有符合的料件"}</td></tr> : pageRows.map(row => <tr key={row.record.id}>
@@ -98,12 +99,12 @@ export function MaterialWeeklyProgressDialog({ records, workspaceName, exportedB
               <td><span className="mb-1 block">{row.record.requestOwnerName || "未指定"}</span>{renderStatus(row.currentStatus)}{row.undatedCount > 0 && <small className="mt-1 block text-muted-foreground">含無日期紀錄</small>}</td>
               {indexes.map(index => { const cell = row.cells[index]; const entry = cell.updates.at(-1); return <td key={weeks[index].key} className={cell.updated ? "material-weekly-updated" : ""}>{renderStatus(cell.status)}{cell.updated && <span className="mt-1 block text-xs text-primary">本週 {cell.updates.length} 次更新</span>}{entry && <details className="mt-1 text-xs"><summary className="cursor-pointer text-muted-foreground">查看本週紀錄</summary>{cell.updates.map(update => <div key={update.id} className="mt-2 whitespace-pre-wrap break-words border-l border-primary/40 pl-2"><time>{new Date(materialProgressTimestamp(update.createdAt)!).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false })}</time><p>{update.status} · {update.createdBy || "未提供更新人"}</p>{update.requestInfo && <p>{update.requestInfo}</p>}{update.note && <p>{update.note}</p>}</div>)}</details>}</td>; })}
             </tr>)}</tbody>
-          </table> : <table className="material-weekly-table" data-testid="material-weekly-summary"><thead><tr><th scope="col" className="material-weekly-part">狀態／指標</th>{indexes.map(index => <th key={weeks[index].key} scope="col">{weeks[index].label}</th>)}</tr></thead><tbody>
+          </table> : <table className="material-weekly-table" data-testid={view === "simple" ? "material-weekly-simple-summary" : "material-weekly-summary"}><thead><tr><th scope="col" className="material-weekly-part">{view === "simple" ? "狀態" : "狀態／指標"}</th>{indexes.map(index => <th key={weeks[index].key} scope="col">{weeks[index].label}</th>)}</tr></thead><tbody>
             {!ready || !filtered.length || !weeks.length ? <tr><td colSpan={1 + weeks.length} className="p-8 text-center text-muted-foreground">{!ready ? "正在載入完整 BOM" : !weeks.length ? "請選擇截至週別" : "目前篩選條件沒有符合的料件"}</td></tr> : <>
-              <tr><th scope="row" className="material-weekly-part">首次更新料件</th>{indexes.map(index => <td key={index}>{summary[index].startedCount}</td>)}</tr>
-              <tr><th scope="row" className="material-weekly-part">本週有更新料件</th>{indexes.map(index => <td key={index}>{summary[index].updatedCount}</td>)}</tr>
+              {view === "summary" && <><tr><th scope="row" className="material-weekly-part">首次更新料件</th>{indexes.map(index => <td key={index}>{summary[index].startedCount}</td>)}</tr>
+              <tr><th scope="row" className="material-weekly-part">本週有更新料件</th>{indexes.map(index => <td key={index}>{summary[index].updatedCount}</td>)}</tr></>}
               {Object.keys(summary[0].counts).map(value => <tr key={value}><th scope="row" className="material-weekly-part">{renderStatus(value)}</th>{indexes.map(index => <td key={index}>{summary[index].counts[value]}</td>)}</tr>)}
-              <tr><th scope="row" className="material-weekly-part">全部申請追蹤料</th>{indexes.map(index => <td key={index}>{filtered.length}</td>)}</tr>
+              {view === "summary" && <tr><th scope="row" className="material-weekly-part">全部申請追蹤料</th>{indexes.map(index => <td key={index}>{filtered.length}</td>)}</tr>}
             </>}
           </tbody></table>}
         </div>

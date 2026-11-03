@@ -1,5 +1,5 @@
 import type { MaterialProgressRow, MaterialProgressWeek } from "./materialWeeklyProgress";
-import { summarizeMaterialWeeklyProgress, taipeiProgressDate } from "./materialWeeklyProgress";
+import { MATERIAL_WEEKLY_SIMPLIFIED_STATUSES, summarizeMaterialWeeklyProgress, taipeiProgressDate } from "./materialWeeklyProgress";
 import { downloadBlob } from "./materialRequestExport";
 
 export interface MaterialWeeklyExportOptions {
@@ -38,11 +38,14 @@ export async function createMaterialWeeklyWorkbook(options: MaterialWeeklyExport
   const statuses = summaries[0] ? Object.keys(summaries[0].counts) : [];
   const summary = prepare("每週彙總", ["週別（週一至週日）", "首次更新料件數", "本週有更新料件數", ...statuses, "總筆數"], [30, 22, 22, ...statuses.map(() => 23), 14]);
   for (const item of [...summaries].reverse()) summary.addRow([item.week.label, item.startedCount, item.updatedCount, ...statuses.map(status => item.counts[status]), rows.length]);
+  const simplified = prepare("五狀態彙總", ["週別（週一至週日）", ...MATERIAL_WEEKLY_SIMPLIFIED_STATUSES], [30, ...MATERIAL_WEEKLY_SIMPLIFIED_STATUSES.map(() => 23)]);
+  simplified.getCell("A3").value = "其他狀態統一計入「料號申請中」；無有效追蹤紀錄不計入該週。每週沿用相同追蹤歷史與篩選範圍，原始狀態不變。";
+  for (const item of summarizeMaterialWeeklyProgress(rows, weeks, true).reverse()) simplified.addRow([item.week.label, ...MATERIAL_WEEKLY_SIMPLIFIED_STATUSES.map(status => item.counts[status])]);
   const history = prepare("週內更新明細", ["週別", "Ref Des", "Manufacturer Part Number", "Manufacturer", "更新時間（原始時間含時區）", "狀態", "更新人", "申請狀態資訊", "追蹤說明", "單號", "連結"], [30, 30, 34, 26, 34, 28, 26, 50, 60, 26, 50]);
   for (const row of rows) row.cells.forEach((cell, index) => {
     for (const entry of cell.updates) history.addRow([weeks[index].label, row.record.refDes, row.record.manufacturerPartNumber, row.record.manufacturer, entry.createdAt, entry.status, entry.createdBy || "", entry.requestInfo || "", entry.note || "", entry.requestTicket || "", entry.requestUrl || ""]);
   });
-  for (const sheet of [matrix, summary, history]) {
+  for (const sheet of [matrix, summary, simplified, history]) {
     for (let i = 5; i <= sheet.rowCount; i++) {
       const row = sheet.getRow(i);
       row.alignment = { vertical: "top", wrapText: true };

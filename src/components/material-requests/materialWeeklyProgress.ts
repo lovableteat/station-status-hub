@@ -4,6 +4,7 @@ import { MATERIAL_TRACKING_STATUS_OPTIONS, normalizeMaterialTrackingStatus } fro
 const DAY = 86_400_000;
 const TAIPEI_OFFSET = 8 * 3_600_000;
 export const NO_WEEKLY_HISTORY = "無追蹤紀錄";
+export const MATERIAL_WEEKLY_SIMPLIFIED_STATUSES = ["未處理", "已發信", "文件已收齊", "料號申請中", "已完成"] as const;
 
 /** Imported dates without an offset are Taipei wall time, independent of the viewer's computer. */
 export function materialProgressTimestamp(value?: string): number | null {
@@ -97,13 +98,16 @@ export function filterMaterialWeeklyProgress(rows: MaterialProgressRow[], query:
   return rows.filter(row => (!status || row.currentStatus === status) && (!owner || (row.record.requestOwnerName?.trim() || "未指定") === owner) && terms.every(term => [row.record.refDes, row.record.name, row.record.manufacturerPartNumber, row.record.manufacturer, row.record.partNumber, row.record.virtualAlternative, row.record.requestOwnerName].join(" ").toLocaleLowerCase().includes(term)));
 }
 
-export function summarizeMaterialWeeklyProgress(rows: MaterialProgressRow[], weeks: MaterialProgressWeek[]) {
-  const statuses: string[] = [...MATERIAL_TRACKING_STATUS_OPTIONS, "處理中", "新增追蹤", NO_WEEKLY_HISTORY];
-  for (const row of rows) for (const cell of row.cells) if (!statuses.includes(cell.status)) statuses.push(cell.status);
+export function summarizeMaterialWeeklyProgress(rows: MaterialProgressRow[], weeks: MaterialProgressWeek[], simplified = false) {
+  const statuses: string[] = simplified ? [...MATERIAL_WEEKLY_SIMPLIFIED_STATUSES] : [...MATERIAL_TRACKING_STATUS_OPTIONS, "處理中", "新增追蹤", NO_WEEKLY_HISTORY];
+  if (!simplified) for (const row of rows) for (const cell of row.cells) if (!statuses.includes(cell.status)) statuses.push(cell.status);
   return weeks.map((week, index) => ({
     week,
     updatedCount: rows.filter(row => row.cells[index]?.updated).length,
     startedCount: rows.filter(row => row.firstUpdate !== null && row.firstUpdate >= week.start && row.firstUpdate <= week.cutoff).length,
-    counts: Object.fromEntries(statuses.map(status => [status, rows.filter(row => row.cells[index]?.status === status).length])),
+    counts: Object.fromEntries(statuses.map(status => [status, rows.filter(row => {
+      const value = row.cells[index]?.status;
+      return value === status || (simplified && status === "料號申請中" && value && value !== NO_WEEKLY_HISTORY && !statuses.includes(value));
+    }).length])),
   }));
 }

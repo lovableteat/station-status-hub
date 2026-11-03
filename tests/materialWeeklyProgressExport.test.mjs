@@ -46,6 +46,15 @@ test("weekly workbook round-trips all filtered rows, chronological snapshots, fu
   const summary = reopened.getWorksheet("每週彙總");
   const summaryHeaders = summary.getRow(4).values;
   assert.equal(summary.getRow(5).getCell(summaryHeaders.indexOf("已取得料號待CIS申請")).value, 61);
+  const simple = reopened.getWorksheet("五狀態彙總");
+  assert.ok(simple, "export includes the third report table");
+  assert.equal(reopened.worksheets[2].name, "五狀態彙總");
+  assert.deepEqual(simple.getRow(4).values.slice(1), ["週別（週一至週日）", "未處理", "已發信", "文件已收齊", "料號申請中", "已完成"]);
+  assert.deepEqual(simple.getRow(5).values.slice(2), [0, 0, 0, 61, 0]);
+  assert.deepEqual(simple.getRow(6).values.slice(2), [0, 61, 0, 0, 0]);
+  assert.deepEqual(simple.getRow(7).values.slice(2), [0, 0, 0, 0, 0]);
+  assert.match(simple.getCell("A3").value, /其他狀態.*料號申請中/);
+  assert.equal(simple.views[0].ySplit, 4);
   assert.match(matrix.getCell("A2").value, /負責人：指派 CE/);
 });
 

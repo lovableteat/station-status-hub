@@ -92,3 +92,22 @@ test("search, current status and assigned owner combine without conflating the h
   assert.equal(filterMaterialWeeklyProgress(rows, "not-found", "", "").length, 0);
   assert.equal(filterMaterialWeeklyProgress(rows, "", "", "").length, 2);
 });
+
+test("five-status summary groups other real statuses into applications without inventing undated weeks", () => {
+  const statuses = ["未處理", "已發信", "文件已收齊", "料號申請中", "已完成", "需申請", "未回應再次發信", "與廠商溝通中", "已取得料號待CIS申請", "SYMBOL申請中", "申請料被退回", "處理中", "自訂舊狀態"];
+  const rows = buildMaterialWeeklyProgress([
+    ...statuses.map((status, i) => record(String(i), [entry(String(i), status, "2026-10-26T02:00:00Z")])),
+    record("undated", [entry("no-date", "已完成", "")]),
+    record("no-history"),
+  ], weeks, asOf);
+  const original = structuredClone(rows);
+  const simple = summarizeMaterialWeeklyProgress(rows, weeks, true);
+  assert.deepEqual(Object.keys(simple.at(-1).counts), statuses.slice(0, 5));
+  assert.deepEqual(simple.at(-1).counts, { 未處理: 1, 已發信: 1, 文件已收齊: 1, 料號申請中: 9, 已完成: 1 });
+  assert.ok(Object.values(simple[0].counts).every(count => count === 0), "no history means no weekly state, never an invented application");
+  assert.deepEqual(simple[2].counts, simple[3].counts, "no-update weeks carry the same grouped state forward");
+  const detailed = summarizeMaterialWeeklyProgress(rows, weeks);
+  assert.equal(detailed.at(-1).counts["SYMBOL申請中"], 1);
+  assert.equal(detailed.at(-1).counts[NO_WEEKLY_HISTORY], 2);
+  assert.deepEqual(rows, original, "simplification never changes actual statuses or history");
+});
