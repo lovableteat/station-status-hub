@@ -6,10 +6,11 @@ import { trackedProviderFetch } from "../api-management/aiUsageTelemetry";
 import { classifyAiFailure } from "../api-management/aiRequestRecovery";
 import type { MaterialSpecDocument, MaterialWorkbookRecord } from "./materialRequestUtils";
 import { MATERIAL_SPEC_BUCKET } from "./materialSpecDocuments";
-import { buildSpecFillPrompt, parseSpecFillResult, SPEC_FILL_INSTRUCTIONS, type SpecFillResult, type SpecFillSource } from "./materialSpecFill";
+import { buildSpecFillPrompt, parseSpecFillTables, SPEC_FILL_INSTRUCTIONS, type SpecFillResult, type SpecFillSource, type SpecFillTable } from "./materialSpecFill";
 
 export const SPEC_FILL_ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv,.tsv,.md";
 export const SPEC_FILL_MAX_BYTES = 18 * 1024 * 1024;
+export const SPEC_FILL_MAX_PHOTOS = 20;
 export interface SpecFillModel { id: string; label: string; record: ApiKeyRecord }
 export interface SpecFillInput { id: string; name: string; blob: Blob }
 export function canReadSpecForFill(name: string) { return /\.(pdf|png|jpe?g|webp|txt|csv|tsv|md)$/i.test(name); }
@@ -64,18 +65,31 @@ export async function analyzeSpecFill({ part, photo, sources, model, note, signa
   part: Pick<MaterialWorkbookRecord, "manufacturerPartNumber" | "manufacturer" | "name" | "refDes">;
   photo: SpecFillInput; sources: SpecFillInput[]; model: SpecFillModel; note: string; signal: AbortSignal;
 }): Promise<SpecFillResult> {
+  const [table] = await analyzeSpecFillPhotos({ part, photos: [photo], sources, model, note, signal });
+  return table;
+}
+
+export async function analyzeSpecFillPhotos({ part, photos, sources, model, note, signal }: {
+  part: Pick<MaterialWorkbookRecord, "manufacturerPartNumber" | "manufacturer" | "name" | "refDes">;
+  photos: SpecFillInput[]; sources: SpecFillInput[]; model: SpecFillModel; note: string; signal: AbortSignal;
+}): Promise<SpecFillTable[]> {
   signal.throwIfAborted();
   if (!part.manufacturerPartNumber.trim()) throw new Error("請先確認此料件的完整廠商料號（MPN）。");
-  if (!/\.(png|jpe?g|webp)$/i.test(photo.name)) throw new Error("請貼上或選擇要填寫的表格照片。");
+  if (!photos.length || photos.length > SPEC_FILL_MAX_PHOTOS || photos.some(photo => !/\.(png|jpe?g|webp)$/i.test(photo.name))) throw new Error(`請選擇 1–${SPEC_FILL_MAX_PHOTOS} 張表格照片（PNG、JPG 或 WEBP），可分批分析，不必壓縮。`);
+  if (new Set(photos.map(photo => photo.id)).size !== photos.length) throw new Error("照片識別重複，請重新選擇照片。");
   if (!sources.length || sources.length > 20) throw new Error("請選擇 1–20 份此料件的 SPEC，可分次分析，不必壓縮。");
-  if ([photo, ...sources].reduce((sum, input) => sum + input.blob.size, 0) > SPEC_FILL_MAX_BYTES) throw new Error("本次檔案合計超過 18 MB，請分次選擇相關 SPEC 或頁面分析，不必壓縮。");
+  if ([...photos, ...sources].reduce((sum, input) => sum + input.blob.size, 0) > SPEC_FILL_MAX_BYTES) throw new Error("本次檔案合計超過 18 MB，請分次選擇相關 SPEC 或頁面分析，不必壓縮。");
   const metadata = normalizeApiKeyPermissions(model.record.permissions).metadata;
   if (!model.record.is_active || (model.record.expires_at && Date.parse(model.record.expires_at) <= Date.now())) throw new Error("AI 服務已停用或到期，請重新選擇。");
   const catalogue: SpecFillSource[] = sources.map(source => ({ id: source.id, name: source.name }));
   if (new Set(catalogue.map(source => source.id)).size !== sources.length) throw new Error("SPEC 識別重複，請重新選擇附件。");
-  const messages: ProviderChatMessage[] = [{ role: "system", text: SPEC_FILL_INSTRUCTIONS }, { role: "user", text: buildSpecFillPrompt(part, catalogue, note) }];
-  const template = await encodeSource(photo);
-  messages.push({ role: "user", text: "要填寫的表格照片（模板，不是 SPEC 數據來源）", images: [{ data: template.data, mimeType: template.mimeType }] });
+  const templates = photos.map(({ id, name }) => ({ id, name }));
+  const messages: ProviderChatMessage[] = [{ role: "system", text: SPEC_FILL_INSTRUCTIONS }, { role: "user", text: buildSpecFillPrompt(part, catalogue, note, templates) }];
+  for (const photo of photos) {
+    signal.throwIfAborted();
+    const template = await encodeSource(photo);
+    messages.push({ role: "user", text: `要填寫的表格照片（模板，不是 SPEC 數據來源）\ntemplateId=${photo.id}; name=${photo.name}`, images: [{ data: template.data, mimeType: template.mimeType }] });
+  }
   for (const source of sources) {
     signal.throwIfAborted();
     const encoded = await encodeSource(source);
@@ -90,5 +104,5 @@ export async function analyzeSpecFill({ part, photo, sources, model, note, signa
   try { payload = await response.json(); } catch { throw new Error("AI 服務回應無法讀取，請稍後重試。"); }
   if (!response.ok) throw classifyAiFailure(response.status, payload, response.headers.get("Retry-After"));
   const parsed = parseProviderChatResponse(metadata.provider, payload);
-  return parseSpecFillResult(redactSensitiveText(parsed.text, [model.record.api_key]), catalogue);
+  return parseSpecFillTables(redactSensitiveText(parsed.text, [model.record.api_key]), catalogue, templates);
 }

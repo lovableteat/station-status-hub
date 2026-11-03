@@ -6,9 +6,24 @@ import { Input } from "@/components/ui/input";
 import type { MaterialWorkbookRecord } from "./materialRequestUtils";
 import { getMaterialSpecDocuments } from "./materialAttachments";
 import { downloadBlob } from "./materialRequestExport";
-import { createSpecFillWorkbook } from "./materialSpecFillExport";
-import { specFillHtml, specFillTsv, type SpecFillResult, type SpecFillSource } from "./materialSpecFill";
-import { analyzeSpecFill, canReadSpecForFill, downloadSpecForFill, loadSpecFillModels, SPEC_FILL_ACCEPT, SPEC_FILL_MAX_BYTES, type SpecFillInput, type SpecFillModel } from "./materialSpecFillService";
+import { createSpecFillPhotosWorkbook } from "./materialSpecFillExport";
+import { specFillTablesHtml, specFillTablesTsv, type SpecFillTable, type SpecFillSource } from "./materialSpecFill";
+import { analyzeSpecFillPhotos, canReadSpecForFill, downloadSpecForFill, loadSpecFillModels, SPEC_FILL_ACCEPT, SPEC_FILL_MAX_BYTES, SPEC_FILL_MAX_PHOTOS, type SpecFillInput, type SpecFillModel } from "./materialSpecFillService";
+
+type FormPhoto = { id: string; file: File };
+function FormPhotoPreview({ photo, index, busy, onRemove, onPreview }: {
+  photo: FormPhoto; index: number; busy: boolean; onRemove: () => void; onPreview: (name: string, url: string) => void;
+}) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(photo.file); setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [photo.file]);
+  return <figure className="spec-fill-photo-card" data-testid="spec-fill-photo-preview">
+    <button type="button" className="spec-fill-photo-thumbnail" disabled={busy || !url} aria-label={`預覽第 ${index + 1} 張照片：${photo.file.name}`} onClick={() => onPreview(photo.file.name, url)}>{url && <img src={url} alt={`第 ${index + 1} 張表格照片：${photo.file.name}`} />}</button>
+    <figcaption><span className="min-w-0 flex-1"><strong className="block text-xs">第 {index + 1} 張</strong><span className="block truncate text-xs text-muted-foreground" title={photo.file.name}>{photo.file.name}</span></span><Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" disabled={busy} aria-label={`移除第 ${index + 1} 張照片：${photo.file.name}`} onClick={onRemove}><X className="h-4 w-4" /></Button></figcaption>
+  </figure>;
+}
 
 export function MaterialSpecFillDialog({ records, workspaceName, open, onOpenChange }: {
   records: MaterialWorkbookRecord[]; workspaceName: string; open: boolean; onOpenChange: (open: boolean) => void;
@@ -19,8 +34,9 @@ export function MaterialSpecFillDialog({ records, workspaceName, open, onOpenCha
   const part = records.find(record => record.id === partId);
   const docs = useMemo(() => part ? getMaterialSpecDocuments(part) : [], [part]);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoUrl, setPhotoUrl] = useState("");
+  const [photos, setPhotos] = useState<FormPhoto[]>([]);
+  const photosRef = useRef<FormPhoto[]>([]);
+  const [preview, setPreview] = useState<{ name: string; url: string } | null>(null);
   const [localSpecs, setLocalSpecs] = useState<File[]>([]);
   const [models, setModels] = useState<SpecFillModel[]>([]);
   const [modelId, setModelId] = useState("");
@@ -32,7 +48,7 @@ export function MaterialSpecFillDialog({ records, workspaceName, open, onOpenCha
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [result, setResult] = useState<SpecFillResult | null>(null);
+  const [result, setResult] = useState<SpecFillTable[] | null>(null);
   const [sources, setSources] = useState<SpecFillSource[]>([]);
   const [showInputs, setShowInputs] = useState(true);
   const active = useRef<AbortController | null>(null);
@@ -51,29 +67,34 @@ export function MaterialSpecFillDialog({ records, workspaceName, open, onOpenCha
     alive.current = true;
     return () => { alive.current = false; active.current?.abort(); };
   }, []);
-  useEffect(() => { if (!open) { active.current?.abort(); active.current = null; setBusy(false); setResult(null); } }, [open]);
+  useEffect(() => { if (!open) { active.current?.abort(); active.current = null; setBusy(false); setResult(null); setPreview(null); setShowInputs(true); } }, [open]);
   useEffect(() => {
     let current = true;
     setModelsLoading(true); setModelsError(""); setModels([]); setModelId("");
     void loadSpecFillModels().then(items => { if (current) { setModels(items); setModelId(items[0]?.id ?? ""); } }).catch(() => { if (current) setModelsError("無法載入 AI 服務，請確認權限或重試。"); }).finally(() => { if (current) setModelsLoading(false); });
     return () => { current = false; };
   }, [loadKey]);
-  useEffect(() => {
-    if (!photo) { setPhotoUrl(""); return; }
-    const url = URL.createObjectURL(photo); setPhotoUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [photo]);
-  const invalidate = () => { generation.current++; active.current?.abort(); active.current = null; setBusy(false); setResult(null); setSources([]); setError(""); setNotice(""); };
+  const invalidate = () => { generation.current++; active.current?.abort(); active.current = null; setBusy(false); setResult(null); setSources([]); setError(""); setNotice(""); setShowInputs(true); };
+  const replacePhotos = (next: FormPhoto[]) => { photosRef.current = next; setPhotos(next); setPreview(null); };
   const choosePart = (id: string) => { invalidate(); setPartId(id); setSelectedPaths([]); setLocalSpecs([]); };
-  const choosePhoto = (files: File[]) => {
-    if (files.length !== 1 || !/\.(png|jpe?g|webp)$/i.test(files[0]?.name ?? "")) { setError("請一次選擇一張表格照片（PNG、JPG 或 WEBP）。"); return; }
-    if (!files[0].size || files[0].size > SPEC_FILL_MAX_BYTES) { setError("照片是空檔或超過 18 MB，請選擇清楚的表格範圍。"); return; }
-    invalidate(); setPhoto(files[0]);
+  const choosePhotos = (files: File[]) => {
+    if (busy || !files.length) return;
+    const added: FormPhoto[] = [], failures: string[] = [];
+    for (const [index, original] of files.entries()) {
+      const extension = ({ "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" } as Record<string, string>)[original.type];
+      const file = !original.name && extension ? new File([original], `表格照片-${Date.now()}-${index + 1}.${extension}`, { type: original.type }) : original;
+      if (!/\.(png|jpe?g|webp)$/i.test(file.name)) failures.push(`${file.name || "未命名檔案"}（請用 PNG、JPG 或 WEBP）`);
+      else if (!file.size || file.size > SPEC_FILL_MAX_BYTES) failures.push(`${file.name}（空檔或超過 18 MB）`);
+      else if (photosRef.current.length + added.length >= SPEC_FILL_MAX_PHOTOS) failures.push(`${file.name}（本次最多 ${SPEC_FILL_MAX_PHOTOS} 張，可分批分析）`);
+      else added.push({ id: crypto.randomUUID(), file });
+    }
+    if (added.length) { invalidate(); replacePhotos([...photosRef.current, ...added]); }
+    if (failures.length) setError(`未加入：${failures.join("、")}。其餘照片與原有照片已保留，不需壓縮。`);
   };
   const pastePhoto = (event: ClipboardEvent) => {
-    const images = Array.from(event.clipboardData.files).filter(file => file.type.startsWith("image/"));
+    const images = event.clipboardData.files.length ? Array.from(event.clipboardData.files) : Array.from(event.clipboardData.items).filter(item => item.kind === "file").flatMap(item => { const file = item.getAsFile(); return file ? [file] : []; });
     if (!images.length) return;
-    event.preventDefault(); choosePhoto(images);
+    event.preventDefault(); choosePhotos(images);
   };
   const addSpecs = (files: File[]) => {
     const rejected = files.filter(file => !canReadSpecForFill(file.name) || !file.size || file.size > SPEC_FILL_MAX_BYTES);
@@ -83,21 +104,21 @@ export function MaterialSpecFillDialog({ records, workspaceName, open, onOpenCha
     if (rejected.length) setError(`未加入：${rejected.map(file => file.name).join("、")}（格式不支援、空檔或超過 18 MB）。其餘檔案已保留。`);
   };
   const analyze = async () => {
-    if (active.current || !part || !photo || !model || !inputCount) return;
+    if (active.current || !part || !photos.length || !model || !inputCount) return;
     const request = new AbortController(); active.current = request;
     const stamp = ++generation.current;
-    setBusy(true); setResult(null); setError(""); setNotice("");
+    setBusy(true); setResult(null); setShowInputs(true); setPreview(null); setError(""); setNotice("");
     try {
       // Download only explicitly selected attachments belonging to this record.
       const chosen = docs.filter(document => selectedPaths.includes(document.path));
       if (chosen.length !== selectedPaths.length) throw new Error("附件已變更，請重新選擇 SPEC。");
-      const total = photo.size + chosen.reduce((sum, doc) => sum + doc.size, 0) + localSpecs.reduce((sum, file) => sum + file.size, 0);
+      const total = photos.reduce((sum, photo) => sum + photo.file.size, 0) + chosen.reduce((sum, doc) => sum + doc.size, 0) + localSpecs.reduce((sum, file) => sum + file.size, 0);
       if (total > SPEC_FILL_MAX_BYTES) throw new Error("本次分析合計超過 18 MB，請分次選取相關 SPEC 或頁面，不必壓縮。");
       if (inputCount > 20) throw new Error("本次最多分析 20 份 SPEC，請分次選擇，不必壓縮。");
       const inputs: SpecFillInput[] = [];
       for (const document of chosen) inputs.push({ id: `spec-${inputs.length + 1}`, name: document.name, blob: await downloadSpecForFill(document, request.signal) });
       localSpecs.forEach(file => inputs.push({ id: `spec-${inputs.length + 1}`, name: file.name, blob: file }));
-      const answer = await analyzeSpecFill({ part, photo: { id: "template", name: photo.name, blob: photo }, sources: inputs, model, note, signal: request.signal });
+      const answer = await analyzeSpecFillPhotos({ part, photos: photos.map(({ file }, index) => ({ id: `template-${index + 1}`, name: file.name, blob: file })), sources: inputs, model, note, signal: request.signal });
       if (!alive.current || stamp !== generation.current || request.signal.aborted) return;
       setSources(inputs.map(({ id, name }) => ({ id, name }))); setResult(answer); setShowInputs(false);
     } catch (failure) {
@@ -107,15 +128,15 @@ export function MaterialSpecFillDialog({ records, workspaceName, open, onOpenCha
     }
   };
   const cancel = () => { generation.current++; active.current?.abort(); active.current = null; setBusy(false); setNotice("已停止分析，照片與 SPEC 選擇已保留。"); };
-  const copy = async () => {
-    if (!result) return;
+  const copy = async (tables = result) => {
+    if (!tables) return;
     try {
       if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) await navigator.clipboard.write([new ClipboardItem({
-        "text/plain": new Blob([specFillTsv(result)], { type: "text/plain" }),
-        "text/html": new Blob([specFillHtml(result)], { type: "text/html" }),
+        "text/plain": new Blob([specFillTablesTsv(tables)], { type: "text/plain" }),
+        "text/html": new Blob([specFillTablesHtml(tables)], { type: "text/html" }),
       })]);
-      else await navigator.clipboard.writeText(specFillTsv(result));
-      setNotice("已複製表格，可直接貼到 Excel。");
+      else await navigator.clipboard.writeText(specFillTablesTsv(tables));
+      setNotice(`已複製 ${tables.length} 張表格，可直接貼到 Excel。`);
     }
     catch { setError("無法使用剪貼簿，請下載 Excel，或選取結果文字複製。"); }
   };
@@ -123,7 +144,7 @@ export function MaterialSpecFillDialog({ records, workspaceName, open, onOpenCha
     if (!result || !part || exporting) return;
     const stamp = generation.current; setExporting(true); setError("");
     try {
-      const workbook = await createSpecFillWorkbook(result, sources, part.manufacturerPartNumber, model?.label ?? "");
+      const workbook = await createSpecFillPhotosWorkbook(result, sources, part.manufacturerPartNumber, model?.label ?? "");
       const data = await workbook.xlsx.writeBuffer();
       if (!alive.current || stamp !== generation.current) return;
       downloadBlob(new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${part.manufacturerPartNumber.replace(/[\\/:*?"<>|]/g, "_")}_依照片填表.xlsx`);
@@ -155,12 +176,12 @@ export function MaterialSpecFillDialog({ records, workspaceName, open, onOpenCha
           <div className="spec-fill-input-grid">
             <section className="spec-fill-section">
               <h3 className="spec-fill-heading">2. 貼上要填的表格照片</h3>
-              <input type="file" ref={photoInput} className="sr-only" tabIndex={-1} aria-label="選擇表格照片檔案" accept=".png,.jpg,.jpeg,.webp" disabled={busy} onChange={event => { choosePhoto(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
-              <div role="group" tabIndex={0} className="spec-fill-photo" onPaste={event => { if (!busy) pastePhoto(event); }} onDragOver={event => { event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (!busy) choosePhoto(Array.from(event.dataTransfer.files)); }} aria-label="貼上表格照片區">
-                {photoUrl ? <img src={photoUrl} alt="要填寫的表格原圖" /> : <><ImagePlus className="h-7 w-7 text-primary" /><strong>點這個區域，按 Ctrl+V 貼上照片</strong><span>也可將照片拖入這裡</span></>}
+              <input type="file" ref={photoInput} className="sr-only" tabIndex={-1} aria-label="選擇表格照片檔案" accept=".png,.jpg,.jpeg,.webp" multiple disabled={busy} onChange={event => { choosePhotos(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
+              <div role="group" tabIndex={0} className={`spec-fill-photo ${photos.length ? "spec-fill-photo--compact" : ""}`} onPaste={event => { if (!busy) pastePhoto(event); }} onDragOver={event => { event.preventDefault(); }} onDrop={event => { event.preventDefault(); if (!busy) choosePhotos(Array.from(event.dataTransfer.files)); }} aria-label="貼上表格照片區" aria-disabled={busy}>
+                <ImagePlus className="h-6 w-6 text-primary" /><strong>{photos.length ? "可繼續貼上或拖入多張照片" : "點這個區域，按 Ctrl+V 貼上多張照片"}</strong><span>也可一次拖入或選取多張，依加入順序逐張填表</span>
               </div>
-              <Button variant="outline" className="mt-2 h-8 px-2 text-xs" disabled={busy} onClick={() => photoInput.current?.click()}>{photo ? "更換照片" : "選擇照片"}</Button>
-              {photo && <div className="mt-2 flex items-center gap-2 text-xs"><span className="min-w-0 flex-1 truncate" title={photo.name}>{photo.name}</span><Button variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => { invalidate(); setPhoto(null); }}>移除照片</Button></div>}
+              <div className="mt-2 flex flex-wrap items-center gap-2"><Button variant="outline" className="h-9 px-2 text-xs" disabled={busy || photos.length >= SPEC_FILL_MAX_PHOTOS} onClick={() => photoInput.current?.click()}>{photos.length ? "新增照片" : "選擇照片"}</Button><span className="text-xs text-muted-foreground" role="status">已加入 {photos.length}／{SPEC_FILL_MAX_PHOTOS} 張</span>{photos.length > 0 && <Button variant="ghost" className="ml-auto h-9 px-2 text-xs" disabled={busy} onClick={() => { invalidate(); replacePhotos([]); }}>清除全部照片</Button>}</div>
+              {photos.length > 0 && <div className="spec-fill-photo-list" aria-label="已加入的表格照片">{photos.map((photo, index) => <FormPhotoPreview key={photo.id} photo={photo} index={index} busy={busy} onPreview={(name, url) => setPreview({ name, url })} onRemove={() => { invalidate(); replacePhotos(photosRef.current.filter(item => item.id !== photo.id)); }} />)}</div>}
             </section>
             <section className="spec-fill-section" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); if (!busy) addSpecs(Array.from(event.dataTransfer.files)); }}>
               <div className="mb-2 flex items-center justify-between gap-2"><h3 className="spec-fill-heading mb-0">3. 選擇這顆料的 SPEC</h3><Button variant="outline" className="h-8 px-2 text-xs" disabled={busy} onClick={() => specInput.current?.click()}>從電腦加入</Button></div>
@@ -180,20 +201,24 @@ export function MaterialSpecFillDialog({ records, workspaceName, open, onOpenCha
         </>}
         {error && <p role="alert" className="rounded-md border border-destructive/50 px-3 py-2 text-sm text-destructive">{error}</p>}
         {notice && <p role="status" className="text-sm text-primary">{notice}</p>}
-        {result && <section className="spec-fill-result" aria-label="依照片填表結果">
-          <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">{result.title}</h3><span className="text-xs text-muted-foreground">{result.rows.length} 列 · {result.columns.length} 欄 · AI 整理，請核對來源</span></div>
-          {result.warnings.map((warning, i) => <p key={i} className="mt-2 text-sm text-amber-300">{warning}</p>)}
-          <div className="spec-fill-table-scroll" tabIndex={0} role="region" aria-label="可複製的填表結果（可左右捲動）"><table><thead><tr>{result.columns.map((column, i) => <th key={i} scope="col">{column}</th>)}</tr></thead><tbody>{result.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j} className={cell.kind === "missing" ? "text-amber-300" : ""}><div className="whitespace-pre-wrap">{cell.value}</div>{cell.kind === "source" && <details className="mt-1 text-xs text-primary"><summary>{cell.sourceId} · {/^(圖片|文字)$/.test(cell.page ?? "") ? cell.page : `p.${cell.page}`}</summary><p className="mt-2 break-words text-muted-foreground">{sources.find(source => source.id === cell.sourceId)?.name}<br />{cell.quote}</p></details>}{cell.kind === "missing" && <p className="mt-1 text-xs text-muted-foreground">{cell.quote}</p>}</td>)}</tr>)}</tbody></table></div>
+        {result && <section className="space-y-4" aria-label="依照片填表結果">
+          <p className="text-sm font-semibold">已完成 {result.length} 張照片的表格</p>
+          {result.map((table, tableIndex) => <section key={table.templateId} className="spec-fill-result" aria-label={`第 ${tableIndex + 1} 張填表結果`}>
+          <div className="flex flex-wrap items-center justify-between gap-2"><div className="min-w-0"><p className="break-all text-xs text-muted-foreground">第 {tableIndex + 1} 張 · {table.templateName}</p><h3 className="font-semibold">{table.title}</h3></div><span className="text-xs text-muted-foreground">{table.rows.length} 列 · {table.columns.length} 欄 · AI 整理，請核對來源</span>{result.length > 1 && <Button variant="outline" className="h-9 text-xs" onClick={() => void copy([table])}>複製這張表格</Button>}</div>
+          {table.warnings.map((warning, i) => <p key={i} className="mt-2 text-sm text-amber-300">{warning}</p>)}
+          <div className="spec-fill-table-scroll" tabIndex={0} role="region" aria-label={`第 ${tableIndex + 1} 張可複製的填表結果（可左右捲動）`}><table><thead><tr>{table.columns.map((column, i) => <th key={i} scope="col">{column}</th>)}</tr></thead><tbody>{table.rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j} className={cell.kind === "missing" ? "text-amber-300" : ""}><div className="whitespace-pre-wrap">{cell.value}</div>{cell.kind === "source" && <details className="mt-1 text-xs text-primary"><summary>{cell.sourceId} · {/^(圖片|文字)$/.test(cell.page ?? "") ? cell.page : `p.${cell.page}`}</summary><p className="mt-2 break-words text-muted-foreground">{sources.find(source => source.id === cell.sourceId)?.name}<br />{cell.quote}</p></details>}{cell.kind === "missing" && <p className="mt-1 text-xs text-muted-foreground">{cell.quote}</p>}</td>)}</tr>)}</tbody></table></div>
+          </section>)}
           <div className="mt-2 text-xs text-muted-foreground">{sources.map(source => <p key={source.id} className="break-words">{source.id}：{source.name}</p>)}</div>
         </section>}
       </div>
       <footer className="spec-fill-footer">
         <p className="text-xs leading-5 text-muted-foreground">按開始後，僅將此料件、表格照片與已選 SPEC 傳給所選 AI。結果不會自動寫回 BOM。</p>
         <div className="flex flex-wrap justify-end gap-2">
-          {result && <><Button variant="outline" className="h-10" onClick={() => void copy()}><Copy className="h-4 w-4" />複製表格</Button><Button variant="outline" className="h-10" disabled={exporting} onClick={() => void exportResult()}><Download className="h-4 w-4" />{exporting ? "匯出中…" : "下載 Excel"}</Button></>}
-          {busy ? <Button variant="outline" className="h-10" onClick={cancel}><Loader2 className="h-4 w-4 animate-spin" />停止分析</Button> : <Button className="h-10" disabled={!photo || !inputCount || !model || !part?.manufacturerPartNumber.trim()} onClick={() => void analyze()}><ScanText className="h-4 w-4" />{result ? "重新分析" : "開始依照片填表"}</Button>}
+          {result && <><Button variant="outline" className="h-10" onClick={() => void copy()}><Copy className="h-4 w-4" />{result.length > 1 ? "複製全部表格" : "複製表格"}</Button><Button variant="outline" className="h-10" disabled={exporting} onClick={() => void exportResult()}><Download className="h-4 w-4" />{exporting ? "匯出中…" : "下載 Excel"}</Button></>}
+          {busy ? <Button variant="outline" className="h-10" onClick={cancel}><Loader2 className="h-4 w-4 animate-spin" />停止分析</Button> : <Button className="h-10" disabled={!photos.length || !inputCount || !model || !part?.manufacturerPartNumber.trim()} onClick={() => void analyze()}><ScanText className="h-4 w-4" />{result ? "重新分析" : "開始依照片填表"}</Button>}
         </div>
       </footer>
+      <Dialog open={Boolean(preview)} onOpenChange={value => { if (!value) setPreview(null); }}><DialogContent className="max-w-4xl"><DialogHeader><DialogTitle className="break-all">{preview?.name ?? "照片預覽"}</DialogTitle><DialogDescription>要填寫的表格原圖</DialogDescription></DialogHeader>{preview && <img src={preview.url} alt={preview.name} className="max-h-[75dvh] w-full object-contain" />}</DialogContent></Dialog>
     </DialogContent>
   </Dialog>;
 }

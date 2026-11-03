@@ -57,3 +57,39 @@ test("PDF SPEC and template photo are sent as native attachments for Gemini, Ope
     assert.equal(serialized.includes("secret-QA-only"), false);
   }
 });
+
+test("twenty uncompressed photos reach AI in one request and each receives its own result", async () => {
+  const photos=Array.from({length:20},(_,i)=>({...photo,id:`template-${i+1}`,name:`photo-${i+1}.png`}));
+  const f=service(async()=>new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify({tables:photos.map(p=>({...result,templateId:p.id}))})}]}}]})));
+  const tables=await f.analyzeSpecFillPhotos({part,photos,sources,model,note:'all photos',signal:new AbortController().signal});
+  assert.equal(tables.length,20);
+  assert.deepEqual(Array.from(tables,t=>t.templateId),photos.map(p=>p.id));
+  assert.equal(f.calls.length,1);
+  const body=JSON.parse(f.calls[0].init.body);
+  const images=body.contents.flatMap(message=>message.parts).filter(p=>p.inlineData?.mimeType==='image/png');
+  assert.equal(images.length,20);
+  assert.match(f.calls[0].init.body,/template-20/);
+  assert.match(f.calls[0].init.body,/spec-10/);
+});
+
+test("multi-photo batches use native images for all three providers and preserve separate table layouts", async () => {
+  const photos=[{...photo,id:'template-1'},{...photo,id:'template-2',name:'second.png'}];
+  for(const provider of ['gemini','openai','anthropic']) {
+    const batch={tables:[{...result,templateId:'template-2',columns:['Other'],rows:[[{...result.rows[0][0],value:'0016'}]]},{...result,templateId:'template-1'}]};
+    const f=service(async()=>new Response(JSON.stringify(provider==='gemini'?{candidates:[{content:{parts:[{text:JSON.stringify(batch)}]}}]}:provider==='openai'?{choices:[{message:{content:JSON.stringify(batch)}}]}:{content:[{type:'text',text:JSON.stringify(batch)}]})));
+    const selected={...model,record:{...model.record,permissions:{read:true,metadata:{provider,model:'qa-vision',baseUrl:provider==='gemini'?'https://generativelanguage.googleapis.com/v1beta':provider==='openai'?'https://api.openai.com/v1':'https://api.anthropic.com/v1'}}}};
+    const tables=await f.analyzeSpecFillPhotos({part,photos,sources,model:selected,note:'',signal:new AbortController().signal});
+    assert.equal(tables[1].columns[0],'Other');assert.equal(tables[1].rows[0][0].value,'0016');
+    const body=JSON.parse(f.calls[0].init.body);
+    const parts=provider==='gemini'?body.contents.flatMap(m=>m.parts):body.messages.flatMap(m=>Array.isArray(m.content)?m.content:[]);
+    assert.equal(parts.filter(p=>p.inlineData?.mimeType==='image/png'||p.type==='image'||p.type==='image_url').length,2);
+  }
+});
+
+test("bad or oversized photo batches never send; a response omitting photos is never presented as complete", async () => {
+  const f=service();const base={part,photos:[{...photo,id:'template-1'},{...photo,id:'template-2'}],sources,model,note:'',signal:new AbortController().signal};
+  for(const photos of [[],[photo,photo],Array.from({length:21},(_,i)=>({...photo,id:String(i)})),[{...photo,blob:{size:18*1024*1024+1}}],[{...photo,name:'bad.jpg'}]]) await assert.rejects(f.analyzeSpecFillPhotos({...base,photos}));
+  assert.equal(f.calls.length,0);
+  await assert.rejects(f.analyzeSpecFillPhotos(base),/未完整/);
+  assert.equal(f.calls.length,1);
+});
