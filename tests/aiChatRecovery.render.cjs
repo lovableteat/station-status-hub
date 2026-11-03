@@ -31,13 +31,18 @@ async function fixture(fetch, available = targets, win = browser(), options = {}
   return {root,rpcCalls,win,draft,send};
 }
 
-test('desktop keeps its send and clear controls outside the lower composer toolbar', async () => {
+test('desktop consolidates source/model/usage controls above chat and all composer actions into one toolbar', async () => {
   const win = browser();
   win.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const f = await fixture(async () => answer(), targets, win);
   try {
     const tools = f.root.root.findByProps({ 'data-ai-composer-toolbar': 'true' });
-    assert.equal(tools.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 0);
+    assert.equal(tools.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 1);
+    assert.equal(tools.findAll(node => node.type === 'stub' && node.props['aria-label'] === '清空對話').length, 1);
+    assert.equal(tools.findAll(node => node.type === 'stub' && node.props['aria-label'] === '開啟共享提示詞庫').length, 1);
+    const header=f.root.root.findByProps({'data-ai-chat-toolbar':'true'});
+    assert.equal(header.findAll(node=>node.type==='stub'&&node.props['aria-label']==='資料來源：維修資料與料號 SPEC').length,1);
+    assert.equal(header.findAll(node=>node.type==='stub'&&node.props.compact===true&&'apiKeyId' in node.props).length,1);
     assert.equal(f.root.root.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 1);
   } finally { await act(async () => f.root.unmount()); }
 });

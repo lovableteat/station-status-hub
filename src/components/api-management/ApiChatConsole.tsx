@@ -2742,6 +2742,39 @@ export function ApiChatConsole({
     </Popover>
   );
 
+  const sourceControls = (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" aria-label="資料來源：維修資料與料號 SPEC" aria-description={`維修資料${maintenanceSourceEnabled ? "已開啟" : "關閉中"}；料號／SPEC${materialSourceEnabled && materialSpecsAllowed ? "已開啟" : "關閉中"}`} className="h-11 shrink-0 gap-3 whitespace-nowrap px-3 text-xs">
+          <span className="flex items-center gap-1.5"><span aria-hidden="true" className={cn("h-1.5 w-1.5 rounded-full", maintenanceSourceEnabled ? "bg-primary" : "bg-muted-foreground")} />維修資料<span className="sr-only">{maintenanceSourceEnabled ? "已開啟" : "關閉中"}</span></span>
+          <span className="flex items-center gap-1.5"><span aria-hidden="true" className={cn("h-1.5 w-1.5 rounded-full", materialSourceEnabled && materialSpecsAllowed ? "bg-primary" : "bg-muted-foreground")} />料號／SPEC<span className="sr-only">{materialSourceEnabled && materialSpecsAllowed ? "已開啟" : "關閉中"}</span></span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(520px,calc(100vw-24px))] max-h-[70dvh] overflow-y-auto p-2">
+          <MaintenanceSourceSelector
+            enabled={maintenanceSourceEnabled}
+            onEnabledChange={(enabled) => {
+              setMaintenanceSourceEnabled(enabled);
+              setMaintenanceRetrievalError(null);
+              setMaintenanceResultCount(null);
+            }}
+            projects={maintenanceProjects}
+            currentProjectId={currentMaintenanceProjectId}
+            scope={maintenanceScope}
+            onScopeChange={(scope) => {
+              setMaintenanceScope(scope);
+              setMaintenanceRetrievalError(null);
+              setMaintenanceResultCount(null);
+            }}
+            loading={loading && maintenanceSourceEnabled}
+            lastResultCount={maintenanceResultCount}
+            retrievalError={maintenanceRetrievalError}
+          />
+          <MaterialSpecSourceSelector enabled={materialSourceEnabled} onEnabledChange={value => { setMaterialSourceEnabled(value); setMaterialSpecProgress(""); }} scope={materialSpecScope} onScopeChange={value => { setMaterialSpecScope(value); setMaterialSpecProgress(""); }} allowed={materialSpecsAllowed} ownerId={user?.userId} loading={loading} progress={materialSpecProgress} />
+      </PopoverContent>
+    </Popover>
+  );
+
   const composerActions = (
     <div data-ai-composer-actions="true" className="ml-auto flex min-w-0 max-w-full items-center justify-end gap-2">
       <span className="hidden min-w-0 max-w-[220px] truncate rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground lg:block" title={model}>{model || "Gemini"}</span>
@@ -2765,12 +2798,13 @@ export function ApiChatConsole({
       )}
     >
       <div
+        data-ai-chat-toolbar="true"
         className={cn(
-          "shrink-0 flex-col gap-4 border-b border-blue-300/20 lg:flex-row lg:items-center lg:justify-between",
-          isChatOnly ? "hidden gap-2 bg-muted/30 px-4 py-2 lg:flex" : "flex pb-5"
+          "shrink-0 border-b border-border",
+          isChatOnly ? "flex items-center gap-2 overflow-x-auto bg-muted/30 p-2 lg:px-4" : "flex flex-col gap-4 pb-5 lg:flex-row lg:items-center lg:justify-between"
         )}
       >
-        <div className="flex items-center gap-3">
+        <div className={cn("items-center gap-2", isChatOnly ? "hidden shrink-0 xl:flex" : "flex")}>
           <div className="flex h-11 w-11 shrink-0 items-center justify-center text-primary">
             <MessageSquareText className="h-5.5 w-5.5" />
           </div>
@@ -2781,7 +2815,8 @@ export function ApiChatConsole({
           </div>
         </div>
 
-        <div data-testid="ai-model-control" className="w-full sm:w-[380px]">
+        {isChatOnly && <>{sourceControls}<AiQuotaStatus apiKeyId={selectedApiKey?.id ?? null} provider={provider} model={model} compact /></>}
+        <div data-testid="ai-model-control" className={isChatOnly ? "ml-auto hidden w-[220px] shrink-0 lg:block xl:w-[280px]" : "w-full sm:w-[380px]"}>
           {isChatOnly ? (
             <div className="flex items-center gap-2">
               <Select
@@ -2831,33 +2866,9 @@ export function ApiChatConsole({
         </div>
       </div>
 
-      {/* Compact layouts scroll source context with messages, leaving the composer outside. */}
+      {/* Keep the message scroller independent of the header and composer. */}
       <div className={cn("flex min-h-0 flex-1 flex-col", isChatOnly && "overflow-y-auto lg:overflow-visible")}>
-      <AiQuotaStatus apiKeyId={selectedApiKey?.id ?? null} provider={provider} model={model} />
-      {isChatOnly ? (
-        <div className="ai-source-context shrink-0 border-b border-blue-300/15 bg-[#111e31] px-1.5 py-1 sm:px-3 sm:py-2 lg:px-6 lg:py-3">
-          <MaintenanceSourceSelector
-            enabled={maintenanceSourceEnabled}
-            onEnabledChange={(enabled) => {
-              setMaintenanceSourceEnabled(enabled);
-              setMaintenanceRetrievalError(null);
-              setMaintenanceResultCount(null);
-            }}
-            projects={maintenanceProjects}
-            currentProjectId={currentMaintenanceProjectId}
-            scope={maintenanceScope}
-            onScopeChange={(scope) => {
-              setMaintenanceScope(scope);
-              setMaintenanceRetrievalError(null);
-              setMaintenanceResultCount(null);
-            }}
-            loading={loading && maintenanceSourceEnabled}
-            lastResultCount={maintenanceResultCount}
-            retrievalError={maintenanceRetrievalError}
-          />
-          <MaterialSpecSourceSelector enabled={materialSourceEnabled} onEnabledChange={value => { setMaterialSourceEnabled(value); setMaterialSpecProgress(""); }} scope={materialSpecScope} onScopeChange={value => { setMaterialSpecScope(value); setMaterialSpecProgress(""); }} allowed={materialSpecsAllowed} ownerId={user?.userId} loading={loading} progress={materialSpecProgress} />
-        </div>
-      ) : null}
+      {!isChatOnly && <AiQuotaStatus apiKeyId={selectedApiKey?.id ?? null} provider={provider} model={model} />}
 
       <div className={cn("flex min-h-0 flex-col", isChatOnly ? "flex-1 gap-0" : "flex-1 mt-4 gap-4")}>
         {connectionState ? (
@@ -2939,7 +2950,7 @@ export function ApiChatConsole({
             }}
           />
 
-          <div className={cn("mb-2.5 flex flex-wrap items-center justify-between gap-2", compactChat && "hidden")}>
+          <div className={cn("mb-2.5 flex flex-wrap items-center justify-between gap-2", (isChatOnly || compactChat) && "hidden")}>
             <div className={cn("min-w-0 flex-wrap items-center gap-2 text-sm font-medium text-slate-300", isChatOnly ? "hidden lg:flex" : "hidden sm:flex")}>
               <span className="hidden rounded-lg border border-cyan-300/18 bg-cyan-400/8 px-2.5 py-1.5 font-bold text-cyan-100 sm:inline">
                 輸入 <kbd className="mx-1 rounded border border-cyan-200/25 bg-slate-950/40 px-1.5 py-0.5 font-mono text-xs">/</kbd> 快速套用
@@ -2960,7 +2971,7 @@ export function ApiChatConsole({
                 {loading ? "測試中..." : "測試連線"}
               </Button>
             ) : null}
-            {!compactChat && composerActions}
+            {!isChatOnly && !compactChat && composerActions}
           </div>
 
           {uploadedAttachments.length ? (
@@ -3099,7 +3110,7 @@ export function ApiChatConsole({
                 />
               </div>
 
-              <div data-ai-composer-toolbar="true" className={cn("flex min-w-0 items-center justify-between gap-2 border-t border-border", compactChat ? "flex-nowrap pt-2" : "flex-wrap pr-28 pt-3 lg:flex-nowrap lg:pr-32")}>
+              <div data-ai-composer-toolbar="true" className={cn("flex min-w-0 items-center justify-between gap-2 border-t border-border", compactChat ? "flex-nowrap pt-2" : isChatOnly ? "flex-nowrap pt-3" : "flex-wrap pr-28 pt-3 lg:flex-nowrap lg:pr-32")}>
                 <div className="flex shrink-0 items-center gap-2">
                   {promptLibraryControl}
                   <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className="h-11 shrink-0 gap-2 px-3">
@@ -3107,7 +3118,8 @@ export function ApiChatConsole({
                     <span className="hidden sm:inline">上傳檔案</span>
                   </Button>
                 </div>
-                {compactChat && composerActions}
+                {isChatOnly && <span className="hidden min-w-0 flex-1 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground 2xl:flex"><span>輸入 <kbd>/</kbd> 快速套用</span><span>文字＋圖片可一起貼上</span><span>附件 {uploadedAttachments.length} / {MAX_UPLOAD_ATTACHMENT_COUNT}</span></span>}
+                {(isChatOnly || compactChat) && composerActions}
               </div>
             </div>
 
