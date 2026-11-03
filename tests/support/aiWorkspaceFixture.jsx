@@ -38,7 +38,9 @@ function Fixture() {
       <span aria-live="polite">隔離資料 · 儲存 {fixtureState.writes.length} 次 · 假 AI {fixtureState.attempts} 次 <span className="sr-only">{revision}</span></span>
     </nav>
     <div className="min-h-0 flex-1 p-2">{workspaceVisible ? <ApiChatConsole mode="chat-only" selectedApiKey={record} selectedModel={selected.model} selectedApiKeyTargetId={targetId} onSelectApiKeyTarget={setTargetId} availableApiKeys={[record]} availableApiKeyTargets={targets} /> : <p>已離開隔離 AI 工作區；返回可確認待儲存草稿。</p>}</div>
-    {mobilePreview && <><div className="fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-40"><DirectMessageLauncher unreadCount={3} onOpen={() => setMessengerOpens(value => value + 1)} /></div><MobileWorkspaceDock activeItem="ai-chat" availableItems={[{id:'workspace-home',label:'首頁'},{id:'station-status',label:'維修'},{id:'material-requests',label:'料號'},{id:'ai-chat',label:'AI 問答'}]} onSelect={() => {}} /><output className="sr-only" aria-label="聊天室開啟次數">{messengerOpens}</output></>}
+    <div data-chat-dock="detached" className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-40 w-auto sm:w-[min(480px,calc(100vw-1rem))] lg:bottom-4 lg:right-4"><DirectMessageLauncher unreadCount={3} onOpen={() => setMessengerOpens(value => value + 1)} /></div>
+    {mobilePreview && <MobileWorkspaceDock activeItem="ai-chat" availableItems={[{id:'workspace-home',label:'首頁'},{id:'station-status',label:'維修'},{id:'material-requests',label:'料號'},{id:'ai-chat',label:'AI 問答'}]} onSelect={() => {}} />}
+    <output className="sr-only" aria-label="聊天室開啟次數">{messengerOpens}</output>
     <Toaster />
   </div>;
 }
