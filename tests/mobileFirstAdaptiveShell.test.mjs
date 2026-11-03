@@ -30,14 +30,15 @@ test("the shared handset shell reserves safe chrome for every workspace", async 
   assert.match(dock, /grid-cols-5/);
 });
 
-test("chat uses one compact rectangular launcher above the shared dock", async () => {
+test("chat uses one circular draggable launcher above the shared dock", async () => {
   const source = await read("src/components/collaboration/CollaborationCenter.tsx");
 
   assert.match(source, /data-chat-launcher="platform"/);
   assert.match(source, /platform-chat-launcher/);
   assert.match(source, /var\(--mobile-shell-bottom\)/);
   assert.match(source, /h-11/);
-  assert.match(source, /rounded-xl/);
+  assert.match(source, /platform-chat-launcher[^\n]*rounded-full/);
+  assert.match(source, /onPointerMove=\{moveDrag\}/);
 });
 
 test("PCB and Data Center prioritize their canvases on phones", async () => {

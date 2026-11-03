@@ -3,7 +3,7 @@ import {
   buildPerformanceReturnActionUrl,
   PERFORMANCE_RETURN_NOTIFICATION_TYPE,
 } from "@/components/performance/performanceNotifications.mjs";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   AlertCircle,
   Bell,
@@ -97,27 +97,110 @@ function formatTime(value: string) {
   return date.toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+type ChatLauncherPosition = { x: number; y: number };
+
 export function DirectMessageLauncher({
   unreadCount,
   onOpen,
+  initialPosition = null,
+  onPositionChange,
 }: {
   unreadCount: number;
   onOpen: () => void;
+  initialPosition?: ChatLauncherPosition | null;
+  onPositionChange?: (position: ChatLauncherPosition) => void;
 }) {
+  const button = useRef<HTMLButtonElement>(null);
+  const [position, setPosition] = useState(initialPosition);
+  const currentPosition = useRef(initialPosition);
+  const drag = useRef<{ id: number; x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+  const [dragging, setDragging] = useState(false);
+  const moveTo = useCallback((next: ChatLauncherPosition) => {
+    const el = button.current;
+    if (!el) return next;
+    const viewport = window.visualViewport;
+    const style = getComputedStyle(el);
+    const inset = (edge: string) => parseFloat(style.getPropertyValue(`--chat-safe-${edge}`)) || 0;
+    const headerBottom = el.ownerDocument?.querySelector('[data-mobile-app-header="true"]')?.getBoundingClientRect().bottom ?? 0;
+    const left = (viewport?.offsetLeft ?? 0) + 12 + inset("left"), top = Math.max((viewport?.offsetTop ?? 0) + inset("top"), headerBottom) + 12;
+    const width = parseFloat(style.width) || 56, height = parseFloat(style.height) || 56;
+    const bottom = Math.max(12, parseFloat(getComputedStyle(el.parentElement!).bottom) || 0);
+    const fitted = {
+      x: Math.max(left, Math.min(next.x, (viewport?.offsetLeft ?? 0) + (viewport?.width ?? window.innerWidth) - width - 12 - inset("right"))),
+      y: Math.max(top, Math.min(next.y, (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight) - height - bottom)),
+    };
+    currentPosition.current = fitted; setPosition(fitted);
+    return fitted;
+  }, []);
+  useEffect(() => {
+    const fit = () => {
+      if (!currentPosition.current) return;
+      if (drag.current) { suppressClick.current = true; drag.current = null; setDragging(false); }
+      const fitted = moveTo(currentPosition.current); onPositionChange?.(fitted);
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("scroll", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("scroll", fit);
+    };
+  }, [moveTo, onPositionChange]);
+  const moveDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const active = drag.current;
+    if (!active || active.id !== event.pointerId) return;
+    const dx = event.clientX - active.x, dy = event.clientY - active.y;
+    if (!active.moved && Math.hypot(dx, dy) < 8) return;
+    active.moved = true; suppressClick.current = true; setDragging(true);
+    event.preventDefault();
+    moveTo({ x: active.left + dx, y: active.top + dy });
+  };
+  const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (drag.current?.id !== event.pointerId) return;
+    const moved = drag.current.moved; drag.current = null; setDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (moved && currentPosition.current) onPositionChange?.(currentPosition.current);
+  };
   return (
     <button
+      ref={button}
       type="button"
       aria-label={`聊天室${unreadCount > 0 ? `，${unreadCount} 則未讀` : ""}`}
       aria-expanded={false}
       aria-controls="direct-messages-panel"
-      onClick={onOpen}
+      onClick={event => { if (suppressClick.current && event.detail !== 0) { suppressClick.current = false; event.preventDefault(); return; } onOpen(); }}
+      onPointerDown={event => {
+        if (!event.isPrimary || event.button !== 0) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        suppressClick.current = false;
+        drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, moved: false };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={moveDrag}
+      onPointerUp={event => { moveDrag(event); finishDrag(event); }}
+      onPointerCancel={finishDrag}
+      onLostPointerCapture={finishDrag}
+      onKeyDown={event => {
+        const delta = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] }[event.key];
+        if (!delta) return;
+        event.preventDefault(); event.stopPropagation();
+        const rect = event.currentTarget.getBoundingClientRect();
+        const start = currentPosition.current ?? { x: rect.left, y: rect.top };
+        const fitted = moveTo({ x: start.x + delta[0], y: start.y + delta[1] }); onPositionChange?.(fitted);
+      }}
+      aria-description="可拖曳移動，聚焦後可用方向鍵調整位置"
+      style={position ? { position: "fixed", left: 0, top: 0, translate: `${position.x}px ${position.y}px` } : undefined}
       title="開啟聊天室"
       data-chat-launcher="platform"
       data-unread={unreadCount > 0 ? "true" : undefined}
-      className="platform-chat-launcher group pointer-events-auto relative ml-auto flex h-12 items-center justify-center gap-2 rounded-2xl border border-primary bg-primary px-4 text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      data-dragging={dragging ? "true" : undefined}
+      className="platform-chat-launcher group pointer-events-auto relative ml-auto flex h-14 w-14 touch-none select-none items-center justify-center rounded-full border border-primary bg-primary p-0 text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <MessageSquareText className="size-5" aria-hidden="true" />
-      <span className="text-[15px] font-bold">訊息</span>
+      <MessageSquareText className="size-6" aria-hidden="true" />
+      <span className="sr-only">訊息</span>
       {unreadCount > 0 ? (
         <span className="absolute -right-1.5 -top-1.5 flex min-h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#071421] bg-rose-500 px-1 text-[10px] font-bold leading-5 text-white shadow-[0_0_14px_rgba(244,63,94,0.65)]">
           {unreadCount > 99 ? "99+" : unreadCount}
@@ -217,6 +300,7 @@ export function CollaborationCenter() {
   const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
   const [messageFloatOpen, setMessageFloatOpen] = useState(false);
   const [directMessageUnreadCount, setDirectMessageUnreadCount] = useState(0);
+  const [launcherPosition, setLauncherPosition] = useState<ChatLauncherPosition | null>(null);
   const messageReturnFocus = useRef<HTMLElement | null>(null);
   const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
   const [memberQuery, setMemberQuery] = useState("");
@@ -712,6 +796,8 @@ export function CollaborationCenter() {
             <DirectMessageLauncher
               unreadCount={directMessageUnreadCount}
               onOpen={() => setMessageFloatOpen(true)}
+              initialPosition={launcherPosition}
+              onPositionChange={setLauncherPosition}
             />
           ) : null}
         </div>
