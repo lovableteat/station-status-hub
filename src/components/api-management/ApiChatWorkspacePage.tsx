@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/components/auth/UserContext";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
+import { usePermissions } from "@/hooks/usePermissions";
 import { withReadDeadline } from "@/lib/readDeadline";
 
 import { ApiChatConsole } from "./ApiChatConsole";
@@ -45,6 +46,7 @@ function sortAvailableApiKeys(records: ApiKeyRecord[]) {
 
 export function ApiChatWorkspacePage() {
   const { user } = useUser();
+  const { canViewModule } = usePermissions();
   const { activeProjectId, allProjects } = useTestProject();
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
   const [selectedApiKeyTargetId, setSelectedApiKeyTargetId] = useState<null | string>(null);
@@ -152,6 +154,7 @@ export function ApiChatWorkspacePage() {
         mode="chat-only"
         maintenanceProjects={maintenanceProjects}
         currentMaintenanceProjectId={activeProjectId}
+        materialSpecsAllowed={canViewModule("material-requests")}
       />
     </div>
   );

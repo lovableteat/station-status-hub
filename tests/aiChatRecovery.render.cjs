@@ -19,6 +19,7 @@ async function fixture(fetch, available = targets, win = browser(), options = {}
     'sonner':{toast:{success(){},error(){},info(){}}}, './AiQuotaStatus':{AiQuotaStatus:child}, './MarkdownMessage':{MarkdownMessage:child},
     '@/components/ui/textarea':{Textarea:React.forwardRef((props,ref)=>React.createElement('stub',{...props,ref}))},
     './MaintenanceCitationList':{MaintenanceCitationList:child}, './MaintenanceSourceSelector':{MaintenanceSourceSelector:child}, './pptxAttachment':{isPptxFile:()=>false},
+    ...options.mocks,
   },globals:{fetch,Response,Error,TextEncoder,TextDecoder,requestAnimationFrame:callback=>setTimeout(callback,0), ...options.globals}});
   const {ApiChatConsole}=load('src/components/api-management/ApiChatConsole.tsx');
   let root;
@@ -39,6 +40,28 @@ test('desktop keeps its send and clear controls outside the lower composer toolb
     assert.equal(tools.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 0);
     assert.equal(f.root.root.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 1);
   } finally { await act(async () => f.root.unmount()); }
+});
+
+test('material SPEC evidence reaches AI independently of maintenance and stays with the assistant response',async()=>{
+  let searches=0;const requests=[];
+  const report={files:[{id:'S1',name:'part.dwg',path:'safe/part.dwg',parts:[],status:'partial',method:'native',note:'only readable text',included:true}],scope:'all',context:'SPEC ORIGINAL EVIDENCE 105 C [S1]'};
+  const f=await fixture(async(url,init)=>{requests.push(JSON.parse(init.body));return answer();},targets,browser(),{props:{materialSpecsAllowed:true},mocks:{'./MaterialSpecSourceSelector':{MaterialSpecSourceSelector:child},'./MaterialSpecCitationList':{MaterialSpecCitationList:child},'./materialSpecKnowledgeService':{searchMaterialSpecs:async input=>{input.assertAccess();searches++;return report;}}}});
+  try{
+    await act(async()=>f.root.root.find(node=>node.type==='stub'&&node.props.onEnabledChange&&node.props.allowed===true).props.onEnabledChange(true));
+    await f.draft('Which part supports 105 C?');await act(async()=>f.send().props.onClick());await flush();
+    assert.equal(searches,1);assert.equal(requests.length,1);assert.match(JSON.stringify(requests[0]),/SPEC ORIGINAL EVIDENCE 105 C/);
+    const rendered=f.root.root.find(node=>node.type==='stub'&&node.props.report?.files?.[0]?.name==='part.dwg');assert.equal(rendered.props.report.files[0].status,'partial');
+    assert.ok(f.rpcCalls.every(([name])=>name!=='search_maintenance_knowledge'));
+  }finally{await act(async()=>f.root.unmount());}
+});
+
+test('unmount cancels material source retrieval and late source text is never sent to AI',async()=>{
+  let input,providers=0;const pending=deferred();
+  const f=await fixture(async()=>{providers++;return answer();},targets,browser(),{props:{materialSpecsAllowed:true},mocks:{'./MaterialSpecSourceSelector':{MaterialSpecSourceSelector:child},'./materialSpecKnowledgeService':{searchMaterialSpecs:request=>{input=request;return pending.promise;}}}});
+  await act(async()=>f.root.root.find(node=>node.type==='stub'&&node.props.onEnabledChange&&node.props.allowed===true).props.onEnabledChange(true));
+  await f.draft('source question');await act(async()=>f.send().props.onClick());await flush();
+  await act(async()=>f.root.unmount());assert.equal(input.signal.aborted,true);
+  pending.resolve({files:[],context:'late private source'});await flush();assert.equal(providers,0);
 });
 
 test('busy model changes once within the same key and route, double click cannot duplicate a request, subsequent sends honor cooldown', async () => {
