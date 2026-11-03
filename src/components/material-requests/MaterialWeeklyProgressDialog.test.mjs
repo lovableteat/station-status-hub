@@ -26,7 +26,7 @@ test("weekly report retains numbered CIS applications; paging never limits pendi
     assert.equal(editor.writes[0].rows.length, 61);
     assert.equal(editor.writes[0].rows[0].currentStatus, "已取得料號待CIS申請");
     assert.equal(editor.writes[0].rows[1].currentStatus, "料號申請中");
-    assert.match(editor.writes[0].scope, /待申請料/);
+    assert.match(editor.writes[0].scope, /申請追蹤料（含已完成/);
     assert.doesNotMatch(editor.writes[0].scope, /全部料件/);
     act(() => editor.action("下一頁").props.onClick());
     assert.equal(body().findAllByType("tr").length, 11);
@@ -90,8 +90,26 @@ test("ready materials are excluded while CIS, SYMBOL and the selected alternate-
       await act(async () => root.root.find(node => node.type === "stub" && node.props["data-testid"] === "material-weekly-export").props.onClick());
       assert.deepEqual(Array.from(writes.at(-1).rows, row => row.record.id), expected);
       act(() => root.root.find(node => node.type === "stub" && node.props.children === "每週彙總").props.onClick());
-      const total = root.root.findAllByType("tr").find(row => row.findAllByType("th").some(cell => cell.props.children === "全部待申請料"));
+      const total = root.root.findAllByType("tr").find(row => row.findAllByType("th").some(cell => cell.props.children === "全部申請追蹤料"));
       assert.ok(total.findAllByType("td").every(cell => cell.props.children === expected.length));
     } finally { act(() => root.unmount()); }
   }
+});
+
+test("third table has only five weekly status rows and keeps shared filters and export scope", async () => {
+  const editor = mount();
+  const table = () => editor.root.root.findByProps({ "data-testid": "material-weekly-simple-summary" });
+  try {
+    act(() => editor.action("五狀態彙總").props.onClick());
+    const labels = () => table().findByType("tbody").findAllByType("th").map(cell => cell.findByType("span").props.children);
+    assert.deepEqual(labels(), ["未處理", "已發信", "文件已收齊", "料號申請中", "已完成"]);
+    act(() => editor.field("負責人").props.onChange({ target: { value: "CE A" } }));
+    await act(async () => editor.testId("material-weekly-export").props.onClick());
+    assert.equal(editor.writes.at(-1).rows.length, 2);
+    assert.match(editor.writes.at(-1).scope, /負責人：CE A/);
+    act(() => editor.field("搜尋週報").props.onChange({ target: { value: "notfound" } }));
+    assert.equal(table().findAllByType("thead").length, 1);
+    assert.match(JSON.stringify(editor.root.toJSON()), /目前篩選條件沒有符合的料件/);
+    assert.equal(editor.testId("material-weekly-export").props.disabled, true);
+  } finally { act(() => editor.root.unmount()); }
 });
