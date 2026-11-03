@@ -1,0 +1,16 @@
+import {createServer} from 'vite';import path from 'node:path';import {readFile} from 'node:fs/promises';import JSZip from 'jszip';import ExcelJS from 'exceljs';import {jsPDF} from 'jspdf';import SevenZip from '7z-wasm';import {encode} from 'fast-png';import UTIF from 'utif';
+const files=new Map();
+const pdf=new jsPDF();pdf.text('MPN-QA Operating temperature 105 C. Supply voltage 1.2 V.',10,20);files.set('random.pdf',Buffer.from(pdf.output('arraybuffer')));
+files.set('QA-SPEC.rar',await readFile('tests/fixtures/spec-fill/QA-SPEC.rar'));
+const book=new ExcelJS.Workbook();book.addWorksheet('Ratings').addRows([['MPN','Voltage'],['MPN-QA','1.2 V']]);files.set('ratings.xlsx',Buffer.from(await book.xlsx.writeBuffer()));
+const doc=new JSZip();doc.file('word/document.xml','<w:document><w:p><w:r><w:t>MPN-QA operating temperature: 105 C</w:t></w:r></w:p></w:document>');files.set('notes.docx',await doc.generateAsync({type:'nodebuffer'}));
+files.set('drawing.dwg',Buffer.concat([Buffer.from([0,0,1,2,0,0]),Buffer.from('MPN-QA readable label only'),Buffer.from([0,0,0])]));
+const pixels=new Uint8Array([255,255,255,255]);files.set('image.png',Buffer.from(encode({width:1,height:1,data:pixels,channels:4})));
+files.set('scan.tiff',Buffer.from(UTIF.encodeImage(pixels.buffer,1,1)));
+const z=await SevenZip({print(){},printErr(){}});z.FS.writeFile('/data.txt',new TextEncoder().encode('MPN-QA 7z rating: 105 C'));z.callMain(['a','-bd','/qa.7z','/data.txt']);files.set('extra.7z',Buffer.from(z.FS.readFile('/qa.7z')));
+const mock=path.resolve('tests/support/materialSpecChatMock.tsx');
+const server=await createServer({configFile:false,root:process.cwd(),resolve:{alias:[{find:'@/integrations/supabase/client',replacement:mock},{find:'@/components/auth/UserContext',replacement:mock},{find:'./AiQuotaStatus',replacement:mock},{find:'./aiUsageTelemetry',replacement:mock},{find:'@',replacement:path.resolve('src')}]},worker:{format:'es'},optimizeDeps:{entries:['tests/support/materialSpecChatFixture.jsx'],include:['pdfjs-dist','7z-wasm','utif','xlsx','react/jsx-dev-runtime','occt-import-js','node-unrar-js','three','three/examples/jsm/loaders/STLLoader.js','three/examples/jsm/loaders/PLYLoader.js','three/examples/jsm/loaders/OBJLoader.js']},server:{host:'127.0.0.1',port:8099,strictPort:true},plugins:[{name:'material-spec-chat-qa',configureServer(server){server.middlewares.use((req,res,next)=>{
+  if(req.url==='/qa-catalogue'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify([...files].map(([name,data])=>({name,size:data.length}))))}
+  if(req.url.startsWith('/qa-spec/')){const file=files.get(decodeURIComponent(req.url.slice(9)));if(!file){res.statusCode=404;return res.end()}return res.end(file)}
+  if(req.url!=='/')return next();res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><title>料號 SPEC 問答隔離驗證</title><div id="root"></div><script type="module" src="/tests/support/materialSpecChatFixture.jsx"></script></html>');
+});}}]});await server.listen();console.log('Material SPEC Chat QA: http://127.0.0.1:8099/ (synthetic data/model, real file readers, no production requests)');
