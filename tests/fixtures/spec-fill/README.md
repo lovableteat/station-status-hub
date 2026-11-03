@@ -1,0 +1,1 @@
+Synthetic test data only. QA-BOX.stp is a 10 x 20 x 3 mm box exported by the installed occt-wasm kernel. QA-SPEC.rar contains that box and a plain text synthetic 1.2 V specification, created with the installed WinRAR. No product or user documents are included.
