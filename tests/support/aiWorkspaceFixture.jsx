@@ -6,10 +6,14 @@ import { Button } from '../../src/components/ui/button';
 import { MobileWorkspaceDock } from '../../src/components/layout/MobileWorkspaceDock';
 import { DirectMessageLauncher } from '../../src/components/collaboration/CollaborationCenter';
 import { fixtureState, setFixtureAccount } from './aiWorkspaceMock';
+import '../../src/index.css';
 
 // The provider is isolated below the real chat/recovery/telemetry code.
-window.fetch = async (url) => {
-  if (!String(url).startsWith('https://fixture.invalid/')) throw new Error('Only fixture provider requests are allowed');
+const localFetch=window.fetch.bind(window);
+window.fetch = async (url,init) => {
+  const href=typeof url==='string'?url:url instanceof URL?url.href:url.url;
+  if(new URL(href,location.href).origin===location.origin)return localFetch(url,init);
+  if (!href.startsWith('https://fixture.invalid/')) throw new Error('Only fixture provider requests are allowed');
   await new Promise(resolve => setTimeout(resolve, 1600));
   return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '隔離測試回覆：這段內容只屬於送出時的對話。' }] } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 };
