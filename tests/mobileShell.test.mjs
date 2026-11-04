@@ -87,3 +87,16 @@ test("AutoCheck on phones uses the tools sheet and result cards with the same em
   assert.match(css, /\.comparison-filterbar \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.comparison-result-cards \{ display: grid/);
 });
+
+test("admin and performance get the shared phone command bar and tools sheet; PCB drops its dead advisory styles", async () => {
+  const [admin, perf, pcbCss, adminTest] = await Promise.all([read("src/components/admin/AdminPanel.tsx"), read("src/components/performance/PerformanceAppraisalPage.tsx"), read("src/components/pcb-designer/pcb-designer.css"), read("tests/adminControlRoomUi.test.mjs")]);
+  assert.match(admin, /testId="admin-mobile-bar"/);
+  assert.match(admin, /testId="admin-mobile-tools"/);
+  assert.match(admin, /actions=\{activeTab === "users" \? \[\{ key: "create", label: "新增帳號"/);
+  assert.match(admin, /data-admin-zone="command"/, "the desktop header stays for the existing contract");
+  assert.match(adminTest, /data-admin-zone="command"/);
+  assert.match(perf, /testId="performance-mobile-bar"/);
+  assert.match(perf, /const navItems = NAV\.filter/);
+  assert.match(perf, /\{navItems\.map\(/);
+  assert.doesNotMatch(pcbCss, /pcb-mobile-advisory/);
+});
