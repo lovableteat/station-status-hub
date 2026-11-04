@@ -2515,3 +2515,36 @@ body {
   .mobile-record-card__action { min-height: 44px; height: 44px; gap: 6px; border-radius: 12px; font-size: 13px; font-weight: 700; }
   .mobile-record-card__action--more { grid-auto-columns: auto; }
 }
+
+/* ===== Phone home (2026-11-05): greeting, unresolved issues, two-column workspaces. Desktop never matches this block. ===== */
+@media (max-width: 767px) {
+  [data-testid="workspace-entrance"] { padding: 12px var(--mobile-page-gutter) 16px; }
+  .workspace-entrance-header { display: none; }
+  .mobile-home-head { padding: 2px 0 10px; }
+  .mobile-home-head h1 { margin: 0; font-size: 20px; line-height: 1.3; font-weight: 800; letter-spacing: -.01em; color: hsl(var(--foreground)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-home-head p { margin: 2px 0 0; font-size: 12px; line-height: 1.35; color: hsl(var(--muted-foreground)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-home-section { display: flex; align-items: center; justify-content: space-between; min-height: 32px; }
+  .mobile-home-section h2 { margin: 0; font-size: 13px; font-weight: 700; color: hsl(var(--muted-foreground)); }
+  .mobile-home-section button { min-height: 44px; padding: 0 4px; font-size: 13px; font-weight: 700; color: hsl(var(--primary)); }
+  .mobile-home-tasks { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 8px; }
+  .mobile-home-issue { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 60px; padding: 8px 12px; border: 1px solid hsl(var(--border)); border-radius: 14px; background: hsl(var(--card)); text-align: left; }
+  .mobile-home-issue:active { background: hsl(var(--accent)); }
+  .mobile-home-issue__tag { flex: none; min-width: 40px; padding: 2px 6px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--secondary)); font-size: 12px; font-weight: 700; text-align: center; color: hsl(var(--foreground)); }
+  .mobile-home-issue[data-priority="critical"] .mobile-home-issue__tag { border-color: hsl(var(--destructive) / .45); background: hsl(var(--destructive) / .14); color: hsl(var(--destructive)); }
+  .mobile-home-issue[data-priority="high"] .mobile-home-issue__tag { border-color: hsl(var(--warning) / .45); background: hsl(var(--warning) / .14); color: hsl(var(--warning)); }
+  .mobile-home-issue__text { min-width: 0; flex: 1 1 auto; }
+  .mobile-home-issue__text strong { display: block; overflow: hidden; font-size: 14px; line-height: 1.35; font-weight: 700; color: hsl(var(--foreground)); text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-home-issue__text small { display: block; margin-top: 1px; font-size: 12px; line-height: 1.35; color: hsl(var(--muted-foreground)); }
+  .mobile-home-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 60px; margin: 0; padding: 8px 12px; border: 1px dashed hsl(var(--border)); border-radius: 14px; font-size: 13px; color: hsl(var(--muted-foreground)); }
+  .mobile-home-note button { min-height: 44px; padding: 0 8px; font-weight: 700; color: hsl(var(--primary)); }
+  .workspace-entrance-mobile-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .workspace-entrance-mobile-list .workspace-entrance-mobile-row { min-height: 68px; gap: 10px; padding: 8px 10px; border: 1px solid hsl(var(--border)); border-radius: 14px; background: hsl(var(--card)); }
+  .workspace-entrance-mobile-list .workspace-entrance-mobile-icon { width: 36px; height: 36px; border-radius: 10px; }
+  .workspace-entrance-mobile-list .workspace-entrance-mobile-icon svg { width: 18px; height: 18px; }
+  .workspace-entrance-mobile-list .workspace-entrance-mobile-row > span:nth-child(2) > span:first-child { font-size: 14px; line-height: 1.3; }
+  .workspace-entrance-mobile-list .workspace-entrance-mobile-row > span:nth-child(2) > span:last-child { margin-top: 1px; font-size: 11px; }
+  .workspace-entrance-mobile-list .workspace-entrance-mobile-chevron { display: none; }
+}
+@media (max-width: 359px) {
+  .workspace-entrance-mobile-list .workspace-entrance-mobile-row > span:nth-child(2) > span:first-child { font-size: 13px; white-space: normal; overflow: visible; }
+}
