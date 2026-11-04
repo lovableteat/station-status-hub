@@ -52,6 +52,8 @@ jobs:
         run: node tests/auditPermissionsDialog.browser.cjs
       - name: BOM version upload, carry-over, diff export and phone layout
         run: node tests/auditBomVersions.browser.cjs
+      - name: Phone shell across files, AutoCheck, admin, performance and maintenance
+        run: node tests/auditMobileWorkspaces.browser.cjs
       - name: Short landscape maintenance navigation and touch scrolling
         run: node tests/auditShortLandscape.browser.cjs
       - run: npm run build
