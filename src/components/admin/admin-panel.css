@@ -1748,3 +1748,8 @@
 .admin-workspace :is(.admin-primary-action, .admin-primary-action:hover) { color: hsl(var(--primary-foreground)); background: hsl(var(--primary)); border-color: transparent; box-shadow: none; }
 .admin-workspace .admin-section-icon { background: hsl(var(--secondary)); color: hsl(var(--primary)); border-color: hsl(var(--border)); box-shadow: none; }
 .admin-shell, .admin-content { gap: 1rem; }
+
+/* 2026-11-04 phones: the command bar already carries 新增帳號, so the hero copy keeps a single entry point. */
+@media (max-width: 1023px) {
+  .admin-user-hero .admin-primary-action { display: none; }
+}

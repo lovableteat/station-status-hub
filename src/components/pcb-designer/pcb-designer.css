@@ -628,7 +628,6 @@
 }
 
 .pcb-mobile-project-actions,
-.pcb-mobile-advisory,
 .pcb-drawer-scrim {
   display: none;
 }
@@ -1220,15 +1219,6 @@
     min-height: 360px;
   }
 
-  .pcb-mobile-advisory {
-    display: block;
-    flex: none;
-    border-bottom: 1px solid #66531e;
-    background: #2a2414;
-    padding: 6px 10px;
-    font-size: 11px;
-    color: #fde68a;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

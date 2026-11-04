@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Search, Plus, UserPlus, Shield, LogOut, Users, Clock3, Lock, Menu, CircleHelp, UserCheck, Hourglass, Camera } from "lucide-react";
+import { Search, Plus, UserPlus, Shield, LogOut, Users, Clock3, Lock, Menu, CircleHelp, UserCheck, Hourglass, Camera, RadioTower, Network } from "lucide-react";
+import { useIsCompactLayout } from "@/hooks/use-mobile";
+import { MobileCommandBar, MobileToolsSheet } from "@/components/layout/mobile";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useUser } from "@/components/auth/UserContext";
@@ -61,6 +63,7 @@ interface SystemUser {
 }
 
 type AdminTab = "users" | "collaboration" | "api-management";
+const ADMIN_TAB_LABELS: Record<AdminTab, string> = { users: "帳號管理", collaboration: "通知與在線", "api-management": "API 管理" };
 
 const SHOW_ENGINEER_ADMIN = false;
 const SHOW_EXTENDED_ADMIN_COPY = false;
@@ -71,6 +74,8 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   const [engineers, setEngineers] = useState<Engineer[]>([]);
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
+  const compact = useIsCompactLayout();
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTeam, setFilterTeam] = useState("all-teams");
   const [userSearchTerm, setUserSearchTerm] = useState("");
@@ -512,6 +517,34 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         />
 
         <div className="admin-content">
+        {compact ? (
+          <>
+            <MobileCommandBar
+              testId="admin-mobile-bar"
+              icon={Shield}
+              title="後台管理"
+              context={ADMIN_TAB_LABELS[activeTab]}
+              actions={activeTab === "users" ? [{ key: "create", label: "新增帳號", icon: Plus, disabled: !canEditUsers, onClick: () => setIsUserDialogOpen(true) }] : []}
+              onOpenTools={() => setMobileToolsOpen(true)}
+              toolsLabel="管理選單"
+            />
+            <MobileToolsSheet
+              testId="admin-mobile-tools"
+              open={mobileToolsOpen}
+              onOpenChange={setMobileToolsOpen}
+              title="管理選單"
+              description="切換管理模組或登出"
+              sections={[
+                { key: "modules", title: "管理模組", items: [
+                  { key: "users", label: "帳號管理", description: "帳號、角色與權限", icon: Users, active: activeTab === "users", onSelect: () => setActiveTab("users") },
+                  { key: "collaboration", label: "通知與在線", description: "協作狀態與公告", icon: RadioTower, active: activeTab === "collaboration", onSelect: () => setActiveTab("collaboration") },
+                  ...(canViewApiManagement ? [{ key: "api-management", label: "API 管理", description: "金鑰、測試與文件", icon: Network, active: activeTab === "api-management", onSelect: () => setActiveTab("api-management") }] : []),
+                ] },
+                { key: "account", title: "帳號", items: [{ key: "logout", label: "登出", icon: LogOut, tone: "danger" as const, onSelect: logout }] },
+              ]}
+            />
+          </>
+        ) : (
         <header
           data-admin-zone="command"
           className="admin-command"
@@ -543,6 +576,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
             )}
           />
         </header>
+        )}
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="flex flex-col gap-3">
         {/* User Management Tab */}

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useIsCompactLayout } from "@/hooks/use-mobile";
+import { MobileCommandBar, MobileToolsSheet } from "@/components/layout/mobile";
 import {
   BookOpen,
   BellRing,
@@ -814,23 +816,45 @@ export function PerformanceAppraisalPage() {
     returnDetails?.feedback || returnDetails?.attachments.length || returnDetails?.returnHistory.length,
   );
 
+  const navItems = NAV.filter((item) => {
+    if (item.id === "organization") return canAccessOrganization;
+    if (["manager", "section-reports"].includes(item.id)) return canManagePerformance;
+    return item.id !== "records" || !canManagePerformance;
+  });
+  const compact = useIsCompactLayout();
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   return (
     <div
       className="performance-workspace rd2-workspace rd2-bright"
       data-performance-view={tab}
     >
+      {compact && (
+        <MobileCommandBar
+          testId="performance-mobile-bar"
+          icon={ClipboardCheck}
+          title="RD2 績效考核"
+          context={navItems.find((item) => item.id === tab)?.label}
+          onOpenTools={() => setMobileToolsOpen(true)}
+          toolsLabel="考核功能"
+        />
+      )}
+      {compact && (
+        <MobileToolsSheet
+          testId="performance-mobile-tools"
+          open={mobileToolsOpen}
+          onOpenChange={setMobileToolsOpen}
+          title="考核功能"
+          description="切換要處理的階段或檢視"
+          sections={[{ key: "nav", title: "前往", items: navItems.map((item) => ({ key: item.id, label: item.label, icon: item.icon, active: tab === item.id, onSelect: () => navigate(item.id) })) }]}
+        />
+      )}
       <aside className="rd2-sidebar" data-testid="performance-sidebar">
         <div className="rd2-brand">
           <ClipboardCheck />
           <strong>RD2 績效考核</strong>
         </div>
         <nav aria-label="績效考核導覽">
-          {NAV.filter((item) => {
-            if (item.id === "organization") return canAccessOrganization;
-            if (["manager", "section-reports"].includes(item.id))
-              return canManagePerformance;
-            return item.id !== "records" || !canManagePerformance;
-          }).map(
+          {navItems.map(
             (item) => (
               <button
                 type="button"
