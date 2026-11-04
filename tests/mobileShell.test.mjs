@@ -100,3 +100,19 @@ test("admin and performance get the shared phone command bar and tools sheet; PC
   assert.match(perf, /\{navItems\.map\(/);
   assert.doesNotMatch(pcbCss, /pcb-mobile-advisory/);
 });
+
+test("the phone home shows real unresolved issues and two-column workspaces without adding desktop work", async () => {
+  const [entrance, tasks, index, css] = await Promise.all([read("src/components/layout/WorkspaceEntrance.tsx"), read("src/components/layout/mobile/MobileHomeTasks.tsx"), read("src/pages/Index.tsx"), read("src/index.css")]);
+  assert.match(entrance, /window\.matchMedia\("\(max-width: 767px\)"\)/);
+  assert.match(entrance, /\{isPhone && showIssues && onOpenIssue && onOpenIssues && <MobileHomeTasks/, "only a phone with issue access mounts the read");
+  assert.match(entrance, /hidden content-start gap-3 md:grid/, "the desktop grid is unchanged");
+  assert.match(index, /showIssues=\{canViewModule\("issues"\)\}/);
+  assert.match(index, /handleStationNavigation\("issues", \{ openIssue: issueId \}\)/);
+  assert.match(tasks, /calculateIssueDashboardMetrics/, "the same ordering as the dashboard");
+  assert.match(tasks, /目前沒有待處理問題/);
+  assert.match(tasks, /問題清單暫時載入失敗/);
+  const block = css.slice(css.indexOf("Phone home (2026-11-05)"));
+  assert.match(block, /^[^\n]*\n@media \(max-width: 767px\)|@media \(max-width: 767px\) \{/);
+  assert.match(block, /\.workspace-entrance-mobile-list \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(block, /\.mobile-home-issue \{ display: flex; align-items: center; gap: 10px; width: 100%; min-height: 60px/);
+});

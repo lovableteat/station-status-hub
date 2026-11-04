@@ -1,6 +1,9 @@
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import { ArrowRight, ChevronRight } from "lucide-react";
 import { WorkspacePreview } from "./WorkspacePreview";
+import { MobileHomeTasks } from "./mobile/MobileHomeTasks";
+import { useUser } from "@/components/auth/UserContext";
+import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { cn } from "@/lib/utils";
 
 interface WorkspaceEntranceItem {
@@ -13,6 +16,10 @@ interface WorkspaceEntranceItem {
 interface WorkspaceEntranceProps {
   items: WorkspaceEntranceItem[];
   onSelect: (id: string) => void;
+  /** Phone home lists unresolved issues only for accounts that may open them. */
+  showIssues?: boolean;
+  onOpenIssue?: (issueId: string) => void;
+  onOpenIssues?: () => void;
 }
 
 const workspaceToneMap: Record<
@@ -105,7 +112,14 @@ const mobileWorkspaceTitleMap: Record<string, string> = {
 export function WorkspaceEntrance({
   items,
   onSelect,
+  showIssues = false,
+  onOpenIssue,
+  onOpenIssues,
 }: WorkspaceEntranceProps) {
+  const { user } = useUser();
+  const { activeProject } = useTestProject();
+  // Decided once at mount: only a phone mounts the issue summary, so desktop adds no request.
+  const [isPhone] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 767px)").matches);
   const isFiveItemLayout = items.length === 5;
   const isSixItemLayout = items.length === 6;
   const gridClass =
@@ -127,7 +141,7 @@ export function WorkspaceEntrance({
       data-testid="workspace-entrance"
     >
       <div className="flex w-full flex-1 flex-col">
-        <div className="workspace-entrance-header mb-3 flex flex-col gap-3 rounded-[1.35rem] border border-primary/15 bg-[linear-gradient(180deg,rgba(15,24,42,0.94),rgba(9,15,29,0.97))] px-4 py-3.5 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+        <div className="workspace-entrance-header mb-3 max-md:hidden flex flex-col gap-3 rounded-[1.35rem] border border-primary/15 bg-[linear-gradient(180deg,rgba(15,24,42,0.94),rgba(9,15,29,0.97))] px-4 py-3.5 sm:flex-row sm:items-end sm:justify-between sm:px-5">
           <div className="space-y-1.5">
             <h1 className="text-2xl font-black tracking-[-0.04em] text-foreground sm:text-3xl">
               <span className="md:hidden">我的工作區</span>
@@ -139,6 +153,12 @@ export function WorkspaceEntrance({
           </div>
         </div>
 
+        <div className="mobile-home-head md:hidden">
+          <h1>你好，{user?.displayName || user?.username || "歡迎回來"}</h1>
+          {activeProject?.name && <p>{activeProject.name}</p>}
+        </div>
+        {isPhone && showIssues && onOpenIssue && onOpenIssues && <MobileHomeTasks onOpenIssue={onOpenIssue} onOpenAll={onOpenIssues} />}
+        <div className="mobile-home-section md:hidden"><h2>全部工作區</h2></div>
         <div
           className="workspace-entrance-mobile-list overflow-hidden rounded-[1.4rem] border border-slate-700/70 bg-[#0c1929] md:hidden"
           data-testid="workspace-entrance-mobile-list"

@@ -635,7 +635,7 @@ const Index = () => {
 
   const renderWorkspaceContent = () => {
     if (activeWorkspace === null) {
-      return <WorkspaceEntrance items={entranceItems} onSelect={handleWorkspaceChange} />;
+      return <WorkspaceEntrance items={entranceItems} onSelect={handleWorkspaceChange} showIssues={canViewModule("issues")} onOpenIssue={(issueId) => handleStationNavigation("issues", { openIssue: issueId })} onOpenIssues={() => handleStationNavigation("issues")} />;
     }
 
     switch (activeWorkspace) {
