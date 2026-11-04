@@ -10,11 +10,11 @@ const fixtureRoot = new URL('fixtures/', import.meta.url);
 const nativePython = process.env.AUTOCHECK_PYTHON;
 const nativeOnly = { skip: !nativePython && 'Set AUTOCHECK_PYTHON and PYTHONPATH for the native AutoCheck draw.io regression' };
 
-test('AutoCheck 1027 manifest includes both original draw.io renderers and verifies every deployed source', async () => {
+test('AutoCheck 1104 manifest includes both original draw.io renderers and verifies every deployed source', async () => {
   const manifest = JSON.parse(await readFile(new URL('engine/manifest.json', publicRoot), 'utf8'));
-  assert.equal(manifest.origin, 'User-provided AutoCheck_1027.zip');
-  assert.equal(manifest.revision, '2026-10-27');
-  assert.equal(manifest.sourceSha256, 'b6449e6b08c64c6bf3fb69511ec5b44a87cbbc2852ed32f19358180270196bd5');
+  assert.equal(manifest.origin, 'User-provided AutoCheck.7z');
+  assert.equal(manifest.revision, '2026-11-04');
+  assert.equal(manifest.sourceSha256, 'c0a13c390edbe01a8b6aa39ac479c0ef89bf9e892cd5882bf4c7ef700ee56a76');
   const paths = manifest.files.map(file => file.path);
   assert.equal(new Set(paths).size, paths.length);
   for (const renderer of ['power_tree_drawio.py', 'i2c_block_drawio.py']) {
@@ -112,11 +112,16 @@ with tempfile.TemporaryDirectory() as temporary:
     assert paths['power_drawio_b'] == b_file
     assert b_file.read_text(encoding='utf-8') == '<mxfile>B original</mxfile>'
     previous_a = a_file.read_text(encoding='utf-8')
+    first_html = paths['ptree_html_a']
+    assert first_html.suffix == '.html'
+    previous_html = first_html.read_text(encoding='utf-8')
     with patch.object(power_tree_drawio, 'render_drawio', side_effect=RuntimeError('synthetic renderer failure')):
         bridge['_drawio_outputs'](result, out, {})
     assert a_file.read_text(encoding='utf-8') == previous_a
     assert b_file.read_text(encoding='utf-8') == '<mxfile>B original</mxfile>'
     assert not (out / 'power_tree_EVT_A_3.drawio').exists()
+    assert (out / 'power_tree_EVT_A_2.html').is_file()
+    assert first_html.read_text(encoding='utf-8') == previous_html
     assert any('synthetic renderer failure' in warning for warning in result.warnings)
 print('A/B filename collision and isolated draw.io failure verified')
 `);
@@ -141,5 +146,23 @@ with tempfile.TemporaryDirectory() as temporary:
             'xlsx', 'pdf', 'json', 'ptree_html', 'i2c_html', 'i2c_block_html'} <= keys, keys
     assert any('synthetic late report failure' in warning for warning in result['warnings'])
 print('partial-report artifacts retain all stable names after A draw.io generation')
+`);
+});
+
+
+test('Traditional Chinese report font uses the matching CNS CMap without altering text', nativeOnly, () => {
+  runPython(String.raw`
+from reportlab.pdfgen import canvas
+from pypdf import PdfReader
+with tempfile.TemporaryDirectory() as temporary:
+    path = Path(temporary) / 'font.pdf'
+    c = canvas.Canvas(str(path))
+    c.setFont('MSung-Light', 12)
+    c.drawString(20, 40, '\u8207\u5728\u65b0\u7248\u4f75\u6210\u540c\u4e00\u689d')
+    c.save()
+    doc = PdfReader(path)
+    fonts = [entry.get_object() for entry in doc.pages[0]['/Resources']['/Font'].values()]
+    assert any(font.get('/BaseFont') == '/MSung-Light' and font.get('/Encoding') == '/UniCNS-UCS2-H' for font in fonts)
+    assert '\u8207\u5728\u65b0\u7248' in doc.pages[0].extract_text()
 `);
 });

@@ -58,11 +58,14 @@ export function parseSessionSnapshot(value: unknown): ComparisonSession {
   function require(condition: unknown, detail: string): asserts condition {
     if (!condition) throw new Error(`工作階段資料無效：${detail}`);
   }
-  require(record(value) && keys(value, ["version", "projectName", "id", "result", "replies", "history", "savedAt"], ["libraryYaml"]), "缺少欄位或含有未知欄位");
+  require(record(value) && keys(value, ["version", "projectName", "id", "result", "replies", "history", "savedAt"], ["libraryYaml", "lastReviewKey"]), "缺少欄位或含有未知欄位");
+  require(value.lastReviewKey === undefined || text(value.lastReviewKey, false, 1024), "上次審查位置");
   require(value.version === 1 && text(value.projectName, true, 120) && text(value.id, true, 1024) && timestamp(value.savedAt), "版本、比對名稱、識別碼或儲存時間");
   require(value.libraryYaml === undefined || (text(value.libraryYaml, false, 2 * 1024 * 1024) && new TextEncoder().encode(value.libraryYaml).byteLength <= 2 * 1024 * 1024), "位址庫 YAML 不可超過 2 MiB");
   const result = value.result;
-  require(record(result) && keys(result, ["meta", "findings", "rows", "overview", "capRows", "railTodo", "railDomain", "powerTree", "powerTreeA", "i2cMap", "i2cMapA", "inputIssues", "warnings", "library", "artifacts"], ["rootcause"]), "比對結果結構");
+  require(record(result) && keys(result, ["meta", "findings", "rows", "overview", "capRows", "railTodo", "railDomain", "powerTree", "powerTreeA", "i2cMap", "i2cMapA", "inputIssues", "warnings", "library", "artifacts"], ["rootcause", "mode", "bomCheck"]), "比對結果結構");
+  require(result.mode === undefined || result.mode === "single" || result.mode === "compare", "工作模式");
+  require(result.bomCheck === undefined || jsonRecord(result.bomCheck), "BOM 一致性檢查");
   require(result.rootcause === undefined || jsonRecord(result.rootcause), "根因摘要");
   const meta = result.meta;
   require(record(meta) && keys(meta, ["tool_version", "generated", "a", "b"], ["rules_version", "config_hash", "warnings"]), "報表中繼資料");

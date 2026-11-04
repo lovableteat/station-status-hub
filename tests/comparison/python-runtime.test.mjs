@@ -143,8 +143,8 @@ with tempfile.TemporaryDirectory() as temporary:
 test('Public engine manifest includes only original Python source and safe config', async () => {
   const manifest = JSON.parse(await readFile(new URL('engine/manifest.json', publicRoot), 'utf8'));
   assert.equal(manifest.version, '0.2.0');
-  assert.equal(manifest.origin, 'User-provided AutoCheck_1027.zip');
-  assert.equal(manifest.revision, '2026-10-27');
+  assert.equal(manifest.origin, 'User-provided AutoCheck.7z');
+  assert.equal(manifest.revision, '2026-11-04');
   assert.equal(manifest.files.length, 52);
   for (const { path, sha256 } of manifest.files) {
     assert.match(path, /^(autocheck\/.+\.py|config\/(default|i2c_devices|i2c_devices_user|power_parts)\.yaml)$/);
@@ -231,6 +231,15 @@ c.save()
   assert.ok(run.result.findings.some(finding => finding.rule === 'MLCC_DERATING' && finding.status === 'NEW'));
   assert.ok(run.result.findings.some(finding => finding.status === 'CHANGE'));
   assert.ok(run.result.i2cMap.buses.length);
+  const single = await bridge.dispatch('single', { a: [], b: a.filter(input => input.path.endsWith('.dat')), bLabel: 'SOLO', options: {} });
+  assert.equal(single.type, 'result', single.message);
+  assert.equal(single.result.mode, 'single');
+  assert.equal(single.result.rows.length, 0);
+  assert.equal(single.result.findings.length, 0);
+  assert.ok(single.result.i2cMap.buses.length);
+  assert.ok(single.result.artifacts.some(artifact => artifact.key === 'ptree_html'));
+  assert.ok(!single.result.artifacts.some(artifact => /pdf|xlsx/.test(artifact.mime)));
+  assert.ok(single.result.inputIssues.some(([level]) => level === 'ERROR'), 'missing BOM is retained as an input issue, not silently treated as complete');
   assert.ok(run.result.rows.every(row => row.dest && row.key));
   // Keys are React keys and lookup keys on the page; the session store rejects duplicates (報表 Key 或檔名重複).
   assert.equal(new Set(run.result.artifacts.map(artifact => artifact.key)).size, run.result.artifacts.length, 'artifact keys are unique');
@@ -239,6 +248,7 @@ c.save()
   assert.ok(run.result.rows.every(row => typeof row.parent === 'string' && Array.isArray(row.children)), 'rows carry root-cause links');
   assert.ok(run.result.rootcause && typeof run.result.rootcause.parents === 'number', 'root-cause summary returned');
   const artifacts = new Map(run.result.artifacts.map(artifact => [artifact.key, artifact]));
+  for (const key of ['ptree_html_a', 'i2c_html_a', 'i2c_block_html_a']) assert.ok(artifacts.get(key)?.bytes.byteLength > 0, key);
   for (const key of ['power_drawio_a', 'power_drawio_b', 'i2c_drawio_a', 'i2c_drawio_b']) {
     const artifact = artifacts.get(key);
     assert.ok(artifact?.bytes.byteLength > 0, key);
@@ -251,6 +261,7 @@ c.save()
   }
   assert.equal(Buffer.from(artifacts.get('pdf').bytes).subarray(0, 4).toString(), '%PDF');
   assert.ok(Buffer.from(artifacts.get('pdf').bytes).includes(Buffer.from('MSung-Light')));
+  assert.ok(Buffer.from(artifacts.get('pdf').bytes).includes(Buffer.from('UniCNS-UCS2-H')), 'Traditional Chinese glyphs must use CNS encoding');
   assert.equal(Buffer.from(artifacts.get('xlsx').bytes).subarray(0, 2).toString(), 'PK');
   assert.ok(!artifacts.has('reviewDb'));
   const sidecar = JSON.parse(new TextDecoder().decode(artifacts.get('annotations').bytes));

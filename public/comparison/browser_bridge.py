@@ -1,4 +1,4 @@
-"""Browser adapter for the user's original AutoCheck 2026-10-27 engine."""
+"""Browser/server adapter for the user's AutoCheck.7z (2026-11-04)."""
 import dataclasses
 import datetime
 import json
@@ -11,17 +11,20 @@ import yaml
 
 from autocheck import review
 from autocheck.checks import i2c_map as i2c
-from autocheck.cli import write_outputs
+from autocheck.cli import write_outputs, write_single
 from autocheck.config import DEFAULT, load_config
 from autocheck.i2c_lib import accept_entry, draft_from_pdf, entry_yaml, page_text, validate_entry
-from autocheck.pipeline import run
+from autocheck.pipeline import run, run_single
 from autocheck.report import pdf_report
 from autocheck.report.data_out import meta
 from autocheck.tracking import TrackRow, expand_rows, link_root_causes
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont, defaultUnicodeEncodings
 
 
+# ReportLab ships this Traditional Chinese face with a GB encoding in some versions.
+# Match CNS1 glyphs to their own CMap; otherwise PDF.js displays different characters.
+defaultUnicodeEncodings['MSung-Light'] = ('cht', 'UniCNS-UCS2-H')
 pdfmetrics.registerFont(UnicodeCIDFont('MSung-Light'))
 pdf_report._FONT.update(name='MSung-Light', bold='MSung-Light', cjk=True)
 
@@ -131,7 +134,7 @@ def _library(payload, root):
     return {'entries': entries, 'yaml': text, 'errors': errors, 'warnings': warnings}
 
 
-_ROLE_SUFFIX = {'.xls': 'bom', '.xlsx': 'bom', '.htm': 'bom', '.html': 'bom', '.csv': 'bom', '.dsn': 'dsn', '.pdf': 'pdf'}
+_ROLE_SUFFIX = {'.xls': 'bom', '.xlsx': 'bom', '.htm': 'bom', '.html': 'bom', '.csv': 'bom', '.bom': 'bom', '.txt': 'bom', '.dsn': 'dsn', '.pdf': 'pdf'}
 
 
 def _role(path):
@@ -191,7 +194,7 @@ def _drawio_outputs(result, out, paths):
         target = out / filename
         suffix = 2
         while target.exists():
-            target = out / f'{Path(filename).stem}_{suffix}.drawio'
+            target = out / f'{Path(filename).stem}_{suffix}{Path(filename).suffix}'
             suffix += 1
         try:
             xml = make()
@@ -212,12 +215,28 @@ def _drawio_outputs(result, out, paths):
                                  a_label=result.a.label, b_label=result.a.label, diff=False, boxes_all=boxes_all)
 
         write_a('power_drawio_a', f'power_tree_{result.a.label}_A.drawio', power)
+        def power_html():
+            from autocheck.report.power_tree_diagram import layout, render_html
+            boxes = layout(power_a, None, '', result.a.label, show_internal=False)
+            boxes_all = layout(power_a, None, '', result.a.label, show_internal=True)
+            return render_html(boxes, f'Power tree 單板 {result.a.label}　產生 {result.generated}',
+                               a_label='', b_label=result.a.label, diff=False, boxes_all=boxes_all,
+                               banner=(power_a.get('bom_check') or {}).get('banner', ''))
+        write_a('ptree_html_a', f'power_tree_{result.a.label}_A.html', power_html)
     i2c_a = getattr(result, 'i2c_map_a', None) or {}
     if i2c_a.get('buses'):
         def i2c_diagram():
             from autocheck.report.i2c_block_drawio import render_drawio
             return render_drawio(i2c_a, f'I2C map 陽春版 {result.a.label}　產生 {result.generated}')
         write_a('i2c_drawio_a', f'i2c_block_{result.a.label}_A.drawio', i2c_diagram)
+        def i2c_html():
+            from autocheck.report.i2c_map_diagram import render_html
+            return render_html(i2c_a, f'I2C 單板 {result.a.label}　產生 {result.generated}', a_label='')
+        def i2c_block_html():
+            from autocheck.report.i2c_block_diagram import render_html
+            return render_html(i2c_a, f'I2C 單板 {result.a.label}　產生 {result.generated}')
+        write_a('i2c_html_a', f'i2c_map_{result.a.label}_A.html', i2c_html)
+        write_a('i2c_block_html_a', f'i2c_block_{result.a.label}_A.html', i2c_block_html)
 
 
 def _safe_workbook(workbook):
@@ -265,9 +284,7 @@ def _safe_workbook(workbook):
                     cell.data_type = 's'
 
 
-def _run(payload, root, progress):
-    a_label, b_label = _label(payload.get('aLabel'), 'A'), _label(payload.get('bLabel'), 'B')
-    a, b = _classified(payload['a'], a_label), _classified(payload['b'], b_label)
+def _prepare_context(payload, root):
     options = payload.get('options') or {}
     custom = _yaml_doc(_option_text(options['config'])) if options.get('config') is not None else {}
     library = _library({'yaml': _option_text(options['library'])} if options.get('library') is not None else {}, root)
@@ -285,8 +302,37 @@ def _run(payload, root, progress):
     custom['publish'] = {'base_url': '', 'static_dir': 'static'}
     config = root / 'effective.yaml'
     config.write_text(yaml.safe_dump(custom, allow_unicode=True), encoding='utf-8')
-    option = lambda key: options.get(key, {}).get('file') if isinstance(options.get(key), dict) else None
     os.environ['AUTOCHECK_REVIEW_DB'] = str(root / 'review.db')
+    return options, config, library
+
+
+def _single(payload, root, progress):
+    label = _label(payload.get('bLabel'), 'BOARD')
+    files = _classified(payload['b'], label)
+    options, config, library = _prepare_context(payload, root)
+    option = lambda key: options.get(key, {}).get('file') if isinstance(options.get(key), dict) else None
+    progress('解析單板 netlist，產生 Power Tree 與 I²C Map')
+    result = run_single(files, label, config, option('railMap'), option('i2cDeclared'), root / 'datasheets')
+    result.warnings.extend(library['warnings'])
+    paths = write_single(result, root / 'out', publish=False)
+    aliases = {'ptree_drawio': 'power_drawio_b', 'i2c_block_drawio': 'i2c_drawio_b', 'circuit': 'circuit_b'}
+    design = {'label': label, 'sources': [vars(source) for source in result.design.sources]}
+    return {'mode': 'single', 'meta': {'tool_version': result.tool_version, 'generated': result.generated,
+            'rules_version': result.cfg.get('rules_version'), 'config_hash': result.cfg.get('_hash'),
+            'a': design, 'b': design, 'warnings': result.warnings},
+            'findings': [], 'rows': [], 'overview': [], 'capRows': [], 'railTodo': [], 'railDomain': [],
+            'powerTree': result.power_tree, 'powerTreeA': {}, 'i2cMap': result.i2c_map, 'i2cMapA': {},
+            'bomCheck': {label: result.bom_check}, 'inputIssues': result.input_issues,
+            'warnings': result.warnings, 'library': library['entries'],
+            'artifacts': [_artifact(path, aliases.get(key, key)) for key, path in paths.items()
+                          if path.is_file() and path.stat().st_size]}
+
+
+def _run(payload, root, progress):
+    a_label, b_label = _label(payload.get('aLabel'), 'A'), _label(payload.get('bLabel'), 'B')
+    a, b = _classified(payload['a'], a_label), _classified(payload['b'], b_label)
+    options, config, library = _prepare_context(payload, root)
+    option = lambda key: options.get(key, {}).get('file') if isinstance(options.get(key), dict) else None
     progress('解析 A/B netlist、BOM、DSN 並執行原始檢查')
     result = run(a, b, a_label, b_label, config, option('railMap'), option('railDomain'),
                  option('i2cDeclared'), root / 'datasheets')
@@ -367,7 +413,7 @@ def _run(payload, root, progress):
             'i2cMap': result.i2c_map, 'i2cMapA': result.i2c_map_a,
             'inputIssues': result.input_issues, 'warnings': result.warnings,
             'library': library['entries'], 'artifacts': artifacts,
-            'rootcause': getattr(result, 'rootcause', None) or {}}
+            'rootcause': getattr(result, 'rootcause', None) or {}, 'bomCheck': getattr(result, 'bom_check', None) or {}}
 
 
 def _tracker(payload, root):
@@ -408,6 +454,8 @@ def autocheck_dispatch(request_json, progress):
     root = Path(payload['root'])
     if kind == 'run':
         result = _run(payload, root, progress)
+    elif kind == 'single':
+        result = _single(payload, root, progress)
     elif kind == 'tracker':
         result = _tracker(payload, root)
     elif kind == 'library':

@@ -49,7 +49,7 @@ function component(path, exported, replacements) {
 }
 
 function session() {
-  return { version: 1, id: '["QA","EVT","DVT"]', projectName: "QA", replies: {}, history: [], savedAt: "2026-10-15T00:00:00Z", result: { rows: [], inputIssues: [], warnings: [], library: [], artifacts: [], meta: { a: { label: "EVT" }, b: { label: "DVT" }, tool_version: "QA" } } };
+  return { version: 1, id: '["QA","EVT","DVT"]', projectName: "QA", replies: {}, history: [], savedAt: "2026-10-15T00:00:00Z", result: { powerTree: {}, powerTreeA: {}, findings: [], capRows: [], rows: [], inputIssues: [], warnings: [], library: [], artifacts: [], meta: { a: { label: "EVT" }, b: { label: "DVT" }, tool_version: "QA" } } };
 }
 
 function workspace(tab = "diagram", stored = []) {
@@ -59,6 +59,7 @@ function workspace(tab = "diagram", stored = []) {
   const updates = [];
   const harness = component("ComparisonWorkspace.tsx", "default", {
     "@/components/auth/UserContext": { useUser: () => ({ user: { userId: currentAccount, displayName: "QA" } }) },
+    "@/hooks/use-mobile": { useIsCompactLayout: () => false },
     "@/hooks/usePermissions": { usePermissions: () => ({ canEditModule: () => editable }) },
     "@/hooks/useWorkspaceMutationScope": { useWorkspaceMutationScope: () => ({}) },
     "./useComparisonFilters": { useComparisonFilters: () => ({ filters, update(key, value) { updates.push([key, value]); filters[key] = value; }, clear() {} }) },

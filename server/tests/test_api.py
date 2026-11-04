@@ -65,7 +65,7 @@ def test_health_reports_engine_limits_and_auth(client):
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] and body["service"] == "autocheck-api" and body["auth"] == "token"
-    assert body["engine"]["revision"] == "2026-10-27" and body["engine"]["files"] == 52
+    assert body["engine"]["revision"] == "2026-11-04" and body["engine"]["files"] == 52
     assert body["limits"] == {"count": 1000, "file": 64 * 1024 * 1024, "total": 128 * 1024 * 1024}
     assert client.get("/api/autocheck/health", headers={"Authorization": "Bearer wrong"}).status_code == 401
     assert client.get("/api/autocheck/health", headers=auth()).status_code == 200
@@ -134,6 +134,25 @@ def test_run_returns_the_browser_contract(run_result):
     assert "父項" in head and "PDF" in head
     pdf_column = head.index("PDF")
     assert all(row[pdf_column].data_type == "f" for row in sheet.iter_rows(min_row=2)), "PDF link formulas survive the safety pass"
+
+
+def test_single_board_uses_original_pipeline_without_bom_or_comparison_reports(client):
+    refs, files = revision("SOLO", "A")
+    refs = [item for item in refs if item["path"].endswith(".dat")]
+    files = [item for item in files if item[1][0].endswith(".dat")]
+    before = temp_dirs()
+    response = post(client, "single", {"a": [], "b": refs, "bLabel": "SOLO", "options": {}}, files)
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["mode"] == "single" and result["meta"]["b"]["label"] == "SOLO"
+    assert result["rows"] == [] and result["findings"] == []
+    assert any(level == "ERROR" for level, _ in result["inputIssues"])
+    keys = {artifact["key"] for artifact in result["artifacts"]}
+    assert "ptree_html" in keys and "circuit_b" in keys and "xlsx" not in keys and "pdf" not in keys
+    assert all(not artifact["name"].endswith((".pdf", ".xlsx")) for artifact in result["artifacts"])
+    assert temp_dirs() == before
+    assert post(client, "single", {"b": [{"path": "../bad.dat", "part": "bad"}]}, [("bad", ("bad", b"x"))]).status_code == 400
+    assert post(client, "single", {}, headers={}).status_code == 401
 
 
 def test_tracker_fills_replies_into_the_workbook(client, run_result):

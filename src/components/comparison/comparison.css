@@ -489,3 +489,71 @@
 
 /* 2026-10-27 engine: root-cause markers in the results table */
 .comparison-result-table .comparison-rootcause { display: block; margin-bottom: 2px; color: hsl(var(--warning)); font-weight: 600; }
+
+/* AutoCheck native workflows share the existing workspace controls and density. */
+.comparison-workspace [hidden] { display: none !important; }
+.comparison-multi-filter { display: grid; gap: 8px; max-height: 340px; overflow-y: auto; }
+.comparison-multi-filter label { display: flex; gap: 8px; align-items: center; min-height: 30px; font-size: 13px; }
+.comparison-filterbar > button { max-width: 350px; overflow: hidden; text-overflow: ellipsis; justify-content: flex-start; }
+.comparison-mode-switch, .comparison-single-sources, .comparison-chart-source, .comparison-chart-source > div,
+.comparison-review-modes, .comparison-review-navigation, .comparison-review-view-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.comparison-mode-switch { margin-bottom: 16px; }
+.comparison-single-sources { margin-bottom: 12px; color: hsl(var(--muted-foreground)); font-size: 13px; }
+.comparison-chart-source { justify-content: space-between; padding: 12px; border: 1px solid hsl(var(--border)); border-radius: 10px; }
+.comparison-review-modes { padding: 12px; border-bottom: 1px solid hsl(var(--border)); }
+.comparison-review-modes > label { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.comparison-review-side { padding: 12px; border-bottom: 1px solid hsl(var(--border)); }
+.comparison-review-navigation > select { min-width: 200px; flex: 1; max-width: 620px; }
+.comparison-review-view-options { padding-block: 12px; color: hsl(var(--muted-foreground)); font-size: 13px; }
+.comparison-review-view-options > label { display: flex; align-items: center; gap: 8px; }
+.comparison-workspace .comparison-review-side select, .comparison-workspace .comparison-batch-review select,
+.comparison-workspace .comparison-review-modes select { min-height: 38px; max-width: 100%; padding: 6px 10px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--input)); color: hsl(var(--foreground)); font-size: 13px; }
+.comparison-review-current { padding: 12px; border: 1px solid hsl(var(--border)); border-left: 3px solid hsl(var(--primary)); border-radius: 6px; }
+.comparison-review-current p { margin-top: 6px; color: hsl(var(--muted-foreground)); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.comparison-review-children { margin-top: 8px; padding: 10px; border: 1px solid hsl(var(--border)); border-radius: 6px; }
+.comparison-review-children button { display: flex; width: 100%; margin-top: 6px; text-align: left; white-space: normal; justify-content: flex-start; }
+.comparison-pdf-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; margin-top: 12px; }
+.comparison-pdf-pane { min-width: 0; border: 1px solid hsl(var(--border)); border-radius: 8px; overflow: hidden; }
+.comparison-pdf-pane > header { min-height: 44px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 8px 12px; background: hsl(var(--muted) / .4); font-size: 13px; }
+.comparison-pdf-pane > header span { color: hsl(var(--muted-foreground)); }
+.comparison-pdf-pane > header a { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: hsl(var(--primary)); }
+.comparison-pdf-pane a svg { width: 14px; height: 14px; }
+.comparison-pdf-pane iframe { display: block; width: 100%; border: 0; background: #fff; }
+.comparison-pdf-message { padding: 12px; color: hsl(var(--warning)); font-size: 13px; }
+.comparison-review-compose { margin-top: 12px; padding: 12px; border: 1px solid hsl(var(--border)); border-radius: 8px; }
+.comparison-review-fields-inline { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-top: 12px; }
+.comparison-review-fields-inline label { display: grid; align-content: start; gap: 6px; font-size: 13px; }
+.comparison-review-note { grid-column: 1 / -1; }
+.comparison-review-note textarea { min-height: 68px; }
+.comparison-batch-review { padding: 0 12px; }
+.comparison-batch-scroll { overflow: auto; border: 1px solid hsl(var(--border)); border-radius: 8px; }
+.comparison-batch-table { width: 100%; min-width: 1450px; font-size: 13px; border-collapse: separate; border-spacing: 0; }
+.comparison-batch-table th { position: sticky; top: 0; z-index: 1; background: hsl(var(--card)); text-align: left; white-space: nowrap; }
+.comparison-batch-table :is(th, td) { padding: 8px; border-bottom: 1px solid hsl(var(--border)); vertical-align: top; }
+.comparison-batch-table td:nth-child(3) { min-width: 220px; max-width: 320px; }
+.comparison-batch-table td:nth-child(5) { max-width: 220px; overflow-wrap: anywhere; }
+.comparison-batch-table :is(input, select) { min-width: 110px; min-height: 36px; font-size: 13px; }
+.comparison-batch-table td:nth-child(9) input { min-width: 260px; }
+.comparison-batch-table small { display: block; color: hsl(var(--muted-foreground)); }
+.comparison-workspace .comparison-history { padding: 12px; }
+.comparison-workspace .comparison-history p { padding: 8px 0; border-bottom: 1px solid hsl(var(--border)); overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .comparison-pdf-grid { grid-template-columns: minmax(0,1fr); }
+  .comparison-review-navigation > select { order: -1; flex-basis: 100%; }
+  .comparison-review-fields-inline { grid-template-columns: minmax(0,1fr); }
+  .comparison-review-modes > label { margin-left: 0; width: 100%; min-height: 36px; }
+  .comparison-review-view-options { align-items: stretch; }
+  .comparison-review-view-options > label { flex: 1 1 180px; }
+  .comparison-review-view-options > span { width: 100%; }
+  .comparison-review-save { flex-wrap: wrap; gap: 8px; }
+}
+.comparison-pdf-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid hsl(var(--border)); }
+.comparison-pdf-controls button { padding: 4px 6px; border: 1px solid hsl(var(--border)); border-radius: 4px; }
+.comparison-pdf-controls button:disabled { opacity: .4; }
+.comparison-pdf-controls label { display: flex; align-items: center; gap: 4px; }
+.comparison-pdf-controls input { width: 50px; padding: 2px; border: 1px solid hsl(var(--border)); background: hsl(var(--input)); }
+.comparison-pdf-scroll { overflow: auto; background: #474747; overscroll-behavior: contain; }
+.comparison-pdf-scroll canvas { display: block; background: #fff; max-width: none; }
+.comparison-pdf-page { position: relative; width: fit-content; }
+.comparison-pdf-link { position: absolute; cursor: pointer; background: transparent; }
+.comparison-pdf-link:hover, .comparison-pdf-link:focus-visible { outline: 2px solid #3399ff; background: #3399ff22; }

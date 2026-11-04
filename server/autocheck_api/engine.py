@@ -24,7 +24,7 @@ LIMITS = {"count": 1000, "file": 64 * 1024 * 1024, "total": 128 * 1024 * 1024}
 LIMIT_MESSAGE = "輸入超過限制（1000 個檔案、單檔 64 MiB、總計 128 MiB）"
 TEXT_LIMIT = 2 * 1024 * 1024
 ADAPTERS = ("browser_compat.py", "power_tree_compat.py", "browser_bridge.py")
-KINDS = ("run", "tracker", "library", "datasheet")
+KINDS = ("run", "single", "tracker", "library", "datasheet")
 OPTION_KEYS = ("config", "railMap", "railDomain", "i2cDeclared", "library")
 TEXT_OPTIONS = ("config", "library")
 log = logging.getLogger("autocheck_api")
@@ -96,8 +96,8 @@ def materialize(kind: str, payload: Any, parts: dict[str, bytes], root: Path) ->
     if not isinstance(payload, dict):
         raise RequestError("工作內容格式無效")
     inputs = Inputs(parts)
-    if kind == "run":
-        a = [_write(root, "a", path, data) for path, data in inputs.files(payload.get("a"))]
+    if kind in ("run", "single"):
+        a = [_write(root, "a", path, data) for path, data in inputs.files([] if kind == "single" else payload.get("a"))]
         b = [_write(root, "b", path, data) for path, data in inputs.files(payload.get("b"))]
         options = payload.get("options") or {}
         if not isinstance(options, dict):
@@ -142,7 +142,7 @@ def _encoded(artifact: dict) -> dict:
 
 def collect(kind: str, result: Any) -> Any:
     """Replaces artifact paths (temporary files) with base64 bytes, as the worker transfers ArrayBuffers."""
-    if kind == "run":
+    if kind in ("run", "single"):
         result["artifacts"] = [_encoded(artifact) for artifact in result["artifacts"]]
     elif kind == "tracker":
         result = _encoded(result)
