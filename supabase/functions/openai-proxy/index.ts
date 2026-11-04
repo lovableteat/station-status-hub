@@ -11,6 +11,88 @@ const respond = (message: string, status: number) => new Response(JSON.stringify
 });
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
+
+// Forward only bounded, explicitly supported per-request generation options.
+// Keep credentials, model selection and upstream URL under the existing guards.
+function generationOptions(chat: Record<string, unknown>) {
+  const options: Record<string, unknown> = {};
+  if (chat.max_completion_tokens !== undefined) {
+    if (!Number.isInteger(chat.max_completion_tokens) || Number(chat.max_completion_tokens) < 1 || Number(chat.max_completion_tokens) > 32_768)
+      throw new TypeError("Invalid completion token budget");
+    options.max_completion_tokens = chat.max_completion_tokens;
+  }
+  if (chat.reasoning_effort !== undefined) {
+    if (typeof chat.reasoning_effort !== 'string' || !['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(chat.reasoning_effort))
+      throw new TypeError("Invalid reasoning effort");
+    options.reasoning_effort = chat.reasoning_effort;
+  }
+  if (chat.store !== undefined) {
+    // Opting out is supported; this endpoint cannot opt an existing conversation
+    // into provider-side storage on a caller's behalf.
+    if (chat.store !== false) throw new TypeError("Provider storage must remain disabled");
+    options.store = false;
+  }
+  if (chat.response_format !== undefined) {
+    const format = object(chat.response_format);
+    if (format.type === 'json_object' || format.type === 'text') {
+      if (Object.keys(format).some(key => key !== 'type')) throw new TypeError("Invalid response format");
+      options.response_format = { type: format.type };
+    } else if (format.type === 'json_schema') {
+      if (Object.keys(format).some(key => !['type', 'json_schema'].includes(key))) throw new TypeError("Invalid response format");
+      const definition = object(format.json_schema);
+      if (typeof definition.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(definition.name)
+        || Object.keys(definition).some(key => !['name', 'description', 'schema', 'strict'].includes(key))
+        || (definition.strict !== undefined && typeof definition.strict !== 'boolean')
+        || (definition.description !== undefined && (typeof definition.description !== 'string' || definition.description.length > 1000)))
+        throw new TypeError("Invalid schema definition");
+      const schema = object(definition.schema);
+      if (schema.type !== 'object' || JSON.stringify(schema).length > 32_768) throw new TypeError("Invalid schema root or size");
+      let nodes = 0;
+      const check = (value: unknown, depth: number) => {
+        if (++nodes > 5000 || depth > 16) throw new TypeError("Schema is too complex");
+        if (typeof value === 'number' && !Number.isFinite(value)) throw new TypeError("Invalid schema number");
+        if (typeof value === 'string' && value.length > 16_384) throw new TypeError("Schema value is too long");
+        if (Array.isArray(value)) { for (const child of value) check(child, depth + 1); return; }
+        if (!value || typeof value !== 'object') return;
+        for (const child of Object.values(object(value))) check(child, depth + 1);
+      };
+      check(schema, 0);
+      const checkSchema = (value: unknown) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError("Invalid schema node");
+        const entry = object(value);
+        if (entry.$ref !== undefined && (typeof entry.$ref !== 'string' || !entry.$ref.startsWith('#/')))
+          throw new TypeError("Only local schema references are supported");
+        if (entry.type !== undefined) {
+          const types = Array.isArray(entry.type) ? entry.type : [entry.type];
+          if (!types.length || types.some(type => typeof type !== 'string' || !['object', 'array', 'string', 'number', 'integer', 'boolean', 'null'].includes(type)))
+            throw new TypeError("Invalid schema type");
+        }
+        if (entry.required !== undefined && (!Array.isArray(entry.required) || entry.required.some(key => typeof key !== 'string')))
+          throw new TypeError("Invalid schema required fields");
+        for (const key of ['properties', '$defs', 'definitions']) {
+          if (entry[key] === undefined) continue;
+          if (!entry[key] || typeof entry[key] !== 'object' || Array.isArray(entry[key])) throw new TypeError("Invalid schema properties");
+          for (const child of Object.values(object(entry[key]))) checkSchema(child);
+        }
+        if (entry.items !== undefined) checkSchema(entry.items);
+        if (entry.additionalProperties !== undefined && typeof entry.additionalProperties !== 'boolean') checkSchema(entry.additionalProperties);
+        for (const key of ['anyOf', 'oneOf', 'allOf']) {
+          if (entry[key] === undefined) continue;
+          if (!Array.isArray(entry[key]) || !entry[key].length) throw new TypeError("Invalid schema alternatives");
+          for (const child of entry[key]) checkSchema(child);
+        }
+      };
+      checkSchema(schema);
+      options.response_format = { type: 'json_schema', json_schema: {
+        name: definition.name, schema,
+        ...(definition.strict === undefined ? {} : { strict: definition.strict }),
+        ...(definition.description === undefined ? {} : { description: definition.description }),
+      } };
+    } else throw new TypeError("Unsupported response format");
+  }
+  return options;
+}
+
 async function readBody(request: Request) {
   const reader = request.body?.getReader();
   const decoder = new TextDecoder();
@@ -76,13 +158,19 @@ Deno.serve(async (request: Request) => {
     if (body.operation === 'chat' && (!model || model.length > 160 || !Array.isArray(chat.messages) || !chat.messages.length || chat.messages.length > 100))
       return respond('請檢查模型與對話內容。', 400);
 
+    let options: Record<string, unknown> = {};
+    if (body.operation === 'chat') {
+      try { options = generationOptions(chat); }
+      catch { return respond('AI 分析參數格式不正確，請調整模型設定後重試。', 400); }
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 120_000);
     try {
       const upstream = await fetch(`https://api.openai.com/v1/${body.operation === 'models' ? 'models' : 'chat/completions'}`, {
         method: body.operation === 'models' ? 'GET' : 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: body.operation === 'models' ? undefined : JSON.stringify({ model, messages: chat.messages }),
+        body: body.operation === 'models' ? undefined : JSON.stringify({ model, messages: chat.messages, ...options }),
         signal: controller.signal,
         redirect: 'error',
       });
