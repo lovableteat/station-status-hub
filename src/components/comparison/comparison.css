@@ -557,3 +557,22 @@
 .comparison-pdf-page { position: relative; width: fit-content; }
 .comparison-pdf-link { position: absolute; cursor: pointer; background: transparent; }
 .comparison-pdf-link:hover, .comparison-pdf-link:focus-visible { outline: 2px solid #3399ff; background: #3399ff22; }
+
+/* 2026-11-04 phone layout: two-column filter grid, result cards, card/table switch */
+.comparison-results-view { display: none; }
+@media (max-width: 1023px) {
+  .comparison-results > .comparison-section-heading { flex-wrap: wrap; padding: 14px 12px 0; }
+  .comparison-results-view { display: flex; gap: 6px; flex-basis: 100%; }
+  .comparison-results-view button { flex: 1; min-height: 40px; }
+  .comparison-filterbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px 12px; }
+  .comparison-filterbar > .comparison-search { grid-column: span 2; }
+  .comparison-filterbar > .comparison-search input { height: 44px; font-size: 16px; }
+  .comparison-filterbar > [role=combobox], .comparison-filterbar > button { width: 100%; min-width: 0; max-width: none; min-height: 44px; font-size: 13px; }
+  .comparison-filter-chips { padding: 8px 12px; gap: 6px; }
+  .comparison-filter-chips button { min-height: 36px; }
+  .comparison-result-cards { display: grid; gap: 8px; padding: 10px 12px; }
+  .comparison-result-cards .comparison-row-status { align-self: center; }
+  .comparison-result-cards .comparison-empty-result { margin: 0; padding: 32px 12px; text-align: center; font-size: 14px; color: hsl(var(--muted-foreground)); }
+  .comparison-results-footer { padding: 8px 12px; }
+  .comparison-results-footer button { width: 44px; height: 44px; }
+}

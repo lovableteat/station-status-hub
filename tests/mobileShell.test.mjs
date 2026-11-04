@@ -72,3 +72,18 @@ test("the dock only lists destinations that can actually render", async () => {
   assert.doesNotMatch(dock, /id: "user-management"/, "後台管理 stays in the account menu, so the sheet must not advertise it");
   assert.doesNotMatch(dock, /ShieldCheck/);
 });
+
+test("AutoCheck on phones uses the tools sheet and result cards with the same empty text and filters", async () => {
+  const [workspace, results, css] = await Promise.all([read("src/components/comparison/ComparisonWorkspace.tsx"), read("src/components/comparison/ComparisonResults.tsx"), read("src/components/comparison/comparison.css")]);
+  assert.doesNotMatch(workspace, /<Popover>/, "header tools are a bottom sheet, not a popover");
+  assert.match(workspace, /data-testid="comparison-mobile-tools-trigger"/);
+  assert.match(workspace, /<MobileToolsSheet testId="comparison-mobile-tools"/);
+  assert.match(workspace, /<ComparisonGuide \/><ComparisonFeedback/, "guide, feedback, backups and engine settings keep their handlers inside the sheet");
+  assert.match(results, /const showCards = compact && mobileView === "cards";/);
+  assert.match(results, /data-testid="comparison-result-cards"/);
+  assert.match(results, /aria-label="結果呈現方式"/);
+  assert.ok(results.indexOf('className="comparison-filterbar"') < results.indexOf('data-testid="comparison-result-cards"'), "the persistent filter bar stays above the cards");
+  assert.equal((results.match(/目前篩選條件沒有符合的比對結果/g) ?? []).length, 1, "cards and table share one empty-state string");
+  assert.match(css, /\.comparison-filterbar \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.comparison-result-cards \{ display: grid/);
+});
