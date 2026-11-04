@@ -15,6 +15,7 @@ const project = { id: 'qa-project', name: 'QA 專案', status: 'active' };
 const projects = [project];
 const editorsByRecordId = new Map();
 const files = new Map();
+const privateMarks = new Map();
 export const useUser = () => ({ user: useSyncExternalStore(subscribeAccount, getAccount), sessionMode: 'authenticated', isRealtimeAuthenticated: true });
 export const usePermissions = () => {
   const account = useSyncExternalStore(subscribeAccount, getAccount);
@@ -26,6 +27,21 @@ export const logMaterialRecordChange = () => {};
 export const logMaterialReportExport = () => {};
 export const logMaterialWorkspaceAction = () => {};
 export const supabase = { ...baseSupabase, from(table) {
+  if (table === 'material_personal_marks') {
+    const filters={}; let method='select',payload;
+    const query={select(){return this},eq(key,value){filters[key]=value;return this},in(key,values){filters[key]=values;return this},order(){return this},range(){return this},abortSignal(){return this},
+      upsert(row){method='upsert';payload=row;return this},delete(){method='delete';return this},
+      then(resolve,reject){return Promise.resolve().then(()=>{
+        const rows=Array.isArray(payload)?payload:[payload];
+        const owner=rows[0]?.owner_id??filters.owner_id;
+        if(owner!==user.userId||user.access==='none')return{data:[],error:new Error('QA owner boundary')};
+        const workspace=rows[0]?.workspace_id??filters.workspace_id;
+        const key=JSON.stringify([owner,workspace]);const marks=privateMarks.get(key)??new Set();
+        if(method==='upsert')rows.forEach(row=>marks.add(row.group_key));
+        if(method==='delete')(Array.isArray(filters.group_key)?filters.group_key:[filters.group_key]).forEach(key=>marks.delete(key));
+        privateMarks.set(key,marks);return{data:[...marks].map(group_key=>({group_key})),error:null};
+      }).then(resolve,reject)}};return query;
+  }
   if (table !== 'company_supplier_contacts') return baseSupabase.from(table);
   let range = [0, 499];
   return { select() { return this; }, order() { return this; }, range(a,b) { range=[a,b]; return this; }, abortSignal() { return this; },
@@ -48,6 +64,13 @@ const makeRecord = (ref, index, overrides = {}) => ({
   trackingStatus: index === 8 ? 'SYMBOL申請中' : index === 0 ? '處理中' : '', trackingHistory: [], trackingNote: '', sourcingStatus: 'Approved', ...overrides,
 });
 const records = ['R1', 'R1', 'PR1', 'R10', 'R1_C0P1', 'LB48', 'C1', 'J1', 'U1', 'J2', 'J2'].map((ref, index) => makeRecord(ref, index));
+if (new URLSearchParams(window.location.search).has('qaMainRows')) {
+  const shared={name:'QA MERGED CAP 10uF',partNumber:'QA-PHYSICAL-CAP',virtualAlternative:'QA-VIRTUAL-CAP',manufacturer:'QA MAIN CO',manufacturerPartNumber:'QA-MAIN-CAP',partSpec:'CAP 10uF',pcbFootprint:'C0402'};
+  records.push(makeRecord('C101_CP1',101,{...shared,qty:2}),makeRecord('C101_CP1',102,{...shared,isGroupStart:false,manufacturer:'ALT ONLY VENDOR',manufacturerPartNumber:'QA-ALT-VIRTUAL',virtualAlternative:'QA-ALT-VIRTUAL'}),
+    makeRecord('C202_CP2',103,{...shared,qty:3}),makeRecord('C202_CP2',104,{...shared,isGroupStart:false,manufacturer:'ALT ONLY VENDOR',manufacturerPartNumber:'QA-ALT-FOOTPRINT',virtualAlternative:''}),
+    makeRecord('C202_CP2',105,{...shared,isGroupStart:false,manufacturer:'ALT ONLY VENDOR',manufacturerPartNumber:'QA-ALT-NO-FOOTPRINT',virtualAlternative:'',pcbFootprint:''}),
+    makeRecord('C202_CP2',106,{...shared,isGroupStart:false,manufacturer:'ALT ONLY VENDOR',manufacturerPartNumber:'QA-ALT-ODM',partUsageStatus:'新設計產品不建議使用 - ODM'}));
+}
 if (new URLSearchParams(window.location.search).has('qaPages')) {
   records.push(...Array.from({ length: 30 }, (_, index) => makeRecord(`R${100 + index}`, 11 + index)));
 }

@@ -78,7 +78,7 @@ test("material vendor cells keep relation metadata inside the hover card", () =>
   assert.match(identityBlock, /\["REF DES", refs, /);
   assert.match(identityBlock, /\["MPN", mpns, /);
   assert.match(primaryCellBlock, /<MaterialIdentityHover/);
-  assert.doesNotMatch(primaryCellBlock, /group\.displayRef/);
+  assert.match(primaryCellBlock, /row\.isLocation && [^\n]*位置：\{group\.displayRef\}/);
   assert.doesNotMatch(primaryCellBlock, /個 MPN/);
 });
 
@@ -142,8 +142,8 @@ test("the table shows Part Spec as its own workbook column and keeps the old spe
   assert.match(rowBlock, /data-material-cell="partSpec"/);
   assert.match(alternativeBlock, /record\.partSpec \|\| group\.partSpec/);
   assert.doesNotMatch(alternativeBlock, /record\.remark/);
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 17);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 17);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 18);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 18);
   assert.doesNotMatch(source, /specification: ColumnFilterSelection|specification: null|case "specification"/);
 });
 

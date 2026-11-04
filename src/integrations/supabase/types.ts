@@ -1216,6 +1216,12 @@ type BaseDatabase = {
           },
         ]
       }
+      material_personal_marks: {
+        Row: { owner_id: string; workspace_id: string; group_key: string; group_hash: string }
+        Insert: { owner_id?: string; workspace_id: string; group_key: string; group_hash?: never }
+        Update: { owner_id?: string; workspace_id?: string; group_key?: string; group_hash?: never }
+        Relationships: []
+      }
       material_bom_workspaces: {
         Row: {
           created_at: string
