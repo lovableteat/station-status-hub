@@ -3,6 +3,16 @@ import test from "node:test";
 import postcss from "postcss";
 
 import charcoalPalette, { recolorCssValue } from "../../scripts/postcss-charcoal-palette.mjs";
+import { readFile } from 'node:fs/promises';
+
+test('selected AI model retains its authored accent after the charcoal palette pass',async()=>{
+  const source=await readFile(new URL('../../src/index.css',import.meta.url),'utf8');
+  const css=source.match(/\.ai-selected-model\s*\{[^}]+\}/)?.[0];
+  assert.ok(css);
+  const authored=postcss.parse(css).first;
+  const compiled=(await postcss([charcoalPalette()]).process(css,{from:undefined})).root.first;
+  for(const prop of ['background','color','border-color'])assert.equal(compiled.nodes.find(node=>node.prop===prop).value,authored.nodes.find(node=>node.prop===prop).value);
+});
 
 test("generated utility colors keep their opacity while changing to the charcoal palette", () => {
   assert.equal(
