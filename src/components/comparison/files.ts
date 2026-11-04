@@ -1,6 +1,6 @@
 import type { InputFile, InputRole, RevisionInventory } from "./types.ts";
 
-const NETLIST_ROLES: InputRole[] = ["pstxnet", "pstxprt", "pstchip"];
+export const NETLIST_ROLES: InputRole[] = ["pstxnet", "pstxprt", "pstchip"];
 export const INPUT_ROLES: InputRole[] = [...NETLIST_ROLES, "bom", "pdf", "dsn"];
 export const REQUIRED_ROLES: InputRole[] = [...NETLIST_ROLES, "bom", "pdf"];
 export const INPUT_ROLE_DETAILS: Record<InputRole, { label: string; hint: string }> = {
@@ -34,7 +34,7 @@ export function inspectRevision(files: File[]): RevisionInventory {
     for (const role of NETLIST_ROLES) {
       if (name.includes(role) && name.endsWith(".dat")) { roles[role].push(file); recognized = true; }
     }
-    if (/\.(xls|xlsx|htm|html|csv)$/.test(name) && !(name.startsWith("i2c_map_declared") && name.endsWith(".csv"))) {
+    if (/\.(xls|xlsx|htm|html|csv|bom|txt)$/.test(name) && !(name.startsWith("i2c_map_declared") && name.endsWith(".csv"))) {
       roles.bom.push(file); recognized = true;
     }
     if (name.endsWith(".dsn")) { roles.dsn.push(file); recognized = true; }
@@ -50,7 +50,7 @@ function chosenFile(inventory: RevisionInventory, role: InputRole, selected: Par
     : inventory.roles[role].find(file => filePath(file) === selected[role]);
 }
 
-export function validateRevision(inventory: RevisionInventory, selected: Partial<Record<InputRole, string>> = {}): string[] {
+export function validateRevision(inventory: RevisionInventory, selected: Partial<Record<InputRole, string>> = {}, required: InputRole[] = REQUIRED_ROLES): string[] {
   const fresh = inspectRevision(inventory.files);
   const errors: string[] = [];
   if (fresh.files.length > 1000) errors.push("每個版本最多選取 1000 個檔案");
@@ -68,11 +68,11 @@ export function validateRevision(inventory: RevisionInventory, selected: Partial
     const candidates = fresh.roles[role];
     const selection = selected[role];
     if (selection !== undefined && typeof selection !== "string") { errors.push(`${roleName(role)}：檔案選擇無效`); continue; }
-    if (selection === "" && !REQUIRED_ROLES.includes(role)) continue;
+    if (selection === "" && !required.includes(role)) continue;
     if (selection && !candidates.some(file => filePath(file) === selection)) errors.push(`${roleName(role)}：選的檔案不存在`);
-    if (!candidates.length && REQUIRED_ROLES.includes(role)) errors.push(`缺少 ${roleName(role)}`);
+    if (!candidates.length && required.includes(role)) errors.push(`缺少 ${roleName(role)}`);
     if (candidates.length > 1 && !selection) errors.push(`${roleName(role)} 有好幾份，從下拉選單挑一份`);
-    if (selection === "" && REQUIRED_ROLES.includes(role)) errors.push(`${roleName(role)} 一定要選一份`);
+    if (selection === "" && required.includes(role)) errors.push(`${roleName(role)} 一定要選一份`);
     const file = chosenFile(fresh, role, selected);
     if (file && chosen.has(filePath(file))) errors.push(`不同輸入角色使用重複的檔案路徑：${filePath(file)}`);
     if (file) chosen.add(filePath(file));
@@ -80,16 +80,16 @@ export function validateRevision(inventory: RevisionInventory, selected: Partial
   return errors;
 }
 
-export function selectedRevisionFiles(inventory: RevisionInventory, selected: Partial<Record<InputRole, string>> = {}): File[] {
+export function selectedRevisionFiles(inventory: RevisionInventory, selected: Partial<Record<InputRole, string>> = {}, required: InputRole[] = REQUIRED_ROLES): File[] {
   const fresh = inspectRevision(inventory.files);
-  const errors = validateRevision(fresh, selected);
+  const errors = validateRevision(fresh, selected, required);
   if (errors.length) throw new Error(errors.join("\n"));
   return INPUT_ROLES.map(role => chosenFile(fresh, role, selected)).filter((file): file is File => Boolean(file));
 }
 
-export async function readRevision(inventory: RevisionInventory, selected: Partial<Record<InputRole, string>> = {}): Promise<InputFile[]> {
+export async function readRevision(inventory: RevisionInventory, selected: Partial<Record<InputRole, string>> = {}, required: InputRole[] = REQUIRED_ROLES): Promise<InputFile[]> {
   const result: InputFile[] = [];
-  for (const file of selectedRevisionFiles(inventory, selected)) {
+  for (const file of selectedRevisionFiles(inventory, selected, required)) {
     const bytes = await file.arrayBuffer();
     if (!(bytes instanceof ArrayBuffer) || bytes.byteLength !== file.size) throw new Error(`檔案讀取大小不符：${filePath(file)}`);
     result.push({ path: filePath(file), bytes });

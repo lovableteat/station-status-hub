@@ -32,7 +32,7 @@ const PREPARE: FlowStep[] = [
 const RUN: FlowStep[] = [
   { icon: Play, title: "按「開始比對」", sub: "比過的會顯示「重新比對」", via: "可以", phase: "before", notes: [{ tone: "warn", text: "名稱、版本名稱跟已存的一樣，會蓋掉那份" }] },
   { icon: ListChecks, title: "看結果", sub: "先看 ERROR，再看 WARN", via: "比完", phase: "after" },
-  { icon: ClipboardCheck, title: "按「檢視」填回覆", sub: "一定要選處置，再按「儲存回覆」", phase: "after" },
+  { icon: ClipboardCheck, title: "並排看圖或批次填回覆", sub: "逐筆按儲存；批次編輯離開欄位後自動儲存", phase: "after" },
   { icon: Download, title: "匯出備份", sub: "下載 .autocheck.zip", phase: "after", shape: "terminal", notes: [{ tone: "warn", text: "資料只存在這個瀏覽器，換電腦就沒了" }] },
 ];
 
@@ -45,8 +45,8 @@ const FILE_RULES: Array<[string, string]> = [
   ["Netlist 連線資料（必要）", "pstxnet.dat：記錄哪些接腳連在同一條線上"],
   ["Netlist 零件資料（必要）", "pstxprt.dat：記錄元件名稱與零件資料"],
   ["Netlist 接腳資料（必要）", "pstchip.dat：記錄元件接腳定義"],
-  ["零件用料表 BOM（必要）", "每版皆需，支援 .xls、.xlsx、.htm、.html、.csv"],
-  ["電路圖 PDF（必要）", "每版皆需電路圖 .pdf；結果裡按「看圖」會開啟新版 PDF"],
+  ["零件用料表 BOM（必要）", "每版皆需，支援 .xls、.xlsx、.htm、.html、.csv、.BOM、.txt"],
+  ["電路圖 PDF（必要）", "每版皆需電路圖 .pdf；審查可並排看 A／B 標註 PDF，也可另開原圖"],
   ["電路設計原檔 DSN（選用）", "OrCAD .dsn，用來抓頁面標題和變更紀錄"],
 ];
 
@@ -57,7 +57,7 @@ const STATUS_MEANINGS: Array<[string, string]> = [
 ];
 
 const TABS: Array<[string, string]> = [
-  ["比對檢查／審查追蹤", "兩個分頁是同一張結果表。"],
+  ["比對檢查／審查追蹤", "共用同一份紀錄；可選並排瀏覽、批次填寫或結果清單。"],
   ["Power Tree", "從 pin 和電阻網路推出電源的上下游，可以縮放。"],
   ["I²C Map", "推出 bus、mux、strap 和每個裝置的位址。"],
   ["位址庫", "I²C 裝置的位址規則。可選取整個 Datasheet 資料夾，批次產生候選規則；每份要對過 PDF、簽核之後才會生效。"],
@@ -107,6 +107,14 @@ export function ComparisonGuide() {
           <DialogDescription>舊版、新版工程檔比一比，問題直接在結果表裡回覆。</DialogDescription>
         </DialogHeader>
 
+        <section className="comparison-guide-examples" aria-label="新增操作說明">
+          <h3>單板畫圖與審查</h3>
+          <p><strong>單板畫圖</strong>：在比對檢查選「單板畫圖」，選三份 Netlist .dat 後按「產生單板圖」。BOM、DSN 與 PDF 選用；沒有 BOM 的畫圖結果會保留輸入提醒。可沿用已選 A／B 資料，不必先完成兩版比對。</p>
+          <p><strong>並排瀏覽</strong>：A／B 依相同追蹤項次跳到標註位置，預設 300%。可切換高度、縮放、上一筆／下一筆、相同 RefDes、上次審查位置。某側沒有該元件時會說明並保留上一筆畫面。可以各自翻頁、查看標註索引或另開完整 PDF。</p>
+          <p><strong>批次填寫</strong>：直接修改處置、負責人、預計版次與備註，離開欄位後自動儲存；失敗會保留草稿，可按「儲存全部草稿」重試。兩種方式寫入同一份回覆，保留填寫日期和修改歷史，匯出的 Excel 也會更新。</p>
+          <p><strong>同根因與篩選</strong>：預設摺疊沒有獨立框選的子項，已框選或未知定位的項目仍顯示；可展開父項的子項按鈕跳轉。嚴重度、規則、版本狀態可複選，篩選子項仍會補顯示父項。</p>
+          <p><strong>兩版圖稿</strong>：Power Tree 與 I²C Map 可選 A 舊版／B 新版，下載 HTML、DRAWIO 或開啟編輯副本。單板結果只顯示這張板子。</p>
+        </section>
         <section className="comparison-guide-examples" aria-label="檔案準備範例圖">
           <h3>照這樣準備兩個版本的檔案</h3>
           <p>依資料夾與檔案截圖整理的範例；資料夾名稱可不同，系統依檔名與副檔名辨識。點圖可放大。</p>

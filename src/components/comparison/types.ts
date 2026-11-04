@@ -38,6 +38,9 @@ export interface ReviewChange { key: string; field: keyof ReviewReply; old: stri
 export interface Artifact { key: string; name: string; mime: string; bytes: ArrayBuffer }
 
 export interface ComparisonResult {
+  /** A single board produces diagrams only; older snapshots are comparisons. */
+  mode?: "single" | "compare";
+  bomCheck?: Record<string, unknown>;
   meta: {
     tool_version: string;
     rules_version?: string;
@@ -74,4 +77,5 @@ export interface ComparisonSession {
   history: ReviewChange[];
   savedAt: string;
   libraryYaml?: string;
+  lastReviewKey?: string;
 }

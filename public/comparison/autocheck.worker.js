@@ -41,8 +41,8 @@ function validateFiles(files, totals) {
 function validateRequest(type, payload) {
   if (!payload || typeof payload !== 'object') throw new Error('工作內容格式無效');
   const totals = { count: 0, bytes: 0 };
-  if (type === 'run') {
-    const a = validateFiles(payload.a, totals);
+  if (type === 'run' || type === 'single') {
+    const a = validateFiles(type === 'single' ? [] : payload.a, totals);
     const b = validateFiles(payload.b, totals);
     const options = payload.options || {};
     const out = { ...options, datasheets: validateFiles(options.datasheets || [], totals) };
@@ -126,7 +126,7 @@ function writeInputs(pyodide, root, type, payload) {
     pyodide.FS.writeFile(path, new Uint8Array(file.bytes));
     return path;
   };
-  if (type === 'run') {
+  if (type === 'run' || type === 'single') {
     const options = { ...payload.options };
     for (const key of ['config', 'railMap', 'railDomain', 'i2cDeclared', 'library']) {
       if (options[key] && typeof options[key] !== 'string') options[key] = { file: write(options[key], `options/${key}`) };
@@ -171,7 +171,7 @@ async function execute({ id, type, payload }) {
       return { ...rest, bytes };
     };
     let returned = result;
-    if (type === 'run') returned = { ...result, artifacts: result.artifacts.map(artifact) };
+    if (type === 'run' || type === 'single') returned = { ...result, artifacts: result.artifacts.map(artifact) };
     if (type === 'tracker') returned = artifact(result);
     self.postMessage({ id, type: 'result', result: returned }, transfers);
   } catch (error) {

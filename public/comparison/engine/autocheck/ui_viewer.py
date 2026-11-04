@@ -214,7 +214,7 @@ def side_by_side(db: Path, run: str, info: dict, rows: list[dict]) -> None:
     t[6].button("回上次審到", key="sb_lastk", on_click=jump_to, args=(lk,), disabled=not lk or lk not in keys)
     hsel = t[7].selectbox("viewer 高度", list(HEIGHTS), index=1, key="sb_h", label_visibility="collapsed")
     z1, z2, z3 = st.columns([2, 2, 6])
-    zsel = z1.selectbox("跳轉縮放", list(ZOOMS), index=2, key="sb_zoom",
+    zsel = z1.selectbox("跳轉縮放", list(ZOOMS), index=3, key="sb_zoom",          # default 300 % (owner 2026-10-27 15:41)
                         help="自動 = PDF 內建目的地 (iframe 裡 Chrome 不放大)；百分比 = 以該倍率把框放到畫面中間")
     wsel = z2.selectbox("視窗寬度 (置中用)", list(WIDTHS), index=2, key="sb_width",
                         help="只影響置中的估算；左右各半的 iframe 寬度 = (視窗寬 - 側欄) / 2")

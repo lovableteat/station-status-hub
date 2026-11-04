@@ -1,6 +1,6 @@
 {
- "origin": "User-provided AutoCheck_1027.zip",
- "sourceSha256": "b6449e6b08c64c6bf3fb69511ec5b44a87cbbc2852ed32f19358180270196bd5",
+ "origin": "User-provided AutoCheck.7z",
+ "sourceSha256": "c0a13c390edbe01a8b6aa39ac479c0ef89bf9e892cd5882bf4c7ef700ee56a76",
  "files": [
   {
    "path": "autocheck/__init__.py",
@@ -188,7 +188,7 @@
   },
   {
    "path": "autocheck/ui_viewer.py",
-   "sha256": "92d6f9155fd1ba77e683515061e739a90985d4cf7e22bcffc12cbc2e484179ab"
+   "sha256": "de91723a94e17a9c55d2c2e313600f3c86c98fcfd1f23bc30df9864ed23add39"
   },
   {
    "path": "autocheck/values.py",
@@ -212,5 +212,5 @@
   }
  ],
  "version": "0.2.0",
- "revision": "2026-10-27"
+ "revision": "2026-11-04"
 }

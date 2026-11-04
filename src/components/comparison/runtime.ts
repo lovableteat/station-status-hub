@@ -20,7 +20,7 @@ export class ComparisonRuntime implements EngineRuntime {
 
   request<T>(type: string, payload: unknown, progress?: (message: string) => void): Promise<T> {
     if (!this.worker) {
-      this.worker = new Worker(`${import.meta.env.BASE_URL}comparison/autocheck.worker.js?revision=2026-10-27`);
+      this.worker = new Worker(`${import.meta.env.BASE_URL}comparison/autocheck.worker.js?revision=2026-11-04`);
       this.worker.onmessage = ({ data }) => {
         const pending = this.pending.get(data.id);
         if (!pending) return;
@@ -88,7 +88,7 @@ export function encodeRequest(type: string, payload: unknown): EncodedRequest {
   };
   const body = payload as Record<string, unknown>;
   let request: unknown;
-  if (type === "run") {
+  if (type === "run" || type === "single") {
     const options = (body.options ?? {}) as Record<string, unknown>;
     const out: Record<string, unknown> = { ...options, datasheets: files(options.datasheets ?? []) };
     for (const key of ["config", "railMap", "railDomain", "i2cDeclared", "library"]) {
@@ -99,7 +99,7 @@ export function encodeRequest(type: string, payload: unknown): EncodedRequest {
         account(size, false);
       } else out[key] = files([options[key]])[0];
     }
-    request = { ...body, a: files(body.a), b: files(body.b), options: out };
+    request = { ...body, a: files(type === "single" ? [] : body.a), b: files(body.b), options: out };
   } else if (type === "datasheet") {
     request = { ...body, file: files([body.file])[0] };
   } else if (type === "tracker") {
@@ -129,7 +129,7 @@ function fromBase64(text: unknown): ArrayBuffer {
 /** Server responses carry artifacts as base64; the page expects the worker's ArrayBuffers. */
 export function decodeResult(type: string, data: unknown): unknown {
   if (!data || typeof data !== "object") throw new Error("伺服器回應格式無效");
-  if (type === "run") {
+  if (type === "run" || type === "single") {
     const result = data as { artifacts?: unknown };
     if (!Array.isArray(result.artifacts)) throw new Error("伺服器回應格式無效");
     return { ...result, artifacts: result.artifacts.map(artifact => ({ ...(artifact as Record<string, unknown>), bytes: fromBase64((artifact as { bytes?: unknown }).bytes) })) };
