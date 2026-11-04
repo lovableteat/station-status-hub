@@ -18,11 +18,10 @@ const load = loader({
     if (!file.endsWith('MaterialRequestPage.tsx')) return source;
     const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     return ast.statements.filter(node =>
-      ts.isFunctionDeclaration(node) && ['PendingMaterialsDialog', 'loadMarkedGroups', 'saveMarkedGroups', 'getMarkedGroupsStorageKey', 'getTrackingWorkflowStatus', 'normalizeTrackingWorkflowStatus'].includes(node.name?.text)
-      || ts.isVariableStatement(node) && node.getText(ast).startsWith('const MARKED_GROUPS_KEY_PREFIX')
+      ts.isFunctionDeclaration(node) && ['PendingMaterialsDialog', 'getTrackingWorkflowStatus', 'normalizeTrackingWorkflowStatus'].includes(node.name?.text)
       || ts.isImportDeclaration(node) && ['react', 'lucide-react', '@/lib/utils', './materialRequestUtils', './materialRequestPresentation', './MaterialRequestOwnerPicker', './useMaterialRequestOwners', './materialTrackingStatus', './pendingMaterialsExport', './materialApplicationTiming'].includes(node.moduleSpecifier.text)
       || ts.isImportDeclaration(node) && node.moduleSpecifier.text.startsWith('@/components/ui/')
-    ).map(node => node.getText(ast)).join('\n') + '\nexport { loadMarkedGroups, saveMarkedGroups };';
+    ).map(node => node.getText(ast)).join('\n');
   },
 });
 
@@ -194,11 +193,12 @@ test('marks filter by location, survive clearing filters, and unmarking the last
   act(() => root.unmount());
 });
 
-test('existing mark storage restores the marked locations for the same BOM without sharing another BOM', () => {
-  const { loadMarkedGroups, saveMarkedGroups } = load('src/components/material-requests/MaterialRequestPage.tsx');
-  saveMarkedGroups('qa-BOM-A', ['group-J1', 'group-J1']);
-  assert.deepEqual([...loadMarkedGroups('qa-BOM-A')], ['group-J1']);
-  assert.deepEqual([...loadMarkedGroups('qa-BOM-B')], []);
+test('pending mark controls wait for the current account private marks to finish loading', () => {
+  const {PendingMaterialsDialog}=load('src/components/material-requests/MaterialRequestPage.tsx');let root;
+  try {
+    act(()=>{root=create(React.createElement(PendingMaterialsDialog,{groups,open:true,canEdit:false,workspaceName:'QA',exportedBy:'QA',marksReady:false,markedGroupKeys:new Set(),onOpenChange(){},onOpenTracking(){},onToggleMarked(){}}));});
+    assert.ok(root.root.findAllByProps({'data-testid':'pending-mark-toggle'}).every(node=>node.props.disabled));
+  }finally{act(()=>root?.unmount());}
 });
 
 test('completed applications remain listed without overdue warnings and the summary distinguishes them from pending work', () => {

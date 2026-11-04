@@ -95,6 +95,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
+import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
+import { buildMaterialMainGroups, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { useWorkspaceMutationScope, WorkspaceMutationScopeChangedError } from "@/hooks/useWorkspaceMutationScope";
@@ -319,7 +321,6 @@ const COLUMN_SORT_OPTIONS = FILTER_KEYS.flatMap(key => (["asc", "desc"] as const
 const DEFAULT_BOM_ID = "bom:申請carrier料.xlsx";
 const ACTIVE_BOM_KEY = "station-status-hub:active-material-bom:v1";
 const ACTIVE_BOM_PROJECT_KEY = "station-status-hub:active-material-bom-project:v1";
-const MARKED_GROUPS_KEY_PREFIX = "station-status-hub:material-marked-groups:v1:";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
@@ -713,10 +714,6 @@ const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>
   note: "網站內部自由紀錄；匯入 BOM 時不讀取，匯出時包含。",
 };
 
-function getMarkedGroupsStorageKey(bomId: string) {
-  return `${MARKED_GROUPS_KEY_PREFIX}${bomId}`;
-}
-
 function loadColumnWidths() {
   if (typeof window === "undefined") return DEFAULT_COLUMN_WIDTHS;
 
@@ -1055,31 +1052,6 @@ function getBomWorkspaceRecordRangeKey(workspaces: BomWorkspace[], workspaceId: 
   return workspace.payload.records.length > 0 ? `${workspaceId}:preview` : "";
 }
 
-function loadMarkedGroups(bomId: string) {
-  if (typeof window === "undefined") return [] as string[];
-
-  try {
-    const stored = JSON.parse(window.localStorage.getItem(getMarkedGroupsStorageKey(bomId)) ?? "[]");
-    if (!Array.isArray(stored)) return [];
-    return Array.from(new Set(stored.filter((value): value is string => typeof value === "string" && value.trim().length > 0)));
-  } catch {
-    return [];
-  }
-}
-
-function saveMarkedGroups(bomId: string, values: string[]) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(
-      getMarkedGroupsStorageKey(bomId),
-      JSON.stringify(Array.from(new Set(values.filter((value) => value.trim().length > 0)))),
-    );
-  } catch {
-    // Ignore browser storage failures and keep current session state usable.
-  }
-}
-
 function getGroupItemValue(group: MaterialGroup, fallbackIndex: number) {
   void group;
   return fallbackIndex;
@@ -1157,28 +1129,6 @@ function parseSearchTokens(query: string) {
 
 function isPrimaryInternalPart(record: MaterialRecord) {
   return isPreferredInternalPartNumber(record.partNumber);
-}
-
-function getAlternativeScore(record: MaterialRecord) {
-  const primaryOffset = record.isPreferred ? 0 : isPrimaryInternalPart(record) ? 10 : 20;
-
-  if (record.isApproved && record.isReady && !record.isRisk) return primaryOffset;
-  if (record.isApproved && !record.isRisk) return primaryOffset + 1;
-  if (record.isReady && !record.isRisk) return primaryOffset + 2;
-  if (!record.isRisk) return primaryOffset + 3;
-  return primaryOffset + 4;
-}
-
-function getSortedAlternatives(group: MaterialGroup) {
-  const alternatives = group.records.filter((record) => record.id !== group.primaryRecord.id);
-  alternatives.sort((left, right) => {
-    const scoreDiff = getAlternativeScore(left) - getAlternativeScore(right);
-    if (scoreDiff !== 0) return scoreDiff;
-
-    return left.manufacturer.localeCompare(right.manufacturer);
-  });
-
-  return [group.primaryRecord, ...alternatives];
 }
 
 function getUniqueMpnCountForRecords(records: MaterialRecord[]) {
@@ -2572,6 +2522,7 @@ export function PendingMaterialsDialog({
   onSetOwner,
   markedGroupKeys,
   onToggleMarked,
+  marksReady = true,
 }: {
   canEdit: boolean;
   groups: MaterialGroup[];
@@ -2592,6 +2543,7 @@ export function PendingMaterialsDialog({
   onSetOwner: (record: MaterialRecord, owner: MaterialRequestOwner | null) => Promise<void>;
   markedGroupKeys: ReadonlySet<string>;
   onToggleMarked: (groupKey: string) => void;
+  marksReady?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [mailOpen, setMailOpen] = useState(false);
@@ -2720,7 +2672,7 @@ export function PendingMaterialsDialog({
               role="tab"
               aria-selected={selectedCategory === tab.key}
               onClick={() => setActiveCategory(tab.key)}
-              title={tab.key === "marked" ? "點每列星號加入或取消；依位號標記，同組替代廠商共用。標記保存在此瀏覽器，依 BOM 分開。" : undefined}
+              title={tab.key === "marked" ? "點每列星號加入或取消；標記只對目前帳號可見，依 BOM 分開儲存。" : undefined}
               className={cn(
                 "inline-flex h-9 items-center gap-1.5 rounded-md border px-4 text-sm font-bold transition-colors",
                 selectedCategory === tab.key ? "border-primary bg-primary text-primary-foreground shadow-[0_0_0_2px_hsl(var(--primary)/0.35)]" : "border-border bg-secondary/60 text-foreground/80 hover:bg-accent hover:text-foreground",
@@ -2759,7 +2711,7 @@ export function PendingMaterialsDialog({
               const marked = markedGroupKeys.has(group.key);
               return (
                 <div key={application.key} data-testid="pending-application" className={cn("pending-material-row rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
-                  <Button type="button" variant="ghost" size="icon" data-testid="pending-mark-toggle" aria-pressed={marked} aria-label={`${marked ? '取消特別標記' : '特別標記'} ${group.displayRef}`} title="標記此位號；同組替代廠商共用，保存在此瀏覽器" onClick={() => onToggleMarked(group.key)} className={cn("pending-row-mark relative h-9 w-8", marked ? "bg-warning/15 text-warning hover:text-warning" : "text-muted-foreground hover:text-warning")}><Star className={cn("h-4 w-4", marked && "fill-current")} aria-hidden="true" />{stale && <span className="material-blink absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}</Button>
+                  <Button type="button" variant="ghost" size="icon" data-testid="pending-mark-toggle" disabled={!marksReady} aria-pressed={marked} aria-label={`${marked ? '取消特別標記' : '特別標記'} ${group.displayRef}`} title="個人標記只對目前帳號可見" onClick={() => onToggleMarked(group.key)} className={cn("pending-row-mark relative h-9 w-8", marked ? "bg-warning/15 text-warning hover:text-warning" : "text-muted-foreground hover:text-warning")}><Star className={cn("h-4 w-4", marked && "fill-current")} aria-hidden="true" />{stale && <span className="material-blink absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}</Button>
                   <span className="pending-row-reference min-w-0 truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
                   <PendingCategoryPicker group={group} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
                   <span className="pending-row-name min-w-0 text-base text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
@@ -3110,6 +3062,7 @@ export function MaterialRecordDialog({
 type MaterialColumnVisibility = Record<MaterialTableColumnKey, boolean>;
 
 interface MaterialRowActions {
+  toggleMarked: (key: string) => void;
   toggleExpanded: (key: string) => void;
   copy: (value: string) => void;
   openCreate: (group: MaterialGroup) => void;
@@ -3119,6 +3072,8 @@ interface MaterialRowActions {
 }
 
 interface VisibleGroupRow {
+  locations?: MaterialGroup[];
+  isLocation?: boolean;
   standalone?: boolean;
   group: MaterialGroup;
   matchingRecords: MaterialRecord[];
@@ -3231,6 +3186,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   colorTheme,
   columns,
   canEditNote,
+  markedLocationIds,
+  markDisabled,
   actions,
 }: {
   row: VisibleGroupRow;
@@ -3242,6 +3199,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   colorTheme: BomTableColorTheme;
   columns: MaterialColumnVisibility;
   canEditNote: boolean;
+  markedLocationIds: string;
+  markDisabled: boolean;
   actions: MaterialRowActions;
 }) {
   const { group, matchingRecords, primaryAlternative, virtualAlternativeRecord, secondaryAlternatives, standalone } = row;
@@ -3249,8 +3208,11 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   const mustApply = group.requiresApplication;
   const primaryReady = Boolean(primaryAlternative?.isPreferred && !primaryAlternative.isRisk);
   const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred && !record.isRisk).length;
-  const hasAlternatives = secondaryAlternatives.length > 0;
-  const groupRefDes = primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
+  const hasLocations = (row.locations?.length ?? 0) > 1;
+  const markedIds: string[] = JSON.parse(markedLocationIds);
+  const marked = markedIds.length === 0 ? false : markedIds.length === (row.locations?.length ?? 1) ? true : "indeterminate";
+  const hasAlternatives = secondaryAlternatives.length > 0 || hasLocations;
+  const groupRefDes = hasLocations ? group.displayRef : primaryAlternative?.refDes || group.primaryRecord.refDes || group.primaryRecord.refGroup || "-";
   const groupRefValues = splitRefDesignators(groupRefDes);
   const materialRefValues = splitRefDesignators(group.displayRef || groupRefDes);
   const materialMpnValues = group.records
@@ -3260,7 +3222,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   // The main row shows the same Excel columns as the CE workbook, read from the
   // first matching record of the group (the alternatives expand below it).
   const statusRecord = primaryAlternative ?? group.primaryRecord;
-  const partSpec = standalone ? statusRecord.partSpec || "" : statusRecord.partSpec || group.partSpec || "";
+  const partSpec = statusRecord.partSpec || "";
   const valueClassName = primaryReady ? "text-emerald-100" : mustApply ? "text-amber-100" : "text-cyan-100";
   const iconClassName = primaryReady ? "text-emerald-300" : mustApply ? "text-amber-300" : "text-cyan-300";
   const mainRowStyle = buildTableRowStyle(isAlternateRow ? colorTheme.alternative : colorTheme.primary, {
@@ -3271,14 +3233,14 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   const updateTitle = latestRecordUpdate
     ? `最後修改：${latestUpdater ? `${latestUpdater} · ` : ""}${formatTimestamp(latestRecordUpdate)}`
     : "修改這列的料件資料（廠商、MPN、實體料號、備註）";
-  const expandLabel = hasAlternatives ? `${expanded ? "收合" : "展開"} ${secondaryAlternatives.length} 筆替代料` : "沒有替代料";
+  const expandLabel = hasLocations ? `${expanded ? "收合" : "展開"} ${row.locations!.length} 個使用位置` : hasAlternatives ? `${expanded ? "收合" : "展開"} ${secondaryAlternatives.length} 筆替代料` : "沒有替代料";
 
   return (
-    <tbody>
+    <><tbody>
       <tr
         data-material-kind={isAlternateRow ? "alternative" : "primary"}
         data-record-id={primaryAlternative.id}
-        onClick={() => hasAlternatives && actions.toggleExpanded(group.key)}
+        onClick={() => !row.isLocation && hasAlternatives && actions.toggleExpanded(group.key)}
         style={mainRowStyle}
         className={cn(
           "group/material-row border-b border-white/20 text-slate-200 transition-colors",
@@ -3286,6 +3248,11 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
           "bg-[var(--material-row-solid)] hover:bg-[var(--material-row-hover-solid)]",
         )}
       >
+        <td className={MATERIAL_CELL_CLASS} onClick={stopRowToggle}>
+          <label className="mx-auto flex min-h-11 w-11 cursor-pointer items-center justify-center">
+            <Checkbox aria-label={`個人標記 ${group.displayRef}`} checked={marked} disabled={markDisabled} onCheckedChange={() => actions.toggleMarked(group.key)} className="h-5 w-5" />
+          </label>
+        </td>
         {columns.item && (
           <td data-material-cell="item" aria-label={isAlternateRow ? `主料 ${itemValue} 的替代料` : undefined} className={cn(MATERIAL_CELL_CLASS, "text-center font-mono text-[13px] font-black text-slate-100")}>
             {!isAlternateRow && itemValue}
@@ -3297,7 +3264,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
             <div className="flex items-center gap-1.5 pl-1">
               <button
                 type="button"
-                disabled={!hasAlternatives}
+                disabled={!hasAlternatives || row.isLocation}
                 aria-expanded={hasAlternatives ? expanded : undefined}
                 aria-label={expandLabel}
                 title={expandLabel}
@@ -3325,6 +3292,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                   qty={group.qty}
                   refValues={materialRefValues}
                 />
+                {hasLocations && <span className="block text-xs font-semibold text-primary">{row.locations!.length} 個使用位置 · 點擊展開</span>}
+                {row.isLocation && <span className="block truncate text-xs text-muted-foreground">位置：{group.displayRef} · {group.assemblyName || group.sectionName}</span>}
               </div>
               <MaterialApplicationExemptionBadge record={statusRecord} />
             </div>
@@ -3475,8 +3444,12 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
           </td>
         )}
       </tr>
-      {expanded && (
-        <CompactAlternativeRows
+      </tbody>
+      {expanded && hasLocations && row.locations!.map(location => (
+        <MaterialGroupRow key={location.key} row={{ ...row, group: location, locations: undefined, isLocation: true, matchingRecords: getSortedAlternatives(location), primaryAlternative: location.primaryRecord, virtualAlternativeRecord: location.primaryRecord, secondaryAlternatives: getSortedAlternatives(location).slice(1) }} itemValue={itemValue} expanded editingNames={editingNames} latestRecordUpdate={latestRecordUpdate} latestUpdater={latestUpdater} colorTheme={colorTheme} columns={columns} canEditNote={canEditNote} markedLocationIds={JSON.stringify(markedIds.includes(location.primaryRecord.id) ? [location.primaryRecord.id] : [])} markDisabled={markDisabled} actions={actions} />
+      ))}
+      {expanded && !hasLocations && (
+        <tbody><CompactAlternativeRows
           group={group}
           records={matchingRecords}
           primaryRecord={primaryAlternative}
@@ -3487,9 +3460,9 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
           onOpenTracking={actions.openTracking}
           onSaveNote={actions.saveNote}
           noteDisabled={!canEditNote}
-        />
+        /></tbody>
       )}
-    </tbody>
+    </>
   );
 });
 
@@ -3544,6 +3517,7 @@ function CompactAlternativeRows({
               "bg-[var(--material-row-solid)] hover:bg-[var(--material-row-hover-solid)]"
             )}
           >
+            <td className={MATERIAL_CELL_CLASS} aria-label="沿用主料的個人標記" />
             {columns.item && (
               <td className={MATERIAL_CELL_CLASS} aria-label={`主料 ${itemValue} 的替代料 ${index + 1}`} />
             )}
@@ -3754,7 +3728,6 @@ export function MaterialRequestPage() {
   const [bomWorkspaces, setBomWorkspaces] = useState<BomWorkspace[]>(() => [createDefaultBomWorkspace()]);
   const [collaborationStatus, setCollaborationStatus] = useState<CollaborationStatus>("checking");
   const [activeBomId, setActiveBomId] = useState(loadActiveBomId);
-  const [markedGroupKeys, setMarkedGroupKeys] = useState<string[]>(() => loadMarkedGroups(loadActiveBomId()));
   const [showMarkedOnly, setShowMarkedOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
@@ -3777,7 +3750,7 @@ export function MaterialRequestPage() {
   };
   const sortSelectItems = <>
     <SelectGroup><SelectLabel>主料排序</SelectLabel>{Object.entries(SORT_MODE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup>
-    <SelectGroup><SelectLabel>全部廠商明細排序</SelectLabel>{COLUMN_SORT_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectGroup>
+    <SelectGroup><SelectLabel>主料欄位排序</SelectLabel>{COLUMN_SORT_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectGroup>
   </>;
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -3847,6 +3820,7 @@ export function MaterialRequestPage() {
   const { user } = useUser();
   useEffect(() => { setMobileToolsOpen(false); }, [activeBomId, isCompactLayout, user?.userId]);
   useEffect(() => {
+    setShowMarkedOnly(false);
     setEditorOpen(false);
     setReturnToPending(false);
     setPendingDialogOpen(false);
@@ -3891,6 +3865,7 @@ export function MaterialRequestPage() {
     presenceEditingRecordId,
   );
   const isCollaborativeReady = collaborationStatus === "remote";
+  const personalMarks = useMaterialPersonalMarks(user?.userId, activeBomId, canViewModuleAccess && isCollaborativeReady);
   const canManageBomPageTracker = canEdit && !["checking", "reconnecting", "error"].includes(collaborationStatus);
   const collaborationStatusMeta = useMemo(
     () => getCollaborationStatusMeta(collaborationStatus),
@@ -3937,17 +3912,15 @@ export function MaterialRequestPage() {
     [basePayload]
   );
 
-  const validGroupKeys = useMemo(
-    () => new Set(dataset.groups.map((group) => group.key)),
-    [dataset.groups],
-  );
+  const displayGroups = useMemo(() => buildMaterialMainGroups(dataset.groups), [dataset.groups]);
+  const markKeysByGroup = useMemo(() => new Map([...dataset.groups, ...displayGroups].map(group => [group.key, getMaterialMarkKeys(group)])), [dataset.groups, displayGroups]);
   const markedGroupKeySet = useMemo(
-    () => new Set(markedGroupKeys),
-    [markedGroupKeys],
+    () => new Set([...markKeysByGroup].filter(([, keys]) => keys.some(key => personalMarks.keys.has(key))).map(([key]) => key)),
+    [markKeysByGroup, personalMarks.keys],
   );
   const markedGroupCount = useMemo(
-    () => dataset.groups.filter((group) => markedGroupKeySet.has(group.key)).length,
-    [dataset.groups, markedGroupKeySet],
+    () => displayGroups.filter((group) => markedGroupKeySet.has(group.key)).length,
+    [displayGroups, markedGroupKeySet],
   );
 
   // Project assignments regroup every BOM, so another client's change only needs the project map, not a full reload.
@@ -4301,22 +4274,6 @@ export function MaterialRequestPage() {
   }, [activeBomId, availability, columnFilters, columnSort, page, pageSize, query, searchColumn, sortMode, user?.userId]);
 
   useEffect(() => {
-    setMarkedGroupKeys(loadMarkedGroups(activeBomId));
-  }, [activeBomId]);
-
-  useEffect(() => {
-    if (!isFullDatasetLoaded) return;
-    setMarkedGroupKeys((current) => {
-      const normalized = current.filter((key) => validGroupKeys.has(key));
-      return normalized.length === current.length ? current : normalized;
-    });
-  }, [isFullDatasetLoaded, validGroupKeys]);
-
-  useEffect(() => {
-    saveMarkedGroups(activeBomId, markedGroupKeys);
-  }, [activeBomId, markedGroupKeys]);
-
-  useEffect(() => {
     try {
       window.sessionStorage.setItem(COLUMN_WIDTHS_SESSION_KEY, JSON.stringify(columnWidths));
     } catch {
@@ -4340,8 +4297,8 @@ export function MaterialRequestPage() {
     ) as MaterialColumnVisibility,
     [hiddenColumns],
   );
-  const visibleColumnCount = MATERIAL_TABLE_COLUMNS.length - hiddenColumns.length;
-  const tableWidth = getMaterialTableWidth(columnWidths, hiddenColumns);
+  const visibleColumnCount = MATERIAL_TABLE_COLUMNS.length - hiddenColumns.length + 1;
+  const tableWidth = getMaterialTableWidth(columnWidths, hiddenColumns) + 84;
 
   const resizeColumn = (index: number, width: number) => {
     // Borrow width from the next *visible* column so a hidden neighbour never shrinks silently.
@@ -4409,29 +4366,23 @@ export function MaterialRequestPage() {
     const uniqueMpnCountByGroup = new Map<string, number>();
     const recordColumnsByRecordId = new Map<string, CachedRecordColumnValues>();
 
-    dataset.groups.forEach((group) => {
+    displayGroups.forEach((group) => {
       const sortedRecords = getSortedAlternatives(group);
       const uniqueMpnCount = getUniqueMpnCountForRecords(group.records);
       sortedRecordsByGroup.set(group.key, sortedRecords);
       uniqueMpnCountByGroup.set(group.key, uniqueMpnCount);
 
       if (searchTokens.length > 0) {
-        const mustApply = requiresApplication(group);
-        const noAlternative = uniqueMpnCount <= 1;
-        const alternativeSearchText = noAlternative
-          ? "單一料 無替代料 單一來源 single source no alternative"
-          : "有替代料 multiple source alternative";
-        const applicationSearchText = group.records.every(isMeManufacturedRecord)
-          ? ME_APPLICATION_EXEMPTION_LABEL
-          : mustApply
-          ? "未提供虛擬／實體料號 料號待補 完全無料 主料與替代都無料"
-          : "已提供料號 已提供實體料號或虛擬料號";
-
-        searchableTextByGroup.set(group.key, `${group.searchText} ${alternativeSearchText} ${applicationSearchText}`);
+        const mains = group.locations.map(location => location.primaryRecord);
+        const applicationText = mains.every(isMeManufacturedRecord) ? ME_APPLICATION_EXEMPTION_LABEL
+          : mains.some(record => !record.applicationExempt && !hasMaterialPartNumber(record))
+            ? "未提供虛擬／實體料號 料號待補 完全無料" : "已提供料號 已提供實體料號或虛擬料號";
+        const alternativeText = uniqueMpnCount <= 1 ? "單一料 無替代料 單一來源 single source no alternative" : "有替代料 multiple source alternative";
+        searchableTextByGroup.set(group.key, `${mains.map(record => record.searchText).join(" ")} ${applicationText} ${alternativeText}`);
         const refTokens = Array.from(new Set(
           [
             group.displayRef,
-            ...group.records.flatMap((record) => [record.refDes, record.refGroup]),
+            ...group.locations.flatMap(location => [location.primaryRecord.refDes, location.primaryRecord.refGroup]),
           ]
             .flatMap((value) => splitRefDesignators(value))
             .map(normalizeMaterialSearchText)
@@ -4494,7 +4445,7 @@ export function MaterialRequestPage() {
       sortedRecordsByGroup,
       uniqueMpnCountByGroup,
     };
-  }, [dataset.groups, hasActiveColumnFilters, searchTokens.length]);
+  }, [displayGroups, hasActiveColumnFilters, searchTokens.length]);
 
   const columnFilterSets = useMemo(
     () => FILTER_KEYS.reduce((result, key) => {
@@ -4515,7 +4466,7 @@ export function MaterialRequestPage() {
 
   const matchesSearch = useCallback((group: MaterialGroup) => {
     if (searchTokens.length === 0) return true;
-    if (searchColumn !== "all") return group.records.some(record => matchesRecordSearch(record, group));
+    if (searchColumn !== "all") return ((group as MaterialMainGroup).locations ?? [group]).some(location => matchesRecordSearch(location.primaryRecord, location));
     const searchableText = groupRuntimeIndex.searchableTextByGroup.get(group.key) ?? group.searchText;
     const refTokens = groupRuntimeIndex.refTokensByGroup.get(group.key) ?? [];
 
@@ -4534,14 +4485,15 @@ export function MaterialRequestPage() {
 
   const matchesAvailability = useCallback((group: MaterialGroup) => {
     const noAlternative = (groupRuntimeIndex.uniqueMpnCountByGroup.get(group.key) ?? 0) <= 1;
-    const mustApply = requiresApplication(group);
+    const mains = ((group as MaterialMainGroup).locations ?? [group]).map(location => location.primaryRecord);
+    const mustApply = mains.some(record => !record.applicationExempt && !hasMaterialPartNumber(record));
 
     return (
       availability === "all" ||
-      (availability === "usable" && group.records.some(hasMaterialPartNumber)) ||
+      (availability === "usable" && mains.some(hasMaterialPartNumber)) ||
       (availability === "required" && mustApply) ||
-      (availability === "pending" && group.pendingCount > 0) ||
-      (availability === "risk" && group.riskCount > 0) ||
+      (availability === "pending" && mains.some(record => record.isPending && !record.applicationExempt)) ||
+      (availability === "risk" && mains.some(record => record.isRisk)) ||
       (availability === "single" && noAlternative)
     );
   }, [availability, groupRuntimeIndex.uniqueMpnCountByGroup]);
@@ -4555,11 +4507,8 @@ export function MaterialRequestPage() {
 
   const getMatchingRecords = useCallback((group: MaterialGroup, ignoredKey?: ColumnFilterKey) => {
     const sortedRecords = groupRuntimeIndex.sortedRecordsByGroup.get(group.key) ?? getSortedAlternatives(group);
-    const searchedRecords = searchColumn === "all" ? sortedRecords : sortedRecords.filter(record => matchesRecordSearch(record, group));
-    if (!hasActiveColumnFilters) return searchedRecords;
-
-    return searchedRecords.filter((record) =>
-      FILTER_KEYS.every((key) => {
+    const mains = ((group as MaterialMainGroup).locations ?? [group]).map(location => location.primaryRecord);
+    const matchingPrimary = mains.find(record => matchesRecordSearch(record, group) && (!hasActiveColumnFilters || FILTER_KEYS.every((key) => {
         if (key === ignoredKey) return true;
 
         const cachedValues = groupRuntimeIndex.recordColumnsByRecordId.get(record.id)?.[key]
@@ -4571,18 +4520,19 @@ export function MaterialRequestPage() {
         }
 
         return true;
-      })
-    );
-  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters, matchesRecordSearch, searchColumn]);
+      })));
+    return matchingPrimary ? [matchingPrimary, ...sortedRecords.filter(record => record.id !== matchingPrimary.id)] : [];
+  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters, matchesRecordSearch]);
 
   const searchAvailabilityGroups = useMemo(
-    () => dataset.groups.filter((group) => matchesMarkedState(group) && matchesSearch(group) && matchesAvailability(group)),
-    [dataset.groups, matchesAvailability, matchesMarkedState, matchesSearch],
+    () => displayGroups.filter((group) => matchesMarkedState(group) && matchesSearch(group) && matchesAvailability(group)),
+    [displayGroups, matchesAvailability, matchesMarkedState, matchesSearch],
   );
 
   const getColumnFilterOptions = useCallback((key: ColumnFilterKey) => {
     const valueGroups = searchAvailabilityGroups
-      .flatMap((group) => getMatchingRecords(group, key).map((record) => getRecordColumnValues(record, group, key)));
+      .filter(group => getMatchingRecords(group, key).length > 0)
+      .map(group => Array.from(new Set(group.locations.flatMap(location => getRecordColumnValues(location.primaryRecord, group, key)))));
 
     return key === "trackingStatus"
       ? buildTrackingStatusFilterOptions(valueGroups)
@@ -4594,6 +4544,8 @@ export function MaterialRequestPage() {
       return getMatchingRecords(group).length > 0;
     });
 
+    if (columnSort) return sortMaterialTableRows(result, columnSort.direction, group =>
+      columnSort.key === "material" ? group.primaryRecord.name : getRecordColumnValues(group.primaryRecord, group, columnSort.key)[0]);
     return [...result].sort((left, right) => {
       const leftUniqueMpnCount = groupRuntimeIndex.uniqueMpnCountByGroup.get(left.key) ?? getUniqueMpnCount(left);
       const rightUniqueMpnCount = groupRuntimeIndex.uniqueMpnCountByGroup.get(right.key) ?? getUniqueMpnCount(right);
@@ -4614,16 +4566,13 @@ export function MaterialRequestPage() {
       }
       return REF_COLLATOR.compare(left.displayRef, right.displayRef);
     });
-  }, [getMatchingRecords, groupRuntimeIndex.uniqueMpnCountByGroup, searchAvailabilityGroups, sortMode]);
+  }, [columnSort, getMatchingRecords, groupRuntimeIndex.uniqueMpnCountByGroup, searchAvailabilityGroups, sortMode]);
 
-  // Column sorting is Excel-style: vendor rows from different parts must be able
-  // to sit together. Keeping alternates nested would break Manufacturer order.
+  // Exports keep original location quantities even when the screen combines main rows.
   const orderedRecordRows = useMemo(() => {
-    const rows = filteredGroups.flatMap((group, groupIndex) => getMatchingRecords(group).map(record => ({ group, record, groupIndex })));
-    if (!columnSort) return rows;
-    return sortMaterialTableRows(rows, columnSort.direction, ({ group, record }) =>
-      columnSort.key === "material" ? record.name || group.name : getRecordColumnValues(record, group, columnSort.key)[0]);
-  }, [columnSort, filteredGroups, getMatchingRecords]);
+    return filteredGroups.flatMap((main, groupIndex) => main.locations.flatMap(group =>
+      getSortedAlternatives(group).map(record => ({ group, record, groupIndex }))));
+  }, [filteredGroups]);
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: string; label: string }> = [];
@@ -4647,7 +4596,7 @@ export function MaterialRequestPage() {
   }, [availability, columnFilters, query, searchColumn, showMarkedOnly]);
 
   const totalPages = isFullDatasetLoaded
-    ? Math.max(1, Math.ceil((columnSort ? orderedRecordRows.length : filteredGroups.length) / pageSize))
+    ? Math.max(1, Math.ceil(filteredGroups.length / pageSize))
     : 1;
   const noAlternativeCount = useMemo(
     () => dataset.groups.filter(hasNoAlternative).length,
@@ -4707,7 +4656,7 @@ export function MaterialRequestPage() {
       setIsExportingDiscouraged(false);
     }
   };
-  const requiredApplicationCount = useMemo(() => dataset.groups.filter(requiresApplication).length, [dataset.groups]);
+  const requiredApplicationCount = useMemo(() => displayGroups.filter(group => group.locations.some(location => !location.primaryRecord.applicationExempt && !hasMaterialPartNumber(location.primaryRecord))).length, [displayGroups]);
   const pendingApplicationCount = useMemo(() => buildPendingApplications(pendingMaterialGroups).length, [pendingMaterialGroups]);
   const pendingGroupCount = useMemo(
     () => dataset.groups.filter((group) => group.pendingCount > 0).length,
@@ -4723,20 +4672,16 @@ export function MaterialRequestPage() {
   }, [filteredGroups, isFullDatasetLoaded, page, pageSize]);
 
   const visibleGroupRows = useMemo(
-    () => (columnSort
-      ? orderedRecordRows.slice(isFullDatasetLoaded ? (page - 1) * pageSize : 0, (isFullDatasetLoaded ? (page - 1) * pageSize : 0) + pageSize)
-      : visibleGroups.map(group => ({ group, record: null }))).map(({ group, record }) => {
-      const matchingRecords = record ? [record] : getMatchingRecords(group);
+    () => visibleGroups.map(group => {
+      const matchingRecords = getMatchingRecords(group);
       const primaryAlternative = matchingRecords[0] ?? group.primaryRecord;
-      const virtualAlternativeRecord = getBestVirtualAlternativeRecord(
-        matchingRecords.length > 0 ? matchingRecords : group.records,
-        primaryAlternative,
-      );
-      const secondaryAlternatives = matchingRecords.slice(primaryAlternative ? 1 : 0);
+      const virtualAlternativeRecord = primaryAlternative;
+      const locationMainIds = new Set(group.locations.map(location => location.primaryRecord.id));
+      const secondaryAlternatives = matchingRecords.filter(record => !locationMainIds.has(record.id));
       const trackingRecord = getBestTrackingRecord(matchingRecords.length > 0 ? matchingRecords : group.records, primaryAlternative);
 
       return {
-        standalone: Boolean(record),
+        locations: group.locations,
         group,
         matchingRecords,
         primaryAlternative,
@@ -4746,7 +4691,7 @@ export function MaterialRequestPage() {
         uniqueMpnCount: getUniqueMpnCountForRecords(matchingRecords),
       };
     }),
-    [columnSort, getMatchingRecords, isFullDatasetLoaded, orderedRecordRows, page, pageSize, visibleGroups],
+    [getMatchingRecords, visibleGroups],
   );
 
   useEffect(() => {
@@ -4756,12 +4701,6 @@ export function MaterialRequestPage() {
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
-
-  useEffect(() => {
-    if (searchTokens.length > 0 && filteredGroups.length === 1) {
-      setExpandedKey(filteredGroups[0].key);
-    }
-  }, [filteredGroups, searchTokens.length]);
 
   const toggleExpanded = (key: string) => {
     setExpandedKey((current) => (current === key ? null : key));
@@ -5124,6 +5063,13 @@ export function MaterialRequestPage() {
 
   const openCreate = (group?: MaterialGroup) => {
     if (!canEdit) return;
+    const locations = (group as MaterialMainGroup | undefined)?.locations;
+    if (locations && locations.length > 1) {
+      setExpandedKey(group!.key);
+      toast({ title: "請先選擇使用位置", description: "展開各位置後，點選該位置的新增替代料。" });
+      return;
+    }
+    group = locations?.[0] ?? group;
     if (!isCollaborativeReady) {
       showCollaborativeUnavailableToast();
       return;
@@ -5648,7 +5594,7 @@ export function MaterialRequestPage() {
           materialName: record.name,
           note: record.note ?? "",
           partName: record.partName,
-          qty: String(group.qty),
+          qty: String(record.qty),
           remark: record.remark ?? "",
           specDocumentName: getMaterialSpecDocuments(record).map(document => document.name).join("、"),
           refDes: record.refDes || group.primaryRecord.refDes,
@@ -5691,7 +5637,7 @@ export function MaterialRequestPage() {
         `排序：${sortLabel}`,
       ],
       id: typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `material-export-${Date.now()}`,
-      originalGroupCount: dataset.stats.totalGroups,
+      originalGroupCount: displayGroups.length,
       reportName: `${activeWorkspace.name}_料號申請篩選報表`,
       rows,
       sheetName: dataset.meta.sheetName,
@@ -5852,9 +5798,8 @@ export function MaterialRequestPage() {
   };
 
   const toggleMarkedGroup = (groupKey: string) => {
-    setMarkedGroupKeys((current) => current.includes(groupKey)
-      ? current.filter((key) => key !== groupKey)
-      : [...current, groupKey]);
+    const key = markKeysByGroup.get(groupKey);
+    if (key) void personalMarks.toggle(key);
   };
 
   const applyTableSettings = async (settings: MaterialTableSettings) => {
@@ -5882,6 +5827,7 @@ export function MaterialRequestPage() {
   const canEditNote = canViewModuleAccess && !isHistoricalVersion && isCollaborativeReady && isFullDatasetLoaded;
   const rowActionsRef = useRef<MaterialRowActions | null>(null);
   rowActionsRef.current = {
+    toggleMarked: toggleMarkedGroup,
     toggleExpanded,
     copy: (value) => { void handleCopy(value); },
     openCreate,
@@ -5890,6 +5836,7 @@ export function MaterialRequestPage() {
     saveNote: saveMaterialNote,
   };
   const rowActions = useMemo<MaterialRowActions>(() => ({
+    toggleMarked: (key) => rowActionsRef.current?.toggleMarked(key),
     toggleExpanded: (key) => rowActionsRef.current?.toggleExpanded(key),
     copy: (value) => rowActionsRef.current?.copy(value),
     openCreate: (group) => rowActionsRef.current?.openCreate(group),
@@ -5978,6 +5925,7 @@ export function MaterialRequestPage() {
         onSetOwner={setPendingOwner}
         markedGroupKeys={markedGroupKeySet}
         onToggleMarked={toggleMarkedGroup}
+        marksReady={personalMarks.ready && personalMarks.pendingKeys.size === 0}
       />
       {weeklyProgressOpen && <MaterialWeeklyProgressDialog
         key={`weekly:${user?.userId}:${activeWorkspace.id}`}
@@ -6192,9 +6140,9 @@ export function MaterialRequestPage() {
           </div>
 
           <div className="material-mobile-scope" role="group" aria-label="料件範圍">
-            <button type="button" onClick={clearFilters} aria-pressed={availability === "all" && !showMarkedOnly}>全部 <span>{dataset.stats.totalGroups.toLocaleString()}</span></button>
+            <button type="button" onClick={clearFilters} aria-pressed={availability === "all" && !showMarkedOnly}>全部 <span>{displayGroups.length.toLocaleString()}</span></button>
             <button type="button" onClick={() => applyAvailabilityFilter("required")} aria-pressed={availability === "required"}>料號待補 <span>{requiredApplicationCount.toLocaleString()}</span></button>
-            <button type="button" onClick={() => setShowMarkedOnly((current) => !current)} aria-pressed={showMarkedOnly}><Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />標記 <span>{markedGroupCount}</span></button>
+            <button type="button" onClick={() => setShowMarkedOnly((current) => !current)} aria-pressed={showMarkedOnly} disabled={!personalMarks.ready}><Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />我的標記 <span>{markedGroupCount}</span></button>
           </div>
 
           <div data-testid="material-mobile-column-filters" role="group" aria-label="料件欄位篩選" className="material-mobile-column-filters">
@@ -6430,7 +6378,7 @@ export function MaterialRequestPage() {
             </div>
             {searchColumnControl}
             <div data-material-zone="summary-filters" className="flex items-center gap-1">
-              <button type="button" onClick={clearFilters} aria-pressed={availability === "all" && !showMarkedOnly} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "all" ? "border-sky-300/34 bg-sky-400/18 text-sky-50" : "border-slate-500/28 bg-slate-900/42 text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-sky-100")}>主料 <strong className="ml-1">{dataset.stats.totalGroups.toLocaleString()}</strong></button>
+              <button type="button" onClick={clearFilters} aria-pressed={availability === "all" && !showMarkedOnly} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "all" ? "border-sky-300/34 bg-sky-400/18 text-sky-50" : "border-slate-500/28 bg-slate-900/42 text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-sky-100")}>主料 <strong className="ml-1">{displayGroups.length.toLocaleString()}</strong></button>
               <button type="button" onClick={() => applyAvailabilityFilter("required")} aria-pressed={availability === "required"} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "required" ? "border-amber-300/50 bg-amber-400/20 text-amber-50" : "border-amber-300/28 bg-amber-400/10 text-amber-100 hover:bg-amber-400/18 hover:text-amber-50")}>料號待補 <strong className="ml-1">{requiredApplicationCount.toLocaleString()}</strong></button>
             </div>
             <Select value={sortSelectValue} onValueChange={selectTableSort}>
@@ -6443,15 +6391,16 @@ export function MaterialRequestPage() {
             </Select>
             {tableSettingsControl}
             <Button type="button" variant="outline" size="sm" data-testid="material-export-visible" className="material-action-highlight h-9 gap-1.5 px-2.5 text-xs" disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} onClick={() => void exportVisibleColumns()} title="依目前顯示欄位與順序匯出所有符合篩選的廠商明細，不受分頁限制；狀態欄匯出文字"><Download className="h-3.5 w-3.5" />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}</Button>
+            <Button type="button" variant="outline" size="sm" data-testid="material-personal-marks-filter" className="h-9 gap-1.5 px-2.5 text-xs" aria-pressed={showMarkedOnly} disabled={!personalMarks.ready} onClick={() => setShowMarkedOnly(value => !value)} title="只顯示目前帳號勾選的料件，其他使用者看不到這些標記"><Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />我的標記（{markedGroupCount}）</Button>
             <span className="ml-auto text-xs text-slate-400">
               {isPreviewDataset
                 ? <>先顯示 <strong className="text-cyan-200">{visibleGroupRows.length.toLocaleString()}</strong> 個主料，完整清單同步中</>
-                : columnSort ? <>顯示 <strong className="text-cyan-200">{orderedRecordRows.length.toLocaleString()}</strong> 筆廠商明細 · {filteredGroups.length.toLocaleString()} 個主料</>
-                : <>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {dataset.stats.totalGroups.toLocaleString()} 個主料 · {dataset.stats.totalRecords.toLocaleString()} 筆廠商明細</>}
+                : <>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {displayGroups.length.toLocaleString()} 個主料 · {dataset.stats.totalRecords.toLocaleString()} 筆廠商明細</>}
             </span>
           </div>
           {activeFilterControls}
         </div>
+        {personalMarks.error && <div role="alert" className="flex items-center gap-2 px-2 py-1 text-xs text-amber-200">{personalMarks.error}<Button type="button" variant="outline" size="sm" onClick={personalMarks.reload} disabled={personalMarks.pendingKeys.size > 0}>重試個人標記</Button></div>}
 
         {isCompactLayout && mobileView === "cards" && <div className="space-y-2 p-2 lg:hidden" data-testid="material-mobile-cards">
           <h2 className="sr-only">手機以料件卡片呈現，點開即可查看替代料與追蹤紀錄</h2>
@@ -6462,6 +6411,7 @@ export function MaterialRequestPage() {
             const isMarked = markedGroupKeySet.has(group.key);
             const mustApply = group.requiresApplication;
             const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred && !record.isRisk).length;
+            const mainRisk = group.locations.some(location => location.primaryRecord.isRisk);
 
             return (
               <article
@@ -6476,6 +6426,7 @@ export function MaterialRequestPage() {
                   <button
                     type="button"
                     onClick={() => toggleMarkedGroup(group.key)}
+                    disabled={!personalMarks.ready || getMaterialMarkKeys(group).some(key => personalMarks.pendingKeys.has(key))}
                     aria-label={isMarked ? "移除我的標記" : "加入我的標記"}
                     className={cn(
                       "flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl border text-[10px] font-black",
@@ -6488,7 +6439,7 @@ export function MaterialRequestPage() {
                   <button type="button" onClick={() => openRecord(mainRecord, "view")} className="min-w-0 flex-1 text-left">
                     <p className="line-clamp-2 break-words text-[.9375rem] font-semibold leading-[1.4] text-foreground">{group.name || mainRecord.name || "未命名料件"}</p>
                     <p className="mt-1 truncate text-[.8125rem] text-muted-foreground">{getDisplayMpn(mainRecord) || "尚未填寫 MPN"} · <span>{mainRecord.manufacturer || "未指定廠商"}</span></p>
-                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><PartUsageSummary records={group.records} /><span className="inline-flex min-w-0 items-center gap-1"><span className="text-xs text-slate-500">phase out</span><PhaseOutStatus record={mainRecord} /></span></div>
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><PartUsageSummary records={group.locations.map(location => location.primaryRecord)} /><span className="inline-flex min-w-0 items-center gap-1"><span className="text-xs text-slate-500">phase out</span><PhaseOutStatus record={mainRecord} /></span></div>
                   </button>
                   <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-500" />
                 </div>
@@ -6496,10 +6447,11 @@ export function MaterialRequestPage() {
                 <div className="material-mobile-summary">
                   <MaterialApplicationExemptionBadge record={mainRecord} />
                   <span className={cn(CHIP_BASE, "shrink-0", getTrackingStatusTone(getTrackingWorkflowStatus(mainRecord)))}>{getTrackingStatusDisplayLabel(getTrackingWorkflowStatus(mainRecord))}</span>
-                  <span className={cn("min-w-0 text-xs", group.riskCount > 0 ? "text-destructive" : mustApply ? "text-warning" : "text-muted-foreground")}>{group.riskCount > 0 ? "料況需確認" : mustApply ? "未提供虛擬／實體料號" : mainRecord.sourcingStatus || "供應／核准狀態未提供"}</span>
+                  <span className={cn("min-w-0 text-xs", mainRisk ? "text-destructive" : mustApply ? "text-warning" : "text-muted-foreground")}>{mainRisk ? "料況需確認" : mustApply ? "未提供虛擬／實體料號" : mainRecord.sourcingStatus || "供應／核准狀態未提供"}</span>
                 </div>
                 <div className="material-mobile-reference">
-                  <span className="min-w-0 flex-1 truncate">REF {mainRecord.refDes || mainRecord.refGroup || "-"}</span>
+                  <span className="min-w-0 flex-1 truncate" title={group.displayRef}>{group.locations.length > 1 ? `${group.locations.length} 個位置 · 用量 ${group.qty}` : `REF ${group.displayRef || "-"}`}</span>
+                  {secondaryAlternatives.some(record => record.isRisk) && <span className="shrink-0 text-xs text-warning">替代料含風險</span>}
                   <span className="shrink-0">替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
                 </div>
 
@@ -6525,12 +6477,14 @@ export function MaterialRequestPage() {
                       <Button type="button" variant="outline" onClick={() => rowActions.copy(mainRecord.refDes || group.displayRef)} className="h-11"><Copy className="mr-1.5 h-4 w-4" />複製 REF DES</Button>
                       {getMaterialSpecDocuments(mainRecord).length > 0 && <Button type="button" variant="outline" onClick={() => rowActions.openSpec(mainRecord)} className="col-span-2 h-11"><Paperclip className="mr-1.5 h-4 w-4" />SPEC 文件（{getMaterialSpecDocuments(mainRecord).length}）</Button>}
                     </div>
-                    <p className="break-words text-xs text-muted-foreground">REF DES：{mainRecord.refDes || group.displayRef || "-"}</p>
-                    {secondaryAlternatives.length ? secondaryAlternatives.map((record) => (
+                    {group.locations.map(location => <section key={location.key} className="space-y-2 rounded-xl border border-border p-2" data-testid="material-mobile-location">
+                    <button type="button" className="flex min-h-11 w-full flex-col items-start text-left" onClick={() => openRecord(location.primaryRecord, "view")}><strong className="break-words text-sm text-foreground">位置：{location.displayRef} · 用量 {location.qty}</strong><span className="text-xs text-muted-foreground">{location.assemblyName || location.sectionName}</span></button>
+                    <Button type="button" variant="outline" className="h-11" disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} onClick={() => openCreate(location)}><Plus className="mr-1 h-4 w-4" />新增替代料</Button>
+                    {getSortedAlternatives(location).length > 1 ? getSortedAlternatives(location).slice(1).map((record) => (
                       <div key={record.id} style={{ backgroundColor: blendWithSurface(record.isPreferred && !record.isRisk ? activeTableColorTheme.alternative : activeTableColorTheme.secondary, 0.2) }} className="rounded-xl border border-violet-300/15 p-2">
                         <button type="button" onClick={() => openRecord(record, "view")} className="flex w-full items-center gap-3 px-1 pb-2 text-left">
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-300/15 text-xs font-black text-violet-100">ALT</span>
-                          <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{getDisplayMpn(record) || "未填 MPN"}</strong><span className="block truncate text-xs text-slate-400">{record.manufacturer || "未指定廠商"}</span></span>
+                          <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{getDisplayMpn(record) || "未填 MPN"}</strong><span className="block truncate text-xs text-slate-400">{record.manufacturer || "未指定廠商"}</span><PartUsageSummary records={[record]} /></span>
                           <MaterialApplicationExemptionBadge record={record} />
                           <ChevronRight className="h-4 w-4 text-violet-200" />
                         </button>
@@ -6538,6 +6492,7 @@ export function MaterialRequestPage() {
                         <MaterialNoteCell key={`${user?.userId}:${activeWorkspace.id}:${record.id}`} compact disabled={!canEditNote} onSave={rowActions.saveNote} record={record} />
                       </div>
                     )) : <p className="rounded-lg border border-dashed border-slate-600/50 px-3 py-2 text-xs text-slate-400">目前沒有替代料</p>}
+                    </section>)}
                   </div>
                 ) : null}
 
@@ -6563,6 +6518,7 @@ export function MaterialRequestPage() {
           <table className="material-table-crosshair table-fixed border-collapse text-[13px]" style={{ ...buildMaterialCrosshairStyle(activeTableColorTheme.crosshair), width: `max(100%, ${tableWidth}px)`, minWidth: tableWidth }} onPointerOver={event => markMaterialCrosshair(event.currentTarget, event.target)} onPointerLeave={event => clearMaterialCrosshair(event.currentTarget)} onFocusCapture={event => markMaterialCrosshair(event.currentTarget, event.target)} onBlurCapture={event => { if (!event.currentTarget.matches(":hover") && !event.currentTarget.contains(event.relatedTarget as Node | null)) clearMaterialCrosshair(event.currentTarget); }}>
             <thead className="sticky top-0 z-20">
               <tr className="bg-[#0d2137] text-left text-[13px] font-bold text-white">
+                <th className="w-[84px] border-r border-white/20 px-2 text-center" scope="col">個人標記</th>
                 {MATERIAL_TABLE_COLUMNS.map((column, columnIndex) => columnVisibility[column.key] && (
                   <ResizableHeader
                     key={column.key}
@@ -6584,6 +6540,7 @@ export function MaterialRequestPage() {
               </tr>
               {/* Second header row mirrors row 5 of the CE workbook: the Chinese meaning, or the column filter where one exists. */}
               <tr className="bg-[#10263a] text-slate-100">
+                <th className="border-r border-white/20 p-1.5 text-center text-xs font-normal text-muted-foreground">僅本人</th>
                 {MATERIAL_TABLE_COLUMNS.map((column) => {
                   if (!columnVisibility[column.key]) return null;
                   const filterKey = MATERIAL_COLUMN_FILTER_KEYS[column.key];
@@ -6625,7 +6582,7 @@ export function MaterialRequestPage() {
 
               return (
                 <MaterialGroupRow
-                  key={`${user?.userId}:${activeWorkspace.id}:${row.group.key}:${row.standalone ? row.primaryAlternative.id : "group"}`}
+                  key={`${user?.userId}:${activeWorkspace.id}:${row.group.key}`}
                   row={row}
                   itemValue={getGroupItemValue(row.group, (page - 1) * pageSize + rowIndex + 1)}
                   expanded={expandedKey === row.group.key}
@@ -6635,6 +6592,8 @@ export function MaterialRequestPage() {
                   colorTheme={activeTableColorTheme}
                   columns={columnVisibility}
                   canEditNote={canEditNote}
+                  markedLocationIds={JSON.stringify(row.locations.filter(location => personalMarks.keys.has(`record::${location.primaryRecord.id}`)).map(location => location.primaryRecord.id))}
+                  markDisabled={!personalMarks.ready || getMaterialMarkKeys(row.group).some(key => personalMarks.pendingKeys.has(key))}
                   actions={rowActions}
                 />
               );

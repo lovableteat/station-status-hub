@@ -236,12 +236,12 @@ test("page snapshots and actual exports keep each physical candidate's own CE fi
     { name: "CAP A", manufacturer: "Maker A", manufacturerPartNumber: "MPN-A", partNumber: "PHYSICAL-A", partName: "實體料 A", partSpec: "0.1uF", schematicPart: "CAP_A", pcbFootprint: "0402_A", symbolStatus: "缺 Symbol", phaseOutStatus: "ACTIVE" },
     { name: "CAP B", manufacturer: "Maker B", manufacturerPartNumber: "MPN-B", partNumber: "PHYSICAL-B", partName: "實體料 B", partSpec: "100nF", schematicPart: "CAP_B", pcbFootprint: "0402_B", symbolStatus: "C", phaseOutStatus: "PHASEOUT" },
     { name: "CAP C", manufacturer: "Maker C", manufacturerPartNumber: "MPN-C", partNumber: "", partName: "", partSpec: "", schematicPart: "", pcbFootprint: "", symbolStatus: "待確認", phaseOutStatus: "UNDERREVIEW" },
-  ].map((record, index) => ({ ...record, id: `candidate-${index}`, virtualAlternative: "SHARED-VIRTUAL", refDes: "C101", trackingHistory: [], partUsageStatus: "待確認", sourcingStatus: "Approved", manufacturerPartNumberAlt: "" }));
+  ].map((record, index) => ({ ...record, id: `candidate-${index}`, qty: index + 1, virtualAlternative: "SHARED-VIRTUAL", refDes: "C101", trackingHistory: [], partUsageStatus: "待確認", sourcingStatus: "Approved", manufacturerPartNumberAlt: "" }));
   candidates[0].trackingStatus = '新增追蹤';
   candidates[0].trackingHistory = [{ status: '新增追蹤', note: '舊進度', createdAt: '2026-10-27T02:00:00Z' }, { status: '已完成', note: '最新已取得料號', requestInfo: 'CE 核對完成', createdBy: 'QA', createdAt: '2026-10-29T02:00:00Z' }];
   const group = { key: "shared-group", records: candidates, primaryRecord: candidates[0], assemblyName: "Module", name: "GROUP NAME MUST NOT REPLACE ROW", qty: 1, schematicPart: "GROUP SYMBOL MUST NOT FILL BLANKS", footprint: "GROUP FOOTPRINT MUST NOT FILL BLANKS", partName: "GROUP NAME MUST NOT BECOME SPEC", partSpec: "GROUP SPEC MUST NOT FILL BLANKS", displayRef: "C101" };
   const bindings = {
-    getMaterialSpecDocuments, filteredGroups: [group], getMatchingRecords: value => value.records,
+    getMaterialSpecDocuments, displayGroups: [group], filteredGroups: [group], getMatchingRecords: value => value.records,
     orderedRecordRows: candidates.map(record => ({ group, record, groupIndex: 0 })), sortLabel: "Ref",
     getLatestTrackingEntry: record => record.trackingHistory.at(-1), getTrackingRequestMeta: () => ({ ticket: "", url: "" }),
     getActionLabel: () => "", getGroupItemValue: () => 1, markedGroupKeySet: new Set(),
@@ -262,6 +262,7 @@ test("page snapshots and actual exports keep each physical candidate's own CE fi
   const html = await (await captureExport(exportMaterialReportHtml, report)).text();
   candidates.forEach((record, index) => {
     const row = report.rows[index];
+    assert.equal(row.qty, String(record.qty), 'exports preserve the original record quantity instead of the displayed main total');
     assert.equal(row.partName, record.partName);
     assert.equal(row.specification, record.partSpec);
     assert.equal(row.symbol, record.schematicPart);

@@ -68,8 +68,9 @@ test("every main-row and alternative-row cell follows the column list and its vi
     assert.match(rowBlock, new RegExp(`data-material-cell="${key}"`));
     assert.match(alternativeBlock, new RegExp(`\\{columns\\.${key} && `), `alternative cell ${key} must be toggleable`);
   }
-  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 17);
-  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 17);
+  assert.equal((rowBlock.match(/<td\b/g) ?? []).length, 18);
+  assert.equal((alternativeBlock.match(/<td\b/g) ?? []).length, 18);
+  assert.match(rowBlock, /aria-label=\{`個人標記/);
   assert.match(rowBlock, /data-material-cell="actions"[\s\S]*?data-material-cell="tracking"[\s\S]*?<TrackingHistoryCell/, "tracking lives inside the sticky update cell");
   assert.match(source, /data-testid="material-column-visibility"/);
   assert.match(source, /HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1"/);
@@ -220,7 +221,7 @@ test("待處理料 opens from the header actions and groups pending parts by cat
   assert.match(dialog, /onOpenTracking\(record\)/);
   assert.doesNotMatch(dialog, />定位<|>更新料號<|>追蹤<|onLocate|onOpenCreate/);
   assert.match(source, /const pendingMaterialGroups = useMemo\(\(\) => dataset\.groups\.filter\(\(group\) => group\.records\.some\(\(record\) => record\.needsApplication \|\| isTrackedMaterialApplication\(record\)\)\)/);
-  assert.match(source, /const requiredApplicationCount = useMemo\(\(\) => dataset\.groups\.filter\(requiresApplication\)\.length/, "料號待補 keeps counting locations with no number at all");
+  assert.match(source, /const requiredApplicationCount = useMemo\(\(\) => displayGroups\.filter/, "料號待補 counts the displayed main parts without matching alternative rows");
   assert.match(source, /<PendingMaterialsDialog/);
   const dialogTokens = dialog;
   assert.doesNotMatch(dialogTokens, /bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);
