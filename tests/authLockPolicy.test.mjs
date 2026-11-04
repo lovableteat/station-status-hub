@@ -200,7 +200,7 @@ test("refresh network errors retry within the same request and can recover", asy
 });
 
 for (const failure of ["network", "503"]) {
-  test(`persistent refresh ${failure} failures share one total deadline and stop SDK retries`, async () => {
+  test(`persistent refresh ${failure} failures share one transport deadline and remain retryable`, async () => {
     let calls = 0, receivedSignal;
     const boundedFetch = createBoundedAuthFetch({
       timeoutMs: 45, retryDelayMs: 1,
@@ -213,7 +213,7 @@ for (const failure of ["network", "503"]) {
     const startedAt = Date.now();
     const response = await boundedFetch(refreshUrl, { method: "POST" });
     assert.ok(calls >= 2, "refresh should recover transient failures before exhausting its budget");
-    assert.equal(response.status, 408);
+    assert.equal(response.status, 503);
     assert.equal((await response.json()).error_code, "request_timeout");
     assert.equal(receivedSignal.aborted, true);
     assert.ok(Date.now() - startedAt < 250, "backoff must not extend the total Auth budget");
@@ -253,7 +253,7 @@ test("a response body after refresh retries still has only the original deadline
   const startedAt = Date.now();
   const response = await boundedFetch(refreshUrl, { method: "POST" });
   assert.equal(calls, 2);
-  assert.equal(response.status, 408);
+  assert.equal(response.status, 503);
   assert.ok(Date.now() - startedAt < 250);
 });
 

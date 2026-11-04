@@ -75,6 +75,8 @@ interface UserContextType {
   isRealtimeAuthenticated: boolean;
   requiresRealtimeUpgrade: boolean;
   reauthRequired: boolean;
+  sessionRecoveryNeeded: boolean;
+  retrySession: () => void;
 }
 
 interface AccountLoginPayload {
@@ -92,6 +94,7 @@ interface AccountLoginPayload {
 }
 
 const SESSION_BOOTSTRAP_TIMEOUT_MS = 8_000;
+const SESSION_RECOVERY_RETRY_MS = 10_000;
 const AUTH_SESSION_VERSION = "2026-07-31-tab-isolation-v2";
 const AUTH_SESSION_VERSION_KEY = "bringup-auth-session-version";
 
@@ -227,13 +230,23 @@ async function userFromSession(session: Session): Promise<User | null> {
   }
 
   if (!error) return null;
+  // Only an unavailable legacy RPC may use the verified Auth metadata fallback.
+  // Network failures must not become either a new grant or a permanent logout.
+  const rpcCode = (error as { code?: string }).code;
+  if (rpcCode !== "PGRST202" && rpcCode !== "42883") {
+    throw normalizeThrownError(error, "Account profile is temporarily unavailable");
+  }
 
   // Keep migration compatibility, but only after Auth has fetched the user
   // from the server. The user object inside getSession() comes from browser
   // storage and must never be trusted for identity or role decisions.
   const { data: verifiedUserData, error: verifiedUserError } =
     await supabase.auth.getUser(session.access_token);
-  if (verifiedUserError || !verifiedUserData.user) return null;
+  if (verifiedUserError) {
+    if (isTerminalSessionError(verifiedUserError)) return null;
+    throw normalizeThrownError(verifiedUserError, "Account verification is temporarily unavailable");
+  }
+  if (!verifiedUserData.user) return null;
   return userFromMetadata(verifiedUserData.user.app_metadata ?? {});
 }
 
@@ -257,6 +270,13 @@ function isCredentialRejection(error: unknown, payload?: AccountLoginPayload | n
   return status === 401 || status === 403;
 }
 
+function isTerminalSessionError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const value = error as { status?: number; code?: string; name?: string };
+  return value.status === 401 || value.status === 403 || value.name === "AuthSessionMissingError"
+    || ["refresh_token_not_found", "refresh_token_already_used", "session_not_found", "session_expired", "user_banned", "user_not_found"].includes(value.code ?? "");
+}
+
 export function UserProvider({ children }: { children: ReactNode }) {
   const demoUser = useMemo(getDevDemoUser, []);
   const cachedUser = useMemo(() => (demoUser ? null : readStoredUser()), [demoUser]);
@@ -268,6 +288,32 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // to be restored. Keep the global session gate closed until that check ends.
   const [isInitializing, setIsInitializing] = useState(!demoUser);
   const [reauthRequired, setReauthRequired] = useState(false);
+  const [sessionRecoveryNeeded, setSessionRecoveryNeeded] = useState(false);
+  const userRef = useRef<User | null>(demoUser ?? cachedUser);
+  // Only a server-verified identity in this mounted provider can survive a
+  // transient profile read. Browser-stored users never enter this ref.
+  const verifiedIdentity = useRef<{ authId: string; accountId: string; checkedAt: number } | null>(null);
+  const lastVerifiedSession = useRef<Session | null>(null);
+  const recoveryPending = useRef(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retrySessionRef = useRef<(() => void) | null>(null);
+  const suppressRecovery = useRef(false);
+  const authenticationAttempt = useRef(0);
+  const pendingSignOut = useRef<Promise<void> | null>(null);
+  const signOutLocally = useCallback(() => {
+    if (pendingSignOut.current) return pendingSignOut.current;
+    const operation = Promise.resolve().then(() => supabase.auth.signOut({ scope: "local" }))
+      .then(() => {}, () => { console.warn("Local sign-out request did not complete"); })
+      .finally(() => { if (pendingSignOut.current === operation) pendingSignOut.current = null; });
+    pendingSignOut.current = operation;
+    return operation;
+  }, []);
+  const cancelRecoveryRetry = useCallback(() => {
+    if (retryTimer.current !== null) clearTimeout(retryTimer.current);
+    retryTimer.current = null;
+    recoveryPending.current = false;
+  }, []);
+  const retrySession = useCallback(() => retrySessionRef.current?.(), []);
   const sessionRestore = useRef<{
     generation: number;
     token: string | null;
@@ -283,6 +329,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const applyUser = useCallback((nextUser: User, mode: Exclude<SessionMode, "signed-out">) => {
+    userRef.current = nextUser;
     setUser(nextUser);
     setSessionMode(mode);
     storeUser(nextUser);
@@ -299,136 +346,171 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (demoUser) return;
     let active = true;
+    let eventEpoch = 0;
+    const eventTimers = new Set<ReturnType<typeof setTimeout>>();
+
+    const clearIdentity = () => {
+      verifiedIdentity.current = null;
+      lastVerifiedSession.current = null;
+      userRef.current = null;
+      setUser(null);
+      setSessionMode("signed-out");
+      storeUser(null);
+      setSessionRecoveryNeeded(false);
+      cancelRecoveryRetry();
+    };
+    const rejectSession = () => {
+      authenticationAttempt.current += 1;
+      suppressRecovery.current = true;
+      clearIdentity();
+      storeCurrentSessionVersion(false);
+      void signOutLocally();
+    };
+    const mayKeepVerifiedUser = (session?: Session | null) => Boolean(
+      session && verifiedIdentity.current?.authId === session.user.id
+      && verifiedIdentity.current.accountId === userRef.current?.userId
+      && typeof session.expires_at === "number" && session.expires_at * 1000 > Date.now(),
+    );
+    const recoverLater = (session?: Session | null) => {
+      if (!active || suppressRecovery.current) return;
+      recoveryPending.current = true;
+      // No cached/local identity is promoted. While unverified (or expired),
+      // the session gate shows a retry screen instead of private providers.
+      setSessionRecoveryNeeded(!mayKeepVerifiedUser(session ?? lastVerifiedSession.current));
+      if (retryTimer.current === null) {
+        retryTimer.current = setTimeout(() => {
+          retryTimer.current = null;
+          if (active && !suppressRecovery.current) void initializeSession();
+        }, SESSION_RECOVERY_RETRY_MS);
+      }
+    };
 
     const restoreSession = (session: Session | null): Promise<void> => {
-      if (!active) return Promise.resolve();
+      if (!active || (suppressRecovery.current && session)) return Promise.resolve();
       const token = session?.access_token ?? null;
       const previous = sessionRestore.current;
-      // getSession() and INITIAL_SESSION can report the same token together.
-      // Share only the in-flight verification; future events still revalidate.
       if (token && previous.token === token && previous.pending) return previous.pending;
-
-      const current = {
-        generation: previous.generation + 1,
-        token,
-        pending: null as Promise<void> | null,
-      };
+      const current = { generation: previous.generation + 1, token, pending: null as Promise<void> | null };
       sessionRestore.current = current;
       const isCurrent = () => active && sessionRestore.current === current;
-
+      if (session && verifiedIdentity.current && verifiedIdentity.current.authId !== session.user.id) {
+        clearIdentity();
+        setIsInitializing(true);
+      }
       current.pending = Promise.resolve().then(async () => {
         if (!isCurrent()) return;
-
         try {
-          if (!session) {
-            setUser(null);
-            setSessionMode("signed-out");
-            storeUser(null);
-            return;
-          }
-
+          if (!session) { clearIdentity(); return; }
           if (!hasCurrentSessionVersion()) {
-            setUser(null);
-            setSessionMode("signed-out");
-            storeUser(null);
             setReauthRequired(true);
-            void supabase.auth.signOut({ scope: "local" });
+            rejectSession();
             return;
           }
-
           void authorizeRealtime(session);
-
           const profileResult = await runSessionBootstrapWithDeadline(
             () => userFromSession(session),
             { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS },
           );
           if (!isCurrent()) return;
-
-          let authenticatedUser: User | null = null;
           if (profileResult.status === "fulfilled") {
-            authenticatedUser = profileResult.value;
-          } else {
-            console.warn(
-              profileResult.status === "timed-out"
-                ? "Session profile restore timed out"
-                : "Session profile restore failed",
-              profileResult.status === "rejected" ? profileResult.error : undefined,
-            );
-          }
-
-          if (authenticatedUser) {
+            if (!profileResult.value) { rejectSession(); return; }
+            lastVerifiedSession.current = session;
+            verifiedIdentity.current = { authId: session.user.id, accountId: profileResult.value.userId, checkedAt: Date.now() };
+            cancelRecoveryRetry();
+            setSessionRecoveryNeeded(false);
             setReauthRequired(false);
-            applyUser(authenticatedUser, "authenticated");
+            applyUser(profileResult.value, "authenticated");
             return;
           }
-
-          setUser(null);
-          setSessionMode("signed-out");
-          storeUser(null);
-          storeCurrentSessionVersion(false);
-          void supabase.auth.signOut({ scope: "local" });
+          console.warn("Session profile verification will retry", profileResult.status);
+          if (profileResult.status === "rejected" && isTerminalSessionError(profileResult.error)) rejectSession();
+          else recoverLater(session);
         } finally {
-          if (isCurrent()) {
-            current.pending = null;
-            setIsInitializing(false);
-          }
+          if (isCurrent()) { current.pending = null; setIsInitializing(false); }
         }
       });
       return current.pending;
     };
 
-    const initializeSession = async () => {
+    async function initializeSession() {
+      if (!active || suppressRecovery.current) return;
       const generation = sessionRestore.current.generation;
+      const authEvent = eventEpoch;
       const sessionResult = await runSessionBootstrapWithDeadline(
         () => supabase.auth.getSession(),
         { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS },
       );
-      // An Auth event, explicit login, or logout supersedes this older read.
-      if (!active || sessionRestore.current.generation !== generation) return;
-
+      if (!active || suppressRecovery.current || sessionRestore.current.generation !== generation || eventEpoch !== authEvent) return;
       if (sessionResult.status !== "fulfilled") {
-        console.warn(
-          sessionResult.status === "timed-out"
-            ? "Session bootstrap timed out"
-            : "Session bootstrap failed",
-          sessionResult.status === "rejected" ? sessionResult.error : undefined,
-        );
-        setUser(null);
-        setSessionMode("signed-out");
-        storeUser(null);
+        console.warn("Session bootstrap will retry", sessionResult.status);
+        recoverLater();
         setIsInitializing(false);
         return;
       }
-
       if (sessionResult.value.error) {
-        console.warn("Session bootstrap returned an auth error", sessionResult.value.error);
-        setUser(null);
-        setSessionMode("signed-out");
-        storeUser(null);
+        if (isTerminalSessionError(sessionResult.value.error)) rejectSession();
+        else recoverLater();
         setIsInitializing(false);
         return;
       }
-
       await restoreSession(sessionResult.value.data.session);
+    }
+    retrySessionRef.current = () => {
+      if (!active || suppressRecovery.current) return;
+      cancelRecoveryRetry();
+      void initializeSession();
     };
-
+    const onReconnect = () => {
+      if (active && !suppressRecovery.current && (recoveryPending.current || Date.now() - (verifiedIdentity.current?.checkedAt ?? 0) >= 60_000)) {
+        retrySessionRef.current?.();
+      }
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") onReconnect(); };
+    window.addEventListener("online", onReconnect);
+    window.addEventListener("pageshow", onReconnect);
+    document.addEventListener("visibilitychange", onVisible);
     void initializeSession();
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      void restoreSession(event === "SIGNED_OUT" ? null : session);
+      if (event === "INITIAL_SESSION" && !session) return;
+      eventEpoch += 1;
+      if (event === "SIGNED_OUT") { suppressRecovery.current = true; void restoreSession(null); return; }
+      // INITIAL_SESSION(null) can also mean a temporary refresh failure. The
+      // getSession result above owns that distinction; never erase storage here.
+      if (!session || suppressRecovery.current) return;
+      const epoch = eventEpoch;
+      const timer = setTimeout(() => {
+        eventTimers.delete(timer);
+        if (active && !suppressRecovery.current && epoch === eventEpoch) void restoreSession(session);
+      }, 0);
+      eventTimers.add(timer);
     });
-
     return () => {
       active = false;
+      authenticationAttempt.current += 1;
+      cancelRecoveryRetry();
+      retrySessionRef.current = null;
+      for (const timer of eventTimers) clearTimeout(timer);
+      window.removeEventListener("online", onReconnect);
+      window.removeEventListener("pageshow", onReconnect);
+      document.removeEventListener("visibilitychange", onVisible);
       invalidateSessionRestore();
       authListener.subscription.unsubscribe();
     };
-  }, [applyUser, demoUser, invalidateSessionRestore]);
+  }, [applyUser, cancelRecoveryRetry, demoUser, invalidateSessionRestore, signOutLocally]);
 
   const authenticate = useCallback(
     async (username: string, password: string): Promise<AuthenticationResult | null> => {
       // Usernames are case-insensitive at login time. Keep the password
       // untouched so its existing case-sensitive verification remains intact.
       const normalizedUsername = username.trim().toLowerCase();
+      const attempt = ++authenticationAttempt.current;
+      const isCurrentAttempt = () => authenticationAttempt.current === attempt;
+      invalidateSessionRestore();
+      cancelRecoveryRetry();
+      // An older logout must finish before a new account establishes its SDK
+      // session; otherwise its late SIGNED_OUT can disable the new refreshes.
+      if (pendingSignOut.current) await pendingSignOut.current;
+      if (!isCurrentAttempt()) return null;
 
       if (REALTIME_COLLABORATION_V2_ENABLED) {
         const edgeResult = await runLoginWithTransientRetry(() =>
@@ -437,15 +519,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
           }),
         );
 
+        if (!isCurrentAttempt()) return null;
         if (!edgeResult.error && edgeResult.data?.success && edgeResult.data.session) {
           // Write the version before setSession(), because the auth listener can
           // run synchronously while the new session is being established.
+          suppressRecovery.current = false;
           storeCurrentSessionVersion(true);
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: edgeResult.data.session.access_token,
             refresh_token: edgeResult.data.session.refresh_token,
           });
+          if (!isCurrentAttempt()) return null;
           if (!sessionError) {
+            suppressRecovery.current = false;
             setReauthRequired(false);
             void authorizeRealtime(edgeResult.data.session);
             const profile = edgeResult.data.system_user;
@@ -460,6 +546,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
               // The login endpoint already returned a verified account. A
               // slower SIGNED_IN profile read must not undo this login later.
               invalidateSessionRestore();
+              lastVerifiedSession.current = edgeResult.data.session;
+              verifiedIdentity.current = { authId: edgeResult.data.session.user.id, accountId: authenticatedUser.userId, checkedAt: Date.now() };
+              cancelRecoveryRetry();
+              setSessionRecoveryNeeded(false);
               applyUser(authenticatedUser, "authenticated");
               setIsInitializing(false);
               return { user: authenticatedUser, mode: "authenticated" };
@@ -486,6 +576,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           password_input: password,
         }),
       );
+      if (!isCurrentAttempt()) return null;
       if (legacyResult.error) {
         throw normalizeThrownError(legacyResult.error, "Authentication failed");
       }
@@ -504,7 +595,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       applyUser(compatibleUser, "legacy");
       return { user: compatibleUser, mode: "legacy" };
     },
-    [applyUser, invalidateSessionRestore],
+    [applyUser, cancelRecoveryRetry, invalidateSessionRestore],
   );
 
   const registerAccount = useCallback(
@@ -644,6 +735,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [sessionMode, user?.userId]);
 
   const logout = useCallback(() => {
+    authenticationAttempt.current += 1;
+    suppressRecovery.current = true;
+    cancelRecoveryRetry();
+    verifiedIdentity.current = null;
+    lastVerifiedSession.current = null;
+    userRef.current = null;
+    setSessionRecoveryNeeded(false);
     invalidateSessionRestore();
     setUser(null);
     setSessionMode("signed-out");
@@ -651,8 +749,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     storeCurrentSessionVersion(false);
     setReauthRequired(false);
     setIsInitializing(false);
-    void supabase.auth.signOut({ scope: "local" });
-  }, [invalidateSessionRestore]);
+    void signOutLocally();
+  }, [cancelRecoveryRetry, invalidateSessionRestore, signOutLocally]);
 
   useEffect(() => {
     if (
@@ -714,9 +812,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
         isRealtimeAuthenticated,
         requiresRealtimeUpgrade,
         reauthRequired,
+        sessionRecoveryNeeded,
+        retrySession,
       };
     },
-    [authenticate, isInitializing, login, logout, reauthRequired, registerAccount, sessionMode, updateAvatar, updateOwnCredentials, user],
+    [authenticate, isInitializing, login, logout, reauthRequired, registerAccount, retrySession, sessionRecoveryNeeded, sessionMode, updateAvatar, updateOwnCredentials, user],
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

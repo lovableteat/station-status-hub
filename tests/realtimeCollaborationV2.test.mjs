@@ -101,13 +101,16 @@ test("stale cached sessions use the same login page before private providers mou
   );
   assert.match(context, /sessionResult\.status !== "fulfilled"/);
   const bootstrapFailureBlock = context.match(
-    /if \(sessionResult\.status !== "fulfilled"\) \{([\s\S]*?)\r?\n\s*\}\r?\n\r?\n\s*if \(sessionResult\.value\.error\)/,
+    /if \(sessionResult\.status !== "fulfilled"\) \{([\s\S]*?)\r?\n\s*\}\r?\n\s*if \(sessionResult\.value\.error\)/,
   )?.[1];
   assert.match(
     bootstrapFailureBlock ?? "",
-    /setUser\(null\)[\s\S]*?setSessionMode\("signed-out"\)[\s\S]*?storeUser\(null\)/,
-    "an unverified cached identity must be cleared when session bootstrap fails",
+    /recoverLater\(\)/,
+    "transient bootstrap failures must enter recovery instead of deleting credentials",
   );
+  assert.doesNotMatch(bootstrapFailureBlock ?? "", /signOut|storeUser\(null\)/);
+  assert.match(app, /if \(sessionRecoveryNeeded\)/);
+  assert.ok(app.indexOf("if (sessionRecoveryNeeded)") < app.indexOf("if (requiresRealtimeUpgrade || !isLoggedIn)"));
   assert.doesNotMatch(context, /await authorizeRealtime\(/);
   assert.match(
     context,

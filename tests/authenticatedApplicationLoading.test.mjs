@@ -72,6 +72,8 @@ test("unverified, signed-out and upgrade-required sessions do not load private a
   const cases = [
     { isInitializing: true, isLoggedIn: false, requiresRealtimeUpgrade: false, text: "正在驗證安全工作階段" },
     { isInitializing: true, isLoggedIn: true, requiresRealtimeUpgrade: false, text: "正在驗證安全工作階段" },
+    { isInitializing: false, isLoggedIn: false, requiresRealtimeUpgrade: false, sessionRecoveryNeeded: true, text: "正在恢復登入連線" },
+    { isInitializing: false, isLoggedIn: true, requiresRealtimeUpgrade: false, sessionRecoveryNeeded: true, text: "正在恢復登入連線" },
     { isInitializing: false, isLoggedIn: false, requiresRealtimeUpgrade: false, text: "登入表單" },
     { isInitializing: false, isLoggedIn: true, requiresRealtimeUpgrade: true, text: "登入表單" },
   ];
