@@ -1999,6 +1999,24 @@ html { color-scheme: dark; }
 .workspace-artwork-copy > span { color: hsl(var(--muted-foreground)); font-size: 10px; line-height: 1.5; }
 .workspace-artwork-image { display: block; width: 100%; height: 122px; min-width: 0; object-fit: contain; pointer-events: none; transition: transform .2s ease; }
 .workspace-entrance-card:hover .workspace-artwork-image { transform: scale(1.035); }
+
+.ai-chat-composer {
+  font-family: "Microsoft JhengHei UI", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+}
+.ai-chat-composer textarea {
+  font-family: inherit;
+  letter-spacing: normal;
+  -webkit-text-fill-color: currentColor;
+  caret-color: hsl(var(--primary));
+}
+.ai-chat-composer textarea::placeholder {
+  color: hsl(var(--foreground) / .82);
+  -webkit-text-fill-color: currentColor;
+  font-weight: 400;
+  opacity: 1;
+}
+.ai-chat-composer [data-ai-composer-toolbar] button { font-size: 15px; line-height: 22px; font-weight: 500; }
+.ai-chat-composer [data-ai-composer-toolbar] > span { font-size: 14px; }
 @media (prefers-reduced-motion: reduce) {
   .workspace-artwork-image { transition: none; }
   .workspace-entrance-card:hover .workspace-artwork-image { transform: none; }

@@ -3106,7 +3106,7 @@ export function ApiChatConsole({
             onDragLeave={handleComposerDragLeave}
             onDrop={handleComposerDrop}
             className={cn(
-              "rounded-xl border p-2 lg:p-3 transition-colors duration-150 focus-within:ring-2 motion-reduce:transition-none",
+              "ai-chat-composer rounded-xl border p-2 lg:p-3 transition-colors duration-150 focus-within:ring-2 motion-reduce:transition-none",
               isDragOverComposer
                 ? "border-primary bg-primary/10 ring-2 ring-primary/25"
                 : "border-border bg-card focus-within:border-primary focus-within:ring-primary/20"
@@ -3191,7 +3191,7 @@ export function ApiChatConsole({
                   placeholder="輸入問題"
                   rows={2}
                   disabled={isChatOnly && !conversationRemoteReadyRef.current}
-                  className="min-h-10 max-h-24 resize-none rounded-none border-0 !bg-transparent px-0 py-0 text-base leading-6 text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0 lg:resize-y"
+                  className="min-h-20 max-h-40 resize-none rounded-none border-0 !bg-transparent px-3 py-2.5 !text-lg font-normal leading-7 text-foreground shadow-none backdrop-blur-none transition-colors placeholder:text-muted-foreground focus-visible:ring-0 lg:resize-y"
                 />
               </div>
 
