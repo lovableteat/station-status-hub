@@ -33,6 +33,8 @@ export interface MobileCommandBarProps {
   toolsBadge?: string | number;
   /** Slot rendered under the bar (segment control, module tabs, status strip). */
   children?: ReactNode;
+  /** 44px control rendered before the heading, e.g. the files page's space drawer toggle. */
+  leading?: ReactNode;
   className?: string;
   testId?: string;
 }
@@ -44,12 +46,13 @@ export interface MobileCommandBarProps {
  * stays one line high and every control is a 44px target.
  */
 export function MobileCommandBar({
-  icon: Icon, title, context, contextTitle, actions = [], onOpenTools, toolsLabel = "工具", toolsBadge, children, className, testId,
+  icon: Icon, title, context, contextTitle, actions = [], onOpenTools, toolsLabel = "工具", toolsBadge, children, className, testId, leading,
 }: MobileCommandBarProps) {
   const visibleActions = actions.slice(0, 2);
   return (
     <section data-mobile-command-bar="true" data-testid={testId} className={cn("mobile-command-bar lg:hidden", className)}>
       <div className="mobile-command-bar__row">
+        {leading && <div className="mobile-command-bar__leading">{leading}</div>}
         <div className="mobile-command-bar__heading">
           {Icon && <span className="mobile-command-bar__icon" aria-hidden="true"><Icon className="h-4 w-4" /></span>}
           <div className="min-w-0">

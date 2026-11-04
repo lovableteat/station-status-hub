@@ -68,6 +68,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MobileCommandBar, MobileToolsSheet, type MobileToolsItem, type MobileToolsSection } from "@/components/layout/mobile";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -515,6 +516,8 @@ export function TestPlanWorkspace() {
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const { query, setQuery, categoryFilter, setCategoryFilter, sort, setSort, reverse, setReverse, toggleSort, scope, setScope, clearFilters } = useFileLibraryFilters();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [rowActionsEntry, setRowActionsEntry] = useState<TestPlanEntry | null>(null);
   const [previewOpen, setPreviewOpenState] = useState(() => readPreviewPreference(compact));
   // Pane widths the user dragged; null keeps the responsive default for the screen size.
   const [paneWidths, setPaneWidths] = useState<PaneWidths>(readPaneWidths);
@@ -1791,7 +1794,11 @@ export function TestPlanWorkspace() {
     );
   };
 
-  const renderQuickActions = (entry: TestPlanEntry) => (
+  const renderQuickActions = (entry: TestPlanEntry) => compact ? (
+    <span className="file-explorer-quick" onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
+      <button type="button" className="file-explorer-row-more" aria-label={`${entryName(entry)} 的操作`} title="更多操作" onClick={() => setRowActionsEntry(entry)}><MoreHorizontal className="h-5 w-5" /></button>
+    </span>
+  ) : (
     <span className="file-explorer-quick" onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
       {entry.kind === "file" ? (
         <>
@@ -2020,11 +2027,51 @@ export function TestPlanWorkspace() {
         >
           <BookOpen className="h-4 w-4" /><span>操作手冊</span>
         </Button>
-        {compact && <div className="file-explorer-mobile-history">
-          <Button type="button" variant="ghost" disabled={!canGoBack || busy} onClick={goBack}><ArrowLeft className="h-4 w-4" />返回</Button>
-          <Button type="button" variant="ghost" disabled={!canGoForward || busy} onClick={goForward}><ArrowRight className="h-4 w-4" />前進</Button>
-        </div>}
   </>;
+
+  // Phone: everything that is not "upload" lives in one bottom sheet, grouped by intent.
+  const selectionCount = selectedEntries.length;
+  const singleSelected = selectedEntry;
+  const mobileToolSections: MobileToolsSection[] = [
+    { key: "create", title: "上傳與建立", items: [
+      { key: "upload-folder", label: "上傳資料夾", description: "瀏覽器會再問一次是否上傳", icon: FolderUp, disabled: uploadDisabled, onSelect: () => folderInputRef.current?.click() },
+      { key: "new-folder", label: "新增資料夾", description: canEdit ? "在目前位置建立並直接命名" : readOnlyReason, icon: FolderPlus, disabled: !canEdit || loading || busy, onSelect: () => void createFolderHere() },
+    ] },
+    { key: "selection", title: selectionCount > 0 ? `已選取 ${selectionCount} 個項目` : "選取項目後可用", items: [
+      { key: "download", label: selectionCount > 1 || selectedEntries[0]?.kind === "folder" ? "下載為 ZIP" : "下載", icon: Download, disabled: selectionCount === 0, onSelect: () => void downloadEntries(selectedEntries) },
+      { key: "preview", label: "預覽", icon: Eye, disabled: !singleSelected || singleSelected.kind !== "file", onSelect: () => { if (singleSelected) previewEntry(singleSelected); } },
+      { key: "move", label: "移至…", icon: FolderInput, disabled: !selectionMovable || busy, onSelect: () => requestMove(selectedEntries) },
+      { key: "rename", label: "重新命名", icon: Pencil, disabled: !singleSelected || !selectionEditable || busy, onSelect: () => startRename(singleSelected) },
+      { key: "copy-link", label: "複製連結", icon: Link2, disabled: !singleSelected, onSelect: () => void copyLink(singleSelected) },
+      { key: "cut", label: "剪下", icon: Scissors, disabled: !selectionMovable || busy, onSelect: () => cutEntries(selectedEntries) },
+      { key: "paste", label: clipboard ? `貼上 ${clipboard.items.length} 個項目到這裡` : "貼上", icon: ClipboardPaste, disabled: !canPaste, onSelect: () => void pasteHere() },
+      { key: "delete", label: "刪除", icon: Trash2, tone: "danger", disabled: busy || loading || selectedEditable.length === 0, onSelect: () => requestDelete(selectedEntries) },
+    ] },
+    { key: "view", title: "排序與檢視", items: [
+      ...(Object.entries(SORT_LABELS) as Array<[TestPlanSort, string]>).map(([value, label]) => ({ key: `sort:${value}`, label: `依${label}`, icon: ArrowDownUp, active: sort === value, keepOpen: true, trailing: sort === value ? ((TEST_PLAN_SORT_DIRECTION[value] === "asc") !== reverse ? "遞增" : "遞減") : undefined, onSelect: () => setSort(value) } satisfies MobileToolsItem)),
+      { key: "direction", label: "反轉排序方向", icon: ArrowDownUp, keepOpen: true, trailing: reverse ? "已反轉" : "預設", onSelect: () => setReverse(!reverse) },
+      { key: "view:list", label: "詳細資料", icon: List, active: viewMode === "list", keepOpen: true, onSelect: () => setViewMode("list") },
+      { key: "view:grid", label: "大圖示", icon: LayoutGrid, active: viewMode === "grid", keepOpen: true, onSelect: () => setViewMode("grid") },
+      { key: "preview-pane", label: "預覽窗格", icon: PanelRight, keepOpen: true, trailing: previewOpen ? "開" : "關", onSelect: () => setPreviewOpen(!previewOpen) },
+    ] },
+    { key: "navigate", title: "資料夾", items: [
+      { key: "back", label: "返回上一個位置", icon: ArrowLeft, disabled: !canGoBack || busy, onSelect: goBack },
+      { key: "forward", label: "前進", icon: ArrowRight, disabled: !canGoForward || busy, onSelect: goForward },
+      { key: "manual", label: "操作手冊", description: "上傳、找檔案、預覽、多選、移動與分享", icon: BookOpen, onSelect: () => openManual() },
+    ] },
+  ];
+  const rowActionSections: MobileToolsSection[] = rowActionsEntry ? [{ key: "row", items: [
+    rowActionsEntry.kind === "folder"
+      ? { key: "open", label: "開啟資料夾", icon: FolderOpen, onSelect: () => openEntry(rowActionsEntry) }
+      : { key: "preview", label: "預覽", icon: Eye, onSelect: () => previewEntry(rowActionsEntry) },
+    { key: "download", label: rowActionsEntry.kind === "folder" ? "下載為 ZIP" : "下載", icon: Download, onSelect: () => void downloadEntries([rowActionsEntry]) },
+    { key: "copy-link", label: "複製連結", icon: Link2, onSelect: () => void copyLink(rowActionsEntry) },
+    ...(locationDiffers(rowActionsEntry) ? [{ key: "location", label: "開啟檔案位置", icon: MapPin, onSelect: () => openLocation(rowActionsEntry) } satisfies MobileToolsItem] : []),
+    { key: "rename", label: "重新命名", icon: Pencil, disabled: !canEditSpace(rowActionsEntry.spaceId) || busy, onSelect: () => { updateSelection(singleSelection(entryKey(rowActionsEntry))); startRename(rowActionsEntry); } },
+    { key: "move", label: "移至…", icon: FolderInput, disabled: !canEditSpace(rowActionsEntry.spaceId) || busy, onSelect: () => requestMove([rowActionsEntry]) },
+    { key: "cut", label: "剪下", icon: Scissors, disabled: !canEditSpace(rowActionsEntry.spaceId) || busy, onSelect: () => cutEntries([rowActionsEntry]) },
+    { key: "delete", label: "刪除", icon: Trash2, tone: "danger", disabled: !canEditSpace(rowActionsEntry.spaceId) || busy, onSelect: () => requestDelete([rowActionsEntry]) },
+  ] }] : [];
 
   return (
     <section className={cn("test-plan-workspace file-library-workspace file-explorer", compact && "is-compact")} onKeyDown={handleExplorerKeyDown}>
@@ -2051,6 +2098,24 @@ export function TestPlanWorkspace() {
         />
       )}
 
+      {compact ? (
+        <MobileCommandBar
+          testId="file-explorer-mobile-bar"
+          icon={FolderUp}
+          title="檔案上傳"
+          context={selectionCount > 0 ? `已選取 ${selectionCount} 個項目` : searchLocationName}
+          contextTitle={searchLocationName}
+          leading={(
+            <Button type="button" variant="outline" size="icon" aria-label="空間與資料夾" aria-expanded={isSpaceDrawerOpen} aria-controls="test-plan-space-drawer" onClick={() => setIsSpaceDrawerOpen(true)}>
+              <PanelLeftOpen className="h-4 w-4" />
+            </Button>
+          )}
+          actions={[{ key: "upload", label: "上傳檔案", icon: Upload, disabled: uploadDisabled, onClick: () => fileInputRef.current?.click() }]}
+          onOpenTools={() => setMobileToolsOpen(true)}
+          toolsLabel="檔案工具"
+          toolsBadge={selectionCount > 0 ? selectionCount : undefined}
+        />
+      ) : (
       <div className="file-explorer-commandbar" role="toolbar" aria-label="檔案操作">
         <Button
           type="button"
@@ -2068,14 +2133,11 @@ export function TestPlanWorkspace() {
         <Button type="button" className="file-explorer-command is-primary" disabled={uploadDisabled} title={activeSpaceId === null ? "上傳到我的空間" : "上傳到目前資料夾；也可以直接把檔案拖進清單"} onClick={() => fileInputRef.current?.click()}>
           <Upload className="h-4 w-4" /><span>上傳檔案</span>
         </Button>
-        {compact ? <Popover>
-          <PopoverTrigger asChild><Button type="button" variant="outline" size="icon" className="file-explorer-mobile-tools-trigger" aria-label="檔案操作與檢視"><MoreHorizontal className="h-5 w-5" /></Button></PopoverTrigger>
-          <PopoverContent align="end" className="file-explorer-mobile-tools w-[min(360px,calc(100vw-24px))] p-3">
-            <p className="mb-3 text-sm font-semibold">檔案操作{selectedEntries.length > 0 && <span className="ml-2 text-primary">已選取 {selectedEntries.length} 個項目</span>}</p>
-            <div className="file-explorer-mobile-tools-grid">{secondaryCommands}</div>
-          </PopoverContent>
-        </Popover> : secondaryCommands}
+        {secondaryCommands}
       </div>
+      )}
+      {compact && <MobileToolsSheet testId="file-explorer-mobile-tools" open={mobileToolsOpen} onOpenChange={setMobileToolsOpen} title="檔案工具" description={selectionCount > 0 ? `已選取 ${selectionCount} 個項目，可一起下載、移動或刪除` : "先勾選項目，就能一起下載、移動或刪除"} sections={mobileToolSections} />}
+      {compact && <MobileToolsSheet testId="file-explorer-row-actions" open={Boolean(rowActionsEntry)} onOpenChange={(open) => { if (!open) setRowActionsEntry(null); }} title={rowActionsEntry ? entryName(rowActionsEntry) : "檔案"} description={rowActionsEntry ? `${describeEntryType(rowActionsEntry)} · ${formatEntryDate(rowActionsEntry.updatedAt)}` : undefined} sections={rowActionSections} />}
 
       <div className="file-explorer-addressbar">
         <div className="file-explorer-nav-buttons">
