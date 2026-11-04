@@ -28,10 +28,15 @@ const MobileDialogOverlay = React.forwardRef<
 ))
 MobileDialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+interface MobileDialogContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
+  /** Phone forms: the sheet takes the full height, the header and footer stay fixed and only MobileDialogBody scrolls. */
+  fullHeight?: boolean
+}
+
 const MobileDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+  MobileDialogContentProps
+>(({ className, children, fullHeight = false, ...props }, ref) => {
   const isMobile = useIsMobile()
   
   return (
@@ -40,12 +45,16 @@ const MobileDialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         data-ui={isMobile ? "mobile-sheet" : "dialog"}
+        data-mobile-form={isMobile && fullHeight ? "true" : undefined}
         className={cn(
-          "workspace-dialog-surface panel-surface-floating fixed z-50 grid w-full gap-4 text-foreground duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+          "workspace-dialog-surface panel-surface-floating fixed z-50 w-full gap-4 text-foreground duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+          isMobile && fullHeight ? "flex flex-col" : "grid",
           // Mobile: Full screen bottom sheet
           isMobile ? [
             "bottom-0 left-0 right-0 top-auto rounded-t-[1.5rem] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-5",
-            "max-h-[min(88dvh,760px)] overflow-y-auto overscroll-contain",
+            fullHeight
+              ? "h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] overflow-hidden"
+              : "max-h-[min(88dvh,760px)] overflow-y-auto overscroll-contain",
             "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom"
           ] : [
             // Desktop: Centered dialog  
@@ -88,6 +97,12 @@ const MobileDialogHeader = ({
 }
 MobileDialogHeader.displayName = "MobileDialogHeader"
 
+/** The only scrolling region of a full-height phone form; on desktop it is a plain block. */
+const MobileDialogBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div data-mobile-form-body="true" className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain", className)} {...props} />
+)
+MobileDialogBody.displayName = "MobileDialogBody"
+
 const MobileDialogFooter = ({
   className,
   ...props
@@ -95,9 +110,9 @@ const MobileDialogFooter = ({
   const isMobile = useIsMobile()
   
   return (
-      <div className={cn(
+      <div data-mobile-form-footer={isMobile ? "true" : undefined} className={cn(
         "app-dialog-footer flex gap-3",
-        isMobile ? "flex-col mt-6" : "flex-col-reverse sm:flex-row sm:justify-end",
+        isMobile ? "mt-4 shrink-0 flex-row [&>*]:min-h-11 [&>*]:flex-1" : "flex-col-reverse sm:flex-row sm:justify-end",
         className
       )}
       {...props}
@@ -146,6 +161,7 @@ export {
   MobileDialogTrigger,
   MobileDialogContent,
   MobileDialogHeader,
+  MobileDialogBody,
   MobileDialogFooter,
   MobileDialogTitle,
   MobileDialogDescription,
