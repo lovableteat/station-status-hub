@@ -99,3 +99,20 @@ test("mixed rich clipboard content keeps images between the surrounding paragrap
 test("plain clipboard content stays unchanged when no image is present", () => {
   assert.equal(helpers.composeClipboardContent("<p>只有文字</p>", "只有文字", 0), "只有文字");
 });
+
+test('internal image positions never appear in editable text',()=>{
+  assert.equal(helpers.stripAttachmentMarkers('[[attachment:0]]'),'');
+  assert.equal(helpers.stripAttachmentMarkers('前文\n[[attachment:0]]\n後文'),'前文\n\n後文');
+  assert.equal(helpers.composerOffsetToContentOffset('前文[[attachment:0]]後文',2),18);
+  assert.equal(helpers.composerOffsetToContentOffset('[[attachment:0]][[attachment:1]]',0),32);
+});
+
+test('editing visible text retains hidden images and their surrounding paragraph order',()=>{
+  const current='前文\n[[attachment:0]]\n後文';
+  const edited=helpers.updateComposerText(helpers.updateComposerText(current,'新增前文\n\n後文'),'新增前文\n\n後文補充');
+  assert.equal(helpers.stripAttachmentMarkers(edited),'新增前文\n\n後文補充');
+  assert.equal(edited,'新增前文\n[[attachment:0]]\n後文補充');
+  assert.equal(helpers.updateComposerText('[[attachment:0]]','這張圖說明'),'[[attachment:0]]這張圖說明');
+  assert.equal(helpers.updateComposerText(current,''),'[[attachment:0]]');
+  assert.equal(helpers.updateComposerText('A[[attachment:0]]B[[attachment:1]]C','AC'),'A[[attachment:0]][[attachment:1]]C');
+});

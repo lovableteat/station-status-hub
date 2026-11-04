@@ -17,6 +17,7 @@ async function fixture({ rows = [row('conversation-active-workspace', 'Current')
   let ownerId = 'account-a';
   const writes = [];
   const win = browser();
+  win.requestAnimationFrame = callback=>setTimeout(callback,0);
   const db = database(query => query.table === 'ai_workspace_conversations'
     ? (read?.(query.filters.owner_id) ?? { data: rows, error: null }) : { data: [], error: null });
   const files = new Map();
@@ -109,6 +110,41 @@ test('an attachment persistence failure retains the draft and file and does not 
     assert.equal(requests,0);
     assert.equal(f.input().props.value,'Keep this question');
     assert.match(f.rendered(),/keep.pdf/);
+  } finally {await f.unmount();}
+});
+
+test('pasting an image shows its preview without control text; mixed text edits and sending retain the image',async()=>{
+  class Reader {readAsDataURL(){this.result='data:image/png;base64,cG5n';this.onload();}}
+  const requests=[];
+  const f=await fixture({rows:[],globals:{FileReader:Reader},fetch:async(url,init)=>{requests.push(JSON.parse(init.body));return answer('Image received');}});
+  const paste=async (plain='',html='')=>{
+    await act(async()=>f.input().props.onPaste({preventDefault(){},currentTarget:{selectionStart:0,selectionEnd:0},clipboardData:{items:[{kind:'file',type:'image/png',getAsFile:()=>new File(['png'],'pasted.png',{type:'image/png'})}],getData:type=>type==='text/html'?html:plain}}));await flush();
+  };
+  try {
+    await paste();assert.equal(f.input().props.value,'');assert.match(f.rendered(),/pasted.png/);
+    await f.draft('請說明這張圖');assert.equal(f.input().props.value,'請說明這張圖');
+    await f.click('送出查詢');await flush();
+    assert.equal(requests.length,1);assert.ok(requests[0].contents[0].parts.some(part=>part.inlineData?.data==='cG5n'));
+    await paste('第一段\n第二段','<p>第一段</p><img src="data:image/png;base64,cG5n"><p>第二段</p>');
+    assert.doesNotMatch(f.input().props.value,/\[\[attachment:/);
+    await f.draft('修改第一段\n\n第二段');await f.draft('修改第一段\n\n第二段補充');await f.click('送出查詢');await flush(950);
+    const message=f.writes.at(-1).p_items[0].messages.filter(message=>message.role==='user').at(-1);
+    assert.equal(message.content,'修改第一段\n[[attachment:0]]\n第二段補充');assert.equal(message.attachments.length,1);
+    await paste();assert.equal(f.input().props.value,'');await f.click('送出查詢');await flush();
+    const lastParts=requests.at(-1).contents.at(-1).parts;
+    assert.ok(lastParts.some(part=>part.inlineData?.data==='cG5n'));
+    assert.match(lastParts.find(part=>part.text).text,/請擷取/);
+  } finally {await f.unmount();}
+});
+
+test('an old marker-only draft stays empty and cannot send control text without an attachment',async()=>{
+  const f=await fixture({rows:[row('conversation-active-workspace','[[attachment:0]]','[[attachment:0]]')]});
+  try {
+    assert.equal(f.input().props.value,'');assert.doesNotMatch(f.rendered(),/\[\[attachment:/);
+    assert.equal(f.root.root.find(node=>node.type==='stub'&&node.props['aria-label']==='送出查詢').props.disabled,true);
+    await f.draft('只送出文字');await f.click('送出查詢');await flush(950);
+    const sent=f.writes.at(-1).p_items[0].messages.at(-2);
+    assert.equal(sent.content,'只送出文字');
   } finally {await f.unmount();}
 });
 

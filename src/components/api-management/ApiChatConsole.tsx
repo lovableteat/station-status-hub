@@ -65,6 +65,7 @@ import {
 import type { ProviderChatMessage } from "./aiProviderCatalog";
 import {
   composeClipboardContent,
+  composerOffsetToContentOffset,
   createFileFromDataImageUrl,
   extractEmbeddedImageSources,
   filterSharedPrompts,
@@ -73,6 +74,8 @@ import {
   getSlashPromptQuery,
   insertClipboardText,
   splitContentByAttachmentMarkers,
+  stripAttachmentMarkers,
+  updateComposerText,
 } from "./apiChatPromptHelpers";
 import {
   ApiKeyModelTarget,
@@ -402,8 +405,8 @@ function createSavedConversation(params: {
   model: string;
   keyLabel: string;
 }): SavedConversation {
-  const firstUserMessage = params.messages.find((message) => message.role === "user")?.content.trim() || "";
-  const fallbackTitleSource = firstUserMessage || params.draftMessage.trim() || "新對話";
+  const firstUserMessage = stripAttachmentMarkers(params.messages.find((message) => message.role === "user")?.content || "").trim();
+  const fallbackTitleSource = firstUserMessage || stripAttachmentMarkers(params.draftMessage).trim() || "新對話";
 
   return {
     id: `conversation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -424,7 +427,7 @@ function mapPrivateConversationRow(row: PrivateConversationRow, ownerId: string)
   const rawMessages = Array.isArray(row.messages) ? row.messages : [];
   return {
     id: row.conversation_key,
-    title: row.title,
+    title: stripAttachmentMarkers(row.title).trim() || "新對話",
     savedAt: Number(row.saved_at) || Date.now(),
     draftMessage: row.draft_message,
     messages: rawMessages.flatMap((value) => {
@@ -915,6 +918,7 @@ export function ApiChatConsole({
   const [baseUrl, setBaseUrl] = useState("https://generativelanguage.googleapis.com/v1beta");
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_QUERY_SYSTEM_PROMPT);
   const [draftMessage, setDraftMessage] = useState("");
+  const composerText = stripAttachmentMarkers(draftMessage);
   const [savedPrompts, setSavedPrompts] = useState<SavedWorkspaceItem[]>([]);
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState(AUTO_SAVED_CONVERSATION_ID);
@@ -1026,7 +1030,7 @@ export function ApiChatConsole({
     window.dispatchEvent(new CustomEvent("collaboration-unread-request"));
     return () => window.removeEventListener("collaboration-unread-change", update);
   }, [isChatOnly]);
-  const slashPromptQuery = useMemo(() => getSlashPromptQuery(draftMessage), [draftMessage]);
+  const slashPromptQuery = useMemo(() => getSlashPromptQuery(composerText), [composerText]);
   const slashPromptResults = useMemo(
     () => filterSharedPrompts(savedPrompts, slashPromptQuery ?? "").slice(0, 6),
     [savedPrompts, slashPromptQuery],
@@ -1481,13 +1485,13 @@ export function ApiChatConsole({
       provider.trim() &&
       model.trim() &&
       baseUrl.trim() &&
-      (draftMessage.trim() || uploadedAttachments.length > 0) &&
+      (composerText.trim() || uploadedAttachments.length > 0) &&
       !loading
       && !readingAttachments
   );
 
   const hasConversationContent =
-    messages.length > 0 || draftMessage.trim().length > 0 || uploadedAttachments.length > 0;
+    messages.length > 0 || composerText.trim().length > 0 || uploadedAttachments.length > 0;
 
   const createCurrentConversationSnapshot = useCallback((id?: string): SavedConversation => {
     const snapshot = createSavedConversation({
@@ -1671,8 +1675,10 @@ export function ApiChatConsole({
   };
   const handleSend = async () => {
     if (sendInFlight.current || loading || attachmentReadInFlight.current || !canSend) return;
-    const typedContent = draftMessage.trim();
-    const content = typedContent || (uploadedAttachments.length ? DEFAULT_IMAGE_OCR_PROMPT : "");
+    const typedContent = composerText.trim();
+    const content = uploadedAttachments.length
+      ? (typedContent ? draftMessage.trim() : [DEFAULT_IMAGE_OCR_PROMPT,draftMessage.trim()].filter(Boolean).join('\n'))
+      : typedContent;
 
     if (!content) {
       toast.error("請先輸入對話內容或上傳附件");
@@ -1861,10 +1867,10 @@ export function ApiChatConsole({
   };
 
   const getLatestUserMessage = () =>
-    [...messages].reverse().find((message) => message.role === "user")?.content.trim() || "";
+    stripAttachmentMarkers([...messages].reverse().find((message) => message.role === "user")?.content || "").trim();
 
   const buildWorkspaceItemDraft = (fallbackTitle: string) => {
-    const content = draftMessage.trim() || getLatestUserMessage();
+    const content = composerText.trim() || getLatestUserMessage();
     const titleSource = content || fallbackTitle;
 
     return {
@@ -1874,7 +1880,7 @@ export function ApiChatConsole({
   };
 
   const persistCurrentConversation = () => {
-    if (messages.length === 0 && draftMessage.trim().length === 0) return false;
+    if (messages.length === 0 && composerText.trim().length === 0) return false;
 
     const snapshot = createCurrentConversationSnapshot(activeConversationId);
     setSavedConversations((current) => {
@@ -2203,8 +2209,11 @@ export function ApiChatConsole({
     // Mixed clipboard payloads must be handled synchronously or the browser drops the image part.
     event.preventDefault();
     const pastedText = event.clipboardData.getData("text/plain");
-    const selectionStart = event.currentTarget.selectionStart ?? draftMessage.length;
-    const selectionEnd = event.currentTarget.selectionEnd ?? selectionStart;
+    const draftContent = uploadedAttachments.length ? draftMessage : composerText;
+    const visibleStart = event.currentTarget.selectionStart ?? composerText.length;
+    const visibleEnd = event.currentTarget.selectionEnd ?? visibleStart;
+    const selectionStart = composerOffsetToContentOffset(draftContent,visibleStart);
+    const selectionEnd = composerOffsetToContentOffset(draftContent,visibleEnd);
 
     void (async () => {
       const sourceFiles = directImageFiles.length
@@ -2217,7 +2226,7 @@ export function ApiChatConsole({
 
       if (!sourceFiles.length) {
         if (pastedText) {
-          setDraftMessage(insertClipboardText(draftMessage, pastedText, selectionStart, selectionEnd));
+          setDraftMessage(insertClipboardText(draftContent, pastedText, selectionStart, selectionEnd));
         }
         toast.error("剪貼簿含有圖片，但原始網站不允許讀取；請單獨複製圖片或直接拖入輸入框");
         return;
@@ -2233,12 +2242,12 @@ export function ApiChatConsole({
         attachmentStartIndex,
       );
       const nextValue = insertClipboardText(
-        draftMessage,
+        draftContent,
         composedContent,
         selectionStart,
         selectionEnd,
       );
-      const nextCursor = selectionStart + composedContent.length;
+      const nextCursor = visibleStart + stripAttachmentMarkers(composedContent).length;
       setDraftMessage(nextValue);
       setSlashMenuDismissed(false);
       window.requestAnimationFrame(() => {
@@ -2365,7 +2374,7 @@ export function ApiChatConsole({
                 Draft
               </p>
               <p className="mt-2 text-3xl font-black text-white">
-                {draftMessage.trim().length ? "已填寫" : "空白"}
+                {composerText.trim().length ? "已填寫" : "空白"}
               </p>
               <p className="mt-2 text-sm leading-6 text-slate-300">輸入框尚未送出的內容狀態。</p>
             </div>
@@ -3179,9 +3188,10 @@ export function ApiChatConsole({
                 <Textarea
                   ref={composerTextareaRef}
                   data-ai-surface="true"
-                  value={draftMessage}
+                  value={composerText}
                   onChange={(event) => {
-                    setDraftMessage(event.target.value);
+                    const nextText = event.target.value;
+                    setDraftMessage(current=>updateComposerText(current,nextText));
                     setSlashMenuDismissed(false);
                     setSlashHighlightedIndex(0);
                   }}
