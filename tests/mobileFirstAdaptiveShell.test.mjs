@@ -77,8 +77,8 @@ test("material and AI keep only primary phone controls above content", async () 
   ]);
 
   assert.match(material, /data-mobile-material-primary-controls="true"/);
-  assert.match(material, /data-mobile-material-tools="true"/);
-  assert.match(material, /overflow-x-auto/);
+  assert.match(material, /data-testid="material-mobile-tools"/, "secondary tools live in the bottom sheet");
+  assert.match(material, /data-testid="material-mobile-cards"/);
   assert.match(ai, /data-mobile-ai-command-bar="true"/);
   assert.match(ai, /data-mobile-ai-empty-state="true"/);
   assert.match(ai, /data-mobile-ai-composer="true"/);

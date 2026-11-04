@@ -48,8 +48,10 @@ test("keeps the five-destination mobile dock and an accessible more sheet", () =
 });
 
 test("scopes the new shell tokens and surfaces to phone widths", () => {
-  assert.match(globalCssSource, /@media \(max-width: 767px\)[\s\S]*--mobile-header-height: 76px/);
-  assert.match(globalCssSource, /@media \(max-width: 767px\)[\s\S]*--mobile-dock-height: 74px/);
+  assert.match(globalCssSource, /@media \(max-width: 767px\)[\s\S]*--mobile-header-height: 64px/);
+  assert.match(globalCssSource, /@media \(max-width: 767px\)[\s\S]*--mobile-dock-height: 64px/);
+  assert.equal((globalCssSource.match(/--mobile-header-height:\s*\d+px/g) ?? []).length, 2, "one tablet value in :root and one phone value; no further overrides");
+  assert.doesNotMatch(globalCssSource, /--mobile-header-height:\s*76px/);
   assert.match(globalCssSource, /--mobile-active: #6794df/);
   assert.match(globalCssSource, /\[data-mobile-workspace-dock="true"\][\s\S]*background: rgb\(7 21 34/);
   assert.match(globalCssSource, /\[data-mobile-more-sheet="true"\][\s\S]*border-top-left-radius: 2rem/);
@@ -71,10 +73,10 @@ test("keeps mobile AI controls thumb-friendly and visually consistent", () => {
   assert.match(globalCssSource, /\[data-mobile-ai-source-toggle="true"\][\s\S]*background:/);
 });
 
-test("keeps mobile maintenance navigation and metrics readable without horizontal rails", () => {
+test("keeps mobile maintenance navigation on one scrollable row and metrics without horizontal rails", () => {
   assert.match(sidebarSource, /data-mobile-maintenance-module=\{item\.id\}/);
-  assert.match(sidebarSource, /grid-cols-2/);
-  assert.doesNotMatch(sidebarSource, /overflow-x-auto/);
+  assert.match(sidebarSource, /flex-nowrap/);
+  assert.match(sidebarSource, /overflow-x-auto/);
   assert.match(metricStripSource, /grid-cols-2/);
   assert.doesNotMatch(metricStripSource, /overflow-x-auto/);
 });

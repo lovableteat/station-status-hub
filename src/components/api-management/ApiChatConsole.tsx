@@ -3243,7 +3243,7 @@ export function ApiChatConsole({
 
           <aside
             className={cn(
-              "fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] top-[76px] z-[79] h-auto min-h-0 overflow-hidden rounded-[24px] border border-[#285273] bg-[#081C2D] shadow-[0_30px_90px_rgba(2,8,23,0.82)] transition-all duration-200 lg:static lg:z-auto lg:order-1 lg:h-full lg:border-[#163653] lg:shadow-[0_24px_70px_rgba(2,8,23,0.42)]",
+              "fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] top-[var(--mobile-header-height)] z-[79] h-auto min-h-0 overflow-hidden rounded-[24px] border border-[#285273] bg-[#081C2D] shadow-[0_30px_90px_rgba(2,8,23,0.82)] transition-all duration-200 lg:static lg:z-auto lg:order-1 lg:h-full lg:border-[#163653] lg:shadow-[0_24px_70px_rgba(2,8,23,0.42)]",
               mobileSidebarOpen ? "visible translate-y-0 opacity-100" : "pointer-events-none invisible translate-y-3 opacity-0 lg:pointer-events-auto lg:visible lg:translate-y-0 lg:opacity-100",
               sidebarCollapsed ? "lg:w-[88px]" : "lg:w-[320px]"
             )}
