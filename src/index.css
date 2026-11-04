@@ -2017,6 +2017,12 @@ html { color-scheme: dark; }
 }
 .ai-chat-composer [data-ai-composer-toolbar] button { font-size: 15px; line-height: 22px; font-weight: 500; }
 .ai-chat-composer [data-ai-composer-toolbar] > span { font-size: 14px; }
+.ai-selected-model {
+  --ai-model-tone: 264 75% 80%;
+  border-color: hsl(var(--ai-model-tone) / .75);
+  background: hsl(var(--ai-model-tone) / .18);
+  color: hsl(var(--ai-model-tone));
+}
 @media (prefers-reduced-motion: reduce) {
   .workspace-artwork-image { transition: none; }
   .workspace-entrance-card:hover .workspace-artwork-image { transform: none; }

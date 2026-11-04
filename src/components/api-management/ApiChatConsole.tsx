@@ -2871,7 +2871,7 @@ export function ApiChatConsole({
 
   const composerActions = (
     <div data-ai-composer-actions="true" className="ml-auto flex min-w-0 max-w-full items-center justify-end gap-2">
-      <span className="hidden min-w-0 max-w-[220px] truncate rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground lg:block" title={model}>{model || "Gemini"}</span>
+      <span className="ai-selected-model hidden min-w-0 max-w-[240px] truncate rounded-lg border px-3 py-2 text-base font-semibold leading-6 lg:block" title={model}>{model || "Gemini"}</span>
       <Button type="button" onClick={() => void handleSend()} disabled={!canSend} aria-label="送出查詢" aria-busy={loading} className={cn("h-11 shrink-0 gap-2 px-3", !compactChat && "min-w-24")}>
         <Send className="h-4 w-4" /><span>{loading ? "查詢中" : "送出"}</span>
       </Button>
