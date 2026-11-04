@@ -6,9 +6,10 @@ const { React, create, act, flush, deferred, loader } = native("./support/render
 const record = id => ({ id, manufacturerPartNumber: "MPN-" + id, manufacturer: "QA", name: "Part", refDes: "U" + id, specDocuments: [{ name: id + ".pdf", path: "qa/" + id + ".pdf", size: 20 }] });
 const answer = { templateId: "template-1", templateName: "form.png", title: "Answer", columns: ["Voltage"], rows: [[{ value: "1.20 V", kind: "label" }]], warnings: [], partMatch: "matched" };
 function fixture() {
-  const calls = [], jobs = [], createdUrls = [], revokedUrls = [];
-  const run = input => { calls.push(input); const job = deferred(); jobs.push(job); return job.promise; };
+  const calls = [], jobs = [], intents = [], createdUrls = [], revokedUrls = [];
+  const run = (input, intent = 'fill') => { calls.push(input); intents.push(intent); const job = deferred(); jobs.push(job); return job.promise; };
   const mocks = { analyzeSpecFillPhotos: run, analyzeSpecFillConversation: input => run(input).then(tables => ({tables, reply: "已依 SPEC 填寫，請核對來源。", sources: input.sources.map(({id,name})=>({id,name})), preparedSources: input.sources, warnings: []})),
+    askSpecFillQuestion: input => run(input, 'question').then(reply => ({ tables: [], reply, sources: input.sources.map(({id,name})=>({id,name})), preparedSources: input.sources, warnings: [], citations: [] })),
     loadSpecFillModels: async () => [{ id: "m", label: "QA", record: {} }],
     downloadSpecForFill: async () => new Blob(["SPEC"]), canReadSpecForFill: () => true, SPEC_FILL_ACCEPT: ".pdf", SPEC_FILL_MAX_BYTES: 18 * 1024 * 1024, SPEC_FILL_MAX_PHOTOS: 20 };
   const load = loader({ mocks: { "./materialSpecFillService": mocks }, globals: { Blob, File, URL: {createObjectURL(file) { const url = 'blob:qa-'+createdUrls.length; createdUrls.push({file,url}); return url; }, revokeObjectURL(url) { revokedUrls.push(url); }} } });
@@ -23,7 +24,7 @@ function fixture() {
   const drop = files => act(() => nodes().findByProps({ "aria-label": "貼上表格照片區" }).props.onDrop({ preventDefault() {}, dataTransfer: { files } }));
   const paste = (files, items = []) => act(() => nodes().findByProps({ "aria-label": "貼上表格照片區" }).props.onPaste({ preventDefault() {}, clipboardData: {files,items} }));
   const previews = () => nodes().findAll(node => node.type === "figure" && node.props["data-testid"] === "spec-fill-photo-preview");
-  return { get root() { return root; }, nodes, button, prepare, calls, jobs, add, drop, paste, previews, createdUrls, revokedUrls };
+  return { get root() { return root; }, nodes, button, prepare, calls, jobs, intents, add, drop, paste, previews, createdUrls, revokedUrls };
 }
 
 test("requires a template photo and selected SPEC; cancellation and part changes discard late results", async () => {
@@ -45,7 +46,7 @@ test("requires a template photo and selected SPEC; cancellation and part changes
   } finally { act(() => f.root.unmount()); }
 });
 
-test("follow-ups preserve successful results on failures and retain every successful turn", async () => {
+test("chat follow-ups preserve the filled table and failures; explicit refill appends a new table result", async () => {
   const f=fixture(); await flush(); f.prepare();
   try {
     act(()=>f.button('開始依照片填表').props.onClick()); await flush(); f.jobs[0].resolve([answer]); await flush();
@@ -53,13 +54,24 @@ test("follow-ups preserve successful results on failures and retain every succes
     ask('請補單位'); act(()=>f.button('送出追問').props.onClick()); await flush();
     assert.equal(f.calls[1].history.length,1);
     assert.equal(f.calls[1].question,'請補單位');
+    assert.equal(f.intents[1], 'question');
     assert.equal(f.calls[1].history[0].tables[0].rows[0][0].value,'1.20 V');
     f.jobs[1].reject(new Error('QA network failed')); await flush();
     assert.equal(f.nodes().findAllByProps({'aria-label':'依照片填表結果'}).length,1);
     assert.equal(f.nodes().findByProps({'aria-label':'接續提問'}).props.value,'請補單位');
-    act(()=>f.button('送出追問').props.onClick()); await flush(); f.jobs[2].resolve([{...answer,title:'Second answer'}]); await flush();
+    act(()=>f.button('送出追問').props.onClick()); await flush(); f.jobs[2].resolve('原數值為 1.20 V，單位是伏特。'); await flush();
     assert.equal(f.calls[2].history.length,1,'failed turns are never treated as assistant answers');
-    assert.match(JSON.stringify(f.root.toJSON()),/Second answer/);
+    assert.match(JSON.stringify(f.root.toJSON()),/原數值為 1.20 V/);
+    assert.equal(f.intents[2], 'question');
+    assert.equal(f.button('查看第 2 次結果'), undefined, 'a chat-only turn must not masquerade as a filled table');
+    assert.equal(f.nodes().findByProps({'aria-label':'第 1 張填表結果'}).findByType('h3').props.children, 'Answer');
+    ask('請依此單位更新表格'); act(()=>f.button('依問題更新表格').props.onClick()); await flush();
+    assert.equal(f.intents[3], 'fill');
+    assert.equal(f.calls[3].history.length, 2, 'refill retains both the original table and successful chat');
+    assert.equal(f.calls[3].history[1].tables.length, 0);
+    f.jobs[3].resolve([{...answer,title:'Second answer'}]); await flush();
+    assert.match(JSON.stringify(f.root.toJSON()), /Second answer/);
+    assert.ok(f.button('查看第 3 次結果'));
     assert.ok(f.button('查看第 1 次結果'));
     act(()=>f.button('查看第 1 次結果').props.onClick());
     assert.match(JSON.stringify(f.root.toJSON()),/Answer/);
@@ -133,7 +145,7 @@ test("all photo results retain independent columns and removing a photo invalida
     assert.equal(f.nodes().findAllByProps({'aria-label':'第 2 張填表結果'}).length,1);
     assert.match(JSON.stringify(f.root.toJSON()),/Package/);
     assert.ok(f.button('複製全部表格'));
-    act(()=>f.button('查看原圖與 SPEC').props.onClick());
+    act(()=>f.button('照片與 SPEC').props.onClick());
     act(()=>f.nodes().findAll(node=>node.type==='stub'&&node.props['aria-label']==='移除第 1 張照片：form.png')[0].props.onClick());
     assert.equal(f.nodes().findAllByProps({'aria-label':'依照片填表結果'}).length,0);
     assert.equal(f.previews().length,1);

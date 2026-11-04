@@ -153,6 +153,7 @@ import { MATERIAL_SPEC_ACCEPT, MATERIAL_SPEC_MAX_BYTES, createMaterialSpecUrl, f
 import { getMaterialSpecDocuments, withMaterialSpecDocuments } from "./materialAttachments";
 import { getMaterialTrackingStatusMeaning, isTrackedMaterialApplication, MATERIAL_TRACKING_STATUS_OPTIONS, materialTrackingStatusTone, materialTrackingStatusPresentation, normalizeMaterialTrackingStatus } from "./materialTrackingStatus";
 import { MaterialWeeklyProgressDialog } from "./MaterialWeeklyProgressDialog";
+import { useSpecFillNavigation } from "./useSpecFillNavigation";
 const MaterialSpecFillDialog = lazy(() => import("./MaterialSpecFillDialog").then(module => ({ default: module.MaterialSpecFillDialog })));
 import { restoreMaterialColumnSort, sortMaterialTableRows, type MaterialColumnSort } from "./materialTableSort";
 import { MaterialRequestOwnerPicker, type MaterialRequestOwner } from "./MaterialRequestOwnerPicker";
@@ -3794,6 +3795,7 @@ export function MaterialRequestPage() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
   const [weeklyProgressOpen, setWeeklyProgressOpen] = useState(false);
+  const [specFillOpen, setSpecFillOpen] = useState(false);
   const [specFillContext, setSpecFillContext] = useState<{ records: MaterialWorkbookRecord[]; accountId?: string; workspaceId: string } | null>(null);
   const [weeklyIncludeAlternates, setWeeklyIncludeAlternates] = useState(false);
   // Set while an editor opened from 待處理料 is showing, so closing it returns to the list.
@@ -3850,10 +3852,17 @@ export function MaterialRequestPage() {
     setPendingDialogOpen(false);
     setWeeklyProgressOpen(false);
     setSpecFillContext(null);
+    setSpecFillOpen(false);
   }, [activeBomId, user?.userId]);
   const { canEditModule, canViewModule } = usePermissions();
   const canEditModuleAccess = canEditModule("material-requests");
   const canViewModuleAccess = canViewModule("material-requests");
+  useEffect(() => {
+    if (canViewModuleAccess) return;
+    setSpecFillContext(null);
+    setSpecFillOpen(false);
+    setPendingDialogOpen(false);
+  }, [canViewModuleAccess]);
   // Versions of one board form a series; only the series' current version accepts record edits.
   const seriesList = useMemo(() => buildBomSeriesList(bomWorkspaces), [bomWorkspaces]);
   const activeVersionInfo = useMemo(() => findBomSeriesByWorkspace(seriesList, activeBomId), [seriesList, activeBomId]);
@@ -3900,6 +3909,11 @@ export function MaterialRequestPage() {
   }, []);
 
   const activeWorkspace = bomWorkspaces.find((workspace) => workspace.id === activeBomId) ?? bomWorkspaces[0];
+  const specFillNavigation = useSpecFillNavigation({
+    scopeKey: user?.userId && canViewModuleAccess ? `${user.userId}:${activeWorkspace.id}` : null,
+    onOpenSpecFill: () => { setSpecFillOpen(true); setPendingDialogOpen(false); },
+    onReturnToPending: () => { setSpecFillOpen(false); setPendingRestoreView(true); setPendingDialogOpen(true); },
+  });
   const activeSeriesName = activeVersionInfo?.series.name ?? activeWorkspace.name;
   const activeWorkspaceProjectLabel = activeWorkspace.project
     ? projectNames.get(activeWorkspace.project.projectId) ?? activeWorkspace.project.projectName
@@ -5958,7 +5972,7 @@ export function MaterialRequestPage() {
         onOpenTracking={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openTrackingDialog(record); }}
         onCopy={value => void handleCopy(value)}
         onOpenWeeklyProgress={includeAlternates => { setWeeklyIncludeAlternates(includeAlternates); setPendingDialogOpen(false); setWeeklyProgressOpen(true); }}
-        onOpenSpecFill={records => { setSpecFillContext({ records, accountId: user?.userId, workspaceId: activeWorkspace.id }); setPendingDialogOpen(false); }}
+        onOpenSpecFill={records => { setSpecFillContext({ records, accountId: user?.userId, workspaceId: activeWorkspace.id }); specFillNavigation.openSpecFill(); }}
         onSetCategory={setPendingCategory}
         accountId={user?.userId}
         onSetOwner={setPendingOwner}
@@ -5974,12 +5988,12 @@ export function MaterialRequestPage() {
         ready={isFullDatasetLoaded && !isWorkspaceLoading}
         onOpenChange={open => { setWeeklyProgressOpen(open); if (!open) { setPendingRestoreView(true); setPendingDialogOpen(true); } }}
       />}
-      {specFillContext && specFillContext.accountId === user?.userId && specFillContext.workspaceId === activeWorkspace.id && canViewModuleAccess && <Suspense fallback={<div role="status" className="fixed inset-0 z-50 grid place-items-center bg-background/90">正在開啟依照片填表…</div>}><MaterialSpecFillDialog
+      {specFillContext && specFillContext.accountId === user?.userId && specFillContext.workspaceId === activeWorkspace.id && canViewModuleAccess && <Suspense fallback={specFillOpen ? <div role="status" className="fixed inset-0 z-50 grid place-items-center bg-background/90">正在開啟依照片填表…</div> : null}><MaterialSpecFillDialog
         key={`spec-fill:${user?.userId}:${activeWorkspace.id}`}
         records={specFillContext.records}
         workspaceName={activeWorkspace.name}
-        open
-        onOpenChange={open => { if (!open) { setSpecFillContext(null); setPendingRestoreView(true); setPendingDialogOpen(true); } }}
+        open={specFillOpen}
+        onOpenChange={open => { if (!open) specFillNavigation.closeSpecFill(); }}
       /></Suspense>}
       <MaterialTableSettingsDialog
         key={`table-settings:${activeWorkspace.id}`}
