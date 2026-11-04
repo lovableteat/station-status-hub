@@ -4,6 +4,10 @@ let account = '00000000-0000-4000-8000-000000000001';
 const secondAccount = '00000000-0000-4000-8000-000000000002';
 const listeners = new Set();
 export const fixtureState = { writes: [], attempts: 0, failNextSave: false };
+const contextQa = new URLSearchParams(location.search).has('qaContext');
+const historyPdf = '%PDF-1.7\nQA connector 731 rated current 7.3 A\n%%EOF';
+const historyPath = `${account}/11111111-1111-4111-8111-111111111111/content`;
+const attachmentFiles = new Map([[historyPath,new Blob([historyPdf],{type:'application/pdf'})]]);
 export function setFixtureAccount(next) { account = next === 'B' ? secondAccount : '00000000-0000-4000-8000-000000000001'; listeners.forEach(fn => fn()); }
 export function useUser() { return { user: { userId: useSyncExternalStore(fn => { listeners.add(fn); return () => listeners.delete(fn); }, () => account) } }; }
 const row = (id, title, content) => ({ conversation_key: id, title, saved_at: 1234, draft_message: '', messages: [{ id: `${id}-message`, role: 'user', content, createdAt: 1234 }], provider: 'gemini', model: 'gemini-2.5-flash', key_label: '隔離測試 Gemini' });
@@ -11,6 +15,12 @@ const cloud = new Map([
   [account, [row('conversation-active-workspace', '帳號 A 目前對話', '帳號 A 的既有問題'), row('history-a', '帳號 A 歷史對話', '歷史 A 問題')]],
   [secondAccount, [row('conversation-active-workspace', '帳號 B 目前對話', '帳號 B 的既有問題'), row('history-b', '帳號 B 歷史對話', '歷史 B 問題')]],
 ]);
+if(contextQa) {
+  const saved=row('conversation-active-workspace','PDF 與上文接續驗證','最初指定的料件是 QA-731，額定電流請見 PDF');
+  saved.messages[0].attachments=[{id:'qa-pdf',name:'QA-731.pdf',kind:'file',mimeType:'application/pdf',size:historyPdf.length,storagePath:historyPath}];
+  for(let i=1;i<40;i++)saved.messages.push({id:`qa-turn-${i}`,role:i%2?'assistant':'user',content:`隔離對話第 ${i} 則`,createdAt:1234+i});
+  cloud.set(account,[saved]);
+}
 const prompts = [{ id: 'qa-prompt', name: '附件重點整理', command: '請列出附件的主要重點', description: '文件', created_by: null, created_at: '2026-10-13T00:00:00Z', updated_at: '2026-10-13T00:00:00Z' }];
 const notify = () => window.dispatchEvent(new Event('ai-qa-state'));
 function query(run) {
@@ -18,6 +28,11 @@ function query(run) {
   return { abortSignal: () => promise, then: promise.then.bind(promise) };
 }
 export const supabase = {
+  storage:{from:()=>({
+    async upload(path,blob){if(!path.startsWith(`${account}/`))return {error:new Error('wrong owner')};attachmentFiles.set(path,blob);return {error:null};},
+    async download(path){return path.startsWith(`${account}/`)&&attachmentFiles.has(path)?{data:attachmentFiles.get(path),error:null}:{data:null,error:new Error('missing private attachment')};},
+    async remove(paths){paths.filter(path=>path.startsWith(`${account}/`)).forEach(path=>attachmentFiles.delete(path));return {error:null};},
+  })},
   from(table) {
     const filters = {};
     const builder = { select() { return this; }, eq(name, value) { filters[name] = value; return this; }, order() { return this; }, limit() { return this; }, abortSignal() { return this; }, then(resolve, reject) { return Promise.resolve({ data: table === 'ai_workspace_conversations' ? structuredClone(cloud.get(filters.owner_id) ?? []) : table === 'command_library' ? prompts : [], error: null }).then(resolve, reject); } };
