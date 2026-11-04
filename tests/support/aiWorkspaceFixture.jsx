@@ -15,7 +15,13 @@ window.fetch = async (url,init) => {
   if(new URL(href,location.href).origin===location.origin)return localFetch(url,init);
   if (!href.startsWith('https://fixture.invalid/')) throw new Error('Only fixture provider requests are allowed');
   await new Promise(resolve => setTimeout(resolve, 1600));
-  return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '隔離測試回覆：這段內容只屬於送出時的對話。' }] } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  let text='隔離測試回覆：這段內容只屬於送出時的對話。';
+  if(new URLSearchParams(location.search).has('qaContext')) {
+    const request=JSON.parse(init.body);
+    const complete=JSON.stringify(request).includes('最初指定的料件是 QA-731')&&request.contents.some(message=>message.parts.some(part=>part.inlineData?.mimeType==='application/pdf'));
+    text=complete?'驗證通過：本次請求已包含第 1 則資料、先前 PDF 原檔及後續追問。QA-731 額定電流 7.3 A。':'驗證失敗：API 請求遺失上文或 PDF。';
+  }
+  return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 };
 const record = { id: 'qa-key', key_name: '隔離測試 Gemini', api_key: 'fixture-only-key', permissions: { metadata: { provider: 'gemini', model: 'gemini-2.5-flash', baseUrl: 'https://fixture.invalid/v1beta' } }, is_active: true };
 const targets = ['gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash'].map(model => ({ id: `qa-key::${model}`, model, record }));

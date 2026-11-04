@@ -9,6 +9,7 @@ const text = root => JSON.stringify(root.toJSON());
 async function fixture(fetch, available = targets, win = browser(), options = {}) {
   const rpcCalls = [];
   const db = database(() => ({data:[],error:null}));
+  db.storage={from:()=>({upload:async()=>({error:null}),remove:async()=>({error:null})})};
   db.rpc = (name,args) => {
     rpcCalls.push([name,args]);
     if (options.rpc && name === 'search_maintenance_knowledge') return options.rpc(name,args);
@@ -20,7 +21,7 @@ async function fixture(fetch, available = targets, win = browser(), options = {}
     '@/components/ui/textarea':{Textarea:React.forwardRef((props,ref)=>React.createElement('stub',{...props,ref}))},
     './MaintenanceCitationList':{MaintenanceCitationList:child}, './MaintenanceSourceSelector':{MaintenanceSourceSelector:child}, './pptxAttachment':{isPptxFile:()=>false},
     ...options.mocks,
-  },globals:{fetch,Response,Error,TextEncoder,TextDecoder,requestAnimationFrame:callback=>setTimeout(callback,0), ...options.globals}});
+  },globals:{fetch,Response,Blob,Uint8Array,atob,Error,TextEncoder,TextDecoder,requestAnimationFrame:callback=>setTimeout(callback,0), ...options.globals}});
   const {ApiChatConsole}=load('src/components/api-management/ApiChatConsole.tsx');
   let root;
   await act(async()=>{root=create(React.createElement(ApiChatConsole,{mode:'chat-only',selectedApiKey:record,selectedModel:'gemini-3.8-flash',selectedApiKeyTargetId:targets[0].id,availableApiKeyTargets:available,...options.props}));});
@@ -57,6 +58,18 @@ test('material SPEC evidence reaches AI independently of maintenance and stays w
     assert.equal(searches,1);assert.equal(requests.length,1);assert.match(JSON.stringify(requests[0]),/SPEC ORIGINAL EVIDENCE 105 C/);
     const rendered=f.root.root.find(node=>node.type==='stub'&&node.props.report?.files?.[0]?.name==='part.dwg');assert.equal(rendered.props.report.files[0].status,'partial');
     assert.ok(f.rpcCalls.every(([name])=>name!=='search_maintenance_knowledge'));
+  }finally{await act(async()=>f.root.unmount());}
+});
+
+test('a follow-up retains previous SPEC evidence when the next retrieval finds no matching excerpt',async()=>{
+  const requests=[];let searches=0;
+  const report={files:[{id:'S1',name:'connector.pdf',path:'safe/connector.pdf',parts:[],status:'read',method:'text',included:true}],scope:'all',context:'Original SPEC: QA-731 rated current is 7.3 A [S1]'};
+  const f=await fixture(async(url,init)=>{requests.push(JSON.parse(init.body));return answer();},targets,browser(),{props:{materialSpecsAllowed:true},mocks:{'./MaterialSpecSourceSelector':{MaterialSpecSourceSelector:child},'./MaterialSpecCitationList':{MaterialSpecCitationList:child},'./materialSpecKnowledgeService':{searchMaterialSpecs:async()=>++searches===1?report:{files:[],scope:'all',context:'No new matching excerpt'}}}});
+  try{
+    await act(async()=>f.root.root.find(node=>node.type==='stub'&&node.props.onEnabledChange&&node.props.allowed===true).props.onEnabledChange(true));
+    await f.draft('Read QA-731');await act(async()=>f.send().props.onClick());await flush();
+    await f.draft('What is its rated current?');await act(async()=>f.send().props.onClick());await flush();
+    assert.match(JSON.stringify(requests[1]),/Original SPEC: QA-731 rated current is 7.3 A/);
   }finally{await act(async()=>f.root.unmount());}
 });
 

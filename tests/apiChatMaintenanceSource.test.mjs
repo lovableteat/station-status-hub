@@ -30,7 +30,7 @@ test("chat console retrieves maintenance evidence before calling the provider", 
   assert.match(source, /不得捏造/);
   assert.match(source, /沒有找到相符紀錄/);
   assert.match(source, /useState\(false\)/);
-  assert.match(source, /MAX_PROVIDER_HISTORY_MESSAGES/);
+  assert.doesNotMatch(source, /slice\(-MAX_PROVIDER_HISTORY_MESSAGES\)/, 'early conversation evidence must not be silently discarded');
 });
 
 test("maintenance source explains the difference from normal AI chat", async () => {

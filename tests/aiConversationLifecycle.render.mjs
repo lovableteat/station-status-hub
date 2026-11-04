@@ -13,12 +13,19 @@ const editName = async (f,title) => act(async()=>f.root.root.find(node=>node.typ
 const typeName = async (f,value) => act(async()=>f.root.root.findByProps({'aria-label':'對話名稱'}).props.onChange({target:{value}}));
 const saveName = async f => act(async()=>f.root.root.findByProps({'aria-label':'編輯對話名稱'}).props.onSubmit({preventDefault(){}}));
 
-async function fixture({ rows = [row('conversation-active-workspace', 'Current'), row('historic-id', 'History')], read, save, fetch = async () => answer('Fixture answer'), globals = {} } = {}) {
+async function fixture({ rows = [row('conversation-active-workspace', 'Current'), row('historic-id', 'History')], read, save, fetch = async () => answer('Fixture answer'), globals = {}, storageError, props: extraProps = {}, mocks = {} } = {}) {
   let ownerId = 'account-a';
   const writes = [];
   const win = browser();
   const db = database(query => query.table === 'ai_workspace_conversations'
     ? (read?.(query.filters.owner_id) ?? { data: rows, error: null }) : { data: [], error: null });
+  const files = new Map();
+  const storageCalls = [];
+  db.storage = { from: bucket => ({
+    async upload(path, blob) { storageCalls.push(['upload', bucket, path]); if (storageError) return {error:new Error('offline')}; files.set(path, blob); return {error:null}; },
+    async download(path) { storageCalls.push(['download', bucket, path]); return {data:files.get(path),error:files.has(path)?null:new Error('missing')}; },
+    async remove(paths) { paths.forEach(path=>files.delete(path)); return {error:null}; },
+  }) };
   db.rpc = (name, args) => {
     if (name !== 'sync_ai_workspace_conversations') return Promise.resolve({ data: null, error: null });
     writes.push(structuredClone(args));
@@ -31,10 +38,11 @@ async function fixture({ rows = [row('conversation-active-workspace', 'Current')
     './aiUsageTelemetry': { trackedProviderFetch: ({ url, init }) => fetch(url, init) },
     './AiQuotaStatus': { AiQuotaStatus: child }, './MarkdownMessage': { MarkdownMessage: ({ content }) => React.createElement('p', null, content) },
     '@/components/ui/textarea': { Textarea: React.forwardRef((props, ref) => React.createElement('stub', { ...props, ref })) },
-    './MaintenanceCitationList': { MaintenanceCitationList: child }, './MaintenanceSourceSelector': { MaintenanceSourceSelector: child }, './pptxAttachment': { isPptxFile: () => false },
-  }, globals: { Response, TextEncoder, TextDecoder, requestAnimationFrame: callback => setTimeout(callback, 0), ...globals } });
+    './MaintenanceCitationList': { MaintenanceCitationList: child }, './MaintenanceSourceSelector': { MaintenanceSourceSelector: child }, './pptxAttachment': { isPptxFile: () => false, bytesToBase64: bytes=>Buffer.from(bytes).toString('base64') },
+    ...mocks,
+  }, globals: { Error, Response, Blob, Uint8Array, atob, TextEncoder, TextDecoder, requestAnimationFrame: callback => setTimeout(callback, 0), ...globals } });
   const { ApiChatConsole } = load('src/components/api-management/ApiChatConsole.tsx');
-  const props = { mode: 'chat-only', selectedApiKey: record, selectedModel: target.model, selectedApiKeyTargetId: target.id, availableApiKeyTargets: [target] };
+  const props = { mode: 'chat-only', selectedApiKey: record, selectedModel: target.model, selectedApiKeyTargetId: target.id, availableApiKeyTargets: [target], ...extraProps };
   let root;
   await act(async () => { root = create(React.createElement(ApiChatConsole, props)); });
   await flush();
@@ -49,8 +57,99 @@ async function fixture({ rows = [row('conversation-active-workspace', 'Current')
   const account = async id => { ownerId = id; await act(async () => root.update(React.createElement(ApiChatConsole, { ...props }))); await flush(); };
   const remount = async () => { await act(async () => root.unmount()); await act(async () => { root = create(React.createElement(ApiChatConsole, props)); }); await flush(); };
   const rendered = () => root.root.findAll(node => node.children.some(item => typeof item === 'string')).map(node => node.children.filter(item => typeof item === 'string').join('')).join('\n');
-  return { get root() { return root; }, win, writes, input, click, select, draft, newConversation, account, remount, rendered, unmount: () => act(async () => root.unmount()) };
+  return { get root() { return root; }, win, writes, files, storageCalls, input, click, select, draft, newConversation, account, remount, rendered, unmount: () => act(async () => root.unmount()) };
 }
+
+test('a follow-up includes early facts and answers beyond 32 messages without dropping older turns', async () => {
+  const current = row('conversation-active-workspace', 'Long conversation');
+  current.messages = Array.from({length:122},(_,i)=>({id:`turn-${i}`,role:i%2?'assistant':'user',content:i===0?'Original connector is QA-731':`Turn ${i}`,createdAt:1234+i}));
+  const requests=[];
+  const f=await fixture({rows:[current],fetch:async(url,init)=>{requests.push(JSON.parse(init.body));return answer('QA-731');}});
+  try {
+    await f.draft('What connector did I provide?'); await f.click('送出查詢'); await flush();
+    const context=JSON.stringify(requests[0]);
+    assert.match(context,/Original connector is QA-731/);
+    for(let i=1;i<122;i++) assert.match(context,new RegExp(`Turn ${i}(?![0-9])`));
+    assert.match(context,/What connector did I provide/);
+    assert.ok(requests[0].contents.length<=99,'long history still fits the OpenAI proxy message count');
+  } finally { await f.unmount(); }
+});
+
+test('PDF bytes survive cloud restore and follow-up without uploading again or mixing accounts', async () => {
+  const pdf=Buffer.from('%PDF-1.7\nQA connector 731\n%%EOF').toString('base64');
+  class Reader {readAsDataURL(){this.result=`data:application/pdf;base64,${pdf}`;this.onload();}}
+  const requests=[];
+  let f;
+  f=await fixture({rows:[],globals:{FileReader:Reader},read:owner=>({data:(f?.writes.filter(write=>write.p_owner_id===owner).at(-1)?.p_items??[]).map(item=>({conversation_key:item.id,title:item.title,saved_at:item.savedAt,draft_message:item.draftMessage,messages:item.messages,provider:item.provider,model:item.model,key_label:item.keyLabel})),error:null}),fetch:async(url,init)=>{requests.push(JSON.parse(init.body));return answer('Read QA PDF');}});
+  try {
+    await act(async()=>f.root.root.find(node=>node.type==='input'&&node.props.type==='file').props.onChange({currentTarget:{files:[new File(['%PDF-1.7\nQA connector 731\n%%EOF'],'connector.pdf')],value:'file'}})); await flush();
+    await f.draft('Read the connector'); await f.click('送出查詢'); await flush(950);
+    const saved=f.writes.at(-1).p_items;
+    assert.equal(saved[0].messages[0].attachments.length,1);
+    assert.doesNotMatch(JSON.stringify(saved),new RegExp(pdf));
+    assert.equal(f.storageCalls.filter(call=>call[0]==='upload').length,1);
+    await f.account('account-b'); assert.doesNotMatch(f.rendered(),/connector.pdf|Read QA PDF/);
+    await f.account('account-a');
+    await f.draft('What does that connector say?'); await f.click('送出查詢'); await flush();
+    assert.equal(requests.length,2,f.rendered());
+    assert.match(JSON.stringify(requests[1]),new RegExp(pdf));
+    assert.match(JSON.stringify(requests[1]),/Read QA PDF/);
+    assert.equal(f.storageCalls.filter(call=>call[0]==='upload').length,1);
+    assert.ok(f.storageCalls.some(call=>call[0]==='download'));
+  } finally { await f.unmount(); }
+});
+
+test('an attachment persistence failure retains the draft and file and does not call the provider', async () => {
+  class Reader {readAsDataURL(){this.result='data:application/pdf;base64,JVBERi0xLjc=';this.onload();}}
+  let requests=0;
+  const f=await fixture({rows:[],storageError:true,globals:{FileReader:Reader},fetch:async()=>{requests++;return answer('unexpected');}});
+  try {
+    await act(async()=>f.root.root.find(node=>node.type==='input'&&node.props.type==='file').props.onChange({currentTarget:{files:[new File(['%PDF-1.7\n%%EOF'],'keep.pdf')],value:'file'}}));await flush();
+    await f.draft('Keep this question');await f.click('送出查詢');await flush();
+    assert.equal(requests,0);
+    assert.equal(f.input().props.value,'Keep this question');
+    assert.match(f.rendered(),/keep.pdf/);
+  } finally {await f.unmount();}
+});
+
+test('restored SPEC source text remains available and is saved again with its original conversation',async()=>{
+  const saved=row('conversation-active-workspace','SPEC history');
+  saved.messages.push({id:'original-answer',role:'assistant',content:'Source checked',createdAt:1235,materialSpecContext:'Historical SPEC QA-731 is rated 7.3 A',materialSpecs:{files:[],scope:'all'}});
+  const requests=[];
+  const f=await fixture({rows:[saved],props:{materialSpecsAllowed:true},mocks:{'./MaterialSpecSourceSelector':{MaterialSpecSourceSelector:child},'./MaterialSpecCitationList':{MaterialSpecCitationList:child},'./materialSpecKnowledgeService':{searchMaterialSpecs:async()=>({files:[],scope:'all',context:'No new excerpt'})}},fetch:async(url,init)=>{requests.push(JSON.parse(init.body));return answer('Follow-up checked');}});
+  try {
+    await act(async()=>f.root.root.find(node=>node.type==='stub'&&node.props.onEnabledChange&&node.props.allowed===true).props.onEnabledChange(true));
+    await f.draft('What was the current rating?');await f.click('送出查詢');await flush(950);
+    assert.match(JSON.stringify(requests[0]),/Historical SPEC QA-731 is rated 7.3 A/);
+    assert.equal(f.writes.at(-1).p_items[0].messages.find(message=>message.id==='original-answer').materialSpecContext,'Historical SPEC QA-731 is rated 7.3 A');
+  } finally {await f.unmount();}
+});
+
+test('missing restored attachments stop a follow-up and retain its draft',async()=>{
+  const saved=row('conversation-active-workspace','Missing PDF');
+  saved.messages[0].attachments=[{id:'old',name:'missing.pdf',kind:'file',mimeType:'application/pdf',size:10,storagePath:'account-a/11111111-1111-4111-8111-111111111111/content'}];
+  let requests=0;
+  const f=await fixture({rows:[saved],fetch:async()=>{requests++;return answer('unexpected');}});
+  try {
+    await f.draft('Read that PDF again');await f.click('送出查詢');await flush();
+    assert.equal(requests,0);assert.equal(f.input().props.value,'Read that PDF again');assert.match(f.rendered(),/沒有忽略附件繼續回答/);
+  } finally {await f.unmount();}
+});
+
+test('attachment files are removed only after deletion of their conversation is cloud-confirmed',async()=>{
+  const saved=row('conversation-active-workspace','Delete PDF');
+  const path='account-a/11111111-1111-4111-8111-111111111111/content';
+  saved.messages[0].attachments=[{id:'old',name:'old.pdf',kind:'file',mimeType:'application/pdf',size:10,storagePath:path}];
+  const pending=deferred();
+  const f=await fixture({rows:[saved],save:()=>pending.promise});
+  f.files.set(path,new Blob(['%PDF-1.7']));
+  try {
+    await act(async()=>f.root.root.find(node=>node.type==='button'&&node.props['aria-label']==='刪除對話：Delete PDF').props.onClick());await flush(950);
+    assert.equal(f.files.has(path),true,'pending cloud deletion cannot remove its source');
+    await act(async()=>pending.resolve({data:0,error:null}));await flush();
+    assert.equal(f.files.has(path),false);
+  } finally {pending.resolve({data:0,error:null});await f.unmount();}
+});
 
 test('selecting history does not create a duplicate or rewrite its ID; edits update that history entry', async () => {
   const f = await fixture();
