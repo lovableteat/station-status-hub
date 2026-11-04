@@ -48,6 +48,39 @@ export type OrderedClipboardSegment =
 
 const ATTACHMENT_MARKER_PATTERN = /\[\[attachment:(\d+)\]\]/g;
 
+export function stripAttachmentMarkers(content: string) {
+  return content.replace(ATTACHMENT_MARKER_PATTERN, "");
+}
+
+export function composerOffsetToContentOffset(content: string, visibleOffset: number) {
+  let offset = Math.max(0, Math.min(visibleOffset, stripAttachmentMarkers(content).length));
+  for (const match of content.matchAll(ATTACHMENT_MARKER_PATTERN)) {
+    if (match.index > offset) break;
+    offset += match[0].length;
+  }
+  return offset;
+}
+
+export function updateComposerText(content: string, nextText: string) {
+  const previousText = stripAttachmentMarkers(content);
+  nextText = stripAttachmentMarkers(nextText);
+  let start = 0, suffix = 0;
+  while (start < previousText.length && start < nextText.length && previousText[start] === nextText[start]) start++;
+  while (suffix < previousText.length - start && suffix < nextText.length - start
+    && previousText[previousText.length - 1 - suffix] === nextText[nextText.length - 1 - suffix]) suffix++;
+  const end = previousText.length - suffix;
+  const insertedLength = nextText.length - start - suffix;
+  let hiddenLength = 0, cursor = 0, updated = "";
+  for (const match of content.matchAll(ATTACHMENT_MARKER_PATTERN)) {
+    const anchor = match.index - hiddenLength;
+    const position = anchor <= start ? anchor : anchor >= end ? anchor + nextText.length - previousText.length : start + insertedLength;
+    updated += nextText.slice(cursor, position) + match[0];
+    cursor = position;
+    hiddenLength += match[0].length;
+  }
+  return updated + nextText.slice(cursor);
+}
+
 function decodeClipboardEntities(value: string) {
   return value
     .replace(/&nbsp;/gi, " ")
