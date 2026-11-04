@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
 const path = require('node:path');
-const { createClient } = require('@supabase/supabase-js');
+const { createClient, isAuthRetryableFetchError } = require('@supabase/supabase-js');
 const { React, act, create, browser, loader } = require('./support/renderHarness.cjs');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -24,9 +24,20 @@ const rows = {
 
 async function fixture(t, { expired = false, refreshFailure = 'stalled', deniedLogin = false, deniedTable = null } = {}) {
   const { createBoundedAuthFetch } = await import(pathToFileURL(path.resolve('src/integrations/supabase/authLockPolicy.mjs')));
+  const originalNow = Date.now;
+  const originalConsoleError = console.error;
+  let logicalNow = originalNow();
+  Date.now = () => logicalNow;
+  t.after(() => { Date.now = originalNow; console.error = originalConsoleError; });
   const storage = new Map();
   if (expired) storage.set('synthetic-auth', JSON.stringify({ ...session, expires_at: Math.floor(Date.now() / 1000) - 60 }));
-  const requests = [], warnings = [], failures = [], toasts = [];
+  const requests = [], warnings = [], failures = [], toasts = [], authEvents = [];
+  console.error = (...args) => {
+    // The SDK logs an expected retryable initialization failure. Keep that
+    // evidence without flooding the test report; unexpected errors still fail.
+    if (isAuthRetryableFetchError(args[0]) && args[0].status === 503) warnings.push(args);
+    else failures.push(args);
+  };
   let refreshAttempts = 0, loginAt = null, state, projects, data;
   const fetchImpl = async (input, init) => {
     const url = new URL(String(input));
@@ -34,10 +45,12 @@ async function fixture(t, { expired = false, refreshFailure = 'stalled', deniedL
     requests.push({ path: url.pathname, authorization: headers.get('Authorization') });
     if (url.pathname === '/auth/v1/token') {
       refreshAttempts += 1;
+      // Exercise the real retryable SDK contract without waiting through its
+      // 30-second retry window. Each request exhausts that window logically;
+      // the bounded transport and all SDK storage/notification code stay real.
+      logicalNow += 31_000;
       if (refreshFailure === 'network') throw new TypeError('Synthetic network unavailable');
       if (refreshFailure === 'server') return Response.json({ message: 'Synthetic service unavailable' }, { status: 503 });
-      // Old refreshes never respond. This must stop after one transport deadline,
-      // rather than locking subsequent Functions/REST calls for the SDK retry budget.
       return new Promise((_resolve, reject) => {
         const abort = () => reject(init.signal.reason);
         if (init.signal.aborted) abort();
@@ -76,6 +89,7 @@ async function fixture(t, { expired = false, refreshFailure = 'stalled', deniedL
   // replaced: these tests exercise session/HTTP sequencing, not a remote service.
   client.channel = () => ({ on() { return this; }, subscribe() { return this; } });
   client.removeChannel = async () => {};
+  const authSubscription = client.auth.onAuthStateChange(event => { authEvents.push(event); }).data.subscription;
   const window = browser();
   const browserStorage = new Map([['bringup-auth-session-version', '2026-07-31-tab-isolation-v2']]);
   window.sessionStorage = { getItem: key => browserStorage.get(key) ?? null, setItem: (key, value) => browserStorage.set(key, value), removeItem: key => browserStorage.delete(key) };
@@ -88,8 +102,8 @@ async function fixture(t, { expired = false, refreshFailure = 'stalled', deniedL
       '@/hooks/use-toast': { useToast: () => ({ toast }) },
     },
     globals: { console: { ...console, warn: (...args) => warnings.push(args), error: (...args) => failures.push(args) } },
-    // Make the app's visible gate open before the old Auth request times out,
-    // exactly the race reported by the user, without spending 8 seconds per test.
+    // The recovery screen can appear before transport settles, but private
+    // providers must still wait for verified authentication.
     transform: source => source.replace('const SESSION_BOOTSTRAP_TIMEOUT_MS = 8_000;', 'const SESSION_BOOTSTRAP_TIMEOUT_MS = 20;'),
   });
   const { UserProvider, useUser } = load('src/components/auth/UserContext.tsx');
@@ -98,25 +112,36 @@ async function fixture(t, { expired = false, refreshFailure = 'stalled', deniedL
   function DataProbe() { projects = useTestProject(); data = useUnifiedData(); return null; }
   function Gate() {
     state = useUser();
-    return state.isLoggedIn && !state.isInitializing
+    return state.isRealtimeAuthenticated && !state.isInitializing && !state.sessionRecoveryNeeded
       ? React.createElement(TestProjectProvider, null, React.createElement(UnifiedDataProvider, null, React.createElement(DataProbe)))
       : null;
   }
   let tree;
   t.after(async () => {
     await act(async () => tree?.unmount());
+    authSubscription.unsubscribe();
     await client.auth.stopAutoRefresh();
     client.realtime.disconnect();
   });
   await act(async () => { tree = create(React.createElement(UserProvider, null, React.createElement(Gate))); });
   return {
-    client, requests, toasts, failures, warnings, storage,
+    client, requests, toasts, failures, warnings, storage, authEvents,
     get state() { return state; }, get projects() { return projects; }, get data() { return data; },
     get refreshAttempts() { return refreshAttempts; }, get loginAt() { return loginAt; },
     async waitUntil(check, message) {
       const started = performance.now();
       while (!check() && performance.now() - started < 1500) await act(async () => sleep(5));
       assert.ok(check(), message);
+    },
+    async settleRefreshFailure() {
+      await act(async () => { await client.auth.getSession(); });
+      assert.equal(JSON.parse(storage.get('synthetic-auth')).refresh_token, 'synthetic-refresh',
+        'temporary refresh failure must retain the saved credential');
+      assert.ok(!authEvents.includes('SIGNED_OUT'), 'temporary errors must not announce a logout');
+      assert.equal(state.sessionRecoveryNeeded, true);
+      assert.equal(state.isLoggedIn, false, 'retained credentials are not an authenticated identity');
+      assert.ok(!requests.some(request => request.path === '/rest/v1/test_projects'),
+        'private providers must not mount while authentication is unverified');
     },
     async login() {
       const started = performance.now();
@@ -141,6 +166,7 @@ for (const scenario of [
   test(`real SDK ${scenario.label} reaches all five project data sets`, async t => {
     const f = await fixture(t, scenario);
     await f.waitUntil(() => !f.state.isInitializing, 'login gate must open');
+    if (scenario.expired) await f.settleRefreshFailure();
     const { result, started } = await f.login();
     assert.equal(result.user.userId, userId);
     assert.ok(f.loginAt - started < 500, 'credential request must not wait through SDK refresh retries');
@@ -149,7 +175,9 @@ for (const scenario of [
     assert.equal(f.data.testItems[0].id, 'item-A');
     assert.equal(f.data.stationContents[0].id, 'content-A');
     assert.equal(f.data.progress[0].id, 'progress-A');
-    assert.equal(f.refreshAttempts, scenario.expired ? 1 : 0);
+    if (scenario.expired) assert.ok(f.refreshAttempts >= 1, 'expired credentials must attempt a real refresh');
+    else assert.equal(f.refreshAttempts, 0);
+    assert.ok(!f.authEvents.includes('SIGNED_OUT'), 'recovery and new login must not revoke the session');
     assert.deepEqual(f.toasts, []);
     assert.deepEqual(f.failures, []);
     assert.equal(f.client.auth.lockAcquired, false);
@@ -162,10 +190,13 @@ for (const scenario of [
 test('expired-session recovery never promotes rejected credentials or reads project data', async t => {
   const f = await fixture(t, { expired: true, deniedLogin: true });
   await f.waitUntil(() => !f.state.isInitializing, 'login gate must open');
+  await f.settleRefreshFailure();
   const { result } = await f.login();
   assert.equal(result, null);
   assert.equal(f.state.isLoggedIn, false);
-  assert.equal(f.refreshAttempts, 1);
+  assert.ok(f.refreshAttempts >= 1);
+  assert.equal(JSON.parse(f.storage.get('synthetic-auth')).refresh_token, 'synthetic-refresh');
+  assert.ok(!f.authEvents.includes('SIGNED_OUT'));
   assert.ok(!f.requests.some(request => request.path === '/rest/v1/test_projects'));
 });
 

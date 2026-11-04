@@ -85,13 +85,14 @@ function authFetchTimeoutError(timeoutMs) {
   return error;
 }
 
-function authFetchTimeoutResponse(timeoutMs) {
-  // Auth SDK 2.x turns thrown transport errors into retryable refresh failures.
-  // A local 408 ends that retry loop and fails closed; it never grants a session.
+function authFetchTimeoutResponse(timeoutMs, refresh = false) {
+  // A refresh deadline is a temporary outage, not revoked credentials. The SDK
+  // retains the existing refresh token for 503 and bounds its own retry window.
+  // Other Auth operations retain the finite 408 response; neither grants a session.
   return new Response(JSON.stringify({
     error_code: "request_timeout",
     msg: `Local Supabase Auth request timed out after ${timeoutMs} ms`,
-  }), { status: 408, headers: { "Content-Type": "application/json" } });
+  }), { status: refresh ? 503 : 408, headers: { "Content-Type": "application/json" } });
 }
 
 function waitForRefreshRetry(delayMs, signal) {
@@ -137,7 +138,7 @@ export function createBoundedAuthFetch({
       timeoutId = setTimeout(() => {
         timedOut = true;
         controller.abort(authFetchTimeoutError(boundedTimeoutMs));
-        resolve(authFetchTimeoutResponse(boundedTimeoutMs));
+        resolve(authFetchTimeoutResponse(boundedTimeoutMs, refresh));
       }, boundedTimeoutMs);
     });
 
@@ -158,8 +159,8 @@ export function createBoundedAuthFetch({
             } catch (error) {
               if (!refresh || controller.signal.aborted) throw error;
             }
-            // Keep refresh retries here so the SDK cannot start a second,
-            // 30-second retry window after the application's deadline.
+            // Bound this transport attempt, while allowing the SDK to retain
+            // its session and recover within its bounded refresh window.
             await waitForRefreshRetry(Math.min(boundedRetryDelayMs * 2 ** attempt, 2_000), controller.signal);
             attempt += 1;
           }
@@ -167,7 +168,7 @@ export function createBoundedAuthFetch({
         stopped,
       ]);
     } catch (error) {
-      if (timedOut) return authFetchTimeoutResponse(boundedTimeoutMs);
+      if (timedOut) return authFetchTimeoutResponse(boundedTimeoutMs, refresh);
       throw error;
     } finally {
       clearTimeout(timeoutId);

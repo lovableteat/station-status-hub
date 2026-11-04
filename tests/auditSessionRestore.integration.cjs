@@ -4,6 +4,7 @@ const { React, act, create, browser, deferred, loader } = require('./support/ren
 
 const session = (id, token = `token-${id}`) => ({
   access_token: token, refresh_token: `refresh-${id}`,
+  expires_at: Math.floor(Date.now() / 1000) + 3600,
   user: { id: `auth-${id}`, app_metadata: {} },
 });
 const profile = id => ({ data: [{ user_id: id, username: id, role: 'user', display_name: id }], error: null });
@@ -57,23 +58,31 @@ async function fixture({ cachedUser, realtimeV2Enabled = true } = {}) {
   function Probe() { state = useUser(); return null; }
   let tree;
   await act(async () => { tree = create(React.createElement(UserProvider, null, React.createElement(Probe))); });
+  async function fireTimers(delay) {
+    // Auth callbacks deliberately schedule profile reads outside the SDK lock.
+    // Flush only that queue; do not accidentally fire recovery deadlines too.
+    for (let iteration = 0; iteration < 12; iteration += 1) {
+      const pending = [...timers].filter(([, timer]) => timer.delay === delay);
+      if (!pending.length) return;
+      await act(async () => {
+        for (const [id, timer] of pending) {
+          if (!timers.has(id)) continue;
+          timers.delete(id); timer.callback();
+        }
+      });
+      if (delay !== 0) return;
+    }
+    throw new Error('Auth notifications scheduled an endless zero-delay loop');
+  }
   return {
     profiles, bootstrap, storage, timers, supabase, channels, removedChannels,
     get state() { return state; },
     get signOuts() { return signOuts; },
     get subscribed() { return subscribed; },
-    async emit(event, value) { await act(async () => { listener(event, value); }); },
+    async emit(event, value) { await act(async () => { listener(event, value); }); await fireTimers(0); },
     async resolveBootstrap(value) { await act(async () => { bootstrap.resolve({ data: { session: value }, error: null }); }); },
     async resolveProfile(index, value) { await act(async () => { profiles[index].resolve(value); }); },
-    async timeout() {
-      const pending = [...timers];
-      await act(async () => {
-        for (const [id, timer] of pending) {
-          assert.equal(timer.delay, 8_000);
-          timers.delete(id); timer.callback();
-        }
-      });
-    },
+    async timeout() { await fireTimers(8_000); await fireTimers(0); },
     async logout() { await act(async () => { state.logout(); }); },
     async unmount() { await act(async () => { tree.unmount(); }); },
   };
@@ -226,7 +235,7 @@ test('bootstrap timeout cannot clear a newer verified session', async t => {
   assert.equal(f.signOuts, 0);
 });
 
-test('shared profile timeout stays signed out even if the server responds late', async t => {
+test('shared profile timeout preserves credentials for recovery without granting private access', async t => {
   const f = await fixture(); t.after(() => f.unmount());
   const account = session('A');
   await f.resolveBootstrap(account);
@@ -235,10 +244,15 @@ test('shared profile timeout stays signed out even if the server responds late',
   await f.timeout();
   assert.equal(f.state.isInitializing, false);
   assert.equal(f.state.user, null);
-  assert.equal(f.signOuts, 1);
+  assert.equal(f.signOuts, 0, 'temporary failure must not revoke the retained Auth credential');
+  assert.equal(f.state.sessionRecoveryNeeded, true);
+  assert.notEqual(f.state.sessionMode, 'authenticated');
+  assert.equal(f.channels.length, 0, 'unverified identity must not subscribe to private account data');
+  assert.ok(f.storage.has('bringup-auth-session-version'));
   await f.resolveProfile(0, profile('A'));
   assert.equal(f.state.user, null);
   assert.equal(f.storage.has('user'), false);
+  assert.equal(f.state.sessionRecoveryNeeded, true, 'late unowned work must not bypass a fresh verification');
 });
 
 test('session-version rejection never queries or trusts the cached user', async t => {
