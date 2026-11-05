@@ -2047,44 +2047,6 @@ html { color-scheme: dark; }
   .workspace-entrance-card:hover .workspace-artwork-image { transform: none; }
 }
 
-@media (max-width: 767px) {
-  [data-testid="workspace-entrance-mobile-list"] {
-    overflow: visible;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  [data-mobile-home-shortcuts="true"] button,
-  [data-mobile-home-modules="true"] button {
-    touch-action: manipulation;
-  }
-
-  .workspace-entrance-mobile-row.mobile-home-module {
-    min-height: 66px;
-    gap: 0.625rem;
-    padding: 0.5rem 0.625rem;
-    border-color: rgb(51 65 75 / 0.78);
-    background: #10191c;
-  }
-
-  .workspace-entrance-mobile-row.mobile-home-module[data-workspace-id="performance"] {
-    border-color: rgb(252 211 77 / 0.46);
-    background: rgb(245 158 11 / 0.1);
-  }
-
-  .workspace-entrance-mobile-row.mobile-home-module .workspace-entrance-mobile-icon {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 0.75rem;
-  }
-
-  .workspace-entrance-mobile-row.mobile-home-module .workspace-entrance-mobile-icon svg {
-    width: 1.25rem;
-    height: 1.25rem;
-  }
-}
 .preview-pcb-board { flex: 1; min-height: 0; width: 100%; }
 .preview-access { display: flex; align-items: center; gap: 20px; flex: 1; }
 .preview-access-users { position: relative; display: grid; place-items: center; width: 60px; height: 60px; flex-shrink: 0; border-radius: 16px; border: 1px solid hsl(var(--preview-accent) / .25); background: hsl(var(--preview-accent) / .06); }
@@ -2578,9 +2540,7 @@ body {
 @media (max-width: 767px) {
   [data-testid="workspace-entrance"] { padding: 12px var(--mobile-page-gutter) 16px; }
   .workspace-entrance-header { display: none; }
-  .mobile-home-head { padding: 2px 0 10px; }
-  .mobile-home-head h1 { margin: 0; font-size: 20px; line-height: 1.3; font-weight: 800; letter-spacing: -.01em; color: hsl(var(--foreground)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mobile-home-head p { margin: 2px 0 0; font-size: 12px; line-height: 1.35; color: hsl(var(--muted-foreground)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-home-greeting { color: hsl(var(--foreground)); color: color-mix(in srgb, hsl(var(--foreground)) 60%, hsl(var(--primary))); }
   .mobile-home-section { display: flex; align-items: center; justify-content: space-between; min-height: 32px; }
   .mobile-home-section h2 { margin: 0; font-size: 13px; font-weight: 700; color: hsl(var(--muted-foreground)); }
   .mobile-home-section button { min-height: 44px; padding: 0 4px; font-size: 13px; font-weight: 700; color: hsl(var(--primary)); }
@@ -2596,9 +2556,26 @@ body {
   .mobile-home-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 60px; margin: 0; padding: 8px 12px; border: 1px dashed hsl(var(--border)); border-radius: 14px; font-size: 13px; color: hsl(var(--muted-foreground)); }
   .mobile-home-note button { min-height: 44px; padding: 0 8px; font-weight: 700; color: hsl(var(--primary)); }
   .workspace-entrance-mobile-list { display: flex; flex-direction: column; gap: 16px; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-  .workspace-entrance-mobile-list .workspace-entrance-mobile-row { min-height: 68px; gap: 10px; padding: 8px 10px; border: 1px solid hsl(var(--border)); border-radius: 14px; background: hsl(var(--card)); }
-  .workspace-entrance-mobile-list .workspace-entrance-mobile-icon { width: 36px; height: 36px; border-radius: 10px; }
-  .workspace-entrance-mobile-list .workspace-entrance-mobile-icon svg { width: 18px; height: 18px; }
+  .mobile-home-module[data-workspace-id="station-status"] { --entrance-accent: var(--platform-rose); }
+  .mobile-home-module[data-workspace-id="file-uploads"] { --entrance-accent: var(--platform-blue); }
+  .mobile-home-module[data-workspace-id="comparison"] { --entrance-accent: var(--platform-violet); }
+  .mobile-home-module[data-workspace-id="data-center"] { --entrance-accent: var(--platform-teal); }
+  .mobile-home-module[data-workspace-id="pcb-designer"] { --entrance-accent: 95 61% 66%; }
+  .mobile-home-module[data-workspace-id="ai-chat"] { --entrance-accent: 320 76% 75%; }
+  .workspace-entrance-mobile-list .workspace-entrance-mobile-row {
+    min-height: 68px;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid hsl(var(--entrance-accent) / .34);
+    border-radius: 14px;
+    background-color: hsl(var(--card));
+    background-color: color-mix(in srgb, hsl(var(--card)), hsl(var(--entrance-accent)) 8%);
+  }
+  .workspace-entrance-mobile-list .workspace-entrance-mobile-row:active {
+    background-color: hsl(var(--entrance-accent) / .18);
+  }
+  .workspace-entrance-mobile-list .workspace-entrance-mobile-icon { width: 40px; height: 40px; }
+  .workspace-entrance-mobile-list .workspace-entrance-mobile-icon svg { width: 20px; height: 20px; }
   .workspace-entrance-mobile-list .workspace-entrance-mobile-row > span:nth-child(2) > span:first-child { font-size: 14px; line-height: 1.3; }
   .workspace-entrance-mobile-list .workspace-entrance-mobile-row > span:nth-child(2) > span:last-child { margin-top: 1px; font-size: 11px; }
   .workspace-entrance-mobile-list .workspace-entrance-mobile-chevron { display: none; }
