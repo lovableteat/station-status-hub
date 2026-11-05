@@ -1,10 +1,12 @@
 import { useMemo, useState, type ComponentType } from "react";
-import { ArrowRight, Boxes, ChevronRight, Zap } from "lucide-react";
+import { ArrowRight, Boxes, ChevronRight } from "lucide-react";
 import racksArtwork from "@/assets/workspace/racks.webp";
 import { WorkspacePreview } from "./WorkspacePreview";
+import { MobileHomeShortcuts } from "./mobile/MobileHomeShortcuts";
 import { MobileHomeTasks } from "./mobile/MobileHomeTasks";
 import { useUser } from "@/components/auth/UserContext";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
 interface WorkspaceEntranceItem {
@@ -121,13 +123,6 @@ const mobileWorkspaceOrder = [
   "performance",
 ];
 
-const mobileShortcutIds = [
-  "station-status",
-  "material-requests",
-  "pcb-designer",
-  "file-uploads",
-];
-
 export function WorkspaceEntrance({
   items,
   onSelect,
@@ -137,6 +132,7 @@ export function WorkspaceEntrance({
 }: WorkspaceEntranceProps) {
   const { user } = useUser();
   const { activeProject } = useTestProject();
+  const showMobileShortcuts = useIsMobile();
   // Decided once at mount: only a phone mounts the issue summary, so desktop adds no request.
   const [isPhone] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 767px)").matches);
   const isFiveItemLayout = items.length === 5;
@@ -155,14 +151,13 @@ export function WorkspaceEntrance({
               : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
   const orderedMobileItems = useMemo(
     () => [
-      ...mobileWorkspaceOrder.map((id) => items.find((item) => item.id === id)).filter(Boolean),
+      ...mobileWorkspaceOrder
+        .map((id) => items.find((item) => item.id === id))
+        .filter((item): item is WorkspaceEntranceItem => Boolean(item)),
       ...items.filter((item) => !mobileWorkspaceOrder.includes(item.id)),
-    ] as WorkspaceEntranceItem[],
+    ].map((item) => ({ ...item, title: mobileWorkspaceTitleMap[item.id] ?? item.title })),
     [items],
   );
-  const shortcutItems = mobileShortcutIds
-    .map((id) => items.find((item) => item.id === id))
-    .filter((item): item is WorkspaceEntranceItem => Boolean(item));
 
   return (
     <section
@@ -202,32 +197,9 @@ export function WorkspaceEntrance({
             />
           </section>
 
-          <section data-mobile-home-shortcuts="true" aria-labelledby="mobile-shortcut-title">
-            <div className="mb-2.5 flex items-center gap-2">
-              <Zap className="h-5 w-5 text-cyan-300" />
-              <h2 id="mobile-shortcut-title" className="text-lg font-black tracking-[-0.03em] text-slate-50">我的快捷</h2>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {shortcutItems.map((item) => {
-                const Icon = item.icon;
-                const mobileTitle = mobileWorkspaceTitleMap[item.id] ?? item.title;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    data-mobile-home-shortcut={item.id}
-                    onClick={() => onSelect(item.id)}
-                    className="group flex min-h-[4.25rem] min-w-0 touch-manipulation flex-col items-center justify-center gap-1 rounded-2xl border border-slate-700/75 bg-[#101b1e] px-1 py-1.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-                  >
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-cyan-300/10 text-cyan-300 transition-colors group-active:bg-cyan-300/20">
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <span className="text-[11px] font-bold leading-tight text-slate-100">{mobileTitle}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+          {showMobileShortcuts && (
+            <MobileHomeShortcuts key={user?.userId} userId={user?.userId} items={orderedMobileItems} onSelect={onSelect} />
+          )}
 
           <section data-mobile-home-modules="true" aria-labelledby="mobile-module-title">
             <div className="mb-2.5 flex items-center gap-2">
@@ -238,7 +210,6 @@ export function WorkspaceEntrance({
               {orderedMobileItems.map((item) => {
                 const Icon = item.icon;
                 const tone = workspaceToneMap[item.id] ?? workspaceToneMap["station-status"];
-                const mobileTitle = mobileWorkspaceTitleMap[item.id] ?? item.title;
                 return (
                   <button
                     key={item.id}
@@ -251,7 +222,7 @@ export function WorkspaceEntrance({
                       <Icon className="h-5 w-5" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-black tracking-[-0.02em] text-slate-50">{mobileTitle}</span>
+                      <span className="block truncate text-[13px] font-black tracking-[-0.02em] text-slate-50">{item.title}</span>
                       <span className="mt-0.5 block truncate text-[10px] font-semibold text-slate-400">{tone.badge}</span>
                     </span>
                     <ChevronRight className="workspace-entrance-mobile-chevron h-4 w-4 shrink-0 text-slate-500 transition-transform group-active:translate-x-0.5" />
