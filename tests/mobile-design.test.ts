@@ -30,7 +30,7 @@ test("uses a dedicated phone workspace list without replacing the desktop grid",
   assert.match(entranceSource, /data-testid="workspace-entrance-mobile-list"/);
   assert.match(entranceSource, /workspace-entrance-mobile-list[^\n]*md:hidden/);
   assert.match(entranceSource, /data-mobile-home-hero="true"/);
-  assert.match(entranceSource, /data-mobile-home-shortcuts="true"/);
+  assert.match(entranceSource, /<MobileHomeShortcuts/);
   assert.match(entranceSource, /data-mobile-home-modules="true"/);
   assert.match(entranceSource, /racksArtwork/);
   assert.doesNotMatch(entranceSource, /localStorage|sessionStorage/);
