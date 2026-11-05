@@ -7,6 +7,8 @@ interface MaterialDisplayLocation extends MaterialGroup {
 
 export interface MaterialMainGroup extends MaterialGroup {
   locations: MaterialDisplayLocation[];
+  /** Matching rows are distinct from the fixed main retained as visual context. */
+  searchMatchIds?: ReadonlySet<string>;
 }
 
 function hasFootprint(value: string | undefined) {
@@ -62,6 +64,27 @@ export function filterMaterialMainGroup(
     const records = location.records.filter(record => matchesRecord(record, location));
     return [records.length === location.records.length ? location : { ...location, records }];
   });
+  return projectMatchingLocations(group, locations);
+}
+
+/** Search all vendors without replacing the selected display main. */
+export function searchMaterialMainGroup(
+  group: MaterialMainGroup,
+  matchesRecord: (record: MaterialRecord, location: MaterialGroup) => boolean,
+): MaterialMainGroup | null {
+  const searchMatchIds = new Set<string>();
+  const locations = group.locations.flatMap(location => {
+    const matches = location.records.filter(record => matchesRecord(record, location));
+    if (matches.length === 0) return [];
+    matches.forEach(record => searchMatchIds.add(record.id));
+    const records = location.records.filter(record => record.id === location.primaryRecord.id || searchMatchIds.has(record.id));
+    return [records.length === location.records.length ? location : { ...location, records }];
+  });
+  const result = projectMatchingLocations(group, locations);
+  return result ? { ...result, searchMatchIds } : null;
+}
+
+function projectMatchingLocations(group: MaterialMainGroup, locations: MaterialDisplayLocation[]): MaterialMainGroup | null {
   if (locations.length === 0) return null;
   if (locations.length === group.locations.length && locations.every((location, index) => location === group.locations[index])) return group;
   const first = locations[0];

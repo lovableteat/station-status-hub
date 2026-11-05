@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const ts = require('typescript');
-const { React, act, create, deferred, loader, browser } = require('./support/renderHarness.cjs');
+const { React, act, create, deferred, loader, browser, ui } = require('./support/renderHarness.cjs');
 
 const part = (id, ref = 'U1') => ({
   id, name: `Synthetic part ${id}`, refDes: ref, manufacturerPartNumber: `QA-MPN-${id}`,
@@ -101,7 +101,7 @@ async function pendingFixture() {
         ${extracted}`;
     },
     globals: {
-      cn: (...values) => values.filter(Boolean).join(' '),
+      MaterialNoteCell: ui.Input, cn: (...values) => values.filter(Boolean).join(' '),
       useMaterialRequestOwners: () => ({ owners: [], error: '' }),
       getTrackingWorkflowStatus: record => record.trackingStatus || '未處理',
       toWorkbookRecord: record => record,

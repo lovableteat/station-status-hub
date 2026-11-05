@@ -7,7 +7,7 @@ import ts from 'typescript';
 const { loader } = createRequire(import.meta.url)('./support/renderHarness.cjs');
 const load = loader();
 const utils = load('src/components/material-requests/materialRequestUtils.ts');
-const { buildMaterialMainGroups, filterMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives } = load('src/components/material-requests/materialMainRows.ts');
+const { buildMaterialMainGroups, filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives } = load('src/components/material-requests/materialMainRows.ts');
 const search = load('src/components/material-requests/materialSearch.ts');
 const { normalizeMaterialTrackingStatus, MATERIAL_TRACKING_STATUS_OPTIONS } = load('src/components/material-requests/materialTrackingStatus.ts');
 const { sortMaterialTableRows } = load('src/components/material-requests/materialTableSort.ts');
@@ -131,7 +131,7 @@ function pagePipeline(displayGroups, { filters = {}, query = '', searchColumn = 
   const markWrites = [];
   const bindings = {
     ...utils, ...search, normalizeMaterialTrackingStatus, MATERIAL_TRACKING_STATUS_OPTIONS, sortMaterialTableRows,
-    filterMaterialMainGroup, getMaterialMarkKeys, getSortedAlternatives: sortMaterialAlternatives,
+    filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, getSortedAlternatives: sortMaterialAlternatives,
     displayGroups, columnFilters: filters, deferredQuery: query, searchColumn, availability: 'all',
     showMarkedOnly, personalMarks: { keys: new Set(markedKeys), toggle: keys => markWrites.push(Array.from(keys)) },
     markKeysByGroup: new Map(displayGroups.map(group => [group.key, getMaterialMarkKeys(group)])),
@@ -264,4 +264,68 @@ test('toggling a filtered merged R1 row writes only the original source-A star i
   const markedOnly = pagePipeline(groups, { filters: { refDes: ['R1'] }, showMarkedOnly: true, markedKeys: ['record::source-A'] });
   assert.deepEqual(markedOnly.orderedRecordRows.map(row => row.record.id), ['selected-A', 'source-A']);
   assert.equal(markedOnly.filteredGroups[0].displayRef, 'R1');
+});
+
+
+function alternativeSearchFixture() {
+  return display([
+    raw('main', 'R1', { isGroupStart: true, virtualAlternative: 'VIRTUAL-MAIN', manufacturer: 'Primary Corp' }),
+    raw('hit', 'R1', { manufacturer: 'AlternateVendor', manufacturerPartNumber: 'ALT-0482-XYZ', partNumber: 'COMPANY-829', virtualAlternative: 'VIRTUAL-ALT', note: 'thermal approval' }),
+    raw('unrelated', 'R1', { manufacturer: 'OtherVendor' }),
+  ]);
+}
+
+test('alternate MPN, vendor, company number and Note searches retain the fixed main only as context and export only matches', () => {
+  const groups = alternativeSearchFixture();
+  const original = JSON.stringify(groups);
+  for (const query of ['ALT-0482', 'alternatevendor', 'COMPANY-829', 'VIRTUAL-ALT', 'thermal approval']) {
+    const result = pagePipeline(groups, { query });
+    assert.equal(result.filteredGroups.length, 1, query);
+    const group = result.filteredGroups[0];
+    assert.equal(group.primaryRecord.id, 'main');
+    assert.deepEqual(ids(group.records), ['main', 'hit']);
+    assert.deepEqual(Array.from(group.searchMatchIds), ['hit']);
+    assert.equal(result.visibleGroupRows[0].searchAlternativeCount, 1);
+    assert.deepEqual(ids(result.visibleGroupRows[0].secondaryAlternatives), ['hit']);
+    assert.deepEqual(result.snapshot().rows.map(row => row.manufacturerPartNumber), ['ALT-0482-XYZ']);
+  }
+  assert.equal(JSON.stringify(groups), original, 'search never mutates the source BOM');
+  assert.deepEqual(pagePipeline(groups).orderedRecordRows.map(row => row.record.id), ['main', 'hit', 'unrelated']);
+});
+
+test('alternate search never bypasses the fixed-main blank virtual-PN rule or combines tokens from different vendors', () => {
+  const groups = alternativeSearchFixture();
+  assert.equal(pagePipeline(groups, { query: 'ALT-0482', filters: { virtualAlternative: ['(空白)'] } }).filteredGroups.length, 0);
+  assert.equal(pagePipeline(groups, { query: 'AlternateVendor OtherVendor' }).filteredGroups.length, 0);
+  assert.deepEqual(pagePipeline(groups, { query: 'alternatevendor', searchColumn: 'manufacturer' }).orderedRecordRows.map(row => row.record.id), ['hit']);
+  assert.equal(pagePipeline(groups, { query: 'ALT-0482', searchColumn: 'manufacturer' }).filteredGroups.length, 0);
+});
+
+test('alternate-only matches in merged locations keep the matching location refs and quantities', () => {
+  const groups = display([
+    raw('main-A', 'R1', { isGroupStart: true, qty: 2, manufacturerPartNumber: 'SHARED', partNumber: 'PHYSICAL' }),
+    raw('alt-A', 'R1', { qty: 2, manufacturerPartNumber: 'UNIQUE-ALT-A' }),
+    raw('main-B', 'R2', { isGroupStart: true, qty: 3, manufacturerPartNumber: 'SHARED', partNumber: 'PHYSICAL' }),
+    raw('alt-B', 'R2', { qty: 3, manufacturerPartNumber: 'UNIQUE-ALT-B' }),
+  ]);
+  assert.equal(groups.length, 1);
+  const result = pagePipeline(groups, { query: 'UNIQUE-ALT-B' });
+  const group = result.filteredGroups[0];
+  assert.equal(group.primaryRecord.id, 'main-B');
+  assert.equal(group.displayRef, 'R2');
+  assert.equal(String(group.qty), '3');
+  assert.deepEqual(ids(group.records), ['main-B', 'alt-B']);
+  assert.deepEqual(Array.from(getMaterialMarkKeys(group)), ['record::main-B']);
+  assert.equal(result.snapshot().rows[0].refDes, 'R2');
+  assert.equal(result.snapshot().rows[0].qty, '3');
+});
+
+test('exact reference search stays exact while an MPN shaped like a designator remains searchable', () => {
+  const groups = display([
+    raw('main', 'R1', { isGroupStart: true }),
+    raw('alternate', 'R1', { manufacturerPartNumber: 'ABC123' }),
+    raw('R10', 'R10', { isGroupStart: true }), raw('PR1', 'PR1', { isGroupStart: true }),
+  ]);
+  assert.deepEqual(pagePipeline(groups, { query: 'R1' }).filteredGroups.map(group => group.displayRef), ['R1']);
+  assert.deepEqual(pagePipeline(groups, { query: 'abc123' }).orderedRecordRows.map(row => row.record.id), ['alternate']);
 });

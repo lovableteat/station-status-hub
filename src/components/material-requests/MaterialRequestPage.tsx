@@ -96,7 +96,7 @@ import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
 import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
-import { buildMaterialMainGroups, filterMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
+import { buildMaterialMainGroups, filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { useWorkspaceMutationScope, WorkspaceMutationScopeChangedError } from "@/hooks/useWorkspaceMutationScope";
@@ -1875,11 +1875,13 @@ export function VirtualAlternativeValue({ value, onCopy }: { value: string; onCo
 function TrackingHistoryCell({
   record,
   onOpen,
+  onEdit,
   embedded = false,
 }: {
   record: MaterialRecord;
   onOpen: (record: MaterialRecord) => void;
-  /** Inside the merged 狀態追蹤 / 更新 control the cell drops its own frame and shares the group's. */
+  onEdit?: (record: MaterialRecord) => void;
+  /** Compact table controls keep status/history and editing as separate buttons. */
   embedded?: boolean;
 }) {
   const latestEntry = getLatestTrackingEntry(record);
@@ -1899,6 +1901,20 @@ function TrackingHistoryCell({
     embedded && requestMeta.ticket ? `單號 ${requestMeta.ticket}` : "",
   ].filter(Boolean).join("\n");
 
+  if (embedded) return (
+    <div data-testid="tracking-history-cell" className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch gap-1.5">
+      <Button type="button" variant="outline" data-testid="material-status-button" onClick={() => onOpen(record)}
+        aria-label={`${record.manufacturerPartNumber || record.name}，${statusLabel}，查看追蹤紀錄（${historyCount} 筆）`}
+        title={tooltip} className={cn("h-10 min-h-[40px] min-w-0 rounded-md px-2 text-xs font-semibold", materialTrackingStatusTone(workflowStatus))}>
+        <span className="truncate">{statusLabel}</span>
+      </Button>
+      <Button type="button" variant="secondary" data-testid="material-edit-button" onClick={() => (onEdit ?? onOpen)(record)}
+        aria-label={`編輯料件 ${record.manufacturerPartNumber || record.name}`} className="h-10 min-h-[40px] rounded-md border border-border px-2.5 text-xs font-semibold">
+        <Pencil aria-hidden="true" className="size-3.5" />編輯
+      </Button>
+    </div>
+  );
+
   return (
     <button
       type="button"
@@ -1915,9 +1931,7 @@ function TrackingHistoryCell({
       <span className={cn(CHIP_BASE, embedded ? "min-w-0 max-w-full truncate" : "flex-none", getTrackingStatusTone(workflowStatus))}>
         {statusLabel}
       </span>
-      {embedded && <span className="ml-auto flex-none text-xs font-semibold text-primary">更新</span>}
-      {/* The merged 狀態追蹤 / 更新 column is narrow: only the status chip stays; the note, ticket and
-          history count are in the tooltip and the whole chip opens the history. */}
+
       {!embedded && (
         <span className={cn("min-w-0 flex-1 truncate text-xs", latestEntry?.note ? "text-foreground" : "text-muted-foreground")}>
           {summary}
@@ -2505,6 +2519,8 @@ function PendingCategoryPicker({ group, disabled, onChange }: { group: MaterialG
 
 export function PendingMaterialsDialog({
   canEdit,
+  canEditNote = false,
+  onSaveNote,
   groups,
   open,
   restoreView = false,
@@ -2524,6 +2540,8 @@ export function PendingMaterialsDialog({
   marksReady = true,
 }: {
   canEdit: boolean;
+  canEditNote?: boolean;
+  onSaveNote: (record: MaterialRecord, note: string) => Promise<void>;
   groups: MaterialGroup[];
   open: boolean;
   /** Reopened after editing one of its items: keep the tab, search and scroll position. */
@@ -2690,7 +2708,7 @@ export function PendingMaterialsDialog({
           <Button type="button" variant="ghost" size="sm" onClick={() => { setQuery(""); setActiveCategory("all"); setIncludeAlternates(false); }}>全部清除</Button>
         </div>}
 
-        <div data-testid="pending-materials-list" ref={listRef} onScroll={(event) => { scrollTopRef.current = event.currentTarget.scrollTop; }} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+        <div data-testid="pending-materials-list" ref={listRef} onScroll={(event) => { scrollTopRef.current = event.currentTarget.scrollTop; }} className="min-h-0 flex-1 space-y-1.5 overflow-auto pr-1">
           {visibleCategories.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
               {applications.length === 0 ? "目前沒有待處理的料號" : selectedCategory === "marked" && markedCount === 0 && !keyword ? "尚未特別標記待處理料，請到「全部」點選每列星號" : "目前篩選條件沒有符合的待處理料"}
@@ -2730,9 +2748,13 @@ export function PendingMaterialsDialog({
                   </div>
                   <div className="pending-row-status">
                     <span data-testid="pending-status-segment" aria-label={`目前狀態：${trackingStatus || '未處理'}`} className={cn("pending-status-indicator inline-flex h-10 min-w-0 flex-col items-center justify-center rounded-md border px-1 text-xs font-semibold", materialTrackingStatusTone(trackingStatus))}><span className="block w-full truncate" title={trackingStatus || "未處理"}>{trackingStatus || "未處理"}</span>{getMaterialTrackingStatusMeaning(trackingStatus) && <span className="block w-full truncate text-[10px] font-normal" title={getMaterialTrackingStatusMeaning(trackingStatus)}>{getMaterialTrackingStatusMeaning(trackingStatus)}</span>}</span>
-                    <Button type="button" data-testid="pending-tracking-control" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full rounded-md border border-border px-1 text-xs font-semibold" aria-label={`追蹤／更新 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
-                      <span data-testid="pending-update-segment">追蹤／更新</span>
+                    <Button type="button" data-testid="pending-tracking-control" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full rounded-md border border-border px-1 text-xs font-semibold" aria-label={`編輯 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
+                      <span data-testid="pending-update-segment">編輯</span>
                     </Button>
+                  </div>
+                  <div className="pending-row-note" data-testid="pending-note-cell">
+                    <span className="pending-note-label text-xs font-semibold text-muted-foreground">Note</span>
+                    <MaterialNoteCell key={record.id} disabled={!canEditNote} onSave={onSaveNote} record={record} />
                   </div>
                 </div>
               );
@@ -3066,6 +3088,7 @@ interface MaterialRowActions {
   copy: (value: string) => void;
   openCreate: (group: MaterialGroup) => void;
   openTracking: (record: MaterialRecord) => void;
+  openDetails: (record: MaterialRecord) => void;
   openSpec: (record: MaterialRecord) => void;
   saveNote: (record: MaterialRecord, note: string) => Promise<void>;
 }
@@ -3081,6 +3104,7 @@ interface VisibleGroupRow {
   trackingRecord: MaterialRecord;
   secondaryAlternatives: MaterialRecord[];
   uniqueMpnCount: number;
+  searchAlternativeCount?: number;
 }
 
 // White-based grid lines stay visible on every custom row colour; the old blue 10% vanished on green rows.
@@ -3296,6 +3320,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
               </div>
               <MaterialApplicationExemptionBadge record={statusRecord} />
             </div>
+            {!row.isLocation && Boolean(row.searchAlternativeCount) && <button type="button" onClick={event => { event.stopPropagation(); actions.toggleExpanded(group.key); }} className="mt-1 block text-xs font-semibold text-primary hover:underline">命中替代料 {row.searchAlternativeCount} 筆 · {expanded ? "收合" : "展開查看"}</button>}
           </td>
         )}
         {columns.qty && (
@@ -3421,9 +3446,9 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
             data-testid="material-data-update-cell"
             onClick={stopRowToggle}
           >
-            <div className="flex min-w-0 items-stretch overflow-hidden rounded-lg border border-primary/30 bg-primary/5" data-testid="material-tracking-update-control" title={updateTitle}>
+            <div className="min-w-0" data-testid="material-tracking-update-control" title={updateTitle}>
               <div className="min-w-0 flex-1" data-material-cell="tracking">
-                <TrackingHistoryCell record={statusRecord} onOpen={actions.openTracking} embedded />
+                <TrackingHistoryCell record={statusRecord} onOpen={actions.openTracking} onEdit={actions.openDetails} embedded />
               </div>
             </div>
             {editingNames && (
@@ -3457,6 +3482,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
           columns={columns}
           onCopy={actions.copy}
           onOpenTracking={actions.openTracking}
+          onOpenDetails={actions.openDetails}
           onSaveNote={actions.saveNote}
           noteDisabled={!canEditNote}
         /></tbody>
@@ -3474,6 +3500,7 @@ function CompactAlternativeRows({
   columns,
   onCopy,
   onOpenTracking,
+  onOpenDetails,
   onSaveNote,
   noteDisabled,
 }: {
@@ -3485,6 +3512,7 @@ function CompactAlternativeRows({
   columns: MaterialColumnVisibility;
   onCopy: (value: string) => void;
   onOpenTracking: (record: MaterialRecord) => void;
+  onOpenDetails: (record: MaterialRecord) => void;
   onSaveNote: (record: MaterialRecord, note: string) => Promise<void>;
   noteDisabled: boolean;
 }) {
@@ -3618,8 +3646,8 @@ function CompactAlternativeRows({
             )}
             {columns.actions && (
               <td className="border-r border-white/20 px-2 py-1.5" onClick={stopRowToggle}>
-                <div className="min-w-0 overflow-hidden rounded-lg border border-primary/30 bg-primary/5">
-                  <TrackingHistoryCell record={record} onOpen={onOpenTracking} embedded />
+                <div className="min-w-0">
+                  <TrackingHistoryCell record={record} onOpen={onOpenTracking} onEdit={onOpenDetails} embedded />
                 </div>
               </td>
             )}
@@ -4358,8 +4386,6 @@ export function MaterialRequestPage() {
   const hasActiveColumnFilters = Object.values(columnFilters).some((values) => values != null);
 
   const groupRuntimeIndex = useMemo(() => {
-    const searchableTextByGroup = new Map<string, string>();
-    const refTokensByGroup = new Map<string, string[]>();
     const refPrefixes = new Set<string>();
     const uniqueMpnCountByGroup = new Map<string, number>();
     const recordColumnsByRecordId = new Map<string, CachedRecordColumnValues>();
@@ -4369,12 +4395,6 @@ export function MaterialRequestPage() {
       uniqueMpnCountByGroup.set(group.key, uniqueMpnCount);
 
       if (searchTokens.length > 0) {
-        const mains = group.locations.map(location => location.primaryRecord);
-        const applicationText = mains.every(isMeManufacturedRecord) ? ME_APPLICATION_EXEMPTION_LABEL
-          : mains.some(record => !record.applicationExempt && !hasMaterialPartNumber(record))
-            ? "未提供虛擬／實體料號 料號待補 完全無料" : "已提供料號 已提供實體料號或虛擬料號";
-        const alternativeText = uniqueMpnCount <= 1 ? "單一料 無替代料 單一來源 single source no alternative" : "有替代料 multiple source alternative";
-        searchableTextByGroup.set(group.key, `${mains.map(record => record.searchText).join(" ")} ${applicationText} ${alternativeText}`);
         const refTokens = Array.from(new Set(
           [
             group.displayRef,
@@ -4384,7 +4404,6 @@ export function MaterialRequestPage() {
             .map(normalizeMaterialSearchText)
             .filter(Boolean),
         ));
-        refTokensByGroup.set(group.key, refTokens);
         refTokens.forEach((refToken) => {
           for (let prefixLength = 1; prefixLength <= refToken.length; prefixLength += 1) {
             refPrefixes.add(refToken.slice(0, prefixLength));
@@ -4404,8 +4423,6 @@ export function MaterialRequestPage() {
     return {
       recordColumnsByRecordId,
       refPrefixes,
-      refTokensByGroup,
-      searchableTextByGroup,
       uniqueMpnCountByGroup,
     };
   }, [displayGroups, hasActiveColumnFilters, searchTokens.length]);
@@ -4420,31 +4437,33 @@ export function MaterialRequestPage() {
   );
 
   const matchesRecordSearch = useCallback((record: MaterialRecord, group: MaterialGroup) => {
-    if (searchColumn === "all" || searchTokens.length === 0) return true;
-    const values = searchColumn === "material" ? [record.name] : getRecordColumnValues(record, group, searchColumn);
-    return searchTokens.every(token => values.some(value => searchColumn === "refDes"
-      ? matchesMaterialReference(value, token)
-      : normalizeMaterialSearchText(value).includes(token)));
-  }, [searchColumn, searchTokens]);
+    if (searchTokens.length === 0) return true;
+    if (searchColumn !== "all") {
+      const values = searchColumn === "material" ? [record.name] : getRecordColumnValues(record, group, searchColumn);
+      return searchTokens.every(token => values.some(value => searchColumn === "refDes"
+        ? matchesMaterialReference(value, token)
+        : normalizeMaterialSearchText(value).includes(token)));
+    }
+    const applicationText = isMeManufacturedRecord(group.primaryRecord) ? ME_APPLICATION_EXEMPTION_LABEL
+      : !group.primaryRecord.applicationExempt && !hasMaterialPartNumber(group.primaryRecord)
+        ? "未提供虛擬／實體料號 料號待補 完全無料" : "已提供料號 已提供實體料號或虛擬料號";
+    const alternativeText = getUniqueMpnCount(group) <= 1 ? "單一料 無替代料 單一來源 single source no alternative" : "有替代料 multiple source alternative";
+    const text = normalizeMaterialSearchText(`${record.searchText} ${record.note ?? ""} ${applicationText} ${alternativeText}`);
+    const refs = splitRefDesignators(record.refDes, record.refGroup, group.displayRef);
+    return searchTokens.every(token => {
+      if (isMaterialReferenceQuery(token)) return refs.some(ref => matchesMaterialReference(ref, token))
+        || [record.manufacturerPartNumber, record.manufacturerPartNumberAlt, record.partNumber, record.virtualAlternative]
+          .some(value => normalizeMaterialSearchText(value) === token);
+      const isRefPrefix = (token.length === 1 || /\d/.test(token)) && groupRuntimeIndex.refPrefixes.has(token);
+      return isRefPrefix ? refs.some(ref => normalizeMaterialSearchText(ref).startsWith(token)) : text.includes(token);
+    });
+  }, [groupRuntimeIndex.refPrefixes, searchColumn, searchTokens]);
 
   const matchesSearch = useCallback((group: MaterialGroup) => {
     if (searchTokens.length === 0) return true;
-    if (searchColumn !== "all") return ((group as MaterialMainGroup).locations ?? [group]).some(location => matchesRecordSearch(location.primaryRecord, location));
-    const searchableText = groupRuntimeIndex.searchableTextByGroup.get(group.key) ?? group.searchText;
-    const refTokens = groupRuntimeIndex.refTokensByGroup.get(group.key) ?? [];
-
-    return searchTokens.every((token) => {
-      if (isMaterialReferenceQuery(token)) return refTokens.some(ref => matchesMaterialReference(ref, token)) || matchesMaterialReference(searchableText, token);
-      const shouldMatchRefPrefix = (
-        token.length === 1
-        || /\d/.test(token)
-      ) && groupRuntimeIndex.refPrefixes.has(token);
-
-      return shouldMatchRefPrefix
-        ? refTokens.some((refToken) => refToken.startsWith(token))
-        : searchableText.includes(token);
-    });
-  }, [groupRuntimeIndex, matchesRecordSearch, searchColumn, searchTokens]);
+    return ((group as MaterialMainGroup).locations ?? [group]).some(location =>
+      location.records.some(record => matchesRecordSearch(record, location)));
+  }, [matchesRecordSearch, searchTokens.length]);
 
   const matchesAvailability = useCallback((group: MaterialGroup) => {
     const noAlternative = (groupRuntimeIndex.uniqueMpnCountByGroup.get(group.key) ?? 0) <= 1;
@@ -4470,18 +4489,19 @@ export function MaterialRequestPage() {
   }, [markedFilterSet]);
 
   const getMatchingGroup = useCallback((group: MaterialMainGroup, ignoredKey?: ColumnFilterKey) => {
-    if (!markedLocationFilterSet && !hasActiveColumnFilters && (searchColumn === "all" || searchTokens.length === 0)) return group;
-    return filterMaterialMainGroup(group, (record, location) => (!markedLocationFilterSet
-      || getMaterialMarkKeys(location).some(key => markedLocationFilterSet.has(key))) && matchesRecordSearch(record, location)
-      && (!hasActiveColumnFilters || FILTER_KEYS.every(key => {
-        if (key === ignoredKey) return true;
-        const selectedSet = columnFilterSets[key];
-        if (selectedSet === null) return true;
-        const cachedValues = groupRuntimeIndex.recordColumnsByRecordId.get(record.id)?.[key]
-          ?? createCachedColumnValues(getRecordColumnValues(record, location, key));
-        return cachedValues.raw.some(value => selectedSet.has(value));
-      })));
-  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters, markedLocationFilterSet, matchesRecordSearch, searchColumn, searchTokens.length]);
+    const scoped = !markedLocationFilterSet && !hasActiveColumnFilters ? group
+      : filterMaterialMainGroup(group, (record, location) => (!markedLocationFilterSet
+        || getMaterialMarkKeys(location).some(key => markedLocationFilterSet.has(key)))
+        && FILTER_KEYS.every(key => {
+          if (key === ignoredKey) return true;
+          const selectedSet = columnFilterSets[key];
+          if (selectedSet === null) return true;
+          const cachedValues = groupRuntimeIndex.recordColumnsByRecordId.get(record.id)?.[key]
+            ?? createCachedColumnValues(getRecordColumnValues(record, location, key));
+          return cachedValues.raw.some(value => selectedSet.has(value));
+        }));
+    return scoped && searchTokens.length > 0 ? searchMaterialMainGroup(scoped, matchesRecordSearch) : scoped;
+  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters, markedLocationFilterSet, matchesRecordSearch, searchTokens.length]);
 
   const searchAvailabilityGroups = useMemo(
     () => displayGroups.filter((group) => matchesMarkedState(group) && matchesSearch(group) && matchesAvailability(group)),
@@ -4536,7 +4556,7 @@ export function MaterialRequestPage() {
   // Exports keep original location quantities even when the screen combines main rows.
   const orderedRecordRows = useMemo(() => {
     return filteredGroups.flatMap((main, groupIndex) => main.locations.flatMap(group =>
-      getSortedAlternatives(group).map(record => ({ group, record, groupIndex }))));
+      getSortedAlternatives(group).filter(record => !main.searchMatchIds || main.searchMatchIds.has(record.id)).map(record => ({ group, record, groupIndex }))));
   }, [filteredGroups]);
 
   const activeFilterChips = useMemo(() => {
@@ -4654,6 +4674,7 @@ export function MaterialRequestPage() {
         trackingRecord,
         secondaryAlternatives,
         uniqueMpnCount: getUniqueMpnCountForRecords(matchingRecords),
+        searchAlternativeCount: group.searchMatchIds ? secondaryAlternatives.filter(record => group.searchMatchIds!.has(record.id)).length : 0,
       };
     }),
     [visibleGroups],
@@ -5797,6 +5818,7 @@ export function MaterialRequestPage() {
     copy: (value) => { void handleCopy(value); },
     openCreate,
     openTracking: openTrackingDialog,
+    openDetails: record => openRecord(record, canEdit && isCollaborativeReady && isFullDatasetLoaded ? "edit" : "view", "details"),
     openSpec: (record) => { if (getMaterialSpecDocuments(record).length > 1) openRecord(record, canEdit && isCollaborativeReady && isFullDatasetLoaded ? "edit" : "view", "details"); else void openSpecDocument({ specDocument: getMaterialSpecDocuments(record)[0] }); },
     saveNote: saveMaterialNote,
   };
@@ -5806,6 +5828,7 @@ export function MaterialRequestPage() {
     copy: (value) => rowActionsRef.current?.copy(value),
     openCreate: (group) => rowActionsRef.current?.openCreate(group),
     openTracking: (record) => rowActionsRef.current?.openTracking(record),
+    openDetails: (record) => rowActionsRef.current?.openDetails(record),
     openSpec: (record) => rowActionsRef.current?.openSpec(record),
     saveNote: (record, note) => rowActionsRef.current?.saveNote(record, note) ?? Promise.reject(new Error("Note editor unavailable")),
   }), []);
@@ -5874,6 +5897,8 @@ export function MaterialRequestPage() {
       />
       <PendingMaterialsDialog
         canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded}
+        canEditNote={canEditNote}
+        onSaveNote={rowActions.saveNote}
         groups={pendingMaterialGroups}
         open={pendingDialogOpen}
         restoreView={pendingRestoreView}
@@ -6088,7 +6113,7 @@ export function MaterialRequestPage() {
                   }
                 }}
                 enterKeyHint="search"
-                placeholder="掃料名、MPN、REF DES、實體料號"
+                placeholder="搜尋主料／替代料的料名、MPN、廠商與料號"
                 aria-label="快速搜尋料號"
                 className="h-11 rounded-xl pl-3 pr-12 text-base"
               />
@@ -6334,7 +6359,7 @@ export function MaterialRequestPage() {
                   }
                 }}
                 aria-label="搜尋料號"
-                placeholder="搜尋料名、REF DES、MPN、實體料號、虛擬料號、狀態追蹤；可輸入『料號待補』"
+                placeholder="搜尋主料／替代料：料名、REF DES、MPN、廠商、料號、Note"
                 className="h-9 border-[#356985] bg-[#071522] pl-9 pr-9 text-sm text-slate-100 placeholder:text-[#a9c0d1] focus-visible:ring-cyan-400"
               />
               {isSearchPending && (
@@ -6369,7 +6394,7 @@ export function MaterialRequestPage() {
 
         {isCompactLayout && mobileView === "cards" && <div className="space-y-2 p-2 lg:hidden" data-testid="material-mobile-cards">
           <h2 className="sr-only">手機以料件卡片呈現，點開即可查看替代料與追蹤紀錄</h2>
-          {visibleGroupRows.map(({ group, primaryAlternative, secondaryAlternatives }, rowIndex) => {
+          {visibleGroupRows.map(({ group, primaryAlternative, secondaryAlternatives, searchAlternativeCount }, rowIndex) => {
             const expanded = expandedKey === group.key;
             const mainRecord = primaryAlternative ?? group.primaryRecord;
             const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
@@ -6411,13 +6436,13 @@ export function MaterialRequestPage() {
 
                 <div className="material-mobile-summary">
                   <MaterialApplicationExemptionBadge record={mainRecord} />
-                  <span className={cn(CHIP_BASE, "shrink-0", getTrackingStatusTone(getTrackingWorkflowStatus(mainRecord)))}>{getTrackingStatusDisplayLabel(getTrackingWorkflowStatus(mainRecord))}</span>
+                  <Button type="button" variant="outline" onClick={() => openTrackingDialog(mainRecord)} aria-label={`查看 ${getDisplayMpn(mainRecord)} 的追蹤紀錄`} className={cn("h-11 shrink-0 rounded-md px-3 text-xs font-semibold", materialTrackingStatusTone(getTrackingWorkflowStatus(mainRecord)))}>{getTrackingStatusDisplayLabel(getTrackingWorkflowStatus(mainRecord))}</Button>
                   <span className={cn("min-w-0 text-xs", mainRisk ? "text-destructive" : mustApply ? "text-warning" : "text-muted-foreground")}>{mainRisk ? "料況需確認" : mustApply ? "未提供虛擬／實體料號" : mainRecord.sourcingStatus || "供應／核准狀態未提供"}</span>
                 </div>
                 <div className="material-mobile-reference">
                   <span className="min-w-0 flex-1 truncate" title={group.displayRef}>{group.locations.length > 1 ? `${group.locations.length} 個位置 · 用量 ${group.qty}` : `REF ${group.displayRef || "-"}`}</span>
                   {secondaryAlternatives.some(record => record.isRisk) && <span className="shrink-0 text-xs text-warning">替代料含風險</span>}
-                  <span className="shrink-0">替代 {availableAlternativeCount}/{secondaryAlternatives.length}</span>
+                  <span className="shrink-0">{searchAlternativeCount ? `命中替代料 ${searchAlternativeCount} 筆` : `替代 ${availableAlternativeCount}/${secondaryAlternatives.length}`}</span>
                 </div>
 
                 <details className="material-mobile-note border-b border-border px-3">
@@ -6453,7 +6478,7 @@ export function MaterialRequestPage() {
                           <MaterialApplicationExemptionBadge record={record} />
                           <ChevronRight className="h-4 w-4 text-violet-200" />
                         </button>
-                        <div className="mb-2 [&>button]:min-h-11"><TrackingHistoryCell record={record} onOpen={openTrackingDialog} embedded /></div>
+                        <div className="mb-2 [&>button]:min-h-11"><TrackingHistoryCell record={record} onOpen={openTrackingDialog} onEdit={rowActions.openDetails} embedded /></div>
                         <MaterialNoteCell key={`${user?.userId}:${activeWorkspace.id}:${record.id}`} compact disabled={!canEditNote} onSave={rowActions.saveNote} record={record} />
                       </div>
                     )) : <p className="rounded-lg border border-dashed border-slate-600/50 px-3 py-2 text-xs text-slate-400">目前沒有替代料</p>}
@@ -6462,7 +6487,7 @@ export function MaterialRequestPage() {
                 ) : null}
 
                 <div className="material-mobile-record-footer">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => openTrackingDialog(mainRecord)} className="h-11 justify-start px-2"><Pencil className="h-4 w-4 text-primary" />追蹤／更新料件</Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => rowActions.openDetails(mainRecord)} className="h-11 justify-start px-2"><Pencil className="h-4 w-4 text-primary" />編輯料件</Button>
                   <Button type="button" variant="ghost" size="sm" onClick={() => toggleExpanded(group.key)} aria-expanded={expanded} className="h-11 px-2 text-muted-foreground">
                     {expanded ? <ChevronDown className="mr-1 h-4 w-4" /> : <ChevronRight className="mr-1 h-4 w-4" />}更多
                   </Button>

@@ -9,7 +9,7 @@ const clock = { now: Date.parse('2026-10-30T04:15:00Z'), intervals: new Map() };
 class TestDate extends Date { static now() { return clock.now; } }
 const load = loader({
   mocks: { './useMaterialRequestOwners': {useMaterialRequestOwners:()=>({owners:[],error:''})}, './MaterialRequestOwnerPicker': { MaterialRequestOwnerPicker: ui.Select } },
-  globals: { toWorkbookRecord: record=>record, PendingCategoryPicker: ui.Select, PendingMailDialog: ui.Dialog, SupplierDirectoryDialog: ui.Dialog,
+  globals: { MaterialNoteCell: ui.Input, toWorkbookRecord: record=>record, PendingCategoryPicker: ui.Select, PendingMailDialog: ui.Dialog, SupplierDirectoryDialog: ui.Dialog,
     STALE_PENDING_MS: 3 * 86400000, getPendingGroupUpdatedAt: group => Date.now() - (group.stale ? 4 * 86400000 : 0), getTrackingStatusTone: () => '',
     CHIP_BASE: '', CHIP_TONES: { danger: '' }, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, Date: TestDate,
     setInterval(callback) { const key = Symbol(); clock.intervals.set(key, callback); return key; },
@@ -214,4 +214,24 @@ test('completed applications remain listed without overdue warnings and the summ
     assert.match(JSON.stringify(root.toJSON()), /待處理 0 筆/);
     assert.ok(root.root.findAllByProps({ 'data-testid': 'pending-mail-button' }).every(node => node.props.disabled), 'completed history must not generate another application email');
   } finally { if (root) act(() => root.unmount()); }
+});
+
+test('pending Note uses the shared Note permission even when general BOM editing is unavailable', () => {
+  const { PendingMaterialsDialog } = load('src/components/material-requests/MaterialRequestPage.tsx');
+  const writes = [];
+  let root;
+  const onSaveNote = async (...args) => writes.push(args);
+  const props = { groups, canEdit: false, canEditNote: true, onSaveNote, open: true, workspaceName: 'QA', exportedBy: 'QA',
+    onOpenChange() {}, onOpenTracking() {}, onSetCategory() {}, onSetOwner() {}, markedGroupKeys: new Set(), onToggleMarked() {} };
+  act(() => { root = create(React.createElement(PendingMaterialsDialog, props)); });
+  try {
+    const cells = () => root.root.findAllByProps({'data-testid': 'pending-note-cell'});
+    const editor = cells()[0].find(node => node.type === 'stub' && node.props.record);
+    assert.equal(editor.props.record, groups[0].primaryRecord);
+    assert.equal(editor.props.disabled, false, 'general read-only does not disable the separately authorized shared Note');
+    assert.equal(editor.props.onSave, onSaveNote, 'the existing shared saver is forwarded directly');
+    act(() => root.update(React.createElement(PendingMaterialsDialog, {...props, canEditNote: false})));
+    assert.ok(cells().every(cell => cell.find(node => node.type === 'stub' && node.props.record).props.disabled));
+    assert.deepEqual(writes, [], 'rendering or revoking permission does not write');
+  } finally { act(() => root.unmount()); }
 });
