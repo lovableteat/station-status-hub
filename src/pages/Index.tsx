@@ -739,6 +739,7 @@ const Index = () => {
 
   return (
     <div
+      data-ai-chat-viewport={activeWorkspace === "ai-chat" ? "true" : undefined}
       className={cn(
         "app-shell flex min-h-[100dvh] min-w-0 flex-col bg-background",
         activeWorkspace === "data-center" && "h-[100dvh] overflow-hidden",

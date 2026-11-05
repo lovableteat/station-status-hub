@@ -5,6 +5,14 @@ const secondAccount = '00000000-0000-4000-8000-000000000002';
 const listeners = new Set();
 export const fixtureState = { writes: [], attempts: 0, failNextSave: false };
 const contextQa = new URLSearchParams(location.search).has('qaContext');
+export const mobileReply = [
+  '## 規格比對結果',
+  '先核對本體標示與原廠規格，再決定是否可替換。',
+  ...Array.from({length: 14}, (_, index) => `- **檢查項目 ${index + 1}**：確認尺寸、阻值、公差與測試條件。`),
+  '| 欄位 | 規格 | 查核說明 |\n| --- | --- | --- |\n| 封裝尺寸 | 0402 | 以零件圖面為準 |',
+  '### 規格查核結尾',
+  '核對完成後可接續提問。',
+].join('\n\n');
 const historyPdf = '%PDF-1.7\nQA connector 731 rated current 7.3 A\n%%EOF';
 const historyPath = `${account}/11111111-1111-4111-8111-111111111111/content`;
 const attachmentFiles = new Map([[historyPath,new Blob([historyPdf],{type:'application/pdf'})]]);
@@ -21,6 +29,10 @@ if(contextQa) {
   for(let i=1;i<40;i++)saved.messages.push({id:`qa-turn-${i}`,role:i%2?'assistant':'user',content:`隔離對話第 ${i} 則`,createdAt:1234+i});
   cloud.set(account,[saved]);
 }
+if (new URLSearchParams(location.search).has('qaMobile')) {
+  const saved = cloud.get(account)[0];
+  saved.messages.push({id:'mobile-long-reply',role:'assistant',content:mobileReply,createdAt:1300});
+}
 const prompts = [{ id: 'qa-prompt', name: '附件重點整理', command: '請列出附件的主要重點', description: '文件', created_by: null, created_at: '2026-10-13T00:00:00Z', updated_at: '2026-10-13T00:00:00Z' }];
 const notify = () => window.dispatchEvent(new Event('ai-qa-state'));
 function query(run) {
@@ -35,7 +47,7 @@ export const supabase = {
   })},
   from(table) {
     const filters = {};
-    const builder = { select() { return this; }, eq(name, value) { filters[name] = value; return this; }, order() { return this; }, limit() { return this; }, abortSignal() { return this; }, then(resolve, reject) { return Promise.resolve({ data: table === 'ai_workspace_conversations' ? structuredClone(cloud.get(filters.owner_id) ?? []) : table === 'command_library' ? prompts : [], error: null }).then(resolve, reject); } };
+    const builder = { select() { return this; }, eq(name, value) { filters[name] = value; return this; }, order() { return this; }, limit() { return this; }, range() { return this; }, abortSignal() { return this; }, then(resolve, reject) { return Promise.resolve({ data: table === 'ai_workspace_conversations' ? structuredClone(cloud.get(filters.owner_id) ?? []) : table === 'command_library' ? prompts : table === 'material_bom_workspaces' ? [{ id: 'qa-bom', name: '隔離測試 BOM' }] : [], error: null }).then(resolve, reject); } };
     return builder;
   },
   rpc(name, args) {

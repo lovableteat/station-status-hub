@@ -3,7 +3,7 @@ import { ChevronDown, Database, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -106,11 +106,18 @@ export function MaintenanceSourceSelector({
             </PopoverTrigger>
             <PopoverContent
               align="end"
-              className="w-[min(380px,calc(100vw-24px))] border-cyan-300/20 bg-slate-950/95 p-0 text-slate-100 shadow-2xl backdrop-blur-xl"
+              className="max-h-[var(--radix-popover-content-available-height)] w-[min(380px,calc(100vw-24px))] overflow-y-auto overscroll-contain border-cyan-300/20 bg-slate-950/95 p-0 text-slate-100 shadow-2xl backdrop-blur-xl lg:max-h-none lg:overflow-visible"
             >
               <div className="border-b border-slate-700/70 p-3">
-                <p className="text-sm font-semibold">查詢專案範圍</p>
-                <p className="mt-1 text-[11px] text-slate-400">預設查目前專案，也可以同時比對多個專案。</p>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">查詢專案範圍</p>
+                    <p className="mt-1 text-[11px] text-slate-400">預設查目前專案，也可以同時比對多個專案。</p>
+                  </div>
+                  <PopoverClose asChild>
+                    <Button type="button" variant="outline" aria-label="完成選擇專案範圍" className="h-11 shrink-0 lg:hidden">完成</Button>
+                  </PopoverClose>
+                </div>
                 <div className="mt-3 grid grid-cols-3 gap-1.5">
                   <Button
                     type="button"
