@@ -1,5 +1,6 @@
-import { useState, type ComponentType } from "react";
-import { ArrowRight, ChevronRight } from "lucide-react";
+import { useMemo, useState, type ComponentType } from "react";
+import { ArrowRight, Boxes, ChevronRight, Zap } from "lucide-react";
+import racksArtwork from "@/assets/workspace/racks.webp";
 import { WorkspacePreview } from "./WorkspacePreview";
 import { MobileHomeTasks } from "./mobile/MobileHomeTasks";
 import { useUser } from "@/components/auth/UserContext";
@@ -109,6 +110,24 @@ const mobileWorkspaceTitleMap: Record<string, string> = {
   performance: "績效考核",
 };
 
+const mobileWorkspaceOrder = [
+  "station-status",
+  "file-uploads",
+  "comparison",
+  "data-center",
+  "pcb-designer",
+  "ai-chat",
+  "material-requests",
+  "performance",
+];
+
+const mobileShortcutIds = [
+  "station-status",
+  "material-requests",
+  "pcb-designer",
+  "file-uploads",
+];
+
 export function WorkspaceEntrance({
   items,
   onSelect,
@@ -134,6 +153,16 @@ export function WorkspaceEntrance({
             : isSixItemLayout
               ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
               : "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
+  const orderedMobileItems = useMemo(
+    () => [
+      ...mobileWorkspaceOrder.map((id) => items.find((item) => item.id === id)).filter(Boolean),
+      ...items.filter((item) => !mobileWorkspaceOrder.includes(item.id)),
+    ] as WorkspaceEntranceItem[],
+    [items],
+  );
+  const shortcutItems = mobileShortcutIds
+    .map((id) => items.find((item) => item.id === id))
+    .filter((item): item is WorkspaceEntranceItem => Boolean(item));
 
   return (
     <section
@@ -144,8 +173,7 @@ export function WorkspaceEntrance({
         <div className="workspace-entrance-header mb-3 max-md:hidden flex flex-col gap-3 rounded-[1.35rem] border border-primary/15 bg-[linear-gradient(180deg,rgba(15,24,42,0.94),rgba(9,15,29,0.97))] px-4 py-3.5 sm:flex-row sm:items-end sm:justify-between sm:px-5">
           <div className="space-y-1.5">
             <h1 className="text-2xl font-black tracking-[-0.04em] text-foreground sm:text-3xl">
-              <span className="md:hidden">我的工作區</span>
-              <span className="hidden md:inline">選擇要進入的工作區</span>
+              選擇要進入的工作區
             </h1>
           </div>
           <div className="hidden w-fit items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-slate-200 md:inline-flex">
@@ -153,49 +181,93 @@ export function WorkspaceEntrance({
           </div>
         </div>
 
-        <div className="mobile-home-head md:hidden">
-          <h1>你好，{user?.displayName || user?.username || "歡迎回來"}</h1>
-          {activeProject?.name && <p>{activeProject.name}</p>}
-        </div>
-        {isPhone && showIssues && onOpenIssue && onOpenIssues && <MobileHomeTasks onOpenIssue={onOpenIssue} onOpenAll={onOpenIssues} />}
-        <div className="mobile-home-section md:hidden"><h2>全部工作區</h2></div>
         <div
-          className="workspace-entrance-mobile-list overflow-hidden rounded-[1.4rem] border border-slate-700/70 bg-[#0c1929] md:hidden"
+          className="workspace-entrance-mobile-list space-y-4 md:hidden"
           data-testid="workspace-entrance-mobile-list"
         >
-          {items.map((item) => {
-            const Icon = item.icon;
-            const tone = workspaceToneMap[item.id] ?? workspaceToneMap["station-status"];
-            const mobileTitle = mobileWorkspaceTitleMap[item.id] ?? item.title;
+          <section
+            data-mobile-home-hero="true"
+            className="relative isolate min-h-[108px] overflow-hidden rounded-[1.4rem] border border-cyan-200/20 bg-[linear-gradient(110deg,#073630_0%,#05211f_48%,#06151a_100%)] px-4 py-4"
+          >
+            <img
+              src={racksArtwork}
+              alt="三座工程機櫃"
+              className="absolute inset-y-0 right-0 -z-10 h-full w-[62%] object-contain object-right opacity-85"
+            />
+            <div className="absolute inset-y-0 left-[34%] right-0 -z-[5] bg-gradient-to-r from-[#052c29] via-[#052421]/65 to-transparent" />
+            <div className="mobile-home-head relative z-10 pb-1">
+              <p className="text-cyan-100">你好，{user?.displayName || user?.username || "歡迎回來"}</p>
+              {activeProject?.name && <p>{activeProject.name}</p>}
+            </div>
+            <h1 className="relative z-10 text-[1.45rem] font-black tracking-[-0.04em] text-white">工程工作平台</h1>
+            <p className="mt-1.5 text-xs font-semibold text-slate-200">整合維修 · 設計 · 料號 · 開發</p>
+            <span className="mt-4 block h-0.5 w-14 rounded-full bg-cyan-300" />
+          </section>
 
-            return (
-              <button
-                key={item.id}
-                type="button"
-                data-workspace-id={item.id}
-                onClick={() => onSelect(item.id)}
-                className="workspace-entrance-mobile-row group flex min-h-[76px] w-full items-center gap-3 border-b border-slate-700/55 px-3 py-2.5 text-left last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300"
-              >
-                <span
-                  className={cn(
-                    "workspace-entrance-mobile-icon grid h-12 w-12 shrink-0 place-items-center rounded-2xl border",
-                    tone.iconWrap,
-                  )}
-                >
-                  <Icon className="h-[22px] w-[22px]" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[16px] font-black tracking-[-0.025em] text-slate-50">
-                    {mobileTitle}
-                  </span>
-                  <span className="mt-1 block truncate text-[12px] font-bold text-slate-400">
-                    {tone.badge}
-                  </span>
-                </span>
-                <ChevronRight className="workspace-entrance-mobile-chevron h-4 w-4 shrink-0 text-slate-500 transition-transform group-active:translate-x-0.5" />
-              </button>
-            );
-          })}
+          <section data-mobile-home-shortcuts="true" aria-labelledby="mobile-shortcut-title">
+            <div className="mb-2.5 flex items-center gap-2">
+              <Zap className="h-5 w-5 text-cyan-300" />
+              <h2 id="mobile-shortcut-title" className="text-lg font-black tracking-[-0.03em] text-slate-50">我的快捷</h2>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {shortcutItems.map((item) => {
+                const Icon = item.icon;
+                const mobileTitle = mobileWorkspaceTitleMap[item.id] ?? item.title;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-mobile-home-shortcut={item.id}
+                    onClick={() => onSelect(item.id)}
+                    className="group flex min-h-[92px] min-w-0 flex-col items-center justify-center rounded-2xl border border-slate-700/75 bg-[#101b1e] px-1.5 py-2.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                  >
+                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-300/10 text-cyan-300 transition-colors group-active:bg-cyan-300/20">
+                      <Icon className="h-[22px] w-[22px]" />
+                    </span>
+                    <span className="mt-2 line-clamp-2 text-[11px] font-black leading-4 text-slate-100">{mobileTitle}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section data-mobile-home-modules="true" aria-labelledby="mobile-module-title">
+            <div className="mb-2.5 flex items-center gap-2">
+              <Boxes className="h-5 w-5 text-cyan-300" />
+              <h2 id="mobile-module-title" className="text-lg font-black tracking-[-0.03em] text-slate-50">工作模組</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {orderedMobileItems.map((item) => {
+                const Icon = item.icon;
+                const tone = workspaceToneMap[item.id] ?? workspaceToneMap["station-status"];
+                const mobileTitle = mobileWorkspaceTitleMap[item.id] ?? item.title;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-workspace-id={item.id}
+                    onClick={() => onSelect(item.id)}
+                    className={cn(
+                      "workspace-entrance-mobile-row mobile-home-module group flex min-h-[66px] min-w-0 items-center gap-2.5 rounded-2xl border border-slate-700/75 bg-[#10191c] px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300",
+                      item.id === "performance" && "border-amber-300/45 bg-amber-400/10",
+                    )}
+                  >
+                    <span className={cn("workspace-entrance-mobile-icon grid h-10 w-10 shrink-0 place-items-center rounded-xl border", tone.iconWrap)}>
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className={cn("block truncate text-[13px] font-black tracking-[-0.02em] text-slate-50", item.id === "performance" && "text-amber-200")}>{mobileTitle}</span>
+                      <span className="mt-0.5 block truncate text-[10px] font-semibold text-slate-400">{tone.badge}</span>
+                    </span>
+                    <ChevronRight className="workspace-entrance-mobile-chevron h-4 w-4 shrink-0 text-slate-500 transition-transform group-active:translate-x-0.5" />
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {isPhone && showIssues && onOpenIssue && onOpenIssues && <MobileHomeTasks onOpenIssue={onOpenIssue} onOpenAll={onOpenIssues} />}
+
         </div>
 
         <div

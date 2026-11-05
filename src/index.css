@@ -2046,6 +2046,45 @@ html { color-scheme: dark; }
   .workspace-artwork-image { transition: none; }
   .workspace-entrance-card:hover .workspace-artwork-image { transform: none; }
 }
+
+@media (max-width: 767px) {
+  [data-testid="workspace-entrance-mobile-list"] {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  [data-mobile-home-shortcuts="true"] button,
+  [data-mobile-home-modules="true"] button {
+    touch-action: manipulation;
+  }
+
+  .workspace-entrance-mobile-row.mobile-home-module {
+    min-height: 66px;
+    gap: 0.625rem;
+    padding: 0.5rem 0.625rem;
+    border-color: rgb(51 65 75 / 0.78);
+    background: #10191c;
+  }
+
+  .workspace-entrance-mobile-row.mobile-home-module[data-workspace-id="performance"] {
+    border-color: rgb(252 211 77 / 0.46);
+    background: rgb(245 158 11 / 0.1);
+  }
+
+  .workspace-entrance-mobile-row.mobile-home-module .workspace-entrance-mobile-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.75rem;
+  }
+
+  .workspace-entrance-mobile-row.mobile-home-module .workspace-entrance-mobile-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
 .preview-pcb-board { flex: 1; min-height: 0; width: 100%; }
 .preview-access { display: flex; align-items: center; gap: 20px; flex: 1; }
 .preview-access-users { position: relative; display: grid; place-items: center; width: 60px; height: 60px; flex-shrink: 0; border-radius: 16px; border: 1px solid hsl(var(--preview-accent) / .25); background: hsl(var(--preview-accent) / .06); }
@@ -2556,7 +2595,7 @@ body {
   .mobile-home-issue__text small { display: block; margin-top: 1px; font-size: 12px; line-height: 1.35; color: hsl(var(--muted-foreground)); }
   .mobile-home-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 60px; margin: 0; padding: 8px 12px; border: 1px dashed hsl(var(--border)); border-radius: 14px; font-size: 13px; color: hsl(var(--muted-foreground)); }
   .mobile-home-note button { min-height: 44px; padding: 0 8px; font-weight: 700; color: hsl(var(--primary)); }
-  .workspace-entrance-mobile-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .workspace-entrance-mobile-list { display: flex; flex-direction: column; gap: 16px; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
   .workspace-entrance-mobile-list .workspace-entrance-mobile-row { min-height: 68px; gap: 10px; padding: 8px 10px; border: 1px solid hsl(var(--border)); border-radius: 14px; background: hsl(var(--card)); }
   .workspace-entrance-mobile-list .workspace-entrance-mobile-icon { width: 36px; height: 36px; border-radius: 10px; }
   .workspace-entrance-mobile-list .workspace-entrance-mobile-icon svg { width: 18px; height: 18px; }
