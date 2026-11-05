@@ -114,3 +114,53 @@ test("follow-up includes prior questions, checked tables and selected documents 
   assert.equal(f.calls.length, 1);
   }
 });
+
+test("a standalone screenshot question reaches the selected provider and can cite the screenshot without a BOM part", async () => {
+  const screenshot = { ...photo, id: "question-1", name: "rating.png" };
+  const citation = { sourceId: screenshot.id, page: "圖片", quote: "Voltage: 1.2 V" };
+  const reply = { reply: "截圖標示 1.2 V。", citations: [citation] };
+  const f = service(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] } }] })));
+  const answer = await f.askSpecFillQuestion({ questionImages: [screenshot], sources: [], model, question: "", signal: new AbortController().signal });
+
+  assert.equal(answer.reply, reply.reply);
+  assert.equal(answer.citations[0].sourceId, screenshot.id);
+  assert.equal(answer.preparedSources.length, 0);
+  assert.equal(answer.sources[0].name, screenshot.name);
+  const body = JSON.parse(f.calls[0].init.body);
+  const message = body.contents.find(entry => entry.parts.some(p => p.text?.includes("問題截圖來源 sourceId=question-1")));
+  assert.equal(message.parts[1].inlineData.mimeType, "image/png");
+  assert.match(body.contents.at(-1).parts[0].text, /整理圖片可核對的規格/);
+  assert.deepEqual(body.generationConfig.responseJsonSchema.properties.citations.items.properties.sourceId.enum, [screenshot.id]);
+});
+
+test("a follow-up can include multiple screenshots while retaining the selected SPEC and earlier answer", async () => {
+  const screenshots = [
+    { ...photo, id: "question-1", name: "first.png" },
+    { ...photo, id: "question-2", name: "next.png" },
+  ];
+  const reply = { reply: "第二張對應 25°C 條件。", citations: [{ sourceId: "question-2", page: "圖片", quote: "25°C" }] };
+  const f = service(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] } }] })));
+  const history = [{ question: "第一張呢？", reply: "查到第一張。", tables: [] }];
+  const answer = await f.askSpecFillQuestion({ part, questionImages: screenshots, sources: [sources[0]], model, question: "請和前一張比較", history, signal: new AbortController().signal });
+
+  assert.equal(answer.reply, reply.reply);
+  assert.equal(answer.preparedSources.length, 1);
+  assert.deepEqual(Array.from(answer.sources, source => source.id), ["spec-1", "question-1", "question-2"]);
+  const body = JSON.parse(f.calls[0].init.body);
+  assert.equal(body.contents.flatMap(entry => entry.parts).filter(p => p.inlineData?.mimeType === "image/png").length, 2);
+  assert.ok(body.contents.some(entry => entry.role === "model" && entry.parts[0].text.includes("查到第一張")));
+});
+
+test("question reference photos cannot be cited in a photo-fill conversation or bypass the SPEC requirement", async () => {
+  const screenshot = { ...photo, id: "question-1", name: "reference.png" };
+  const reply = { reply: "截圖標示 1.2 V。", citations: [{ sourceId: screenshot.id, page: "圖片", quote: "1.2 V" }] };
+  const f = service(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] } }] })));
+  const input = { part, photos: [photo], questionImages: [screenshot], sources: [sources[0]], model, question: "請核對畫面上的電壓", signal: new AbortController().signal };
+
+  await assert.rejects(f.askSpecFillQuestion({ ...input, sources: [] }), /SPEC/);
+  assert.equal(f.calls.length, 0);
+  await assert.rejects(f.askSpecFillQuestion(input), /無法核對/);
+  const body = JSON.parse(f.calls[0].init.body);
+  assert.deepEqual(body.generationConfig.responseJsonSchema.properties.citations.items.properties.sourceId.enum, ["spec-1"]);
+  assert.match(f.calls[0].init.body, /問題參考圖/);
+});

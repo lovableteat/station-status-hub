@@ -351,7 +351,7 @@ test('the first screen can answer questions from a selected SPEC without requiri
   assert.equal(f.root.root.findAllByProps({ 'aria-label': '接續提問' }).length, 0);
   await act(async () => { f.button('問 SPEC 規格').props.onClick(); });
   await f.choosePart();
-  const firstQuestion = () => f.root.root.findAll(node => node.type === 'stub' && node.props.id?.endsWith('-first-question'))[0];
+  const firstQuestion = () => f.root.root.findByProps({ 'aria-label': '想確認什麼？' });
   await act(async () => { firstQuestion().props.onChange({ target: { value: 'What is the operating voltage?' } }); });
   assert.equal(f.button('送出問題').props.disabled, true, 'a question needs an explicitly selected SPEC');
   await act(async () => { f.root.root.findAllByType('input').find(node => node.props.type === 'checkbox').props.onChange({ target: { checked: true } }); });

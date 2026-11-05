@@ -1194,7 +1194,17 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 .material-spec-fill-dialog .spec-fill-conditions { font-size: 13px; color: hsl(var(--muted-foreground)); }
 .material-spec-fill-dialog .spec-fill-conditions summary { cursor: pointer; }
 .material-spec-fill-dialog .spec-fill-conditions input { margin-top: 8px; }
-.material-spec-fill-dialog .spec-fill-first-question { display: grid; gap: 8px; font-size: 13px; font-weight: 600; }
+.material-spec-fill-dialog .spec-fill-question-entry { display: grid; min-width: 0; gap: 7px; }
+.material-spec-fill-dialog .spec-fill-question-box { min-width: 0; border: 1px solid hsl(var(--border)); border-radius: 9px; background: hsl(var(--background) / .35); }
+.material-spec-fill-dialog .spec-fill-question-box:focus-within { border-color: hsl(var(--primary) / .75); }
+.material-spec-fill-dialog .spec-fill-question-box textarea { min-height: 64px; max-height: 120px; border: 0; box-shadow: none; background: transparent; resize: vertical; }
+.material-spec-fill-dialog .spec-fill-question-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-top: 1px solid hsl(var(--border)); padding: 7px 9px; }
+.material-spec-fill-dialog .spec-fill-question-tools > span { color: hsl(var(--muted-foreground)); font-size: 12px; }
+.material-spec-fill-dialog .spec-fill-question-images { display: flex; gap: 6px; overflow-x: auto; padding: 4px 8px 7px; }
+.material-spec-fill-dialog .spec-fill-question-images figure { flex: 0 0 124px; }
+.material-spec-fill-dialog .spec-fill-question-images .spec-fill-photo-thumbnail { height: 48px; padding: 3px; }
+.material-spec-fill-dialog .spec-fill-question-images figcaption { padding: 0 5px; }
+.material-spec-fill-dialog .spec-fill-question-images figcaption strong { display: none; }
 .material-spec-fill-dialog .spec-fill-results { min-height: 0; min-width: 0; display: flex; flex: 1 0 auto; flex-direction: column; gap: 10px; }
 .material-spec-fill-dialog .spec-fill-results-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; }
 .material-spec-fill-dialog .spec-fill-results-toolbar p { margin-top: 3px; color: hsl(var(--muted-foreground)); font-size: 12px; }
@@ -1225,10 +1235,9 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 .material-spec-fill-dialog .spec-fill-answer { margin-top: 16px; font-size: 14px; line-height: 1.8; }
 .material-spec-fill-dialog .spec-fill-answer p,.material-spec-fill-dialog .spec-fill-question p { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .material-spec-fill-dialog .spec-fill-warnings { margin-block: 8px; padding-left: 18px; list-style: disc; font-size: 12px; line-height: 1.7; color: hsl(40 85% 72%); }
-.material-spec-fill-dialog .spec-fill-composer { display: flex; flex-shrink: 0; align-items: end; gap: 10px; margin: 0 20px; border: 1px solid hsl(var(--primary) / .4); border-radius: 9px; padding: 8px; background: hsl(var(--background) / .35); }
-.material-spec-fill-dialog .spec-fill-composer textarea { border: 0; box-shadow: none; min-height: 52px; max-height: 100px; resize: vertical; font-size: 14px; line-height: 1.6; background: transparent; }
-.material-spec-fill-dialog .spec-fill-composer button { min-height: 40px; flex-shrink: 0; }
-.material-spec-fill-dialog .spec-fill-composer-actions { display: flex; gap: 5px; align-items: center; }
+.material-spec-fill-dialog .spec-fill-composer { flex-shrink: 0; margin: 0 20px 12px; }
+.material-spec-fill-dialog .spec-fill-composer textarea { min-height: 52px; }
+.material-spec-fill-dialog .spec-fill-composer-actions { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; justify-content: end; margin-left: auto; }
 .material-spec-fill-dialog .spec-fill-footer { display: flex; flex: 0 0 auto; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 20px 12px; border-top: 1px solid hsl(var(--border)); }
 .material-spec-fill-dialog .spec-fill-footer > p { font-size: 11px; color: hsl(var(--muted-foreground)); }
 .material-spec-fill-dialog .spec-fill-footer-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
@@ -1253,10 +1262,8 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
   .material-spec-fill-dialog :is(input:not([type="checkbox"]),select,textarea) { font-size: 16px; }
   .material-spec-fill-dialog .spec-fill-results-toolbar label { margin-left: 0; }
   .material-spec-fill-dialog .spec-fill-table-scroll { max-height: 46dvh; }
-  .material-spec-fill-dialog .spec-fill-composer { margin-inline: 12px; gap: 5px; flex-wrap: wrap; }
-  .material-spec-fill-dialog .spec-fill-composer-actions { margin-left: auto; }
-  .material-spec-fill-dialog .spec-fill-composer textarea { min-height: 52px; }
-  .material-spec-fill-dialog .spec-fill-composer button { min-height: 44px; padding-inline: 10px; font-size: 12px; }
+  .material-spec-fill-dialog .spec-fill-composer { margin-inline: 12px; }
+  .material-spec-fill-dialog .spec-fill-question-tools button { min-height: 44px; padding-inline: 10px; font-size: 12px; }
   .material-spec-fill-dialog .spec-fill-footer { padding: 8px 12px max(8px,env(safe-area-inset-bottom)); }
   .material-spec-fill-dialog .spec-fill-footer-actions { margin-left: 0; width: 100%; }
   .material-spec-fill-dialog .spec-fill-footer-actions button { min-height: 40px; flex: 1 0 auto; }
