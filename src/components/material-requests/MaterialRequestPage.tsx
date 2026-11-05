@@ -6592,7 +6592,7 @@ export function MaterialRequestPage() {
                   colorTheme={activeTableColorTheme}
                   columns={columnVisibility}
                   canEditNote={canEditNote}
-                  markedLocationIds={JSON.stringify(row.locations.filter(location => personalMarks.keys.has(`record::${location.primaryRecord.id}`)).map(location => location.primaryRecord.id))}
+                  markedLocationIds={JSON.stringify(row.locations.filter(location => getMaterialMarkKeys(location).some(key => personalMarks.keys.has(key))).map(location => location.primaryRecord.id))}
                   markDisabled={!personalMarks.ready || getMaterialMarkKeys(row.group).some(key => personalMarks.pendingKeys.has(key))}
                   actions={rowActions}
                 />

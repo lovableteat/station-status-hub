@@ -1,18 +1,42 @@
 import { hasMaterialPartNumber, type MaterialGroup, type MaterialRecord } from "./materialRequestUtils";
 
+interface MaterialDisplayLocation extends MaterialGroup {
+  /** Keep personal marks attached to the imported location when its display main changes. */
+  sourcePrimaryRecord?: MaterialRecord;
+}
+
 export interface MaterialMainGroup extends MaterialGroup {
-  locations: MaterialGroup[];
+  locations: MaterialDisplayLocation[];
+}
+
+function hasFootprint(value: string | undefined) {
+  const normalized = (value ?? "").normalize("NFKC").trim().toUpperCase();
+  return Boolean(normalized) && !["-", "—", "--", "N/A", "NA", "NONE", "NULL", "無", "未提供", "未設定", "待確認"].includes(normalized);
+}
+
+function presentationPriority(record: MaterialRecord) {
+  if (record.isRisk || /不建議使用.*ODM/i.test(record.partUsageStatus ?? "")) return 4;
+  if (record.virtualAlternative?.trim()) return 0;
+  if (record.partNumber?.trim()) return hasFootprint(record.pcbFootprint) ? 1 : 2;
+  return 3;
 }
 
 export function sortMaterialAlternatives(group: MaterialGroup) {
-  const priority = (record: MaterialRecord) => {
-    if (/不建議使用.*ODM/i.test(record.partUsageStatus ?? "")) return 4;
-    if (record.virtualAlternative?.trim()) return 0;
-    if (record.partNumber?.trim()) return record.pcbFootprint?.trim() ? 1 : 2;
-    return 3;
+  // The source's first row is a tie-breaker, not an exemption from the same
+  // virtual / physical+footprint / physical-only priority used for alternatives.
+  return [group.primaryRecord, ...group.records.filter(record => record.id !== group.primaryRecord.id)]
+    .sort((left, right) => presentationPriority(left) - presentationPriority(right)
+      || Number(right.id === group.primaryRecord.id) - Number(left.id === group.primaryRecord.id)
+      || left.manufacturer.localeCompare(right.manufacturer));
+}
+
+function projectDisplayLocation(group: MaterialGroup): MaterialDisplayLocation {
+  const primaryRecord = sortMaterialAlternatives(group)[0];
+  if (primaryRecord.id === group.primaryRecord.id) return group;
+  return { ...group, sourcePrimaryRecord: group.primaryRecord, primaryRecord,
+    name: primaryRecord.name, partName: primaryRecord.partName, partSpec: primaryRecord.partSpec,
+    schematicPart: primaryRecord.schematicPart, footprint: primaryRecord.pcbFootprint,
   };
-  return [group.primaryRecord, ...group.records.filter(record => record.id !== group.primaryRecord.id)
-    .sort((left, right) => priority(left) - priority(right) || left.manufacturer.localeCompare(right.manufacturer))];
 }
 
 export function getMaterialMainKey(group: MaterialGroup) {
@@ -24,13 +48,15 @@ export function getMaterialMainKey(group: MaterialGroup) {
 }
 
 export function getMaterialMarkKeys(group: MaterialGroup) {
-  return ((group as MaterialMainGroup).locations ?? [group]).map(location => `record::${location.primaryRecord.id}`);
+  return ((group as MaterialMainGroup).locations ?? [group as MaterialDisplayLocation])
+    .map(location => `record::${(location.sourcePrimaryRecord ?? location.primaryRecord).id}`);
 }
 
 // This projection never changes the source groups or their per-location records.
 export function buildMaterialMainGroups(groups: MaterialGroup[]): MaterialMainGroup[] {
-  const merged = new Map<string, MaterialGroup[]>();
-  groups.forEach(group => {
+  const merged = new Map<string, MaterialDisplayLocation[]>();
+  groups.forEach(sourceGroup => {
+    const group = projectDisplayLocation(sourceGroup);
     const primary = group.primaryRecord;
     const key = JSON.stringify([getMaterialMainKey(group), primary.name, primary.virtualAlternative, primary.sourcingStatus,
       primary.partName, primary.partSpec, primary.schematicPart, primary.pcbFootprint, primary.phaseOutStatus, primary.partUsageStatus]);
