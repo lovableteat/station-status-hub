@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ComparisonPdfViewer } from "./ComparisonPdfViewer";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, Save } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, Save, SlidersHorizontal } from "lucide-react";
 import { DISPOSITIONS, EMPTY_REPLY, pdfTarget, type PdfLocation, type ReplyPatch, type ReplyPatches } from "./reviewTools";
 import type { Artifact, ComparisonSession, ReviewReply, TrackRow } from "./types";
 
@@ -19,23 +19,16 @@ export function ReviewReplyFields({ value, onChange, disabled, prefix }: { value
 function PdfFrame({ row, url, label, location, zoom, height, side, artifact }: { row: TrackRow; url?: string; label: string; location?: PdfLocation; zoom: number; height: number; side: "a" | "b"; artifact?: Artifact }) {
   const container = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(600);
-  const [previous, setPrevious] = useState<{ row: TrackRow; location?: PdfLocation } | null>(null);
   useEffect(() => {
     if (!container.current) return;
     const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
     observer.observe(container.current); return () => observer.disconnect();
   }, []);
-  const missing = location?.page === null;
-  useEffect(() => { if (!missing && url) setPrevious({ row, location }); }, [row, location, url, missing]);
-  const shown = missing ? previous : { row, location };
-  const src = url && shown ? pdfTarget(url, shown.row, shown.location, zoom, width, height) : "";
-  return <section className="comparison-pdf-pane" ref={container}>
-    <header><strong>{side.toUpperCase()} · {label}</strong><span>{location?.page ? `PDF 第 ${location.page} 頁` : "未定位"}</span>{src && <a href={src} target="_blank" rel="noopener noreferrer"><ExternalLink aria-hidden="true" />另開線路圖</a>}</header>
-    {!url ? <p className="comparison-pdf-message">此版本沒有標註線路圖 PDF。</p> : <>
-      {missing && <p className="comparison-pdf-message" role="status">{label} 無此件或未定位到 PDF 頁{previous ? "，保留上一筆畫面。" : "。"}</p>}
-      {!location && <p className="comparison-help">舊資料沒有頁面座標，使用 PDF 目的地定位。</p>}
-      {artifact && shown && <ComparisonPdfViewer artifact={artifact} row={shown.row} location={shown.location} zoom={zoom} height={height} width={width} label={`${side.toUpperCase()} · ${label}`} />}
-    </>}
+  const src = url ? (location?.page === null ? url : pdfTarget(url, row, location, zoom, width, height || 360)) : "";
+  return <section className="comparison-pdf-pane" data-side={side} ref={container}>
+    <header><b data-side={side}>{side.toUpperCase()}</b><strong title={label}>{label}</strong>{src && <a href={src} target="_blank" rel="noopener noreferrer" aria-label={`另開 ${side.toUpperCase()} 線路圖`} title="另開線路圖"><ExternalLink aria-hidden="true" /><span>另開</span></a>}</header>
+    {!artifact || !url ? <p className="comparison-pdf-message">此版本沒有標註線路圖 PDF。</p>
+      : <ComparisonPdfViewer artifact={artifact} row={row} location={location} zoom={zoom} height={height} width={width} label={`${side.toUpperCase()} · ${label}`} externalUrl={src} />}
   </section>;
 }
 
@@ -46,51 +39,80 @@ export function ComparisonSideBySide({ session, rows, selectedKey, onSelect, loc
 }) {
   const row = rows.find(item => item.key === selectedKey) ?? rows[0];
   const [zoom, setZoom] = useState(300);
-  const [height, setHeight] = useState(460);
+  const [height, setHeight] = useState(0);
   const [showPdf, setShowPdf] = useState(true);
+  const [mobileSide, setMobileSide] = useState<"a" | "b">("b");
   const [drafts, setDrafts] = useState<Record<string, ReplyPatch>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const numbers = useMemo(() => new Map(session.result.rows.map((item, index) => [item.key, index + 1])), [session.result.rows]);
   const index = rows.findIndex(item => item.key === row?.key);
   const draft = row ? { ...EMPTY_REPLY, ...session.replies[row.key], ...drafts[row.key] } : EMPTY_REPLY;
-  const jump = (key: string) => {
-    onSelect(key); setMessage("");
+  const jump = (key: string, status = "") => {
+    onSelect(key); setMessage(status);
     if (canEdit) void onRemember(key).catch(error => setMessage(error instanceof Error ? error.message : String(error)));
   };
-  const go = (offset: number) => { const next = rows[Math.max(0, Math.min(rows.length - 1, offset))]; if (next) jump(next.key); };
+  const go = (offset: number) => { const next = rows[offset]; if (next) jump(next.key); };
   const save = async (advance = false) => {
     if (!row || saving || busy || !canEdit) return;
     setSaving(true); setMessage("");
     try {
       await onSave({ [row.key]: drafts[row.key] ?? {} });
       setDrafts(current => { const next = { ...current }; delete next[row.key]; return next; });
-      setMessage("回覆已儲存"); if (advance) go(index + 1);
+      if (advance && rows[index + 1]) jump(rows[index + 1].key, `已儲存 #${numbers.get(row.key)}`);
+      else setMessage("回覆已儲存");
     } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
     finally { setSaving(false); }
   };
   if (!row) return <p className="comparison-empty-result">目前篩選條件沒有符合的比對結果</p>;
   const children = session.result.rows.filter(item => row.children?.includes(item.key));
-  return <div className="comparison-review-side">
+  return <div className="comparison-review-side" data-has-pdf={showPdf}>
     <div className="comparison-review-navigation">
-      <Button variant="outline" size="icon" aria-label="第一筆審查" disabled={index <= 0 || saving} onClick={() => go(0)}><ChevronsLeft /></Button>
-      <Button variant="outline" size="icon" aria-label="上一筆審查" disabled={index <= 0 || saving} onClick={() => go(index - 1)}><ChevronLeft /></Button>
-      <select aria-label="審查項目" value={row.key} disabled={saving} onChange={event => jump(event.target.value)}>{rows.map(item => <option key={item.key} value={item.key}>#{numbers.get(item.key)} · {item.severity} · {item.refdes.join(", ")} · {item.title}</option>)}</select>
-      <Button variant="outline" size="icon" aria-label="下一筆審查" disabled={index + 1 >= rows.length || saving} onClick={() => go(index + 1)}><ChevronRight /></Button>
-      <Button variant="outline" size="icon" aria-label="最後一筆審查" disabled={index + 1 >= rows.length || saving} onClick={() => go(rows.length - 1)}><ChevronsRight /></Button>
-      <Button variant="outline" disabled={!row.refdes.length || saving} onClick={() => { for (let offset = 1; offset < rows.length; offset++) { const next = rows[(index + offset) % rows.length]; if (next.refdes.join(",") === row.refdes.join(",")) { jump(next.key); return; } } setMessage("目前篩選結果沒有下一個相同 RefDes。"); }}>下一個同 RefDes</Button>
-      <Button variant="outline" disabled={!session.lastReviewKey || saving || !session.result.rows.some(item => item.key === session.lastReviewKey)} onClick={() => session.lastReviewKey && onSelect(session.lastReviewKey)}>回上次審到</Button>
+      <div className="comparison-review-stepper">
+        <Button variant="ghost" size="icon" aria-label="第一筆審查" title="第一筆" disabled={index <= 0 || saving} onClick={() => go(0)}><ChevronsLeft /></Button>
+        <Button variant="ghost" size="icon" aria-label="上一筆審查" title="上一筆" disabled={index <= 0 || saving} onClick={() => go(index - 1)}><ChevronLeft /></Button>
+        <select aria-label="審查項目" title={row.title} value={row.key} disabled={saving} onChange={event => jump(event.target.value)}>{rows.map(item => <option key={item.key} value={item.key}>#{numbers.get(item.key)} · {item.severity} · {item.refdes.join(", ")} · {item.title}</option>)}</select>
+        <Button variant="ghost" size="icon" aria-label="下一筆審查" title="下一筆" disabled={index + 1 >= rows.length || saving} onClick={() => go(index + 1)}><ChevronRight /></Button>
+        <Button variant="ghost" size="icon" aria-label="最後一筆審查" title="最後一筆" disabled={index + 1 >= rows.length || saving} onClick={() => go(rows.length - 1)}><ChevronsRight /></Button>
+      </div>
+      <span className="comparison-review-progress">第 {index + 1} / {rows.length} 筆</span>
+      <div className="comparison-review-shortcuts">
+        <Button size="sm" variant="ghost" disabled={!row.refdes.length || saving} onClick={() => { for (let offset = 1; offset < rows.length; offset++) { const next = rows[(index + offset) % rows.length]; if (next.refdes.join(",") === row.refdes.join(",")) { jump(next.key); return; } } setMessage("目前篩選結果沒有下一個相同 RefDes。"); }}>下一個同 RefDes</Button>
+        <Button size="sm" variant="ghost" disabled={!session.lastReviewKey || saving || !session.result.rows.some(item => item.key === session.lastReviewKey)} onClick={() => session.lastReviewKey && jump(session.lastReviewKey)}>回上次審到</Button>
+        <details className="comparison-review-settings">
+          <summary><SlidersHorizontal />圖面設定</summary>
+          <div className="comparison-review-view-options">
+            <label>定位縮放<select value={zoom} onChange={event => setZoom(Number(event.target.value))}><option value={0}>符合視窗</option>{[150, 200, 300, 400].map(value => <option key={value} value={value}>{value}%</option>)}</select></label>
+            <label>線路圖高度<select value={height} onChange={event => setHeight(Number(event.target.value))}><option value={0}>配合螢幕</option><option value={460}>筆電 · 460 px</option><option value={740}>桌機 · 740 px</option><option value={1090}>大螢幕 · 1090 px</option></select></label>
+            <label><input type="checkbox" checked={showPdf} onChange={event => setShowPdf(event.target.checked)} />顯示線路圖</label>
+          </div>
+        </details>
+      </div>
     </div>
-    <div className="comparison-review-view-options">
-      <label>跳轉縮放<select value={zoom} onChange={event => setZoom(Number(event.target.value))}><option value={0}>符合視窗</option>{[150, 200, 300, 400].map(value => <option key={value} value={value}>{value}%</option>)}</select></label>
-      <label>線路圖高度<select value={height} onChange={event => setHeight(Number(event.target.value))}><option value={460}>筆電 · 460 px</option><option value={740}>桌機 · 740 px</option><option value={1090}>大螢幕 · 1090 px</option></select></label>
-      <label><input type="checkbox" checked={showPdf} onChange={event => setShowPdf(event.target.checked)} />顯示線路圖</label>
-      <span>{index + 1}／{rows.length} 筆 · #{numbers.get(row.key)} · {row.rule}</span>
+    <div className="comparison-review-bench">
+      {showPdf && <div className="comparison-pdf-grid" data-mobile-side={mobileSide}>
+        <div className="comparison-pdf-mobile-sides" role="group" aria-label="切換線路圖">
+          <Button size="sm" variant={mobileSide === "a" ? "secondary" : "ghost"} aria-pressed={mobileSide === "a"} onClick={() => setMobileSide("a")}>A · {session.result.meta.a.label}</Button>
+          <Button size="sm" variant={mobileSide === "b" ? "secondary" : "ghost"} aria-pressed={mobileSide === "b"} onClick={() => setMobileSide("b")}>B · {session.result.meta.b.label}</Button>
+        </div>
+        <PdfFrame key={`${session.id}:a`} row={row} side="a" artifact={session.result.artifacts.find(item => item.key === "schematic_a")} label={session.result.meta.a.label} url={urls.a} location={locationsA.get(row.key)} zoom={zoom} height={height} />
+        <PdfFrame key={`${session.id}:b`} row={row} side="b" artifact={session.result.artifacts.find(item => item.key === "schematic")} label={session.result.meta.b.label} url={urls.b} location={locationsB.get(row.key)} zoom={zoom} height={height} />
+      </div>}
+      <div className="comparison-review-inspector">
+        <section className="comparison-review-current" aria-label="目前審查項目">
+          <div className="comparison-review-kicker"><span>#{numbers.get(row.key)}</span><span className={`comparison-severity is-${row.severity.toLowerCase()}`}>{row.severity}</span><span title={row.rule}>{row.rule}</span></div>
+          <h3>{row.title}</h3>
+          {row.refdes.length > 0 && <div className="comparison-review-refs">{row.refdes.join("、")}</div>}
+          {(row.detail || row.nets.length > 0 || row.pins.length > 0) && <details className="comparison-review-evidence" key={`evidence:${row.key}`}><summary>差異詳情</summary>{row.detail && <p>{row.detail}</p>}{row.nets.length > 0 && <p>Net：{row.nets.join("、")}</p>}{row.pins.length > 0 && <p>Pin：{row.pins.join("、")}</p>}</details>}
+          {row.parent && <Button size="sm" variant="link" onClick={() => jump(row.parent!)}>查看根因 #{numbers.get(row.parent)}</Button>}
+          {!!children.length && <details className="comparison-review-children" key={`children:${row.key}`}><summary>同根因子項 · {children.length} 筆</summary>{children.map(child => <Button key={child.key} size="sm" variant="outline" onClick={() => jump(child.key)}>#{numbers.get(child.key)} · {child.severity} · {child.title}</Button>)}</details>}
+        </section>
+        <section className="comparison-review-compose"><h3>審查回覆</h3><ReviewReplyFields prefix="side-reply" value={draft} disabled={!canEdit || saving || busy} onChange={(field, value) => { setMessage(""); setDrafts(current => ({ ...current, [row.key]: { ...current[row.key], [field]: value } })); }} />
+          <p className="comparison-review-feedback" role="status">{message || (drafts[row.key] ? "此筆有未儲存的修改" : Object.keys(drafts).length ? `另有 ${Object.keys(drafts).length} 筆未儲存草稿` : draft.filled ? `填寫日期：${draft.filled}` : "尚未填寫")}</p>
+          <div className="comparison-review-actions"><Button size="sm" variant={index + 1 >= rows.length ? "default" : "outline"} disabled={!canEdit || saving || busy} onClick={() => void save()}><Save />{saving ? "儲存中…" : "儲存回覆"}</Button>{index + 1 < rows.length && <Button size="sm" disabled={!canEdit || saving || busy} onClick={() => void save(true)}>儲存並下一筆<ArrowRight /></Button>}</div>
+        </section>
+      </div>
     </div>
-    <div className="comparison-review-current"><strong>{row.title}</strong><p>{row.detail}</p>{row.parent && <Button variant="link" onClick={() => onSelect(row.parent!)}>同根因 → #{numbers.get(row.parent)}（查看父項）</Button>}</div>
-    {!!children.length && <details className="comparison-review-children"><summary>同根因的子項 {children.length} 筆</summary>{children.map(child => <Button key={child.key} variant="outline" onClick={() => onSelect(child.key)}>#{numbers.get(child.key)} · {child.severity} · {child.refdes.join(", ")} · {child.title}</Button>)}</details>}
-    {showPdf && <div className="comparison-pdf-grid"><PdfFrame key={`${session.id}:a`} row={row} side="a" artifact={session.result.artifacts.find(item => item.key === "schematic_a")} label={session.result.meta.a.label} url={urls.a} location={locationsA.get(row.key)} zoom={zoom} height={height} /><PdfFrame key={`${session.id}:b`} row={row} side="b" artifact={session.result.artifacts.find(item => item.key === "schematic")} label={session.result.meta.b.label} url={urls.b} location={locationsB.get(row.key)} zoom={zoom} height={height} /></div>}
-    <section className="comparison-review-compose"><h3>#{numbers.get(row.key)} 審查回覆</h3><ReviewReplyFields prefix="side-reply" value={draft} disabled={!canEdit || saving || busy} onChange={(field, value) => setDrafts(current => ({ ...current, [row.key]: { ...current[row.key], [field]: value } }))} /><div className="comparison-review-save"><span role="status">{message || (Object.keys(drafts).length ? `尚有 ${Object.keys(drafts).length} 筆未儲存，切換項目仍保留草稿` : `填寫日期：${draft.filled || "未填"}`)}</span><Button variant="outline" disabled={!canEdit || saving || busy} onClick={() => void save()}><Save />儲存回覆</Button><Button disabled={!canEdit || saving || busy} onClick={() => void save(true)}>儲存並下一筆</Button></div></section>
   </div>;
 }
 
