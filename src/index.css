@@ -966,7 +966,7 @@ All colors MUST be HSL for proper theming support.
 .pending-material-row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) 166px;
-  grid-template-areas: "mark reference reference" "name name name" "mpn mpn mpn" "category category owner" "timing timing status";
+  grid-template-areas: "mark reference reference" "name name name" "mpn mpn mpn" "category category owner" "timing timing status" "note note note";
   align-items: center;
   gap: 8px;
   min-height: 56px;
@@ -985,25 +985,33 @@ All colors MUST be HSL for proper theming support.
 .pending-stale-badge { display: flex; height: 32px; align-items: center; justify-content: center; gap: 4px; border: 1px solid hsl(var(--destructive) / 0.4); border-radius: 6px; background: hsl(var(--destructive) / 0.12); color: hsl(var(--destructive)); }
 .pending-stale-label { display: none; white-space: nowrap; font-size: 11px; }
 .pending-row-status { grid-area: status; display: grid; grid-template-columns: minmax(0, 1fr) 70px; align-items: center; gap: 8px; justify-self: end; width: 166px; max-width: 100%; }
+.pending-row-note { grid-area: note; display: flex; align-items: center; gap: 8px; }
+.pending-row-note > div { flex: 1; }
 .pending-status-indicator { cursor: default; text-align: center; }
 @media (min-width: 768px) and (max-width: 1099px) {
-  .pending-material-row { grid-template-areas: "mark reference reference" "name name name" "mpn mpn mpn" "category category owner" "timing timing status"; }
+  .pending-material-row { grid-template-areas: "mark reference reference" "name name name" "mpn mpn mpn" "category category owner" "timing timing status" "note note note"; }
   .pending-row-mpn { display: block; }
 }
 @media (min-width: 1100px) {
   .pending-material-row {
-    grid-template-columns: 32px 84px 88px minmax(90px, 1fr) 104px 64px 144px 80px 196px;
-    grid-template-areas: "mark reference category name mpn manufacturer owner timing status";
+    min-width: 1020px;
+    grid-template-columns: 28px 80px 80px minmax(90px, 1fr) 100px 64px 112px 64px 148px 160px;
+    grid-template-areas: "mark reference category name mpn manufacturer owner timing status note";
+    gap: 6px;
   }
   .pending-row-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .pending-row-mpn, .pending-row-manufacturer { display: block; }
-  .pending-row-status { width: 196px; grid-template-columns: minmax(0, 1fr) 84px; }
+  .pending-row-status { width: 148px; grid-template-columns: minmax(0, 1fr) 54px; gap: 6px; }
+  .pending-note-label { font-size: 10px; }
+  .pending-row-note input { height: 40px; }
 }
 @media (min-width: 1280px) {
-  .pending-material-row { grid-template-columns: 32px 112px 96px minmax(120px, 1fr) 144px 88px 160px 80px 196px; }
+  .pending-material-row { min-width: 1120px; grid-template-columns: 28px 96px 88px minmax(100px, 1fr) 112px 72px 128px 72px 156px 176px; }
+  .pending-row-status { width: 156px; }
 }
 @media (min-width: 1600px) {
-  .pending-material-row { grid-template-columns: 32px 144px 100px minmax(140px, 1fr) 160px 96px 160px 168px 196px; }
+  .pending-material-row { min-width: 1360px; grid-template-columns: 32px 120px 96px minmax(140px, 1fr) 144px 88px 144px 152px 168px minmax(180px, 1fr); }
+  .pending-row-status { width: 168px; }
   .pending-row-warning { flex-basis: 112px; width: 112px; }
   .pending-stale-label { display: inline; }
 }

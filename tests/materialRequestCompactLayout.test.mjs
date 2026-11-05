@@ -35,7 +35,7 @@ const COLUMN_KEYS = [
 
 test("the table mirrors the CE workbook and keeps the website-only Note column last", () => {
   assert.ok(!presentation.MATERIAL_TABLE_COLUMNS.some((column) => ["marked", "status", "tracking"].includes(column.key)));
-  assert.equal(presentation.MATERIAL_TABLE_COLUMNS.at(-2).label, "狀態追蹤 / 更新");
+  assert.equal(presentation.MATERIAL_TABLE_COLUMNS.at(-2).label, "狀態追蹤 / 編輯");
   assert.equal(presentation.MATERIAL_TABLE_COLUMNS.at(-1).label, "Note");
   assert.equal(presentation.MATERIAL_TABLE_COLUMNS.at(-1).ceHeader, "");
   assert.deepEqual(presentation.MATERIAL_TABLE_COLUMNS.map((column) => column.key), COLUMN_KEYS);
@@ -104,7 +104,7 @@ test("expanded alternative rows keep their own copyable virtual number without i
   assert.doesNotMatch(alternativeBlock, /onToggleMarked|<Star\b/);
   assert.match(alternativeBlock, /<VirtualAlternativeValue value=\{record\.virtualAlternative/);
   assert.doesNotMatch(alternativeBlock, /InlineVirtualAlternativeEditor|onSaveVirtual/);
-  assert.match(alternativeBlock, /<TrackingHistoryCell record=\{record\} onOpen=\{onOpenTracking\} embedded \/>/);
+  assert.match(alternativeBlock, /<TrackingHistoryCell record=\{record\} onOpen=\{onOpenTracking\} onEdit=\{onOpenDetails\} embedded \/>/);
   assert.doesNotMatch(alternativeBlock, /primaryTrackingRecordId|onClick=\{\(\) => onEdit\(record\)\}|onClick=\{\(\) => onView\(record\)\}/);
   assert.match(rowBlock, /aria-expanded=\{hasAlternatives \? expanded : undefined\}/);
   assert.match(source, /adjacentIndex = MATERIAL_TABLE_COLUMNS\.findIndex\(/);
@@ -233,7 +233,7 @@ test("待處理料 keeps compact category controls and fills every toolbar actio
   assert.match(dialog, /inline-flex h-9 items-center gap-1\.5 rounded-md border px-4 text-sm font-bold/);
   assert.match(dialog, /rounded-full px-1\.5 font-mono text-xs leading-4/);
   assert.match(source, /pending-row-category h-9 gap-1 rounded-md px-2 text-xs font-bold/);
-  assert.match(styles, /grid-template-columns: 32px 84px 88px minmax\(90px, 1fr\)/);
+  assert.match(styles, /grid-template-columns: 28px 80px 80px minmax\(90px, 1fr\)/);
   for (const action of ['spec-fill', 'weekly', 'export', 'mail', 'suppliers']) {
     assert.ok(dialog.includes(`pending-action--${action}`));
     assert.ok(styles.includes(`.pending-action--${action} { --pending-action-color:`));
@@ -264,9 +264,9 @@ test("editing an item from 待處理料 returns to the list with its tab, search
 });
 
 test("更新 on a table row or mobile card edits that row; 新增替代料 lives in the record dialog", () => {
-  assert.match(rowBlock, /<TrackingHistoryCell record=\{statusRecord\} onOpen=\{actions\.openTracking\} embedded \/>/);
+  assert.match(rowBlock, /<TrackingHistoryCell record=\{statusRecord\} onOpen=\{actions\.openTracking\} onEdit=\{actions\.openDetails\} embedded \/>/);
   assert.doesNotMatch(rowBlock, /actions\.openCreate\(group\)/);
-  assert.match(source, /onClick=\{\(\) => openTrackingDialog\(mainRecord\)\}[^>]*>[\s\S]{0,80}?追蹤／更新料件/);
+  assert.match(source, /onClick=\{\(\) => rowActions\.openDetails\(mainRecord\)\}[^>]*>[\s\S]{0,80}?編輯料件/);
   const dialog = slice("function MaterialRecordDialog(", "type MaterialColumnVisibility");
   assert.match(dialog, /data-testid="material-add-alternate"/);
   assert.match(dialog, /先儲存或取消目前的修改，再新增替代料/);
