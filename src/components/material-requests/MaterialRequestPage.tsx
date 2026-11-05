@@ -96,7 +96,7 @@ import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
 import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
-import { buildMaterialMainGroups, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
+import { buildMaterialMainGroups, filterMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { useWorkspaceMutationScope, WorkspaceMutationScopeChangedError } from "@/hooks/useWorkspaceMutationScope";
@@ -1209,8 +1209,6 @@ function getGroupColumnValues(group: MaterialGroup, key: ColumnFilterKey) {
 }
 
 function getRecordColumnValues(record: MaterialRecord, group: MaterialGroup, key: ColumnFilterKey) {
-  const latestTrackingEntry = getLatestTrackingEntry(record);
-
   switch (key) {
     case "material":
       return [
@@ -1252,6 +1250,7 @@ function getRecordColumnValues(record: MaterialRecord, group: MaterialGroup, key
     case "partUsage":
       return [record.partUsageStatus ?? ""];
     case "trackingStatus": {
+      const latestTrackingEntry = getLatestTrackingEntry(record);
       const values = [
         getTrackingWorkflowStatus(record),
         latestTrackingEntry?.note ?? "",
@@ -4362,14 +4361,11 @@ export function MaterialRequestPage() {
     const searchableTextByGroup = new Map<string, string>();
     const refTokensByGroup = new Map<string, string[]>();
     const refPrefixes = new Set<string>();
-    const sortedRecordsByGroup = new Map<string, MaterialRecord[]>();
     const uniqueMpnCountByGroup = new Map<string, number>();
     const recordColumnsByRecordId = new Map<string, CachedRecordColumnValues>();
 
     displayGroups.forEach((group) => {
-      const sortedRecords = getSortedAlternatives(group);
       const uniqueMpnCount = getUniqueMpnCountForRecords(group.records);
-      sortedRecordsByGroup.set(group.key, sortedRecords);
       uniqueMpnCountByGroup.set(group.key, uniqueMpnCount);
 
       if (searchTokens.length > 0) {
@@ -4398,43 +4394,11 @@ export function MaterialRequestPage() {
 
       if (!hasActiveColumnFilters) return;
 
-      group.records.forEach((record) => {
-        const latestTrackingEntry = getLatestTrackingEntry(record);
-        const splitRefs = splitRefDesignators(record.refDes);
-        const refValues = splitRefs.length > 0
-          ? splitRefs
-          : splitRefDesignators(record.refGroup, group.displayRef);
-
-        recordColumnsByRecordId.set(record.id, {
-          material: createCachedColumnValues([
-            group.displayRef,
-            group.name,
-            group.assemblyName,
-            record.manufacturer,
-            record.refDes,
-            record.refGroup,
-          ]),
-          refDes: createCachedColumnValues(refValues),
-          mpn: createCachedColumnValues([record.manufacturerPartNumber, record.manufacturerPartNumberAlt]),
-          internal: createCachedColumnValues([record.partNumber, record.schematicPart, record.pcbFootprint]),
-          virtualAlternative: createCachedColumnValues([record.virtualAlternative ?? ""]),
-          qty: createCachedColumnValues([String(group.qty ?? "")]),
-          manufacturer: createCachedColumnValues([record.manufacturer]),
-          sourcingStatus: createCachedColumnValues([record.sourcingStatus]),
-          partName: createCachedColumnValues([record.partName]),
-          partSpec: createCachedColumnValues([record.partSpec]),
-          schematicPart: createCachedColumnValues([record.schematicPart]),
-          footprint: createCachedColumnValues([record.pcbFootprint]),
-          phaseOut: createCachedColumnValues([record.phaseOutStatus ?? ""]),
-          partUsage: createCachedColumnValues([record.partUsageStatus ?? ""]),
-          trackingStatus: createCachedColumnValues([
-            getTrackingWorkflowStatus(record),
-            latestTrackingEntry?.note ?? "",
-            latestTrackingEntry?.createdBy ?? "",
-            latestTrackingEntry?.requestInfo ?? "",
-          ]),
-        });
-      });
+      group.locations.forEach(location => location.records.forEach(record => {
+        recordColumnsByRecordId.set(record.id, Object.fromEntries(FILTER_KEYS.map(key =>
+          [key, createCachedColumnValues(getRecordColumnValues(record, location, key))],
+        )) as CachedRecordColumnValues);
+      }));
     });
 
     return {
@@ -4442,7 +4406,6 @@ export function MaterialRequestPage() {
       refPrefixes,
       refTokensByGroup,
       searchableTextByGroup,
-      sortedRecordsByGroup,
       uniqueMpnCountByGroup,
     };
   }, [displayGroups, hasActiveColumnFilters, searchTokens.length]);
@@ -4501,28 +4464,24 @@ export function MaterialRequestPage() {
   // Only the "marked only" view depends on the marked set; toggling a star
   // otherwise must not re-filter and re-sort every group on the page.
   const markedFilterSet = showMarkedOnly ? markedGroupKeySet : null;
+  const markedLocationFilterSet = showMarkedOnly ? personalMarks.keys : null;
   const matchesMarkedState = useCallback((group: MaterialGroup) => {
     return !markedFilterSet || markedFilterSet.has(group.key);
   }, [markedFilterSet]);
 
-  const getMatchingRecords = useCallback((group: MaterialGroup, ignoredKey?: ColumnFilterKey) => {
-    const sortedRecords = groupRuntimeIndex.sortedRecordsByGroup.get(group.key) ?? getSortedAlternatives(group);
-    const mains = ((group as MaterialMainGroup).locations ?? [group]).map(location => location.primaryRecord);
-    const matchingPrimary = mains.find(record => matchesRecordSearch(record, group) && (!hasActiveColumnFilters || FILTER_KEYS.every((key) => {
+  const getMatchingGroup = useCallback((group: MaterialMainGroup, ignoredKey?: ColumnFilterKey) => {
+    if (!markedLocationFilterSet && !hasActiveColumnFilters && (searchColumn === "all" || searchTokens.length === 0)) return group;
+    return filterMaterialMainGroup(group, (record, location) => (!markedLocationFilterSet
+      || getMaterialMarkKeys(location).some(key => markedLocationFilterSet.has(key))) && matchesRecordSearch(record, location)
+      && (!hasActiveColumnFilters || FILTER_KEYS.every(key => {
         if (key === ignoredKey) return true;
-
-        const cachedValues = groupRuntimeIndex.recordColumnsByRecordId.get(record.id)?.[key]
-          ?? createCachedColumnValues(getRecordColumnValues(record, group, key));
         const selectedSet = columnFilterSets[key];
-
-        if (selectedSet !== null && !cachedValues.raw.some((value) => selectedSet.has(value))) {
-          return false;
-        }
-
-        return true;
+        if (selectedSet === null) return true;
+        const cachedValues = groupRuntimeIndex.recordColumnsByRecordId.get(record.id)?.[key]
+          ?? createCachedColumnValues(getRecordColumnValues(record, location, key));
+        return cachedValues.raw.some(value => selectedSet.has(value));
       })));
-    return matchingPrimary ? [matchingPrimary, ...sortedRecords.filter(record => record.id !== matchingPrimary.id)] : [];
-  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters, matchesRecordSearch]);
+  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters, markedLocationFilterSet, matchesRecordSearch, searchColumn, searchTokens.length]);
 
   const searchAvailabilityGroups = useMemo(
     () => displayGroups.filter((group) => matchesMarkedState(group) && matchesSearch(group) && matchesAvailability(group)),
@@ -4531,17 +4490,21 @@ export function MaterialRequestPage() {
 
   const getColumnFilterOptions = useCallback((key: ColumnFilterKey) => {
     const valueGroups = searchAvailabilityGroups
-      .filter(group => getMatchingRecords(group, key).length > 0)
-      .map(group => Array.from(new Set(group.locations.flatMap(location => getRecordColumnValues(location.primaryRecord, group, key)))));
+      .flatMap(group => {
+        const matchingGroup = getMatchingGroup(group, key);
+        return matchingGroup ? [Array.from(new Set(matchingGroup.locations.flatMap(location =>
+          getRecordColumnValues(location.primaryRecord, location, key))))] : [];
+      });
 
     return key === "trackingStatus"
       ? buildTrackingStatusFilterOptions(valueGroups)
       : buildExcelFilterOptions(valueGroups);
-  }, [getMatchingRecords, searchAvailabilityGroups]);
+  }, [getMatchingGroup, searchAvailabilityGroups]);
 
   const filteredGroups = useMemo(() => {
-    const result = searchAvailabilityGroups.filter((group) => {
-      return getMatchingRecords(group).length > 0;
+    const result = searchAvailabilityGroups.flatMap(group => {
+      const matchingGroup = getMatchingGroup(group);
+      return matchingGroup ? [matchingGroup] : [];
     });
 
     if (columnSort) return sortMaterialTableRows(result, columnSort.direction, group =>
@@ -4566,7 +4529,9 @@ export function MaterialRequestPage() {
       }
       return REF_COLLATOR.compare(left.displayRef, right.displayRef);
     });
-  }, [columnSort, getMatchingRecords, groupRuntimeIndex.uniqueMpnCountByGroup, searchAvailabilityGroups, sortMode]);
+  }, [columnSort, getMatchingGroup, groupRuntimeIndex.uniqueMpnCountByGroup, searchAvailabilityGroups, sortMode]);
+
+  const filteredMarkKeysByGroup = useMemo(() => new Map(filteredGroups.map(group => [group.key, getMaterialMarkKeys(group)])), [filteredGroups]);
 
   // Exports keep original location quantities even when the screen combines main rows.
   const orderedRecordRows = useMemo(() => {
@@ -4673,7 +4638,7 @@ export function MaterialRequestPage() {
 
   const visibleGroupRows = useMemo(
     () => visibleGroups.map(group => {
-      const matchingRecords = getMatchingRecords(group);
+      const matchingRecords = getSortedAlternatives(group);
       const primaryAlternative = matchingRecords[0] ?? group.primaryRecord;
       const virtualAlternativeRecord = primaryAlternative;
       const locationMainIds = new Set(group.locations.map(location => location.primaryRecord.id));
@@ -4691,7 +4656,7 @@ export function MaterialRequestPage() {
         uniqueMpnCount: getUniqueMpnCountForRecords(matchingRecords),
       };
     }),
-    [getMatchingRecords, visibleGroups],
+    [visibleGroups],
   );
 
   useEffect(() => {
@@ -5798,7 +5763,7 @@ export function MaterialRequestPage() {
   };
 
   const toggleMarkedGroup = (groupKey: string) => {
-    const key = markKeysByGroup.get(groupKey);
+    const key = filteredMarkKeysByGroup.get(groupKey) ?? markKeysByGroup.get(groupKey);
     if (key) void personalMarks.toggle(key);
   };
 
@@ -6408,7 +6373,7 @@ export function MaterialRequestPage() {
             const expanded = expandedKey === group.key;
             const mainRecord = primaryAlternative ?? group.primaryRecord;
             const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
-            const isMarked = markedGroupKeySet.has(group.key);
+            const isMarked = getMaterialMarkKeys(group).some(key => personalMarks.keys.has(key));
             const mustApply = group.requiresApplication;
             const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred && !record.isRisk).length;
             const mainRisk = group.locations.some(location => location.primaryRecord.isRisk);
