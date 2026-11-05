@@ -81,6 +81,27 @@ test("chat follow-ups preserve the filled table and failures; explicit refill ap
   } finally { act(()=>f.root.unmount()); }
 });
 
+test("pasted question images can be sent without a part and remain available for follow-ups", async () => {
+  const f = fixture(); await flush();
+  const screenshot = new File(['first'], 'spec.png', { type: 'image/png' });
+  const followup = new File(['second'], 'spec.png', { type: 'image/png' });
+  try {
+    act(() => f.button('問 SPEC 規格').props.onClick());
+    const questionEntry = () => f.nodes().findAllByType('section').find(node => node.props.className === 'spec-fill-question-entry').props;
+    act(() => questionEntry().onPaste({ preventDefault() {}, clipboardData: { files: [screenshot], items: [] } }));
+    assert.equal(f.button('送出問題').props.disabled, false);
+    act(() => f.button('送出問題').props.onClick()); await flush();
+    assert.equal(f.calls[0].part, undefined);
+    assert.equal(f.calls[0].photos.length, 0);
+    assert.equal(f.calls[0].questionImages[0].blob, screenshot);
+    f.jobs[0].resolve('找到可核對的規格。'); await flush();
+    act(() => questionEntry().onDrop({ preventDefault() {}, dataTransfer: { files: [followup] } }));
+    act(() => f.button('送出追問').props.onClick()); await flush();
+    assert.equal(f.calls[1].history.length, 1);
+    assert.deepEqual(Array.from(f.calls[1].questionImages, input => input.blob), [screenshot, followup]);
+  } finally { act(() => f.root.unmount()); }
+});
+
 test("closing/account remount aborts pending work and never carries a result into another account", async () => {
   const f = fixture(); await flush(); f.prepare();
   act(() => f.button("開始依照片填表").props.onClick()); await flush();
