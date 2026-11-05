@@ -182,26 +182,24 @@ export function WorkspaceEntrance({
         </div>
 
         <div
-          className="workspace-entrance-mobile-list space-y-4 md:hidden"
+          className="workspace-entrance-mobile-list md:hidden"
           data-testid="workspace-entrance-mobile-list"
         >
           <section
             data-mobile-home-hero="true"
-            className="relative isolate min-h-[108px] overflow-hidden rounded-[1.4rem] border border-cyan-200/20 bg-[linear-gradient(110deg,#073630_0%,#05211f_48%,#06151a_100%)] px-4 py-4"
+            className="mx-1.5 grid min-h-28 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-center gap-2 rounded-2xl border border-cyan-200/20 bg-[linear-gradient(110deg,#073630_0%,#05211f_48%,#06151a_100%)] px-3.5 py-2.5"
           >
+            <div className="min-w-0 break-words">
+              <p className="mobile-home-greeting text-sm font-bold leading-snug">你好，{user?.displayName || user?.username || "歡迎回來"}</p>
+              {activeProject?.name && <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{activeProject.name}</p>}
+              <h1 className="mt-2 text-[1.4rem] font-black leading-tight tracking-[-0.03em] text-white">工程工作平台</h1>
+              <span className="mt-2 block h-0.5 w-10 rounded-full bg-cyan-300" />
+            </div>
             <img
               src={racksArtwork}
               alt="三座工程機櫃"
-              className="absolute inset-y-0 right-0 -z-10 h-full w-[62%] object-contain object-right opacity-85"
+              className="h-[5.5rem] w-full object-contain"
             />
-            <div className="absolute inset-y-0 left-[34%] right-0 -z-[5] bg-gradient-to-r from-[#052c29] via-[#052421]/65 to-transparent" />
-            <div className="mobile-home-head relative z-10 pb-1">
-              <p className="text-cyan-100">你好，{user?.displayName || user?.username || "歡迎回來"}</p>
-              {activeProject?.name && <p>{activeProject.name}</p>}
-            </div>
-            <h1 className="relative z-10 text-[1.45rem] font-black tracking-[-0.04em] text-white">工程工作平台</h1>
-            <p className="mt-1.5 text-xs font-semibold text-slate-200">整合維修 · 設計 · 料號 · 開發</p>
-            <span className="mt-4 block h-0.5 w-14 rounded-full bg-cyan-300" />
           </section>
 
           <section data-mobile-home-shortcuts="true" aria-labelledby="mobile-shortcut-title">
@@ -219,12 +217,12 @@ export function WorkspaceEntrance({
                     type="button"
                     data-mobile-home-shortcut={item.id}
                     onClick={() => onSelect(item.id)}
-                    className="group flex min-h-[92px] min-w-0 flex-col items-center justify-center rounded-2xl border border-slate-700/75 bg-[#101b1e] px-1.5 py-2.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                    className="group flex min-h-[4.25rem] min-w-0 touch-manipulation flex-col items-center justify-center gap-1 rounded-2xl border border-slate-700/75 bg-[#101b1e] px-1 py-1.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
                   >
-                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-300/10 text-cyan-300 transition-colors group-active:bg-cyan-300/20">
-                      <Icon className="h-[22px] w-[22px]" />
+                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-cyan-300/10 text-cyan-300 transition-colors group-active:bg-cyan-300/20">
+                      <Icon className="h-5 w-5" />
                     </span>
-                    <span className="mt-2 line-clamp-2 text-[11px] font-black leading-4 text-slate-100">{mobileTitle}</span>
+                    <span className="text-[11px] font-bold leading-tight text-slate-100">{mobileTitle}</span>
                   </button>
                 );
               })}
@@ -247,16 +245,13 @@ export function WorkspaceEntrance({
                     type="button"
                     data-workspace-id={item.id}
                     onClick={() => onSelect(item.id)}
-                    className={cn(
-                      "workspace-entrance-mobile-row mobile-home-module group flex min-h-[66px] min-w-0 items-center gap-2.5 rounded-2xl border border-slate-700/75 bg-[#10191c] px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300",
-                      item.id === "performance" && "border-amber-300/45 bg-amber-400/10",
-                    )}
+                    className="workspace-entrance-mobile-row mobile-home-module group flex min-w-0 items-center text-left"
                   >
-                    <span className={cn("workspace-entrance-mobile-icon grid h-10 w-10 shrink-0 place-items-center rounded-xl border", tone.iconWrap)}>
+                    <span className="workspace-entrance-mobile-icon grid shrink-0 place-items-center">
                       <Icon className="h-5 w-5" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className={cn("block truncate text-[13px] font-black tracking-[-0.02em] text-slate-50", item.id === "performance" && "text-amber-200")}>{mobileTitle}</span>
+                      <span className="block truncate text-[13px] font-black tracking-[-0.02em] text-slate-50">{mobileTitle}</span>
                       <span className="mt-0.5 block truncate text-[10px] font-semibold text-slate-400">{tone.badge}</span>
                     </span>
                     <ChevronRight className="workspace-entrance-mobile-chevron h-4 w-4 shrink-0 text-slate-500 transition-transform group-active:translate-x-0.5" />
