@@ -43,7 +43,11 @@ async function specFixture() {
     root, calls, jobs, questions, exports, downloads,
     button: name => button(root, name),
     async setOpen(open) { await act(async () => { root.update(React.createElement(MaterialSpecFillDialog, { ...props, open })); }); },
+    async choosePart() {
+      await act(async () => { root.root.findAll(node => node.type === 'stub' && node.props.value === source.id && node.props.onSelect)[0].props.onSelect(source.id); });
+    },
     async prepare() {
+      await this.choosePart();
       await act(async () => {
         root.root.findByProps({ 'aria-label': '選擇表格照片檔案' }).props.onChange({ target: { files: [new File(['synthetic'], 'form.png', { type: 'image/png' })], value: '' } });
         root.root.findAllByType('input').find(node => node.props.type === 'checkbox').props.onChange({ target: { checked: true } });
@@ -57,7 +61,15 @@ async function specFixture() {
         sources: input.sources.map(({ id, name }) => ({ id, name })), preparedSources: input.sources,
       }); });
     },
+    async showConversation() {
+      const switcher = button(root, '追問規格');
+      if (switcher) await act(async () => { switcher.props.onClick(); });
+    },
+    async showTable() {
+      await act(async () => { button(root, '表格結果').props.onClick(); });
+    },
     async ask(question) {
+      if (!root.root.findAllByProps({ 'aria-label': '接續提問' }).length) await this.showConversation();
       await act(async () => { root.root.findByProps({ 'aria-label': '接續提問' }).props.onChange({ target: { value: question } }); });
     },
     async answerQuestion(index, reply = `Synthetic grounded answer ${index + 1}: 1.20 V`) {
@@ -336,11 +348,13 @@ test('returning to the pending list and reopening the same AI task retains photo
 
 test('the first screen can answer questions from a selected SPEC without requiring a template photo', async t => {
   const f = await specFixture(); t.after(() => f.unmount());
-  assert.equal(f.root.root.findAllByProps({ 'aria-label': '接續提問' }).length > 0, true);
-  await f.ask('What is the operating voltage?');
+  assert.equal(f.root.root.findAllByProps({ 'aria-label': '接續提問' }).length, 0);
+  await act(async () => { f.button('問 SPEC 規格').props.onClick(); });
+  await f.choosePart();
+  const firstQuestion = () => f.root.root.findAll(node => node.type === 'stub' && node.props.id?.endsWith('-first-question'))[0];
+  await act(async () => { firstQuestion().props.onChange({ target: { value: 'What is the operating voltage?' } }); });
   assert.equal(f.button('送出問題').props.disabled, true, 'a question needs an explicitly selected SPEC');
   await act(async () => { f.root.root.findAllByType('input').find(node => node.props.type === 'checkbox').props.onChange({ target: { checked: true } }); });
-  await f.ask('What is the operating voltage?');
   assert.equal(f.button('送出問題').props.disabled, false);
   await act(async () => { f.button('送出問題').props.onClick(); });
   assert.equal(f.calls.length, 0, 'SPEC questions must not force photo-table regeneration');
@@ -392,6 +406,7 @@ test('explicit refill appends a table turn while retaining previous chat, origin
   assert.equal(f.calls[1].photos.length, 1);
   assert.equal(f.calls[1].sources.length, 1);
   await f.answer(1, 'Explicitly updated table');
+  await f.showConversation();
   assert.ok(f.button('查看第 1 次結果'));
   assert.ok(f.button('查看第 3 次結果'));
   assert.match(JSON.stringify(f.root.toJSON()), /Explicitly updated table/);
@@ -410,6 +425,7 @@ test('photo-backed chat keeps the existing filled table and its original model a
   assert.equal(f.root.root.findByProps({ 'aria-label': '第 1 張填表結果' }).findByType('h3').props.children, 'Initial result');
   assert.ok(f.button('查看第 1 次結果'));
   assert.equal(f.button('查看第 2 次結果'), undefined);
+  await f.showTable();
   await act(async () => { f.button('下載 Excel').props.onClick(); });
   assert.equal(f.exports.length, 1);
   assert.equal(f.exports[0].tables[0].title, 'Initial result');
@@ -421,6 +437,7 @@ test('photo-backed chat keeps the existing filled table and its original model a
   await act(async () => { f.button('下載 Excel').props.onClick(); });
   assert.equal(f.exports[1].tables[0].title, 'Second-model filled table');
   assert.equal(f.exports[1].model, 'Synthetic second AI');
+  await f.showConversation();
   await act(async () => { f.button('查看第 1 次結果').props.onClick(); });
   await act(async () => { f.button('下載 Excel').props.onClick(); });
   assert.equal(f.exports[2].tables[0].title, 'Initial result');
