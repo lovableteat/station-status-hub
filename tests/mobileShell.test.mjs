@@ -23,7 +23,7 @@ test("toasts sit above the dock on phones instead of over the header", async () 
   assert.match(block, /@media \(max-width: 1023px\)/);
   assert.match(block, /\[data-ui='toast-viewport'\] \{ top: auto; bottom: calc\(var\(--mobile-shell-bottom\) \+ 12px\)/);
   assert.match(block, /\[data-sonner-toaster\] \{ top: auto !important; bottom: calc\(var\(--mobile-shell-bottom\) \+ 12px\) !important/);
-  assert.match(block, /body:has\(\[data-ai-chat-shell\]\) \[data-ui='toast-viewport'\] \{ bottom: calc\(var\(--mobile-shell-bottom\) \+ 188px\)/);
+  assert.match(block, /body:has\(\[data-ai-chat-shell\]\) \[data-ui='toast-viewport'\] \{ bottom: calc\(var\(--mobile-shell-bottom\) \+ 72px\)/);
 });
 
 test("shared phone components exist with the agreed anatomy and 44px targets", async () => {

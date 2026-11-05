@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   ClipboardEvent as ReactClipboardEvent,
   DragEvent as ReactDragEvent,
@@ -23,6 +23,7 @@ import {
   Plus,
   Search,
   Send,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   X,
@@ -48,6 +49,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useUser } from "@/components/auth/UserContext";
+import { MobileToolsSheet } from "@/components/layout/mobile/MobileToolsSheet";
 import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
@@ -92,6 +94,7 @@ import { MaterialSpecCitationList } from "./MaterialSpecCitationList";
 import { searchMaterialSpecs } from "./materialSpecKnowledgeService";
 import { parseMaterialSpecReport, type MaterialSpecReport } from "./materialSpecKnowledge";
 import { MarkdownMessage } from "./MarkdownMessage";
+import { useMobileAiChatViewport } from "./useMobileAiChatViewport";
 import {
   MaintenanceCitation,
   MaintenanceProjectOption,
@@ -705,7 +708,7 @@ function SectionTitle({
 
 function QueryLoadingCard({ message }: { message: string }) {
   return (
-    <div className="flex gap-3">
+    <div data-ai-message-loading className="flex gap-3">
       <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/18 bg-emerald-400/10 text-emerald-100">
         <Bot className="h-4.5 w-4.5" />
       </div>
@@ -786,7 +789,7 @@ function MessageCard({ message, materialSpecsAllowed }: { message: ChatMessage; 
   };
 
   return (
-    <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
+    <div data-ai-message-role={message.role} data-ai-message-state={message.state} className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
       {!isUser ? (
         <div className="mt-1 hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cyan-400/16 bg-cyan-400/10 text-cyan-100 md:flex">
           <Bot className="h-4.5 w-4.5" />
@@ -794,6 +797,7 @@ function MessageCard({ message, materialSpecsAllowed }: { message: ChatMessage; 
       ) : null}
 
       <div
+        data-ai-message-bubble
         className={cn(
           "min-w-0 max-w-full rounded-xl border px-3 py-3 text-[15px] leading-7 md:max-w-[86%] md:rounded-[24px] md:px-5 md:py-4 md:shadow-[0_16px_36px_rgba(2,8,23,0.18)]",
           isUser
@@ -803,7 +807,7 @@ function MessageCard({ message, materialSpecsAllowed }: { message: ChatMessage; 
               : "border-cyan-400/10 bg-[linear-gradient(180deg,#10192e_0%,#0b1423_100%)] text-slate-100"
         )}
       >
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div data-ai-message-meta className="mb-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
             {isUser ? (
               <>
@@ -823,7 +827,7 @@ function MessageCard({ message, materialSpecsAllowed }: { message: ChatMessage; 
         </div>
 
         {message.content ? (
-          <div className="break-words">
+          <div data-ai-message-content className="break-words">
             {contentSegments.map((segment, segmentIndex) => {
               if (segment.kind === "text") {
                 return (
@@ -968,8 +972,9 @@ export function ApiChatConsole({
     setMaintenanceResultCount(null);
   }, []);
   useEffect(() => { writeAiCooldowns(keyCooldowns,typeof window === 'undefined' ? undefined : window.sessionStorage); }, [keyCooldowns]);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [desktopSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const [conversationCloudState, setConversationCloudState] = useState<ConversationCloudState>("loading");
@@ -985,6 +990,7 @@ export function ApiChatConsole({
   const [maintenanceRetrievalError, setMaintenanceRetrievalError] = useState<string | null>(null);
   const [maintenanceResultCount, setMaintenanceResultCount] = useState<number | null>(null);
   const chatConsoleRef = useRef<HTMLDivElement | null>(null);
+  const messageScrollRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1022,6 +1028,8 @@ export function ApiChatConsole({
   const isChatOnly = mode === "chat-only";
   const isCompactLayout = useIsCompactLayout();
   const compactChat = isChatOnly && isCompactLayout;
+  const sidebarCollapsed = !compactChat && desktopSidebarCollapsed;
+  useMobileAiChatViewport(compactChat, chatConsoleRef, composerTextareaRef);
   const [directMessageUnreadCount, setDirectMessageUnreadCount] = useState(0);
   useEffect(() => {
     if (!isChatOnly) return;
@@ -1128,9 +1136,34 @@ export function ApiChatConsole({
   }, []);
 
   useEffect(() => {
-    if (!messages.length && !loading) return;
+    if (compactChat || (!messages.length && !loading)) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, loading]);
+  }, [compactChat, messages, loading]);
+
+  const latestMessageId = messages.at(-1)?.id;
+  useLayoutEffect(() => {
+    const scroller = messageScrollRef.current;
+    if (!compactChat || !scroller) return;
+    const reply = scroller.querySelector<HTMLElement>('[data-ai-message-role="assistant"]:last-child');
+    scroller.scrollTop = reply && reply.offsetHeight > scroller.clientHeight
+      ? scroller.scrollTop + reply.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 8
+      : scroller.scrollHeight;
+  }, [compactChat, activeConversationId, latestMessageId, loading]);
+
+  useLayoutEffect(() => {
+    const input = composerTextareaRef.current;
+    if (!compactChat || !input || window.CSS?.supports("field-sizing", "content")) return;
+    const resize = () => {
+      input.style.height = "44px";
+      input.style.height = `${input.scrollHeight}px`;
+    };
+    resize();
+    window.addEventListener("resize", resize);
+    return () => {
+      window.removeEventListener("resize", resize);
+      input.style.removeProperty("height");
+    };
+  }, [compactChat, composerText]);
 
   useEffect(() => {
     if (!isChatOnly) return;
@@ -2603,12 +2636,12 @@ export function ApiChatConsole({
         <Button
           type="button"
           variant="outline"
-          className="relative h-11 shrink-0 gap-2 px-3 text-sm"
+          className={cn("relative h-11 shrink-0 gap-2 px-3 text-sm", compactChat && "w-11 p-0")}
           aria-label="開啟共享提示詞庫"
         >
           <LibraryBig className="h-4 w-4" />
-          <span className="hidden sm:inline">提示詞庫</span>
-          {savedPrompts.length > 0 ? (
+          {!compactChat && <span className="hidden sm:inline">提示詞庫</span>}
+          {!compactChat && savedPrompts.length > 0 ? (
             <span className="hidden text-xs tabular-nums text-muted-foreground sm:inline">
               {savedPrompts.length}
             </span>
@@ -2619,7 +2652,7 @@ export function ApiChatConsole({
         side="top"
         align="start"
         sideOffset={10}
-        className="w-[min(760px,calc(100vw-24px))] overflow-hidden rounded-[20px] border border-blue-300/35 bg-[linear-gradient(180deg,#152a43_0%,#0a1828_100%)] p-0 text-slate-100 shadow-[0_28px_80px_rgba(2,8,23,0.62)]"
+        className={cn("w-[min(760px,calc(100vw-24px))] rounded-[20px] border border-blue-300/35 bg-[linear-gradient(180deg,#152a43_0%,#0a1828_100%)] p-0 text-slate-100 shadow-[0_28px_80px_rgba(2,8,23,0.62)]", compactChat ? "max-h-[var(--radix-popover-content-available-height)] overflow-y-auto overscroll-contain" : "overflow-hidden")}
       >
         <div className="border-b border-blue-300/20 px-4 py-4">
           <div className="flex items-start justify-between gap-3">
@@ -2627,15 +2660,13 @@ export function ApiChatConsole({
               <p className="text-lg font-black text-white">共享提示詞庫</p>
               <p className="mt-1 text-sm leading-5 text-blue-100/75">點選直接套用，或在輸入框輸入 / 快速搜尋。</p>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={openSavePromptDialog}
-              className="h-11 shrink-0 px-3"
-            >
-              <Plus className="mr-1.5 h-4 w-4" />
-              新增
-            </Button>
+            <div className="flex shrink-0 gap-1">
+              <Button type="button" size="sm" onClick={openSavePromptDialog} className="h-11 px-3">
+                <Plus className="mr-1.5 h-4 w-4" />
+                新增
+              </Button>
+              {compactChat && <Button type="button" variant="ghost" size="icon" aria-label="關閉共享提示詞庫" onClick={() => setPromptLibraryOpen(false)} className="h-11 w-11"><X className="h-4 w-4" /></Button>}
+            </div>
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_160px_140px]">
             <div className="relative">
@@ -2836,6 +2867,34 @@ export function ApiChatConsole({
     </Popover>
   );
 
+  const activeSourceLabels = [
+    maintenanceSourceEnabled ? "維修資料" : "",
+    materialSourceEnabled && materialSpecsAllowed ? "料號／SPEC" : "",
+  ].filter(Boolean).join("、");
+  const sourceSettings = (
+    <>
+      <MaintenanceSourceSelector
+        enabled={maintenanceSourceEnabled}
+        onEnabledChange={(enabled) => {
+          setMaintenanceSourceEnabled(enabled);
+          setMaintenanceRetrievalError(null);
+          setMaintenanceResultCount(null);
+        }}
+        projects={maintenanceProjects}
+        currentProjectId={currentMaintenanceProjectId}
+        scope={maintenanceScope}
+        onScopeChange={(scope) => {
+          setMaintenanceScope(scope);
+          setMaintenanceRetrievalError(null);
+          setMaintenanceResultCount(null);
+        }}
+        loading={loading && maintenanceSourceEnabled}
+        lastResultCount={maintenanceResultCount}
+        retrievalError={maintenanceRetrievalError}
+      />
+      <MaterialSpecSourceSelector enabled={materialSourceEnabled} onEnabledChange={value => { setMaterialSourceEnabled(value); setMaterialSpecProgress(""); }} scope={materialSpecScope} onScopeChange={value => { setMaterialSpecScope(value); setMaterialSpecProgress(""); }} allowed={materialSpecsAllowed} ownerId={user?.userId} loading={loading} progress={materialSpecProgress} />
+    </>
+  );
   const sourceControls = (
     <Popover>
       <PopoverTrigger asChild>
@@ -2845,38 +2904,38 @@ export function ApiChatConsole({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[min(520px,calc(100vw-24px))] max-h-[70dvh] overflow-y-auto p-2">
-          <MaintenanceSourceSelector
-            enabled={maintenanceSourceEnabled}
-            onEnabledChange={(enabled) => {
-              setMaintenanceSourceEnabled(enabled);
-              setMaintenanceRetrievalError(null);
-              setMaintenanceResultCount(null);
-            }}
-            projects={maintenanceProjects}
-            currentProjectId={currentMaintenanceProjectId}
-            scope={maintenanceScope}
-            onScopeChange={(scope) => {
-              setMaintenanceScope(scope);
-              setMaintenanceRetrievalError(null);
-              setMaintenanceResultCount(null);
-            }}
-            loading={loading && maintenanceSourceEnabled}
-            lastResultCount={maintenanceResultCount}
-            retrievalError={maintenanceRetrievalError}
-          />
-          <MaterialSpecSourceSelector enabled={materialSourceEnabled} onEnabledChange={value => { setMaterialSourceEnabled(value); setMaterialSpecProgress(""); }} scope={materialSpecScope} onScopeChange={value => { setMaterialSpecScope(value); setMaterialSpecProgress(""); }} allowed={materialSpecsAllowed} ownerId={user?.userId} loading={loading} progress={materialSpecProgress} />
+        {sourceSettings}
       </PopoverContent>
     </Popover>
   );
 
+  const uploadControl = (
+    <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className={cn("h-11 shrink-0 gap-2 px-3", compactChat && "w-11 p-0")}>
+      <Paperclip className="h-4 w-4" />
+      {!compactChat && <span className="hidden sm:inline">上傳檔案</span>}
+    </Button>
+  );
+  const sendControl = (
+    <Button
+      type="button"
+      onClick={() => {
+        if (compactChat) composerTextareaRef.current?.blur();
+        void handleSend();
+      }}
+      disabled={!canSend}
+      aria-label="送出查詢"
+      aria-busy={loading}
+      className={cn("h-11 shrink-0 gap-2 px-3", compactChat ? "w-11 rounded-xl p-0" : "min-w-24")}
+    >
+      <Send className="h-4 w-4" /><span className={compactChat ? "sr-only" : undefined}>{loading ? "查詢中" : "送出"}</span>
+    </Button>
+  );
   const composerActions = (
     <div data-ai-composer-actions="true" className="ml-auto flex min-w-0 max-w-full items-center justify-end gap-2">
       <span className="ai-selected-model hidden min-w-0 max-w-[240px] truncate rounded-lg border px-3 py-2 text-base font-semibold leading-6 lg:block" title={model}>{model || "Gemini"}</span>
-      <Button type="button" onClick={() => void handleSend()} disabled={!canSend} aria-label="送出查詢" aria-busy={loading} className={cn("h-11 shrink-0 gap-2 px-3", !compactChat && "min-w-24")}>
-        <Send className="h-4 w-4" /><span>{loading ? "查詢中" : "送出"}</span>
-      </Button>
-      <Button type="button" variant="outline" onClick={requestResetConversation} aria-label="清空對話" title="清空對話" className={cn("h-11 shrink-0 rounded-xl", compactChat ? "order-first w-11 p-0" : "gap-2 px-4")}>
-        <Trash2 className="h-4 w-4" /><span className={compactChat ? "sr-only" : undefined}>清空對話</span>
+      {sendControl}
+      <Button type="button" variant="outline" onClick={requestResetConversation} aria-label="清空對話" title="清空對話" className="h-11 shrink-0 gap-2 rounded-xl px-4">
+        <Trash2 className="h-4 w-4" /><span>清空對話</span>
       </Button>
     </div>
   );
@@ -2891,7 +2950,7 @@ export function ApiChatConsole({
           : "min-h-[720px] rounded-[34px] p-5"
       )}
     >
-      <div
+      {!compactChat && <div
         data-ai-chat-toolbar="true"
         className={cn(
           "shrink-0 border-b border-border",
@@ -2958,10 +3017,10 @@ export function ApiChatConsole({
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* Keep the message scroller independent of the header and composer. */}
-      <div className={cn("flex min-h-0 flex-1 flex-col", isChatOnly && "overflow-y-auto lg:overflow-visible")}>
+      <div className="flex min-h-0 flex-1 flex-col">
       {!isChatOnly && <AiQuotaStatus apiKeyId={selectedApiKey?.id ?? null} provider={provider} model={model} />}
 
       <div className={cn("flex min-h-0 flex-col", isChatOnly ? "flex-1 gap-0" : "flex-1 mt-4 gap-4")}>
@@ -2970,12 +3029,13 @@ export function ApiChatConsole({
         ) : null}
 
         <div
+          data-ai-reading-area
           className={cn(
             "flex min-h-0 flex-1 flex-col bg-[radial-gradient(circle_at_50%_0%,rgba(16,185,129,0.08),transparent_28%),#030508]",
             isChatOnly ? "px-2 py-2 sm:px-4 sm:py-4 md:px-6" : "rounded-[30px] border border-white/8 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
           )}
         >
-          <div className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto", isChatOnly ? "pr-2" : "pr-1", chatHeightClass)}>
+          <div ref={messageScrollRef} data-ai-message-scroller className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto", isChatOnly ? "pr-2" : "pr-1", chatHeightClass)}>
             <div className={cn("space-y-4", isChatOnly && messages.length === 0 && "flex min-h-full flex-col")}>
               {messages.length === 0 ? (
                 isChatOnly ? (
@@ -3018,6 +3078,7 @@ export function ApiChatConsole({
       </div>
 
         <div
+          data-ai-composer-footer
           className={cn(
             "border-cyan-300/12",
             isChatOnly
@@ -3069,7 +3130,7 @@ export function ApiChatConsole({
           </div>
 
           {uploadedAttachments.length ? (
-            <div className="mb-3 grid max-h-[20dvh] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:max-h-[232px] xl:grid-cols-3">
+            <div data-ai-composer-attachments className="mb-3 grid max-h-[20dvh] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:max-h-[232px] xl:grid-cols-3">
               {uploadedAttachments.map((attachment, index) => (
                 <div
                   key={attachment.id}
@@ -3121,13 +3182,14 @@ export function ApiChatConsole({
                 : "border-border bg-card focus-within:border-primary focus-within:ring-primary/20"
             )}
           >
-            <div className="flex min-w-0 flex-col gap-2">
-              <div className="relative min-w-0 px-1 py-1 lg:py-2">
+            <div className={cn("flex min-w-0", compactChat ? "relative items-end gap-1" : "flex-col gap-2")}>
+              {compactChat && <>{promptLibraryControl}{uploadControl}</>}
+              <div className={cn("min-w-0", compactChat ? "flex-1" : "relative px-1 py-1 lg:py-2")}>
                 {slashMenuOpen ? (
                   <div
                     role="listbox"
                     aria-label="共享提示詞快速選單"
-                    className="absolute bottom-[calc(100%+12px)] left-0 z-40 w-full min-w-[280px] overflow-hidden rounded-[18px] border border-cyan-300/35 bg-[linear-gradient(180deg,#142b45_0%,#091827_100%)] shadow-[0_28px_70px_rgba(2,8,23,0.68)]"
+                    className={cn("absolute bottom-[calc(100%+12px)] left-0 z-40 w-full overflow-hidden rounded-[18px] border border-cyan-300/35 bg-[linear-gradient(180deg,#142b45_0%,#091827_100%)] shadow-[0_28px_70px_rgba(2,8,23,0.68)]", !compactChat && "min-w-[280px]")}
                   >
                     <div className="flex items-center justify-between gap-3 border-b border-blue-300/18 px-4 py-3">
                       <div className="flex min-w-0 items-center gap-2">
@@ -3136,9 +3198,9 @@ export function ApiChatConsole({
                           {slashPromptQuery ? `搜尋「${slashPromptQuery}」` : "選擇共享提示詞"}
                         </p>
                       </div>
-                      <span className="shrink-0 text-xs font-bold text-slate-400">↑↓ 選擇 · Enter 套用</span>
+                      {!compactChat && <span className="shrink-0 text-xs font-bold text-slate-400">↑↓ 選擇 · Enter 套用</span>}
                     </div>
-                    <div className="max-h-[300px] overflow-y-auto p-2">
+                    <div data-ai-prompt-options className="max-h-[300px] overflow-y-auto p-2">
                       {slashPromptResults.length ? (
                         slashPromptResults.map((item, index) => (
                           <button
@@ -3199,23 +3261,25 @@ export function ApiChatConsole({
                   onPaste={handleComposerPaste}
                   aria-label="輸入查詢內容"
                   placeholder="輸入問題"
-                  rows={2}
+                  rows={compactChat ? 1 : 2}
                   disabled={isChatOnly && !conversationRemoteReadyRef.current}
-                  className="min-h-20 max-h-40 resize-none rounded-none border-0 !bg-transparent px-3 py-2.5 !text-lg font-normal leading-7 text-foreground shadow-none backdrop-blur-none transition-colors placeholder:text-muted-foreground focus-visible:ring-0 lg:resize-y"
+                  className={cn(
+                    "resize-none border-0 font-normal text-foreground shadow-none backdrop-blur-none transition-colors placeholder:text-muted-foreground focus-visible:ring-0",
+                    compactChat
+                      ? "min-h-11 rounded-xl !bg-background px-3 py-2.5 text-base leading-6"
+                      : "min-h-20 max-h-40 rounded-none !bg-transparent px-3 py-2.5 !text-lg leading-7 lg:resize-y"
+                  )}
                 />
               </div>
 
-              <div data-ai-composer-toolbar="true" className={cn("flex min-w-0 items-center justify-between gap-2 border-t border-border", compactChat ? "flex-nowrap pt-2" : isChatOnly ? "flex-nowrap pt-3" : "flex-wrap pr-28 pt-3 lg:flex-nowrap lg:pr-32")}>
+              {compactChat ? sendControl : <div data-ai-composer-toolbar="true" className={cn("flex min-w-0 items-center justify-between gap-2 border-t border-border", isChatOnly ? "flex-nowrap pt-3" : "flex-wrap pr-28 pt-3 lg:flex-nowrap lg:pr-32")}>
                 <div className="flex shrink-0 items-center gap-2">
                   {promptLibraryControl}
-                  <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className="h-11 shrink-0 gap-2 px-3">
-                    <Paperclip className="h-4 w-4" />
-                    <span className="hidden sm:inline">上傳檔案</span>
-                  </Button>
+                  {uploadControl}
                 </div>
                 {isChatOnly && <span className="hidden min-w-0 flex-1 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground 2xl:flex"><span>輸入 <kbd>/</kbd> 快速套用</span><span>文字＋圖片可一起貼上</span><span>附件 {uploadedAttachments.length} / {MAX_UPLOAD_ATTACHMENT_COUNT}</span></span>}
-                {(isChatOnly || compactChat) && composerActions}
-              </div>
+                {isChatOnly && composerActions}
+              </div>}
             </div>
 
             {isDragOverComposer ? (
@@ -3252,6 +3316,7 @@ export function ApiChatConsole({
           ) : null}
 
           <aside
+            data-ai-chat-history
             className={cn(
               "fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] top-[var(--mobile-header-height)] z-[79] h-auto min-h-0 overflow-hidden rounded-[24px] border border-[#285273] bg-[#081C2D] shadow-[0_30px_90px_rgba(2,8,23,0.82)] transition-all duration-200 lg:static lg:z-auto lg:order-1 lg:h-full lg:border-[#163653] lg:shadow-[0_24px_70px_rgba(2,8,23,0.42)]",
               mobileSidebarOpen ? "visible translate-y-0 opacity-100" : "pointer-events-none invisible translate-y-3 opacity-0 lg:pointer-events-auto lg:visible lg:translate-y-0 lg:opacity-100",
@@ -3276,8 +3341,8 @@ export function ApiChatConsole({
                     variant="ghost"
                     size="icon"
                     onClick={() => setMobileSidebarOpen(false)}
-                    aria-label="關閉資料查詢選單"
-                    className="h-10 w-10 shrink-0 rounded-xl border border-[#214669] bg-[#10283d] text-blue-100 hover:bg-[#16324b] lg:hidden"
+                    aria-label="關閉最近對話"
+                    className="h-11 w-11 shrink-0 rounded-xl border border-[#214669] bg-[#10283d] text-blue-100 hover:bg-[#16324b] lg:hidden"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -3403,7 +3468,7 @@ export function ApiChatConsole({
                 </div>
               )}
 
-              <div className="border-t border-[#163653] bg-[#081C2D] p-4">
+              <div className="hidden border-t border-[#163653] bg-[#081C2D] p-4 lg:block">
                 <div
                   className={cn(
                     "rounded-xl border border-[#214669] bg-[#0C2235]",
@@ -3433,42 +3498,51 @@ export function ApiChatConsole({
             </div>
           </aside>
 
-          <div className="order-1 flex min-h-0 min-w-0 flex-col gap-2 lg:order-2">
-            <div data-mobile-ai-command-bar="true" className="grid shrink-0 grid-cols-[minmax(0,1fr)_44px_44px_44px] gap-2 lg:hidden">
-              <h1 className="flex min-w-0 items-center text-lg font-semibold text-foreground">AI 問答</h1>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setMobileSidebarOpen(true)}
-                aria-label={`開啟最近對話，共 ${savedConversations.length} 筆`}
-                className="relative h-11 w-11 rounded-xl border-blue-300/25 bg-blue-400/10 p-0 text-blue-50 hover:bg-blue-400/18"
-              >
-                <History className="h-4 w-4" />
-                <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-cyan-300 px-1 text-[9px] font-black leading-4 tabular-nums text-slate-950">{savedConversations.length}</span>
-              </Button>
-              <div className="order-last col-span-full min-w-0">
+          <div className="order-1 flex min-h-0 min-w-0 flex-col lg:order-2">
+            {compactChat && <div data-mobile-ai-command-bar="true" className="grid shrink-0 grid-cols-[minmax(0,1fr)_repeat(4,44px)] lg:hidden">
+              <h1 className="sr-only">AI 問答</h1>
               <Select
                 value={selectedApiKeyTargetId ?? ""}
                 onValueChange={(value) => onSelectApiKeyTarget?.(value)}
               >
                 <SelectTrigger
+                  data-mobile-ai-model
                   aria-label="選擇 API 金鑰與模型"
-                  className="h-11 min-w-0 rounded-xl border-blue-300/30 bg-[#13243b] px-3 text-left text-sm font-bold text-white shadow-none focus:ring-2 focus:ring-cyan-300/35 [&>span]:truncate"
+                  aria-description={model || undefined}
+                  title={model}
+                  className="h-11 min-w-0 gap-1 px-2.5 text-left"
                 >
-                  <SelectValue placeholder="選擇模型">{model ? model.replace(/^gemini-/i, "").replace(/-/g, " ") : "選擇模型"}</SelectValue>
+                  <div className="grid min-w-0 gap-0.5">
+                    <span aria-hidden="true" className="truncate text-xs font-medium leading-none text-foreground">AI 問答</span>
+                    <span className="truncate text-sm font-semibold leading-none text-primary">
+                      <SelectValue placeholder="選擇模型">{model || "選擇模型"}</SelectValue>
+                    </span>
+                  </div>
                 </SelectTrigger>
-                <SelectContent className="border-cyan-400/15 bg-[#0d1727] text-slate-100">
+                <SelectContent className="border-border bg-popover text-foreground">
                   {availableApiKeyTargets.map((target) => {
                     const metadata = normalizeApiKeyPermissions(target.record.permissions).metadata;
                     return (
-                      <SelectItem key={target.id} value={target.id}>
+                      <SelectItem key={target.id} value={target.id} className="min-h-11">
                         {target.record.key_name} · {metadata.provider || "-"} / {target.model}
                       </SelectItem>
                     );
                   })}
                 </SelectContent>
               </Select>
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label={`開啟最近對話，共 ${savedConversations.length} 筆`}
+                title="最近對話"
+                className="h-11 w-11 p-0"
+              >
+                <History className="h-4 w-4" />
+              </Button>
+              <Button type="button" variant="outline" aria-label="對話工具" aria-haspopup="dialog" aria-expanded={mobileToolsOpen} title="資料來源與 API 用量" onClick={() => setMobileToolsOpen(true)} className="h-11 w-11 p-0">
+                <SlidersHorizontal className="h-4 w-4" />
+              </Button>
               <Button type="button" variant="outline" aria-label={`開啟聊天室${directMessageUnreadCount ? `，${directMessageUnreadCount} 則未讀` : ""}`} title="訊息" className="relative h-11 w-11 p-0" onClick={() => window.dispatchEvent(new CustomEvent("open-global-direct-messages"))}>
                 <MessageSquareText className="h-4 w-4" />
                 {directMessageUnreadCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-destructive px-1 text-[10px] text-destructive-foreground">{directMessageUnreadCount > 99 ? "99+" : directMessageUnreadCount}</span>}
@@ -3477,11 +3551,26 @@ export function ApiChatConsole({
                 type="button"
                 onClick={requestResetConversation}
                 aria-label="建立新對話"
-                className="h-11 w-11 rounded-xl bg-[linear-gradient(135deg,#bef264,#67e8f9)] p-0 text-[#082032] shadow-[0_10px_24px_-14px_rgba(103,232,249,0.9)] hover:brightness-110"
+                className="h-11 w-11 rounded-xl p-0"
               >
                 <Plus className="h-5 w-5" />
               </Button>
-            </div>
+            </div>}
+            {compactChat && <MobileToolsSheet
+              open={mobileToolsOpen}
+              onOpenChange={setMobileToolsOpen}
+              title="對話工具"
+              description="管理資料來源與查看 API 用量。"
+              testId="mobile-ai-tools"
+              sections={[
+                { key: "sources", title: "資料來源", content: sourceSettings },
+                { key: "quota", title: "全員共用 API 額度", content: <AiQuotaStatus apiKeyId={selectedApiKey?.id ?? null} provider={provider} model={model} /> },
+                { key: "conversation", items: [{ key: "clear", label: "清空對話", icon: Trash2, onSelect: requestResetConversation }] },
+              ]}
+            />}
+            {compactChat && activeSourceLabels && (
+              <p data-ai-active-sources className="shrink-0 px-2 pb-1 text-xs leading-5 text-primary">已啟用 {activeSourceLabels}</p>
+            )}
             <div className="min-h-0 flex-1">{conversationPanel}</div>
           </div>
         </div>
