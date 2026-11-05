@@ -1908,8 +1908,8 @@ function TrackingHistoryCell({
         title={tooltip} className={cn("h-10 min-h-[40px] min-w-0 rounded-md px-2 text-xs font-semibold", materialTrackingStatusTone(workflowStatus))}>
         <span className="truncate">{statusLabel}</span>
       </Button>
-      <Button type="button" variant="secondary" data-testid="material-edit-button" onClick={() => (onEdit ?? onOpen)(record)}
-        aria-label={`編輯料件 ${record.manufacturerPartNumber || record.name}`} className="h-10 min-h-[40px] rounded-md border border-border px-2.5 text-xs font-semibold">
+      <Button type="button" data-testid="material-edit-button" onClick={() => (onEdit ?? onOpen)(record)}
+        aria-label={`編輯料件 ${record.manufacturerPartNumber || record.name}`} className="h-10 min-h-[40px] rounded-md px-2.5 text-xs font-semibold">
         <Pencil aria-hidden="true" className="size-3.5" />編輯
       </Button>
     </div>
@@ -2748,7 +2748,7 @@ export function PendingMaterialsDialog({
                   </div>
                   <div className="pending-row-status">
                     <span data-testid="pending-status-segment" aria-label={`目前狀態：${trackingStatus || '未處理'}`} className={cn("pending-status-indicator inline-flex h-10 min-w-0 flex-col items-center justify-center rounded-md border px-1 text-xs font-semibold", materialTrackingStatusTone(trackingStatus))}><span className="block w-full truncate" title={trackingStatus || "未處理"}>{trackingStatus || "未處理"}</span>{getMaterialTrackingStatusMeaning(trackingStatus) && <span className="block w-full truncate text-[10px] font-normal" title={getMaterialTrackingStatusMeaning(trackingStatus)}>{getMaterialTrackingStatusMeaning(trackingStatus)}</span>}</span>
-                    <Button type="button" data-testid="pending-tracking-control" variant="secondary" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full rounded-md border border-border px-1 text-xs font-semibold" aria-label={`編輯 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
+                    <Button type="button" data-testid="pending-tracking-control" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full rounded-md px-1 text-xs font-semibold" aria-label={`編輯 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
                       <span data-testid="pending-update-segment">編輯</span>
                     </Button>
                   </div>
