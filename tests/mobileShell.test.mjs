@@ -113,6 +113,6 @@ test("the phone home shows real unresolved issues and two-column workspaces with
   assert.match(tasks, /問題清單暫時載入失敗/);
   const block = css.slice(css.indexOf("Phone home (2026-11-05)"));
   assert.match(block, /^[^\n]*\n@media \(max-width: 767px\)|@media \(max-width: 767px\) \{/);
-  assert.match(block, /\.workspace-entrance-mobile-list \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(entrance, /data-mobile-home-modules="true"[\s\S]*grid grid-cols-2 gap-2/);
   assert.match(block, /\.mobile-home-issue \{ display: flex; align-items: center; gap: 10px; width: 100%; min-height: 60px/);
 });

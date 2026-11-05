@@ -29,8 +29,13 @@ test("does not embed the platform introduction video in the app", () => {
 test("uses a dedicated phone workspace list without replacing the desktop grid", () => {
   assert.match(entranceSource, /data-testid="workspace-entrance-mobile-list"/);
   assert.match(entranceSource, /workspace-entrance-mobile-list[^\n]*md:hidden/);
+  assert.match(entranceSource, /data-mobile-home-hero="true"/);
+  assert.match(entranceSource, /data-mobile-home-shortcuts="true"/);
+  assert.match(entranceSource, /data-mobile-home-modules="true"/);
+  assert.match(entranceSource, /racksArtwork/);
+  assert.doesNotMatch(entranceSource, /localStorage|sessionStorage/);
   assert.match(entranceSource, /hidden content-start gap-3 md:grid/);
-  assert.match(entranceSource, /我的工作區/);
+  assert.match(entranceSource, /工程工作平台/);
   assert.match(entranceSource, /data-workspace-id=\{item\.id\}/);
   assert.match(entranceSource, /workspace-entrance-mobile-chevron/);
   assert.match(entranceSource, /"station-status": "維修中心"/);
