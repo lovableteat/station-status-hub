@@ -52,6 +52,35 @@ export function getMaterialMarkKeys(group: MaterialGroup) {
     .map(location => `record::${(location.sourcePrimaryRecord ?? location.primaryRecord).id}`);
 }
 
+/** Filter the existing display mains, never promote an alternative to pass a filter. */
+export function filterMaterialMainGroup(
+  group: MaterialMainGroup,
+  matchesRecord: (record: MaterialRecord, location: MaterialGroup) => boolean,
+): MaterialMainGroup | null {
+  const locations = group.locations.flatMap(location => {
+    if (!matchesRecord(location.primaryRecord, location)) return [];
+    const records = location.records.filter(record => matchesRecord(record, location));
+    return [records.length === location.records.length ? location : { ...location, records }];
+  });
+  if (locations.length === 0) return null;
+  if (locations.length === group.locations.length && locations.every((location, index) => location === group.locations[index])) return group;
+  const first = locations[0];
+  const records = locations.flatMap(location => location.records);
+  const quantities = locations.map(location => Number(String(location.qty).replaceAll(",", "")));
+  const qty = locations.length === 1 ? first.qty : quantities.every(Number.isFinite)
+    ? String(Number(quantities.reduce((sum, value) => sum + value, 0).toPrecision(15))) : "—";
+  return { ...group, locations, records, primaryRecord: first.primaryRecord, qty,
+    assemblyName: first.assemblyName, sectionName: first.sectionName,
+    displayRef: [...new Set(locations.map(location => location.displayRef))].join(", "),
+    totalCount: records.length,
+    pendingCount: records.filter(record => record.isPending && !record.applicationExempt).length,
+    okCount: records.filter(record => record.isReady).length,
+    approvedCount: records.filter(record => record.isApproved).length,
+    riskCount: records.filter(record => record.isRisk).length,
+    requiresApplication: locations.some(location => !location.primaryRecord.applicationExempt && !hasMaterialPartNumber(location.primaryRecord)),
+  };
+}
+
 // This projection never changes the source groups or their per-location records.
 export function buildMaterialMainGroups(groups: MaterialGroup[]): MaterialMainGroup[] {
   const merged = new Map<string, MaterialDisplayLocation[]>();
