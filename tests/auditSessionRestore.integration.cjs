@@ -255,11 +255,25 @@ test('shared profile timeout preserves credentials for recovery without granting
   assert.equal(f.state.sessionRecoveryNeeded, true, 'late unowned work must not bypass a fresh verification');
 });
 
-test('session-version rejection never queries or trusts the cached user', async t => {
+test('a server-verified session survives a missing local version marker', async t => {
   const f = await fixture(); t.after(() => f.unmount());
   f.storage.delete('bringup-auth-session-version');
   await f.resolveBootstrap(session('A'));
-  assert.equal(f.profiles.length, 0);
+  assert.equal(f.state.isInitializing, true);
+  assert.equal(f.channels.length, 0);
+  await f.resolveProfile(0, profile('A'));
+  assert.equal(f.state.user.userId, 'A');
+  assert.equal(f.state.sessionMode, 'authenticated');
+  assert.equal(f.storage.get('bringup-auth-session-version'), '2026-07-31-tab-isolation-v2');
+  assert.equal(f.signOuts, 0);
+});
+
+test('a session without a version marker requires an active server profile', async t => {
+  const f = await fixture(); t.after(() => f.unmount());
+  f.storage.delete('bringup-auth-session-version');
+  f.supabase.auth.getUser = async () => assert.fail('metadata alone cannot migrate the session');
+  await f.resolveBootstrap(session('A'));
+  await f.resolveProfile(0, { data: null, error: { code: 'PGRST202' } });
   assert.equal(f.state.user, null);
   assert.equal(f.state.reauthRequired, true);
   assert.equal(f.signOuts, 1);
