@@ -1140,34 +1140,40 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 .material-status-text { color: hsl(var(--material-status)); }
 
 .material-record-dialog .app-dialog-header { flex: 0 0 auto; padding-right: 46px; }
-/* SPEC reader: stable task header, one result canvas and an always-visible composer. */
+/* SPEC reader: one task at a time, with a separate result and conversation. */
 .workspace-dialog-surface.material-spec-fill-dialog { width: calc(100vw - 24px); max-width: 1680px; height: calc(100dvh - 24px); max-height: 1100px; padding: 0; gap: 0; border-radius: 14px; }
 .material-spec-fill-dialog [hidden] { display: none !important; }
-.material-spec-fill-dialog .spec-fill-header { flex: 0 0 auto; padding: 12px 20px 14px; gap: 8px; border-bottom: 1px solid hsl(var(--border)); }
+.material-spec-fill-dialog .spec-fill-header { flex: 0 0 auto; padding: 8px 20px 12px; gap: 4px; border-bottom: 1px solid hsl(var(--border)); }
 .material-spec-fill-dialog .spec-fill-back { align-self: start; height: 32px; padding: 0 6px; color: hsl(var(--muted-foreground)); font-size: 13px; }
 .material-spec-fill-dialog .spec-fill-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .material-spec-fill-dialog .spec-fill-title-row h2 { font-size: 19px; }
 .material-spec-fill-dialog .spec-fill-title-row p { margin-top: 3px; font-size: 12px; overflow-wrap: anywhere; }
-.material-spec-fill-dialog .spec-fill-part-identity { flex: 0 1 auto; min-width: 0; display: grid; gap: 3px; text-align: right; font-size: 12px; }
-.material-spec-fill-dialog .spec-fill-part-identity strong { font-size: 15px; overflow-wrap: anywhere; }
-.material-spec-fill-dialog .spec-fill-part-identity span { color: hsl(var(--muted-foreground)); }
-.material-spec-fill-dialog .spec-fill-toolbar { display: flex; flex: 0 0 auto; align-items: end; flex-wrap: wrap; gap: 10px; padding: 10px 20px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--background) / .35); }
-.material-spec-fill-dialog .spec-fill-toolbar > label { display: grid; gap: 4px; font-size: 11px; color: hsl(var(--muted-foreground)); }
-.material-spec-fill-dialog .spec-fill-model-label { min-width: 220px; flex: 1 1 240px; max-width: 420px; }
+.material-spec-fill-dialog .spec-fill-toolbar { display: flex; flex: 0 0 auto; align-items: center; flex-wrap: wrap; gap: 8px; padding: 7px 20px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--background) / .35); }
+.spec-fill-ai-settings { width: min(22rem, calc(100vw - 24px)); display: grid; gap: 12px; }
+.spec-fill-ai-settings label { display: grid; gap: 6px; font-size: 12px; }
+.spec-fill-ai-settings select { min-width: 0; width: 100%; padding: 6px 8px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 13px; }
 .material-spec-fill-dialog :is(input:not([type="checkbox"]),select) { min-width: 0; max-width: 100%; height: 38px; font-size: 13px; }
 .material-spec-fill-dialog select { padding: 0 28px 0 10px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
 .material-spec-fill-dialog :is(select,button,input,textarea):focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
 .material-spec-fill-dialog .spec-fill-count { color: hsl(var(--muted-foreground)); font-size: 11px; font-variant-numeric: tabular-nums; }
-.material-spec-fill-dialog .spec-fill-view-switch { display: flex; align-self: end; gap: 2px; margin-left: auto; padding: 2px; border: 1px solid hsl(var(--border)); border-radius: 8px; }
+.material-spec-fill-dialog .spec-fill-view-switch { display: flex; gap: 2px; padding: 2px; border: 1px solid hsl(var(--border)); border-radius: 8px; }
 .material-spec-fill-dialog .spec-fill-view-switch button { height: 34px; padding-inline: 12px; font-size: 12px; }
+.material-spec-fill-dialog .spec-fill-edit-inputs { margin-left: auto; }
 .material-spec-fill-dialog [aria-pressed="true"] { background: hsl(var(--primary) / .14); color: hsl(var(--primary)); }
 .material-spec-fill-dialog .spec-fill-workspace { display: flex; flex: 1 1 auto; min-height: 0; min-width: 0; flex-direction: column; gap: 14px; padding: 16px 20px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.material-spec-fill-dialog .spec-fill-setup { display: grid; gap: 14px; }
+.material-spec-fill-dialog .spec-fill-setup { display: grid; align-content: start; width: 100%; max-width: 1040px; gap: 16px; margin-inline: auto; }
 .material-spec-fill-dialog .spec-fill-heading { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; }
-.material-spec-fill-dialog .spec-fill-part-fields { display: grid; grid-template-columns: minmax(180px,1fr) minmax(0,2fr); gap: 10px; }
+.material-spec-fill-dialog .spec-fill-part-trigger { width: 100%; min-height: 52px; height: auto; justify-content: space-between; text-align: left; padding: 6px 12px; }
+.material-spec-fill-dialog .spec-fill-part-trigger > span, .spec-fill-part-options [cmdk-item] > span { min-width: 0; display: grid; gap: 3px; }
+.material-spec-fill-dialog .spec-fill-part-trigger small, .spec-fill-part-options [cmdk-item] small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 400; }
+.spec-fill-part-options { width: min(var(--radix-popover-trigger-width), calc(100vw - 24px)); }
+.spec-fill-part-options [cmdk-list] { max-height: min(290px, max(100px, calc(var(--radix-popover-content-available-height) - 75px))); }
+.spec-fill-part-options [cmdk-item] { align-items: center; min-height: 46px; }
+.spec-fill-part-more { padding: 5px 10px; color: hsl(var(--muted-foreground)); font-size: 11px; }
 .material-spec-fill-dialog .spec-fill-help { margin-top: 6px; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
-.material-spec-fill-dialog .spec-fill-input-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
-.material-spec-fill-dialog .spec-fill-section { min-width: 0; }
+.material-spec-fill-dialog .spec-fill-input-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; align-items: start; }
+.material-spec-fill-dialog .spec-fill-input-grid[data-mode=ask] { grid-template-columns: minmax(0,1fr); }
+.material-spec-fill-dialog .spec-fill-section { min-width: 0; border: 1px solid hsl(var(--border)); border-radius: 8px; padding: 10px; background: hsl(var(--background) / .18); }
 .material-spec-fill-dialog .spec-fill-section-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .material-spec-fill-dialog .spec-fill-section-title h3 { font-size: 13px; font-weight: 600; }
 .material-spec-fill-dialog .spec-fill-section-title h3 span { padding-left: 5px; color: hsl(var(--muted-foreground)); font-size: 11px; font-weight: 400; }
@@ -1180,12 +1186,15 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 .material-spec-fill-dialog .spec-fill-photo-thumbnail { display: block; width: 100%; height: 100px; padding: 7px; background: hsl(var(--background) / .4); }
 .material-spec-fill-dialog .spec-fill-photo-thumbnail img { width: 100%; height: 100%; object-fit: contain; }
 .material-spec-fill-dialog .spec-fill-photo-card figcaption { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border-top: 1px solid hsl(var(--border)); }
-.material-spec-fill-dialog .spec-fill-files { max-height: 190px; min-height: 116px; overflow-y: auto; border: 1px solid hsl(var(--border)); border-radius: 7px; }
+.material-spec-fill-dialog .spec-fill-files { max-height: 182px; overflow-y: auto; border: 1px solid hsl(var(--border)); border-radius: 7px; }
 .material-spec-fill-dialog .spec-fill-file { display: flex; min-height: 42px; gap: 9px; align-items: center; padding: 8px 10px; border-bottom: 1px solid hsl(var(--border) / .7); font-size: 13px; }
 .material-spec-fill-dialog .spec-fill-file:last-child { border-bottom: 0; }
 .material-spec-fill-dialog .spec-fill-file input { width: 16px; height: 16px; flex-shrink: 0; accent-color: hsl(var(--primary)); }
 .material-spec-fill-dialog .spec-fill-file:has(input:checked) { background: hsl(var(--primary) / .08); }
-.material-spec-fill-dialog .spec-fill-note { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 12px; font-size: 12px; }
+.material-spec-fill-dialog .spec-fill-conditions { font-size: 13px; color: hsl(var(--muted-foreground)); }
+.material-spec-fill-dialog .spec-fill-conditions summary { cursor: pointer; }
+.material-spec-fill-dialog .spec-fill-conditions input { margin-top: 8px; }
+.material-spec-fill-dialog .spec-fill-first-question { display: grid; gap: 8px; font-size: 13px; font-weight: 600; }
 .material-spec-fill-dialog .spec-fill-results { min-height: 0; min-width: 0; display: flex; flex: 1 0 auto; flex-direction: column; gap: 10px; }
 .material-spec-fill-dialog .spec-fill-results-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; }
 .material-spec-fill-dialog .spec-fill-results-toolbar p { margin-top: 3px; color: hsl(var(--muted-foreground)); font-size: 12px; }
@@ -1219,38 +1228,33 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 .material-spec-fill-dialog .spec-fill-composer { display: flex; flex-shrink: 0; align-items: end; gap: 10px; margin: 0 20px; border: 1px solid hsl(var(--primary) / .4); border-radius: 9px; padding: 8px; background: hsl(var(--background) / .35); }
 .material-spec-fill-dialog .spec-fill-composer textarea { border: 0; box-shadow: none; min-height: 52px; max-height: 100px; resize: vertical; font-size: 14px; line-height: 1.6; background: transparent; }
 .material-spec-fill-dialog .spec-fill-composer button { min-height: 40px; flex-shrink: 0; }
-.material-spec-fill-dialog .spec-fill-footer { display: flex; flex: 0 0 auto; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 20px 12px; }
+.material-spec-fill-dialog .spec-fill-composer-actions { display: flex; gap: 5px; align-items: center; }
+.material-spec-fill-dialog .spec-fill-footer { display: flex; flex: 0 0 auto; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 20px 12px; border-top: 1px solid hsl(var(--border)); }
 .material-spec-fill-dialog .spec-fill-footer > p { font-size: 11px; color: hsl(var(--muted-foreground)); }
 .material-spec-fill-dialog .spec-fill-footer-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
 .material-spec-fill-dialog .spec-fill-footer-actions button { height: 36px; font-size: 12px; }
-.material-spec-fill-dialog .spec-fill-inline-error { border: 1px solid hsl(var(--destructive) / .5); padding: 10px 12px; border-radius: 7px; color: hsl(var(--destructive)); font-size: 13px; }
+.material-spec-fill-dialog .spec-fill-inline-error { max-height: 18dvh; overflow: auto; flex: 0 0 auto; margin: 0 12px 8px; border: 1px solid hsl(var(--destructive) / .5); padding: 8px 12px; border-radius: 7px; color: hsl(var(--destructive)); font-size: 13px; }
 .material-spec-fill-dialog .spec-fill-inline-warning { margin: 6px 20px; color: hsl(40 85% 72%); font-size: 12px; }
-.material-spec-fill-dialog .spec-fill-notice { color: hsl(var(--primary)); font-size: 12px; }
+.material-spec-fill-dialog .spec-fill-notice { margin: 0 12px 8px; color: hsl(var(--primary)); font-size: 12px; }
 .material-spec-fill-dialog .spec-fill-busy { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid hsl(var(--border)); border-radius: 7px; color: hsl(var(--muted-foreground)); font-size: 12px; }
 .workspace-dialog-surface.spec-fill-source-dialog { max-width: 780px; border-radius: 12px; }
 .spec-fill-source-dialog .spec-fill-evidence-value { padding: 12px; border: 1px solid hsl(var(--border)); border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
-@media (max-width: 900px) { .material-spec-fill-dialog .spec-fill-model-label { max-width: none; } .material-spec-fill-dialog .spec-fill-view-switch { margin-left: 0; } }
 @media (max-width: 640px) {
   .workspace-dialog-surface.material-spec-fill-dialog { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; }
   .material-spec-fill-dialog .spec-fill-header { padding: 8px 12px 10px; gap: 4px; }
   .material-spec-fill-dialog .spec-fill-title-row { align-items: start; gap: 8px; }
   .material-spec-fill-dialog .spec-fill-title-row h2 { font-size: 17px; }
   .material-spec-fill-dialog .spec-fill-title-row p { font-size: 11px; }
-  .material-spec-fill-dialog .spec-fill-part-identity strong { font-size: 12px; }
   .material-spec-fill-dialog .spec-fill-toolbar { padding: 8px 12px; gap: 8px; }
-  .material-spec-fill-dialog .spec-fill-model-label { min-width: 180px; flex: 1 1 100%; }
-  .material-spec-fill-dialog .spec-fill-toolbar > label:not(.spec-fill-model-label) { flex: 1 1 120px; }
-  .material-spec-fill-dialog .spec-fill-toolbar select { height: 36px; }
   .material-spec-fill-dialog .spec-fill-workspace { padding: 12px; gap: 12px; }
-  .material-spec-fill-dialog .spec-fill-part-fields { grid-template-columns: minmax(0,1fr); }
   .material-spec-fill-dialog .spec-fill-input-grid { grid-template-columns: minmax(0,1fr); gap: 16px; }
   .material-spec-fill-dialog .spec-fill-photo { min-height: 104px; }
   .material-spec-fill-dialog .spec-fill-photo-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .material-spec-fill-dialog .spec-fill-note { grid-template-columns: minmax(0,1fr); gap: 6px; }
   .material-spec-fill-dialog :is(input:not([type="checkbox"]),select,textarea) { font-size: 16px; }
   .material-spec-fill-dialog .spec-fill-results-toolbar label { margin-left: 0; }
   .material-spec-fill-dialog .spec-fill-table-scroll { max-height: 46dvh; }
-  .material-spec-fill-dialog .spec-fill-composer { margin-inline: 12px; gap: 5px; }
+  .material-spec-fill-dialog .spec-fill-composer { margin-inline: 12px; gap: 5px; flex-wrap: wrap; }
+  .material-spec-fill-dialog .spec-fill-composer-actions { margin-left: auto; }
   .material-spec-fill-dialog .spec-fill-composer textarea { min-height: 52px; }
   .material-spec-fill-dialog .spec-fill-composer button { min-height: 44px; padding-inline: 10px; font-size: 12px; }
   .material-spec-fill-dialog .spec-fill-footer { padding: 8px 12px max(8px,env(safe-area-inset-bottom)); }

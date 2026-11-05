@@ -19,12 +19,13 @@ function fixture() {
   const nodes = () => root.root;
   const button = name => nodes().findAll(node => node.type === "stub" && node.props.onClick && (node.props["aria-label"] === name || React.Children.toArray(node.props.children).filter(child => typeof child === "string" || typeof child === "number").join("").includes(name)))[0];
   const photo = new File(["test"], "form.png", { type: "image/png" });
-  const prepare = () => act(() => { nodes().findByProps({ "aria-label": "選擇表格照片檔案" }).props.onChange({ target: { files: [photo], value: "" } }); nodes().findAllByType("input").find(node => node.props.type === "checkbox").props.onChange({ target: { checked: true } }); });
+  const choosePart = id => act(() => nodes().findAll(node => node.type === "stub" && node.props.value === id && node.props.onSelect)[0].props.onSelect(id));
+  const prepare = () => { choosePart("1"); act(() => { nodes().findByProps({ "aria-label": "選擇表格照片檔案" }).props.onChange({ target: { files: [photo], value: "" } }); nodes().findAllByType("input").find(node => node.props.type === "checkbox").props.onChange({ target: { checked: true } }); }); };
   const add = files => act(() => nodes().findByProps({ "aria-label": "選擇表格照片檔案" }).props.onChange({ target: { files, value: "" } }));
   const drop = files => act(() => nodes().findByProps({ "aria-label": "貼上表格照片區" }).props.onDrop({ preventDefault() {}, dataTransfer: { files } }));
   const paste = (files, items = []) => act(() => nodes().findByProps({ "aria-label": "貼上表格照片區" }).props.onPaste({ preventDefault() {}, clipboardData: {files,items} }));
   const previews = () => nodes().findAll(node => node.type === "figure" && node.props["data-testid"] === "spec-fill-photo-preview");
-  return { get root() { return root; }, nodes, button, prepare, calls, jobs, intents, add, drop, paste, previews, createdUrls, revokedUrls };
+  return { get root() { return root; }, nodes, button, prepare, choosePart, calls, jobs, intents, add, drop, paste, previews, createdUrls, revokedUrls };
 }
 
 test("requires a template photo and selected SPEC; cancellation and part changes discard late results", async () => {
@@ -38,11 +39,11 @@ test("requires a template photo and selected SPEC; cancellation and part changes
     assert.equal(f.calls.length, 1);
     act(() => f.button("停止分析").props.onClick());
     assert.equal(f.calls[0].signal.aborted, true);
-    act(() => f.nodes().findByProps({ "aria-label": "指定料件" }).props.onChange({ target: { value: "2" } }));
+    f.choosePart("2");
     f.jobs[0].resolve([answer]); await flush();
     assert.equal(f.nodes().findAllByProps({ "aria-label": "依照片填表結果" }).length, 0);
     assert.equal(f.button("開始依照片填表").props.disabled, true, "old SPEC selection is cleared for another part");
-    assert.equal(f.nodes().findByProps({ "aria-label": "指定料件" }).props.value, "2");
+    assert.match(JSON.stringify(f.root.toJSON()), /MPN-2/);
   } finally { act(() => f.root.unmount()); }
 });
 
@@ -50,6 +51,7 @@ test("chat follow-ups preserve the filled table and failures; explicit refill ap
   const f=fixture(); await flush(); f.prepare();
   try {
     act(()=>f.button('開始依照片填表').props.onClick()); await flush(); f.jobs[0].resolve([answer]); await flush();
+    act(()=>f.button('追問規格').props.onClick());
     const ask=value=>act(()=>f.nodes().findByProps({'aria-label':'接續提問'}).props.onChange({target:{value}}));
     ask('請補單位'); act(()=>f.button('送出追問').props.onClick()); await flush();
     assert.equal(f.calls[1].history.length,1);
@@ -71,6 +73,7 @@ test("chat follow-ups preserve the filled table and failures; explicit refill ap
     assert.equal(f.calls[3].history[1].tables.length, 0);
     f.jobs[3].resolve([{...answer,title:'Second answer'}]); await flush();
     assert.match(JSON.stringify(f.root.toJSON()), /Second answer/);
+    act(()=>f.button('追問規格').props.onClick());
     assert.ok(f.button('查看第 3 次結果'));
     assert.ok(f.button('查看第 1 次結果'));
     act(()=>f.button('查看第 1 次結果').props.onClick());
@@ -101,6 +104,7 @@ test("multi-file select, multi-image paste, item-only clipboard and drop append 
     f.drop(files.slice(9));
     assert.equal(f.previews().length,12);
     assert.equal(f.createdUrls.length,12);
+    f.choosePart('1');
     act(()=>f.nodes().findAllByType('input').find(n=>n.props.type==='checkbox').props.onChange({target:{checked:true}}));
     act(()=>f.button('開始依照片填表').props.onClick()); await flush();
     assert.equal(f.calls.length,1);
@@ -134,7 +138,7 @@ test("partial failures and the 20-photo cap identify rejected files and keep acc
   assert.equal(f.revokedUrls.length,20,'all remaining preview URLs are released on unmount');
 });
 
-test("all photo results retain independent columns and removing a photo invalidates the old batch", async () => {
+test("results keep independent columns and input edits preserve the last completed result", async () => {
   const f=fixture(); await flush(); f.prepare(); f.add([new File(['x'],'second.png')]);
   try {
     act(()=>f.button('開始依照片填表').props.onClick()); await flush();
@@ -145,12 +149,18 @@ test("all photo results retain independent columns and removing a photo invalida
     assert.equal(f.nodes().findAllByProps({'aria-label':'第 2 張填表結果'}).length,1);
     assert.match(JSON.stringify(f.root.toJSON()),/Package/);
     assert.ok(f.button('複製全部表格'));
-    act(()=>f.button('照片與 SPEC').props.onClick());
+    act(()=>f.button('調整資料').props.onClick());
     act(()=>f.nodes().findAll(node=>node.type==='stub'&&node.props['aria-label']==='移除第 1 張照片：form.png')[0].props.onClick());
     assert.equal(f.nodes().findAllByProps({'aria-label':'依照片填表結果'}).length,0);
     assert.equal(f.previews().length,1);
-    act(()=>f.button('開始依照片填表').props.onClick()); await flush();
+    act(()=>f.button('返回結果').props.onClick());
+    assert.equal(f.nodes().findAllByProps({'aria-label':'第 2 張填表結果'}).length,1);
+    act(()=>f.button('調整資料').props.onClick());
+    assert.equal(f.previews().length,2,'returning to the result restores the photo batch used');
+    act(()=>f.nodes().findAll(node=>node.type==='stub'&&node.props['aria-label']==='移除第 1 張照片：form.png')[0].props.onClick());
+    act(()=>f.button('重新填表').props.onClick()); await flush();
     assert.equal(f.calls[1].photos.length,1);
+    assert.equal(f.calls[1].history.length,0,'a new photo batch does not reuse old answers');
     assert.equal(f.calls[1].photos[0].name,'second.png');
   } finally { act(()=>f.root.unmount()); }
 });
