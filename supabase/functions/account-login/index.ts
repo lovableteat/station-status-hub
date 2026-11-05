@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type AuthResponse } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,11 +107,28 @@ serve(async (request) => {
           503,
         );
       }
-    } else {
+    }
+
+    const authClient = createClient(supabaseUrl, anonKey, {
+      db: { schema: supabaseSchema },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const credentials = { email, password };
+    let authResult: AuthResponse = await authClient.auth.signInWithPassword(credentials);
+    const initialSession = authResult.data.session;
+    const staleMetadata = initialSession?.user.id === authUserId
+      && Object.entries(appMetadata).some(([key, value]) =>
+        (initialSession.user.app_metadata[key] ?? null) !== value,
+      );
+
+    // Supabase revokes all sessions on an admin password write. Repair a linked
+    // account only when its already verified legacy password is out of sync.
+    const repairCredentials = Boolean(systemUser.auth_user_id)
+      && authResult.error?.code === "invalid_credentials";
+    if (repairCredentials || staleMetadata) {
       const { error: updateError } = await admin.auth.admin.updateUserById(authUserId, {
-        password,
-        email,
         app_metadata: appMetadata,
+        ...(repairCredentials ? credentials : {}),
       });
       if (updateError) {
         console.error("Unable to synchronize account", updateError);
@@ -120,17 +137,15 @@ serve(async (request) => {
           503,
         );
       }
+      if (repairCredentials) {
+        authResult = await authClient.auth.signInWithPassword(credentials);
+      } else if (initialSession) {
+        authResult = await authClient.auth.refreshSession({ refresh_token: initialSession.refresh_token });
+      }
     }
 
-    const authClient = createClient(supabaseUrl, anonKey, {
-      db: { schema: supabaseSchema },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: sessionData, error: signInError } = await authClient.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (signInError || !sessionData.session) {
+    const { data: { session }, error: signInError } = authResult;
+    if (signInError || !session || session.user.id !== authUserId) {
       console.error("Unable to establish account session", signInError);
       return jsonResponse(
         { success: false, code: "SESSION_FAILED", error: "Unable to establish session" },
@@ -145,7 +160,7 @@ serve(async (request) => {
 
     return jsonResponse({
       success: true,
-      session: sessionData.session,
+      session,
       system_user: {
         user_id: systemUser.id,
         username: systemUser.username,

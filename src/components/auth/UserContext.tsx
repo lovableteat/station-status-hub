@@ -172,7 +172,7 @@ function storeCurrentSessionVersion(enabled: boolean) {
     if (enabled) window.sessionStorage.setItem(AUTH_SESSION_VERSION_KEY, AUTH_SESSION_VERSION);
     else window.sessionStorage.removeItem(AUTH_SESSION_VERSION_KEY);
   } catch {
-    // Storage restrictions are handled as a signed-out session on next load.
+    // An existing Auth session can still be verified by the server on reload.
   }
 }
 
@@ -207,7 +207,7 @@ function userFromMetadata(metadata: Session["user"]["app_metadata"]): User | nul
   };
 }
 
-async function userFromSession(session: Session): Promise<User | null> {
+async function userFromSession(session: Session, allowMetadataFallback: boolean): Promise<User | null> {
   const rpc = supabase.rpc.bind(supabase) as unknown as (
     name: string,
   ) => Promise<{ data: Array<Record<string, unknown>> | null; error: unknown }>;
@@ -236,6 +236,7 @@ async function userFromSession(session: Session): Promise<User | null> {
   if (rpcCode !== "PGRST202" && rpcCode !== "42883") {
     throw normalizeThrownError(error, "Account profile is temporarily unavailable");
   }
+  if (!allowMetadataFallback) return null;
 
   // Keep migration compatibility, but only after Auth has fetched the user
   // from the server. The user object inside getSession() comes from browser
@@ -401,19 +402,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (!isCurrent()) return;
         try {
           if (!session) { clearIdentity(); return; }
-          if (!hasCurrentSessionVersion()) {
-            setReauthRequired(true);
-            rejectSession();
-            return;
-          }
-          void authorizeRealtime(session);
+          const hasSessionVersion = hasCurrentSessionVersion();
+          if (hasSessionVersion) void authorizeRealtime(session);
           const profileResult = await runSessionBootstrapWithDeadline(
-            () => userFromSession(session),
+            () => userFromSession(session, hasSessionVersion),
             { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS },
           );
           if (!isCurrent()) return;
           if (profileResult.status === "fulfilled") {
-            if (!profileResult.value) { rejectSession(); return; }
+            if (!profileResult.value) {
+              if (!hasSessionVersion) setReauthRequired(true);
+              rejectSession();
+              return;
+            }
+            if (!hasSessionVersion) {
+              storeCurrentSessionVersion(true);
+              void authorizeRealtime(session);
+            }
             lastVerifiedSession.current = session;
             verifiedIdentity.current = { authId: session.user.id, accountId: profileResult.value.userId, checkedAt: Date.now() };
             cancelRecoveryRetry();
