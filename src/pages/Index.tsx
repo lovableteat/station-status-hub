@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Archive,
+  Bell,
   Boxes,
   Camera,
   CircuitBoard,
@@ -11,10 +12,12 @@ import {
   GitCompareArrows,
   KeyRound,
   LayoutDashboard,
+  LogOut,
   MessageSquareText,
   ServerCog,
   ShieldCheck,
   Target,
+  UsersRound,
   Wrench,
 } from "lucide-react";
 
@@ -24,7 +27,7 @@ import { OwnCredentialsDialog } from "@/components/account/OwnCredentialsDialog"
 import { CollaborationCenter } from "@/components/collaboration/CollaborationCenter";
 import { UpdateIndicator } from "@/components/common/UpdateIndicator";
 import { WorkspaceRuntimeBoundary } from "@/components/common/WorkspaceRuntimeBoundary";
-import { MainWorkspaceHeader } from "@/components/layout/MainWorkspaceHeader";
+import { MainWorkspaceHeader, type WorkspaceMenuItem } from "@/components/layout/MainWorkspaceHeader";
 import { MobileWorkspaceDock } from "@/components/layout/MobileWorkspaceDock";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -737,6 +740,18 @@ const Index = () => {
     }
   };
 
+  const accountMenuItems: WorkspaceMenuItem[] = [
+    ...(canOpenAdminWorkspace ? [{
+      id: "admin-workspace", label: "後台管理", icon: <ShieldCheck className="h-4 w-4" />,
+      onSelect: () => handleWorkspaceChange("user-management"),
+    }] : []),
+    ...(isDemoMode ? [] : [
+      { id: "assessment-backups", label: "我的自評備份", icon: <Archive className="h-4 w-4" />, onSelect: () => setAssessmentBackupsOpen(true) },
+      { id: "personal-profile", label: "編輯大頭貼", icon: <Camera className="h-4 w-4" />, onSelect: () => setProfileDialogOpen(true) },
+      { id: "own-credentials", label: "帳號與密碼", icon: <KeyRound className="h-4 w-4" />, onSelect: () => setCredentialsDialogOpen(true) },
+    ]),
+  ];
+
   return (
     <div
       data-ai-chat-viewport={activeWorkspace === "ai-chat" ? "true" : undefined}
@@ -772,34 +787,7 @@ const Index = () => {
         userRoleLabel={getRoleLabel(user?.role)}
         showOnlineUsers={!isDemoMode}
         showNotifications={!isDemoMode}
-        userMenuItems={[
-          ...(canOpenAdminWorkspace ? [{
-            id: "admin-workspace",
-            label: "後台管理",
-            icon: <ShieldCheck className="h-4 w-4" />,
-            onSelect: () => handleWorkspaceChange("user-management"),
-          }] : []),
-          ...(isDemoMode ? [] : [
-            {
-              id: "assessment-backups",
-              label: "我的自評備份",
-              icon: <Archive className="h-4 w-4" />,
-              onSelect: () => setAssessmentBackupsOpen(true),
-            },
-            {
-              id: "personal-profile",
-              label: "編輯大頭貼",
-              icon: <Camera className="h-4 w-4" />,
-              onSelect: () => setProfileDialogOpen(true),
-            },
-            {
-              id: "own-credentials",
-              label: "帳號與密碼",
-              icon: <KeyRound className="h-4 w-4" />,
-              onSelect: () => setCredentialsDialogOpen(true),
-            },
-          ]),
-        ]}
+        userMenuItems={accountMenuItems}
       />
 
       <main
@@ -837,6 +825,14 @@ const Index = () => {
         activeItem={activeWorkspace ?? "workspace-home"}
         availableItems={workspaceNavigationItems}
         onSelect={handleWorkspaceChange}
+        platformActions={activeWorkspace === "ai-chat" ? [
+          ...(isDemoMode ? [] : [
+            { id: "notifications", label: "通知", icon: <Bell className="h-4 w-4" />, onSelect: () => window.dispatchEvent(new CustomEvent("open-global-collaboration", { detail: { tab: "notifications" } })) },
+            { id: "online", label: "線上人員", icon: <UsersRound className="h-4 w-4" />, onSelect: () => window.dispatchEvent(new CustomEvent("open-global-collaboration", { detail: { tab: "online" } })) },
+          ]),
+          ...accountMenuItems,
+          { id: "logout", label: "登出", icon: <LogOut className="h-4 w-4" />, onSelect: logout },
+        ] : undefined}
       />
     </div>
   );

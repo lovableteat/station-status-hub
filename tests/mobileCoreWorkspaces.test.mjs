@@ -5,13 +5,14 @@ import test from "node:test";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("mobile header exposes a bundled website QR and a thumb-friendly workspace dock", async () => {
-  const [header, qr, dock, index, toast, sonner] = await Promise.all([
+  const [header, qr, dock, index, toast, sonner, clipboard] = await Promise.all([
     read("src/components/layout/MainWorkspaceHeader.tsx"),
     read("src/components/layout/WebsiteQrButton.tsx"),
     read("src/components/layout/MobileWorkspaceDock.tsx"),
     read("src/pages/Index.tsx"),
     read("src/components/ui/toast.tsx"),
     read("src/components/ui/sonner.tsx"),
+    read("src/lib/writeClipboardText.ts"),
   ]);
 
   assert.match(header, /<WebsiteQrButton \/>/);
@@ -20,7 +21,8 @@ test("mobile header exposes a bundled website QR and a thumb-friendly workspace 
   assert.match(qr, /https:\/\/lovableteat\.github\.io\/station-status-hub\//);
   assert.match(qr, /複製連結/);
   assert.match(qr, /navigator\.share/);
-  assert.match(qr, /document\.execCommand\("copy"\)/);
+  assert.match(qr, /await writeClipboardText\(siteUrl\)/);
+  assert.match(clipboard, /document\.execCommand\("copy"\)/);
   assert.match(qr, /AbortError/);
   assert.match(dock, /data-mobile-workspace-dock="true"/);
   assert.match(dock, /workspace-home/);

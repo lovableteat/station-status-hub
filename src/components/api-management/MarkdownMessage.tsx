@@ -132,7 +132,7 @@ export function MarkdownMessage({ className, content }: MarkdownMessageProps) {
 
         if (block.type === "table") {
           return (
-            <div key={key} className="my-4 max-w-full overflow-x-auto rounded-2xl border border-slate-600/50 [scrollbar-width:thin]">
+            <div key={key} data-ai-markdown-table={block.headers.length <= 2 ? "compact" : "wide"} className="my-4 max-w-full overflow-x-auto rounded-2xl border border-slate-600/50 [scrollbar-width:thin]">
               <table className="w-full min-w-[520px] border-collapse text-left text-sm">
                 <thead className="bg-[linear-gradient(180deg,#17263a,#122033)] text-slate-100">
                   <tr>
