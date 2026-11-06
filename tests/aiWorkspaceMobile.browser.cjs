@@ -75,6 +75,163 @@ async function waitForSendAboveKeyboard(page) {
   }, undefined, { timeout: 3000 });
 }
 
+async function tapVisible(locator) {
+  await locator.waitFor();
+  const target = await locator.evaluate(async node => {
+    const measureTarget = () => {
+      const rect = node.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      return {
+        top: rect.top, bottom: rect.bottom,
+        visibleTop: visualViewport.offsetTop, visibleBottom: visualViewport.offsetTop + visualViewport.height,
+        hit: node.contains(hit),
+        blockedBy: node.contains(hit) ? null : hit?.outerHTML.slice(0, 180),
+      };
+    };
+    // Give the outgoing sheet a frame to release its modal backdrop.
+    let result = measureTarget();
+    const end = performance.now() + 500;
+    while ((!result.hit || result.top < result.visibleTop || result.bottom > result.visibleBottom) && performance.now() < end) {
+      await new Promise(requestAnimationFrame);
+      result = measureTarget();
+    }
+    return result;
+  });
+  assert.ok(target.top >= target.visibleTop && target.bottom <= target.visibleBottom && target.hit,
+    `button is visible and directly tappable ${await locator.textContent()} ${JSON.stringify(target)}`);
+  await locator.tap();
+}
+
+async function checkPanels(page, width, height) {
+  await page.goto(origin + '/?mobile&qaReference&qaEmptyPrompts');
+  await page.getByRole('heading', { name: '先說結論' }).waitFor();
+  const composer = page.getByRole('textbox', { name: inputLabel });
+  const openLibrary = page.getByRole('button', { name: '開啟共享提示詞庫' });
+  const library = page.getByRole('dialog', { name: '共享提示詞庫' });
+  const closeLibrary = library.getByRole('button', { name: '關閉共享提示詞庫' });
+  const createConversation = page.getByRole('button', { name: '建立新對話', exact: true });
+  const reset = page.getByRole('dialog', { name: '建立新對話' });
+  await composer.fill('保留這份草稿');
+  await composer.blur();
+  await createConversation.tap();
+  await shot(page, `mobile-ai-new-chat-${width}x${height}`);
+  await tapVisible(reset.getByRole('button', { name: '取消' }));
+  assert.equal(await composer.inputValue(), '保留這份草稿');
+  await openLibrary.tap();
+  await library.getByText('尚未建立共享提示詞').waitFor();
+  await shot(page, `mobile-ai-prompt-library-${width}x${height}`);
+  await tapVisible(library.getByRole('button', { name: '建立第一個提示詞' }));
+  const form = page.getByRole('dialog', { name: '建立共享提示詞' });
+  await form.waitFor();
+  await shot(page, `mobile-ai-prompt-form-${width}x${height}`);
+  if (width !== 390) {
+    await tapVisible(form.getByRole('button', { name: '取消' }));
+    await createConversation.tap();
+    await tapVisible(reset.getByRole('button', { name: '確認建立' }));
+    assert.equal(await composer.inputValue(), '');
+    return;
+  }
+
+  await form.getByLabel('分類', { exact: true }).fill('規格');
+  await form.getByLabel('提示詞名稱').fill('規格欄位確認');
+  await form.getByLabel('提示詞內容').fill('請列出額定電流與規格來源');
+  await page.evaluate(() => window.qaSetVisualViewport(410, 20));
+  await tapVisible(form.getByRole('button', { name: '儲存到提示詞庫' }));
+  await form.waitFor({ state: 'hidden' });
+  await page.evaluate(() => window.qaSetVisualViewport(null));
+
+  await composer.tap();
+  await page.evaluate(() => window.qaSetVisualViewport(430, 20));
+  await waitForSendAboveKeyboard(page);
+  await openLibrary.tap();
+  await tapVisible(closeLibrary);
+  await library.waitFor({ state: 'hidden' });
+  await page.evaluate(() => window.qaSetVisualViewport(null));
+
+  await openLibrary.tap();
+  const search = library.getByRole('textbox', { name: '搜尋名稱或提示詞內容' });
+  await search.tap();
+  await page.evaluate(() => window.qaSetVisualViewport(400, 20));
+  await search.fill('找不到的字');
+  await library.getByText('找不到符合的提示詞').waitFor();
+  await shot(page, 'mobile-ai-library-keyboard-390x844', { x: 0, y: 20, width, height: 400 });
+  await tapVisible(library.getByRole('button', { name: '清除提示詞搜尋' }));
+  await page.evaluate(() => window.qaSetVisualViewport(null));
+  await library.getByRole('combobox', { name: '提示詞分類' }).tap();
+  await page.getByRole('option', { name: '規格', exact: true }).tap();
+  await library.getByRole('button', { name: '清除提示詞分類' }).waitFor();
+  await tapVisible(library.getByRole('button', { name: '全部清除' }));
+
+  await library.getByRole('button', { name: '編輯提示詞：規格欄位確認' }).tap();
+  const edit = page.getByRole('dialog', { name: '編輯提示詞' });
+  assert.equal(await edit.getByLabel('提示詞名稱').inputValue(), '規格欄位確認');
+  await tapVisible(edit.getByRole('button', { name: '取消' }));
+  await openLibrary.tap();
+  await library.getByRole('button', { name: '調整後套用：規格欄位確認' }).tap();
+  const adjust = page.getByRole('dialog', { name: '套用共享提示詞' });
+  await adjust.getByLabel('本次要套用的內容').fill('只列出額定電流');
+  await tapVisible(adjust.getByRole('button', { name: '放入輸入框' }));
+  assert.equal(await composer.inputValue(), '只列出額定電流');
+  await openLibrary.tap();
+  await library.getByRole('button', { name: /規格欄位確認/ }).filter({ hasText: '規格欄位確認' }).tap();
+  assert.equal(await composer.inputValue(), '請列出額定電流與規格來源');
+  await composer.blur();
+
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('button', { name: '上傳 PDF、PPT、Excel、Word 或圖片' }).tap(),
+  ]);
+  await chooser.setFiles({ name: 'qa-panel.txt', mimeType: 'text/plain', buffer: Buffer.from('隔離測試') });
+  const pendingAttachment = page.getByRole('button', { name: '移除附件 1' });
+  await pendingAttachment.waitFor();
+  await createConversation.tap();
+  await reset.getByText('未送出的附件會移除。').waitFor();
+  await tapVisible(reset.getByRole('button', { name: '確認建立' }));
+  assert.equal(await composer.inputValue(), '');
+  await pendingAttachment.waitFor({ state: 'hidden' });
+
+  const openHistory = page.getByRole('button', { name: /開啟最近對話/ });
+  const history = page.getByRole('dialog', { name: '最近對話' });
+  await openHistory.tap();
+  await shot(page, 'mobile-ai-history-390x844');
+  await history.getByRole('button', { name: '編輯對話名稱：手機問答版面' }).tap();
+  const rename = page.getByRole('dialog', { name: '編輯對話名稱' });
+  await rename.getByRole('textbox', { name: '對話名稱' }).fill('手機介面確認');
+  await tapVisible(rename.getByRole('button', { name: '儲存名稱' }));
+  await openHistory.tap();
+  await history.getByRole('button', { name: /手機介面確認.*gpt-5\.4/ }).tap();
+  await history.waitFor({ state: 'hidden' });
+  assert.equal(await composer.inputValue(), '請列出額定電流與規格來源');
+  await page.getByRole('heading', { name: '先說結論' }).waitFor();
+
+  const model = page.getByRole('combobox', { name: '選擇 API 金鑰與模型' });
+  await model.tap();
+  await page.getByRole('option', { name: /gpt-6\.1-sol.*單次使用/ }).tap();
+  await model.getByText('gpt-6.1-sol', { exact: true }).waitFor();
+
+  const openTools = page.getByRole('button', { name: '對話工具' });
+  const tools = page.getByRole('dialog', { name: '對話工具' });
+  await openTools.tap();
+  await tools.getByRole('switch', { name: '啟用機台維修紀錄來源' }).tap();
+  await tools.getByRole('button', { name: '選擇維修資料專案範圍' }).tap();
+  const scope = page.getByRole('dialog', { name: '查詢專案範圍' });
+  await scope.getByRole('button', { name: '全部選取' }).tap();
+  await scope.getByRole('checkbox', { name: '選取專案 隔離測試專案' }).waitFor();
+  assert.equal(await scope.getByRole('checkbox', { name: '選取專案 隔離測試專案' }).getAttribute('data-state'), 'checked');
+  await tapVisible(scope.getByRole('button', { name: '完成選擇專案範圍' }));
+  await tools.getByText('已選 1 個專案').waitFor();
+  await tools.getByRole('button', { name: '製作 PPT' }).tap();
+  const presentation = page.getByRole('dialog', { name: '製作 PPT' });
+  await presentation.getByLabel('貼上文字或表格').fill('隔離測試的簡報來源');
+  assert.ok(await presentation.getByRole('button', { name: '產生簡報' }).isEnabled());
+  await shot(page, 'mobile-ai-presentation-390x844');
+  await tapVisible(presentation.getByRole('button', { name: 'Close' }));
+  await openTools.tap();
+  await tools.getByRole('button', { name: '清空對話' }).tap();
+  await tapVisible(reset.getByRole('button', { name: '取消' }));
+  assert.equal(await composer.inputValue(), '請列出額定電流與規格來源');
+}
+
 async function checkReferenceLayout(page, width, height) {
   await page.goto(origin + '/?mobile&qaReference');
   await page.getByRole('heading', { name: '先說結論' }).waitFor();
@@ -132,6 +289,12 @@ async function checkReferenceLayout(page, width, height) {
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         await installVisualViewport(page);
+        if (process.argv.includes('--panels')) {
+          await checkPanels(page, width, height);
+          assert.deepEqual(errors, []);
+          console.log(`${browserName} ${width}×${height}: mobile AI panels`);
+          continue;
+        }
         if (width <= 390) await checkReferenceLayout(page, width, height);
         await page.goto(origin + '/?mobile&qaContext&qaMobile');
         const replyHeading = page.getByRole('heading', { name: '規格比對結果', exact: true });
@@ -248,6 +411,17 @@ async function checkReferenceLayout(page, width, height) {
     await desktop.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     await desktop.goto(origin + '/?mobile&qaReference');
     await desktop.getByRole('heading', { name: '先說結論' }).waitFor();
+    if (process.argv.includes('--panels')) {
+      await desktop.getByRole('button', { name: '開啟共享提示詞庫' }).click();
+      const popover = desktop.locator('[data-ui="popover"]').filter({ hasText: '共享提示詞庫' });
+      const prompt = popover.getByRole('button', { name: /附件重點整理/ }).filter({ hasText: '附件重點整理' });
+      await prompt.hover();
+      await desktop.getByTestId('prompt-hover-preview').getByText('完整提示詞').waitFor();
+      await prompt.click();
+      assert.equal(await desktop.getByRole('textbox', { name: inputLabel }).inputValue(), '請列出附件的主要重點');
+      console.log(`${browserName} desktop: existing anchored prompt library`);
+      return;
+    }
     assert.ok(await desktop.locator('[data-mobile-app-header]').isVisible());
     assert.ok(await desktop.locator('[data-ai-composer-toolbar]').isVisible());
     assert.equal(await desktop.getByRole('button', { name: '複製回覆' }).count(), 0);

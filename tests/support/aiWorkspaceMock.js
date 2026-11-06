@@ -46,7 +46,7 @@ if (new URLSearchParams(location.search).has('qaReference')) {
   saved.messages.push({ id: 'mobile-reference-reply', role: 'assistant', content, createdAt: Date.UTC(2026, 10, 6, 10, 12) });
   cloud.set(account, [saved]);
 }
-const prompts = [{ id: 'qa-prompt', name: '附件重點整理', command: '請列出附件的主要重點', description: '文件', created_by: null, created_at: '2026-10-13T00:00:00Z', updated_at: '2026-10-13T00:00:00Z' }];
+const prompts = new URLSearchParams(location.search).has('qaEmptyPrompts') ? [] : [{ id: 'qa-prompt', name: '附件重點整理', command: '請列出附件的主要重點', description: '文件', created_by: null, created_at: '2026-10-13T00:00:00Z', updated_at: '2026-10-13T00:00:00Z' }];
 const notify = () => window.dispatchEvent(new Event('ai-qa-state'));
 function query(run) {
   const promise = Promise.resolve().then(run);
@@ -61,6 +61,14 @@ export const supabase = {
   from(table) {
     const filters = {};
     const builder = { select() { return this; }, eq(name, value) { filters[name] = value; return this; }, order() { return this; }, limit() { return this; }, range() { return this; }, abortSignal() { return this; }, then(resolve, reject) { return Promise.resolve({ data: table === 'ai_workspace_conversations' ? structuredClone(cloud.get(filters.owner_id) ?? []) : table === 'command_library' ? prompts : table === 'material_bom_workspaces' ? [{ id: 'qa-bom', name: '隔離測試 BOM' }] : [], error: null }).then(resolve, reject); } };
+    if (table === 'command_library') {
+      builder.insert = payload => ({ select: () => ({ async single() {
+        const timestamp = new Date().toISOString();
+        const data = { ...payload, id: 'qa-created-prompt', created_at: timestamp, updated_at: timestamp };
+        prompts.push(data);
+        return { data, error: null };
+      } }) });
+    }
     return builder;
   },
   rpc(name, args) {

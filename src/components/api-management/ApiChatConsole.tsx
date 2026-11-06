@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   ClipboardEvent as ReactClipboardEvent,
   DragEvent as ReactDragEvent,
@@ -45,6 +45,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -2479,25 +2480,34 @@ export function ApiChatConsole({
     ? "min-h-0 flex-1"
     : "min-h-[560px] max-h-[560px]";
 
+  const focusDialogWithoutKeyboard = (event: Event) => {
+    if (event.target instanceof HTMLElement) {
+      event.preventDefault();
+      event.target.focus({ preventScroll: true });
+    }
+  };
+  const PromptTemplateOptions = compactChat ? "details" : "div";
+
   const workspaceDialogs = (
     <>
       {presentationOpen && <PptxGenerationDialog
         key={user?.userId}
+        compact={compactChat}
         model={canGeneratePresentation ? model : ""}
         progress={requestProgress}
         onClose={() => setPresentationOpen(false)}
         onGenerate={generatePresentation}
       />}
       <Dialog open={Boolean(renamingConversation)} onOpenChange={open => { if (!open) setRenamingConversation(null); }}>
-        <DialogContent className="w-[calc(100vw-24px)] max-w-md border-border bg-card text-foreground">
+        <DialogContent data-ai-mobile-dialog={compactChat ? "rename" : undefined} onOpenAutoFocus={compactChat ? focusDialogWithoutKeyboard : undefined} className="w-[calc(100vw-24px)] max-w-md border-border bg-card text-foreground">
           <DialogHeader>
             <DialogTitle>編輯對話名稱</DialogTitle>
             <DialogDescription>只修改名稱，聊天內容與草稿會保留。</DialogDescription>
           </DialogHeader>
-          <form aria-label="編輯對話名稱" className="space-y-4" onSubmit={event => { event.preventDefault(); renameConversation(); }}>
-            <div className="space-y-2">
+          <form aria-label="編輯對話名稱" className={compactChat ? "flex min-h-0 flex-col gap-3" : "space-y-4"} onSubmit={event => { event.preventDefault(); renameConversation(); }}>
+            <div data-ai-mobile-dialog-body className="space-y-2">
               <Label htmlFor="conversation-rename-title">對話名稱</Label>
-              <Input id="conversation-rename-title" aria-label="對話名稱" autoFocus required maxLength={160} value={renamingConversation?.title ?? ""} onChange={event => { const title = event.target.value; setRenamingConversation(current => current ? { ...current, title } : null); }} />
+              <Input id="conversation-rename-title" aria-label="對話名稱" autoFocus={!compactChat} required maxLength={160} value={renamingConversation?.title ?? ""} onChange={event => { const title = event.target.value; setRenamingConversation(current => current ? { ...current, title } : null); }} />
               <p className="text-xs text-muted-foreground">最多 160 字元，儲存後會同步到目前帳號。</p>
             </div>
             <DialogFooter>
@@ -2508,14 +2518,27 @@ export function ApiChatConsole({
         </DialogContent>
       </Dialog>
       <Dialog open={newConversationDialogOpen} onOpenChange={setNewConversationDialogOpen}>
-        <DialogContent className="max-h-[calc(100dvh-32px)] max-w-2xl overflow-y-auto border-blue-400/35 bg-[linear-gradient(180deg,#17243a_0%,#0f1b2e_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.58)]">
+        <DialogContent data-ai-mobile-dialog={compactChat ? "new-chat" : undefined} className="max-h-[calc(100dvh-32px)] max-w-2xl overflow-y-auto border-blue-400/35 bg-[linear-gradient(180deg,#17243a_0%,#0f1b2e_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.58)]">
           <DialogHeader className="space-y-3">
             <DialogTitle className="text-3xl font-black tracking-tight text-white">建立新對話</DialogTitle>
             <DialogDescription className="text-base leading-7 text-slate-300">
-              這個動作會把目前視窗清空。若你已經有聊天內容或輸入中的文字，系統會先自動存到左側的對話紀錄。
+              {compactChat
+                ? "建立後會切換到空白對話。"
+                : "這個動作會把目前視窗清空。若你已經有聊天內容或輸入中的文字，系統會先自動存到左側的對話紀錄。"}
             </DialogDescription>
           </DialogHeader>
 
+          {compactChat ? (
+            <div data-ai-mobile-dialog-body className="space-y-3">
+              <dl className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border bg-card py-2.5 text-center">
+                <div><dt className="text-xs text-muted-foreground">訊息</dt><dd className="font-semibold tabular-nums">{messages.length}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">文字草稿</dt><dd className="font-semibold">{composerText.trim() ? "有草稿" : "空白"}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">未送出附件</dt><dd className="font-semibold tabular-nums">{uploadedAttachments.length}</dd></div>
+              </dl>
+              {(messages.length > 0 || composerText.trim()) && <p className="text-sm leading-5 text-muted-foreground">目前的訊息和文字草稿會保存在最近對話。</p>}
+              {uploadedAttachments.length > 0 && <p className="text-sm leading-5 text-amber-200">未送出的附件會移除。</p>}
+            </div>
+          ) : <>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-[20px] border border-cyan-300/30 bg-cyan-400/12 px-5 py-5">
               <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">
@@ -2547,6 +2570,7 @@ export function ApiChatConsole({
               ? "按下確認後會切到全新對話；文字與聊天紀錄會保留到左側清單，未送出的附件會直接移除。"
               : "目前沒有未儲存內容，按下確認後會直接建立乾淨的新對話。"}
           </div>
+          </>}
 
           <DialogFooter className="gap-2 sm:justify-end">
             <Button
@@ -2569,19 +2593,19 @@ export function ApiChatConsole({
       </Dialog>
 
       <Dialog open={savePromptDialogOpen} onOpenChange={setSavePromptDialogOpen}>
-        <DialogContent className="max-h-[calc(100dvh-32px)] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-blue-400/35 bg-[linear-gradient(180deg,#17243a_0%,#0f1b2e_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.58)]">
+        <DialogContent data-ai-mobile-dialog={compactChat ? "prompt-form" : undefined} onOpenAutoFocus={compactChat ? focusDialogWithoutKeyboard : undefined} className="max-h-[calc(100dvh-32px)] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-blue-400/35 bg-[linear-gradient(180deg,#17243a_0%,#0f1b2e_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.58)]">
           <DialogHeader className="shrink-0 space-y-3">
             <DialogTitle className="flex items-center gap-3 text-3xl font-black tracking-tight text-white">
               <LibraryBig className="h-7 w-7 text-blue-300" />
               {editingPromptId ? "編輯提示詞" : "建立共享提示詞"}
             </DialogTitle>
             <DialogDescription className="text-base leading-7 text-slate-300">
-              把常用查詢方式存進團隊提示詞庫。儲存後，可從輸入區的「提示詞庫」或輸入 / 快速套用。
+              {compactChat ? "儲存後，團隊成員都能套用。" : "把常用查詢方式存進團隊提示詞庫。儲存後，可從輸入區的「提示詞庫」或輸入 / 快速套用。"}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-0 space-y-5 overflow-y-auto pr-2">
-            <div className="grid gap-3 rounded-[20px] border border-blue-300/25 bg-blue-500/10 p-4 sm:grid-cols-3">
+          <div data-ai-mobile-dialog-body className={compactChat ? "flex flex-col gap-4" : "min-h-0 space-y-5 overflow-y-auto pr-2"}>
+            {!compactChat && <div className="grid gap-3 rounded-[20px] border border-blue-300/25 bg-blue-500/10 p-4 sm:grid-cols-3">
             {[
               ["1", "填寫", "輸入名稱與完整指令"],
               ["2", "儲存", "加入輸入區共享提示詞庫"],
@@ -2597,14 +2621,14 @@ export function ApiChatConsole({
                 </div>
               </div>
             ))}
-            </div>
+            </div>}
 
-            <div>
-              <div className="flex items-center gap-2">
+            <PromptTemplateOptions className={compactChat ? "order-last rounded-xl border border-border bg-card px-3" : undefined}>
+              {compactChat ? <summary className="min-h-11 cursor-pointer py-2.5 text-sm font-medium text-primary">從範本開始</summary> : <div className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-amber-300" />
                 <p className="text-base font-black text-white">不知道怎麼寫？從範本開始</p>
-              </div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              </div>}
+              <div className={cn("mt-3 grid gap-3 sm:grid-cols-3", compactChat && "mb-3 mt-0 gap-2")}>
                 {SHARED_PROMPT_TEMPLATES.map((template) => (
                   <button
                     key={template.title}
@@ -2622,12 +2646,13 @@ export function ApiChatConsole({
                   </button>
                 ))}
               </div>
-            </div>
+            </PromptTemplateOptions>
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-base font-bold text-white">分類</Label>
+                <Label htmlFor="ai-prompt-category" className="text-base font-bold text-white">分類</Label>
                 <Input
+                  id="ai-prompt-category"
                   data-ai-surface="true"
                   value={promptDialogCategory}
                   onChange={(event) => setPromptDialogCategory(event.target.value)}
@@ -2637,8 +2662,9 @@ export function ApiChatConsole({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-base font-bold text-white">提示詞名稱</Label>
+                <Label htmlFor="ai-prompt-title" className="text-base font-bold text-white">提示詞名稱</Label>
                 <Input
+                  id="ai-prompt-title"
                   data-ai-surface="true"
                   value={promptDialogTitle}
                   onChange={(event) => setPromptDialogTitle(event.target.value)}
@@ -2648,17 +2674,18 @@ export function ApiChatConsole({
               </div>
 
               <div className="space-y-2">
-                <Label className="text-base font-bold text-white">提示詞內容</Label>
+                <Label htmlFor="ai-prompt-content" className="text-base font-bold text-white">提示詞內容</Label>
                 <Textarea
+                  id="ai-prompt-content"
                   data-ai-surface="true"
                   value={promptDialogContent}
                   onChange={(event) => setPromptDialogContent(event.target.value)}
                   placeholder="請直接輸入要保存的提示詞內容"
                   className="min-h-[220px] rounded-[18px] border-slate-500/60 bg-[#0b1628] px-4 py-3 text-base leading-7 text-white placeholder:text-slate-400 hover:border-blue-300/60 focus:ring-2 focus:ring-blue-400/30"
                 />
-                <p className="text-sm leading-6 text-slate-300">
+                {!compactChat && <p className="text-sm leading-6 text-slate-300">
                   建議寫清楚資料範圍、輸出格式與判斷規則，例如：「整理異常站點，依嚴重度排序並列出建議處置」。
-                </p>
+                </p>}
               </div>
             </div>
           </div>
@@ -2686,18 +2713,18 @@ export function ApiChatConsole({
       </Dialog>
 
       <Dialog open={libraryApplyDialogOpen} onOpenChange={setLibraryApplyDialogOpen}>
-        <DialogContent className="max-h-[calc(100dvh-32px)] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-blue-400/35 bg-[linear-gradient(180deg,#17243a_0%,#0f1b2e_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.58)]">
+        <DialogContent data-ai-mobile-dialog={compactChat ? "prompt-apply" : undefined} onOpenAutoFocus={compactChat ? focusDialogWithoutKeyboard : undefined} className="max-h-[calc(100dvh-32px)] max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-blue-400/35 bg-[linear-gradient(180deg,#17243a_0%,#0f1b2e_100%)] text-slate-100 shadow-[0_32px_90px_rgba(2,8,23,0.58)]">
           <DialogHeader className="space-y-3">
             <DialogTitle className="flex items-center gap-3 text-3xl font-black tracking-tight text-white">
               <LibraryBig className="h-7 w-7 text-blue-300" />
               套用共享提示詞
             </DialogTitle>
             <DialogDescription className="text-base leading-7 text-slate-300">
-              確認內容後放入 AI 輸入框。系統不會自動送出，你仍可補上站點、日期或附件說明。
+              {compactChat ? "先調整內容，再放入輸入框。" : "確認內容後放入 AI 輸入框。系統不會自動送出，你仍可補上站點、日期或附件說明。"}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-0 space-y-4 overflow-y-auto pr-2">
+          <div data-ai-mobile-dialog-body className="min-h-0 space-y-4 overflow-y-auto pr-2">
             <div className="rounded-[18px] border border-blue-300/25 bg-blue-500/10 px-5 py-4">
               <p className="text-sm font-bold text-blue-200">已選擇提示詞</p>
               <p className="mt-1 text-xl font-black text-white">{libraryApplyTitle || "未命名提示詞"}</p>
@@ -2705,10 +2732,11 @@ export function ApiChatConsole({
 
             <div className="space-y-2">
               <div className="flex flex-wrap items-end justify-between gap-2">
-                <Label className="text-base font-bold text-white">本次要套用的內容</Label>
+                <Label htmlFor="ai-prompt-apply-content" className="text-base font-bold text-white">本次要套用的內容</Label>
                 <span className="text-sm text-slate-300">可先修改，不會覆蓋共享版本</span>
               </div>
               <Textarea
+                id="ai-prompt-apply-content"
                 data-ai-surface="true"
                 value={libraryApplyContent}
                 onChange={(event) => setLibraryApplyContent(event.target.value)}
@@ -2717,10 +2745,10 @@ export function ApiChatConsole({
               />
             </div>
 
-            <div className="flex items-start gap-3 rounded-[18px] border border-emerald-300/25 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+            {!compactChat && <div className="flex items-start gap-3 rounded-[18px] border border-emerald-300/25 bg-emerald-400/10 px-4 py-3 text-sm leading-6 text-emerald-50">
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
               套用後會回到主畫面並把內容放進輸入框；確認資料範圍後，再按送出即可。
-            </div>
+            </div>}
           </div>
 
           <DialogFooter className="shrink-0 gap-2 border-t border-blue-300/20 pt-4 sm:justify-end">
@@ -2738,7 +2766,7 @@ export function ApiChatConsole({
               disabled={!libraryApplyContent.trim()}
               className="h-11 px-6"
             >
-              放入 AI 輸入框（不送出）
+              {compactChat ? "放入輸入框" : "放入 AI 輸入框（不送出）"}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </DialogFooter>
@@ -2747,14 +2775,15 @@ export function ApiChatConsole({
     </>
   );
 
+  const PromptLibraryRoot = compactChat ? Dialog : Popover;
+  const PromptLibraryTrigger = compactChat ? DialogTrigger : PopoverTrigger;
+  const PromptLibraryContent = compactChat ? DialogContent : PopoverContent;
+  const PromptLibraryTitle = compactChat ? DialogTitle : "p";
+  const PromptLibraryDescription = compactChat ? DialogDescription : "p";
+  const hasPromptLibraryFilters = Boolean(promptLibraryQuery.trim()) || promptLibraryCategory !== "all";
   const promptLibraryControl = (
-    <Popover
-      open={promptLibraryOpen}
-      onOpenChange={(open) => {
-        setPromptLibraryOpen(open);
-      }}
-    >
-      <PopoverTrigger asChild>
+    <PromptLibraryRoot open={promptLibraryOpen} onOpenChange={setPromptLibraryOpen}>
+      <PromptLibraryTrigger asChild>
         <Button
           type="button"
           variant={compactChat ? "ghost" : "outline"}
@@ -2769,39 +2798,38 @@ export function ApiChatConsole({
             </span>
           ) : null}
         </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        side="top"
-        align="start"
-        sideOffset={10}
-        className={cn("w-[min(760px,calc(100vw-24px))] rounded-[20px] border border-blue-300/35 bg-[linear-gradient(180deg,#152a43_0%,#0a1828_100%)] p-0 text-slate-100 shadow-[0_28px_80px_rgba(2,8,23,0.62)]", compactChat ? "max-h-[var(--radix-popover-content-available-height)] overflow-y-auto overscroll-contain" : "overflow-hidden")}
+      </PromptLibraryTrigger>
+      <PromptLibraryContent
+        {...(compactChat ? { "data-ai-mobile-dialog": "library", hideCloseButton: true } : { side: "top" as const, align: "start" as const, sideOffset: 10 })}
+        className="w-[min(760px,calc(100vw-24px))] overflow-hidden rounded-[20px] border border-blue-300/35 bg-[linear-gradient(180deg,#152a43_0%,#0a1828_100%)] p-0 text-slate-100 shadow-[0_28px_80px_rgba(2,8,23,0.62)]"
       >
-        <div className="border-b border-blue-300/20 px-4 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-lg font-black text-white">共享提示詞庫</p>
-              <p className="mt-1 text-sm leading-5 text-blue-100/75">點選直接套用，或在輸入框輸入 / 快速搜尋。</p>
+        <div className={cn("flex items-start justify-between gap-3", compactChat ? "shrink-0 items-center" : "px-4 pt-4")}>
+            <div className="min-w-0">
+              <PromptLibraryTitle className={compactChat ? "text-lg font-bold text-foreground" : "text-lg font-black text-white"}>共享提示詞庫</PromptLibraryTitle>
+              <PromptLibraryDescription className={cn("mt-1 text-sm leading-5", compactChat ? "text-muted-foreground" : "text-blue-100/75")}>{compactChat ? "點選提示詞即可套用。" : "點選直接套用，或在輸入框輸入 / 快速搜尋。"}</PromptLibraryDescription>
             </div>
             <div className="flex shrink-0 gap-1">
-              <Button type="button" size="sm" onClick={openSavePromptDialog} className="h-11 px-3">
-                <Plus className="mr-1.5 h-4 w-4" />
+              <Button type="button" size="sm" onClick={openSavePromptDialog} className="h-11 gap-1.5 px-3">
+                <Plus className="h-4 w-4" />
                 新增
               </Button>
-              {compactChat && <Button type="button" variant="ghost" size="icon" aria-label="關閉共享提示詞庫" onClick={() => setPromptLibraryOpen(false)} className="h-11 w-11"><X className="h-4 w-4" /></Button>}
+              {compactChat && <Button type="button" variant="secondary" size="icon" aria-label="關閉共享提示詞庫" onClick={() => setPromptLibraryOpen(false)} className="h-11 w-11 rounded-full"><X className="h-4 w-4" /></Button>}
             </div>
-          </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_160px_140px]">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200" />
+        </div>
+        <div data-ai-mobile-dialog-body>
+          <div className={cn("grid gap-2 border-b border-border", compactChat ? "grid-cols-2 pb-3 min-[480px]:grid-cols-[minmax(0,1fr)_minmax(0,.55fr)_minmax(0,.5fr)]" : "px-4 pb-4 pt-3 sm:grid-cols-[minmax(0,1fr)_160px_140px]")}>
+            <div className={cn("relative", compactChat && "col-span-2 min-[480px]:col-span-1")}>
+              <Search className={cn("pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2", compactChat ? "text-primary" : "text-blue-200")} />
               <Input
                 value={promptLibraryQuery}
                 onChange={(event) => setPromptLibraryQuery(event.target.value)}
+                aria-label="搜尋名稱或提示詞內容"
                 placeholder="搜尋名稱或提示詞內容"
-                className="h-11 rounded-xl border-blue-300/25 bg-slate-950/35 pl-10 text-sm text-white placeholder:text-slate-400 focus-visible:ring-blue-400/35"
+                className={cn("h-11 rounded-xl pl-10", compactChat ? "bg-card text-base" : "border-blue-300/25 bg-slate-950/35 text-sm text-white placeholder:text-slate-400 focus-visible:ring-blue-400/35")}
               />
             </div>
             <Select value={promptLibraryCategory} onValueChange={setPromptLibraryCategory}>
-              <SelectTrigger className="h-11 rounded-xl border-blue-300/25 bg-slate-950/35 text-sm text-white">
+              <SelectTrigger aria-label="提示詞分類" className={cn("h-11 min-w-0 rounded-xl text-sm", !compactChat && "border-blue-300/25 bg-slate-950/35 text-white")}>
                 <SelectValue placeholder="全部分類" />
               </SelectTrigger>
               <SelectContent>
@@ -2815,7 +2843,7 @@ export function ApiChatConsole({
               value={promptLibrarySort}
               onValueChange={(value) => setPromptLibrarySort(value as "name" | "recent")}
             >
-              <SelectTrigger className="h-11 rounded-xl border-blue-300/25 bg-slate-950/35 text-sm text-white">
+              <SelectTrigger aria-label="提示詞排序" className={cn("h-11 min-w-0 rounded-xl text-sm", !compactChat && "border-blue-300/25 bg-slate-950/35 text-white")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -2824,9 +2852,13 @@ export function ApiChatConsole({
               </SelectContent>
             </Select>
           </div>
-        </div>
+            {compactChat && hasPromptLibraryFilters && <div className="sticky top-0 z-[1] flex flex-wrap items-center gap-1.5 bg-popover py-1" aria-label="作用中的提示詞篩選">
+              {promptLibraryQuery.trim() && <button type="button" onClick={() => setPromptLibraryQuery("")} className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-1 rounded-lg bg-primary/10 px-2 text-xs text-primary" aria-label="清除提示詞搜尋"><span className="truncate">搜尋 · {promptLibraryQuery.trim()}</span><X className="size-3.5 shrink-0" /></button>}
+              {promptLibraryCategory !== "all" && <button type="button" onClick={() => setPromptLibraryCategory("all")} className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-1 rounded-lg bg-primary/10 px-2 text-xs text-primary" aria-label="清除提示詞分類"><span className="truncate">分類 · {promptLibraryCategory}</span><X className="size-3.5 shrink-0" /></button>}
+              <Button type="button" variant="ghost" size="sm" className="h-11" onClick={() => { setPromptLibraryQuery(""); setPromptLibraryCategory("all"); }}>全部清除</Button>
+            </div>}
 
-        <div className="max-h-[420px] space-y-2 overflow-y-auto p-3">
+        <div className={cn("space-y-2", compactChat ? "pt-3" : "max-h-[420px] overflow-y-auto p-3")}>
           {filteredLibraryPrompts.length ? (
             pagedLibraryPrompts.map((item) => (
               <div
@@ -2847,9 +2879,9 @@ export function ApiChatConsole({
                         <Badge className="shrink-0 border-cyan-300/20 bg-cyan-400/10 px-1.5 py-0 text-[10px] text-cyan-100 hover:bg-cyan-400/10">
                           {item.category}
                         </Badge>
-                        <span className="ml-auto shrink-0 text-[10px] text-slate-500">
+                        {!compactChat && <span className="ml-auto shrink-0 text-[10px] text-slate-500">
                           {formatSavedItemTime(item.savedAt)}
-                        </span>
+                        </span>}
                       </span>
                       <span
                         id={`prompt-library-summary-${item.id}`}
@@ -2859,7 +2891,7 @@ export function ApiChatConsole({
                       </span>
                     </button>
                   </HoverCardTrigger>
-                  <HoverCardContent
+                  {!compactChat && <HoverCardContent
                     data-testid="prompt-hover-preview"
                     side="right"
                     align="start"
@@ -2903,9 +2935,9 @@ export function ApiChatConsole({
                       </span>
                       <span className="text-slate-500">完整內容預覽</span>
                     </div>
-                  </HoverCardContent>
+                  </HoverCardContent>}
                 </HoverCard>
-                <div className="flex shrink-0 items-center gap-1 self-center">
+                <div data-ai-prompt-row-actions className="flex shrink-0 items-center gap-1 self-center">
                   <button
                     type="button"
                     onClick={() => openLibraryApplyDialog(item)}
@@ -2934,9 +2966,9 @@ export function ApiChatConsole({
               </div>
             ))
           ) : (
-            <div className="rounded-2xl border border-dashed border-blue-300/25 bg-slate-950/25 px-5 py-8 text-center">
-              <LibraryBig className="mx-auto h-7 w-7 text-blue-200" />
-              <p className="mt-3 text-base font-black text-white">
+            <div className={cn("rounded-2xl border border-dashed text-center", compactChat ? "border-border bg-card px-4 py-3" : "border-blue-300/25 bg-slate-950/25 px-5 py-8")}>
+              <LibraryBig className={cn("mx-auto", compactChat ? "size-6 text-primary" : "size-7 text-blue-200")} />
+              <p className={cn("text-base", compactChat ? "mt-2 font-bold text-foreground" : "mt-3 font-black text-white")}>
                 {savedPrompts.length ? "找不到符合的提示詞" : "尚未建立共享提示詞"}
               </p>
               <p className="mt-1 text-sm text-slate-400">
@@ -2946,7 +2978,7 @@ export function ApiChatConsole({
                 <Button
                   type="button"
                   onClick={openSavePromptDialog}
-                  className="mt-4 h-11 px-4"
+                  className={cn("h-11 px-4", compactChat ? "mt-3" : "mt-4")}
                 >
                   建立第一個提示詞
                 </Button>
@@ -2954,10 +2986,11 @@ export function ApiChatConsole({
             </div>
           )}
         </div>
-        {filteredLibraryPrompts.length ? (
-          <div className="flex items-center justify-between gap-3 border-t border-blue-300/20 px-4 py-3 text-xs text-slate-300">
+        </div>
+        {filteredLibraryPrompts.length > 0 && (!compactChat || promptLibraryPageCount > 1) ? (
+          <div className={cn("flex shrink-0 items-center justify-between border-t text-xs", compactChat ? "gap-2 border-border px-2 py-2 text-muted-foreground" : "gap-3 border-blue-300/20 px-4 py-3 text-slate-300")}>
             <span>
-              共 {filteredLibraryPrompts.length} 筆，每頁 {SHARED_PROMPT_PAGE_SIZE} 筆 · 第 {promptLibraryPage}/{promptLibraryPageCount} 頁
+              {compactChat ? `${promptLibraryPage} / ${promptLibraryPageCount} 頁` : `共 ${filteredLibraryPrompts.length} 筆，每頁 ${SHARED_PROMPT_PAGE_SIZE} 筆 · 第 ${promptLibraryPage}/${promptLibraryPageCount} 頁`}
             </span>
             <div className="flex items-center gap-1.5">
               <Button
@@ -2985,8 +3018,8 @@ export function ApiChatConsole({
             </div>
           </div>
         ) : null}
-      </PopoverContent>
-    </Popover>
+      </PromptLibraryContent>
+    </PromptLibraryRoot>
   );
 
   const activeSourceLabels = [
@@ -2996,6 +3029,7 @@ export function ApiChatConsole({
   const sourceSettings = (
     <>
       <MaintenanceSourceSelector
+        compact={compactChat}
         enabled={maintenanceSourceEnabled}
         onEnabledChange={(enabled) => {
           setMaintenanceSourceEnabled(enabled);
@@ -3426,8 +3460,11 @@ export function ApiChatConsole({
   );
 
   if (isChatOnly) {
+    const HistoryRoot = compactChat ? Dialog : Fragment;
+    const HistorySurface = compactChat ? DialogContent : "aside";
+    const HistoryTitle = compactChat ? DialogTitle : "p";
     return (
-      <>
+      <HistoryRoot {...(compactChat ? { open: mobileSidebarOpen, onOpenChange: setMobileSidebarOpen } : {})}>
         {workspaceDialogs}
         <div
           data-ai-chat-shell="viewport-fit"
@@ -3438,43 +3475,32 @@ export function ApiChatConsole({
               : "lg:grid-cols-[320px_minmax(0,1fr)]"
           )}
         >
-          {mobileSidebarOpen ? (
-            <button
-              type="button"
-              aria-label="關閉資料查詢選單"
-              onClick={() => setMobileSidebarOpen(false)}
-              className="fixed inset-0 z-[78] bg-slate-950/70 backdrop-blur-sm lg:hidden"
-            />
-          ) : null}
-
-          <aside
+          <HistorySurface
             data-ai-chat-history
-            className={cn(
-              "fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] top-[var(--mobile-header-height)] z-[79] h-auto min-h-0 overflow-hidden rounded-[24px] border border-[#285273] bg-[#081C2D] shadow-[0_30px_90px_rgba(2,8,23,0.82)] transition-all duration-200 lg:static lg:z-auto lg:order-1 lg:h-full lg:border-[#163653] lg:shadow-[0_24px_70px_rgba(2,8,23,0.42)]",
-              mobileSidebarOpen ? "visible translate-y-0 opacity-100" : "pointer-events-none invisible translate-y-3 opacity-0 lg:pointer-events-auto lg:visible lg:translate-y-0 lg:opacity-100",
-              sidebarCollapsed ? "lg:w-[88px]" : "lg:w-[320px]"
-            )}
+            {...(compactChat ? { "data-ai-mobile-dialog": "history", hideCloseButton: true } : {})}
+            className={compactChat ? undefined : cn("order-1 h-full min-h-0 overflow-hidden rounded-[24px] border border-[#163653] bg-[#081C2D] shadow-[0_24px_70px_rgba(2,8,23,0.42)]", sidebarCollapsed ? "w-[88px]" : "w-[320px]")}
           >
             <div className="flex h-full min-h-0 flex-col">
-              <div className="border-b border-[#163653] bg-[#081C2D] p-5">
-                <div className={cn("flex", sidebarCollapsed ? "flex-col-reverse items-center gap-3" : "items-start justify-between gap-3")}>
+              <div className={compactChat ? "shrink-0 border-b border-border pb-3" : "border-b border-[#163653] bg-[#081C2D] p-5"}>
+                <div className={cn("flex gap-3", sidebarCollapsed ? "flex-col-reverse items-center" : compactChat ? "items-center justify-between" : "items-start justify-between")}>
                   <div className={cn("flex items-center gap-3", sidebarCollapsed && "flex-col gap-2 text-center")}>
-                    <div className="flex h-12 w-12 items-center justify-center rounded-[15px] border border-blue-300/35 bg-blue-400/15 text-blue-100">
+                    {!compactChat && <div className="flex h-12 w-12 items-center justify-center rounded-[15px] border border-blue-300/35 bg-blue-400/15 text-blue-100">
                       <Search className="h-5 w-5" />
-                    </div>
+                    </div>}
                     {!sidebarCollapsed ? (
                       <div className="min-w-0">
-                        <p className="text-xl font-semibold text-white">AI 問答</p>
+                        <HistoryTitle className="text-xl font-semibold text-foreground">{compactChat ? "最近對話" : "AI 問答"}</HistoryTitle>
+                        {compactChat && <DialogDescription className="sr-only">從目前帳號的對話紀錄選擇一筆。</DialogDescription>}
                       </div>
                     ) : null}
                   </div>
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="secondary"
                     size="icon"
                     onClick={() => setMobileSidebarOpen(false)}
                     aria-label="關閉最近對話"
-                    className="h-11 w-11 shrink-0 rounded-xl border border-[#214669] bg-[#10283d] text-blue-100 hover:bg-[#16324b] lg:hidden"
+                    className="h-11 w-11 shrink-0 rounded-full lg:hidden"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -3503,7 +3529,7 @@ export function ApiChatConsole({
                     setMobileSidebarOpen(false);
                   }}
                   className={cn(
-                    "mt-4 h-11 font-semibold",
+                    compactChat ? "mt-2 h-11 font-semibold" : "mt-4 h-11 font-semibold",
                     sidebarCollapsed ? "w-full justify-center px-0" : "w-full justify-start px-4 text-base"
                   )}
                   aria-label="建立新對話"
@@ -3515,13 +3541,13 @@ export function ApiChatConsole({
               </div>
 
               {!sidebarCollapsed ? (
-              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[#081C2D] px-4 py-4">
+              <div data-ai-mobile-dialog-body className={compactChat ? "pt-3" : "min-h-0 flex-1 space-y-5 overflow-y-auto bg-[#081C2D] px-4 py-4"}>
                 <section aria-labelledby="conversation-history-title">
                   <div className="mb-2 flex items-center justify-between gap-3 px-1">
                     <div className="flex items-center gap-2">
                       <History className="h-4 w-4 text-blue-200" />
                       <p id="conversation-history-title" className="text-sm font-black text-slate-100">
-                        最近對話
+                        {compactChat ? "帳號紀錄" : "最近對話"}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -3628,7 +3654,7 @@ export function ApiChatConsole({
                 </div>
               </div>
             </div>
-          </aside>
+          </HistorySurface>
 
           <div className="order-1 flex min-h-0 min-w-0 flex-col lg:order-2">
             {compactChat && <div data-mobile-ai-command-bar="true" className="flex shrink-0 items-center lg:hidden">
@@ -3658,16 +3684,17 @@ export function ApiChatConsole({
                   })}
                 </SelectContent>
               </Select>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setMobileSidebarOpen(true)}
-                aria-label={`開啟最近對話，共 ${savedConversations.length} 筆`}
-                title="最近對話"
-                className="ml-auto h-11 w-11 shrink-0 p-0 [&_svg]:size-5"
-              >
-                <History className="h-4 w-4" />
-              </Button>
+              <DialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  aria-label={`開啟最近對話，共 ${savedConversations.length} 筆`}
+                  title="最近對話"
+                  className="ml-auto h-11 w-11 shrink-0 p-0 [&_svg]:size-5"
+                >
+                  <History className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
               <Button type="button" variant="ghost" aria-label="對話工具" aria-description={directMessageUnreadCount ? `聊天室有 ${directMessageUnreadCount} 則未讀` : undefined} aria-haspopup="dialog" aria-expanded={mobileToolsOpen} title="對話工具" onClick={() => setMobileToolsOpen(true)} className="relative h-11 w-11 shrink-0 p-0 [&_svg]:size-5">
                 <SlidersHorizontal className="h-4 w-4" />
                 {directMessageUnreadCount > 0 && <span aria-hidden="true" className="absolute right-2.5 top-2 h-1.5 w-1.5 rounded-full bg-primary" />}
@@ -3676,6 +3703,7 @@ export function ApiChatConsole({
                 type="button"
                 onClick={requestResetConversation}
                 aria-label="建立新對話"
+                aria-haspopup="dialog"
                 className="h-11 w-11 shrink-0 rounded-xl p-0 [&_svg]:size-5"
               >
                 <Plus className="h-5 w-5" />
@@ -3703,7 +3731,7 @@ export function ApiChatConsole({
             <div className="min-h-0 flex-1">{conversationPanel}</div>
           </div>
         </div>
-      </>
+      </HistoryRoot>
     );
   }
 

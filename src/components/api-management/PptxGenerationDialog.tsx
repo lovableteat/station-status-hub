@@ -14,7 +14,8 @@ export interface PresentationRequest {
   slideCount: number;
 }
 
-export function PptxGenerationDialog({ model, progress, onClose, onGenerate }: {
+export function PptxGenerationDialog({ compact, model, progress, onClose, onGenerate }: {
+  compact: boolean;
   model: string;
   progress: string;
   onClose: () => void;
@@ -88,13 +89,13 @@ export function PptxGenerationDialog({ model, progress, onClose, onGenerate }: {
 
   return (
     <Dialog open onOpenChange={open => { if (!open && !runningRef.current) onClose(); }}>
-      <DialogContent className="flex max-h-[calc(100dvh_-_1rem)] w-[calc(100%_-_1rem)] max-w-[760px] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90dvh]">
+      <DialogContent data-ai-mobile-dialog={compact ? "presentation" : undefined} className="flex max-h-[calc(100dvh_-_1rem)] w-[calc(100%_-_1rem)] max-w-[760px] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90dvh]">
         <DialogHeader className="shrink-0 border-b border-border px-4 py-4 pr-12 sm:px-6 sm:pr-12">
           <DialogTitle className="flex items-center gap-2"><Presentation className="size-5 text-primary" />製作 PPT</DialogTitle>
           <DialogDescription>上傳或貼上資料，整理成可編輯的 PowerPoint 簡報。</DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-6" onPaste={event => {
+        <div data-ai-mobile-dialog-body className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-6" onPaste={event => {
           const incoming = Array.from(event.clipboardData.files);
           if (incoming.length) { event.preventDefault(); addFiles(incoming); }
         }}>
