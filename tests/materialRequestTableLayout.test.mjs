@@ -124,8 +124,8 @@ test("tracking table summaries remain compact instead of stretching material row
 test("one record dialog saves the material fields and pending tracking together", () => {
   assert.doesNotMatch(source, /function TrackingHistoryDialog|trackingDialogOpen|saveTrackingHistory/);
   assert.match(source, /<MaterialTrackingEditor record=\{form\} draft=\{trackingDraft\}/);
-  assert.match(source, /applyMaterialTrackingDraft\(\{[\s\S]*?level: 2,[\s\S]*?\}, trackingDraft, uploaderName\)/);
-  assert.match(source, /await onSave\(next\)/);
+  assert.match(source, /applyMaterialTrackingDraft\(\{[\s\S]*?level: addToPending \? form\.level : 2,[\s\S]*?\}, trackingDraft, uploaderName\)/);
+  assert.match(source, /await onSave\(addToPending \? addMaterialToPending\(next, uploaderName \?\? ""\) : next, addToPending\)/);
   assert.match(source, /<TabsContent value="details" forceMount/);
   assert.match(source, /<TabsContent value="tracking" forceMount/);
   assert.match(source, /data-testid="material-record-save-footer"/);

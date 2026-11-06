@@ -34,7 +34,7 @@ function mountDialog(overrides = {}, uploadSpec = () => Promise.resolve({ name: 
         if (ts.isVariableStatement(node)) return node.declarationList.declarations.some(declaration => declaration.name.getText(ast) === "MATERIAL_CE_EDITOR_FIELDS");
         if (!ts.isImportDeclaration(node)) return false;
         const spec = node.moduleSpecifier.text;
-        return spec === "react" || spec === "lucide-react" || spec.startsWith("@/components/ui/") || ["@/hooks/use-toast", "@/lib/utils", "@/lib/inputValidation", "./materialSpecDocuments", "./materialAttachments", "./MaterialTrackingEditor", "./materialTrackingDraft", "./materialUploadContract.mjs"].includes(spec);
+        return spec === "react" || spec === "lucide-react" || spec.startsWith("@/components/ui/") || ["@/hooks/use-toast", "@/lib/utils", "@/lib/inputValidation", "./materialSpecDocuments", "./materialAttachments", "./MaterialTrackingEditor", "./materialTrackingDraft", "./materialRequestUtils", "./materialUploadContract.mjs"].includes(spec);
       });
       return retained.map((node) => node.getText(ast)).join("\n") + "\nexport { MaterialRecordDialog };";
     },
@@ -68,6 +68,31 @@ test("one main save persists both the material edits and the pending progress wi
   assert.equal(editor.writes[0].trackingHistory.at(-1).createdBy, "CE");
   assert.equal(editor.writes[0].trackingHistory[0].note, "original note");
   editor.unmount();
+});
+
+test("the editor footer adds the current numbered vendor to Other in the same save as its draft", async () => {
+  const source = { ...baseRecord, level: 3, partNumber: "000-REAL", virtualAlternative: "000-VIRTUAL" };
+  const writes = [];
+  const editor = mountDialog({ record: source, onSave: async (record, addToPending) => writes.push({ record, addToPending }) });
+  try {
+    editor.changeName("Changed material");
+    editor.setTracking({ status: "已發信", note: "Follow-up" });
+    const footer = editor.root.root.find(node => node.type === "stub" && node.props["data-testid"] === "material-record-save-footer");
+    const addButton = footer.find(node => node.type === "stub" && node.props["data-testid"] === "material-record-add-pending");
+    await act(async () => addButton.props.onClick());
+    assert.equal(writes.length, 1);
+    const [{ record, addToPending }] = writes;
+    assert.equal(addToPending, true);
+    assert.equal(record.id, source.id);
+    assert.equal(record.level, source.level);
+    assert.equal(record.name, "Changed material");
+    assert.equal(record.partNumber, source.partNumber);
+    assert.equal(record.pendingCategory, "other");
+    assert.equal(record.trackingStatus, "已發信");
+    assert.deepEqual(Array.from(record.trackingHistory, entry => entry.note), ["original note", "Follow-up"]);
+    editor.update({ mode: "view" });
+    assert.equal(footer.findAllByProps({ "data-testid": "material-record-add-pending" }).length, 0);
+  } finally { editor.unmount(); }
 });
 
 test("required application and completion save and reopen as ordinary status updates without losing history", async () => {
