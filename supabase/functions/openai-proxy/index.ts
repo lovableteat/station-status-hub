@@ -149,7 +149,11 @@ Deno.serve(async (request: Request) => {
         return respond('此服務只接受官方 OpenAI 金鑰設定。', 400);
       apiKey = typeof key.api_key === 'string' ? key.api_key.trim() : '';
       model = typeof metadata.model === 'string' ? metadata.model.trim() : '';
-      if (body.operation === 'chat' && chat.model !== model) return respond('模型與已儲存的設定不一致。', 400);
+      if (body.operation === 'chat' && chat.model !== model) {
+        // GPT-5.4 remains the stored default. The official key can also be used for a single explicitly selected Sol request.
+        if (model !== 'gpt-5.4' || chat.model !== 'gpt-6.1-sol') return respond('模型與已儲存的設定不一致。', 400);
+        model = chat.model;
+      }
     } else {
       apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
       model = typeof chat.model === 'string' ? chat.model.trim() : '';

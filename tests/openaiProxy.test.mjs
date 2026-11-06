@@ -67,6 +67,21 @@ test('proxy uses the stored key, fixes the upstream URL and preserves HTTP error
   assert.equal(f.permissions[0].p_action, 'view');
 });
 
+test('only the official saved GPT-5.4 key can request the one alternate GPT-6.1 Sol model', async () => {
+  const request = model => ({ operation: 'chat', apiKeyId: 'key', request: { model, messages: [{ role: 'user', content: 'hello' }] } });
+  const f = fixture();
+  assert.equal((await f.run(request('gpt-6.1-sol'))).status, 200);
+  assert.equal(JSON.parse(f.calls[0].init.body).model, 'gpt-6.1-sol');
+  assert.equal(f.calls[0].init.headers.Authorization, 'Bearer fixture-openai-secret');
+  assert.equal(f.permissions[0].p_action, 'view');
+  assert.equal((await f.run(request('gpt-6.1-astra'))).status, 400);
+  assert.equal(f.calls.length, 1);
+
+  const otherModel = fixture({ keyPatch: { permissions: { metadata: { provider: 'openai', model: 'gpt-5.2', baseUrl: 'https://api.openai.com/v1' } } } });
+  assert.equal((await otherModel.run(request('gpt-6.1-sol'))).status, 400);
+  assert.equal(otherModel.calls.length, 0);
+});
+
 test('model discovery and unsaved-key verification require editing permission and only reach the official model endpoint', async () => {
   const f = fixture();
   const response = await f.run({ operation: 'models', apiKey: 'new-fixture-key' });
