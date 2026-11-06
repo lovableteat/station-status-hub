@@ -97,6 +97,7 @@ import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
 import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
 import { MaterialTableScroll } from "./MaterialTableScroll";
+import { MaterialAddPendingDialog } from "./MaterialAddPendingDialog";
 import { buildMaterialMainGroups, filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
@@ -151,7 +152,7 @@ import {
 import { createBomSourceUrl, uploadBomSourceFile } from "./materialBomSources";
 import { UploadGuideDialog } from "./MaterialUploadGuideDialog";
 import { MaterialTrackingEditor } from "./MaterialTrackingEditor";
-import { applyMaterialTrackingDraft, createMaterialTrackingDraft } from "./materialTrackingDraft";
+import { addMaterialToPending, applyMaterialTrackingDraft, createMaterialTrackingDraft } from "./materialTrackingDraft";
 import { MATERIAL_SPEC_ACCEPT, MATERIAL_SPEC_MAX_BYTES, createMaterialSpecUrl, formatMaterialSpecSize, uploadMaterialSpecDocuments } from "./materialSpecDocuments";
 import { getMaterialSpecDocuments, withMaterialSpecDocuments } from "./materialAttachments";
 import { getMaterialTrackingStatusMeaning, isTrackedMaterialApplication, MATERIAL_TRACKING_STATUS_OPTIONS, materialTrackingStatusTone, materialTrackingStatusPresentation, normalizeMaterialTrackingStatus } from "./materialTrackingStatus";
@@ -2496,8 +2497,8 @@ function MaterialApplicationExemptionBadge({ record }: { record: Pick<MaterialWo
 }
 
 // Ref Des prefixes decide the category by default; companies that name parts differently can override it per part.
-function PendingCategoryPicker({ group, disabled, onChange }: { group: MaterialGroup; disabled: boolean; onChange: (category: PendingMaterialCategory | null) => void }) {
-  const { category, manual } = resolvePendingMaterialCategory(group);
+function PendingCategoryPicker({ group, record, disabled, onChange }: { group: MaterialGroup; record: MaterialRecord; disabled: boolean; onChange: (category: PendingMaterialCategory | null) => void }) {
+  const { category, manual } = resolvePendingMaterialCategory({ ...group, record });
   const automatic = PENDING_MATERIAL_CATEGORIES.find((item) => item.key === getPendingMaterialCategory(group.displayRef));
   const label = PENDING_MATERIAL_CATEGORIES.find((item) => item.key === category)?.label ?? category;
   return (
@@ -2524,6 +2525,7 @@ export function PendingMaterialsDialog({
   onSaveNote,
   groups,
   open,
+  addedRecordId,
   restoreView = false,
   recordMeta,
   workspaceName,
@@ -2545,6 +2547,7 @@ export function PendingMaterialsDialog({
   onSaveNote: (record: MaterialRecord, note: string) => Promise<void>;
   groups: MaterialGroup[];
   open: boolean;
+  addedRecordId?: string;
   /** Reopened after editing one of its items: keep the tab, search and scroll position. */
   restoreView?: boolean;
   recordMeta?: Record<string, BomRecordSyncMeta>;
@@ -2615,8 +2618,16 @@ export function PendingMaterialsDialog({
       return () => cancelAnimationFrame(frame);
     }
     setQuery("");
-    setActiveCategory("all");
+    setActiveCategory(addedRecordId ? "other" : "all");
     scrollTopRef.current = 0;
+    if (addedRecordId) {
+      const frame = requestAnimationFrame(() => {
+        const list = listRef.current;
+        const row = list?.querySelector(`[data-pending-record-id="${CSS.escape(addedRecordId)}"]`);
+        row?.scrollIntoView({ block: "nearest" });
+      });
+      return () => cancelAnimationFrame(frame);
+    }
     // Only re-run when the dialog opens; the category list may change while it is open without resetting the tab.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -2728,10 +2739,10 @@ export function PendingMaterialsDialog({
               const stale = isStale(group, record);
               const marked = markedGroupKeys.has(group.key);
               return (
-                <div key={application.key} data-testid="pending-application" className={cn("pending-material-row rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
+                <div key={application.key} data-testid="pending-application" data-pending-record-id={record.id} className={cn("pending-material-row rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
                   <Button type="button" variant="ghost" size="icon" data-testid="pending-mark-toggle" disabled={!marksReady} aria-pressed={marked} aria-label={`${marked ? '取消特別標記' : '特別標記'} ${group.displayRef}`} title="個人標記只對目前帳號可見" onClick={() => onToggleMarked(group.key)} className={cn("pending-row-mark relative h-9 w-8", marked ? "bg-warning/15 text-warning hover:text-warning" : "text-muted-foreground hover:text-warning")}><Star className={cn("h-4 w-4", marked && "fill-current")} aria-hidden="true" />{stale && <span className="material-blink absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}</Button>
                   <span className="pending-row-reference min-w-0 truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
-                  <PendingCategoryPicker group={group} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
+                  <PendingCategoryPicker group={group} record={record} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
                   <span className="pending-row-name min-w-0 text-base text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
                   <div className="pending-row-mpn min-w-0 font-mono text-sm text-foreground/85">
                     {record.manufacturerPartNumber?.trim() ? <button type="button" data-testid="pending-mpn-copy" className="group/mpn flex min-h-9 w-full min-w-0 items-center gap-1 rounded px-0.5 text-left hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`複製廠商料號 ${record.manufacturerPartNumber}`} title={`複製完整廠商料號：${record.manufacturerPartNumber}`} onClick={() => onCopy(record.manufacturerPartNumber)}>
@@ -3795,6 +3806,8 @@ export function MaterialRequestPage() {
   const uploadTargetSeriesRef = useRef<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
+  const [addPendingOpen, setAddPendingOpen] = useState(false);
+  const [addedPendingRecordId, setAddedPendingRecordId] = useState<string>();
   const [weeklyProgressOpen, setWeeklyProgressOpen] = useState(false);
   const [specFillOpen, setSpecFillOpen] = useState(false);
   const [specFillContext, setSpecFillContext] = useState<{ records: MaterialWorkbookRecord[]; accountId?: string; workspaceId: string } | null>(null);
@@ -3817,6 +3830,7 @@ export function MaterialRequestPage() {
   const openPendingDialog = () => {
     setReturnToPending(false);
     setPendingRestoreView(false);
+    setAddedPendingRecordId(undefined);
     setPendingDialogOpen(true);
   };
   const [pageTrackerDialogOpen, setPageTrackerDialogOpen] = useState(false);
@@ -3852,6 +3866,8 @@ export function MaterialRequestPage() {
     setEditorOpen(false);
     setReturnToPending(false);
     setPendingDialogOpen(false);
+    setAddPendingOpen(false);
+    setAddedPendingRecordId(undefined);
     setWeeklyProgressOpen(false);
     setSpecFillContext(null);
     setSpecFillOpen(false);
@@ -5282,6 +5298,29 @@ export function MaterialRequestPage() {
     toast({ title: "負責人已儲存", description: `${record.refDes || record.name} → ${owner?.name ?? "未指定"}` });
   };
 
+  const handleAddPending = async (recordId: string) => {
+    if (!canEdit || !isCollaborativeReady || !isFullDatasetLoaded) throw new Error("目前無法更新此 BOM，請確認編輯權限與同步狀態。");
+    const writeScope = captureBomWrite();
+    const workspaceId = activeWorkspace.id;
+    const record = basePayload.records.find(item => item.id === recordId);
+    if (!record || isMeManufacturedRecord(record)) throw new Error("此料件已不在可加入的清單，請重新選擇。");
+    const next = addMaterialToPending(record, user?.displayName || user?.username || "");
+    if (next !== record) {
+      try {
+        await saveRecordToActiveBom(next, activeWorkspace.recordMeta?.[record.id]);
+      } catch (error) {
+        throw new Error(error instanceof BomRecordConflictError ? "這筆料件剛被更新，請確認最新資料後再試。" : "加入尚未寫入共用資料，請再試一次。");
+      }
+    }
+    if (!isBomWriteCurrent(writeScope) || activeBomIdRef.current !== workspaceId) return;
+    setAddPendingOpen(false);
+    setReturnToPending(false);
+    setPendingRestoreView(false);
+    setAddedPendingRecordId(record.id);
+    setPendingDialogOpen(true);
+    toast({ title: next === record ? "已在待處理料的其他分類" : "已加入待處理料的其他分類", description: record.manufacturerPartNumber || record.refDes || record.name });
+  };
+
   const saveMaterialNote = async (record: MaterialRecord, note: string) => {
     if (!canViewModuleAccess || isHistoricalVersion || !isCollaborativeReady || !isFullDatasetLoaded) {
       throw new Error("尚未同步，請稍後重試。");
@@ -5896,12 +5935,21 @@ export function MaterialRequestPage() {
         onExportDetail={() => void exportDiscouragedMaterials()}
         onOpenChange={setNonPvlDialogOpen}
       />
+      {addPendingOpen && canEdit && <MaterialAddPendingDialog
+        key={`add-pending:${user?.userId}:${activeWorkspace.id}`}
+        records={dataset.records}
+        workspaceName={activeWorkspace.name}
+        canSave={isCollaborativeReady && isFullDatasetLoaded}
+        onClose={() => setAddPendingOpen(false)}
+        onAdd={handleAddPending}
+      />}
       <PendingMaterialsDialog
         canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded}
         canEditNote={canEditNote}
         onSaveNote={rowActions.saveNote}
         groups={pendingMaterialGroups}
         open={pendingDialogOpen}
+        addedRecordId={addedPendingRecordId}
         restoreView={pendingRestoreView}
         recordMeta={activeWorkspace.recordMeta}
         workspaceName={activeWorkspace.name}
@@ -6598,7 +6646,9 @@ export function MaterialRequestPage() {
 
         </div>}
         <div data-testid="material-pagination" className="flex flex-wrap items-center justify-between gap-2 border-t border-blue-400/15 bg-[#101d33] px-3 py-2 lg:py-1.5 lg:pr-28">
-          <div className="flex items-center gap-2 text-xs text-slate-400"><span>每頁</span><Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}><SelectTrigger aria-label="每頁筆數" className="h-11 w-20 border-blue-400/20 bg-[#0b1527] text-xs text-slate-200 lg:h-8"><SelectValue /></SelectTrigger><SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">{PAGE_SIZE_OPTIONS.map((size) => <SelectItem key={size} value={String(size)}>{size} 列</SelectItem>)}</SelectContent></Select><span>第 {page} / {totalPages} 頁</span></div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400"><span>每頁</span><Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}><SelectTrigger aria-label="每頁筆數" className="h-11 w-20 border-blue-400/20 bg-[#0b1527] text-xs text-slate-200 lg:h-8"><SelectValue /></SelectTrigger><SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">{PAGE_SIZE_OPTIONS.map((size) => <SelectItem key={size} value={String(size)}>{size} 列</SelectItem>)}</SelectContent></Select><span>第 {page} / {totalPages} 頁</span>
+            <Button type="button" variant="outline" size="sm" className="h-11 lg:h-8" disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded || !dataset.records.length} onClick={() => setAddPendingOpen(true)}><Plus className="h-4 w-4" />新增為待處理料</Button>
+          </div>
           <div className="flex items-center gap-1.5"><Button type="button" variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="h-11 border-blue-400/20 bg-[#0b1527] px-2.5 text-xs text-slate-300 lg:h-8"><ChevronLeft className="mr-1 h-3.5 w-3.5" />上一頁</Button><Button type="button" variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="h-11 border-blue-400/20 bg-[#0b1527] px-2.5 text-xs text-slate-300 lg:h-8">下一頁<ChevronRight className="ml-1 h-3.5 w-3.5" /></Button></div>
         </div>
       </section>

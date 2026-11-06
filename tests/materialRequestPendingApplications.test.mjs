@@ -133,3 +133,11 @@ test("a numbered part waiting for CIS stays pending in both location and vendor 
     assert.equal(applications[0].record, cis);
   }
 });
+
+test("a manually added numbered alternate appears in Other even if its primary has a different manual category", () => {
+  const primary = record("primary", "MAIN-MPN", false, { trackingStatus: "需申請", pendingCategory: "ic" });
+  const alternate = record("alternate", "ALT-MPN", false, { trackingStatus: "需申請", pendingCategory: "other" });
+  const location = group("group", "U777", [primary, alternate]);
+  const categories = groupPendingMaterials(buildPendingApplications([location]));
+  assert.deepEqual(categories.map(category => [category.key, category.groups.map(application => application.record.id)]), [["ic", ["primary"]], ["other", ["alternate"]]]);
+});

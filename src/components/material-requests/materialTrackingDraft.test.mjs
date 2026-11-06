@@ -7,11 +7,27 @@ const source = await readFile(new URL("./materialTrackingDraft.ts", import.meta.
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
   .replaceAll('"./materialTrackingStatus"', JSON.stringify(new URL("./materialTrackingStatus.ts", import.meta.url).href))
   .replace('"./materialRequestUtils"', JSON.stringify(new URL("./materialRequestUtils.ts", import.meta.url).href));
-const { createMaterialTrackingDraft, applyMaterialTrackingDraft, normalizeMaterialRequestUrl, MATERIAL_TRACKING_STATUS_OPTIONS } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+const { addMaterialToPending, createMaterialTrackingDraft, applyMaterialTrackingDraft, normalizeMaterialRequestUrl, MATERIAL_TRACKING_STATUS_OPTIONS } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
 
 const image = { id: "image-1", name: "original.png", mimeType: "image/png", size: 10, dataUrl: "data:image/png;base64,old" };
 const history = [{ id: "old", status: "處理中", note: "原追蹤", createdAt: "2026-01-01T00:00:00.000Z", images: [image] }];
 const record = { id: "row-1", trackingHistory: history, trackingStatus: "處理中", trackingNote: "來源註記", requestTicket: "A-1", requestUrl: "https://example.com/old", partUsageStatus: "不建議使用", sourcingStatus: "Approved", partNumber: "real-1" };
+
+test("manual add tracks a numbered vendor in Other without changing its BOM fields or appending duplicates", () => {
+  const existing = { ...record, requestUrl: "舊資料的非網址文字", note: "共用備註", virtualAlternative: "virtual-1" };
+  const added = addMaterialToPending(existing, "目前登入者");
+  assert.equal(added.pendingCategory, "other");
+  assert.equal(added.trackingStatus, "需申請");
+  assert.deepEqual(added.trackingHistory[0], history[0]);
+  assert.equal(added.trackingHistory.at(-1).createdBy, "目前登入者");
+  assert.ok(added.trackingHistory.at(-1).createdAt);
+  const { trackingHistory, trackingStatus, pendingCategory, ...fields } = added;
+  assert.deepEqual(fields, Object.fromEntries(Object.entries(existing).filter(([key]) => key !== "trackingHistory" && key !== "trackingStatus")));
+  assert.equal(addMaterialToPending(added, "另一位使用者"), added);
+
+  const completed = { ...added, pendingCategory: "ic", trackingStatus: "已完成" };
+  assert.deepEqual(addMaterialToPending(completed, "另一位使用者"), { ...completed, pendingCategory: "other" });
+});
 
 test("all stages preserve old history and use the acting account instead of the assigned request owner", () => {
   for (const status of MATERIAL_TRACKING_STATUS_OPTIONS) {

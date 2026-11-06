@@ -1,6 +1,6 @@
 import { getLatestTrackingEntry } from "./materialRequestUtils";
 import type { MaterialTrackingHistoryImage, MaterialWorkbookRecord } from "./materialRequestUtils";
-import { MATERIAL_TRACKING_STATUS_OPTIONS } from "./materialTrackingStatus";
+import { isTrackedMaterialApplication, MATERIAL_TRACKING_STATUS_OPTIONS } from "./materialTrackingStatus";
 export { MATERIAL_TRACKING_STATUS_OPTIONS } from "./materialTrackingStatus";
 
 export interface MaterialTrackingDraft {
@@ -48,9 +48,14 @@ export function applyMaterialTrackingDraft(record: MaterialWorkbookRecord, draft
   const next = { ...record, requestTicket: draft.requestTicket.trim(), requestUrl };
   if (!status) return next;
 
-  const legacy = !record.trackingHistory?.length ? getLatestTrackingEntry(record) : null;
+  return appendTrackingEntry(next, draft, defaultAuthor, record);
+}
+
+function appendTrackingEntry(record: MaterialWorkbookRecord, draft: MaterialTrackingDraft, defaultAuthor: string, previousRecord = record): MaterialWorkbookRecord {
+  const status = draft.status.trim();
+  const legacy = !record.trackingHistory?.length ? getLatestTrackingEntry(previousRecord) : null;
   return {
-    ...next,
+    ...record,
     trackingStatus: status,
     trackingHistory: [
       ...(record.trackingHistory ?? []),
@@ -59,8 +64,8 @@ export function applyMaterialTrackingDraft(record: MaterialWorkbookRecord, draft
         id: `tracking-${crypto.randomUUID()}`,
         status,
         note: draft.note.trim(),
-        requestTicket: next.requestTicket,
-        requestUrl: next.requestUrl,
+        requestTicket: record.requestTicket,
+        requestUrl: record.requestUrl,
         createdAt: new Date().toISOString(),
         createdBy: draft.createdBy.trim() || defaultAuthor.trim(),
         requestInfo: draft.requestInfo.trim(),
@@ -68,4 +73,12 @@ export function applyMaterialTrackingDraft(record: MaterialWorkbookRecord, draft
       },
     ],
   };
+}
+
+export function addMaterialToPending(record: MaterialWorkbookRecord, author: string): MaterialWorkbookRecord {
+  if (isTrackedMaterialApplication(record)) {
+    return record.pendingCategory === "other" ? record : { ...record, pendingCategory: "other" };
+  }
+  const draft = { ...createMaterialTrackingDraft(record), status: "需申請", note: "手動加入待處理料" };
+  return { ...appendTrackingEntry(record, draft, author), pendingCategory: "other" };
 }
