@@ -10,6 +10,7 @@ export function useMobileAiChatViewport(
     const viewport = window.visualViewport;
     if (!enabled || !shell || !viewport) return;
 
+    const root = document.documentElement;
     let layoutWidth = window.innerWidth;
     let restingHeight = Math.max(window.innerHeight, viewport.height);
     let keyboardOpen = false;
@@ -23,6 +24,9 @@ export function useMobileAiChatViewport(
 
     const update = () => {
       if (Math.abs(viewport.scale - 1) > 0.02) return;
+      // Dialogs are portaled outside the chat shell and must also clear the keyboard.
+      root.style.setProperty("--ai-dialog-visible-height", `${viewport.height}px`);
+      root.style.setProperty("--ai-dialog-visible-bottom", `${Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)}px`);
       const editing = document.activeElement === inputRef.current;
       if (layoutWidth !== window.innerWidth) {
         layoutWidth = window.innerWidth;
@@ -51,6 +55,7 @@ export function useMobileAiChatViewport(
     window.addEventListener("resize", scheduleUpdate);
     shell.addEventListener("focusin", scheduleUpdate);
     shell.addEventListener("focusout", scheduleUpdate);
+    update();
     return () => {
       window.cancelAnimationFrame(frame);
       viewport.removeEventListener("resize", scheduleUpdate);
@@ -59,6 +64,8 @@ export function useMobileAiChatViewport(
       shell.removeEventListener("focusin", scheduleUpdate);
       shell.removeEventListener("focusout", scheduleUpdate);
       reset();
+      root.style.removeProperty("--ai-dialog-visible-height");
+      root.style.removeProperty("--ai-dialog-visible-bottom");
     };
   }, [enabled, panelRef, inputRef]);
 }

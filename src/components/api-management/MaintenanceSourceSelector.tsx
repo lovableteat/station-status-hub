@@ -3,6 +3,7 @@ import { ChevronDown, Database, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ import {
 } from "./maintenanceKnowledge";
 
 interface MaintenanceSourceSelectorProps {
+  compact?: boolean;
   enabled: boolean;
   onEnabledChange: (enabled: boolean) => void;
   projects: MaintenanceProjectOption[];
@@ -28,6 +30,7 @@ interface MaintenanceSourceSelectorProps {
   retrievalError?: null | string;
 }
 export function MaintenanceSourceSelector({
+  compact = false,
   enabled,
   onEnabledChange,
   projects,
@@ -50,6 +53,12 @@ export function MaintenanceSourceSelector({
       : lastResultCount !== null
         ? `找到 ${lastResultCount} 筆來源`
         : `已選 ${selectedProjectIds.length} 個專案`;
+  const ScopeRoot = compact ? Dialog : Popover;
+  const ScopeTrigger = compact ? DialogTrigger : PopoverTrigger;
+  const ScopeContent = compact ? DialogContent : PopoverContent;
+  const ScopeTitle = compact ? DialogTitle : "p";
+  const ScopeDescription = compact ? DialogDescription : "p";
+  const ScopeClose = compact ? DialogClose : PopoverClose;
 
   return (
     <section
@@ -82,8 +91,8 @@ export function MaintenanceSourceSelector({
         </div>
 
         {enabled ? (
-          <Popover>
-            <PopoverTrigger asChild>
+          <ScopeRoot>
+            <ScopeTrigger asChild>
               <Button
                 type="button"
                 variant="outline"
@@ -103,20 +112,20 @@ export function MaintenanceSourceSelector({
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
               </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              className="max-h-[var(--radix-popover-content-available-height)] w-[min(380px,calc(100vw-24px))] overflow-y-auto overscroll-contain border-cyan-300/20 bg-slate-950/95 p-0 text-slate-100 shadow-2xl backdrop-blur-xl lg:max-h-none lg:overflow-visible"
+            </ScopeTrigger>
+            <ScopeContent
+              {...(compact ? { "data-ai-mobile-dialog": "scope", hideCloseButton: true } : { align: "end" as const })}
+              className={compact ? undefined : "max-h-[var(--radix-popover-content-available-height)] w-[min(380px,calc(100vw-24px))] overflow-y-auto overscroll-contain border-cyan-300/20 bg-slate-950/95 p-0 text-slate-100 shadow-2xl backdrop-blur-xl lg:max-h-none lg:overflow-visible"}
             >
-              <div className="border-b border-slate-700/70 p-3">
+              <div className={compact ? "shrink-0 border-b border-border pb-3" : "border-b border-slate-700/70 p-3"}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold">查詢專案範圍</p>
-                    <p className="mt-1 text-[11px] text-slate-400">預設查目前專案，也可以同時比對多個專案。</p>
+                    <ScopeTitle className={compact ? "text-lg font-semibold" : "text-sm font-semibold"}>查詢專案範圍</ScopeTitle>
+                    <ScopeDescription className={compact ? "mt-1 text-sm text-muted-foreground" : "mt-1 text-[11px] text-slate-400"}>預設查目前專案，也可以同時比對多個專案。</ScopeDescription>
                   </div>
-                  <PopoverClose asChild>
-                    <Button type="button" variant="outline" aria-label="完成選擇專案範圍" className="h-11 shrink-0 lg:hidden">完成</Button>
-                  </PopoverClose>
+                  <ScopeClose asChild>
+                    <Button type="button" variant={compact ? "default" : "outline"} aria-label="完成選擇專案範圍" className="h-11 shrink-0 lg:hidden">完成</Button>
+                  </ScopeClose>
                 </div>
                 <div className="mt-3 grid grid-cols-3 gap-1.5">
                   <Button
@@ -148,7 +157,7 @@ export function MaintenanceSourceSelector({
                   </Button>
                 </div>
               </div>
-              <div className="max-h-64 space-y-1 overflow-y-auto p-2">
+              <div data-ai-mobile-dialog-body className={compact ? "space-y-1" : "max-h-64 space-y-1 overflow-y-auto p-2"}>
                 {activeProjects.length ? projects.map((project) => {
                   if (project.status === "archived") return null;
                   const checked = selectedProjectIds.includes(project.id);
@@ -182,8 +191,8 @@ export function MaintenanceSourceSelector({
                   <p className="px-3 py-6 text-center text-xs text-slate-500">沒有可查詢的維修專案</p>
                 )}
               </div>
-            </PopoverContent>
-          </Popover>
+            </ScopeContent>
+          </ScopeRoot>
         ) : null}
 
         <label className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center">

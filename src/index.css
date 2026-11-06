@@ -2453,7 +2453,6 @@ body {
   [data-ai-chat-shell] [data-ai-composer-attachments] > div { flex: 0 0 min(78%, 230px); gap: 8px; padding: 2px 4px 2px 8px; border-radius: 12px; }
   [data-ai-chat-shell] [data-ai-composer-attachments] > div > :first-child { width: 30px; height: 30px; flex-shrink: 0; border-radius: 6px; }
   [data-ai-chat-shell] [data-ai-composer-attachments] button { width: 44px; height: 44px; }
-  [data-ai-chat-history] > div > div:first-child { padding: 12px; }
   [data-chat-launcher="platform"] { width: 48px; min-width: 48px; height: 48px; padding: 0; border-radius: 50%; }
   [data-chat-launcher="platform"] > span:first-of-type { display: none; }
 }
@@ -2463,8 +2462,65 @@ body {
 }
 @media (max-width: 1023px) and (max-height: 450px) {
   [data-ai-chat-viewport] > [data-mobile-app-header] > div { min-height: 48px; padding-block: 2px; }
-  [data-ai-chat-history] { top: 8px; bottom: 8px; }
   [data-ai-chat-shell] [data-mobile-ai-empty-state] { padding-block: 0; }
+}
+@media (max-width: 1023px) {
+  [data-ui="dialog"][data-ai-mobile-dialog] {
+    --tw-enter-scale: 1;
+    --tw-exit-scale: 1;
+    top: auto;
+    bottom: var(--ai-dialog-visible-bottom, 0px);
+    inset-inline: 0;
+    width: min(100%, 35rem);
+    max-height: calc(min(100dvh, var(--ai-dialog-visible-height, 100dvh)) - max(10px, env(safe-area-inset-top)));
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+    padding: 14px max(16px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    transform: none;
+    border-color: hsl(var(--border));
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+    background: hsl(var(--popover));
+    color: hsl(var(--foreground));
+  }
+  [data-ai-mobile-dialog] [data-ai-mobile-dialog-body] {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 8px;
+  }
+  [data-ai-mobile-dialog] .app-dialog-header { flex: none; gap: 4px; padding-inline-end: 48px; }
+  [data-ai-mobile-dialog] .app-dialog-header h2 { margin: 0; font-size: 20px; font-weight: 650; line-height: 1.35; }
+  [data-ai-mobile-dialog] .app-dialog-header h2 svg { width: 20px; height: 20px; color: hsl(var(--primary)); }
+  [data-ai-mobile-dialog] .app-dialog-header p { margin: 0; font-size: 14px; line-height: 1.4; }
+  [data-ai-mobile-dialog] > [data-ui="dialog-close"] { top: 10px; right: 12px; }
+  [data-ai-mobile-dialog] .app-dialog-footer {
+    flex: none;
+    flex-direction: row;
+    gap: 8px;
+    padding-top: 10px;
+  }
+  [data-ai-mobile-dialog] .app-dialog-footer > button {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    height: auto;
+    padding-inline: 8px;
+    white-space: normal;
+    font-size: 14px;
+  }
+  [data-ai-mobile-dialog] .app-dialog-footer > [data-variant="outline"] { background: hsl(var(--card)); border-color: hsl(var(--border)); color: hsl(var(--foreground)); }
+  [data-ai-mobile-dialog] :is(input, textarea, select) { font-size: 16px; }
+  [data-ai-mobile-dialog] textarea[data-ai-surface] { min-height: 112px; line-height: 1.5; }
+  [data-ai-mobile-dialog] input[data-ai-surface] { height: 44px; }
+  [data-ai-mobile-dialog="library"] [data-ai-prompt-row-actions] { gap: 0; }
+  [data-ai-mobile-dialog="library"] [data-ai-prompt-row-actions] button { min-width: 44px; height: 44px; padding-inline: 4px; }
+  [data-ai-mobile-dialog="library"] [data-ai-prompt-row-actions] button:first-child { border: 0; background: transparent; color: hsl(var(--primary)); }
+  [data-ui="dialog"][data-ai-mobile-dialog="presentation"] { gap: 0; padding: 0 0 env(safe-area-inset-bottom); }
+  [data-ai-mobile-dialog="presentation"] .app-dialog-footer > p { flex-basis: 100%; }
 }
 *::-webkit-scrollbar-track { background: hsl(var(--background)); }
 *::-webkit-scrollbar-thumb, *::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / .4); background-clip: padding-box; }
@@ -2606,12 +2662,18 @@ body {
   .mobile-tools-sheet__content { display: grid; gap: 8px; }
   .mobile-tools-sheet__content [data-ui='select-trigger'], .mobile-tools-sheet__content [data-ui='button'], .mobile-tools-sheet__content button, .mobile-tools-sheet__content [role='combobox'] { min-height: 44px; }
   .mobile-tools-sheet__footer { padding-top: 4px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+  [data-testid="mobile-ai-tools"] {
+    bottom: var(--ai-dialog-visible-bottom, 0px);
+    width: min(100%, 35rem);
+    max-height: min(88dvh, 44rem, calc(var(--ai-dialog-visible-height, 100dvh) - 10px));
+    margin-inline: auto;
+  }
   [data-testid="mobile-ai-tools"] .mobile-tools-sheet__content [role="switch"] { min-height: 0; }
   [data-testid="mobile-ai-tools"] :is([data-testid="maintenance-source-selector"], [data-testid="material-spec-source"]) { margin-top: 0; padding: 6px 12px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--card)); }
   [data-testid="mobile-ai-tools"] select { min-height: 44px; font-size: 13px; }
   [data-testid="mobile-ai-tools"] [data-testid="material-spec-source"] summary { align-content: center; min-height: 44px; }
-  body:has([data-testid="mobile-ai-tools"][data-state="open"]) :is([data-sonner-toaster], [data-ui="toast-viewport"]) { top: max(12px, env(safe-area-inset-top)) !important; bottom: auto !important; }
-  body:has([data-testid="mobile-ai-tools"][data-state="open"]) [data-sonner-toast][data-y-position="bottom"] { top: 0; bottom: auto; --lift: 1; }
+  body:has(:is([data-testid="mobile-ai-tools"], [data-ai-mobile-dialog])[data-state="open"]) :is([data-sonner-toaster], [data-ui="toast-viewport"]) { top: max(12px, env(safe-area-inset-top)) !important; bottom: auto !important; }
+  body:has(:is([data-testid="mobile-ai-tools"], [data-ai-mobile-dialog])[data-state="open"]) [data-sonner-toast][data-y-position="bottom"] { top: 0; bottom: auto; --lift: 1; }
 
   .mobile-filter-bar { display: grid; gap: 8px; padding: 8px var(--mobile-page-gutter); }
   .mobile-filter-bar__search { position: relative; display: flex; align-items: center; }

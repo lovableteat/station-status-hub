@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Toaster } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 import { ApiChatConsole } from '../../src/components/api-management/ApiChatConsole';
 import { buildApiKeyModelTargets } from '../../src/components/api-management/apiKeyHelpers';
 import { Button } from '../../src/components/ui/button';
@@ -65,7 +65,7 @@ function Fixture() {
       </DialogContent>
     </Dialog>
     <output className="sr-only" aria-label="聊天室開啟次數">{messengerOpens}</output>
-    <Toaster />
+    <Toaster theme="dark" />
   </div>;
 }
 createRoot(document.getElementById('root')).render(<Fixture />);
