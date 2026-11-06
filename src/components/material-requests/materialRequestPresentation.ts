@@ -283,13 +283,14 @@ export function isPendingMaterialCategory(value: unknown): value is PendingMater
 
 type PendingCategorySource = {
   displayRef: string;
+  record?: { pendingCategory?: string | null };
   primaryRecord?: { pendingCategory?: string | null } | null;
   records?: ReadonlyArray<{ pendingCategory?: string | null }>;
 };
 
-/** A category chosen by hand on any row of the part wins (the main row first); otherwise the Ref Des prefix decides. */
+/** An explicit vendor-row choice wins, then any category saved for the location, then its Ref Des prefix. */
 export function resolvePendingMaterialCategory(group: PendingCategorySource): { category: PendingMaterialCategory; manual: boolean } {
-  const manual = [group.primaryRecord, ...(group.records ?? [])].map((record) => record?.pendingCategory).find(isPendingMaterialCategory);
+  const manual = [group.record, group.primaryRecord, ...(group.records ?? [])].map((record) => record?.pendingCategory).find(isPendingMaterialCategory);
   return manual ? { category: manual, manual: true } : { category: getPendingMaterialCategory(group.displayRef), manual: false };
 }
 
@@ -301,7 +302,7 @@ export function groupPendingMaterials<T extends PendingCategorySource>(groups: r
     .filter((category) => category.groups.length > 0);
 }
 
-type ApplicationRecord = { id: string; needsApplication?: boolean; applicationRequired?: boolean; applicationExempt?: boolean; manufacturer?: string | null; manufacturerPartNumber?: string | null; name?: string | null; trackingStatus?: string; trackingHistory?: readonly { id: string; status: string }[]; requestOwnerName?: string };
+type ApplicationRecord = { id: string; needsApplication?: boolean; applicationRequired?: boolean; applicationExempt?: boolean; manufacturer?: string | null; manufacturerPartNumber?: string | null; name?: string | null; trackingStatus?: string; trackingHistory?: readonly { id: string; status: string }[]; requestOwnerName?: string; pendingCategory?: string | null };
 
 export interface PendingApplication<G, R extends ApplicationRecord> {
   key: string;

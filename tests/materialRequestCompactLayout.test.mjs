@@ -281,7 +281,7 @@ test("匯出報表 and 上傳說明 carry their own colours and 上傳說明 bli
 
 test("待處理料 categories can be changed by hand and survive saves of other fields", () => {
   const dialog = slice("function PendingMaterialsDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
-  assert.match(dialog, /<PendingCategoryPicker group=\{group\} disabled=\{!canEdit\} onChange=\{\(next\) => onSetCategory\(group, next\)\} \/>/);
+  assert.match(dialog, /<PendingCategoryPicker group=\{group\} record=\{record\} disabled=\{!canEdit\} onChange=\{\(next\) => onSetCategory\(group, next\)\} \/>/);
   assert.match(source, /data-testid="pending-category-picker"/);
   assert.match(source, /<SelectItem value="auto">依位號自動/);
   assert.match(source, /onSetCategory=\{setPendingCategory\}/);
