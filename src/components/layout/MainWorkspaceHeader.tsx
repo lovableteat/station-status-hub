@@ -21,6 +21,11 @@ export interface WorkspaceNavItem {
   label: string;
 }
 
+export interface WorkspaceMenuItem extends WorkspaceNavItem {
+  icon?: ReactNode;
+  onSelect: () => void;
+}
+
 interface MainWorkspaceHeaderProps {
   items: WorkspaceNavItem[];
   activeItem?: string;
@@ -32,12 +37,7 @@ interface MainWorkspaceHeaderProps {
   userRoleLabel?: string;
   showOnlineUsers?: boolean;
   showNotifications?: boolean;
-  userMenuItems?: Array<{
-    id: string;
-    label: string;
-    icon?: ReactNode;
-    onSelect: () => void;
-  }>;
+  userMenuItems?: WorkspaceMenuItem[];
 }
 
 export function MainWorkspaceHeader({

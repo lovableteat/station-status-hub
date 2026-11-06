@@ -23,11 +23,13 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import type { WorkspaceMenuItem } from "./MainWorkspaceHeader";
 
 interface MobileWorkspaceDockProps {
   activeItem: string;
   availableItems: Array<{ id: string; label: string }>;
   onSelect: (id: string) => void;
+  platformActions?: WorkspaceMenuItem[];
 }
 
 const PRIMARY_WORKSPACES = [
@@ -48,7 +50,7 @@ const SECONDARY_WORKSPACES = [
 const activeDockClasses =
   "border-primary/45 bg-sidebar-accent text-sidebar-accent-foreground shadow-[0_10px_22px_-16px_rgba(0,0,0,0.55)]";
 
-export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: MobileWorkspaceDockProps) {
+export function MobileWorkspaceDock({ activeItem, availableItems, onSelect, platformActions }: MobileWorkspaceDockProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const availableIds = useMemo(() => new Set(availableItems.map((item) => item.id)), [availableItems]);
   const primaryItems = PRIMARY_WORKSPACES.filter((item) => availableIds.has(item.id));
@@ -155,6 +157,17 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect }: Mo
                 </button>
               );
             })}
+            {platformActions?.length ? (
+              <section aria-label="帳號與協作" className="mt-2 space-y-1 border-t border-border pt-3 md:hidden">
+                <h3 className="px-3 text-xs font-semibold text-muted-foreground">帳號與協作</h3>
+                {platformActions.map((action) => (
+                  <button key={action.id} type="button" onClick={() => { setMoreOpen(false); action.onSelect(); }} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    {action.icon && <span aria-hidden="true" className="text-muted-foreground">{action.icon}</span>}
+                    {action.label}
+                  </button>
+                ))}
+              </section>
+            ) : null}
           </div>
         </DrawerContent>
       </Drawer>

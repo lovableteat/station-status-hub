@@ -498,7 +498,10 @@ test('compact chat keeps one send action inside the composer and opens the share
     let opened = 0;
     f.win.addEventListener('open-global-direct-messages', () => opened++);
     await act(async () => f.win.dispatchEvent(new CustomEvent('collaboration-unread-change', { detail: { count: 9, directMessageCount: 3 } })));
-    await f.click('開啟聊天室，3 則未讀');
+    await f.click('對話工具');
+    const messenger = f.root.root.findByProps({ 'data-mobile-tools-item': 'messages' });
+    assert.ok(messenger.findAll(node => node.children.includes('3 則未讀')).length > 0);
+    await act(async () => messenger.props.onClick());
     assert.equal(opened, 1);
   } finally { await f.unmount(); }
 });

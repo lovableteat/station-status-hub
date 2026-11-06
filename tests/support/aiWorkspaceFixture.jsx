@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster } from 'sonner';
 import { ApiChatConsole } from '../../src/components/api-management/ApiChatConsole';
+import { buildApiKeyModelTargets } from '../../src/components/api-management/apiKeyHelpers';
 import { Button } from '../../src/components/ui/button';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '../../src/components/ui/dialog';
 import { MainWorkspaceHeader } from '../../src/components/layout/MainWorkspaceHeader';
 import { MobileWorkspaceDock } from '../../src/components/layout/MobileWorkspaceDock';
 import { DirectMessageLauncher } from '../../src/components/collaboration/CollaborationCenter';
@@ -27,15 +29,20 @@ window.fetch = async (url,init) => {
 };
 const record = { id: 'qa-key', key_name: '隔離測試 Gemini', api_key: 'fixture-only-key', permissions: { metadata: { provider: 'gemini', model: 'gemini-2.5-flash', baseUrl: 'https://fixture.invalid/v1beta' } }, is_active: true };
 const targets = ['gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash'].map(model => ({ id: `qa-key::${model}`, model, record }));
+const openAiRecord = { ...record, id: 'qa-openai', key_name: '隔離測試 OpenAI', permissions: { metadata: { provider: 'openai', model: 'gpt-5.4', baseUrl: 'https://api.openai.com/v1' } } };
+const referenceTargets = buildApiKeyModelTargets([openAiRecord], []);
 const workspaces = [{id:'workspace-home',label:'首頁'},{id:'station-status',label:'維修'},{id:'material-requests',label:'料號'},{id:'ai-chat',label:'AI 問答'}];
 const maintenanceProjects = [{ id: 'qa-project', name: '隔離測試專案' }];
 function Fixture() {
-  const mobilePreview = new URLSearchParams(location.search).has('mobile');
-  const [targetId, setTargetId] = useState(targets[0].id);
+  const params = new URLSearchParams(location.search);
+  const mobilePreview = params.has('mobile');
+  const modelTargets = params.has('qaReference') ? referenceTargets : targets;
+  const [targetId, setTargetId] = useState(modelTargets[0].id);
   const [revision, setRevision] = useState(0);
   const [workspaceVisible, setWorkspaceVisible] = useState(true);
   const [messengerOpens, setMessengerOpens] = useState(0);
-  const selected = targets.find(target => target.id === targetId);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const selected = modelTargets.find(target => target.id === targetId);
   useEffect(() => { const update = () => setRevision(value => value + 1); window.addEventListener('ai-qa-state', update); return () => window.removeEventListener('ai-qa-state', update); }, []);
   useEffect(() => { const open = () => setMessengerOpens(value => value + 1); const unread = () => window.dispatchEvent(new CustomEvent('collaboration-unread-change', { detail: { count: 3, directMessageCount: 3 } })); window.addEventListener('open-global-direct-messages', open); window.addEventListener('collaboration-unread-request', unread); unread(); return () => { window.removeEventListener('open-global-direct-messages', open); window.removeEventListener('collaboration-unread-request', unread); }; }, []);
   return <div data-ai-chat-viewport={mobilePreview ? 'true' : undefined} className="app-shell flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-background text-foreground">
@@ -47,9 +54,16 @@ function Fixture() {
       <Button variant="outline" onClick={() => setWorkspaceVisible(value => !value)}>{workspaceVisible ? '離開 AI 工作區' : '返回 AI 工作區'}</Button>
       <span aria-live="polite">隔離資料 · 儲存 {fixtureState.writes.length} 次 · 假 AI {fixtureState.attempts} 次 <span className="sr-only">{revision}</span></span>
     </nav>
-    <main data-mobile-workspace-main={mobilePreview ? 'true' : undefined} className="min-h-0 flex-1"><div data-ai-chat-workspace="viewport-fit" className="h-full min-h-0 w-full min-w-0 px-1 py-1 sm:px-3 sm:py-3 lg:px-5 lg:py-4">{workspaceVisible ? <ApiChatConsole mode="chat-only" selectedApiKey={record} selectedModel={selected.model} selectedApiKeyTargetId={targetId} onSelectApiKeyTarget={setTargetId} availableApiKeys={[record]} availableApiKeyTargets={targets} maintenanceProjects={maintenanceProjects} currentMaintenanceProjectId={maintenanceProjects[0].id} materialSpecsAllowed /> : <p>已離開隔離 AI 工作區；返回可確認待儲存草稿。</p>}</div></main>
+    <main data-mobile-workspace-main={mobilePreview ? 'true' : undefined} className="min-h-0 flex-1"><div data-ai-chat-workspace="viewport-fit" className="h-full min-h-0 w-full min-w-0 px-1 py-1 sm:px-3 sm:py-3 lg:px-5 lg:py-4">{workspaceVisible ? <ApiChatConsole mode="chat-only" selectedApiKey={selected.record} selectedModel={selected.model} selectedApiKeyTargetId={targetId} onSelectApiKeyTarget={setTargetId} availableApiKeys={[selected.record]} availableApiKeyTargets={modelTargets} maintenanceProjects={maintenanceProjects} currentMaintenanceProjectId={maintenanceProjects[0].id} materialSpecsAllowed /> : <p>已離開隔離 AI 工作區；返回可確認待儲存草稿。</p>}</div></main>
     <div data-chat-dock="detached" className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-40 w-auto sm:w-[min(480px,calc(100vw-1rem))] lg:bottom-4 lg:right-4"><DirectMessageLauncher unreadCount={3} onOpen={() => setMessengerOpens(value => value + 1)} /></div>
-    {mobilePreview && <MobileWorkspaceDock activeItem="ai-chat" availableItems={workspaces} onSelect={() => {}} />}
+    {mobilePreview && <MobileWorkspaceDock activeItem="ai-chat" availableItems={workspaces} onSelect={() => {}} platformActions={[{ id: 'own-credentials', label: '帳號與密碼', onSelect: () => setAccountOpen(true) }]} />}
+    <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
+      <DialogContent>
+        <DialogTitle>測試帳號設定</DialogTitle>
+        <DialogDescription>用於驗證從更多選單開啟帳號設定。</DialogDescription>
+        <DialogClose asChild><Button type="button">完成</Button></DialogClose>
+      </DialogContent>
+    </Dialog>
     <output className="sr-only" aria-label="聊天室開啟次數">{messengerOpens}</output>
     <Toaster />
   </div>;

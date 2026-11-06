@@ -33,6 +33,19 @@ if (new URLSearchParams(location.search).has('qaMobile')) {
   const saved = cloud.get(account)[0];
   saved.messages.push({id:'mobile-long-reply',role:'assistant',content:mobileReply,createdAt:1300});
 }
+if (new URLSearchParams(location.search).has('qaReference')) {
+  const saved = { ...row('conversation-active-workspace', '手機問答版面', 'QA-731 的欄位要怎麼填？'), provider: 'openai', model: 'gpt-5.4', key_label: '隔離測試 OpenAI' };
+  const content = [
+    '依照測試附件，**QA-731** 的欄位可以先整理成下面的格式。這些數值需要再與正式規格書核對。',
+    '---',
+    '## 先說結論',
+    '**送審前請確認封裝、阻值與額定功率。**',
+    '先把附件內的欄位和待確認的數值分開：',
+    '| 欄位 | 待確認值 |\n| --- | ---: |\n| Type | RES FILM |\n| 阻值 | 36 |\n| 阻值單位 | Kohm |\n| 瓦特數與尺寸 | 1/8 W · 0402 |',
+  ].join('\n\n');
+  saved.messages.push({ id: 'mobile-reference-reply', role: 'assistant', content, createdAt: Date.UTC(2026, 10, 6, 10, 12) });
+  cloud.set(account, [saved]);
+}
 const prompts = [{ id: 'qa-prompt', name: '附件重點整理', command: '請列出附件的主要重點', description: '文件', created_by: null, created_at: '2026-10-13T00:00:00Z', updated_at: '2026-10-13T00:00:00Z' }];
 const notify = () => window.dispatchEvent(new Event('ai-qa-state'));
 function query(run) {

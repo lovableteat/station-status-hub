@@ -7,11 +7,13 @@ import type {
 import {
   AlertTriangle,
   ArrowRight,
+  ArrowUp,
   Bookmark,
   Bot,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Copy,
   FileText,
   History,
   ImageIcon,
@@ -22,6 +24,7 @@ import {
   Pencil,
   Plus,
   Presentation,
+  RotateCcw,
   Search,
   Send,
   SlidersHorizontal,
@@ -57,6 +60,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { semanticJson } from "@/lib/semanticJson";
 import { withReadDeadline } from "@/lib/readDeadline";
+import { writeClipboardText } from "@/lib/writeClipboardText";
 
 import {
   GEMINI_DEFAULT_MODEL,
@@ -741,8 +745,16 @@ function QueryLoadingCard({ message }: { message: string }) {
   );
 }
 
-function MessageCard({ message, materialSpecsAllowed }: { message: ChatMessage; materialSpecsAllowed: boolean }) {
+function MessageCard({ message, materialSpecsAllowed, compact, priorQuestion, canReuseQuestion, onReuseQuestion }: {
+  message: ChatMessage;
+  materialSpecsAllowed: boolean;
+  compact: boolean;
+  priorQuestion?: string;
+  canReuseQuestion: boolean;
+  onReuseQuestion: (question: string) => void;
+}) {
   const isUser = message.role === "user";
+  const replyText = compact && !isUser ? stripAttachmentMarkers(message.content).trim() : "";
   const contentSegments = splitContentByAttachmentMarkers(message.content || "");
   const inlineAttachmentIndexes = new Set(
     contentSegments.flatMap((segment) =>
@@ -814,7 +826,7 @@ function MessageCard({ message, materialSpecsAllowed }: { message: ChatMessage; 
               : "border-cyan-400/10 bg-[linear-gradient(180deg,#10192e_0%,#0b1423_100%)] text-slate-100"
         )}
       >
-        <div data-ai-message-meta className="mb-3 flex items-center justify-between gap-3">
+        <div data-ai-message-meta className={cn("mb-3 flex items-center justify-between gap-3", compact && "sr-only")}>
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
             {isUser ? (
               <>
@@ -828,9 +840,9 @@ function MessageCard({ message, materialSpecsAllowed }: { message: ChatMessage; 
               </>
             )}
           </div>
-          <span className="text-xs font-semibold text-slate-500">
+          {(!compact || isUser) && <span className="text-xs font-semibold text-slate-500">
             {formatMessageTime(message.createdAt)}
-          </span>
+          </span>}
         </div>
 
         {message.content ? (
@@ -896,6 +908,23 @@ function MessageCard({ message, materialSpecsAllowed }: { message: ChatMessage; 
           <MaintenanceCitationList citations={message.citations} />
         ) : null}
         {!isUser && message.materialSpecs && <MaterialSpecCitationList report={message.materialSpecs} allowed={materialSpecsAllowed} />}
+        {compact && !isUser && (
+          <div data-ai-reply-actions className="flex items-center text-muted-foreground">
+            {replyText && <Button
+              type="button" variant="ghost" className="h-11 w-11 shrink-0 p-0" aria-label="複製回覆" title="複製回覆"
+              onClick={() => void writeClipboardText(replyText).then(
+                () => toast.success("已複製回覆"),
+                () => toast.error("無法自動複製，請長按回覆文字複製"),
+              )}
+            ><Copy className="h-4 w-4" /></Button>}
+            {priorQuestion && <Button
+              type="button" variant="ghost" className="h-11 w-11 shrink-0 p-0" aria-label="重填這個問題"
+              title={canReuseQuestion ? "重填這個問題" : "輸入列可用且沒有草稿時才能重填"}
+              disabled={!canReuseQuestion} onClick={() => onReuseQuestion(priorQuestion)}
+            ><RotateCcw className="h-4 w-4" /></Button>}
+            <span className="ml-auto whitespace-nowrap text-xs tabular-nums">{formatMessageTime(message.createdAt)}</span>
+          </div>
+        )}
       </div>
 
       {isUser ? (
@@ -1537,6 +1566,13 @@ export function ApiChatConsole({
       !loading
       && !readingAttachments
   );
+  const canReuseQuestion = Boolean(conversationRemoteReadyRef.current && !composerText && !uploadedAttachments.length && !loading && !readingAttachments);
+  const reuseQuestion = (question: string) => {
+    if (!canReuseQuestion) return;
+    setDraftMessage(question);
+    setSlashMenuDismissed(true);
+    composerTextareaRef.current?.focus({ preventScroll: true });
+  };
 
   const hasConversationContent =
     messages.length > 0 || composerText.trim().length > 0 || uploadedAttachments.length > 0;
@@ -2721,8 +2757,8 @@ export function ApiChatConsole({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="outline"
-          className={cn("relative h-11 shrink-0 gap-2 px-3 text-sm", compactChat && "w-11 p-0")}
+          variant={compactChat ? "ghost" : "outline"}
+          className={cn("relative h-11 shrink-0 gap-2 px-3 text-sm", compactChat && "w-11 p-0 text-muted-foreground")}
           aria-label="開啟共享提示詞庫"
         >
           <LibraryBig className="h-4 w-4" />
@@ -2996,7 +3032,7 @@ export function ApiChatConsole({
   );
 
   const uploadControl = (
-    <Button type="button" variant="outline" onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className={cn("h-11 shrink-0 gap-2 px-3", compactChat && "w-11 p-0")}>
+    <Button type="button" variant={compactChat ? "ghost" : "outline"} onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className={cn("h-11 shrink-0 gap-2 px-3", compactChat && "w-11 p-0 text-muted-foreground")}>
       <Paperclip className="h-4 w-4" />
       {!compactChat && <span className="hidden sm:inline">上傳檔案</span>}
     </Button>
@@ -3011,9 +3047,10 @@ export function ApiChatConsole({
       disabled={!canSend}
       aria-label="送出查詢"
       aria-busy={loading}
-      className={cn("h-11 shrink-0 gap-2 px-3", compactChat ? "w-11 rounded-xl p-0" : "min-w-24")}
+      className={cn("h-11 shrink-0 gap-2 px-3", compactChat ? "w-11 rounded-full p-0 [&_svg]:size-5" : "min-w-24")}
     >
-      <Send className="h-4 w-4" /><span className={compactChat ? "sr-only" : undefined}>{loading ? "查詢中" : "送出"}</span>
+      {compactChat ? <ArrowUp className="h-5 w-5" /> : <Send className="h-4 w-4" />}
+      <span className={compactChat ? "sr-only" : undefined}>{loading ? "查詢中" : "送出"}</span>
     </Button>
   );
   const composerActions = (
@@ -3153,7 +3190,14 @@ export function ApiChatConsole({
                   </div>
                 )
               ) : (
-                messages.map((message) => <MessageCard key={message.id} message={message} materialSpecsAllowed={materialSpecsAllowed} />)
+                messages.map((message, index) => {
+                  const previous = messages[index - 1];
+                  return <MessageCard
+                    key={message.id} message={message} materialSpecsAllowed={materialSpecsAllowed} compact={compactChat}
+                    priorQuestion={compactChat && previous?.role === "user" ? stripAttachmentMarkers(previous.content).trim() : undefined}
+                    canReuseQuestion={canReuseQuestion} onReuseQuestion={reuseQuestion}
+                  />;
+                })
               )}
 
               {loading ? <QueryLoadingCard message={requestProgress} /> : null}
@@ -3353,7 +3397,7 @@ export function ApiChatConsole({
                   className={cn(
                     "resize-none border-0 font-normal text-foreground shadow-none backdrop-blur-none transition-colors placeholder:text-muted-foreground focus-visible:ring-0",
                     compactChat
-                      ? "min-h-11 rounded-xl !bg-background px-3 py-2.5 text-base leading-6"
+                      ? "min-h-11 rounded-xl !bg-transparent px-1 py-2.5 text-base leading-6"
                       : "min-h-20 max-h-40 rounded-none !bg-transparent px-3 py-2.5 !text-lg leading-7 lg:resize-y"
                   )}
                 />
@@ -3587,8 +3631,8 @@ export function ApiChatConsole({
           </aside>
 
           <div className="order-1 flex min-h-0 min-w-0 flex-col lg:order-2">
-            {compactChat && <div data-mobile-ai-command-bar="true" className="grid shrink-0 grid-cols-[minmax(0,1fr)_repeat(4,44px)] lg:hidden">
-              <h1 className="sr-only">AI 問答</h1>
+            {compactChat && <div data-mobile-ai-command-bar="true" className="flex shrink-0 items-center lg:hidden">
+              <h1 className="shrink-0 whitespace-nowrap text-lg font-semibold leading-none text-foreground">AI 問答</h1>
               <Select
                 value={selectedApiKeyTargetId ?? ""}
                 onValueChange={(value) => onSelectApiKeyTarget?.(value)}
@@ -3599,14 +3643,9 @@ export function ApiChatConsole({
                   aria-label="選擇 API 金鑰與模型"
                   aria-description={model || undefined}
                   title={model}
-                  className="h-11 min-w-0 gap-1 px-2.5 text-left"
+                  className="h-11 w-auto min-w-0 gap-1 px-2.5 text-left font-semibold [&>span]:truncate"
                 >
-                  <div className="grid min-w-0 gap-0.5">
-                    <span aria-hidden="true" className="truncate text-xs font-medium leading-none text-foreground">AI 問答</span>
-                    <span className="truncate text-sm font-semibold leading-none text-primary">
-                      <SelectValue placeholder="選擇模型">{model || "選擇模型"}</SelectValue>
-                    </span>
-                  </div>
+                  <SelectValue placeholder="選擇模型">{model || "選擇模型"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent className="border-border bg-popover text-foreground">
                   {availableApiKeyTargets.map((target) => {
@@ -3621,26 +3660,23 @@ export function ApiChatConsole({
               </Select>
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 onClick={() => setMobileSidebarOpen(true)}
                 aria-label={`開啟最近對話，共 ${savedConversations.length} 筆`}
                 title="最近對話"
-                className="h-11 w-11 p-0"
+                className="ml-auto h-11 w-11 shrink-0 p-0 [&_svg]:size-5"
               >
                 <History className="h-4 w-4" />
               </Button>
-              <Button type="button" variant="outline" aria-label="對話工具" aria-haspopup="dialog" aria-expanded={mobileToolsOpen} title="資料來源與 API 用量" onClick={() => setMobileToolsOpen(true)} className="h-11 w-11 p-0">
+              <Button type="button" variant="ghost" aria-label="對話工具" aria-description={directMessageUnreadCount ? `聊天室有 ${directMessageUnreadCount} 則未讀` : undefined} aria-haspopup="dialog" aria-expanded={mobileToolsOpen} title="對話工具" onClick={() => setMobileToolsOpen(true)} className="relative h-11 w-11 shrink-0 p-0 [&_svg]:size-5">
                 <SlidersHorizontal className="h-4 w-4" />
-              </Button>
-              <Button type="button" variant="outline" aria-label={`開啟聊天室${directMessageUnreadCount ? `，${directMessageUnreadCount} 則未讀` : ""}`} title="訊息" className="relative h-11 w-11 p-0" onClick={() => window.dispatchEvent(new CustomEvent("open-global-direct-messages"))}>
-                <MessageSquareText className="h-4 w-4" />
-                {directMessageUnreadCount > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-destructive px-1 text-[10px] text-destructive-foreground">{directMessageUnreadCount > 99 ? "99+" : directMessageUnreadCount}</span>}
+                {directMessageUnreadCount > 0 && <span aria-hidden="true" className="absolute right-2.5 top-2 h-1.5 w-1.5 rounded-full bg-primary" />}
               </Button>
               <Button
                 type="button"
                 onClick={requestResetConversation}
                 aria-label="建立新對話"
-                className="h-11 w-11 rounded-xl p-0"
+                className="h-11 w-11 shrink-0 rounded-xl p-0 [&_svg]:size-5"
               >
                 <Plus className="h-5 w-5" />
               </Button>
@@ -3649,16 +3685,20 @@ export function ApiChatConsole({
               open={mobileToolsOpen}
               onOpenChange={setMobileToolsOpen}
               title="對話工具"
-              description="管理資料來源與查看 API 用量。"
+              description="查看資料來源、API 用量與聊天室。"
               testId="mobile-ai-tools"
               sections={[
                 { key: "sources", title: "資料來源", content: sourceSettings },
                 { key: "quota", title: "全員共用 API 額度", content: <AiQuotaStatus apiKeyId={selectedApiKey?.id ?? null} provider={provider} model={model} /> },
-                { key: "conversation", items: [{ key: "presentation", label: "製作 PPT", icon: Presentation, onSelect: () => setPresentationOpen(true), disabled: loading }, { key: "clear", label: "清空對話", icon: Trash2, onSelect: requestResetConversation }] },
+                { key: "conversation", items: [
+                  { key: "messages", label: "開啟聊天室", icon: MessageSquareText, trailing: directMessageUnreadCount ? `${directMessageUnreadCount > 99 ? "99+" : directMessageUnreadCount} 則未讀` : undefined, onSelect: () => window.dispatchEvent(new CustomEvent("open-global-direct-messages")) },
+                  { key: "presentation", label: "製作 PPT", icon: Presentation, onSelect: () => setPresentationOpen(true), disabled: loading },
+                  { key: "clear", label: "清空對話", icon: Trash2, onSelect: requestResetConversation },
+                ] },
               ]}
             />}
             {compactChat && activeSourceLabels && (
-              <p data-ai-active-sources className="shrink-0 px-2 pb-1 text-xs leading-5 text-primary">已啟用 {activeSourceLabels}</p>
+              <p data-ai-active-sources className="shrink-0 px-4 pt-1 text-xs leading-5 text-primary">已啟用 {activeSourceLabels}</p>
             )}
             <div className="min-h-0 flex-1">{conversationPanel}</div>
           </div>

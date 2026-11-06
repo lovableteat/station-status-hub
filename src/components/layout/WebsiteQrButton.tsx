@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { writeClipboardText } from "@/lib/writeClipboardText";
 
 const PRODUCTION_SITE_URL = "https://lovableteat.github.io/station-status-hub/";
 
@@ -18,28 +19,6 @@ function getPublicSiteUrl() {
   if (typeof window === "undefined") return PRODUCTION_SITE_URL;
   if (/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) return PRODUCTION_SITE_URL;
   return new URL(import.meta.env.BASE_URL, window.location.origin).toString();
-}
-
-async function writeClipboardText(value: string) {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(value);
-      return;
-    } catch {
-      // Older mobile browsers can expose Clipboard API but reject writes.
-    }
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  textarea.remove();
-  if (!copied) throw new Error("Clipboard write failed");
 }
 
 export function WebsiteQrButton() {

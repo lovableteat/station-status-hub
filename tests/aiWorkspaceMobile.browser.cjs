@@ -75,6 +75,49 @@ async function waitForSendAboveKeyboard(page) {
   }, undefined, { timeout: 3000 });
 }
 
+async function checkReferenceLayout(page, width, height) {
+  await page.goto(origin + '/?mobile&qaReference');
+  await page.getByRole('heading', { name: '先說結論' }).waitFor();
+  assert.equal(await page.locator('[data-mobile-app-header]').isVisible(), false, 'the phone opens directly onto the chat header');
+  const title = await page.getByRole('heading', { name: 'AI 問答', exact: true }).boundingBox();
+  const model = await page.getByRole('combobox', { name: '選擇 API 金鑰與模型' }).boundingBox();
+  assert.ok(title.height >= 16 && title.x + title.width <= model.x && title.y >= model.y && title.y + title.height <= model.y + model.height);
+  const table = page.getByRole('table');
+  assert.ok(await table.evaluate(node => node.parentElement.scrollWidth === node.parentElement.clientWidth), 'both columns are visible without scrolling sideways');
+  assert.equal(await table.getByRole('cell', { name: '36', exact: true }).evaluate(node => getComputedStyle(node).textAlign), 'right');
+  const send = page.getByRole('button', { name: sendLabel });
+  assert.equal(await send.evaluate(node => getComputedStyle(node).borderRadius), '50%');
+  await shot(page, `mobile-ai-reference-${width}x${height}`);
+  if (width !== 390) return;
+
+  const modelPicker = page.getByRole('combobox', { name: '選擇 API 金鑰與模型' });
+  await modelPicker.tap();
+  await page.getByRole('option', { name: /gpt-6\.1-sol.*單次使用/ }).tap();
+  await modelPicker.getByText('gpt-6.1-sol', { exact: true }).waitFor();
+  await modelPicker.tap();
+  await page.getByRole('option', { name: /gpt-5\.4/ }).tap();
+  await modelPicker.getByText('gpt-5.4', { exact: true }).waitFor();
+
+  await page.getByRole('button', { name: '更多', exact: true }).tap();
+  await page.getByRole('button', { name: '帳號與密碼' }).tap();
+  await page.getByRole('dialog', { name: '測試帳號設定' }).getByRole('button', { name: '完成' }).tap();
+
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.qaCopiedReply = text; } } }));
+  const copy = page.getByRole('button', { name: '複製回覆' });
+  const copyTarget = await copy.boundingBox();
+  assert.ok(copyTarget.width >= 44 && copyTarget.height >= 44);
+  await copy.tap();
+  assert.match(await page.evaluate(() => window.qaCopiedReply), /先說結論/);
+  const input = page.getByRole('textbox', { name: inputLabel });
+  const reuse = page.getByRole('button', { name: '重填這個問題' });
+  await input.fill('保留這份草稿');
+  assert.ok(await reuse.isDisabled(), 'reuse cannot replace a draft');
+  await input.fill('');
+  await reuse.tap();
+  assert.equal(await input.inputValue(), 'QA-731 的欄位要怎麼填？');
+  assert.ok(await page.getByRole('heading', { name: '先說結論' }).isVisible());
+}
+
 (async () => {
   const browser = await playwright[browserName].launch({
     headless: true,
@@ -89,6 +132,7 @@ async function waitForSendAboveKeyboard(page) {
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         await installVisualViewport(page);
+        if (width <= 390) await checkReferenceLayout(page, width, height);
         await page.goto(origin + '/?mobile&qaContext&qaMobile');
         const replyHeading = page.getByRole('heading', { name: '規格比對結果', exact: true });
         await replyHeading.waitFor({ state: 'attached' });
@@ -133,12 +177,15 @@ async function waitForSendAboveKeyboard(page) {
           await page.getByRole('button', { name: /開啟最近對話/ }).tap();
           await page.getByRole('button', { name: '編輯對話名稱：PDF 與上文接續驗證' }).waitFor();
           await page.getByRole('button', { name: '關閉最近對話' }).tap();
-          await page.getByRole('button', { name: '開啟聊天室，3 則未讀' }).tap();
-          assert.equal(await page.getByLabel('聊天室開啟次數').textContent(), '1');
-
           const tools = page.getByRole('button', { name: '對話工具' });
           await tools.tap();
           const sheet = page.getByRole('dialog', { name: '對話工具' });
+          await sheet.getByRole('button', { name: '製作 PPT' }).tap();
+          await page.getByRole('dialog', { name: '製作 PPT' }).getByRole('button', { name: 'Close' }).tap();
+          await tools.tap();
+          await sheet.getByRole('button', { name: /聊天室.*3 則未讀/ }).tap();
+          assert.equal(await page.getByLabel('聊天室開啟次數').textContent(), '1');
+          await tools.tap();
           const maintenance = sheet.getByRole('switch', { name: '啟用機台維修紀錄來源' });
           const material = sheet.getByRole('switch', { name: '啟用料號與 SPEC 來源' });
           await maintenance.tap();
@@ -197,6 +244,14 @@ async function waitForSendAboveKeyboard(page) {
         await context.close();
       }
     }
+    const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    await desktop.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+    await desktop.goto(origin + '/?mobile&qaReference');
+    await desktop.getByRole('heading', { name: '先說結論' }).waitFor();
+    assert.ok(await desktop.locator('[data-mobile-app-header]').isVisible());
+    assert.ok(await desktop.locator('[data-ai-composer-toolbar]').isVisible());
+    assert.equal(await desktop.getByRole('button', { name: '複製回覆' }).count(), 0);
+    await desktop.close();
   } finally {
     await browser.close();
   }
