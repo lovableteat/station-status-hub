@@ -2131,6 +2131,14 @@ html { color-scheme: dark; }
   font-weight: 700;
 }
 .material-record-dialog .material-ce-control.material-pn-missing { border-color: hsl(var(--warning)) !important; }
+.material-table-top-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid hsl(var(--border));
+  scrollbar-color: hsl(var(--primary) / .65) hsl(var(--background));
+}
+.material-table-top-scroll:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
 .material-table-crosshair [data-crosshair-row] > :is(td, th),
 .material-table-crosshair [data-crosshair-column] { box-shadow: inset 0 0 0 9999px var(--material-crosshair-tint, hsl(var(--primary) / .12)); }
 .material-table-crosshair :is(td, th)[data-crosshair-active] { box-shadow: inset 0 0 0 9999px var(--material-crosshair-active, hsl(var(--primary) / .25)); outline: 2px solid var(--material-crosshair-color, hsl(var(--primary))); outline-offset: -2px; }
