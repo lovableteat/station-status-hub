@@ -25,7 +25,7 @@ test("material search controls are contained by the material table card", () => 
   const headingStart = source.indexOf("<h2", cardStart);
   const headingEnd = source.indexOf("料號總表", headingStart);
   const toolbarStart = source.indexOf('data-testid="material-table-toolbar"');
-  const tableStart = source.indexOf('data-testid="material-table-scroll"');
+  const tableStart = source.indexOf('<MaterialTableScroll>');
 
   assert.ok(cardStart >= 0, "material table card marker is missing");
   assert.ok(headingStart > cardStart && headingEnd > headingStart, "material table heading is missing");
@@ -131,7 +131,7 @@ test("one record dialog saves the material fields and pending tracking together"
   assert.match(source, /data-testid="material-record-save-footer"/);
 });
 
-const tableStart = source.indexOf('data-testid="material-table-scroll"');
+const tableStart = source.indexOf('<MaterialTableScroll>');
 const tableBlock = source.slice(tableStart, source.indexOf("</table>", tableStart));
 const rowBlock = source.slice(source.indexOf("const MaterialGroupRow = memo("), source.indexOf("function CompactAlternativeRows("));
 const alternativeBlock = source.slice(source.indexOf("function CompactAlternativeRows("), source.indexOf("function MaterialExportDialog("));

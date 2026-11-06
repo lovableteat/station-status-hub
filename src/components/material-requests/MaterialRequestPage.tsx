@@ -96,6 +96,7 @@ import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
 import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
+import { MaterialTableScroll } from "./MaterialTableScroll";
 import { buildMaterialMainGroups, filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
@@ -6501,10 +6502,7 @@ export function MaterialRequestPage() {
         </div>}
 
         {(!isCompactLayout || mobileView === "table") && <div className="border-t border-[#2a526f]">
-        <div
-          className="relative max-h-[72vh] overflow-auto"
-          data-testid="material-table-scroll"
-        >
+        <MaterialTableScroll>
           <table className="material-table-crosshair table-fixed border-collapse text-[13px]" style={{ ...buildMaterialCrosshairStyle(activeTableColorTheme.crosshair), width: `max(100%, ${tableWidth}px)`, minWidth: tableWidth }} onPointerOver={event => markMaterialCrosshair(event.currentTarget, event.target)} onPointerLeave={event => clearMaterialCrosshair(event.currentTarget)} onFocusCapture={event => markMaterialCrosshair(event.currentTarget, event.target)} onBlurCapture={event => { if (!event.currentTarget.matches(":hover") && !event.currentTarget.contains(event.relatedTarget as Node | null)) clearMaterialCrosshair(event.currentTarget); }}>
             <thead className="sticky top-0 z-20">
               <tr className="bg-[#0d2137] text-left text-[13px] font-bold text-white">
@@ -6596,7 +6594,7 @@ export function MaterialRequestPage() {
               </tbody>
             )}
           </table>
-        </div>
+        </MaterialTableScroll>
 
         </div>}
         <div data-testid="material-pagination" className="flex flex-wrap items-center justify-between gap-2 border-t border-blue-400/15 bg-[#101d33] px-3 py-2 lg:py-1.5 lg:pr-28">
