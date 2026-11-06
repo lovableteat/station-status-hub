@@ -97,7 +97,6 @@ import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
 import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
 import { MaterialTableScroll } from "./MaterialTableScroll";
-import { MaterialAddPendingDialog } from "./MaterialAddPendingDialog";
 import { buildMaterialMainGroups, filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
@@ -2820,7 +2819,7 @@ export function MaterialRecordDialog({
   onOpenChange: (open: boolean) => void;
   onModeChange: (mode: EditorMode) => void;
   onOpenSpec: (record: Pick<MaterialWorkbookRecord, "specDocument">, download?: boolean) => void;
-  onSave: (record: MaterialWorkbookRecord) => Promise<void>;
+  onSave: (record: MaterialWorkbookRecord, addToPending: boolean) => Promise<void>;
   /** Opens a blank alternate in this record's group; absent when creating. */
   onAddAlternate?: () => void;
 }) {
@@ -2894,8 +2893,10 @@ export function MaterialRecordDialog({
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const handleSave = async () => {
-    if (readOnly || savingRef.current || specUploadRef.current || !form.name.trim()) return;
+  const canAddToPending = mode === "edit" && !readOnly && !isMeManufacturedRecord(form);
+  const handleSave = async (addToPending = false) => {
+    if (readOnly || savingRef.current || specUploadRef.current || trackingDraft.pendingImageReads > 0 || !form.name.trim()) return;
+    if (addToPending && !canAddToPending) return;
     if (!isValidBomUsage(form.qty)) {
       toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
       return;
@@ -2905,11 +2906,11 @@ export function MaterialRecordDialog({
       const next = applyMaterialTrackingDraft({
         ...form,
         ...(mode === "create" && !form.refGroup.trim() ? { refGroup: form.refDes.trim(), sourceGroupKey: form.sourceGroupKey || form.id } : {}),
-        level: 2,
+        level: addToPending ? form.level : 2,
       }, trackingDraft, uploaderName);
       savingRef.current = true;
       setIsSaving(true);
-      await onSave(next);
+      await onSave(addToPending ? addMaterialToPending(next, uploaderName ?? "") : next, addToPending);
     } catch (error) {
       if (!mountedRef.current) return;
       const message = error instanceof Error ? error.message : "資料尚未儲存，請稍後再試。";
@@ -3059,20 +3060,36 @@ export function MaterialRecordDialog({
 
         {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
         <DialogFooter data-testid="material-record-save-footer" className="shrink-0 gap-2 border-t border-border pt-3">
-          {onAddAlternate && mode !== "create" && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid="material-add-alternate"
-              disabled={!canEdit || isSaving || isUploadingSpec || hasUnsavedChanges}
-              title={hasUnsavedChanges ? "先儲存或取消目前的修改，再新增替代料" : "在同一組位號下新增另一家廠商的替代料"}
-              onClick={onAddAlternate}
-              className="h-11 sm:mr-auto"
-            >
-              <Plus className="mr-1.5 h-3.5 w-3.5" />新增替代料
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-2 empty:hidden sm:mr-auto">
+            {onAddAlternate && mode !== "create" && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="material-add-alternate"
+                disabled={!canEdit || isSaving || isUploadingSpec || hasUnsavedChanges}
+                title={hasUnsavedChanges ? "先儲存或取消目前的修改，再新增替代料" : "在同一組位號下新增另一家廠商的替代料"}
+                onClick={onAddAlternate}
+                className="h-11"
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />新增替代料
+              </Button>
+            )}
+            {canAddToPending && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="material-record-add-pending"
+                className="h-11 border-primary/45 bg-primary/10 text-primary hover:bg-primary/20"
+                disabled={isSaving || isUploadingSpec || trackingDraft.pendingImageReads > 0 || !form.name.trim()}
+                title="儲存目前的修改，並加入待處理料的「其他」分類"
+                onClick={() => void handleSave(true)}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" />新增為待處理料
+              </Button>
+            )}
+          </div>
           <Button type="button" variant="outline" size="sm" className="h-11" disabled={isSaving} onClick={() => onOpenChange(false)}>
             {readOnly ? "關閉" : "取消"}
           </Button>
@@ -3806,7 +3823,6 @@ export function MaterialRequestPage() {
   const uploadTargetSeriesRef = useRef<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
-  const [addPendingOpen, setAddPendingOpen] = useState(false);
   const [addedPendingRecordId, setAddedPendingRecordId] = useState<string>();
   const [weeklyProgressOpen, setWeeklyProgressOpen] = useState(false);
   const [specFillOpen, setSpecFillOpen] = useState(false);
@@ -3866,7 +3882,6 @@ export function MaterialRequestPage() {
     setEditorOpen(false);
     setReturnToPending(false);
     setPendingDialogOpen(false);
-    setAddPendingOpen(false);
     setAddedPendingRecordId(undefined);
     setWeeklyProgressOpen(false);
     setSpecFillContext(null);
@@ -5298,29 +5313,6 @@ export function MaterialRequestPage() {
     toast({ title: "負責人已儲存", description: `${record.refDes || record.name} → ${owner?.name ?? "未指定"}` });
   };
 
-  const handleAddPending = async (recordId: string) => {
-    if (!canEdit || !isCollaborativeReady || !isFullDatasetLoaded) throw new Error("目前無法更新此 BOM，請確認編輯權限與同步狀態。");
-    const writeScope = captureBomWrite();
-    const workspaceId = activeWorkspace.id;
-    const record = basePayload.records.find(item => item.id === recordId);
-    if (!record || isMeManufacturedRecord(record)) throw new Error("此料件已不在可加入的清單，請重新選擇。");
-    const next = addMaterialToPending(record, user?.displayName || user?.username || "");
-    if (next !== record) {
-      try {
-        await saveRecordToActiveBom(next, activeWorkspace.recordMeta?.[record.id]);
-      } catch (error) {
-        throw new Error(error instanceof BomRecordConflictError ? "這筆料件剛被更新，請確認最新資料後再試。" : "加入尚未寫入共用資料，請再試一次。");
-      }
-    }
-    if (!isBomWriteCurrent(writeScope) || activeBomIdRef.current !== workspaceId) return;
-    setAddPendingOpen(false);
-    setReturnToPending(false);
-    setPendingRestoreView(false);
-    setAddedPendingRecordId(record.id);
-    setPendingDialogOpen(true);
-    toast({ title: next === record ? "已在待處理料的其他分類" : "已加入待處理料的其他分類", description: record.manufacturerPartNumber || record.refDes || record.name });
-  };
-
   const saveMaterialNote = async (record: MaterialRecord, note: string) => {
     if (!canViewModuleAccess || isHistoricalVersion || !isCollaborativeReady || !isFullDatasetLoaded) {
       throw new Error("尚未同步，請稍後重試。");
@@ -5356,10 +5348,13 @@ export function MaterialRequestPage() {
     }
   };
 
-  const handleSaveRecord = async (record: MaterialWorkbookRecord) => {
+  const handleSaveRecord = async (record: MaterialWorkbookRecord, addToPending: boolean) => {
     if (!isValidBomUsage(record.qty)) {
       toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
       throw new Error("Qty 是單一產品用量，不能為負數");
+    }
+    if (addToPending && (editorMode !== "edit" || record.id !== editorRecord.id || !basePayload.records.some(item => item.id === record.id))) {
+      throw new Error("這筆料件已不在目前的 BOM，請重新開啟後再試。");
     }
     try {
       if (editorContext?.workspaceId !== activeWorkspace.id || editorContext.accountId !== user?.userId) throw new WorkspaceMutationScopeChangedError();
@@ -5369,10 +5364,16 @@ export function MaterialRequestPage() {
         ...(record.requestOwnerId === undefined && record.requestOwnerName === undefined ? { requestOwnerId: user?.userId, requestOwnerName: user?.displayName || user?.username } : {}),
         requestUrl: normalizeRequestUrl(record.requestUrl ?? ""),
       }, editorContext.recordMeta);
-      if (!isBomWriteCurrent(writeScope)) return;
+      if (!isBomWriteCurrent(writeScope) || activeBomIdRef.current !== editorContext.workspaceId) return;
       setEditorOpen(false);
+      if (addToPending) {
+        setReturnToPending(false);
+        setPendingRestoreView(false);
+        setAddedPendingRecordId(record.id);
+        setPendingDialogOpen(true);
+      }
       toast({
-        title: editorMode === "create" ? "料件已新增" : "料件已更新",
+        title: addToPending ? "已加入待處理料的其他分類" : editorMode === "create" ? "料件已新增" : "料件已更新",
         description: `${record.manufacturer || "未指定廠商"} ${record.manufacturerPartNumber || record.name}`,
       });
     } catch (error) {
@@ -5935,14 +5936,6 @@ export function MaterialRequestPage() {
         onExportDetail={() => void exportDiscouragedMaterials()}
         onOpenChange={setNonPvlDialogOpen}
       />
-      {addPendingOpen && canEdit && <MaterialAddPendingDialog
-        key={`add-pending:${user?.userId}:${activeWorkspace.id}`}
-        records={dataset.records}
-        workspaceName={activeWorkspace.name}
-        canSave={isCollaborativeReady && isFullDatasetLoaded}
-        onClose={() => setAddPendingOpen(false)}
-        onAdd={handleAddPending}
-      />}
       <PendingMaterialsDialog
         canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded}
         canEditNote={canEditNote}
@@ -6646,9 +6639,7 @@ export function MaterialRequestPage() {
 
         </div>}
         <div data-testid="material-pagination" className="flex flex-wrap items-center justify-between gap-2 border-t border-blue-400/15 bg-[#101d33] px-3 py-2 lg:py-1.5 lg:pr-28">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400"><span>每頁</span><Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}><SelectTrigger aria-label="每頁筆數" className="h-11 w-20 border-blue-400/20 bg-[#0b1527] text-xs text-slate-200 lg:h-8"><SelectValue /></SelectTrigger><SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">{PAGE_SIZE_OPTIONS.map((size) => <SelectItem key={size} value={String(size)}>{size} 列</SelectItem>)}</SelectContent></Select><span>第 {page} / {totalPages} 頁</span>
-            <Button type="button" variant="outline" size="sm" className="h-11 lg:h-8" disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded || !dataset.records.length} onClick={() => setAddPendingOpen(true)}><Plus className="h-4 w-4" />新增為待處理料</Button>
-          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400"><span>每頁</span><Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}><SelectTrigger aria-label="每頁筆數" className="h-11 w-20 border-blue-400/20 bg-[#0b1527] text-xs text-slate-200 lg:h-8"><SelectValue /></SelectTrigger><SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">{PAGE_SIZE_OPTIONS.map((size) => <SelectItem key={size} value={String(size)}>{size} 列</SelectItem>)}</SelectContent></Select><span>第 {page} / {totalPages} 頁</span></div>
           <div className="flex items-center gap-1.5"><Button type="button" variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="h-11 border-blue-400/20 bg-[#0b1527] px-2.5 text-xs text-slate-300 lg:h-8"><ChevronLeft className="mr-1 h-3.5 w-3.5" />上一頁</Button><Button type="button" variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="h-11 border-blue-400/20 bg-[#0b1527] px-2.5 text-xs text-slate-300 lg:h-8">下一頁<ChevronRight className="ml-1 h-3.5 w-3.5" /></Button></div>
         </div>
       </section>
