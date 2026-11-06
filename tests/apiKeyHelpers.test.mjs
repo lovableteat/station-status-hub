@@ -81,7 +81,7 @@ test("one Gemini key expands into independent model targets without copying the 
   targets.forEach((target) => assert.strictEqual(target.record, record));
 });
 
-test("non-Gemini keys keep one stored-model target", () => {
+test("other OpenAI models keep one stored-model target", () => {
   const record = {
     id: "key-openai",
     key_name: "OpenAI",
@@ -110,6 +110,17 @@ test("non-Gemini keys keep one stored-model target", () => {
   assert.equal(targets.length, 1);
   assert.equal(targets[0].model, "gpt-5.2");
   assert.strictEqual(targets[0].record, record);
+});
+
+test("an active official GPT-5.4 key offers GPT-6.1 Sol after the saved default", () => {
+  const metadata = { provider: "openai", model: "gpt-5.4", baseUrl: "https://api.openai.com/v1/" };
+  const record = { id: "key-openai", permissions: { metadata }, is_active: true };
+  const targets = helpers.buildApiKeyModelTargets([record], []);
+  assert.deepEqual(targets.map(target => target.id), ["key-openai::gpt-5.4", "key-openai::gpt-6.1-sol"]);
+  targets.forEach(target => assert.strictEqual(target.record, record));
+
+  const otherEndpoint = { ...record, permissions: { metadata: { ...metadata, baseUrl: "https://custom.invalid/v1" } } };
+  assert.deepEqual(helpers.buildApiKeyModelTargets([otherEndpoint], []).map(target => target.model), ["gpt-5.4"]);
 });
 
 test("expired and disabled keys are not offered as usable model targets", () => {

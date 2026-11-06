@@ -33,6 +33,9 @@ export interface ApiKeyModelTarget {
   record: ApiKeyRecord;
 }
 
+export const OPENAI_STANDARD_CHAT_MODEL = "gpt-5.4";
+export const OPENAI_ON_DEMAND_MODEL = "gpt-6.1-sol";
+
 export const defaultApiKeyMetadata: ApiKeyMetadata = {
   provider: "",
   model: "",
@@ -73,8 +76,14 @@ export function buildApiKeyModelTargets(
 ): ApiKeyModelTarget[] {
   return records.filter(record => record.is_active && (!record.expires_at || Date.parse(record.expires_at) > Date.now())).flatMap((record) => {
     const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
-    const isGemini = metadata.provider.trim().toLowerCase() === "gemini";
-    const models = isGemini ? geminiModels : [metadata.model];
+    const provider = metadata.provider.trim().toLowerCase();
+    const savedModel = metadata.model.trim();
+    const offersOpenAiUpgrade =
+      provider === "openai" && savedModel === OPENAI_STANDARD_CHAT_MODEL
+      && metadata.baseUrl.trim().replace(/\/+$/, "") === "https://api.openai.com/v1";
+    const models = provider === "gemini" ? geminiModels
+      : offersOpenAiUpgrade ? [savedModel, OPENAI_ON_DEMAND_MODEL]
+      : [savedModel];
 
     return Array.from(new Set(models.map((model) => model.trim())))
       .filter(Boolean)

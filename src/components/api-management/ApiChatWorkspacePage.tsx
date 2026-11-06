@@ -12,6 +12,8 @@ import {
   ApiKeyRecord,
   buildApiKeyModelTargets,
   normalizeApiKeyPermissions,
+  OPENAI_ON_DEMAND_MODEL,
+  OPENAI_STANDARD_CHAT_MODEL,
 } from "./apiKeyHelpers";
 
 function looksLikeImageModel(model?: string | null) {
@@ -112,6 +114,11 @@ export function ApiChatWorkspacePage() {
     [apiKeys],
   );
 
+  const defaultTarget = apiKeyTargets.find(target =>
+    target.model === OPENAI_STANDARD_CHAT_MODEL
+    && normalizeApiKeyPermissions(target.record.permissions).metadata.provider.trim().toLowerCase() === "openai"
+  ) ?? apiKeyTargets.find(target => target.model !== OPENAI_ON_DEMAND_MODEL) ?? null;
+
   useEffect(() => {
     if (!apiKeyTargets.length) {
       setSelectedApiKeyTargetId(null);
@@ -121,16 +128,15 @@ export function ApiChatWorkspacePage() {
     setSelectedApiKeyTargetId((current) =>
       current && apiKeyTargets.some((target) => target.id === current)
         ? current
-        : apiKeyTargets[0].id
+        : defaultTarget?.id ?? null
     );
-  }, [apiKeyTargets]);
+  }, [apiKeyTargets, defaultTarget]);
 
   const selectedTarget = useMemo(
     () =>
       apiKeyTargets.find((target) => target.id === selectedApiKeyTargetId) ??
-      apiKeyTargets[0] ??
-      null,
-    [apiKeyTargets, selectedApiKeyTargetId],
+      defaultTarget,
+    [apiKeyTargets, defaultTarget, selectedApiKeyTargetId],
   );
   const maintenanceProjects = useMemo(
     () => allProjects

@@ -21,6 +21,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Presentation,
   Search,
   Send,
   SlidersHorizontal,
@@ -82,7 +83,10 @@ import {
 import {
   ApiKeyModelTarget,
   ApiKeyRecord,
+  buildApiKeyModelTargetId,
   normalizeApiKeyPermissions,
+  OPENAI_ON_DEMAND_MODEL,
+  OPENAI_STANDARD_CHAT_MODEL,
 } from "./apiKeyHelpers";
 import { trackedProviderFetch } from "./aiUsageTelemetry";
 import { AiRequestFailure, classifyAiFailure, readAiCooldowns, requestAiWithRecovery, writeAiCooldowns } from './aiRequestRecovery';
@@ -113,6 +117,9 @@ import {
 } from "./pptxAttachment";
 import { isPdfFile, validatePdfFile } from './pdfAttachment';
 import { AI_CHAT_ATTACHMENT_BUCKET, chatAttachmentPaths, hydrateChatAttachment, parseChatAttachment, persistChatAttachment, serializeChatAttachment, type UploadedAttachment } from './aiConversationAttachments';
+import { PptxGenerationDialog, type PresentationRequest } from "./PptxGenerationDialog";
+import { createPresentationPrompt, parsePresentationResponse } from "./pptxGeneration";
+import { preparePresentationSources } from "./presentationSources";
 
 interface ApiChatConsoleProps {
   selectedApiKey?: ApiKeyRecord | null;
@@ -950,6 +957,7 @@ export function ApiChatConsole({
   const attachmentReadInFlight = useRef(false);
   const attachmentReadGeneration = useRef(0);
   const [loading, setLoading] = useState(false);
+  const [presentationOpen, setPresentationOpen] = useState(false);
   const [connectionState, setConnectionState] = useState<ChatConnectionState | null>(null);
   const [keyCooldowns, setKeyCooldowns] = useState<Record<string, number>>(() => readAiCooldowns(typeof window === 'undefined' ? undefined : window.sessionStorage));
   const [requestProgress, setRequestProgress] = useState('');
@@ -1008,6 +1016,7 @@ export function ApiChatConsole({
   const previousSelectedApiKeyTargetIdRef = useRef<null | string>(null);
   const { user } = useUser();
   useEffect(() => {
+    setPresentationOpen(false);
     setMaterialSourceEnabled(false); setMaterialSpecScope("all"); setMaterialSpecProgress("");
     specReadController.current?.abort();
     return () => specReadController.current?.abort();
@@ -1083,7 +1092,7 @@ export function ApiChatConsole({
       availableApiKeyTargets.find(
         (target) =>
           target.record.key_name === conversation.keyLabel &&
-          target.model === conversation.model,
+          target.model === (conversation.model === OPENAI_ON_DEMAND_MODEL ? OPENAI_STANDARD_CHAT_MODEL : conversation.model),
       ),
     [availableApiKeyTargets],
   );
@@ -1100,6 +1109,10 @@ export function ApiChatConsole({
     const nextTargetId = selectedApiKeyTargetId ?? selectedApiKey.id;
     const previousTargetId = previousSelectedApiKeyTargetIdRef.current;
     const switchedTarget = Boolean(previousTargetId && previousTargetId !== nextTargetId);
+    const standardTargetId = buildApiKeyModelTargetId(selectedApiKey.id, OPENAI_STANDARD_CHAT_MODEL);
+    const onDemandTargetId = buildApiKeyModelTargetId(selectedApiKey.id, OPENAI_ON_DEMAND_MODEL);
+    const sameKeyModeSwitch = (previousTargetId === standardTargetId && nextTargetId === onDemandTargetId)
+      || (previousTargetId === onDemandTargetId && nextTargetId === standardTargetId);
 
     setApiKey(selectedApiKey.api_key);
     setProvider(selectedMetadata?.provider || "gemini");
@@ -1109,6 +1122,7 @@ export function ApiChatConsole({
     previousSelectedApiKeyTargetIdRef.current = nextTargetId;
 
     if (!switchedTarget || conversationHydratingRef.current) return;
+    if (sameKeyModeSwitch) return;
 
     invalidateConversationRequest();
     setConnectionState(null);
@@ -1302,7 +1316,7 @@ export function ApiChatConsole({
           conversationHydratingRef.current = true;
         }
         onSelectApiKeyTarget?.(historicalTarget.id);
-        setModel(activeConversation.model);
+        setModel(historicalTarget.model);
       }
       conversationHydratingRef.current = true;
       setActiveConversationId(activeConversation.id);
@@ -1437,6 +1451,7 @@ export function ApiChatConsole({
           !record.is_active ||
           !record.api_key.trim() ||
           !sameProvider ||
+          (target.model === OPENAI_ON_DEMAND_MODEL && target.id !== selectedApiKeyTargetId) ||
           (candidatePreset.id === 'gemini' && !safeGeminiFallback && record.id !== selectedApiKey?.id) ||
           (!sameModel && !safeGeminiFallback) ||
           (record.expires_at && Date.parse(record.expires_at) <= Date.now()) ||
@@ -1580,6 +1595,7 @@ export function ApiChatConsole({
     history: ChatMessage[],
     targetProvider: string,
     ephemeralSystemContext?: string,
+    includeChatSystemPrompt = true,
   ) => {
     const targetPreset = resolveAiProviderPreset(targetProvider);
     const providerMessages: ProviderChatMessage[] = [];
@@ -1597,7 +1613,7 @@ export function ApiChatConsole({
       );
     }
 
-    if (systemPrompt.trim()) {
+    if (includeChatSystemPrompt && systemPrompt.trim()) {
       providerMessages.push({ role: "system", text: systemPrompt.trim() });
     }
 
@@ -1649,6 +1665,7 @@ export function ApiChatConsole({
     showSuccessBanner = true,
     ephemeralSystemContext?: string,
     requestGeneration = requestGenerationRef.current,
+    options?: { presentation?: boolean },
   ) => {
     const isCurrentRequest = () => requestGenerationRef.current === requestGeneration;
     const availableTargets = providerTargets.filter(target => target.apiKey.trim() && target.model.trim() && target.baseUrl.trim());
@@ -1660,6 +1677,7 @@ export function ApiChatConsole({
       const recovered = await requestAiWithRecovery({
         targets: availableTargets,
         hasAttachments: history.some(message => !!message.attachments?.length),
+        longRequest: options?.presentation,
         onProgress: (progress) => { if (isCurrentRequest()) setRequestProgress(progress); },
         onFailure: (target, _failure, until) => {
           if (isCurrentRequest() && until) setKeyCooldowns(current => ({ ...current, [target.id]: until }));
@@ -1670,8 +1688,17 @@ export function ApiChatConsole({
           try {
             providerRequest = buildProviderChatRequest({
               provider: target.provider, apiKey: target.apiKey, baseUrl: target.baseUrl, model: target.model,
-              messages: buildProviderMessages(history, target.provider, ephemeralSystemContext),
+              messages: buildProviderMessages(history, target.provider, ephemeralSystemContext, !options?.presentation),
             });
+            if (options?.presentation && providerRequest.url === "https://api.openai.com/v1/chat/completions"
+              && (target.model === OPENAI_STANDARD_CHAT_MODEL || target.model === OPENAI_ON_DEMAND_MODEL)) {
+              providerRequest.body = {
+                ...providerRequest.body,
+                response_format: { type: "json_object" },
+                max_completion_tokens: 16_384,
+                store: false,
+              };
+            }
           } catch (error) {
             throw error instanceof AiRequestFailure ? error : new AiRequestFailure(error instanceof Error ? error.message : '附件無法送出，請檢查文件格式。', 'invalid');
           }
@@ -1686,7 +1713,7 @@ export function ApiChatConsole({
           if (!response.ok) throw classifyAiFailure(response.status,result,response.headers.get('Retry-After'));
           const parsed = parseProviderChatResponse(target.provider,result);
           const parsedImages = parsed.images.map((image,index) => ({id:`inline-${index}`,src:`data:${image.mimeType};base64,${image.data}`,mimeType:image.mimeType}));
-          return { text: redactSensitiveText(parsed.text || (parsedImages.length ? '' : JSON.stringify(result,null,2)),[target.apiKey]), images:parsedImages };
+          return { text: redactSensitiveText(parsed.text || (parsedImages.length ? '' : JSON.stringify(result,null,2)),[target.apiKey]), images:parsedImages, model: target.model };
         },
       });
       const {result,target,durationMs,attempt} = recovered;
@@ -1706,6 +1733,53 @@ export function ApiChatConsole({
       throw error;
     } finally { if (isCurrentRequest()) setRequestProgress(''); }
   };
+  const resetOnDemandModel = () => {
+    if (model !== OPENAI_ON_DEMAND_MODEL || !selectedApiKey) return;
+    const standardTargetId = buildApiKeyModelTargetId(selectedApiKey.id, OPENAI_STANDARD_CHAT_MODEL);
+    const standardTarget = availableApiKeyTargets.find(target => target.id === standardTargetId)
+      ?? availableApiKeyTargets.find(target => target.model === OPENAI_STANDARD_CHAT_MODEL);
+    if (standardTarget) onSelectApiKeyTarget?.(standardTarget.id);
+  };
+
+  const canGeneratePresentation = Boolean(apiKey.trim() && model.trim() && baseUrl.trim() && provider.trim());
+  const generatePresentation = async ({ files, sourceText, instruction, slideCount }: PresentationRequest) => {
+    if (sendInFlight.current || !canGeneratePresentation) throw new Error("目前沒有可用的模型，或已有請求正在執行。");
+    const generation = ++requestGenerationRef.current;
+    sendInFlight.current = true;
+    setLoading(true);
+    setRequestProgress("正在讀取簡報資料…");
+    let requested = false;
+    try {
+      const { sourceNames, excerpts, attachments } = await preparePresentationSources(files, sourceText);
+      if (generation !== requestGenerationRef.current) throw new Error("對話已切換，請重新開啟簡報工具。");
+      const prompt = createPresentationPrompt({ instruction, slideCount, sourceNames });
+      const imageSources = attachments.filter(attachment => attachment.kind === "image").map(attachment => attachment.id);
+      const content = [
+        prompt,
+        excerpts.length ? `來源文字節錄：${JSON.stringify(excerpts)}` : "",
+        imageSources.length ? `圖片依附件順序對應的來源編號：${imageSources.join("、")}` : "",
+      ].filter(Boolean).join("\n\n");
+      requested = true;
+      const reply = await runProviderRequest(
+        [createMessage("user", content, "normal", [], attachments)],
+        "簡報整理",
+        false,
+        "你是簡報整理助手。只依提供的來源整理內容，並按指定格式輸出 JSON。",
+        generation,
+        { presentation: true },
+      );
+      if (generation !== requestGenerationRef.current) throw new Error("對話已切換，請重新開啟簡報工具。");
+      return { draft: parsePresentationResponse(reply.text, slideCount, sourceNames), model: reply.model };
+    } finally {
+      if (generation === requestGenerationRef.current) {
+        sendInFlight.current = false;
+        setLoading(false);
+        setRequestProgress("");
+        if (requested) resetOnDemandModel();
+      }
+    }
+  };
+
   const handleSend = async () => {
     if (sendInFlight.current || loading || attachmentReadInFlight.current || !canSend) return;
     const typedContent = composerText.trim();
@@ -1859,6 +1933,7 @@ export function ApiChatConsole({
         if (specReadController.current === specController) specReadController.current = null;
         sendInFlight.current = false;
         setLoading(false);
+        resetOnDemandModel();
       }
     }
   };
@@ -1895,6 +1970,7 @@ export function ApiChatConsole({
       if (requestGenerationRef.current === requestGeneration) {
         sendInFlight.current = false;
         setLoading(false);
+        resetOnDemandModel();
       }
     }
   };
@@ -1936,6 +2012,7 @@ export function ApiChatConsole({
     }
     const archived = persistCurrentConversation();
     invalidateConversationRequest();
+    resetOnDemandModel();
     setActiveConversationId(createCurrentConversationSnapshot().id);
     setMessages([]);
     setDraftMessage("");
@@ -2057,7 +2134,9 @@ export function ApiChatConsole({
         conversationHydratingRef.current = true;
       }
       onSelectApiKeyTarget?.(historicalTarget.id);
-      setModel(conversation.model);
+      setModel(historicalTarget.model);
+    } else {
+      resetOnDemandModel();
     }
     setMessages(conversation.messages);
     setDraftMessage(conversation.draftMessage);
@@ -2366,6 +2445,13 @@ export function ApiChatConsole({
 
   const workspaceDialogs = (
     <>
+      {presentationOpen && <PptxGenerationDialog
+        key={user?.userId}
+        model={canGeneratePresentation ? model : ""}
+        progress={requestProgress}
+        onClose={() => setPresentationOpen(false)}
+        onGenerate={generatePresentation}
+      />}
       <Dialog open={Boolean(renamingConversation)} onOpenChange={open => { if (!open) setRenamingConversation(null); }}>
         <DialogContent className="w-[calc(100vw-24px)] max-w-md border-border bg-card text-foreground">
           <DialogHeader>
@@ -2975,6 +3061,7 @@ export function ApiChatConsole({
               <Select
                 value={selectedApiKeyTargetId ?? ""}
                 onValueChange={(value) => onSelectApiKeyTarget?.(value)}
+                disabled={loading}
               >
                 <SelectTrigger
                   aria-label="選擇 API 金鑰與模型"
@@ -2987,7 +3074,7 @@ export function ApiChatConsole({
                     const metadata = normalizeApiKeyPermissions(target.record.permissions).metadata;
                     return (
                       <SelectItem key={target.id} value={target.id}>
-                        {target.record.key_name} · {metadata.provider || "-"} / {target.model}
+                        {target.record.key_name} · {metadata.provider || "-"} / {target.model}{target.model === OPENAI_ON_DEMAND_MODEL ? "（單次使用）" : ""}
                       </SelectItem>
                     );
                   })}
@@ -3276,6 +3363,7 @@ export function ApiChatConsole({
                 <div className="flex shrink-0 items-center gap-2">
                   {promptLibraryControl}
                   {uploadControl}
+                  {isChatOnly && <Button type="button" variant="outline" aria-label="製作 PPT" title="製作 PPT" className="h-11 shrink-0 gap-2 border-primary/40 bg-primary/10 px-3 text-primary hover:bg-primary/15" disabled={loading} onClick={() => setPresentationOpen(true)}><Presentation className="size-4" /><span>製作 PPT</span></Button>}
                 </div>
                 {isChatOnly && <span className="hidden min-w-0 flex-1 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground 2xl:flex"><span>輸入 <kbd>/</kbd> 快速套用</span><span>文字＋圖片可一起貼上</span><span>附件 {uploadedAttachments.length} / {MAX_UPLOAD_ATTACHMENT_COUNT}</span></span>}
                 {isChatOnly && composerActions}
@@ -3504,6 +3592,7 @@ export function ApiChatConsole({
               <Select
                 value={selectedApiKeyTargetId ?? ""}
                 onValueChange={(value) => onSelectApiKeyTarget?.(value)}
+                disabled={loading}
               >
                 <SelectTrigger
                   data-mobile-ai-model
@@ -3524,7 +3613,7 @@ export function ApiChatConsole({
                     const metadata = normalizeApiKeyPermissions(target.record.permissions).metadata;
                     return (
                       <SelectItem key={target.id} value={target.id} className="min-h-11">
-                        {target.record.key_name} · {metadata.provider || "-"} / {target.model}
+                        {target.record.key_name} · {metadata.provider || "-"} / {target.model}{target.model === OPENAI_ON_DEMAND_MODEL ? "（單次使用）" : ""}
                       </SelectItem>
                     );
                   })}
@@ -3565,7 +3654,7 @@ export function ApiChatConsole({
               sections={[
                 { key: "sources", title: "資料來源", content: sourceSettings },
                 { key: "quota", title: "全員共用 API 額度", content: <AiQuotaStatus apiKeyId={selectedApiKey?.id ?? null} provider={provider} model={model} /> },
-                { key: "conversation", items: [{ key: "clear", label: "清空對話", icon: Trash2, onSelect: requestResetConversation }] },
+                { key: "conversation", items: [{ key: "presentation", label: "製作 PPT", icon: Presentation, onSelect: () => setPresentationOpen(true), disabled: loading }, { key: "clear", label: "清空對話", icon: Trash2, onSelect: requestResetConversation }] },
               ]}
             />}
             {compactChat && activeSourceLabels && (

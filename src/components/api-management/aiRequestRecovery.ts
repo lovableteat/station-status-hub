@@ -75,18 +75,20 @@ export async function requestAiWithRecovery<T extends {
     id: string;
     model: string;
     cooldownUntil: number;
-}, R>({ targets, execute, onProgress = () => { }, onFailure = () => { }, hasAttachments = false, now = Date.now, pause = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)), random = Math.random, }: {
+}, R>({ targets, execute, onProgress = () => { }, onFailure = () => { }, hasAttachments = false, longRequest = false, now = Date.now, pause = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)), random = Math.random, }: {
     targets: T[];
     execute: (target: T, attempt: number, timeoutMs: number) => Promise<R>;
     onProgress?: (message: string) => void;
     onFailure?: (target: T, failure: AiRequestFailure, until: number) => void;
     hasAttachments?: boolean;
+    longRequest?: boolean;
     now?: () => number;
     pause?: (ms: number) => Promise<void>;
     random?: () => number;
 }) {
     const started = now();
-    const budget = hasAttachments ? 90000 : 75000;
+    const budget = longRequest ? 120_000 : hasAttachments ? 90000 : 75000;
+    const attemptTimeout = longRequest ? 110_000 : hasAttachments ? 45000 : 25000;
     const candidates = targets.filter(target => target.cooldownUntil <= now()).slice(0, 3);
     if (!candidates.length) {
         const earliest = Math.min(...targets.map(target => target.cooldownUntil));
@@ -104,7 +106,7 @@ export async function requestAiWithRecovery<T extends {
                 break;
             onProgress(`${attempt ? '正在恢復連線，改用' : '正在查詢'} ${target.model}…`);
             try {
-                const result = await execute(target, ++attempt, Math.min(hasAttachments ? 45000 : 25000, remaining));
+                const result = await execute(target, ++attempt, Math.min(attemptTimeout, remaining));
                 return { result, target, attempt, durationMs: now() - started };
             }
             catch (error) {

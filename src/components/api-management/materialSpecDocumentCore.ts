@@ -60,13 +60,15 @@ function xmlText(text: string) {
   }).replace(/[ \t]+/g, " ");
 }
 
-export async function readMaterialSpecOffice(name: string, bytes: Uint8Array): Promise<SpecDecodedContent> {
+export async function readMaterialSpecOffice(name: string, bytes: Uint8Array, includeMedia = true): Promise<SpecDecodedContent> {
   const zip = bytes[0] === 0x50 && bytes[1] === 0x4b ? await JSZip.loadAsync(bytes) : null;
   const files = zip ? Object.values(zip.files).filter(file => !file.dir) : [];
   // Inspect declared expansion sizes before any XML, media or workbook is inflated.
   validateMaterialSpecArchiveEntries(files.map(file => ({ name: file.name, size: (file as unknown as { _data: { uncompressedSize: number } })._data?.uncompressedSize ?? SPEC_ARCHIVE_MAX_BYTES + 1 })));
   const children: SpecDecodedChild[] = [];
-  for (const file of files) if (/\/(?:media|embeddings)\//.test(file.name) || /^Pictures\//.test(file.name)) children.push({ name: file.name, bytes: await file.async("uint8array") });
+  if (includeMedia) {
+    for (const file of files) if (/\/(?:media|embeddings)\//.test(file.name) || /^Pictures\//.test(file.name)) children.push({ name: file.name, bytes: await file.async("uint8array") });
+  }
   if (/\.(xlsx?|xlsm|xlsb|ods)$/i.test(name)) {
     const XLSX = await import("xlsx");
     const workbook = XLSX.read(bytes, { type: "array", cellFormula: false, cellHTML: false });
