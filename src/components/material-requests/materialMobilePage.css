@@ -4,11 +4,13 @@
   .material-sheet-theme.maintenance-workspace { flex-shrink: 0; padding: 0; background: hsl(var(--background)); }
   [data-material-mobile-viewport] .material-sheet-theme.maintenance-workspace { padding-bottom: var(--mobile-shell-bottom); }
   .material-sheet-theme .material-mobile-command-center { position: sticky; top: 0; z-index: 25; background: hsl(var(--background)); }
-  .material-sheet-theme .material-mobile-command-center > .material-mobile-titlebar { height: 72px; min-height: 72px; padding: 8px 16px; border: 0; }
+  .material-sheet-theme .material-mobile-command-center > .material-mobile-titlebar { height: 88px; min-height: 88px; padding: 8px 16px; border: 0; }
   .material-sheet-theme .material-mobile-titlebar > div:first-child { flex: 1; min-width: 0; }
   .material-sheet-theme .material-mobile-command-center .material-mobile-titlebar h1 { font-size: 23px; font-weight: 700; line-height: 28px; letter-spacing: -.02em; }
-  .material-sheet-theme .material-mobile-context { position: relative; max-width: 100%; min-width: 0; height: 20px; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 20px; text-align: left; }
-  .material-sheet-theme .material-mobile-context::before { position: absolute; inset: -12px 0; content: ""; }
+  .material-sheet-theme .material-mobile-context { width: 100%; max-width: 100%; min-width: 0; height: 44px; gap: 4px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 20px; text-align: left; box-shadow: none; }
+  .material-mobile-bom-menu { width: min(28rem, calc(100vw - 32px)); max-height: min(24rem, var(--radix-select-content-available-height)); border: 1px solid hsl(var(--border)); background: hsl(var(--popover)); }
+  .material-mobile-bom-menu [role="option"] { min-height: 56px; }
+  .material-mobile-bom-menu [role="option"] > span:last-child { min-width: 0; width: 100%; overflow-wrap: anywhere; }
   .material-sheet-theme .material-mobile-titlebar > div:last-child { gap: 0; }
   .material-sheet-theme .material-mobile-titlebar > div:last-child > button { width: 44px; height: 44px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; }
   .material-sheet-theme .material-mobile-add { color: hsl(var(--primary)); }

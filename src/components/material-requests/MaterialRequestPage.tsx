@@ -6236,11 +6236,38 @@ export function MaterialRequestPage() {
                 {collaborationStatusMeta.label}
               </span>}
             </div>
-            <button type="button" onClick={() => setBomManagerOpen(true)} className="material-mobile-context flex max-w-[62vw] items-center gap-1 text-[11px] text-slate-400" aria-label="開啟 BOM 管理">
-              {activeWorkspaceProjectLabel && <span className="min-w-0 truncate text-cyan-200/70">{activeWorkspaceProjectLabel} /</span>}
-              <span className="min-w-0 truncate">{activeSeriesName}{isHistoricalVersion && activeVersionInfo ? ` · ${activeVersionInfo.version.displayNumber}（歷史）` : ""}</span>
-              <span className="shrink-0">· {seriesList.length} BOM</span><ChevronDown className="h-3 w-3 shrink-0" />
-            </button>
+            <Select value={activeBomId} onValueChange={switchActiveBom}>
+              <SelectTrigger className="material-mobile-context" aria-label="切換 BOM">
+                <span className="flex min-w-0 items-center gap-1">
+                  {activeWorkspaceProjectLabel && <span className="min-w-0 truncate text-cyan-200/70">{activeWorkspaceProjectLabel} /</span>}
+                  <span className="min-w-0 truncate">{activeSeriesName}{isHistoricalVersion && activeVersionInfo ? ` · ${activeVersionInfo.version.displayNumber}（歷史）` : ""}</span>
+                  <span className="shrink-0">· {seriesList.length} BOM</span>
+                </span>
+              </SelectTrigger>
+              <SelectContent className="material-mobile-bom-menu" align="start" sideOffset={4}>
+                {bomSeriesGroups.filter(group => group.workspaces.length > 0).map(group => (
+                  <SelectGroup key={group.key}>
+                    <SelectLabel>{group.label}{group.isActive ? " · 目前專案" : ""}</SelectLabel>
+                    {group.workspaces.map(series => (
+                      <SelectItem key={series.id} value={series.current.workspace.id} textValue={series.name}>
+                        <span className="block whitespace-normal break-words text-left">
+                          <span className="block font-semibold">{series.name}</span>
+                          <span className="block text-xs text-muted-foreground">{series.current.displayNumber} · {series.recordCount.toLocaleString()} 筆</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+                {isHistoricalVersion && activeVersionInfo && (
+                  <SelectGroup>
+                    <SelectLabel>檢視中的歷史版本</SelectLabel>
+                    <SelectItem value={activeBomId} textValue={activeSeriesName}>
+                      <span className="block whitespace-normal break-words">{activeSeriesName} · {activeVersionInfo.version.displayNumber}（歷史）</span>
+                    </SelectItem>
+                  </SelectGroup>
+                )}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <Button
@@ -6255,7 +6282,7 @@ export function MaterialRequestPage() {
             </Button>
             <Drawer open={mobileToolsOpen} onOpenChange={setMobileToolsOpen} shouldScaleBackground={false}>
               <DrawerTrigger asChild><Button type="button" variant="ghost" className="h-11 w-11 rounded-xl p-0" aria-label="排序與工具"><MoreHorizontal className="h-5 w-5" /></Button></DrawerTrigger>
-              <DrawerContent data-testid="material-mobile-tools" className="material-mobile-tools-sheet" onCloseAutoFocus={event => { if (pendingDialogOpen || exportDialogOpen || nonPvlDialogOpen || pageTrackerDialogOpen || rlcPriorityOpen || guideOpen || tableSettingsOpen) event.preventDefault(); }}>
+              <DrawerContent data-testid="material-mobile-tools" className="material-mobile-tools-sheet" onCloseAutoFocus={event => { if (bomManagerOpen || pendingDialogOpen || exportDialogOpen || nonPvlDialogOpen || pageTrackerDialogOpen || rlcPriorityOpen || guideOpen || tableSettingsOpen) event.preventDefault(); }}>
                 <DrawerHeader className="material-mobile-tools-heading">
                   <div><DrawerTitle>排序與工具</DrawerTitle><DrawerDescription>{activeSeriesName}</DrawerDescription></div>
                   <DrawerClose asChild><Button type="button" variant="ghost" className="h-11 w-11 rounded-full p-0" aria-label="關閉排序與工具"><X className="h-5 w-5" /></Button></DrawerClose>
@@ -6279,6 +6306,7 @@ export function MaterialRequestPage() {
                     </div>
                   </div>
                   <div className="material-mobile-tool-list">
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady}><Layers3 />BOM 管理<span>{seriesList.length}</span><ChevronRight /></Button></DrawerClose>
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker}><CircleCheck />頁數進度<ChevronRight /></Button></DrawerClose>
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => setRlcPriorityOpen(true)}><Layers3 />RLC 優先順序<ChevronRight /></Button></DrawerClose>
                     <DrawerClose asChild>{tableSettingsControl}</DrawerClose>
