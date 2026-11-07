@@ -263,10 +263,11 @@ test("editing an item from 待處理料 returns to the list with its tab, search
   assert.equal((source.match(/onClick=\{openPendingDialog\}/g) ?? []).length, 2, "the header buttons open a fresh list");
 });
 
-test("更新 on a table row or mobile card edits that row; 新增替代料 lives in the record dialog", () => {
+test("更新 on a table row or mobile list opens the existing record editor", () => {
   assert.match(rowBlock, /<TrackingHistoryCell record=\{statusRecord\} onOpen=\{actions\.openTracking\} onEdit=\{actions\.openDetails\} embedded \/>/);
   assert.doesNotMatch(rowBlock, /actions\.openCreate\(group\)/);
-  assert.match(source, /onClick=\{\(\) => rowActions\.openDetails\(mainRecord\)\}[^>]*>[\s\S]{0,80}?編輯料件/);
+  assert.match(source, /onTracking=\{\(\) => openTrackingDialog\(mainRecord\)\}/);
+  assert.match(source, /onClick=\{\(\) => openMobileRecord\(mainRecord, "edit"\)\}/);
   const dialog = slice("function MaterialRecordDialog(", "type MaterialColumnVisibility");
   assert.match(dialog, /data-testid="material-add-alternate"/);
   assert.match(dialog, /先儲存或取消目前的修改，再新增替代料/);

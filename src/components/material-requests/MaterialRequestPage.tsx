@@ -97,6 +97,8 @@ import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
 import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
 import { MaterialTableScroll } from "./MaterialTableScroll";
+import { MaterialMobileListRow } from "./MaterialMobileListRow";
+import "./materialMobilePage.css";
 import { buildMaterialMainGroups, filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
@@ -6070,7 +6072,7 @@ export function MaterialRequestPage() {
   );
   const tableSettingsControl = (
     <Button type="button" variant="outline" size="sm" data-testid="material-column-visibility" aria-haspopup="dialog" aria-expanded={tableSettingsOpen} onClick={() => setTableSettingsOpen(true)} className="h-11 gap-1.5 border-border bg-background/40 px-3 text-sm font-medium text-foreground hover:bg-secondary lg:h-9 lg:px-2.5 lg:text-xs">
-      <Columns3 className="h-4 w-4" />欄位設定
+      <Columns3 className="h-4 w-4" />{isCompactLayout ? "欄位" : "欄位設定"}
       {hiddenColumns.length > 0 && <span className="rounded bg-secondary px-1.5 text-xs tabular-nums text-muted-foreground">隱藏 {hiddenColumns.length}</span>}
     </Button>
   );
@@ -6225,34 +6227,29 @@ export function MaterialRequestPage() {
         data-testid="material-mobile-command-center"
         className="material-mobile-command-center lg:hidden"
       >
-        <div className="flex items-center justify-between gap-2 border-b border-cyan-200/10 px-2.5 py-2">
+        <div className="material-mobile-titlebar flex items-center justify-between gap-2 border-b border-cyan-200/10 px-2.5 py-2">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-semibold text-foreground">料號快查</h1>
+              <h1 className="text-lg font-semibold text-foreground">料號申請</h1>
               {collaborationStatus !== "remote" && <span className={cn("inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-black", collaborationStatusMeta.badgeClassName)}>
                 <span className={cn("h-1.5 w-1.5 rounded-full", collaborationStatusMeta.dotClassName)} />
                 {collaborationStatusMeta.label}
               </span>}
             </div>
-            <p className="flex max-w-[48vw] items-center gap-1 text-[11px] text-slate-400">
+            <button type="button" onClick={() => setBomManagerOpen(true)} className="material-mobile-context flex max-w-[62vw] items-center gap-1 text-[11px] text-slate-400" aria-label="開啟 BOM 管理">
               {activeWorkspaceProjectLabel && <span className="min-w-0 truncate text-cyan-200/70">{activeWorkspaceProjectLabel} /</span>}
               <span className="min-w-0 truncate">{activeSeriesName}{isHistoricalVersion && activeVersionInfo ? ` · ${activeVersionInfo.version.displayNumber}（歷史）` : ""}</span>
-            </p>
+              <span className="shrink-0">· {seriesList.length} BOM</span><ChevronDown className="h-3 w-3 shrink-0" />
+            </button>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setBomManagerOpen(true)}
-              className="material-mobile-bom flex h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-medium"
-            >
-              <Layers3 className="h-4 w-4" />{seriesList.length} BOM
-            </button>
             <Button
               type="button"
               onClick={() => openCreate()}
               disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded}
               aria-label="新增料號"
-              className="h-11 w-11 rounded-xl p-0"
+              variant="ghost"
+              className="material-mobile-add h-11 w-11 rounded-xl p-0"
             >
               <Plus className="h-5 w-5" />
             </Button>
@@ -6277,7 +6274,7 @@ export function MaterialRequestPage() {
                     </Select>
                     {searchColumnControl}
                     <div role="group" aria-label="料件檢視" className="material-mobile-view-switch">
-                      <Button type="button" variant="ghost" aria-pressed={mobileView === "cards"} onClick={() => setMobileView("cards")}>卡片</Button>
+                      <Button type="button" variant="ghost" aria-pressed={mobileView === "cards"} onClick={() => setMobileView("cards")}>清單</Button>
                       <Button type="button" variant="ghost" aria-pressed={mobileView === "table"} onClick={() => setMobileView("table")}>表格</Button>
                     </div>
                   </div>
@@ -6317,9 +6314,9 @@ export function MaterialRequestPage() {
                   }
                 }}
                 enterKeyHint="search"
-                placeholder="搜尋主料／替代料的料名、MPN、廠商與料號"
+                placeholder="搜尋料號、MPN 或廠商"
                 aria-label="快速搜尋料號"
-                className="h-11 rounded-xl pl-3 pr-12 text-base"
+                className="h-11 rounded-xl pl-11 pr-3 text-base"
               />
             </div>
             <Button
@@ -6340,12 +6337,13 @@ export function MaterialRequestPage() {
           </div>
 
           <div data-testid="material-mobile-column-filters" role="group" aria-label="料件欄位篩選" className="material-mobile-column-filters">
-            <ExcelFilterPopover filterKey="trackingStatus" getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS.trackingStatus} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, trackingStatus: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
+            <ExcelFilterPopover filterKey="trackingStatus" getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS.trackingStatus} triggerLabel="狀態" selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, trackingStatus: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
             <Select value={mobileFilterColumn} onValueChange={value => setMobileFilterColumn(value as ColumnFilterKey)}>
-              <SelectTrigger aria-label="篩選欄位" className="h-11 min-w-0 text-xs [&>span]:truncate"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="篩選欄位" className="h-11 min-w-0 text-xs [&>span]:truncate"><SelectValue>{mobileFilterColumn === "manufacturer" ? "廠商" : COLUMN_FILTER_LABELS[mobileFilterColumn]}</SelectValue></SelectTrigger>
               <SelectContent>{FILTER_KEYS.filter(key => key !== "trackingStatus").map(key => <SelectItem key={key} value={key}>{COLUMN_FILTER_LABELS[key]}</SelectItem>)}</SelectContent>
             </Select>
             <ExcelFilterPopover filterKey={mobileFilterColumn} getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS[mobileFilterColumn]} triggerLabel={mobileFilterValueLabel} selectedValues={selectedMobileFilter} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, [mobileFilterColumn]: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
+            {tableSettingsControl}
           </div>
           {activeFilterControls}
         </div>
@@ -6532,7 +6530,7 @@ export function MaterialRequestPage() {
         </div>
       )}
 
-      <div className={cn("mt-2 transition-opacity", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
+      <div data-material-results="true" className={cn("mt-2 transition-opacity", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
         <div className="min-w-0">
       <section
         data-testid="material-table-card"
@@ -6596,9 +6594,9 @@ export function MaterialRequestPage() {
         </div>
         {personalMarks.error && <div role="alert" className="flex items-center gap-2 px-2 py-1 text-xs text-amber-200">{personalMarks.error}<Button type="button" variant="outline" size="sm" onClick={personalMarks.reload} disabled={personalMarks.pendingKeys.size > 0}>重試個人標記</Button></div>}
 
-        {isCompactLayout && mobileView === "cards" && <div className="space-y-2 p-2 lg:hidden" data-testid="material-mobile-cards">
-          <h2 className="sr-only">手機以料件卡片呈現，點開即可查看替代料與追蹤紀錄</h2>
-          {visibleGroupRows.map(({ group, primaryAlternative, secondaryAlternatives, searchAlternativeCount }, rowIndex) => {
+        {isCompactLayout && mobileView === "cards" && <div className="material-mobile-list" data-testid="material-mobile-cards">
+          <h2 className="sr-only">手機料件清單，點料號查看完整資料</h2>
+          {visibleGroupRows.map(({ group, primaryAlternative, virtualAlternativeRecord, secondaryAlternatives, searchAlternativeCount }, rowIndex) => {
             const expanded = expandedKey === group.key;
             const mainRecord = primaryAlternative ?? group.primaryRecord;
             const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
@@ -6606,41 +6604,50 @@ export function MaterialRequestPage() {
             const mustApply = group.requiresApplication;
             const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred && !record.isRisk).length;
             const mainRisk = group.locations.some(location => location.primaryRecord.isRisk);
-
-            return (
-              <article
-                key={`${group.key}:${mainRecord.id}`}
-                style={buildTableRowStyle(mainRecord.id !== group.primaryRecord.id ? activeTableColorTheme.alternative : activeTableColorTheme.primary, { backgroundAlpha: 0.48 })}
-                className={cn(
-                  "material-mobile-record overflow-hidden rounded-xl border bg-[var(--material-row-solid)]",
-                  mustApply ? "border-amber-300/35" : "border-cyan-200/20",
-                )}
-              >
-                <div className="flex items-start gap-2.5 p-2.5">
-                  <button
-                    type="button"
-                    onClick={() => toggleMarkedGroup(group.key)}
-                    disabled={!personalMarks.ready || getMaterialMarkKeys(group).some(key => personalMarks.pendingKeys.has(key))}
-                    aria-label={isMarked ? "移除我的標記" : "加入我的標記"}
-                    className={cn(
-                      "flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl border text-[10px] font-black",
-                      isMarked ? "border-amber-200/45 bg-amber-300 text-amber-950" : "border-slate-500/25 bg-slate-900/50 text-slate-400",
-                    )}
-                  >
-                    <Star className={cn("h-4 w-4", isMarked && "fill-current")} />
-                    {itemValue}
-                  </button>
-                  <button type="button" onClick={() => openRecord(mainRecord, "view")} className="min-w-0 flex-1 text-left">
+            const mobileFieldValues: Partial<Record<MaterialTableColumnKey, string>> = {
+              item: String(itemValue), name: group.name || mainRecord.name, qty: String(group.qty), refDes: group.displayRef,
+              mpn: getDisplayMpn(mainRecord), manufacturer: mainRecord.manufacturer, sourcingStatus: mainRecord.sourcingStatus,
+              partName: mainRecord.partName, partSpec: mainRecord.partSpec, schematicPart: mainRecord.schematicPart,
+              footprint: mainRecord.pcbFootprint, phaseOut: mainRecord.phaseOutStatus, partUsage: mainRecord.partUsageStatus,
+              note: mainRecord.note,
+            };
+            const mobileFields = MATERIAL_TABLE_COLUMNS.filter(column => columnVisibility[column.key] && !["virtual", "physical", "actions"].includes(column.key))
+              .map(column => ({ key: column.key, label: column.label, value: mobileFieldValues[column.key] || "" }));
+            const openMobileRecord = (record: MaterialRecord, mode: EditorMode) => { setExpandedKey(null); openRecord(record, mode); };
+            const openMobileTracking = (record: MaterialRecord) => { setExpandedKey(null); openTrackingDialog(record); };
+            const openMobileDetails = (record: MaterialRecord) => { setExpandedKey(null); rowActions.openDetails(record); };
+            const openMobileCreate = (location: MaterialGroup) => { setExpandedKey(null); openCreate(location); };
+            return <div key={`${group.key}:${mainRecord.id}`}>
+              <MaterialMobileListRow
+                recordId={mainRecord.id}
+                virtualNumber={(virtualAlternativeRecord ?? mainRecord).virtualAlternative ?? ""}
+                physicalNumber={mainRecord.partNumber ?? ""}
+                showVirtual={columnVisibility.virtual}
+                showPhysical={columnVisibility.physical}
+                status={getTrackingStatusDisplayLabel(getTrackingWorkflowStatus(mainRecord))}
+                statusTone={materialTrackingStatusPresentation(getTrackingWorkflowStatus(mainRecord)).text}
+                marked={isMarked}
+                markDisabled={!personalMarks.ready || getMaterialMarkKeys(group).some(key => personalMarks.pendingKeys.has(key))}
+                fields={mobileFields}
+                onToggleMarked={() => toggleMarkedGroup(group.key)}
+                onOpen={() => toggleExpanded(group.key)}
+                onTracking={() => openTrackingDialog(mainRecord)}
+              />
+              <Drawer open={expanded} onOpenChange={open => { if (!open) setExpandedKey(null); }} shouldScaleBackground={false}>
+                <DrawerContent className="material-mobile-detail-sheet" data-testid="material-mobile-detail" onCloseAutoFocus={event => { if (editorOpen) event.preventDefault(); }}>
+                  <DrawerHeader className="material-mobile-detail-heading flex">
+                    <div><DrawerTitle>料件詳情</DrawerTitle><DrawerDescription>{group.displayRef || group.name || mainRecord.name}</DrawerDescription></div>
+                    <DrawerClose asChild><Button variant="ghost" className="h-11 w-11 shrink-0 p-0" aria-label="關閉料件詳情"><X className="h-5 w-5" /></Button></DrawerClose>
+                  </DrawerHeader>
+                  <div className="material-mobile-detail-body">
+                  <button type="button" onClick={() => openMobileRecord(mainRecord, "view")} className="min-w-0 flex-1 text-left">
                     <p className="line-clamp-2 break-words text-[.9375rem] font-semibold leading-[1.4] text-foreground">{group.name || mainRecord.name || "未命名料件"}</p>
                     <p className="mt-1 truncate text-[.8125rem] text-muted-foreground">{getDisplayMpn(mainRecord) || "尚未填寫 MPN"} · <span>{mainRecord.manufacturer || "未指定廠商"}</span></p>
                     <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"><PartUsageSummary records={group.locations.map(location => location.primaryRecord)} /><span className="inline-flex min-w-0 items-center gap-1"><span className="text-xs text-slate-500">phase out</span><PhaseOutStatus record={mainRecord} /></span></div>
                   </button>
-                  <ChevronRight className="mt-3 h-4 w-4 shrink-0 text-slate-500" />
-                </div>
-
                 <div className="material-mobile-summary">
                   <MaterialApplicationExemptionBadge record={mainRecord} />
-                  <Button type="button" variant="outline" onClick={() => openTrackingDialog(mainRecord)} aria-label={`查看 ${getDisplayMpn(mainRecord)} 的追蹤紀錄`} className={cn("h-11 shrink-0 rounded-md px-3 text-xs font-semibold", materialTrackingStatusTone(getTrackingWorkflowStatus(mainRecord)))}>{getTrackingStatusDisplayLabel(getTrackingWorkflowStatus(mainRecord))}</Button>
+                  <Button type="button" variant="outline" onClick={() => openMobileTracking(mainRecord)} aria-label={`查看 ${getDisplayMpn(mainRecord)} 的追蹤紀錄`} className={cn("h-11 shrink-0 rounded-md px-3 text-xs font-semibold", materialTrackingStatusTone(getTrackingWorkflowStatus(mainRecord)))}>{getTrackingStatusDisplayLabel(getTrackingWorkflowStatus(mainRecord))}</Button>
                   <span className={cn("min-w-0 text-xs", mainRisk ? "text-destructive" : mustApply ? "text-warning" : "text-muted-foreground")}>{mainRisk ? "料況需確認" : mustApply ? "未提供虛擬／實體料號" : mainRecord.sourcingStatus || "供應／核准狀態未提供"}</span>
                 </div>
                 <div className="material-mobile-reference">
@@ -6662,46 +6669,41 @@ export function MaterialRequestPage() {
                   </div>
                 </details>
 
-                {expanded ? (
                   <div className="space-y-2 border-b border-cyan-200/10 bg-[#071522] p-2.5">
                     <div className="grid grid-cols-2 gap-2" data-testid="material-mobile-record-actions">
-                      <Button type="button" variant="outline" disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} onClick={() => openRecord(mainRecord, "edit")} className="h-11"><Pencil className="mr-1.5 h-4 w-4" />修改這筆</Button>
-                      <Button type="button" variant="outline" disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} onClick={() => openCreate(group)} className="h-11"><Plus className="mr-1.5 h-4 w-4" />新增替代料</Button>
+                      <Button type="button" variant="outline" disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} onClick={() => openMobileRecord(mainRecord, "edit")} className="h-11"><Pencil className="mr-1.5 h-4 w-4" />修改這筆</Button>
+                      <Button type="button" variant="outline" disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} onClick={() => openMobileCreate(group)} className="h-11"><Plus className="mr-1.5 h-4 w-4" />新增替代料</Button>
                       <Button type="button" variant="outline" disabled={!getDisplayMpn(mainRecord)} onClick={() => rowActions.copy(getDisplayMpn(mainRecord))} className="h-11"><Copy className="mr-1.5 h-4 w-4" />複製 MPN</Button>
                       <Button type="button" variant="outline" onClick={() => rowActions.copy(mainRecord.refDes || group.displayRef)} className="h-11"><Copy className="mr-1.5 h-4 w-4" />複製 REF DES</Button>
                       {getMaterialSpecDocuments(mainRecord).length > 0 && <Button type="button" variant="outline" onClick={() => rowActions.openSpec(mainRecord)} className="col-span-2 h-11"><Paperclip className="mr-1.5 h-4 w-4" />SPEC 文件（{getMaterialSpecDocuments(mainRecord).length}）</Button>}
                     </div>
                     {group.locations.map(location => <section key={location.key} className="space-y-2 rounded-xl border border-border p-2" data-testid="material-mobile-location">
-                    <button type="button" className="flex min-h-11 w-full flex-col items-start text-left" onClick={() => openRecord(location.primaryRecord, "view")}><strong className="break-words text-sm text-foreground">位置：{location.displayRef} · 用量 {location.qty}</strong><span className="text-xs text-muted-foreground">{location.assemblyName || location.sectionName}</span></button>
-                    <Button type="button" variant="outline" className="h-11" disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} onClick={() => openCreate(location)}><Plus className="mr-1 h-4 w-4" />新增替代料</Button>
+                    <button type="button" className="flex min-h-11 w-full flex-col items-start text-left" onClick={() => openMobileRecord(location.primaryRecord, "view")}><strong className="break-words text-sm text-foreground">位置：{location.displayRef} · 用量 {location.qty}</strong><span className="text-xs text-muted-foreground">{location.assemblyName || location.sectionName}</span></button>
+                    <Button type="button" variant="outline" className="h-11" disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} onClick={() => openMobileCreate(location)}><Plus className="mr-1 h-4 w-4" />新增替代料</Button>
                     {getSortedAlternatives(location).length > 1 ? getSortedAlternatives(location).slice(1).map((record) => (
                       <div key={record.id} style={{ backgroundColor: blendWithSurface(record.isPreferred && !record.isRisk ? activeTableColorTheme.alternative : activeTableColorTheme.secondary, 0.2) }} className="rounded-xl border border-violet-300/15 p-2">
-                        <button type="button" onClick={() => openRecord(record, "view")} className="flex w-full items-center gap-3 px-1 pb-2 text-left">
+                        <button type="button" onClick={() => openMobileRecord(record, "view")} className="flex w-full items-center gap-3 px-1 pb-2 text-left">
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-300/15 text-xs font-black text-violet-100">ALT</span>
                           <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{getDisplayMpn(record) || "未填 MPN"}</strong><span className="block truncate text-xs text-slate-400">{record.manufacturer || "未指定廠商"}</span><PartUsageSummary records={[record]} /></span>
                           <MaterialApplicationExemptionBadge record={record} />
                           <ChevronRight className="h-4 w-4 text-violet-200" />
                         </button>
-                        <div className="mb-2 [&>button]:min-h-11"><TrackingHistoryCell record={record} onOpen={openTrackingDialog} onEdit={rowActions.openDetails} embedded /></div>
+                        <div className="mb-2 [&>button]:min-h-11"><TrackingHistoryCell record={record} onOpen={openMobileTracking} onEdit={openMobileDetails} embedded /></div>
                         <MaterialNoteCell key={`${user?.userId}:${activeWorkspace.id}:${record.id}`} compact disabled={!canEditNote} onSave={rowActions.saveNote} record={record} />
                       </div>
                     )) : <p className="rounded-lg border border-dashed border-slate-600/50 px-3 py-2 text-xs text-slate-400">目前沒有替代料</p>}
                     </section>)}
                   </div>
-                ) : null}
 
-                <div className="material-mobile-record-footer">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => rowActions.openDetails(mainRecord)} className="h-11 justify-start px-2"><Pencil className="h-4 w-4 text-primary" />編輯料件</Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => toggleExpanded(group.key)} aria-expanded={expanded} className="h-11 px-2 text-muted-foreground">
-                    {expanded ? <ChevronDown className="mr-1 h-4 w-4" /> : <ChevronRight className="mr-1 h-4 w-4" />}更多
-                  </Button>
-                </div>
-              </article>
-            );
+                  </div>
+                </DrawerContent>
+              </Drawer>
+            </div>;
           })}
-          {visibleGroupRows.length === 0 ? (
-            <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center text-slate-400"><Search className="h-9 w-9" /><p className="mt-3 font-bold text-slate-200">目前篩選條件沒有符合的料件</p></div>
-          ) : null}
+          {visibleGroupRows.length === 0 && <div className="material-mobile-empty">
+            <div className="material-mobile-empty-fields"><span>虛擬料號</span><span>實體料號</span><span>狀態</span></div>
+            <p>目前篩選條件沒有符合的料件</p>
+          </div>}
         </div>}
 
         {(!isCompactLayout || mobileView === "table") && <div className="border-t border-[#2a526f]">

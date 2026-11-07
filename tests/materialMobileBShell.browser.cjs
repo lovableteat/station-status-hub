@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{createRequire}=require('node:module');
+const {chromium}=createRequire(path.resolve('../qa-tools/package.json'))('playwright');
+const out=path.resolve(process.env.MATERIAL_B_EVIDENCE_DIR||'../material-mobile-b-evidence');
+(async()=>{const{createServer}=await import('vite'),{default:react}=await import('@vitejs/plugin-react-swc');let server,browser;
+try{
+ fs.mkdirSync(out,{recursive:true});server=await createServer({configFile:false,envFile:false,root:process.cwd(),base:'/station-status-hub/',plugins:[react()],server:{host:'127.0.0.1',port:0,fs:{allow:[process.cwd()]}},resolve:{alias:[{find:'@/integrations/supabase/client',replacement:path.resolve('tests/support/mobileAppMock.mjs')},{find:'@',replacement:path.resolve('src')}]},optimizeDeps:{exclude:['occt-wasm']},worker:{format:'es'}});await server.listen();const origin='http://127.0.0.1:'+server.httpServer.address().port;
+ browser=await chromium.launch({channel:'chrome'});const results=[];
+ for(const width of[375,390,430]){
+  const context=await browser.newContext({viewport:{width,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,reducedMotion:'reduce'});await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(origin+'/station-status-hub/?demo=admin&workspace=material-requests');await page.locator('[data-testid="material-mobile-list-row"]').first().waitFor({timeout:60000});await page.evaluate(()=>document.fonts.ready);
+  const metrics=await page.evaluate(()=>{const rows=[...document.querySelectorAll('[data-testid="material-mobile-list-row"]')],dock=document.querySelector('[data-mobile-workspace-dock]').getBoundingClientRect();return{width:innerWidth,pageWidth:document.documentElement.scrollWidth,header:getComputedStyle(document.querySelector('[data-mobile-app-header]')).display,dock:{y:dock.y,height:dock.height},rows:rows.map(e=>e.getBoundingClientRect().height),fonts:[...document.querySelectorAll('.material-mobile-list-number-value')].map(e=>getComputedStyle(e).fontSize),pnFit:[...document.querySelectorAll('.material-mobile-list-number-value')].every(e=>e.scrollWidth<=e.clientWidth),first:rows[0].getBoundingClientRect().top}});
+  assert.equal(metrics.pageWidth,width);assert.equal(metrics.header,'none');assert.ok(metrics.rows.every(h=>h===68));assert.ok(metrics.fonts.every(s=>s==='16px'||s==='14px'));assert.ok(metrics.pnFit);assert.ok(metrics.dock.height>44&&metrics.dock.y>600);assert.deepEqual(errors,[]);
+  await page.screenshot({path:path.join(out,'shell-'+width+'.png')});
+  if(width===390){await page.locator('[data-mobile-workspace-dock]').getByRole('button',{name:'更多',exact:true}).tap();await page.getByRole('heading',{name:'更多工作區',exact:true}).waitFor();assert.ok(await page.getByRole('region',{name:'帳號與協作'}).count());await page.getByRole('button',{name:'關閉更多工作區',exact:true}).tap();}
+  results.push(metrics);await context.close();
+ }
+ fs.writeFileSync(path.join(out,'shell-results.json'),JSON.stringify(results,null,2));console.log(JSON.stringify(results));
+}finally{if(browser)await browser.close();if(server)await server.close()}})().catch(e=>{console.error(e);process.exitCode=1});

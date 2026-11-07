@@ -85,17 +85,19 @@ test("AI query workspace uses the available mobile height and keeps every compos
   assert.match(consoleSource, /aria-label="上傳 PDF、PPT、Excel、Word 或圖片"/);
 });
 
-test("material requests render actionable cards on compact screens and preserve the desktop table", async () => {
+test("material requests render the selected mobile list and preserve the desktop table", async () => {
   const source = await read("src/components/material-requests/MaterialRequestPage.tsx");
 
   assert.match(source, /data-testid="material-mobile-cards"/);
   assert.match(source, /lg:hidden/);
   assert.match(source, /!isCompactLayout \|\| mobileView === "table"/);
-  assert.match(source, /手機以料件卡片呈現/);
-  assert.match(source, /openRecord\(mainRecord, "view"\)/);
+  assert.match(source, /手機料件清單/);
+  assert.match(source, /openMobileRecord\(mainRecord, "view"\)/);
   assert.match(source, /openTrackingDialog\(mainRecord\)/);
   assert.match(source, /openCreate\(group\)/);
   assert.match(source, /toggleMarkedGroup\(group\.key\)/);
+  assert.match(source, /<MaterialMobileListRow/);
+  assert.match(source, /data-testid="material-mobile-detail"/);
   assert.match(source, /aria-label=\{isSearchPending \? "搜尋中" : "搜尋"\}/);
 });
 
