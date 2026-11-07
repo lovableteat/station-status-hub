@@ -10,6 +10,7 @@ import {
   createProgressiveBomRecordFetchPlan,
 } from "./materialBomPerformance";
 import { canReuseBomWorkspaceCache, runBomReadWithRetry } from "./materialBomSyncPolicy";
+import { applyBomNoteSnapshot } from "./materialBomNoteSync";
 import { normalizeBomVersion, type BomWorkspaceVersion } from "./bomVersioning";
 
 export type BomPageTrackerStatus = "done" | "pending" | "done_missing";
@@ -65,6 +66,11 @@ export interface BomRecordSyncMeta {
   updatedAt: string;
 }
 
+export interface BomNoteSnapshot {
+  record: MaterialWorkbookRecord;
+  recordMeta: BomRecordSyncMeta;
+}
+
 export class BomRecordConflictError extends Error {
   constructor(public readonly recordId: string) {
     super("此筆料號已由其他使用者更新，系統已阻止覆蓋。請載入最新資料後再確認修改內容。");
@@ -89,8 +95,15 @@ export interface BomWorkspaceLoadOptions {
 }
 
 export interface BomWorkspaceChange {
-  recordIds: string[];
+  records: BomWorkspaceRecordChange[];
   workspaceIds: string[];
+}
+
+export interface BomWorkspaceRecordChange {
+  workspaceId: string;
+  recordId: string;
+  snapshot?: BomNoteSnapshot;
+  orderIndex?: number;
 }
 
 interface BomWorkspaceRow {
@@ -148,6 +161,7 @@ let renderCacheDatabasePromise: Promise<IDBDatabase | null> | null = null;
 const supabaseClient = supabase as any;
 
 interface RealtimeRowPayload {
+  eventType?: string;
   new?: Record<string, unknown>;
   old?: Record<string, unknown>;
 }
@@ -1382,32 +1396,31 @@ export async function saveBomWorkspaceRecord(workspace: BomWorkspace, record: Ma
 }
 
 /** Patch only Note on the server; never send a stale copy of the BOM row. */
-export async function saveBomWorkspaceNote(workspace: BomWorkspace, record: MaterialWorkbookRecord, note: string, assertWrite: () => void = () => {}) {
+export async function saveBomWorkspaceNote(workspaceId: string, recordId: string, note: string, expectedNote: string, assertWrite: () => void = () => {}): Promise<BomNoteSnapshot> {
   assertWrite();
-  const { data, error } = await supabaseClient.rpc("save_material_bom_note", {
-    p_workspace_id: workspace.id,
-    p_record_id: record.id,
+  const { data, error, status } = await supabaseClient.rpc("save_material_bom_note", {
+    p_workspace_id: workspaceId,
+    p_record_id: recordId,
     p_note: note,
-    p_expected_note: record.note ?? "",
+    p_expected_note: expectedNote,
   });
   if (error) {
-    if (error.code === "40001") throw new BomRecordConflictError(record.id);
+    if (status === 409 || error.code === "40001") throw new BomRecordConflictError(recordId);
     throw error;
   }
   assertWrite();
   if (!data?.data || !data.updated_at) throw new Error("Note 儲存未完成，請重試。");
-  const savedRecord = data.data as MaterialWorkbookRecord;
-  const recordMeta = { updatedAt: data.updated_at as string } satisfies BomRecordSyncMeta;
-  void patchCachedWorkspace({
-    ...workspace,
-    updatedAt: recordMeta.updatedAt,
-    payload: {
-      ...workspace.payload,
-      records: workspace.payload.records.map((item) => item.id === record.id ? savedRecord : item),
-    },
-    recordMeta: { ...workspace.recordMeta, [record.id]: recordMeta },
-  }, assertWrite);
-  return { record: savedRecord, recordMeta };
+  const snapshot = { record: data.data, recordMeta: { updatedAt: data.updated_at } } as BomNoteSnapshot;
+  // A single acknowledged row cannot advance the revision of the whole cached BOM.
+  void patchCachedWorkspaceFields(workspaceId, workspace => applyBomNoteSnapshot(workspace, snapshot), assertWrite);
+  return snapshot;
+}
+
+export async function loadBomWorkspaceNoteRecord(workspaceId: string, recordId: string): Promise<BomNoteSnapshot | null> {
+  const { data, error } = await supabaseClient.from(RECORD_TABLE)
+    .select("data, updated_at").eq("workspace_id", workspaceId).eq("record_id", recordId).maybeSingle();
+  if (error) throw error;
+  return data ? { record: data.data, recordMeta: { updatedAt: data.updated_at } } : null;
 }
 
 export async function saveBomWorkspacePageTracker(workspaceId: string, pageTracker: BomPageTracker, assertWrite: () => void = () => {}) {
@@ -1504,19 +1517,18 @@ export async function removeBomWorkspace(id: string, assertWrite: () => void = (
 export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChange) => void) {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const workspaceIds = new Set<string>();
-  const recordIds = new Set<string>();
-  const emitChange = (workspaceId?: unknown, recordId?: unknown) => {
+  const records = new Map<string, BomWorkspaceRecordChange>();
+  const emitChange = (workspaceId?: unknown, record?: BomWorkspaceRecordChange) => {
     if (typeof workspaceId === "string" && workspaceId) workspaceIds.add(workspaceId);
-    if (typeof recordId === "string" && recordId) recordIds.add(recordId);
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
-    }
+    if (record) records.set(JSON.stringify([record.workspaceId, record.recordId]), record);
+    if (debounceTimer !== null) return;
 
     debounceTimer = setTimeout(() => {
-      onChange({ workspaceIds: [...workspaceIds], recordIds: [...recordIds] });
+      const changes = { workspaceIds: [...workspaceIds], records: [...records.values()] };
       workspaceIds.clear();
-      recordIds.clear();
+      records.clear();
       debounceTimer = null;
+      onChange(changes);
     }, 180);
   };
 
@@ -1526,10 +1538,15 @@ export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChan
       emitChange(payload?.new?.id ?? payload?.old?.id);
     })
     .on("postgres_changes", { event: "*", schema: "workspace", table: RECORD_TABLE }, (payload: RealtimeRowPayload) => {
-      emitChange(
-        payload?.new?.workspace_id ?? payload?.old?.workspace_id,
-        payload?.new?.record_id ?? payload?.old?.record_id,
-      );
+      const workspaceId = payload.new?.workspace_id ?? payload.old?.workspace_id;
+      const recordId = payload.new?.record_id ?? payload.old?.record_id;
+      if (typeof workspaceId !== "string" || typeof recordId !== "string") return;
+      const row = payload.new;
+      const record = row?.data as MaterialWorkbookRecord | undefined;
+      const updatedAt = row?.updated_at;
+      const snapshot = payload.eventType === "UPDATE" && record?.id === recordId && typeof updatedAt === "string"
+        && (record.note == null || typeof record.note === "string") ? { record, recordMeta: { updatedAt } } : undefined;
+      emitChange(workspaceId, { workspaceId, recordId, snapshot, orderIndex: typeof row?.order_index === "number" ? row.order_index : undefined });
     })
     .on("postgres_changes", { event: "*", schema: "workspace", table: PREFERENCE_TABLE }, (payload: RealtimeRowPayload) => {
       const keys = [payload?.new?.table_key, payload?.old?.table_key].filter((value): value is string => typeof value === "string");
