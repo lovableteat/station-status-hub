@@ -28,7 +28,8 @@ async function expectNote(input, value) {
     await desktop.setViewportSize({ width: 1440, height: 960 });
     await Promise.all([desktop, phone].map(page => page.goto(`${origin}/?qaLiveNotes`)));
     await phone.getByRole('button', { name: 'QA 帳號 B（檢視）', exact: true }).tap();
-    const summary = phone.getByTestId('material-mobile-cards').locator('details.material-mobile-note')
+    await phone.locator('[data-testid="material-mobile-list-row"][data-record-id="qa-5"]').getByTestId('material-mobile-row-open').tap();
+    const summary = phone.getByTestId('material-mobile-detail').locator('details.material-mobile-note')
       .filter({ has: phone.locator('input[aria-label="編輯 LB48 Note"]') }).locator('summary');
     await summary.tap();
     const note = page => page.getByRole('textbox', { name: '編輯 LB48 Note', exact: true });

@@ -755,6 +755,7 @@ const Index = () => {
   return (
     <div
       data-ai-chat-viewport={activeWorkspace === "ai-chat" ? "true" : undefined}
+      data-material-mobile-viewport={activeWorkspace === "material-requests" ? "true" : undefined}
       className={cn(
         "app-shell flex min-h-[100dvh] min-w-0 flex-col bg-background",
         activeWorkspace === "data-center" && "h-[100dvh] overflow-hidden",
@@ -825,7 +826,7 @@ const Index = () => {
         activeItem={activeWorkspace ?? "workspace-home"}
         availableItems={workspaceNavigationItems}
         onSelect={handleWorkspaceChange}
-        platformActions={activeWorkspace === "ai-chat" ? [
+        platformActions={activeWorkspace === "ai-chat" || activeWorkspace === "material-requests" ? [
           ...(isDemoMode ? [] : [
             { id: "notifications", label: "通知", icon: <Bell className="h-4 w-4" />, onSelect: () => window.dispatchEvent(new CustomEvent("open-global-collaboration", { detail: { tab: "notifications" } })) },
             { id: "online", label: "線上人員", icon: <UsersRound className="h-4 w-4" />, onSelect: () => window.dispatchEvent(new CustomEvent("open-global-collaboration", { detail: { tab: "online" } })) },
