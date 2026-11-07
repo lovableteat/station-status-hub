@@ -239,6 +239,12 @@ async function checkModelSwitchNotice(page, width, height) {
   const message = '已切換 API 金鑰與模型';
   const toast = page.locator('[data-sonner-toast]').filter({ hasText: message });
   const mobile = width < 1024;
+  const appearance = () => picker.evaluate(async element => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const style = getComputedStyle(element);
+    return { border: style.borderColor, background: style.backgroundColor, shadow: style.boxShadow };
+  });
+  const idleAppearance = mobile ? await appearance() : null;
   const pick = async name => {
     const option = page.getByRole('option', { name });
     if (mobile) { await tapVisible(picker); await option.tap(); }
@@ -257,6 +263,7 @@ async function checkModelSwitchNotice(page, width, height) {
   const [row, banner, content] = await Promise.all([toolbar.boundingBox(), notice.boundingBox(), reading.boundingBox()]);
   assert.ok(row.y + row.height <= banner.y && banner.y + banner.height <= content.y + 1, 'notice stays between the toolbar and the reading area');
   await shot(page, `mobile-ai-model-notice-${width}x${height}`);
+  assert.deepEqual(await appearance(), idleAppearance, 'the model picker loses its glow when the touch selection closes');
 
   if (width === 390) {
     const input = page.getByRole('textbox', { name: inputLabel });
@@ -276,11 +283,22 @@ async function checkModelSwitchNotice(page, width, height) {
   await tapVisible(notice.getByRole('button', { name: '關閉 API 切換提示' }));
   await notice.waitFor({ state: 'hidden' });
   assert.equal(await picker.textContent(), 'gemini-3.5-flash-lite');
+  assert.deepEqual(await appearance(), idleAppearance, 'touch dismissal must not leave a focus ring on the picker');
   if (width === 390) {
     assert.equal(await page.getByRole('textbox', { name: inputLabel }).inputValue(), '切換後保留這份草稿');
     await pick(/隔離測試 OpenAI.*gpt-5\.4/);
     await notice.waitFor();
     await notice.waitFor({ state: 'hidden', timeout: 6000 });
+    assert.deepEqual(await appearance(), idleAppearance, 'the picker remains quiet after the notice expires');
+
+    await picker.press('Enter');
+    const options = page.getByRole('listbox');
+    await options.waitFor();
+    await page.keyboard.press('Escape');
+    await options.waitFor({ state: 'hidden' });
+    const focusedAppearance = await appearance();
+    assert.ok(await picker.evaluate(element => document.activeElement === element && element.matches(':focus-visible')), 'keyboard closure restores visible focus');
+    assert.notEqual(focusedAppearance.shadow, idleAppearance.shadow, 'the keyboard focus indicator remains visible');
   }
 }
 
