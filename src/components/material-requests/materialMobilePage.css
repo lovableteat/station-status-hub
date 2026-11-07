@@ -1,8 +1,9 @@
 @media (max-width: 1023px) {
   [data-material-mobile-viewport] { height: 100dvh; overflow: hidden; }
   [data-material-mobile-viewport] > [data-mobile-app-header] { display: none; }
-  [data-material-mobile-viewport] > [data-mobile-workspace-main] { overflow-y: auto; overscroll-behavior-y: contain; }
-  .material-sheet-theme.maintenance-workspace { padding: 0; background: hsl(var(--background)); }
+  [data-material-mobile-viewport] > [data-mobile-workspace-main] { overflow-y: auto; overscroll-behavior-y: contain; padding-bottom: 0; }
+  .material-sheet-theme.maintenance-workspace { flex-shrink: 0; padding: 0; background: hsl(var(--background)); }
+  [data-material-mobile-viewport] .material-sheet-theme.maintenance-workspace { padding-bottom: var(--mobile-shell-bottom); }
   .material-sheet-theme .material-mobile-command-center { position: sticky; top: 0; z-index: 25; background: hsl(var(--background)); }
   .material-sheet-theme .material-mobile-command-center > .material-mobile-titlebar { height: 72px; min-height: 72px; padding: 8px 16px; border: 0; }
   .material-sheet-theme .material-mobile-titlebar > div:first-child { flex: 1; min-width: 0; }
