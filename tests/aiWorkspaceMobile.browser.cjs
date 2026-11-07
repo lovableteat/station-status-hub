@@ -284,6 +284,67 @@ async function checkModelSwitchNotice(page, width, height) {
   }
 }
 
+async function checkMoreLayout(page, width, height) {
+  await page.goto(origin + '/?mobile&qaReference&qaMoreLayout');
+  const dock = page.getByRole('navigation', { name: '手機工作區導覽' });
+  const more = dock.getByRole('button', { name: '更多' });
+  const sheet = page.getByRole('dialog', { name: '更多工作區' });
+  const close = sheet.getByRole('button', { name: '關閉更多工作區' });
+  const result = page.getByTestId('more-selection');
+  await tapVisible(more);
+  await sheet.waitFor();
+  await shot(page, `more-workspaces-${width}x${height}`);
+
+  const rowSpacing = await sheet.locator('[data-mobile-more-item]').evaluateAll(rows => rows.map(row => {
+    const bounds = row.getBoundingClientRect();
+    const icon = row.firstElementChild.getBoundingClientRect();
+    const label = row.children[1].getBoundingClientRect();
+    return { height: bounds.height, topGap: icon.top - bounds.top, bottomGap: bounds.bottom - icon.bottom, textFits: label.top >= bounds.top && label.bottom <= bounds.bottom };
+  }));
+  assert.equal(rowSpacing.length, 5);
+  assert.ok(rowSpacing.every(row => row.height >= 54 && row.topGap >= 6 && row.bottomGap >= 6 && row.textFits), `every row leaves space around its icon and copy: ${JSON.stringify(rowSpacing)}`);
+  const actions = sheet.getByRole('region', { name: '帳號與協作' });
+  const first = await actions.getByRole('button', { name: '通知' }).boundingBox();
+  const next = await actions.getByRole('button', { name: '線上人員' }).boundingBox();
+  assert.ok(first.y === next.y && first.x + first.width < next.x, 'account and collaboration actions are grouped in two columns');
+
+  const credentials = actions.getByRole('button', { name: '帳號與密碼' });
+  await credentials.scrollIntoViewIfNeeded();
+  await tapVisible(close);
+  await sheet.waitFor({ state: 'hidden' });
+  for (const [id, label] of width === 390 ? [
+    ['file-uploads', '檔案上傳'], ['comparison', '比對系統'], ['data-center', 'Data Center'], ['pcb-designer', 'PCB Designer'], ['performance', '績效考核'],
+  ] : [['performance', '績效考核']]) {
+    await tapVisible(more);
+    const workspace = sheet.getByRole('button', { name: new RegExp(label) });
+    await workspace.scrollIntoViewIfNeeded();
+    await tapVisible(workspace);
+    await sheet.waitFor({ state: 'hidden' });
+    assert.equal(await result.textContent(), `${id}/`);
+  }
+  await tapVisible(dock.getByRole('button', { name: 'AI 問答' }));
+  if (width === 390) {
+    for (const [id, label] of [
+      ['notifications', '通知'], ['online', '線上人員'], ['admin-workspace', '後台管理'],
+      ['assessment-backups', '我的自評備份'], ['personal-profile', '編輯大頭貼'], ['logout', '登出'],
+    ]) {
+      await tapVisible(more);
+      const action = actions.getByRole('button', { name: label, exact: true });
+      await action.scrollIntoViewIfNeeded();
+      await tapVisible(action);
+      await sheet.waitFor({ state: 'hidden' });
+      assert.equal(await result.textContent(), `ai-chat/${id}`);
+    }
+  }
+  await tapVisible(more);
+  await credentials.scrollIntoViewIfNeeded();
+  await tapVisible(credentials);
+  const account = page.getByRole('dialog', { name: '測試帳號設定' });
+  await tapVisible(account.getByRole('button', { name: '完成' }));
+  await sheet.waitFor({ state: 'hidden' });
+  assert.equal(await result.textContent(), 'ai-chat/own-credentials');
+}
+
 async function checkReferenceLayout(page, width, height) {
   await page.goto(origin + '/?mobile&qaReference');
   await page.getByRole('heading', { name: '先說結論' }).waitFor();
@@ -341,6 +402,12 @@ async function checkReferenceLayout(page, width, height) {
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         await installVisualViewport(page);
+        if (process.argv.includes('--more-layout')) {
+          await checkMoreLayout(page, width, height);
+          assert.deepEqual(errors, []);
+          console.log(`${browserName} ${width}×${height}: More workspace layout and actions`);
+          continue;
+        }
         if (process.argv.includes('--model-notice')) {
           await checkModelSwitchNotice(page, width, height);
           assert.deepEqual(errors, []);
@@ -465,6 +532,7 @@ async function checkReferenceLayout(page, width, height) {
         await context.close();
       }
     }
+    if (process.argv.includes('--more-layout')) return;
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     await desktop.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     if (process.argv.includes('--model-notice')) {

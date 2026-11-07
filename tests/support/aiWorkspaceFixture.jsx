@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Archive, Bell, Camera, KeyRound, LogOut, ShieldCheck, UsersRound } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { ApiChatConsole } from '../../src/components/api-management/ApiChatConsole';
 import { buildApiKeyModelTargets } from '../../src/components/api-management/apiKeyHelpers';
@@ -32,16 +33,34 @@ const targets = ['gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash'
 const openAiRecord = { ...record, id: 'qa-openai', key_name: '隔離測試 OpenAI', permissions: { metadata: { provider: 'openai', model: 'gpt-5.4', baseUrl: 'https://api.openai.com/v1' } } };
 const referenceTargets = buildApiKeyModelTargets([openAiRecord], []);
 const workspaces = [{id:'workspace-home',label:'首頁'},{id:'station-status',label:'維修'},{id:'material-requests',label:'料號'},{id:'ai-chat',label:'AI 問答'}];
+const moreWorkspaces = [
+  { id: 'file-uploads', label: '檔案上傳' }, { id: 'comparison', label: '比對系統' }, { id: 'data-center', label: 'Data Center' },
+  { id: 'pcb-designer', label: 'PCB Designer' }, { id: 'performance', label: '績效考核' },
+];
+const moreAccountActions = [
+  ['notifications', '通知', Bell], ['online', '線上人員', UsersRound], ['admin-workspace', '後台管理', ShieldCheck],
+  ['assessment-backups', '我的自評備份', Archive], ['personal-profile', '編輯大頭貼', Camera],
+  ['own-credentials', '帳號與密碼', KeyRound], ['logout', '登出', LogOut],
+];
 const maintenanceProjects = [{ id: 'qa-project', name: '隔離測試專案' }];
 function Fixture() {
   const params = new URLSearchParams(location.search);
   const mobilePreview = params.has('mobile');
+  const moreLayout = params.has('qaMoreLayout');
   const modelTargets = params.has('qaMixedModels') ? [...targets, ...referenceTargets] : params.has('qaReference') ? referenceTargets : targets;
   const [targetId, setTargetId] = useState(modelTargets[0].id);
   const [revision, setRevision] = useState(0);
   const [workspaceVisible, setWorkspaceVisible] = useState(true);
   const [messengerOpens, setMessengerOpens] = useState(0);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [dockWorkspace, setDockWorkspace] = useState('ai-chat');
+  const [moreAction, setMoreAction] = useState('');
+  const accountActions = moreLayout
+    ? moreAccountActions.map(([id, label, Icon]) => ({ id, label, icon: <Icon className="size-4" />, onSelect: () => {
+      setMoreAction(id);
+      if (id === 'own-credentials') setAccountOpen(true);
+    } }))
+    : [{ id: 'own-credentials', label: '帳號與密碼', onSelect: () => setAccountOpen(true) }];
   const selected = modelTargets.find(target => target.id === targetId);
   useEffect(() => { const update = () => setRevision(value => value + 1); window.addEventListener('ai-qa-state', update); return () => window.removeEventListener('ai-qa-state', update); }, []);
   useEffect(() => { const open = () => setMessengerOpens(value => value + 1); const unread = () => window.dispatchEvent(new CustomEvent('collaboration-unread-change', { detail: { count: 3, directMessageCount: 3 } })); window.addEventListener('open-global-direct-messages', open); window.addEventListener('collaboration-unread-request', unread); unread(); return () => { window.removeEventListener('open-global-direct-messages', open); window.removeEventListener('collaboration-unread-request', unread); }; }, []);
@@ -56,7 +75,7 @@ function Fixture() {
     </nav>
     <main data-mobile-workspace-main={mobilePreview ? 'true' : undefined} className="min-h-0 flex-1"><div data-ai-chat-workspace="viewport-fit" className="h-full min-h-0 w-full min-w-0 px-1 py-1 sm:px-3 sm:py-3 lg:px-5 lg:py-4">{workspaceVisible ? <ApiChatConsole mode="chat-only" selectedApiKey={selected.record} selectedModel={selected.model} selectedApiKeyTargetId={targetId} onSelectApiKeyTarget={setTargetId} availableApiKeys={[selected.record]} availableApiKeyTargets={modelTargets} maintenanceProjects={maintenanceProjects} currentMaintenanceProjectId={maintenanceProjects[0].id} materialSpecsAllowed /> : <p>已離開隔離 AI 工作區；返回可確認待儲存草稿。</p>}</div></main>
     <div data-chat-dock="detached" className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-40 w-auto sm:w-[min(480px,calc(100vw-1rem))] lg:bottom-4 lg:right-4"><DirectMessageLauncher unreadCount={3} onOpen={() => setMessengerOpens(value => value + 1)} /></div>
-    {mobilePreview && <MobileWorkspaceDock activeItem="ai-chat" availableItems={workspaces} onSelect={() => {}} platformActions={[{ id: 'own-credentials', label: '帳號與密碼', onSelect: () => setAccountOpen(true) }]} />}
+    {mobilePreview && <MobileWorkspaceDock activeItem={dockWorkspace} availableItems={moreLayout ? [...workspaces, ...moreWorkspaces] : workspaces} onSelect={setDockWorkspace} platformActions={dockWorkspace === 'ai-chat' ? accountActions : undefined} />}
     <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
       <DialogContent>
         <DialogTitle>測試帳號設定</DialogTitle>
@@ -65,6 +84,7 @@ function Fixture() {
       </DialogContent>
     </Dialog>
     <output className="sr-only" aria-label="聊天室開啟次數">{messengerOpens}</output>
+    {moreLayout && <output className="sr-only" data-testid="more-selection">{dockWorkspace}/{moreAction}</output>}
     <Toaster theme="dark" />
   </div>;
 }
