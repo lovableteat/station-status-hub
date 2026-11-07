@@ -38,12 +38,12 @@ begin
   result := workspace.save_material_bom_note(target,'r1','account B','account A');
   assert result #>> '{data,note}' = 'account B', 'account B could not edit shared Note';
   assert result #>> '{data,name}' = 'updated by colleague' and result #>> '{data,qty}' = '1', 'Note changed other BOM fields';
-  denied := false;
-  begin
-    perform workspace.save_material_bom_note(target,'r1','stale overwrite','account A');
-  exception when serialization_failure then denied := true;
-  end;
-  assert denied, 'stale Note overwrote a newer edit';
+  result := workspace.save_material_bom_note(target,'r1','stale overwrite','account A');
+  assert current_setting('response.status',true) = '409', 'stale Note did not return HTTP 409';
+  assert result ->> 'code' = '40001' and not result ? 'data', 'existing clients could not recognize the conflict';
+  assert (select data ->> 'note' = 'account B' from workspace.material_bom_records
+    where workspace_id=target and record_id='r1'), 'stale Note overwrote a newer edit';
+  perform set_config('response.status','',true);
   denied := false;
   begin
     perform workspace.save_material_bom_note(target,'r1',repeat('x',4001),'account B');
