@@ -736,8 +736,19 @@ function buildRecord(raw: MaterialWorkbookRecord): MaterialRecord {
   };
 }
 
-export function buildMaterialDataset(payload: MaterialWorkbookPayload): MaterialDataset {
-  const records = payload.records.map(buildRecord);
+export function buildMaterialDataset(
+  payload: MaterialWorkbookPayload,
+  recordCache?: WeakMap<MaterialWorkbookRecord, MaterialRecord>,
+  groupCache?: Map<string, MaterialGroup>,
+): MaterialDataset {
+  // Opt-in callers replace edited raw rows; uncached callers may still mutate them.
+  const records = payload.records.map((raw) => {
+    const cached = recordCache?.get(raw);
+    if (cached) return cached;
+    const record = buildRecord(raw);
+    recordCache?.set(raw, record);
+    return record;
+  });
   const groupMap = new Map<string, MaterialRecord[]>();
 
   records.forEach((record) => {
@@ -748,6 +759,10 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
 
   const groups = Array.from(groupMap.entries())
     .map(([key, groupRecords]) => {
+      const cached = groupCache?.get(key);
+      if (cached?.records.length === groupRecords.length && groupRecords.every((record, index) => record === cached.records[index])) {
+        return cached;
+      }
       const firstRecord = groupRecords[0];
       const preferredRecord = [...groupRecords].sort((left, right) => {
         const scoreDifference = getPreferenceScore(left) - getPreferenceScore(right);
@@ -767,7 +782,7 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
       const displayLocationTokens = Array.from(new Set(groupRecords.flatMap((item) => item.locationTokens))).sort(compareLocationTokens);
       const applicationRecords = groupRecords.filter(record => !record.applicationExempt);
 
-      return {
+      const group = {
         key,
         displayRef: displayLocationTokens.length > 0
           ? displayLocationTokens.join(", ")
@@ -800,6 +815,8 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
           key,
         ]),
       } satisfies MaterialGroup;
+      groupCache?.set(key, group);
+      return group;
     })
     .sort((left, right) => {
       if (left.pendingCount !== right.pendingCount) {
@@ -812,6 +829,12 @@ export function buildMaterialDataset(payload: MaterialWorkbookPayload): Material
 
       return left.displayRef.localeCompare(right.displayRef);
     });
+
+  if (groupCache) {
+    for (const key of groupCache.keys()) {
+      if (!groupMap.has(key)) groupCache.delete(key);
+    }
+  }
 
   return {
     meta: {

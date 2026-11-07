@@ -4099,9 +4099,17 @@ export function MaterialRequestPage() {
     [activeWorkspace.pageTracker],
   );
 
+  const materialRecordCache = useMemo(
+    () => new WeakMap<MaterialWorkbookRecord, MaterialRecord>(),
+    [activeWorkspace.id, user?.userId],
+  );
+  const materialGroupCache = useMemo(
+    () => new Map<string, MaterialGroup>(),
+    [activeWorkspace.id, user?.userId],
+  );
   const dataset = useMemo<MaterialDataset>(
-    () => buildMaterialDataset(basePayload),
-    [basePayload]
+    () => buildMaterialDataset(basePayload, materialRecordCache, materialGroupCache),
+    [basePayload, materialRecordCache, materialGroupCache]
   );
 
   const displayGroups = useMemo(() => buildMaterialMainGroups(dataset.groups), [dataset.groups]);
@@ -4321,11 +4329,13 @@ export function MaterialRequestPage() {
       const workspace = bomWorkspacesRef.current.find(item => item.id === workspaceId);
       const sync = workspace ? applyRealtimeBomNotes(workspace, records) : null;
       if (sync && sync.workspace !== workspace) {
-        setBomWorkspaces(current => {
-          if (!active || accountGeneration !== bomAccountRef.current.generation) return current;
-          return current.map(item => {
-            if (item.id !== workspaceId) return item;
-            return item === workspace ? sync.workspace : applyRealtimeBomNotes(item, records).workspace;
+        startTransition(() => {
+          setBomWorkspaces(current => {
+            if (!active || accountGeneration !== bomAccountRef.current.generation) return current;
+            return current.map(item => {
+              if (item.id !== workspaceId) return item;
+              return item === workspace ? sync.workspace : applyRealtimeBomNotes(item, records).workspace;
+            });
           });
         });
       }
@@ -5470,13 +5480,15 @@ export function MaterialRequestPage() {
     const workspaceId = activeWorkspace.id;
     const applySnapshot = (snapshot: BomNoteSnapshot) => {
       assertNoteWriteCurrent(writeScope);
-      setBomWorkspaces(current => {
-        if (!isNoteWriteCurrent(writeScope)) return current;
-        return current.map(workspace => {
-          if (workspace.id !== workspaceId) return workspace;
-          const updated = applyBomNoteSnapshot(workspace, snapshot);
-          if (updated === workspace || Date.parse(workspace.updatedAt) > Date.parse(snapshot.recordMeta.updatedAt)) return updated;
-          return { ...updated, updatedAt: snapshot.recordMeta.updatedAt };
+      startTransition(() => {
+        setBomWorkspaces(current => {
+          if (!isNoteWriteCurrent(writeScope)) return current;
+          return current.map(workspace => {
+            if (workspace.id !== workspaceId) return workspace;
+            const updated = applyBomNoteSnapshot(workspace, snapshot);
+            if (updated === workspace || Date.parse(workspace.updatedAt) > Date.parse(snapshot.recordMeta.updatedAt)) return updated;
+            return { ...updated, updatedAt: snapshot.recordMeta.updatedAt };
+          });
         });
       });
     };
