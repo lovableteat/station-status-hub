@@ -123,12 +123,14 @@ import {
   type BomPageTracker,
   type BomPageTrackerPage,
   type BomPageTrackerStatus,
+  type BomNoteSnapshot,
   type BomRecordSyncMeta,
   type BomStorageMode,
   type BomWorkspace,
   type BomWorkspaceLoadResult,
   BomRecordConflictError,
   loadCachedBomWorkspacesDetailed,
+  loadBomWorkspaceNoteRecord,
   loadBomWorkspacesDetailed,
   removeBomWorkspace,
   saveBomWorkspace,
@@ -137,6 +139,7 @@ import {
   saveBomWorkspaceNote,
   subscribeBomWorkspaceChanges,
 } from "./materialBomStorage";
+import { applyBomNoteSnapshot, applyRealtimeBomNotes } from "./materialBomNoteSync";
 import type { BomTableColorTheme, BomWorkspaceArchive, BomWorkspaceProject } from "./materialBomStorage";
 import { loadBomWorkspaceArchives, loadBomWorkspaceProjects, saveBomWorkspaceArchive, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { loadBomWorkspaceRecords, loadBomWorkspaceVersions, saveBomWorkspaceVersion } from "./materialBomStorage";
@@ -701,7 +704,7 @@ const MATERIAL_TABLE_COLUMN_MEANING: Partial<Record<MaterialTableColumnKey, stri
       .filter((column) => column.ceHeader)
       .map((column) => [column.key, MATERIAL_CE_HELP_BY_HEADER.get(column.ceHeader)?.meaning ?? ""]),
   ),
-  note: "共用紀錄 · Enter 儲存",
+  note: "共用紀錄 · 停打自動儲存",
 };
 
 const MATERIAL_TABLE_COLUMN_HELP: Partial<Record<MaterialTableColumnKey, string>> = {
@@ -2543,7 +2546,7 @@ export function PendingMaterialsDialog({
 }: {
   canEdit: boolean;
   canEditNote?: boolean;
-  onSaveNote: (record: MaterialRecord, note: string) => Promise<void>;
+  onSaveNote: SaveMaterialNote;
   groups: MaterialGroup[];
   open: boolean;
   addedRecordId?: string;
@@ -3119,7 +3122,7 @@ interface MaterialRowActions {
   openTracking: (record: MaterialRecord) => void;
   openDetails: (record: MaterialRecord) => void;
   openSpec: (record: MaterialRecord) => void;
-  saveNote: (record: MaterialRecord, note: string) => Promise<void>;
+  saveNote: SaveMaterialNote;
 }
 
 interface VisibleGroupRow {
@@ -3141,6 +3144,9 @@ const MATERIAL_CELL_CLASS = "border-r border-white/20 px-2 py-1.5 align-middle";
 
 const stopRowToggle = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
+type SaveMaterialNote = (record: MaterialRecord, note: string, expectedNote: string) => Promise<void>;
+type MaterialNoteSaveState = "idle" | "dirty" | "saving" | "saved" | "error" | "conflict";
+
 function MaterialNoteCell({
   compact = false,
   disabled,
@@ -3149,81 +3155,205 @@ function MaterialNoteCell({
 }: {
   compact?: boolean;
   disabled: boolean;
-  onSave: (record: MaterialRecord, note: string) => Promise<void>;
+  onSave: SaveMaterialNote;
   record: MaterialRecord;
 }) {
   const savedNote = record.note ?? "";
   const [value, setValue] = useState(savedNote);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const valueRef = useRef(savedNote);
-  const savedRef = useRef(savedNote);
+  const [{ phase: saveState, writing }, setSaveStatus] = useState<{ phase: MaterialNoteSaveState; writing: boolean }>({ phase: "idle", writing: false });
+  const draft = useRef({
+    value: savedNote,
+    baseline: savedNote,
+    confirmed: savedNote,
+    inFlight: null as string | null,
+    phase: "idle" as MaterialNoteSaveState,
+    composing: false,
+    flush: false,
+  });
+  const timer = useRef<number | null>(null);
+  const mounted = useRef(true);
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
+
+  const clearTimer = useCallback(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+  }, []);
+  const showState = useCallback((phase: MaterialNoteSaveState) => {
+    draft.current.phase = phase;
+    setSaveStatus({ phase, writing: draft.current.inFlight !== null });
+  }, []);
+  const showValue = useCallback((text: string) => {
+    draft.current.value = text;
+    setValue(text);
+  }, []);
 
   useEffect(() => {
-    valueRef.current = savedNote;
-    savedRef.current = savedNote;
-    setValue(savedNote);
-    setSaveState("idle");
-  }, [savedNote]);
+    mounted.current = true;
+    return () => { mounted.current = false; clearTimer(); };
+  }, [clearTimer]);
 
-  const commit = async () => {
-    const next = valueRef.current.trim().slice(0, MATERIAL_NOTE_MAX_LENGTH);
-    if (disabled || saveState === "saving" || next === savedRef.current) return;
-    valueRef.current = next;
-    setValue(next);
-    setSaveState("saving");
+  useEffect(() => {
+    const current = draft.current;
+    if (savedNote === current.confirmed) return;
+    current.confirmed = savedNote;
+    const draftMatchesServer = [current.baseline, savedNote].some(note => note === current.value || note === current.value.trim());
+    if (current.inFlight === null && !current.composing && draftMatchesServer) {
+      clearTimer();
+      current.baseline = savedNote;
+      showValue(savedNote);
+      showState("idle");
+    } else if (savedNote !== current.baseline && savedNote !== current.inFlight) {
+      clearTimer();
+      showState("conflict");
+    }
+  }, [clearTimer, savedNote, showState, showValue]);
+
+  const scheduleSave = () => {
+    clearTimer();
+    timer.current = window.setTimeout(() => { void commit(); }, 650);
+  };
+
+  const commit = async (explicit = false, confirmedBaseline?: string) => {
+    clearTimer();
+    const current = draft.current;
+    if (!mounted.current || disabledRef.current || current.composing) return;
+    if (current.phase === "conflict" && confirmedBaseline === undefined) return;
+    if (current.inFlight !== null) { current.flush = true; return; }
+    const next = current.value.trim().slice(0, MATERIAL_NOTE_MAX_LENGTH);
+    const expected = confirmedBaseline ?? current.baseline;
+    if (current.value === current.confirmed || next === current.confirmed) {
+      current.baseline = current.confirmed;
+      if (explicit) showValue(current.confirmed);
+      if (current.phase !== "saved") showState("idle");
+      return;
+    }
+    if (expected !== current.confirmed) { showState("conflict"); return; }
+
+    if (explicit) showValue(next);
+    current.inFlight = next;
+    current.baseline = expected;
+    showState("saving");
     try {
-      await onSave(record, next);
-      savedRef.current = next;
-      setSaveState("saved");
-      window.setTimeout(() => setSaveState((current) => current === "saved" ? "idle" : current), 1400);
-    } catch {
-      setSaveState("error");
+      await onSave(record, next, expected);
+    } catch (error) {
+      current.inFlight = null;
+      current.flush = false;
+      clearTimer();
+      if (mounted.current) showState(error instanceof BomRecordConflictError || current.confirmed !== expected ? "conflict" : "error");
+      return;
+    }
+
+    const flush = current.flush;
+    current.flush = false;
+    current.inFlight = null;
+    if (!mounted.current) return;
+    const newerNoteArrived = current.confirmed !== expected && current.confirmed !== next;
+    if (!newerNoteArrived) current.confirmed = next;
+    current.baseline = next;
+    if (current.composing) { showState(newerNoteArrived ? "conflict" : "dirty"); return; }
+    if (current.value.trim() === next || current.value.trim() === current.confirmed) {
+      clearTimer();
+      current.baseline = current.confirmed;
+      if (newerNoteArrived) showValue(current.confirmed);
+      showState("saved");
+    } else if (newerNoteArrived) {
+      clearTimer();
+      showState("conflict");
+    } else {
+      showState("dirty");
+      if (flush) void commit(true);
+      else if (timer.current === null) scheduleSave();
+    }
+  };
+
+  const changeDraft = (text: string) => {
+    const current = draft.current;
+    if (text !== current.value) current.flush = false;
+    showValue(text);
+    if (current.composing) return;
+    if (current.inFlight === null && text.trim() === current.confirmed) {
+      clearTimer();
+      current.baseline = current.confirmed;
+      showState("idle");
+    } else if (current.phase !== "conflict") {
+      if (current.inFlight === null) showState("dirty");
+      scheduleSave();
     }
   };
 
   return (
     <div
-      className={cn("relative min-w-0", compact && "w-full")}
+      className={cn("min-w-0", compact && "w-full")}
       onClick={stopRowToggle}
       onPointerDown={stopRowToggle}
     >
-      <Input
-        aria-label={`編輯 ${record.refDes || record.name || "料件"} Note`}
-        data-testid="material-note-input"
-        disabled={disabled || saveState === "saving"}
-        maxLength={MATERIAL_NOTE_MAX_LENGTH}
-        placeholder={disabled ? "僅供檢視" : "新增 Note"}
-        title={value || (disabled ? "僅供檢視" : "共用紀錄；按 Enter 或離開欄位儲存")}
-        value={value}
-        onBlur={() => { void commit(); }}
-        onChange={(event) => {
-          valueRef.current = event.target.value;
-          setValue(event.target.value);
-          if (saveState === "error" || saveState === "saved") setSaveState("idle");
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            void commit();
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            valueRef.current = savedRef.current;
-            setValue(savedRef.current);
-            setSaveState("idle");
-            event.currentTarget.blur();
-          }
-        }}
-        className={cn(
-          "h-8 min-w-0 border-white/20 bg-black/15 pr-7 text-xs text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/35 focus-visible:border-cyan-300 focus-visible:ring-cyan-300/25",
-          saveState === "error" && "border-rose-400/70 focus-visible:border-rose-300 focus-visible:ring-rose-400/25",
-          compact && "h-10 bg-[#071522] text-sm",
-        )}
-      />
-      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2" aria-live="polite">
-        {saveState === "saving" && <RotateCcw className="h-3.5 w-3.5 animate-spin text-cyan-300 motion-reduce:animate-none" aria-label="Note 儲存中" />}
-        {saveState === "saved" && <Check className="h-3.5 w-3.5 text-emerald-300" aria-label="Note 已儲存" />}
-        {saveState === "error" && <TriangleAlert className="h-3.5 w-3.5 text-rose-300" aria-label="Note 儲存失敗" />}
-      </span>
+      <div className="relative">
+        <Input
+          aria-label={`編輯 ${record.refDes || record.name || "料件"} Note`}
+          data-testid="material-note-input"
+          disabled={disabled}
+          maxLength={MATERIAL_NOTE_MAX_LENGTH}
+          placeholder={disabled ? "僅供檢視" : "新增 Note"}
+          title={value || (disabled ? "僅供檢視" : "停打後自動儲存，也可按 Enter")}
+          value={value}
+          onBlur={() => { if (draft.current.phase !== "error") void commit(true); }}
+          onChange={(event) => changeDraft(event.target.value)}
+          onCompositionStart={() => { clearTimer(); draft.current.composing = true; }}
+          onCompositionEnd={(event) => { draft.current.composing = false; changeDraft(event.currentTarget.value); }}
+          onKeyDown={(event) => {
+            const current = draft.current;
+            if (current.composing || event.nativeEvent?.isComposing || event.keyCode === 229) return;
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void commit(true);
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              clearTimer();
+              current.baseline = current.confirmed;
+              showValue(current.inFlight ?? current.confirmed);
+              showState(current.inFlight === null ? "idle" : "saving");
+              event.currentTarget.blur();
+            }
+          }}
+          className={cn(
+            "h-8 min-w-0 border-white/20 bg-black/15 pr-7 text-xs text-slate-100 placeholder:text-slate-500 hover:border-cyan-300/35 focus-visible:border-cyan-300 focus-visible:ring-cyan-300/25",
+            saveState === "error" && "border-rose-400/70 focus-visible:border-rose-300 focus-visible:ring-rose-400/25",
+            saveState === "conflict" && "border-warning/70",
+            compact && "h-10 bg-[#071522] text-sm",
+          )}
+        />
+        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2" aria-live="polite">
+          {saveState === "dirty" && <span className="block size-2 rounded-full bg-warning" aria-label="Note 等待儲存" />}
+          {saveState === "saving" && <RotateCcw className="h-3.5 w-3.5 animate-spin text-cyan-300 motion-reduce:animate-none" aria-label="Note 儲存中" />}
+          {saveState === "saved" && <Check className="h-3.5 w-3.5 text-emerald-300" aria-label="Note 已儲存" />}
+          {saveState === "error" && <TriangleAlert className="h-3.5 w-3.5 text-rose-300" aria-label="Note 儲存失敗" />}
+        </span>
+      </div>
+      {saveState === "error" && (
+        <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-destructive">
+          <span>儲存失敗</span>
+          <Button type="button" size="sm" variant="ghost" disabled={disabled} className="min-h-11 lg:min-h-8" onClick={() => { void commit(true); }}>重試</Button>
+        </div>
+      )}
+      {saveState === "conflict" && (
+        <div className="mt-1 space-y-1 rounded-md border border-warning/40 bg-card p-2 text-xs" role="status">
+          <p className="font-semibold text-warning">他人已更新，草稿已保留</p>
+          {savedNote !== draft.current.baseline ? (
+            <>
+              <p className="max-h-24 overflow-auto whitespace-pre-wrap break-words"><span className="block text-muted-foreground">最新備註</span>{savedNote || "（空白）"}</p>
+              <div className="flex flex-wrap gap-1">
+                <Button type="button" size="sm" variant="outline" disabled={writing} className="min-h-11 px-2 lg:min-h-8" onClick={() => {
+                  draft.current.baseline = draft.current.confirmed;
+                  showValue(draft.current.confirmed);
+                  showState("idle");
+                }}>採用最新</Button>
+                <Button type="button" size="sm" data-testid="material-note-keep-draft" disabled={disabled || writing} className="min-h-11 px-2 lg:min-h-8" onClick={() => { void commit(true, savedNote); }}>儲存我的草稿</Button>
+              </div>
+            </>
+          ) : <div className="flex flex-wrap items-center gap-1"><span>暫時讀不到最新備註</span><Button type="button" size="sm" variant="outline" disabled={disabled || writing} className="min-h-11 px-2 lg:min-h-8" onClick={() => { void commit(true, savedNote); }}>重試儲存</Button></div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -3490,6 +3620,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         {columns.note && (
           <td data-material-cell="note" className={MATERIAL_CELL_CLASS} onClick={stopRowToggle}>
             <MaterialNoteCell
+              key={statusRecord.id}
               disabled={!canEditNote}
               onSave={actions.saveNote}
               record={statusRecord}
@@ -3542,7 +3673,7 @@ function CompactAlternativeRows({
   onCopy: (value: string) => void;
   onOpenTracking: (record: MaterialRecord) => void;
   onOpenDetails: (record: MaterialRecord) => void;
-  onSaveNote: (record: MaterialRecord, note: string) => Promise<void>;
+  onSaveNote: SaveMaterialNote;
   noteDisabled: boolean;
 }) {
   const alternatives = records.filter((record) => record.id !== primaryRecord.id);
@@ -3869,6 +4000,8 @@ export function MaterialRequestPage() {
   const bomSyncRetryAttemptRef = useRef(0);
   const bomSyncRetryTimerRef = useRef<number | null>(null);
   const activeBomIdRef = useRef(activeBomId);
+  const bomWorkspacesRef = useRef(bomWorkspaces);
+  bomWorkspacesRef.current = bomWorkspaces;
   const loadedRecordRangeRef = useRef("");
   const recentLocalRecordIdsRef = useRef(new Map<string, number>());
   const recentLocalWorkspaceWritesRef = useRef(new Map<string, number>());
@@ -3905,7 +4038,7 @@ export function MaterialRequestPage() {
   const projectNames = useMemo(() => new Map(allProjects.map((project) => [project.id, project.name])), [allProjects]);
   const {capture: captureBomWrite, isCurrent: isBomWriteCurrent, assertCurrent: assertBomWriteCurrent}
     = useWorkspaceMutationScope(user?.userId ?? null, canEditModuleAccess);
-  const { capture: captureNoteWrite, assertCurrent: assertNoteWriteCurrent }
+  const { capture: captureNoteWrite, isCurrent: isNoteWriteCurrent, assertCurrent: assertNoteWriteCurrent }
     = useWorkspaceMutationScope(user?.userId ?? null, canViewModuleAccess);
   const bomAccountRef = useRef({accountId: user?.userId, generation: 0});
   if (bomAccountRef.current.accountId !== user?.userId) {
@@ -4176,20 +4309,36 @@ export function MaterialRequestPage() {
     };
 
     void syncWorkspaces(loadActiveBomId());
+    const accountGeneration = bomAccountRef.current.generation;
     const unsubscribe = subscribeBomWorkspaceChanges((change) => {
+      if (!active || !canViewModuleAccess || accountGeneration !== bomAccountRef.current.generation) return;
       const now = Date.now();
-      if (change.recordIds.length === 0 && change.workspaceIds.length > 0) void refreshBomProjects();
-      if (!change.workspaceIds.includes(activeBomIdRef.current)) return;
+      const workspaceId = activeBomIdRef.current;
+      if (change.records.length === 0 && change.workspaceIds.length > 0) void refreshBomProjects();
+      if (!change.workspaceIds.includes(workspaceId)) return;
 
-      const externalRecordIds = change.recordIds.filter((recordId) => {
+      const records = change.records.filter(record => record.workspaceId === workspaceId);
+      const workspace = bomWorkspacesRef.current.find(item => item.id === workspaceId);
+      const sync = workspace ? applyRealtimeBomNotes(workspace, records) : null;
+      if (sync && sync.workspace !== workspace) {
+        setBomWorkspaces(current => {
+          if (!active || accountGeneration !== bomAccountRef.current.generation) return current;
+          return current.map(item => {
+            if (item.id !== workspaceId) return item;
+            return item === workspace ? sync.workspace : applyRealtimeBomNotes(item, records).workspace;
+          });
+        });
+      }
+
+      const externalRecordIds = (sync?.pendingRecordIds ?? records.map(record => record.recordId)).filter((recordId) => {
         const localTimestamp = recentLocalRecordIdsRef.current.get(recordId) ?? 0;
         return now - localTimestamp > 5000;
       });
       if (externalRecordIds.length > 0) {
         setPendingRemoteRecordIds((current) => Array.from(new Set([...current, ...externalRecordIds])));
       }
-      const localWorkspaceWriteAt = recentLocalWorkspaceWritesRef.current.get(activeBomIdRef.current) ?? 0;
-      if (change.recordIds.length === 0 && now - localWorkspaceWriteAt > 5000) {
+      const localWorkspaceWriteAt = recentLocalWorkspaceWritesRef.current.get(workspaceId) ?? 0;
+      if (records.length === 0 && now - localWorkspaceWriteAt > 5000) {
         setHasPendingWorkspaceUpdate(true);
       }
     });
@@ -4198,7 +4347,7 @@ export function MaterialRequestPage() {
       active = false;
       unsubscribe();
     };
-  }, [applyLoadedWorkspaces, refreshBomProjects, reloadBomWorkspaces]);
+  }, [applyLoadedWorkspaces, canViewModuleAccess, refreshBomProjects, reloadBomWorkspaces]);
 
   useEffect(() => {
     if (collaborationStatus !== "error") {
@@ -5313,37 +5462,37 @@ export function MaterialRequestPage() {
     toast({ title: "負責人已儲存", description: `${record.refDes || record.name} → ${owner?.name ?? "未指定"}` });
   };
 
-  const saveMaterialNote = async (record: MaterialRecord, note: string) => {
+  const saveMaterialNote: SaveMaterialNote = async (record, note, expectedNote) => {
     if (!canViewModuleAccess || isHistoricalVersion || !isCollaborativeReady || !isFullDatasetLoaded) {
       throw new Error("尚未同步，請稍後重試。");
     }
     const writeScope = captureNoteWrite();
     const workspaceId = activeWorkspace.id;
+    const applySnapshot = (snapshot: BomNoteSnapshot) => {
+      assertNoteWriteCurrent(writeScope);
+      setBomWorkspaces(current => {
+        if (!isNoteWriteCurrent(writeScope)) return current;
+        return current.map(workspace => {
+          if (workspace.id !== workspaceId) return workspace;
+          const updated = applyBomNoteSnapshot(workspace, snapshot);
+          if (updated === workspace || Date.parse(workspace.updatedAt) > Date.parse(snapshot.recordMeta.updatedAt)) return updated;
+          return { ...updated, updatedAt: snapshot.recordMeta.updatedAt };
+        });
+      });
+    };
     try {
       const saved = await saveBomWorkspaceNote(
-        activeWorkspace, toWorkbookRecord(record), note.slice(0, MATERIAL_NOTE_MAX_LENGTH),
+        workspaceId, record.id, note.slice(0, MATERIAL_NOTE_MAX_LENGTH), expectedNote,
         () => assertNoteWriteCurrent(writeScope),
       );
-      assertNoteWriteCurrent(writeScope);
+      applySnapshot(saved);
       recentLocalRecordIdsRef.current.set(record.id, Date.now());
-      setBomWorkspaces((current) => current.map((workspace) => workspace.id === workspaceId ? {
-        ...workspace,
-        updatedAt: saved.recordMeta.updatedAt,
-        payload: {
-          ...workspace.payload,
-          records: workspace.payload.records.map((item) => item.id === record.id ? saved.record : item),
-        },
-        recordMeta: { ...workspace.recordMeta, [record.id]: saved.recordMeta },
-      } : workspace));
     } catch (error) {
-      if (error instanceof BomRecordConflictError) await reloadBomWorkspaces(workspaceId).catch(() => undefined);
-      toast({
-        title: error instanceof BomRecordConflictError ? "Note 已有更新" : "Note 儲存失敗",
-        description: error instanceof BomRecordConflictError
-          ? "其他人剛更新過這筆資料，系統沒有覆蓋；請確認最新內容後再儲存。"
-          : "這筆 Note 還沒寫入共用資料，內容仍留在欄位內，請再試一次。",
-        variant: "destructive",
-      });
+      assertNoteWriteCurrent(writeScope);
+      if (error instanceof BomRecordConflictError) {
+        const latest = await loadBomWorkspaceNoteRecord(workspaceId, record.id).catch(() => null);
+        if (latest) applySnapshot(latest);
+      }
       throw error;
     }
   };
@@ -5871,7 +6020,7 @@ export function MaterialRequestPage() {
     openTracking: (record) => rowActionsRef.current?.openTracking(record),
     openDetails: (record) => rowActionsRef.current?.openDetails(record),
     openSpec: (record) => rowActionsRef.current?.openSpec(record),
-    saveNote: (record, note) => rowActionsRef.current?.saveNote(record, note) ?? Promise.reject(new Error("Note editor unavailable")),
+    saveNote: (record, note, expectedNote) => rowActionsRef.current?.saveNote(record, note, expectedNote) ?? Promise.reject(new Error("Note editor unavailable")),
   }), []);
 
   if (isInitialLoading) {
@@ -5937,6 +6086,7 @@ export function MaterialRequestPage() {
         onOpenChange={setNonPvlDialogOpen}
       />
       <PendingMaterialsDialog
+        key={`${user?.userId}:${activeWorkspace.id}`}
         canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded}
         canEditNote={canEditNote}
         onSaveNote={rowActions.saveNote}
