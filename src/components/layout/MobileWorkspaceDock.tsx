@@ -94,6 +94,7 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect, plat
         <button
           type="button"
           aria-current={moreActive ? "page" : undefined}
+          aria-haspopup="dialog"
           aria-expanded={moreOpen}
           data-mobile-dock-item="true"
           data-mobile-dock-id="more"
@@ -111,61 +112,69 @@ export function MobileWorkspaceDock({ activeItem, availableItems, onSelect, plat
       <Drawer open={moreOpen} onOpenChange={setMoreOpen} shouldScaleBackground={false}>
         <DrawerContent
           data-mobile-more-sheet="true"
-          className="z-[92] max-h-[min(72dvh,560px)] border-cyan-200/25 bg-[#071522] pb-[env(safe-area-inset-bottom)] text-slate-100 lg:hidden"
+          className="z-[92] lg:hidden"
         >
-          <DrawerHeader data-mobile-more-header="true" className="relative px-5 pb-4 pt-3 text-left">
-            <DrawerTitle className="text-base text-white">更多工作區</DrawerTitle>
-            <DrawerDescription className="text-xs text-slate-400">選擇要開啟的工具</DrawerDescription>
+          <DrawerHeader data-mobile-more-header="true" className="shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 pb-4 pt-1 text-left">
+            <div className="space-y-1">
+              <DrawerTitle className="text-xl leading-6 text-foreground">更多工作區</DrawerTitle>
+              <DrawerDescription className="leading-5">選擇要開啟的工具</DrawerDescription>
+            </div>
             <DrawerClose asChild>
               <button
                 type="button"
                 aria-label="關閉更多工作區"
                 data-ui="dialog-close"
-                className="absolute right-5 top-2 hidden h-12 w-12 items-center justify-center rounded-2xl border border-slate-600/70 bg-slate-800 text-slate-200 max-sm:flex"
+                className="grid size-11 place-items-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
               >
-                <X className="h-5 w-5" />
+                <X aria-hidden="true" className="size-5" />
               </button>
             </DrawerClose>
           </DrawerHeader>
-          <div className="mobile-more-workspace-list grid gap-2 overflow-y-auto px-3 pb-4">
-            {secondaryItems.map((item) => {
-              const Icon = item.icon;
-              const active = activeItem === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-current={active ? "page" : undefined}
-                  data-mobile-more-item="true"
-                  data-mobile-more-id={item.id}
-                  onClick={() => selectWorkspace(item.id)}
-                  className={cn(
-                    "flex min-h-14 items-center gap-3 rounded-xl border px-3 py-2 text-left",
-                    active
-                      ? "border-cyan-200/50 bg-cyan-300/15 text-white"
-                      : "border-slate-700 bg-[#0b1b2d] text-slate-200",
-                  )}
-                >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-300/10 text-cyan-100">
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-bold">{item.label}</span>
-                    <span className="mt-0.5 block truncate text-xs text-slate-400">{item.description}</span>
-                  </span>
-                  <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-slate-500" />
-                </button>
-              );
-            })}
+          <div className="mobile-more-workspace-list min-h-0 space-y-4 overflow-y-auto overscroll-contain">
+            {secondaryItems.length > 0 && (
+              <section aria-label="工作區工具" className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+                {secondaryItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      aria-current={activeItem === item.id ? "page" : undefined}
+                      data-mobile-more-item="true"
+                      data-mobile-more-id={item.id}
+                      onClick={() => selectWorkspace(item.id)}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-foreground"
+                    >
+                      <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-primary/10 text-primary">
+                        <Icon className="size-[18px]" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block break-words text-[15px] font-semibold leading-5">{item.label}</span>
+                        <span className="mt-0.5 block break-words text-[13px] leading-[1.125rem] text-muted-foreground">{item.description}</span>
+                      </span>
+                      <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  );
+                })}
+              </section>
+            )}
             {platformActions?.length ? (
-              <section aria-label="帳號與協作" className="mt-2 space-y-1 border-t border-border pt-3 md:hidden">
-                <h3 className="px-3 text-xs font-semibold text-muted-foreground">帳號與協作</h3>
-                {platformActions.map((action) => (
-                  <button key={action.id} type="button" onClick={() => { setMoreOpen(false); action.onSelect(); }} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    {action.icon && <span aria-hidden="true" className="text-muted-foreground">{action.icon}</span>}
-                    {action.label}
-                  </button>
-                ))}
+              <section aria-label="帳號與協作" className="space-y-2 md:hidden">
+                <h3 className="px-1 text-[13px] font-semibold leading-5 text-muted-foreground">帳號與協作</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {platformActions.map((action) => (
+                    <button
+                      key={action.id}
+                      type="button"
+                      data-mobile-more-action={action.id}
+                      onClick={() => { setMoreOpen(false); action.onSelect(); }}
+                      className="flex min-h-11 min-w-0 items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-left text-sm font-medium text-foreground last:odd:col-span-2"
+                    >
+                      {action.icon && <span aria-hidden="true" className="shrink-0 text-muted-foreground">{action.icon}</span>}
+                      <span className="min-w-0 break-words">{action.label}</span>
+                    </button>
+                  ))}
+                </div>
               </section>
             ) : null}
           </div>
