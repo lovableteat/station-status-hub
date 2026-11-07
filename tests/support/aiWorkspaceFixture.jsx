@@ -36,7 +36,7 @@ const maintenanceProjects = [{ id: 'qa-project', name: '隔離測試專案' }];
 function Fixture() {
   const params = new URLSearchParams(location.search);
   const mobilePreview = params.has('mobile');
-  const modelTargets = params.has('qaReference') ? referenceTargets : targets;
+  const modelTargets = params.has('qaMixedModels') ? [...targets, ...referenceTargets] : params.has('qaReference') ? referenceTargets : targets;
   const [targetId, setTargetId] = useState(modelTargets[0].id);
   const [revision, setRevision] = useState(0);
   const [workspaceVisible, setWorkspaceVisible] = useState(true);

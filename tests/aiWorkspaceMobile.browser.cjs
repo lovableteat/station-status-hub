@@ -232,6 +232,58 @@ async function checkPanels(page, width, height) {
   assert.equal(await composer.inputValue(), '請列出額定電流與規格來源');
 }
 
+async function checkModelSwitchNotice(page, width, height) {
+  await page.goto(origin + '/?mobile&qaContext&qaMobile&qaMixedModels');
+  await page.getByRole('heading', { name: '規格比對結果' }).waitFor({ state: 'attached' });
+  const picker = page.getByRole('combobox', { name: '選擇 API 金鑰與模型' });
+  const message = '已切換 API 金鑰與模型';
+  const toast = page.locator('[data-sonner-toast]').filter({ hasText: message });
+  const mobile = width < 1024;
+  const pick = async name => {
+    const option = page.getByRole('option', { name });
+    if (mobile) { await tapVisible(picker); await option.tap(); }
+    else { await picker.click(); await option.click(); }
+  };
+
+  await pick(/隔離測試 OpenAI.*gpt-5\.4/);
+  await picker.getByText(/gpt-5\.4/).waitFor();
+  await page.getByText(message, { exact: true }).waitFor({ timeout: 2500 });
+  if (!mobile) { await toast.waitFor(); return; }
+
+  assert.equal(await toast.count(), 0, 'switching models should not show an overlapping toast on mobile');
+  const notice = page.locator('[data-mobile-ai-model-notice]');
+  const toolbar = page.locator('[data-mobile-ai-command-bar]');
+  const reading = page.locator('[data-ai-reading-area]');
+  const [row, banner, content] = await Promise.all([toolbar.boundingBox(), notice.boundingBox(), reading.boundingBox()]);
+  assert.ok(row.y + row.height <= banner.y && banner.y + banner.height <= content.y + 1, 'notice stays between the toolbar and the reading area');
+  await shot(page, `mobile-ai-model-notice-${width}x${height}`);
+
+  if (width === 390) {
+    const input = page.getByRole('textbox', { name: inputLabel });
+    await input.tap();
+    await input.fill('切換後保留這份草稿');
+    await page.evaluate(() => window.qaSetVisualViewport(220, 16));
+    await waitForSendAboveKeyboard(page);
+    assert.equal(await notice.isVisible(), false, 'notice releases space on a short keyboard viewport');
+    const { send } = await measure(page);
+    assert.ok(send.hit, `send remains tappable with the keyboard open: ${JSON.stringify(send)}`);
+    await input.blur();
+    await page.evaluate(() => window.qaSetVisualViewport(null));
+  }
+
+  await pick(/隔離測試 Gemini.*gemini-3\.5-flash-lite/);
+  await picker.getByText('gemini-3.5-flash-lite', { exact: true }).waitFor();
+  await tapVisible(notice.getByRole('button', { name: '關閉 API 切換提示' }));
+  await notice.waitFor({ state: 'hidden' });
+  assert.equal(await picker.textContent(), 'gemini-3.5-flash-lite');
+  if (width === 390) {
+    assert.equal(await page.getByRole('textbox', { name: inputLabel }).inputValue(), '切換後保留這份草稿');
+    await pick(/隔離測試 OpenAI.*gpt-5\.4/);
+    await notice.waitFor();
+    await notice.waitFor({ state: 'hidden', timeout: 6000 });
+  }
+}
+
 async function checkReferenceLayout(page, width, height) {
   await page.goto(origin + '/?mobile&qaReference');
   await page.getByRole('heading', { name: '先說結論' }).waitFor();
@@ -289,6 +341,12 @@ async function checkReferenceLayout(page, width, height) {
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         await installVisualViewport(page);
+        if (process.argv.includes('--model-notice')) {
+          await checkModelSwitchNotice(page, width, height);
+          assert.deepEqual(errors, []);
+          console.log(`${browserName} ${width}×${height}: dismissible API model notice`);
+          continue;
+        }
         if (process.argv.includes('--panels')) {
           await checkPanels(page, width, height);
           assert.deepEqual(errors, []);
@@ -409,6 +467,11 @@ async function checkReferenceLayout(page, width, height) {
     }
     const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     await desktop.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+    if (process.argv.includes('--model-notice')) {
+      await checkModelSwitchNotice(desktop, 1440, 900);
+      console.log(`${browserName} desktop: API model toast`);
+      return;
+    }
     await desktop.goto(origin + '/?mobile&qaReference');
     await desktop.getByRole('heading', { name: '先說結論' }).waitFor();
     if (process.argv.includes('--panels')) {
