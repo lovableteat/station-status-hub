@@ -226,6 +226,7 @@ const SHARED_PROMPT_CATEGORY = "ai_prompt";
 const SHARED_PROMPT_PLATFORM = "api-chat";
 const SHARED_PROMPT_PAGE_SIZE = 8;
 const DEFAULT_SHARED_PROMPT_CATEGORY = "未分類";
+const API_MODEL_SWITCH_MESSAGE = "已切換 API 金鑰與模型";
 const LEGACY_ASSISTANT_SYSTEM_PROMPT =
   "你是站點管理系統的 AI 助理，請用繁體中文直接回答，優先給可執行結論。";
 const DEFAULT_QUERY_SYSTEM_PROMPT = [
@@ -1013,6 +1014,8 @@ export function ApiChatConsole({
   const [desktopSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [mobileApiSwitchNotice, setMobileApiSwitchNotice] = useState<string | null>(null);
+  const mobileModelTriggerRef = useRef<HTMLButtonElement>(null);
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const [conversationCloudState, setConversationCloudState] = useState<ConversationCloudState>("loading");
@@ -1156,7 +1159,8 @@ export function ApiChatConsole({
 
     invalidateConversationRequest();
     setConnectionState(null);
-    toast.success("已切換 API 金鑰與模型");
+    if (compactChat) setMobileApiSwitchNotice(nextTargetId);
+    else toast.success(API_MODEL_SWITCH_MESSAGE);
   }, [
     selectedApiKey,
     selectedApiKeyTargetId,
@@ -1166,7 +1170,14 @@ export function ApiChatConsole({
     selectedModel,
     invalidateConversationRequest,
     isChatOnly,
+    compactChat,
   ]);
+
+  useEffect(() => {
+    if (!mobileApiSwitchNotice) return;
+    const timeout = window.setTimeout(() => setMobileApiSwitchNotice(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [mobileApiSwitchNotice]);
 
   useEffect(() => {
     setSystemPrompt((current) => {
@@ -3666,6 +3677,7 @@ export function ApiChatConsole({
               >
                 <SelectTrigger
                   data-mobile-ai-model
+                  ref={mobileModelTriggerRef}
                   aria-label="選擇 API 金鑰與模型"
                   aria-description={model || undefined}
                   title={model}
@@ -3709,6 +3721,26 @@ export function ApiChatConsole({
                 <Plus className="h-5 w-5" />
               </Button>
             </div>}
+            {compactChat && <span role="status" className="sr-only">{mobileApiSwitchNotice ? `${API_MODEL_SWITCH_MESSAGE}。${model}` : ""}</span>}
+            {compactChat && mobileApiSwitchNotice && (
+              <div data-mobile-ai-model-notice className="mx-4 mt-2 flex shrink-0 items-center gap-2 self-start rounded-xl border border-primary/25 bg-primary/10 pl-3">
+                <CheckCircle2 aria-hidden="true" className="size-4 shrink-0 text-primary" />
+                <span className="min-w-0 py-1.5 text-sm font-medium leading-5 text-foreground">{API_MODEL_SWITCH_MESSAGE}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="關閉 API 切換提示"
+                  onClick={() => {
+                    setMobileApiSwitchNotice(null);
+                    mobileModelTriggerRef.current?.focus({ preventScroll: true });
+                  }}
+                  className="size-11 shrink-0 rounded-lg text-muted-foreground hover:text-foreground"
+                >
+                  <X aria-hidden="true" className="size-4" />
+                </Button>
+              </div>
+            )}
             {compactChat && <MobileToolsSheet
               open={mobileToolsOpen}
               onOpenChange={setMobileToolsOpen}

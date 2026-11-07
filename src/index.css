@@ -2380,7 +2380,7 @@ body {
     --mobile-shell-bottom: 0px;
   }
   [data-ai-chat-viewport][data-ai-chat-keyboard] > :is([data-mobile-app-header], [data-mobile-workspace-dock]),
-  [data-ai-chat-keyboard="short"] :is([data-mobile-ai-command-bar], [data-ai-active-sources]) { display: none; }
+  [data-ai-chat-keyboard="short"] :is([data-mobile-ai-command-bar], [data-mobile-ai-model-notice], [data-ai-active-sources]) { display: none; }
 
   [data-ai-chat-workspace] { padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); }
   [data-ai-chat-viewport] > [data-mobile-workspace-dock] {
