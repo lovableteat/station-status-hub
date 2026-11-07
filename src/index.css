@@ -1762,6 +1762,12 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
     font-size: 13px;
   }
 
+  [data-mobile-ai-command-bar="true"] [data-mobile-ai-model]:focus:not(:focus-visible) {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
   [data-mobile-ai-model]::before {
     position: absolute;
     inset: 7px 0;
