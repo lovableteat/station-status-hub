@@ -104,7 +104,11 @@ const legacyWorkspace = {
 const store = new Map([[workspace.id, workspace], [previousWorkspace.id, previousWorkspace], [legacyWorkspace.id, legacyWorkspace]]);
 const fullRecords = new Map([[workspace.id, records], [previousWorkspace.id, previousRecords], [legacyWorkspace.id, previousRecords.slice(0, 3)]]);
 const snapshot = (preferredId) => [...store.values()].map(item => structuredClone({ ...item, payload: { ...item.payload, records: item.id === (preferredId ?? workspace.id) ? (fullRecords.get(item.id) ?? []) : [] }, isLoaded: item.id === (preferredId ?? workspace.id) }));
-const noteChannel = new URLSearchParams(window.location.search).has('qaLiveNotes') ? new BroadcastChannel('qa-material-notes') : null;
+const liveRecords = new URLSearchParams(window.location.search).has('qaLiveRecords');
+if (liveRecords) for (const item of store.values()) item.recordMeta = Object.fromEntries((fullRecords.get(item.id) ?? []).map(record => [record.id, { updatedAt: '2026-11-01T00:00:00.000Z' }]));
+let lastRecordStamp = 0;
+const nextRecordStamp = () => new Date(lastRecordStamp = Math.max(Date.now(), lastRecordStamp + 1)).toISOString();
+const noteChannel = liveRecords || new URLSearchParams(window.location.search).has('qaLiveNotes') ? new BroadcastChannel(liveRecords ? 'qa-material-records' : 'qa-material-notes') : null;
 const workspaceListeners = new Set();
 function applyQaNote(workspaceId, noteSnapshot) {
   const row = noteSnapshot.record;
@@ -115,16 +119,42 @@ function applyQaNote(workspaceId, noteSnapshot) {
   fullRecords.set(workspaceId, list.map(item => item.id === row.id ? row : item));
   const item = store.get(workspaceId);
   item.recordMeta[row.id] = noteSnapshot.recordMeta;
+  if (liveRecords) lastRecordStamp = Math.max(lastRecordStamp, Date.parse(noteSnapshot.recordMeta.updatedAt));
   return { workspaceId, recordId: row.id, orderIndex: index, snapshot: noteSnapshot };
 }
-noteChannel?.addEventListener('message', ({ data: { workspaceId, noteSnapshot } }) => {
+noteChannel?.addEventListener('message', ({ data: { workspaceId, noteSnapshot, missingPayload, change: metadataChange } }) => {
+  if (metadataChange) {
+    workspaceListeners.forEach(listener => listener(metadataChange));
+    if (liveRecords) setTimeout(() => { window.__qaLiveRecords.touches += 1; }, 50);
+    return;
+  }
   const change = applyQaNote(workspaceId, noteSnapshot);
-  if (change && !globalThis.__qaMuteNoteUpdates) workspaceListeners.forEach(listener => listener({ workspaceIds: [workspaceId], records: [change] }));
+  if (change && !globalThis.__qaMuteNoteUpdates) workspaceListeners.forEach(listener => listener({ workspaceIds: [workspaceId], records: [missingPayload ? { workspaceId, recordId: change.recordId } : change] }));
 });
+if (liveRecords) window.__qaLiveRecords = {
+  loads: 0,
+  touches: 0,
+  record: id => structuredClone(fullRecords.get(workspace.id)?.find(record => record.id === id)),
+  touch() {
+    const { sourceFile, sheetName, generatedAt, recordCount } = workspace.payload;
+    const change = { workspaceIds: [workspace.id], records: [], workspaceHeaders: [{ id: workspace.id, name: workspace.name, sourceFile, sheetName, generatedAt, recordCount }], preferenceWorkspaceIds: [], invalidatedWorkspaceIds: [] };
+    workspaceListeners.forEach(listener => listener(change));
+    noteChannel.postMessage({ change });
+  },
+  patch(id, fields, missingPayload = false) {
+    const record = fullRecords.get(workspace.id)?.find(record => record.id === id);
+    if (!record) throw new Error('QA record not found');
+    const noteSnapshot = { record: { ...record, ...fields }, recordMeta: { updatedAt: nextRecordStamp() } };
+    const change = applyQaNote(workspace.id, noteSnapshot);
+    workspaceListeners.forEach(listener => listener({ workspaceIds: [workspace.id], records: [missingPayload ? { workspaceId: workspace.id, recordId: id } : change] }));
+    noteChannel.postMessage({ workspaceId: workspace.id, noteSnapshot, missingPayload });
+  },
+};
 
 export class BomRecordConflictError extends Error {}
 export const loadCachedBomWorkspacesDetailed = async () => null;
 export const loadBomWorkspacesDetailed = async (preferredId, options = {}) => {
+  if (liveRecords) window.__qaLiveRecords.loads += 1;
   const result = { mode: 'remote', workspaces: snapshot(store.has(preferredId) ? preferredId : undefined) };
   options.onPreview?.(result);
   return result;
@@ -132,6 +162,8 @@ export const loadBomWorkspacesDetailed = async (preferredId, options = {}) => {
 export const loadBomWorkspaceArchives = async () => new Map([...store.values()].flatMap(item => (item.archive ? [[item.id, item.archive]] : [])));
 export const loadBomWorkspaceProjects = async () => new Map([...store.values()].flatMap(item => (item.project ? [[item.id, item.project]] : [])));
 export const loadBomWorkspaceVersions = async () => new Map([...store.values()].flatMap(item => (item.version ? [[item.id, item.version]] : [])));
+export const loadPageTrackerMap = async () => new Map([...store.values()].flatMap(item => (item.pageTracker ? [[item.id, item.pageTracker]] : [])));
+export const loadTableColorThemeMap = async () => new Map([...store.values()].flatMap(item => (item.tableColorTheme ? [[item.id, item.tableColorTheme]] : [])));
 export const loadBomWorkspaceRecords = async (workspaceId) => { await new Promise(resolve => setTimeout(resolve, 120)); if (!fullRecords.has(workspaceId)) throw new Error('QA：找不到這個版本'); return structuredClone(fullRecords.get(workspaceId)); };
 export const subscribeBomWorkspaceChanges = (listener) => {
   workspaceListeners.add(listener);
@@ -150,9 +182,17 @@ export const removeBomWorkspace = async (id) => { store.delete(id); fullRecords.
 export const saveBomWorkspaceRecord = async (target, record) => {
   const list = fullRecords.get(target.id) ?? [];
   const index = list.findIndex(item => item.id === record.id);
+  if (liveRecords && index >= 0 && target.recordMeta?.[record.id]?.updatedAt !== store.get(target.id).recordMeta[record.id]?.updatedAt) throw new BomRecordConflictError('QA record revision conflict');
   if (index >= 0) list[index] = structuredClone(record); else list.push(structuredClone(record));
   fullRecords.set(target.id, list);
-  return { updatedAt: new Date().toISOString(), updatedBy: user.displayName, version: 1 };
+  const recordMeta = { updatedAt: liveRecords ? nextRecordStamp() : new Date().toISOString(), updatedBy: user.displayName, version: 1 };
+  if (liveRecords) {
+    const noteSnapshot = { record: structuredClone(record), recordMeta };
+    const change = applyQaNote(target.id, noteSnapshot);
+    workspaceListeners.forEach(listener => listener({ workspaceIds: [target.id], records: [change] }));
+    noteChannel.postMessage({ workspaceId: target.id, noteSnapshot });
+  }
+  return recordMeta;
 };
 export const loadBomWorkspaceNoteRecord = async (workspaceId, recordId) => {
   if (globalThis.__qaFailNoteRead) throw new Error('QA simulated Note read failure');

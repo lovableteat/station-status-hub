@@ -23,8 +23,8 @@ export function applyBomNoteSnapshot(workspace: BomWorkspace, snapshot: BomNoteS
   };
 }
 
-export function applyRealtimeBomNotes(workspace: BomWorkspace, changes: readonly BomWorkspaceRecordChange[]) {
-  const pending = new Map(changes.map(change => [change.recordId, change]));
+export function applyRealtimeBomRecords(workspace: BomWorkspace, changes: readonly BomWorkspaceRecordChange[]) {
+  const pending = new Map(changes.filter(change => change.workspaceId === workspace.id).map(change => [change.recordId, change]));
   if (!pending.size) return { workspace, pendingRecordIds: [] };
 
   const recordMeta = { ...workspace.recordMeta };
@@ -37,10 +37,7 @@ export function applyRealtimeBomNotes(workspace: BomWorkspace, changes: readonly
       pending.delete(current.id);
       return current;
     }
-    // Other BOM edits keep the existing manual refresh and version checks.
-    const { note: _currentNote, ...currentFields } = current;
-    const { note: _incomingNote, ...incomingFields } = record;
-    if (change.orderIndex !== index || JSON.stringify(currentFields) !== JSON.stringify(incomingFields)) return current;
+    if (record.id !== current.id || change.orderIndex !== index) return current;
 
     pending.delete(current.id);
     recordMeta[current.id] = incomingMeta;
@@ -52,4 +49,12 @@ export function applyRealtimeBomNotes(workspace: BomWorkspace, changes: readonly
     workspace: changed ? { ...workspace, payload: { ...workspace.payload, records }, recordMeta } : workspace,
     pendingRecordIds: [...pending.keys()],
   };
+}
+
+/** A background read must not roll back a newer row received while it was in flight. */
+export function mergeBomWorkspaceRecords(loaded: BomWorkspace, current: BomWorkspace): BomWorkspace {
+  return applyRealtimeBomRecords(loaded, current.payload.records.flatMap((record, orderIndex) => {
+    const recordMeta = current.recordMeta?.[record.id];
+    return recordMeta ? [{ workspaceId: current.id, recordId: record.id, orderIndex, snapshot: { record, recordMeta } }] : [];
+  })).workspace;
 }

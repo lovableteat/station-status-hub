@@ -133,6 +133,8 @@ import {
   BomRecordConflictError,
   loadCachedBomWorkspacesDetailed,
   loadBomWorkspaceNoteRecord,
+  loadPageTrackerMap,
+  loadTableColorThemeMap,
   loadBomWorkspacesDetailed,
   removeBomWorkspace,
   saveBomWorkspace,
@@ -141,7 +143,7 @@ import {
   saveBomWorkspaceNote,
   subscribeBomWorkspaceChanges,
 } from "./materialBomStorage";
-import { applyBomNoteSnapshot, applyRealtimeBomNotes } from "./materialBomNoteSync";
+import { applyBomNoteSnapshot, applyRealtimeBomRecords, mergeBomWorkspaceRecords } from "./materialBomNoteSync";
 import type { BomTableColorTheme, BomWorkspaceArchive, BomWorkspaceProject } from "./materialBomStorage";
 import { loadBomWorkspaceArchives, loadBomWorkspaceProjects, saveBomWorkspaceArchive, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { loadBomWorkspaceRecords, loadBomWorkspaceVersions, saveBomWorkspaceVersion } from "./materialBomStorage";
@@ -3992,8 +3994,7 @@ export function MaterialRequestPage() {
   const [exportSnapshot, setExportSnapshot] = useState<MaterialReportSnapshot | null>(null);
   const [exportProgress, setExportProgress] = useState<MaterialExportProgress | null>(null);
   const [activeExportFormat, setActiveExportFormat] = useState<"excel" | "html" | "zip" | null>(null);
-  const [pendingRemoteRecordIds, setPendingRemoteRecordIds] = useState<string[]>([]);
-  const [hasPendingWorkspaceUpdate, setHasPendingWorkspaceUpdate] = useState(false);
+  const [remoteSyncFailed, setRemoteSyncFailed] = useState(false);
   const [isSearchPending, startSearchTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceSyncRequestRef = useRef(0);
@@ -4005,8 +4006,6 @@ export function MaterialRequestPage() {
   const bomWorkspacesRef = useRef(bomWorkspaces);
   bomWorkspacesRef.current = bomWorkspaces;
   const loadedRecordRangeRef = useRef("");
-  const recentLocalRecordIdsRef = useRef(new Map<string, number>());
-  const recentLocalWorkspaceWritesRef = useRef(new Map<string, number>());
   const loadedViewStateKeyRef = useRef("");
   const deferredQuery = useDeferredValue(query);
   const { toast } = useToast();
@@ -4125,22 +4124,23 @@ export function MaterialRequestPage() {
     [displayGroups, markedGroupKeySet],
   );
 
-  // Project assignments regroup every BOM, so another client's change only needs the project map, not a full reload.
-  const refreshBomProjects = useCallback(async () => {
+  // Shared settings need only their small preference maps, not the BOM records.
+  const refreshBomPreferences = useCallback(async () => {
     const generation = bomAccountRef.current.generation;
-    try {
-      const [projectByWorkspace, archiveByWorkspace, versionByWorkspace] = await Promise.all([loadBomWorkspaceProjects(), loadBomWorkspaceArchives(), loadBomWorkspaceVersions()]);
-      if (generation !== bomAccountRef.current.generation) return;
-      setBomWorkspaces((current) => current.map((workspace) => {
-        const project = projectByWorkspace.get(workspace.id);
-        const archive = archiveByWorkspace.get(workspace.id);
-        const version = versionByWorkspace.get(workspace.id);
-        const sameProject = project?.projectId === workspace.project?.projectId && project?.projectName === workspace.project?.projectName;
-        const sameArchive = archive?.archivedAt === workspace.archive?.archivedAt;
-        const sameVersion = JSON.stringify(version ?? null) === JSON.stringify(workspace.version ?? null);
-        return sameProject && sameArchive && sameVersion ? workspace : { ...workspace, project, archive, version };
-      }));
-    } catch { /* keep the current grouping until the next full reload */ }
+    const [projectByWorkspace, archiveByWorkspace, versionByWorkspace, pageTrackers, colorThemes] = await Promise.all([loadBomWorkspaceProjects(), loadBomWorkspaceArchives(), loadBomWorkspaceVersions(), loadPageTrackerMap(), loadTableColorThemeMap()]);
+    if (generation !== bomAccountRef.current.generation) return;
+    setBomWorkspaces((current) => current.map((workspace) => {
+      const project = projectByWorkspace.get(workspace.id);
+      const archive = archiveByWorkspace.get(workspace.id);
+      const version = versionByWorkspace.get(workspace.id);
+      const pageTracker = pageTrackers.get(workspace.id);
+      const tableColorTheme = colorThemes.get(workspace.id);
+      const sameProject = project?.projectId === workspace.project?.projectId && project?.projectName === workspace.project?.projectName;
+      const sameArchive = archive?.archivedAt === workspace.archive?.archivedAt;
+      const sameVersion = JSON.stringify(version ?? null) === JSON.stringify(workspace.version ?? null);
+      const sameSettings = JSON.stringify([pageTracker, tableColorTheme]) === JSON.stringify([workspace.pageTracker, workspace.tableColorTheme]);
+      return sameProject && sameArchive && sameVersion && sameSettings ? workspace : { ...workspace, project, archive, version, pageTracker, tableColorTheme };
+    }));
   }, []);
 
   const applyLoadedWorkspaces = useCallback((storedWorkspaces: BomWorkspace[], preferredBomId?: string) => {
@@ -4165,6 +4165,7 @@ export function MaterialRequestPage() {
 
     setBomWorkspaces((currentWorkspaces) => storedWorkspaces.map((workspace) => {
       const currentWorkspace = currentWorkspaces.find((candidate) => candidate.id === workspace.id);
+      if (currentWorkspace) workspace = mergeBomWorkspaceRecords(workspace, currentWorkspace);
       if (
         currentWorkspace
         && canReuseBomPayloadReference(currentWorkspace.payload, workspace.payload)
@@ -4191,6 +4192,7 @@ export function MaterialRequestPage() {
       cachedResult?: BomWorkspaceLoadResult | null;
       onPreviewReady?: () => void;
       progressive?: boolean;
+      background?: boolean;
       requestId?: number;
     } = {},
   ) => {
@@ -4198,6 +4200,7 @@ export function MaterialRequestPage() {
     const {
       onPreviewReady,
       progressive = false,
+      background = false,
       requestId: requestedRequestId,
       ...loadOptions
     } = options;
@@ -4229,6 +4232,7 @@ export function MaterialRequestPage() {
       if (!isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) {
         return result.workspaces;
       }
+      if (background && workspaceId !== activeBomIdRef.current) return result.workspaces;
 
       bomSyncRetryAttemptRef.current = 0;
       setCollaborationStatus(result.mode);
@@ -4236,13 +4240,15 @@ export function MaterialRequestPage() {
       const applyResult = () => {
         applyLoadedWorkspaces(result.workspaces, preferredBomId);
         setWorkspaceListSettled(true);
+        setRemoteSyncFailed(false);
       };
-      if (previewApplied) startTransition(applyResult);
+      if (previewApplied || background) startTransition(applyResult);
       else applyResult();
       return result.workspaces;
     } catch (error) {
       if (isLatestBomWorkspaceLoad(requestId, workspaceSyncRequestRef.current)) {
         setCollaborationStatus("error");
+        if (background) setRemoteSyncFailed(true);
       }
       throw error;
     } finally {
@@ -4277,6 +4283,22 @@ export function MaterialRequestPage() {
 
   useEffect(() => {
     let active = true;
+    let refreshing = false;
+    let refreshQueued = false;
+    const queueWorkspaceRefresh = () => {
+      refreshQueued = true;
+      if (refreshing) return;
+      refreshing = true;
+      void (async () => {
+        try {
+          while (active && refreshQueued) {
+            refreshQueued = false;
+            await reloadBomWorkspaces(activeBomIdRef.current, { forceRefresh: true, loadAllRecords: true, background: true });
+          }
+        } catch { /* The existing connection retry handles failed background reads. */ }
+        finally { refreshing = false; }
+      })();
+    };
     const syncWorkspaces = async (preferredBomId?: string) => {
       const requestId = ++workspaceSyncRequestRef.current;
       const preferredWorkspaceId = preferredBomId ?? loadActiveBomId();
@@ -4322,44 +4344,42 @@ export function MaterialRequestPage() {
     const accountGeneration = bomAccountRef.current.generation;
     const unsubscribe = subscribeBomWorkspaceChanges((change) => {
       if (!active || !canViewModuleAccess || accountGeneration !== bomAccountRef.current.generation) return;
-      const now = Date.now();
       const workspaceId = activeBomIdRef.current;
-      if (change.records.length === 0 && change.workspaceIds.length > 0) void refreshBomProjects();
+      if (change.preferenceWorkspaceIds?.length) void refreshBomPreferences().catch(queueWorkspaceRefresh);
+      const headerChanged = change.workspaceHeaders?.some(header => {
+        const current = bomWorkspacesRef.current.find(item => item.id === header.id);
+        return !current || current.name !== header.name || current.payload.sourceFile !== header.sourceFile
+          || current.payload.sheetName !== header.sheetName || Date.parse(current.payload.generatedAt) !== Date.parse(header.generatedAt)
+          || current.payload.recordCount !== header.recordCount;
+      });
+      const unknownWorkspaceChange = !change.workspaceHeaders && !change.preferenceWorkspaceIds
+        && !change.invalidatedWorkspaceIds && change.records.length === 0 && change.workspaceIds.length > 0;
+      if (headerChanged || change.invalidatedWorkspaceIds?.length || unknownWorkspaceChange) queueWorkspaceRefresh();
       if (!change.workspaceIds.includes(workspaceId)) return;
 
       const records = change.records.filter(record => record.workspaceId === workspaceId);
       const workspace = bomWorkspacesRef.current.find(item => item.id === workspaceId);
-      const sync = workspace ? applyRealtimeBomNotes(workspace, records) : null;
+      const sync = workspace ? applyRealtimeBomRecords(workspace, records) : null;
       if (sync && sync.workspace !== workspace) {
         startTransition(() => {
           setBomWorkspaces(current => {
             if (!active || accountGeneration !== bomAccountRef.current.generation) return current;
             return current.map(item => {
               if (item.id !== workspaceId) return item;
-              return item === workspace ? sync.workspace : applyRealtimeBomNotes(item, records).workspace;
+              return item === workspace ? sync.workspace : applyRealtimeBomRecords(item, records).workspace;
             });
           });
         });
       }
 
-      const externalRecordIds = (sync?.pendingRecordIds ?? records.map(record => record.recordId)).filter((recordId) => {
-        const localTimestamp = recentLocalRecordIdsRef.current.get(recordId) ?? 0;
-        return now - localTimestamp > 5000;
-      });
-      if (externalRecordIds.length > 0) {
-        setPendingRemoteRecordIds((current) => Array.from(new Set([...current, ...externalRecordIds])));
-      }
-      const localWorkspaceWriteAt = recentLocalWorkspaceWritesRef.current.get(workspaceId) ?? 0;
-      if (records.length === 0 && now - localWorkspaceWriteAt > 5000) {
-        setHasPendingWorkspaceUpdate(true);
-      }
+      if (sync?.pendingRecordIds.length) queueWorkspaceRefresh();
     });
 
     return () => {
       active = false;
       unsubscribe();
     };
-  }, [applyLoadedWorkspaces, canViewModuleAccess, refreshBomProjects, reloadBomWorkspaces]);
+  }, [applyLoadedWorkspaces, canViewModuleAccess, refreshBomPreferences, reloadBomWorkspaces]);
 
   useEffect(() => {
     if (collaborationStatus !== "error") {
@@ -5027,7 +5047,6 @@ export function MaterialRequestPage() {
         await saveBomWorkspace(workspace, () => assertBomWriteCurrent(writeScope));
         if (!isBomWriteCurrent(writeScope)) return;
         if (workspace.project) {
-          recentLocalWorkspaceWritesRef.current.set(workspaceId, Date.now());
           await saveBomWorkspaceProject(workspaceId, workspace.project, () => assertBomWriteCurrent(writeScope));
           if (!isBomWriteCurrent(writeScope)) return;
         }
@@ -5185,7 +5204,6 @@ export function MaterialRequestPage() {
     const trimmed = name.trim().slice(0, BOM_SERIES_NAME_LIMIT);
     if (!trimmed) throw new Error("系列名稱不能空白。");
     for (const item of series.versions) {
-      recentLocalWorkspaceWritesRef.current.set(item.workspace.id, Date.now());
       await saveBomWorkspaceVersion(item.workspace.id, { ...item.version, seriesId: series.id, seriesName: trimmed }, () => assertBomWriteCurrent(writeScope));
     }
     assertBomWriteCurrent(writeScope);
@@ -5199,7 +5217,6 @@ export function MaterialRequestPage() {
     const writeScope = captureBomWrite();
     if (!isCollaborativeReady) throw new Error("共用資料尚未連線，請稍後再試。");
     const next: BomWorkspaceVersion = { ...version.version, seriesId: series.id, seriesName: series.name, label: patch.label.slice(0, BOM_VERSION_LABEL_LIMIT), note: patch.note.slice(0, BOM_VERSION_NOTE_LIMIT) };
-    recentLocalWorkspaceWritesRef.current.set(version.workspace.id, Date.now());
     await saveBomWorkspaceVersion(version.workspace.id, next, () => assertBomWriteCurrent(writeScope));
     assertBomWriteCurrent(writeScope);
     setBomWorkspaces((current) => current.map((workspace) => (workspace.id === version.workspace.id ? { ...workspace, version: next } : workspace)));
@@ -5337,7 +5354,6 @@ export function MaterialRequestPage() {
       payload: { ...basePayload, records, recordCount: records.length },
       updatedAt: new Date().toISOString(),
     };
-    recentLocalRecordIdsRef.current.set(record.id, Date.now());
     replaceBomWorkspace(nextWorkspace);
 
     return saveBomWorkspaceRecord(nextWorkspace, record, () => assertBomWriteCurrent(writeScope))
@@ -5395,7 +5411,6 @@ export function MaterialRequestPage() {
       payload: { ...basePayload, records, recordCount: records.length },
       updatedAt: new Date().toISOString(),
     };
-    for (const item of list) recentLocalRecordIdsRef.current.set(item.id, Date.now());
     replaceBomWorkspace(nextWorkspace);
     const metas: Record<string, BomRecordSyncMeta> = {};
     let failed = 0;
@@ -5500,7 +5515,6 @@ export function MaterialRequestPage() {
         () => assertNoteWriteCurrent(writeScope),
       );
       applySnapshot(saved);
-      recentLocalRecordIdsRef.current.set(record.id, Date.now());
     } catch (error) {
       assertNoteWriteCurrent(writeScope);
       if (error instanceof BomRecordConflictError) {
@@ -5567,7 +5581,6 @@ export function MaterialRequestPage() {
     replaceBomWorkspace(nextWorkspace);
 
     try {
-      recentLocalWorkspaceWritesRef.current.set(workspaceId, Date.now());
       await saveBomWorkspacePageTracker(workspaceId, pageTracker, () => assertBomWriteCurrent(writeScope));
       if (!isBomWriteCurrent(writeScope)) return;
       void logMaterialWorkspaceAction({
@@ -5598,8 +5611,7 @@ export function MaterialRequestPage() {
 
   const switchActiveBom = (value: string) => {
     setActiveBomId(value);
-    setPendingRemoteRecordIds([]);
-    setHasPendingWorkspaceUpdate(false);
+    setRemoteSyncFailed(false);
     setQuery("");
     setSearchDraft("");
     setSearchColumn("all");
@@ -5627,7 +5639,6 @@ export function MaterialRequestPage() {
     }
 
     try {
-      recentLocalWorkspaceWritesRef.current.set(workspaceId, Date.now());
       await saveBomWorkspaceArchive(workspaceId, nextArchive, () => assertBomWriteCurrent(writeScope));
       if (!isBomWriteCurrent(writeScope)) return;
       toast({
@@ -5654,7 +5665,6 @@ export function MaterialRequestPage() {
     bomProjectAssignmentRef.current = writeScope;
     setAssigningBomProjectId(workspaceId);
     try {
-      recentLocalWorkspaceWritesRef.current.set(workspaceId, Date.now());
       await saveBomWorkspaceProject(workspaceId, nextProject, () => assertBomWriteCurrent(writeScope));
       assertBomWriteCurrent(writeScope);
       setBomWorkspaces((current) => current.map((item) => (
@@ -5977,8 +5987,7 @@ export function MaterialRequestPage() {
         loadAllRecords: true,
         requestId,
       });
-      setPendingRemoteRecordIds([]);
-      setHasPendingWorkspaceUpdate(false);
+      setRemoteSyncFailed(false);
       toast({ title: "已載入最新資料", description: "搜尋、篩選與分頁條件皆已保留。" });
     } catch {
       toast({ title: "載入最新資料失敗", description: "目前仍保留畫面中的資料與輸入內容。", variant: "destructive" });
@@ -5998,7 +6007,6 @@ export function MaterialRequestPage() {
     if (colorsChanged) {
       const writeScope = captureBomWrite();
       if (!isCollaborativeReady) throw new Error("尚未連上共享資料，請稍後再套用配色。");
-      recentLocalWorkspaceWritesRef.current.set(activeWorkspace.id, Date.now());
       try {
         await saveBomWorkspaceTableColorTheme(activeWorkspace.id, nextTheme, () => assertBomWriteCurrent(writeScope));
       } catch {
@@ -6533,19 +6541,19 @@ export function MaterialRequestPage() {
           <Button type="button" variant="ghost" size="sm" onClick={() => setBomManagerOpen(true)} className="h-9 text-amber-100 hover:bg-amber-400/15 lg:h-8">比對差異</Button>
         </div>
       )}
-      {(pendingRemoteRecordIds.length > 0 || hasPendingWorkspaceUpdate) && (
+      {remoteSyncFailed && (
         <div className="mt-2 flex flex-col gap-2 rounded-xl border border-amber-300/30 bg-amber-400/[0.09] px-3 py-2 sm:flex-row sm:items-center sm:justify-between" role="status" aria-live="polite">
           <div className="flex min-w-0 items-center gap-2">
             <TriangleAlert className="h-4 w-4 flex-none text-amber-300" />
             <p className="truncate text-sm font-bold text-amber-100">
-              {pendingRemoteRecordIds.length > 0 ? `有 ${pendingRemoteRecordIds.length} 筆資料已由其他使用者更新` : "BOM 設定已由其他使用者更新"}
+              資料同步暫時中斷，系統正在背景重試
               <span className="ml-2 font-normal text-amber-100/70">
-                {editorOpen ? "你正在填的內容不會被清掉，完成後再載入。" : "不會自動刷新，方便時再載入最新內容。"}
+                正在填寫的內容會保留。
               </span>
             </p>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={() => { void loadLatestBomData(); }} disabled={isWorkspaceLoading} className="h-8 flex-none border-amber-300/35 bg-amber-300/12 text-xs text-amber-50 hover:bg-amber-300/20">
-            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />載入最新資料
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />重試同步
           </Button>
         </div>
       )}
