@@ -36,8 +36,8 @@ export function MaterialMobileListRow({
       </button>
       <div className="material-mobile-list-identity">
         <button type="button" className="material-mobile-list-open" data-testid="material-mobile-row-open" onClick={onOpen} aria-label={`查看料件詳情，虛擬料號${virtualNumber || "未提供"}，實體料號${physicalNumber || "未提供"}`}>
-          {showVirtual && <span className="material-mobile-list-number"><span className="material-mobile-list-number-label">虛擬</span><span className={cn("material-mobile-list-number-value", !virtualNumber && "is-empty")} title={virtualNumber || "未提供"}>{virtualNumber || "未提供"}</span></span>}
-          {showPhysical && <span className="material-mobile-list-number"><span className="material-mobile-list-number-label">實體</span><span className={cn("material-mobile-list-number-value", !physicalNumber && "is-empty")} title={physicalNumber || "未提供"}>{physicalNumber || "未提供"}</span></span>}
+          {showVirtual && <span className="material-mobile-list-number is-virtual"><span className="material-mobile-list-number-label">虛擬</span><span className={cn("material-mobile-list-number-value", !virtualNumber && "is-empty")} title={virtualNumber || "未提供"}>{virtualNumber || "未提供"}</span></span>}
+          {showPhysical && <span className="material-mobile-list-number is-physical"><span className="material-mobile-list-number-label">實體</span><span className={cn("material-mobile-list-number-value", !physicalNumber && "is-empty")} title={physicalNumber || "未提供"}>{physicalNumber || "未提供"}</span></span>}
           {!showVirtual && !showPhysical && <span className="material-mobile-list-fallback">料件詳情</span>}
         </button>
         {fields.length > 0 && (
@@ -46,8 +46,8 @@ export function MaterialMobileListRow({
           </div>
         )}
       </div>
-      <button type="button" className="material-mobile-list-status" data-testid="material-mobile-row-tracking" onClick={onTracking} aria-label={`更新進度：${status}`} title={status}>
-        <span aria-hidden="true" className={cn("material-mobile-list-status-dot", statusTone)} />
+      <button type="button" className={cn("material-mobile-list-status", statusTone)} data-testid="material-mobile-row-tracking" onClick={onTracking} aria-label={`更新進度：${status}`} title={status}>
+        <span aria-hidden="true" className="material-mobile-list-status-dot" />
         <span className="material-mobile-list-status-label">{status}</span>
         <ChevronRight aria-hidden="true" />
       </button>

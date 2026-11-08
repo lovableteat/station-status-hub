@@ -48,21 +48,28 @@ async function run(browser, width, height) {
     const initialIds = await ids(page);
 
     await contextButton.tap();
-    const list = page.getByRole('listbox');
+    const list = page.getByTestId('material-mobile-bom-picker');
     await list.waitFor();
-    assert.equal(await list.getByRole('option').count(), 2, 'direct picker must list both live BOM series');
+    const options = list.locator('.material-mobile-bom-picker-option');
+    assert.equal(await options.count(), 2, 'direct picker must list both live BOM series');
     const buttonBox = await geometry(page, '.material-mobile-context');
     assert.ok(buttonBox.width >= 44 && buttonBox.height >= 44, JSON.stringify(buttonBox));
     // The open picker intercepts pointer events; hit testing the trigger is done after dismissal.
     const listBox = await list.boundingBox();
     assert.ok(listBox.x >= 0 && listBox.x + listBox.width <= width + 1, JSON.stringify(listBox));
-    const optionBoxes = await list.getByRole('option').evaluateAll(elements => elements.map(element => {
+    const optionBoxes = await options.evaluateAll(elements => elements.map(element => {
       const rect = element.getBoundingClientRect();
       return { width: rect.width, height: rect.height };
     }));
     assert.ok(optionBoxes.every(rect => rect.width >= 44 && rect.height >= 44), JSON.stringify(optionBoxes));
     await page.screenshot({ path: path.join(evidence, `bom-picker-${tag}.png`) });
-    await list.getByRole('option', { name: new RegExp(oldName.replaceAll('.', '\\.')) }).tap();
+    const search = list.getByRole('textbox', { name: '搜尋 BOM 或專案', exact: true });
+    await search.fill('沒有這張 BOM');
+    assert.equal(await options.count(), 0);
+    await list.getByText('沒有符合的 BOM，請調整搜尋文字', { exact: true }).waitFor();
+    await search.fill('舊格式');
+    assert.equal(await options.count(), 1);
+    await options.filter({ hasText: oldName }).tap();
     await list.waitFor({ state: 'hidden' });
     await settled(page, oldId);
     await page.waitForFunction(name => document.querySelector('.material-mobile-context')?.textContent.includes(name), oldName);
@@ -72,7 +79,7 @@ async function run(browser, width, height) {
 
     await contextButton.tap();
     await list.waitFor();
-    await list.getByRole('option', { name: new RegExp(mainName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).tap();
+    await options.filter({ hasText: mainName }).tap();
     await list.waitFor({ state: 'hidden' });
     await settled(page, mainId);
     assert.ok((await contextButton.innerText()).includes(mainName));
@@ -80,12 +87,13 @@ async function run(browser, width, height) {
 
     await contextButton.tap();
     await list.waitFor();
-    await page.touchscreen.tap(width - 2, 2);
+    await list.getByRole('button', { name: '關閉 BOM 選擇', exact: true }).tap();
     await list.waitFor({ state: 'hidden' });
     assert.equal(await page.evaluate(key => localStorage.getItem(key), activeKey), mainId);
     assert.deepEqual(await ids(page), initialIds, 'dismissing the picker must not switch BOM');
     const closedButtonBox = await geometry(page, '.material-mobile-context');
     assert.ok(closedButtonBox.hit, JSON.stringify(closedButtonBox));
+    assert.equal(await contextButton.evaluate(element => element === document.activeElement), true, 'closing picker restores focus to switcher');
     assert.equal(closedButtonBox.pageWidth, width, 'page must not overflow after switching');
 
     await page.getByRole('button', { name: '排序與工具', exact: true }).tap();
@@ -117,8 +125,8 @@ async function run(browser, width, height) {
   const browser = await chromium.launch({ channel: 'chrome' });
   const results = [];
   try {
-    for (const [width, height] of [[375, 844], [390, 844], [430, 844], [390, 500]]) results.push(await run(browser, width, height));
-    console.log('Mobile BOM switching passed: select, update records, return, dismiss and management at four viewport sizes');
+    for (const [width, height] of [[375, 844], [390, 844], [430, 844], [536, 884], [390, 500]]) results.push(await run(browser, width, height));
+    console.log('Mobile BOM switching passed: search, select, update records, return, cancel and management at five viewport sizes');
   } finally {
     fs.writeFileSync(path.join(evidence, 'bom-switch-results.json'), JSON.stringify(results, null, 2));
     await browser.close();

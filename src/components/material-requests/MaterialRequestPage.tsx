@@ -98,7 +98,9 @@ import { useUser } from "@/components/auth/UserContext";
 import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
 import { MaterialTableScroll } from "./MaterialTableScroll";
 import { MaterialMobileListRow } from "./MaterialMobileListRow";
+import { MaterialMobileBomPicker } from "./MaterialMobileBomPicker";
 import "./materialMobilePage.css";
+import "./materialMobileEditor.css";
 import { buildMaterialMainGroups, filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
@@ -6284,38 +6286,13 @@ export function MaterialRequestPage() {
                 {collaborationStatusMeta.label}
               </span>}
             </div>
-            <Select value={activeBomId} onValueChange={switchActiveBom}>
-              <SelectTrigger className="material-mobile-context" aria-label="切換 BOM">
+            <MaterialMobileBomPicker groups={bomSeriesGroups} value={activeBomId} onValueChange={switchActiveBom} historicalVersion={isHistoricalVersion && activeVersionInfo ? { name: activeSeriesName, version: activeVersionInfo.version } : undefined}>
                 <span className="flex min-w-0 items-center gap-1">
                   {activeWorkspaceProjectLabel && <span className="min-w-0 truncate text-cyan-200/70">{activeWorkspaceProjectLabel} /</span>}
                   <span className="min-w-0 truncate">{activeSeriesName}{isHistoricalVersion && activeVersionInfo ? ` · ${activeVersionInfo.version.displayNumber}（歷史）` : ""}</span>
                   <span className="shrink-0">· {seriesList.length} BOM</span>
                 </span>
-              </SelectTrigger>
-              <SelectContent className="material-mobile-bom-menu" align="start" sideOffset={4}>
-                {bomSeriesGroups.filter(group => group.workspaces.length > 0).map(group => (
-                  <SelectGroup key={group.key}>
-                    <SelectLabel>{group.label}{group.isActive ? " · 目前專案" : ""}</SelectLabel>
-                    {group.workspaces.map(series => (
-                      <SelectItem key={series.id} value={series.current.workspace.id} textValue={series.name}>
-                        <span className="block whitespace-normal break-words text-left">
-                          <span className="block font-semibold">{series.name}</span>
-                          <span className="block text-xs text-muted-foreground">{series.current.displayNumber} · {series.recordCount.toLocaleString()} 筆</span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-                {isHistoricalVersion && activeVersionInfo && (
-                  <SelectGroup>
-                    <SelectLabel>檢視中的歷史版本</SelectLabel>
-                    <SelectItem value={activeBomId} textValue={activeSeriesName}>
-                      <span className="block whitespace-normal break-words">{activeSeriesName} · {activeVersionInfo.version.displayNumber}（歷史）</span>
-                    </SelectItem>
-                  </SelectGroup>
-                )}
-              </SelectContent>
-            </Select>
+            </MaterialMobileBomPicker>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <Button
