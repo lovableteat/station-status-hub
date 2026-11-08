@@ -39,14 +39,17 @@ async function mobileGeometry(page){return page.evaluate(()=>{
  const rect=e=>{const r=e.getBoundingClientRect();return{w:r.width,h:r.height,x:r.x,y:r.y}};
  const rows=[...document.querySelectorAll('[data-testid="material-mobile-list-row"]')];
  const numbers=[...document.querySelectorAll('.material-mobile-list-number-value:not(.is-empty)')];
- return{width:innerWidth,pageWidth:document.documentElement.scrollWidth,rows:rows.map(e=>rect(e).h),numbers:numbers.map(e=>({text:e.textContent,font:getComputedStyle(e).fontSize,fits:e.scrollWidth<=e.clientWidth})),marks:rows.map(e=>rect(e.querySelector('.material-mobile-list-mark'))),tracking:rows.map(e=>rect(e.querySelector('[data-testid="material-mobile-row-tracking"]')))};
+ const statusParts=rows.map(row=>{const origin=rect(row);return Object.fromEntries([['dot','.material-mobile-list-status-dot'],['label','.material-mobile-list-status-label'],['arrow','.material-mobile-list-status > svg']].map(([key,selector])=>{const r=rect(row.querySelector(selector));return[key,{x:r.x-origin.x,y:r.y-origin.y,w:r.w,h:r.h}]}))});
+ return{width:innerWidth,pageWidth:document.documentElement.scrollWidth,rows:rows.map(e=>rect(e).h),numbers:numbers.map(e=>({text:e.textContent,font:getComputedStyle(e).fontSize,fits:e.scrollWidth<=e.clientWidth})),marks:rows.map(e=>rect(e.querySelector('.material-mobile-list-mark'))),tracking:rows.map(e=>rect(e.querySelector('[data-testid="material-mobile-row-tracking"]'))),statusParts};
  });}
 async function mobile(browser){
  const report={widths:[],checks:[],errors:[]};
  try{
-  for(const width of[375,390,430]){const{context,page,errors}=await open(browser,width,844);try{
+  for(const width of[375,390,430,498,536]){const{context,page,errors}=await open(browser,width,844);try{
    const measure=await mobileGeometry(page);assert.equal(measure.width,measure.pageWidth);assert.ok(measure.rows.length>0&&measure.rows.every(h=>h===68));assert.ok(measure.numbers.every(n=>n.font==='16px'&&n.fits));assert.ok(measure.marks.every(r=>r.w===44&&r.h===44));assert.ok(measure.tracking.every(r=>r.w===104&&r.h===48));assert.deepEqual(errors,[]);report.widths.push(measure);
-   if(width===390)await page.screenshot({path:path.join(evidence,'mobile-390-main.png')});
+   for(const parts of measure.statusParts){assert.equal(parts.label.w,78,'status badges must use the same column width');assert.equal(parts.label.h,38,'one- and two-line status badges must have equal heights');assert.deepEqual(parts,measure.statusParts[0],'dots, badges and arrows must align across status lengths');}
+   assert.equal(await page.locator('.material-mobile-list-name').count(),measure.rows.length);assert.equal(await page.locator('.material-mobile-list-fields').count(),0,'list summary shows names without Item or the scrolling field strip');
+   if([390,498,536].includes(width))await page.screenshot({path:path.join(evidence,`mobile-${width}-main.png`)});
   }finally{await context.close()}}
   const{context,page,errors}=await open(browser,390,844);try{
    const rows=page.getByTestId('material-mobile-list-row'),first=rows.first(),recordId=await first.getAttribute('data-record-id');
@@ -60,7 +63,7 @@ async function mobile(browser){
    await page.screenshot({path:path.join(evidence,'mobile-390-columns.png')});
    await settings.getByRole('checkbox',{name:'實體料號',exact:true}).tap();await settings.getByRole('button',{name:'取消',exact:true}).tap();await settings.waitFor({state:'hidden'});assert.equal(await first.locator('.material-mobile-list-number').count(),2);
    await columns.tap();await settings.getByRole('checkbox',{name:'實體料號',exact:true}).tap();await settings.getByRole('checkbox',{name:'Manufacturer',exact:true}).tap();await settings.getByRole('button',{name:'套用設定',exact:true}).tap();await settings.waitFor({state:'hidden'});
-   assert.equal(await first.locator('.material-mobile-list-number').count(),1);assert.equal(await page.locator('.material-mobile-list-field[title^="Manufacturer："]').count(),0);assert.ok((await mobileGeometry(page)).rows.every(h=>h===68));
+   assert.equal(await first.locator('.material-mobile-list-number').count(),1);assert.equal(await first.locator('.material-mobile-list-name').count(),1);assert.ok((await mobileGeometry(page)).rows.every(h=>h===68));
    await columns.tap();await settings.getByRole('button',{name:'全部顯示',exact:true}).tap();await settings.getByRole('button',{name:'套用設定',exact:true}).tap();await settings.waitFor({state:'hidden'});assert.equal(await first.locator('.material-mobile-list-number').count(),2);assert.ok((await mobileGeometry(page)).rows.every(h=>h===68));report.checks.push('existing 17 columns, cancel/apply/all-show and equal heights');
    const search=page.getByRole('textbox',{name:'快速搜尋料號',exact:true});await search.fill('QA-PHYSICAL-CAP');await page.waitForFunction(()=>document.querySelectorAll('[data-testid="material-mobile-list-row"]').length===1);
    await rows.first().getByTestId('material-mobile-row-open').tap();const detail=page.getByTestId('material-mobile-detail');await detail.waitFor();const detailHeading=await detail.locator('.material-mobile-detail-heading').evaluate(e=>{const box=n=>{const r=n.getBoundingClientRect();return{x:r.x,y:r.y,w:r.width,h:r.height,cy:r.y+r.height/2}};return{header:box(e),title:box(e.querySelector('h2')),close:box(e.querySelector('[aria-label="關閉料件詳情"]')),viewport:innerWidth}});assert.ok(detailHeading.header.h<=88&&detailHeading.close.x>detailHeading.viewport/2&&Math.abs(detailHeading.close.cy-detailHeading.title.cy)<30,'detail close button must sit beside title');assert.ok(detailHeading.close.w>=44&&detailHeading.close.h>=44);report.detailHeading=detailHeading;assert.equal(await detail.getByTestId('material-mobile-location').count(),2);assert.ok((await detail.innerText()).includes('QA-ALT-ODM'));assert.ok((await detail.innerText()).includes('QA-ALT-FOOTPRINT'));

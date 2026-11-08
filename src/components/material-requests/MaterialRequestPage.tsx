@@ -6650,23 +6650,13 @@ export function MaterialRequestPage() {
 
         {isCompactLayout && mobileView === "cards" && <div className="material-mobile-list" data-testid="material-mobile-cards">
           <h2 className="sr-only">手機料件清單，點料號查看完整資料</h2>
-          {visibleGroupRows.map(({ group, primaryAlternative, virtualAlternativeRecord, secondaryAlternatives, searchAlternativeCount }, rowIndex) => {
+          {visibleGroupRows.map(({ group, primaryAlternative, virtualAlternativeRecord, secondaryAlternatives, searchAlternativeCount }) => {
             const expanded = expandedKey === group.key;
             const mainRecord = primaryAlternative ?? group.primaryRecord;
-            const itemValue = getGroupItemValue(group, (page - 1) * pageSize + rowIndex + 1);
             const isMarked = getMaterialMarkKeys(group).some(key => personalMarks.keys.has(key));
             const mustApply = group.requiresApplication;
             const availableAlternativeCount = secondaryAlternatives.filter((record) => record.isPreferred && !record.isRisk).length;
             const mainRisk = group.locations.some(location => location.primaryRecord.isRisk);
-            const mobileFieldValues: Partial<Record<MaterialTableColumnKey, string>> = {
-              item: String(itemValue), name: group.name || mainRecord.name, qty: String(group.qty), refDes: group.displayRef,
-              mpn: getDisplayMpn(mainRecord), manufacturer: mainRecord.manufacturer, sourcingStatus: mainRecord.sourcingStatus,
-              partName: mainRecord.partName, partSpec: mainRecord.partSpec, schematicPart: mainRecord.schematicPart,
-              footprint: mainRecord.pcbFootprint, phaseOut: mainRecord.phaseOutStatus, partUsage: mainRecord.partUsageStatus,
-              note: mainRecord.note,
-            };
-            const mobileFields = MATERIAL_TABLE_COLUMNS.filter(column => columnVisibility[column.key] && !["virtual", "physical", "actions"].includes(column.key))
-              .map(column => ({ key: column.key, label: column.label, value: mobileFieldValues[column.key] || "" }));
             const openMobileRecord = (record: MaterialRecord, mode: EditorMode) => { setExpandedKey(null); openRecord(record, mode); };
             const openMobileTracking = (record: MaterialRecord) => { setExpandedKey(null); openTrackingDialog(record); };
             const openMobileDetails = (record: MaterialRecord) => { setExpandedKey(null); rowActions.openDetails(record); };
@@ -6682,7 +6672,7 @@ export function MaterialRequestPage() {
                 statusTone={materialTrackingStatusPresentation(getTrackingWorkflowStatus(mainRecord)).text}
                 marked={isMarked}
                 markDisabled={!personalMarks.ready || getMaterialMarkKeys(group).some(key => personalMarks.pendingKeys.has(key))}
-                fields={mobileFields}
+                name={group.name || mainRecord.name || "未命名料件"}
                 onToggleMarked={() => toggleMarkedGroup(group.key)}
                 onOpen={() => toggleExpanded(group.key)}
                 onTracking={() => openTrackingDialog(mainRecord)}
