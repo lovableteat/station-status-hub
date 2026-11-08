@@ -10,7 +10,7 @@ import {
   createProgressiveBomRecordFetchPlan,
 } from "./materialBomPerformance";
 import { canReuseBomWorkspaceCache, runBomReadWithRetry } from "./materialBomSyncPolicy";
-import { applyBomNoteSnapshot } from "./materialBomNoteSync";
+import { applyBomNoteSnapshot, timestampMicros } from "./materialBomNoteSync";
 import { normalizeBomVersion, type BomWorkspaceVersion } from "./bomVersioning";
 
 export type BomPageTrackerStatus = "done" | "pending" | "done_missing";
@@ -701,6 +701,7 @@ async function loadRemoteRecordRowsForWorkspace(
       .select("workspace_id, record_id, order_index, data, updated_at")
       .eq("workspace_id", workspaceId)
       .order("order_index", { ascending: true })
+      .order("record_id", { ascending: true })
       .range(from, to);
 
     if (error) throw error;
@@ -1502,6 +1503,47 @@ export async function loadBomWorkspaceRecords(workspaceId: string): Promise<Mate
   return [...rows].sort((left, right) => left.order_index - right.order_index).map((row) => row.data);
 }
 
+/** Recover missed events using row revisions, fetching full data only for changed records. */
+export async function loadBomWorkspaceRecordChanges(workspace: BomWorkspace): Promise<BomWorkspaceChange> {
+  const change: BomWorkspaceChange = { workspaceIds: [workspace.id], records: [] };
+  const headers: Pick<BomRecordRow, "record_id" | "updated_at" | "order_index">[] = [];
+  const signal = AbortSignal.timeout(8000);
+  for (let from = 0; ; from += REMOTE_RECORD_FETCH_BATCH_SIZE) {
+    const { data, error } = await supabaseClient.from(RECORD_TABLE)
+      .select("record_id, updated_at, order_index").eq("workspace_id", workspace.id)
+      .order("order_index", { ascending: true }).order("record_id", { ascending: true })
+      .range(from, from + REMOTE_RECORD_FETCH_BATCH_SIZE - 1).abortSignal(signal);
+    if (error) throw error;
+    headers.push(...(data ?? []));
+    if ((data ?? []).length < REMOTE_RECORD_FETCH_BATCH_SIZE) break;
+  }
+  if (headers.length !== workspace.payload.records.length || headers.length !== workspace.payload.recordCount
+    || headers.some((row, index) => row.record_id !== workspace.payload.records[index]?.id)) {
+    return { ...change, invalidatedWorkspaceIds: [workspace.id] };
+  }
+  const changedIds = headers.filter(row => {
+    const current = workspace.recordMeta?.[row.record_id]?.updatedAt;
+    const incomingTime = timestampMicros(row.updated_at), currentTime = current ? timestampMicros(current) : NaN;
+    return !Number.isFinite(currentTime) || !Number.isFinite(incomingTime) || incomingTime > currentTime;
+  }).map(row => row.record_id);
+  const currentRecordIds = new Set(workspace.payload.records.map(record => record.id));
+  for (let from = 0; from < changedIds.length; from += RECORD_BATCH_SIZE) {
+    const ids = changedIds.slice(from, from + RECORD_BATCH_SIZE);
+    const { data, error } = await supabaseClient.from(RECORD_TABLE)
+      .select("record_id, order_index, data, updated_at").eq("workspace_id", workspace.id)
+      .in("record_id", ids).abortSignal(signal);
+    if (error) throw error;
+    const batch = (data ?? []) as BomRecordRow[];
+    if (batch.length !== ids.length || batch.some(row => row.data?.id !== row.record_id
+      || !currentRecordIds.has(row.record_id) || !Number.isFinite(timestampMicros(row.updated_at)))) {
+      return { ...change, invalidatedWorkspaceIds: [workspace.id] };
+    }
+    change.records.push(...batch.map(row => ({ workspaceId: workspace.id, recordId: row.record_id,
+      orderIndex: row.order_index, snapshot: { record: row.data, recordMeta: { updatedAt: row.updated_at } } })));
+  }
+  return change;
+}
+
 export async function removeBomWorkspace(id: string, assertWrite: () => void = () => {}) {
   assertWrite();
   const { error } = await supabaseClient
@@ -1526,7 +1568,11 @@ export async function removeBomWorkspace(id: string, assertWrite: () => void = (
   void removeCachedWorkspace(id, assertWrite);
 }
 
-export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChange) => void) {
+export function subscribeBomWorkspaceChanges(
+  onChange: (change: BomWorkspaceChange) => void,
+  onStatusChange?: Parameters<RealtimeChannel["subscribe"]>[0],
+) {
+  let active = true;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const workspaceIds = new Set<string>();
   const records = new Map<string, BomWorkspaceRecordChange>();
@@ -1534,6 +1580,7 @@ export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChan
   const preferenceWorkspaceIds = new Set<string>();
   const invalidatedWorkspaceIds = new Set<string>();
   const emitChange = (workspaceId?: unknown, record?: BomWorkspaceRecordChange) => {
+    if (!active) return;
     if (typeof workspaceId === "string" && workspaceId) workspaceIds.add(workspaceId);
     if (record) records.set(JSON.stringify([record.workspaceId, record.recordId]), record);
     if (debounceTimer !== null) return;
@@ -1554,7 +1601,7 @@ export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChan
   };
 
   const channel = supabaseClient
-    .channel("material_bom_workspace_changes")
+    .channel(`material_bom_workspace_changes:${crypto.randomUUID()}`)
     .on("postgres_changes", { event: "*", schema: "workspace", table: WORKSPACE_TABLE }, (payload: RealtimeRowPayload) => {
       const row = payload.new;
       const workspaceId = row?.id ?? payload.old?.id;
@@ -1594,9 +1641,10 @@ export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChan
         emitChange(workspaceId);
       }
     })
-    .subscribe();
+    .subscribe((status, error) => { if (active) onStatusChange?.(status, error); });
 
   return () => {
+    active = false;
     if (debounceTimer) {
       clearTimeout(debounceTimer);
     }

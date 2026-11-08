@@ -1,6 +1,6 @@
 import type { BomNoteSnapshot, BomWorkspace, BomWorkspaceRecordChange } from "./materialBomStorage";
 
-function timestampMicros(value: string) {
+export function timestampMicros(value: string) {
   const fraction = value.match(/\.(\d{1,6})/)?.[1] ?? "";
   return Date.parse(value) * 1000 + Number(fraction.padEnd(6, "0").slice(3));
 }
@@ -29,7 +29,7 @@ export function applyRealtimeBomRecords(workspace: BomWorkspace, changes: readon
 
   const recordMeta = { ...workspace.recordMeta };
   let changed = false;
-  const records = workspace.payload.records.map((current, index) => {
+  const records = workspace.payload.records.map(current => {
     const change = pending.get(current.id);
     if (!change?.snapshot) return current;
     const { record, recordMeta: incomingMeta } = change.snapshot;
@@ -37,7 +37,8 @@ export function applyRealtimeBomRecords(workspace: BomWorkspace, changes: readon
       pending.delete(current.id);
       return current;
     }
-    if (record.id !== current.id || change.orderIndex !== index) return current;
+    // Stored positions can have gaps or duplicates; a revision belongs to its record ID.
+    if (record.id !== current.id) return current;
 
     pending.delete(current.id);
     recordMeta[current.id] = incomingMeta;

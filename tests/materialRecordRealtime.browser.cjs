@@ -37,6 +37,16 @@ async function closeEditor(page){await editor(page).getByTestId('material-record
  await patch(desktop,'qa-3',{partNumber:'OTHER-ROW-LIVE'});await waitRow(phone,'qa-3','OTHER-ROW-LIVE');
  assert.equal(await draft.inputValue(),'手機端尚未儲存的草稿');assert.equal(await draft.evaluate(element=>document.activeElement===element),true);
  assert.equal(await search.inputValue(),'QA');
+ await phone.bringToFront();
+ const beforeMiss=await phone.evaluate(()=>({loads:window.__qaLiveRecords.loads,catchups:window.__qaLiveRecords.catchups})),missedAt=Date.now();
+ await desktop.evaluate(()=>window.__qaLiveRecords.silentPatch('qa-3',{partNumber:'MISSED-PUSH-LIVE'}));
+ await phone.waitForFunction(()=>document.querySelector('[data-testid="material-mobile-list-row"][data-record-id="qa-3"]')?.textContent.includes('MISSED-PUSH-LIVE'),null,{timeout:5000});
+ const missedPushRecoveryMs=Date.now()-missedAt;
+ assert.ok(missedPushRecoveryMs<=5000,`missed push recovered in ${missedPushRecoveryMs}ms`);
+ assert.ok(await phone.evaluate(count=>window.__qaLiveRecords.catchups>count,beforeMiss.catchups),'missing push must recover through catchup');
+ assert.equal(await phone.evaluate(()=>window.__qaLiveRecords.loads),beforeMiss.loads,'missing push must not reload the full BOM');
+ assert.equal(await draft.inputValue(),'手機端尚未儲存的草稿');assert.equal(await search.inputValue(),'QA');
+ console.log(`Recovered missing push in ${missedPushRecoveryMs}ms without full reload`);
  await patch(desktop,'qa-5',{partNumber:'REMOTE-WINS'});await waitRow(phone,'qa-5','REMOTE-WINS');
  await editor(phone).getByTestId('material-record-save-footer').getByRole('button',{name:/儲存/}).tap();
  await editor(phone).getByRole('alert').filter({hasText:'QA record revision conflict'}).waitFor();
@@ -50,5 +60,6 @@ async function closeEditor(page){await editor(page).getByTestId('material-record
  assert.equal(await draft.inputValue(),'背景重讀也必須保留草稿');assert.equal(await search.inputValue(),'QA');
  await closeEditor(phone);assert.equal(await phone.getByRole('button',{name:'載入最新資料',exact:true}).count(),0);
  await phone.screenshot({path:path.join(evidence,'record-live-phone.png')});await desktop.screenshot({path:path.join(evidence,'record-live-desktop.png')});assert.deepEqual(errors,[]);
+ fs.writeFileSync(path.join(evidence,'record-live-results.json'),JSON.stringify({missedPushRecoveryMs,checks:['PN/status/owner live updates','missed push catchup without full BOM reload','draft and filter retained','stale form rejected','missing payload background refresh'],errors},null,2));
  console.log('Record realtime: PN/status/owner sync, no full reload for ordinary edits, draft/focus/filter preserved, stale form rejected and missing payload refreshed in background');
 }finally{if(context)await context.close();await browser.close()}})().catch(error=>{console.error(error);process.exitCode=1});
