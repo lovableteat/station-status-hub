@@ -11,7 +11,7 @@ test("mobile presentation keeps virtual/physical values independent and routes e
   let props = {
     virtualNumber: "", physicalNumber: "1A50-0331000", showVirtual: true, showPhysical: true,
     status: "已取得料號待CIS申請", statusTone: "material-status-badge material-status--cis",
-    marked: false, markDisabled: false, fields: [{ key: "mpn", label: "MPN", value: "MPN-123456789" }],
+    marked: false, markDisabled: false, name: "CAP NCS X7R 0402 0.1uF",
     onToggleMarked: () => calls.push("mark"), onOpen: () => calls.push("details"), onTracking: () => calls.push("tracking"), recordId: "record-123",
   };
   let root;
@@ -27,7 +27,10 @@ test("mobile presentation keeps virtual/physical values independent and routes e
     });
     assert.deepEqual(calls, ["mark", "details", "tracking"]);
     assert.equal(root.root.findByProps({ "data-testid": "material-mobile-row-tracking" }).props.title, "已取得料號待CIS申請");
-    assert.equal(root.root.findByProps({ title: "MPN：MPN-123456789" }).props.className, "material-mobile-list-field");
+    const name = root.root.findByProps({ className: "material-mobile-list-name" });
+    assert.equal(name.props.children, props.name);
+    assert.equal(name.props.title, props.name);
+    assert.equal(root.root.findAll(node => node.props.className === "material-mobile-list-fields").length, 0);
     props = { ...props, showVirtual: false, showPhysical: false, marked: true, markDisabled: true };
     act(() => root.update(React.createElement(MaterialMobileListRow, props)));
     assert.equal(root.root.findByProps({ "aria-label": "移除我的標記" }).props.disabled, true);

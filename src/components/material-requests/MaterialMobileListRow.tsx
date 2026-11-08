@@ -11,7 +11,7 @@ export interface MaterialMobileListRowProps {
   statusTone: string;
   marked: boolean;
   markDisabled: boolean;
-  fields: Array<{ key: string; label: string; value: string }>;
+  name: string;
   onToggleMarked: () => void;
   onOpen: () => void;
   onTracking: () => void;
@@ -20,7 +20,7 @@ export interface MaterialMobileListRowProps {
 
 export function MaterialMobileListRow({
   virtualNumber, physicalNumber, showVirtual, showPhysical, status, statusTone,
-  marked, markDisabled, fields, onToggleMarked, onOpen, onTracking, recordId,
+  marked, markDisabled, name, onToggleMarked, onOpen, onTracking, recordId,
 }: MaterialMobileListRowProps) {
   return (
     <article className="material-mobile-list-row" data-testid="material-mobile-list-row" data-record-id={recordId}>
@@ -35,16 +35,12 @@ export function MaterialMobileListRow({
         <Star aria-hidden="true" />
       </button>
       <div className="material-mobile-list-identity">
-        <button type="button" className="material-mobile-list-open" data-testid="material-mobile-row-open" onClick={onOpen} aria-label={`查看料件詳情，虛擬料號${virtualNumber || "未提供"}，實體料號${physicalNumber || "未提供"}`}>
+        <button type="button" className="material-mobile-list-open" data-testid="material-mobile-row-open" onClick={onOpen} aria-label={`查看料件詳情，${name}，虛擬料號${virtualNumber || "未提供"}，實體料號${physicalNumber || "未提供"}`}>
           {showVirtual && <span className="material-mobile-list-number is-virtual"><span className="material-mobile-list-number-label">虛擬</span><span className={cn("material-mobile-list-number-value", !virtualNumber && "is-empty")} title={virtualNumber || "未提供"}>{virtualNumber || "未提供"}</span></span>}
           {showPhysical && <span className="material-mobile-list-number is-physical"><span className="material-mobile-list-number-label">實體</span><span className={cn("material-mobile-list-number-value", !physicalNumber && "is-empty")} title={physicalNumber || "未提供"}>{physicalNumber || "未提供"}</span></span>}
           {!showVirtual && !showPhysical && <span className="material-mobile-list-fallback">料件詳情</span>}
+          <span className="material-mobile-list-name" title={name}>{name}</span>
         </button>
-        {fields.length > 0 && (
-          <div className="material-mobile-list-fields" tabIndex={0} role="group" aria-label="已選料件欄位">
-            {fields.map(field => <span key={field.key} className="material-mobile-list-field" title={`${field.label}：${field.value || "未提供"}`}><span className="material-mobile-list-field-label">{field.label}</span> {field.value || "未提供"}</span>)}
-          </div>
-        )}
       </div>
       <button type="button" className={cn("material-mobile-list-status", statusTone)} data-testid="material-mobile-row-tracking" onClick={onTracking} aria-label={`更新進度：${status}`} title={status}>
         <span aria-hidden="true" className="material-mobile-list-status-dot" />
