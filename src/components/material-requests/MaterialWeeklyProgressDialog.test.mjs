@@ -113,3 +113,31 @@ test("third table has only five weekly status rows and keeps shared filters and 
     assert.equal(editor.testId("material-weekly-export").props.disabled, true);
   } finally { act(() => editor.root.unmount()); }
 });
+
+test("current-week emphasis follows the actual week across all report views and preserves the current snapshot", () => {
+  const editor = mount();
+  const table = id => editor.root.root.findByProps({ "data-testid": id });
+  const marked = (report, type) => report.findAllByType(type).filter(cell => cell.props["data-current-week"] === "true");
+  const snapshots = report => report.findAllByType("td").filter(cell => cell.props.className?.split(/\s+/).includes("material-weekly-current-snapshot"));
+  const views = [[null, "material-weekly-parts"], ["每週彙總", "material-weekly-summary"], ["五狀態彙總", "material-weekly-simple-summary"]];
+  try {
+    for (const [action, id] of views) {
+      if (action) act(() => editor.action(action).props.onClick());
+      const report = table(id);
+      assert.equal(marked(report, "th").length, 1, `${id} highlights exactly the actual current week`);
+      assert.equal(marked(report, "td").length, report.findByType("tbody").findAllByType("tr").length);
+      if (!action) {
+        assert.ok(marked(report, "th")[0].findAllByType("span").some(node => node.props.children === "當週狀態"));
+        assert.equal(snapshots(report).length, 50, "current snapshot stays distinct from reconstructed weekly cells");
+      }
+    }
+    act(() => editor.field("截至週別").props.onChange({ target: { value: "2000-01-01" } }));
+    act(() => editor.action("各料進度").props.onClick());
+    for (const [action, id] of views) {
+      if (action) act(() => editor.action(action).props.onClick());
+      const report = table(id);
+      assert.equal(marked(report, "th").length + marked(report, "td").length, 0, `${id} never labels a historical week as current`);
+      if (!action) assert.equal(snapshots(report).length, 50, "historical selection retains the current snapshot emphasis");
+    }
+  } finally { act(() => editor.root.unmount()); }
+});
