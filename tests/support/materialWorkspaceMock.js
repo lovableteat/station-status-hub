@@ -122,17 +122,18 @@ function applyQaNote(workspaceId, noteSnapshot) {
   if (liveRecords) lastRecordStamp = Math.max(lastRecordStamp, Date.parse(noteSnapshot.recordMeta.updatedAt));
   return { workspaceId, recordId: row.id, orderIndex: index, snapshot: noteSnapshot };
 }
-noteChannel?.addEventListener('message', ({ data: { workspaceId, noteSnapshot, missingPayload, change: metadataChange } }) => {
+noteChannel?.addEventListener('message', ({ data: { workspaceId, noteSnapshot, missingPayload, silent, change: metadataChange } }) => {
   if (metadataChange) {
     workspaceListeners.forEach(listener => listener(metadataChange));
     if (liveRecords) setTimeout(() => { window.__qaLiveRecords.touches += 1; }, 50);
     return;
   }
   const change = applyQaNote(workspaceId, noteSnapshot);
-  if (change && !globalThis.__qaMuteNoteUpdates) workspaceListeners.forEach(listener => listener({ workspaceIds: [workspaceId], records: [missingPayload ? { workspaceId, recordId: change.recordId } : change] }));
+  if (change && !silent && !globalThis.__qaMuteNoteUpdates) workspaceListeners.forEach(listener => listener({ workspaceIds: [workspaceId], records: [missingPayload ? { workspaceId, recordId: change.recordId } : change] }));
 });
 if (liveRecords) window.__qaLiveRecords = {
   loads: 0,
+  catchups: 0,
   touches: 0,
   record: id => structuredClone(fullRecords.get(workspace.id)?.find(record => record.id === id)),
   touch() {
@@ -141,14 +142,15 @@ if (liveRecords) window.__qaLiveRecords = {
     workspaceListeners.forEach(listener => listener(change));
     noteChannel.postMessage({ change });
   },
-  patch(id, fields, missingPayload = false) {
+  patch(id, fields, missingPayload = false, silent = false) {
     const record = fullRecords.get(workspace.id)?.find(record => record.id === id);
     if (!record) throw new Error('QA record not found');
     const noteSnapshot = { record: { ...record, ...fields }, recordMeta: { updatedAt: nextRecordStamp() } };
     const change = applyQaNote(workspace.id, noteSnapshot);
-    workspaceListeners.forEach(listener => listener({ workspaceIds: [workspace.id], records: [missingPayload ? { workspaceId: workspace.id, recordId: id } : change] }));
-    noteChannel.postMessage({ workspaceId: workspace.id, noteSnapshot, missingPayload });
+    if (!silent) workspaceListeners.forEach(listener => listener({ workspaceIds: [workspace.id], records: [missingPayload ? { workspaceId: workspace.id, recordId: id } : change] }));
+    noteChannel.postMessage({ workspaceId: workspace.id, noteSnapshot, missingPayload, silent });
   },
+  silentPatch(id, fields) { this.patch(id, fields, false, true); },
 };
 
 export class BomRecordConflictError extends Error {}
@@ -165,9 +167,26 @@ export const loadBomWorkspaceVersions = async () => new Map([...store.values()].
 export const loadPageTrackerMap = async () => new Map([...store.values()].flatMap(item => (item.pageTracker ? [[item.id, item.pageTracker]] : [])));
 export const loadTableColorThemeMap = async () => new Map([...store.values()].flatMap(item => (item.tableColorTheme ? [[item.id, item.tableColorTheme]] : [])));
 export const loadBomWorkspaceRecords = async (workspaceId) => { await new Promise(resolve => setTimeout(resolve, 120)); if (!fullRecords.has(workspaceId)) throw new Error('QA：找不到這個版本'); return structuredClone(fullRecords.get(workspaceId)); };
-export const subscribeBomWorkspaceChanges = (listener) => {
+export const loadBomWorkspaceRecordChanges = async (current) => {
+  const change = { workspaceIds: [current.id], records: [] };
+  if (!liveRecords || !fullRecords.has(current.id)) return change;
+  window.__qaLiveRecords.catchups += 1;
+  const rows = fullRecords.get(current.id), target = store.get(current.id);
+  if (rows.length !== current.payload.records.length || rows.some((record, index) => record.id !== current.payload.records[index]?.id)) {
+    return { ...change, invalidatedWorkspaceIds: [current.id] };
+  }
+  change.records = rows.flatMap((record, orderIndex) => {
+    const recordMeta = target.recordMeta[record.id];
+    return recordMeta?.updatedAt !== current.recordMeta?.[record.id]?.updatedAt
+      ? [{ workspaceId: current.id, recordId: record.id, orderIndex, snapshot: { record, recordMeta } }] : [];
+  });
+  return structuredClone(change);
+};
+export const subscribeBomWorkspaceChanges = (listener, onStatusChange) => {
+  let active = true;
   workspaceListeners.add(listener);
-  return () => workspaceListeners.delete(listener);
+  queueMicrotask(() => { if (active) onStatusChange?.('SUBSCRIBED'); });
+  return () => { active = false; workspaceListeners.delete(listener); };
 };
 export const saveBomWorkspace = async (next) => { store.set(next.id, structuredClone({ ...next, payload: { ...next.payload, records: [] } })); fullRecords.set(next.id, structuredClone(next.payload.records)); };
 export const saveBomWorkspacePageTracker = async (id, pageTracker) => { const item = store.get(id); if (item) item.pageTracker = pageTracker; };

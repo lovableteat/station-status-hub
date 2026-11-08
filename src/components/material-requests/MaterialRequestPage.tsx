@@ -129,10 +129,12 @@ import {
   type BomRecordSyncMeta,
   type BomStorageMode,
   type BomWorkspace,
+  type BomWorkspaceChange,
   type BomWorkspaceLoadResult,
   BomRecordConflictError,
   loadCachedBomWorkspacesDetailed,
   loadBomWorkspaceNoteRecord,
+  loadBomWorkspaceRecordChanges,
   loadPageTrackerMap,
   loadTableColorThemeMap,
   loadBomWorkspacesDetailed,
@@ -3995,6 +3997,7 @@ export function MaterialRequestPage() {
   const [exportProgress, setExportProgress] = useState<MaterialExportProgress | null>(null);
   const [activeExportFormat, setActiveExportFormat] = useState<"excel" | "html" | "zip" | null>(null);
   const [remoteSyncFailed, setRemoteSyncFailed] = useState(false);
+  const [isBomRealtimeConnected, setIsBomRealtimeConnected] = useState(false);
   const [isSearchPending, startSearchTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceSyncRequestRef = useRef(0);
@@ -4061,8 +4064,10 @@ export function MaterialRequestPage() {
   const personalMarks = useMaterialPersonalMarks(user?.userId, activeBomId, canViewModuleAccess && isCollaborativeReady);
   const canManageBomPageTracker = canEdit && !["checking", "reconnecting", "error"].includes(collaborationStatus);
   const collaborationStatusMeta = useMemo(
-    () => getCollaborationStatusMeta(collaborationStatus),
-    [collaborationStatus],
+    () => collaborationStatus === "remote" && !isBomRealtimeConnected
+      ? { ...getCollaborationStatusMeta("reconnecting"), label: "背景同步中", description: "即時連線正在重連，系統會自動比對版本並補回變動的料件。", bannerText: "" }
+      : getCollaborationStatusMeta(collaborationStatus),
+    [collaborationStatus, isBomRealtimeConnected],
   );
   const startWorkspaceLoad = useCallback(() => {
     const requestId = workspaceLoadingRequestRef.current + 1;
@@ -4282,6 +4287,7 @@ export function MaterialRequestPage() {
   }, [reloadBomWorkspaces, toast]);
 
   useEffect(() => {
+    if (!canViewModuleAccess) return;
     let active = true;
     let refreshing = false;
     let refreshQueued = false;
@@ -4342,7 +4348,7 @@ export function MaterialRequestPage() {
 
     void syncWorkspaces(loadActiveBomId());
     const accountGeneration = bomAccountRef.current.generation;
-    const unsubscribe = subscribeBomWorkspaceChanges((change) => {
+    const applyRemoteChange = (change: BomWorkspaceChange) => {
       if (!active || !canViewModuleAccess || accountGeneration !== bomAccountRef.current.generation) return;
       const workspaceId = activeBomIdRef.current;
       if (change.preferenceWorkspaceIds?.length) void refreshBomPreferences().catch(queueWorkspaceRefresh);
@@ -4373,10 +4379,44 @@ export function MaterialRequestPage() {
       }
 
       if (sync?.pendingRecordIds.length) queueWorkspaceRefresh();
+    };
+    let reconciling = false;
+    const reconcileRecords = async () => {
+      if (!active || reconciling || document.visibilityState === "hidden") return;
+      const workspaceId = activeBomIdRef.current;
+      const workspace = bomWorkspacesRef.current.find(item => item.id === workspaceId);
+      if (!workspace || workspace.isLoaded === false) return;
+      reconciling = true;
+      try {
+        const change = await loadBomWorkspaceRecordChanges(workspace);
+        if (!active || accountGeneration !== bomAccountRef.current.generation || workspaceId !== activeBomIdRef.current) return;
+        if (change.records.length || change.invalidatedWorkspaceIds?.length) applyRemoteChange(change);
+        if (!change.invalidatedWorkspaceIds?.length) setRemoteSyncFailed(false);
+      } catch {
+        if (active && accountGeneration === bomAccountRef.current.generation) setRemoteSyncFailed(true);
+      } finally { reconciling = false; }
+    };
+    const catchUp = () => { void reconcileRecords(); };
+    setIsBomRealtimeConnected(false);
+    const unsubscribe = subscribeBomWorkspaceChanges(applyRemoteChange, (status) => {
+      if (!active) return;
+      setIsBomRealtimeConnected(status === "SUBSCRIBED");
+      if (status === "SUBSCRIBED") {
+        catchUp();
+        void refreshBomPreferences().catch(queueWorkspaceRefresh);
+      }
     });
+    const reconcileTimer = window.setInterval(catchUp, 3000);
+    window.addEventListener("online", catchUp);
+    window.addEventListener("focus", catchUp);
+    document.addEventListener("visibilitychange", catchUp);
 
     return () => {
       active = false;
+      window.clearInterval(reconcileTimer);
+      window.removeEventListener("online", catchUp);
+      window.removeEventListener("focus", catchUp);
+      document.removeEventListener("visibilitychange", catchUp);
       unsubscribe();
     };
   }, [applyLoadedWorkspaces, canViewModuleAccess, refreshBomPreferences, reloadBomWorkspaces]);
@@ -6239,7 +6279,7 @@ export function MaterialRequestPage() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-semibold text-foreground">料號申請</h1>
-              {collaborationStatus !== "remote" && <span className={cn("inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-black", collaborationStatusMeta.badgeClassName)}>
+              {(collaborationStatus !== "remote" || !isBomRealtimeConnected) && <span className={cn("inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-black", collaborationStatusMeta.badgeClassName)}>
                 <span className={cn("h-1.5 w-1.5 rounded-full", collaborationStatusMeta.dotClassName)} />
                 {collaborationStatusMeta.label}
               </span>}
@@ -6393,7 +6433,7 @@ export function MaterialRequestPage() {
             </span>
             <h1 className="shrink-0 text-base font-black text-white">料號申請</h1>
             <div data-material-zone="collaboration" className="flex min-w-0 items-center gap-1.5">
-              {collaborationStatus !== "remote" && <Badge className={cn("h-6 shrink-0 border px-2 text-[11px] font-black", collaborationStatusMeta.badgeClassName)} title={collaborationStatusMeta.description}>
+              {(collaborationStatus !== "remote" || !isBomRealtimeConnected) && <Badge className={cn("h-6 shrink-0 border px-2 text-[11px] font-black", collaborationStatusMeta.badgeClassName)} title={collaborationStatusMeta.description}>
                 <span className={cn("mr-1.5 h-1.5 w-1.5 rounded-full", collaborationStatusMeta.dotClassName)} />
                 {collaborationStatusMeta.label}
               </Badge>}
@@ -6570,6 +6610,7 @@ export function MaterialRequestPage() {
         <div className="min-w-0">
       <section
         data-testid="material-table-card"
+        data-realtime-connected={isBomRealtimeConnected ? "true" : "false"}
         className="overflow-hidden rounded-[14px] border border-[#2a526f] bg-[#0b1b2d]"
       >
         <h2 className="sr-only">料號總表</h2>

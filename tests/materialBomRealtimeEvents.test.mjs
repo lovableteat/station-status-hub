@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import ts from 'typescript';
+import { RealtimeClient } from '@supabase/realtime-js';
 
 const source = await readFile(new URL('../src/components/material-requests/materialBomStorage.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source.slice(source.indexOf('export function subscribeBomWorkspaceChanges(')), {
@@ -10,20 +11,25 @@ const compiled = ts.transpileModule(source.slice(source.indexOf('export function
 const tables = ['material_bom_workspaces', 'material_bom_records', 'ui_table_preferences'];
 const prefixes = ['material-bom-project:', 'material-bom-page-tracker:', 'material-bom-table-color-theme:'];
 
-function subscription() {
-  const handlers = new Map(), changes = [], removed = [];
-  let timer;
-  const channel = { on(_event, { table }, callback) { handlers.set(table, callback); return this; }, subscribe() { return this; } };
-  const client = { channel: () => channel, removeChannel: value => removed.push(value) };
+function loadSubscribe(client, schedule = setTimeout, cancel = clearTimeout) {
   const exports = {};
   new Function('supabaseClient', 'supabase', 'WORKSPACE_TABLE', 'RECORD_TABLE', 'PREFERENCE_TABLE',
     'BOM_PREFERENCE_KEY_PREFIXES', 'getBomPreferenceWorkspaceId', 'setTimeout', 'clearTimeout', 'exports', compiled)(
     client, client, ...tables, prefixes,
     (key, candidates) => { const prefix = candidates.find(value => key.startsWith(value)); return prefix ? key.slice(prefix.length) : null; },
-    callback => { timer = callback; return 1; }, () => { timer = undefined; }, exports,
+    schedule, cancel, exports,
   );
-  const unsubscribe = exports.subscribeBomWorkspaceChanges(change => changes.push(change));
-  return { changes, removed, unsubscribe, emit: (table, payload) => handlers.get(table)(payload),
+  return exports.subscribeBomWorkspaceChanges;
+}
+
+function subscription() {
+  const handlers = new Map(), changes = [], removed = [], statuses = [];
+  let timer, notifyStatus;
+  const channel = { on(_event, { table }, callback) { handlers.set(table, callback); return this; }, subscribe(callback) { notifyStatus = callback; return this; } };
+  const client = { channel: () => channel, removeChannel: value => removed.push(value) };
+  const subscribe = loadSubscribe(client, callback => { timer = callback; return 1; }, () => { timer = undefined; });
+  const unsubscribe = subscribe(change => changes.push(change), (status, error) => statuses.push({ status, error }));
+  return { changes, removed, statuses, unsubscribe, status: (status, error) => notifyStatus?.(status, error), emit: (table, payload) => handlers.get(table)(payload),
     flush() { const callback = timer; timer = undefined; callback?.(); } };
 }
 
@@ -46,6 +52,48 @@ test('revision touches, complete record snapshots and preferences remain distinc
       generatedAt: '2026-11-08T00:00:00Z', recordCount: 3000 }], preferenceWorkspaceIds: ['bom-a'], invalidatedWorkspaceIds: [] });
   s.unsubscribe();
   assert.equal(s.removed.length, 1);
+});
+
+test('subscription status is forwarded only while its listener is active', () => {
+  const s = subscription(), error = new Error('isolated join failure');
+  s.status('SUBSCRIBED');
+  s.status('CHANNEL_ERROR', error);
+  s.status('TIMED_OUT');
+  assert.deepEqual(s.statuses, [{ status: 'SUBSCRIBED', error: undefined }, { status: 'CHANNEL_ERROR', error }, { status: 'TIMED_OUT', error: undefined }]);
+  s.unsubscribe();
+  s.status('CLOSED');
+  assert.equal(s.statuses.length, 3, 'a delayed cleanup acknowledgement must not update the next subscription');
+});
+
+test('the installed SDK reuses a leaving fixed-topic channel; each BOM subscription must get a fresh channel', () => {
+  const sdk = new RealtimeClient('ws://127.0.0.1:9/realtime/v1', { params: { apikey: 'isolated-no-network-check' } });
+  sdk.isConnected = () => true;
+  const old = sdk.channel('material_bom_workspace_changes');
+  old.state = 'leaving';
+  const reused = sdk.channel('material_bom_workspace_changes');
+  let callbacks = 0;
+  reused.subscribe(() => { callbacks += 1; });
+  assert.equal(reused, old);
+  assert.equal(reused.state, 'leaving');
+  assert.equal(callbacks, 0, 'the installed SDK silently skips joining the leaving instance');
+
+  const channels = [], getChannel = sdk.channel.bind(sdk);
+  sdk.channel = topic => {
+    const channel = getChannel(topic);
+    channels.push(channel);
+    channel.subscribe = () => channel;
+    return channel;
+  };
+  sdk.removeChannel = async channel => { channel.state = 'leaving'; };
+  const subscribe = loadSubscribe(sdk);
+  const firstCleanup = subscribe(() => {});
+  firstCleanup();
+  const secondCleanup = subscribe(() => {});
+  try {
+    assert.ok(channels[0] !== channels[1], 'the second subscription must not reuse the leaving channel');
+    assert.notEqual(channels[0].topic, channels[1].topic);
+    assert.equal(channels[1].state, 'closed');
+  } finally { secondCleanup(); }
 });
 
 test('structural or incomplete changes invalidate only their BOM and do not leak into the next batch', () => {
@@ -71,6 +119,8 @@ test('structural or incomplete changes invalidate only their BOM and do not leak
   assert.deepEqual(s.changes[1].preferenceWorkspaceIds, []);
   s.emit(tables[0], { eventType: 'UPDATE', new: header('cancelled') });
   s.unsubscribe();
+  s.flush();
+  s.emit(tables[0], { eventType: 'UPDATE', new: header('after-cleanup') });
   s.flush();
   assert.equal(s.changes.length, 2, 'unsubscribing discards the pending debounce');
 });

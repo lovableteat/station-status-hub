@@ -62,7 +62,8 @@ test('structural or incomplete changes request a background read; other BOMs and
   const merged = applyRealtimeBomRecords(workspace, [change]);
   assert.equal(merged.workspace.payload.records[1], second);
   assert.equal(applyRealtimeBomRecords(workspace, [{ ...change, workspaceId: 'bom-b' }]).workspace, workspace);
-  for (const unresolved of [{ ...change, snapshot: undefined }, { ...change, orderIndex: 1 }, { ...change, recordId: 'new' }]) {
+  assert.equal(applyRealtimeBomRecords(workspace, [{ ...change, orderIndex: 5 }]).workspace.payload.records[0].partNumber, 'new');
+  for (const unresolved of [{ ...change, snapshot: undefined }, { ...change, recordId: 'new' }]) {
     assert.deepEqual(applyRealtimeBomRecords(workspace, [unresolved]), { workspace, pendingRecordIds: [unresolved.recordId] });
   }
 });
