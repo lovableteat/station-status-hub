@@ -1,0 +1,60 @@
+@media (max-width: 1023px) {
+  .workspace-dialog-surface.material-record-dialog[data-ui="dialog"] {
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    gap: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: hsl(var(--background));
+  }
+  .material-record-dialog[data-ui="dialog"] .app-dialog-header { gap: 0; padding: 12px 60px 10px 16px; }
+  .material-record-dialog[data-ui="dialog"] .app-dialog-header > div { gap: 4px 8px; }
+  .material-record-dialog[data-ui="dialog"] .app-dialog-header h2 { font-size: 19px; line-height: 26px; }
+  .material-record-dialog[data-ui="dialog"] .app-dialog-header > p {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .material-record-dialog[data-ui="dialog"] > [data-ui="dialog-close"] { top: 8px; right: 8px; width: 44px; height: 44px; background: transparent; }
+  .material-record-dialog[data-ui="dialog"] .material-record-mpn { flex: 1 1 100%; flex-wrap: nowrap; gap: 6px; margin: 0; line-height: 20px; }
+  .material-record-dialog[data-ui="dialog"] .material-record-mpn > span:first-child { flex: none; font-size: 11px; }
+  .material-record-dialog[data-ui="dialog"] .material-record-mpn > span:last-child { overflow: hidden; color: hsl(var(--primary)); font-family: inherit; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+  .material-record-dialog[data-ui="dialog"] .material-record-tablist { display: grid; flex: none; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; height: 48px; padding: 0 16px; border-block: 1px solid hsl(var(--border)); border-radius: 0; background: hsl(var(--background)); }
+  .material-record-dialog[data-ui="dialog"] .material-record-tablist > button { height: 47px; border-radius: 0; background: transparent; font-size: 14px; box-shadow: none; }
+  .material-record-dialog[data-ui="dialog"] .material-record-tablist > button[data-state="active"] { color: hsl(var(--primary)); box-shadow: inset 0 -2px hsl(var(--primary)); }
+  .material-record-dialog[data-ui="dialog"] .material-record-scroll { padding: 0 16px 16px; overscroll-behavior: contain; scrollbar-gutter: auto; }
+  .material-record-dialog[data-ui="dialog"] .material-details-tab { height: auto; margin: 0; }
+  .material-record-dialog[data-ui="dialog"] .material-details-layout { display: flex; min-height: 0; flex-direction: column; gap: 16px; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-section { min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-heading { gap: 6px; margin: 0; padding-block: 10px; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-heading h3 { flex: 1; min-width: 0; font-size: 11px; line-height: 16px; color: hsl(var(--muted-foreground)); }
+  .material-record-dialog[data-ui="dialog"] .material-ce-view-switch { gap: 0; padding: 0; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-view-switch > button { min-width: 64px; height: 44px; padding-inline: 8px; font-size: 12px; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-form { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-form > div { display: grid; grid-column: auto; grid-template-columns: minmax(108px, .9fr) minmax(0, 1.7fr); min-height: 68px; align-items: center; gap: 8px; padding-block: 8px; border-top: 1px solid hsl(var(--border)); }
+  .material-record-dialog[data-ui="dialog"] .material-ce-form > div > :first-child { min-width: 0; min-height: 44px; align-items: center; gap: 0; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-form label { min-width: 0; overflow-wrap: anywhere; font-size: 12px; line-height: 16px; font-weight: 500; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-form > div > :first-child button { flex: 0 0 44px; width: 44px; height: 44px; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-form > div > p { grid-column: 2; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-control { min-width: 0; font-size: 16px; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-form .material-ce-control { height: 44px; min-height: 44px; padding: 8px; line-height: 22px; }
+  .material-record-dialog[data-ui="dialog"] .material-ce-control::placeholder { font-size: 13px; font-style: normal; }
+  .material-record-dialog[data-ui="dialog"] .material-spec-section { padding: 12px; border-radius: 10px; }
+  .material-record-dialog[data-ui="dialog"] .material-spec-files { max-height: none; overflow: visible; }
+  .material-record-dialog[data-ui="dialog"] .material-spec-empty { min-height: 96px; flex-direction: row; text-align: left; }
+  .material-record-dialog[data-ui="dialog"] .material-tracking-tab { height: auto; margin-top: 0; padding-top: 12px; }
+  .material-record-dialog[data-ui="dialog"] .material-tracking-layout { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "current" "fields" "history"; }
+  .material-record-dialog[data-ui="dialog"] .material-tracking-fields :is(input, textarea) { font-size: 16px; }
+  .material-record-dialog[data-ui="dialog"] .app-dialog-footer { display: grid; flex: none; grid-template-columns: minmax(72px, .7fr) minmax(0, 1.5fr); gap: 8px; padding: 10px 16px max(10px, env(safe-area-inset-bottom)); background: hsl(var(--background)); }
+  .material-record-dialog[data-ui="dialog"] .app-dialog-footer > div { grid-column: 1 / -1; margin: 0; }
+  .material-record-dialog[data-ui="dialog"] .app-dialog-footer > div:empty { display: none; }
+  .material-record-dialog[data-ui="dialog"] .app-dialog-footer > div > button { flex: 1; min-width: 0; padding-inline: 8px; font-size: 12px; }
+  .material-record-dialog[data-ui="dialog"] .app-dialog-footer > button { width: 100%; min-width: 0; height: 44px; }
+  .material-record-dialog[data-ui="dialog"] > [role="alert"] { flex: none; margin: 8px 16px; }
+}
