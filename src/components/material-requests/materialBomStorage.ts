@@ -97,6 +97,18 @@ export interface BomWorkspaceLoadOptions {
 export interface BomWorkspaceChange {
   records: BomWorkspaceRecordChange[];
   workspaceIds: string[];
+  workspaceHeaders?: BomWorkspaceHeader[];
+  preferenceWorkspaceIds?: string[];
+  invalidatedWorkspaceIds?: string[];
+}
+
+export interface BomWorkspaceHeader {
+  id: string;
+  name: string;
+  sourceFile: string;
+  sheetName: string;
+  generatedAt: string;
+  recordCount: number;
 }
 
 export interface BomWorkspaceRecordChange {
@@ -649,7 +661,7 @@ function buildWorkspaceFromCache(
   };
 }
 
-async function loadPageTrackerMap() {
+export async function loadPageTrackerMap() {
   const data = await runBomReadWithRetry(async () => {
     const { data: preferenceRows, error } = await supabaseClient
       .from(PREFERENCE_TABLE)
@@ -735,7 +747,7 @@ async function loadRemoteRecordRowsForWorkspace(
   return rows;
 }
 
-async function loadTableColorThemeMap() {
+export async function loadTableColorThemeMap() {
   const data = await runBomReadWithRetry(async () => {
     const { data: preferenceRows, error } = await supabaseClient
       .from(PREFERENCE_TABLE)
@@ -1518,15 +1530,24 @@ export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChan
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const workspaceIds = new Set<string>();
   const records = new Map<string, BomWorkspaceRecordChange>();
+  const workspaceHeaders = new Map<string, BomWorkspaceHeader>();
+  const preferenceWorkspaceIds = new Set<string>();
+  const invalidatedWorkspaceIds = new Set<string>();
   const emitChange = (workspaceId?: unknown, record?: BomWorkspaceRecordChange) => {
     if (typeof workspaceId === "string" && workspaceId) workspaceIds.add(workspaceId);
     if (record) records.set(JSON.stringify([record.workspaceId, record.recordId]), record);
     if (debounceTimer !== null) return;
 
     debounceTimer = setTimeout(() => {
-      const changes = { workspaceIds: [...workspaceIds], records: [...records.values()] };
+      const changes: BomWorkspaceChange = {
+        workspaceIds: [...workspaceIds], records: [...records.values()], workspaceHeaders: [...workspaceHeaders.values()],
+        preferenceWorkspaceIds: [...preferenceWorkspaceIds], invalidatedWorkspaceIds: [...invalidatedWorkspaceIds],
+      };
       workspaceIds.clear();
       records.clear();
+      workspaceHeaders.clear();
+      preferenceWorkspaceIds.clear();
+      invalidatedWorkspaceIds.clear();
       debounceTimer = null;
       onChange(changes);
     }, 180);
@@ -1535,23 +1556,43 @@ export function subscribeBomWorkspaceChanges(onChange: (change: BomWorkspaceChan
   const channel = supabaseClient
     .channel("material_bom_workspace_changes")
     .on("postgres_changes", { event: "*", schema: "workspace", table: WORKSPACE_TABLE }, (payload: RealtimeRowPayload) => {
-      emitChange(payload?.new?.id ?? payload?.old?.id);
+      const row = payload.new;
+      const workspaceId = row?.id ?? payload.old?.id;
+      if (typeof workspaceId !== "string" || !workspaceId) return;
+      if (payload.eventType === "UPDATE" && row && typeof row.name === "string" && typeof row.source_file === "string"
+        && typeof row.sheet_name === "string" && typeof row.generated_at === "string"
+        && typeof row.record_count === "number" && Number.isInteger(row.record_count) && row.record_count >= 0) {
+        workspaceHeaders.set(workspaceId, { id: workspaceId, name: row.name, sourceFile: row.source_file,
+          sheetName: row.sheet_name, generatedAt: row.generated_at, recordCount: row.record_count });
+      } else {
+        invalidatedWorkspaceIds.add(workspaceId);
+      }
+      emitChange(workspaceId);
     })
     .on("postgres_changes", { event: "*", schema: "workspace", table: RECORD_TABLE }, (payload: RealtimeRowPayload) => {
       const workspaceId = payload.new?.workspace_id ?? payload.old?.workspace_id;
       const recordId = payload.new?.record_id ?? payload.old?.record_id;
-      if (typeof workspaceId !== "string" || typeof recordId !== "string") return;
+      if (typeof workspaceId !== "string" || !workspaceId) return;
+      if (typeof recordId !== "string" || !recordId) {
+        invalidatedWorkspaceIds.add(workspaceId);
+        emitChange(workspaceId);
+        return;
+      }
       const row = payload.new;
       const record = row?.data as MaterialWorkbookRecord | undefined;
       const updatedAt = row?.updated_at;
       const snapshot = payload.eventType === "UPDATE" && record?.id === recordId && typeof updatedAt === "string"
         && (record.note == null || typeof record.note === "string") ? { record, recordMeta: { updatedAt } } : undefined;
+      if (!snapshot) invalidatedWorkspaceIds.add(workspaceId);
       emitChange(workspaceId, { workspaceId, recordId, snapshot, orderIndex: typeof row?.order_index === "number" ? row.order_index : undefined });
     })
     .on("postgres_changes", { event: "*", schema: "workspace", table: PREFERENCE_TABLE }, (payload: RealtimeRowPayload) => {
       const keys = [payload?.new?.table_key, payload?.old?.table_key].filter((value): value is string => typeof value === "string");
       const workspaceId = keys.map((key) => getBomPreferenceWorkspaceId(key, BOM_PREFERENCE_KEY_PREFIXES)).find(Boolean);
-      if (workspaceId) emitChange(workspaceId);
+      if (workspaceId) {
+        preferenceWorkspaceIds.add(workspaceId);
+        emitChange(workspaceId);
+      }
     })
     .subscribe();
 

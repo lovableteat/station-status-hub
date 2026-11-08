@@ -9,7 +9,7 @@ const compiled = ts.transpileModule(block, { compilerOptions: { module: ts.Modul
 const noteSync = await readFile(new URL('../src/components/material-requests/materialBomNoteSync.ts', import.meta.url), 'utf8');
 const syncExports = {};
 new Function('exports', ts.transpileModule(noteSync, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(syncExports);
-const { applyBomNoteSnapshot, applyRealtimeBomNotes } = syncExports;
+const { applyBomNoteSnapshot, applyRealtimeBomRecords, mergeBomWorkspaceRecords } = syncExports;
 class Conflict extends Error {}
 function editor(response, assertWrite = () => {}) {
   const calls = [], caches = [], exports = {};
@@ -37,7 +37,7 @@ test('a newer Note is reported as a conflict and is never cached over', async ()
   assert.equal(e.caches.length, 0);
 });
 
-test('Realtime updates the Note in place, keeps other edits pending and ignores a late response for the same row', () => {
+test('Realtime applies Note and other record fields in place and ignores a late response for the same row', () => {
   const first = { id: 'r1', name: 'original A', note: 'previous' };
   const second = { id: 'r2', name: 'original B', note: 'unchanged' };
   const workspace = { id: 'bom-a', payload: { records: [first, second] },
@@ -47,12 +47,33 @@ test('Realtime updates the Note in place, keeps other edits pending and ignores 
   });
   const note = update({ ...first, note: 'shared immediately' }, 0, '2026-11-07T01:02:03.000013Z');
   const other = update({ ...second, name: 'other fields changed' }, 1, '2026-11-07T01:02:04Z');
-  const merged = applyRealtimeBomNotes(workspace, [note, other]);
-  assert.deepEqual(merged.workspace.payload.records, [note.snapshot.record, second]);
-  assert.deepEqual(merged.pendingRecordIds, ['r2']);
+  const merged = applyRealtimeBomRecords(workspace, [note, other]);
+  assert.deepEqual(merged.workspace.payload.records, [note.snapshot.record, other.snapshot.record]);
+  assert.deepEqual(merged.pendingRecordIds, []);
   const late = update({ ...first, note: 'stale response' }, 0, '2026-11-07T01:02:03.000012+00:00');
   assert.equal(applyBomNoteSnapshot(merged.workspace, late.snapshot), merged.workspace);
-  assert.deepEqual(applyRealtimeBomNotes(merged.workspace, [late]), { workspace: merged.workspace, pendingRecordIds: [] });
+  assert.deepEqual(applyRealtimeBomRecords(merged.workspace, [late]), { workspace: merged.workspace, pendingRecordIds: [] });
+});
+
+test('structural or incomplete changes request a background read; other BOMs and untouched rows retain identity', () => {
+  const first = { id: 'r1', partNumber: 'old' }, second = { id: 'r2' };
+  const workspace = { id: 'bom-a', payload: { records: [first, second] } };
+  const change = { workspaceId: 'bom-a', recordId: first.id, orderIndex: 0, snapshot: { record: { ...first, partNumber: 'new' }, recordMeta: { updatedAt: '2026-11-08T01:00:00Z' } } };
+  const merged = applyRealtimeBomRecords(workspace, [change]);
+  assert.equal(merged.workspace.payload.records[1], second);
+  assert.equal(applyRealtimeBomRecords(workspace, [{ ...change, workspaceId: 'bom-b' }]).workspace, workspace);
+  for (const unresolved of [{ ...change, snapshot: undefined }, { ...change, orderIndex: 1 }, { ...change, recordId: 'new' }]) {
+    assert.deepEqual(applyRealtimeBomRecords(workspace, [unresolved]), { workspace, pendingRecordIds: [unresolved.recordId] });
+  }
+});
+
+test('background reads preserve newer live rows but discard unsaved optimistic data at the same revision', () => {
+  const old = '2026-11-08T01:00:00.000001Z', newer = '2026-11-08T01:00:00.000002Z';
+  const loaded = { id: 'bom-a', updatedAt: 'loaded', payload: { records: [{ id: 'r1', partNumber: 'server' }] }, recordMeta: { r1: { updatedAt: old } } };
+  const current = { ...loaded, payload: { records: [{ id: 'r1', partNumber: 'live' }] }, recordMeta: { r1: { updatedAt: newer } } };
+  assert.equal(mergeBomWorkspaceRecords(loaded, current).payload.records[0], current.payload.records[0]);
+  assert.equal(mergeBomWorkspaceRecords(loaded, current).updatedAt, loaded.updatedAt);
+  assert.equal(mergeBomWorkspaceRecords(loaded, { ...current, recordMeta: loaded.recordMeta }), loaded);
 });
 
 test('revoked account scope prevents writes and discards late responses', async () => {

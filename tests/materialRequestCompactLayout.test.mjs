@@ -196,10 +196,10 @@ test("the project row has one writer and realtime keeps the bom: prefix of works
   assert.match(storageSource, /export async function loadBomWorkspaceProjects\(\)/);
   assert.match(storageSource, /export async function saveBomWorkspaceArchive\(/);
   assert.match(storageSource, /column_order: archive \?\? \{ archived: false, archivedAt: "", archivedBy: "" \}/);
-  assert.match(source, /if \(workspace\.project\) \{\s*recentLocalWorkspaceWritesRef\.current\.set\(workspaceId, Date\.now\(\)\);\s*await saveBomWorkspaceProject\(workspaceId, workspace\.project,/);
+  assert.match(source, /if \(workspace\.project\) \{\s*await saveBomWorkspaceProject\(workspaceId, workspace\.project,/);
   assert.match(source, /if \(!activeProjectId \|\| !workspaceListSettled\) return;/);
-  assert.match(source, /if \(change\.recordIds\.length === 0 && change\.workspaceIds\.length > 0\) void refreshBomProjects\(\);/);
-  assert.match(source, /change\.recordIds\.length === 0 && now - localWorkspaceWriteAt > 5000/);
+  assert.match(source, /change\.preferenceWorkspaceIds\?\.length\) void refreshBomPreferences\(\)/);
+  assert.doesNotMatch(source, /不會自動刷新|recentLocalWorkspaceWritesRef/);
   const compactHeader = slice('data-testid="material-mobile-command-center"', 'data-material-zone="overview"');
   assert.match(compactHeader, /activeWorkspaceProjectLabel/);
   assert.doesNotMatch(compactHeader, />非目前專案</);
