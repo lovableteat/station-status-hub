@@ -28,9 +28,9 @@ function UploadTimestamp({ value }: { value: string }) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return <span className="font-semibold text-foreground">{value || "—"}</span>;
   return (
-    <time dateTime={date.toISOString()} aria-label={formatBomTimestamp(value)} className="inline-flex flex-col gap-0.5 whitespace-nowrap rounded-md border border-primary/25 bg-primary/5 px-2 py-1 tabular-nums">
-      <span className="text-sm font-bold leading-5 text-foreground">{date.toLocaleDateString("zh-TW", { year: "numeric", month: "2-digit", day: "2-digit" })}</span>
-      <span className="text-[13px] font-semibold leading-5 text-primary">{date.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })}</span>
+    <time dateTime={date.toISOString()} aria-label={formatBomTimestamp(value)} className="bom-version-uploaded-at inline-flex whitespace-nowrap tabular-nums">
+      <span>{date.toLocaleDateString("zh-TW", { year: "numeric", month: "2-digit", day: "2-digit" })}</span>
+      <span>{date.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })}</span>
     </time>
   );
 }
@@ -333,17 +333,19 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
               return [
                 <tr key={item.workspace.id} data-version-id={item.workspace.id} className={cn("border-t border-border/60 align-top", item.isCurrent && "bg-primary/5")}>
                   <td className="px-2 py-2 whitespace-nowrap"><span className={cn("inline-flex h-9 min-w-14 items-center justify-center rounded-md border px-2 font-mono text-base font-bold tabular-nums", item.isCurrent ? "border-primary bg-primary text-primary-foreground" : "border-primary/40 bg-primary/10 text-foreground")}>{item.displayNumber}</span></td>
-                  <td className="max-w-[22rem] px-2 py-2 text-xs">
-                    <p className="font-semibold text-foreground">{item.version.label || <span className="font-normal text-muted-foreground">未設定標籤</span>}</p>
-                    {item.version.note && <p className="mt-0.5 whitespace-pre-wrap break-words text-foreground/80">{item.version.note}</p>}
-                    {!item.stored && <p className="mt-0.5 text-muted-foreground">版本化前上傳的 BOM</p>}
+                  <td className="px-2 py-2 text-xs">
+                    <span className="bom-version-label-note" title={[item.version.label || "未設定標籤", item.version.note, !item.stored ? "版本化前上傳的 BOM" : ""].filter(Boolean).join(" · ")}>
+                      <strong className={cn("font-semibold", item.version.label ? "text-foreground" : "font-normal text-muted-foreground")}>{item.version.label || "未設定標籤"}</strong>
+                      {item.version.note && <span className="text-foreground/80">{item.version.note}</span>}
+                      {!item.stored && <span className="text-muted-foreground">版本化前上傳的 BOM</span>}
+                    </span>
                   </td>
-                  <td className="max-w-[16rem] px-2 py-2 text-xs text-foreground/85"><span className="line-clamp-2 break-all" title={`${item.workspace.payload.sourceFile} · ${item.workspace.payload.sheetName}`}>{item.workspace.payload.sourceFile}</span></td>
+                  <td className="px-2 py-2 text-xs text-foreground/85"><span className="bom-version-source-file" title={`${item.workspace.payload.sourceFile} · ${item.workspace.payload.sheetName}`}>{item.workspace.payload.sourceFile}</span></td>
                   <td className="px-2 py-2 text-xs tabular-nums text-foreground/85">{item.workspace.payload.recordCount.toLocaleString()}</td>
-                  <td className="px-2 py-2 text-xs"><UploadTimestamp value={item.version.uploadedAt} />{item.version.uploadedBy && <span className="mt-1 block text-muted-foreground">{item.version.uploadedBy}</span>}</td>
+                  <td className="px-2 py-2 text-xs"><span className="bom-version-upload"><UploadTimestamp value={item.version.uploadedAt} />{item.version.uploadedBy && <span className="bom-version-uploader text-muted-foreground" title={item.version.uploadedBy}>{item.version.uploadedBy}</span>}</span></td>
                   <td className="px-2 py-2 text-xs">
                     {carry ? (
-                      <span className="flex flex-wrap gap-1">
+                      <span className="bom-version-chip-row flex gap-1">
                         <span className={cn(CHIP, CHIP_TONE.success)}>帶入 {carry.matched}</span>
                         {carry.orphaned > 0 && <span className={cn(CHIP, CHIP_TONE.danger)}>未帶入 {carry.orphaned}</span>}
                         {carry.manual > 0 && <span className={cn(CHIP, CHIP_TONE.neutral)}>手動 {carry.manual}</span>}
@@ -351,14 +353,14 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-2 py-2 text-xs">
-                    <span className="flex flex-wrap gap-1">
+                    <span className="bom-version-chip-row flex gap-1">
                       {item.isCurrent ? <span className={cn(CHIP, CHIP_TONE.success)}>目前版本</span> : <span className={cn(CHIP, CHIP_TONE.neutral)}>歷史</span>}
                       {isActive && <span className={cn(CHIP, CHIP_TONE.warning)}>畫面中</span>}
                       {item.version.source ? null : <span className={cn(CHIP, CHIP_TONE.neutral)} title="這個版本沒有保存原始 Excel">無原檔</span>}
                     </span>
                   </td>
                   <td className="px-2 py-1.5">
-                    <div className="flex flex-wrap items-center gap-1">
+                    <div className="bom-version-row-actions flex items-center gap-1">
                       {!isActive && <Button type="button" variant="secondary" size="sm" onClick={() => onView(item.workspace.id)} className="h-8 px-2 text-xs lg:h-7">檢視</Button>}
                       {!item.isCurrent && <Button type="button" variant="outline" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onSetCurrent(item, selectedSeries)} className="h-8 px-2 text-xs lg:h-7">設為目前版本</Button>}
                       {compareTarget && <Button type="button" variant="ghost" size="sm" onClick={() => (item.isCurrent ? openDiff(selectedSeries, compareTarget, item) : openDiff(selectedSeries, item, compareTarget))} className="h-8 px-2 text-xs lg:h-7">比對</Button>}
@@ -412,10 +414,12 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         ) : (
           <div className="bom-version-columns grid min-h-0 min-w-0 flex-1">
             <aside data-testid="bom-series-list" className={cn("bom-series-sidebar flex min-h-0 min-w-0 flex-col", compact && mobilePane === "detail" && "hidden")}>
+              <div className="bom-series-tools">
               {canEdit && <Button type="button" variant="outline" size="sm" disabled={!ready || busy} onClick={onUploadNew} title="上傳新系列或新版本" className="bom-upload-entry h-9 justify-start"><Upload className="mr-1.5 h-4 w-4" />上傳 BOM</Button>}
-              <div className="relative">
+              <div className="bom-series-search relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋專案、系列或版本" title="搜尋系列、專案、來源檔或版本說明" aria-label="搜尋 BOM 系列" className="h-10 rounded-xl pl-9 text-sm lg:h-9" />
+              </div>
               </div>
               {query && <div className="bom-series-filter-chips"><button type="button" aria-label="清除 BOM 系列搜尋" onClick={() => setQuery("")}><span>搜尋：{query}</span><X aria-hidden="true" /></button><Button type="button" variant="ghost" onClick={() => setQuery("")}>全部清除</Button></div>}
               <div className="bom-series-groups min-h-0 flex-1 overflow-y-auto">

@@ -219,14 +219,7 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
             {!readOnly && <Button type="button" variant="outline" className="bom-tracker-pdf" disabled={isSaving} title="從線路圖 PDF 讀出頁數與每頁標題" onClick={() => setPdfAiOpen(true)}>PDF AI</Button>}
           </section>
           {totalPages > 0 && <button type="button" className="bom-tracker-tools-toggle" aria-expanded={toolsOpen} onClick={() => setToolsOpen(value => !value)}>{readOnly ? "頁面總覽" : "頁面總覽與批次設定"}<ChevronDown aria-hidden="true" /></button>}
-          {totalPages > 0 && <section className="bom-tracker-map" aria-label="頁面總覽">
-            <header>
-              <h3>頁面總覽</h3>
-              <p>{readOnly ? "點頁碼可跳到那一頁。" : <><span className="bom-tracker-wide-copy">點頁碼跳到那一頁；按住 Shift 再點另一頁，可選一段範圍一次設定。</span><span className="bom-tracker-compact-copy">點頁碼跳到那一頁；一次設定多頁請填下方起訖頁。</span></>}</p>
-              <ul aria-hidden="true">{BOM_PAGE_STATUSES.map(status => <li key={status} data-status={status}>{BOM_PAGE_STATUS_LABELS[status]}</li>)}</ul>
-            </header>
-            <PageMap codes={statusCodes} currentPage={currentPage} rangeStart={readOnly ? 0 : rangeStart} rangeEnd={readOnly ? 0 : rangeEnd} onPick={onPick} />
-            {!readOnly && <div data-testid="bom-page-tracker-batch" className="bom-tracker-batch">
+          {totalPages > 0 && !readOnly && <div data-testid="bom-page-tracker-batch" className="bom-tracker-batch">
               <span className="bom-tracker-batch-label">批次設定</span>
               <Label htmlFor="bom-range-start">第</Label>
               <Input id="bom-range-start" type="number" min={1} max={Math.max(totalPages, 1)} step={1} value={rangeStartInput} onChange={event => setRangeStartInput(event.target.value)} aria-label="起始頁" />
@@ -238,6 +231,13 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
               </div>
               <span className="bom-tracker-batch-hint">{rangeCount > 0 ? `共 ${rangeCount} 頁，標題與備註會保留` : "先填起訖頁"}</span>
             </div>}
+          {totalPages > 0 && <section className="bom-tracker-map" aria-label="頁面總覽">
+            <header>
+              <h3>頁面總覽</h3>
+              <p>{readOnly ? "點頁碼可跳到那一頁。" : <><span className="bom-tracker-wide-copy">點頁碼跳到那一頁；按住 Shift 再點另一頁，可選一段範圍一次設定。</span><span className="bom-tracker-compact-copy">點頁碼跳到那一頁；一次設定多頁請填上方起訖頁。</span></>}</p>
+              <ul aria-hidden="true">{BOM_PAGE_STATUSES.map(status => <li key={status} data-status={status}>{BOM_PAGE_STATUS_LABELS[status]}</li>)}</ul>
+            </header>
+            <PageMap codes={statusCodes} currentPage={currentPage} rangeStart={readOnly ? 0 : rangeStart} rangeEnd={readOnly ? 0 : rangeEnd} onPick={onPick} />
           </section>}
         </div>
 
@@ -250,13 +250,13 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
             <div className="bom-tracker-filter" role="group" aria-label="頁面篩選">
               <label className="bom-tracker-search"><Search aria-hidden="true" /><Input aria-label="搜尋頁面" placeholder="搜尋頁碼、標題或備註" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} /></label>
               <div className="bom-tracker-status-filter" role="group" aria-label="篩選狀態">
-                <button type="button" aria-pressed={filters.status === "all"} onClick={() => setFilters(current => ({ ...current, status: "all" }))}>全部 <span>{totalPages}</span></button>
+                <button type="button" data-status="all" aria-pressed={filters.status === "all"} onClick={() => setFilters(current => ({ ...current, status: "all" }))}>全部 <span>{totalPages}</span></button>
                 {(["pending", "done", "done_missing"] as const).map(status => <button key={status} type="button" data-status={status} aria-pressed={filters.status === status} onClick={() => setFilters(current => ({ ...current, status }))}>{BOM_PAGE_STATUS_LABELS[status]} <span>{counts[status]}</span></button>)}
               </div>
               <span className="bom-tracker-count">{shown} / {totalPages} 頁</span>
             </div>
             {activeChips.length > 0 && <div className="bom-tracker-chips" data-testid="bom-page-tracker-filters">
-              {activeChips.map(chip => <button type="button" key={chip.key} aria-label={`移除篩選：${chip.label}`} onClick={() => setFilters(current => ({ ...current, [chip.key]: chip.reset }))}>{chip.label}<X aria-hidden="true" /></button>)}
+              {activeChips.map(chip => <button type="button" key={chip.key} data-status={chip.key === "status" ? filters.status : undefined} aria-label={`移除篩選：${chip.label}`} onClick={() => setFilters(current => ({ ...current, [chip.key]: chip.reset }))}>{chip.label}<X aria-hidden="true" /></button>)}
               <Button type="button" variant="ghost" onClick={() => setFilters(NO_FILTERS)}>全部清除</Button>
             </div>}
             <div className="bom-tracker-table-scroll" ref={table} data-testid="bom-page-tracker-scroll">
