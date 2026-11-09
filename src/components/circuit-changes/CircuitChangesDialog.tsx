@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type FormEvent } from "react";
-import { ArchiveRestore, ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, Filter, HelpCircle, MessageSquare, PanelLeftClose, PanelLeftOpen, Plus, Search, Trash2, UserRound, X } from "lucide-react";
+import { ArchiveRestore, ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, Filter, HelpCircle, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Search, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -36,11 +36,11 @@ const sideBySide = () => window.matchMedia?.("(min-width: 1024px)").matches ?? t
 const isPdfFile = (file: File) => /\.pdf$/i.test(file.name) || /pdf/i.test(file.type);
 // The PDF beside the form is the default on a wide screen; the choice is kept per browser.
 const LAYOUT_KEY = "circuit-changes-layout:v1";
-function readLayout(): { pdf: boolean; list: "auto" | "open" | "collapsed" } {
-  try { const value = JSON.parse(window.localStorage.getItem(LAYOUT_KEY) || "{}"); return { pdf: value.pdf !== false, list: value.list === "open" || value.list === "collapsed" ? value.list : "auto" }; }
-  catch { return { pdf: true, list: "auto" }; }
+function readLayout(): { pdf: boolean; detail: boolean; list: "auto" | "open" | "collapsed" } {
+  try { const value = JSON.parse(window.localStorage.getItem(LAYOUT_KEY) || "{}"); return { pdf: value.pdf !== false, detail: value.detail !== false, list: value.list === "open" || value.list === "collapsed" ? value.list : "auto" }; }
+  catch { return { pdf: true, detail: true, list: "auto" }; }
 }
-function writeLayout(value: { pdf: boolean; list: "auto" | "open" | "collapsed" }) { try { window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(value)); } catch { /* layout only */ } }
+function writeLayout(value: ReturnType<typeof readLayout>) { try { window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(value)); } catch { /* layout only */ } }
 
 export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, model, pdfs, onAiReview }: {
   open: boolean; onOpenChange: (value: boolean) => void; context: CircuitChangeContext; canEdit: boolean; model: CircuitChangesModel; pdfs: CircuitPdfModel; onAiReview?: () => void;
@@ -76,9 +76,12 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   const [mobilePdf, setMobilePdf] = useState(false);
   const pdfOpen = wide ? layout.pdf : mobilePdf;
   const listCollapsed = wide && pdfOpen && (layout.list === "collapsed" || (layout.list === "auto" && !roomy));
+  const detailCollapsed = wide && pdfOpen && !layout.detail;
   const fileInput = useRef<HTMLInputElement>(null);
   const pickerSide = useRef<CircuitImageSide>("before");
   const detailScroll = useRef<HTMLDivElement>(null);
+  const detailPanel = useRef<HTMLElement>(null);
+  const detailScrollTop = useRef(0);
   const historySection = useRef<HTMLElement>(null);
   const openedDetail = useRef(false);
   const selectedSet = model.sets.find(set => set.id === model.selectedSetId);
@@ -202,12 +205,12 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     window.history.replaceState(window.history.state, "", url);
     onOpenChange(false);
   }
-  function selectItem(id: string) { void run(async () => { await model.selectItem(id); setMobileDetail(true); }); }
+  function selectItem(id: string) { void run(async () => { await model.selectItem(id); changeLayout({ detail: true }); setMobileDetail(true); }); }
   function newItem() {
     void run(async () => {
       await model.createItem();
       // A new change is a draft; a status or search filter would hide the row it gets once it is saved.
-      setFilters({ query: "", status: "all", owner: "all" }); setMobileDetail(true);
+      setFilters({ query: "", status: "all", owner: "all" }); changeLayout({ detail: true }); setMobileDetail(true);
       if (sideBySide()) requestAnimationFrame(() => detailScroll.current?.querySelector<HTMLInputElement>(".circuit-field-title input")?.focus());
     });
   }
@@ -217,7 +220,15 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     if (working || !newTitle.trim()) return;
     void run(async () => { await model.createSet(newTitle.trim(), fromLabel.trim(), toLabel.trim()); setNewSetOpen(false); });
   }
-  function changeLayout(patch: Partial<{ pdf: boolean; list: "auto" | "open" | "collapsed" }>) { setLayout(current => { const next = { ...current, ...patch }; writeLayout(next); return next; }); }
+  function changeLayout(patch: Partial<ReturnType<typeof readLayout>>) { setLayout(current => { const next = { ...current, ...patch }; writeLayout(next); return next; }); }
+  function toggleDetail() {
+    if (!detailCollapsed) detailScrollTop.current = detailScroll.current?.scrollTop || 0;
+    changeLayout({ detail: detailCollapsed });
+    requestAnimationFrame(() => {
+      if (detailCollapsed) detailScroll.current?.scrollTo({ top: detailScrollTop.current });
+      detailPanel.current?.parentElement?.querySelector<HTMLButtonElement>(detailCollapsed ? '.circuit-detail [aria-label="收合修改內容"]' : '.circuit-detail-rail button')?.focus({ preventScroll: true });
+    });
+  }
   function togglePdf() { if (wide) changeLayout({ pdf: !layout.pdf }); else setMobilePdf(value => !value); }
   function uploadPdfs(files: File[]) {
     if (!canEdit) { setNotice("目前為檢視權限，無法上傳 PDF。"); return; }
@@ -240,7 +251,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
         if (files.length) await model.addImages(files, target);
       }
       // Show where the pictures went; the PDF stays where it was. On a phone, going back from the PDF shows this change.
-      setMobileDetail(true);
+      changeLayout({ detail: true }); setMobileDetail(true);
       detailScroll.current?.querySelector(".circuit-image-section")?.scrollIntoView({ block: "start", behavior: "smooth" });
     } finally { setWorking(false); }
   }
@@ -260,7 +271,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     const count = (target: CircuitImageSide) => latestImages.current.filter(image => image.side === target).length;
     const before = count("before");
     void run(async () => {
-      await model.addImages(files, targetSide); setMobileDetail(true);
+      await model.addImages(files, targetSide); changeLayout({ detail: true }); setMobileDetail(true);
       // Screenshots usually come as one "before" then one "after": once the before picture is in, the next paste belongs to after.
       if (targetSide === "before" && count("before") > before && !count("after") && sideBySide()) setSide("after");
     });
@@ -351,7 +362,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           </div>
         </header>
         {(notice || model.error || model.saveError) && <div className="circuit-message" role="alert"><span>{notice || model.saveError || model.error}</span><div>{closeBlocked && <Button type="button" variant="ghost" title={unsaved ? "這項新修改還沒有建立，關閉後不會保留" : "未儲存的草稿會留在這台電腦，下次開啟這一項時帶回"} onClick={leave}>不儲存，直接關閉</Button>}<Button type="button" variant="ghost" onClick={() => void run(() => model.reload())}>重新載入</Button></div></div>}
-        <div className="circuit-workspace" data-pdf-open={pdfOpen} data-list-collapsed={listCollapsed}>
+        <div className="circuit-workspace" data-pdf-open={pdfOpen} data-list-collapsed={listCollapsed} data-detail-collapsed={detailCollapsed}>
           <aside className="circuit-list-panel" aria-label="修改項目">
             {listCollapsed ? <div className="circuit-list-rail">
               <Button type="button" variant="ghost" aria-label="展開修改清單" title="展開修改清單" onClick={() => changeLayout({ list: "open" })}><PanelLeftOpen aria-hidden="true" /></Button>
@@ -389,9 +400,10 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           </aside>
           {pdfOpen && <CircuitPdfPanel pdfs={pdfs} canEdit={canEdit} captureBlocked={captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops} onAiReview={onAiReview}
             onCapture={addCaptures} onSelectChange={selectItem} onBack={() => setMobilePdf(false)} />}
-          <section className="circuit-detail" aria-label="線路修改內容" data-testid="circuit-change-detail" aria-busy={model.switching}>
+          <section ref={detailPanel} id="circuit-change-detail" className="circuit-detail" hidden={detailCollapsed} aria-label="線路修改內容" data-testid="circuit-change-detail" aria-busy={model.switching}>
             {content && item ? <>
               <header className="circuit-detail-heading">
+                {wide && pdfOpen && <Button type="button" variant="ghost" className="circuit-detail-collapse" aria-label="收合修改內容" title="收合修改內容，讓 PDF 更寬" aria-expanded={true} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightClose aria-hidden="true" /></Button>}
                 <Button type="button" variant="ghost" className="circuit-mobile-back" aria-label="返回修改清單" onClick={() => setMobileDetail(false)}><ArrowLeft aria-hidden="true" /></Button>
                 <div>
                   <strong>{unsaved ? "新修改" : number(item.number)}<span className="circuit-list-status" data-status={item.status}>{unsaved ? "尚未儲存" : CIRCUIT_CHANGE_STATUS_LABELS[item.status]}</span></strong>
@@ -452,11 +464,13 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                 </div>
               </footer>
             </> : <div className="circuit-detail-empty">
+              {wide && pdfOpen && <Button type="button" variant="ghost" aria-label="收合修改內容" aria-expanded={true} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightClose aria-hidden="true" />收合修改內容</Button>}
               <h3>{model.loading ? "正在載入線路修改…" : model.items.length ? "從左側選一項修改" : "這塊板子還沒有線路修改紀錄"}</h3>
               {!model.loading && !model.items.length && <p>{canEdit ? "按「新增修改」開始記錄。" : "你目前是檢視權限；有編輯權限的同仁記錄後，這裡會列出每一項修改的前後圖與 Review 狀態。"}</p>}
               {!model.loading && canEdit && <Button type="button" disabled={busy} onClick={newItem}><Plus aria-hidden="true" />新增修改</Button>}
             </div>}
           </section>
+          {detailCollapsed && <aside className="circuit-list-rail circuit-detail-rail" aria-label="修改內容已收合"><Button type="button" variant="ghost" aria-label="展開修改內容" title="展開修改內容" aria-expanded={false} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightOpen aria-hidden="true" /></Button><span aria-hidden="true">修改內容</span></aside>}
         </div>
       </DialogContent>
     </Dialog>
