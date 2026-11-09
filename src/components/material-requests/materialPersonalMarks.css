@@ -1,0 +1,14 @@
+/* Neutral ink stays dark through the site's charcoal palette transform. */
+.material-sheet-theme .material-personal-marks-button { border-color: #a9792e; background: #3d3020; color: #ffe0a0; font-weight: 600; }
+.material-sheet-theme .material-personal-marks-button > svg { color: #ffd16b; }
+.material-sheet-theme .material-personal-marks-button:hover:not(:disabled) { border-color: #e8b34f; background: #514024; color: #ffedc6; }
+.material-sheet-theme .material-personal-marks-button[aria-pressed="true"], .material-sheet-theme .material-personal-marks-button[aria-pressed="true"]:hover:not(:disabled) { border-color: #ffdc88; background: #f6c65b; color: #222222; }
+.material-sheet-theme .material-personal-marks-button[aria-pressed="true"] > svg { color: inherit; }
+.material-sheet-theme .material-personal-marks-button:focus-visible { outline: 2px solid #ffdb85; outline-offset: 2px; }
+.material-sheet-theme .material-personal-marks-button .material-mark-count { display: inline-flex; min-width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 5px; padding: 0 6px; background: #f6c65b; color: #222222; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.material-sheet-theme .material-personal-marks-button[aria-pressed="true"] .material-mark-count { background: #222222; color: #ffe5a8; }
+.material-sheet-theme .material-mobile-scope > .material-personal-marks-button { color: #f6cf7f; }
+.material-sheet-theme .material-mobile-scope > .material-personal-marks-button[aria-pressed="true"], .material-sheet-theme .material-mobile-scope > .material-personal-marks-button[aria-pressed="true"]:hover:not(:disabled) { background: #f6c65b12; color: #ffdf98; }
+.material-sheet-theme .material-mobile-scope > .material-personal-marks-button[aria-pressed="true"]::after { background: #f6c65b; }
+.material-sheet-theme .material-mobile-scope > .material-personal-marks-button .material-mark-count { background: #f6c65b; color: #222222; }
+.material-sheet-theme .material-mobile-scope > .material-personal-marks-button[aria-pressed="true"] .material-mark-count { background: #f6c65b; color: #222222; }
