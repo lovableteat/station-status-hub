@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-07-23-global-collaboration-center-design.md`；程式參考基準：`88f28c2affca63e061321412902fb835e2172685`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-07-23-global-collaboration-center-design.md`；程式參考基準：`83b81c61ff76d4b016b5e5774e752789e06b63ed`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 全站協作中心設計
 
