@@ -42,7 +42,7 @@ test('desktop consolidates source/model/usage controls above chat and all compos
     assert.equal(tools.findAll(node => node.type === 'stub' && node.props['aria-label'] === '清空對話').length, 1);
     assert.equal(tools.findAll(node => node.type === 'stub' && node.props['aria-label'] === '開啟共享提示詞庫').length, 1);
     const header=f.root.root.findByProps({'data-ai-chat-toolbar':'true'});
-    assert.equal(header.findAll(node=>node.type==='stub'&&node.props['aria-label']==='資料來源：維修資料與料號 SPEC').length,1);
+    assert.equal(header.findAll(node=>node.type==='stub'&&node.props['aria-label']==='資料來源：全站資料、維修資料與料號 SPEC').length,1);
     assert.equal(header.findAll(node=>node.type==='stub'&&node.props.compact===true&&'apiKeyId' in node.props).length,1);
     assert.equal(f.root.root.findAll(node => node.type === 'stub' && node.props['aria-label'] === '送出查詢').length, 1);
   } finally { await act(async () => f.root.unmount()); }
