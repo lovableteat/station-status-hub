@@ -23,7 +23,7 @@ function execute(name,h,overrides={}){
   activeBomId:'W',bomWorkspaces:[workspace],activeWorkspace:workspace,basePayload:workspace.payload,
   isValidBomUsage:()=>true,normalizeRequestUrl:v=>v,canManageBomPageTracker:true,
   showCollaborativeUnavailableToast:effect('connection-toast'),showDatasetSyncingToast:effect('loading-toast'),
-  setIsImporting:effect('busy'),setBomWorkspaces:effect('state'),setActiveBomId:effect('selection'),setExpandedKey:effect('expand'),setPage:effect('page'),setEditorOpen:effect('editor'),setTableColorDialogOpen:effect('colors'),
+  setIsImporting:effect('busy'),setBomWorkspaces:effect('state'),setActiveBomId:effect('selection'),setExpandedKey:effect('expand'),setPage:effect('page'),setEditorOpen:effect('editor'),setHiddenColumns:effect('columns'),setColumnWidths:effect('widths'),DEFAULT_COLUMN_WIDTHS:[],
   setPendingUploads:effect('staged'),setUploadDialogOpen:effect('upload-dialog'),setBomManagerOpen:effect('manager'),
   replaceBomWorkspace:effect('optimistic'),toast:effect('toast'),console,
   parseMaterialWorkbookFile:async()=>({recordCount:1,records:[record],sheetName:'Sheet',importNotes:[]}),
@@ -37,7 +37,7 @@ function execute(name,h,overrides={}){
   logMaterialWorkspaceAction:async()=>effects.push('audit'),logMaterialRecordChange:async()=>effects.push('audit'),
   reloadBomWorkspaces:async()=>effects.push('reload'),switchActiveBom:effect('selection'),
   recentLocalRecordIdsRef:{current:new Map()},loadDefaultBomWorkspace:async()=>workspace,createDefaultBomWorkspace:()=>workspace,
-  getBomPageTrackerSummary:()=>({}),normalizeBomTableColorTheme:v=>v,tableColorDraft:{},
+  getBomPageTrackerSummary:()=>({}),normalizeBomTableColorTheme:v=>v,activeTableColorTheme:{primary:'#saved'},
   useCallback:fn=>fn,bomAccountRef:{current:{accountId:'account-A',generation:0}},
   activeProject:null,toBomWorkspaceProject:()=>undefined,saveBomWorkspaceProject:async()=>{writes.push('project');},recentLocalWorkspaceWritesRef:{current:new Map()},
   allProjects:[{id:'P',name:'VERA'}],bomProjectAssignmentRef:{current:null},setAssigningBomProjectId:effect('project-busy'),
@@ -82,10 +82,45 @@ test('completed BOM version write after account replacement has no new-account U
 test('legitimate current-account BOM upload still writes every file as its own version and updates the directory',async()=>{
  const h=await mount();try{const c=execute('confirmBomUploads',h);await c.run({label:'EVT',note:''});assert.equal(fileWrites(c).length,2);assert.ok(c.writes.includes('version'));assert.ok(c.effects.includes('optimistic'));assert.ok(c.effects.includes('reload'));assert.ok(c.effects.includes('selection'));assert.ok(c.effects.includes('audit'));}finally{await h.unmount();}
 });
-for(const name of ['saveRecordToActiveBom','saveBomPageTracker','deleteBomWorkspaceById','applyTableColorTheme'])test(`actual ${name} denies view-only invocation before local or backend mutation`,async()=>{
+// Table settings mix one shared write (the BOM's colours) with personal choices (which columns show, their widths).
+const sharedColours={theme:{primary:'#changed'},hiddenColumns:['note'],resetWidths:true};
+const personalOnly={theme:{primary:'#saved'},hiddenColumns:['note'],resetWidths:true};
+for(const name of ['saveRecordToActiveBom','saveBomPageTracker','deleteBomWorkspaceById','applyTableSettings'])test(`actual ${name} denies view-only invocation before local or backend mutation`,async()=>{
  const h=await mount(false);try{
-  const c=execute(name,h,{canEdit:false});await Promise.resolve(c.run(name==='saveRecordToActiveBom'?c.record:'W',{})).catch(e=>assert.ok(e instanceof h.WorkspaceMutationScopeChangedError));
+  const c=execute(name,h,{canEdit:false});await Promise.resolve(c.run(name==='saveRecordToActiveBom'?c.record:name==='applyTableSettings'?sharedColours:'W',{})).catch(e=>assert.ok(e instanceof h.WorkspaceMutationScopeChangedError));
   assert.equal(c.writes.length,0);assert.deepEqual(c.effects,[]);
+ }finally{await h.unmount();}
+});
+test('shared table colours are refused for a view-only account, while its own column choices need no shared write',async()=>{
+ const h=await mount(false);try{
+  const denied=execute('applyTableSettings',h,{canEdit:false});
+  await assert.rejects(async()=>denied.run(sharedColours),h.WorkspaceMutationScopeChangedError,'changing the shared colours must be refused, not silently skipped');
+  assert.deepEqual(denied.writes,[]);assert.deepEqual(denied.effects,[],'a refused colour change applies nothing else either');
+  const personal=execute('applyTableSettings',h,{canEdit:false});await personal.run(personalOnly);
+  assert.deepEqual(personal.writes,[],'column visibility and widths are kept per person');assert.deepEqual(personal.effects,['columns','widths']);
+ }finally{await h.unmount();}
+});
+test('an editor saves the shared table colours once, and the page shows them only after the save succeeded',async()=>{
+ const h=await mount();try{
+  const c=execute('applyTableSettings',h);await c.run(sharedColours);
+  assert.deepEqual(c.writes,['theme']);assert.deepEqual(c.effects,['state','columns','widths']);
+  const failed=execute('applyTableSettings',h,{saveBomWorkspaceTableColorTheme:async()=>{throw Error('storage refused');}});
+  await assert.rejects(async()=>failed.run(sharedColours),/配色尚未儲存/,'a failed save is reported so the settings window stays open');
+  assert.deepEqual(failed.effects,[],'a failed save leaves the colours and the column choices as they were');
+  const offline=execute('applyTableSettings',h,{isCollaborativeReady:false});
+  await assert.rejects(async()=>offline.run(sharedColours),/尚未連上共享資料/);
+  assert.deepEqual(offline.writes,[]);assert.deepEqual(offline.effects,[]);
+ }finally{await h.unmount();}
+});
+test('a colour save answered after the account changed does not repaint the new account',async()=>{
+ const h=await mount(),pending=deferred();try{
+  // Storage re-checks with the callback it is handed. This stand-in only keeps that callback, so the page's own check after the write is what stops the repaint.
+  let storageCheck;
+  const c=execute('applyTableSettings',h,{saveBomWorkspaceTableColorTheme:async(_id,_theme,check)=>{storageCheck=check;c.writes.push('theme');await pending.promise;}});
+  const request=c.run(sharedColours).then(()=>null,error=>error);await flush();assert.deepEqual(c.writes,['theme'],'the write was issued under the first account');
+  assert.doesNotThrow(storageCheck,'the first account is still allowed to write');
+  await h.update('account-B',true);assert.throws(storageCheck,h.WorkspaceMutationScopeChangedError,'storage is handed a check that notices the account changed');pending.resolve();
+  assert.ok((await request) instanceof h.WorkspaceMutationScopeChangedError);assert.deepEqual(c.effects,[],'nothing of the old request reaches the page of the new account');
  }finally{await h.unmount();}
 });
 test('held callbacks and unmounted mutation scope cannot revive an old permission epoch',async()=>{
