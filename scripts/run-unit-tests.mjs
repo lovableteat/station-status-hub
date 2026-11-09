@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 
@@ -15,6 +15,9 @@ async function collect(directory) {
 }
 const files = (await Promise.all(["src", "tests"].map(directory => collect(join(root, directory))))).flat().sort();
 if (!files.length) throw new Error("No unit or contract tests found");
-const child = spawn(process.execPath, ["--test", ...files], { cwd: root, stdio: "inherit" });
+// Pass paths relative to the root: absolute ones overflow Windows' 32,767-character command line in a deep checkout
+// such as a git worktree, and spawn fails with ENAMETOOLONG before any test runs.
+const tests = files.map(file => relative(root, file).split(sep).join("/"));
+const child = spawn(process.execPath, ["--test", ...tests], { cwd: root, stdio: "inherit" });
 child.on("error", error => { console.error(error); process.exitCode = 1; });
 child.on("exit", code => { process.exitCode = code ?? 1; });
