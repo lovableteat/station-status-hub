@@ -104,6 +104,7 @@ import { MaterialMobileBomPicker } from "./MaterialMobileBomPicker";
 import "./materialMobilePage.css";
 import "./materialMobileEditor.css";
 import "./bomPageTracker.css";
+import "./materialPersonalMarks.css";
 import { buildMaterialMainGroups, filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
@@ -6437,7 +6438,7 @@ export function MaterialRequestPage() {
           <div className="material-mobile-scope" role="group" aria-label="料件範圍">
             <button type="button" onClick={clearFilters} aria-pressed={availability === "all" && !showMarkedOnly}>全部 <span>{displayGroups.length.toLocaleString()}</span></button>
             <button type="button" onClick={() => applyAvailabilityFilter("required")} aria-pressed={availability === "required"}>料號待補 <span>{requiredApplicationCount.toLocaleString()}</span></button>
-            <button type="button" onClick={() => setShowMarkedOnly((current) => !current)} aria-pressed={showMarkedOnly} disabled={!personalMarks.ready}><Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />我的標記 <span>{markedGroupCount}</span></button>
+            <button type="button" className="material-personal-marks-button" onClick={() => setShowMarkedOnly((current) => !current)} aria-pressed={showMarkedOnly} disabled={!personalMarks.ready}><Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />我的標記 <span className="material-mark-count">{markedGroupCount}</span></button>
           </div>
 
           <div data-testid="material-mobile-column-filters" role="group" aria-label="料件欄位篩選" className="material-mobile-column-filters">
@@ -6689,7 +6690,7 @@ export function MaterialRequestPage() {
             </Select>
             {tableSettingsControl}
             <Button type="button" variant="outline" size="sm" data-testid="material-export-visible" className="material-action-highlight h-9 gap-1.5 px-2.5 text-xs" disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} onClick={() => void exportVisibleColumns()} title="依目前顯示欄位與順序匯出所有符合篩選的廠商明細，不受分頁限制；狀態欄匯出文字"><Download className="h-3.5 w-3.5" />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}</Button>
-            <Button type="button" variant="outline" size="sm" data-testid="material-personal-marks-filter" className="h-9 gap-1.5 px-2.5 text-xs" aria-pressed={showMarkedOnly} disabled={!personalMarks.ready} onClick={() => setShowMarkedOnly(value => !value)} title="只顯示目前帳號勾選的料件，其他使用者看不到這些標記"><Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />我的標記（{markedGroupCount}）</Button>
+            <Button type="button" variant="outline" size="sm" data-testid="material-personal-marks-filter" className="material-personal-marks-button h-9 gap-1.5 px-2.5 text-xs" aria-label={`我的標記（${markedGroupCount}）`} aria-pressed={showMarkedOnly} disabled={!personalMarks.ready} onClick={() => setShowMarkedOnly(value => !value)} title="只顯示目前帳號勾選的料件，其他使用者看不到這些標記"><Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />我的標記 <span className="material-mark-count">{markedGroupCount}</span></Button>
             <span className="ml-auto text-xs text-slate-400">
               {isPreviewDataset
                 ? <>先顯示 <strong className="text-cyan-200">{visibleGroupRows.length.toLocaleString()}</strong> 個主料，完整清單同步中</>
