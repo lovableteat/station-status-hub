@@ -98,6 +98,8 @@ import { useUser } from "@/components/auth/UserContext";
 import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
 import { MaterialTableScroll } from "./MaterialTableScroll";
 import { MaterialMobileListRow } from "./MaterialMobileListRow";
+import { BomPagePdfAiDialog } from "./BomPagePdfAiDialog";
+import { applyPdfPageTitles } from "./bomPagePdfAi";
 import { MaterialMobileBomPicker } from "./MaterialMobileBomPicker";
 import "./materialMobilePage.css";
 import "./materialMobileEditor.css";
@@ -765,6 +767,7 @@ function syncBomTrackerPages(pages: BomPageTrackerPage[], totalPages: number) {
       pageNumber,
       status: page.status ?? (page.completed === true ? "done" : "pending"),
       note: page.note ?? "",
+      ...(typeof page.title === "string" ? { title: page.title } : {}),
     });
   });
 
@@ -2049,8 +2052,10 @@ function BomPageTrackerDialog({
   const [rangeEndInput, setRangeEndInput] = useState("1");
   const [pages, setPages] = useState<BomPageTrackerPage[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [pdfAiOpen, setPdfAiOpen] = useState(false);
 
   useEffect(() => {
+    setPdfAiOpen(false);
     if (!open || !workspace) return;
 
     const summary = getBomPageTrackerSummary(workspace.pageTracker);
@@ -2179,6 +2184,7 @@ function BomPageTrackerDialog({
             <BomPageTrackerSummaryPill pageTracker={{ totalPages, currentPage, pages: syncedPages, updatedAt: workspace.pageTracker?.updatedAt ?? workspace.updatedAt }} />
             <span className="text-xs text-muted-foreground">完成率 {completionRate}%</span>
           </div>
+          <Button type="button" variant="outline" className="ml-auto h-11" disabled={isSaving} onClick={() => setPdfAiOpen(true)}>PDF AI</Button>
         </section>
 
         {totalPages === 0 ? (
@@ -2233,7 +2239,7 @@ function BomPageTrackerDialog({
             </div>
 
             <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
-              <span>逐頁狀態與備註</span>
+              <span>逐頁標題、狀態與備註</span>
               <span>{completedPages} / {totalPages} 頁完成</span>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border bg-background/40">
@@ -2245,7 +2251,7 @@ function BomPageTrackerDialog({
                   return (
                     <div
                       key={page.pageNumber}
-                      className={cn("flex flex-wrap items-center gap-2 px-3 py-1.5", isCurrent && "bg-primary/10")}
+                      className={cn("flex flex-wrap items-center gap-2 px-3 py-1.5 lg:grid lg:grid-cols-[4rem_auto_5.5rem_minmax(0,1.2fr)_minmax(0,1fr)]", isCurrent && "bg-primary/10")}
                     >
                       <span className={cn("w-16 flex-none text-sm font-semibold", statusMeta.textClassName)}>第 {page.pageNumber} 頁</span>
                       <div className="inline-flex flex-none rounded-lg border border-border bg-secondary p-0.5" role="group" aria-label={`第 ${page.pageNumber} 頁狀態`}>
@@ -2278,6 +2284,14 @@ function BomPageTrackerDialog({
                         </button>
                       )}
                       <Input
+                        value={page.title ?? ""}
+                        onChange={event => updatePage(page.pageNumber, { title: event.target.value })}
+                        placeholder="頁面標題"
+                        aria-label={`第 ${page.pageNumber} 頁標題`}
+                        maxLength={300}
+                        className="h-8 min-w-[10rem] flex-1 rounded-lg px-2.5 text-sm lg:min-w-0"
+                      />
+                      <Input
                         value={page.note}
                         onChange={(event) => {
                           updatePage(page.pageNumber, { note: event.target.value });
@@ -2287,7 +2301,7 @@ function BomPageTrackerDialog({
                         }}
                         placeholder="備註"
                         aria-label={`第 ${page.pageNumber} 頁備註`}
-                        className="h-8 min-w-[12rem] flex-1 rounded-lg px-2.5 text-sm"
+                        className="h-8 min-w-[12rem] flex-1 rounded-lg px-2.5 text-sm lg:min-w-0"
                       />
                     </div>
                   );
@@ -2303,6 +2317,14 @@ function BomPageTrackerDialog({
             {isSaving ? "儲存中..." : "儲存頁數進度"}
           </Button>
         </DialogFooter>
+        <BomPagePdfAiDialog key={workspace.id} open={open && pdfAiOpen} onOpenChange={setPdfAiOpen} maxPages={MAX_BOM_TRACKER_PAGES} onApply={titles => {
+          const nextTotal = Math.max(totalPages, titles.length);
+          setTotalPagesInput(String(nextTotal));
+          setCurrentPageInput(current => String(Math.min(nextTotal, clampBomTrackerPageCount(Number(current || 0)))));
+          setRangeStartInput(current => String(Math.min(nextTotal, Math.max(1, clampBomTrackerPageCount(Number(current || 0))))));
+          setRangeEndInput(current => String(Math.min(nextTotal, Math.max(1, clampBomTrackerPageCount(Number(current || 0))))));
+          setPages(current => applyPdfPageTitles(current, titles));
+        }} />
       </DialogContent>
     </Dialog>
   );
