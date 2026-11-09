@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/UI設計風格與互動規則.md`；程式參考基準：`83b81c61ff76d4b016b5e5774e752789e06b63ed`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/UI設計風格與互動規則.md`；程式參考基準：`04733c47718c790a0fae3c0ebda41f3b79ec148b`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # UI 設計風格與互動規則
 
@@ -190,6 +190,8 @@ AutoCheck「比對檢查」的輸入區是一張可照著做的清單（2026-11-
 
 料號申請的「線路修改」打開就是可以記錄的畫面（2026-11-09）。尚無紀錄時直接顯示空白的新修改表單與修改前／修改後兩個放圖區，不先要求建立批次；輸入第一個字或加入第一張圖才建立紀錄，沒有批次時一併建立以目前版次命名的批次（例如「V1 → V2 線路修改」），沒有輸入的空白表單不留下紀錄。同一個動作只有一個入口：「新增修改」在清單上方，「新增批次」在批次選擇旁，「匯出 Change List」與「使用說明」在頁首。搜尋、狀態、負責人篩選與 chip 位於清單欄內並緊貼清單上方，狀態選項帶各狀態筆數；關閉視窗時移除網址上的篩選參數。內容區先文字（標題、Ref／Net／頁碼／負責人、原因、說明）後圖片：修改前與修改後並排，各顯示一張含標記的大圖，多張時以縮圖列切換，補充圖是一列縮圖。貼上（Ctrl+V）加入標示「貼上會加到這裡」的那一格，沒有修改前圖時是修改前，加入後自動移到修改後；拖放以放開時所在的那一格為準；在文字欄位貼上帶文字的剪貼簿（Excel 儲存格）只貼文字。視窗外的檔案拖放必須攔下，不可讓瀏覽器開啟檔案而離開頁面。移除圖片提供立即復原；無法接受的檔案（非圖片、空檔、過大）列出原因且不提供重試。待 Review 與已確認的項目內容鎖定，按「修改內容」才可編輯，避免審查者誤改而撤回送審；Review 意見欄與「退回補充／確認」固定在頁尾同一列，退回原因顯示在該項目最上方。送出前還缺的內容（修改標題、修改說明或修改後圖片）在頁尾列出並停用「送出 Review」。切換項目的載入期間表單不接受輸入。表單主文字 14px、控制高度 40px（1023px 以下 44px、輸入 16px），12–13px 只用於輔助資訊。1023px 以下清單與內容分成兩個畫面，尚無紀錄時直接進入表單，圖片區排在原因／說明之前，分頁（修改前／修改後／補充圖）就是顯示中的那一格，文案不提 Ctrl+V 與拖放。放大視窗依長寬完整顯示圖片，標記工具可連續使用，說明與標記列在圖片旁，可切換上一張／下一張（方向鍵）並更改圖片用途。
 
+料號申請的「頁數進度」先讓人一眼看到全貌，再逐頁編輯（2026-11-09）。上方一列是總頁數、目前做到第幾頁、進度條與 PDF AI；其下的「頁面總覽」把每頁畫成依狀態上色的一格，點格跳到該頁，Shift 加點選取一段並同步到批次設定。篩選列（搜尋 → 狀態，狀態帶頁數）緊貼表格上方，chip 可個別清除與全部清除，沒有符合時保留表頭並顯示「目前篩選條件沒有符合的頁面」；批次設定屬於工具，放在頁面總覽區，不與篩選列混在一起。表格只有頁碼、狀態、頁面標題、備註四欄，列高 44px、文字 14px；「設為目前頁」是頁碼旁的旗標，不另佔一欄。頁尾左側固定顯示儲存狀態（已儲存與時間，或有幾頁尚未儲存），有未儲存修改時任何關閉方式都先在頁尾詢問，不另開對話框。背景更新（同事存料件或存頁數進度）不得重設視窗中的草稿；儲存時以最新資料為底只寫入自己改過的頁面。唯讀者可開啟查看但不顯示任何會被拒絕的操作。視窗很矮（手機鍵盤彈出）時，設定區限高內部捲動、篩選列改成單列水平捲動，表格至少保留 100px，頁尾按鈕不得被擠出畫面。樣式表只用主題變數上色。
+
 工程圖保留原有比例、標籤與可讀性；目前 app 內圖表使用已清理的 SVG 與 React 控制，不把外部 HTML script 直接嵌入 app。下載 HTML 可保留原有 standalone 工具，但不能因此放寬 app 內嵌執行界線。不要為了統一深色外觀而任意反相線路圖、刪掉必要標示或扭曲工程幾何。
 
 依據：`src/components/ui/table.tsx`、`src/components/test-plan/TestPlanWorkspace.tsx`、`test-plan.css`、`src/components/comparison/ComparisonResults.tsx`、`ComparisonCharts.tsx`、`comparison.css`、`public/comparison/README.md`。
@@ -343,6 +345,7 @@ AI 回答與請求必須有 loading／進度／取消或錯誤回饋，來源選
 | 維修標題與 loading | `src/components/maintenance/MaintenancePageHeader.tsx`、`MaintenanceLoading.tsx` |
 | 檔案庫 | `src/components/test-plan/TestPlanWorkspace.tsx`、`useFileLibraryFilters.ts`、`test-plan.css` |
 | AutoCheck | `src/components/comparison/ComparisonResults.tsx`、`ComparisonCharts.tsx`、`useComparisonFilters.ts`、`comparison.css`、`public/comparison/README.md` |
+| 頁數進度 | `src/components/material-requests/BomPageTrackerDialog.tsx`、`bomPageTracker.ts`、`bomPageTracker.css`、`docs/material-workflows.md` |
 | 線路修改 | `src/components/circuit-changes/CircuitChangesDialog.tsx`、`CircuitChangeImages.tsx`、`CircuitChangeImageViewer.tsx`、`useCircuitChanges.ts`、`circuitChanges.css`、`docs/material-workflows.md` |
 | AI | `src/components/api-management/ApiChatConsole.tsx`、`AiQuotaStatus.tsx`、`MaintenanceSourceSelector.tsx` |
 | 全域協作與隔離錯誤 | `src/components/collaboration/CollaborationCenter.tsx`、`src/components/common/WorkspaceRuntimeBoundary.tsx` |
