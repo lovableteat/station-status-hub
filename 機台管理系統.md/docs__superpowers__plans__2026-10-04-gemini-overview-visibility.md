@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-04-gemini-overview-visibility.md`；程式參考基準：`197e2e5bc3f0ba15fe4f6d0bcb305ff12298a943`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-04-gemini-overview-visibility.md`；程式參考基準：`74cf6ebb8d8de066f93e19468086e5e8e520d2f8`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Gemini Overview Visibility Implementation Plan
 
