@@ -64,6 +64,7 @@ station-status-hub/
 ├─ scripts/                   # STEP、GLB 等大型模型的轉換工具
 ├─ docs/                      # 交接、驗證與架構文件
 ├─ .github/workflows/main.yml # main 推送後的 GitHub Pages 建置與部署
+├─ .github/workflows/audit-on-main.yml # main 推送後的稽核整合測試（不擋部署）
 └─ vite.config.ts             # base path、開發伺服器與前端 build 設定
 ```
 
@@ -312,6 +313,8 @@ RWD 的目標是「工作現場拿起手機就能完成工作」，不是只讓�
 2. 注入 GitHub Actions secrets 的 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` 與 realtime flag。
 3. 執行 production build。
 4. 將 `dist` 發布到 GitHub Pages。
+
+同一次推送也會觸發 `.github/workflows/audit-on-main.yml`，以隔離的假資料執行 `node --test tests/audit*.integration.cjs`（權限、帳號切換、即時事件與草稿保護等稽核整合測試）。它與部署並行、不擋部署；失敗時該 commit 會標紅並通知推送者，應盡快修正。這些測試不在 `npm test` 內，改名頁面函式或更換對話框關閉按鈕時要一併檢查。完整的 PR 回歸（含型別、單元、PostgreSQL、瀏覽器測試）仍在 `audit-regression.yml`。
 
 前端 base path 是 `/station-status-hub/`。部署檢查至少包含 build 成功、Pages 200、登入頁可開啟、主要 workspace 可載入，以及沒有把 secrets 打進 bundle 或 log。Pages workflow 不會套用 Supabase migration；資料庫變更必須另外依照 [`supabase-production-migration-runbook.md`](./supabase-production-migration-runbook.md) 執行、查詢並記錄驗證結果。
 

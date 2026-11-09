@@ -112,14 +112,22 @@ test('Data-center renders real inspector in desktop/mobile layout without Refere
     './DataCenterModelViewer':{DataCenterModelViewer:child}, './FacilityAisleCreationDialog':{FacilityAisleCreationDialog:child},
     './modelConversionWorker':{convertStepToGlb(){}},
     './useSharedDataCenterProjects':{useSharedDataCenterProjects:()=>({projects:[],selectedProject:null,selectedProjectId:'',syncState:'local'})},
+    // Daily work reports (f8de59e4) are read through React Query and the Supabase client. Signed out, the query never runs.
+    '@/integrations/supabase/client':{supabase:{from(){throw Error('a signed-out Data-center render must not read work reports');}}},
+    '@tanstack/react-query':{useQuery:options=>{assert.equal(options.enabled,false,'signed out, the work report query stays disabled');return {data:undefined,isPending:true,isFetching:false,isError:false,error:null};},useQueryClient:()=>({invalidateQueries:async()=>{}})},
   };
   const load=loader({window:win,mocks});
   const {DeploymentPlanningCenter}=load('src/components/data-center/DeploymentPlanningCenter.tsx');
   let root;await act(async()=>{root=create(React.createElement(DeploymentPlanningCenter));});
-  assert.ok(JSON.stringify(root.toJSON()).includes('Data Center Digital Twin'));
+  // The heading became 機房配置與工作回報 in f8de59e4.
+  const textOf=node=>typeof node==='string'?node:node.children.map(textOf).join('');
+  assert.ok(root.root.findAll(node=>node.type==='h1').some(node=>textOf(node).startsWith('機房配置')),'the page heading renders');
   await act(async()=>root.unmount());
   win.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}});
   await act(async()=>{root=create(React.createElement(DeploymentPlanningCenter));});
-  assert.ok(JSON.stringify(root.toJSON()).includes('機櫃詳情'));
+  // On a phone the inspector opens in the 機櫃與設備 dialog without its desktop header (f8de59e4).
+  const phone=JSON.stringify(root.toJSON());
+  assert.ok(phone.includes('目前機櫃：')&&phone.includes('L11 機櫃外型'),'the phone rack dialog renders the real inspector');
+  assert.equal(phone.includes('機櫃詳情'),false,'the desktop inspector header is not used on a phone');
   await act(async()=>root.unmount());
 });

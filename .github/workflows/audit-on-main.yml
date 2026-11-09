@@ -1,0 +1,32 @@
+name: Audit tests on main
+# Runs the audit integration tests on every push to main, next to the Pages deploy.
+# It does not hold the deploy back; a failure marks the commit red and notifies the person who pushed.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: audit-on-main
+  cancel-in-progress: true
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VITE_SUPABASE_URL: http://127.0.0.1:54321
+      VITE_SUPABASE_ANON_KEY: isolated-test-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - name: Set isolated QA directory
+        run: echo "AUDIT_QA_DIR=$RUNNER_TEMP/station-audit-qa" >> "$GITHUB_ENV"
+      - name: Install isolated QA dependencies
+        run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock react@18.3.1 react-test-renderer@18.3.1 jsdom@29.1.1 @electric-sql/pglite@0.5.8
+      - name: Deferred requests, live events, drafts and permissions
+        run: node --test tests/audit*.integration.cjs
