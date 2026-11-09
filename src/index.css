@@ -2522,6 +2522,10 @@ body {
 [data-floating-direct-messages='true'] :is(input, textarea) { font-size: 15px; }
 
 /* ===== Mobile shell: feedback placement and shared phone components (2026-11-04) ===== */
+/* From 640px the AI chat page keeps a 12px gutter under the composer (sm:py-3 on its wrapper), so its toasts sit that much higher. */
+@media (min-width: 640px) and (max-width: 1023px) {
+  body:has([data-ai-chat-shell]) :is([data-ui='toast-viewport'], [data-sonner-toaster]) { margin-bottom: 12px; }
+}
 @media (max-width: 1023px) {
   /* Toasts sit above the dock instead of over the header; the AI page adds its composer height.
      sonner is anchored at the bottom on these widths (ui/sonner.tsx). Never give the toaster a top and a bottom offset

@@ -31,6 +31,8 @@ test("toasts sit above the dock on phones instead of over the header", async () 
   assert.doesNotMatch(toast, /\bsm:top-\[/, "the Radix viewport keeps its desktop top offset behind lg: for the same reason");
   assert.match(block, /body:has\(\[data-ai-composer-attachments\]\) :is\(\[data-ui='toast-viewport'\], \[data-sonner-toaster\]\) \{ bottom: calc\(var\(--mobile-shell-bottom\) \+ 132px\) !important/);
   assert.match(block, /body:has\(\[data-ai-chat-keyboard\]\) :is\(\[data-ui='toast-viewport'\], \[data-sonner-toaster\]\) \{ bottom: calc\(var\(--ai-dialog-visible-bottom, 0px\) \+ 72px\) !important/);
+  // From 640px the chat page keeps a 12px gutter under the composer, so the chat's toasts are lifted by the same amount.
+  assert.match(block, /@media \(min-width: 640px\) and \(max-width: 1023px\) \{\s*body:has\(\[data-ai-chat-shell\]\) :is\(\[data-ui='toast-viewport'\], \[data-sonner-toaster\]\) \{ margin-bottom: 12px; \}/);
 });
 
 test("shared phone components exist with the agreed anatomy and 44px targets", async () => {
