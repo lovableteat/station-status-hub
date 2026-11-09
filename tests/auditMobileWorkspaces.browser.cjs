@@ -66,9 +66,10 @@ async function checkWorkspace(context, workspace, { bar, tools, sheet }) {
 }
 
 // Raises one real toast through each of the app's two toast systems (sonner and the Radix hook) and checks that it sits
-// above the dock inside a list no taller than itself: a taller list is an invisible layer that swallows taps.
-async function checkRealToasts(tab, viewport) {
-  const result = await tab.evaluate(async () => {
+// above the dock (or whatever `floor` names) inside a list no taller than itself: a taller list is an invisible layer
+// that swallows taps.
+async function checkRealToasts(tab, viewport, floor = '[data-mobile-workspace-dock]') {
+  const result = await tab.evaluate(async (floorSelector) => {
     const loaded = performance.getEntriesByType('resource').map((entry) => entry.name).reverse();
     const sonnerUrl = loaded.find((name) => /\/sonner\.js(\?|$)/.test(name));
     const radixUrl = loaded.find((name) => /\/src\/hooks\/use-toast\.ts(\?|$)/.test(name));
@@ -76,20 +77,20 @@ async function checkRealToasts(tab, viewport) {
     (await import(sonnerUrl)).toast.success('稽核用提示');
     (await import(radixUrl)).toast({ title: '稽核用提示' });
     await new Promise((resolve) => setTimeout(resolve, 800));
-    const dockTop = document.querySelector('[data-mobile-workspace-dock]').getBoundingClientRect().top;
+    const floorTop = document.querySelector(floorSelector).getBoundingClientRect().top;
     const measure = (list, item) => {
       if (!list || !item) return { error: 'the toast did not render' };
       const box = item.getBoundingClientRect();
-      return { top: Math.round(box.top), bottom: Math.round(box.bottom), dockTop: Math.round(dockTop), listHeight: Math.round(list.getBoundingClientRect().height), toastHeight: Math.round(box.height) };
+      return { top: Math.round(box.top), bottom: Math.round(box.bottom), floorTop: Math.round(floorTop), listHeight: Math.round(list.getBoundingClientRect().height), toastHeight: Math.round(box.height) };
     };
     const sonnerList = document.querySelector('[data-sonner-toaster]');
     const radixList = document.querySelector('[data-ui="toast-viewport"]');
     return { sonner: measure(sonnerList, sonnerList?.querySelector('[data-sonner-toast]')), radix: measure(radixList, radixList?.querySelector('li')) };
-  });
+  }, floor);
   assert.ok(!result.error, `${viewport.width}px: ${result.error}`);
   for (const [name, toast] of Object.entries(result)) {
-    assert.ok(!toast.error && toast.bottom <= toast.dockTop + 1 && toast.top > viewport.height / 2 && toast.listHeight <= toast.toastHeight + 2,
-      `${viewport.width}px: ${name} toasts sit above the dock without covering the page (${JSON.stringify(toast)})`);
+    assert.ok(!toast.error && toast.bottom <= toast.floorTop + 1 && toast.top > viewport.height / 2 && toast.listHeight <= toast.toastHeight + 2,
+      `${viewport.width}px: ${name} toasts sit above ${floor} without covering the page (${JSON.stringify(toast)})`);
   }
 }
 
@@ -127,6 +128,11 @@ async function checkRealToasts(tab, viewport) {
     await tabletTab.locator('[data-mobile-workspace-dock]').waitFor({ timeout: 30000 });
     await tabletTab.waitForTimeout(1500);
     await checkRealToasts(tabletTab, tablet);
+    // In the AI chat the composer sits above the dock, so a toast has to clear the composer instead.
+    await tabletTab.goto(page('ai-chat'), { waitUntil: 'domcontentloaded' });
+    await tabletTab.locator('[data-mobile-ai-composer]').waitFor({ timeout: 30000 });
+    await tabletTab.waitForTimeout(1500);
+    await checkRealToasts(tabletTab, tablet, '[data-mobile-ai-composer]');
     await tabletContext.close();
     console.log('Phone shell verified at 390 and 320px: command bars, tools sheets, dock and toast placement (toasts also at 820px)');
   } finally {
