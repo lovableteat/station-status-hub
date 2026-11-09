@@ -1,0 +1,20 @@
+.circuit-image-viewer{display:flex;min-height:0;flex-direction:column;gap:10px;font-family:system-ui,sans-serif}
+.circuit-image-toolbar{display:flex;flex:none;flex-wrap:wrap;align-items:center;gap:6px}
+.circuit-image-toolbar>button{min-height:44px;min-width:44px;padding:8px;gap:5px}
+.circuit-image-toolbar>span{min-width:42px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums}
+.circuit-image-toolbar svg,.circuit-image-mark-list button svg{width:17px;height:17px}
+.circuit-image-hint{font-size:12px;line-height:18px;color:hsl(var(--muted-foreground))}
+.circuit-image-scroll{min-height:120px;max-height:50dvh;overflow:auto;border:1px solid hsl(var(--border));border-radius:8px;background:hsl(var(--background));overscroll-behavior:contain}
+.circuit-image-surface{position:relative;min-width:0;user-select:none}
+.circuit-image-surface>img{display:block;width:100%;height:auto;max-width:none;pointer-events:none}
+.circuit-image-marks{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.circuit-image-marks rect{fill:#fbbf2418;stroke:#fbbf24;stroke-width:2}
+.circuit-image-pin{position:absolute;display:grid;width:24px;height:24px;place-items:center;transform:translate(-50%,-50%);border:1px solid #1a1a1a;border-radius:50%;background:#fbbf24;color:#111;font-size:12px;font-weight:700;pointer-events:none}
+.circuit-image-caption{display:grid;gap:6px;font-size:12px}
+.circuit-image-caption textarea{min-height:66px;font-size:16px}
+.circuit-image-mark-list{display:grid;gap:6px;max-height:180px;overflow-y:auto;padding:0;margin:0;list-style:none}
+.circuit-image-mark-list>li{display:flex;align-items:center;gap:6px}
+.circuit-image-mark-list>li>span{width:26px;flex:none;text-align:center;color:hsl(var(--warning))}
+.circuit-image-mark-list input{height:44px;min-width:0;font-size:16px}
+.circuit-image-mark-list button{width:44px;height:44px;flex:none;padding:8px}
+@media(max-width:600px){.circuit-image-scroll{max-height:44dvh}.circuit-image-toolbar>button{font-size:12px}.circuit-image-viewer{gap:8px}}
