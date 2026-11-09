@@ -27,6 +27,22 @@ function mount(overrides = {}, search = "?workspace=material-requests&project=A"
   const update = patch => act(() => root.update(React.createElement(CircuitChangesDialog, { ...all, model: { ...model, ...patch } })));
   return { root, model, props: all, calls, window, text, button, pane, update, origins };
 }
+test("only explicit close dismisses the workspace and still flushes a dirty draft", async () => {
+  const { root, calls } = mount({ dirty: true });
+  try {
+    const panel = root.root.findByProps({ "data-testid": "circuit-changes-dialog" });
+    let prevented = 0;
+    for (const handler of ["onEscapeKeyDown", "onInteractOutside"]) {
+      assert.equal(typeof panel.props[handler], "function");
+      panel.props[handler]({ preventDefault() { prevented++; } });
+    }
+    assert.equal(prevented, 2);
+    assert.equal(calls.some(call => call[0] === "open"), false);
+    await act(async () => root.root.findByProps({ "aria-label": "關閉線路修改" }).props.onClick());
+    assert.deepEqual(calls.filter(call => ["save", "open"].includes(call[0])), [["save"], ["open", false]]);
+  } finally { act(() => root.unmount()); }
+});
+
 test("filters stay visible, reversible and scoped to their URL keys", async () => {
   const { root, window, calls } = mount({}, "?workspace=material-requests&project=A&circuitStatus=draft");
   try {

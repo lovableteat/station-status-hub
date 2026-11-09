@@ -155,6 +155,23 @@ test("the page map selects a range for the batch tool and the filter keeps its h
   } finally { act(() => view.root.unmount()); }
 });
 
+test("a 500-page map uses labelled ranges and keeps keyboard navigation across them", () => {
+  const tracker = { totalPages: 500, currentPage: 52, pages: Array.from({ length: 500 }, (_, index) => page(index + 1)) };
+  const view = mount({ workspace: { id: "big-board", name: "QA", payload: { sheetName: "QA", recordCount: 0 }, pageTracker: tracker } });
+  try {
+    const cells = () => view.root.root.findAll(node => node.type === "button" && node.props["data-map-page"]);
+    assert.equal(cells().length, 50); assert.equal(cells()[0].props["data-map-page"], 51);
+    const key = (from, value) => act(() => view.root.root.findByProps({ "aria-label": "各頁狀態" }).props.onKeyDown({ key: value, target: { getAttribute: () => String(from) }, preventDefault() {} }));
+    key(100, "ArrowRight"); assert.equal(cells()[0].props["data-map-page"], 101);
+    key(101, "Home"); assert.equal(cells()[0].props["data-map-page"], 1);
+    key(1, "End"); assert.equal(cells().at(-1).props["data-map-page"], 500);
+    act(() => view.field("選擇頁碼範圍").props.onChange({ target: { value: "0" } }));
+    assert.equal(cells()[0].props["data-map-page"], 1);
+    assert.equal(view.current(), "52", "browsing ranges never changes the page that work reached");
+    assert.equal(view.button("儲存頁數進度").props.disabled, true, "map navigation writes nothing");
+  } finally { act(() => view.root.unmount()); }
+});
+
 test("a viewer can read every page but is offered nothing that would be refused", () => {
   const view = mount({ readOnly: true });
   try {

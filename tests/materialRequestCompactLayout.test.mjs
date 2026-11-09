@@ -201,8 +201,10 @@ test("BOMs are grouped by project in BOM 管理 and in the header switcher", () 
   assert.match(source, /import \{ useTestProject \} from "@\/components\/test-projects\/TestProjectProvider"/);
   assert.match(source, /const bomSeriesGroups = useMemo\(\s*\(\) => groupBomWorkspacesByProject\(activeSeriesList, \{ activeProjectId, activeProjectName: activeProject\?\.name, projectNames \}\)/);
   assert.match(versionCenter, /groupBomWorkspacesByProject\(liveSeries, \{ activeProjectId, activeProjectName, projectNames \}\)/);
-  assert.match(versionCenter, /groups\.flatMap\(\(group\) => \[/);
-  assert.match(versionCenter, /<div key=\{`project:\$\{group\.key\}`\}/);
+  assert.match(versionCenter, /groups\.map\(\(group\) => \{/);
+  assert.match(versionCenter, /<section key=\{group\.key\} className="bom-project-group"/);
+  assert.match(versionCenter, /aria-expanded=\{expanded\}/);
+  assert.match(versionCenter, /hidden=\{!expanded\}/);
   assert.match(versionCenter, /請有編輯權限的同事上傳或指定專案/);
   assert.match(versionCenter, />目前專案</);
   assert.match(versionCenter, /onAssignProject\(selectedSeries, value === UNASSIGNED_VALUE \? null : value\)/);
