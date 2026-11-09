@@ -1,0 +1,61 @@
+.workspace-dialog-surface.bom-page-tracker[data-ui="dialog"] { width: min(1800px, calc(100vw - 24px)); max-width: none; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); gap: 16px; padding: 24px; --tw-enter-translate-x: -50%; --tw-enter-translate-y: -50%; --tw-exit-translate-x: -50%; --tw-exit-translate-y: -50%; }
+.bom-page-tracker .bom-tracker-header { flex: none; gap: 6px; padding-right: 44px; }
+.bom-tracker-header h2 { font-size: 24px; line-height: 32px; }
+.bom-tracker-header p { font-size: 13px; line-height: 20px; }
+.bom-page-tracker .bom-tracker-controls { display: flex; flex: none; min-height: 0; max-height: 44dvh; flex-direction: column; gap: 12px; overflow-y: auto; overscroll-behavior: contain; }
+.bom-page-tracker .bom-tracker-overview { flex: none; align-items: center; gap: 12px 20px; border-radius: 10px; padding: 14px 16px; }
+.bom-tracker-overview label { display: block; font-size: 13px; }
+.bom-tracker-overview input { height: 40px; width: 112px; border-radius: 7px; font-size: 15px; }
+.bom-tracker-overview > button { min-height: 44px; }
+.bom-page-tracker .bom-tracker-batch { flex: none; gap: 8px; padding: 10px 14px; border-radius: 10px; }
+.bom-tracker-batch input { width: 80px; height: 38px; font-size: 14px; }
+.bom-tracker-batch button { min-height: 36px; font-size: 13px; }
+.bom-page-tracker .bom-tracker-table-heading { flex: none; padding-inline: 2px; }
+.bom-tracker-table-heading h3 { color: hsl(var(--foreground)); font-size: 16px; font-weight: 600; }
+.bom-tracker-table-heading > span { color: hsl(var(--primary)); font-size: 13px; }
+.bom-page-tracker .bom-tracker-table-scroll { flex: 1 1 0%; min-height: 120px; min-width: 0; overflow: auto; overscroll-behavior: contain; scroll-padding-left: 84px; scroll-padding-top: 44px; border: 1px solid hsl(var(--border)); border-radius: 10px; }
+.bom-tracker-table { width: 100%; min-width: 1120px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+.bom-tracker-table .bom-tracker-page-col { width: 84px; }
+.bom-tracker-table .bom-tracker-status-col { width: 280px; }
+.bom-tracker-table .bom-tracker-current-col { width: 124px; }
+.bom-tracker-table thead th { position: sticky; top: 0; z-index: 2; height: 44px; border-right: 1px solid hsl(var(--border)); border-bottom: 1px solid hsl(var(--border)); padding: 8px 12px; background: hsl(var(--secondary)); color: hsl(var(--primary)); font-size: 13px; font-weight: 600; text-align: left; }
+.bom-tracker-table thead th:first-child { left: 0; z-index: 3; }
+.bom-tracker-table tbody tr { --bom-page-row: var(--card); height: 58px; }
+.bom-tracker-table tbody tr[data-current="true"] { --bom-page-row: var(--secondary); }
+.bom-tracker-table tbody :is(th,td) { height: 58px; overflow: hidden; border-right: 1px solid hsl(var(--border) / .6); border-bottom: 1px solid hsl(var(--border) / .6); padding: 6px 10px; background: hsl(var(--bom-page-row)); vertical-align: middle; }
+.bom-tracker-table tr > :last-child { border-right: 0; }
+.bom-tracker-table tbody th { position: sticky; left: 0; z-index: 1; text-align: left; white-space: nowrap; }
+.bom-tracker-table tbody tr:last-child > * { border-bottom: 0; }
+.bom-tracker-table [role="group"] { display: grid; grid-template-columns: 68px 68px minmax(0,1fr); gap: 2px; width: 100%; border-radius: 7px; }
+.bom-tracker-table [role="group"] > button { min-height: 40px; height: 40px; padding-inline: 4px; font-size: 12px; white-space: nowrap; }
+.bom-tracker-table td > button { min-height: 40px; width: 100%; padding-inline: 6px; font-size: 12px; }
+.bom-tracker-table td > span { display: inline-flex; min-height: 32px; align-items: center; justify-content: center; width: 100%; }
+.bom-tracker-table :is(.bom-tracker-title-input,.bom-tracker-note-input) { width: 100%; min-width: 0; height: 42px; border-color: hsl(var(--border)); border-radius: 6px; padding-inline: 10px; background: hsl(var(--background) / .35); font-size: 14px; }
+.bom-page-tracker .bom-tracker-footer { display: flex; flex: none; flex-direction: row; align-items: center; justify-content: flex-end; border-top: 1px solid hsl(var(--border)); padding-top: 14px; }
+.bom-tracker-footer button { min-height: 44px; padding-inline: 16px; font-size: 14px; }
+@media (max-width: 767px) {
+  .workspace-dialog-surface.bom-page-tracker[data-ui="dialog"] { width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); gap: 10px; padding: 16px; }
+  .bom-tracker-header h2 { font-size: 21px; line-height: 28px; }
+  .bom-tracker-header p { font-size: 12px; }
+  .bom-page-tracker .bom-tracker-overview { gap: 8px 12px; padding: 10px; }
+  .bom-tracker-overview label { font-size: 12px; }
+  .bom-tracker-overview input { width: 96px; height: 44px; font-size: 16px; }
+  .bom-page-tracker .bom-tracker-batch { gap: 6px; padding: 8px 10px; }
+  .bom-tracker-batch input { width: 62px; height: 44px; font-size: 16px; }
+  .bom-tracker-batch button { min-height: 44px; padding-inline: 6px; font-size: 12px; }
+  .bom-tracker-batch > span:last-child { margin-left: 0; font-size: 11px; }
+  .bom-tracker-table { width: calc(200vw + 192px); min-width: 0; }
+  .bom-tracker-table tbody :is(th,td) { height: 60px; padding-block: 7px; }
+  .bom-tracker-table [role="group"] > button, .bom-tracker-table td > button { min-height: 44px; height: 44px; }
+  .bom-tracker-table :is(.bom-tracker-title-input,.bom-tracker-note-input) { height: 44px; font-size: 16px; }
+  .bom-page-tracker .bom-tracker-footer { padding-top: 8px; }
+  .bom-tracker-footer button { padding-inline: 12px; font-size: 13px; }
+}
+@media (max-height: 620px) {
+  .workspace-dialog-surface.bom-page-tracker[data-ui="dialog"] { gap: 8px; padding: 12px 16px; }
+  .bom-page-tracker .bom-tracker-overview { padding: 8px 10px; }
+  .bom-tracker-header p { display: none; }
+  .bom-page-tracker .bom-tracker-controls { max-height: min(220px, 40dvh); gap: 8px; }
+  .bom-page-tracker .bom-tracker-table-scroll { min-height: 100px; }
+  .bom-page-tracker .bom-tracker-footer { padding-top: 8px; }
+}
