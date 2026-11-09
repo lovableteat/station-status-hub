@@ -35,7 +35,8 @@
 .circuit-list-rail > span { display: flex; flex-direction: column; align-items: center; color: hsl(var(--muted-foreground)); font-size: 14px; font-variant-numeric: tabular-nums; line-height: 18px; }
 .circuit-list-rail > span > small { font-size: 11px; }
 .circuit-new-item-row { display: flex; flex: none; gap: 6px; margin: 12px 12px 0; }
-.circuit-new-item-row > .circuit-list-collapse { flex: none; width: 44px; height: 44px; padding: 0; }
+.circuit-new-item-row > .circuit-list-collapse { flex: none; width: 44px; height: 44px; padding: 0; color: hsl(var(--muted-foreground)); }
+.circuit-new-item-row > .circuit-list-collapse:hover { color: hsl(var(--foreground)); }
 
 /* List: create, then the filters directly above the results they narrow. */
 .circuit-list-panel { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid hsl(var(--border)); }
@@ -49,9 +50,10 @@
 .circuit-active-filters > button > svg { width: 12px; height: 12px; }
 .circuit-active-filters > button:last-child { border: 0; background: transparent; color: hsl(var(--primary)); }
 .circuit-item-list { flex: 1; min-height: 0; overflow-y: auto; border-top: 1px solid hsl(var(--border)); overscroll-behavior: contain; }
-.circuit-list-heading { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--background)); color: hsl(var(--muted-foreground)); font-size: 12px; }
-.circuit-list-heading > span:first-child { flex: 1; }
-.circuit-result-count { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* The heading uses the rows' own columns, so 編號, 修改項目 and 狀態 sit over what they label. */
+.circuit-list-heading { position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--background)); color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
+.circuit-list-heading-title { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
+.circuit-result-count { color: hsl(var(--foreground) / .7); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .circuit-item { display: grid; width: 100%; min-height: 64px; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 8px; align-items: center; border: 0; border-bottom: 1px solid hsl(var(--border)); padding: 9px 12px; background: transparent; color: hsl(var(--foreground)); text-align: left; }
 .circuit-item:hover:not(:disabled) { background: hsl(var(--secondary) / .5); }
 .circuit-item[aria-pressed="true"] { background: hsl(var(--primary) / .11); box-shadow: inset 3px 0 hsl(var(--primary)); }
@@ -64,6 +66,7 @@
 .circuit-list-status[data-status="in_review"] { --circuit-status: 205 90% 75%; }
 .circuit-list-status[data-status="needs_changes"] { --circuit-status: 32 88% 72%; }
 .circuit-list-status[data-status="approved"] { --circuit-status: 155 56% 72%; }
+.circuit-list-status[data-status="unsaved"] { --circuit-status: var(--muted-foreground); border: 1px dashed hsl(var(--circuit-status) / .55); background: transparent; }
 .circuit-empty { padding: 28px 18px; color: hsl(var(--muted-foreground)); font-size: 14px; line-height: 22px; text-align: center; }
 
 /* Detail */
