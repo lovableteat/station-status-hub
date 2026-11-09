@@ -38,6 +38,7 @@ export interface CircuitChangeSet {
 export interface CircuitChangeItem {
   id: string; setId: string; number: number; content: CircuitChangeContent; status: CircuitChangeStatus;
   revision: number; createdAt: string; updatedAt: string; createdBy: string; updatedBy: string; imageCount?: number;
+  removedAt?: string; removedBy?: string;
 }
 export type CircuitChangeAction = "submit" | "approve" | "request_changes" | "comment";
 export interface CircuitChangeEvent {
@@ -68,6 +69,7 @@ export function circuitChangeMissingForReview(content: CircuitChangeContent | nu
 export interface CircuitUploadFailure { file: File; error: string; side?: CircuitImageSide; permanent?: boolean }
 export interface CircuitChangesModel {
   sets: CircuitChangeSet[]; selectedSetId: string; items: CircuitChangeItem[]; selectedItemId: string;
+  removedItems: CircuitChangeItem[];
   selectedItem: CircuitChangeItem | null; draft: CircuitChangeContent | null; events: CircuitChangeEvent[];
   loading: boolean; saving: boolean; uploading: boolean; dirty: boolean; conflict: boolean;
   /** True while another change is being loaded; edits are ignored until it is on screen. */
@@ -78,6 +80,7 @@ export interface CircuitChangesModel {
   createSet: (title: string, fromLabel: string, toLabel: string) => Promise<void>;
   /** Opens a blank change. Nothing is written until the user types or adds an image. */
   createItem: () => Promise<void>; updateDraft: (patch: Partial<CircuitChangeContent>) => void;
+  deleteItem: (id: string) => Promise<void>; restoreItem: (id: string) => Promise<void>;
   saveDraft: () => Promise<void>; review: (action: CircuitChangeAction, note?: string) => Promise<void>;
   addImages: (files: File[], side: CircuitImageSide) => Promise<void>; retryUploads: () => Promise<void>;
   dismissUploadFailures: () => void;

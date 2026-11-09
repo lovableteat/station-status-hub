@@ -76,7 +76,7 @@ async function checkMobileGeometry(page) {
       {find:/^\.\/(materialBomStorage|useMaterialBomPresence|materialRequestAudit)$/,replacement:materialMock},
       {find:'@',replacement:path.resolve('src')},
     ]},worker:{format:'es'},optimizeDeps:{entries:['tests/support/circuitChangesFixture.jsx'],include:['react/jsx-dev-runtime','exceljs','pdfjs-dist']},server:{host:'127.0.0.1',port:0,fs:{allow:[process.cwd(),fs.realpathSync('node_modules')]}},plugins:[
-      {name:'circuit-repository-fixture',enforce:'pre',resolveId(source,importer){const own=importer?.replaceAll('\\','/').includes('/circuit-changes/');if(own&&source === './storage')return storageMock;if(own&&source === './pdfStorage')return pdfStorageMock;}},
+      {name:'circuit-repository-fixture',enforce:'pre',resolveId(source,importer){const own=importer?.replaceAll('\\','/').includes('/circuit-changes/');if(own&&source === './storage')return storageMock;if(own&&source === './pdfStorage')return pdfStorageMock;if(own&&source === './officialPdfStorage')return path.resolve('tests/support/circuitPdfOfficialMock.js');}},
       {name:'circuit-http-fixture',configureServer(vite){vite.middlewares.use(fixture.middleware);vite.middlewares.use((req,res,next)=>{
         if(req.url?.split('?')[0] !== '/')return next();
         res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:; base-uri 'none'");
@@ -96,12 +96,12 @@ async function checkMobileGeometry(page) {
     let serverState=await stateOf(origin);
     assert.equal(serverState.sets.length+serverState.items.length,0,'opening the dialog or pressing 新增修改 on an empty form must not leave records');
     report.checks.push('first open is a ready form with visible picture targets and writes nothing');
-    await dialog(a.page).getByRole('button',{name:'新增批次',exact:true}).click();
-    await a.page.getByRole('textbox',{name:'改版批次名稱',exact:true}).fill('QA E1.S 線路修改 V1 → V2');
+    await dialog(a.page).getByRole('button',{name:'開始另一次改版',exact:true}).click();
+    await a.page.getByRole('textbox',{name:'改版紀錄名稱',exact:true}).fill('QA E1.S 線路修改 V1 → V2');
     await a.page.getByRole('textbox',{name:'修改前版次',exact:true}).fill('V1');
     await a.page.getByRole('textbox',{name:'修改後版次',exact:true}).fill('V2');
-    await a.page.getByRole('button',{name:'建立批次',exact:true}).click();
-    await a.page.getByRole('heading',{name:'新增改版批次',exact:true}).waitFor({state:'hidden'});
+    await a.page.getByRole('button',{name:'建立改版紀錄',exact:true}).click();
+    await a.page.getByRole('heading',{name:'建立改版紀錄',exact:true}).waitFor({state:'hidden'});
     await a.page.getByRole('textbox',{name:'修改標題',exact:true}).fill('QA R2301 阻值與接法調整');
     await a.page.getByRole('textbox',{name:'Ref',exact:true}).fill('R2301, U2');
     await a.page.getByRole('textbox',{name:'修改原因',exact:true}).fill('Review 要求調整上拉與電源接法');

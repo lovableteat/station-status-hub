@@ -31,6 +31,13 @@ async function mount(overrides = {}) {
       if (!actionResult) throw new Error("Not used");
       const result = await actionResult({ id, revision, action, note }); records.set(id, clone(result)); return clone(result);
     },
+    setCircuitChangeItemRemoved: async (id, revision, removed) => {
+      actions.push({ id, revision, removed });
+      const prior = records.get(id);
+      if (prior.revision !== revision) throw new Conflict();
+      const next = { ...clone(prior), revision: revision + 1, removedAt: removed ? "2026-11-09T01:00:00Z" : undefined, removedBy: removed ? "qa-A" : undefined };
+      records.set(id, clone(next)); return clone(next);
+    },
     saveCircuitChangeItem: async (setId, id, revision, content) => {
       const args = { setId, id, revision, content: clone(content) }; saves.push(args);
       const result = saveResult ? await saveResult(args) : { ...clone(records.get(id)), revision: revision + 1, content: clone(content) };
@@ -249,6 +256,90 @@ async function openBoard({ sets = [], records = [], canEdit = true } = {}) {
 const change = (id, setId, number, title) => ({ id, setId, number, content: { title, reason: "", description: "", refs: "", net: "", page: "", owner: "QA", images: [] }, status: "draft", revision: 1, createdAt: "2026-11-09T00:00:00Z", updatedAt: "rev-1", createdBy: "qa-A", updatedBy: "qa-A" });
 const batch = (id, title) => ({ id, seriesId: "A", workspaceId: "bom-A", projectId: null, title, fromLabel: "V1", toLabel: "V2", createdAt: "2026-11-01", updatedAt: "0", createdBy: "qa-A" });
 const OLD_SET = "00000000-0000-4000-8000-0000000000aa";
+
+test("remove discards only the local draft and restore preserves saved images and numbering", async () => {
+  const view = await mount();
+  try {
+    const original = view.records.get("item-A"); original.content.images = [{ id: "original", path: "set-A/item-A/original.png" }];
+    await act(async () => view.model.reload());
+    act(() => view.model.updateDraft({ title: "Discard this unsaved edit" }));
+    await act(async () => view.model.deleteItem("item-A"));
+    assert.equal(view.saves.length, 0);
+    assert.equal(view.records.size, 2);
+    assert.equal(view.records.get("item-A").content.title, "Saved");
+    assert.equal(view.records.get("item-A").content.images[0].id, "original");
+    assert.equal(view.model.items.length, 0); assert.equal(view.model.removedItems.length, 1);
+    assert.equal(view.model.selectedItem.revision, 0); assert.equal(view.model.dirty, false);
+    await act(async () => view.model.reload());
+    assert.equal(view.model.items.length, 0, "a background refresh must not resurrect a removed item");
+    await act(async () => view.model.restoreItem("item-A"));
+    assert.equal(view.model.items.length, 1); assert.equal(view.model.removedItems.length, 0);
+    assert.equal(view.model.items[0].number, 1);
+    await act(async () => view.model.selectItem("item-A"));
+    assert.equal(view.model.draft.title, "Saved"); assert.equal(view.model.draft.images[0].id, "original");
+  } finally { view.unmount(); }
+});
+
+test("a remote removal moves clean selection off the item but retains a dirty draft as a conflict", async () => {
+  const clean = await mount();
+  try {
+    clean.records.set("item-A", { ...makeItem("A", 2), removedAt: "now", removedBy: "other" });
+    await act(async () => clean.model.reload());
+    assert.equal(clean.model.items.length, 0); assert.equal(clean.model.removedItems.length, 1);
+    assert.equal(clean.model.selectedItem.revision, 0);
+  } finally { clean.unmount(); }
+  const dirty = await mount();
+  try {
+    act(() => dirty.model.updateDraft({ title: "Keep my draft" }));
+    dirty.records.set("item-A", { ...makeItem("A", 2), removedAt: "now", removedBy: "other" });
+    await act(async () => dirty.model.reload());
+    assert.equal(dirty.model.items.length, 0); assert.equal(dirty.model.removedItems.length, 1);
+    assert.equal(dirty.model.draft.title, "Keep my draft"); assert.equal(dirty.model.conflict, true);
+    assert.ok(dirty.model.selectedItem.removedAt);
+    await act(async () => assert.rejects(dirty.model.saveMyRevision(), /移除/));
+    act(() => dirty.model.adoptRemote());
+    assert.equal(dirty.model.selectedItem.revision, 0); assert.equal(dirty.model.dirty, false);
+  } finally { dirty.unmount(); }
+});
+
+test("view-only access cannot remove or restore items", async () => {
+  const view = await mount({ canEdit: false });
+  try {
+    await act(async () => assert.rejects(view.model.deleteItem("item-A"), /權限/));
+    await act(async () => assert.rejects(view.model.restoreItem("item-A"), /權限/));
+    assert.equal(view.actions.length, 0);
+  } finally { view.unmount(); }
+});
+
+test("a stale removal retains the newer server item and the local draft", async () => {
+  const view = await mount();
+  try {
+    act(() => view.model.updateDraft({ title: "My draft" }));
+    view.records.set("item-A", makeItem("A", 2, "Newer server item"));
+    await act(async () => assert.rejects(view.model.deleteItem("item-A"), view.Conflict));
+    assert.equal(view.model.conflict, true); assert.equal(view.model.draft.title, "My draft");
+    assert.equal(view.records.get("item-A").content.title, "Newer server item");
+    assert.equal(view.model.items.length, 1); assert.equal(view.model.removedItems.length, 0);
+    assert.equal(view.saves.length, 0);
+  } finally { view.unmount(); }
+});
+
+test("removing while a save is pending waits for its revision before removal", async () => {
+  const view = await mount(), pending = deferred();
+  try {
+    view.setSave(() => pending.promise);
+    act(() => view.model.updateDraft({ title: "Already saving" }));
+    let saving, removing;
+    act(() => { saving = view.model.saveDraft(); });
+    await act(async () => { removing = view.model.deleteItem("item-A"); await Promise.resolve(); });
+    assert.equal(view.actions.length, 0); assert.equal(view.model.switching, true);
+    act(() => view.model.updateDraft({ title: "Must not change a disappearing form" }));
+    assert.equal(view.model.draft.title, "Already saving");
+    await act(async () => { pending.resolve(makeItem("A", 2, "Already saving")); await saving; await removing; });
+    assert.equal(view.actions[0].revision, 2); assert.equal(view.records.get("item-A").content.title, "Already saving");
+    assert.equal(view.model.removedItems.length, 1); assert.equal(view.model.dirty, false);
+  } finally { view.unmount(); }
+});
 
 test("a board with nothing recorded opens on a ready form and writes nothing until the first input", async () => {
   const view = await openBoard();

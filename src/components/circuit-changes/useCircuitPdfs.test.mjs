@@ -34,7 +34,15 @@ async function mount({ stored = null, props: overrides = {}, store: shared, loca
     isPdfFile: async file => /\.pdf$/.test(file.name),
     openCircuitPdf: async bytes => { const pages = Number(/pages=(\d+)/.exec(new TextDecoder().decode(bytes))?.[1] || 1); return { numPages: pages, destroy: async () => {} }; },
   };
-  const load = loader({ window, mocks: { "./pdfStorage": storage, "./pdfRender": render }, globals: { File, Blob, TextDecoder, Error, localStorage: window.localStorage } });
+  const officialStorage = {
+    loadCircuitPdfOfficial: async () => store.official || null,
+    saveCircuitPdfOfficial: async (_series, documentId) => {
+      if (store.failOfficial) throw store.failOfficial;
+      const document = store.row.documents.find(row => row.id === documentId);
+      store.official = { documentId, document: json(document), revision: (store.official?.revision || 0) + 1, at: new Date().toISOString(), by: "qa-A", byName: "QA" }; return store.official;
+    },
+  };
+  const load = loader({ window, mocks: { "./pdfStorage": storage, "./pdfRender": render, "./officialPdfStorage": officialStorage }, globals: { File, Blob, TextDecoder, Error, localStorage: window.localStorage } });
   const { useCircuitPdfs } = load("src/components/circuit-changes/useCircuitPdfs.ts");
   let latest, root, props = { open: true, seriesId: "board", canEdit: true, userId: "qa-A", userName: "QA", ...overrides };
   function Probe(value) { latest = useCircuitPdfs(value); return null; }
@@ -122,7 +130,7 @@ test("a PDF over 50 MB opens here without being uploaded, and another visit asks
   } finally { await other.unmount(); }
 });
 
-test("removing a version hides it, deletes its file and moves to the next version; switching keeps the page", async () => {
+test("archiving a version hides it but preserves its original, and it can be restored", async () => {
   const view = await mount({ stored: { version: 1, documents: [doc("new", "2026-11-09"), doc("old", "2026-11-08", { pages: 6 })], pages: {}, positions: {} } });
   try {
     assert.equal(view.model.active.id, "new", "with nothing read yet the newest drawing date opens");
@@ -133,14 +141,62 @@ test("removing a version hides it, deletes its file and moves to the next versio
     assert.equal(view.model.active.id, "new"); assert.equal(view.model.page, 3);
     act(() => { assert.equal(view.model.show("missing", 2), false); });
     await act(async () => { await view.model.removeDocument("new"); });
-    assert.deepEqual(view.store.removed, ["circuit-pdf/qa/new.pdf"]);
+    assert.deepEqual(view.store.removed, [], "archiving never deletes the PDF original");
     assert.ok(view.store.row.documents.find(row => row.id === "new").removedAt);
     await wait(10);
     assert.equal(JSON.stringify(view.model.documents.map(row => row.id)), JSON.stringify(["old"]));
     assert.equal(view.model.active.id, "old");
     const stale = mergeCircuitPdfRegistry(normalizeCircuitPdfRegistry(view.store.row), normalizeCircuitPdfRegistry({ version: 1, documents: [doc("new", "2026-11-09")], pages: {}, positions: {} }));
     assert.ok(stale.documents.find(row => row.id === "new").removedAt, "an old copy of the list cannot bring it back");
+    await act(async () => { await view.model.restoreDocument("new"); });
+    assert.ok(!view.store.row.documents.find(row => row.id === "new").removedAt);
+    assert.equal(view.model.documents.length, 2);
   } finally { await view.unmount(); }
+});
+
+test("an explicit official PDF stays pinned across uploads, groups and reopening", async () => {
+  const view = await mount({ stored: { version: 1, documents: [doc("official", "2026-11-08"), doc("working", "2026-11-09")], pages: {}, positions: {} } });
+  try {
+    assert.equal(view.model.official, null, "an existing PDF is never guessed to be the official version");
+    await act(async () => { await view.model.setOfficial("official"); });
+    assert.equal(view.store.official.documentId, "official");
+    assert.equal(view.model.compare.id, "official");
+    act(() => { view.model.goTo(7); view.model.setCompareOffset(-2); });
+    assert.equal(view.model.officialPage, 5);
+    await act(async () => { await view.model.upload(pdfFile("working_20261110.pdf", 14)); });
+    assert.equal(view.model.official.id, "official");
+    assert.equal(view.model.compare.id, "official", "the newly uploaded working version compares against the same baseline");
+    act(() => { view.model.goTo(14); });
+    assert.equal(view.model.officialPage, 0, "an added working page must not silently compare against the official last page");
+    assert.equal(view.model.comparePage, 0, "the reference canvas must require an explicit mapping too");
+    act(() => { view.model.setCompareOffset(-2); });
+    assert.equal(view.model.officialPage, 12, "the user can explicitly match a differently numbered page");
+    assert.equal(view.store.row.documents.length, 3);
+    assert.equal(view.store.row.official, undefined, "the unprotected preference row does not choose the official version");
+    await assert.rejects(async () => { await act(async () => { await view.model.removeDocument("official"); }); }, /官方基準不能封存/);
+    await view.update({ open: false }); await view.update({ open: true });
+    assert.equal(view.model.official.id, "official");
+    const baseline = json(view.model.official);
+    Object.assign(view.store.row.documents.find(row => row.id === "official"), { path: "circuit-pdf/qa/substituted.pdf", pages: 1, removedAt: "2026-11-10T00:00:00.000Z", updatedAt: "2026-11-10T00:00:00.000Z" });
+    await act(async () => { await view.model.reload(); });
+    assert.equal(JSON.stringify(view.model.official), JSON.stringify(baseline), "legacy metadata cannot substitute or hide the protected official original");
+    assert.equal(view.model.compare.path, baseline.path, "comparison opens the canonical original too");
+    assert.equal(view.model.documents.find(row => row.id === "official").pages, 12);
+    view.store.failOfficial = new Error("conflict");
+    await assert.rejects(async () => { await act(async () => { await view.model.setOfficial("working"); }); }, /conflict/);
+    assert.equal(view.model.official.id, "official", "a failed pin leaves the current official version unchanged");
+  } finally { await view.unmount(); }
+});
+
+test("viewers cannot pin a baseline, and a local-only PDF cannot become a shared baseline", async () => {
+  const viewer = await mount({ props: { canEdit: false } });
+  try { await assert.rejects(async () => { await act(async () => { await viewer.model.setOfficial("any"); }); }, /檢視權限/); } finally { await viewer.unmount(); }
+  const editor = await mount();
+  try {
+    await act(async () => { await editor.model.upload(pdfFile("large.pdf", 2, 51 * 1024 * 1024)); });
+    await assert.rejects(async () => { await act(async () => { await editor.model.setOfficial(editor.model.active.id); }); }, /本機 PDF/);
+    assert.equal(editor.model.official, null);
+  } finally { await editor.unmount(); }
 });
 test("the reading position this browser kept wins when it is newer than the shared one", async () => {
   const window = browser();

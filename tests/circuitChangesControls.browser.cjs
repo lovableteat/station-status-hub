@@ -20,7 +20,7 @@ const evidence = path.resolve(process.env.CIRCUIT_CONTROLS_EVIDENCE_DIR || '../c
       { find: /^\.\/(materialBomStorage|useMaterialBomPresence|materialRequestAudit)$/, replacement: materialMock },
       { find: '@', replacement: path.resolve('src') },
     ] }, worker: { format: 'es' }, optimizeDeps: { entries: ['tests/support/circuitChangesFixture.jsx'], include: ['react/jsx-dev-runtime', 'exceljs', 'pdfjs-dist'] }, server: { host: '127.0.0.1', port: 0, fs: { allow: [process.cwd(), evidence, fs.realpathSync('node_modules')] } }, plugins: [
-      { name: 'circuit-controls-storage', enforce: 'pre', resolveId(source, importer) { if (!importer?.replaceAll('\\', '/').includes('/circuit-changes/')) return; if (source === './storage') return path.resolve('tests/support/circuitChangesStorageMock.js'); if (source === './pdfStorage') return path.resolve('tests/support/circuitChangesPdfStorageMock.js'); } },
+      { name: 'circuit-controls-storage', enforce: 'pre', resolveId(source, importer) { if (!importer?.replaceAll('\\', '/').includes('/circuit-changes/')) return; if (source === './storage') return path.resolve('tests/support/circuitChangesStorageMock.js'); if (source === './pdfStorage') return path.resolve('tests/support/circuitChangesPdfStorageMock.js'); if (source === './officialPdfStorage') return path.resolve('tests/support/circuitPdfOfficialMock.js'); } },
       { name: 'circuit-controls-http', configureServer(vite) { vite.middlewares.use(fixture.middleware); vite.middlewares.use((req, res, next) => { if (req.url?.split('?')[0] !== '/') return next(); res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end('<!doctype html><html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/tests/support/circuitChangesFixture.jsx"></script></html>'); }); } },
     ] });
     await server.listen();
@@ -42,9 +42,9 @@ const evidence = path.resolve(process.env.CIRCUIT_CONTROLS_EVIDENCE_DIR || '../c
         await dialog.getByRole('button', { name: '使用說明', exact: true }).tap(); await page.getByTestId('circuit-usage-guide').waitFor();
         await page.keyboard.press('Escape'); await page.getByTestId('circuit-usage-guide').waitFor({ state: 'hidden' }); assert.equal(await dialog.isVisible(), true);
         if (width < 1024) await dialog.getByRole('button', { name: '返回修改清單', exact: true }).tap();
-        await dialog.getByRole('button', { name: '新增批次', exact: true }).tap();
-        await page.getByRole('heading', { name: '新增改版批次', exact: true }).waitFor(); await page.keyboard.press('Escape');
-        await page.getByRole('heading', { name: '新增改版批次', exact: true }).waitFor({ state: 'hidden' }); assert.equal(await dialog.isVisible(), true);
+        await dialog.getByRole('button', { name: '開始另一次改版', exact: true }).tap();
+        await page.getByRole('heading', { name: '建立改版紀錄', exact: true }).waitFor(); await page.keyboard.press('Escape');
+        await page.getByRole('heading', { name: '建立改版紀錄', exact: true }).waitFor({ state: 'hidden' }); assert.equal(await dialog.isVisible(), true);
         if (width < 1024) await dialog.getByRole('button', { name: '新增修改', exact: true }).tap();
         await dialog.getByRole('textbox', { name: '修改標題', exact: true }).fill('QA 控制色彩 ' + width);
         await page.waitForFunction(() => document.querySelector('.circuit-detail-footer [role="status"]')?.textContent === '已儲存');
@@ -69,8 +69,23 @@ const evidence = path.resolve(process.env.CIRCUIT_CONTROLS_EVIDENCE_DIR || '../c
         await page.keyboard.press('Escape'); assert.equal(await dialog.isVisible(), true);
         await dialog.getByRole('button', { name: '關閉線路修改', exact: true }).tap(); await dialog.waitFor({ state: 'hidden' });
         const state = await (await fetch(origin + '/__circuit/state')).json(); assert.ok(state.items.some(item => item.content.title === title), 'explicit close flushes the latest input');
+        await open();
+        await dialog.getByTestId('circuit-change-item').filter({ hasText: title }).tap();
+        await dialog.getByRole('button', { name: '移除修改', exact: true }).tap();
+        const remove = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '移除這項修改？', exact: true }) });
+        assert.ok((await remove.innerText()).includes('已儲存的歷史與原圖保留'));
+        await page.screenshot({ path: path.join(evidence, 'remove-' + width + '.png') });
+        await remove.getByRole('button', { name: '確認移除', exact: true }).tap(); await remove.waitFor({ state: 'hidden' });
+        await dialog.getByRole('button', { name: /^已移除的修改/ }).tap();
+        const archive = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '已移除的修改', exact: true }) });
+        await page.screenshot({ path: path.join(evidence, 'restore-' + width + '.png') });
+        await archive.getByRole('button', { name: /^還原修改 #/ }).tap();
+        await archive.getByText('沒有已移除的修改', { exact: true }).waitFor();
+        await archive.getByRole('button', { name: '關閉', exact: true }).tap();
+        if (width < 1024 && !(await dialog.getByTestId('circuit-change-item').first().isVisible())) await dialog.getByRole('button', { name: '返回修改清單', exact: true }).tap();
+        assert.equal(await dialog.getByTestId('circuit-change-item').filter({ hasText: title }).count(), 1);
         assert.deepEqual(errors, []);
-        report.checks.push({ width, result: 'passed', colors, interactions: ['ESC and outside keep workspace', 'nested ESC closes only nested dialog', 'search/status/owner and visible chips', 'collapse/expand keeps filters', 'new item and X flush latest draft'] });
+        report.checks.push({ width, result: 'passed', colors, interactions: ['ESC and outside keep workspace', 'nested ESC closes only nested dialog', 'search/status/owner and visible chips', 'collapse/expand keeps filters', 'new item and X flush latest draft', 'explicit removal and restore'] });
       } catch (error) { await page.screenshot({ path: path.join(evidence, 'failure-' + width + '.png') }); throw error; }
       finally { await context.close(); }
     }

@@ -1,6 +1,6 @@
 /* 線路修改: one header row, the list with its filters on the left, the selected change on the right.
    Form text is 14px and controls are 40px tall (44px on touch layouts); 12-13px is kept for metadata. */
-.workspace-dialog-surface.circuit-changes-dialog[data-ui="dialog"] { display: flex; flex-direction: column; top: calc(var(--circuit-viewport-top, 0px) + var(--circuit-viewport-height, 100dvh) / 2); width: min(1680px, calc(100vw - 32px)); max-width: none; height: calc(var(--circuit-viewport-height, 100dvh) - 32px); max-height: calc(var(--circuit-viewport-height, 100dvh) - 32px); gap: 0; overflow: hidden; padding: 0; border-radius: 16px; background: hsl(var(--background)); font-family: system-ui, sans-serif; font-size: 14px; }
+.workspace-dialog-surface.circuit-changes-dialog[data-ui="dialog"] { display: flex; flex-direction: column; top: calc(var(--circuit-viewport-top, 0px) + var(--circuit-viewport-height, 100dvh) / 2); width: calc(100vw - 16px); max-width: none; height: calc(var(--circuit-viewport-height, 100dvh) - 16px); max-height: calc(var(--circuit-viewport-height, 100dvh) - 16px); gap: 0; overflow: hidden; padding: 0; border-radius: 12px; background: hsl(var(--background)); font-family: system-ui, sans-serif; font-size: 14px; }
 .circuit-changes-dialog :is(button,input,select,textarea) { min-width: 0; }
 .circuit-changes-dialog button { touch-action: manipulation; }
 .circuit-changes-dialog button > svg { flex: none; width: 16px; height: 16px; }
@@ -12,7 +12,7 @@
 .circuit-title { flex: 0 1 auto; min-width: 0; max-width: 34%; }
 .circuit-title h2 { font-size: 20px; font-weight: 600; line-height: 26px; }
 .circuit-title p { margin-top: 2px; overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
-.circuit-set { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; }
+.circuit-set { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .circuit-set-picker { display: flex; flex: 0 1 460px; min-width: 0; align-items: center; gap: 8px; }
 .circuit-set-picker > span, .circuit-set-pending > span { flex: none; color: hsl(var(--muted-foreground)); font-size: 13px; }
 .circuit-set-pending { display: flex; min-width: 0; align-items: baseline; gap: 8px; overflow: hidden; font-size: 14px; white-space: nowrap; }
@@ -21,6 +21,11 @@
 .circuit-header button { flex: none; height: 40px; gap: 6px; padding-inline: 12px; font-size: 14px; }
 .circuit-header-actions { display: flex; flex: none; align-items: center; gap: 6px; margin-left: auto; }
 .circuit-header-actions > .circuit-close { width: 40px; padding: 0; }
+.circuit-set-help { flex: 1 0 100%; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
+.circuit-header .circuit-new-set { border-color: hsl(var(--primary) / .35); background: hsl(var(--primary) / .08); color: hsl(var(--primary)); }
+.circuit-header-actions > .circuit-action-pdf { border-color: hsl(var(--primary) / .4); background: hsl(var(--primary) / .12); color: hsl(var(--primary)); }
+.circuit-header-actions > .circuit-action-export { border-color: hsl(var(--info) / .4); background: hsl(var(--info) / .12); color: hsl(var(--info)); }
+.circuit-header-actions > .circuit-action-guide { border-color: hsl(var(--warning) / .4); background: hsl(var(--warning) / .1); color: hsl(var(--warning)); }
 .circuit-message { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 20px; border-bottom: 1px solid hsl(var(--warning) / .3); background: hsl(var(--warning) / .1); color: hsl(var(--foreground)); font-size: 14px; line-height: 20px; }
 .circuit-message > div { display: flex; flex: none; gap: 4px; }
 .circuit-message button { flex: none; height: 36px; font-size: 13px; }
@@ -42,6 +47,8 @@
 /* List: create, then the filters directly above the results they narrow. */
 .circuit-list-panel { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid hsl(var(--border)); }
 .circuit-changes-dialog .circuit-new-item { flex: 1; height: 44px; margin: 0; gap: 6px; font-size: 14px; }
+.circuit-list-help { flex: none; margin: 8px 12px 0; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
+.circuit-removed-trigger { flex: none; min-height: 36px; align-self: flex-start; gap: 6px; margin: 4px 12px 0; padding-inline: 0; color: hsl(var(--muted-foreground)); font-size: 12px; }
 .circuit-filter-bar { display: grid; flex: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px 12px; }
 .circuit-search { position: relative; grid-column: 1 / -1; min-width: 0; }
 .circuit-search > svg { position: absolute; top: 12px; left: 11px; width: 16px; height: 16px; color: hsl(var(--primary)); pointer-events: none; }
@@ -88,6 +95,7 @@
 .circuit-detail-heading > div > span { min-width: 0; overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .circuit-item-navigation { display: flex; flex: none; align-items: center; gap: 2px; }
 .circuit-item-navigation > button { min-width: 40px; height: 40px; padding: 0 10px; font-size: 14px; }
+.circuit-item-navigation > .circuit-remove-item { gap: 4px; padding-inline: 6px; color: hsl(var(--destructive)); font-size: 13px; }
 .circuit-changes-dialog .circuit-mobile-back { display: none; }
 .circuit-detail-scroll { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 16px 20px 20px; overscroll-behavior: contain; }
 .circuit-snapshot-banner, .circuit-conflict, .circuit-returned { margin-bottom: 14px; border: 1px solid hsl(var(--warning) / .4); border-radius: 8px; padding: 10px 12px; background: hsl(var(--warning) / .08); font-size: 14px; line-height: 22px; }
@@ -171,7 +179,7 @@
 .circuit-history { margin-top: 20px; border-top: 1px solid hsl(var(--border)); padding-top: 16px; }
 .circuit-comment { display: flex; align-items: flex-end; gap: 10px; margin-top: 12px; }
 .circuit-note-box { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 6px; }
-.circuit-note-box textarea { min-height: 60px; max-height: 160px; padding: 8px 10px; font-size: 14px; line-height: 22px; }
+.circuit-note-box textarea { width: 100%; min-height: 72px; max-height: 160px; padding: 8px 10px; font-size: 14px; line-height: 22px; }
 .circuit-comment > button, .circuit-review-bar button { flex: none; height: 40px; gap: 6px; font-size: 14px; }
 .circuit-history > article { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding-block: 12px; border-bottom: 1px solid hsl(var(--border)); }
 .circuit-history > article > div:first-child { display: flex; flex-direction: column; gap: 3px; }
@@ -188,8 +196,9 @@
 
 /* Footer: the save state, what is still missing, and the action for the current status. */
 .circuit-detail-footer { flex: none; border-top: 1px solid hsl(var(--border)); padding: 10px 20px; background: hsl(var(--background)); }
-.circuit-review-bar { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 10px; border-bottom: 1px solid hsl(var(--border)); padding-bottom: 10px; }
-.circuit-review-bar > div { display: flex; flex: none; gap: 8px; }
+.circuit-review-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 10px; border-bottom: 1px solid hsl(var(--border)); padding-bottom: 10px; }
+.circuit-review-bar > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.circuit-review-bar > div > button { flex: 1; }
 .circuit-footer-row { display: flex; min-height: 40px; align-items: center; gap: 14px; }
 .circuit-review-bar + .circuit-footer-row { min-height: 0; }
 .circuit-footer-row > [role="status"] { flex: none; color: hsl(var(--muted-foreground)); font-size: 13px; white-space: nowrap; }
@@ -211,10 +220,20 @@
   .circuit-detail-scroll { padding: 12px 14px 16px; }
   .circuit-footer-row { flex-wrap: wrap; gap: 6px 10px; }
   .circuit-next-step { flex-basis: 100%; order: 3; }
+  .circuit-comment { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .circuit-comment > button { justify-self: end; }
 }
 .circuit-image-actions > .circuit-image-source { width: auto; gap: 3px; padding-inline: 6px; color: hsl(var(--primary)); font-size: 12px; font-variant-numeric: tabular-nums; }
 
 /* Secondary dialogs */
+.workspace-dialog-surface:is(.circuit-remove-dialog,.circuit-removed-dialog)[data-ui="dialog"] { top: calc(var(--circuit-viewport-top, 0px) + var(--circuit-viewport-height, 100dvh) / 2); max-height: calc(var(--circuit-viewport-height, 100dvh) - 16px); gap: 14px; }
+.circuit-removed-list { min-height: 0; overflow-y: auto; }
+.circuit-removed-list > li { display: flex; align-items: center; gap: 12px; padding-block: 12px; border-bottom: 1px solid hsl(var(--border)); }
+.circuit-removed-list > li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.circuit-removed-list strong { font-size: 14px; font-weight: 600; }
+.circuit-removed-list span { display: block; margin-top: 4px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-removed-list button { flex: none; min-height: 44px; gap: 6px; }
+.circuit-removed-list > .circuit-removed-empty { justify-content: center; color: hsl(var(--muted-foreground)); }
 .workspace-dialog-surface.circuit-new-set-dialog[data-ui="dialog"] { top: calc(var(--circuit-viewport-top, 0px) + var(--circuit-viewport-height, 100dvh) / 2); max-height: calc(var(--circuit-viewport-height, 100dvh) - 16px); gap: 14px; }
 .circuit-new-set-dialog form { display: grid; gap: 14px; }
 .circuit-new-set-dialog label { display: flex; min-width: 0; flex-direction: column; gap: 6px; font-size: 14px; }
@@ -292,6 +311,8 @@
   .circuit-detail-heading strong { gap: 6px; font-size: 14px; }
   .circuit-detail-heading > div > span { max-width: 100%; font-size: 11px; }
   .circuit-item-navigation > button { min-width: 40px; height: 44px; padding-inline: 8px; font-size: 13px; }
+  .circuit-item-navigation > .circuit-remove-item { width: 40px; padding: 0; }
+  .circuit-remove-item > span { display: none; }
   /* On a phone the picture area has to be reachable without scrolling past two long text boxes. */
   .circuit-detail-scroll { display: flex; flex-direction: column; padding: 14px 16px; }
   .circuit-detail-scroll > * { flex: none; }

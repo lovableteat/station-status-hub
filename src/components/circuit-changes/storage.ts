@@ -34,6 +34,7 @@ function item(row: any): CircuitChangeItem {
   return { id: row.id, setId: row.set_id, number: row.number, content: content(row.content),
     status: row.status as CircuitChangeStatus, revision: row.revision, createdAt: row.created_at,
     updatedAt: row.updated_at, createdBy: row.created_by, updatedBy: row.updated_by,
+    ...(row.removed_at ? { removedAt: row.removed_at, removedBy: row.removed_by } : {}),
     imageCount: row.image_count ?? row.content.images.length };
 }
 function changeSet(row: any): CircuitChangeSet {
@@ -74,9 +75,14 @@ export async function getCircuitChangeItem(id: string) {
   return item(await request(db.from("circuit_change_items").select("*").eq("id", id).single()));
 }
 export async function saveCircuitChangeItem(setId: string, id: string, revision: number, value: CircuitChangeContent) {
-  return item(await request(db.rpc("circuit_change_save_item", {
+  const saved = item(await request(db.rpc("circuit_change_save_item", {
     p_set_id: setId, p_item_id: id, p_expected_revision: revision, p_content: value,
   })));
+  if (saved.removedAt) throw new CircuitChangeConflictError();
+  return saved;
+}
+export async function setCircuitChangeItemRemoved(id: string, revision: number, removed: boolean) {
+  return item(await request(db.rpc("circuit_change_set_removed", { p_item_id: id, p_expected_revision: revision, p_removed: removed })));
 }
 export async function actOnCircuitChangeItem(id: string, revision: number, action: CircuitChangeAction, note = "") {
   return item(await request(db.rpc("circuit_change_action", {

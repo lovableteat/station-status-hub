@@ -1,7 +1,7 @@
 const { randomUUID } = require('node:crypto');
 
 function createCircuitChangesServer() {
-  const state = { sets: new Map(), items: new Map(), events: new Map(), files: new Map(), failedNames: new Set(), calls: [], conflictItem: null, sseDelivered: 0, pdfRegistries: new Map(), pdfVersions: new Map(), pdfs: new Map(), pdfWrites: 0, pdfConflicts: 0, pdfWriteDelay: 0 };
+  const state = { sets: new Map(), items: new Map(), events: new Map(), files: new Map(), failedNames: new Set(), calls: [], conflictItem: null, sseDelivered: 0, pdfRegistries: new Map(), pdfVersions: new Map(), pdfOfficials: new Map(), pdfs: new Map(), pdfWrites: 0, pdfConflicts: 0, pdfWriteDelay: 0 };
   const clients = new Set();
   let lastStamp = Date.now();
   const clone = value => structuredClone(value);
@@ -26,7 +26,7 @@ function createCircuitChangesServer() {
   const metadata = event => { const { snapshot, ...data } = event; return clone(data); };
   function run(method, args, account) {
     state.calls.push({ method, args: clone(args), account });
-    const writes = ['createCircuitChangeSet', 'saveCircuitChangeItem', 'actOnCircuitChangeItem'];
+    const writes = ['createCircuitChangeSet', 'saveCircuitChangeItem', 'actOnCircuitChangeItem', 'setCircuitChangeItemRemoved'];
     if (writes.includes(method) && account === 'view') fail(403, '目前帳號沒有料號申請編輯權限');
     if (method === 'listCircuitChangeSets') return [...state.sets.values()].filter(set => set.seriesId === args[0]).sort((a,b) => b.createdAt.localeCompare(a.createdAt)).map(clone);
     if (method === 'createCircuitChangeSet') {
@@ -42,6 +42,7 @@ function createCircuitChangesServer() {
       const [setId, id, expected, content] = args;
       if (!state.sets.has(setId)) fail(404, '找不到修改批次');
       const old = state.items.get(id);
+      if (old?.removedAt) fail(409, '此修改已移除，請先還原後再操作');
       if (state.conflictItem === true || state.conflictItem === id) {
         state.conflictItem = null;
         fail(409, '這個修改項目已由其他人更新；你的草稿仍保留，請先對照最新內容。');
@@ -55,6 +56,7 @@ function createCircuitChangesServer() {
     }
     if (method === 'actOnCircuitChangeItem') {
       const [id, expected, action, note = ''] = args, item = getItem(id);
+      if (item.removedAt) fail(409, '此修改已移除，請先還原後再操作');
       if (item.revision !== expected) fail(409, '這個修改項目已由其他人更新；你的草稿仍保留，請先對照最新內容。');
       if (action === 'submit') {
         if (!item.content.title.trim() || (!item.content.description.trim() && !item.content.images.some(image => image.side === 'after'))) fail(400, '送出 Review 前請填寫標題及修改說明，或加入修改後圖片');
@@ -67,6 +69,16 @@ function createCircuitChangesServer() {
       item.revision++; item.updatedAt = stamp(); item.updatedBy = actor(account).id;
       record(item, ({submit:'submitted',approve:'approved',request_changes:'request_changes',comment:'comment'})[action], account, note);
       return clone(item);
+    }
+    if (method === 'setCircuitChangeItemRemoved') {
+      const [id, expected, removed] = args, item = getItem(id);
+      if (typeof removed !== 'boolean') fail(400, '移除或還原動作不正確');
+      if (item.revision !== expected) fail(409, '這個修改項目已由其他人更新；請先對照最新內容。');
+      if (Boolean(item.removedAt) === removed) return clone(item);
+      item.removedAt = removed ? stamp() : undefined;
+      item.removedBy = removed ? actor(account).id : undefined;
+      item.revision++; item.updatedAt = stamp(); item.updatedBy = actor(account).id;
+      record(item, removed ? 'removed' : 'restored', account); return clone(item);
     }
     if (method === 'listCircuitChangeEvents') return [...state.events.values()].filter(event => event.itemId === args[0]).sort((a,b) => b.revision - a.revision).map(metadata);
     if (method === 'getCircuitChangeEvent') return clone(state.events.get(args[0]) || fail(404, '找不到歷史修訂'));
@@ -91,14 +103,26 @@ function createCircuitChangesServer() {
         const { method, args = [] } = JSON.parse((await body(req)).toString());
         return json(res, 200, { data: run(method, args, account) });
       }
-      if (url.pathname === '/__circuit/state') return json(res, 200, { sets:[...state.sets.values()], items:[...state.items.values()], events:[...state.events.values()], files:[...state.files.keys()],pdfRegistries:Object.fromEntries(state.pdfRegistries),pdfs:[...state.pdfs.keys()],pdfWrites:state.pdfWrites,pdfConflicts:state.pdfConflicts, objects:[...state.files].map(([path,file])=>({path,size:file.bytes.length,type:file.mime})), calls:state.calls, sseDelivered:state.sseDelivered });
+      if (url.pathname === '/__circuit/state') return json(res, 200, { sets:[...state.sets.values()], items:[...state.items.values()], events:[...state.events.values()], files:[...state.files.keys()],pdfRegistries:Object.fromEntries(state.pdfRegistries),pdfOfficials:Object.fromEntries(state.pdfOfficials),pdfs:[...state.pdfs.keys()],pdfWrites:state.pdfWrites,pdfConflicts:state.pdfConflicts, objects:[...state.files].map(([path,file])=>({path,size:file.bytes.length,type:file.mime})), calls:state.calls, sseDelivered:state.sseDelivered });
       if (url.pathname === '/__circuit/control') {
         const input = JSON.parse((await body(req)).toString() || '{}');
-        if (input.action === 'reset') { for (const key of ['sets','items','events','files','pdfRegistries','pdfVersions','pdfs']) state[key].clear(); state.pdfWrites = 0; state.pdfConflicts = 0; state.pdfWriteDelay = 0; state.failedNames.clear(); state.calls.length = 0; state.conflictItem = null; state.sseDelivered = 0; }
+        if (input.action === 'reset') { for (const key of ['sets','items','events','files','pdfRegistries','pdfVersions','pdfOfficials','pdfs']) state[key].clear(); state.pdfWrites = 0; state.pdfConflicts = 0; state.pdfWriteDelay = 0; state.failedNames.clear(); state.calls.length = 0; state.conflictItem = null; state.sseDelivered = 0; }
         if (input.action === 'conflict_next_save') state.conflictItem = input.itemId || true;
         if (input.action === 'pdf_write_delay') state.pdfWriteDelay = Number(input.ms) || 0;
         if (input.action === 'bump') { const item = getItem(input.itemId); item.content = {...item.content, ...(input.patch || {})}; item.revision++; item.updatedAt=stamp(); record(item,'edited','B'); }
         return json(res, 200, {ok:true});
+      }
+      if (url.pathname === '/__circuit/pdf-official') {
+        const seriesId = url.searchParams.get('seriesId') || '';
+        if (req.method === 'PUT') {
+          if (account === 'view') fail(403, '目前帳號沒有設定官方基準權限');
+          const { documentId } = JSON.parse((await body(req)).toString());
+          const document = state.pdfRegistries.get(seriesId)?.documents?.find(row => row.id === documentId && !row.removedAt && !row.localOnly && row.path);
+          if (!document) fail(400, '官方基準必須是這塊板子已儲存的 PDF');
+          const who = actor(account), official = { documentId, document: clone(document), at: stamp(), by: who.id, byName: who.name, revision: (state.pdfOfficials.get(seriesId)?.revision || 0) + 1 };
+          state.pdfOfficials.set(seriesId, official); return json(res, 200, { data: official });
+        }
+        return json(res, 200, { data: clone(state.pdfOfficials.get(seriesId) || null) });
       }
       // Schematic PDFs: the shared version list per board and the PDF files, like the preference row and the SPEC bucket.
       if (url.pathname === '/__circuit/pdf-registry') {
