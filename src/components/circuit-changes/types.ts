@@ -7,10 +7,17 @@ export const CIRCUIT_IMAGE_SIDE_LABELS: Record<CircuitImageSide, string> = { bef
 export interface CircuitImageMark {
   id: string; kind: "pin" | "box"; x: number; y: number; width?: number; height?: number; text: string;
 }
+/** Where a picture framed on a schematic PDF came from: which dated version, page and area (fractions of the page). */
+export interface CircuitImageSource {
+  kind: "pdf"; documentId: string; name: string; date: string; label: string; page: number;
+  rect: { x: number; y: number; width: number; height: number };
+}
 export interface CircuitImage {
   id: string; name: string; path: string; thumbnailPath?: string; mime: string; size: number;
   width: number; height: number; side: CircuitImageSide; caption: string; marks: CircuitImageMark[];
   uploadedAt: string; uploadedBy: string;
+  /** Set for pictures framed on a PDF here; the server stores it with the picture unchanged. */
+  source?: CircuitImageSource;
 }
 export interface CircuitChangeContent {
   title: string; reason: string; description: string; refs: string; net: string; page: string;

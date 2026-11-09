@@ -15,6 +15,7 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
   const {createServer} = await import('vite');
   const materialMock = path.resolve('tests/support/materialWorkspaceMock.js');
   const storageMock = path.resolve('tests/support/circuitChangesStorageMock.js');
+  const pdfStorageMock = path.resolve('tests/support/circuitChangesPdfStorageMock.js');
   const supabaseMock = path.resolve('tests/support/circuitChangesSupabaseMock.js');
   let server, browser, context, page;
   try {
@@ -24,7 +25,7 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       {find:/^\.\/(materialBomStorage|useMaterialBomPresence|materialRequestAudit)$/, replacement:materialMock},
       {find:'@', replacement:path.resolve('src')},
     ]}, worker:{format:'es'}, optimizeDeps:{entries:['tests/support/circuitChangesFixture.jsx'], include:['react/jsx-dev-runtime','exceljs']}, server:{host:'127.0.0.1',port:0}, plugins:[
-      {name:'circuit-onboarding-storage', enforce:'pre', resolveId(source, importer){if(source === './storage' && importer?.replaceAll('\\','/').includes('/circuit-changes/')) return storageMock;}},
+      {name:'circuit-onboarding-storage', enforce:'pre', resolveId(source, importer){const own = importer?.replaceAll('\\','/').includes('/circuit-changes/'); if(own && source === './storage') return storageMock; if(own && source === './pdfStorage') return pdfStorageMock;}},
       {name:'circuit-onboarding-http', configureServer(vite){vite.middlewares.use(fixture.middleware); vite.middlewares.use((req,res,next) => {
         if(req.url?.split('?')[0] !== '/') return next();
         res.setHeader('Content-Type','text/html; charset=utf-8');

@@ -1,0 +1,143 @@
+/* PDF 圖面: the schematic page between the change list and the form. Toolbar rows stay 40px; the page takes the rest. */
+.circuit-pdf-panel { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid hsl(var(--border)); background: hsl(var(--secondary) / .18); }
+.circuit-pdf-panel[data-dropping="true"] { outline: 2px dashed hsl(var(--primary)); outline-offset: -4px; }
+.circuit-pdf-panel button > svg { flex: none; width: 16px; height: 16px; }
+.circuit-pdf-toolbar { display: flex; flex: none; flex-direction: column; gap: 6px; padding: 8px 12px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--background)); }
+.circuit-pdf-row { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.circuit-pdf-row button { height: 36px; gap: 6px; padding-inline: 10px; font-size: 13px; }
+.circuit-pdf-panel .circuit-pdf-back { display: none; width: 40px; padding: 0; }
+
+.circuit-pdf-versions { position: relative; min-width: 0; flex: 0 1 260px; }
+.circuit-pdf-versions > .circuit-pdf-version-button { display: flex; width: 100%; justify-content: flex-start; gap: 8px; }
+.circuit-pdf-version-button > span { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+.circuit-pdf-version-button > small { min-width: 0; overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.circuit-pdf-version-button > svg { margin-left: auto; }
+.circuit-pdf-version-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; width: min(520px, calc(100vw - 32px)); max-height: min(60vh, 520px); overflow-y: auto; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--popover)); color: hsl(var(--popover-foreground)); box-shadow: 0 16px 40px hsl(var(--background) / .6); }
+.circuit-pdf-version-list > header { display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border-bottom: 1px solid hsl(var(--border)); }
+.circuit-pdf-version-list > header > strong { font-size: 14px; }
+.circuit-pdf-version-list > header > span { color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-pdf-version-list li { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-bottom: 1px solid hsl(var(--border)); }
+.circuit-pdf-version-list li:last-child { border-bottom: 0; }
+.circuit-pdf-version-list li[data-active="true"] { background: hsl(var(--primary) / .08); box-shadow: inset 3px 0 hsl(var(--primary)); }
+.circuit-pdf-version-open { display: grid; width: 100%; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; border: 0; padding: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.circuit-pdf-version-open > strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+.circuit-pdf-version-open > span { min-width: 0; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.circuit-pdf-version-open > small { grid-column: 2; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-pdf-version-edit { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.circuit-pdf-version-edit > label { display: flex; flex-direction: column; gap: 3px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-pdf-version-edit input { height: 34px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding: 0 8px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 13px; color-scheme: dark; }
+.circuit-pdf-version-edit > label:nth-child(2) input { width: 150px; }
+.circuit-pdf-version-edit > button { width: 36px; height: 34px; margin-left: auto; padding: 0; }
+.circuit-pdf-remove-confirm { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: 6px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-pdf-remove-confirm > button { height: 32px; font-size: 12px; }
+
+.circuit-pdf-compare { display: flex; min-width: 0; align-items: center; gap: 6px; color: hsl(var(--muted-foreground)); font-size: 13px; }
+.circuit-pdf-panel .circuit-pdf-compare select { width: 170px; height: 36px; font-size: 13px; }
+.circuit-pdf-progress { display: flex; flex: none; align-items: center; gap: 8px; color: hsl(var(--muted-foreground)); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.circuit-pdf-progress-bar { position: relative; display: block; width: 64px; height: 6px; overflow: hidden; border-radius: 3px; background: hsl(var(--secondary)); }
+.circuit-pdf-progress-bar > span { position: absolute; inset: 0 auto 0 0; background: hsl(var(--primary)); }
+
+.circuit-pdf-pager, .circuit-pdf-zoom, .circuit-pdf-offset { display: flex; flex: none; align-items: center; gap: 2px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.circuit-pdf-pager > button, .circuit-pdf-zoom > button, .circuit-pdf-offset > button { width: 36px; padding: 0 !important; }
+.circuit-pdf-pager input { width: 56px; height: 36px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 14px; text-align: center; }
+.circuit-pdf-pager > span { padding-inline: 4px 2px; color: hsl(var(--muted-foreground)); }
+.circuit-pdf-zoom > span { min-width: 44px; color: hsl(var(--muted-foreground)); text-align: center; }
+.circuit-pdf-offset > span { padding-right: 2px; color: hsl(var(--muted-foreground)); }
+.circuit-pdf-page-changes { display: flex; flex: 0 1 auto; min-width: 0; max-width: 40%; align-items: center; gap: 4px; overflow-x: auto; color: hsl(var(--muted-foreground)); font-size: 12px; scrollbar-width: none; }
+.circuit-pdf-page-changes > button { flex: none; height: 28px !important; border: 1px solid hsl(var(--warning) / .5); border-radius: 5px; padding: 0 7px !important; background: hsl(var(--warning) / .1); color: hsl(var(--foreground)); font-size: 12px !important; font-variant-numeric: tabular-nums; }
+.circuit-pdf-finish { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
+.circuit-pdf-finish-bar { display: none; }
+.circuit-pdf-checked { display: flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.circuit-pdf-checked > input { width: 18px; height: 18px; accent-color: hsl(var(--primary)); }
+
+/* One cell per page: filled = gone through on this PDF, outlined = on an earlier PDF, amber dot = a change is recorded there. */
+.circuit-pdf-overview { display: flex; flex: none; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--background)); }
+.circuit-pdf-strip { display: flex; flex: 1; min-width: 0; gap: 1px; overflow-x: auto; padding: 8px 2px; scrollbar-width: thin; }
+.circuit-pdf-strip > button { position: relative; flex: none; width: 9px; height: 22px; border: 1px solid transparent; border-radius: 2px; padding: 0; background: hsl(var(--muted-foreground) / .22); cursor: pointer; }
+.circuit-pdf-strip > button[data-state="here"] { background: hsl(var(--primary) / .85); }
+.circuit-pdf-strip > button[data-state="older"] { border-color: hsl(var(--primary) / .8); background: hsl(var(--primary) / .18); }
+.circuit-pdf-strip > button[data-changes="true"]::after { position: absolute; top: -3px; left: 50%; width: 6px; height: 6px; border-radius: 50%; background: hsl(var(--warning)); content: ""; transform: translateX(-50%); }
+.circuit-pdf-strip > button[aria-current="page"] { outline: 2px solid hsl(var(--foreground)); outline-offset: 1px; }
+.circuit-pdf-strip > button > span { position: absolute; top: 24px; left: 50%; color: hsl(var(--muted-foreground)); font-size: 9px; line-height: 10px; transform: translateX(-50%); pointer-events: none; }
+.circuit-pdf-strip:has(button > span) { padding-bottom: 18px; }
+
+.circuit-pdf-message { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 6px 12px; border-bottom: 1px solid hsl(var(--warning) / .3); background: hsl(var(--warning) / .1); font-size: 13px; line-height: 20px; }
+.circuit-pdf-message > button { flex: none; width: 32px; height: 32px; padding: 0; }
+.circuit-pdf-stage { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 12px; overscroll-behavior: contain; }
+.circuit-pdf-stage:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
+.circuit-pdf-pages { display: flex; width: max-content; min-width: 100%; align-items: flex-start; justify-content: center; gap: 12px; }
+.circuit-pdf-pages[data-stacked="true"] { flex-direction: column; align-items: center; gap: 16px; }
+.circuit-pdf-page { flex: none; margin: 0; }
+.circuit-pdf-page > figcaption { margin-bottom: 6px; color: hsl(var(--muted-foreground)); font-size: 12px; font-variant-numeric: tabular-nums; }
+.circuit-pdf-page[data-pane="compare"] > figcaption { color: hsl(var(--warning)); }
+.circuit-pdf-page[data-pane="active"] > figcaption { color: hsl(var(--primary)); }
+.circuit-pdf-surface { position: relative; min-width: 120px; min-height: 120px; overflow: hidden; background: #ffffff; box-shadow: 0 1px 4px hsl(var(--background) / .8); touch-action: pan-x pan-y; user-select: none; }
+.circuit-pdf-stage[data-crop="true"] .circuit-pdf-surface { cursor: crosshair; touch-action: none; }
+.circuit-pdf-surface[data-rendering="true"] > canvas { opacity: .6; }
+.circuit-pdf-surface > canvas { display: block; }
+.circuit-pdf-selection, .circuit-pdf-crop { position: absolute; pointer-events: none; }
+.circuit-pdf-selection { border: 2px solid hsl(var(--primary)); background: hsl(var(--primary) / .12); box-shadow: 0 0 0 9999px hsl(220 20% 8% / .18); }
+.circuit-pdf-selection[data-mirror="true"] { border-style: dashed; box-shadow: none; }
+.circuit-pdf-crop { border: 1.5px dashed #d97706; }
+.circuit-pdf-crop[data-side="after"] { border-color: #0d9488; }
+.circuit-pdf-crop > span { position: absolute; top: -1px; left: -1px; padding: 0 4px; background: #d97706; color: #ffffff; font-size: 11px; line-height: 16px; }
+.circuit-pdf-crop[data-side="after"] > span { background: #0d9488; }
+.circuit-pdf-page-error { position: absolute; inset: auto 8px 8px; padding: 6px 8px; border-radius: 6px; background: hsl(var(--background) / .92); color: hsl(var(--foreground)); font-size: 13px; }
+.circuit-pdf-loading, .circuit-pdf-open-error { display: flex; min-height: 200px; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: hsl(var(--muted-foreground)); font-size: 14px; text-align: center; }
+.circuit-pdf-open-error > button { min-height: 40px; }
+
+/* What to do with the framed area, kept at the bottom so it never covers the page. */
+.circuit-pdf-actions { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px; border-top: 1px solid hsl(var(--primary) / .35); background: hsl(var(--background)); font-size: 13px; }
+.circuit-pdf-actions > button { height: 38px; gap: 6px; font-size: 13px; }
+.circuit-pdf-actions > button[aria-label="取消框選"] { width: 38px; padding: 0; }
+.circuit-pdf-actions-target { flex: 1 1 180px; min-width: 0; overflow: hidden; color: hsl(var(--muted-foreground)); text-overflow: ellipsis; white-space: nowrap; }
+.circuit-pdf-actions-target > strong { color: hsl(var(--foreground)); font-weight: 600; }
+.circuit-pdf-actions-busy { color: hsl(var(--muted-foreground)); }
+.circuit-pdf-actions[role="status"] { border-top-color: hsl(var(--border)); color: hsl(var(--primary)); }
+
+.circuit-pdf-empty-heading { display: none; }
+.circuit-pdf-empty { display: flex; flex: 1; min-height: 0; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin: 16px; border: 1.5px dashed hsl(var(--border)); border-radius: 12px; padding: 24px; background: hsl(var(--background) / .5); color: hsl(var(--foreground)); text-align: center; cursor: pointer; }
+.circuit-pdf-empty:hover, .circuit-pdf-panel[data-dropping="true"] .circuit-pdf-empty { border-color: hsl(var(--primary)); background: hsl(var(--primary) / .06); }
+.circuit-pdf-panel .circuit-pdf-empty > svg { width: 36px; height: 36px; color: hsl(var(--primary)); }
+.circuit-pdf-empty > strong { font-size: 17px; font-weight: 600; }
+.circuit-pdf-empty > span { max-width: 30rem; color: hsl(var(--muted-foreground)); font-size: 14px; line-height: 22px; }
+.circuit-pdf-empty > small { max-width: 30rem; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
+.circuit-pdf-empty-note { margin: auto; padding: 24px; color: hsl(var(--muted-foreground)); font-size: 14px; line-height: 22px; text-align: center; }
+
+@media (max-width: 1279px) {
+  .circuit-pdf-row > button > span { display: none; }
+  .circuit-pdf-row > .circuit-pdf-crop-toggle > span { display: inline; }
+}
+@media (max-width: 1023px) {
+  .circuit-pdf-panel { flex: 1; border-right: 0; }
+  .circuit-pdf-panel .circuit-pdf-back { display: inline-flex; width: 44px; height: 44px; }
+  .circuit-pdf-empty-heading { display: flex; flex: none; align-items: center; gap: 4px; padding: 6px 12px; border-bottom: 1px solid hsl(var(--border)); font-size: 16px; }
+  .circuit-pdf-toolbar { padding: 6px 12px; }
+  .circuit-pdf-row button { height: 44px; }
+  .circuit-pdf-pager > button, .circuit-pdf-zoom > button, .circuit-pdf-offset > button { width: 44px; }
+  .circuit-pdf-overview { flex-wrap: wrap; gap: 0 10px; padding-top: 6px; }
+  .circuit-pdf-overview > .circuit-pdf-strip { flex-basis: 100%; order: 3; }
+  .circuit-pdf-pager input { height: 44px; font-size: 16px; }
+  .circuit-pdf-panel .circuit-pdf-compare select { width: 150px; height: 44px; font-size: 14px; }
+  /* Toolbar: versions and upload; then turning pages, zoom and framing; the comparison gets its own line. */
+  .circuit-pdf-toolbar { gap: 4px; }
+  .circuit-pdf-row { flex-wrap: wrap; gap: 4px 6px; }
+  .circuit-pdf-versions { flex: 1 1 200px; }
+  .circuit-pdf-compare { order: 5; flex: 1 1 calc(100% - 150px); }
+  .circuit-pdf-compare > span { display: none; }
+  .circuit-pdf-panel .circuit-pdf-compare select { width: 100%; }
+  .circuit-pdf-offset { order: 6; }
+  .circuit-pdf-pager input { width: 48px; }
+  .circuit-pdf-pager > span { padding-inline: 2px; }
+  .circuit-pdf-zoom > span { display: none; }
+  .circuit-pdf-crop-toggle { width: 44px; padding: 0 !important; }
+  .circuit-pdf-crop-toggle > span { display: none !important; }
+  .circuit-pdf-finish-toolbar { display: none; }
+  .circuit-pdf-finish-bar { display: flex; flex: none; margin: 0; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid hsl(var(--border)); background: hsl(var(--background)); }
+  .circuit-pdf-finish-bar > button { flex: 1; height: 44px; gap: 6px; font-size: 14px; }
+  .circuit-pdf-finish-bar .circuit-pdf-checked { min-height: 44px; padding-right: 4px; font-size: 14px; }
+  .circuit-pdf-strip > button { width: 12px; height: 26px; }
+  .circuit-pdf-actions { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .circuit-pdf-actions > button { flex: 1 1 30%; height: 44px; }
+  .circuit-pdf-actions > button[aria-label="取消框選"] { flex: none; width: 44px; }
+}

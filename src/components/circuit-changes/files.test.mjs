@@ -35,7 +35,7 @@ test("a file that can never be accepted is marked so, unlike a transfer that may
   const result = await api.uploadCircuitImages({ setId, itemId, files: [pdf, offline, file(3)], side: "after", actorId: setId });
   assert.equal(result.images.length, 1);
   const rejected = result.failures.find(failure => failure.file === pdf), dropped = result.failures.find(failure => failure.file === offline);
-  assert.equal(rejected.permanent, true); assert.match(rejected.error, /PDF 請先截圖/);
+  assert.equal(rejected.permanent, true); assert.match(rejected.error, /PDF 請上傳到「PDF 圖面」再框選/);
   assert.equal(dropped.permanent, undefined); assert.match(dropped.error, /network down/);
 });
 test("links signed earlier are handed out again instead of signing every picture on each change", async () => {
@@ -49,4 +49,19 @@ test("links signed earlier are handed out again instead of signing every picture
   assert.equal(second.a.thumbnail, first.a.thumbnail, "an unchanged link does not make the thumbnail load again");
   assert.equal(second.a.original, first.a.original); assert.ok(second.c.original.includes("c.png"));
   assert.ok(api.CIRCUIT_IMAGE_URL_REUSE_MS >= 20 * 60 * 1000 && api.CIRCUIT_IMAGE_URL_REUSE_MS < 60 * 60 * 1000, "a reused link keeps a useful lifetime and is renewed before the hour is up");
+});
+test("a picture framed on a PDF keeps which dated version and page it came from, also when it is retried", async () => {
+  let attempts = 0;
+  const api = media(async (path, value) => { if (value instanceof File) attempts++; return value instanceof File && attempts === 1 ? { error: { message: "network down" } } : { error: null }; });
+  const framed = file(7);
+  const source = { kind: "pdf", documentId: "v9", name: "Vera.pdf", date: "2026-11-09", label: "V2", page: 12, rect: { x: .1, y: .2, width: .3, height: .4 } };
+  api.circuitImageOrigins.set(framed, { source, caption: "2026-11-09 V2 版 PDF「Vera.pdf」第 12 頁" });
+  const failed = await api.uploadCircuitImages({ setId, itemId, files: [framed], side: "after", actorId: setId });
+  assert.equal(failed.failures.length, 1);
+  const retried = await api.uploadCircuitImages({ setId, itemId, files: [failed.failures[0].file], side: "after", actorId: setId });
+  const image = retried.images[0];
+  assert.equal(image.caption, "2026-11-09 V2 版 PDF「Vera.pdf」第 12 頁");
+  assert.equal(image.source.page, 12); assert.equal(image.source.date, "2026-11-09"); assert.equal(image.source.rect.width, .3);
+  const plain = await api.uploadCircuitImages({ setId, itemId, files: [file(8)], side: "after", actorId: setId });
+  assert.equal(plain.images[0].caption, ""); assert.equal("source" in plain.images[0], false, "an ordinary screenshot has no PDF source");
 });
