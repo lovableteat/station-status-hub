@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-11-04-mobile-ui-design.md`；程式參考基準：`ec1f330775706649cdc4a4d6c5ed3f3e2de5f70e`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-11-04-mobile-ui-design.md`；程式參考基準：`8dee352be3e963250b1cebbb4596647187be4443`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 手機版 UI 設計（料號申請以外的工作區）
 
