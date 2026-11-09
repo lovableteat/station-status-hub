@@ -10,8 +10,9 @@ test("phone shell sizes are defined once per tier and never hard-coded", async (
   const docks = css.match(/--mobile-dock-height:\s*\d+px/g) ?? [];
   assert.deepEqual(headers, ["--mobile-header-height: 52px", "--mobile-header-height: 64px"], "tablet tier in :root, phone tier in the 767px block");
   assert.deepEqual(docks, ["--mobile-dock-height: 56px", "--mobile-dock-height: 64px"]);
-  assert.doesNotMatch(chat, /top-\[76px\]/);
-  assert.match(chat, /top-\[var\(--mobile-header-height\)\]/);
+  // The chat sits in the shell's flow and its phone history is a bottom sheet, so it carries no header or dock offset of its own.
+  assert.doesNotMatch(chat, /\b(?:top|bottom)-\[(?:calc\()?(?:52|56|64|76)px/, "a literal header or dock size in the chat would bypass the shell tokens");
+  assert.match(chat, /"data-ai-mobile-dialog": "history"/, "phone history stays the shared sheet that index.css places, not a hand-positioned panel");
   assert.doesNotMatch(pcb, /calc\(76px \+/);
   assert.match(pcb, /calc\(var\(--mobile-header-height\) \+ env\(safe-area-inset-top\)\)/);
 });
