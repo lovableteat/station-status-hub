@@ -26,6 +26,11 @@
 .circuit-header :is(.circuit-new-set, .circuit-header-actions > button:not(.circuit-close)) > svg { color: hsl(var(--muted-foreground)); }
 .circuit-header-actions > .circuit-action-pdf[aria-pressed="true"] { border-color: hsl(var(--primary) / .55); background: hsl(var(--primary) / .12); color: hsl(var(--primary)); }
 .circuit-header-actions > .circuit-action-pdf[aria-pressed="true"] > svg { color: hsl(var(--primary)); }
+.circuit-header .circuit-header-actions > .circuit-action-baseline > svg { color: hsl(var(--warning)); }
+.circuit-header .circuit-header-actions > .circuit-action-baseline[aria-expanded="true"] { border-color: hsl(var(--warning) / .5); background: hsl(var(--warning) / .08); }
+.circuit-header .circuit-header-actions > .circuit-action-ai { border-color: hsl(var(--primary) / .45); background: hsl(var(--primary) / .08); color: hsl(var(--primary)); }
+.circuit-header .circuit-header-actions > .circuit-action-ai > svg { color: currentColor; }
+.circuit-header .circuit-header-actions > .circuit-action-ai:disabled { border-color: hsl(var(--border)); background: transparent; color: hsl(var(--muted-foreground)); }
 .circuit-message { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 20px; border-bottom: 1px solid hsl(var(--warning) / .3); background: hsl(var(--warning) / .1); color: hsl(var(--foreground)); font-size: 14px; line-height: 20px; }
 .circuit-message > div { display: flex; flex: none; gap: 4px; }
 .circuit-message button { flex: none; height: 36px; font-size: 13px; }
@@ -272,6 +277,9 @@
 .circuit-image-dialog-heading > h2 { flex: 1; min-width: 0; overflow: hidden; font-size: 18px; line-height: 26px; text-overflow: ellipsis; white-space: nowrap; }
 .circuit-image-dialog-heading > button { flex: none; width: 44px; height: 44px; padding: 0; }
 
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .circuit-header-actions > button:not(.circuit-action-pdf) > span { display: none; }
+}
 @media (min-width: 1024px) and (max-width: 1279px) {
   .circuit-workspace { --circuit-list-width: 290px; --circuit-detail-width: minmax(340px, 380px); }
   .circuit-title { max-width: 26%; }
@@ -285,8 +293,8 @@
   .circuit-title h2 { font-size: 19px; }
   .circuit-title p { font-size: 12px; }
   .circuit-header-actions { order: 2; gap: 2px; }
-  .circuit-header-actions > button { height: 44px; padding-inline: 8px; font-size: 13px; }
-  .circuit-header-actions > button:nth-child(2) > span, .circuit-pdf-word { display: none; }
+  .circuit-header-actions > button { width: 44px; height: 44px; padding: 0; font-size: 13px; }
+  .circuit-header-actions > button > span, .circuit-pdf-word { display: none; }
   .circuit-header-actions > .circuit-close { width: 44px; }
   .circuit-set { order: 3; flex: 1 0 100%; }
   .circuit-set > button { height: 44px; }

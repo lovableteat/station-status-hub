@@ -27,6 +27,24 @@ async function eventually(read, message, timeout = 10000) {
 async function rendered(page) {
   await page.waitForFunction(() => { const pages = [...document.querySelectorAll('.circuit-pdf-surface')]; return pages.length > 0 && pages.every(node => node.dataset.rendering === 'false'); });
 }
+const versionManagerFor = page => panel(page).getByRole('group', { name: 'PDF 版本（依圖面日期）' });
+async function headerFits(page, width) {
+  await page.waitForFunction(() => {
+    const frame = document.querySelector('[data-testid="circuit-changes-dialog"]')?.getBoundingClientRect();
+    const actions = document.querySelector('.circuit-header-actions')?.getBoundingClientRect();
+    return frame && actions && Math.abs(frame.width - (innerWidth - (innerWidth >= 1024 ? 24 : 0))) <= 1 && frame.left >= 0 && frame.right <= innerWidth + 1 && actions.left >= 0 && actions.right <= innerWidth + 1;
+  }, undefined, { timeout: 3000 });
+  const geometry = await dialog(page).locator('.circuit-header-actions').evaluate(node => {
+    const r = node.getBoundingClientRect();
+    return { left: r.left, right: r.right, overflow: node.scrollWidth - node.clientWidth, buttons: [...node.querySelectorAll('button')].map(button => { const b = button.getBoundingClientRect(); return { label: button.getAttribute('aria-label'), top: b.top, left: b.left, right: b.right, height: b.height }; }), labels: [...node.querySelectorAll('button')].map(button => button.getAttribute('aria-label')) };
+  });
+  assert.deepEqual(geometry.labels.slice(0, 3), ['PDF 圖面', '官方基準', 'AI 逐頁初審']);
+  assert.ok(geometry.left >= 0 && geometry.right <= width + 1 && geometry.overflow <= 1, JSON.stringify(geometry));
+  assert.ok(geometry.buttons.every(button => Math.abs(button.top - geometry.buttons[0].top) <= 1 && button.height >= (width < 1024 ? 44 : 40)), JSON.stringify(geometry));
+  assert.equal(await panel(page).locator('.circuit-pdf-official').count(), 0, 'The baseline banner no longer takes a PDF row');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+}
+
 async function managerFits(page, label) {
   const bounds = await panel(page).locator('.circuit-pdf-version-list').evaluate(node => {
     const rect = element => { const r = element.getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right, bottom: r.bottom }; };
@@ -75,6 +93,22 @@ async function managerFits(page, label) {
       return { page, errors };
     };
     const desktop = await open(1440), page = desktop.page;
+    const baselineButton = dialog(page).getByRole('button', { name: '官方基準', exact: true });
+    const versionManager = () => panel(page).getByRole('group', { name: 'PDF 版本（依圖面日期）' });
+    assert.equal(await dialog(page).getByRole('button', { name: 'AI 逐頁初審', exact: true }).isEnabled(), false);
+    await dialog(page).getByRole('button', { name: 'PDF 圖面', exact: true }).click();
+    await panel(page).waitFor({ state: 'hidden' });
+    await baselineButton.click();
+    await versionManager().waitFor();
+    await versionManager().getByText('目前沒有工作版本', { exact: true }).waitFor();
+    await versionManager().getByRole('button', { name: '關閉 PDF 版本管理', exact: true }).click();
+    await versionManager().waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '官方基準');
+    await baselineButton.click();
+    await page.keyboard.press('Escape');
+    await versionManager().waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '官方基準');
+    report.checks.push('header baseline opens the PDF and empty manager, with X/Escape returning focus to the header trigger');
     await panel(page).locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(files[0]); await rendered(page);
     assert.ok(!fixture.state.pdfOfficials.get('series:qa'), 'Uploading a PDF must not silently designate an official baseline');
     const baselineId = registry().documents[0].id;
@@ -85,8 +119,8 @@ async function managerFits(page, label) {
     await eventually(() => fixture.state.pdfOfficials.get('series:qa')?.documentId === baselineId, 'The explicit pin must persist separately from the version registry');
     const baselineSnapshot = structuredClone(fixture.state.pdfOfficials.get('series:qa').document);
     assert.equal(baselineSnapshot.name, 'Official_20261101.pdf');
-    const official = panel(page).getByTestId('circuit-pdf-official');
-    assert.match(await official.innerText(), /Official_20261101\.pdf/);
+    const official = dialog(page).getByTestId('circuit-pdf-official');
+    assert.match(await official.getAttribute('title'), /Official_20261101\.pdf/);
     assert.equal(await panel(page).getByRole('button', { name: '刪除 PDF：Official_20261101.pdf', exact: true }).count(), 0, 'The official original cannot be deleted');
     const manager = panel(page).getByRole('group', { name: 'PDF 版本（依圖面日期）' });
     await manager.getByText('目前沒有工作版本', { exact: true }).waitFor();
@@ -115,7 +149,7 @@ async function managerFits(page, label) {
       await rendered(page);
       await eventually(() => registry().documents.some(row => row.name === path.basename(file)), 'Every working PDF must append to history');
       assert.equal(fixture.state.pdfOfficials.get('series:qa').documentId, baselineId);
-      assert.match(await official.innerText(), /Official_20261101\.pdf/);
+      assert.match(await official.getAttribute('title'), /Official_20261101\.pdf/);
       await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').waitFor();
       assert.match(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), /Official_20261101\.pdf/);
       if (file === files[1]) await manager.getByRole('button', { name: '關閉 PDF 版本管理', exact: true }).click();
@@ -168,25 +202,41 @@ async function managerFits(page, label) {
     await strip.locator('[data-strip-page="101"]').press('Enter');
     await page.waitForFunction(() => document.querySelector('input[aria-label="目前頁碼"]').value === '101');
     report.checks.push('mouse drag pans without page jumps; ordinary click and keyboard navigation still work');
+    for (const width of [1440, 1280, 1173]) {
+      await page.setViewportSize({ width, height: 884 });
+      await headerFits(page, width);
+      await page.screenshot({ path: path.join(evidence, `header-actions-${width}.png`) });
+      await baselineButton.click(); await versionManager().waitFor();
+      await versionManager().getByRole('button', { name: '關閉 PDF 版本管理', exact: true }).click();
+    }
+    await page.setViewportSize({ width: 1440, height: 884 });
+    report.checks.push('PDF, baseline and AI header actions remain adjacent and on one row at 1440/1280/1173');
     await strip.locator('[data-strip-page="500"]').click(); await rendered(page);
     assert.equal(await panel(page).getByLabel('目前頁碼', { exact: true }).inputValue(), '500');
     await panel(page).getByLabel('官方對應頁', { exact: true }).fill('500'); await rendered(page);
     assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), 'Official_20261101.pdf 第 500 頁');
-    assert.equal(await panel(page).getByRole('button', { name: 'AI 逐頁初審', exact: true }).isEnabled(), true, 'Matching the last official page must resolve the out-of-range offset and enable review');
+    assert.equal(await dialog(page).getByRole('button', { name: 'AI 逐頁初審', exact: true }).isEnabled(), true, 'Matching the last official page must resolve the out-of-range offset and enable review');
+    await dialog(page).getByRole('button', { name: 'AI 逐頁初審', exact: true }).click();
+    const aiDialog = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'AI 逐頁初審', exact: true }) });
+    await aiDialog.waitFor();
+    await aiDialog.getByRole('button', { name: /^(關閉 AI 逐頁初審|Close)$/ }).click();
+    await aiDialog.waitFor({ state: 'hidden' });
+    assert.ok(await dialog(page).isVisible());
+    report.checks.push('relocated AI header entry opens and closes its review surface without starting a provider analysis');
     const compareBounds = await panel(page).locator('.circuit-pdf-page[data-pane="compare"]').boundingBox(), workingBounds = await panel(page).locator('.circuit-pdf-page[data-pane="active"]').boundingBox();
     assert.ok(compareBounds.x < workingBounds.x && Math.abs(compareBounds.y - workingBounds.y) < 2, 'The desktop official and working drawings must appear side by side');
     report.checks.push('500-page working and official PDFs can navigate and render the last matched page');
 
     await dialog(page).locator('.circuit-set select').selectOption('qa-group-b');
     assert.equal(fixture.state.pdfOfficials.get('series:qa').documentId, baselineId);
-    assert.match(await official.innerText(), /Official_20261101\.pdf/);
+    assert.match(await official.getAttribute('title'), /Official_20261101\.pdf/);
     await page.screenshot({ path: path.join(evidence, 'official-compare-1440.png') });
     await dialog(page).getByRole('button', { name: '關閉線路修改', exact: true }).click(); await dialog(page).waitFor({ state: 'hidden' });
     // Legacy version metadata may change; it must never replace the protected official file snapshot.
     const legacyBaseline = registry().documents.find(row => row.id === baselineId);
     Object.assign(legacyBaseline, { name: 'Edited_legacy_metadata.pdf', path: registry().documents.find(row => row.name === 'Working_20261109.pdf').path });
     await page.getByTestId('material-circuit-changes').filter({ visible: true }).click(); await dialog(page).waitFor(); await rendered(page);
-    assert.match(await panel(page).getByTestId('circuit-pdf-official').innerText(), /Official_20261101\.pdf/);
+    assert.match(await dialog(page).getByTestId('circuit-pdf-official').getAttribute('title'), /Official_20261101\.pdf/);
     assert.deepEqual(fixture.state.pdfOfficials.get('series:qa').document, baselineSnapshot, 'Legacy registry metadata cannot mutate the official file snapshot');
     assert.match(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), /Official_20261101\.pdf/);
     report.checks.push('official baseline survives a modification-group switch and closing/reopening the workspace');
@@ -220,7 +270,15 @@ async function managerFits(page, label) {
     report.checks.push('official-only empty state, named delete cancel, compact restoration and restored-work feedback are usable without switching the active PDF');
 
     const viewer = await open(390, 'view'); await rendered(viewer.page);
-    assert.match(await panel(viewer.page).getByTestId('circuit-pdf-official').innerText(), /Official_20261101\.pdf/);
+    await headerFits(viewer.page, 390);
+    await viewer.page.screenshot({ path: path.join(evidence, 'header-actions-390.png') });
+    await dialog(viewer.page).getByRole('button', { name: 'PDF 圖面', exact: true }).click();
+    await panel(viewer.page).waitFor({ state: 'hidden' });
+    await dialog(viewer.page).getByRole('button', { name: '官方基準', exact: true }).click();
+    await versionManagerFor(viewer.page).waitFor();
+    await versionManagerFor(viewer.page).getByRole('button', { name: '關閉 PDF 版本管理', exact: true }).click();
+    assert.equal(await viewer.page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '官方基準');
+    assert.match(await dialog(viewer.page).getByTestId('circuit-pdf-official').getAttribute('title'), /Official_20261101\.pdf/);
     await panel(viewer.page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
     assert.equal(await panel(viewer.page).getByRole('button', { name: /設為官方基準：/ }).count(), 0, 'A viewer cannot designate a baseline');
     const versionBounds = await panel(viewer.page).locator('.circuit-pdf-version-list').boundingBox();

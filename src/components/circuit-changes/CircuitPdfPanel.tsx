@@ -1,6 +1,6 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Crop, FileUp, Minus, MoveHorizontal, Pencil, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Crop, FileUp, Minus, MoveHorizontal, Pencil, Plus, RotateCcw, ShieldCheck, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   circuitPdfCaption, circuitPdfImageName, circuitPdfPageState, circuitPdfProgress, circuitPdfVersionLabel, normalizeCropRect,
@@ -29,11 +29,11 @@ const SIDE_BY_SIDE_MIN = 900;
  * The schematic PDF of the board, one page at a time. Dragging on the page frames an area that is added to the change on the
  * right as a sharp picture rendered from the PDF; with an older version beside it, the same area is taken from both dates.
  */
-export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pageChanges, crops, onCapture, onSelectChange, onBack, onAiReview }: {
+export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pageChanges, crops, onCapture, onSelectChange, onBack, versionsOpen, onVersionsOpenChange: setVersionsOpen, versionsOpener }: {
   pdfs: CircuitPdfModel; canEdit: boolean; captureBlocked: string; targetLabel: string;
   pageChanges: Map<number, Array<{ id: string; number: number }>>; crops: CircuitPdfCrop[];
   onCapture: (captures: CircuitPdfCapture[]) => Promise<void>; onSelectChange: (id: string) => void; onBack: () => void;
-  onAiReview?: () => void;
+  versionsOpen: boolean; onVersionsOpenChange: (open: boolean) => void; versionsOpener: MutableRefObject<HTMLButtonElement | null>;
 }) {
   const { active, compare, official, documents, registry, page } = pdfs;
   const [zoom, setZoom] = useState<number | "fit">("fit");
@@ -44,7 +44,6 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
   const [capturing, setCapturing] = useState(false);
   const [captured, setCaptured] = useState("");
   const [failure, setFailure] = useState("");
-  const [versionsOpen, setVersionsOpen] = useState(false);
   const [removing, setRemoving] = useState("");
   const [deleting, setDeleting] = useState("");
   const [officialCandidate, setOfficialCandidate] = useState("");
@@ -59,7 +58,6 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
   const localInput = useRef<HTMLInputElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const versions = useRef<HTMLDivElement>(null);
-  const versionButton = useRef<HTMLButtonElement>(null);
   const versionClose = useRef<HTMLButtonElement>(null);
   const scale = zoom === "fit" ? fitScale : zoom;
   const progress = useMemo(() => active ? circuitPdfProgress(registry, active.id, active.pages) : null, [registry, active]);
@@ -87,7 +85,7 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
     return () => window.removeEventListener("pointerdown", outside, true);
   }, [versionsOpen]);
 
-  function closeVersions() { setVersionsOpen(false); versionButton.current?.focus(); }
+  function closeVersions() { setVersionsOpen(false); versionsOpener.current?.focus(); }
 
   // "Fit width" follows the space the page has, which changes with the dialog and with the comparison pane.
   useLayoutEffect(() => {
@@ -187,7 +185,7 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
   const message = failure || pdfs.error;
   const back = <Button type="button" variant="ghost" className="circuit-pdf-back" aria-label="返回修改內容" onClick={onBack}><ArrowLeft aria-hidden="true" /></Button>;
 
-  if (!documents.length && !archived.length) {
+  if (!documents.length && !archived.length && !versionsOpen) {
     return <section className="circuit-pdf-panel" aria-label="PDF 圖面" data-testid="circuit-pdf-panel" data-dropping={dropping}
       onDragOver={event => { if (carriesFiles(event) && canEdit) { event.preventDefault(); event.stopPropagation(); setDropping(true); } }}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false); }} onDrop={drop}>
@@ -222,20 +220,14 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
       else if (event.key === "ArrowRight" || event.key === "PageDown") { event.preventDefault(); pdfs.goTo(page + 1); }
     }}>
     {hiddenInputs}
-    <div className="circuit-pdf-official" data-testid="circuit-pdf-official" data-configured={Boolean(official)} title={official ? "所有工作版本都以這份原圖為基準；上傳新版不會替換它。" : "官方基準是原廠的參考原圖；在版本清單選一份設為官方基準。"}>
-      <ShieldCheck aria-hidden="true" /><div><strong>官方基準</strong><span title={official?.name}>{official?.name || "尚未指定"}</span>{official && !pdfs.officialPage && <small>官方沒有同頁碼，請在「官方對應頁」輸入頁碼</small>}</div>
-      {!official && canEdit && <Button type="button" variant="outline" title="打開版本清單，選原廠圖並按「設為官方基準」" onClick={() => setVersionsOpen(true)}><ShieldCheck aria-hidden="true" />指定官方基準</Button>}
-      {official && active?.id !== official.id && <Button type="button" variant="outline" aria-pressed={compare?.id === official.id} onClick={() => compare?.id === official.id ? pdfs.setCompare("") : pdfs.compareOfficial()}>對照官方基準</Button>}
-      {onAiReview && <Button type="button" className="circuit-pdf-ai" disabled={!official || !pdfs.officialPdf || !pdfs.officialPage || !active || active.id === official.id || !pdfs.activePdf || pdfs.opening} onClick={onAiReview} title={!official ? "先指定官方基準" : active?.id === official.id ? "請選擇另一份工作 PDF 與官方基準比對" : "比對官方基準與目前工作頁，先列出待人工確認事項"}><Sparkles aria-hidden="true" />AI 逐頁初審</Button>}
-    </div>
     <div className="circuit-pdf-toolbar">
       <div className="circuit-pdf-row">
         {back}
         <div className="circuit-pdf-versions" ref={versions} onBlur={event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) setVersionsOpen(false); }}>
-          <Button ref={versionButton} type="button" variant="outline" className="circuit-pdf-version-button" aria-label="選擇 PDF 版本" aria-expanded={versionsOpen} title={active ? `${active.name} · ${active.pages} 頁；點此管理 PDF 版本` : "管理 PDF 版本"} onClick={() => setVersionsOpen(value => !value)}>
+          <Button type="button" variant="outline" className="circuit-pdf-version-button" aria-label="選擇 PDF 版本" aria-expanded={versionsOpen} title={active ? `${active.name} · ${active.pages} 頁；點此管理 PDF 版本` : "管理 PDF 版本"} onClick={event => { versionsOpener.current = event.currentTarget; setVersionsOpen(!versionsOpen); }}>
             <span>{active ? active.id === official?.id ? "官方原圖" : "工作版本" : "PDF 版本"}</span><small>{active ? `${circuitPdfVersionLabel(active)} · ${active.name}` : "管理與還原"}</small><ChevronDown aria-hidden="true" />
           </Button>
-          {versionsOpen && <div className="circuit-pdf-version-list" role="group" aria-label="PDF 版本（依圖面日期）">
+          {versionsOpen && <div id="circuit-pdf-version-manager" className="circuit-pdf-version-list" role="group" aria-label="PDF 版本（依圖面日期）">
             <header><div><strong>PDF 版本管理</strong><span>先選工作版本，再與固定的官方原圖對照。</span></div><Button ref={versionClose} type="button" variant="ghost" aria-label="關閉 PDF 版本管理" onClick={closeVersions}><X aria-hidden="true" /></Button></header>
             <div className="circuit-pdf-version-body">
               {message && <p className="circuit-pdf-version-feedback" role="alert">{message}</p>}
@@ -261,6 +253,7 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
         {canEdit && active && <Button type="button" variant="outline" className="circuit-pdf-delete" aria-label="刪除這份 PDF" aria-expanded={deleting === active.id} disabled={active.id === official?.id}
           title={active.id === official?.id ? "官方基準不能刪除；先把另一份 PDF 設為官方基準" : "刪除目前這份 PDF；已加入的截圖保留，可從版本清單的「已刪除的 PDF」還原"} onClick={() => setDeleting(value => value === active.id ? "" : active.id)}><Trash2 aria-hidden="true" /></Button>}
         {canEdit && <Button type="button" variant="outline" aria-label="上傳新 PDF" title="新增工作版本，保留全部舊 PDF 與官方基準" disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Upload aria-hidden="true" /><span>{pdfs.uploading ? "上傳中…" : "新增 PDF"}</span></Button>}
+        {official && active?.id !== official.id && <Button type="button" variant="outline" className="circuit-pdf-compare-official" aria-pressed={compare?.id === official.id} onClick={() => compare?.id === official.id ? pdfs.setCompare("") : pdfs.compareOfficial()}><ShieldCheck aria-hidden="true" />對照官方基準</Button>}
         {compareChoices.length > 0 && <label className="circuit-pdf-compare"><span>對照</span>
           <select aria-label="對照較早的 PDF 版本" value={compare?.id || ""} onChange={event => pdfs.setCompare(event.target.value)}>
             <option value="">不對照</option>
@@ -272,6 +265,7 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
           <Button type="button" variant="ghost" aria-label="對照頁往前一頁" disabled={pdfs.comparePage <= 1} onClick={() => pdfs.setCompareOffset(pdfs.compareOffset - 1)}><Minus aria-hidden="true" /></Button>
           <Button type="button" variant="ghost" aria-label="對照頁往後一頁" disabled={!pdfs.comparePage || pdfs.comparePage >= compare.pages} onClick={() => pdfs.setCompareOffset(pdfs.compareOffset + 1)}><Plus aria-hidden="true" /></Button>
         </div>}
+        {official && !pdfs.officialPage && <small className="circuit-pdf-page-warning" role="status">請在「官方對應頁」輸入有效頁碼</small>}
         {active && <><div className="circuit-pdf-pager" role="group" aria-label="翻頁">
           <Button type="button" variant="ghost" aria-label="上一頁" title="上一頁（←）" disabled={page <= 1} onClick={() => pdfs.goTo(page - 1)}><ChevronLeft aria-hidden="true" /></Button>
           <label><span className="sr-only">頁碼</span><input aria-label="目前頁碼" inputMode="numeric" value={pageInput} onChange={event => setPageInput(event.target.value.replace(/[^0-9]/g, ""))}

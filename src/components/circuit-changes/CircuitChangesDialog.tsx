@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type FormEvent } from "react";
-import { ArchiveRestore, ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, Filter, HelpCircle, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Search, Trash2, UserRound, X } from "lucide-react";
+import { ArchiveRestore, ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, Filter, HelpCircle, MessageSquare, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Search, ShieldCheck, Sparkles, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -74,6 +74,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   const [roomy, setRoomy] = useState(() => window.matchMedia?.("(min-width: 1600px)").matches ?? true);
   // On a phone the PDF is a pane of its own, opened from the header; on a wide screen it sits between the list and the form.
   const [mobilePdf, setMobilePdf] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const versionsOpener = useRef<HTMLButtonElement | null>(null);
   const pdfOpen = wide ? layout.pdf : mobilePdf;
   const listCollapsed = wide && pdfOpen && (layout.list === "collapsed" || (layout.list === "auto" && !roomy));
   const detailCollapsed = wide && pdfOpen && !layout.detail;
@@ -84,6 +86,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   const detailScrollTop = useRef(0);
   const historySection = useRef<HTMLElement>(null);
   const openedDetail = useRef(false);
+  const officialPdf = pdfs.official;
+  const activePdf = pdfs.active;
   const selectedSet = model.sets.find(set => set.id === model.selectedSetId);
   const item = snapshot || model.selectedItem;
   const content = snapshot?.content || model.draft;
@@ -142,6 +146,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     read(); query?.addEventListener("change", read); large?.addEventListener("change", read);
     return () => { query?.removeEventListener("change", read); large?.removeEventListener("change", read); };
   }, [open]);
+  useEffect(() => { setVersionsOpen(false); }, [open, context.seriesId]);
   useEffect(() => {
     if (!open) return;
     const visual = window.visualViewport;
@@ -229,7 +234,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
       detailPanel.current?.parentElement?.querySelector<HTMLButtonElement>(detailCollapsed ? '.circuit-detail [aria-label="收合修改內容"]' : '.circuit-detail-rail button')?.focus({ preventScroll: true });
     });
   }
-  function togglePdf() { if (wide) changeLayout({ pdf: !layout.pdf }); else setMobilePdf(value => !value); }
+  function togglePdf() { setVersionsOpen(false); if (wide) changeLayout({ pdf: !layout.pdf }); else setMobilePdf(value => !value); }
+  function openVersions() { if (wide) changeLayout({ pdf: true }); else setMobilePdf(true); setVersionsOpen(true); }
   function uploadPdfs(files: File[]) {
     if (!canEdit) { setNotice("目前為檢視權限，無法上傳 PDF。"); return; }
     if (wide) changeLayout({ pdf: true }); else setMobilePdf(true);
@@ -356,6 +362,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           </div>
           <div className="circuit-header-actions">
             <Button type="button" className="circuit-action-pdf" variant={pdfOpen ? "secondary" : "outline"} aria-label="PDF 圖面" aria-pressed={pdfOpen} title={pdfOpen ? "收起 PDF，只看清單與表單" : "上傳或打開原理圖 PDF，逐頁框選修改"} onClick={togglePdf}><FileText aria-hidden="true" /><span>PDF<span className="circuit-pdf-word"> 圖面</span></span></Button>
+            <Button type="button" className="circuit-action-baseline" variant="outline" aria-label="官方基準" aria-expanded={versionsOpen} aria-controls="circuit-pdf-version-manager" data-testid="circuit-pdf-official" data-configured={Boolean(officialPdf)} title={officialPdf ? `官方基準：${officialPdf.name}；管理 PDF 版本` : "尚未指定官方基準；管理 PDF 版本"} onClick={event => { versionsOpener.current = event.currentTarget; openVersions(); }}><ShieldCheck aria-hidden="true" /><span>官方基準</span></Button>
+            {onAiReview && <Button type="button" className="circuit-action-ai" variant="outline" aria-label="AI 逐頁初審" disabled={!officialPdf || !pdfs.officialPdf || !pdfs.officialPage || !activePdf || activePdf.id === officialPdf.id || !pdfs.activePdf || pdfs.opening} onClick={onAiReview} title={!officialPdf ? "先指定官方基準" : activePdf?.id === officialPdf.id ? "請選擇另一份工作 PDF 與官方基準比對" : !pdfs.officialPage ? "先指定有效的官方對應頁" : "比對官方基準與目前工作頁，先列出待人工確認事項"}><Sparkles aria-hidden="true" /><span>AI 初審</span></Button>}
             <Button type="button" className="circuit-action-export" variant="outline" aria-label="匯出 Change List" disabled={!selectedSet || !filtered.length || busy || model.dirty} title={model.dirty ? "尚有未儲存修改，儲存後可匯出" : `匯出目前篩選的全部 ${filtered.length} 項修改`} onClick={() => void run(() => exportCircuitChangeList(selectedSet!, filtered))}><Download aria-hidden="true" /><span>匯出 Change List</span></Button>
             <Button type="button" className="circuit-action-guide" variant="outline" aria-label="使用說明" onClick={() => setGuideOpen(true)}><HelpCircle aria-hidden="true" /><span>使用說明</span></Button>
             <Button type="button" variant="ghost" aria-label="關閉線路修改" className="circuit-close" onClick={() => close(false)}><X aria-hidden="true" /></Button>
@@ -398,8 +406,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
             </div>
             </>}
           </aside>
-          {pdfOpen && <CircuitPdfPanel pdfs={pdfs} canEdit={canEdit} captureBlocked={captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops} onAiReview={onAiReview}
-            onCapture={addCaptures} onSelectChange={selectItem} onBack={() => setMobilePdf(false)} />}
+          {pdfOpen && <CircuitPdfPanel pdfs={pdfs} canEdit={canEdit} captureBlocked={captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops} versionsOpen={versionsOpen} onVersionsOpenChange={setVersionsOpen} versionsOpener={versionsOpener}
+            onCapture={addCaptures} onSelectChange={selectItem} onBack={() => { setVersionsOpen(false); setMobilePdf(false); }} />}
           <section ref={detailPanel} id="circuit-change-detail" className="circuit-detail" hidden={detailCollapsed} aria-label="線路修改內容" data-testid="circuit-change-detail" aria-busy={model.switching}>
             {content && item ? <>
               <header className="circuit-detail-heading">
