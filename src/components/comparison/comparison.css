@@ -624,3 +624,132 @@
   .comparison-results-footer { padding: 8px 12px; }
   .comparison-results-footer button { width: 44px; height: 44px; }
 }
+
+/* ===== One-row tools and a step-by-step input flow (2026-11-09) =====
+   Desktop: title, tabs and tools share one bar; mode, name, per-side status and the run button share the next one.
+   Each file slot has its own picker, so what to fill, change and upload is readable without the guide. */
+.comparison-topbar { display: contents; }
+@media (min-width: 1024px) {
+  .comparison-topbar { display: flex; align-items: center; gap: 8px 14px; min-width: 0; padding: 8px 10px 8px 14px; border: 1px solid hsl(var(--border)); border-radius: var(--app-radius-card); background: hsl(var(--card)); }
+  .comparison-topbar > .comparison-page-header, .comparison-topbar > .comparison-page-header > header { display: contents; }
+  .comparison-topbar > .comparison-page-header > header > div:first-child { order: 1; flex: none; }
+  .comparison-topbar > .comparison-workspace-nav { order: 2; flex: 1 1 0; min-width: 0; }
+  .comparison-topbar > .comparison-page-header > header > [data-maintenance-page-actions] { order: 3; flex: none; flex-wrap: nowrap; gap: 6px; }
+  .comparison-topbar h1 { font-size: 20px; }
+  .comparison-workspace .comparison-topbar button { min-height: 36px; height: 36px; }
+  .comparison-topbar .comparison-workspace-nav nav { padding: 0; }
+  .comparison-topbar .comparison-workspace-nav nav button { padding-inline: 12px; }
+  .comparison-topbar .comparison-engine-badge { font-size: 13px; }
+  /* The setup bar is a row only here: on compact screens its parts stack, where a flex-basis would become a height. */
+  .comparison-setup-heading { display: flex; flex-wrap: wrap; align-items: stretch; justify-content: flex-start; gap: 10px 12px; margin-bottom: 12px; }
+  .comparison-setup-controls { flex: 1 1 760px; align-items: stretch; justify-content: flex-start; gap: 12px; }
+  .comparison-setup-controls .comparison-project-name { flex: 0 1 400px; max-width: none; gap: 10px; }
+  .comparison-setup-controls .comparison-project-name input { height: 40px; min-height: 40px; }
+  .comparison-setup-controls .comparison-run-actions { flex: 1 1 520px; max-width: none; height: auto; min-height: 54px; padding: 6px 6px 6px 8px; gap: 10px; }
+  .comparison-run-status { flex: 1 1 150px; }
+  .comparison-setup-controls .comparison-run-status p { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .comparison-workspace .comparison-input-file button, .comparison-workspace .comparison-input-file [role=combobox], .comparison-workspace .comparison-dropzone button { min-height: 34px; height: 34px; }
+  .comparison-workspace .comparison-slot-remove { width: 34px; }
+}
+/* Narrower desktops keep one row by showing the secondary tools as icons; every one of them carries a title. */
+@media (min-width: 1024px) and (max-width: 1559px) {
+  .comparison-topbar header p { display: none; }
+  .comparison-workspace .comparison-topbar [data-maintenance-page-actions] > button:not(:last-child) { width: 36px; padding-inline: 0; gap: 0; font-size: 0; }
+  .comparison-topbar [data-maintenance-page-actions] > button:not(:last-child) > svg { width: 17px; height: 17px; margin: 0; }
+}
+
+.comparison-mode-switch { flex: none; align-self: center; gap: 0; margin-bottom: 0; padding: 3px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); }
+.comparison-workspace .comparison-mode-switch button { min-height: 40px; border-color: transparent; border-radius: 7px; background: transparent; color: hsl(var(--muted-foreground)); box-shadow: none; }
+.comparison-workspace .comparison-mode-switch button[aria-pressed=true] { border-color: hsl(var(--primary) / .45); background: hsl(var(--primary) / .14); color: hsl(var(--primary)); font-weight: 700; }
+.comparison-setup-controls .comparison-project-name { padding: 6px 8px 6px 12px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--card)); }
+.comparison-project-name label { gap: 8px; white-space: nowrap; }
+.comparison-step-no { display: inline-grid; flex: none; width: 22px; height: 22px; place-items: center; border: 1px solid hsl(var(--muted-foreground) / .6); border-radius: 999px; color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.comparison-step-no svg { width: 13px; height: 13px; }
+.comparison-project-name[data-empty="true"] .comparison-step-no { border-color: hsl(var(--warning)); color: hsl(var(--warning)); }
+.comparison-project-name[data-empty="false"] .comparison-step-no, .comparison-steps li[data-state=done] .comparison-step-no { border-color: transparent; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+
+.comparison-run-actions[data-ready=true] { border-color: hsl(var(--primary) / .75); }
+.comparison-steps { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.comparison-workspace .comparison-steps button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 10px 0 8px; border: 1px solid hsl(var(--border)); border-radius: 9px; background: hsl(var(--card)); color: hsl(var(--foreground)); font-size: 13px; white-space: nowrap; cursor: pointer; }
+.comparison-workspace .comparison-steps button:hover { border-color: hsl(var(--primary) / .6); }
+.comparison-workspace .comparison-steps button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.comparison-run-actions .comparison-steps strong { display: inline; margin: 0; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: hsl(var(--warning)); }
+.comparison-run-actions .comparison-steps li[data-state=done] strong { color: hsl(var(--primary)); }
+.comparison-steps li[data-state=next] button { border-color: hsl(var(--warning) / .75); background: hsl(var(--warning) / .08); }
+.comparison-steps li[data-state=next] .comparison-step-no { border-color: hsl(var(--warning)); color: hsl(var(--warning)); }
+.comparison-run-status { min-width: 0; }
+.comparison-run-actions .comparison-run-status strong { margin-bottom: 0; font-size: 12px; font-weight: 600; color: hsl(var(--muted-foreground)); }
+.comparison-run-actions .comparison-run-status p { overflow-wrap: anywhere; font-size: 13px; color: hsl(var(--foreground)); }
+.comparison-input-warning { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px !important; padding: 8px 12px; border: 1px solid hsl(var(--warning) / .45); border-radius: 10px; background: hsl(var(--warning) / .08); color: hsl(var(--warning)); font-size: 13px; line-height: 1.6; }
+.comparison-input-warning svg { flex: none; width: 16px; height: 16px; margin-top: 3px; }
+
+.comparison-input-panel { container-type: inline-size; padding: 14px 16px 10px; }
+.comparison-input-heading { flex-wrap: wrap; gap: 8px 10px; }
+.comparison-revision-mark { width: 36px; height: 36px; font-size: 19px; }
+.comparison-input-heading h2 { font-size: 16px; line-height: 1.35; }
+.comparison-input-heading p { margin-top: 0; }
+.comparison-revision-title { flex: 1 1 150px; }
+.comparison-required-summary { flex: none; gap: 6px; margin: 0 !important; padding: 6px 10px; font-size: 12px; white-space: nowrap; }
+.comparison-required-summary svg { width: 15px; height: 15px; }
+.comparison-required-summary > span:last-child { margin-left: 2px; }
+.comparison-revision-name { display: flex; align-items: center; gap: 8px; width: auto; margin-left: 0; }
+.comparison-revision-name label { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-weight: 600; color: hsl(var(--muted-foreground)); white-space: nowrap; }
+.comparison-revision-name label svg { width: 13px; height: 13px; }
+.comparison-input-heading .comparison-revision-label { width: 112px; min-height: 36px; height: 36px; }
+
+.comparison-dropzone { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; padding: 8px 8px 8px 12px; border: 1px dashed hsl(var(--primary) / .55); border-radius: 10px; background: hsl(var(--primary) / .05); }
+.comparison-dropzone-icon { flex: none; width: 22px; height: 22px; color: hsl(var(--primary)); }
+.comparison-dropzone-text { display: flex; flex: 1 1 200px; flex-direction: column; min-width: 0; }
+.comparison-dropzone-text strong { font-size: 14px; font-weight: 650; line-height: 1.4; }
+.comparison-dropzone-text .comparison-drop-hint { align-self: flex-start; }
+.comparison-dropzone .comparison-file-actions { flex: none; margin: 0; }
+.comparison-input-panel[data-ready=true] .comparison-dropzone { border-style: solid; border-color: hsl(var(--border)); background: transparent; }
+.comparison-input-panel[data-ready=true] .comparison-dropzone-icon { color: hsl(var(--muted-foreground)); }
+.comparison-input-problem { align-items: center; gap: 8px; margin-top: 8px !important; padding: 6px 6px 6px 12px; border-radius: 10px; line-height: 1.5; }
+.comparison-input-problem > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.comparison-input-problem > svg { margin-top: 0; }
+.comparison-workspace .comparison-input-problem > button { flex: none; min-height: 32px; width: 32px; height: 32px; margin: 0; }
+.comparison-input-panel[data-dragging]::after { content: "放開以放入這一版"; }
+
+.comparison-input-inventory { margin-top: 4px; }
+.comparison-input-file { grid-template-columns: 18px 176px minmax(0,1fr) auto; min-height: 46px; padding-block: 4px; }
+.comparison-input-file:last-child { border-bottom: 0; }
+.comparison-input-file [role=combobox] { margin-block: 0; }
+.comparison-file-name[data-empty] { color: hsl(var(--muted-foreground)); }
+.comparison-input-file[data-state=missing] .comparison-file-name[data-empty] { color: hsl(var(--warning)); font-weight: 500; }
+.comparison-input-file[data-state=missing] .comparison-file-source { border-color: hsl(var(--warning) / .75); }
+.comparison-slot-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.comparison-workspace .comparison-slot-pick { min-width: 84px; padding-inline: 10px; font-size: 13px; }
+/* An empty version points at the drop zone; once it has files, the slots still open become the loud ones. */
+.comparison-input-panel[data-has-files=true] .comparison-input-file[data-state=missing] .comparison-file-name[data-empty] { font-weight: 650; }
+.comparison-input-panel[data-has-files=true] .comparison-input-file[data-state=missing] .comparison-slot-pick { border-color: hsl(var(--warning) / .65); background: hsl(var(--warning) / .1); color: hsl(var(--warning)); font-weight: 650; }
+.comparison-input-panel[data-has-files=true] .comparison-input-file[data-state=missing] .comparison-slot-pick:hover { background: hsl(var(--warning) / .2); }
+.comparison-input-footnote { margin-top: 6px !important; }
+/* A wide panel has room for the slot name and the expected file on one line. */
+@container (min-width: 760px) {
+  .comparison-input-file { grid-template-columns: 18px 290px minmax(0,1fr) auto; min-height: 42px; }
+  .comparison-file-role { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .comparison-file-role > span:first-child { flex: none; }
+  .comparison-role-filename { margin-top: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+}
+@media (max-width: 1023px) {
+  .comparison-mode-switch { align-self: stretch; }
+  .comparison-mode-switch button { flex: 1; }
+  .comparison-setup-controls .comparison-project-name { padding: 10px 12px; }
+  .comparison-run-settings > .comparison-run-actions .comparison-steps li { display: flex; flex: 1 1 140px; }
+  .comparison-run-settings > .comparison-run-actions .comparison-steps button { flex: 1; }
+}
+@media (max-width: 767px) {
+  .comparison-dropzone { padding: 0; border: 0; background: transparent; }
+  .comparison-dropzone-icon, .comparison-dropzone-text { display: none; }
+  .comparison-dropzone .comparison-file-actions { flex: 1 1 100%; }
+  .comparison-required-summary { order: 3; flex: 1 1 100%; }
+  /* Phones keep the version-name label above its field, so the default EVT / DVT is not an unexplained box. */
+  .comparison-revision-name { flex-direction: column; align-items: stretch; gap: 2px; }
+  .comparison-revision-name label { font-size: 11px; }
+  .comparison-input-heading .comparison-revision-label { width: 116px; min-height: 44px; height: 44px; }
+}
+@media (max-width: 700px) {
+  .comparison-slot-actions { grid-column: 3; grid-row: 1; }
+  .comparison-file-name[data-empty] { display: none; }
+}

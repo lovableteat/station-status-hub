@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { deflateRawSync } from "node:zlib";
 import JSZip from "jszip";
-import { filePath, inspectRevision, readRevision, selectedRevisionFiles, validateRevision } from "../../src/components/comparison/files.ts";
+import { addRevisionFiles, filePath, inspectRevision, readRevision, removeRevisionFile, revisionProgress, roleMismatch, sameRevisionSources, selectedRevisionFiles, validateRevision } from "../../src/components/comparison/files.ts";
 import { exportBackup, importBackup } from "../../src/components/comparison/backup.ts";
 import { listSessions, parseSessionSnapshot, readLibrary, saveLibrary, saveSession } from "../../src/components/comparison/storage.ts";
 import type { ComparisonSession } from "../../src/components/comparison/types.ts";
@@ -109,12 +109,80 @@ test("worker preflight counts only selected sources without reading file buffers
   assert.equal(reads, 0);
 });
 
-test("bounds all picked files before reading, including files later ignored", async () => {
-  for (const files of [[...revision(), input("ignored.bin", 64 * MiB + 1)], [...revision(), ...[1, 2, 3].map(n => input(`${n}.bin`, 48 * MiB))], [...revision(), ...Array.from({ length: 1000 }, (_, n) => input(`${n}.bin`))]]) {
-    const inventory = inspectRevision(files);
-    assert.ok(validateRevision(inventory, {}).length);
-    await assert.rejects(readRevision(inventory, {}));
+test("unrelated and unselected files in a picked folder never block the run and are never read", async () => {
+  // A real version folder also holds board files, archives and datasheets: none of them is sent to the engine.
+  const extras = [
+    [input("board/layout.brd", 64 * MiB + 1)],
+    [1, 2, 3].map(n => input(`board/gerber${n}.zip`, 48 * MiB)),
+    Array.from({ length: 1000 }, (_, n) => input(`board/log/${n}.log`)),
+    [input("board/datasheets/big.pdf", 64 * MiB + 1)],
+  ];
+  for (const extra of extras) {
+    for (const file of extra) file.arrayBuffer = async () => { throw new Error("A file that is not selected must not be read"); };
+    const inventory = inspectRevision([...revision(), ...extra]);
+    const selected = extra.some(file => file.name.endsWith(".pdf")) ? { pdf: "board/schematic.pdf" } : {};
+    assert.deepEqual(validateRevision(inventory, selected), []);
+    assert.equal((await readRevision(inventory, selected)).length, 5);
   }
+});
+
+test("bounds every file that is actually selected before reading it", async () => {
+  const oversized = [...revision().filter(file => file.name !== "schematic.pdf"), input("board/schematic.pdf", 64 * MiB + 1)];
+  assert.match(validateRevision(inspectRevision(oversized)).join(" "), /schematic\.pdf：單一檔案不可超過 64 MiB/);
+  const heavy = [...revision().filter(file => !/bom\.csv|schematic\.pdf/.test(file.name)), input("board/bom.csv", 60 * MiB), input("board/schematic.pdf", 60 * MiB), input("board/main.dsn", 60 * MiB)];
+  assert.match(validateRevision(inspectRevision(heavy)).join(" "), /合計不可超過 128 MiB/);
+  for (const files of [oversized, heavy]) {
+    for (const file of files) file.arrayBuffer = async () => { throw new Error("Preflight must not read file bytes"); };
+    await assert.rejects(readRevision(inspectRevision(files), {}), /MiB/);
+  }
+});
+
+test("files picked one batch at a time add up instead of replacing each other", () => {
+  let value = { files: [] as File[], selected: {} };
+  value = addRevisionFiles(value, ["pstxnet.dat", "pstxprt.dat", "pstchip.dat"].map(name => input(name)));
+  assert.deepEqual(revisionProgress(value), { ready: 3, total: 5 });
+  value = addRevisionFiles(value, [input("bom.csv")]);
+  value = addRevisionFiles(value, [input("schematic.pdf")]);
+  assert.deepEqual(revisionProgress(value), { ready: 5, total: 5 });
+  assert.deepEqual(validateRevision(inspectRevision(value.files), value.selected), []);
+  // A new file for a filled slot takes the slot and lets go of the old file, so no second candidate is left to choose from.
+  value = addRevisionFiles(value, [input("revB/schematic.pdf")]);
+  assert.equal(value.selected.pdf, "revB/schematic.pdf");
+  assert.deepEqual(inspectRevision(value.files).roles.pdf.map(filePath), ["revB/schematic.pdf"]);
+  assert.deepEqual(validateRevision(inspectRevision(value.files), value.selected), []);
+  // The same path replaces the old copy.
+  const again = input("bom.csv", 9);
+  value = addRevisionFiles(value, [again]);
+  assert.equal(value.files.filter(file => file.name === "bom.csv").length, 1);
+  assert.equal(value.files.find(file => file.name === "bom.csv"), again);
+});
+
+test("adding to a folder keeps its other candidates and several new files for one slot ask for a choice", () => {
+  const folder = { files: [...revision(), input("board/datasheets/u1.pdf")], selected: { pdf: "board/schematic.pdf" } };
+  const replaced = addRevisionFiles(folder, [input("new.pdf")]);
+  assert.equal(replaced.selected.pdf, "new.pdf");
+  assert.deepEqual(inspectRevision(replaced.files).roles.pdf.map(filePath).sort(), ["board/datasheets/u1.pdf", "new.pdf"]);
+  const ambiguous = addRevisionFiles({ files: revision(), selected: {} }, [input("x.pdf"), input("y.pdf")]);
+  assert.equal(ambiguous.selected.pdf, undefined);
+  assert.match(validateRevision(inspectRevision(ambiguous.files), ambiguous.selected).join(" "), /PDF.*好幾份/);
+  assert.deepEqual(revisionProgress(ambiguous), { ready: 4, total: 5 });
+});
+
+test("slot checks, removal and the same-folder warning describe what the panel shows", () => {
+  assert.equal(roleMismatch("pstxnet", input("pstxnet.dat")), "");
+  assert.match(roleMismatch("pstxnet", input("schematic.pdf")), /不能放在Netlist 連線資料.*pstxnet/);
+  assert.match(roleMismatch("pdf", input("AutoCheck_EVT_vs_DVT.pdf")), /不以 AutoCheck 開頭/);
+  assert.match(roleMismatch("bom", input("layout.brd")), /BOM 用料表/);
+  const withDsn = { files: [...revision(), input("board/main.dsn")], selected: { dsn: "board/main.dsn" } };
+  const removed = removeRevisionFile(withDsn, "board/main.dsn");
+  assert.equal(removed.files.length, 5);
+  assert.equal(removed.selected.dsn, undefined);
+  assert.deepEqual(revisionProgress(removed), { ready: 5, total: 5 });
+  const stamp = (files: File[], time: number) => files.map(file => Object.assign(file, { lastModified: time }));
+  const a = { files: stamp(revision(), 1000), selected: {} };
+  assert.equal(sameRevisionSources(a, { files: stamp(revision(), 1000), selected: {} }), true);
+  assert.equal(sameRevisionSources(a, { files: stamp(revision(), 2000), selected: {} }), false);
+  assert.equal(sameRevisionSources(a, { files: [], selected: {} }), false);
 });
 
 test("validates complete snapshots and preserves replies for keys removed by a rerun", () => {

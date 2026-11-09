@@ -26,7 +26,7 @@ type FlowStep = {
 
 const PREPARE: FlowStep[] = [
   { icon: PenLine, title: "填比對名稱", sub: "通常填板名", phase: "before", shape: "terminal", notes: [{ tone: "info", text: "有舊結果時，換板按「新比對」，同板展開來源檔案" }] },
-  { icon: FolderOpen, title: "選 A 舊版、B 新版", sub: "每版都放 Netlist、BOM、電路圖 PDF", phase: "before", notes: [{ tone: "info", text: "卡片右上角填版本名稱，例如 EVT、DVT" }, { tone: "info", text: "瀏覽器問要不要上傳，按「上傳」，檔案不會離開電腦" }, { tone: "warn", text: "重選會整批換掉，要一次選齊" }] },
+  { icon: FolderOpen, title: "選 A 舊版、B 新版", sub: "每版都放 Netlist、BOM、電路圖 PDF", phase: "before", notes: [{ tone: "info", text: "卡片右上角的版本名稱可改，例如 EVT、DVT" }, { tone: "info", text: "瀏覽器問要不要上傳，按「上傳」，檔案不會離開電腦" }, { tone: "info", text: "檔案不在同一個資料夾，就用各列的「選擇檔案」逐份放入，已選的會保留" }, { tone: "warn", text: "重選資料夾會整版換掉" }] },
 ];
 
 const RUN: FlowStep[] = [
@@ -99,7 +99,7 @@ function FlowRow({ step, number }: { step: FlowStep; number: number }) {
 export function ComparisonGuide() {
   const [open, setOpen] = useState(false);
   return <>
-    <Button variant="outline" className="comparison-guide-trigger" onClick={() => setOpen(true)}><CircleHelp />使用說明</Button>
+    <Button variant="outline" className="comparison-guide-trigger" title="使用說明：怎麼準備檔案、怎麼看結果" onClick={() => setOpen(true)}><CircleHelp />使用說明</Button>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="comparison-guide-dialog">
         <DialogHeader>
@@ -160,7 +160,7 @@ export function ComparisonGuide() {
               <dl className="comparison-guide-pairs">
                 {FILE_RULES.map(([role, rule]) => <div key={role}><dt>{role}</dt><dd>{rule}</dd></div>)}
               </dl>
-              <p className="comparison-guide-note">BOM 和 PDF 只看副檔名，資料夾裡有好幾份就會出現下拉選單讓你挑。用不到的檔案也算在上限裡：每版最多 1000 個檔案、單檔 64 MiB、合計 128 MiB；A、B 實際拿去比的檔案加上進階設定和 Datasheet，總共也不能超過 128 MiB。超過就另外開一個只放工程檔的資料夾。</p>
+              <p className="comparison-guide-note">BOM 和 PDF 只看副檔名，資料夾裡有好幾份就會出現下拉選單讓你挑。資料夾裡用不到的檔案（板檔、壓縮檔、其他 PDF）不會讀取，也不算在上限裡。實際拿去比的檔案單檔不能超過 64 MiB、每版合計 128 MiB；A、B 加上進階設定和 Datasheet，總共也不能超過 128 MiB。</p>
             </section>
 
             <section aria-label="結果怎麼看">

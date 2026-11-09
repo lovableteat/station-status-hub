@@ -184,6 +184,8 @@ URL 更新要修改自己負責的 query key，保留 workspace、module、專�
 
 AutoCheck 需要保留工程資料的真實關係：A／B 版本、必要／建議／選用輸入、檢查分類、嚴重度、RefDes、Net、頁碼與審查回覆。現在結果每頁 50 筆，表格最小寬 920px，以容器捲動保留完整欄位；詳細回覆在 Dialog 編輯，原始檢查內容與回覆分開。缺少資料、零筆檢查、零筆篩選與執行失敗使用不同文字，不可以全部包成「成功」或「沒有資料」。
 
+AutoCheck「比對檢查」的輸入區是一張可照著做的清單（2026-11-09）。桌面版標題、六個分頁與工具（使用說明、意見收集、匯出／匯入備份、處理位置、新比對）共用一排；1560px 以下次要工具收成帶 `title` 的圖示，仍維持一排。模式切換、① 比對名稱、② 舊版 A／③ 新版 B 的進度與「開始比對」共用下一排，第一個未完成的步驟標為下一步，並用一句話說明還缺什麼。每一格檔案（Netlist 三份、BOM、電路圖 PDF、DSN）都有自己的「選擇檔案」，只開啟該格可用的副檔名；放錯格要說明原因且不變更。「選擇資料夾」與拖入資料夾代表整版更換，「加入檔案」、各格選檔與拖入零散檔案則累加並保留已選內容。資料夾裡用不到的檔案不讀取、不計入上限，也不得擋住比對；上限只算實際送進引擎的檔案。A、B 選到同一份 Netlist 要在執行前警告；檔案拖到面板外不得讓瀏覽器開檔離開頁面。1023px 以下各區塊直向堆疊，桌面用的 flex-basis 不可套到直向排列。
+
 工程圖保留原有比例、標籤與可讀性；目前 app 內圖表使用已清理的 SVG 與 React 控制，不把外部 HTML script 直接嵌入 app。下載 HTML 可保留原有 standalone 工具，但不能因此放寬 app 內嵌執行界線。不要為了統一深色外觀而任意反相線路圖、刪掉必要標示或扭曲工程幾何。
 
 依據：`src/components/ui/table.tsx`、`src/components/test-plan/TestPlanWorkspace.tsx`、`test-plan.css`、`src/components/comparison/ComparisonResults.tsx`、`ComparisonCharts.tsx`、`comparison.css`、`public/comparison/README.md`。

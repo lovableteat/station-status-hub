@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GitCompareArrows, Play, Square, Download, Upload, Plus, CheckCircle2, TriangleAlert, FileText, ChevronDown, FilePlus2, X, MoreHorizontal } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { GitCompareArrows, Play, Square, Download, Upload, Plus, Check, CheckCircle2, TriangleAlert, FileText, ChevronDown, FilePlus2, X, MoreHorizontal } from "lucide-react";
 import { useUser } from "@/components/auth/UserContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useIsCompactLayout } from "@/hooks/use-mobile";
@@ -20,7 +20,8 @@ import { ComparisonCharts } from "./ComparisonCharts";
 import { createRuntime, type EngineRuntime } from "./runtime";
 import { engineHost, readEngineSettings, writeEngineSettings, type EngineSettings } from "./engineSettings";
 import { EngineSettingsControl } from "./EngineSettingsControl";
-import { inspectRevision, readRevision, validateRevision, selectedRevisionFiles, formatBytes, filePath, NETLIST_ROLES, REQUIRED_ROLES } from "./files";
+import { inspectRevision, readRevision, validateRevision, selectedRevisionFiles, revisionProgress, sameRevisionSources, formatBytes, filePath, NETLIST_ROLES, REQUIRED_ROLES } from "./files";
+import { isFileDrag } from "@/lib/droppedFiles";
 import { exportBackup, importBackup } from "./backup";
 import { listSessions, saveSession, readLibrary, saveLibrary } from "./storage";
 import { useComparisonFilters } from "./useComparisonFilters";
@@ -145,14 +146,42 @@ export default function ComparisonWorkspace() {
     return { path: file.name, bytes: await file.arrayBuffer() };
   };
   const inputErrors = useMemo(() => mode === "single" ? validateRevision(inspectRevision(singleInput.files), singleInput.selected, NETLIST_ROLES) : [...validateRevision(inspectRevision(a.files), a.selected).map(message => `A：${message}`), ...validateRevision(inspectRevision(b.files), b.selected).map(message => `B：${message}`)], [a, b, mode, singleInput]);
-  // The run button is disabled on any validation error; once files are chosen,
-  // show the actual blocker instead of a generic netlist reminder.
-  const noFilesYet = mode === "single" ? !singleInput.files.length : !a.files.length && !b.files.length;
   // Same label rules start() enforces, surfaced before the click so the hint
   // never says the run is ready when it will fail.
   const labels = mode === "single" ? [singleLabel] : [aLabel, bLabel];
   const labelError = labels.some(label => !label.trim()) ? "請填寫版本名稱" : mode === "compare" && aLabel.trim() === bLabel.trim() ? "A、B 版本名稱不能一樣" : labels.some(label => label.length > 80 || Array.from(label).some(char => "/\\[]:*?".includes(char) || char.charCodeAt(0) < 32)) ? "版本名稱最多 80 字，不能有 / \\ [ ] : * ?" : "";
   const blockers = labelError ? [...inputErrors, labelError] : inputErrors;
+  // The setup bar is a checklist: each step shows its own state and the first open one is the next action.
+  const nameReady = Boolean(projectName.trim());
+  const slotProgress = useMemo(() => ({ a: revisionProgress(a), b: revisionProgress(b), single: revisionProgress(singleInput, NETLIST_ROLES) }), [a, b, singleInput]);
+  const sideSteps = (mode === "single"
+    ? [{ key: "single", side: "B", label: "單板資料", folder: "這張板子的資料夾", prefix: "", files: singleInput.files.length, ...slotProgress.single }]
+    : [{ key: "a", side: "A", label: "舊版 A", folder: "舊版 A 的資料夾", prefix: "A：", files: a.files.length, ...slotProgress.a }, { key: "b", side: "B", label: "新版 B", folder: "新版 B 的資料夾", prefix: "B：", files: b.files.length, ...slotProgress.b }]
+  ).map((step, index) => {
+    const errors = inputErrors.filter(message => message.startsWith(step.prefix)).map(message => message.slice(step.prefix.length));
+    return { ...step, no: index + 2, errors, done: step.ready === step.total && errors.length === 0 };
+  });
+  const openSide = sideSteps.find(step => !step.done);
+  const nextStep = !nameReady ? "name" : openSide?.key ?? (labelError ? "label" : "run");
+  const runTitle = busy ? "處理中" : !canEdit ? "唯讀" : nextStep === "run" ? "資料已齊" : "下一步";
+  const runHint = busy ? "正在解析工程資料" : !canEdit ? "這個帳號只能檢視，不能執行比對"
+    : !nameReady ? "填比對名稱，通常填板名"
+    : openSide ? (openSide.files ? `${openSide.label}：${openSide.errors[0] ?? "還有檔案沒放齊"}${openSide.errors.length > 1 ? `，還有 ${openSide.errors.length - 1} 項` : ""}` : `把${openSide.folder}拖進下面的格子，或逐份選擇檔案`)
+    : labelError ? labelError
+    : "IC Datasheet 與規則設定可於下方選用工具加入";
+  // Picking one folder for both sides compares a board with itself; say so before the run instead of after.
+  const identical = useMemo(() => mode === "compare" && a.files.length > 0 && b.files.length > 0 && sameRevisionSources(a, b), [a, b, mode]);
+  const focusPanel = (side: string) => {
+    const panel = workspace.current?.querySelector<HTMLElement>(`.comparison-input-panel[data-side="${side}"]`);
+    panel?.scrollIntoView({ block: "nearest" });
+    panel?.querySelector<HTMLElement>(".comparison-folder-action")?.focus({ preventScroll: true });
+  };
+  // A file dropped beside a panel would otherwise make the browser open it and throw away everything picked so far.
+  const guardFileDrag = (event: DragEvent<HTMLElement>) => {
+    if (!isFileDrag(event.dataTransfer) || event.defaultPrevented) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "none";
+  };
   const start = async () => {
     await runJob(async () => {
       const token = scope.capture();
@@ -252,13 +281,19 @@ export default function ComparisonWorkspace() {
   // editor in its existing project context without changing the cloud format.
   const feedbackProjectName = filters.tab === "diagram" ? [projectName.slice(0, 112), "圖表編輯器"].filter(Boolean).join(" · ") : projectName;
 
-  const runActions = <div className="comparison-run-actions"><div><strong>{busy ? "處理中" : !canEdit ? "唯讀" : blockers.length ? (noFilesYet ? mode === "single" ? "先選單板來源檔案" : "先選 A、B 兩版的檔案" : "尚有資料待確認") : !projectName.trim() ? "請填寫名稱" : "必要資料已齊"}</strong><p id="comparison-run-hint" title={blockers.join("；")}>{busy ? "正在解析工程資料" : blockers.length ? (noFilesYet ? mode === "single" ? "只需要三份 Netlist .dat，BOM、DSN 與 PDF 選用" : "每版都要有 Netlist 三份 .dat、BOM 用料表、電路圖 PDF" : `${blockers[0]}${blockers.length > 1 ? `，還有 ${blockers.length - 1} 項` : ""}`) : "IC Datasheet 與規則設定可於選用工具加入"}</p></div><Button size="lg" aria-describedby="comparison-run-hint" disabled={!canEdit || busy || !projectName.trim() || blockers.length > 0} onClick={() => void start()}><Play />{busy ? "處理中…" : mode === "single" ? "產生單板圖" : session ? "重新比對" : "開始比對"}</Button></div>;
+  const runActions = <div className="comparison-run-actions" data-ready={canEdit && !busy && nextStep === "run"}>
+    <ol className="comparison-steps" aria-label="比對步驟">{sideSteps.map(step => <li key={step.key} data-state={step.done ? "done" : nextStep === step.key ? "next" : "todo"}><button type="button" title={step.done ? `${step.label}的必要檔案已齊` : step.errors.join("；") || `前往${step.label}`} onClick={() => focusPanel(step.side)}><span className="comparison-step-no">{step.done ? <Check /> : step.no}</span><span>{step.label}</span><strong>{step.done ? "已齊" : `${step.ready}／${step.total}`}</strong></button></li>)}</ol>
+    <div className="comparison-run-status"><strong>{runTitle}</strong><p id="comparison-run-hint" title={blockers.join("；")}>{runHint}</p></div>
+    <Button size="lg" data-testid="comparison-run" aria-describedby="comparison-run-hint" disabled={!canEdit || busy || !projectName.trim() || blockers.length > 0} onClick={() => void start()}><Play />{busy ? "處理中…" : mode === "single" ? "產生單板圖" : session ? "重新比對" : "開始比對"}</Button>
+  </div>;
 
-  return <div ref={workspace} className="comparison-workspace" data-comparison-workspace="true">
-    <section className="comparison-page-header"><MaintenancePageHeader title="AutoCheck" description="線路改版比對與審查追蹤" icon={GitCompareArrows} wrapActionsOnMobile actions={<>{compact ? <Button variant="outline" size="icon" aria-label="AutoCheck 工具" aria-expanded={mobileToolsOpen} data-testid="comparison-mobile-tools-trigger" onClick={() => setMobileToolsOpen(true)}><MoreHorizontal /></Button> : <><ComparisonGuide /><ComparisonFeedback tab={filters.tab === "diagram" ? "compare" : filters.tab} projectName={feedbackProjectName} revisionA={aLabel} revisionB={bLabel} /><Button variant="ghost" disabled={!session || busy} onClick={() => void exportSession()}><Download />匯出備份</Button><Button variant="ghost" disabled={!canEdit || busy} onClick={() => importInput.current?.click()}><Upload />匯入備份</Button></>}<Button variant="outline" disabled={!canEdit || busy} onClick={() => { setCurrent(null); setMode("compare"); setSingleInput(blankRevision()); setProjectName(""); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice(""); update("tab", "compare"); }}><Plus />新比對</Button></>} /></section>
+  return <div ref={workspace} className="comparison-workspace" data-comparison-workspace="true" onDragOver={guardFileDrag} onDrop={guardFileDrag}>
+    <div className="comparison-topbar">
+    <section className="comparison-page-header"><MaintenancePageHeader title="AutoCheck" description="線路改版比對與審查追蹤" icon={GitCompareArrows} wrapActionsOnMobile actions={<>{compact ? <Button variant="outline" size="icon" aria-label="AutoCheck 工具" aria-expanded={mobileToolsOpen} data-testid="comparison-mobile-tools-trigger" onClick={() => setMobileToolsOpen(true)}><MoreHorizontal /></Button> : <><ComparisonGuide /><ComparisonFeedback tab={filters.tab === "diagram" ? "compare" : filters.tab} projectName={feedbackProjectName} revisionA={aLabel} revisionB={bLabel} /><Button variant="ghost" title="匯出備份：下載這份比對的 .autocheck.zip" disabled={!session || busy} onClick={() => void exportSession()}><Download />匯出備份</Button><Button variant="ghost" title="匯入備份：讀回之前匯出的 .autocheck.zip" disabled={!canEdit || busy} onClick={() => importInput.current?.click()}><Upload />匯入備份</Button>{canEdit ? <EngineSettingsControl settings={engine} onChange={changeEngine} disabled={busy} /> : <Badge variant="outline">唯讀</Badge>}</>}<Button variant="outline" title="清空目前的輸入，開始另一份比對" disabled={!canEdit || busy} onClick={() => { setCurrent(null); setMode("compare"); setSingleInput(blankRevision()); setProjectName(""); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice(""); update("tab", "compare"); }}><Plus />新比對</Button></>} /></section>
+    <div className="comparison-workspace-nav"><nav aria-label="比對系統頁面">{Object.entries(tabLabels).map(([key, label]) => <Button key={key} variant={filters.tab === key ? "secondary" : "ghost"} aria-current={filters.tab === key ? "page" : undefined} onClick={() => { update("tab", key as keyof typeof tabLabels); if (key === "review" && session && session.result.mode !== "single") requestAnimationFrame(() => workspace.current?.querySelector(".comparison-review-anchor:not([hidden])")?.scrollIntoView({ block: "start" })); }}>{label}</Button>)}</nav></div>
+    </div>
     {compact && <MobileToolsSheet testId="comparison-mobile-tools" open={mobileToolsOpen} onOpenChange={setMobileToolsOpen} title="AutoCheck 工具" description="說明、意見回報、備份與比對處理位置" sections={[{ key: "tools", content: <div className="comparison-mobile-tools"><div><ComparisonGuide /><ComparisonFeedback tab={filters.tab === "diagram" ? "compare" : filters.tab} projectName={feedbackProjectName} revisionA={aLabel} revisionB={bLabel} /><Button variant="ghost" disabled={!session || busy} onClick={() => void exportSession()}><Download />匯出備份</Button><Button variant="ghost" disabled={!canEdit || busy} onClick={() => importInput.current?.click()}><Upload />匯入備份</Button><EngineSettingsControl settings={engine} onChange={changeEngine} disabled={busy || !canEdit} /></div></div> }]} />}
     <input ref={importInput} type="file" accept=".zip" className="sr-only" aria-label="匯入 AutoCheck 備份" onChange={event => { const file = event.target.files?.[0]; if (file) void importSession(file); event.target.value = ""; }} />
-    <div className="comparison-workspace-nav"><nav aria-label="比對系統頁面">{Object.entries(tabLabels).map(([key, label]) => <Button key={key} variant={filters.tab === key ? "secondary" : "ghost"} aria-current={filters.tab === key ? "page" : undefined} onClick={() => { update("tab", key as keyof typeof tabLabels); if (key === "review" && session && session.result.mode !== "single") requestAnimationFrame(() => workspace.current?.querySelector(".comparison-review-anchor:not([hidden])")?.scrollIntoView({ block: "start" })); }}>{label}</Button>)}</nav>{canEdit ? <EngineSettingsControl settings={engine} onChange={changeEngine} disabled={busy} /> : <Badge variant="outline">唯讀</Badge>}</div>
     {!!sessions.length && <div className="comparison-session-picker"><Label>已儲存的比對</Label><Select value={session?.id ?? "new"} disabled={busy} onValueChange={chooseSession}><SelectTrigger aria-label="已儲存的比對"><SelectValue placeholder="選擇比對" /></SelectTrigger><SelectContent>{!session && <SelectItem value="new" disabled>新比對</SelectItem>}{sessions.map(item => <SelectItem key={item.id} value={item.id}>{item.projectName} · {item.result.mode === "single" ? `單板 ${item.result.meta.b.label}` : `${item.result.meta.a.label} → ${item.result.meta.b.label}`}</SelectItem>)}</SelectContent></Select><span>儲存於目前帳號與瀏覽器</span></div>}
     {error && <div className="comparison-alert" role="alert"><TriangleAlert /><p>{error}</p><Button variant="ghost" size="icon" aria-label="關閉錯誤訊息" onClick={() => setError("")}>×</Button></div>}
     {notice && <div className="comparison-notice" role="status"><CheckCircle2 /><p>{notice}</p></div>}
@@ -267,9 +302,13 @@ export default function ComparisonWorkspace() {
       {filters.tab === "compare" && <details key={session?.id ?? "new"} className="comparison-source-settings" open={!session} data-new={!session}>
         <summary>展開來源檔案，重新比對<ChevronDown /></summary>
         <section className="comparison-section comparison-run-settings">
-        <div className="comparison-mode-switch" role="group" aria-label="AutoCheck 執行模式"><Button variant={mode === "compare" ? "secondary" : "outline"} aria-pressed={mode === "compare"} disabled={busy} onClick={() => setMode("compare")}>A／B 版本比對</Button><Button variant={mode === "single" ? "secondary" : "outline"} aria-pressed={mode === "single"} disabled={busy} onClick={() => setMode("single")}>單板畫圖</Button></div>
-        <div className="comparison-setup-heading"><div className="comparison-section-heading"><div><h2>{mode === "single" ? "單板畫圖" : "A / B 版本比對"}</h2><p>{mode === "single" ? "只解析一張板子，產生 Power Tree 與 I²C Map。" : "選取舊版與新版工程檔，檢查連線、元件、BOM 與線路規則。"}</p></div></div><div className="comparison-setup-controls"><div className="comparison-project-name" data-empty={!projectName.trim()}><Label htmlFor="comparison-project">比對名稱{!projectName.trim() && <span className="comparison-required-chip">必填</span>}</Label><Input id="comparison-project" placeholder="例如 CATANIA PDB" value={projectName} maxLength={120} aria-required="true" disabled={!canEdit || busy} onChange={event => setProjectName(event.target.value)} /></div>{!compact && runActions}</div></div>
-        {mode === "compare" ? <div className="comparison-revision-grid"><ComparisonInputs side="A" label={aLabel} onLabel={setALabel} value={a} onChange={setA} disabled={!canEdit || busy} /><ComparisonInputs side="B" label={bLabel} onLabel={setBLabel} value={b} onChange={setB} disabled={!canEdit || busy} /></div> : <><div className="comparison-single-sources"><span>可另選資料夾，或沿用本次已選來源：</span><Button variant="outline" disabled={!canEdit || busy || !a.files.length} onClick={() => { setSingleInput(a); setSingleLabel(aLabel); }}>沿用 A · {aLabel}</Button><Button variant="outline" disabled={!canEdit || busy || !b.files.length} onClick={() => { setSingleInput(b); setSingleLabel(bLabel); }}>沿用 B · {bLabel}</Button></div><ComparisonInputs side="B" label={singleLabel} onLabel={setSingleLabel} value={singleInput} onChange={setSingleInput} disabled={!canEdit || busy} single /></>}
+        <div className="comparison-setup-heading">
+          <h2 className="sr-only">{mode === "single" ? "單板畫圖" : "A / B 版本比對"}</h2>
+          <div className="comparison-mode-switch" role="group" aria-label="AutoCheck 執行模式"><Button variant={mode === "compare" ? "secondary" : "outline"} aria-pressed={mode === "compare"} disabled={busy} title="選取舊版與新版工程檔，檢查連線、元件、BOM 與線路規則" onClick={() => setMode("compare")}>A／B 版本比對</Button><Button variant={mode === "single" ? "secondary" : "outline"} aria-pressed={mode === "single"} disabled={busy} title="只解析一張板子，產生 Power Tree 與 I²C Map" onClick={() => setMode("single")}>單板畫圖</Button></div>
+          <div className="comparison-setup-controls"><div className="comparison-project-name" data-empty={!projectName.trim()} data-next={nextStep === "name" || undefined}><Label htmlFor="comparison-project"><span className="comparison-step-no">{projectName.trim() ? <Check /> : 1}</span>比對名稱{!projectName.trim() && <span className="comparison-required-chip">必填</span>}</Label><Input id="comparison-project" placeholder="例如 CATANIA PDB" title="用來保存這個板件的結果與回覆，最多 120 字" value={projectName} maxLength={120} aria-required="true" disabled={!canEdit || busy} onChange={event => setProjectName(event.target.value)} /></div>{!compact && runActions}</div>
+        </div>
+        {identical && <p className="comparison-input-warning" role="status"><TriangleAlert />A、B 的 Netlist 三份檔案看起來是同一份（檔名、大小、修改時間都相同），比對不會有差異。請確認沒有選到同一個資料夾。</p>}
+        {mode === "compare" ? <div className="comparison-revision-grid"><ComparisonInputs side="A" step={2} label={aLabel} onLabel={setALabel} value={a} onChange={setA} disabled={!canEdit || busy} /><ComparisonInputs side="B" step={3} label={bLabel} onLabel={setBLabel} value={b} onChange={setB} disabled={!canEdit || busy} /></div> : <><div className="comparison-single-sources"><span>可另選資料夾，或沿用本次已選來源：</span><Button variant="outline" disabled={!canEdit || busy || !a.files.length} onClick={() => { setSingleInput(a); setSingleLabel(aLabel); }}>沿用 A · {aLabel}</Button><Button variant="outline" disabled={!canEdit || busy || !b.files.length} onClick={() => { setSingleInput(b); setSingleLabel(bLabel); }}>沿用 B · {bLabel}</Button></div><ComparisonInputs side="B" step={2} label={singleLabel} onLabel={setSingleLabel} value={singleInput} onChange={setSingleInput} disabled={!canEdit || busy} single /></>}
         {compact && runActions}
         <details className="comparison-optional"><summary>選用工具：IC Datasheet 與進階設定<ChevronDown /></summary><div className="comparison-optional-grid">{optionalInputs.map(option => <OptionalFileField key={option.key} id={`comparison-option-${option.key}`} label={option.label} accept={option.accept} file={optional[option.key]} disabled={!canEdit || busy} onChange={file => setOptional(current => ({ ...current, [option.key]: file }))} />)}<div className="comparison-datasheets-run"><Label>IC Datasheet 規格書 PDF（選用）</Label><DatasheetFiles value={datasheets} onChange={setDatasheets} disabled={!canEdit || busy} inputPrefix="comparison-run-datasheets" /></div></div><p>已保存的使用者位址庫會自動套用；可在「位址庫」核對與管理。</p></details>
         </section>
