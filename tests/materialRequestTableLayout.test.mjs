@@ -164,7 +164,7 @@ test("material column geometry keeps Note as the seventeenth and final column", 
 });
 
 test("stored column widths are reused only when they match the current seventeen-column layout", () => {
-  const loadBlock = source.slice(source.indexOf("function loadColumnWidths()"), source.indexOf("function clampBomTrackerPageCount("));
+  const loadBlock = source.slice(source.indexOf("function loadColumnWidths()"), source.indexOf("function toWorkbookRecord("));
   const load = new Function("window", "DEFAULT_COLUMN_WIDTHS", "MIN_COLUMN_WIDTHS", "MAX_COLUMN_WIDTHS", "COLUMN_WIDTHS_SESSION_KEY", `${loadBlock}; return loadColumnWidths();`);
   const run = (stored) => load({ sessionStorage: { getItem: (key) => key === "fixture" && stored !== null ? JSON.stringify(stored) : null } }, readWidths("DEFAULT_COLUMN_WIDTHS"), readWidths("MIN_COLUMN_WIDTHS"), readWidths("MAX_COLUMN_WIDTHS"), "fixture");
   const defaults = readWidths("DEFAULT_COLUMN_WIDTHS");

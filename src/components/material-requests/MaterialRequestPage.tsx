@@ -98,12 +98,11 @@ import { useUser } from "@/components/auth/UserContext";
 import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
 import { MaterialTableScroll } from "./MaterialTableScroll";
 import { MaterialMobileListRow } from "./MaterialMobileListRow";
-import { BomPagePdfAiDialog } from "./BomPagePdfAiDialog";
-import { applyPdfPageTitles } from "./bomPagePdfAi";
+import { BomPageTrackerDialog } from "./BomPageTrackerDialog";
+import { getBomPageTrackerSummary } from "./bomPageTracker";
 import { MaterialMobileBomPicker } from "./MaterialMobileBomPicker";
 import "./materialMobilePage.css";
 import "./materialMobileEditor.css";
-import "./bomPageTracker.css";
 import "./materialPersonalMarks.css";
 import { buildMaterialMainGroups, filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -129,8 +128,6 @@ import {
 } from "./materialRequestUtils";
 import {
   type BomPageTracker,
-  type BomPageTrackerPage,
-  type BomPageTrackerStatus,
   type BomNoteSnapshot,
   type BomRecordSyncMeta,
   type BomStorageMode,
@@ -344,32 +341,6 @@ const LOCAL_CHANGES_KEY = "station-status-hub:material-changes:v1";
 const VIEW_STATE_KEY_PREFIX = "station-status-hub:material-view:v1:";
 const COLUMN_WIDTHS_SESSION_KEY = "station-status-hub:material-column-widths:v15";
 const HIDDEN_COLUMNS_KEY = "station-status-hub:material-hidden-columns:v1";
-const MAX_BOM_TRACKER_PAGES = 500;
-const BOM_PAGE_STATUS_OPTIONS: Array<{
-  value: BomPageTrackerStatus;
-  label: string;
-  activeClassName: string;
-  idleClassName: string;
-}> = [
-  {
-    value: "done",
-    label: "已完成",
-    activeClassName: "bg-success text-success-foreground",
-    idleClassName: "text-muted-foreground hover:bg-accent hover:text-foreground",
-  },
-  {
-    value: "pending",
-    label: "待處理",
-    activeClassName: "bg-accent text-foreground",
-    idleClassName: "text-muted-foreground hover:bg-accent hover:text-foreground",
-  },
-  {
-    value: "done_missing",
-    label: "已完成但缺料",
-    activeClassName: "bg-warning text-warning-foreground",
-    idleClassName: "text-muted-foreground hover:bg-accent hover:text-foreground",
-  },
-];
 const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 180, 130, 130, 110, 170, 150, 220];
 const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 130, 160];
 const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 520];
@@ -747,124 +718,6 @@ function loadColumnWidths() {
   } catch {
     return DEFAULT_COLUMN_WIDTHS;
   }
-}
-
-function clampBomTrackerPageCount(value: number) {
-  return Number.isFinite(value) ? Math.min(MAX_BOM_TRACKER_PAGES, Math.max(0, Math.trunc(value))) : 0;
-}
-
-function sortBomTrackerPages(pages: BomPageTrackerPage[]) {
-  return [...pages].sort((left, right) => left.pageNumber - right.pageNumber);
-}
-
-function syncBomTrackerPages(pages: BomPageTrackerPage[], totalPages: number) {
-  const normalizedTotalPages = clampBomTrackerPageCount(totalPages);
-  const pageMap = new Map<number, BomPageTrackerPage>();
-
-  pages.forEach((page) => {
-    const pageNumber = clampBomTrackerPageCount(page.pageNumber);
-    if (pageNumber < 1) return;
-
-    pageMap.set(pageNumber, {
-      pageNumber,
-      status: page.status ?? (page.completed === true ? "done" : "pending"),
-      note: page.note ?? "",
-      ...(typeof page.title === "string" ? { title: page.title } : {}),
-    });
-  });
-
-  for (let pageNumber = 1; pageNumber <= normalizedTotalPages; pageNumber += 1) {
-    if (!pageMap.has(pageNumber)) {
-      pageMap.set(pageNumber, {
-        pageNumber,
-        status: "pending",
-        note: "",
-      });
-    }
-  }
-
-  return sortBomTrackerPages([...pageMap.values()]);
-}
-
-function getBomPageTrackerSummary(pageTracker?: BomPageTracker) {
-  const totalPages = clampBomTrackerPageCount(pageTracker?.totalPages ?? 0);
-  const pages = syncBomTrackerPages(pageTracker?.pages ?? [], totalPages);
-  const completedPages = pages.filter((page) => page.pageNumber <= totalPages && page.status !== "pending").length;
-  const missingPages = pages.filter((page) => page.pageNumber <= totalPages && page.status === "done_missing").length;
-  const highestTouchedPage = pages.reduce((maxPage, page) => (
-    page.status !== "pending" || page.note.trim()
-      ? Math.max(maxPage, page.pageNumber)
-      : maxPage
-  ), 0);
-  const requestedCurrentPage = clampBomTrackerPageCount(pageTracker?.currentPage ?? 0);
-  const currentPage = totalPages > 0
-    ? Math.min(totalPages, requestedCurrentPage > 0 ? requestedCurrentPage : highestTouchedPage)
-    : 0;
-  const currentPageEntry = currentPage > 0
-    ? pages.find((page) => page.pageNumber === currentPage) ?? null
-    : null;
-
-  return {
-    totalPages,
-    completedPages,
-    missingPages,
-    currentPage,
-    currentPageEntry,
-    highestTouchedPage,
-    pages,
-  };
-}
-
-function getBomPageStatusMeta(status: BomPageTrackerStatus) {
-  switch (status) {
-    case "done":
-      return {
-        label: "已完成",
-        cardClassName: "border-success/30 bg-success/10",
-        textClassName: "text-success",
-      };
-    case "done_missing":
-      return {
-        label: "已完成但缺料",
-        cardClassName: "border-warning/30 bg-warning/10",
-        textClassName: "text-warning",
-      };
-    default:
-      return {
-        label: "待處理",
-        cardClassName: "border-border bg-background/40",
-        textClassName: "text-foreground",
-      };
-  }
-}
-
-function BomPageTrackerSummaryPill({
-  pageTracker,
-  className,
-}: {
-  pageTracker?: BomPageTracker;
-  className?: string;
-}) {
-  const summary = getBomPageTrackerSummary(pageTracker);
-  const ready = summary.totalPages > 0;
-  const hasCurrentPage = ready && summary.currentPage > 0;
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
-        ready ? CHIP_TONES.success : CHIP_TONES.neutral,
-        className,
-      )}
-    >
-      <CircleCheck className="h-3.5 w-3.5" />
-      {ready
-        ? hasCurrentPage
-          ? `目前第 ${summary.currentPage} / ${summary.totalPages} 頁 · 已完成 ${summary.completedPages} 頁`
-          : `已完成 ${summary.completedPages} / ${summary.totalPages} 頁`
-        : "頁數未設定"}
-    </span>
-  );
 }
 
 function toWorkbookRecord(record: MaterialWorkbookRecord): MaterialWorkbookRecord {
@@ -2034,317 +1887,6 @@ function ActionPill({ record }: { record: MaterialRecord }) {
     <span className={cn(CHIP_BASE, tone)} title={getActionLabel(record.actionKind)}>
       {getActionLabel(record.actionKind)}
     </span>
-  );
-}
-
-function BomPageTrackerDialog({
-  workspace,
-  open,
-  onOpenChange,
-  onSave,
-}: {
-  workspace: BomWorkspace | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSave: (workspaceId: string, pageTracker: BomPageTracker) => Promise<void>;
-}) {
-  const [totalPagesInput, setTotalPagesInput] = useState("0");
-  const [currentPageInput, setCurrentPageInput] = useState("0");
-  const [rangeStartInput, setRangeStartInput] = useState("1");
-  const [rangeEndInput, setRangeEndInput] = useState("1");
-  const [pages, setPages] = useState<BomPageTrackerPage[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [pdfAiOpen, setPdfAiOpen] = useState(false);
-
-  useEffect(() => {
-    setPdfAiOpen(false);
-    if (!open || !workspace) return;
-
-    const summary = getBomPageTrackerSummary(workspace.pageTracker);
-    setTotalPagesInput(String(summary.totalPages));
-    setCurrentPageInput(String(summary.currentPage));
-    const defaultRangePage = summary.currentPage > 0
-      ? summary.currentPage
-      : summary.totalPages > 0
-        ? 1
-        : 0;
-    setRangeStartInput(String(defaultRangePage));
-    setRangeEndInput(String(defaultRangePage));
-    setPages(syncBomTrackerPages(workspace.pageTracker?.pages ?? [], summary.totalPages));
-    setIsSaving(false);
-  }, [open, workspace]);
-
-  if (!workspace) return null;
-
-  const totalPages = clampBomTrackerPageCount(Number(totalPagesInput || 0));
-  const currentPage = totalPages > 0
-    ? Math.min(totalPages, clampBomTrackerPageCount(Number(currentPageInput || 0)))
-    : 0;
-  const rawRangeStart = clampBomTrackerPageCount(Number(rangeStartInput || 0));
-  const rawRangeEnd = clampBomTrackerPageCount(Number(rangeEndInput || 0));
-  const rangeStartPage = totalPages > 0 && rawRangeStart > 0 ? Math.min(totalPages, rawRangeStart) : 0;
-  const rangeEndPage = totalPages > 0 && rawRangeEnd > 0 ? Math.min(totalPages, rawRangeEnd) : 0;
-  const rangeSelectionStart = rangeStartPage > 0 && rangeEndPage > 0 ? Math.min(rangeStartPage, rangeEndPage) : 0;
-  const rangeSelectionEnd = rangeStartPage > 0 && rangeEndPage > 0 ? Math.max(rangeStartPage, rangeEndPage) : 0;
-  const rangeSelectionCount = rangeSelectionStart > 0 && rangeSelectionEnd > 0
-    ? rangeSelectionEnd - rangeSelectionStart + 1
-    : 0;
-  const syncedPages = syncBomTrackerPages(pages, totalPages);
-  const visiblePages = syncedPages.filter((page) => page.pageNumber <= totalPages);
-  const completedPages = visiblePages.filter((page) => page.status !== "pending").length;
-  const completionRate = totalPages > 0 ? Math.round((completedPages / totalPages) * 100) : 0;
-
-  const updatePage = (pageNumber: number, patch: Partial<BomPageTrackerPage>) => {
-    setPages((current) =>
-      syncBomTrackerPages(current, Math.max(totalPages, pageNumber)).map((page) =>
-        page.pageNumber === pageNumber ? { ...page, ...patch } : page
-      )
-    );
-  };
-
-  const applyRangeStatus = (status: BomPageTrackerStatus) => {
-    if (rangeSelectionCount === 0) return;
-
-    startTransition(() => {
-      setPages((current) =>
-        syncBomTrackerPages(current, Math.max(totalPages, rangeSelectionEnd)).map((page) => (
-          page.pageNumber >= rangeSelectionStart && page.pageNumber <= rangeSelectionEnd
-            ? { ...page, status }
-            : page
-        ))
-      );
-    });
-
-    if (status !== "pending" && (currentPage === 0 || rangeSelectionEnd > currentPage)) {
-      setCurrentPageInput(String(rangeSelectionEnd));
-    }
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      await onSave(workspace.id, {
-        totalPages,
-        currentPage,
-        pages: syncedPages,
-        updatedAt: new Date().toISOString(),
-      });
-      onOpenChange(false);
-    } catch {
-      // Save handler already shows the error toast.
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const numberFieldClassName = "h-9 w-24 rounded-xl px-3 text-sm";
-  const dialogDescription = `${workspace.name} · ${workspace.payload.sheetName} · ${workspace.payload.recordCount.toLocaleString()} 筆料件`;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="bom-page-tracker" className="bom-page-tracker flex flex-col overflow-hidden">
-        <DialogHeader className="bom-tracker-header">
-          <DialogTitle className="text-xl">頁數進度</DialogTitle>
-          <DialogDescription className="truncate" title={dialogDescription}>
-            {dialogDescription}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="bom-tracker-controls">
-        <section className="bom-tracker-overview workspace-dialog-section flex flex-wrap items-end gap-x-4 gap-y-2 rounded-2xl px-4 py-3">
-          <div className="space-y-1">
-            <Label htmlFor="bom-total-pages" className="text-xs font-semibold">總頁數</Label>
-            <Input
-              id="bom-total-pages"
-              type="number"
-              min={0}
-              max={MAX_BOM_TRACKER_PAGES}
-              step={1}
-              value={totalPagesInput}
-              onChange={(event) => setTotalPagesInput(event.target.value)}
-              placeholder="例如 12"
-              title={`可填 0 到 ${MAX_BOM_TRACKER_PAGES} 頁；頁數調小時，後面頁面的備註會先保留`}
-              className={numberFieldClassName}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="bom-current-page" className="text-xs font-semibold">目前做到第幾頁</Label>
-            <Input
-              id="bom-current-page"
-              type="number"
-              min={0}
-              max={Math.max(totalPages, MAX_BOM_TRACKER_PAGES)}
-              step={1}
-              value={currentPageInput}
-              onChange={(event) => setCurrentPageInput(event.target.value)}
-              placeholder={totalPages > 0 ? `1 ~ ${totalPages}` : "先填總頁數"}
-              disabled={totalPages === 0}
-              title="主畫面的頁數進度會顯示這一頁"
-              className={numberFieldClassName}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2 pb-1.5">
-            <BomPageTrackerSummaryPill pageTracker={{ totalPages, currentPage, pages: syncedPages, updatedAt: workspace.pageTracker?.updatedAt ?? workspace.updatedAt }} />
-            <span className="text-xs text-muted-foreground">完成率 {completionRate}%</span>
-          </div>
-          <Button type="button" variant="outline" className="ml-auto h-11" disabled={isSaving} onClick={() => setPdfAiOpen(true)}>PDF AI</Button>
-        </section>
-          {totalPages > 0 && (
-            <div data-testid="bom-page-tracker-batch" className="bom-tracker-batch flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-background/40 px-4 py-2.5">
-              <span className="text-xs font-semibold text-foreground">批次設定</span>
-              <Label htmlFor="bom-range-start" className="text-xs text-muted-foreground">第</Label>
-              <Input
-                id="bom-range-start"
-                type="number"
-                min={1}
-                max={Math.max(totalPages, 1)}
-                step={1}
-                value={rangeStartInput}
-                onChange={(event) => setRangeStartInput(event.target.value)}
-                aria-label="起始頁"
-                className="h-8 w-20 rounded-lg px-2 text-sm"
-              />
-              <Label htmlFor="bom-range-end" className="text-xs text-muted-foreground">~</Label>
-              <Input
-                id="bom-range-end"
-                type="number"
-                min={1}
-                max={Math.max(totalPages, 1)}
-                step={1}
-                value={rangeEndInput}
-                onChange={(event) => setRangeEndInput(event.target.value)}
-                aria-label="結束頁"
-                className="h-8 w-20 rounded-lg px-2 text-sm"
-              />
-              <span className="text-xs text-muted-foreground">頁設為</span>
-              <div className="inline-flex rounded-lg border border-border bg-secondary p-0.5">
-                {BOM_PAGE_STATUS_OPTIONS.map((option) => (
-                  <button
-                    key={`range-${option.value}`}
-                    type="button"
-                    onClick={() => applyRangeStatus(option.value)}
-                    disabled={rangeSelectionCount === 0}
-                    className={cn("h-7 rounded-md px-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50", option.idleClassName)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-              <span className="ml-auto text-xs text-muted-foreground">
-                {rangeSelectionCount > 0 ? `共 ${rangeSelectionCount} 頁，備註會保留` : "先填起訖頁"}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {totalPages === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-            先填總頁數，下面就會列出每一頁
-          </p>
-        ) : (
-          <>
-            <div className="bom-tracker-table-heading flex items-center justify-between">
-              <h3>逐頁進度表</h3>
-              <span>{completedPages} / {totalPages} 頁完成</span>
-            </div>
-            <div className="bom-tracker-table-scroll" data-testid="bom-page-tracker-scroll">
-              <table className="bom-tracker-table" data-testid="bom-page-tracker-table" aria-label="逐頁進度表">
-                <colgroup><col className="bom-tracker-page-col" /><col className="bom-tracker-status-col" /><col className="bom-tracker-current-col" /><col /><col /></colgroup>
-                <thead><tr><th scope="col">頁碼</th><th scope="col">狀態</th><th scope="col">目前頁</th><th scope="col">頁面標題</th><th scope="col">備註</th></tr></thead>
-                <tbody>
-                {visiblePages.map((page) => {
-                  const statusMeta = getBomPageStatusMeta(page.status);
-                  const isCurrent = page.pageNumber === currentPage;
-
-                  return (
-                    <tr
-                      key={page.pageNumber}
-                      data-testid="bom-page-tracker-row"
-                      data-current={isCurrent}
-                    >
-                      <th scope="row"><span className={cn("text-sm font-semibold", statusMeta.textClassName)}>第 {page.pageNumber} 頁</span></th>
-                      <td>
-                      <div className="inline-flex flex-none rounded-lg border border-border bg-secondary p-0.5" role="group" aria-label={`第 ${page.pageNumber} 頁狀態`}>
-                        {BOM_PAGE_STATUS_OPTIONS.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            aria-pressed={page.status === option.value}
-                            onClick={() => {
-                              updatePage(page.pageNumber, { status: option.value });
-                              if (currentPage === 0 || page.pageNumber > currentPage) {
-                                setCurrentPageInput(String(page.pageNumber));
-                              }
-                            }}
-                            className={cn("h-7 rounded-md px-2.5 text-xs font-semibold transition-colors", page.status === option.value ? option.activeClassName : option.idleClassName)}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                      </td>
-                      <td>
-                      {isCurrent ? (
-                        <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.primary)}>目前頁</span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setCurrentPageInput(String(page.pageNumber))}
-                          className="flex-none rounded-md px-2 text-[11px] font-semibold leading-5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                        >
-                          設為目前頁
-                        </button>
-                      )}
-                      </td>
-                      <td>
-                      <Input
-                        value={page.title ?? ""}
-                        onChange={event => updatePage(page.pageNumber, { title: event.target.value })}
-                        placeholder="頁面標題"
-                        aria-label={`第 ${page.pageNumber} 頁標題`}
-                        maxLength={300}
-                        className="bom-tracker-title-input"
-                      />
-                      </td>
-                      <td>
-                      <Input
-                        value={page.note}
-                        onChange={(event) => {
-                          updatePage(page.pageNumber, { note: event.target.value });
-                          if (currentPage === 0 || page.pageNumber > currentPage) {
-                            setCurrentPageInput(String(page.pageNumber));
-                          }
-                        }}
-                        placeholder="備註"
-                        aria-label={`第 ${page.pageNumber} 頁備註`}
-                        className="bom-tracker-note-input"
-                      />
-                      </td>
-                    </tr>
-                  );
-                })}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-
-        <DialogFooter className="bom-tracker-footer gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>關閉</Button>
-          <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "儲存中..." : "儲存頁數進度"}
-          </Button>
-        </DialogFooter>
-        <BomPagePdfAiDialog key={workspace.id} open={open && pdfAiOpen} onOpenChange={setPdfAiOpen} maxPages={MAX_BOM_TRACKER_PAGES} onApply={titles => {
-          const nextTotal = Math.max(totalPages, titles.length);
-          setTotalPagesInput(String(nextTotal));
-          setCurrentPageInput(current => String(Math.min(nextTotal, clampBomTrackerPageCount(Number(current || 0)))));
-          setRangeStartInput(current => String(Math.min(nextTotal, Math.max(1, clampBomTrackerPageCount(Number(current || 0))))));
-          setRangeEndInput(current => String(Math.min(nextTotal, Math.max(1, clampBomTrackerPageCount(Number(current || 0))))));
-          setPages(current => applyPdfPageTitles(current, titles));
-        }} />
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -4109,6 +3651,8 @@ export function MaterialRequestPage() {
   const isCollaborativeReady = collaborationStatus === "remote";
   const personalMarks = useMaterialPersonalMarks(user?.userId, activeBomId, canViewModuleAccess && isCollaborativeReady);
   const canManageBomPageTracker = canEdit && !["checking", "reconnecting", "error"].includes(collaborationStatus);
+  // Anyone who may see this BOM may read its page progress (statuses, titles, notes); changing it still needs edit rights.
+  const canOpenBomPageTracker = canViewModuleAccess && !["checking", "reconnecting", "error"].includes(collaborationStatus);
   const collaborationStatusMeta = useMemo(
     () => collaborationStatus === "remote" && !isBomRealtimeConnected
       ? { ...getCollaborationStatusMeta("reconnecting"), label: "背景同步中", description: "即時連線正在重連，系統會自動比對版本並補回變動的料件。", bannerText: "" }
@@ -5406,7 +4950,7 @@ export function MaterialRequestPage() {
   };
 
   const openBomPageTrackerDialog = (workspaceId = activeBomId) => {
-    if (!canManageBomPageTracker) {
+    if (!canOpenBomPageTracker) {
       showCollaborativeUnavailableToast();
       return;
     }
@@ -5680,15 +5224,15 @@ export function MaterialRequestPage() {
         workspaceId,
       });
       toast({
-        title: "頁數追蹤已更新",
+        title: "頁數進度已儲存",
         description: `${workspace.name} · ${pageTrackerSummary.currentPage > 0 ? `目前第 ${pageTrackerSummary.currentPage} / ${pageTrackerSummary.totalPages} 頁 · ` : ""}已完成 ${pageTrackerSummary.completedPages} 頁`,
       });
     } catch (error) {
       if (!isBomWriteCurrent(writeScope)) throw error;
       await reloadBomWorkspaces(activeBomId).catch(() => undefined);
       toast({
-        title: "頁數追蹤更新失敗",
-        description: "共用頁數狀態尚未同步成功，已重新載入最新版本。",
+        title: "頁數進度儲存失敗",
+        description: "這次沒有存成功。你的修改還留在視窗裡，可以再按一次儲存。",
         variant: "destructive",
       });
       throw error;
@@ -6250,7 +5794,8 @@ export function MaterialRequestPage() {
         canEditColors={canEdit && isCollaborativeReady}
         onApply={applyTableSettings}
       />
-      <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker} />
+      <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker}
+        loadLatest={async (workspaceId) => (await loadPageTrackerMap()).get(workspaceId)} readOnly={!canManageBomPageTracker} />
       <BomVersionCenter
         open={bomManagerOpen}
         onOpenChange={setBomManagerOpen}
@@ -6384,7 +5929,7 @@ export function MaterialRequestPage() {
                   </div>
                   <div className="material-mobile-tool-list">
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => setBomManagerOpen(true)} disabled={!isCollaborativeReady}><Layers3 />BOM 管理<span>{seriesList.length}</span><ChevronRight /></Button></DrawerClose>
-                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canManageBomPageTracker}><CircleCheck />頁數進度<ChevronRight /></Button></DrawerClose>
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => openBomPageTrackerDialog(activeWorkspace.id)} disabled={!canOpenBomPageTracker}><CircleCheck />頁數進度<ChevronRight /></Button></DrawerClose>
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => setRlcPriorityOpen(true)}><Layers3 />RLC 優先順序<ChevronRight /></Button></DrawerClose>
                     <DrawerClose asChild>{tableSettingsControl}</DrawerClose>
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => void exportVisibleColumns()} disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending}><Download />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}<ChevronRight /></Button></DrawerClose>
@@ -6581,8 +6126,8 @@ export function MaterialRequestPage() {
             size="sm"
             data-material-zone="page-progress"
             onClick={() => openBomPageTrackerDialog(activeWorkspace.id)}
-            disabled={!canManageBomPageTracker}
-            title="設定總頁數、目前頁與逐頁狀態"
+            disabled={!canOpenBomPageTracker}
+            title={canManageBomPageTracker ? "設定總頁數、目前頁與逐頁狀態" : "查看逐頁狀態、標題與備註"}
             className={cn(
               "material-action-highlight h-8 px-2.5 text-xs font-bold disabled:cursor-not-allowed disabled:border-slate-600 disabled:bg-slate-700/30 disabled:text-slate-500",
               activePageTrackerSummary.totalPages > 0

@@ -146,7 +146,14 @@ async function runRegular(browser, origin, width, height, state, pdf) {
       await reopened.getByRole('button', { name: '取消', exact: true }).tap(); await reopened.waitFor({ state: 'hidden' });
       assert.deepEqual(await page.evaluate(() => window.__pdfAiFixture.tracker), saved.tracker);
     }
-    await tracker.getByRole('button', { name: '關閉', exact: true }).tap(); await tracker.waitFor({ state: 'hidden' });
+    await tracker.getByRole('button', { name: '關閉', exact: true }).tap();
+    // Applied titles that were not saved are a draft: closing asks first, and declining leaves the stored progress untouched.
+    if (width !== 1440) {
+      await tracker.getByText('要儲存這些修改嗎？').waitFor();
+      await tracker.getByRole('button', { name: '不儲存，直接關閉', exact: true }).tap();
+      assert.deepEqual(await page.evaluate(() => window.__pdfAiFixture.tracker), original);
+    }
+    await tracker.waitFor({ state: 'hidden' });
     assert.deepEqual(errors, []);
     return { width, height, crop, checks: ['selected filename and actual PDF preview before AI', 'tight lossless crop excludes neighboring schematic text', 'actual page selection and editable titles', 'dialog and footer inside viewport', 'apply preserves saved progress and later pages', ...(width === 1440 ? ['explicit save/reopen', 'incomplete response blocked', 'in-flight cancellation'] : ['outer cancel keeps saved tracker']), ...(width < 1024 ? ['500px short viewport reachable'] : [])] };
   } catch (error) { await page.screenshot({ path: path.join(evidence, `failure-${width}.png`) }).catch(() => {}); throw error; }

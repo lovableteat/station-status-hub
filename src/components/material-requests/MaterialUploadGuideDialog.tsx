@@ -92,8 +92,9 @@ export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpe
             <p className="material-guide-note"><strong>本次 AI 分析容量</strong><br />最多 20 張照片、20 份 SPEC 輸入，合計 18 MB，包含解壓／解析後資料。AI 支援 PDF、PNG／JPG／WEBP、TXT／CSV／TSV／MD、RAR、STP／STEP；其他可保存的工程附件不代表都能直接由 AI 判讀。</p>
           </>}
           {chapter === "pages" && <>
-            <p className="material-guide-lead">「頁數進度」用表格記錄每一頁的狀態、目前頁、頁面標題與備註。總頁數上限 500 頁，標題可以手動填寫或用 PDF AI 協助。</p>
-            <h4>手動更新頁數進度</h4><p>設定總頁數與目前做到的頁數，再逐頁選「已完成／待處理／已完成但缺料」。批次設定會更新指定範圍的狀態，標題與備註保留。最後按「儲存頁數進度」。手機可在表格內左右捲動。</p>
+            <p className="material-guide-lead">「頁數進度」記錄每一頁的狀態、頁面標題與備註，以及目前做到第幾頁。上方的「頁面總覽」用顏色一次顯示全部頁面。總頁數上限 500 頁，標題可以手動填寫或用 PDF AI 協助。</p>
+            <h4>手動更新頁數進度</h4><p>先填總頁數，再逐頁選「已完成／待處理／已完成但缺料」，缺料的頁面請在備註寫缺哪些料。要一次設定一段：在「頁面總覽」點起始頁，按住 Shift 再點結束頁（或直接填起訖頁），再按要設成的狀態，標題與備註保留。點頁面總覽的頁碼會跳到那一頁；表格上方可搜尋標題、備註，或只看待處理／已完成／缺料的頁面。最後按「儲存頁數進度」；還沒儲存就關閉會先詢問。手機可在表格內左右捲動。</p>
+            <aside className="material-guide-note"><strong>多人同時更新</strong><p>儲存時只寫入你改過的頁面，同事在你開著視窗期間儲存的其他頁面不會被蓋掉；同一頁兩邊都改時，以後儲存的為準。只有檢視權限的人也能打開查看，但不能修改。</p></aside>
             <h4>PDF AI 讀取頁面標題</h4><ol className="material-guide-steps"><li><strong>選擇 PDF，先看截圖</strong><p>單份上限 50 MB、500 頁。選檔後顯示實際頁數與標題截圖；實際頁數和系統上限分開顯示。可切頁、直接跳頁與放大核對。</p></li><li><strong>選 AI 服務並辨識</strong><p>按「辨識全部頁面」，全檔每批 8 頁處理。完成後逐頁修正標題；未辨識的內容請參照原圖補填。</p></li><li><strong>先套用，再儲存</strong><p>「套用 N 頁」只帶回頁數進度表單，仍需按「儲存頁數進度」才保存。取消辨識或不完整結果不會改掉已儲存進度。</p></li></ol>
             <aside className="material-guide-note"><strong>原進度會保留</strong><p>辨識只協助填標題，原完成狀態與備註保留；空白辨識不蓋舊標題，較短 PDF 保留後面既有頁面。特殊掃描或沒有可辨識 Title 的圖面，請先檢查截圖與結果。</p></aside>
           </>}
