@@ -19,6 +19,6 @@ export const saveBomWorkspacePageTracker = async (id,tracker) => {
 const model = {id:'pdf-qa-model',key_name:'QA Vision',api_key:'qa-no-real-api-key',is_active:true,expires_at:null,permissions:{read:true,write:false,metadata:{provider:'openai',model:'fixture-vision',baseUrl:location.origin+'/__qa',editable:false}},created_at:'2026-11-09T00:00:00Z'};
 const query = data => ({select(){return this},eq(){return this},order(){return this},abortSignal(){return this},then(resolve,reject){return Promise.resolve({data,error:null}).then(resolve,reject)}});
 export const supabase = {...base.supabase,
-  from(table){return table==='api_keys' ? query([model]) : base.supabase.from(table)},
+  from(table){return table==='api_keys' ? query([model,{...model,id:'pdf-qa-model-2',key_name:'QA Vision 2',permissions:{...model.permissions,metadata:{...model.permissions.metadata,model:'fixture-vision-2'}}}]) : base.supabase.from(table)},
   rpc(name,args){return ['start_ai_model_usage_attempt','finish_ai_model_usage_attempt'].includes(name) ? query(null) : base.supabase.rpc(name,args)},
 };
