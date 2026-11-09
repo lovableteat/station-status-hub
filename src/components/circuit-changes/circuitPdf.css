@@ -22,7 +22,7 @@
 .circuit-pdf-official > .circuit-pdf-ai:disabled { border-color: hsl(var(--border)); background: transparent; color: hsl(var(--muted-foreground)); opacity: .7; }
 .circuit-pdf-official > .circuit-pdf-ai:disabled > svg { color: currentColor; }
 
-.circuit-pdf-versions { position: relative; min-width: 0; flex: 0 1 220px; }
+.circuit-pdf-versions { min-width: 0; flex: 0 1 220px; }
 .circuit-pdf-row > .circuit-pdf-delete { width: 36px; padding: 0; color: hsl(var(--muted-foreground)); }
 .circuit-pdf-row > .circuit-pdf-delete:hover:not(:disabled), .circuit-pdf-row > .circuit-pdf-delete[aria-expanded="true"] { border-color: hsl(var(--destructive) / .6); color: hsl(var(--destructive)); }
 .circuit-pdf-confirm { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 12px; border-bottom: 1px solid hsl(var(--destructive) / .35); background: hsl(var(--destructive) / .08); font-size: 13px; line-height: 20px; }
@@ -32,28 +32,59 @@
 .circuit-pdf-version-button > span { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
 .circuit-pdf-version-button > small { min-width: 0; overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .circuit-pdf-version-button > svg { margin-left: auto; }
-.circuit-pdf-version-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; width: min(520px, calc(100vw - 32px)); max-height: min(60vh, 520px); overflow-y: auto; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--popover)); color: hsl(var(--popover-foreground)); box-shadow: 0 16px 40px hsl(var(--background) / .6); }
-.circuit-pdf-version-list > header { display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border-bottom: 1px solid hsl(var(--border)); }
-.circuit-pdf-version-list > header > strong { font-size: 14px; }
-.circuit-pdf-version-list > header > span { color: hsl(var(--muted-foreground)); font-size: 12px; }
-.circuit-pdf-version-list li { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-bottom: 1px solid hsl(var(--border)); }
+.circuit-pdf-version-list { position: absolute; inset: 8px; z-index: 40; display: flex; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--background)); color: hsl(var(--foreground)); box-shadow: 0 16px 40px hsl(var(--background) / .6); }
+.circuit-pdf-version-list > header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid hsl(var(--border)); }
+.circuit-pdf-version-list > header > div { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.circuit-pdf-version-list > header strong { font-size: 18px; font-weight: 600; }
+.circuit-pdf-version-list > header span { color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 20px; }
+.circuit-pdf-version-list > header > button { flex: none; width: 40px; height: 40px; padding: 0; }
+.circuit-pdf-version-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px; }
+.circuit-pdf-version-body > section + section { margin-top: 24px; }
+.circuit-pdf-version-body h3 { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.circuit-pdf-version-body h3 > svg { width: 16px; height: 16px; }
+.circuit-pdf-version-body h3 > span { border-radius: 4px; padding: 2px 6px; background: hsl(var(--secondary)); color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 400; }
+.circuit-pdf-baseline-section { padding: 12px; border: 1px solid hsl(var(--warning) / .3); border-radius: 8px; background: hsl(var(--warning) / .04); }
+.circuit-pdf-baseline-section h3 { color: hsl(var(--warning)); }
+.circuit-pdf-baseline-section h3 > span { color: hsl(var(--warning)); background: hsl(var(--warning) / .08); }
+.circuit-pdf-baseline-section > p, .circuit-pdf-archived-section > p { color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 20px; }
+.circuit-pdf-version-list li { display: flex; min-width: 0; flex-direction: column; gap: 10px; padding: 12px 0; border-bottom: 1px solid hsl(var(--border)); }
 .circuit-pdf-version-list li:last-child { border-bottom: 0; }
-.circuit-pdf-version-list li[data-active="true"] { background: hsl(var(--primary) / .08); box-shadow: inset 3px 0 hsl(var(--primary)); }
-.circuit-pdf-version-open { display: grid; width: 100%; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; border: 0; padding: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.circuit-pdf-version-open > strong { font-size: 14px; font-variant-numeric: tabular-nums; }
-.circuit-pdf-version-open > span { min-width: 0; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.circuit-pdf-version-open > small { grid-column: 2; color: hsl(var(--muted-foreground)); font-size: 12px; }
-.circuit-pdf-version-edit { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
-.circuit-pdf-version-edit > label { display: flex; flex-direction: column; gap: 3px; color: hsl(var(--muted-foreground)); font-size: 12px; }
-.circuit-pdf-version-edit input { height: 34px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding: 0 8px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 13px; color-scheme: dark; }
-.circuit-pdf-version-edit > label:nth-child(2) input { width: 150px; }
-.circuit-pdf-version-edit > button { width: 36px; height: 34px; margin-left: auto; padding: 0; }
-.circuit-pdf-version-edit > .circuit-pdf-pin-official { width: auto; gap: 5px; padding-inline: 8px; color: hsl(var(--warning)); }
-.circuit-pdf-version-edit > .circuit-pdf-version-delete { color: hsl(var(--muted-foreground)); }
-.circuit-pdf-version-edit > .circuit-pdf-version-delete:hover { color: hsl(var(--destructive)); }
+.circuit-pdf-version-open { display: flex; width: 100%; min-width: 0; height: auto !important; min-height: 44px; align-items: center; justify-content: space-between; gap: 12px; border: 0; padding: 0 !important; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.circuit-pdf-version-open > span:first-child { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 5px; }
+.circuit-pdf-version-open strong { overflow-wrap: anywhere; font-size: 14px; font-weight: 600; line-height: 20px; }
+.circuit-pdf-version-open small { color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
+.circuit-pdf-open-label { display: flex; flex: none; align-items: center; gap: 3px; color: hsl(var(--primary)); font-size: 13px; white-space: nowrap; }
+.circuit-pdf-version-list li[data-active="true"] .circuit-pdf-open-label { padding: 5px 7px; border-radius: 5px; background: hsl(var(--primary) / .12); }
+.circuit-pdf-version-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.circuit-pdf-version-actions > button { height: 32px; padding-inline: 8px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-pdf-version-actions > .circuit-pdf-pin-official { color: hsl(var(--warning)); }
+.circuit-pdf-version-actions > .circuit-pdf-version-delete { margin-left: auto; }
+.circuit-pdf-version-actions > .circuit-pdf-version-delete:hover { color: hsl(var(--destructive)); }
+.circuit-pdf-version-edit { order: 2; display: flex; flex: 1 0 100%; flex-wrap: wrap; gap: 10px; padding: 12px; border-radius: 6px; background: hsl(var(--secondary) / .45); }
+.circuit-pdf-version-edit > label { display: flex; flex: 1 1 140px; min-width: 0; flex-direction: column; gap: 5px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-pdf-version-edit input { width: 100%; height: 36px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding: 0 8px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 14px; color-scheme: dark; }
+.circuit-pdf-version-edit > small { flex: 1 0 100%; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
 .circuit-pdf-official-confirm { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: 6px; color: hsl(var(--warning)); font-size: 12px; }
 .circuit-pdf-official-confirm > button { min-height: 36px; font-size: 12px; }
-.circuit-pdf-archived-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; padding: 10px 12px; color: hsl(var(--muted-foreground)); font-size: 13px; }
+.circuit-pdf-archived-section { padding-top: 16px; border-top: 1px solid hsl(var(--border)); }
+.circuit-pdf-archived-toggle { display: flex; width: 100%; min-height: 40px; align-items: center; justify-content: space-between; gap: 10px; color: hsl(var(--muted-foreground)); font-size: 13px; }
+.circuit-pdf-archived-toggle > span { display: flex; align-items: center; gap: 8px; }
+.circuit-pdf-archived-toggle > span > span { padding: 2px 6px; border-radius: 4px; background: hsl(var(--secondary)); font-size: 12px; font-variant-numeric: tabular-nums; }
+.circuit-pdf-archived-toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.circuit-pdf-archived-section li { flex-direction: row; align-items: center; gap: 12px; }
+.circuit-pdf-archived-section li > div { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 5px; }
+.circuit-pdf-archived-section li strong { overflow-wrap: anywhere; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 20px; }
+.circuit-pdf-archived-section li small { color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-pdf-archived-section li > button { flex: none; height: 36px; gap: 5px; padding-inline: 10px; color: hsl(var(--primary)); font-size: 12px; }
+.circuit-pdf-working-section > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 6px; }
+.circuit-pdf-working-section > header > button { height: 36px; gap: 5px; padding-inline: 10px; font-size: 13px; }
+.circuit-pdf-working-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 12px; text-align: center; }
+.circuit-pdf-working-empty > svg { width: 24px; height: 24px; color: hsl(var(--primary)); }
+.circuit-pdf-working-empty > strong { font-size: 14px; font-weight: 500; }
+.circuit-pdf-working-empty > p { max-width: 38ch; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 22px; }
+.circuit-pdf-version-feedback { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 14px; padding: 10px 12px; border: 1px solid hsl(var(--primary) / .3); border-radius: 6px; background: hsl(var(--primary) / .06); color: hsl(var(--primary)); font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+.circuit-pdf-version-feedback > svg { flex: none; width: 16px; height: 20px; }
+.circuit-pdf-version-feedback[role="alert"] { color: hsl(var(--warning)); border-color: hsl(var(--warning) / .3); background: hsl(var(--warning) / .05); }
 .circuit-pdf-remove-confirm { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: 6px; color: hsl(var(--muted-foreground)); font-size: 12px; }
 .circuit-pdf-remove-confirm > button { height: 32px; font-size: 12px; }
 
@@ -149,10 +180,13 @@
   .circuit-pdf-official > button { flex: 1 1 auto; min-height: 44px; }
   .circuit-pdf-empty-heading { display: flex; flex: none; align-items: center; gap: 4px; padding: 6px 12px; border-bottom: 1px solid hsl(var(--border)); font-size: 16px; }
   .circuit-pdf-toolbar { padding: 6px 12px; }
-  .circuit-pdf-toolbar { position: relative; }
   .circuit-pdf-versions { position: static; }
-  .circuit-pdf-version-list { left: 12px; right: 12px; width: auto; max-height: min(40dvh, 400px); }
-  .circuit-pdf-version-list > header { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .circuit-pdf-version-list { inset: 0; border: 0; border-radius: 0; }
+  .circuit-pdf-version-list > header { padding: 10px 12px; }
+  .circuit-pdf-version-list > header > button { width: 44px; height: 44px; }
+  .circuit-pdf-version-body { padding: 12px; }
+  .circuit-pdf-version-actions > button, .circuit-pdf-working-section > header > button, .circuit-pdf-archived-section li > button { min-height: 44px; }
+  .circuit-pdf-version-edit input { height: 44px; font-size: 16px; }
   .circuit-pdf-row button { height: 44px; }
   .circuit-pdf-pager > button, .circuit-pdf-zoom > button, .circuit-pdf-offset > button { width: 44px; }
   .circuit-pdf-overview { flex-wrap: wrap; gap: 0 10px; padding-top: 6px; }
