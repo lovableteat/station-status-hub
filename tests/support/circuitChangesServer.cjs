@@ -2,6 +2,7 @@ const { randomUUID } = require('node:crypto');
 
 function createCircuitChangesServer() {
   const state = { sets: new Map(), items: new Map(), events: new Map(), files: new Map(), failedNames: new Set(), calls: [], conflictItem: null, sseDelivered: 0, pdfRegistries: new Map(), pdfVersions: new Map(), pdfOfficials: new Map(), pdfs: new Map(), pdfWrites: 0, pdfConflicts: 0, pdfWriteDelay: 0 };
+  Object.assign(state, { inkRows: new Map(), inkCalls: [], inkWrites: 0, inkFailWrites: false, inkWriteDelay: 0 });
   const clients = new Set();
   let lastStamp = Date.now();
   const clone = value => structuredClone(value);
@@ -103,12 +104,36 @@ function createCircuitChangesServer() {
         const { method, args = [] } = JSON.parse((await body(req)).toString());
         return json(res, 200, { data: run(method, args, account) });
       }
+      if (url.pathname === '/__circuit/ink-preference') {
+        const input = JSON.parse((await body(req)).toString()), {method,key,payload,version} = input;
+        if (!String(key).startsWith('circuit-pdf-ink:')) fail(400, 'Invalid isolated ink preference key');
+        state.inkCalls.push({method,key,account});
+        const row = state.inkRows.get(key);
+        if (method === 'select') return json(res, 200, {data:clone(row || null),error:null});
+        if (account === 'view') return json(res, 200, {data:null,error:{code:'42501',message:'QA no ink edit permission'}});
+        if (state.inkFailWrites) return json(res, 200, {data:null,error:{code:'QA503',message:'QA simulated ink save failure'}});
+        if (state.inkWriteDelay) await new Promise(resolve=>setTimeout(resolve,state.inkWriteDelay));
+        if (method === 'insert') {
+          if (state.inkRows.has(key)) return json(res, 200, {data:null,error:{code:'23505',message:'QA ink row exists'}});
+          state.inkRows.set(key,{...clone(payload),updated_at:stamp()}); state.inkWrites++;
+          return json(res, 200, {data:null,error:null});
+        }
+        if (method === 'update') {
+          if (state.inkRows.get(key)?.updated_at !== version) return json(res, 200, {data:[],error:null});
+          state.inkRows.set(key,{...clone(payload),table_key:key}); state.inkWrites++;
+          return json(res, 200, {data:[{table_key:key}],error:null});
+        }
+        fail(400,'Unknown isolated ink preference method');
+      }
       if (url.pathname === '/__circuit/state') return json(res, 200, { sets:[...state.sets.values()], items:[...state.items.values()], events:[...state.events.values()], files:[...state.files.keys()],pdfRegistries:Object.fromEntries(state.pdfRegistries),pdfOfficials:Object.fromEntries(state.pdfOfficials),pdfs:[...state.pdfs.keys()],pdfWrites:state.pdfWrites,pdfConflicts:state.pdfConflicts, objects:[...state.files].map(([path,file])=>({path,size:file.bytes.length,type:file.mime})), calls:state.calls, sseDelivered:state.sseDelivered });
       if (url.pathname === '/__circuit/control') {
         const input = JSON.parse((await body(req)).toString() || '{}');
         if (input.action === 'reset') { for (const key of ['sets','items','events','files','pdfRegistries','pdfVersions','pdfOfficials','pdfs']) state[key].clear(); state.pdfWrites = 0; state.pdfConflicts = 0; state.pdfWriteDelay = 0; state.failedNames.clear(); state.calls.length = 0; state.conflictItem = null; state.sseDelivered = 0; }
         if (input.action === 'conflict_next_save') state.conflictItem = input.itemId || true;
+        if (input.action === 'reset') { state.inkRows.clear(); state.inkCalls.length=0; state.inkWrites=0; state.inkFailWrites=false; state.inkWriteDelay=0; }
         if (input.action === 'pdf_write_delay') state.pdfWriteDelay = Number(input.ms) || 0;
+        if (input.action === 'ink_fail_writes') state.inkFailWrites = Boolean(input.fail);
+        if (input.action === 'ink_write_delay') state.inkWriteDelay = Number(input.ms) || 0;
         if (input.action === 'bump') { const item = getItem(input.itemId); item.content = {...item.content, ...(input.patch || {})}; item.revision++; item.updatedAt=stamp(); record(item,'edited','B'); }
         return json(res, 200, {ok:true});
       }

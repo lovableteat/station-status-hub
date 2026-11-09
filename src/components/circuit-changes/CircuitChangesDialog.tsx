@@ -8,6 +8,7 @@ import { CIRCUIT_IMAGE_URL_REUSE_MS, circuitImageOrigins, createCircuitImageUrls
 import { parseCircuitPageNumbers } from "./circuitPdf";
 import { CircuitPdfPanel, type CircuitPdfCapture, type CircuitPdfCrop } from "./CircuitPdfPanel";
 import type { CircuitPdfModel } from "./useCircuitPdfs";
+import type { CircuitPdfInkModel } from "./useCircuitPdfInk";
 import { exportCircuitChangeList } from "./export";
 import { CircuitChangeImages, type CircuitImageUrls } from "./CircuitChangeImages";
 import { CircuitChangeImageViewer } from "./CircuitChangeImageViewer";
@@ -42,8 +43,8 @@ function readLayout(): { pdf: boolean; detail: boolean; list: "auto" | "open" | 
 }
 function writeLayout(value: ReturnType<typeof readLayout>) { try { window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(value)); } catch { /* layout only */ } }
 
-export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, model, pdfs, onAiReview }: {
-  open: boolean; onOpenChange: (value: boolean) => void; context: CircuitChangeContext; canEdit: boolean; model: CircuitChangesModel; pdfs: CircuitPdfModel; onAiReview?: () => void;
+export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, model, pdfs, pdfInk, onAiReview }: {
+  open: boolean; onOpenChange: (value: boolean) => void; context: CircuitChangeContext; canEdit: boolean; model: CircuitChangesModel; pdfs: CircuitPdfModel; pdfInk?: CircuitPdfInkModel; onAiReview?: () => void;
 }) {
   const naming = useMemo(() => defaultCircuitChangeSet(context.versionLabel), [context.versionLabel]);
   const [filters, setFilters] = useState(readFilters);
@@ -406,7 +407,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
             </div>
             </>}
           </aside>
-          {pdfOpen && <CircuitPdfPanel pdfs={pdfs} canEdit={canEdit} captureBlocked={captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops} versionsOpen={versionsOpen} onVersionsOpenChange={setVersionsOpen} versionsOpener={versionsOpener}
+          {pdfOpen && <CircuitPdfPanel pdfs={pdfs} ink={pdfInk} canEdit={canEdit} captureBlocked={captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops} versionsOpen={versionsOpen} onVersionsOpenChange={setVersionsOpen} versionsOpener={versionsOpener}
             onCapture={addCaptures} onSelectChange={selectItem} onBack={() => { setVersionsOpen(false); setMobilePdf(false); }} />}
           <section ref={detailPanel} id="circuit-change-detail" className="circuit-detail" hidden={detailCollapsed} aria-label="線路修改內容" data-testid="circuit-change-detail" aria-busy={model.switching}>
             {content && item ? <>
@@ -522,7 +523,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           <section><h3>先分清楚官方基準、工作 PDF 與改版紀錄</h3><p>官方基準是你明確指定的參考原檔；「新增 PDF」會保留全部舊版，也不會換掉官方基準。改版紀錄只把同一次改動的項目集中管理，不會切換 BOM 或自動更換 PDF。</p></section>
           <section><h3>逐頁怎麼比對與初審？</h3><p>先在 PDF 區指定官方基準，再選工作 PDF，按「與官方比對」並核對兩邊頁碼。頁面新增或刪除時，請調整「官方對應頁」。按「AI 逐頁初審」會用這兩頁的圖像與文字核對可見的連接性、Net 與名稱差異；每項保留位置、前後依據與建議，你可逐項判讀並保存。AI 結果與人工 Review 分開，PDF 初審不能取代原始 Netlist／ERC 的電氣連通驗證。</p></section>
           <ol className="circuit-start-steps">{guideSteps.map((step, index) => <li key={step.title}><span>{index + 1}</span><div><strong>{step.title}</strong><p>{step.text}</p></div></li>)}</ol>
-          <section><h3>PDF 怎麼用？</h3><p>按右上的「PDF 圖面」上傳原理圖 PDF（可拖入，每份 50 MB 內存到雲端，更大的只在這台電腦開啟，不需壓縮）。日期先取檔名裡的日期，沒有就用檔案日期，可在版本清單修改。上傳錯了就按版本選擇旁的垃圾桶刪除（已加入的截圖保留，可從版本清單的「已刪除的 PDF」還原）。在頁面上拖曳框選一塊區域，按「加到修改前／修改後」，圖會從 PDF 重新繪製，放大也清楚，並記下來源版本與頁碼；這項的頁碼欄若是空的會自動填入。選「對照」可以並排一份較早日期的 PDF，同一個框選區域一次加到修改前與修改後。按「看完，下一頁」記下進度；上方的頁面總覽會分別標出這版看過、較早版本看過與有修改的頁面，明天上傳新的 PDF 會從你看到的那一頁接續。按圖片旁的「P12」可回到該頁。</p></section>
+          <section><h3>PDF 怎麼用？</h3><p>按右上的「PDF 圖面」上傳原理圖 PDF（可拖入，每份 50 MB 內存到雲端，更大的只在這台電腦開啟，不需壓縮）。日期先取檔名裡的日期，沒有就用檔案日期，可在版本清單修改。上傳錯了就按版本選擇旁的垃圾桶刪除（已加入的截圖保留，可從版本清單的「已刪除的 PDF」還原）。在頁面上拖曳框選一塊區域，按「加到修改前／修改後」，圖會從 PDF 重新繪製，放大也清楚，並記下來源版本與頁碼；這項的頁碼欄若是空的會自動填入。工具列的「畫筆」可直接畫線，放開後依版本與頁碼自動儲存；用「橡皮擦」點掉筆跡，或撤回最後一筆。縮放不會改變標註位置，加入截圖時會帶上筆跡；PDF 原圖不變。選「對照」可以並排一份較早日期的 PDF，同一個框選區域一次加到修改前與修改後。按「看完，下一頁」記下進度；上方的頁面總覽會分別標出這版看過、較早版本看過與有修改的頁面，明天上傳新的 PDF 會從你看到的那一頁接續。按圖片旁的「P12」可回到該頁。</p></section>
           <section><h3>1. 怎麼新增？</h3><p>打開「線路修改」就能直接填寫；之後按左上的「新增修改」再記下一項。每一處修改各一項，填入標題、Ref／Net、頁碼、負責人及修改原因。還沒輸入任何內容的新修改不會留下紀錄。</p></section>
           <section><h3>2. 怎麼貼圖、標記？</h3><p>截圖後按 Ctrl+V，圖會加到標示「貼上會加到這裡」的那一格；點另一格即可切換，也可以把檔案拖到想放的那一格。每次加入都是追加，每項最多 200 張、每張 50 MB，不需壓縮。點圖片放大，使用「位置標記」或「框選」標出改動並填寫說明；放錯格可在放大視窗改「圖片用途」。</p></section>
           <section><h3>3. 怎麼儲存與交給主管 Review？</h3><p>停止輸入後會自動儲存，下方顯示「已儲存」。標題加上修改說明（或修改後圖片）齊全後，按「送出 Review」。有料號申請編輯權限的人可逐項「確認」，或填寫意見後「退回補充」；退回原因會顯示在該項目最上方。按「歷史」可查看操作者、時間、意見及舊修訂。</p></section>
