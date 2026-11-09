@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type FormEvent } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, HelpCircle, ListCollapse, MessageSquare, PanelLeftOpen, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, HelpCircle, MessageSquare, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -354,7 +354,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
               <span title={`共 ${model.items.length} 項修改`}>{model.items.length}<small>項</small></span>
             </div> : <>
             {canEdit && <div className="circuit-new-item-row"><Button type="button" className="circuit-new-item" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" />新增修改</Button>
-              {wide && pdfOpen && <Button type="button" variant="ghost" className="circuit-list-collapse" aria-label="收合修改清單" title="收合清單，讓 PDF 更寬" onClick={() => changeLayout({ list: "collapsed" })}><ListCollapse aria-hidden="true" /></Button>}</div>}
+              {wide && pdfOpen && <Button type="button" variant="outline" className="circuit-list-collapse" aria-label="收合修改清單" title="收合清單，讓 PDF 更寬" onClick={() => changeLayout({ list: "collapsed" })}><PanelLeftClose aria-hidden="true" /></Button>}</div>}
             <div className="circuit-filter-bar" role="group" aria-label="線路修改篩選">
               <label className="circuit-search"><Search aria-hidden="true" /><Input aria-label="搜尋線路修改" placeholder="搜尋編號、標題、Ref 或 Net" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} /></label>
               <label><span className="sr-only">狀態</span><select aria-label="篩選修改狀態" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value }))}>
@@ -369,15 +369,16 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
               <Button type="button" variant="ghost" onClick={() => setFilters({ query: "", status: "all", owner: "all" })}>全部清除</Button>
             </div>}
             <div className="circuit-item-list" aria-label="修改項目清單" aria-busy={model.loading}>
-              <div className="circuit-list-heading"><span>編號／修改項目</span><span className="circuit-result-count">{filtered.length} / {model.items.length} 項</span><span>狀態</span></div>
+              <div className="circuit-list-heading"><span>編號</span><span className="circuit-list-heading-title">修改項目<span className="circuit-result-count">{filtered.length === model.items.length ? `${model.items.length} 項` : `${filtered.length} / ${model.items.length} 項`}</span></span><span>狀態</span></div>
               {filtered.map(row => <button type="button" key={row.id} data-testid="circuit-change-item" className="circuit-item" aria-pressed={row.id === model.selectedItemId} disabled={busy} onClick={() => selectItem(row.id)}>
                 <span className="circuit-item-number">{number(row.number)}</span>
                 <span className="circuit-item-title"><strong>{row.content.title || "未命名修改"}</strong><small>{[row.content.refs || row.content.net, row.content.owner].filter(Boolean).join(" · ") || "尚未補充位置"}{row.imageCount ? ` · ${row.imageCount} 張圖` : ""}</small></span>
                 <span className="circuit-list-status" data-status={row.status}>{CIRCUIT_CHANGE_STATUS_LABELS[row.status]}</span>
               </button>)}
               {unsaved && <button type="button" data-testid="circuit-change-unsaved" className="circuit-item circuit-item-unsaved" aria-pressed="true" onClick={() => setMobileDetail(true)}>
-                <span className="circuit-item-number">新</span>
-                <span className="circuit-item-title"><strong>{model.draft?.title || "新修改"}</strong><small>{model.dirty ? "儲存中，稍後取得編號" : "尚未儲存，輸入內容後自動建立"}</small></span>
+                <span className="circuit-item-number" aria-label="尚未編號">—</span>
+                <span className="circuit-item-title"><strong>{model.draft?.title || "新修改"}</strong><small>{model.dirty ? "建立後取得編號" : "輸入內容後自動建立"}</small></span>
+                <span className="circuit-list-status" data-status="unsaved">{model.dirty ? "儲存中" : "尚未儲存"}</span>
               </button>}
               {model.loading && !model.items.length ? <p className="circuit-empty">正在載入修改項目…</p>
                 : model.items.length > 0 && !filtered.length ? <p className="circuit-empty">目前篩選條件沒有符合的修改項目</p>
