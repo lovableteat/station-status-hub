@@ -173,7 +173,7 @@ test("an explicit official PDF stays pinned across uploads, groups and reopening
     assert.equal(view.model.officialPage, 12, "the user can explicitly match a differently numbered page");
     assert.equal(view.store.row.documents.length, 3);
     assert.equal(view.store.row.official, undefined, "the unprotected preference row does not choose the official version");
-    await assert.rejects(async () => { await act(async () => { await view.model.removeDocument("official"); }); }, /官方基準不能封存/);
+    await assert.rejects(async () => { await act(async () => { await view.model.removeDocument("official"); }); }, /官方基準不能刪除/);
     await view.update({ open: false }); await view.update({ open: true });
     assert.equal(view.model.official.id, "official");
     const baseline = json(view.model.official);

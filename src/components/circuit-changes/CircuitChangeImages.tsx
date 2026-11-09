@@ -31,7 +31,7 @@ export function CircuitChangeImages({ images, urls, side, dragSide, readOnly, bu
     <header className="circuit-image-heading">
       <h3>修改前後對照</h3>
       <span>{images.length} 張</span>
-      <p className="circuit-upload-hint">{readOnly ? "點圖片可放大查看標記，也可下載原圖。" : <><span className="circuit-wide-copy">截圖後直接貼上（Ctrl+V），或把圖片拖到要放的那一格。</span><span className="circuit-compact-copy">選「修改前」或「修改後」，再點下方區塊選取圖片。</span>每項最多 200 張、每張 50 MB，不需壓縮。</>}</p>
+      <p className="circuit-upload-hint" title={readOnly ? undefined : "截圖後按 Ctrl+V 貼上，或把圖片拖到要放的那一格；每項最多 200 張、每張 50 MB，不需壓縮。"}>{readOnly ? "點圖片可放大查看標記，也可下載原圖。" : <><span className="circuit-wide-copy">每項最多 200 張、每張 50 MB</span><span className="circuit-compact-copy">選「修改前」或「修改後」，再點下方區塊選取圖片。每項最多 200 張、每張 50 MB，不需壓縮。</span></>}</p>
     </header>
     <div className="circuit-image-controls">
       <div role="group" aria-label="圖片用途">
@@ -80,7 +80,7 @@ function Pane({ side, images, urls, active, dropping, readOnly, busy, onSide, on
   const empty = <button type="button" className="circuit-image-empty" aria-label={`加入${label}圖片`} disabled={readOnly || busy} onFocus={() => onSide(side)} onClick={() => onPick(side)}>
     <ImagePlus aria-hidden="true" />
     {readOnly ? <span>未提供圖片</span> : <>
-      <span className="circuit-wide-copy">{compact ? "加入補充圖：規格書截圖、量測波形等（可貼上、拖入或點此選取）" : `貼上${label}的截圖（Ctrl+V）、拖入圖片，或點這裡選取`}</span>
+      <span className="circuit-wide-copy">{compact ? "補充圖：規格書、量測波形等，貼上或點這裡選取" : "貼上（Ctrl+V）、拖入或點這裡選取"}</span>
       <span className="circuit-compact-copy">{compact ? "點這裡加入補充圖：規格書截圖、量測波形等" : `點這裡選取${label}的圖片`}</span>
     </>}
   </button>;

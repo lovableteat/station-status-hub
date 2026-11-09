@@ -125,7 +125,7 @@ test("a returned change shows its reason first and cannot be sent until the requ
   try {
     const reason = root.root.findByProps({ className: "circuit-returned" });
     assert.ok(textOf(reason).includes("請補量測波形") && textOf(reason).includes("審查主管"));
-    assert.ok(text().includes("送出前還缺：") && text().includes("修改標題") && text().includes("修改說明或修改後圖片"));
+    assert.ok(text().includes("還缺：") && text().includes("修改標題") && text().includes("修改說明或修改後圖片"));
     assert.equal(button("送出 Review").props.disabled, true);
     await act(async () => { button("送出 Review").props.onClick(); });
     assert.equal(calls.filter(call => call[0] === "review").length, 0, "an incomplete change never reaches the server");
@@ -188,7 +188,8 @@ test("with nothing recorded an editor gets the form straight away and a viewer g
     assert.equal(editor.root.root.findAllByProps({ "data-testid": "circuit-change-item" }).length, 0);
     assert.equal(editor.root.root.findAllByProps({ "aria-label": "修改標題" }, { deep: false }).length, 1, "the form is there on first open");
     assert.equal(editor.pane("before").findAllByProps({ "aria-label": "加入修改前圖片" }).length, 1, "and so is a visible place to add pictures");
-    assert.equal(editor.root.root.findAllByProps({ "data-testid": "circuit-change-unsaved" }).length, 1);
+    assert.equal(editor.root.root.findAllByProps({ "data-testid": "circuit-change-unsaved" }).length, 0, "the blank form is the new change; the list has no placeholder row");
+    assert.ok(editor.text().includes("還沒有修改；在右邊填寫就會建立第一項"));
     assert.ok(editor.text().includes("V1 → V2 線路修改") && editor.text().includes("記錄第一項時自動建立"));
     assert.ok(editor.text().includes("輸入後自動儲存"));
     assert.equal(editor.root.root.findAll(node => node.type === "stub" && typeof node.props.onClick === "function" && Array.isArray(node.props.children) && node.props.children.includes("新增修改")).length, 1, "one way to start a change");

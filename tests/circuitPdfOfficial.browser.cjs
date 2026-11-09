@@ -76,7 +76,7 @@ async function rendered(page) {
     assert.equal(baselineSnapshot.name, 'Official_20261101.pdf');
     const official = panel(page).getByTestId('circuit-pdf-official');
     assert.match(await official.innerText(), /Official_20261101\.pdf/);
-    assert.equal(await panel(page).getByRole('button', { name: '封存 PDF：Official_20261101.pdf', exact: true }).count(), 0, 'The official original cannot be archived');
+    assert.equal(await panel(page).getByRole('button', { name: '刪除 PDF：Official_20261101.pdf', exact: true }).count(), 0, 'The official original cannot be deleted');
     await page.keyboard.press('Escape');
     report.checks.push('first upload is not silently official; explicit official baseline persists');
 
@@ -92,11 +92,11 @@ async function rendered(page) {
     report.checks.push('two newer working revisions retain the same official pointer and all three original PDFs');
 
     await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
-    await panel(page).getByRole('button', { name: '封存 PDF：Working_20261108.pdf', exact: true }).click();
-    await panel(page).getByRole('button', { name: '確認封存 11/08 版', exact: true }).click();
+    await panel(page).getByRole('button', { name: '刪除 PDF：Working_20261108.pdf', exact: true }).click();
+    await panel(page).getByRole('button', { name: '確認刪除 11/08 版', exact: true }).click();
     await eventually(() => registry().documents.find(row => row.name === 'Working_20261108.pdf')?.removedAt, 'Archiving must persist without deleting the original');
     assert.equal(fixture.state.pdfs.size, 3);
-    await panel(page).getByRole('button', { name: /已封存 PDF/ }).click();
+    await panel(page).getByRole('button', { name: /已刪除的 PDF/ }).click();
     await panel(page).getByRole('button', { name: '還原 PDF：Working_20261108.pdf', exact: true }).click();
     await eventually(() => !registry().documents.find(row => row.name === 'Working_20261108.pdf')?.removedAt, 'An archived working PDF must be restorable');
     assert.equal(fixture.state.pdfs.size, 3); assert.equal(fixture.state.pdfOfficials.get('series:qa').documentId, baselineId);

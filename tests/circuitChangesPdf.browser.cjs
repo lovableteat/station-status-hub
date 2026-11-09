@@ -189,7 +189,7 @@ async function eventually(check, message, timeout = 8000) {
     await panel(p).getByRole('button', {name:'對照頁往前一頁', exact:true}).click();
     assert.equal(await panel(p).locator('.circuit-pdf-offset > span').innerText(), '第 4 頁');
     await dialog(p).getByRole('button', {name:'新增修改', exact:true}).click();
-    await dialog(p).getByText('填寫內容或貼上圖片就會自動建立').waitFor();
+    await dialog(p).getByText('填寫後自動建立', {exact:true}).waitFor();
     await panel(p).getByRole('button', {name:'下一頁', exact:true}).click(); await onPage(p, 5); await rendered(p);
     assert.equal(await panel(p).locator('figure[data-pane="compare"] figcaption').innerText(), '自選對照 · 11/07 版 第1天 第 5 頁');
     await frame(p, 0);
@@ -274,8 +274,8 @@ async function eventually(check, message, timeout = 8000) {
 
     // --- Archiving a version: it leaves the main list while its original and pictures stay.
     await panel(p).getByRole('button', {name:'選擇 PDF 版本', exact:true}).click();
-    await panel(p).getByRole('button', {name:'封存 PDF：Vera_SCH_20261108.pdf', exact:true}).click();
-    await panel(p).getByRole('button', {name:'確認封存 11/07 版 第1天', exact:true}).click();
+    await panel(p).getByRole('button', {name:'刪除 PDF：Vera_SCH_20261108.pdf', exact:true}).click();
+    await panel(p).getByRole('button', {name:'確認刪除 11/07 版 第1天', exact:true}).click();
     await eventually(async () => (await registryOf(origin)).documents.find(row => row.date === '2026-11-07')?.removedAt, 'the version is marked removed');
     await eventually(async () => (await stateOf(origin)).pdfs.every(name => !name.includes(big.id)) && (await stateOf(origin)).pdfs.length === objectsBefore, 'archiving keeps the original PDF file');
     await p.keyboard.press('Escape');
@@ -286,6 +286,29 @@ async function eventually(check, message, timeout = 8000) {
     await dialog(p).getByRole('alert').filter({hasText:'已從清單移除'}).waitFor();
     assert.equal((await stateOf(origin)).items.find(row => row.number === 2).content.images.filter(image => image.side === 'before').length, 2);
     check('archiving a version: hidden from the main list, its original and pictures kept, and P5 explains where it went');
+
+    // --- 刪除 beside the version picker: it asks first, Escape or 取消 keep the PDF, 刪除 hides it, and it can be restored.
+    const shownName = async () => (await panel(p).getByRole('button', {name:'選擇 PDF 版本', exact:true}).getAttribute('title')).split(' · ')[0];
+    const doomed = await shownName();
+    const deleteButton = panel(p).getByRole('button', {name:'刪除這份 PDF', exact:true});
+    await deleteButton.click();
+    const confirmBar = panel(p).getByRole('group', {name:'確認刪除 PDF'});
+    assert.ok((await confirmBar.innerText()).includes(doomed), 'the confirmation names the PDF');
+    await confirmBar.getByRole('button', {name:'取消', exact:true}).click();
+    await confirmBar.waitFor({state:'hidden'});
+    await deleteButton.click(); await confirmBar.waitFor();
+    await p.keyboard.press('Escape'); await confirmBar.waitFor({state:'hidden'});
+    assert.equal(await dialog(p).isVisible(), true, 'Escape cancels the deletion, not the window');
+    assert.ok(!(await registryOf(origin)).documents.find(row => row.name === doomed)?.removedAt, 'cancelling deletes nothing');
+    await deleteButton.click();
+    await confirmBar.getByRole('button', {name:'確認刪除 ' + doomed, exact:true}).click();
+    await eventually(async () => (await registryOf(origin)).documents.find(row => row.name === doomed)?.removedAt, 'the PDF is deleted from the list');
+    await panel(p).getByRole('button', {name:'選擇 PDF 版本', exact:true}).click();
+    await panel(p).getByRole('button', {name:/已刪除的 PDF/}).click();
+    await panel(p).getByRole('button', {name:'還原 PDF：' + doomed, exact:true}).click();
+    await eventually(async () => !(await registryOf(origin)).documents.find(row => row.name === doomed)?.removedAt, 'the deleted PDF is restored');
+    await p.keyboard.press('Escape');
+    check('刪除 beside the version picker: named confirmation, 取消 and Escape keep the PDF, 刪除 removes it, 還原 brings it back');
 
     // --- The picture's page button from a version that is still there, and closing the pane.
     await dialog(p).locator('.circuit-image-column[data-side="after"]').getByRole('button', {name:/到 PDF 第 5 頁（2026-11-09）/}).click();
