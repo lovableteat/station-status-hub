@@ -19,10 +19,13 @@ async function openTools(page) {
   return sheet;
 }
 
+// Dialogs close with the shared corner button, whose name is Close. The upload guide hides that one and puts its own in the header.
+const OWN_CLOSE_BUTTON = { '上傳說明・CE／RD 交付規格': '關閉上傳說明' };
+
 async function closeDialog(page, heading) {
   const dialog = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: heading, exact: true }) });
   await dialog.waitFor();
-  await dialog.getByRole('button', { name: 'Close', exact: true }).tap();
+  await dialog.getByRole('button', { name: OWN_CLOSE_BUTTON[heading] ?? 'Close', exact: true }).tap();
   await dialog.waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: '排序與工具', exact: true }).waitFor();
 }
