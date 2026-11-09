@@ -68,12 +68,16 @@ test('overview and count questions do not become literal filters; named BOM stat
     const client = database(); await k.searchSiteKnowledge({ ...options(client), query: question });
     assert.ok(client.calls.filter(call => call.table.startsWith('material_bom')).every(call => !call.filter));
   }
-  const client = database({ material_bom_workspaces: { data: [{ id: 'vera-cpu', name: 'Vera CPU' }], count: 1, error: null } });
+  const client = database({ material_bom_workspaces: { data: [{ id: 'vera-cpu', name: 'Vera CPU' }], count: 1, error: null }, material_bom_records: { data: [{ record_id:'r1', mpn:'CPU-PART', status:null }], count:1, error:null } });
   const report = await k.searchSiteKnowledge({ ...options(client), query: 'Vera CPU 的未處理料件' });
   const parts = client.calls.find(call => call.table === 'material_bom_records');
+  const bomFilter = client.calls.find(call => call.table === 'material_bom_workspaces').filter;
+  assert.equal(bomFilter, 'and(or(name.ilike.%vera%,source_file.ilike.%vera%),or(name.ilike.%cpu%,source_file.ilike.%cpu%))', 'A named BOM must match all name terms, so Vera GPU cannot enter the Vera CPU scope');
   assert.equal(parts.in[0], 'workspace_id'); assert.deepEqual(Array.from(parts.in[1]), ['vera-cpu']);
   assert.match(parts.filter, /trackingStatus.eq.未處理/);
   assert.ok(!parts.filter.includes('Vera')); assert.ok(report.sources.find(source => source.label === 'BOM 料件與追蹤').note.includes('已限定'));
+  assert.ok(report.citations.some(item => item.content.includes('未處理（儲存狀態空白）')));
+  assert.match(k.buildSiteKnowledgeContext(report), /不表示缺少料號或已提出申請/);
 });
 
 
