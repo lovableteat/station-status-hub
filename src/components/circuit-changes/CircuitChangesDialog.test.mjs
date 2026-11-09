@@ -27,6 +27,38 @@ function mount(overrides = {}, search = "?workspace=material-requests&project=A"
   const update = patch => act(() => root.update(React.createElement(CircuitChangesDialog, { ...all, model: { ...model, ...patch } })));
   return { root, model, props: all, calls, window, text, button, pane, update, origins };
 }
+test("header baseline opens the PDF manager and AI keeps the existing enablement and callback", () => {
+  let aiCalls = 0;
+  const pdfs = { documents: [], official: { id: "official", name: "Official.pdf" }, active: { id: "working" }, officialPdf: {}, activePdf: {}, officialPage: 1, opening: false };
+  const view = mount({}, undefined, { pdfs, onAiReview: () => aiCalls++ });
+  try {
+    const byLabel = label => view.root.root.findByProps({ "aria-label": label });
+    const pdfProps = () => view.root.root.findByProps({ "data-testid": "circuit-pdf-panel" }).props.pdfprops;
+    const opener = { focus() {} };
+    assert.match(byLabel("官方基準").props.title, /Official.pdf/);
+    act(() => byLabel("PDF 圖面").props.onClick());
+    assert.equal(view.root.root.findAllByProps({ "data-testid": "circuit-pdf-panel" }).length, 0);
+    act(() => byLabel("官方基準").props.onClick({ currentTarget: opener }));
+    assert.equal(pdfProps().versionsOpen, true);
+    assert.equal(pdfProps().versionsOpener.current, opener);
+    act(() => pdfProps().onVersionsOpenChange(false));
+    assert.equal(byLabel("官方基準").props["aria-expanded"], false);
+    act(() => byLabel("官方基準").props.onClick({ currentTarget: opener }));
+    assert.equal(pdfProps().versionsOpen, true);
+    act(() => byLabel("PDF 圖面").props.onClick());
+    assert.equal(byLabel("官方基準").props["aria-expanded"], false);
+    assert.equal(byLabel("AI 逐頁初審").props.disabled, false);
+    act(() => byLabel("AI 逐頁初審").props.onClick());
+    assert.equal(aiCalls, 1);
+    pdfs.officialPage = 0; view.update({});
+    assert.equal(byLabel("AI 逐頁初審").props.disabled, true);
+    assert.match(byLabel("AI 逐頁初審").props.title, /官方對應頁/);
+    pdfs.official = null; view.update({});
+    assert.equal(byLabel("AI 逐頁初審").props.disabled, true);
+    assert.equal(view.calls.some(call => ["save", "review", "draft"].includes(call[0])), false);
+  } finally { act(() => view.root.unmount()); }
+});
+
 test("collapsing the detail preserves mounted content and Review notes without saving or reviewing", async () => {
   const view = mount();
   try {
