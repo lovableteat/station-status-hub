@@ -18,7 +18,7 @@ function mount(overrides = {}, search = "?workspace=material-requests&project=A"
   const origins = new WeakMap();
   const pdfs = { documents: [], show: (documentId, page) => { calls.push(["show", documentId, page]); return documentId !== "gone"; }, upload: done("uploadPdf") };
   const model = { sets: [set], selectedSetId: "set", items: [first, second], selectedItemId: first.id, selectedItem: first, draft: first.content, events: [event], loading: false, saving: false, uploading: false, switching: false, dirty: false, conflict: false, error: "", saveError: "", uploadProgress: { completed: 0, total: 0 }, uploadFailures: [], uploadWarnings: [], selectSet: done("set"), selectItem: done("select"), createSet: done("createSet"), createItem: done("createItem"), updateDraft: patch => calls.push(["draft", patch]), saveDraft: done("save"), review: done("review"), addImages: done("images"), retryUploads: done("retry"), dismissUploadFailures: () => calls.push(["dismiss"]), reload: done("reload"), adoptRemote: () => calls.push(["adopt"]), saveMyRevision: done("mine"), loadEvent: async id => { calls.push(["event", id]); return { ...event, snapshot: { ...first, revision: 2, content: content("歷史線路內容") } }; }, ...overrides };
-  const { CircuitChangesDialog } = loader({ window, globals: { Error }, mocks: { "./CircuitPdfPanel": { CircuitPdfPanel: props => React.createElement("stub", { "data-testid": "circuit-pdf-panel", pdfprops: props }) }, "./files": { circuitImageOrigins: origins, CIRCUIT_IMAGE_URL_REUSE_MS: 1500000, createCircuitImageUrls: async () => ({}), downloadCircuitImage: done("download") }, "./export": { exportCircuitChangeList: done("export") }, "./CircuitChangeImageViewer": { CircuitChangeImageViewer: () => null } } })("src/components/circuit-changes/CircuitChangesDialog.tsx");
+  const { CircuitChangesDialog } = loader({ window, globals: { Error, requestAnimationFrame: callback => callback() }, mocks: { "./CircuitPdfPanel": { CircuitPdfPanel: props => React.createElement("stub", { "data-testid": "circuit-pdf-panel", pdfprops: props }) }, "./files": { circuitImageOrigins: origins, CIRCUIT_IMAGE_URL_REUSE_MS: 1500000, createCircuitImageUrls: async () => ({}), downloadCircuitImage: done("download") }, "./export": { exportCircuitChangeList: done("export") }, "./CircuitChangeImageViewer": { CircuitChangeImageViewer: () => null } } })("src/components/circuit-changes/CircuitChangesDialog.tsx");
   const all = { open: true, onOpenChange: value => calls.push(["open", value]), context: { seriesId: "board", workspaceId: "bom", workspaceName: "Board.xlsx", versionLabel: "V1" }, canEdit: true, model, pdfs, ...props };
   let root; act(() => { root = create(React.createElement(CircuitChangesDialog, all)); });
   const text = () => JSON.stringify(root.toJSON());
@@ -27,6 +27,39 @@ function mount(overrides = {}, search = "?workspace=material-requests&project=A"
   const update = patch => act(() => root.update(React.createElement(CircuitChangesDialog, { ...all, model: { ...model, ...patch } })));
   return { root, model, props: all, calls, window, text, button, pane, update, origins };
 }
+test("collapsing the detail preserves mounted content and Review notes without saving or reviewing", async () => {
+  const view = mount();
+  try {
+    const detail = view.root.root.findByProps({ "data-testid": "circuit-change-detail" });
+    const note = view.root.root.findByProps({ "aria-label": "Review 意見或退回原因" });
+    const title = view.root.root.findByProps({ "aria-label": "修改標題" });
+    act(() => note.props.onChange({ target: { value: "請核對 VCC 接線，尚未送出。" } }));
+    for (let cycle = 0; cycle < 2; cycle++) {
+      act(() => view.root.root.findByProps({ "aria-label": "收合修改內容" }).props.onClick());
+      assert.equal(detail.props.hidden, true);
+      assert.equal(view.root.root.findByProps({ "aria-label": "展開修改內容" }).props["aria-expanded"], false);
+      assert.equal(JSON.parse(view.window.localStorage.getItem("circuit-changes-layout:v1")).detail, false);
+      act(() => view.root.root.findByProps({ "aria-label": "展開修改內容" }).props.onClick());
+      assert.equal(detail.props.hidden, false);
+      assert.equal(view.root.root.findByProps({ "data-testid": "circuit-change-detail" }), detail);
+      assert.equal(view.root.root.findByProps({ "aria-label": "Review 意見或退回原因" }), note);
+      assert.equal(note.props.value, "請核對 VCC 接線，尚未送出。");
+      assert.equal(title.props.value, "修改降壓線路");
+      assert.equal(JSON.parse(view.window.localStorage.getItem("circuit-changes-layout:v1")).detail, true);
+    }
+    assert.equal(view.calls.some(call => ["save", "review", "draft"].includes(call[0])), false);
+    act(() => view.root.root.findByProps({ "aria-label": "收合修改內容" }).props.onClick());
+    act(() => view.root.root.findByProps({ "aria-label": "PDF 圖面" }).props.onClick());
+    assert.equal(detail.props.hidden, false, "without the PDF the form remains available");
+    assert.equal(view.root.root.findAllByProps({ "aria-label": "展開修改內容" }).length, 0);
+    act(() => view.root.root.findByProps({ "aria-label": "PDF 圖面" }).props.onClick());
+    assert.equal(detail.props.hidden, true, "reopening the PDF remembers the collapsed layout");
+    await act(async () => view.root.root.findByProps({ "aria-label": "下一項修改" }).props.onClick());
+    assert.equal(detail.props.hidden, false, "selecting a modification opens its content");
+    assert.ok(view.calls.some(call => call[0] === "select" && call[1] === "two"));
+  } finally { act(() => view.root.unmount()); }
+});
+
 test("only explicit close dismisses the workspace and still flushes a dirty draft", async () => {
   const { root, calls } = mount({ dirty: true });
   try {
