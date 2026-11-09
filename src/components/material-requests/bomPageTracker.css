@@ -30,6 +30,13 @@
 .bom-tracker-map > header li::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 5px; border: 1px solid hsl(var(--border)); border-radius: 2px; background: hsl(var(--secondary)); vertical-align: -1px; }
 .bom-tracker-map > header li[data-status="done"]::before { border-color: hsl(var(--success)); background: hsl(var(--success) / .55); }
 .bom-tracker-map > header li[data-status="done_missing"]::before { border-color: hsl(var(--warning)); background: hsl(var(--warning) / .6); }
+.bom-tracker-map-window { min-width: 0; }
+.bom-tracker-map-navigation { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.bom-tracker-map-navigation > div { display: flex; align-items: center; gap: 4px; }
+.bom-tracker-map-navigation button { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid hsl(var(--border)); border-radius: 6px; color: hsl(var(--primary)); }
+.bom-tracker-map-navigation button:disabled { opacity: .35; cursor: default; }
+.bom-tracker-map-navigation svg { width: 16px; height: 16px; }
+.bom-tracker-map-navigation select { min-width: 136px; height: 32px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding-inline: 8px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 13px; }
 .bom-tracker-map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; max-height: 132px; overflow-y: auto; overscroll-behavior: contain; padding: 3px; }
 .bom-tracker-map-grid > button { height: 28px; border: 1px solid hsl(var(--border)); border-radius: 5px; padding: 0; background: hsl(var(--secondary) / .55); color: hsl(var(--muted-foreground)); font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1; }
 .bom-tracker-map-grid > button:hover { border-color: hsl(var(--foreground) / .5); color: hsl(var(--foreground)); }
@@ -85,6 +92,9 @@
 .bom-tracker-table tbody tr[data-current="true"] { --bom-page-row: var(--secondary); }
 .bom-tracker-table tbody :is(th,td) { height: 44px; overflow: hidden; border-right: 1px solid hsl(var(--border) / .6); border-bottom: 1px solid hsl(var(--border) / .6); padding: 3px 10px; background: hsl(var(--bom-page-row)); vertical-align: middle; }
 .bom-tracker-table tbody tr[data-flash="true"] > * { box-shadow: inset 0 2px 0 hsl(var(--primary)), inset 0 -2px 0 hsl(var(--primary)); }
+.bom-tracker-table tbody tr[data-current="true"] > * { box-shadow: inset 0 2px 0 hsl(var(--primary)), inset 0 -2px 0 hsl(var(--primary)); }
+.bom-tracker-table tbody tr[data-current="true"] > :first-child { box-shadow: inset 2px 0 0 hsl(var(--primary)), inset 0 2px 0 hsl(var(--primary)), inset 0 -2px 0 hsl(var(--primary)); }
+.bom-tracker-table tbody tr[data-current="true"] > :last-child { box-shadow: inset -2px 0 0 hsl(var(--primary)), inset 0 2px 0 hsl(var(--primary)), inset 0 -2px 0 hsl(var(--primary)); }
 .bom-tracker-table tr > :last-child { border-right: 0; }
 .bom-tracker-table tbody th { position: sticky; left: 0; z-index: 1; font-weight: 600; text-align: left; white-space: nowrap; }
 .bom-tracker-table tbody tr:last-child > * { border-bottom: 0; }
@@ -99,6 +109,7 @@
 .bom-tracker-table .bom-tracker-status > button { height: 32px; padding-inline: 4px; }
 .bom-tracker-table :is(.bom-tracker-title-input,.bom-tracker-note-input) { width: 100%; min-width: 0; height: 36px; border-color: hsl(var(--border) / .8); border-radius: 6px; padding-inline: 10px; background: hsl(var(--background) / .35); font-size: 14px; }
 .bom-tracker-table :is(.bom-tracker-title-input,.bom-tracker-note-input):disabled { cursor: default; opacity: 1; }
+.bom-page-tracker .bom-tracker-note-input::placeholder { color: hsl(var(--muted-foreground)); -webkit-text-fill-color: hsl(var(--muted-foreground)); opacity: 1; }
 .bom-tracker-table .bom-tracker-no-match > td { height: 96px; background: transparent; color: hsl(var(--muted-foreground)); font-size: 14px; text-align: center; }
 
 /* Save state and the actions */
@@ -137,6 +148,9 @@
   .bom-tracker-map > header > p { flex-basis: 100%; font-size: 12px; line-height: 18px; }
   .bom-tracker-map-grid { grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); max-height: 112px; }
   .bom-tracker-map-grid > button { height: 34px; font-size: 13px; }
+  .bom-tracker-map-navigation { flex-wrap: wrap; }
+  .bom-tracker-map-navigation button { width: 44px; height: 44px; }
+  .bom-tracker-map-navigation select { height: 44px; font-size: 16px; }
   .bom-tracker-batch { gap: 6px; }
   .bom-tracker-batch input { width: 62px; height: 44px; font-size: 16px; }
   .bom-tracker-batch .bom-tracker-status > button { height: 44px; padding-inline: 8px; font-size: 12px; }

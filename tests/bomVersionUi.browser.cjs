@@ -7,6 +7,7 @@ const {chromium} = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa
 const evidence = path.resolve(process.env.BOM_VERSION_UI_EVIDENCE_DIR || '../bom-version-ui-evidence');
 const calls = page => page.evaluate(()=>window.__bomUiFixture.calls);
 async function assertFrame(page, center, width, height) {
+  await page.waitForFunction(({width,height})=>{const box=document.querySelector('[data-testid="bom-version-center"]')?.getBoundingClientRect();return box&&box.width>=width-36&&box.height>=height-40&&box.x>=-1&&box.y>=-1;},{width,height});
   const frame = await center.boundingBox();
   assert.ok(frame && frame.x>=-1 && frame.y>=-1 && frame.x+frame.width<=width+1 && frame.y+frame.height<=height+1, JSON.stringify(frame));
   assert.ok(frame.width>=width-36, `version window should use available width: ${JSON.stringify(frame)}`);
@@ -25,6 +26,18 @@ async function run(browser, origin, width) {
     assert.ok(await search.isVisible());
     const active = list.getByRole('button',{name:/Vera_CPU_Rack_E1\.S/}).first();
     const other = list.getByRole('button',{name:/Vera_CPU_Baseboard/}).first();
+    assert.match(await center.locator('.bom-version-project').innerText(), /目前專案：Carlo-Next-\(GB300\)/);
+    const projectGroup = list.locator('.bom-project-heading').filter({hasText:'Vera CPU'});
+    await projectGroup.tap();
+    assert.equal(await projectGroup.getAttribute('aria-expanded'),'false');
+    assert.equal(await active.isVisible(),false,'collapsed project hides its series without changing the selection');
+    await projectGroup.press('Enter');
+    assert.equal(await projectGroup.getAttribute('aria-expanded'),'true');
+    await active.waitFor();
+    await projectGroup.tap();
+    await search.fill('Vera_CPU_Rack_E1.S'); await active.waitFor();
+    assert.equal(await list.getByRole('button',{name:/收合專案：Vera CPU/}).getAttribute('aria-expanded'),'true','search reveals matching series in a collapsed project');
+    await search.fill(''); await active.waitFor();
     const tone = await active.evaluate(el=>getComputedStyle(el).backgroundColor), alternateTone=await other.evaluate(el=>getComputedStyle(el).backgroundColor);
     assert.notEqual(tone,alternateTone,'selected series should have a distinct surface');
     const titleFont = await active.locator('p').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize)); assert.ok(titleFont>=14,titleFont);
@@ -40,6 +53,7 @@ async function run(browser, origin, width) {
     assert.ok((await detail.getByRole('heading',{level:3}).innerText()).includes('超長系列名稱'));
     if(width<1024) { await detail.getByRole('button',{name:'返回清單',exact:true}).tap(); await list.waitFor(); }
     await active.tap(); await detail.waitFor();
+    await detail.getByText('系列所屬專案',{exact:true}).waitFor();
     await detail.getByRole('button',{name:'上傳新版本',exact:true}).tap(); assert.ok((await calls(page)).some(call=>call.name==='uploadVersion'&&call.args[0]==='rack'));
     await detail.getByRole('button',{name:'修改系列名稱',exact:true}).tap(); await detail.getByRole('textbox',{name:'系列名稱',exact:true}).fill('暫存取消名稱');
     await detail.getByRole('button',{name:'取消',exact:true}).tap(); assert.equal((await calls(page)).some(call=>call.name==='rename'),false);
@@ -70,9 +84,14 @@ async function run(browser, origin, width) {
       assert.equal((await calls(page)).filter(call=>call.name==='pages').length,before+1,'short phone can scroll to a version action');
     }
     await page.screenshot({path:path.join(evidence,`short-${width}.png`)});
+    if(width<1024) { await detail.getByRole('button',{name:'返回清單',exact:true}).tap(); await list.waitFor(); }
+    await projectGroup.scrollIntoViewIfNeeded(); await projectGroup.tap();
+    assert.equal(await projectGroup.getAttribute('aria-expanded'),'false');
+    await projectGroup.tap(); await list.locator('.bom-series-row[aria-current="true"]').waitFor();
+    await page.screenshot({path:path.join(evidence,`groups-short-${width}.png`)});
     await center.locator('[data-ui="dialog-close"]').tap(); await center.waitFor({state:'hidden'});
     assert.deepEqual(errors,[]);
-    return {width,result:'passed',checks:['near-full-screen bounds','readable and distinct selected series','search and archive reveal','long names and phone back','upload callbacks','rename and version edit save/cancel','page tracker callback','diff open and return','short viewport controls','no dialog horizontal overflow']};
+    return {width,result:'passed',checks:['near-full-screen bounds','labeled current and series project roles','project collapse and keyboard expand','search reveals collapsed matching project','readable and distinct selected series','search and archive reveal','long names and phone back','upload callbacks','rename and version edit save/cancel','page tracker callback','diff open and return','short viewport group controls','no dialog horizontal overflow']};
   } catch(error) { await page.screenshot({path:path.join(evidence,`failure-${width}.png`)}).catch(()=>{}); throw error; }
   finally { await context.close(); }
 }

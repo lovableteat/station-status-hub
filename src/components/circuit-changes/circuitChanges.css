@@ -32,10 +32,11 @@
 .circuit-workspace[data-pdf-open="true"] .circuit-detail { container: circuit-detail / inline-size; }
 .circuit-list-rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 0; }
 .circuit-list-rail > button { width: 40px; height: 40px; padding: 0; }
+.circuit-list-rail > button:first-child { color: hsl(var(--primary)); background: hsl(var(--primary) / .1); }
 .circuit-list-rail > span { display: flex; flex-direction: column; align-items: center; color: hsl(var(--muted-foreground)); font-size: 14px; font-variant-numeric: tabular-nums; line-height: 18px; }
 .circuit-list-rail > span > small { font-size: 11px; }
 .circuit-new-item-row { display: flex; flex: none; gap: 6px; margin: 12px 12px 0; }
-.circuit-new-item-row > .circuit-list-collapse { flex: none; width: 44px; height: 44px; padding: 0; color: hsl(var(--muted-foreground)); }
+.circuit-new-item-row > .circuit-list-collapse { flex: none; width: 44px; height: 44px; padding: 0; border-color: hsl(var(--primary) / .3); background: hsl(var(--primary) / .08); color: hsl(var(--primary)); }
 .circuit-new-item-row > .circuit-list-collapse:hover { color: hsl(var(--foreground)); }
 
 /* List: create, then the filters directly above the results they narrow. */
@@ -43,8 +44,17 @@
 .circuit-changes-dialog .circuit-new-item { flex: 1; height: 44px; margin: 0; gap: 6px; font-size: 14px; }
 .circuit-filter-bar { display: grid; flex: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px 12px; }
 .circuit-search { position: relative; grid-column: 1 / -1; min-width: 0; }
-.circuit-search > svg { position: absolute; top: 12px; left: 11px; width: 16px; height: 16px; color: hsl(var(--muted-foreground)); pointer-events: none; }
-.circuit-search input { height: 40px; padding-left: 34px; font-size: 14px; }
+.circuit-search > svg { position: absolute; top: 12px; left: 11px; width: 16px; height: 16px; color: hsl(var(--primary)); pointer-events: none; }
+.circuit-search input { height: 40px; padding-left: 34px; border-color: hsl(var(--primary) / .28); background: hsl(var(--primary) / .05) !important; box-shadow: none; font-size: 14px; }
+.circuit-filter-select { --circuit-filter: 205 78% 78%; position: relative; min-width: 0; }
+.circuit-filter-select > svg { position: absolute; top: 50%; left: 10px; width: 16px; height: 16px; transform: translateY(-50%); color: hsl(var(--circuit-filter)); pointer-events: none; }
+.circuit-changes-dialog .circuit-filter-select select { padding-left: 33px; border-color: hsl(var(--circuit-filter) / .32); background: hsl(var(--circuit-filter) / .09) !important; box-shadow: none; color: hsl(var(--circuit-filter)); -webkit-text-fill-color: currentColor; }
+.circuit-filter-select[data-status="draft"] { --circuit-filter: 215 50% 77%; }
+.circuit-filter-select[data-status="needs_changes"] { --circuit-filter: 32 88% 72%; }
+.circuit-filter-select[data-status="approved"] { --circuit-filter: 155 56% 72%; }
+.circuit-filter-owner { --circuit-filter: var(--primary); }
+.circuit-filter-owner[data-active="true"] select, .circuit-filter-select[data-status]:not([data-status="all"]) select { border-color: hsl(var(--circuit-filter) / .75); background: hsl(var(--circuit-filter) / .15) !important; }
+.circuit-filter-select option { background: hsl(var(--background)); color: hsl(var(--foreground)); }
 .circuit-active-filters { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 12px 10px; }
 .circuit-active-filters > button { display: flex; min-height: 32px; max-width: 100%; align-items: center; gap: 5px; border: 1px solid hsl(var(--primary) / .35); border-radius: 6px; padding: 4px 8px; background: hsl(var(--primary) / .1); color: hsl(var(--foreground)); font-size: 12px; overflow-wrap: anywhere; text-align: left; }
 .circuit-active-filters > button > svg { width: 12px; height: 12px; }

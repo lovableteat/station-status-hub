@@ -67,6 +67,11 @@ async function run(browser, origin, width) {
     const mapCell = number => tracker.locator(`[data-map-page="${number}"]`);
     assert.deepEqual(await tracker.locator('[data-map-page]').evaluateAll(cells => cells.map(cell => cell.dataset.status)), original.pages.map(page => page.status));
     assert.equal(await mapCell(original.currentPage).getAttribute('data-current'), 'true');
+    await page.waitForFunction(() => !document.querySelector('tr[data-current="true"][data-flash="true"]'));
+    const currentFrame = await tracker.locator('tr[data-current="true"]').evaluate(row => [...row.cells].map(cell => getComputedStyle(cell).boxShadow));
+    assert.ok(currentFrame.every(shadow => shadow !== 'none'), 'The current page must keep a visible frame after the jump flash ends');
+    const noteInk = await tracker.getByLabel('第 3 頁備註', { exact: true }).evaluate(input => ({ text: getComputedStyle(input).webkitTextFillColor, hint: getComputedStyle(input, '::placeholder').webkitTextFillColor }));
+    assert.notEqual(noteInk.text, noteInk.hint, 'Note placeholder ink must remain distinct from entered text');
     assert.ok((await tracker.locator('.bom-tracker-save-state').innerText()).startsWith('已儲存'));
     assert.equal(await tracker.getByRole('button', { name: '儲存頁數進度', exact: true }).isDisabled(), true);
     assert.ok((await tracker.getByTestId('bom-page-tracker-progress').innerText()).includes(`${original.pages.filter(page => page.status !== 'pending').length} / ${original.totalPages} 頁`));
@@ -90,6 +95,17 @@ async function run(browser, origin, width) {
     await tracker.getByLabel('總頁數', { exact: true }).fill('500');
     await tracker.getByLabel('第 500 頁標題', { exact: true }).waitFor({ state: 'attached' });
     assert.equal(await tracker.getByRole('table').locator('tbody tr').count(), 500);
+    const mapRange = tracker.getByLabel('選擇頁碼範圍', { exact: true });
+    assert.equal(await mapRange.locator('option').count(), 10);
+    assert.equal(await tracker.locator('[data-map-page]').count(), 50, '500-page map shows one labelled 50-page range at a time');
+    if (width < 768) await tracker.getByRole('button', { name: '頁面總覽與批次設定', exact: true }).tap();
+    await mapRange.selectOption('9'); await mapCell(500).tap();
+    assert.equal(await tracker.getByLabel('起始頁', { exact: true }).inputValue(), '500');
+    await tracker.getByRole('button', { name: '上一段頁碼', exact: true }).tap(); assert.equal(await mapRange.inputValue(), '8');
+    await tracker.getByRole('button', { name: '下一段頁碼', exact: true }).tap(); assert.equal(await mapRange.inputValue(), '9');
+    await mapCell(500).scrollIntoViewIfNeeded(); await page.screenshot({ path: path.join(evidence, `map-500-${width}.png`) });
+    await mapRange.selectOption('0');
+    if (width < 768) await tracker.getByRole('button', { name: '頁面總覽與批次設定', exact: true }).tap();
     const title500 = tracker.getByLabel('第 500 頁標題', { exact: true }), note500 = tracker.getByLabel('第 500 頁備註', { exact: true });
     await title500.fill('QA 第500頁標題，取消後不得保存');
     await note500.fill('QA 第500頁草稿備註');
@@ -163,6 +179,7 @@ async function run(browser, origin, width) {
     for (const number of [1, 2, 3]) assert.equal(await tracker.getByRole('group', { name: `第 ${number} 頁狀態`, exact: true }).getByRole('button', { name: '已完成但缺料', exact: true }).getAttribute('aria-pressed'), 'true');
     // The page map follows: the three pages show as missing, and picking a range on it fills the batch tool.
     const mapNow = number => tracker.locator(`[data-map-page="${number}"]`);
+    await tracker.getByLabel('選擇頁碼範圍', { exact: true }).selectOption('0');
     for (const number of [1, 2, 3]) assert.equal(await mapNow(number).getAttribute('data-status'), 'done_missing');
     await mapNow(1).scrollIntoViewIfNeeded();
     await mapNow(5).click(); await mapNow(9).click({ modifiers: ['Shift'] });

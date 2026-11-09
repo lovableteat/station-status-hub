@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import { ChevronDown, Flag, Search, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Flag, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -302,22 +302,47 @@ const PageMap = memo(function PageMap({ codes, currentPage, rangeStart, rangeEnd
   codes: string; currentPage: number; rangeStart: number; rangeEnd: number; onPick: (pageNumber: number, extend: boolean) => void;
 }) {
   const grid = useRef<HTMLDivElement>(null);
+  const [block, setBlock] = useState(0);
+  const focusPage = useRef(0);
+  const lastBlock = Math.max(0, Math.ceil(codes.length / 50) - 1);
+  const activeBlock = Math.min(block, lastBlock);
+  const start = activeBlock * 50, end = Math.min(start + 50, codes.length);
+  useEffect(() => { setBlock(Math.floor(Math.max(0, currentPage - 1) / 50)); }, [currentPage]);
+  useEffect(() => {
+    if (grid.current) grid.current.scrollTop = 0;
+    if (!focusPage.current) return;
+    grid.current?.querySelector<HTMLButtonElement>(`[data-map-page="${focusPage.current}"]`)?.focus();
+    focusPage.current = 0;
+  }, [activeBlock]);
   const anchor = rangeStart || currentPage || 1;
   const keys = (event: KeyboardEvent<HTMLDivElement>) => {
     const from = Number((event.target as HTMLElement).getAttribute?.("data-map-page"));
     const to = event.key === "ArrowRight" ? from + 1 : event.key === "ArrowLeft" ? from - 1 : event.key === "Home" ? 1 : event.key === "End" ? codes.length : 0;
     if (!from || to < 1 || to > codes.length) return;
     event.preventDefault();
+    if (to <= start || to > end) { focusPage.current = to; setBlock(Math.floor((to - 1) / 50)); return; }
     grid.current?.querySelector<HTMLButtonElement>(`[data-map-page="${to}"]`)?.focus();
   };
-  return <div ref={grid} className="bom-tracker-map-grid" role="group" aria-label="各頁狀態" onKeyDown={keys}>
-    {Array.from(codes, (code, index) => {
-      const pageNumber = index + 1, status = statusOfCode(code);
+  return <div className="bom-tracker-map-window">
+    {lastBlock > 0 && <div className="bom-tracker-map-navigation">
+      <span>每段 50 頁 · 共 {codes.length} 頁</span>
+      <div>
+        <button type="button" aria-label="上一段頁碼" disabled={activeBlock === 0} onClick={() => setBlock(activeBlock - 1)}><ChevronLeft aria-hidden="true" /></button>
+        <select aria-label="選擇頁碼範圍" value={activeBlock} onChange={event => setBlock(Number(event.target.value))}>
+          {Array.from({ length: lastBlock + 1 }, (_, index) => <option key={index} value={index}>第 {index * 50 + 1}–{Math.min((index + 1) * 50, codes.length)} 頁</option>)}
+        </select>
+        <button type="button" aria-label="下一段頁碼" disabled={activeBlock === lastBlock} onClick={() => setBlock(activeBlock + 1)}><ChevronRight aria-hidden="true" /></button>
+      </div>
+    </div>}
+    <div ref={grid} className="bom-tracker-map-grid" role="group" aria-label="各頁狀態" onKeyDown={keys}>
+    {Array.from(codes.slice(start, end), (code, index) => {
+      const pageNumber = start + index + 1, status = statusOfCode(code);
       const selected = pageNumber >= rangeStart && pageNumber <= rangeEnd;
-      return <button key={pageNumber} type="button" data-map-page={pageNumber} data-status={status} data-current={pageNumber === currentPage} aria-pressed={selected} tabIndex={pageNumber === anchor ? 0 : -1}
+      return <button key={pageNumber} type="button" data-map-page={pageNumber} data-status={status} data-current={pageNumber === currentPage} aria-pressed={selected} tabIndex={pageNumber === (anchor > start && anchor <= end ? anchor : start + 1) ? 0 : -1}
         aria-label={`第 ${pageNumber} 頁，${BOM_PAGE_STATUS_LABELS[status]}${pageNumber === currentPage ? "，目前頁" : ""}`} title={`第 ${pageNumber} 頁 · ${BOM_PAGE_STATUS_LABELS[status]}`}
         onClick={(event: MouseEvent) => onPick(pageNumber, event.shiftKey)}>{pageNumber}</button>;
     })}
+    </div>
   </div>;
 });
 

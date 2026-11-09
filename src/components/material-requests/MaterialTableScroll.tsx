@@ -4,23 +4,40 @@ export function MaterialTableScroll({ children }: { children: ReactNode }) {
   const tableScrollId = useId();
   const topScroll = useRef<HTMLDivElement>(null);
   const tableScroll = useRef<HTMLDivElement>(null);
-  const [widths, setWidths] = useState({ viewport: 0, content: 0 });
+  const [widths, setWidths] = useState({ viewport: 0, content: 0, maxHeight: undefined as number | undefined });
 
   useLayoutEffect(() => {
     const viewport = tableScroll.current;
     const table = viewport?.firstElementChild;
     if (!viewport || !table) return;
+    const workspace = viewport.closest('.material-sheet-theme');
+    const pagination = viewport.closest('section')?.querySelector('[data-testid="material-pagination"]');
 
     const measure = () => {
-      const next = { viewport: viewport.clientWidth, content: viewport.scrollWidth };
-      setWidths(current => current.viewport === next.viewport && current.content === next.content ? current : next);
+      // Reserve the actual footer and toolbar space when browser zoom changes their wrapping.
+      const maxHeight = window.innerWidth >= 1024
+        ? Math.max(120, Math.floor((window.visualViewport?.height ?? window.innerHeight) - viewport.getBoundingClientRect().top - window.scrollY - (pagination?.getBoundingClientRect().height ?? 0) - 16))
+        : undefined;
+      const next = { viewport: viewport.clientWidth, content: viewport.scrollWidth, maxHeight };
+      setWidths(current => current.viewport === next.viewport && current.content === next.content && current.maxHeight === next.maxHeight ? current : next);
     };
+    let frame = 0;
+    const scheduleMeasure = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(measure); };
 
     measure();
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserver(scheduleMeasure);
     observer.observe(viewport);
     observer.observe(table);
-    return () => observer.disconnect();
+    if (workspace) observer.observe(workspace);
+    if (pagination) observer.observe(pagination);
+    window.addEventListener('resize', scheduleMeasure);
+    window.visualViewport?.addEventListener('resize', scheduleMeasure);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', scheduleMeasure);
+      window.visualViewport?.removeEventListener('resize', scheduleMeasure);
+    };
   }, []);
 
   useLayoutEffect(() => {
@@ -47,6 +64,7 @@ export function MaterialTableScroll({ children }: { children: ReactNode }) {
       ref={tableScroll}
       id={tableScrollId}
       className="relative max-h-[72vh] overflow-auto"
+      style={{ maxHeight: widths.maxHeight }}
       data-testid="material-table-scroll"
       onScroll={event => {
         const left = event.currentTarget.scrollLeft;

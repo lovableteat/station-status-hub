@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type FormEvent } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, HelpCircle, MessageSquare, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, Filter, HelpCircle, MessageSquare, PanelLeftClose, PanelLeftOpen, Plus, Search, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -320,6 +320,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   return <>
     <Dialog open={open} onOpenChange={close}>
       <DialogContent hideCloseButton className="circuit-changes-dialog" style={viewportStyle} data-testid="circuit-changes-dialog" data-mobile-detail={mobileDetail} data-mobile-pdf={!wide && mobilePdf} onPaste={paste}
+        onEscapeKeyDown={event => event.preventDefault()} onInteractOutside={event => event.preventDefault()}
         onDragOver={event => { if (carriesFiles(event)) { event.preventDefault(); if (!readOnly && content) setDragSide(side); } }}
         onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragSide(null); }} onDrop={drop}>
         <input ref={fileInput} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" aria-label="選取線路修改圖片" className="sr-only" onChange={event => { const files = Array.from(event.target.files || []); event.target.value = ""; addFiles(files, pickerSide.current); }} />
@@ -357,10 +358,10 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
               {wide && pdfOpen && <Button type="button" variant="outline" className="circuit-list-collapse" aria-label="收合修改清單" title="收合清單，讓 PDF 更寬" onClick={() => changeLayout({ list: "collapsed" })}><PanelLeftClose aria-hidden="true" /></Button>}</div>}
             <div className="circuit-filter-bar" role="group" aria-label="線路修改篩選">
               <label className="circuit-search"><Search aria-hidden="true" /><Input aria-label="搜尋線路修改" placeholder="搜尋編號、標題、Ref 或 Net" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} /></label>
-              <label><span className="sr-only">狀態</span><select aria-label="篩選修改狀態" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value }))}>
+              <label className="circuit-filter-select" data-status={filters.status}><Filter aria-hidden="true" /><span className="sr-only">狀態</span><select aria-label="篩選修改狀態" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value }))}>
                 <option value="all">全部狀態</option>{statusKeys.map(key => <option key={key} value={key}>{CIRCUIT_CHANGE_STATUS_LABELS[key]}（{statusCounts[key]}）</option>)}
               </select></label>
-              <label><span className="sr-only">負責人</span><select aria-label="篩選修改負責人" value={filters.owner} onChange={event => setFilters(current => ({ ...current, owner: event.target.value }))}>
+              <label className="circuit-filter-select circuit-filter-owner" data-active={filters.owner !== "all"}><UserRound aria-hidden="true" /><span className="sr-only">負責人</span><select aria-label="篩選修改負責人" value={filters.owner} onChange={event => setFilters(current => ({ ...current, owner: event.target.value }))}>
                 <option value="all">全部負責人</option>{filters.owner !== "all" && !owners.includes(filters.owner) && <option value={filters.owner}>{filters.owner}</option>}{owners.map(owner => <option key={owner} value={owner}>{owner}</option>)}
               </select></label>
             </div>

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download, FileArchive, GitCompareArrows, Layers3, Pencil, Search, Upload, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ChevronDown, Download, FileArchive, GitCompareArrows, Layers3, Pencil, Search, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -109,6 +109,8 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   } = props;
   const compact = useCompact();
   const [query, setQuery] = useState("");
+  const [collapsedProjects, setCollapsedProjects] = useState<string[]>([]);
+  const projectGroupId = useId();
   const [showArchived, setShowArchived] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
@@ -142,9 +144,11 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     setRenaming(false);
     setFeedback(null);
     setMobilePane("list");
+    setCollapsedProjects([]);
     setSelectedSeriesId(activeSeries?.series.id ?? null);
     recordsCache.current.clear();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setCollapsedProjects([]); }, [query]);
 
   const groups = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -279,13 +283,16 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
           )}
           <div className="bom-series-summary-meta"><span className="bom-current-version">目前版本 {selectedSeries.current.displayNumber}</span><span>{selectedSeries.versions.length} 個版本</span><span>{selectedSeries.recordCount.toLocaleString()} 筆</span></div>
         </div>
+        <div className="bom-series-project">
+        <Label htmlFor={`${projectGroupId}-assignment`}>系列所屬專案</Label>
         <Select value={selectedSeries.project?.projectId ?? UNASSIGNED_VALUE} disabled={!canEdit || !ready || pending} onValueChange={(value) => void runAction(() => onAssignProject(selectedSeries, value === UNASSIGNED_VALUE ? null : value), "專案歸屬已更新")}>
-          <SelectTrigger aria-label={`${selectedSeries.name} 所屬專案`} className="h-9 w-[12rem] text-sm"><SelectValue placeholder="指定專案" /></SelectTrigger>
+          <SelectTrigger id={`${projectGroupId}-assignment`} aria-label={`${selectedSeries.name} 所屬專案`} className="h-9 w-[12rem] text-sm"><SelectValue placeholder="指定專案" /></SelectTrigger>
           <SelectContent>
             <SelectItem value={UNASSIGNED_VALUE}>未指定專案</SelectItem>
             {(selectedSeries.project && !projects.some((project) => project.id === selectedSeries.project?.projectId) ? [...projects, { id: selectedSeries.project.projectId, name: selectedSeries.project.projectName }] : projects).map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}
           </SelectContent>
         </Select>
+        </div>
       </div>
 
       <div className="bom-series-actions flex flex-wrap items-center gap-1.5">
@@ -382,7 +389,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         <DialogHeader className="bom-version-header">
           <DialogTitle className="text-xl">BOM 版本管理</DialogTitle>
           <DialogDescription className="sr-only">{description}</DialogDescription>
-          <div className="bom-version-overview"><span className="bom-version-project" title={activeProjectName ?? "未選擇"}><Layers3 aria-hidden="true" />{activeProjectName ?? "未選擇專案"}</span><span>{seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>
+          <div className="bom-version-overview"><span className="bom-version-project" title={`目前專案：${activeProjectName ?? "未選擇"}`}><Layers3 aria-hidden="true" />目前專案：{activeProjectName ?? "未選擇"}</span><span>{seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>
         </DialogHeader>
         {/* Action feedback lives above both modes so an export started from the diff view is acknowledged there too. */}
         {feedback && <p role="status" data-testid="bom-version-feedback" className={cn("rounded-lg border px-3 py-1.5 text-xs", feedback.tone === "ok" ? "border-success/35 bg-success/10 text-success" : "border-destructive/35 bg-destructive/10 text-destructive")}>{feedback.text}</p>}
@@ -414,17 +421,23 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
               <div className="bom-series-groups min-h-0 flex-1 overflow-y-auto">
                 {groups.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">{BOM_SERIES_EMPTY_TEXT}</p>
-                ) : groups.flatMap((group) => [
-                  <div key={`project:${group.key}`} data-active-project={group.isActive} className="bom-project-heading flex items-center gap-2">
-                    <Layers3 className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" />
-                    <h4 className="min-w-0 truncate text-sm font-bold text-foreground">{group.label}</h4>
-                    {group.isActive && <span className={cn(CHIP, "flex-none", CHIP_TONE.success)}>目前專案</span>}
-                    <span className="flex-none text-[11px] text-muted-foreground">{group.workspaces.length} 個系列</span>
-                  </div>,
-                  ...(group.workspaces.length === 0
-                    ? [<div key={`empty:${group.key}`} className="bom-project-empty"><strong>尚無 BOM</strong><p>{canEdit ? "上傳 Excel，或將現有系列移入此專案。" : "請有編輯權限的同事上傳或指定專案。"}</p></div>]
-                    : group.workspaces.map((series) => renderSeriesRow(series))),
-                ])}
+                ) : groups.map((group) => {
+                  const expanded = !collapsedProjects.includes(group.key);
+                  return <section key={group.key} className="bom-project-group">
+                    <h4><button type="button" data-active-project={group.isActive} className="bom-project-heading flex items-center gap-2" aria-label={`${expanded ? "收合" : "展開"}專案：${group.label}`} aria-expanded={expanded} aria-controls={`${projectGroupId}-${group.key}`} onClick={() => setCollapsedProjects(current => expanded ? [...current, group.key] : current.filter(key => key !== group.key))}>
+                      <Layers3 className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" />
+                      <span className="bom-project-name min-w-0 truncate text-sm font-bold text-foreground" title={group.label}>{group.label}</span>
+                      {group.isActive && <span className={cn(CHIP, "flex-none", CHIP_TONE.success)}>目前專案</span>}
+                      <span className="bom-project-count flex-none text-muted-foreground">{group.workspaces.length} 個系列</span>
+                      <ChevronDown aria-hidden="true" className="bom-project-chevron h-4 w-4 flex-none" />
+                    </button></h4>
+                    <div id={`${projectGroupId}-${group.key}`} hidden={!expanded}>
+                      {group.workspaces.length === 0
+                        ? <div className="bom-project-empty"><strong>尚無 BOM</strong><p>{canEdit ? "上傳 Excel，或將現有系列移入此專案。" : "請有編輯權限的同事上傳或指定專案。"}</p></div>
+                        : group.workspaces.map((series) => renderSeriesRow(series))}
+                    </div>
+                  </section>;
+                })}
                 {archivedSeries.length > 0 && (
                   <section data-testid="bom-archive-section" className="pt-3">
                     <button type="button" onClick={() => setShowArchived((current) => !current)} aria-expanded={showArchived} className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-left text-sm font-semibold text-foreground/80 hover:bg-accent/40">
