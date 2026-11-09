@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/UI設計風格與互動規則.md`；程式參考基準：`0b0dee080f02ceb8d58b38744fabe3b5d5f4bcfd`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/UI設計風格與互動規則.md`；程式參考基準：`ec1f330775706649cdc4a4d6c5ed3f3e2de5f70e`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # UI 設計風格與互動規則
 
@@ -206,7 +206,16 @@ AutoCheck 需要保留工程資料的真實關係：A／B 版本、必要／建�
 - chip 可換行或橫向捲動，清除動作可操作，不能藏到 mobile「更多篩選」。
 - desktop 與 mobile 的空結果仍保留對應結構，長標題／帳號／檔名不把右側動作擠出畫面。
 
-依據：`src/pages/Index.tsx`、`src/index.css`、`src/components/layout/MainWorkspaceHeader.tsx`、`MobileWorkspaceDock.tsx`、`src/components/test-plan/test-plan.css`。
+### 手機共用元件與回饋位置（2026-11-04）
+
+- 尺寸只定義兩層：`:root` 的 52／56／8 給平板（768–1023px），`@media (max-width:767px)` 的 64／64／16 給手機；任何畫面都引用 `--mobile-header-height`、`--mobile-shell-bottom`，不得再寫死 76px 之類的數字。
+- 每個工作區在手機的第一列是 `MobileCommandBar`（`src/components/layout/mobile/`）：圖示＋標題＋一行上下文、最多兩個 44px 主要動作、一個「工具」按鈕。次要動作、排序、檢視設定、匯出與說明放進 `MobileToolsSheet`（vaul 底部抽屜，列高 48px，關閉鈕 44px）。料號申請頁既有的工具抽屜是這個模式的來源，之後也以此對齊。
+- 資料清單在手機用 `MobileRecordCard`（標題列＋狀態 chip、兩欄 label-value、最多兩個 44px 動作＋更多）；表格只在使用者切到「表格」時出現並在自己的容器內橫捲。篩選列仍緊接結果上方，用 `MobileFilterBar` 或各頁既有的篩選列，chip 與全部清除不得收進抽屜。
+- 表單在手機用 `MobileDialog` 的 `fullHeight`：標題固定、`MobileDialogBody` 捲動、底部按鈕列固定並避開安全區。
+- toast（Radix viewport 與 sonner）在 ≤1023px 固定於 dock 上方 12px、左右 16px，不再貼頂蓋住品牌與帳號；AI 問答另加作曲區高度。
+- 驗收：`tests/mobileShell.test.mjs` 鎖定上述契約；`tests/auditMobileWorkspaces.browser.cjs` 以 Playwright 在 390 與 320px 檢查各工作區無整頁橫向溢出、指揮列與抽屜可開關、dock 可及、toast 位置。
+
+依據：`src/pages/Index.tsx`、`src/index.css`、`src/components/layout/MainWorkspaceHeader.tsx`、`MobileWorkspaceDock.tsx`、`src/components/layout/mobile/*`、`src/components/ui/mobile-dialog.tsx`、`src/components/test-plan/test-plan.css`。
 
 ## 10. Dialog、選單、3D HTML 與全域聊天室層級
 
