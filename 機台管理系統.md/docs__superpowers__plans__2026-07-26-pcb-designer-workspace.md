@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-07-26-pcb-designer-workspace.md`；程式參考基準：`74cf6ebb8d8de066f93e19468086e5e8e520d2f8`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-07-26-pcb-designer-workspace.md`；程式參考基準：`9abef6de69254929e868a3362451004ed86a0c84`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # PCB Designer 第六工作區實作計畫
 
