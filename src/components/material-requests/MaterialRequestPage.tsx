@@ -169,6 +169,7 @@ import { getMaterialTrackingStatusMeaning, isTrackedMaterialApplication, MATERIA
 import { MaterialWeeklyProgressDialog } from "./MaterialWeeklyProgressDialog";
 import { useSpecFillNavigation } from "./useSpecFillNavigation";
 const MaterialSpecFillDialog = lazy(() => import("./MaterialSpecFillDialog").then(module => ({ default: module.MaterialSpecFillDialog })));
+const CircuitChangesWorkspace = lazy(() => import("../circuit-changes/CircuitChangesWorkspace"));
 import { restoreMaterialColumnSort, sortMaterialTableRows, type MaterialColumnSort } from "./materialTableSort";
 import { MaterialRequestOwnerPicker, type MaterialRequestOwner } from "./MaterialRequestOwnerPicker";
 import { useMaterialRequestOwners } from "./useMaterialRequestOwners";
@@ -3954,6 +3955,7 @@ export function MaterialRequestPage() {
   const [tableSettingsOpen, setTableSettingsOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [bomManagerOpen, setBomManagerOpen] = useState(false);
+  const [circuitChangesOpen, setCircuitChangesOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ title: string; description: string; workspaceIds: string[] } | null>(null);
   const [pendingCurrent, setPendingCurrent] = useState<{ version: BomSeriesVersion; series: BomSeries } | null>(null);
   const [carryOnSwitch, setCarryOnSwitch] = useState(true);
@@ -4025,6 +4027,7 @@ export function MaterialRequestPage() {
     setWeeklyProgressOpen(false);
     setSpecFillContext(null);
     setSpecFillOpen(false);
+    setCircuitChangesOpen(false);
   }, [activeBomId, user?.userId]);
   const { canEditModule, canViewModule } = usePermissions();
   const canEditModuleAccess = canEditModule("material-requests");
@@ -4034,6 +4037,7 @@ export function MaterialRequestPage() {
     setSpecFillContext(null);
     setSpecFillOpen(false);
     setPendingDialogOpen(false);
+    setCircuitChangesOpen(false);
   }, [canViewModuleAccess]);
   // Versions of one board form a series; only the series' current version accepts record edits.
   const seriesList = useMemo(() => buildBomSeriesList(bomWorkspaces), [bomWorkspaces]);
@@ -6137,6 +6141,13 @@ export function MaterialRequestPage() {
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls" multiple className="hidden" onChange={handleWorkbookImport} />
 
       <UploadGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
+      {circuitChangesOpen && canViewModuleAccess && <Suspense fallback={<div role="status" className="fixed inset-0 z-50 grid place-items-center bg-background/90 text-foreground">載入線路修改…</div>}>
+        <CircuitChangesWorkspace open onOpenChange={setCircuitChangesOpen} canEdit={canEditModuleAccess}
+          userId={user?.userId || ""} userName={user?.displayName || user?.username || ""}
+          context={{ seriesId: activeVersionInfo?.series.id || activeWorkspace.id, workspaceId: activeWorkspace.id,
+            workspaceName: activeSeriesName, projectId: activeWorkspace.project?.projectId,
+            projectName: activeWorkspaceProjectLabel, versionLabel: activeVersionInfo?.version.displayNumber || "V1" }} />
+      </Suspense>}
       <RlcPriorityDialog key={`${user?.userId}:${activeWorkspace.id}:${rlcProjectId}`} open={rlcPriorityOpen} onOpenChange={setRlcPriorityOpen} projectId={rlcProjectId} projectName={activeWorkspace.project?.projectName ?? ''} workspaceName={activeWorkspace.name} projects={projects.map(project => ({ id: project.id, name: project.name }))} onAssignProject={projectId => assignBomProject(activeWorkspace.id, projectId)} assigningProject={assigningBomProjectId === activeWorkspace.id} groups={dataset.groups} rules={rlcRules.rules} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} loading={rlcRules.loading || !isFullDatasetLoaded} saving={rlcRules.saving} error={rlcRules.error} onSaveRule={rlcRules.saveRule} onReload={rlcRules.reload} />
       <MaterialNonPvlDialog
         key={`non-pvl:${activeWorkspace.id}`}
@@ -6307,12 +6318,13 @@ export function MaterialRequestPage() {
             </Button>
             <Drawer open={mobileToolsOpen} onOpenChange={setMobileToolsOpen} shouldScaleBackground={false}>
               <DrawerTrigger asChild><Button type="button" variant="ghost" className="h-11 w-11 rounded-xl p-0" aria-label="排序與工具"><MoreHorizontal className="h-5 w-5" /></Button></DrawerTrigger>
-              <DrawerContent data-testid="material-mobile-tools" className="material-mobile-tools-sheet" onCloseAutoFocus={event => { if (bomManagerOpen || pendingDialogOpen || exportDialogOpen || nonPvlDialogOpen || pageTrackerDialogOpen || rlcPriorityOpen || guideOpen || tableSettingsOpen) event.preventDefault(); }}>
+              <DrawerContent data-testid="material-mobile-tools" className="material-mobile-tools-sheet" onCloseAutoFocus={event => { if (bomManagerOpen || circuitChangesOpen || pendingDialogOpen || exportDialogOpen || nonPvlDialogOpen || pageTrackerDialogOpen || rlcPriorityOpen || guideOpen || tableSettingsOpen) event.preventDefault(); }}>
                 <DrawerHeader className="material-mobile-tools-heading">
                   <div><DrawerTitle>排序與工具</DrawerTitle><DrawerDescription>{activeSeriesName}</DrawerDescription></div>
                   <DrawerClose asChild><Button type="button" variant="ghost" className="h-11 w-11 rounded-full p-0" aria-label="關閉排序與工具"><X className="h-5 w-5" /></Button></DrawerClose>
                 </DrawerHeader>
                 <div className="material-mobile-tools-body">
+                  <DrawerClose asChild><Button type="button" variant="outline" data-testid="material-circuit-changes" className="mb-3 h-12 w-full justify-start gap-2" onClick={() => setCircuitChangesOpen(true)} disabled={!isCollaborativeReady}><Pencil className="h-4 w-4 text-primary" />線路修改<ChevronRight className="ml-auto h-4 w-4" /></Button></DrawerClose>
                   <div data-testid="material-mobile-actions" className="material-mobile-tool-list">
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={openPendingDialog}><TriangleAlert className="text-destructive" />待處理料<span>{pendingApplicationCount.toLocaleString()}</span><ChevronRight /></Button></DrawerClose>
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded}><Upload className="text-success" />{isImporting ? "讀取中..." : "上傳 BOM"}<ChevronRight /></Button></DrawerClose>
@@ -6547,6 +6559,7 @@ export function MaterialRequestPage() {
             <Layers3 className="mr-1.5 h-3.5 w-3.5" />BOM 管理
             <span className="ml-1.5 rounded-full border border-current/25 px-1.5 text-[10px] leading-4">{seriesList.length}</span>
           </Button>
+          <Button type="button" variant="outline" size="sm" data-testid="material-circuit-changes" onClick={() => setCircuitChangesOpen(true)} disabled={!isCollaborativeReady} className="material-action-highlight h-8 gap-1.5 px-2.5 text-xs font-bold"><Pencil className="h-3.5 w-3.5" />線路修改</Button>
         </div>
       </header>}
 
