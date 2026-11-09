@@ -103,6 +103,7 @@ import { applyPdfPageTitles } from "./bomPagePdfAi";
 import { MaterialMobileBomPicker } from "./MaterialMobileBomPicker";
 import "./materialMobilePage.css";
 import "./materialMobileEditor.css";
+import "./bomPageTracker.css";
 import { buildMaterialMainGroups, filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, sortMaterialAlternatives as getSortedAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
@@ -2140,15 +2141,16 @@ function BomPageTrackerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[94vh] w-[min(92vw,1400px)] max-w-[min(92vw,1400px)] flex-col gap-4 overflow-hidden p-5 text-base sm:p-7">
-        <DialogHeader>
+      <DialogContent data-testid="bom-page-tracker" className="bom-page-tracker flex flex-col overflow-hidden">
+        <DialogHeader className="bom-tracker-header">
           <DialogTitle className="text-xl">頁數進度</DialogTitle>
           <DialogDescription className="truncate" title={dialogDescription}>
             {dialogDescription}
           </DialogDescription>
         </DialogHeader>
 
-        <section className="workspace-dialog-section flex flex-wrap items-end gap-x-4 gap-y-2 rounded-2xl px-4 py-3">
+        <div className="bom-tracker-controls">
+        <section className="bom-tracker-overview workspace-dialog-section flex flex-wrap items-end gap-x-4 gap-y-2 rounded-2xl px-4 py-3">
           <div className="space-y-1">
             <Label htmlFor="bom-total-pages" className="text-xs font-semibold">總頁數</Label>
             <Input
@@ -2186,14 +2188,8 @@ function BomPageTrackerDialog({
           </div>
           <Button type="button" variant="outline" className="ml-auto h-11" disabled={isSaving} onClick={() => setPdfAiOpen(true)}>PDF AI</Button>
         </section>
-
-        {totalPages === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-            先填總頁數，下面就會列出每一頁
-          </p>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-background/40 px-4 py-2.5">
+          {totalPages > 0 && (
+            <div data-testid="bom-page-tracker-batch" className="bom-tracker-batch flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-background/40 px-4 py-2.5">
               <span className="text-xs font-semibold text-foreground">批次設定</span>
               <Label htmlFor="bom-range-start" className="text-xs text-muted-foreground">第</Label>
               <Input
@@ -2237,23 +2233,36 @@ function BomPageTrackerDialog({
                 {rangeSelectionCount > 0 ? `共 ${rangeSelectionCount} 頁，備註會保留` : "先填起訖頁"}
               </span>
             </div>
+          )}
+        </div>
 
-            <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
-              <span>逐頁標題、狀態與備註</span>
+        {totalPages === 0 ? (
+          <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
+            先填總頁數，下面就會列出每一頁
+          </p>
+        ) : (
+          <>
+            <div className="bom-tracker-table-heading flex items-center justify-between">
+              <h3>逐頁進度表</h3>
               <span>{completedPages} / {totalPages} 頁完成</span>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border bg-background/40">
-              <div className="divide-y divide-border/70">
+            <div className="bom-tracker-table-scroll" data-testid="bom-page-tracker-scroll">
+              <table className="bom-tracker-table" data-testid="bom-page-tracker-table" aria-label="逐頁進度表">
+                <colgroup><col className="bom-tracker-page-col" /><col className="bom-tracker-status-col" /><col className="bom-tracker-current-col" /><col /><col /></colgroup>
+                <thead><tr><th scope="col">頁碼</th><th scope="col">狀態</th><th scope="col">目前頁</th><th scope="col">頁面標題</th><th scope="col">備註</th></tr></thead>
+                <tbody>
                 {visiblePages.map((page) => {
                   const statusMeta = getBomPageStatusMeta(page.status);
                   const isCurrent = page.pageNumber === currentPage;
 
                   return (
-                    <div
+                    <tr
                       key={page.pageNumber}
-                      className={cn("flex flex-wrap items-center gap-2 px-3 py-1.5 lg:grid lg:grid-cols-[4rem_auto_5.5rem_minmax(0,1.2fr)_minmax(0,1fr)]", isCurrent && "bg-primary/10")}
+                      data-testid="bom-page-tracker-row"
+                      data-current={isCurrent}
                     >
-                      <span className={cn("w-16 flex-none text-sm font-semibold", statusMeta.textClassName)}>第 {page.pageNumber} 頁</span>
+                      <th scope="row"><span className={cn("text-sm font-semibold", statusMeta.textClassName)}>第 {page.pageNumber} 頁</span></th>
+                      <td>
                       <div className="inline-flex flex-none rounded-lg border border-border bg-secondary p-0.5" role="group" aria-label={`第 ${page.pageNumber} 頁狀態`}>
                         {BOM_PAGE_STATUS_OPTIONS.map((option) => (
                           <button
@@ -2272,6 +2281,8 @@ function BomPageTrackerDialog({
                           </button>
                         ))}
                       </div>
+                      </td>
+                      <td>
                       {isCurrent ? (
                         <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.primary)}>目前頁</span>
                       ) : (
@@ -2283,14 +2294,18 @@ function BomPageTrackerDialog({
                           設為目前頁
                         </button>
                       )}
+                      </td>
+                      <td>
                       <Input
                         value={page.title ?? ""}
                         onChange={event => updatePage(page.pageNumber, { title: event.target.value })}
                         placeholder="頁面標題"
                         aria-label={`第 ${page.pageNumber} 頁標題`}
                         maxLength={300}
-                        className="h-8 min-w-[10rem] flex-1 rounded-lg px-2.5 text-sm lg:min-w-0"
+                        className="bom-tracker-title-input"
                       />
+                      </td>
+                      <td>
                       <Input
                         value={page.note}
                         onChange={(event) => {
@@ -2301,17 +2316,19 @@ function BomPageTrackerDialog({
                         }}
                         placeholder="備註"
                         aria-label={`第 ${page.pageNumber} 頁備註`}
-                        className="h-8 min-w-[12rem] flex-1 rounded-lg px-2.5 text-sm lg:min-w-0"
+                        className="bom-tracker-note-input"
                       />
-                    </div>
+                      </td>
+                    </tr>
                   );
                 })}
-              </div>
+                </tbody>
+              </table>
             </div>
           </>
         )}
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="bom-tracker-footer gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>關閉</Button>
           <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
             {isSaving ? "儲存中..." : "儲存頁數進度"}
