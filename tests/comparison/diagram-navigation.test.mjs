@@ -66,7 +66,7 @@ function workspace(tab = "diagram", stored = []) {
     "./runtime": { ComparisonRuntime: class { cancel() {} }, createRuntime: () => ({ generation: 0, cancel() {}, async request() { return {}; } }) },
     "./engineSettings": { readEngineSettings: () => ({ mode: "browser", url: "", token: "" }), writeEngineSettings() {}, engineHost: url => url },
     "./storage": { async listSessions(id) { return id === accountA ? stored : []; }, async readLibrary() { return "devices: []\n"; } },
-    "./files": { inspectRevision: () => ({}), validateRevision: () => [], formatBytes: bytes => `${bytes} B` },
+    "./files": { inspectRevision: () => ({}), validateRevision: () => [], revisionProgress: () => ({ ready: 0, total: 5 }), sameRevisionSources: () => false, formatBytes: bytes => `${bytes} B` },
     "./datasheetSelection": {},
   });
   let tree;

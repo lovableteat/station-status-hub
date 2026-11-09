@@ -127,3 +127,37 @@ test("optional input warnings are compact while blocking input errors start expa
     assert.equal(vm.runInNewContext(expression, { session: { result: { inputIssues } } }), expected);
   }
 });
+
+test("the input page reads as a checklist: one tool row, numbered steps and a picker on every file slot", async () => {
+  const [workspace, inputs, files, css, guide] = await Promise.all([read("src/components/comparison/ComparisonWorkspace.tsx"), read("src/components/comparison/ComparisonInputs.tsx"), read("src/components/comparison/files.ts"), read("src/components/comparison/comparison.css"), read("src/components/comparison/ComparisonGuide.tsx")]);
+  // Title, tabs and tools share one bar on desktop; the engine badge moved in with the other tools.
+  const topbar = workspace.slice(workspace.indexOf('className="comparison-topbar"'), workspace.indexOf("{compact && <MobileToolsSheet"));
+  assert.match(topbar, /className="comparison-page-header"[\s\S]*className="comparison-workspace-nav"/);
+  assert.match(topbar, /<EngineSettingsControl settings=\{engine\} onChange=\{changeEngine\} disabled=\{busy\} \/>/);
+  assert.match(css, /@media \(min-width: 1024px\) \{\s*\.comparison-topbar \{ display: flex;/);
+  assert.match(css, /\.comparison-topbar > \.comparison-page-header, \.comparison-topbar > \.comparison-page-header > header \{ display: contents; \}/);
+  // The mode switch no longer takes its own row above the name field.
+  const setup = workspace.slice(workspace.indexOf('className="comparison-setup-heading"'), workspace.indexOf('className="comparison-revision-grid"'));
+  assert.match(setup, /className="comparison-mode-switch"[\s\S]*className="comparison-setup-controls"/);
+  assert.match(workspace, /<ol className="comparison-steps" aria-label="比對步驟">/);
+  assert.match(workspace, /data-testid="comparison-run"/);
+  assert.match(workspace, /nextStep === "run" \? "資料已齊" : "下一步"/);
+  assert.match(workspace, /sameRevisionSources\(a, b\)/, "one folder picked for both sides is flagged before the run");
+  assert.match(workspace, /onDragOver=\{guardFileDrag\} onDrop=\{guardFileDrag\}/, "a file dropped beside the panels must not navigate away");
+  // Every slot can be filled on its own and earlier picks stay.
+  assert.match(inputs, /className="comparison-slot-pick"[^>]*onClick=\{\(\) => pickSlot\(role\.key\)\}/);
+  assert.match(inputs, /input\.accept = INPUT_ROLE_ACCEPT\[role\];/);
+  assert.match(inputs, /dropped\.hasDirectory \? loadFolder\(list\) : addFiles\(list\)/, "a folder replaces the version, loose files are added to it");
+  assert.match(inputs, /onChange\(addRevisionFiles\(value, list\)\)/);
+  assert.match(inputs, /版本名稱（可改）/);
+  assert.match(files, /export function addRevisionFiles/);
+  assert.doesNotMatch(files, /每個版本最多選取 1000 個檔案/, "unrelated files in a folder no longer block the run");
+  assert.doesNotMatch(guide, /用不到的檔案也算在上限裡|要一次選齊/);
+  // A desktop flex-basis must not leak into the stacked phone layout, where it would become a height.
+  const flow = css.slice(css.indexOf("One-row tools and a step-by-step input flow"));
+  const desktop = flow.slice(flow.indexOf("@media (min-width: 1024px) {"), flow.indexOf("/* Narrower desktops"));
+  for (const rule of [".comparison-setup-controls { flex: 1 1 760px;", ".comparison-setup-controls .comparison-project-name { flex: 0 1 400px;", ".comparison-run-status { flex: 1 1 150px; }"]) {
+    assert.ok(desktop.includes(rule), rule);
+    assert.equal(flow.split(rule).length, 2, `${rule} must only exist inside the desktop block`);
+  }
+});
