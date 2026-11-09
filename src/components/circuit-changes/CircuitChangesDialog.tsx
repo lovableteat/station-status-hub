@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type FormEvent } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, HelpCircle, MessageSquare, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, HelpCircle, ListCollapse, MessageSquare, PanelLeftOpen, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { CIRCUIT_IMAGE_URL_REUSE_MS, createCircuitImageUrls, downloadCircuitImage } from "./files";
+import { CIRCUIT_IMAGE_URL_REUSE_MS, circuitImageOrigins, createCircuitImageUrls, downloadCircuitImage } from "./files";
+import { parseCircuitPageNumbers } from "./circuitPdf";
+import { CircuitPdfPanel, type CircuitPdfCapture, type CircuitPdfCrop } from "./CircuitPdfPanel";
+import type { CircuitPdfModel } from "./useCircuitPdfs";
 import { exportCircuitChangeList } from "./export";
 import { CircuitChangeImages, type CircuitImageUrls } from "./CircuitChangeImages";
 import { CircuitChangeImageViewer } from "./CircuitChangeImageViewer";
@@ -16,7 +19,8 @@ const sides = Object.keys(CIRCUIT_IMAGE_SIDE_LABELS) as CircuitImageSide[];
 const statusKeys = Object.keys(CIRCUIT_CHANGE_STATUS_LABELS) as CircuitChangeStatus[];
 const FILTER_KEYS = [["circuitQuery", "query", ""], ["circuitStatus", "status", "all"], ["circuitOwner", "owner", "all"]] as const;
 const guideSteps = [
-  { title: "直接記錄", text: "打開就是可以填的表單：寫標題與位置，貼上修改前、修改後的截圖。輸入後自動儲存。" },
+  { title: "上傳 PDF、逐頁看", text: "在「PDF 圖面」上傳原理圖 PDF，每次上傳記為一個日期版本。看到修改就在頁面上框選，直接加到修改前或修改後；也可以只寫文字。按「看完，下一頁」記下進度，明天上傳新的 PDF 會接續同一頁。" },
+  { title: "直接記錄", text: "右邊就是可以填的表單：寫標題與位置，也可以貼上其他截圖。輸入後自動儲存。" },
   { title: "標出改了哪裡", text: "點圖片放大，用「位置標記」或「框選」標出改動，並寫上說明。" },
   { title: "送出 Review、匯出清單", text: "逐項確認或退回補充，最後匯出含圖片與歷史的 Change List。" },
 ];
@@ -29,9 +33,17 @@ const readFilters = () => {
 const carriesFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
 // Side by side panes exist from 1024px. Below that one pane shows at a time and the selected side is also the visible tab.
 const sideBySide = () => window.matchMedia?.("(min-width: 1024px)").matches ?? true;
+const isPdfFile = (file: File) => /\.pdf$/i.test(file.name) || /pdf/i.test(file.type);
+// The PDF beside the form is the default on a wide screen; the choice is kept per browser.
+const LAYOUT_KEY = "circuit-changes-layout:v1";
+function readLayout(): { pdf: boolean; list: "auto" | "open" | "collapsed" } {
+  try { const value = JSON.parse(window.localStorage.getItem(LAYOUT_KEY) || "{}"); return { pdf: value.pdf !== false, list: value.list === "open" || value.list === "collapsed" ? value.list : "auto" }; }
+  catch { return { pdf: true, list: "auto" }; }
+}
+function writeLayout(value: { pdf: boolean; list: "auto" | "open" | "collapsed" }) { try { window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(value)); } catch { /* layout only */ } }
 
-export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, model }: {
-  open: boolean; onOpenChange: (value: boolean) => void; context: CircuitChangeContext; canEdit: boolean; model: CircuitChangesModel;
+export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, model, pdfs }: {
+  open: boolean; onOpenChange: (value: boolean) => void; context: CircuitChangeContext; canEdit: boolean; model: CircuitChangesModel; pdfs: CircuitPdfModel;
 }) {
   const naming = useMemo(() => defaultCircuitChangeSet(context.versionLabel), [context.versionLabel]);
   const [filters, setFilters] = useState(readFilters);
@@ -55,6 +67,13 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   const [closeBlocked, setCloseBlocked] = useState(false);
   const [urls, setUrls] = useState<CircuitImageUrls>({});
   const [viewport, setViewport] = useState<{ height: number; top: number }>();
+  const [layout, setLayout] = useState(readLayout);
+  const [wide, setWide] = useState(sideBySide);
+  const [roomy, setRoomy] = useState(() => window.matchMedia?.("(min-width: 1600px)").matches ?? true);
+  // On a phone the PDF is a pane of its own, opened from the header; on a wide screen it sits between the list and the form.
+  const [mobilePdf, setMobilePdf] = useState(false);
+  const pdfOpen = wide ? layout.pdf : mobilePdf;
+  const listCollapsed = wide && pdfOpen && (layout.list === "collapsed" || (layout.list === "auto" && !roomy));
   const fileInput = useRef<HTMLInputElement>(null);
   const pickerSide = useRef<CircuitImageSide>("before");
   const detailScroll = useRef<HTMLDivElement>(null);
@@ -112,6 +131,13 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   }, []);
   useEffect(() => {
     if (!open) return;
+    const query = window.matchMedia?.("(min-width: 1024px)"), large = window.matchMedia?.("(min-width: 1600px)");
+    const read = () => { setWide(query?.matches ?? true); setRoomy(large?.matches ?? true); };
+    read(); query?.addEventListener("change", read); large?.addEventListener("change", read);
+    return () => { query?.removeEventListener("change", read); large?.removeEventListener("change", read); };
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
     const visual = window.visualViewport;
     const resize = () => { const height = visual?.height || window.innerHeight; if (height) setViewport({ height: Math.min(height, window.innerHeight || height), top: visual?.offsetTop || 0 }); };
     resize(); window.addEventListener("resize", resize); visual?.addEventListener("resize", resize); visual?.addEventListener("scroll", resize);
@@ -133,7 +159,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   // On a phone the side is the tab on screen, and reading a change starts with its before picture.
   const hasBefore = useRef(false); hasBefore.current = Boolean(model.selectedItem?.content.images.some(image => image.side === "before"));
   useEffect(() => { setSide(sideBySide() && hasBefore.current ? "after" : "before"); }, [model.selectedItem?.id]);
-  useEffect(() => { if (!open) { setMobileDetail(false); setNewSetOpen(false); setGuideOpen(false); setViewerId(""); openedDetail.current = false; } }, [open]);
+  useEffect(() => { if (!open) { setMobileDetail(false); setMobilePdf(false); setNewSetOpen(false); setGuideOpen(false); setViewerId(""); openedDetail.current = false; } }, [open]);
   // On a phone the list comes first, but with nothing recorded yet the list is empty and the form is what the user needs.
   useEffect(() => {
     if (!open || openedDetail.current || model.loading || !model.selectedItem) return;
@@ -187,7 +213,42 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     if (working || !newTitle.trim()) return;
     void run(async () => { await model.createSet(newTitle.trim(), fromLabel.trim(), toLabel.trim()); setNewSetOpen(false); });
   }
+  function changeLayout(patch: Partial<{ pdf: boolean; list: "auto" | "open" | "collapsed" }>) { setLayout(current => { const next = { ...current, ...patch }; writeLayout(next); return next; }); }
+  function togglePdf() { if (wide) changeLayout({ pdf: !layout.pdf }); else setMobilePdf(value => !value); }
+  function uploadPdfs(files: File[]) {
+    if (!canEdit) { setNotice("目前為檢視權限，無法上傳 PDF。"); return; }
+    if (wide) changeLayout({ pdf: true }); else setMobilePdf(true);
+    void (async () => { for (const file of files) await pdfs.upload(file).catch(() => {}); })();
+  }
+  const captureBlocked = snapshot ? "正在查看舊修訂，返回目前修訂後才能加入截圖。" : !canEdit ? "目前為檢視權限，無法加入截圖。"
+    : locked ? "這項的內容已鎖定，先按「修改內容」再加入截圖。" : model.switching ? "正在載入修改項目…" : "";
+  async function addCaptures(captures: CircuitPdfCapture[]) {
+    if (captureBlocked) throw new Error(captureBlocked);
+    if (!captures.length) return;
+    for (const capture of captures) circuitImageOrigins.set(capture.file, { source: capture.source, caption: capture.caption });
+    // A change framed from a PDF page gets that page in its 頁碼 field, unless something is written there already.
+    const pageNumber = captures.find(capture => capture.side === "after")?.page ?? captures[0].page;
+    if (content && !content.page.trim()) update({ page: String(pageNumber) });
+    setNotice(""); setWorking(true);
+    try {
+      for (const target of ["before", "after", "reference"] as const) {
+        const files = captures.filter(capture => capture.side === target).map(capture => capture.file);
+        if (files.length) await model.addImages(files, target);
+      }
+      // Show where the pictures went; the PDF stays where it was. On a phone, going back from the PDF shows this change.
+      setMobileDetail(true);
+      detailScroll.current?.querySelector(".circuit-image-section")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    } finally { setWorking(false); }
+  }
+  function showSource(image: CircuitImage) {
+    if (!image.source) return;
+    if (!pdfs.show(image.source.documentId, image.source.page)) { setNotice(`這張圖來自的 PDF（${image.source.date}「${image.source.name}」）已從清單移除。`); return; }
+    if (wide) changeLayout({ pdf: true }); else setMobilePdf(true);
+    setViewerId("");
+  }
   function addFiles(files: File[], targetSide = side) {
+    const pdfFiles = files.filter(isPdfFile);
+    if (pdfFiles.length) { uploadPdfs(pdfFiles); files = files.filter(file => !isPdfFile(file)); if (!files.length) return; }
     if (locked) { setNotice("這項的內容已鎖定，先按「修改內容」再加入圖片。"); return; }
     if (readOnly) { setNotice("目前為唯讀檢視，請返回目前修訂後加入圖片。"); return; }
     if (!files.length) return;
@@ -202,6 +263,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   }
   function openPicker(targetSide: CircuitImageSide) { pickerSide.current = targetSide; setSide(targetSide); fileInput.current?.click(); }
   function paste(event: ClipboardEvent) {
+    const pastedPdfs = Array.from(event.clipboardData.files).filter(isPdfFile);
+    if (pastedPdfs.length) { event.preventDefault(); uploadPdfs(pastedPdfs); return; }
     const files = Array.from(event.clipboardData.files).filter(file => file.type.startsWith("image/"));
     if (!files.length) return;
     // Excel and Word put a picture of the copied cells next to their text. In a text field the text is what was meant.
@@ -229,6 +292,18 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
       await model.review(action, reviewNote.trim()); setReviewNote("");
     });
   }
+  const pdfCrops = useMemo<CircuitPdfCrop[]>(() => images.flatMap(image => image.source ? [{ id: image.id, side: image.side, documentId: image.source.documentId, page: image.source.page, rect: image.source.rect }] : []), [images]);
+  const pageChanges = useMemo(() => {
+    const pages = new Map<number, Array<{ id: string; number: number }>>();
+    const add = (page: number, id: string, value: number) => { const list = pages.get(page) || []; if (!list.some(entry => entry.id === id)) pages.set(page, [...list, { id, number: value }]); };
+    for (const row of model.items) {
+      const text = row.id === model.selectedItemId && model.draft ? model.draft.page : row.content.page;
+      for (const page of parseCircuitPageNumbers(text)) add(page, row.id, row.number);
+    }
+    for (const image of images) if (image.source && model.selectedItem && !unsaved) add(image.source.page, model.selectedItem.id, model.selectedItem.number);
+    return pages;
+  }, [model.items, model.selectedItemId, model.draft, model.selectedItem, images, unsaved]);
+  const targetLabel = unsaved || !item ? "這項新修改" : `${number(item.number)}${content?.title ? ` ${content.title.slice(0, 24)}` : ""}`;
   const saveLabel = model.saving ? "儲存中…" : model.saveError ? (model.dirty ? "儲存失敗" : "操作未完成") : model.dirty ? "尚有未儲存修改" : unsaved ? "輸入後自動儲存" : "已儲存";
   const nextStep = snapshot ? "" : !canEdit ? "檢視權限：可查看與匯出" : reviewing ? "確認內容無誤就按「確認」；需要補充時先寫意見再退回。"
     : item?.status === "approved" && !model.dirty ? "這項已確認。" : missing.length ? `送出前還缺：${missing.join("、")}` : "內容齊全，可以送出 Review。";
@@ -244,7 +319,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
 
   return <>
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent hideCloseButton className="circuit-changes-dialog" style={viewportStyle} data-testid="circuit-changes-dialog" data-mobile-detail={mobileDetail} onPaste={paste}
+      <DialogContent hideCloseButton className="circuit-changes-dialog" style={viewportStyle} data-testid="circuit-changes-dialog" data-mobile-detail={mobileDetail} data-mobile-pdf={!wide && mobilePdf} onPaste={paste}
         onDragOver={event => { if (carriesFiles(event)) { event.preventDefault(); if (!readOnly && content) setDragSide(side); } }}
         onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragSide(null); }} onDrop={drop}>
         <input ref={fileInput} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" aria-label="選取線路修改圖片" className="sr-only" onChange={event => { const files = Array.from(event.target.files || []); event.target.value = ""; addFiles(files, pickerSide.current); }} />
@@ -264,15 +339,22 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
             {canEdit && <Button type="button" variant="outline" onClick={openNewSet} disabled={busy || model.loading} title="另外建立一個改版批次，可自訂名稱與版次"><Plus aria-hidden="true" />新增批次</Button>}
           </div>
           <div className="circuit-header-actions">
+            <Button type="button" variant={pdfOpen ? "secondary" : "outline"} aria-label="PDF 圖面" aria-pressed={pdfOpen} title={pdfOpen ? "收起 PDF，只看清單與表單" : "上傳或打開原理圖 PDF，逐頁框選修改"} onClick={togglePdf}><FileText aria-hidden="true" /><span>PDF<span className="circuit-pdf-word"> 圖面</span></span></Button>
             <Button type="button" variant="outline" aria-label="匯出 Change List" disabled={!selectedSet || !filtered.length || busy || model.dirty} title={model.dirty ? "尚有未儲存修改，儲存後可匯出" : `匯出目前篩選的全部 ${filtered.length} 項修改`} onClick={() => void run(() => exportCircuitChangeList(selectedSet!, filtered))}><Download aria-hidden="true" /><span>匯出 Change List</span></Button>
             <Button type="button" variant="ghost" aria-label="使用說明" onClick={() => setGuideOpen(true)}><HelpCircle aria-hidden="true" /><span>使用說明</span></Button>
             <Button type="button" variant="ghost" aria-label="關閉線路修改" className="circuit-close" onClick={() => close(false)}><X aria-hidden="true" /></Button>
           </div>
         </header>
         {(notice || model.error || model.saveError) && <div className="circuit-message" role="alert"><span>{notice || model.saveError || model.error}</span><div>{closeBlocked && <Button type="button" variant="ghost" title={unsaved ? "這項新修改還沒有建立，關閉後不會保留" : "未儲存的草稿會留在這台電腦，下次開啟這一項時帶回"} onClick={leave}>不儲存，直接關閉</Button>}<Button type="button" variant="ghost" onClick={() => void run(() => model.reload())}>重新載入</Button></div></div>}
-        <div className="circuit-workspace">
+        <div className="circuit-workspace" data-pdf-open={pdfOpen} data-list-collapsed={listCollapsed}>
           <aside className="circuit-list-panel" aria-label="修改項目">
-            {canEdit && <Button type="button" className="circuit-new-item" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" />新增修改</Button>}
+            {listCollapsed ? <div className="circuit-list-rail">
+              <Button type="button" variant="ghost" aria-label="展開修改清單" title="展開修改清單" onClick={() => changeLayout({ list: "open" })}><PanelLeftOpen aria-hidden="true" /></Button>
+              {canEdit && <Button type="button" aria-label="新增修改" title="新增修改" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" /></Button>}
+              <span title={`共 ${model.items.length} 項修改`}>{model.items.length}<small>項</small></span>
+            </div> : <>
+            {canEdit && <div className="circuit-new-item-row"><Button type="button" className="circuit-new-item" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" />新增修改</Button>
+              {wide && pdfOpen && <Button type="button" variant="ghost" className="circuit-list-collapse" aria-label="收合修改清單" title="收合清單，讓 PDF 更寬" onClick={() => changeLayout({ list: "collapsed" })}><ListCollapse aria-hidden="true" /></Button>}</div>}
             <div className="circuit-filter-bar" role="group" aria-label="線路修改篩選">
               <label className="circuit-search"><Search aria-hidden="true" /><Input aria-label="搜尋線路修改" placeholder="搜尋編號、標題、Ref 或 Net" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} /></label>
               <label><span className="sr-only">狀態</span><select aria-label="篩選修改狀態" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value }))}>
@@ -301,7 +383,10 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                 : model.items.length > 0 && !filtered.length ? <p className="circuit-empty">目前篩選條件沒有符合的修改項目</p>
                 : !model.items.length && !unsaved ? <p className="circuit-empty">這個批次還沒有記錄任何修改</p> : null}
             </div>
+            </>}
           </aside>
+          {pdfOpen && <CircuitPdfPanel pdfs={pdfs} canEdit={canEdit} captureBlocked={captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops}
+            onCapture={addCaptures} onSelectChange={selectItem} onBack={() => setMobilePdf(false)} />}
           <section className="circuit-detail" aria-label="線路修改內容" data-testid="circuit-change-detail" aria-busy={model.switching}>
             {content && item ? <>
               <header className="circuit-detail-heading">
@@ -332,7 +417,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                   uploading={model.uploading} progress={model.uploadProgress} warnings={snapshot ? [] : model.uploadWarnings} failures={snapshot ? [] : model.uploadFailures}
                   removed={removed && removed.itemId === item.id ? removed.image : null}
                   onSide={setSide} onDragSide={setDragSide} onPick={openPicker} onFiles={addFiles} onOpen={image => setViewerId(image.id)} onRemove={removeImage} onRestore={restoreImage}
-                  onDownload={image => void run(() => downloadCircuitImage(image))} onRetry={() => void run(() => model.retryUploads())} onDismiss={model.dismissUploadFailures} />
+                  onDownload={image => void run(() => downloadCircuitImage(image))} onRetry={() => void run(() => model.retryUploads())} onDismiss={model.dismissUploadFailures} onShowSource={showSource} />
                 {historyOpen && <section ref={historySection} className="circuit-history" aria-label="修改與 Review 歷史">
                   <h3>歷史與留言</h3>
                   {!snapshot && canEdit && !reviewing && <div className="circuit-comment">{noteBox}{commentButton}</div>}
@@ -392,6 +477,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
         <header className="circuit-guide-header"><div><DialogTitle>線路修改怎麼用</DialogTitle><DialogDescription>記錄修改與貼圖 → 標出位置 → 逐項 Review → 匯出</DialogDescription></div><Button type="button" variant="ghost" aria-label="關閉使用說明" onClick={() => setGuideOpen(false)}><X aria-hidden="true" /></Button></header>
         <div className="circuit-guide-scroll">
           <ol className="circuit-start-steps">{guideSteps.map((step, index) => <li key={step.title}><span>{index + 1}</span><div><strong>{step.title}</strong><p>{step.text}</p></div></li>)}</ol>
+          <section><h3>PDF 怎麼用？</h3><p>按右上的「PDF 圖面」上傳原理圖 PDF（可拖入，每份 50 MB 內存到雲端，更大的只在這台電腦開啟，不需壓縮）。日期先取檔名裡的日期，沒有就用檔案日期，可在版本清單修改。在頁面上拖曳框選一塊區域，按「加到修改前／修改後」，圖會從 PDF 重新繪製，放大也清楚，並記下來源版本與頁碼；這項的頁碼欄若是空的會自動填入。選「對照」可以並排一份較早日期的 PDF，同一個框選區域一次加到修改前與修改後。按「看完，下一頁」記下進度；上方的頁面總覽會分別標出這版看過、較早版本看過與有修改的頁面，明天上傳新的 PDF 會從你看到的那一頁接續。按圖片旁的「P12」可回到該頁。</p></section>
           <section><h3>1. 怎麼新增？</h3><p>打開「線路修改」就能直接填寫；之後按左上的「新增修改」再記下一項。每一處修改各一項，填入標題、Ref／Net、頁碼、負責人及修改原因。還沒輸入任何內容的新修改不會留下紀錄。</p></section>
           <section><h3>2. 怎麼貼圖、標記？</h3><p>截圖後按 Ctrl+V，圖會加到標示「貼上會加到這裡」的那一格；點另一格即可切換，也可以把檔案拖到想放的那一格。每次加入都是追加，每項最多 200 張、每張 50 MB，不需壓縮。點圖片放大，使用「位置標記」或「框選」標出改動並填寫說明；放錯格可在放大視窗改「圖片用途」。</p></section>
           <section><h3>3. 怎麼儲存與交給主管 Review？</h3><p>停止輸入後會自動儲存，下方顯示「已儲存」。標題加上修改說明（或修改後圖片）齊全後，按「送出 Review」。有料號申請編輯權限的人可逐項「確認」，或填寫意見後「退回補充」；退回原因會顯示在該項目最上方。按「歷史」可查看操作者、時間、意見及舊修訂。</p></section>

@@ -14,15 +14,18 @@ function mount(overrides = {}, search = "?workspace=material-requests&project=A"
   const set = { id: "set", seriesId: "board", workspaceId: "bom", title: "Rev B", fromLabel: "V1", toLabel: "V2", projectId: "A", createdAt: first.createdAt, updatedAt: first.updatedAt, createdBy: "a" };
   const event = { id: "event", itemId: first.id, setId: "set", type: "submitted", actorId: "a", actorName: "工程師甲", revision: 2, note: "請確認", createdAt: first.updatedAt };
   const done = name => async (...args) => { calls.push([name, ...args]); };
+  // The PDF pane is replaced by a stub here; its own behaviour is tested with a real PDF in the browser.
+  const origins = new WeakMap();
+  const pdfs = { documents: [], show: (documentId, page) => { calls.push(["show", documentId, page]); return documentId !== "gone"; }, upload: done("uploadPdf") };
   const model = { sets: [set], selectedSetId: "set", items: [first, second], selectedItemId: first.id, selectedItem: first, draft: first.content, events: [event], loading: false, saving: false, uploading: false, switching: false, dirty: false, conflict: false, error: "", saveError: "", uploadProgress: { completed: 0, total: 0 }, uploadFailures: [], uploadWarnings: [], selectSet: done("set"), selectItem: done("select"), createSet: done("createSet"), createItem: done("createItem"), updateDraft: patch => calls.push(["draft", patch]), saveDraft: done("save"), review: done("review"), addImages: done("images"), retryUploads: done("retry"), dismissUploadFailures: () => calls.push(["dismiss"]), reload: done("reload"), adoptRemote: () => calls.push(["adopt"]), saveMyRevision: done("mine"), loadEvent: async id => { calls.push(["event", id]); return { ...event, snapshot: { ...first, revision: 2, content: content("歷史線路內容") } }; }, ...overrides };
-  const { CircuitChangesDialog } = loader({ window, globals: { Error }, mocks: { "./files": { CIRCUIT_IMAGE_URL_REUSE_MS: 1500000, createCircuitImageUrls: async () => ({}), downloadCircuitImage: done("download") }, "./export": { exportCircuitChangeList: done("export") }, "./CircuitChangeImageViewer": { CircuitChangeImageViewer: () => null } } })("src/components/circuit-changes/CircuitChangesDialog.tsx");
-  const all = { open: true, onOpenChange: value => calls.push(["open", value]), context: { seriesId: "board", workspaceId: "bom", workspaceName: "Board.xlsx", versionLabel: "V1" }, canEdit: true, model, ...props };
+  const { CircuitChangesDialog } = loader({ window, globals: { Error }, mocks: { "./CircuitPdfPanel": { CircuitPdfPanel: props => React.createElement("stub", { "data-testid": "circuit-pdf-panel", pdfprops: props }) }, "./files": { circuitImageOrigins: origins, CIRCUIT_IMAGE_URL_REUSE_MS: 1500000, createCircuitImageUrls: async () => ({}), downloadCircuitImage: done("download") }, "./export": { exportCircuitChangeList: done("export") }, "./CircuitChangeImageViewer": { CircuitChangeImageViewer: () => null } } })("src/components/circuit-changes/CircuitChangesDialog.tsx");
+  const all = { open: true, onOpenChange: value => calls.push(["open", value]), context: { seriesId: "board", workspaceId: "bom", workspaceName: "Board.xlsx", versionLabel: "V1" }, canEdit: true, model, pdfs, ...props };
   let root; act(() => { root = create(React.createElement(CircuitChangesDialog, all)); });
   const text = () => JSON.stringify(root.toJSON());
   const button = label => root.root.findAll(node => node.type === "stub" && typeof node.props.onClick === "function" && node.props.children === label)[0];
   const pane = side => root.root.findByProps({ "data-side": side, className: "circuit-image-column" });
   const update = patch => act(() => root.update(React.createElement(CircuitChangesDialog, { ...all, model: { ...model, ...patch } })));
-  return { root, model, props: all, calls, window, text, button, pane, update };
+  return { root, model, props: all, calls, window, text, button, pane, update, origins };
 }
 test("filters stay visible, reversible and scoped to their URL keys", async () => {
   const { root, window, calls } = mount({}, "?workspace=material-requests&project=A&circuitStatus=draft");
@@ -199,5 +202,78 @@ test("once the before picture is in, the next paste belongs to after", async () 
     assert.ok(textOf(view.pane("after")).includes("貼上會加到這裡"));
     await act(async () => { dialog.props.onPaste({ clipboardData: { files: [{ name: "after.png", type: "image/png" }] }, preventDefault() {} }); });
     assert.equal(view.calls.filter(call => call[0] === "images")[1][2], "after");
+  } finally { act(() => view.root.unmount()); }
+});
+test("a framed PDF area goes into the change on screen: its source is kept, sides stay apart, and an empty 頁碼 is filled", async () => {
+  const draft = item("two", 2, "draft", "調整 LED 阻值", { page: "" });
+  const view = mount({ selectedItemId: "two", selectedItem: draft, draft: draft.content });
+  try {
+    const pane = view.root.root.findByProps({ "data-testid": "circuit-pdf-panel" }).props.pdfprops;
+    assert.equal(pane.captureBlocked, "", "an editable change accepts framed areas");
+    assert.equal(pane.targetLabel, "#002 調整 LED 阻值");
+    const file = name => new File(["png"], name, { type: "image/png" });
+    const source = (date, page) => ({ kind: "pdf", documentId: date, name: `${date}.pdf`, date, label: "", page, rect: { x: .1, y: .1, width: .2, height: .2 } });
+    const before = file("before.png"), after = file("after.png");
+    await act(async () => { await pane.onCapture([{ side: "before", file: before, page: 4, caption: "舊版第 4 頁", source: source("2026-11-08", 4) }, { side: "after", file: after, page: 5, caption: "新版第 5 頁", source: source("2026-11-09", 5) }]); });
+    assert.deepEqual(view.calls.filter(call => call[0] === "draft").map(call => call[1].page), ["5"], "頁碼 takes the page of the after picture");
+    const added = view.calls.filter(call => call[0] === "images");
+    assert.equal(added.length, 2);
+    assert.equal(added[0][2], "before"); assert.equal(added[0][1][0], before);
+    assert.equal(added[1][2], "after"); assert.equal(added[1][1][0], after);
+    assert.equal(view.origins.get(before).source.date, "2026-11-08"); assert.equal(view.origins.get(before).caption, "舊版第 4 頁");
+    assert.equal(view.origins.get(after).source.page, 5, "each picture carries its own PDF page into the upload");
+  } finally { act(() => view.root.unmount()); }
+});
+
+test("a written 頁碼 is left alone, and a locked change or an old revision refuses framed areas with the reason", async () => {
+  const draft = item("two", 2, "draft", "調整 LED 阻值", { page: "P12-13" });
+  const editable = mount({ selectedItemId: "two", selectedItem: draft, draft: draft.content });
+  try {
+    const pane = editable.root.root.findByProps({ "data-testid": "circuit-pdf-panel" }).props.pdfprops;
+    await act(async () => { await pane.onCapture([{ side: "after", file: new File(["png"], "a.png", { type: "image/png" }), page: 5, caption: "", source: { kind: "pdf", documentId: "d", name: "d.pdf", date: "2026-11-09", label: "", page: 5, rect: { x: 0, y: 0, width: .5, height: .5 } } }]); });
+    assert.equal(editable.calls.filter(call => call[0] === "draft").length, 0, "the engineer's own 頁碼 is not replaced");
+    assert.equal(editable.calls.filter(call => call[0] === "images").length, 1);
+  } finally { act(() => editable.root.unmount()); }
+  const locked = mount();
+  try {
+    const pane = locked.root.root.findByProps({ "data-testid": "circuit-pdf-panel" }).props.pdfprops;
+    assert.match(pane.captureBlocked, /已鎖定/, "a change waiting for review is locked against framed areas too");
+    await assert.rejects(async () => { await act(async () => { await pane.onCapture([{ side: "after", file: new File(["png"], "a.png"), page: 1, caption: "", source: {} }]); }); }, /已鎖定/);
+    assert.equal(locked.calls.filter(call => call[0] === "images").length, 0);
+  } finally { act(() => locked.root.unmount()); }
+  const viewer = mount({}, undefined, { canEdit: false });
+  try {
+    assert.match(viewer.root.root.findByProps({ "data-testid": "circuit-pdf-panel" }).props.pdfprops.captureBlocked, /檢視權限/);
+  } finally { act(() => viewer.root.unmount()); }
+});
+
+test("a PDF dropped or pasted on the form goes to the PDF pane instead of being refused as a picture", async () => {
+  const draft = item("two", 2, "draft", "調整 LED 阻值");
+  const view = mount({ selectedItemId: "two", selectedItem: draft, draft: draft.content });
+  try {
+    const dialog = view.root.root.findByProps({ "data-testid": "circuit-changes-dialog" });
+    const pdf = new File(["%PDF-1.4"], "Vera_SCH_20261109.pdf", { type: "application/pdf" });
+    await act(async () => { dialog.props.onPaste({ clipboardData: { files: [pdf] }, preventDefault() {} }); });
+    await act(async () => { view.pane("before").props.onDrop({ dataTransfer: { types: ["Files"], files: [pdf, new File(["png"], "shot.png", { type: "image/png" })] }, preventDefault() {}, stopPropagation() {} }); });
+    const uploads = view.calls.filter(call => call[0] === "uploadPdf");
+    assert.equal(uploads.length, 2, "both PDFs went to the PDF pane");
+    assert.equal(uploads[0][1], pdf);
+    const images = view.calls.filter(call => call[0] === "images");
+    assert.equal(images.length, 1, "the picture dropped with it is still added as a picture");
+    assert.equal(images[0][1].length, 1); assert.equal(images[0][1][0].name, "shot.png");
+  } finally { act(() => view.root.unmount()); }
+});
+
+test("a picture framed on a PDF opens its page; a picture from a removed version says so", async () => {
+  const framed = { ...picture("framed", "after"), source: { kind: "pdf", documentId: "v9", name: "v9.pdf", date: "2026-11-09", label: "", page: 7, rect: { x: 0, y: 0, width: 1, height: 1 } } };
+  const gone = { ...picture("gone", "before"), source: { ...framed.source, documentId: "gone", date: "2026-11-01" } };
+  const draft = item("two", 2, "draft", "調整 LED 阻值", { images: [gone, framed] });
+  const view = mount({ selectedItemId: "two", selectedItem: draft, draft: draft.content });
+  try {
+    const button = label => view.root.root.findAll(node => node.props["aria-label"] === label && typeof node.props.onClick === "function")[0];
+    await act(async () => { button("到 PDF 第 7 頁（2026-11-09）").props.onClick(); });
+    assert.deepEqual(view.calls.filter(call => call[0] === "show").map(call => call.slice(1)), [["v9", 7]]);
+    await act(async () => { button("到 PDF 第 7 頁（2026-11-01）").props.onClick(); });
+    assert.ok(view.text().includes("已從清單移除"));
   } finally { act(() => view.root.unmount()); }
 });

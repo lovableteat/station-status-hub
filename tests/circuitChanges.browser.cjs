@@ -25,6 +25,13 @@ async function createPage(browser, origin, account, width = 1440, height = 960) 
   await page.getByTestId('material-circuit-changes').filter({visible:true}).click();
   await dialog(page).waitFor();
   await page.getByRole('heading', {name:'線路修改', exact:true}).waitFor();
+  // This test covers the list, review and export. On a wide screen the PDF pane opens beside them and folds the list;
+  // it is closed here (the choice is kept per browser). tests/circuitChangesPdf.browser.cjs covers the PDF layout.
+  if (width >= 1024) {
+    const pdfToggle = dialog(page).getByRole('button', {name:'PDF 圖面', exact:true});
+    if (await pdfToggle.getAttribute('aria-pressed') === 'true') await pdfToggle.click();
+    await page.getByTestId('circuit-pdf-panel').waitFor({state:'hidden'});
+  }
   return {context,page,errors,navigations};
 }
 async function saved(page) {
@@ -58,6 +65,7 @@ async function checkMobileGeometry(page) {
   const {createServer} = await import('vite');
   const materialMock = path.resolve('tests/support/materialWorkspaceMock.js');
   const storageMock = path.resolve('tests/support/circuitChangesStorageMock.js');
+  const pdfStorageMock = path.resolve('tests/support/circuitChangesPdfStorageMock.js');
   const supabaseMock = path.resolve('tests/support/circuitChangesSupabaseMock.js');
   let server, browser;
   const sessions = [], report = {checks:[],mobile:[],result:'running'};
@@ -67,8 +75,8 @@ async function checkMobileGeometry(page) {
       {find:'@/integrations/supabase/client',replacement:supabaseMock},
       {find:/^\.\/(materialBomStorage|useMaterialBomPresence|materialRequestAudit)$/,replacement:materialMock},
       {find:'@',replacement:path.resolve('src')},
-    ]},worker:{format:'es'},optimizeDeps:{entries:['tests/support/circuitChangesFixture.jsx'],include:['react/jsx-dev-runtime','exceljs']},server:{host:'127.0.0.1',port:0},plugins:[
-      {name:'circuit-repository-fixture',enforce:'pre',resolveId(source,importer){if(source === './storage' && importer?.replaceAll('\\','/').includes('/circuit-changes/'))return storageMock;}},
+    ]},worker:{format:'es'},optimizeDeps:{entries:['tests/support/circuitChangesFixture.jsx'],include:['react/jsx-dev-runtime','exceljs','pdfjs-dist']},server:{host:'127.0.0.1',port:0,fs:{allow:[process.cwd(),fs.realpathSync('node_modules')]}},plugins:[
+      {name:'circuit-repository-fixture',enforce:'pre',resolveId(source,importer){const own=importer?.replaceAll('\\','/').includes('/circuit-changes/');if(own&&source === './storage')return storageMock;if(own&&source === './pdfStorage')return pdfStorageMock;}},
       {name:'circuit-http-fixture',configureServer(vite){vite.middlewares.use(fixture.middleware);vite.middlewares.use((req,res,next)=>{
         if(req.url?.split('?')[0] !== '/')return next();
         res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:; base-uri 'none'");

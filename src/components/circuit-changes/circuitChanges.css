@@ -26,10 +26,20 @@
 .circuit-message button { flex: none; height: 36px; font-size: 13px; }
 
 .circuit-workspace { display: grid; flex: 1; grid-template-columns: 340px minmax(0, 1fr); min-height: 0; }
+/* With the PDF open: list | PDF page | form. The list folds to a rail so the page gets the width. */
+.circuit-workspace[data-pdf-open="true"] { grid-template-columns: 340px minmax(0, 1fr) minmax(380px, 440px); }
+.circuit-workspace[data-pdf-open="true"][data-list-collapsed="true"] { grid-template-columns: 56px minmax(0, 1fr) minmax(380px, 440px); }
+.circuit-workspace[data-pdf-open="true"] .circuit-detail { container: circuit-detail / inline-size; }
+.circuit-list-rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 0; }
+.circuit-list-rail > button { width: 40px; height: 40px; padding: 0; }
+.circuit-list-rail > span { display: flex; flex-direction: column; align-items: center; color: hsl(var(--muted-foreground)); font-size: 14px; font-variant-numeric: tabular-nums; line-height: 18px; }
+.circuit-list-rail > span > small { font-size: 11px; }
+.circuit-new-item-row { display: flex; flex: none; gap: 6px; margin: 12px 12px 0; }
+.circuit-new-item-row > .circuit-list-collapse { flex: none; width: 44px; height: 44px; padding: 0; }
 
 /* List: create, then the filters directly above the results they narrow. */
 .circuit-list-panel { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid hsl(var(--border)); }
-.circuit-changes-dialog .circuit-new-item { flex: none; height: 44px; margin: 12px 12px 0; gap: 6px; font-size: 14px; }
+.circuit-changes-dialog .circuit-new-item { flex: 1; height: 44px; margin: 0; gap: 6px; font-size: 14px; }
 .circuit-filter-bar { display: grid; flex: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px 12px; }
 .circuit-search { position: relative; grid-column: 1 / -1; min-width: 0; }
 .circuit-search > svg { position: absolute; top: 12px; left: 11px; width: 16px; height: 16px; color: hsl(var(--muted-foreground)); pointer-events: none; }
@@ -177,6 +187,20 @@
 .circuit-detail-empty h3 { max-width: 30rem; font-size: 18px; font-weight: 500; line-height: 28px; }
 .circuit-detail-empty p { max-width: 30rem; color: hsl(var(--muted-foreground)); font-size: 14px; line-height: 22px; }
 
+/* Beside a PDF the form column is narrow: fields go two per row, before / after stack, pictures are shorter. */
+@container circuit-detail (max-width: 720px) {
+  .circuit-location-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .circuit-description-fields { grid-template-columns: minmax(0, 1fr); }
+  .circuit-image-columns { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .circuit-image-stage { height: clamp(160px, 26vh, 320px); }
+  .circuit-image-empty { height: clamp(96px, 14vh, 150px); }
+  .circuit-detail-heading, .circuit-detail-footer { padding-inline: 14px; }
+  .circuit-detail-scroll { padding: 12px 14px 16px; }
+  .circuit-footer-row { flex-wrap: wrap; gap: 6px 10px; }
+  .circuit-next-step { flex-basis: 100%; order: 3; }
+}
+.circuit-image-actions > .circuit-image-source { width: auto; gap: 3px; padding-inline: 6px; color: hsl(var(--primary)); font-size: 12px; font-variant-numeric: tabular-nums; }
+
 /* Secondary dialogs */
 .workspace-dialog-surface.circuit-new-set-dialog[data-ui="dialog"] { top: calc(var(--circuit-viewport-top, 0px) + var(--circuit-viewport-height, 100dvh) / 2); max-height: calc(var(--circuit-viewport-height, 100dvh) - 16px); gap: 14px; }
 .circuit-new-set-dialog form { display: grid; gap: 14px; }
@@ -210,6 +234,8 @@
 
 @media (min-width: 1024px) and (max-width: 1279px) {
   .circuit-workspace { grid-template-columns: 290px minmax(0, 1fr); }
+  .circuit-workspace[data-pdf-open="true"] { grid-template-columns: 290px minmax(0, 1fr) minmax(340px, 380px); }
+  .circuit-workspace[data-pdf-open="true"][data-list-collapsed="true"] { grid-template-columns: 56px minmax(0, 1fr) minmax(340px, 380px); }
   .circuit-title { max-width: 26%; }
   .circuit-header-actions > button > span { display: none; }
 }
@@ -222,7 +248,7 @@
   .circuit-title p { font-size: 12px; }
   .circuit-header-actions { order: 2; gap: 2px; }
   .circuit-header-actions > button { height: 44px; padding-inline: 8px; font-size: 13px; }
-  .circuit-header-actions > button:first-child > span { display: none; }
+  .circuit-header-actions > button:nth-child(2) > span, .circuit-pdf-word { display: none; }
   .circuit-header-actions > .circuit-close { width: 44px; }
   .circuit-set { order: 3; flex: 1 0 100%; }
   .circuit-set > button { height: 44px; }
@@ -234,7 +260,9 @@
   .circuit-message button { min-height: 44px; }
   .circuit-workspace { display: flex; }
   .circuit-list-panel { flex: 1; border-right: 0; }
-  .circuit-changes-dialog .circuit-new-item { margin: 10px 16px 0; }
+  .circuit-new-item-row { margin: 10px 16px 0; }
+  .circuit-changes-dialog[data-mobile-pdf="true"] .circuit-workspace > :is(.circuit-list-panel, .circuit-detail) { display: none; }
+  .circuit-changes-dialog[data-mobile-pdf="true"] .circuit-set { display: none; }
   .circuit-filter-bar { gap: 6px; padding: 8px 16px; }
   .circuit-search input { height: 44px; font-size: 16px; }
   .circuit-search > svg { top: 14px; }

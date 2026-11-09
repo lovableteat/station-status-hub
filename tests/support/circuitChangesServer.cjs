@@ -1,7 +1,7 @@
 const { randomUUID } = require('node:crypto');
 
 function createCircuitChangesServer() {
-  const state = { sets: new Map(), items: new Map(), events: new Map(), files: new Map(), failedNames: new Set(), calls: [], conflictItem: null, sseDelivered: 0 };
+  const state = { sets: new Map(), items: new Map(), events: new Map(), files: new Map(), failedNames: new Set(), calls: [], conflictItem: null, sseDelivered: 0, pdfRegistries: new Map(), pdfVersions: new Map(), pdfs: new Map(), pdfWrites: 0, pdfConflicts: 0, pdfWriteDelay: 0 };
   const clients = new Set();
   let lastStamp = Date.now();
   const clone = value => structuredClone(value);
@@ -91,13 +91,41 @@ function createCircuitChangesServer() {
         const { method, args = [] } = JSON.parse((await body(req)).toString());
         return json(res, 200, { data: run(method, args, account) });
       }
-      if (url.pathname === '/__circuit/state') return json(res, 200, { sets:[...state.sets.values()], items:[...state.items.values()], events:[...state.events.values()], files:[...state.files.keys()], objects:[...state.files].map(([path,file])=>({path,size:file.bytes.length,type:file.mime})), calls:state.calls, sseDelivered:state.sseDelivered });
+      if (url.pathname === '/__circuit/state') return json(res, 200, { sets:[...state.sets.values()], items:[...state.items.values()], events:[...state.events.values()], files:[...state.files.keys()],pdfRegistries:Object.fromEntries(state.pdfRegistries),pdfs:[...state.pdfs.keys()],pdfWrites:state.pdfWrites,pdfConflicts:state.pdfConflicts, objects:[...state.files].map(([path,file])=>({path,size:file.bytes.length,type:file.mime})), calls:state.calls, sseDelivered:state.sseDelivered });
       if (url.pathname === '/__circuit/control') {
         const input = JSON.parse((await body(req)).toString() || '{}');
-        if (input.action === 'reset') { for (const key of ['sets','items','events','files']) state[key].clear(); state.failedNames.clear(); state.calls.length = 0; state.conflictItem = null; state.sseDelivered = 0; }
+        if (input.action === 'reset') { for (const key of ['sets','items','events','files','pdfRegistries','pdfVersions','pdfs']) state[key].clear(); state.pdfWrites = 0; state.pdfConflicts = 0; state.pdfWriteDelay = 0; state.failedNames.clear(); state.calls.length = 0; state.conflictItem = null; state.sseDelivered = 0; }
         if (input.action === 'conflict_next_save') state.conflictItem = input.itemId || true;
+        if (input.action === 'pdf_write_delay') state.pdfWriteDelay = Number(input.ms) || 0;
         if (input.action === 'bump') { const item = getItem(input.itemId); item.content = {...item.content, ...(input.patch || {})}; item.revision++; item.updatedAt=stamp(); record(item,'edited','B'); }
         return json(res, 200, {ok:true});
+      }
+      // Schematic PDFs: the shared version list per board and the PDF files, like the preference row and the SPEC bucket.
+      if (url.pathname === '/__circuit/pdf-registry') {
+        const seriesId = url.searchParams.get('seriesId') || '';
+        if (req.method === 'PUT') {
+          if (account === 'view') fail(403, '目前帳號沒有料號申請編輯權限');
+          const current = state.pdfVersions.get(seriesId) || 0;
+          if (Number(url.searchParams.get('version')) !== current) { state.pdfConflicts++; fail(409, 'QA PDF 清單已被他人更新'); }
+          // Optional delay between the check and the write, to make two saves overlap on purpose.
+          const delay = state.pdfWriteDelay; if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+          if ((state.pdfVersions.get(seriesId) || 0) !== current) { state.pdfConflicts++; fail(409, 'QA PDF 清單已被他人更新'); }
+          state.pdfRegistries.set(seriesId, JSON.parse((await body(req)).toString())); state.pdfVersions.set(seriesId, current + 1); state.pdfWrites++;
+          return json(res, 200, { ok: true });
+        }
+        return json(res, 200, { data: state.pdfRegistries.has(seriesId) ? clone(state.pdfRegistries.get(seriesId)) : null, version: state.pdfVersions.get(seriesId) || 0 });
+      }
+      if (url.pathname === '/__circuit/pdf-object') {
+        const path = url.searchParams.get('path') || '';
+        if (!/^circuit-pdf\/[^/]+\/[^/]+\.pdf$/.test(path)) fail(400, 'QA PDF 路徑不符合儲存區規則');
+        if (req.method === 'PUT') {
+          if (account === 'view') fail(403, '目前帳號沒有上傳權限');
+          if (state.pdfs.has(path)) fail(409, 'QA PDF 不得覆寫');
+          state.pdfs.set(path, await body(req)); return json(res, 200, { data: { path } });
+        }
+        if (req.method === 'DELETE') { if (account === 'view') fail(403, '目前帳號沒有刪除權限'); state.pdfs.delete(path); return json(res, 200, { ok: true }); }
+        const bytes = state.pdfs.get(path); if (!bytes) fail(404, '找不到 QA PDF');
+        res.statusCode = 200; res.setHeader('Content-Type', 'application/pdf'); res.setHeader('Cache-Control', 'no-store'); res.end(bytes); return;
       }
       if (url.pathname === '/__circuit/object') {
         const path = url.searchParams.get('path');

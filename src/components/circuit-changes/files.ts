@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { CircuitImage, CircuitImageSide } from "./types";
+import type { CircuitImage, CircuitImageSide, CircuitImageSource } from "./types";
 
 export const CIRCUIT_IMAGE_BUCKET = "circuit-change-images";
 export const CIRCUIT_IMAGE_MAX_BYTES = 50 * 1024 * 1024;
@@ -7,6 +7,8 @@ export const CIRCUIT_IMAGE_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,.bmp";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** The file itself can never be accepted (wrong type, empty, too large), unlike a transfer that may work on retry. */
 export class CircuitImageRejectedError extends Error {}
+/** A picture framed on a PDF carries where it came from; the same File object is used again when a failed upload is retried. */
+export const circuitImageOrigins = new WeakMap<File, { source: CircuitImageSource; caption: string }>();
 
 export async function validateCircuitImage(file: File) {
   if (!file.size) throw new CircuitImageRejectedError("圖片內容是空的。");
@@ -18,7 +20,7 @@ export async function validateCircuitImage(file: File) {
   if (text.startsWith("RIFF") && text.slice(8, 12) === "WEBP") return { mime: "image/webp", extension: "webp" };
   if (text.startsWith("GIF87a") || text.startsWith("GIF89a")) return { mime: "image/gif", extension: "gif" };
   if (text.startsWith("BM")) return { mime: "image/bmp", extension: "bmp" };
-  throw new CircuitImageRejectedError("不是可用的圖片，請使用 PNG、JPEG、WEBP、GIF 或 BMP（PDF 請先截圖）。");
+  throw new CircuitImageRejectedError("不是可用的圖片，請使用 PNG、JPEG、WEBP、GIF 或 BMP（PDF 請上傳到「PDF 圖面」再框選）。");
 }
 
 async function preview(file: File) {
@@ -68,8 +70,10 @@ export async function uploadCircuitImages({ setId, itemId, files, side, actorId,
           } catch { warning = `${file.name}：縮圖上傳中斷，已保留原圖。`; }
           assertScope();
         } else warning = `${file.name}：無法建立縮圖，已保留原圖。`;
+        const origin = circuitImageOrigins.get(file);
         results[index] = { image: { id, name: file.name || `image.${type.extension}`, path, thumbnailPath, mime: type.mime, size: file.size,
-          width: decoded.width, height: decoded.height, side, caption: "", marks: [], uploadedAt: new Date().toISOString(), uploadedBy: actorId }, warning };
+          width: decoded.width, height: decoded.height, side, caption: origin?.caption ?? "", marks: [], uploadedAt: new Date().toISOString(), uploadedBy: actorId,
+          ...(origin ? { source: origin.source } : {}) }, warning };
       } catch (error) {
         results[index] = { file, error: error instanceof Error ? error.message : String((error as { message?: string })?.message || "圖片上傳失敗，請重試。"),
           ...(error instanceof CircuitImageRejectedError ? { permanent: true } : {}) };

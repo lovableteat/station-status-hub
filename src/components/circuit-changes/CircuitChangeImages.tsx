@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
-import { Download, ImagePlus, Maximize2, Trash2, Upload } from "lucide-react";
+import { Download, FileText, ImagePlus, Maximize2, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CircuitImageMarks } from "./CircuitImageMarks";
 import { CIRCUIT_IMAGE_SIDE_LABELS, type CircuitImage, type CircuitImageSide, type CircuitUploadFailure } from "./types";
@@ -12,6 +12,8 @@ interface PaneActions {
   onSide: (side: CircuitImageSide) => void; onDragSide: (side: CircuitImageSide | null) => void;
   onPick: (side: CircuitImageSide) => void; onFiles: (files: File[], side: CircuitImageSide) => void;
   onOpen: (image: CircuitImage) => void; onRemove: (image: CircuitImage) => void; onDownload: (image: CircuitImage) => void;
+  /** Shows the PDF page a framed picture came from. */
+  onShowSource?: (image: CircuitImage) => void;
 }
 
 /**
@@ -53,7 +55,7 @@ export function CircuitChangeImages({ images, urls, side, dragSide, readOnly, bu
   </section>;
 }
 
-function Pane({ side, images, urls, active, dropping, readOnly, busy, onSide, onDragSide, onPick, onFiles, onOpen, onRemove, onDownload }: PaneActions & {
+function Pane({ side, images, urls, active, dropping, readOnly, busy, onSide, onDragSide, onPick, onFiles, onOpen, onRemove, onDownload, onShowSource }: PaneActions & {
   side: CircuitImageSide; images: CircuitImage[]; urls: CircuitImageUrls; active: boolean; dropping: boolean; readOnly: boolean; busy: boolean;
 }) {
   const label = CIRCUIT_IMAGE_SIDE_LABELS[side], compact = side === "reference";
@@ -71,6 +73,7 @@ function Pane({ side, images, urls, active, dropping, readOnly, busy, onSide, on
   const shown = images[shownIndex];
   const frame = (image: CircuitImage) => ({ "--circuit-image-aspect": image.width / image.height, aspectRatio: `${image.width} / ${image.height}` }) as CSSProperties;
   const actions = (image: CircuitImage) => <div className="circuit-image-actions">
+    {image.source && onShowSource && <Button type="button" variant="ghost" className="circuit-image-source" aria-label={`到 PDF 第 ${image.source.page} 頁（${image.source.date}）`} title={`在 PDF 圖面打開 ${image.source.date} 版第 ${image.source.page} 頁`} onClick={() => onShowSource(image)}><FileText aria-hidden="true" /><span>P{image.source.page}</span></Button>}
     <Button type="button" variant="ghost" aria-label={`下載原圖 ${image.name}`} title="下載原圖" onClick={() => onDownload(image)}><Download aria-hidden="true" /></Button>
     {!readOnly && <Button type="button" variant="ghost" aria-label={`移除圖片 ${image.name}`} title="移除這張圖（可復原）" disabled={busy} onClick={() => onRemove(image)}><Trash2 aria-hidden="true" /></Button>}
   </div>;
