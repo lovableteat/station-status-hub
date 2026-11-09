@@ -16,6 +16,11 @@ export interface CircuitChangeContent {
   title: string; reason: string; description: string; refs: string; net: string; page: string;
   owner: string; images: CircuitImage[];
 }
+export type CircuitChangeTextField = Exclude<keyof CircuitChangeContent, "images">;
+/** Same limits as circuit_change_private.validate_content, so a field can never hold text the server will refuse. */
+export const CIRCUIT_CHANGE_FIELD_LIMITS: Record<CircuitChangeTextField, number> = {
+  title: 500, reason: 10000, description: 40000, refs: 4000, net: 2000, page: 500, owner: 200,
+};
 export interface CircuitChangeContext {
   seriesId: string; workspaceId: string; workspaceName: string; projectId?: string; projectName?: string; versionLabel: string;
 }
@@ -35,18 +40,40 @@ export interface CircuitChangeEvent {
 export const emptyCircuitChangeContent = (owner = ""): CircuitChangeContent => ({
   title: "", reason: "", description: "", refs: "", net: "", page: "", owner, images: [],
 });
-export interface CircuitUploadFailure { file: File; error: string; side?: CircuitImageSide }
+/** A change that is open on screen but has not been written yet: the first save creates it and gives it its number. */
+export const isUnsavedCircuitChange = (item: Pick<CircuitChangeItem, "revision"> | null | undefined) => Boolean(item && item.revision === 0);
+/** The batch created together with the first recorded change of a board that has none, e.g. "V1 → V2 線路修改". */
+export function defaultCircuitChangeSet(versionLabel: string) {
+  const fromLabel = versionLabel.trim().slice(0, 80);
+  const number = /^V(\d+)/i.exec(fromLabel);
+  const toLabel = number ? `V${Number(number[1]) + 1}` : "";
+  return { title: `${[fromLabel, toLabel].filter(Boolean).join(" → ")} 線路修改`.trim(), fromLabel, toLabel };
+}
+/** What the server still requires before a change can be sent for review; empty when it is ready. */
+export function circuitChangeMissingForReview(content: CircuitChangeContent | null | undefined) {
+  if (!content) return ["修改內容"];
+  const missing: string[] = [];
+  if (!content.title.trim()) missing.push("修改標題");
+  if (!content.description.trim() && !content.images.some(image => image.side === "after")) missing.push("修改說明或修改後圖片");
+  return missing;
+}
+/** `permanent` marks a file that can never be accepted (wrong type, empty, too large), so retrying it is pointless. */
+export interface CircuitUploadFailure { file: File; error: string; side?: CircuitImageSide; permanent?: boolean }
 export interface CircuitChangesModel {
   sets: CircuitChangeSet[]; selectedSetId: string; items: CircuitChangeItem[]; selectedItemId: string;
   selectedItem: CircuitChangeItem | null; draft: CircuitChangeContent | null; events: CircuitChangeEvent[];
   loading: boolean; saving: boolean; uploading: boolean; dirty: boolean; conflict: boolean;
+  /** True while another change is being loaded; edits are ignored until it is on screen. */
+  switching: boolean;
   error: string; saveError: string; uploadProgress: { completed: number; total: number };
   uploadFailures: CircuitUploadFailure[]; uploadWarnings: string[];
   selectSet: (id: string) => Promise<void>; selectItem: (id: string) => Promise<void>;
   createSet: (title: string, fromLabel: string, toLabel: string) => Promise<void>;
+  /** Opens a blank change. Nothing is written until the user types or adds an image. */
   createItem: () => Promise<void>; updateDraft: (patch: Partial<CircuitChangeContent>) => void;
   saveDraft: () => Promise<void>; review: (action: CircuitChangeAction, note?: string) => Promise<void>;
   addImages: (files: File[], side: CircuitImageSide) => Promise<void>; retryUploads: () => Promise<void>;
+  dismissUploadFailures: () => void;
   reload: () => Promise<void>; adoptRemote: () => void; saveMyRevision: () => Promise<void>;
   loadEvent: (id: string) => Promise<CircuitChangeEvent>;
 }

@@ -36,7 +36,7 @@ async function status(page, value) {
   await page.waitForFunction(expected => document.querySelector('[data-testid="circuit-change-item"][aria-pressed="true"] .circuit-list-status')?.getAttribute('data-status') === expected, value);
 }
 async function imageCount(page, expected) {
-  await page.waitForFunction(count => document.querySelectorAll('.circuit-image-preview').length === count, expected);
+  await page.waitForFunction(count => [...document.querySelectorAll('.circuit-image-column')].reduce((total, pane) => total + Number(pane.dataset.imageCount || 0), 0) === count, expected);
 }
 async function upload(page, side, files) {
   const promise = page.waitForEvent('filechooser');
@@ -79,13 +79,21 @@ async function checkMobileGeometry(page) {
     const origin = 'http://127.0.0.1:' + server.httpServer.address().port;
     browser = await chromium.launch({channel:'chrome'});
     const a = await createPage(browser,origin,'A'); sessions.push(a);
+    // Nothing recorded yet: the form and both picture targets are there on open, and looking at them writes nothing.
+    await a.page.getByRole('textbox',{name:'修改標題',exact:true}).waitFor();
+    assert.ok(await a.page.getByRole('button',{name:'加入修改前圖片',exact:true}).isVisible());
+    assert.ok(await a.page.getByRole('button',{name:'加入修改後圖片',exact:true}).isVisible());
+    await dialog(a.page).getByRole('button',{name:'新增修改',exact:true}).click();
+    await dialog(a.page).getByRole('button',{name:'新增修改',exact:true}).click();
+    let serverState=await stateOf(origin);
+    assert.equal(serverState.sets.length+serverState.items.length,0,'opening the dialog or pressing 新增修改 on an empty form must not leave records');
+    report.checks.push('first open is a ready form with visible picture targets and writes nothing');
     await dialog(a.page).getByRole('button',{name:'新增批次',exact:true}).click();
     await a.page.getByRole('textbox',{name:'改版批次名稱',exact:true}).fill('QA E1.S 線路修改 V1 → V2');
     await a.page.getByRole('textbox',{name:'修改前版次',exact:true}).fill('V1');
     await a.page.getByRole('textbox',{name:'修改後版次',exact:true}).fill('V2');
     await a.page.getByRole('button',{name:'建立批次',exact:true}).click();
     await a.page.getByRole('heading',{name:'新增改版批次',exact:true}).waitFor({state:'hidden'});
-    await dialog(a.page).getByRole('button',{name:'新增修改',exact:true}).click();
     await a.page.getByRole('textbox',{name:'修改標題',exact:true}).fill('QA R2301 阻值與接法調整');
     await a.page.getByRole('textbox',{name:'Ref',exact:true}).fill('R2301, U2');
     await a.page.getByRole('textbox',{name:'修改原因',exact:true}).fill('Review 要求調整上拉與電源接法');
@@ -101,7 +109,8 @@ async function checkMobileGeometry(page) {
     const image = name => ({name,mimeType:'image/png',buffer:png});
     await upload(a.page,'修改前',Array.from({length:12},()=>image('same.png')));
     await imageCount(a.page,12);await saved(a.page);
-    let serverState=await stateOf(origin);const firstId=serverState.items[0].id;
+    serverState=await stateOf(origin);const firstId=serverState.items[0].id;
+    assert.equal(serverState.sets.length,1,'the change went into the batch the user created, not into a second default one');assert.equal(serverState.items.length,1);
     assert.equal(new Set(serverState.items[0].content.images.map(file=>file.path)).size,12,'same filenames must append with unique paths');
     assert.equal(serverState.items[0].content.images.filter(file=>file.side==='before').length,12);
     await upload(a.page,'修改後',[image('fail-once.png')]);
@@ -125,8 +134,25 @@ async function checkMobileGeometry(page) {
     await imageViewer.getByRole('textbox',{name:'標記 2 說明',exact:true}).fill('檢查這段接法');
     await imageViewer.getByRole('textbox',{name:'圖片說明',exact:true}).fill('修改前電路，位置1與框2需要調整');
     await imageViewer.getByRole('button',{name:'關閉圖片',exact:true}).click();await imageViewer.waitFor({state:'hidden'});await saved(a.page);
-    serverState=await stateOf(origin);assert.equal(serverState.items[0].content.images[0].marks.length,2);
+    serverState=await stateOf(origin);assert.equal(serverState.items[0].content.images.filter(file=>file.marks.length===2).length,1);
     report.checks.push('actual image viewer zoom, pin, box and captions persist separately from original bytes');
+    const transfer=(selector,type,options={})=>a.page.evaluate(({selector,type,base64,options})=>{
+      const bytes=Uint8Array.from(atob(base64),char=>char.charCodeAt(0)),data=new DataTransfer();
+      data.items.add(new File([bytes],options.name||'shot.png',{type:'image/png'}));if(options.text)data.setData('text/plain',options.text);
+      const event=type==='paste'?new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}):new DragEvent(type,{bubbles:true,cancelable:true,dataTransfer:data});
+      document.querySelector(selector).dispatchEvent(event);return event.defaultPrevented;
+    },{selector,type,base64:pngData,options});
+    assert.equal(await transfer('.circuit-image-column[data-side="reference"]','drop',{name:'dropped-reference.png'}),true);
+    await imageCount(a.page,14);await saved(a.page);
+    serverState=await stateOf(origin);assert.equal(serverState.items[0].content.images.find(file=>file.name==='dropped-reference.png').side,'reference','a drop lands in the pane it was dropped on');
+    await a.page.getByRole('textbox',{name:'修改說明',exact:true}).focus();
+    assert.equal(await transfer('textarea[aria-label="修改說明"]','paste',{text:'R2301 10K -> 4.7K'}),false,'cell text copied from a spreadsheet is pasted as text, not uploaded as a picture');
+    assert.equal(await transfer('[data-ui="scrim"]','dragover'),true,'a file dragged beside the dialog must not make the browser open it');
+    await a.page.waitForTimeout(600);await imageCount(a.page,14);
+    await a.page.getByRole('button',{name:'移除圖片 dropped-reference.png',exact:true}).click();await imageCount(a.page,13);
+    await a.page.getByRole('button',{name:'復原',exact:true}).click();await imageCount(a.page,14);
+    await a.page.getByRole('button',{name:'移除圖片 dropped-reference.png',exact:true}).click();await imageCount(a.page,13);await saved(a.page);
+    report.checks.push('drop targets the pane under the pointer, spreadsheet text is not hijacked, stray drops are neutralised, image removal can be undone');
     const b=await createPage(browser,origin,'B');sessions.push(b);
     await b.page.getByRole('textbox',{name:'修改標題',exact:true}).waitFor();
     assert.equal(await b.page.getByRole('textbox',{name:'修改標題',exact:true}).inputValue(),'QA R2301 阻值與接法調整');
@@ -137,6 +163,9 @@ async function checkMobileGeometry(page) {
     await a.page.getByRole('textbox',{name:'修改說明',exact:true}).fill('已補修改後接法，R2301 4.7K 依最新設計確認');await saved(a.page);await status(a.page,'draft');
     await a.page.getByRole('button',{name:'送出 Review',exact:true}).click();await status(b.page,'in_review');
     await b.page.getByRole('button',{name:'確認',exact:true}).click();await status(b.page,'approved');await status(a.page,'approved');
+    // An approved change is locked; editing it is a deliberate step and starts a new revision that needs review again.
+    assert.equal(await a.page.getByRole('textbox',{name:'修改標題',exact:true}).isDisabled(),true);
+    await a.page.getByRole('button',{name:'修改內容',exact:true}).click();
     await a.page.getByRole('textbox',{name:'修改標題',exact:true}).fill('QA R2301 新修訂需要再次 Review');await saved(a.page);await status(a.page,'draft');await status(b.page,'draft');
     assert.equal(a.navigations.length,aNav);assert.equal(b.navigations.length,bNav);
     report.checks.push('two-editor shared review: submit, return with reason, revise, resubmit, approve; editing approved content resets draft without navigation');

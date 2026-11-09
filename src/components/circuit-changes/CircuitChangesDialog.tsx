@@ -1,63 +1,88 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type CSSProperties } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, HelpCircle, ImagePlus, MessageSquare, Plus, Search, Upload, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type FormEvent } from "react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, HelpCircle, MessageSquare, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { createCircuitImageUrls, downloadCircuitImage } from "./files";
+import { CIRCUIT_IMAGE_URL_REUSE_MS, createCircuitImageUrls, downloadCircuitImage } from "./files";
 import { exportCircuitChangeList } from "./export";
+import { CircuitChangeImages, type CircuitImageUrls } from "./CircuitChangeImages";
 import { CircuitChangeImageViewer } from "./CircuitChangeImageViewer";
-import { CIRCUIT_CHANGE_STATUS_LABELS, CIRCUIT_IMAGE_SIDE_LABELS, type CircuitChangeContext, type CircuitChangeContent, type CircuitChangeItem, type CircuitChangeStatus, type CircuitChangesModel, type CircuitImage, type CircuitImageSide } from "./types";
+import { CIRCUIT_EVENT_LABELS, circuitSetLabel, groupCircuitChangeEvents, latestCircuitReturn } from "./presentation";
+import { CIRCUIT_CHANGE_FIELD_LIMITS, CIRCUIT_CHANGE_STATUS_LABELS, CIRCUIT_IMAGE_SIDE_LABELS, circuitChangeMissingForReview, defaultCircuitChangeSet, isUnsavedCircuitChange, type CircuitChangeContext, type CircuitChangeContent, type CircuitChangeItem, type CircuitChangeStatus, type CircuitChangeTextField, type CircuitChangesModel, type CircuitImage, type CircuitImageSide } from "./types";
 import "./circuitChanges.css";
 
 const sides = Object.keys(CIRCUIT_IMAGE_SIDE_LABELS) as CircuitImageSide[];
 const statusKeys = Object.keys(CIRCUIT_CHANGE_STATUS_LABELS) as CircuitChangeStatus[];
-const startSteps = [
-  { title: "建立改版批次", text: "把同一次改版的修改放在一起，例如 V1 → V2。" },
-  { title: "新增修改、貼上前後圖", text: "每一處修改獨立記錄，填標題、位置與原因，再加入圖片。" },
+const FILTER_KEYS = [["circuitQuery", "query", ""], ["circuitStatus", "status", "all"], ["circuitOwner", "owner", "all"]] as const;
+const guideSteps = [
+  { title: "直接記錄", text: "打開就是可以填的表單：寫標題與位置，貼上修改前、修改後的截圖。輸入後自動儲存。" },
+  { title: "標出改了哪裡", text: "點圖片放大，用「位置標記」或「框選」標出改動，並寫上說明。" },
   { title: "送出 Review、匯出清單", text: "逐項確認或退回補充，最後匯出含圖片與歷史的 Change List。" },
 ];
-const eventLabels: Record<string, string> = { created: "建立項目", edited: "更新內容", submitted: "送出 Review", approved: "確認", request_changes: "退回補充", changes_requested: "退回補充", comment: "留言", submit: "送出 Review", approve: "確認" };
 const dateTime = (value: string) => value ? new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "";
+const number = (value: number) => `#${String(value).padStart(3, "0")}`;
 const readFilters = () => {
   const query = new URLSearchParams(window.location.search);
   return { query: query.get("circuitQuery") || "", status: statusKeys.includes(query.get("circuitStatus") as CircuitChangeStatus) ? query.get("circuitStatus")! : "all", owner: query.get("circuitOwner") || "all" };
 };
+const carriesFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
+// Side by side panes exist from 1024px. Below that one pane shows at a time and the selected side is also the visible tab.
+const sideBySide = () => window.matchMedia?.("(min-width: 1024px)").matches ?? true;
 
 export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, model }: {
   open: boolean; onOpenChange: (value: boolean) => void; context: CircuitChangeContext; canEdit: boolean; model: CircuitChangesModel;
 }) {
+  const naming = useMemo(() => defaultCircuitChangeSet(context.versionLabel), [context.versionLabel]);
   const [filters, setFilters] = useState(readFilters);
   const [notice, setNotice] = useState("");
   const [working, setWorking] = useState(false);
   const [newSetOpen, setNewSetOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [fromLabel, setFromLabel] = useState(context.versionLabel);
-  const [toLabel, setToLabel] = useState("");
+  const [newTitle, setNewTitle] = useState(naming.title);
+  const [fromLabel, setFromLabel] = useState(naming.fromLabel);
+  const [toLabel, setToLabel] = useState(naming.toLabel);
   const [mobileDetail, setMobileDetail] = useState(false);
-  const [side, setSide] = useState<CircuitImageSide>("after");
+  const [side, setSide] = useState<CircuitImageSide>("before");
+  const [dragSide, setDragSide] = useState<CircuitImageSide | null>(null);
   const [reviewNote, setReviewNote] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [snapshot, setSnapshot] = useState<CircuitChangeItem | null>(null);
-  const [viewer, setViewer] = useState<CircuitImage | null>(null);
-  const [urls, setUrls] = useState<Record<string, { original: string; thumbnail: string }>>({});
-  const [dragging, setDragging] = useState(false);
+  const [viewerId, setViewerId] = useState("");
+  const [removed, setRemoved] = useState<{ image: CircuitImage; index: number; itemId: string } | null>(null);
+  const [unlockedId, setUnlockedId] = useState("");
+  const [closeBlocked, setCloseBlocked] = useState(false);
+  const [urls, setUrls] = useState<CircuitImageUrls>({});
   const [viewport, setViewport] = useState<{ height: number; top: number }>();
   const fileInput = useRef<HTMLInputElement>(null);
-  const pickerSide = useRef<CircuitImageSide>("after");
+  const pickerSide = useRef<CircuitImageSide>("before");
   const detailScroll = useRef<HTMLDivElement>(null);
   const historySection = useRef<HTMLElement>(null);
-  const selectedSet = model.sets.find(item => item.id === model.selectedSetId);
+  const openedDetail = useRef(false);
+  const selectedSet = model.sets.find(set => set.id === model.selectedSetId);
   const item = snapshot || model.selectedItem;
   const content = snapshot?.content || model.draft;
-  const readOnly = !canEdit || Boolean(snapshot);
-  const busy = working || model.saving || model.uploading;
-  const canSubmit = item?.status === "draft" || item?.status === "needs_changes" || model.dirty;
+  const unsaved = !snapshot && isUnsavedCircuitChange(model.selectedItem);
+  // A change that waits for review or is approved cannot be edited by accident: any content change withdraws that state,
+  // and with auto-save a stray keystroke from the reviewer would do it. Editing takes one deliberate click.
+  const locked = canEdit && !snapshot && !model.dirty && (item?.status === "in_review" || item?.status === "approved") && unlockedId !== item.id;
+  const readOnly = !canEdit || Boolean(snapshot) || locked;
+  const busy = working || model.saving || model.uploading || model.switching;
+  const missing = circuitChangeMissingForReview(content);
+  const reviewing = !snapshot && canEdit && item?.status === "in_review" && !model.dirty;
+  const canSubmit = !reviewing && (unsaved || item?.status === "draft" || item?.status === "needs_changes" || model.dirty);
   const latestActor = model.events.find(event => event.revision === item?.revision)?.actorName;
-  const images = content?.images || [];
+  const returned = !snapshot && item?.status === "needs_changes" ? latestCircuitReturn(model.events, item.revision) : null;
+  const history = useMemo(() => groupCircuitChangeEvents(model.events), [model.events]);
+  const images = useMemo(() => content?.images || [], [content]);
+  const latestImages = useRef(images); latestImages.current = images;
   const imageSources = images.map(image => `${image.id}:${image.path}:${image.thumbnailPath || ""}`).join("|");
+  const viewerOrder = useMemo(() => sides.flatMap(key => images.filter(image => image.side === key)), [images]);
+  const viewerIndex = viewerOrder.findIndex(image => image.id === viewerId);
+  const viewer = viewerIndex < 0 ? null : viewerOrder[viewerIndex];
   const owners = useMemo(() => [...new Set(model.items.map(row => row.content.owner).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-TW")), [model.items]);
+  const statusCounts = useMemo(() => Object.fromEntries(statusKeys.map(key => [key, model.items.filter(row => row.status === key).length])) as Record<CircuitChangeStatus, number>, [model.items]);
   const filtered = useMemo(() => {
     const needle = filters.query.trim().toLocaleLowerCase();
     return model.items.filter(row => (filters.status === "all" || row.status === filters.status)
@@ -72,12 +97,11 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     ...(filters.status !== "all" ? [{ key: "status" as const, label: `狀態：${CIRCUIT_CHANGE_STATUS_LABELS[filters.status as CircuitChangeStatus]}`, reset: "all" }] : []),
     ...(filters.owner !== "all" ? [{ key: "owner" as const, label: `負責人：${filters.owner}`, reset: "all" }] : []),
   ];
-
   useEffect(() => {
     if (!open) return;
     const url = new URL(window.location.href);
-    for (const [key, value, empty] of [["circuitQuery", filters.query, ""], ["circuitStatus", filters.status, "all"], ["circuitOwner", filters.owner, "all"]]) {
-      if (value === empty) url.searchParams.delete(key); else url.searchParams.set(key, value);
+    for (const [key, field, empty] of FILTER_KEYS) {
+      if (filters[field] === empty) url.searchParams.delete(key); else url.searchParams.set(key, filters[field]);
     }
     window.history.replaceState(window.history.state, "", url);
   }, [filters, open]);
@@ -93,21 +117,43 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     resize(); window.addEventListener("resize", resize); visual?.addEventListener("resize", resize); visual?.addEventListener("scroll", resize);
     return () => { window.removeEventListener("resize", resize); visual?.removeEventListener("resize", resize); visual?.removeEventListener("scroll", resize); };
   }, [open]);
+  // A file dropped beside the dialog would otherwise make the browser open it and leave the page, losing what is on screen.
   useEffect(() => {
-    setSnapshot(null); setViewer(null); setReviewNote(""); setHistoryOpen(false); setNotice("");
+    if (!open) return;
+    const guard = (event: Event) => { if (Array.from((event as unknown as DragEvent).dataTransfer?.types ?? []).includes("Files")) event.preventDefault(); };
+    window.addEventListener("dragover", guard); window.addEventListener("drop", guard);
+    return () => { window.removeEventListener("dragover", guard); window.removeEventListener("drop", guard); };
+  }, [open]);
+  useEffect(() => {
+    setSnapshot(null); setViewerId(""); setReviewNote(""); setHistoryOpen(false); setExpandedGroups([]); setNotice(""); setRemoved(null); setUnlockedId("");
   }, [model.selectedItemId, context.seriesId]);
-  useEffect(() => { if (!open) { setMobileDetail(false); setNewSetOpen(false); setGuideOpen(false); setViewer(null); } }, [open]);
+  // Unlocking covers one review state only: once the change is sent or approved again it is locked again.
+  useEffect(() => { setUnlockedId(""); }, [model.selectedItem?.status]);
+  // Screenshots usually arrive as "before" first; once a change has its before picture, the next paste belongs to "after".
+  // On a phone the side is the tab on screen, and reading a change starts with its before picture.
+  const hasBefore = useRef(false); hasBefore.current = Boolean(model.selectedItem?.content.images.some(image => image.side === "before"));
+  useEffect(() => { setSide(sideBySide() && hasBefore.current ? "after" : "before"); }, [model.selectedItem?.id]);
+  useEffect(() => { if (!open) { setMobileDetail(false); setNewSetOpen(false); setGuideOpen(false); setViewerId(""); openedDetail.current = false; } }, [open]);
+  // On a phone the list comes first, but with nothing recorded yet the list is empty and the form is what the user needs.
+  useEffect(() => {
+    if (!open || openedDetail.current || model.loading || !model.selectedItem) return;
+    openedDetail.current = true;
+    if (isUnsavedCircuitChange(model.selectedItem) && !model.items.length) setMobileDetail(true);
+  }, [open, model.loading, model.selectedItem, model.items.length]);
   useEffect(() => { if (historyOpen) historySection.current?.scrollIntoView({ block: "start" }); }, [historyOpen]);
   useEffect(() => { detailScroll.current?.scrollTo({ top: 0 }); }, [snapshot, model.selectedItemId]);
   useEffect(() => {
     let current = true;
-    if (!images.length) { setUrls({}); return; }
-    createCircuitImageUrls(images).then(value => { if (current) setUrls(value); }).catch(error => { if (current) setNotice(error instanceof Error ? error.message : "圖片載入失敗，請重試。"); });
-    return () => { current = false; };
+    if (!imageSources) { setUrls({}); return; }
+    const sign = () => createCircuitImageUrls(latestImages.current).then(value => { if (current) setUrls(value); }).catch(error => { if (current) setNotice(error instanceof Error ? error.message : "圖片載入失敗，請重試。"); });
+    void sign();
+    // Signed links expire after an hour; renew them while the dialog stays open so enlarging a picture keeps working.
+    const renew = setInterval(sign, CIRCUIT_IMAGE_URL_REUSE_MS - 5 * 60 * 1000);
+    return () => { current = false; clearInterval(renew); };
   }, [imageSources]);
 
   async function run(action: () => Promise<void>) {
-    setNotice(""); setWorking(true);
+    setNotice(""); setCloseBlocked(false); setWorking(true);
     try { await action(); } catch (error) { setNotice(error instanceof Error ? error.message : "操作失敗，請重試。"); }
     finally { setWorking(false); }
   }
@@ -115,81 +161,257 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     if (value) { onOpenChange(true); return; }
     void run(async () => {
       if (model.uploading) throw new Error("圖片仍在上傳，請等上傳完成後再關閉。");
-      if (canEdit && (model.dirty || model.saving)) await model.saveDraft();
-      onOpenChange(false);
+      // Closing saves first. When that fails the draft stays, and the user is offered a way out instead of being held here.
+      if (canEdit && (model.dirty || model.saving)) { try { await model.saveDraft(); } catch (error) { setCloseBlocked(true); throw error; } }
+      leave();
     });
   }
+  function leave() {
+    // The filters belong to this dialog; left in the address bar they would silently narrow the next board's list.
+    const url = new URL(window.location.href);
+    for (const [key] of FILTER_KEYS) url.searchParams.delete(key);
+    window.history.replaceState(window.history.state, "", url);
+    onOpenChange(false);
+  }
   function selectItem(id: string) { void run(async () => { await model.selectItem(id); setMobileDetail(true); }); }
-  function newItem() { void run(async () => { await model.createItem(); setMobileDetail(true); }); }
-  function openNewSet() { setNewTitle(""); setFromLabel(context.versionLabel); setToLabel(""); setNewSetOpen(true); }
+  function newItem() {
+    void run(async () => {
+      await model.createItem();
+      // A new change is a draft; a status or search filter would hide the row it gets once it is saved.
+      setFilters({ query: "", status: "all", owner: "all" }); setMobileDetail(true);
+    });
+  }
+  function openNewSet() { setNewTitle(naming.title); setFromLabel(naming.fromLabel); setToLabel(naming.toLabel); setNotice(""); setNewSetOpen(true); }
+  function submitNewSet(event: FormEvent) {
+    event.preventDefault();
+    if (working || !newTitle.trim()) return;
+    void run(async () => { await model.createSet(newTitle.trim(), fromLabel.trim(), toLabel.trim()); setNewSetOpen(false); });
+  }
   function addFiles(files: File[], targetSide = side) {
+    if (locked) { setNotice("這項的內容已鎖定，先按「修改內容」再加入圖片。"); return; }
     if (readOnly) { setNotice("目前為唯讀檢視，請返回目前修訂後加入圖片。"); return; }
-    if (files.length) void run(async () => { await model.addImages(files, targetSide); setMobileDetail(true); });
+    if (!files.length) return;
+    setSide(targetSide);
+    const count = (target: CircuitImageSide) => latestImages.current.filter(image => image.side === target).length;
+    const before = count("before");
+    void run(async () => {
+      await model.addImages(files, targetSide); setMobileDetail(true);
+      // Screenshots usually come as one "before" then one "after": once the before picture is in, the next paste belongs to after.
+      if (targetSide === "before" && count("before") > before && !count("after") && sideBySide()) setSide("after");
+    });
   }
   function openPicker(targetSide: CircuitImageSide) { pickerSide.current = targetSide; setSide(targetSide); fileInput.current?.click(); }
   function paste(event: ClipboardEvent) {
     const files = Array.from(event.clipboardData.files).filter(file => file.type.startsWith("image/"));
     if (!files.length) return;
+    // Excel and Word put a picture of the copied cells next to their text. In a text field the text is what was meant.
+    const field = (event.target as HTMLElement | null)?.closest?.("input,textarea");
+    if (field && typeof event.clipboardData.getData === "function" && event.clipboardData.getData("text/plain").trim()) return;
     event.preventDefault(); addFiles(files);
   }
-  function drop(event: DragEvent) { if (!event.dataTransfer.types.includes("Files")) return; event.preventDefault(); setDragging(false); addFiles(Array.from(event.dataTransfer.files)); }
+  function drop(event: DragEvent) { if (!carriesFiles(event)) return; event.preventDefault(); setDragSide(null); addFiles(Array.from(event.dataTransfer.files)); }
   function update(patch: Partial<CircuitChangeContent>) { if (!readOnly) model.updateDraft(patch); }
-  function updateImage(next: CircuitImage) {
-    update({ images: images.map(image => image.id === next.id ? next : image) });
-    setViewer(next);
+  function updateImage(next: CircuitImage) { update({ images: images.map(image => image.id === next.id ? next : image) }); }
+  function removeImage(image: CircuitImage) {
+    if (!item) return;
+    setRemoved({ image, index: images.findIndex(value => value.id === image.id), itemId: item.id });
+    update({ images: images.filter(value => value.id !== image.id) });
+  }
+  function restoreImage() {
+    if (!removed || removed.itemId !== item?.id || images.some(image => image.id === removed.image.id)) { setRemoved(null); return; }
+    const next = [...images]; next.splice(Math.min(removed.index, next.length), 0, removed.image);
+    update({ images: next }); setRemoved(null);
   }
   function act(action: "submit" | "approve" | "request_changes" | "comment") {
     void run(async () => {
       if ((action === "request_changes" || action === "comment") && !reviewNote.trim()) throw new Error(action === "request_changes" ? "請先填寫退回原因，工程師才知道需要補充哪裡。" : "請填寫留言內容。");
+      if (action === "submit" && missing.length) throw new Error(`送出前還缺：${missing.join("、")}。`);
       await model.review(action, reviewNote.trim()); setReviewNote("");
     });
   }
-  const saveLabel = model.saving ? "儲存中…" : model.saveError ? "儲存失敗" : model.dirty ? "尚有未儲存修改" : "已儲存";
+  const saveLabel = model.saving ? "儲存中…" : model.saveError ? (model.dirty ? "儲存失敗" : "操作未完成") : model.dirty ? "尚有未儲存修改" : unsaved ? "輸入後自動儲存" : "已儲存";
+  const nextStep = snapshot ? "" : !canEdit ? "檢視權限：可查看與匯出" : reviewing ? "確認內容無誤就按「確認」；需要補充時先寫意見再退回。"
+    : item?.status === "approved" && !model.dirty ? "這項已確認。" : missing.length ? `送出前還缺：${missing.join("、")}` : "內容齊全，可以送出 Review。";
   const viewportStyle = viewport ? { "--circuit-viewport-height": `${viewport.height}px`, "--circuit-viewport-top": `${viewport.top}px` } as CSSProperties : undefined;
-  const field = (key: Exclude<keyof CircuitChangeContent, "images">, label: string, multiline = false, placeholder = "") => <label className={`circuit-field circuit-field-${key}`} key={key}><span>{label}</span>{multiline
-    ? <Textarea aria-label={label} value={content?.[key] || ""} disabled={readOnly} placeholder={placeholder} onChange={event => update({ [key]: event.target.value })} />
-    : <Input aria-label={label} value={content?.[key] || ""} disabled={readOnly} placeholder={placeholder} onChange={event => update({ [key]: event.target.value })} />}</label>;
-  const filePicker = <input ref={fileInput} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" aria-label="選取線路修改圖片" className="sr-only" onChange={event => { const files = Array.from(event.target.files || []); event.target.value = ""; addFiles(files, pickerSide.current); }} />;
+  const field = (key: CircuitChangeTextField, label: string, multiline = false, placeholder = "") => <label className={`circuit-field circuit-field-${key}`} key={key}><span>{label}</span>{multiline
+    ? <Textarea aria-label={label} value={content?.[key] || ""} disabled={readOnly} maxLength={CIRCUIT_CHANGE_FIELD_LIMITS[key]} placeholder={readOnly ? "" : placeholder} onChange={event => update({ [key]: event.target.value })} />
+    : <Input aria-label={label} value={content?.[key] || ""} disabled={readOnly} maxLength={CIRCUIT_CHANGE_FIELD_LIMITS[key]} placeholder={readOnly ? "" : placeholder} onChange={event => update({ [key]: event.target.value })} />}</label>;
+  const noteBox = <label className="circuit-note-box">
+    <span>{reviewing ? "Review 意見（退回時必填）" : "留言"}</span>
+    <Textarea aria-label="Review 意見或退回原因" value={reviewNote} disabled={!canEdit} maxLength={10000} placeholder={reviewing ? "退回時請寫清楚要補充什麼；確認可以留空。" : "補充說明或討論，會記在歷史中。"} onChange={event => setReviewNote(event.target.value)} />
+  </label>;
+  const commentButton = <Button type="button" variant="outline" disabled={busy || !canEdit || !reviewNote.trim()} onClick={() => act("comment")}><MessageSquare aria-hidden="true" />新增留言</Button>;
 
   return <>
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent hideCloseButton className="circuit-changes-dialog" style={viewportStyle} data-testid="circuit-changes-dialog" data-mobile-detail={mobileDetail} onPaste={paste} onDragOver={event => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); setDragging(true); } }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }} onDrop={drop}>
-        {filePicker}
-        <header className="circuit-header"><div><DialogTitle>線路修改</DialogTitle><DialogDescription title={context.workspaceName}>{context.projectName && `${context.projectName} / `}{context.workspaceName}</DialogDescription></div><div className="circuit-header-actions"><Button type="button" variant="ghost" aria-label="使用說明" onClick={() => setGuideOpen(true)}><HelpCircle aria-hidden="true" /><span>使用說明</span></Button><Button type="button" variant="ghost" aria-label="關閉線路修改" onClick={() => close(false)}><X aria-hidden="true" /></Button></div></header>
-        <div className="circuit-toolbar">
-          <label className="circuit-set-picker"><span>改版批次</span><select aria-label="選擇改版批次" value={model.selectedSetId} disabled={busy || model.loading} onChange={event => void run(() => model.selectSet(event.target.value))}><option value="">{model.loading ? "載入中…" : "選擇改版批次"}</option>{model.sets.map(set => <option key={set.id} value={set.id}>{set.title} · {set.fromLabel} → {set.toLabel || "待指定"}</option>)}</select></label>
-          {canEdit && <Button type="button" variant="outline" onClick={openNewSet} disabled={busy || model.loading}><Plus aria-hidden="true" />新增批次</Button>}
-          <div className="circuit-toolbar-actions">{canEdit && <Button type="button" onClick={model.selectedSetId ? newItem : openNewSet} disabled={busy || model.loading}><Plus aria-hidden="true" />{model.selectedSetId ? "新增修改" : "開始新增修改"}</Button>}<Button type="button" variant="outline" disabled={!selectedSet || !filtered.length || busy || model.dirty} title={model.dirty ? "尚有未儲存修改，儲存後可匯出" : `匯出目前篩選的全部 ${filtered.length} 項修改`} onClick={() => void run(() => exportCircuitChangeList(selectedSet!, filtered))}><Download aria-hidden="true" /><span>匯出 Change List</span></Button></div>
-        </div>
-        <div className="circuit-filter-bar" role="group" aria-label="線路修改篩選"><label className="circuit-search"><Search aria-hidden="true" /><Input aria-label="搜尋線路修改" placeholder="搜尋編號、修改內容、Ref 或 Net" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} /></label><label><span className="sr-only">狀態</span><select aria-label="篩選修改狀態" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value }))}><option value="all">全部狀態</option>{statusKeys.map(key => <option key={key} value={key}>{CIRCUIT_CHANGE_STATUS_LABELS[key]}</option>)}</select></label><label><span className="sr-only">負責人</span><select aria-label="篩選修改負責人" value={filters.owner} onChange={event => setFilters(current => ({ ...current, owner: event.target.value }))}><option value="all">全部負責人</option>{owners.map(owner => <option key={owner} value={owner}>{owner}</option>)}</select></label><span className="circuit-result-count">{filtered.length} / {model.items.length} 項</span></div>
-        {activeChips.length > 0 && <div className="circuit-active-filters" data-testid="circuit-active-filters">{activeChips.map(chip => <button type="button" key={chip.key} aria-label={`移除篩選：${chip.label}`} onClick={() => setFilters(current => ({ ...current, [chip.key]: chip.reset }))}>{chip.label}<X aria-hidden="true" /></button>)}<Button type="button" variant="ghost" onClick={() => setFilters({ query: "", status: "all", owner: "all" })}>全部清除</Button></div>}
-        {(notice || model.error || model.saveError) && <div className="circuit-message" role="alert"><span>{notice || model.saveError || model.error}</span><Button type="button" variant="ghost" onClick={() => void run(() => model.reload())}>重新載入</Button></div>}
+      <DialogContent hideCloseButton className="circuit-changes-dialog" style={viewportStyle} data-testid="circuit-changes-dialog" data-mobile-detail={mobileDetail} onPaste={paste}
+        onDragOver={event => { if (carriesFiles(event)) { event.preventDefault(); if (!readOnly && content) setDragSide(side); } }}
+        onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragSide(null); }} onDrop={drop}>
+        <input ref={fileInput} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" aria-label="選取線路修改圖片" className="sr-only" onChange={event => { const files = Array.from(event.target.files || []); event.target.value = ""; addFiles(files, pickerSide.current); }} />
+        <header className="circuit-header">
+          <div className="circuit-title">
+            <DialogTitle>線路修改</DialogTitle>
+            <DialogDescription title={context.workspaceName}>{context.projectName && `${context.projectName} / `}{context.workspaceName}{context.versionLabel && ` · ${context.versionLabel}`}</DialogDescription>
+          </div>
+          <div className="circuit-set">
+            {model.sets.length > 0
+              ? <label className="circuit-set-picker"><span>改版批次</span>
+                <select aria-label="選擇改版批次" value={model.selectedSetId} disabled={busy || model.loading} onChange={event => void run(() => model.selectSet(event.target.value))}>
+                  {model.sets.map(set => <option key={set.id} value={set.id}>{circuitSetLabel(set)}</option>)}
+                </select>
+              </label>
+              : <p className="circuit-set-pending"><span>改版批次</span>{model.loading ? "載入中…" : canEdit ? <><strong>{naming.title}</strong><small>記錄第一項時自動建立</small></> : "尚未建立"}</p>}
+            {canEdit && <Button type="button" variant="outline" onClick={openNewSet} disabled={busy || model.loading} title="另外建立一個改版批次，可自訂名稱與版次"><Plus aria-hidden="true" />新增批次</Button>}
+          </div>
+          <div className="circuit-header-actions">
+            <Button type="button" variant="outline" aria-label="匯出 Change List" disabled={!selectedSet || !filtered.length || busy || model.dirty} title={model.dirty ? "尚有未儲存修改，儲存後可匯出" : `匯出目前篩選的全部 ${filtered.length} 項修改`} onClick={() => void run(() => exportCircuitChangeList(selectedSet!, filtered))}><Download aria-hidden="true" /><span>匯出 Change List</span></Button>
+            <Button type="button" variant="ghost" aria-label="使用說明" onClick={() => setGuideOpen(true)}><HelpCircle aria-hidden="true" /><span>使用說明</span></Button>
+            <Button type="button" variant="ghost" aria-label="關閉線路修改" className="circuit-close" onClick={() => close(false)}><X aria-hidden="true" /></Button>
+          </div>
+        </header>
+        {(notice || model.error || model.saveError) && <div className="circuit-message" role="alert"><span>{notice || model.saveError || model.error}</span><div>{closeBlocked && <Button type="button" variant="ghost" title={unsaved ? "這項新修改還沒有建立，關閉後不會保留" : "未儲存的草稿會留在這台電腦，下次開啟這一項時帶回"} onClick={leave}>不儲存，直接關閉</Button>}<Button type="button" variant="ghost" onClick={() => void run(() => model.reload())}>重新載入</Button></div></div>}
         <div className="circuit-workspace">
-          <aside className="circuit-item-list" aria-label="修改項目清單"><div className="circuit-list-heading"><span>編號／修改項目</span><span>狀態</span></div>{model.loading && !model.items.length ? <p className="circuit-empty">正在載入修改項目…</p> : filtered.length ? filtered.map(row => <button type="button" key={row.id} data-testid="circuit-change-item" className="circuit-item" aria-pressed={row.id === model.selectedItemId} disabled={busy} onClick={() => selectItem(row.id)}><span className="circuit-item-number">#{String(row.number).padStart(3, "0")}</span><span className="circuit-item-title"><strong>{row.content.title || "未命名修改"}</strong><small>{row.content.refs || row.content.net || row.content.owner || "尚未補充位置"}</small></span><span className="circuit-list-status" data-status={row.status}>{CIRCUIT_CHANGE_STATUS_LABELS[row.status]}</span></button>) : <div className="circuit-empty">{model.selectedSetId ? "目前篩選條件沒有符合的修改項目" : <><strong>先建立這次改版的批次</strong><span>一個批次收納同一次改版的修改。建立後，按「新增修改」記錄前後圖。</span>{canEdit && <Button type="button" className="circuit-empty-mobile-action" disabled={busy || model.loading} onClick={openNewSet}><Plus aria-hidden="true" />建立改版批次</Button>}</>}{canEdit && model.selectedSetId && !model.items.length && <><span>這個批次還沒有修改。新增一項後，就能填寫說明與貼圖。</span><Button type="button" disabled={busy} onClick={newItem}><Plus aria-hidden="true" />新增第一項修改</Button></>}</div>}</aside>
-          <section className="circuit-detail" aria-label="線路修改內容" data-testid="circuit-change-detail">
+          <aside className="circuit-list-panel" aria-label="修改項目">
+            {canEdit && <Button type="button" className="circuit-new-item" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" />新增修改</Button>}
+            <div className="circuit-filter-bar" role="group" aria-label="線路修改篩選">
+              <label className="circuit-search"><Search aria-hidden="true" /><Input aria-label="搜尋線路修改" placeholder="搜尋編號、標題、Ref 或 Net" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} /></label>
+              <label><span className="sr-only">狀態</span><select aria-label="篩選修改狀態" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value }))}>
+                <option value="all">全部狀態</option>{statusKeys.map(key => <option key={key} value={key}>{CIRCUIT_CHANGE_STATUS_LABELS[key]}（{statusCounts[key]}）</option>)}
+              </select></label>
+              <label><span className="sr-only">負責人</span><select aria-label="篩選修改負責人" value={filters.owner} onChange={event => setFilters(current => ({ ...current, owner: event.target.value }))}>
+                <option value="all">全部負責人</option>{filters.owner !== "all" && !owners.includes(filters.owner) && <option value={filters.owner}>{filters.owner}</option>}{owners.map(owner => <option key={owner} value={owner}>{owner}</option>)}
+              </select></label>
+            </div>
+            {activeChips.length > 0 && <div className="circuit-active-filters" data-testid="circuit-active-filters">
+              {activeChips.map(chip => <button type="button" key={chip.key} aria-label={`移除篩選：${chip.label}`} onClick={() => setFilters(current => ({ ...current, [chip.key]: chip.reset }))}>{chip.label}<X aria-hidden="true" /></button>)}
+              <Button type="button" variant="ghost" onClick={() => setFilters({ query: "", status: "all", owner: "all" })}>全部清除</Button>
+            </div>}
+            <div className="circuit-item-list" aria-label="修改項目清單" aria-busy={model.loading}>
+              <div className="circuit-list-heading"><span>編號／修改項目</span><span className="circuit-result-count">{filtered.length} / {model.items.length} 項</span><span>狀態</span></div>
+              {filtered.map(row => <button type="button" key={row.id} data-testid="circuit-change-item" className="circuit-item" aria-pressed={row.id === model.selectedItemId} disabled={busy} onClick={() => selectItem(row.id)}>
+                <span className="circuit-item-number">{number(row.number)}</span>
+                <span className="circuit-item-title"><strong>{row.content.title || "未命名修改"}</strong><small>{[row.content.refs || row.content.net, row.content.owner].filter(Boolean).join(" · ") || "尚未補充位置"}{row.imageCount ? ` · ${row.imageCount} 張圖` : ""}</small></span>
+                <span className="circuit-list-status" data-status={row.status}>{CIRCUIT_CHANGE_STATUS_LABELS[row.status]}</span>
+              </button>)}
+              {unsaved && <button type="button" data-testid="circuit-change-unsaved" className="circuit-item circuit-item-unsaved" aria-pressed="true" onClick={() => setMobileDetail(true)}>
+                <span className="circuit-item-number">新</span>
+                <span className="circuit-item-title"><strong>{model.draft?.title || "新修改"}</strong><small>{model.dirty ? "儲存中，稍後取得編號" : "尚未儲存，輸入內容後自動建立"}</small></span>
+              </button>}
+              {model.loading && !model.items.length ? <p className="circuit-empty">正在載入修改項目…</p>
+                : model.items.length > 0 && !filtered.length ? <p className="circuit-empty">目前篩選條件沒有符合的修改項目</p>
+                : !model.items.length && !unsaved ? <p className="circuit-empty">這個批次還沒有記錄任何修改</p> : null}
+            </div>
+          </aside>
+          <section className="circuit-detail" aria-label="線路修改內容" data-testid="circuit-change-detail" aria-busy={model.switching}>
             {content && item ? <>
-              <header className="circuit-detail-heading"><Button type="button" variant="ghost" className="circuit-mobile-back" aria-label="返回修改清單" onClick={() => setMobileDetail(false)}><ArrowLeft aria-hidden="true" /></Button><div><strong>#{String(item.number).padStart(3, "0")}<span className="circuit-list-status" data-status={item.status}>{CIRCUIT_CHANGE_STATUS_LABELS[item.status]}</span></strong><span>修訂 {item.revision}{latestActor ? ` · ${latestActor}` : ""} · {dateTime(item.updatedAt)}</span></div><div className="circuit-item-navigation"><Button type="button" variant="ghost" aria-label="上一項修改" disabled={!canPrevious || busy} onClick={() => selectItem(filtered[selectedIndex - 1].id)}><ChevronLeft aria-hidden="true" /></Button><Button type="button" variant="ghost" aria-label="下一項修改" disabled={!canNext || busy} onClick={() => selectItem(filtered[selectedIndex < 0 ? 0 : selectedIndex + 1].id)}><ChevronRight aria-hidden="true" /></Button><Button type="button" variant={historyOpen ? "secondary" : "ghost"} aria-pressed={historyOpen} onClick={() => setHistoryOpen(value => !value)}>歷史 {model.events.length}</Button></div></header>
-              <div ref={detailScroll} className="circuit-detail-scroll" data-dragging={dragging}>
-                {snapshot && <div className="circuit-snapshot-banner" role="status"><span>正在查看修訂 {snapshot.revision}，此版本內容唯讀</span><Button type="button" variant="outline" onClick={() => { setSnapshot(null); setViewer(null); }}>返回目前修訂</Button></div>}
+              <header className="circuit-detail-heading">
+                <Button type="button" variant="ghost" className="circuit-mobile-back" aria-label="返回修改清單" onClick={() => setMobileDetail(false)}><ArrowLeft aria-hidden="true" /></Button>
+                <div>
+                  <strong>{unsaved ? "新修改" : number(item.number)}<span className="circuit-list-status" data-status={item.status}>{unsaved ? "尚未儲存" : CIRCUIT_CHANGE_STATUS_LABELS[item.status]}</span></strong>
+                  <span>{unsaved ? "填寫內容或貼上圖片就會自動建立" : `修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""} · ${dateTime(item.updatedAt)}`}</span>
+                </div>
+                <div className="circuit-item-navigation">
+                  <Button type="button" variant="ghost" aria-label="上一項修改" title="上一項" disabled={!canPrevious || busy} onClick={() => selectItem(filtered[selectedIndex - 1].id)}><ChevronLeft aria-hidden="true" /></Button>
+                  <Button type="button" variant="ghost" aria-label="下一項修改" title="下一項" disabled={!canNext || busy} onClick={() => selectItem(filtered[selectedIndex < 0 ? 0 : selectedIndex + 1].id)}><ChevronRight aria-hidden="true" /></Button>
+                  {!unsaved && <Button type="button" variant={historyOpen ? "secondary" : "ghost"} aria-pressed={historyOpen} onClick={() => setHistoryOpen(value => !value)}>歷史 {model.events.length}</Button>}
+                </div>
+              </header>
+              <div ref={detailScroll} className="circuit-detail-scroll">
+                {snapshot && <div className="circuit-snapshot-banner" role="status"><span>正在查看修訂 {snapshot.revision}，此版本內容唯讀</span><Button type="button" variant="outline" onClick={() => { setSnapshot(null); setViewerId(""); }}>返回目前修訂</Button></div>}
                 {model.conflict && !snapshot && <div className="circuit-conflict" role="alert"><p>另一位使用者已更新這個項目。你的草稿仍保留，請選擇要採用的內容。</p><div><Button type="button" variant="outline" onClick={() => { setNotice(""); model.adoptRemote(); }}>採用最新版本</Button><Button type="button" disabled={busy || !canEdit} onClick={() => void run(() => model.saveMyRevision())}>儲存我的修訂</Button></div></div>}
-                {!snapshot && item.status === "approved" && <p className="circuit-revision-note">更新已確認的內容會保留原紀錄，並建立需要重新 Review 的修訂。</p>}{!readOnly && <p className="circuit-entry-hint">先填修改標題，再選「修改前／修改後」加入圖片；準備好後按「送出 Review」。</p>}<div className="circuit-content-fields">{field("title", "修改標題", false, "例如：調整 R2301 阻值與接法")}<div className="circuit-location-fields">{field("refs", "Ref", false, "R2301、U2…")}{field("net", "Net", false, "電源或訊號名稱")}{field("page", "頁碼", false, "原理圖頁碼")}{field("owner", "負責人", false, "工程師名稱")}</div></div>
-                <section className="circuit-image-section" aria-label="修改前後圖片"><header><h3>前後圖與修改位置</h3><span>{images.length} 張</span></header><div className="circuit-image-controls"><div role="group" aria-label="圖片用途">{sides.map(key => <button type="button" key={key} aria-pressed={side === key} onClick={() => setSide(key)}>{CIRCUIT_IMAGE_SIDE_LABELS[key]} <span>{images.filter(image => image.side === key).length}</span></button>)}</div>{!readOnly && <Button type="button" variant="outline" disabled={busy} onClick={() => openPicker(side)}><Upload aria-hidden="true" />加入圖片</Button>}</div><p className="circuit-upload-hint">{readOnly ? "點圖片放大檢視，或下載原檔。" : `可連續貼上、多選或拖入圖片，追加到「${CIRCUIT_IMAGE_SIDE_LABELS[side]}」；每項最多 200 張、每張上限 50 MB，不需先壓縮。`}</p>
-                  {model.uploading && <p className="circuit-upload-progress" role="status">正在上傳 {model.uploadProgress.completed} / {model.uploadProgress.total} 張，已成功的圖片會保留</p>}
-                  {model.uploadWarnings.length > 0 && <div className="circuit-upload-warning" role="status">{model.uploadWarnings.map((warning, index) => <p key={index}>{warning}</p>)}</div>}
-                  {model.uploadFailures.length > 0 && <div className="circuit-upload-failures" role="alert"><p>以下圖片尚未成功，已成功項目保留：</p><ul>{model.uploadFailures.map((failure, index) => <li key={index}>{failure.file.name}：{failure.error}</li>)}</ul><Button type="button" variant="outline" disabled={busy || readOnly} onClick={() => void run(() => model.retryUploads())}>重試失敗圖片</Button></div>}
-                  <div className="circuit-image-columns" data-mobile-side={side}>{sides.map(key => <section key={key} className="circuit-image-column" data-side={key}><header><h4>{CIRCUIT_IMAGE_SIDE_LABELS[key]}</h4>{!readOnly && <Button type="button" variant="ghost" aria-label={`加入${CIRCUIT_IMAGE_SIDE_LABELS[key]}圖片`} disabled={busy} onClick={() => openPicker(key)}><Plus aria-hidden="true" /></Button>}</header><div className="circuit-image-grid">{images.filter(image => image.side === key).map(image => <figure key={image.id}><button type="button" className="circuit-image-preview" aria-label={`放大圖片 ${image.name}`} onClick={() => setViewer(image)}>{urls[image.id] ? <img src={urls[image.id].thumbnail} alt={image.caption || image.name} loading="lazy" /> : <span>載入圖片…</span>}{image.marks.length > 0 && <span className="circuit-mark-count">{image.marks.length} 個標記</span>}</button><figcaption title={image.caption || image.name}>{image.caption || image.name}</figcaption><div className="circuit-image-actions"><Button type="button" variant="ghost" aria-label={`下載原圖 ${image.name}`} onClick={() => void run(() => downloadCircuitImage(image))}><Download aria-hidden="true" /></Button>{!readOnly && <Button type="button" variant="ghost" aria-label={`移除圖片 ${image.name}`} disabled={busy} onClick={() => update({ images: images.filter(value => value.id !== image.id) })}><X aria-hidden="true" /></Button>}</div></figure>)}</div>{!images.some(image => image.side === key) && <button type="button" className="circuit-image-empty" disabled={readOnly || busy} onClick={() => openPicker(key)}><ImagePlus aria-hidden="true" /><span>{readOnly ? "未提供圖片" : "加入圖片或直接貼上"}</span></button>}</section>)}</div>
-                </section>
-                <div className="circuit-description-fields">{field("reason", "修改原因", true, "為什麼需要這次修改？")}{field("description", "修改說明", true, "實際改了什麼，或直接貼上修改前後圖。")}</div>{!snapshot && <section className="circuit-review-note"><label><span>Review 意見／留言</span><Textarea aria-label="Review 意見或退回原因" value={reviewNote} disabled={!canEdit} placeholder="退回時請說明需要補充的內容；一般討論可直接留言。" onChange={event => setReviewNote(event.target.value)} /></label><Button type="button" variant="outline" disabled={busy || !canEdit || !reviewNote.trim()} onClick={() => act("comment")}><MessageSquare aria-hidden="true" />新增留言</Button></section>}
-                {historyOpen && <section ref={historySection} className="circuit-history" aria-label="修改與 Review 歷史"><h3>修改與 Review 歷史</h3>{model.events.length ? [...model.events].sort((a, b) => b.revision - a.revision).map(event => <article key={event.id}><div><strong>修訂 {event.revision} · {eventLabels[event.type] || event.type}</strong><span>{event.actorName} · {dateTime(event.createdAt)}</span></div>{event.note && <p>{event.note}</p>}<Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { const full = await model.loadEvent(event.id); if (!full.snapshot) throw new Error("此修訂內容尚未載入，請重試。"); setSnapshot(full.snapshot); setViewer(null); })}>查看此修訂</Button></article>) : <p>尚無歷史紀錄</p>}</section>}
+                {returned && <div className="circuit-returned" role="status"><strong>退回原因</strong><p>{returned.note || "未填寫原因"}</p><span>{returned.actorName} · {dateTime(returned.createdAt)}</span></div>}
+                {locked && <div className="circuit-locked" role="status"><span>{item.status === "in_review" ? "這項正在等待 Review，內容已鎖定以免誤改。" : "這項已確認，內容已鎖定。"}</span><Button type="button" variant="outline" disabled={busy} onClick={() => setUnlockedId(item.id)}>修改內容</Button></div>}
+                {!readOnly && item.status === "in_review" && <p className="circuit-revision-note">修改任何內容（包含圖片標記）會撤回送審，需要重新送出 Review。</p>}
+                {!readOnly && item.status === "approved" && <p className="circuit-revision-note">更新已確認的內容會保留原紀錄，並建立需要重新 Review 的修訂。</p>}
+                <div className="circuit-content-fields">
+                  {field("title", "修改標題", false, "例如：調整 R2301 阻值與接法")}
+                  <div className="circuit-location-fields">{field("refs", "Ref", false, "R2301、U2…")}{field("net", "Net", false, "電源或訊號名稱")}{field("page", "頁碼", false, "原理圖頁碼")}{field("owner", "負責人", false, "工程師名稱")}</div>
+                </div>
+                <div className="circuit-description-fields">{field("reason", "修改原因", true, "為什麼需要這次修改？")}{field("description", "修改說明", true, "實際改了什麼：元件、數值、接法。")}</div>
+                <CircuitChangeImages key={`${item.id}:${snapshot ? snapshot.revision : "live"}`} images={images} urls={urls} side={side} dragSide={dragSide} readOnly={readOnly} busy={busy}
+                  uploading={model.uploading} progress={model.uploadProgress} warnings={snapshot ? [] : model.uploadWarnings} failures={snapshot ? [] : model.uploadFailures}
+                  removed={removed && removed.itemId === item.id ? removed.image : null}
+                  onSide={setSide} onDragSide={setDragSide} onPick={openPicker} onFiles={addFiles} onOpen={image => setViewerId(image.id)} onRemove={removeImage} onRestore={restoreImage}
+                  onDownload={image => void run(() => downloadCircuitImage(image))} onRetry={() => void run(() => model.retryUploads())} onDismiss={model.dismissUploadFailures} />
+                {historyOpen && <section ref={historySection} className="circuit-history" aria-label="修改與 Review 歷史">
+                  <h3>歷史與留言</h3>
+                  {!snapshot && canEdit && !reviewing && <div className="circuit-comment">{noteBox}{commentButton}</div>}
+                  {history.length ? history.map(group => {
+                    const expanded = expandedGroups.includes(group.latest.id);
+                    const openRevision = (id: string) => void run(async () => { const full = await model.loadEvent(id); if (!full.snapshot) throw new Error("此修訂內容尚未載入，請重試。"); setSnapshot(full.snapshot); setViewerId(""); });
+                    return <article key={group.latest.id}>
+                      <div><strong>修訂 {group.latest.revision} · {CIRCUIT_EVENT_LABELS[group.latest.type] || group.latest.type}{group.events.length > 1 ? `（連續 ${group.events.length} 次）` : ""}</strong><span>{group.latest.actorName} · {dateTime(group.latest.createdAt)}</span></div>
+                      {group.latest.note && <p>{group.latest.note}</p>}
+                      <Button type="button" variant="outline" disabled={busy} onClick={() => openRevision(group.latest.id)}>查看此修訂</Button>
+                      {group.events.length > 1 && <div className="circuit-history-earlier">
+                        <Button type="button" variant="ghost" aria-expanded={expanded} onClick={() => setExpandedGroups(current => expanded ? current.filter(id => id !== group.latest.id) : [...current, group.latest.id])}>{expanded ? "收合" : `顯示這段的其餘 ${group.events.length - 1} 次修訂`}</Button>
+                        {expanded && <ul>{group.events.slice(1).map(event => <li key={event.id}><span>修訂 {event.revision} · {dateTime(event.createdAt)}</span><Button type="button" variant="ghost" disabled={busy} onClick={() => openRevision(event.id)}>查看</Button></li>)}</ul>}
+                      </div>}
+                    </article>;
+                  }) : <p>尚無歷史紀錄</p>}
+                </section>}
               </div>
-              <footer className="circuit-detail-footer"><span role="status">{snapshot ? `修訂 ${snapshot.revision} 唯讀` : saveLabel}</span>{!snapshot && canEdit && <div><Button type="button" variant="outline" disabled={busy || !model.dirty} onClick={() => void run(() => model.saveDraft())}>儲存修改</Button>{item.status === "in_review" && !model.dirty ? <><Button type="button" variant="outline" disabled={busy} onClick={() => act("request_changes")}>退回補充</Button><Button type="button" disabled={busy} onClick={() => act("approve")}><Check aria-hidden="true" />確認</Button></> : canSubmit && <Button type="button" disabled={busy || model.conflict} onClick={() => act("submit")}>送出 Review</Button>}</div>}</footer>
-            </> : <div className="circuit-detail-empty"><h3>{model.selectedSetId ? "新增第一項修改，記錄這次改動" : "第一次記錄線路修改？從這裡開始"}</h3><p>{model.selectedSetId ? "每一處改動建立一項，前後圖、說明與 Review 紀錄都放在一起。" : "不必先整理 Excel。先建立改版批次，再逐項貼圖、說明與送審。"}</p><ol className="circuit-start-steps">{startSteps.map((step, index) => <li key={step.title}><span>{index + 1}</span><div><strong>{step.title}</strong><p>{step.text}</p></div></li>)}</ol>{canEdit && <Button type="button" disabled={busy || model.loading} onClick={model.selectedSetId ? newItem : openNewSet}><Plus aria-hidden="true" />{model.selectedSetId ? "新增修改項目" : "建立改版批次"}</Button>}</div>}
+              <footer className="circuit-detail-footer">
+                {reviewing && <div className="circuit-review-bar">{noteBox}<div>{commentButton}<Button type="button" variant="outline" disabled={busy} onClick={() => act("request_changes")}>退回補充</Button><Button type="button" disabled={busy} onClick={() => act("approve")}><Check aria-hidden="true" />確認</Button></div></div>}
+                <div className="circuit-footer-row">
+                  <span role="status">{snapshot ? `修訂 ${snapshot.revision} 唯讀` : saveLabel}</span>
+                  {nextStep && <span className="circuit-next-step" title={nextStep}>{nextStep}</span>}
+                  {!snapshot && canEdit && !reviewing && <div>
+                    <Button type="button" variant="outline" disabled={busy || !model.dirty} onClick={() => void run(() => model.saveDraft())}>儲存修改</Button>
+                    {canSubmit && <Button type="button" disabled={busy || model.conflict || missing.length > 0} title={missing.length ? `還缺：${missing.join("、")}` : undefined} onClick={() => act("submit")}>送出 Review</Button>}
+                  </div>}
+                </div>
+              </footer>
+            </> : <div className="circuit-detail-empty">
+              <h3>{model.loading ? "正在載入線路修改…" : model.items.length ? "從左側選一項修改" : "這塊板子還沒有線路修改紀錄"}</h3>
+              {!model.loading && !model.items.length && <p>{canEdit ? "按「新增修改」開始記錄。" : "你目前是檢視權限；有編輯權限的同仁記錄後，這裡會列出每一項修改的前後圖與 Review 狀態。"}</p>}
+              {!model.loading && canEdit && <Button type="button" disabled={busy} onClick={newItem}><Plus aria-hidden="true" />新增修改</Button>}
+            </div>}
           </section>
         </div>
       </DialogContent>
     </Dialog>
-    <Dialog open={newSetOpen} onOpenChange={setNewSetOpen}><DialogContent className="circuit-new-set-dialog" style={viewportStyle}><DialogTitle>新增改版批次</DialogTitle><DialogDescription>一個批次收納同一次改版的所有修改，例如「E1.S 電源調整 · V1 → V2」。建立後按「新增修改」，逐項貼圖與送審。</DialogDescription><label>批次名稱<Input aria-label="改版批次名稱" autoComplete="off" value={newTitle} maxLength={160} placeholder="例如：E1.S 第二次線路調整" onChange={event => setNewTitle(event.target.value)} /></label><div className="circuit-new-set-versions"><label>修改前版次<Input aria-label="修改前版次" value={fromLabel} maxLength={80} onChange={event => setFromLabel(event.target.value)} /></label><label>修改後版次<Input aria-label="修改後版次" value={toLabel} maxLength={80} placeholder="例如：V2 / Rev B" onChange={event => setToLabel(event.target.value)} /></label></div><p className="circuit-new-set-hint">版次用來說明這次修改，不會變更原始 BOM。修改後版次可稍後再決定。</p><div className="circuit-new-set-actions"><Button type="button" variant="outline" onClick={() => setNewSetOpen(false)} disabled={working}>取消</Button><Button type="button" disabled={working || !newTitle.trim()} onClick={() => void run(async () => { await model.createSet(newTitle.trim(), fromLabel.trim(), toLabel.trim()); setNewSetOpen(false); })}>建立批次</Button></div>{notice && <p role="alert">{notice}</p>}</DialogContent></Dialog>
-    <Dialog open={guideOpen} onOpenChange={setGuideOpen}><DialogContent hideCloseButton className="circuit-guide-dialog" style={viewportStyle} data-testid="circuit-usage-guide"><header className="circuit-header"><div><DialogTitle>線路修改怎麼用</DialogTitle><DialogDescription>建立批次 → 記錄修改與貼圖 → 逐項 Review → 匯出</DialogDescription></div><Button type="button" variant="ghost" aria-label="關閉使用說明" onClick={() => setGuideOpen(false)}><X aria-hidden="true" /></Button></header><div className="circuit-guide-scroll"><ol className="circuit-start-steps">{startSteps.map((step, index) => <li key={step.title}><span>{index + 1}</span><div><strong>{step.title}</strong><p>{step.text}</p></div></li>)}</ol><section><h3>1. 怎麼新增？</h3><p>按「開始新增修改」或「新增批次」，輸入批次名稱及前後版次。建立後，按「新增修改」；每一處修改各建一項，填入標題、Ref／Net、頁碼、負責人及修改原因。</p></section><section><h3>2. 怎麼大量貼圖、標記？</h3><p>先選「修改前」、「修改後」或「補充圖」，再連續貼上、多選上傳或拖入圖片。每次加入都會追加；每項最多 200 張、每張 50 MB，不需壓縮。點圖片放大，使用「位置標記」或「框選」標出改動，並填寫說明。</p></section><section><h3>3. 怎麼儲存與交給老闆 Review？</h3><p>停打後會自動儲存，也可按「儲存修改」；請確認下方顯示「已儲存」。準備好後按「送出 Review」。有料號申請編輯權限的人可逐項「確認」或填寫意見後「退回補充」；補完後再送出。按「歷史」可查看操作者、時間、意見及舊修訂。</p></section><section><h3>4. 怎麼產生 Change List？</h3><p>選好批次，按「匯出 Change List」下載 Excel，包含目前篩選的修改項目、標註圖片及 Review 歷史。要匯出整批，先將搜尋、狀態與負責人篩選全部清除。</p></section></div><footer className="circuit-guide-footer"><Button type="button" onClick={() => setGuideOpen(false)}>知道了</Button></footer></DialogContent></Dialog>
-    <Dialog open={Boolean(viewer)} onOpenChange={value => { if (!value) setViewer(null); }}><DialogContent hideCloseButton className="circuit-image-viewer-dialog" style={viewportStyle}><div className="circuit-image-dialog-heading"><DialogTitle title={viewer?.name}>{viewer?.name || "線路圖片"}</DialogTitle><Button type="button" variant="ghost" aria-label="關閉圖片" onClick={() => setViewer(null)}><X aria-hidden="true" /></Button></div><DialogDescription>{readOnly ? "原圖與此修訂的標記" : "放大查看、框選或加入位置說明，原圖會保留。"}</DialogDescription>{viewer && urls[viewer.id] && <CircuitChangeImageViewer image={viewer} src={urls[viewer.id].original} onChange={readOnly ? undefined : updateImage} readOnly={readOnly} />}</DialogContent></Dialog>
+    <Dialog open={newSetOpen} onOpenChange={setNewSetOpen}>
+      <DialogContent className="circuit-new-set-dialog" style={viewportStyle}>
+        <DialogTitle>新增改版批次</DialogTitle>
+        <DialogDescription>一個批次收納同一次改版的所有修改。不建立也可以直接記錄，第一項會自動放進「{naming.title}」。</DialogDescription>
+        <form onSubmit={submitNewSet}>
+          <label>批次名稱<Input aria-label="改版批次名稱" autoComplete="off" value={newTitle} maxLength={160} placeholder="例如：E1.S 第二次線路調整" onChange={event => setNewTitle(event.target.value)} /></label>
+          <div className="circuit-new-set-versions">
+            <label>修改前版次<Input aria-label="修改前版次" value={fromLabel} maxLength={80} onChange={event => setFromLabel(event.target.value)} /></label>
+            <label>修改後版次<Input aria-label="修改後版次" value={toLabel} maxLength={80} placeholder="例如：V2 / Rev B" onChange={event => setToLabel(event.target.value)} /></label>
+          </div>
+          <p className="circuit-new-set-hint">版次只用來說明這次修改，不會變更原始 BOM。批次建立後，名稱與版次目前無法再修改，請確認後再建立。</p>
+          <div className="circuit-new-set-actions"><Button type="button" variant="outline" onClick={() => setNewSetOpen(false)} disabled={working}>取消</Button><Button type="submit" disabled={working || !newTitle.trim()}>建立批次</Button></div>
+          {notice && <p role="alert">{notice}</p>}
+        </form>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={guideOpen} onOpenChange={setGuideOpen}>
+      <DialogContent hideCloseButton className="circuit-guide-dialog" style={viewportStyle} data-testid="circuit-usage-guide">
+        <header className="circuit-guide-header"><div><DialogTitle>線路修改怎麼用</DialogTitle><DialogDescription>記錄修改與貼圖 → 標出位置 → 逐項 Review → 匯出</DialogDescription></div><Button type="button" variant="ghost" aria-label="關閉使用說明" onClick={() => setGuideOpen(false)}><X aria-hidden="true" /></Button></header>
+        <div className="circuit-guide-scroll">
+          <ol className="circuit-start-steps">{guideSteps.map((step, index) => <li key={step.title}><span>{index + 1}</span><div><strong>{step.title}</strong><p>{step.text}</p></div></li>)}</ol>
+          <section><h3>1. 怎麼新增？</h3><p>打開「線路修改」就能直接填寫；之後按左上的「新增修改」再記下一項。每一處修改各一項，填入標題、Ref／Net、頁碼、負責人及修改原因。還沒輸入任何內容的新修改不會留下紀錄。</p></section>
+          <section><h3>2. 怎麼貼圖、標記？</h3><p>截圖後按 Ctrl+V，圖會加到標示「貼上會加到這裡」的那一格；點另一格即可切換，也可以把檔案拖到想放的那一格。每次加入都是追加，每項最多 200 張、每張 50 MB，不需壓縮。點圖片放大，使用「位置標記」或「框選」標出改動並填寫說明；放錯格可在放大視窗改「圖片用途」。</p></section>
+          <section><h3>3. 怎麼儲存與交給主管 Review？</h3><p>停止輸入後會自動儲存，下方顯示「已儲存」。標題加上修改說明（或修改後圖片）齊全後，按「送出 Review」。有料號申請編輯權限的人可逐項「確認」，或填寫意見後「退回補充」；退回原因會顯示在該項目最上方。按「歷史」可查看操作者、時間、意見及舊修訂。</p></section>
+          <section><h3>4. 怎麼產生 Change List？</h3><p>選好批次，按「匯出 Change List」下載 Excel，包含目前篩選的修改項目、標註圖片及 Review 歷史。要匯出整批，先將搜尋、狀態與負責人篩選全部清除。</p></section>
+        </div>
+        <footer className="circuit-guide-footer"><Button type="button" onClick={() => setGuideOpen(false)}>知道了</Button></footer>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={Boolean(viewer)} onOpenChange={value => { if (!value) setViewerId(""); }}>
+      <DialogContent hideCloseButton className="circuit-image-viewer-dialog" style={viewportStyle}>
+        <div className="circuit-image-dialog-heading">
+          <DialogTitle title={viewer?.name}>{viewer ? `${CIRCUIT_IMAGE_SIDE_LABELS[viewer.side]} · ${viewer.name}` : "線路圖片"}</DialogTitle>
+          <Button type="button" variant="ghost" aria-label="關閉圖片" onClick={() => setViewerId("")}><X aria-hidden="true" /></Button>
+        </div>
+        <DialogDescription className="sr-only">{readOnly ? "原圖與此修訂的標記" : "放大查看、框選或加入位置說明，原圖會保留。"}</DialogDescription>
+        {viewer && urls[viewer.id] && <CircuitChangeImageViewer image={viewer} src={urls[viewer.id].original} onChange={readOnly ? undefined : updateImage} readOnly={readOnly}
+          position={{ index: viewerIndex, total: viewerOrder.length }}
+          onPrevious={viewerIndex > 0 ? () => setViewerId(viewerOrder[viewerIndex - 1].id) : undefined}
+          onNext={viewerIndex + 1 < viewerOrder.length ? () => setViewerId(viewerOrder[viewerIndex + 1].id) : undefined} />}
+      </DialogContent>
+    </Dialog>
   </>;
 }
