@@ -100,6 +100,8 @@ import { MaintenanceCitationList } from "./MaintenanceCitationList";
 import { MaintenanceSourceSelector } from "./MaintenanceSourceSelector";
 import { MaterialSpecSourceSelector } from "./MaterialSpecSourceSelector";
 import { MaterialSpecCitationList } from "./MaterialSpecCitationList";
+import { SiteKnowledgeControl, SiteKnowledgeSources } from "./SiteKnowledgeSources";
+import { buildSiteKnowledgeContext, parseSiteKnowledgeReport, searchSiteKnowledge, siteKnowledgeQuery, type SiteKnowledgeReport } from "./siteKnowledge";
 import { searchMaterialSpecs } from "./materialSpecKnowledgeService";
 import { parseMaterialSpecReport, type MaterialSpecReport } from "./materialSpecKnowledge";
 import { MarkdownMessage } from "./MarkdownMessage";
@@ -137,6 +139,7 @@ interface ApiChatConsoleProps {
   maintenanceProjects?: MaintenanceProjectOption[];
   currentMaintenanceProjectId?: null | string;
   materialSpecsAllowed?: boolean;
+  siteKnowledgeModules?: string[];
 }
 
 interface GeneratedImage {
@@ -156,6 +159,7 @@ interface ChatMessage {
   citations?: MaintenanceCitation[];
   materialSpecs?: MaterialSpecReport;
   materialSpecContext?: string;
+  siteKnowledge?: SiteKnowledgeReport;
   attachmentsUnavailable?: boolean;
 }
 
@@ -471,6 +475,7 @@ function mapPrivateConversationRow(row: PrivateConversationRow, ownerId: string)
         citations,
         materialSpecs: parseMaterialSpecReport(message.materialSpecs) ?? undefined,
         materialSpecContext: typeof message.materialSpecContext === 'string' ? message.materialSpecContext : undefined,
+        siteKnowledge: parseSiteKnowledgeReport(message.siteKnowledge),
       }];
     }),
     provider: row.provider,
@@ -497,6 +502,7 @@ function serializePrivateConversations(conversations: SavedConversation[]): Json
       citations: message.citations?.map((citation) => ({ ...citation })),
       materialSpecs: message.materialSpecs ? { ...message.materialSpecs, files: message.materialSpecs.files.map(file => ({ ...file, parts: file.parts.map(part => ({ ...part })) })) } : null,
       materialSpecContext: message.materialSpecContext,
+      siteKnowledge: message.siteKnowledge as unknown as Json,
     })),
     provider: conversation.provider,
     model: conversation.model,
@@ -909,6 +915,7 @@ function MessageCard({ message, materialSpecsAllowed, compact, priorQuestion, ca
         {!isUser && message.citations?.length ? (
           <MaintenanceCitationList citations={message.citations} />
         ) : null}
+        {!isUser && message.siteKnowledge && <SiteKnowledgeSources report={message.siteKnowledge} />}
         {!isUser && message.materialSpecs && <MaterialSpecCitationList report={message.materialSpecs} allowed={materialSpecsAllowed} />}
         {compact && !isUser && (
           <div data-ai-reply-actions className="flex items-center text-muted-foreground">
@@ -941,6 +948,7 @@ function MessageCard({ message, materialSpecsAllowed, compact, priorQuestion, ca
 const EMPTY_API_KEYS: ApiKeyRecord[] = [];
 const EMPTY_API_TARGETS: ApiKeyModelTarget[] = [];
 const EMPTY_MAINTENANCE_PROJECTS: MaintenanceProjectOption[] = [];
+const EMPTY_SITE_MODULES: string[] = [];
 
 export function ApiChatConsole({
   selectedApiKey,
@@ -953,6 +961,7 @@ export function ApiChatConsole({
   maintenanceProjects = EMPTY_MAINTENANCE_PROJECTS,
   currentMaintenanceProjectId = null,
   materialSpecsAllowed = false,
+  siteKnowledgeModules = EMPTY_SITE_MODULES,
 }: ApiChatConsoleProps) {
   const [apiKey, setApiKey] = useState("");
   const [provider, setProvider] = useState("gemini");
@@ -1021,6 +1030,8 @@ export function ApiChatConsole({
   const [conversationCloudState, setConversationCloudState] = useState<ConversationCloudState>("loading");
   const [conversationRetry, setConversationRetry] = useState(0);
   const [conversationSaveRetry, setConversationSaveRetry] = useState(0);
+  const [siteSourceEnabled, setSiteSourceEnabled] = useState(mode === "chat-only");
+  const siteAccess = useRef(siteKnowledgeModules); siteAccess.current = siteKnowledgeModules;
   const [maintenanceSourceEnabled, setMaintenanceSourceEnabled] = useState(false);
   const [materialSourceEnabled, setMaterialSourceEnabled] = useState(false);
   const [materialSpecScope, setMaterialSpecScope] = useState("all");
@@ -1886,11 +1897,28 @@ export function ApiChatConsole({
     let citations: MaintenanceCitation[] = [];
     let materialSpecs: MaterialSpecReport | undefined;
     let materialSpecContext: string | undefined;
+    let siteKnowledge: SiteKnowledgeReport | undefined;
     let retrievingMaterialSpecs = false;
     const specController = new AbortController(); specReadController.current = specController;
     let retrievingMaintenance = false;
     try {
       let ephemeralSystemContext: string | undefined;
+      const siteQuery = siteKnowledgeQuery(content, messages.filter(message => message.role === "user").at(-1)?.content);
+      if (siteSourceEnabled && siteKnowledgeModules.length && user?.userId && siteQuery) {
+        setRequestProgress("正在搜尋全站可讀資料…");
+        const requestedModules = [...siteKnowledgeModules];
+        const guard = () => { assertCurrent(); if (requestedModules.some(module => !siteAccess.current.includes(module))) throw new Error("資料讀取權限已變更，請重新提問。"); };
+        siteKnowledge = await searchSiteKnowledge({ client: supabase, query: siteQuery, modules: requestedModules, userId: user.userId,
+          signal: AbortSignal.any([specController.signal, AbortSignal.timeout(30_000)]), assertAccess: guard,
+          projectIds: maintenanceProjects.map(project => project.id),
+          localComparisons: async () => {
+            const { listSessions } = await import("../comparison/storage");
+            const sessions = await listSessions(user.userId); guard();
+            return sessions.flatMap(session => session.result.rows.map(row => ({ title: `${session.projectName} · ${row.title}`, content: `儲存：${session.savedAt}；A：${session.result.meta.a.label}；B：${session.result.meta.b.label}；狀態：${row.status}；嚴重度：${row.severity}；頁碼：${row.page} ${row.page_title}；位號：${row.refdes.join("、")}；Net：${row.nets.join("、")}；${row.detail}；回覆：${session.replies[row.key]?.note ?? ""}` })));
+          },
+        });
+        guard(); ephemeralSystemContext = buildSiteKnowledgeContext(siteKnowledge);
+      }
       if (maintenanceSourceEnabled && typedContent) {
         retrievingMaintenance = true;
         if (!maintenanceScope.selectedProjectIds.length) {
@@ -1910,13 +1938,14 @@ export function ApiChatConsole({
         setMaintenanceResultCount(citations.length);
         retrievingMaintenance = false;
 
-        ephemeralSystemContext = citations.length
+        const maintenanceContext = citations.length
           ? buildMaintenanceContext(citations)
           : [
               "本次已啟用機台維修資料來源，但在選定專案內沒有找到相符紀錄。",
               "不得捏造任何機台、專案、測試或維修數據。",
               "若使用者問的是一般知識、工作討論或附件內容，仍要正常回答；若問題要求專案事實，請明確說明目前沒有可引用來源。",
             ].join(" ");
+        ephemeralSystemContext = [ephemeralSystemContext, maintenanceContext].filter(Boolean).join("\n\n");
       }
 
       if (materialSourceEnabled) {
@@ -1953,7 +1982,7 @@ export function ApiChatConsole({
       if (requestGenerationRef.current !== requestGeneration) return;
       setMessages((current) => [
         ...current,
-        { ...createMessage("assistant", reply.text, "normal", reply.images, [], citations), materialSpecs, materialSpecContext },
+        { ...createMessage("assistant", reply.text, "normal", reply.images, [], citations), materialSpecs, materialSpecContext, siteKnowledge },
       ]);
       toast.success(reply.images.length > 0 ? "結果已回傳並顯示" : "查詢完成");
     } catch (error) {
@@ -3034,11 +3063,13 @@ export function ApiChatConsole({
   );
 
   const activeSourceLabels = [
+    siteSourceEnabled && siteKnowledgeModules.length ? "全站資料" : "",
     maintenanceSourceEnabled ? "維修資料" : "",
     materialSourceEnabled && materialSpecsAllowed ? "料號／SPEC" : "",
   ].filter(Boolean).join("、");
   const sourceSettings = (
     <>
+      <SiteKnowledgeControl enabled={siteSourceEnabled} onChange={setSiteSourceEnabled} allowed={siteKnowledgeModules.length > 0} loading={loading} />
       <MaintenanceSourceSelector
         compact={compactChat}
         enabled={maintenanceSourceEnabled}
@@ -3065,7 +3096,8 @@ export function ApiChatConsole({
   const sourceControls = (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" aria-label="資料來源：維修資料與料號 SPEC" aria-description={`維修資料${maintenanceSourceEnabled ? "已開啟" : "關閉中"}；料號／SPEC${materialSourceEnabled && materialSpecsAllowed ? "已開啟" : "關閉中"}`} className="h-11 shrink-0 gap-3 whitespace-nowrap px-3 text-xs">
+        <Button type="button" variant="outline" aria-label="資料來源：全站資料、維修資料與料號 SPEC" aria-description={`全站資料${siteSourceEnabled && siteKnowledgeModules.length ? "已開啟" : "關閉中"}；維修資料${maintenanceSourceEnabled ? "已開啟" : "關閉中"}；料號／SPEC${materialSourceEnabled && materialSpecsAllowed ? "已開啟" : "關閉中"}`} className="h-11 shrink-0 gap-3 whitespace-nowrap px-3 text-xs">
+          <span className="flex items-center gap-1.5"><span aria-hidden="true" className={cn("h-1.5 w-1.5 rounded-full", siteSourceEnabled && siteKnowledgeModules.length ? "bg-primary" : "bg-muted-foreground")} />全站資料</span>
           <span className="flex items-center gap-1.5"><span aria-hidden="true" className={cn("h-1.5 w-1.5 rounded-full", maintenanceSourceEnabled ? "bg-primary" : "bg-muted-foreground")} />維修資料<span className="sr-only">{maintenanceSourceEnabled ? "已開啟" : "關閉中"}</span></span>
           <span className="flex items-center gap-1.5"><span aria-hidden="true" className={cn("h-1.5 w-1.5 rounded-full", materialSourceEnabled && materialSpecsAllowed ? "bg-primary" : "bg-muted-foreground")} />料號／SPEC<span className="sr-only">{materialSourceEnabled && materialSpecsAllowed ? "已開啟" : "關閉中"}</span></span>
         </Button>

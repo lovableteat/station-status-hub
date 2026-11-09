@@ -6,6 +6,7 @@ import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { usePermissions } from "@/hooks/usePermissions";
 import { withReadDeadline } from "@/lib/readDeadline";
 
+import { SITE_KNOWLEDGE_MODULES } from "./siteKnowledge";
 import { ApiChatConsole } from "./ApiChatConsole";
 import { GEMINI_FREE_MODEL_PROFILES } from "./aiProviderCatalog";
 import {
@@ -161,6 +162,7 @@ export function ApiChatWorkspacePage() {
         maintenanceProjects={maintenanceProjects}
         currentMaintenanceProjectId={activeProjectId}
         materialSpecsAllowed={canViewModule("material-requests")}
+        siteKnowledgeModules={SITE_KNOWLEDGE_MODULES.filter(canViewModule)}
       />
     </div>
   );
