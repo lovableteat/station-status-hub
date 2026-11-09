@@ -1,5 +1,6 @@
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { circuitCropOutputSize, type CircuitCropRect } from "./circuitPdf";
+import type { CircuitPdfInkStroke } from "./circuitPdfInk";
 
 /** Fonts, CMaps and wasm come from this site's own assets, so opening a PDF never sends it or asks another service for anything. */
 export async function openCircuitPdf(bytes: ArrayBuffer): Promise<PDFDocumentProxy> {
@@ -52,7 +53,7 @@ export async function renderCircuitPdfPage(pdf: PDFDocumentProxy, pageNumber: nu
 }
 
 /** Renders only the cropped area, from the PDF itself rather than the screen, so the picture stays sharp at any zoom. */
-export async function cropCircuitPdfPage(pdf: PDFDocumentProxy, pageNumber: number, rect: CircuitCropRect, longEdge = 2400): Promise<{ blob: Blob; width: number; height: number }> {
+export async function cropCircuitPdfPage(pdf: PDFDocumentProxy, pageNumber: number, rect: CircuitCropRect, longEdge = 2400, strokes: CircuitPdfInkStroke[] = []): Promise<{ blob: Blob; width: number; height: number }> {
   const page = await pdf.getPage(pageNumber);
   const base = page.getViewport({ scale: 1 });
   const output = circuitCropOutputSize(base.width, base.height, rect, longEdge);
@@ -60,6 +61,16 @@ export async function cropCircuitPdfPage(pdf: PDFDocumentProxy, pageNumber: numb
   const canvas = document.createElement("canvas");
   canvas.width = output.width; canvas.height = output.height;
   await page.render({ canvas, viewport, transform: [1, 0, 0, 1, -rect.x * viewport.width, -rect.y * viewport.height] }).promise;
+  const context = canvas.getContext("2d");
+  if (context) for (const stroke of strokes) {
+    if (stroke.removedAt || !stroke.points.length) continue;
+    context.strokeStyle = stroke.color; context.fillStyle = stroke.color; context.lineWidth = stroke.width * viewport.width; context.lineCap = "round"; context.lineJoin = "round";
+    const points = stroke.points.map(point => ({ x: (point.x - rect.x) * viewport.width, y: (point.y - rect.y) * viewport.height }));
+    context.beginPath();
+    if (points.every(point => point.x === points[0].x && point.y === points[0].y)) {
+      context.arc(points[0].x, points[0].y, context.lineWidth / 2, 0, Math.PI * 2); context.fill();
+    } else { context.moveTo(points[0].x, points[0].y); for (const point of points.slice(1)) context.lineTo(point.x, point.y); context.stroke(); }
+  }
   const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("截圖建立失敗，請重試。");
   return { blob, width: output.width, height: output.height };

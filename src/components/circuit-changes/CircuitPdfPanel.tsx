@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Crop, FileUp, Minus, MoveHorizontal, Pencil, Plus, RotateCcw, ShieldCheck, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Crop, Eraser, FileUp, Hand, Minus, MoveHorizontal, Pencil, PenLine, Plus, RotateCcw, ShieldCheck, Trash2, Undo2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   circuitPdfCaption, circuitPdfImageName, circuitPdfPageState, circuitPdfProgress, circuitPdfVersionLabel, normalizeCropRect,
@@ -9,6 +9,9 @@ import {
 import { circuitPdfPageSize, cropCircuitPdfPage, renderCircuitPdfPage } from "./pdfRender";
 import { CIRCUIT_IMAGE_SIDE_LABELS, type CircuitImageSide, type CircuitImageSource } from "./types";
 import type { CircuitPdfModel } from "./useCircuitPdfs";
+import type { CircuitPdfInkModel } from "./useCircuitPdfInk";
+import type { CircuitPdfInkStroke } from "./circuitPdfInk";
+import { CircuitPdfInkLayer, type CircuitPdfTool } from "./CircuitPdfInkLayer";
 import "./circuitPdf.css";
 
 export interface CircuitPdfCapture { side: CircuitImageSide; file: File; source: CircuitImageSource; caption: string; page: number }
@@ -29,8 +32,8 @@ const SIDE_BY_SIDE_MIN = 900;
  * The schematic PDF of the board, one page at a time. Dragging on the page frames an area that is added to the change on the
  * right as a sharp picture rendered from the PDF; with an older version beside it, the same area is taken from both dates.
  */
-export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pageChanges, crops, onCapture, onSelectChange, onBack, versionsOpen, onVersionsOpenChange: setVersionsOpen, versionsOpener }: {
-  pdfs: CircuitPdfModel; canEdit: boolean; captureBlocked: string; targetLabel: string;
+export function CircuitPdfPanel({ pdfs, ink, canEdit, captureBlocked, targetLabel, pageChanges, crops, onCapture, onSelectChange, onBack, versionsOpen, onVersionsOpenChange: setVersionsOpen, versionsOpener }: {
+  pdfs: CircuitPdfModel; ink?: CircuitPdfInkModel; canEdit: boolean; captureBlocked: string; targetLabel: string;
   pageChanges: Map<number, Array<{ id: string; number: number }>>; crops: CircuitPdfCrop[];
   onCapture: (captures: CircuitPdfCapture[]) => Promise<void>; onSelectChange: (id: string) => void; onBack: () => void;
   versionsOpen: boolean; onVersionsOpenChange: (open: boolean) => void; versionsOpener: MutableRefObject<HTMLButtonElement | null>;
@@ -39,7 +42,9 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
   const [zoom, setZoom] = useState<number | "fit">("fit");
   const [fitScale, setFitScale] = useState(1);
   const [pageWidth, setPageWidth] = useState(1190);
-  const [cropMode, setCropMode] = useState(finePointer);
+  const [tool, setTool] = useState<CircuitPdfTool>(() => finePointer() ? "crop" : "pan");
+  const [inkPane, setInkPane] = useState<Pane>("active");
+  const cropMode = tool === "crop";
   const [selection, setSelection] = useState<Selection | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [captured, setCaptured] = useState("");
@@ -66,6 +71,18 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
   const archived = registry.documents.filter(row => row.removedAt && row.id !== official?.id);
   const workingVersions = documents.filter(row => row.id !== official?.id);
   const compareReady = Boolean(compare && pdfs.comparePdf && pdfs.comparePage > 0);
+  const inkRow = inkPane === "compare" && compareReady ? compare : active;
+  const inkPage = inkPane === "compare" && compareReady ? pdfs.comparePage : page;
+  const targetInk = inkRow ? ink?.pages[`${inkRow.id}:${inkPage}`] || [] : [];
+  const loadInk = ink?.load;
+  const activeInkId = active?.id, compareInkId = compare?.id;
+  useEffect(() => {
+    if (!loadInk) return;
+    if (activeInkId) void loadInk(activeInkId, page).catch(() => {});
+    if (compareInkId && pdfs.comparePage > 0) void loadInk(compareInkId, pdfs.comparePage).catch(() => {});
+  }, [loadInk, activeInkId, page, compareInkId, pdfs.comparePage]);
+  useEffect(() => { setInkPane("active"); }, [active?.id, page, compare?.id, pdfs.comparePage]);
+  function chooseTool(value: CircuitPdfTool) { setTool(value); setSelection(null); }
   useEffect(() => { setPageInput(String(page)); setSelection(null); stage.current?.scrollTo({ top: 0 }); }, [page, active?.id]);
   useEffect(() => { setSelection(null); }, [compare?.id, pdfs.comparePage]);
   useEffect(() => { if (!captured) return; const timer = setTimeout(() => setCaptured(""), 4000); return () => clearTimeout(timer); }, [captured]);
@@ -157,6 +174,7 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
   }
   async function capture(sides: Array<{ pane: Pane; side: CircuitImageSide }>) {
     if (!selection || capturing || captureBlocked) return;
+    if (ink?.loading) { setFailure("畫筆標註載入中，請稍後再截圖。"); return; }
     if (sides.some(side => side.pane === "compare") && !compareReady) { setFailure("請先指定有效的官方對應頁，再加入修改前截圖。"); return; }
     setCapturing(true); setFailure("");
     try {
@@ -165,7 +183,7 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
         const row = pane === "compare" ? compare : active, pdf = pane === "compare" ? pdfs.comparePdf : pdfs.activePdf;
         const pageNumber = pane === "compare" ? pdfs.comparePage : page;
         if (!row || !pdf) continue;
-        const output = await cropCircuitPdfPage(pdf, pageNumber, selection.rect);
+        const output = await cropCircuitPdfPage(pdf, pageNumber, selection.rect, 2400, ink?.pages[`${row.id}:${pageNumber}`] || []);
         const name = circuitPdfImageName(row, pageNumber, CIRCUIT_IMAGE_SIDE_LABELS[side]);
         captures.push({ side, page: pageNumber, caption: circuitPdfCaption(row, pageNumber), file: new File([output.blob], name, { type: "image/png", lastModified: Date.now() }),
           source: { kind: "pdf", documentId: row.id, name: row.name, date: row.date, label: row.label, page: pageNumber, rect: selection.rect } });
@@ -221,8 +239,9 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
     }}>
     {hiddenInputs}
     <div className="circuit-pdf-toolbar">
-      <div className="circuit-pdf-row">
+      <div className="circuit-pdf-row" role="toolbar" aria-label="PDF 工具列">
         {back}
+        <div className="circuit-pdf-tool-group" data-group="version">
         <div className="circuit-pdf-versions" ref={versions} onBlur={event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) setVersionsOpen(false); }}>
           <Button type="button" variant="outline" className="circuit-pdf-version-button" aria-label="選擇 PDF 版本" aria-expanded={versionsOpen} title={active ? `${active.name} · ${active.pages} 頁；點此管理 PDF 版本` : "管理 PDF 版本"} onClick={event => { versionsOpener.current = event.currentTarget; setVersionsOpen(!versionsOpen); }}>
             <span>{active ? active.id === official?.id ? "官方原圖" : "工作版本" : "PDF 版本"}</span><small>{active ? `${circuitPdfVersionLabel(active)} · ${active.name}` : "管理與還原"}</small><ChevronDown aria-hidden="true" />
@@ -250,38 +269,50 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
             </div>
           </div>}
         </div>
-        {canEdit && active && <Button type="button" variant="outline" className="circuit-pdf-delete" aria-label="刪除這份 PDF" aria-expanded={deleting === active.id} disabled={active.id === official?.id}
+        </div>
+        {canEdit && <div className="circuit-pdf-tool-group" data-group="files">
+        {active && <Button type="button" variant="outline" className="circuit-pdf-delete" aria-label="刪除這份 PDF" aria-expanded={deleting === active.id} disabled={active.id === official?.id}
           title={active.id === official?.id ? "官方基準不能刪除；先把另一份 PDF 設為官方基準" : "刪除目前這份 PDF；已加入的截圖保留，可從版本清單的「已刪除的 PDF」還原"} onClick={() => setDeleting(value => value === active.id ? "" : active.id)}><Trash2 aria-hidden="true" /></Button>}
-        {canEdit && <Button type="button" variant="outline" aria-label="上傳新 PDF" title="新增工作版本，保留全部舊 PDF 與官方基準" disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Upload aria-hidden="true" /><span>{pdfs.uploading ? "上傳中…" : "新增 PDF"}</span></Button>}
-        {official && active?.id !== official.id && <Button type="button" variant="outline" className="circuit-pdf-compare-official" aria-pressed={compare?.id === official.id} onClick={() => compare?.id === official.id ? pdfs.setCompare("") : pdfs.compareOfficial()}><ShieldCheck aria-hidden="true" />對照官方基準</Button>}
-        {compareChoices.length > 0 && <label className="circuit-pdf-compare"><span>對照</span>
-          <select aria-label="對照較早的 PDF 版本" value={compare?.id || ""} onChange={event => pdfs.setCompare(event.target.value)}>
-            <option value="">不對照</option>
-            {compareChoices.map(row => <option key={row.id} value={row.id}>{row.id === official?.id ? "官方基準 · " : ""}{circuitPdfVersionLabel(row)} · {row.name}</option>)}
-          </select>
-        </label>}
-        {compare && <div className="circuit-pdf-offset" role="group" aria-label="對照頁差" title="兩個版本頁數不同時，調整對照的頁碼">
-          {compare.id === official?.id ? <label>官方對應頁<input type="number" aria-label="官方對應頁" placeholder="頁碼" min={1} max={compare.pages} value={pdfs.comparePage || ""} onChange={event => { const target = Number(event.target.value); if (target >= 1 && target <= compare.pages) pdfs.setCompareOffset(target - page); }} /></label> : <span>第 {pdfs.comparePage} 頁</span>}
-          <Button type="button" variant="ghost" aria-label="對照頁往前一頁" disabled={pdfs.comparePage <= 1} onClick={() => pdfs.setCompareOffset(pdfs.compareOffset - 1)}><Minus aria-hidden="true" /></Button>
-          <Button type="button" variant="ghost" aria-label="對照頁往後一頁" disabled={!pdfs.comparePage || pdfs.comparePage >= compare.pages} onClick={() => pdfs.setCompareOffset(pdfs.compareOffset + 1)}><Plus aria-hidden="true" /></Button>
+        <Button type="button" variant="outline" aria-label="上傳新 PDF" title={pdfs.uploading ? `正在上傳 ${pdfs.uploading}` : "新增工作版本，保留全部舊 PDF 與官方基準"} disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Upload aria-hidden="true" /></Button>
         </div>}
-        {official && !pdfs.officialPage && <small className="circuit-pdf-page-warning" role="status">請在「官方對應頁」輸入有效頁碼</small>}
-        {active && <><div className="circuit-pdf-pager" role="group" aria-label="翻頁">
+        {active && <><div className="circuit-pdf-tool-group" data-group="draw" role="group" aria-label="標註工具">
+          <Button type="button" variant="ghost" aria-label="移動" title="移動圖面；也可按住空白鍵拖曳" aria-pressed={tool === "pan"} onClick={() => chooseTool("pan")}><Hand aria-hidden="true" /></Button>
+          <Button type="button" variant="ghost" className="circuit-pdf-crop-toggle" aria-label="框選" title="框選區域，加入修改前後截圖" aria-pressed={cropMode} onClick={() => chooseTool("crop")}><Crop aria-hidden="true" /></Button>
+          <Button type="button" variant="ghost" aria-label="畫筆" title="畫筆：直接在圖面畫線，放開後自動儲存" aria-pressed={tool === "pen"} disabled={!canEdit || !ink || ink.loading || !pdfs.activePdf || pdfs.opening} onClick={() => chooseTool("pen")}><PenLine aria-hidden="true" /></Button>
+          <Button type="button" variant="ghost" aria-label="橡皮擦" title="點選筆跡即可擦除；不會更動 PDF 原圖" aria-pressed={tool === "erase"} disabled={!canEdit || !ink || ink.loading || !pdfs.activePdf || pdfs.opening} onClick={() => chooseTool("erase")}><Eraser aria-hidden="true" /></Button>
+          <Button type="button" variant="ghost" aria-label="撤回最後一筆畫筆" title="撤回最後操作圖面上的最後一筆畫筆" disabled={!canEdit || !ink || !targetInk.length} onClick={() => { if (inkRow) ink?.undo(inkRow.id, inkPage); }}><Undo2 aria-hidden="true" /></Button>
+        </div>
+        <div className="circuit-pdf-tool-group" data-group="navigation"><div className="circuit-pdf-pager" role="group" aria-label="翻頁">
           <Button type="button" variant="ghost" aria-label="上一頁" title="上一頁（←）" disabled={page <= 1} onClick={() => pdfs.goTo(page - 1)}><ChevronLeft aria-hidden="true" /></Button>
           <label><span className="sr-only">頁碼</span><input aria-label="目前頁碼" inputMode="numeric" value={pageInput} onChange={event => setPageInput(event.target.value.replace(/[^0-9]/g, ""))}
             onBlur={() => { pdfs.goTo(Number(pageInput) || page); setPageInput(String(page)); }} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); pdfs.goTo(Number(pageInput) || page); } }} /></label>
           <span>/ {active.pages}</span>
           <Button type="button" variant="ghost" aria-label="下一頁" title="下一頁（→）" disabled={page >= active.pages} onClick={() => pdfs.goTo(page + 1)}><ChevronRight aria-hidden="true" /></Button>
-        </div>
-        <div className="circuit-pdf-zoom" role="group" aria-label="縮放">
+        </div></div>
+        <div className="circuit-pdf-tool-group" data-group="zoom"><div className="circuit-pdf-zoom" role="group" aria-label="縮放">
           <Button type="button" variant="ghost" aria-label="縮小" onClick={() => setZoom(step(scale, -1))}><Minus aria-hidden="true" /></Button>
           <span aria-live="polite">{Math.round(scale * 100)}%</span>
           <Button type="button" variant="ghost" aria-label="放大" onClick={() => setZoom(step(scale, 1))}><Plus aria-hidden="true" /></Button>
           <Button type="button" variant={zoom === "fit" ? "secondary" : "ghost"} aria-label="符合寬度" title="符合寬度" aria-pressed={zoom === "fit"} onClick={() => setZoom("fit")}><MoveHorizontal aria-hidden="true" /></Button>
-        </div>
-        <Button type="button" variant={cropMode ? "secondary" : "ghost"} className="circuit-pdf-crop-toggle" aria-label="框選" aria-pressed={cropMode} title={cropMode ? "在頁面上拖曳即可框選；按住空白鍵拖曳可移動畫面" : "開啟後在頁面上拖曳框選"} onClick={() => setCropMode(value => !value)}><Crop aria-hidden="true" /><span>框選</span></Button></>}
+        </div></div></>}
+        {compareChoices.length > 0 && <div className="circuit-pdf-tool-group" data-group="compare">
+          {official && active?.id !== official.id && <Button type="button" variant="outline" className="circuit-pdf-compare-official" aria-label="對照官方基準" title="開啟／關閉官方基準對照" aria-pressed={compare?.id === official.id} onClick={() => compare?.id === official.id ? pdfs.setCompare("") : pdfs.compareOfficial()}><ShieldCheck aria-hidden="true" /></Button>}
+          <label className="circuit-pdf-compare"><span>對照</span><select aria-label="對照較早的 PDF 版本" value={compare?.id || ""} onChange={event => pdfs.setCompare(event.target.value)}>
+            <option value="">不對照</option>{compareChoices.map(row => <option key={row.id} value={row.id}>{row.id === official?.id ? "官方基準 · " : ""}{circuitPdfVersionLabel(row)} · {row.name}</option>)}
+          </select></label>
+          {compare && <div className="circuit-pdf-offset" role="group" aria-label="對照頁差" title="兩個版本頁數不同時，調整對照的頁碼">
+            {compare.id === official?.id ? <label>官方頁<input type="number" aria-label="官方對應頁" placeholder="頁碼" min={1} max={compare.pages} value={pdfs.comparePage || ""} onChange={event => { const target = Number(event.target.value); if (target >= 1 && target <= compare.pages) pdfs.setCompareOffset(target - page); }} /></label> : <span>第 {pdfs.comparePage} 頁</span>}
+            <Button type="button" variant="ghost" aria-label="對照頁往前一頁" disabled={pdfs.comparePage <= 1} onClick={() => pdfs.setCompareOffset(pdfs.compareOffset - 1)}><Minus aria-hidden="true" /></Button>
+            <Button type="button" variant="ghost" aria-label="對照頁往後一頁" disabled={!pdfs.comparePage || pdfs.comparePage >= compare.pages} onClick={() => pdfs.setCompareOffset(pdfs.compareOffset + 1)}><Plus aria-hidden="true" /></Button>
+          </div>}
+          {official && !pdfs.officialPage && <small className="circuit-pdf-page-warning" role="status">請輸入官方對應頁</small>}
+        </div>}
+        {ink && active && <span className="circuit-pdf-ink-status" role="status" title="筆跡依版本與頁碼自動儲存，截圖時會一併加入">
+          {ink.error ? "標註未儲存" : ink.loading ? "載入標註…" : ink.saving ? "儲存標註…" : `${targetInk.length} 筆標註`}
+        </span>}
       </div>
     </div>
+    {ink?.error && !versionsOpen && <p className="circuit-pdf-message" role="alert"><span>{ink.error}</span><Button type="button" variant="ghost" aria-label="重試儲存畫筆標註" title="重新連線並儲存本機保留的筆跡" onClick={() => void ink.retry().catch(() => {})}><RotateCcw aria-hidden="true" /></Button></p>}
     {deletingRow && <div className="circuit-pdf-confirm" role="group" aria-label="確認刪除 PDF">
       <span>刪除 {circuitPdfVersionLabel(deletingRow)}「{deletingRow.name}」？已加入的截圖保留，可從版本清單的「已刪除的 PDF」還原。</span>
       <Button type="button" variant="outline" onClick={() => setDeleting("")}>取消</Button>
@@ -306,8 +337,12 @@ export function CircuitPdfPanel({ pdfs, canEdit, captureBlocked, targetLabel, pa
         : !pdfs.activePdf || !active ? <p className="circuit-pdf-loading">{pdfs.opening ? "正在開啟 PDF…" : "選擇一個版本"}</p>
         : <div className="circuit-pdf-pages" data-stacked={Boolean(compare) && stacked}>
           {compare && (pdfs.comparePage ? <PdfPage key={`compare:${compare.id}`} pane="compare" pdf={pdfs.comparePdf} row={compare} page={pdfs.comparePage} scale={scale} heading={`${compare.id === official?.id ? "官方基準" : "自選對照"} · ${circuitPdfVersionLabel(compare)} 第 ${pdfs.comparePage} 頁`}
+            tool={canEdit && ink && !ink.loading ? tool : cropMode ? "crop" : "pan"} strokes={ink?.pages[`${compare.id}:${pdfs.comparePage}`] || []}
+            onAddInk={points => ink?.add(compare.id, pdfs.comparePage, points)} onRemoveInk={id => ink?.remove(compare.id, pdfs.comparePage, id)} onInkTarget={() => setInkPane("compare")}
             crops={crops.filter(crop => crop.documentId === compare.id && crop.page === pdfs.comparePage)} selection={selection} cropMode={cropMode} onSelection={setSelection} stage={stage} /> : <figure className="circuit-pdf-page circuit-pdf-unmatched" data-pane="compare" style={{ width: pageWidth * scale }}><figcaption>官方基準 · 尚未對應頁面</figcaption><div role="status"><strong>官方基準沒有對應的第 {page + pdfs.compareOffset} 頁</strong><span>請在「官方對應頁」輸入 1–{compare.pages}，再比對或加入修改前截圖。</span></div></figure>)}
           <PdfPage key={`active:${active!.id}`} pane="active" pdf={pdfs.activePdf} row={active!} page={page} scale={scale} heading={compare ? `工作版本 · ${circuitPdfVersionLabel(active!)} 第 ${page} 頁` : ""}
+            tool={canEdit && ink && !ink.loading ? tool : cropMode ? "crop" : "pan"} strokes={ink?.pages[`${active.id}:${page}`] || []}
+            onAddInk={points => ink?.add(active.id, page, points)} onRemoveInk={id => ink?.remove(active.id, page, id)} onInkTarget={() => setInkPane("active")}
             crops={crops.filter(crop => crop.documentId === active!.id && crop.page === page)} selection={selection} cropMode={cropMode} onSelection={setSelection} stage={stage} />
         </div>}
     </div>
@@ -398,8 +433,9 @@ const PageStrip = memo(function PageStrip({ registry, documentId, pages, current
   </div>;
 });
 
-function PdfPage({ pane, pdf, row, page, scale, heading, crops, selection, cropMode, onSelection, stage }: {
+function PdfPage({ pane, pdf, row, page, scale, heading, crops, selection, cropMode, tool, strokes, onAddInk, onRemoveInk, onInkTarget, onSelection, stage }: {
   pane: Pane; pdf: PDFDocumentProxy | null; row: CircuitPdfDocument; page: number; scale: number; heading: string; crops: CircuitPdfCrop[];
+  tool: CircuitPdfTool; strokes: CircuitPdfInkStroke[]; onAddInk: (points: CircuitPdfInkStroke["points"]) => void; onRemoveInk: (id: string) => void; onInkTarget: () => void;
   selection: Selection | null; cropMode: boolean; onSelection: (value: Selection | null) => void; stage: RefObject<HTMLDivElement>;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -461,6 +497,8 @@ function PdfPage({ pane, pdf, row, page, scale, heading, crops, selection, cropM
       }}
       onPointerCancel={() => { drag.current = null; }}>
       <canvas ref={canvas} aria-label={`${row.name} 第 ${page} 頁`} role="img" />
+      {size && !rendering && !error && <CircuitPdfInkLayer key={`${row.id}:${page}:${tool}`} strokes={strokes} width={size.width} height={size.height} tool={tool} space={space}
+        label={`${row.name} 第 ${page} 頁`} onAdd={onAddInk} onRemove={onRemoveInk} onTarget={onInkTarget} />}
       {crops.map(crop => <span key={crop.id} className="circuit-pdf-crop" data-side={crop.side} style={box(crop.rect)}><span>{SHORT_SIDE[crop.side]}</span></span>)}
       {shown && <span className="circuit-pdf-selection" data-mirror={shown.pane !== pane} style={box(shown.rect)} />}
       {error && <p className="circuit-pdf-page-error" role="alert">{error}</p>}
