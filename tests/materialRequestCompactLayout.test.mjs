@@ -11,6 +11,7 @@ const versionCenter = (await readFile(new URL("../src/components/material-reques
 const uploadDialog = (await readFile(new URL("../src/components/material-requests/BomUploadDialog.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const settingsDialog = await readFile(new URL("../src/components/material-requests/MaterialTableSettingsDialog.tsx", import.meta.url), "utf8");
 const styles = (await readFile(new URL("../src/index.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const pageTrackerStyles = (await readFile(new URL("../src/components/material-requests/bomPageTracker.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const transpiled = ts.transpileModule(presentationSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText.replace('"./materialTrackingStatus.ts"', JSON.stringify(new URL("../src/components/material-requests/materialTrackingStatus.ts", import.meta.url).href));
@@ -32,6 +33,21 @@ const COLUMN_KEYS = [
   "item", "name", "qty", "refDes", "mpn", "manufacturer", "sourcingStatus", "virtual", "physical",
   "partName", "partSpec", "schematicPart", "footprint", "phaseOut", "partUsage", "actions", "note",
 ];
+// Classifies a stylesheet's declarations by where their colour comes from. `themed` are painted with hsl(var(--token));
+// `fixed` carry any other colour: a hex or colour-function literal in any property, anything but lengths, line styles
+// and neutral keywords in a paint property, or a colour variable that is set to something other than another variable.
+const PAINT_PROPERTY = /^(?:(?:[\w-]+-)?color|background|border(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?|outline|(?:box|text)-shadow|fill|stroke)$/;
+function auditStylesheetColours(css) {
+  const colourVariables = new Set([...css.matchAll(/hsl\(var\((--[\w-]+)\)/g)].map(([, name]) => name));
+  const declarations = [...css.matchAll(/([\w-]+):\s*([^;{}]+)[;}]/g)].map(([, property, value]) => [property, value.trim()]);
+  const isFixed = ([property, value]) => {
+    const rest = value.replace(/hsl\(var\(--[\w-]+\)(?:\s*\/\s*[\d.]+%?)?\)/g, "");
+    if (/#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i.test(rest)) return true;
+    if (colourVariables.has(property)) return !/^var\(--[\w-]+\)$/.test(value);
+    return PAINT_PROPERTY.test(property) && !/^(?:-?[\d.]+(?:px|rem|em|%)?|solid|dashed|dotted|double|none|inset|transparent|currentColor|inherit|!important|color-mix\(in [a-z-]+|[\s,)])*$/i.test(rest);
+  };
+  return { themed: declarations.filter(([, value]) => /hsl\(var\(--/.test(value)), fixed: declarations.filter(isFixed) };
+}
 
 test("the table mirrors the CE workbook and keeps the website-only Note column last", () => {
   assert.ok(!presentation.MATERIAL_TABLE_COLUMNS.some((column) => ["marked", "status", "tracking"].includes(column.key)));
@@ -145,7 +161,16 @@ test("dialogs and popovers use the page theme tokens instead of their own fixed 
   assert.match(dialogBlocks, /workspace-dialog-section/);
   assert.match(source, /const CHIP_TONES = \{/);
   const pageTracker = slice("function BomPageTrackerDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
-  assert.match(pageTracker, /className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border bg-background\/40"/);
+  // The page list is a table painted by bomPageTracker.css, so its theme contract is checked in that stylesheet:
+  // the page loads it, the dialog names its classes, and every colour in it comes from a theme variable.
+  assert.match(source, /^import "\.\/bomPageTracker\.css";$/m);
+  assert.match(pageTracker, /<div className="bom-tracker-table-scroll[" ][\s\S]{0,200}?<table className="bom-tracker-table[" ]/);
+  assert.match(pageTrackerStyles, /\.bom-tracker-table-scroll \{[^}]*border: 1px solid hsl\(var\(--border\)\)/);
+  assert.match(pageTrackerStyles, /\.bom-tracker-table tbody tr \{[^}]*--bom-page-row: var\(--[a-z-]+\);/);
+  assert.match(pageTrackerStyles, /\.bom-tracker-table tbody :is\(th,td\) \{[^}]*background: hsl\(var\(--bom-page-row\)\)/);
+  const pageTrackerColours = auditStylesheetColours(pageTrackerStyles);
+  assert.ok(pageTrackerColours.themed.length >= 10, "the audit must see the table's borders, header, rows and inputs");
+  assert.deepEqual(pageTrackerColours.fixed, [], `bomPageTracker.css must paint with hsl(var(--token)) only, found ${JSON.stringify(pageTrackerColours.fixed)}`);
   assert.match(pageTracker, /role="group" aria-label=\{`第 \$\{page\.pageNumber\} 頁狀態`\}/);
   assert.match(slice("function MaterialRecordDialog(", "const MaterialGroupRow = memo("), /CE Excel 欄位/);
   assert.match(source, /<AlertDialogContent data-dialog-tone="danger"/);
