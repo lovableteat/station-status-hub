@@ -14,7 +14,9 @@ async function geometry(page, dialog, width, height) {
     return { frame: rect(node), overflow: node.scrollWidth - node.clientWidth, panel: rect(node.querySelector('.circuit-detail')), note: rect(review.querySelector('textarea')), actions: rect(review.lastElementChild), footer: rect(node.querySelector('.circuit-detail-footer')), buttons: [...review.querySelectorAll('button')].map(rect) };
   });
   assert.ok(values.frame.left >= -1 && values.frame.top >= -1 && values.frame.right <= width + 1 && values.frame.bottom <= height + 1, JSON.stringify(values));
-  assert.ok(values.frame.width >= width - 18, 'The workspace must use the available display width');
+  // A window with room around it: up to 1800px wide, at least 16px each side and 24px top and bottom (phones keep the full screen).
+  if (width >= 1024) assert.ok(Math.abs(values.frame.width - Math.min(1800, width - 32)) <= 2 && values.frame.top >= 20 && values.frame.bottom <= height - 20, 'The workspace is a slightly smaller window: ' + JSON.stringify(values.frame));
+  else assert.ok(values.frame.width >= width - 2, 'On a phone the workspace uses the whole width');
   assert.ok(values.overflow <= 1, 'The dialog must not stretch horizontally');
   assert.ok(values.note.width >= Math.min(280, values.panel.width - 36), 'Review comments must retain a usable full line');
   assert.ok(values.note.bottom <= values.actions.top + 1, 'Review actions belong below the comment, not squeezed beside it');

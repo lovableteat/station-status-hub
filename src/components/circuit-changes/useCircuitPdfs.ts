@@ -314,7 +314,7 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { 
   const removeDocument = useCallback(async (id: string) => {
     const row = registryRef.current.documents.find(item => item.id === id);
     if (!row || !canEdit) return;
-    if (officialRef.current?.id === id) throw new Error("官方基準不能封存。請先明確指定另一份官方基準。");
+    if (officialRef.current?.id === id) throw new Error("官方基準不能刪除。請先把另一份 PDF 設為官方基準。");
     const at = now();
     await queue({ documents: [{ ...row, removedAt: at, updatedAt: at }] }, true);
     if (activeId === id) { placed.current = ""; setActiveId(""); }

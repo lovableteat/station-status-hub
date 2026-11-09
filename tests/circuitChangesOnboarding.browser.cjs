@@ -56,7 +56,7 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       if(!phone) assert.ok(await dialog.getByRole('button',{name:'加入修改後圖片',exact:true}).isVisible(), 'before and after sit side by side');
       assert.ok((await dialog.locator('.circuit-image-column[data-side="before"]').innerText()).includes('貼上會加到這裡'));
       assert.equal((await addBefore.innerText()).includes('Ctrl+V'), !phone, 'a phone is not told to press Ctrl+V or drag');
-      assert.equal(await dialog.getByRole('button',{name:/批次|新增修改/}).filter({visible:true}).count(), phone ? 0 : 2, 'one button per action, not several names for the same form');
+      assert.equal(await dialog.getByRole('button',{name:/開始另一次改版|新增修改/}).filter({visible:true}).count(), phone ? 0 : 2, 'one button per action, not several names for the same form');
       const initialState=await state(origin);
       assert.equal(initialState.sets.length+initialState.items.length, 0);
       await page.screenshot({path:path.join(evidence,`first-open-${width}.png`)});
@@ -68,7 +68,7 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       await guide.getByRole('button',{name:'關閉使用說明',exact:true}).tap(); await guide.waitFor({state:'hidden'});
       assert.equal((await state(origin)).sets.length, 0); assert.equal((await state(origin)).items.length, 0);
       const batch=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'建立改版紀錄',exact:true})});
-      if(phone) { await dialog.getByRole('button',{name:'返回修改清單',exact:true}).tap(); await dialog.getByTestId('circuit-change-unsaved').waitFor(); }
+      if(phone) { await dialog.getByRole('button',{name:'返回修改清單',exact:true}).tap(); await dialog.getByText('還沒有修改；在右邊填寫就會建立第一項',{exact:true}).waitFor(); assert.equal(await dialog.getByTestId('circuit-change-unsaved').count(),0); }
       // 3. Naming a batch is optional: the form can be cancelled, or submitted with Enter.
       await dialog.getByRole('button',{name:'開始另一次改版',exact:true}).tap();
       await batch.waitFor();
@@ -93,7 +93,7 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
         await batch.getByRole('button',{name:'取消',exact:true}).tap(); await batch.waitFor({state:'hidden'});
         assert.equal((await state(origin)).sets.length,0);
       }
-      if(phone) await dialog.getByTestId('circuit-change-unsaved').tap();
+      if(phone) await dialog.getByRole('button',{name:'新增修改',exact:true}).tap();
       // 4. Typing is all it takes: the change is created, and so is its batch when the user did not make one.
       await title.fill('QA 這筆草稿不因操作說明消失');
       await page.waitForFunction(()=>document.querySelector('.circuit-detail-footer [role="status"]')?.textContent==='已儲存');

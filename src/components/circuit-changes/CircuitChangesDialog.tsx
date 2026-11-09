@@ -208,6 +208,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
       await model.createItem();
       // A new change is a draft; a status or search filter would hide the row it gets once it is saved.
       setFilters({ query: "", status: "all", owner: "all" }); setMobileDetail(true);
+      if (sideBySide()) requestAnimationFrame(() => detailScroll.current?.querySelector<HTMLInputElement>(".circuit-field-title input")?.focus());
     });
   }
   function openNewSet() { setNewTitle(naming.title); setFromLabel(naming.fromLabel); setToLabel(naming.toLabel); setNotice(""); setNewSetOpen(true); }
@@ -309,7 +310,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   const targetLabel = unsaved || !item ? "這項新修改" : `${number(item.number)}${content?.title ? ` ${content.title.slice(0, 24)}` : ""}`;
   const saveLabel = model.saving ? "儲存中…" : model.saveError ? (model.dirty ? "儲存失敗" : "操作未完成") : model.dirty ? "尚有未儲存修改" : unsaved ? "輸入後自動儲存" : "已儲存";
   const nextStep = snapshot ? "" : !canEdit ? "檢視權限：可查看與匯出" : reviewing ? "確認內容無誤就按「確認」；需要補充時先寫意見再退回。"
-    : item?.status === "approved" && !model.dirty ? "這項已確認。" : missing.length ? `送出前還缺：${missing.join("、")}` : "內容齊全，可以送出 Review。";
+    : item?.status === "approved" && !model.dirty ? "這項已確認。" : missing.length ? `還缺：${missing.join("、")}` : "內容齊全，可以送出 Review";
   const viewportStyle = viewport ? { "--circuit-viewport-height": `${viewport.height}px`, "--circuit-viewport-top": `${viewport.top}px` } as CSSProperties : undefined;
   const field = (key: CircuitChangeTextField, label: string, multiline = false, placeholder = "") => <label className={`circuit-field circuit-field-${key}`} key={key}><span>{label}</span>{multiline
     ? <Textarea aria-label={label} value={content?.[key] || ""} disabled={readOnly} maxLength={CIRCUIT_CHANGE_FIELD_LIMITS[key]} placeholder={readOnly ? "" : placeholder} onChange={event => update({ [key]: event.target.value })} />
@@ -334,14 +335,13 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           </div>
           <div className="circuit-set">
             {model.sets.length > 0
-              ? <label className="circuit-set-picker"><span>本次改版</span>
+              ? <label className="circuit-set-picker" title="把同一次改版的修改放在一起，方便回查與匯出"><span>本次改版</span>
                 <select aria-label="選擇改版紀錄" value={model.selectedSetId} disabled={busy || model.loading} onChange={event => void run(() => model.selectSet(event.target.value))}>
                   {model.sets.map(set => <option key={set.id} value={set.id}>{circuitSetLabel(set)}</option>)}
                 </select>
               </label>
               : <p className="circuit-set-pending"><span>本次改版</span>{model.loading ? "載入中…" : canEdit ? <><strong>{naming.title}</strong><small>記錄第一項時自動建立</small></> : "尚未建立"}</p>}
             {canEdit && <Button type="button" variant="outline" className="circuit-new-set" onClick={openNewSet} disabled={busy || model.loading} title="為另一次改版建立獨立的修改清單"><Plus aria-hidden="true" />開始另一次改版</Button>}
-            <p className="circuit-set-help">把同一次改版的修改放在一起，方便回查與匯出。</p>
           </div>
           <div className="circuit-header-actions">
             <Button type="button" className="circuit-action-pdf" variant={pdfOpen ? "secondary" : "outline"} aria-label="PDF 圖面" aria-pressed={pdfOpen} title={pdfOpen ? "收起 PDF，只看清單與表單" : "上傳或打開原理圖 PDF，逐頁框選修改"} onClick={togglePdf}><FileText aria-hidden="true" /><span>PDF<span className="circuit-pdf-word"> 圖面</span></span></Button>
@@ -358,10 +358,9 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
               {canEdit && <Button type="button" aria-label="新增修改" title="新增修改" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" /></Button>}
               <span title={`共 ${model.items.length} 項修改`}>{model.items.length}<small>項</small></span>
             </div> : <>
-            {canEdit && <div className="circuit-new-item-row"><Button type="button" className="circuit-new-item" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" />新增修改</Button>
+            {canEdit && <div className="circuit-new-item-row"><Button type="button" className="circuit-new-item" title="每一處修改記成一項" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" />新增修改</Button>
+              {(model.removedItems?.length ?? 0) > 0 && <Button type="button" variant="outline" className="circuit-removed-trigger" aria-label={`已移除的修改（${model.removedItems.length}）`} title={`已移除的修改 ${model.removedItems.length} 項，可還原`} onClick={() => { setNotice(""); setRemovedOpen(true); }}><ArchiveRestore aria-hidden="true" /><span>{model.removedItems.length}</span></Button>}
               {wide && pdfOpen && <Button type="button" variant="outline" className="circuit-list-collapse" aria-label="收合修改清單" title="收合清單，讓 PDF 更寬" onClick={() => changeLayout({ list: "collapsed" })}><PanelLeftClose aria-hidden="true" /></Button>}</div>}
-            <p className="circuit-list-help">每項記錄一處修改，點開查看前後圖與確認紀錄。</p>
-            {canEdit && (model.removedItems?.length ?? 0) > 0 && <Button type="button" variant="ghost" className="circuit-removed-trigger" onClick={() => { setNotice(""); setRemovedOpen(true); }}><ArchiveRestore aria-hidden="true" />已移除的修改（{model.removedItems.length}）</Button>}
             <div className="circuit-filter-bar" role="group" aria-label="線路修改篩選">
               <label className="circuit-search"><Search aria-hidden="true" /><Input aria-label="搜尋線路修改" placeholder="搜尋編號、標題、Ref 或 Net" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} /></label>
               <label className="circuit-filter-select" data-status={filters.status}><Filter aria-hidden="true" /><span className="sr-only">狀態</span><select aria-label="篩選修改狀態" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value }))}>
@@ -382,14 +381,9 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                 <span className="circuit-item-title"><strong>{row.content.title || "未命名修改"}</strong><small>{[row.content.refs || row.content.net, row.content.owner].filter(Boolean).join(" · ") || "尚未補充位置"}{row.imageCount ? ` · ${row.imageCount} 張圖` : ""}</small></span>
                 <span className="circuit-list-status" data-status={row.status}>{CIRCUIT_CHANGE_STATUS_LABELS[row.status]}</span>
               </button>)}
-              {unsaved && <button type="button" data-testid="circuit-change-unsaved" className="circuit-item circuit-item-unsaved" aria-pressed="true" onClick={() => setMobileDetail(true)}>
-                <span className="circuit-item-number" aria-label="尚未編號">—</span>
-                <span className="circuit-item-title"><strong>{model.draft?.title || "新修改"}</strong><small>{model.dirty ? "建立後取得編號" : "輸入內容後自動建立"}</small></span>
-                <span className="circuit-list-status" data-status="unsaved">{model.dirty ? "儲存中" : "尚未儲存"}</span>
-              </button>}
               {model.loading && !model.items.length ? <p className="circuit-empty">正在載入修改項目…</p>
                 : model.items.length > 0 && !filtered.length ? <p className="circuit-empty">目前篩選條件沒有符合的修改項目</p>
-                : !model.items.length && !unsaved ? <p className="circuit-empty">這次改版還沒有記錄任何修改</p> : null}
+                : !model.items.length ? <p className="circuit-empty">{unsaved && canEdit ? "還沒有修改；在右邊填寫就會建立第一項" : "這次改版還沒有記錄任何修改"}</p> : null}
             </div>
             </>}
           </aside>
@@ -401,13 +395,13 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                 <Button type="button" variant="ghost" className="circuit-mobile-back" aria-label="返回修改清單" onClick={() => setMobileDetail(false)}><ArrowLeft aria-hidden="true" /></Button>
                 <div>
                   <strong>{unsaved ? "新修改" : number(item.number)}<span className="circuit-list-status" data-status={item.status}>{unsaved ? "尚未儲存" : CIRCUIT_CHANGE_STATUS_LABELS[item.status]}</span></strong>
-                  <span>{unsaved ? "填寫內容或貼上圖片就會自動建立" : `修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""} · ${dateTime(item.updatedAt)}`}</span>
+                  <span title={unsaved ? undefined : `修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""} · ${dateTime(item.updatedAt)}`}>{unsaved ? "填寫後自動建立" : `修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""}`}</span>
                 </div>
                 <div className="circuit-item-navigation">
                   <Button type="button" variant="ghost" aria-label="上一項修改" title="上一項" disabled={!canPrevious || busy} onClick={() => selectItem(filtered[selectedIndex - 1].id)}><ChevronLeft aria-hidden="true" /></Button>
                   <Button type="button" variant="ghost" aria-label="下一項修改" title="下一項" disabled={!canNext || busy} onClick={() => selectItem(filtered[selectedIndex < 0 ? 0 : selectedIndex + 1].id)}><ChevronRight aria-hidden="true" /></Button>
                   {!unsaved && <Button type="button" variant={historyOpen ? "secondary" : "ghost"} aria-pressed={historyOpen} onClick={() => setHistoryOpen(value => !value)}>歷史 {model.events.length}</Button>}
-                  {canEdit && !snapshot && !unsaved && <Button type="button" variant="ghost" className="circuit-remove-item" aria-label="移除修改" title="移出清單，保留歷史與原圖，之後可還原" disabled={busy || remotelyRemoved} onClick={() => { setNotice(""); setRemoveTarget(item); }}><Trash2 aria-hidden="true" /><span>移除</span></Button>}
+                  {canEdit && !snapshot && !unsaved && <Button type="button" variant="ghost" className="circuit-remove-item" aria-label="移除修改" title="移出清單，保留歷史與原圖，之後可還原" disabled={busy || remotelyRemoved} onClick={() => { setNotice(""); setRemoveTarget(item); }}><Trash2 aria-hidden="true" /></Button>}
                 </div>
               </header>
               <div ref={detailScroll} className="circuit-detail-scroll">
@@ -449,10 +443,10 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
               <footer className="circuit-detail-footer">
                 {reviewing && <div className="circuit-review-bar">{noteBox}<div>{commentButton}<Button type="button" variant="outline" disabled={busy} onClick={() => act("request_changes")}>退回補充</Button><Button type="button" disabled={busy} onClick={() => act("approve")}><Check aria-hidden="true" />確認</Button></div></div>}
                 <div className="circuit-footer-row">
-                  <span role="status">{snapshot ? `修訂 ${snapshot.revision} 唯讀` : saveLabel}</span>
+                  <span role="status" className={!snapshot && canEdit && !reviewing ? "sr-only" : undefined}>{snapshot ? `修訂 ${snapshot.revision} 唯讀` : saveLabel}</span>
                   {nextStep && <span className="circuit-next-step" title={nextStep}>{nextStep}</span>}
                   {!snapshot && canEdit && !reviewing && <div>
-                    <Button type="button" variant="outline" disabled={busy || !model.dirty || remotelyRemoved} onClick={() => void run(() => model.saveDraft())}>儲存修改</Button>
+                    <Button type="button" variant="outline" className="circuit-save-button" aria-label="儲存修改" title={saveLabel} data-state={model.saving ? "saving" : model.dirty ? "dirty" : model.saveError ? "failed" : "saved"} disabled={busy || !model.dirty || remotelyRemoved} onClick={() => void run(() => model.saveDraft())}>{model.saving ? "儲存中…" : model.dirty ? (model.saveError ? "重新儲存" : "儲存修改") : <><Check aria-hidden="true" />{unsaved ? "自動儲存" : "已儲存"}</>}</Button>
                     {canSubmit && <Button type="button" disabled={busy || model.conflict || missing.length > 0} title={missing.length ? `還缺：${missing.join("、")}` : undefined} onClick={() => act("submit")}>送出 Review</Button>}
                   </div>}
                 </div>
@@ -503,10 +497,10 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
       <DialogContent hideCloseButton className="circuit-guide-dialog" style={viewportStyle} data-testid="circuit-usage-guide">
         <header className="circuit-guide-header"><div><DialogTitle>線路修改怎麼用</DialogTitle><DialogDescription>記錄修改與貼圖 → 標出位置 → 逐項 Review → 匯出</DialogDescription></div><Button type="button" variant="ghost" aria-label="關閉使用說明" onClick={() => setGuideOpen(false)}><X aria-hidden="true" /></Button></header>
         <div className="circuit-guide-scroll">
-          <section><h3>先分清楚官方基準、工作 PDF 與改版紀錄</h3><p>官方基準是你明確指定的參考原檔；新增工作 PDF 會保留全部舊版，也不會換掉官方基準。改版紀錄只把同一次改動的項目集中管理，不會切換 BOM 或自動更換 PDF。</p></section>
+          <section><h3>先分清楚官方基準、工作 PDF 與改版紀錄</h3><p>官方基準是你明確指定的參考原檔；「新增 PDF」會保留全部舊版，也不會換掉官方基準。改版紀錄只把同一次改動的項目集中管理，不會切換 BOM 或自動更換 PDF。</p></section>
           <section><h3>逐頁怎麼比對與初審？</h3><p>先在 PDF 區指定官方基準，再選工作 PDF，按「與官方比對」並核對兩邊頁碼。頁面新增或刪除時，請調整「官方對應頁」。按「AI 逐頁初審」會用這兩頁的圖像與文字核對可見的連接性、Net 與名稱差異；每項保留位置、前後依據與建議，你可逐項判讀並保存。AI 結果與人工 Review 分開，PDF 初審不能取代原始 Netlist／ERC 的電氣連通驗證。</p></section>
           <ol className="circuit-start-steps">{guideSteps.map((step, index) => <li key={step.title}><span>{index + 1}</span><div><strong>{step.title}</strong><p>{step.text}</p></div></li>)}</ol>
-          <section><h3>PDF 怎麼用？</h3><p>按右上的「PDF 圖面」上傳原理圖 PDF（可拖入，每份 50 MB 內存到雲端，更大的只在這台電腦開啟，不需壓縮）。日期先取檔名裡的日期，沒有就用檔案日期，可在版本清單修改。在頁面上拖曳框選一塊區域，按「加到修改前／修改後」，圖會從 PDF 重新繪製，放大也清楚，並記下來源版本與頁碼；這項的頁碼欄若是空的會自動填入。選「對照」可以並排一份較早日期的 PDF，同一個框選區域一次加到修改前與修改後。按「看完，下一頁」記下進度；上方的頁面總覽會分別標出這版看過、較早版本看過與有修改的頁面，明天上傳新的 PDF 會從你看到的那一頁接續。按圖片旁的「P12」可回到該頁。</p></section>
+          <section><h3>PDF 怎麼用？</h3><p>按右上的「PDF 圖面」上傳原理圖 PDF（可拖入，每份 50 MB 內存到雲端，更大的只在這台電腦開啟，不需壓縮）。日期先取檔名裡的日期，沒有就用檔案日期，可在版本清單修改。上傳錯了就按版本選擇旁的垃圾桶刪除（已加入的截圖保留，可從版本清單的「已刪除的 PDF」還原）。在頁面上拖曳框選一塊區域，按「加到修改前／修改後」，圖會從 PDF 重新繪製，放大也清楚，並記下來源版本與頁碼；這項的頁碼欄若是空的會自動填入。選「對照」可以並排一份較早日期的 PDF，同一個框選區域一次加到修改前與修改後。按「看完，下一頁」記下進度；上方的頁面總覽會分別標出這版看過、較早版本看過與有修改的頁面，明天上傳新的 PDF 會從你看到的那一頁接續。按圖片旁的「P12」可回到該頁。</p></section>
           <section><h3>1. 怎麼新增？</h3><p>打開「線路修改」就能直接填寫；之後按左上的「新增修改」再記下一項。每一處修改各一項，填入標題、Ref／Net、頁碼、負責人及修改原因。還沒輸入任何內容的新修改不會留下紀錄。</p></section>
           <section><h3>2. 怎麼貼圖、標記？</h3><p>截圖後按 Ctrl+V，圖會加到標示「貼上會加到這裡」的那一格；點另一格即可切換，也可以把檔案拖到想放的那一格。每次加入都是追加，每項最多 200 張、每張 50 MB，不需壓縮。點圖片放大，使用「位置標記」或「框選」標出改動並填寫說明；放錯格可在放大視窗改「圖片用途」。</p></section>
           <section><h3>3. 怎麼儲存與交給主管 Review？</h3><p>停止輸入後會自動儲存，下方顯示「已儲存」。標題加上修改說明（或修改後圖片）齊全後，按「送出 Review」。有料號申請編輯權限的人可逐項「確認」，或填寫意見後「退回補充」；退回原因會顯示在該項目最上方。按「歷史」可查看操作者、時間、意見及舊修訂。</p></section>
