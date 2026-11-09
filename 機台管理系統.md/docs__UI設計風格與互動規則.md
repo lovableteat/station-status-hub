@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/UI設計風格與互動規則.md`；程式參考基準：`88f28c2affca63e061321412902fb835e2172685`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/UI設計風格與互動規則.md`；程式參考基準：`83b81c61ff76d4b016b5e5774e752789e06b63ed`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # UI 設計風格與互動規則
 
@@ -188,6 +188,8 @@ AutoCheck 需要保留工程資料的真實關係：A／B 版本、必要／建�
 
 AutoCheck「比對檢查」的輸入區是一張可照著做的清單（2026-11-09）。桌面版標題、六個分頁與工具（使用說明、意見收集、匯出／匯入備份、處理位置、新比對）共用一排；1560px 以下次要工具收成帶 `title` 的圖示，仍維持一排。模式切換、① 比對名稱、② 舊版 A／③ 新版 B 的進度與「開始比對」共用下一排，第一個未完成的步驟標為下一步，並用一句話說明還缺什麼。每一格檔案（Netlist 三份、BOM、電路圖 PDF、DSN）都有自己的「選擇檔案」，只開啟該格可用的副檔名；放錯格要說明原因且不變更。「選擇資料夾」與拖入資料夾代表整版更換，「加入檔案」、各格選檔與拖入零散檔案則累加並保留已選內容。資料夾裡用不到的檔案不讀取、不計入上限，也不得擋住比對；上限只算實際送進引擎的檔案。A、B 選到同一份 Netlist 要在執行前警告；檔案拖到面板外不得讓瀏覽器開檔離開頁面。1023px 以下各區塊直向堆疊，桌面用的 flex-basis 不可套到直向排列。
 
+料號申請的「線路修改」打開就是可以記錄的畫面（2026-11-09）。尚無紀錄時直接顯示空白的新修改表單與修改前／修改後兩個放圖區，不先要求建立批次；輸入第一個字或加入第一張圖才建立紀錄，沒有批次時一併建立以目前版次命名的批次（例如「V1 → V2 線路修改」），沒有輸入的空白表單不留下紀錄。同一個動作只有一個入口：「新增修改」在清單上方，「新增批次」在批次選擇旁，「匯出 Change List」與「使用說明」在頁首。搜尋、狀態、負責人篩選與 chip 位於清單欄內並緊貼清單上方，狀態選項帶各狀態筆數；關閉視窗時移除網址上的篩選參數。內容區先文字（標題、Ref／Net／頁碼／負責人、原因、說明）後圖片：修改前與修改後並排，各顯示一張含標記的大圖，多張時以縮圖列切換，補充圖是一列縮圖。貼上（Ctrl+V）加入標示「貼上會加到這裡」的那一格，沒有修改前圖時是修改前，加入後自動移到修改後；拖放以放開時所在的那一格為準；在文字欄位貼上帶文字的剪貼簿（Excel 儲存格）只貼文字。視窗外的檔案拖放必須攔下，不可讓瀏覽器開啟檔案而離開頁面。移除圖片提供立即復原；無法接受的檔案（非圖片、空檔、過大）列出原因且不提供重試。待 Review 與已確認的項目內容鎖定，按「修改內容」才可編輯，避免審查者誤改而撤回送審；Review 意見欄與「退回補充／確認」固定在頁尾同一列，退回原因顯示在該項目最上方。送出前還缺的內容（修改標題、修改說明或修改後圖片）在頁尾列出並停用「送出 Review」。切換項目的載入期間表單不接受輸入。表單主文字 14px、控制高度 40px（1023px 以下 44px、輸入 16px），12–13px 只用於輔助資訊。1023px 以下清單與內容分成兩個畫面，尚無紀錄時直接進入表單，圖片區排在原因／說明之前，分頁（修改前／修改後／補充圖）就是顯示中的那一格，文案不提 Ctrl+V 與拖放。放大視窗依長寬完整顯示圖片，標記工具可連續使用，說明與標記列在圖片旁，可切換上一張／下一張（方向鍵）並更改圖片用途。
+
 工程圖保留原有比例、標籤與可讀性；目前 app 內圖表使用已清理的 SVG 與 React 控制，不把外部 HTML script 直接嵌入 app。下載 HTML 可保留原有 standalone 工具，但不能因此放寬 app 內嵌執行界線。不要為了統一深色外觀而任意反相線路圖、刪掉必要標示或扭曲工程幾何。
 
 依據：`src/components/ui/table.tsx`、`src/components/test-plan/TestPlanWorkspace.tsx`、`test-plan.css`、`src/components/comparison/ComparisonResults.tsx`、`ComparisonCharts.tsx`、`comparison.css`、`public/comparison/README.md`。
@@ -341,6 +343,7 @@ AI 回答與請求必須有 loading／進度／取消或錯誤回饋，來源選
 | 維修標題與 loading | `src/components/maintenance/MaintenancePageHeader.tsx`、`MaintenanceLoading.tsx` |
 | 檔案庫 | `src/components/test-plan/TestPlanWorkspace.tsx`、`useFileLibraryFilters.ts`、`test-plan.css` |
 | AutoCheck | `src/components/comparison/ComparisonResults.tsx`、`ComparisonCharts.tsx`、`useComparisonFilters.ts`、`comparison.css`、`public/comparison/README.md` |
+| 線路修改 | `src/components/circuit-changes/CircuitChangesDialog.tsx`、`CircuitChangeImages.tsx`、`CircuitChangeImageViewer.tsx`、`useCircuitChanges.ts`、`circuitChanges.css`、`docs/material-workflows.md` |
 | AI | `src/components/api-management/ApiChatConsole.tsx`、`AiQuotaStatus.tsx`、`MaintenanceSourceSelector.tsx` |
 | 全域協作與隔離錯誤 | `src/components/collaboration/CollaborationCenter.tsx`、`src/components/common/WorkspaceRuntimeBoundary.tsx` |
 | 登入驗證 | `src/App.tsx`、`src/components/auth/UserContext.tsx` |
