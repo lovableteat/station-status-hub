@@ -17,6 +17,7 @@ export type BomPageTrackerStatus = "done" | "pending" | "done_missing";
 
 export interface BomPageTrackerPage {
   pageNumber: number;
+  title?: string;
   status: BomPageTrackerStatus;
   completed?: boolean;
   note: string;
@@ -383,6 +384,7 @@ function normalizePageTracker(raw: unknown, fallbackUpdatedAt: string) {
             ? "done"
             : "pending",
         note: typeof candidate.note === "string" ? candidate.note : "",
+        ...(typeof candidate.title === "string" ? { title: candidate.title } : {}),
       });
     });
   }
