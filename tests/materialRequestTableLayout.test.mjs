@@ -153,6 +153,10 @@ test("material column geometry keeps Note as the seventeenth and final column", 
   assert.deepEqual(readWidths("MAX_COLUMN_WIDTHS"), [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 520]);
   assert.equal(readWidths("DEFAULT_COLUMN_WIDTHS").length, 17);
   assert.match(rowBlock, /data-material-cell="note"/);
+  // Note used to be pinned to the right edge with backgrounds of its own; it is an ordinary last column now, styled like its neighbours.
+  assert.match(rowBlock, /<td data-material-cell="note" className=\{MATERIAL_CELL_CLASS\}/);
+  assert.match(alternativeBlock, /\{columns\.note && \(\s*<td className=\{MATERIAL_CELL_CLASS\}/);
+  assert.doesNotMatch(source, /sticky right-0/, "no material column is pinned to the right edge");
   assert.match(alternativeBlock, /columns\.note/);
   assert.match(source, /data-testid="material-note-input"/);
   assert.doesNotMatch(source, /colSpan=\{1[012]\}/);
