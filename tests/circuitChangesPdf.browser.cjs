@@ -164,6 +164,7 @@ async function eventually(check, message, timeout = 8000) {
     await panel(p).getByRole('button', {name:'選擇 PDF 版本', exact:true}).click();
     const versions = panel(p).getByRole('group', {name:'PDF 版本（依圖面日期）'});
     await versions.waitFor();
+    await versions.getByRole('button', {name:'編輯版本資訊：Vera_SCH_20261108.pdf', exact:true}).click();
     await versions.getByLabel('Vera_SCH_20261108.pdf 的版本備註', {exact:true}).fill('第1天'); await p.keyboard.press('Tab');
     await versions.getByLabel('Vera_SCH_20261108.pdf 的圖面日期', {exact:true}).fill('2026-11-07'); await p.keyboard.press('Tab');
     await eventually(async () => { const row = (await registryOf(origin)).documents[0]; return row.label === '第1天' && row.date === '2026-11-07'; }, 'date and note are saved');
