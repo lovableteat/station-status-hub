@@ -7,7 +7,7 @@ import SevenZip from '7z-wasm';
 const {loader}=createRequire(import.meta.url)('./support/renderHarness.cjs');
 const core=()=>loader({mocks:{jszip:{default:JSZip}},globals:{TextDecoder,TextEncoder,Blob}})('src/components/api-management/materialSpecDocumentCore.ts');
 test('RAR and 7z share a real sandboxed extractor with bounded uncompressed size',async()=>{
-  const wasm=await readFile('node_modules/7z-wasm/7zz.wasm');
+  const wasm=await readFile(createRequire(import.meta.url).resolve('7z-wasm/7zz.wasm'));
   const rar=await readFile('tests/fixtures/spec-fill/QA-SPEC.rar');
   const files=await core().extractMaterialSpecArchive(new Uint8Array(rar),wasm.buffer.slice(wasm.byteOffset,wasm.byteOffset+wasm.length));
   assert.ok(files.some(file=>file.name==='QA-BOX.stp'));

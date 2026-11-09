@@ -8,7 +8,7 @@ const load=loader({globals:{TextDecoder}});
 const engineering=()=>load('src/components/material-requests/materialSpecFillEngineering.ts');
 test('real RAR extracts named SPEC files and rejects bad data before AI',async()=>{
   const data=await readFile('tests/fixtures/spec-fill/QA-SPEC.rar');
-  const wasm=await readFile('node_modules/node-unrar-js/dist/js/unrar.wasm');
+  const wasm=await readFile(native.resolve('node-unrar-js/dist/js/unrar.wasm'));
   const files=await engineering().extractSpecFillRar(data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength),wasm.buffer.slice(wasm.byteOffset,wasm.byteOffset+wasm.byteLength));
   assert.ok(files.some(file=>file.name==='QA-BOX.stp'));
   assert.match(new TextDecoder().decode(files.find(file=>file.name==='spec-fill-QA.txt').bytes),/operating voltage 1.2 V/);

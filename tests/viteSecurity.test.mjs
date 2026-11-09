@@ -1,25 +1,32 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { join } from "node:path";
 import test from "node:test";
 
 const readJson = (url) => readFile(url, "utf8").then(JSON.parse);
 const rootPackageUrl = new URL("../package.json", import.meta.url);
 const lockfileUrl = new URL("../package-lock.json", import.meta.url);
 const viteConfigUrl = new URL("../vite.config.ts", import.meta.url);
-const requireFromFdir = createRequire(
-  new URL("../node_modules/fdir/package.json", import.meta.url),
-);
+// The installed copy Node loads from this checkout: its own node_modules, or the nearest parent's when the checkout is
+// a git worktree without one. Found by folder, because some packages hide package.json behind their "exports" map.
+const require = createRequire(import.meta.url);
+const installedManifest = (packageName) => {
+  const folder = require.resolve.paths(packageName).find((path) => existsSync(join(path, packageName, "package.json")));
+  assert.ok(folder, `${packageName} is not installed where Node would load it from this checkout`);
+  return join(folder, packageName, "package.json");
+};
 
 test("pins the supported patched Vite and Rollup graph with integrity", async () => {
   const [manifest, lockfile, vitePackage, rollupPackage, reactSwcPackage, taggerPackage] =
     await Promise.all([
       readJson(rootPackageUrl),
       readJson(lockfileUrl),
-      readJson(new URL("../node_modules/vite/package.json", import.meta.url)),
-      readJson(new URL("../node_modules/rollup/package.json", import.meta.url)),
-      readJson(new URL("../node_modules/@vitejs/plugin-react-swc/package.json", import.meta.url)),
-      readJson(new URL("../node_modules/lovable-tagger/package.json", import.meta.url)),
+      readJson(installedManifest("vite")),
+      readJson(installedManifest("rollup")),
+      readJson(installedManifest("@vitejs/plugin-react-swc")),
+      readJson(installedManifest("lovable-tagger")),
     ]);
 
   assert.equal(manifest.devDependencies.vite, "6.4.3");
@@ -52,6 +59,7 @@ test("pins the supported patched Vite and Rollup graph with integrity", async ()
 
 test("gives fdir a compatible picomatch without removing version 2 consumers", async () => {
   const lockfile = await readJson(lockfileUrl);
+  const requireFromFdir = createRequire(installedManifest("fdir"));
   const fdirPicomatch = await readJson(requireFromFdir.resolve("picomatch/package.json"));
   const legacyPicomatchLocations = Object.entries(lockfile.packages)
     .filter(([packagePath, metadata]) => (
