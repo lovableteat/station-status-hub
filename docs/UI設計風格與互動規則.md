@@ -212,8 +212,9 @@ AutoCheck「比對檢查」的輸入區是一張可照著做的清單（2026-11-
 - 每個工作區在手機的第一列是 `MobileCommandBar`（`src/components/layout/mobile/`）：圖示＋標題＋一行上下文、最多兩個 44px 主要動作、一個「工具」按鈕。次要動作、排序、檢視設定、匯出與說明放進 `MobileToolsSheet`（vaul 底部抽屜，列高 48px，關閉鈕 44px）。料號申請頁既有的工具抽屜是這個模式的來源，之後也以此對齊。
 - 資料清單在手機用 `MobileRecordCard`（標題列＋狀態 chip、兩欄 label-value、最多兩個 44px 動作＋更多）；表格只在使用者切到「表格」時出現並在自己的容器內橫捲。篩選列仍緊接結果上方，用 `MobileFilterBar` 或各頁既有的篩選列，chip 與全部清除不得收進抽屜。
 - 表單在手機用 `MobileDialog` 的 `fullHeight`：標題固定、`MobileDialogBody` 捲動、底部按鈕列固定並避開安全區。
-- toast（Radix viewport 與 sonner）在 ≤1023px 固定於 dock 上方 12px、左右 16px，不再貼頂蓋住品牌與帳號；AI 問答另加作曲區高度。
-- 驗收：`tests/mobileShell.test.mjs` 鎖定上述契約；`tests/auditMobileWorkspaces.browser.cjs` 以 Playwright 在 390 與 320px 檢查各工作區無整頁橫向溢出、指揮列與抽屜可開關、dock 可及、toast 位置。
+- toast（Radix viewport 與 sonner）在 ≤1023px 固定於 dock 上方 12px、左右 16px，不再貼頂蓋住品牌與帳號；AI 問答另加作曲區高度，有待送附件或鍵盤開啟時跟著作曲區上移，抽屜開啟時改到頂端。
+- sonner 在 ≤1023px 必須是底部定位（`ui/sonner.tsx` 依 `useIsCompactLayout` 切換 `position`）；不得同時給 toaster `top` 與 `bottom`，否則清單會被撐成整頁透明層，toast 顯示期間整頁點不到。桌機的頂端位置只能用 `lg:` 類別；Radix viewport（`ui/toast.tsx`）的桌機位置同樣從 `lg:` 起算，不可用 `sm:`。
+- 驗收：`tests/mobileShell.test.mjs` 鎖定上述契約；`tests/auditMobileWorkspaces.browser.cjs` 以 Playwright 在 390 與 320px 檢查各工作區無整頁橫向溢出、指揮列與抽屜可開關、dock 可及、toast 位置（含實際叫出一則 sonner toast，確認在 dock 上方且沒有蓋住頁面）。
 
 依據：`src/pages/Index.tsx`、`src/index.css`、`src/components/layout/MainWorkspaceHeader.tsx`、`MobileWorkspaceDock.tsx`、`src/components/layout/mobile/*`、`src/components/ui/mobile-dialog.tsx`、`src/components/test-plan/test-plan.css`。
 

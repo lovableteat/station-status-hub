@@ -18,13 +18,19 @@ test("phone shell sizes are defined once per tier and never hard-coded", async (
 });
 
 test("toasts sit above the dock on phones instead of over the header", async () => {
-  const [css, toast] = await Promise.all([read("src/index.css"), read("src/components/ui/toast.tsx")]);
+  const [css, toast, sonner] = await Promise.all([read("src/index.css"), read("src/components/ui/toast.tsx"), read("src/components/ui/sonner.tsx")]);
   assert.match(toast, /data-ui="toast-viewport"/);
   const block = css.slice(css.indexOf("Mobile shell: feedback placement"));
   assert.match(block, /@media \(max-width: 1023px\)/);
   assert.match(block, /\[data-ui='toast-viewport'\] \{ top: auto; bottom: calc\(var\(--mobile-shell-bottom\) \+ 12px\)/);
   assert.match(block, /\[data-sonner-toaster\] \{ top: auto !important; bottom: calc\(var\(--mobile-shell-bottom\) \+ 12px\) !important/);
   assert.match(block, /body:has\(\[data-ai-chat-shell\]\) \[data-ui='toast-viewport'\] \{ bottom: calc\(var\(--mobile-shell-bottom\) \+ 72px\)/);
+  // A bottom offset needs a bottom-anchored list: with a top anchor as well, the toaster stretches over the page and swallows taps.
+  assert.match(sonner, /position=\{compact \? "bottom-right" : "top-right"\}/);
+  assert.doesNotMatch(sonner, /(?<!lg:)!top-\[/, "only the desktop layout may pin the toaster's top edge");
+  assert.doesNotMatch(toast, /\bsm:top-\[/, "the Radix viewport keeps its desktop top offset behind lg: for the same reason");
+  assert.match(block, /body:has\(\[data-ai-composer-attachments\]\) :is\(\[data-ui='toast-viewport'\], \[data-sonner-toaster\]\) \{ bottom: calc\(var\(--mobile-shell-bottom\) \+ 132px\) !important/);
+  assert.match(block, /body:has\(\[data-ai-chat-keyboard\]\) :is\(\[data-ui='toast-viewport'\], \[data-sonner-toaster\]\) \{ bottom: calc\(var\(--ai-dialog-visible-bottom, 0px\) \+ 72px\) !important/);
 });
 
 test("shared phone components exist with the agreed anatomy and 44px targets", async () => {

@@ -33,7 +33,7 @@ test("mobile header exposes a bundled website QR and a thumb-friendly workspace 
   assert.match(dock, /z-40/);
   assert.match(index, /<MobileWorkspaceDock/);
   assert.match(toast, /w-\[min\(250px,calc\(100%-7\.5rem\)\)\]/);
-  assert.match(toast, /sm:left-auto sm:right-0/);
+  assert.match(toast, /lg:left-auto lg:right-0/);
   assert.match(sonner, /max-sm:!w-\[min\(250px,calc\(100vw-7\.5rem\)\)\]/);
 });
 

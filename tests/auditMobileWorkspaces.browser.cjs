@@ -65,12 +65,42 @@ async function checkWorkspace(context, workspace, { bar, tools, sheet }) {
   return tab;
 }
 
+// Raises one real toast through each of the app's two toast systems (sonner and the Radix hook) and checks that it sits
+// above the dock inside a list no taller than itself: a taller list is an invisible layer that swallows taps.
+async function checkRealToasts(tab, viewport) {
+  const result = await tab.evaluate(async () => {
+    const loaded = performance.getEntriesByType('resource').map((entry) => entry.name).reverse();
+    const sonnerUrl = loaded.find((name) => /\/sonner\.js(\?|$)/.test(name));
+    const radixUrl = loaded.find((name) => /\/src\/hooks\/use-toast\.ts(\?|$)/.test(name));
+    if (!sonnerUrl || !radixUrl) return { error: `toast modules not found (sonner ${Boolean(sonnerUrl)}, radix ${Boolean(radixUrl)})` };
+    (await import(sonnerUrl)).toast.success('稽核用提示');
+    (await import(radixUrl)).toast({ title: '稽核用提示' });
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const dockTop = document.querySelector('[data-mobile-workspace-dock]').getBoundingClientRect().top;
+    const measure = (list, item) => {
+      if (!list || !item) return { error: 'the toast did not render' };
+      const box = item.getBoundingClientRect();
+      return { top: Math.round(box.top), bottom: Math.round(box.bottom), dockTop: Math.round(dockTop), listHeight: Math.round(list.getBoundingClientRect().height), toastHeight: Math.round(box.height) };
+    };
+    const sonnerList = document.querySelector('[data-sonner-toaster]');
+    const radixList = document.querySelector('[data-ui="toast-viewport"]');
+    return { sonner: measure(sonnerList, sonnerList?.querySelector('[data-sonner-toast]')), radix: measure(radixList, radixList?.querySelector('li')) };
+  });
+  assert.ok(!result.error, `${viewport.width}px: ${result.error}`);
+  for (const [name, toast] of Object.entries(result)) {
+    assert.ok(!toast.error && toast.bottom <= toast.dockTop + 1 && toast.top > viewport.height / 2 && toast.listHeight <= toast.toastHeight + 2,
+      `${viewport.width}px: ${name} toasts sit above the dock without covering the page (${JSON.stringify(toast)})`);
+  }
+}
+
 (async () => {
   const vite = await startVite();
   const browser = await chromium.launch({ headless: true, ...(process.platform === 'win32' ? { executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe' } : {}) });
   try {
     for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
       const context = await browser.newContext({ viewport, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+      // The dev server loads hundreds of modules; keep every resource timing so the page's own toast module can be found below.
+      await context.addInitScript(() => performance.setResourceTimingBufferSize(5000));
       await checkWorkspace(context, 'file-uploads', { bar: '[data-testid="file-explorer-mobile-bar"]', tools: '[data-mobile-command-tools="true"]', sheet: '[data-testid="file-explorer-mobile-tools"]' });
       await checkWorkspace(context, 'comparison', { tools: '[data-testid="comparison-mobile-tools-trigger"]', sheet: '[data-testid="comparison-mobile-tools"]' });
       await checkWorkspace(context, 'user-management', { bar: '[data-testid="admin-mobile-bar"]', tools: '[data-testid="admin-mobile-bar"] [data-mobile-command-tools="true"]', sheet: '[data-testid="admin-mobile-tools"]' });
@@ -85,9 +115,20 @@ async function checkWorkspace(context, workspace, { bar, tools, sheet }) {
         return { top: style.top, bottom: style.bottom, aboveDock: rect.bottom <= dock.top + 1 };
       });
       assert.ok(!toast || (toast.aboveDock && parseFloat(toast.bottom) >= 60), `${viewport.width}px: toasts stack above the dock (${JSON.stringify(toast)})`);
+      await checkRealToasts(issues, viewport);
       await context.close();
     }
-    console.log('Phone shell verified at 390 and 320px: command bars, tools sheets, dock and toast placement');
+    // Tablets share the dock, so a toast must land above it there too instead of hanging from the top of the page.
+    const tablet = { width: 820, height: 1100 };
+    const tabletContext = await browser.newContext({ viewport: tablet, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+    await tabletContext.addInitScript(() => performance.setResourceTimingBufferSize(5000));
+    const tabletTab = await tabletContext.newPage();
+    await tabletTab.goto(page('comparison'), { waitUntil: 'domcontentloaded' });
+    await tabletTab.locator('[data-mobile-workspace-dock]').waitFor({ timeout: 30000 });
+    await tabletTab.waitForTimeout(1500);
+    await checkRealToasts(tabletTab, tablet);
+    await tabletContext.close();
+    console.log('Phone shell verified at 390 and 320px: command bars, tools sheets, dock and toast placement (toasts also at 820px)');
   } finally {
     await browser.close();
     stop(vite);
