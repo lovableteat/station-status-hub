@@ -1,3 +1,3 @@
-> 集中副本；原始路徑：`tests/fixtures/spec-fill/README.md`；程式參考基準：`74cf6ebb8d8de066f93e19468086e5e8e520d2f8`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`tests/fixtures/spec-fill/README.md`；程式參考基準：`9abef6de69254929e868a3362451004ed86a0c84`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 Synthetic test data only. QA-BOX.stp is a 10 x 20 x 3 mm box exported by the installed occt-wasm kernel. QA-SPEC.rar contains that box and a plain text synthetic 1.2 V specification, created with the installed WinRAR. No product or user documents are included.
