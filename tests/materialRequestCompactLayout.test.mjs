@@ -174,10 +174,10 @@ test("BOMs are grouped by project in BOM 管理 and in the header switcher", () 
   assert.match(versionCenter, /groupBomWorkspacesByProject\(liveSeries, \{ activeProjectId, activeProjectName, projectNames \}\)/);
   assert.match(versionCenter, /groups\.flatMap\(\(group\) => \[/);
   assert.match(versionCenter, /<div key=\{`project:\$\{group\.key\}`\}/);
-  assert.match(versionCenter, /請有編輯權限的同事上傳 Excel 或指定專案/);
+  assert.match(versionCenter, /請有編輯權限的同事上傳或指定專案/);
   assert.match(versionCenter, />目前專案</);
   assert.match(versionCenter, /onAssignProject\(selectedSeries, value === UNASSIGNED_VALUE \? null : value\)/);
-  assert.match(versionCenter, /此專案還沒有 BOM/);
+  assert.match(versionCenter, /尚無 BOM/);
   assert.match(desktopHeader, /<SelectGroup key=\{group\.key\}>/);
   assert.match(desktopHeader, /<SelectLabel/);
   assert.doesNotMatch(desktopHeader, />非目前專案</);

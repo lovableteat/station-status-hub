@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download, FileArchive, GitCompareArrows, Layers3, Pencil, Search, Upload } from "lucide-react";
+import { ArrowLeft, Download, FileArchive, GitCompareArrows, Layers3, Pencil, Search, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,8 +17,9 @@ import {
   type BomSeries, type BomSeriesVersion,
 } from "./bomVersioning";
 import { CHIP, CHIP_TONE, formatBomRelativeTime, formatBomTimestamp } from "./bomVersionPresentation";
-import { groupBomWorkspacesByProject, UNASSIGNED_BOM_PROJECT_LABEL } from "./materialRequestPresentation";
+import { groupBomWorkspacesByProject } from "./materialRequestPresentation";
 import type { MaterialWorkbookRecord } from "./materialRequestUtils";
+import "./bomVersionCenter.css";
 
 const UNASSIGNED_VALUE = "__unassigned__";
 export const BOM_SERIES_EMPTY_TEXT = "找不到符合條件的 BOM 系列";
@@ -241,8 +242,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         type="button"
         onClick={() => selectSeries(series)}
         aria-current={isSelected ? "true" : undefined}
+        data-active={isActive}
         className={cn(
-          "flex w-full flex-col gap-1 rounded-xl border px-3 py-2 text-left transition-colors",
+          "bom-series-row flex w-full flex-col gap-1 rounded-xl border px-3 py-2 text-left transition-colors",
           isSelected ? "border-primary/50 bg-primary/10" : "border-border bg-background/40 hover:bg-accent/40",
           archived && "opacity-75",
         )}
@@ -253,7 +255,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
           {isActive && <span className={cn(CHIP, "flex-none", activeSeries?.version.isCurrent ? CHIP_TONE.success : CHIP_TONE.warning)}>{activeSeries?.version.isCurrent ? "使用中" : `檢視 ${activeSeries?.version.displayNumber}`}</span>}
           {archived && <span className={cn(CHIP, "flex-none", CHIP_TONE.neutral)}>已封存</span>}
         </div>
-        <p className="truncate text-xs text-muted-foreground">{series.versions.length} 個版本 · {series.recordCount.toLocaleString()} 筆 · 更新 {formatBomRelativeTime(series.updatedAt)}</p>
+        <div className="bom-series-metadata"><span>{series.versions.length} 個版本</span><span>{series.recordCount.toLocaleString()} 筆</span><span>更新 {formatBomRelativeTime(series.updatedAt)}</span></div>
       </button>
     );
   };
@@ -261,7 +263,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const detail = selectedSeries && (
     <section data-testid="bom-series-detail" className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
       {compact && <Button type="button" variant="ghost" size="sm" onClick={() => setMobilePane("list")} className="h-10 w-fit px-2 text-sm lg:hidden"><ArrowLeft className="mr-1 h-4 w-4" />返回清單</Button>}
-      <div className="flex flex-wrap items-start gap-2">
+      <div className="bom-series-summary flex flex-wrap items-start gap-2">
         <div className="min-w-0 flex-1">
           {renaming ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -275,7 +277,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
               {canEdit && <Button type="button" variant="ghost" size="sm" aria-label="修改系列名稱" title="修改系列名稱" onClick={() => { setRenameDraft(selectedSeries.name); setRenaming(true); }} className="h-8 w-8 p-0"><Pencil className="h-3.5 w-3.5" /></Button>}
             </div>
           )}
-          <p className="mt-0.5 text-xs text-muted-foreground">目前版本 {selectedSeries.current.displayNumber} · {selectedSeries.versions.length} 個版本 · {selectedSeries.recordCount.toLocaleString()} 筆 · 專案：{selectedSeries.project ? projectNames.get(selectedSeries.project.projectId) ?? selectedSeries.project.projectName : UNASSIGNED_BOM_PROJECT_LABEL}</p>
+          <div className="bom-series-summary-meta"><span className="bom-current-version">目前版本 {selectedSeries.current.displayNumber}</span><span>{selectedSeries.versions.length} 個版本</span><span>{selectedSeries.recordCount.toLocaleString()} 筆</span></div>
         </div>
         <Select value={selectedSeries.project?.projectId ?? UNASSIGNED_VALUE} disabled={!canEdit || !ready || pending} onValueChange={(value) => void runAction(() => onAssignProject(selectedSeries, value === UNASSIGNED_VALUE ? null : value), "專案歸屬已更新")}>
           <SelectTrigger aria-label={`${selectedSeries.name} 所屬專案`} className="h-9 w-[12rem] text-sm"><SelectValue placeholder="指定專案" /></SelectTrigger>
@@ -286,7 +288,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         </Select>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="bom-series-actions flex flex-wrap items-center gap-1.5">
         <Button type="button" size="sm" disabled={!canEdit || !ready || busy} onClick={() => onUploadVersion(selectedSeries)} className="h-9"><Upload className="mr-1.5 h-4 w-4" />上傳新版本</Button>
         <Button type="button" variant="outline" size="sm" disabled={selectedSeries.versions.length < 2} title={selectedSeries.versions.length < 2 ? "需要兩個以上版本才能比對" : "比對目前版本與前一版"} onClick={() => {
           const current = selectedSeries.current;
@@ -299,7 +301,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-border">
+      <div className="bom-version-table-scroll min-h-0 flex-1 overflow-auto rounded-xl border border-border">
         <table data-testid="bom-version-table" className="w-full min-w-[960px] border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-card text-left text-xs text-muted-foreground">
             <tr>
@@ -370,16 +372,17 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-muted-foreground">歷史版本只能檢視與比對；料件與追蹤只在目前版本維護。上傳新版本時會把目前版本的追蹤依位號與料號帶過去，帶不過去的在差異檢視以「追蹤未帶入」列出。</p>
+      <p className="bom-version-footnote text-xs text-muted-foreground"><strong>歷史版本唯讀</strong><span>料件與追蹤在目前版本維護。上傳新版時帶入既有追蹤，未帶入項目可在差異檢視查看。</span></p>
     </section>
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="bom-version-center" className="flex h-[min(92vh,900px)] w-[min(96vw,1500px)] max-w-[min(96vw,1500px)] flex-col gap-3 overflow-hidden p-4 sm:p-5">
-        <DialogHeader>
+      <DialogContent data-testid="bom-version-center" className="bom-version-center flex flex-col overflow-hidden">
+        <DialogHeader className="bom-version-header">
           <DialogTitle className="text-xl">BOM 版本管理</DialogTitle>
-          <DialogDescription className="truncate" title={description}>{description}</DialogDescription>
+          <DialogDescription className="sr-only">{description}</DialogDescription>
+          <div className="bom-version-overview"><span className="bom-version-project" title={activeProjectName ?? "未選擇"}><Layers3 aria-hidden="true" />{activeProjectName ?? "未選擇專案"}</span><span>{seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>
         </DialogHeader>
         {/* Action feedback lives above both modes so an export started from the diff view is acknowledged there too. */}
         {feedback && <p role="status" data-testid="bom-version-feedback" className={cn("rounded-lg border px-3 py-1.5 text-xs", feedback.tone === "ok" ? "border-success/35 bg-success/10 text-success" : "border-destructive/35 bg-destructive/10 text-destructive")}>{feedback.text}</p>}
@@ -400,25 +403,26 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
             onExport={(visible) => void exportDiff(visible)}
           />
         ) : (
-          <div className="grid min-h-0 min-w-0 flex-1 gap-3 lg:grid-cols-[300px_minmax(0,1fr)]">
-            <aside data-testid="bom-series-list" className={cn("flex min-h-0 min-w-0 flex-col gap-2", compact && mobilePane === "detail" && "hidden")}>
+          <div className="bom-version-columns grid min-h-0 min-w-0 flex-1">
+            <aside data-testid="bom-series-list" className={cn("bom-series-sidebar flex min-h-0 min-w-0 flex-col", compact && mobilePane === "detail" && "hidden")}>
+              {canEdit && <Button type="button" variant="outline" size="sm" disabled={!ready || busy} onClick={onUploadNew} title="上傳新系列或新版本" className="bom-upload-entry h-9 justify-start"><Upload className="mr-1.5 h-4 w-4" />上傳 BOM</Button>}
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋系列、專案、來源檔或版本說明" aria-label="搜尋 BOM 系列" className="h-10 rounded-xl pl-9 text-sm lg:h-9" />
+                <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋專案、系列或版本" title="搜尋系列、專案、來源檔或版本說明" aria-label="搜尋 BOM 系列" className="h-10 rounded-xl pl-9 text-sm lg:h-9" />
               </div>
-              {canEdit && <Button type="button" variant="outline" size="sm" disabled={!ready || busy} onClick={onUploadNew} className="h-9 justify-start"><Upload className="mr-1.5 h-4 w-4" />上傳 BOM（新系列或新版本）</Button>}
-              <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+              {query && <div className="bom-series-filter-chips"><button type="button" aria-label="清除 BOM 系列搜尋" onClick={() => setQuery("")}><span>搜尋：{query}</span><X aria-hidden="true" /></button><Button type="button" variant="ghost" onClick={() => setQuery("")}>全部清除</Button></div>}
+              <div className="bom-series-groups min-h-0 flex-1 overflow-y-auto">
                 {groups.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">{BOM_SERIES_EMPTY_TEXT}</p>
                 ) : groups.flatMap((group) => [
-                  <div key={`project:${group.key}`} className="flex items-center gap-2 px-1 pt-2 first:pt-0">
+                  <div key={`project:${group.key}`} data-active-project={group.isActive} className="bom-project-heading flex items-center gap-2">
                     <Layers3 className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" />
                     <h4 className="min-w-0 truncate text-sm font-bold text-foreground">{group.label}</h4>
                     {group.isActive && <span className={cn(CHIP, "flex-none", CHIP_TONE.success)}>目前專案</span>}
                     <span className="flex-none text-[11px] text-muted-foreground">{group.workspaces.length} 個系列</span>
                   </div>,
                   ...(group.workspaces.length === 0
-                    ? [<p key={`empty:${group.key}`} className="rounded-xl border border-dashed border-border px-3 py-3 text-xs text-foreground/75">{canEdit ? "此專案還沒有 BOM。上傳 Excel 會自動歸入目前專案，或在系列詳情把現有系列移進來。" : "此專案還沒有 BOM。請有編輯權限的同事上傳 Excel 或指定專案。"}</p>]
+                    ? [<div key={`empty:${group.key}`} className="bom-project-empty"><strong>尚無 BOM</strong><p>{canEdit ? "上傳 Excel，或將現有系列移入此專案。" : "請有編輯權限的同事上傳或指定專案。"}</p></div>]
                     : group.workspaces.map((series) => renderSeriesRow(series))),
                 ])}
                 {archivedSeries.length > 0 && (

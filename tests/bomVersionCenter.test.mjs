@@ -52,11 +52,12 @@ test("the version center is a two-pane series/version window with timeline actio
   assert.match(center, /data-testid="bom-series-detail"/);
   assert.match(center, /data-testid="bom-version-table"/);
   assert.match(center, /data-testid="bom-archive-section"/);
-  assert.match(center, /lg:grid-cols-\[300px_minmax\(0,1fr\)\]/);
+  assert.match(center, /className="bom-version-columns grid min-h-0 min-w-0 flex-1"/);
   assert.match(center, /aria-label="搜尋 BOM 系列"/);
   for (const action of ["上傳新版本", "比對版本", "設為目前版本", "檢視", "編輯說明", "刪除系列", "返回清單", "回到清單"]) assert.ok(center.includes(action), action);
   assert.match(center, /BOM_SERIES_EMPTY_TEXT = "找不到符合條件的 BOM 系列"/);
-  assert.match(center, /歷史版本只能檢視與比對；料件與追蹤只在目前版本維護/);
+  assert.match(center, /歷史版本唯讀/);
+  assert.match(center, /料件與追蹤在目前版本維護/);
   assert.doesNotMatch(center, /removeBomWorkspace|saveBomWorkspace\(/, "the window never writes storage directly; the page owns every mutation");
 });
 
