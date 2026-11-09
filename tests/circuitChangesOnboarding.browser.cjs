@@ -25,7 +25,7 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       {find:/^\.\/(materialBomStorage|useMaterialBomPresence|materialRequestAudit)$/, replacement:materialMock},
       {find:'@', replacement:path.resolve('src')},
     ]}, worker:{format:'es'}, optimizeDeps:{entries:['tests/support/circuitChangesFixture.jsx'], include:['react/jsx-dev-runtime','exceljs']}, server:{host:'127.0.0.1',port:0}, plugins:[
-      {name:'circuit-onboarding-storage', enforce:'pre', resolveId(source, importer){const own = importer?.replaceAll('\\','/').includes('/circuit-changes/'); if(own && source === './storage') return storageMock; if(own && source === './pdfStorage') return pdfStorageMock;}},
+      {name:'circuit-onboarding-storage', enforce:'pre', resolveId(source, importer){const own = importer?.replaceAll('\\','/').includes('/circuit-changes/'); if(own && source === './storage') return storageMock; if(own && source === './pdfStorage') return pdfStorageMock; if(own && source === './officialPdfStorage') return path.resolve('tests/support/circuitPdfOfficialMock.js');}},
       {name:'circuit-onboarding-http', configureServer(vite){vite.middlewares.use(fixture.middleware); vite.middlewares.use((req,res,next) => {
         if(req.url?.split('?')[0] !== '/') return next();
         res.setHeader('Content-Type','text/html; charset=utf-8');
@@ -67,12 +67,12 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       await page.screenshot({path:path.join(evidence,`guide-${width}.png`)});
       await guide.getByRole('button',{name:'關閉使用說明',exact:true}).tap(); await guide.waitFor({state:'hidden'});
       assert.equal((await state(origin)).sets.length, 0); assert.equal((await state(origin)).items.length, 0);
-      const batch=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'新增改版批次',exact:true})});
+      const batch=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'建立改版紀錄',exact:true})});
       if(phone) { await dialog.getByRole('button',{name:'返回修改清單',exact:true}).tap(); await dialog.getByTestId('circuit-change-unsaved').waitFor(); }
       // 3. Naming a batch is optional: the form can be cancelled, or submitted with Enter.
-      await dialog.getByRole('button',{name:'新增批次',exact:true}).tap();
+      await dialog.getByRole('button',{name:'開始另一次改版',exact:true}).tap();
       await batch.waitFor();
-      const batchName=batch.getByRole('textbox',{name:'改版批次名稱',exact:true});
+      const batchName=batch.getByRole('textbox',{name:'改版紀錄名稱',exact:true});
       assert.equal(await batchName.inputValue(),'V2 → V3 線路修改','the batch name is filled in from the version on screen');
       assert.equal(await batch.getByRole('textbox',{name:'修改前版次',exact:true}).inputValue(),'V2');
       assert.equal(await batch.getByRole('textbox',{name:'修改後版次',exact:true}).inputValue(),'V3');
@@ -80,8 +80,8 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
         await page.setViewportSize({width,height:500});
         await batchName.focus();
         assert.ok(await batchName.evaluate(input=>document.activeElement===input && parseFloat(getComputedStyle(input).fontSize)>=16));
-        await batch.getByRole('button',{name:'建立批次',exact:true}).scrollIntoViewIfNeeded();
-        const createBox=await batch.getByRole('button',{name:'建立批次',exact:true}).boundingBox();
+        await batch.getByRole('button',{name:'建立改版紀錄',exact:true}).scrollIntoViewIfNeeded();
+        const createBox=await batch.getByRole('button',{name:'建立改版紀錄',exact:true}).boundingBox();
         assert.ok(createBox && createBox.height>=40 && createBox.y+createBox.height<=501);
         await page.setViewportSize({width,height:884});
       }

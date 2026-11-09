@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type FormEvent } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, Filter, HelpCircle, MessageSquare, PanelLeftClose, PanelLeftOpen, Plus, Search, UserRound, X } from "lucide-react";
+import { ArchiveRestore, ArrowLeft, Check, ChevronLeft, ChevronRight, Download, FileText, Filter, HelpCircle, MessageSquare, PanelLeftClose, PanelLeftOpen, Plus, Search, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -42,14 +42,16 @@ function readLayout(): { pdf: boolean; list: "auto" | "open" | "collapsed" } {
 }
 function writeLayout(value: { pdf: boolean; list: "auto" | "open" | "collapsed" }) { try { window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(value)); } catch { /* layout only */ } }
 
-export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, model, pdfs }: {
-  open: boolean; onOpenChange: (value: boolean) => void; context: CircuitChangeContext; canEdit: boolean; model: CircuitChangesModel; pdfs: CircuitPdfModel;
+export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, model, pdfs, onAiReview }: {
+  open: boolean; onOpenChange: (value: boolean) => void; context: CircuitChangeContext; canEdit: boolean; model: CircuitChangesModel; pdfs: CircuitPdfModel; onAiReview?: () => void;
 }) {
   const naming = useMemo(() => defaultCircuitChangeSet(context.versionLabel), [context.versionLabel]);
   const [filters, setFilters] = useState(readFilters);
   const [notice, setNotice] = useState("");
   const [working, setWorking] = useState(false);
   const [newSetOpen, setNewSetOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<CircuitChangeItem | null>(null);
+  const [removedOpen, setRemovedOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [newTitle, setNewTitle] = useState(naming.title);
   const [fromLabel, setFromLabel] = useState(naming.fromLabel);
@@ -83,14 +85,15 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   const item = snapshot || model.selectedItem;
   const content = snapshot?.content || model.draft;
   const unsaved = !snapshot && isUnsavedCircuitChange(model.selectedItem);
+  const remotelyRemoved = !snapshot && Boolean(model.selectedItem?.removedAt);
   // A change that waits for review or is approved cannot be edited by accident: any content change withdraws that state,
   // and with auto-save a stray keystroke from the reviewer would do it. Editing takes one deliberate click.
   const locked = canEdit && !snapshot && !model.dirty && (item?.status === "in_review" || item?.status === "approved") && unlockedId !== item.id;
-  const readOnly = !canEdit || Boolean(snapshot) || locked;
+  const readOnly = !canEdit || Boolean(snapshot) || locked || remotelyRemoved;
   const busy = working || model.saving || model.uploading || model.switching;
   const missing = circuitChangeMissingForReview(content);
-  const reviewing = !snapshot && canEdit && item?.status === "in_review" && !model.dirty;
-  const canSubmit = !reviewing && (unsaved || item?.status === "draft" || item?.status === "needs_changes" || model.dirty);
+  const reviewing = !snapshot && !remotelyRemoved && canEdit && item?.status === "in_review" && !model.dirty;
+  const canSubmit = !reviewing && !remotelyRemoved && (unsaved || item?.status === "draft" || item?.status === "needs_changes" || model.dirty);
   const latestActor = model.events.find(event => event.revision === item?.revision)?.actorName;
   const returned = !snapshot && item?.status === "needs_changes" ? latestCircuitReturn(model.events, item.revision) : null;
   const history = useMemo(() => groupCircuitChangeEvents(model.events), [model.events]);
@@ -159,7 +162,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   // On a phone the side is the tab on screen, and reading a change starts with its before picture.
   const hasBefore = useRef(false); hasBefore.current = Boolean(model.selectedItem?.content.images.some(image => image.side === "before"));
   useEffect(() => { setSide(sideBySide() && hasBefore.current ? "after" : "before"); }, [model.selectedItem?.id]);
-  useEffect(() => { if (!open) { setMobileDetail(false); setMobilePdf(false); setNewSetOpen(false); setGuideOpen(false); setViewerId(""); openedDetail.current = false; } }, [open]);
+  useEffect(() => { if (!open) { setMobileDetail(false); setMobilePdf(false); setNewSetOpen(false); setRemovedOpen(false); setRemoveTarget(null); setGuideOpen(false); setViewerId(""); openedDetail.current = false; } }, [open]);
   // On a phone the list comes first, but with nothing recorded yet the list is empty and the form is what the user needs.
   useEffect(() => {
     if (!open || openedDetail.current || model.loading || !model.selectedItem) return;
@@ -220,7 +223,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     if (wide) changeLayout({ pdf: true }); else setMobilePdf(true);
     void (async () => { for (const file of files) await pdfs.upload(file).catch(() => {}); })();
   }
-  const captureBlocked = snapshot ? "正在查看舊修訂，返回目前修訂後才能加入截圖。" : !canEdit ? "目前為檢視權限，無法加入截圖。"
+  const captureBlocked = remotelyRemoved ? "這項修改已被移除，先還原後才能加入截圖。" : snapshot ? "正在查看舊修訂，返回目前修訂後才能加入截圖。" : !canEdit ? "目前為檢視權限，無法加入截圖。"
     : locked ? "這項的內容已鎖定，先按「修改內容」再加入截圖。" : model.switching ? "正在載入修改項目…" : "";
   async function addCaptures(captures: CircuitPdfCapture[]) {
     if (captureBlocked) throw new Error(captureBlocked);
@@ -313,9 +316,9 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     : <Input aria-label={label} value={content?.[key] || ""} disabled={readOnly} maxLength={CIRCUIT_CHANGE_FIELD_LIMITS[key]} placeholder={readOnly ? "" : placeholder} onChange={event => update({ [key]: event.target.value })} />}</label>;
   const noteBox = <label className="circuit-note-box">
     <span>{reviewing ? "Review 意見（退回時必填）" : "留言"}</span>
-    <Textarea aria-label="Review 意見或退回原因" value={reviewNote} disabled={!canEdit} maxLength={10000} placeholder={reviewing ? "退回時請寫清楚要補充什麼；確認可以留空。" : "補充說明或討論，會記在歷史中。"} onChange={event => setReviewNote(event.target.value)} />
+    <Textarea aria-label="Review 意見或退回原因" value={reviewNote} disabled={!canEdit || remotelyRemoved} maxLength={10000} placeholder={reviewing ? "退回時請寫清楚要補充什麼；確認可以留空。" : "補充說明或討論，會記在歷史中。"} onChange={event => setReviewNote(event.target.value)} />
   </label>;
-  const commentButton = <Button type="button" variant="outline" disabled={busy || !canEdit || !reviewNote.trim()} onClick={() => act("comment")}><MessageSquare aria-hidden="true" />新增留言</Button>;
+  const commentButton = <Button type="button" variant="outline" disabled={busy || !canEdit || remotelyRemoved || !reviewNote.trim()} onClick={() => act("comment")}><MessageSquare aria-hidden="true" />新增留言</Button>;
 
   return <>
     <Dialog open={open} onOpenChange={close}>
@@ -331,18 +334,19 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           </div>
           <div className="circuit-set">
             {model.sets.length > 0
-              ? <label className="circuit-set-picker"><span>改版批次</span>
-                <select aria-label="選擇改版批次" value={model.selectedSetId} disabled={busy || model.loading} onChange={event => void run(() => model.selectSet(event.target.value))}>
+              ? <label className="circuit-set-picker"><span>本次改版</span>
+                <select aria-label="選擇改版紀錄" value={model.selectedSetId} disabled={busy || model.loading} onChange={event => void run(() => model.selectSet(event.target.value))}>
                   {model.sets.map(set => <option key={set.id} value={set.id}>{circuitSetLabel(set)}</option>)}
                 </select>
               </label>
-              : <p className="circuit-set-pending"><span>改版批次</span>{model.loading ? "載入中…" : canEdit ? <><strong>{naming.title}</strong><small>記錄第一項時自動建立</small></> : "尚未建立"}</p>}
-            {canEdit && <Button type="button" variant="outline" onClick={openNewSet} disabled={busy || model.loading} title="另外建立一個改版批次，可自訂名稱與版次"><Plus aria-hidden="true" />新增批次</Button>}
+              : <p className="circuit-set-pending"><span>本次改版</span>{model.loading ? "載入中…" : canEdit ? <><strong>{naming.title}</strong><small>記錄第一項時自動建立</small></> : "尚未建立"}</p>}
+            {canEdit && <Button type="button" variant="outline" className="circuit-new-set" onClick={openNewSet} disabled={busy || model.loading} title="為另一次改版建立獨立的修改清單"><Plus aria-hidden="true" />開始另一次改版</Button>}
+            <p className="circuit-set-help">把同一次改版的修改放在一起，方便回查與匯出。</p>
           </div>
           <div className="circuit-header-actions">
-            <Button type="button" variant={pdfOpen ? "secondary" : "outline"} aria-label="PDF 圖面" aria-pressed={pdfOpen} title={pdfOpen ? "收起 PDF，只看清單與表單" : "上傳或打開原理圖 PDF，逐頁框選修改"} onClick={togglePdf}><FileText aria-hidden="true" /><span>PDF<span className="circuit-pdf-word"> 圖面</span></span></Button>
-            <Button type="button" variant="outline" aria-label="匯出 Change List" disabled={!selectedSet || !filtered.length || busy || model.dirty} title={model.dirty ? "尚有未儲存修改，儲存後可匯出" : `匯出目前篩選的全部 ${filtered.length} 項修改`} onClick={() => void run(() => exportCircuitChangeList(selectedSet!, filtered))}><Download aria-hidden="true" /><span>匯出 Change List</span></Button>
-            <Button type="button" variant="ghost" aria-label="使用說明" onClick={() => setGuideOpen(true)}><HelpCircle aria-hidden="true" /><span>使用說明</span></Button>
+            <Button type="button" className="circuit-action-pdf" variant={pdfOpen ? "secondary" : "outline"} aria-label="PDF 圖面" aria-pressed={pdfOpen} title={pdfOpen ? "收起 PDF，只看清單與表單" : "上傳或打開原理圖 PDF，逐頁框選修改"} onClick={togglePdf}><FileText aria-hidden="true" /><span>PDF<span className="circuit-pdf-word"> 圖面</span></span></Button>
+            <Button type="button" className="circuit-action-export" variant="outline" aria-label="匯出 Change List" disabled={!selectedSet || !filtered.length || busy || model.dirty} title={model.dirty ? "尚有未儲存修改，儲存後可匯出" : `匯出目前篩選的全部 ${filtered.length} 項修改`} onClick={() => void run(() => exportCircuitChangeList(selectedSet!, filtered))}><Download aria-hidden="true" /><span>匯出 Change List</span></Button>
+            <Button type="button" className="circuit-action-guide" variant="outline" aria-label="使用說明" onClick={() => setGuideOpen(true)}><HelpCircle aria-hidden="true" /><span>使用說明</span></Button>
             <Button type="button" variant="ghost" aria-label="關閉線路修改" className="circuit-close" onClick={() => close(false)}><X aria-hidden="true" /></Button>
           </div>
         </header>
@@ -356,6 +360,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
             </div> : <>
             {canEdit && <div className="circuit-new-item-row"><Button type="button" className="circuit-new-item" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" />新增修改</Button>
               {wide && pdfOpen && <Button type="button" variant="outline" className="circuit-list-collapse" aria-label="收合修改清單" title="收合清單，讓 PDF 更寬" onClick={() => changeLayout({ list: "collapsed" })}><PanelLeftClose aria-hidden="true" /></Button>}</div>}
+            <p className="circuit-list-help">每項記錄一處修改，點開查看前後圖與確認紀錄。</p>
+            {canEdit && (model.removedItems?.length ?? 0) > 0 && <Button type="button" variant="ghost" className="circuit-removed-trigger" onClick={() => { setNotice(""); setRemovedOpen(true); }}><ArchiveRestore aria-hidden="true" />已移除的修改（{model.removedItems.length}）</Button>}
             <div className="circuit-filter-bar" role="group" aria-label="線路修改篩選">
               <label className="circuit-search"><Search aria-hidden="true" /><Input aria-label="搜尋線路修改" placeholder="搜尋編號、標題、Ref 或 Net" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} /></label>
               <label className="circuit-filter-select" data-status={filters.status}><Filter aria-hidden="true" /><span className="sr-only">狀態</span><select aria-label="篩選修改狀態" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value }))}>
@@ -383,11 +389,11 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
               </button>}
               {model.loading && !model.items.length ? <p className="circuit-empty">正在載入修改項目…</p>
                 : model.items.length > 0 && !filtered.length ? <p className="circuit-empty">目前篩選條件沒有符合的修改項目</p>
-                : !model.items.length && !unsaved ? <p className="circuit-empty">這個批次還沒有記錄任何修改</p> : null}
+                : !model.items.length && !unsaved ? <p className="circuit-empty">這次改版還沒有記錄任何修改</p> : null}
             </div>
             </>}
           </aside>
-          {pdfOpen && <CircuitPdfPanel pdfs={pdfs} canEdit={canEdit} captureBlocked={captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops}
+          {pdfOpen && <CircuitPdfPanel pdfs={pdfs} canEdit={canEdit} captureBlocked={captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops} onAiReview={onAiReview}
             onCapture={addCaptures} onSelectChange={selectItem} onBack={() => setMobilePdf(false)} />}
           <section className="circuit-detail" aria-label="線路修改內容" data-testid="circuit-change-detail" aria-busy={model.switching}>
             {content && item ? <>
@@ -401,11 +407,12 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                   <Button type="button" variant="ghost" aria-label="上一項修改" title="上一項" disabled={!canPrevious || busy} onClick={() => selectItem(filtered[selectedIndex - 1].id)}><ChevronLeft aria-hidden="true" /></Button>
                   <Button type="button" variant="ghost" aria-label="下一項修改" title="下一項" disabled={!canNext || busy} onClick={() => selectItem(filtered[selectedIndex < 0 ? 0 : selectedIndex + 1].id)}><ChevronRight aria-hidden="true" /></Button>
                   {!unsaved && <Button type="button" variant={historyOpen ? "secondary" : "ghost"} aria-pressed={historyOpen} onClick={() => setHistoryOpen(value => !value)}>歷史 {model.events.length}</Button>}
+                  {canEdit && !snapshot && !unsaved && <Button type="button" variant="ghost" className="circuit-remove-item" aria-label="移除修改" title="移出清單，保留歷史與原圖，之後可還原" disabled={busy || remotelyRemoved} onClick={() => { setNotice(""); setRemoveTarget(item); }}><Trash2 aria-hidden="true" /><span>移除</span></Button>}
                 </div>
               </header>
               <div ref={detailScroll} className="circuit-detail-scroll">
                 {snapshot && <div className="circuit-snapshot-banner" role="status"><span>正在查看修訂 {snapshot.revision}，此版本內容唯讀</span><Button type="button" variant="outline" onClick={() => { setSnapshot(null); setViewerId(""); }}>返回目前修訂</Button></div>}
-                {model.conflict && !snapshot && <div className="circuit-conflict" role="alert"><p>另一位使用者已更新這個項目。你的草稿仍保留，請選擇要採用的內容。</p><div><Button type="button" variant="outline" onClick={() => { setNotice(""); model.adoptRemote(); }}>採用最新版本</Button><Button type="button" disabled={busy || !canEdit} onClick={() => void run(() => model.saveMyRevision())}>儲存我的修訂</Button></div></div>}
+                {model.conflict && !snapshot && <div className="circuit-conflict" role="alert"><p>{remotelyRemoved ? "這項修改已由其他人移除。你的草稿仍保留；請先還原項目後再儲存。" : "另一位使用者已更新這個項目。你的草稿仍保留，請選擇要採用的內容。"}</p><div><Button type="button" variant="outline" onClick={() => { setNotice(""); model.adoptRemote(); }}>採用最新版本</Button><Button type="button" disabled={busy || !canEdit || remotelyRemoved} onClick={() => void run(() => model.saveMyRevision())}>儲存我的修訂</Button></div></div>}
                 {returned && <div className="circuit-returned" role="status"><strong>退回原因</strong><p>{returned.note || "未填寫原因"}</p><span>{returned.actorName} · {dateTime(returned.createdAt)}</span></div>}
                 {locked && <div className="circuit-locked" role="status"><span>{item.status === "in_review" ? "這項正在等待 Review，內容已鎖定以免誤改。" : "這項已確認，內容已鎖定。"}</span><Button type="button" variant="outline" disabled={busy} onClick={() => setUnlockedId(item.id)}>修改內容</Button></div>}
                 {!readOnly && item.status === "in_review" && <p className="circuit-revision-note">修改任何內容（包含圖片標記）會撤回送審，需要重新送出 Review。</p>}
@@ -421,7 +428,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                   onSide={setSide} onDragSide={setDragSide} onPick={openPicker} onFiles={addFiles} onOpen={image => setViewerId(image.id)} onRemove={removeImage} onRestore={restoreImage}
                   onDownload={image => void run(() => downloadCircuitImage(image))} onRetry={() => void run(() => model.retryUploads())} onDismiss={model.dismissUploadFailures} onShowSource={showSource} />
                 {historyOpen && <section ref={historySection} className="circuit-history" aria-label="修改與 Review 歷史">
-                  <h3>歷史與留言</h3>
+                  <h3>修改與確認紀錄</h3>
+                  <p className="circuit-history-help">每次儲存、送審、確認與退回都會留在這裡；查看修訂可回看當時內容。</p>
                   {!snapshot && canEdit && !reviewing && <div className="circuit-comment">{noteBox}{commentButton}</div>}
                   {history.length ? history.map(group => {
                     const expanded = expandedGroups.includes(group.latest.id);
@@ -444,7 +452,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                   <span role="status">{snapshot ? `修訂 ${snapshot.revision} 唯讀` : saveLabel}</span>
                   {nextStep && <span className="circuit-next-step" title={nextStep}>{nextStep}</span>}
                   {!snapshot && canEdit && !reviewing && <div>
-                    <Button type="button" variant="outline" disabled={busy || !model.dirty} onClick={() => void run(() => model.saveDraft())}>儲存修改</Button>
+                    <Button type="button" variant="outline" disabled={busy || !model.dirty || remotelyRemoved} onClick={() => void run(() => model.saveDraft())}>儲存修改</Button>
                     {canSubmit && <Button type="button" disabled={busy || model.conflict || missing.length > 0} title={missing.length ? `還缺：${missing.join("、")}` : undefined} onClick={() => act("submit")}>送出 Review</Button>}
                   </div>}
                 </div>
@@ -458,18 +466,35 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
         </div>
       </DialogContent>
     </Dialog>
+    <Dialog open={Boolean(removeTarget)} onOpenChange={value => { if (!value && !working) setRemoveTarget(null); }}>
+      <DialogContent className="circuit-remove-dialog" style={viewportStyle}>
+        <DialogTitle>移除這項修改？</DialogTitle>
+        <DialogDescription>「{removeTarget && `${number(removeTarget.number)} ${removeTarget.content.title || "未命名修改"}`}」會移出修改清單。已儲存的歷史與原圖保留，之後可從「已移除的修改」還原；未儲存的草稿會捨棄。</DialogDescription>
+        <div className="circuit-new-set-actions"><Button type="button" variant="outline" disabled={busy} onClick={() => setRemoveTarget(null)}>取消</Button><Button type="button" variant="destructive" disabled={busy || !canEdit || !removeTarget} onClick={() => void run(async () => { await model.deleteItem(removeTarget!.id); setRemoveTarget(null); setMobileDetail(false); })}>確認移除</Button></div>
+        {notice && <p role="alert">{notice}</p>}
+      </DialogContent>
+    </Dialog>
+    <Dialog open={removedOpen} onOpenChange={setRemovedOpen}>
+      <DialogContent className="circuit-removed-dialog" style={viewportStyle}>
+        <DialogTitle>已移除的修改</DialogTitle>
+        <DialogDescription>歷史與原圖仍保留。還原後可回到修改清單繼續查看。</DialogDescription>
+        <ul className="circuit-removed-list">{(model.removedItems ?? []).map(row => <li key={row.id}><div><strong>{number(row.number)} {row.content.title || "未命名修改"}</strong><span>{row.content.owner || "未指定負責人"}</span></div><Button type="button" variant="outline" disabled={busy || !canEdit} aria-label={`還原修改 ${number(row.number)}`} onClick={() => void run(() => model.restoreItem(row.id))}><ArchiveRestore aria-hidden="true" />還原</Button></li>)}{!model.removedItems?.length && <li className="circuit-removed-empty">沒有已移除的修改</li>}</ul>
+        {notice && <p role="alert">{notice}</p>}
+        <div className="circuit-new-set-actions"><Button type="button" variant="outline" onClick={() => setRemovedOpen(false)} disabled={busy}>關閉</Button></div>
+      </DialogContent>
+    </Dialog>
     <Dialog open={newSetOpen} onOpenChange={setNewSetOpen}>
       <DialogContent className="circuit-new-set-dialog" style={viewportStyle}>
-        <DialogTitle>新增改版批次</DialogTitle>
-        <DialogDescription>一個批次收納同一次改版的所有修改。不建立也可以直接記錄，第一項會自動放進「{naming.title}」。</DialogDescription>
+        <DialogTitle>建立改版紀錄</DialogTitle>
+        <DialogDescription>把同一次改版的修改集中在一份清單。例如這次修改 Rev A → Rev B，就建立一份紀錄；日常補圖或更新同一項修改，不必再建立。</DialogDescription>
         <form onSubmit={submitNewSet}>
-          <label>批次名稱<Input aria-label="改版批次名稱" autoComplete="off" value={newTitle} maxLength={160} placeholder="例如：E1.S 第二次線路調整" onChange={event => setNewTitle(event.target.value)} /></label>
+          <label>這次改版的名稱<Input aria-label="改版紀錄名稱" autoComplete="off" value={newTitle} maxLength={160} placeholder="例如：E1.S Rev B 線路修正" onChange={event => setNewTitle(event.target.value)} /></label>
           <div className="circuit-new-set-versions">
             <label>修改前版次<Input aria-label="修改前版次" value={fromLabel} maxLength={80} onChange={event => setFromLabel(event.target.value)} /></label>
             <label>修改後版次<Input aria-label="修改後版次" value={toLabel} maxLength={80} placeholder="例如：V2 / Rev B" onChange={event => setToLabel(event.target.value)} /></label>
           </div>
-          <p className="circuit-new-set-hint">版次只用來說明這次修改，不會變更原始 BOM。批次建立後，名稱與版次目前無法再修改，請確認後再建立。</p>
-          <div className="circuit-new-set-actions"><Button type="button" variant="outline" onClick={() => setNewSetOpen(false)} disabled={working}>取消</Button><Button type="submit" disabled={working || !newTitle.trim()}>建立批次</Button></div>
+          <p className="circuit-new-set-hint">這裡只整理修改紀錄，不會改動原始 BOM 或覆蓋 PDF。建立後名稱與版次目前無法修改，請先確認。</p>
+          <div className="circuit-new-set-actions"><Button type="button" variant="outline" onClick={() => setNewSetOpen(false)} disabled={working}>取消</Button><Button type="submit" disabled={working || !newTitle.trim()}>建立改版紀錄</Button></div>
           {notice && <p role="alert">{notice}</p>}
         </form>
       </DialogContent>
@@ -478,12 +503,14 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
       <DialogContent hideCloseButton className="circuit-guide-dialog" style={viewportStyle} data-testid="circuit-usage-guide">
         <header className="circuit-guide-header"><div><DialogTitle>線路修改怎麼用</DialogTitle><DialogDescription>記錄修改與貼圖 → 標出位置 → 逐項 Review → 匯出</DialogDescription></div><Button type="button" variant="ghost" aria-label="關閉使用說明" onClick={() => setGuideOpen(false)}><X aria-hidden="true" /></Button></header>
         <div className="circuit-guide-scroll">
+          <section><h3>先分清楚官方基準、工作 PDF 與改版紀錄</h3><p>官方基準是你明確指定的參考原檔；新增工作 PDF 會保留全部舊版，也不會換掉官方基準。改版紀錄只把同一次改動的項目集中管理，不會切換 BOM 或自動更換 PDF。</p></section>
+          <section><h3>逐頁怎麼比對與初審？</h3><p>先在 PDF 區指定官方基準，再選工作 PDF，按「與官方比對」並核對兩邊頁碼。頁面新增或刪除時，請調整「官方對應頁」。按「AI 逐頁初審」會用這兩頁的圖像與文字核對可見的連接性、Net 與名稱差異；每項保留位置、前後依據與建議，你可逐項判讀並保存。AI 結果與人工 Review 分開，PDF 初審不能取代原始 Netlist／ERC 的電氣連通驗證。</p></section>
           <ol className="circuit-start-steps">{guideSteps.map((step, index) => <li key={step.title}><span>{index + 1}</span><div><strong>{step.title}</strong><p>{step.text}</p></div></li>)}</ol>
           <section><h3>PDF 怎麼用？</h3><p>按右上的「PDF 圖面」上傳原理圖 PDF（可拖入，每份 50 MB 內存到雲端，更大的只在這台電腦開啟，不需壓縮）。日期先取檔名裡的日期，沒有就用檔案日期，可在版本清單修改。在頁面上拖曳框選一塊區域，按「加到修改前／修改後」，圖會從 PDF 重新繪製，放大也清楚，並記下來源版本與頁碼；這項的頁碼欄若是空的會自動填入。選「對照」可以並排一份較早日期的 PDF，同一個框選區域一次加到修改前與修改後。按「看完，下一頁」記下進度；上方的頁面總覽會分別標出這版看過、較早版本看過與有修改的頁面，明天上傳新的 PDF 會從你看到的那一頁接續。按圖片旁的「P12」可回到該頁。</p></section>
           <section><h3>1. 怎麼新增？</h3><p>打開「線路修改」就能直接填寫；之後按左上的「新增修改」再記下一項。每一處修改各一項，填入標題、Ref／Net、頁碼、負責人及修改原因。還沒輸入任何內容的新修改不會留下紀錄。</p></section>
           <section><h3>2. 怎麼貼圖、標記？</h3><p>截圖後按 Ctrl+V，圖會加到標示「貼上會加到這裡」的那一格；點另一格即可切換，也可以把檔案拖到想放的那一格。每次加入都是追加，每項最多 200 張、每張 50 MB，不需壓縮。點圖片放大，使用「位置標記」或「框選」標出改動並填寫說明；放錯格可在放大視窗改「圖片用途」。</p></section>
           <section><h3>3. 怎麼儲存與交給主管 Review？</h3><p>停止輸入後會自動儲存，下方顯示「已儲存」。標題加上修改說明（或修改後圖片）齊全後，按「送出 Review」。有料號申請編輯權限的人可逐項「確認」，或填寫意見後「退回補充」；退回原因會顯示在該項目最上方。按「歷史」可查看操作者、時間、意見及舊修訂。</p></section>
-          <section><h3>4. 怎麼產生 Change List？</h3><p>選好批次，按「匯出 Change List」下載 Excel，包含目前篩選的修改項目、標註圖片及 Review 歷史。要匯出整批，先將搜尋、狀態與負責人篩選全部清除。</p></section>
+          <section><h3>4. 怎麼產生 Change List？</h3><p>選好本次改版，按「匯出 Change List」下載 Excel，包含目前篩選的修改項目、標註圖片及 Review 歷史。要匯出全部修改，先將搜尋、狀態與負責人篩選全部清除。</p></section>
         </div>
         <footer className="circuit-guide-footer"><Button type="button" onClick={() => setGuideOpen(false)}>知道了</Button></footer>
       </DialogContent>

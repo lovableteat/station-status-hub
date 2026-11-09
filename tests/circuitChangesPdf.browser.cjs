@@ -55,6 +55,7 @@ async function frame(page, index = 0, from = [400 / 1190, 380 / 842], to = [590 
   await panel(page).getByRole('group', {name:'加入框選區域'}).waitFor();
 }
 const pageNumber = page => panel(page).getByLabel('目前頁碼', {exact:true}).inputValue();
+const versionLabel = async page => (await panel(page).locator('.circuit-pdf-version-button > small').innerText()).split(' · ')[0];
 async function onPage(page, value) { await page.waitForFunction(expected => document.querySelector('input[aria-label="目前頁碼"]')?.value === String(expected), value); }
 async function saved(page) { await page.waitForFunction(() => document.querySelector('.circuit-detail-footer [role="status"]')?.textContent === '已儲存'); }
 async function imageCount(page, side, count) { await page.waitForFunction(([key, expected]) => Number(document.querySelector(`.circuit-image-column[data-side="${key}"]`)?.dataset.imageCount || 0) === expected, [side, count]); }
@@ -87,7 +88,7 @@ async function eventually(check, message, timeout = 8000) {
       {find:'@', replacement:path.resolve('src')},
     ]}, worker:{format:'es'}, optimizeDeps:{entries:['tests/support/circuitChangesFixture.jsx'], include:['react/jsx-dev-runtime', 'exceljs', 'pdfjs-dist']},
     server:{host:'127.0.0.1', port:0, fs:{allow:[process.cwd(), evidence, fs.realpathSync('node_modules')]}}, plugins:[
-      {name:'circuit-repository-fixture', enforce:'pre', resolveId(source, importer) { const own = importer?.replaceAll('\\', '/').includes('/circuit-changes/'); if (own && source === './storage') return storageMock; if (own && source === './pdfStorage') return pdfStorageMock; }},
+      {name:'circuit-repository-fixture', enforce:'pre', resolveId(source, importer) { const own = importer?.replaceAll('\\', '/').includes('/circuit-changes/'); if (own && source === './storage') return storageMock; if (own && source === './pdfStorage') return pdfStorageMock; if (own && source === './officialPdfStorage') return path.resolve('tests/support/circuitPdfOfficialMock.js'); }},
       {name:'circuit-http-fixture', configureServer(vite) { vite.middlewares.use(fixture.middleware); vite.middlewares.use((req, res, next) => {
         if (req.url?.split('?')[0] !== '/') return next();
         res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:; worker-src 'self' blob:; base-uri 'none'");
@@ -116,7 +117,7 @@ async function eventually(check, message, timeout = 8000) {
     // --- Upload the first dated PDF; its date comes from the file name.
     await panel(p).locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(older);
     await rendered(p);
-    assert.equal(await panel(p).locator('.circuit-pdf-version-button > span').innerText(), '11/08 版');
+    assert.equal(await versionLabel(p), '11/08 版');
     assert.equal(await panel(p).locator('.circuit-pdf-strip > button').count(), 12);
     assert.match(await panel(p).locator('.circuit-pdf-progress').innerText(), /已看 0 \/ 12 頁/);
     assert.equal(await pageNumber(p), '1');
@@ -169,14 +170,14 @@ async function eventually(check, message, timeout = 8000) {
     await p.keyboard.press('Escape');
     await versions.waitFor({state:'hidden'});
     assert.ok(await dialog(p).isVisible());
-    assert.equal(await panel(p).locator('.circuit-pdf-version-button > span').innerText(), '11/07 版 第1天');
+    assert.equal(await versionLabel(p), '11/07 版 第1天');
     check('version list: drawing date and note are edited and saved; Escape closes the list, not the dialog');
 
     // --- The next day's PDF: 上傳新 PDF, it opens at the page reached so far.
     const chooser = p.waitForEvent('filechooser');
     await panel(p).getByRole('button', {name:'上傳新 PDF', exact:true}).click();
     await (await chooser).setFiles(newer);
-    await p.waitForFunction(() => document.querySelector('.circuit-pdf-version-button > span')?.textContent === '11/09 版');
+    await p.waitForFunction(() => document.querySelector('.circuit-pdf-version-button > small')?.textContent.startsWith('11/09 版 ·'));
     await onPage(p, 4); await rendered(p);
     check('上傳新 PDF adds the next dated version and keeps the page reached');
 
@@ -190,7 +191,7 @@ async function eventually(check, message, timeout = 8000) {
     await dialog(p).getByRole('button', {name:'新增修改', exact:true}).click();
     await dialog(p).getByText('填寫內容或貼上圖片就會自動建立').waitFor();
     await panel(p).getByRole('button', {name:'下一頁', exact:true}).click(); await onPage(p, 5); await rendered(p);
-    assert.equal(await panel(p).locator('figure[data-pane="compare"] figcaption').innerText(), '修改前 · 11/07 版 第1天 第 5 頁');
+    assert.equal(await panel(p).locator('figure[data-pane="compare"] figcaption').innerText(), '自選對照 · 11/07 版 第1天 第 5 頁');
     await frame(p, 0);
     assert.equal(await panel(p).locator('.circuit-pdf-selection').count(), 2, 'the framed area is shown on both dates');
     await panel(p).getByRole('button', {name:'前後同區域加入', exact:true}).click();
@@ -228,7 +229,7 @@ async function eventually(check, message, timeout = 8000) {
     await eventually(async () => (await registryOf(origin)).positions['00000000-0000-4000-8000-000000000001']?.page === 7, 'the reading position is saved');
     await a.open();
     await rendered(p); await onPage(p, 7);
-    assert.equal(await panel(p).locator('.circuit-pdf-version-button > span').innerText(), '11/09 版');
+    assert.equal(await versionLabel(p), '11/09 版');
     assert.equal(await panel(p).locator('[data-strip-page="5"]').getAttribute('data-state'), 'here');
     check('reopening continues on the newest PDF at page 7 with the marks shown');
 
@@ -257,7 +258,7 @@ async function eventually(check, message, timeout = 8000) {
     // --- A PDF over 50 MB opens on this computer only; a colleague opens it from the same file.
     const objectsBefore = (await stateOf(origin)).pdfs.length;
     await panel(p).locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(large);
-    await p.waitForFunction(() => document.querySelector('.circuit-pdf-version-button > span')?.textContent === '11/10 版', null, {timeout:60000});
+    await p.waitForFunction(() => document.querySelector('.circuit-pdf-version-button > small')?.textContent.startsWith('11/10 版 ·'), null, {timeout:60000});
     await rendered(p);
     assert.match(await panel(p).locator('.circuit-pdf-message').innerText(), /50 MB/);
     registry = await registryOf(origin);
@@ -271,12 +272,12 @@ async function eventually(check, message, timeout = 8000) {
     await rendered(b.page);
     check('a 51 MB PDF opens locally without uploading; a colleague is asked for the file and opens it');
 
-    // --- Removing a version: it leaves the list and the stored file goes; pictures taken from it stay.
+    // --- Archiving a version: it leaves the main list while its original and pictures stay.
     await panel(p).getByRole('button', {name:'選擇 PDF 版本', exact:true}).click();
-    await panel(p).getByRole('button', {name:'移除 11/07 版 第1天 Vera_SCH_20261108.pdf', exact:true}).click();
-    await panel(p).getByRole('button', {name:'移除 11/07 版 第1天', exact:true}).click();
+    await panel(p).getByRole('button', {name:'封存 PDF：Vera_SCH_20261108.pdf', exact:true}).click();
+    await panel(p).getByRole('button', {name:'確認封存 11/07 版 第1天', exact:true}).click();
     await eventually(async () => (await registryOf(origin)).documents.find(row => row.date === '2026-11-07')?.removedAt, 'the version is marked removed');
-    await eventually(async () => (await stateOf(origin)).pdfs.every(name => !name.includes(big.id)) && (await stateOf(origin)).pdfs.length === objectsBefore - 1, 'the stored PDF file is removed');
+    await eventually(async () => (await stateOf(origin)).pdfs.every(name => !name.includes(big.id)) && (await stateOf(origin)).pdfs.length === objectsBefore, 'archiving keeps the original PDF file');
     await p.keyboard.press('Escape');
     await dialog(p).getByRole('button', {name:'展開修改清單', exact:true}).click();
     await dialog(p).getByTestId('circuit-change-item').filter({hasText:'#002'}).click();
@@ -284,12 +285,12 @@ async function eventually(check, message, timeout = 8000) {
     await dialog(p).locator('.circuit-image-column[data-side="before"]').getByRole('button', {name:/到 PDF 第 5 頁（2026-11-07）/}).click();
     await dialog(p).getByRole('alert').filter({hasText:'已從清單移除'}).waitFor();
     assert.equal((await stateOf(origin)).items.find(row => row.number === 2).content.images.filter(image => image.side === 'before').length, 2);
-    check('removing a version: gone from the list, its file deleted, its pictures kept, and P5 explains where it went');
+    check('archiving a version: hidden from the main list, its original and pictures kept, and P5 explains where it went');
 
     // --- The picture's page button from a version that is still there, and closing the pane.
     await dialog(p).locator('.circuit-image-column[data-side="after"]').getByRole('button', {name:/到 PDF 第 5 頁（2026-11-09）/}).click();
     await onPage(p, 5);
-    assert.equal(await panel(p).locator('.circuit-pdf-version-button > span').innerText(), '11/09 版');
+    assert.equal(await versionLabel(p), '11/09 版');
     await dialog(p).getByRole('button', {name:'PDF 圖面', exact:true}).click();
     await panel(p).waitFor({state:'hidden'});
     assert.equal(await dialog(p).locator('.circuit-workspace').evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length), 2, 'without the PDF the dialog is list | form as before');

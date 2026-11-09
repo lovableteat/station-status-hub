@@ -5,12 +5,14 @@ import {
   emptyCircuitPdfRegistry, mergeCircuitPdfRegistry, visibleCircuitPdfDocuments, type CircuitPdfDocument, type CircuitPdfRegistry,
 } from "./circuitPdf";
 import { isPdfFile, openCircuitPdf } from "./pdfRender";
-import { downloadCircuitPdf, loadCircuitPdfRegistry, removeCircuitPdfFile, saveCircuitPdfRegistry, uploadCircuitPdf } from "./pdfStorage";
+import { downloadCircuitPdf, loadCircuitPdfRegistry, saveCircuitPdfRegistry, uploadCircuitPdf } from "./pdfStorage";
+import { loadCircuitPdfOfficial, saveCircuitPdfOfficial, type CircuitPdfOfficial } from "./officialPdfStorage";
 
 export interface CircuitPdfModel {
   registry: CircuitPdfRegistry; documents: CircuitPdfDocument[];
   loading: boolean; saving: boolean; error: string; uploading: string;
   active: CircuitPdfDocument | null; compare: CircuitPdfDocument | null;
+  official: CircuitPdfDocument | null; officialPdf: PDFDocumentProxy | null; officialPage: number;
   activePdf: PDFDocumentProxy | null; comparePdf: PDFDocumentProxy | null;
   opening: boolean; openError: string; needsLocalFile: boolean;
   page: number; comparePage: number; compareOffset: number;
@@ -18,9 +20,10 @@ export interface CircuitPdfModel {
   /** Opens a version at a page, e.g. the page a picture was framed on. Returns false when that version is no longer offered. */
   show: (documentId: string, page: number) => boolean;
   select: (id: string) => void; setCompare: (id: string) => void; setCompareOffset: (offset: number) => void;
+  setOfficial: (id: string) => Promise<void>; compareOfficial: () => void;
   goTo: (page: number) => void; setChecked: (page: number, checked: boolean) => void;
   updateDocument: (id: string, patch: { date?: string; label?: string }) => void;
-  removeDocument: (id: string) => Promise<void>; reload: () => Promise<void>; clearError: () => void;
+  removeDocument: (id: string) => Promise<void>; restoreDocument: (id: string) => Promise<void>; reload: () => Promise<void>; clearError: () => void;
 }
 
 const empty = emptyCircuitPdfRegistry;
@@ -40,6 +43,7 @@ const positionKey = (userId: string, seriesId: string) => `circuit-pdf-position:
 
 export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { open: boolean; seriesId: string; canEdit: boolean; userId: string; userName: string }): CircuitPdfModel {
   const [registry, setRegistry] = useState<CircuitPdfRegistry>(empty);
+  const [officialSelection, setOfficialSelection] = useState<CircuitPdfOfficial | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -60,10 +64,16 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { 
   const flushTimer = useRef<ReturnType<typeof setTimeout>>();
   const opened = useRef(new Map<string, Promise<PDFDocumentProxy>>());
   const placed = useRef("");
-  const documents = useMemo(() => visibleCircuitPdfDocuments(registry), [registry]);
+  const official = officialSelection?.document || null;
+  // The official original comes from its protected snapshot, independent of later edits to the legacy version list.
+  const documents = useMemo(() => visibleCircuitPdfDocuments(official ? { ...registry, documents: [...registry.documents.filter(row => row.id !== official.id), official] } : registry), [registry, official]);
   const active = documents.find(row => row.id === activeId) || null;
+  const officialRef = useRef(official); officialRef.current = official;
   const compare = documents.find(row => row.id === compareId && row.id !== activeId) || null;
-  const comparePage = compare ? Math.min(compare.pages, Math.max(1, page + compareOffset)) : 0;
+  const compareTarget = page + compareOffset;
+  const comparePage = compare ? compare.id === official?.id && (compareTarget < 1 || compareTarget > compare.pages) ? 0 : Math.min(compare.pages, Math.max(1, compareTarget)) : 0;
+  const officialTarget = page + (compareId === official?.id ? compareOffset : 0);
+  const officialPage = official && officialTarget >= 1 && officialTarget <= official.pages ? officialTarget : 0;
   // What is on screen right now, for actions that continue from it (a new upload keeps the page being read).
   const onScreen = useRef<{ documentId: string; page: number }>({ documentId: "", page: 1 });
   onScreen.current = { documentId: active?.id || "", page };
@@ -114,8 +124,8 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { 
     const captured = scopeRef.current;
     setLoading(true); setError("");
     try {
-      const latest = await loadCircuitPdfRegistry(seriesId);
-      if (scopeRef.current === captured) setRegistry(mergeCircuitPdfRegistry(latest, pending.current));
+      const [latest, selection] = await Promise.all([loadCircuitPdfRegistry(seriesId), loadCircuitPdfOfficial(seriesId)]);
+      if (scopeRef.current === captured) { setRegistry(mergeCircuitPdfRegistry(latest, pending.current)); setOfficialSelection(selection); }
     } catch (failure) {
       if (scopeRef.current === captured) setError(failure instanceof Error ? failure.message : "無法讀取 PDF 清單，請重試。");
     } finally { if (scopeRef.current === captured) setLoading(false); }
@@ -124,7 +134,7 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { 
   useEffect(() => {
     if (!open || !seriesId) return;
     placed.current = ""; setActiveId(""); setCompareId(""); setCompareOffset(0); setOpenError(""); setNeedsLocalFile(false);
-    setRegistry(empty()); pending.current = empty();
+    setRegistry(empty()); setOfficialSelection(null); pending.current = empty();
     void reload();
     const cache = opened.current;
     return () => {
@@ -164,8 +174,13 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { 
   }, []);
 
   useEffect(() => {
+    if (!official || !active || official.id === active.id) return;
+    setCompareId(official.id); setCompareOffset(0);
+  }, [official?.id, active?.id]);
+
+  useEffect(() => {
     if (!open) return;
-    const wanted = [active, compare].filter((row): row is CircuitPdfDocument => Boolean(row));
+    const wanted = [active, compare, official].filter((row, index, all): row is CircuitPdfDocument => Boolean(row) && all.findIndex(item => item?.id === row?.id) === index);
     if (!wanted.length) return;
     let current = true;
     setOpening(true); setOpenError(""); setNeedsLocalFile(false);
@@ -178,7 +193,7 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { 
       setNeedsLocalFile(Boolean((failure as { localFile?: boolean })?.localFile));
     }).finally(() => { if (current) setOpening(false); });
     return () => { current = false; };
-  }, [open, active, compare, load]);
+  }, [open, active, compare, official, load]);
 
   // The first time a version is shown, it opens where this person stopped (yesterday's page on today's PDF).
   useEffect(() => {
@@ -286,25 +301,43 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { 
     void queue({ documents: [{ ...row, date, label, updatedAt: now() }] }).catch(() => {});
   }, [canEdit, queue]);
 
+  const setOfficial = useCallback(async (id: string) => {
+    if (!canEdit) throw new Error("目前為檢視權限，無法設定官方基準。");
+    const row = registryRef.current.documents.find(item => item.id === id && !item.removedAt);
+    if (!row) throw new Error("這個 PDF 版本已不在清單中，請重新載入。");
+    if (row.localOnly || !row.path) throw new Error("官方基準須使用已存到雲端的 PDF；本機 PDF 仍可作為工作版本。");
+    const captured = scopeRef.current;
+    const selection = await saveCircuitPdfOfficial(seriesId, id);
+    if (scopeRef.current === captured) { setOfficialSelection(selection); setError(""); }
+  }, [canEdit, seriesId]);
+
   const removeDocument = useCallback(async (id: string) => {
     const row = registryRef.current.documents.find(item => item.id === id);
     if (!row || !canEdit) return;
+    if (officialRef.current?.id === id) throw new Error("官方基準不能封存。請先明確指定另一份官方基準。");
     const at = now();
     await queue({ documents: [{ ...row, removedAt: at, updatedAt: at }] }, true);
     if (activeId === id) { placed.current = ""; setActiveId(""); }
     if (compareId === id) setCompareId("");
     void opened.current.get(id)?.then(pdf => pdf.destroy()).catch(() => {});
     opened.current.delete(id); localFiles.delete(id);
-    // The list no longer offers it; the stored file is removed afterwards. Crops already taken are separate pictures and stay.
-    await removeCircuitPdfFile(row.path).catch(() => {});
   }, [canEdit, queue, activeId, compareId]);
+
+  const restoreDocument = useCallback(async (id: string) => {
+    const row = registryRef.current.documents.find(item => item.id === id && item.removedAt);
+    if (!row || !canEdit) return;
+    const restored = { ...row, updatedAt: now() }; delete restored.removedAt;
+    await queue({ documents: [restored] }, true);
+  }, [canEdit, queue]);
 
   return {
     registry, documents, loading, saving, error, uploading, active, compare,
+    official, officialPdf: official ? pdfs[official.id] || null : null, officialPage,
     activePdf: active ? pdfs[active.id] || null : null, comparePdf: compare ? pdfs[compare.id] || null : null,
     opening, openError, needsLocalFile, page, comparePage, compareOffset,
     upload, openLocal, show, select, setCompare: id => { setCompareId(id); setCompareOffset(0); }, setCompareOffset,
-    goTo, setChecked, updateDocument, removeDocument, reload, clearError: () => setError(""),
+    setOfficial, compareOfficial: () => { setCompareId(official?.id || ""); setCompareOffset(0); },
+    goTo, setChecked, updateDocument, removeDocument, restoreDocument, reload, clearError: () => setError(""),
   };
 }
 

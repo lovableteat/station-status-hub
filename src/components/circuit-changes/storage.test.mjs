@@ -58,3 +58,26 @@ test("history list reads metadata while the selected revision explicitly loads i
   assert.equal(calls[1].select, "*");
   assert.equal(event.snapshot.revision, 4);
 });
+
+test("removal and restore retain content and send the expected revision to their RPC", async () => {
+  const image = { id: "image-1", path: "set-1/item-1/original.png" };
+  const { api, calls } = loadRepository(q => ({ data: { ...row("item-1", [image]), revision: 5, removed_at: q.args.p_removed ? "2026-11-09T01:00:00Z" : null, removed_by: q.args.p_removed ? "qa" : null }, error: null }));
+  const removed = await api.setCircuitChangeItemRemoved("item-1", 4, true);
+  assert.equal(removed.removedAt, "2026-11-09T01:00:00Z");
+  assert.equal(removed.content.images[0].path, image.path);
+  assert.equal(calls[0].name, "circuit_change_set_removed");
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].args)), { p_item_id: "item-1", p_expected_revision: 4, p_removed: true });
+  const restored = await api.setCircuitChangeItemRemoved("item-1", 5, false);
+  assert.equal(restored.removedAt, undefined);
+  assert.equal(restored.content.images[0].path, image.path);
+});
+
+test("archived rows returned by a stale save cannot be treated as successful active edits", async () => {
+  const { api } = loadRepository(() => ({ data: { ...row(), removed_at: "2026-11-09T01:00:00Z", removed_by: "other" }, error: null }));
+  await assert.rejects(api.saveCircuitChangeItem("set-1", "item-1", 4, row().content), api.CircuitChangeConflictError);
+});
+
+test("a stale removal returns a conflict instead of pretending the item was removed", async () => {
+  const { api } = loadRepository(() => ({ data: null, error: { code: "PT409", message: "stale" }, status: 409 }));
+  await assert.rejects(api.setCircuitChangeItemRemoved("item-1", 4, true), api.CircuitChangeConflictError);
+});

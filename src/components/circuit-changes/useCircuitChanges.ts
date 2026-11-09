@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { uploadCircuitImages } from "./files";
-import { actOnCircuitChangeItem, CircuitChangeConflictError, createCircuitChangeSet, getCircuitChangeEvent, getCircuitChangeItem, listCircuitChangeEvents, listCircuitChangeItems, listCircuitChangeSets, saveCircuitChangeItem, subscribeCircuitChanges } from "./storage";
+import { actOnCircuitChangeItem, CircuitChangeConflictError, createCircuitChangeSet, getCircuitChangeEvent, getCircuitChangeItem, listCircuitChangeEvents, listCircuitChangeItems, listCircuitChangeSets, saveCircuitChangeItem, setCircuitChangeItemRemoved, subscribeCircuitChanges } from "./storage";
 import { defaultCircuitChangeSet, emptyCircuitChangeContent, isUnsavedCircuitChange, type CircuitChangeContent, type CircuitChangeContext, type CircuitChangeEvent, type CircuitChangeItem, type CircuitChangeSet, type CircuitChangesModel, type CircuitImageSide, type CircuitUploadFailure } from "./types";
 
 const message = (error: unknown) => error instanceof Error ? error.message : "線路修改操作失敗，請重試。";
@@ -55,6 +55,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   const uploadQueue = useRef<Promise<void>>(Promise.resolve());
   const pendingUploads = useRef(0);
   const reservedUploads = useRef(0);
+  const removalInFlight = useRef("");
   const isDirty = () => Boolean(current.current && draftRef.current && JSON.stringify(current.current.content) !== JSON.stringify(draftRef.current));
   const dirty = isDirty();
   const cacheKey = (id: string) => `circuit-change-draft:v1:${userId}:${context.seriesId}:${id}`;
@@ -111,6 +112,13 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     if (saveInFlight.current) { await saveInFlight.current.catch(() => {}); assertScope(captured); }
     if (selection.current.itemId && selection.current.itemId !== id) return;
     if (current.current?.id === id && next.revision < current.current.revision) return;
+    if (next.removedAt) {
+      if (isDirty() && current.current?.id === id) {
+        remote.current = next; current.current = { ...current.current, removedAt: next.removedAt, removedBy: next.removedBy };
+        setSelectedItem(current.current); setConflict(true); setSaveError("此修改已由其他人移除，草稿仍保留；請從已移除項目還原，或採用最新結果。");
+      } else { clearSelection(); offerBlank(); }
+      return;
+    }
     if (isDirty() && current.current?.id === id && next.revision !== current.current.revision) {
       remote.current = next; setConflict(true);
     } else if (!isDirty() || current.current?.id !== id) install(next, restore);
@@ -134,14 +142,17 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
       const nextItems = await listCircuitChangeItems(setId);
       assertScope(captured);
       if (selectionEpoch.current !== epoch || selection.current.setId !== setId) return;
-      // Changes are never deleted, so a list without the saved change on screen is older than that change: wait for a newer one.
+      // Removed rows remain in this response; a missing saved row still means this list predates its write.
       const shown = current.current;
       if (shown && !isUnsavedCircuitChange(shown) && shown.setId === setId && !nextItems.some(row => row.id === shown.id)) return;
       fingerprint.current = nextFingerprint; putItems(nextItems);
       // The unsaved change stays on screen; it is not in the list yet, so nothing here may select another row over it.
       if (isUnsavedCircuitChange(current.current)) return;
-      const id = nextItems.some(row => row.id === selection.current.itemId) ? selection.current.itemId : nextItems[0]?.id || "";
-      if (!id) { if (!isDirty()) offerBlank(); return; }
+      const removedSelection = nextItems.find(row => row.id === selection.current.itemId && row.removedAt);
+      if (removedSelection && isDirty()) { await loadSelected(removedSelection.id, captured); return; }
+      const activeItems = nextItems.filter(row => !row.removedAt);
+      const id = activeItems.some(row => row.id === selection.current.itemId) ? selection.current.itemId : activeItems[0]?.id || "";
+      if (!id) { if (!isDirty()) { clearSelection(); offerBlank(); } return; }
       const meta = nextItems.find(row => row.id === id)!;
       if (force || current.current?.id !== id || current.current.revision !== meta.revision) {
         selection.current.itemId = id; await loadSelected(id, captured, current.current?.id !== id);
@@ -167,7 +178,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   }
   function updateDraft(patch: Partial<CircuitChangeContent>) {
     // While another change is loading the form still shows the previous one; typing must not land on it.
-    if (!canEdit || !draftRef.current || !current.current || selection.current.itemId !== current.current.id) return;
+    if (!canEdit || !draftRef.current || !current.current || current.current.removedAt || removalInFlight.current || selection.current.itemId !== current.current.id) return;
     draftRef.current = { ...draftRef.current, ...patch };
     localVersion.current += 1; setEditVersion(localVersion.current); setDraft(draftRef.current); setSaveError("");
   }
@@ -193,6 +204,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   async function saveDraft(create = false) {
     const captured = scope;
     assertScope(captured, true);
+    if (removalInFlight.current || current.current?.removedAt) throw new Error("此修改已移除或正在移除，請先還原。");
     if (saveInFlight.current) await saveInFlight.current;
     assertScope(captured, true);
     const unsaved = isUnsavedCircuitChange(current.current);
@@ -223,7 +235,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
             const latest = await getCircuitChangeItem(target.id).catch(() => null);
             if (scopeRef.current === captured && selection.current.itemId === target.id) {
               // The earlier request did reach the server and only its answer was lost: nothing differs, so nothing is in conflict.
-              if (latest && stable(latest.content) === stable(value)) { adopt(latest); remote.current = latest; return; }
+              if (latest && !latest.removedAt && stable(latest.content) === stable(value)) { adopt(latest); remote.current = latest; return; }
               remote.current = latest; setConflict(true);
             }
           }
@@ -286,6 +298,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   async function review(action: Parameters<CircuitChangesModel["review"]>[0], note = "") {
     await finishDraft(); assertScope(scope, true);
     if (!current.current) throw new Error("請先選取修改項目。");
+    if (current.current.removedAt) throw new Error("此修改已移除，請先還原。");
     if (isUnsavedCircuitChange(current.current)) throw new Error("請先填寫修改內容。");
     const captured = scope, target = current.current, version = localVersion.current;
     setSaving(true);
@@ -334,6 +347,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   }
   async function addImages(files: File[], side: CircuitImageSide) {
     assertScope(scope, true);
+    if (current.current?.removedAt || removalInFlight.current) throw new Error("此修改已移除或正在移除，請先還原。");
     if (!files.length) return;
     if ((draftRef.current?.images.length || 0) + reservedUploads.current + files.length > 200) throw new Error("每個修改項目最多200張圖；請分成另一個修改項目，現有圖片已保留。");
     const captured = scope, setId = selection.current.setId, itemId = selection.current.itemId;
@@ -370,6 +384,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     try {
       const next = await getCircuitChangeItem(current.current.id);
       assertScope(captured, true);
+      if (next.removedAt) throw new Error("此修改已移除，請先還原後再儲存草稿。");
       const value = draftRef.current, version = localVersion.current;
       if (!value) return;
       // This explicit choice keeps the user's content while adopting the latest CAS token.
@@ -387,7 +402,45 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   }
   function adoptRemote() {
     if (!remote.current) return;
+    if (remote.current.removedAt) { clearCache(remote.current.id); clearSelection(); offerBlank(); return; }
     clearCache(remote.current.id); install(remote.current);
+  }
+  async function setRemoved(id: string, removed: boolean) {
+    const captured = scope;
+    assertScope(captured, true);
+    if (pendingUploads.current || removalInFlight.current) throw new Error("圖片或其他操作仍在進行，請完成後再試。");
+    removalInFlight.current = id; setSaving(true); setSwitching(true);
+    try {
+      if (saveInFlight.current) await saveInFlight.current.catch(() => {});
+      assertScope(captured, true);
+      const target = current.current?.id === id ? current.current : itemsRef.current.find(row => row.id === id);
+      if (!target) throw new Error("找不到修改項目，請重新載入。");
+      if (isUnsavedCircuitChange(target)) { clearSelection(); offerBlank(); return; }
+      let next: CircuitChangeItem;
+      try { next = await setCircuitChangeItemRemoved(id, target.revision, removed); }
+      catch (failure) {
+        if (!(failure instanceof CircuitChangeConflictError)) throw failure;
+        const latest = await getCircuitChangeItem(id); assertScope(captured, true);
+        if (Boolean(latest.removedAt) !== removed) { remote.current = latest; setConflict(true); throw failure; }
+        next = latest;
+      }
+      assertScope(captured, true);
+      selectionEpoch.current += 1; upsertItem(next); fingerprint.current = ""; setSaveError("");
+      if (current.current?.id !== id) return;
+      if (removed) {
+        clearCache(id); clearSelection(); clearUploadNotes();
+        const first = itemsRef.current.find(row => !row.removedAt);
+        if (first) { selection.current.itemId = first.id; await loadSelected(first.id, captured, true); }
+        else offerBlank();
+      } else if (isDirty()) {
+        current.current = next; remote.current = next; setSelectedItem(next); setConflict(true);
+      } else install(next, true);
+    } catch (failure) {
+      if (scopeRef.current === captured) setSaveError(message(failure));
+      throw failure;
+    } finally {
+      if (scopeRef.current === captured) { removalInFlight.current = ""; setSaving(false); setSwitching(false); }
+    }
   }
   const actions = useRef({ refresh, saveDraft, cacheDraft }); actions.current = { refresh, saveDraft, cacheDraft };
   useEffect(() => {
@@ -399,6 +452,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     setError(""); setSaveError(""); setConflict(false); setSaving(false); setUploading(false); setSwitching(false);
     setUploadFailures([]); uploadFailuresRef.current = []; setUploadWarnings([]);
     uploadQueue.current = Promise.resolve(); pendingUploads.current = 0; reservedUploads.current = 0;
+    removalInFlight.current = "";
     if (!open || !userId) return;
     setLoading(true); void actions.current.refresh(true);
   }, [open, userId, context.seriesId]);
@@ -423,8 +477,8 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     window.addEventListener("beforeunload", beforeLeave);
     return () => { actions.current.cacheDraft(); scopeRef.current += ":unmounted"; window.removeEventListener("beforeunload", beforeLeave); };
   }, []);
-  return { sets, selectedSetId, items, selectedItemId, selectedItem, draft, events, loading, saving, uploading, switching, dirty, conflict,
+  return { sets, selectedSetId, items: items.filter(row => !row.removedAt), removedItems: items.filter(row => row.removedAt), selectedItemId, selectedItem, draft, events, loading, saving, uploading, switching, dirty, conflict,
     error, saveError, uploadProgress, uploadFailures, uploadWarnings, selectSet, selectItem, createSet, createItem: startItem, updateDraft,
-    saveDraft: () => saveDraft(), review, addImages, retryUploads, dismissUploadFailures: clearUploadNotes,
+    saveDraft: () => saveDraft(), review, deleteItem: id => setRemoved(id, true), restoreItem: id => setRemoved(id, false), addImages, retryUploads, dismissUploadFailures: clearUploadNotes,
     reload: () => refresh(true), adoptRemote, saveMyRevision, loadEvent: getCircuitChangeEvent };
 }

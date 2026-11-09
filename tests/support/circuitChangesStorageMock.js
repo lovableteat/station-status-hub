@@ -12,6 +12,7 @@ export const listCircuitChangeItems = (...args) => request('listCircuitChangeIte
 export const getCircuitChangeItem = (...args) => request('getCircuitChangeItem',args);
 export const saveCircuitChangeItem = (...args) => request('saveCircuitChangeItem',args);
 export const actOnCircuitChangeItem = (...args) => request('actOnCircuitChangeItem',args);
+export const setCircuitChangeItemRemoved = (...args) => request('setCircuitChangeItemRemoved',args);
 export const listCircuitChangeEvents = (...args) => request('listCircuitChangeEvents',args);
 export const getCircuitChangeEvent = (...args) => request('getCircuitChangeEvent',args);
 export const loadCircuitChangeItemsForExport = (...args) => request('loadCircuitChangeItemsForExport',args);

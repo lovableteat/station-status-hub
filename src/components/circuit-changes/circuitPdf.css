@@ -6,6 +6,14 @@
 .circuit-pdf-row { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .circuit-pdf-row button { height: 36px; gap: 6px; padding-inline: 10px; font-size: 13px; }
 .circuit-pdf-panel .circuit-pdf-back { display: none; width: 40px; padding: 0; }
+.circuit-pdf-official { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid hsl(var(--warning) / .35); background: hsl(var(--warning) / .06); }
+.circuit-pdf-official > svg { flex: none; width: 18px; height: 18px; color: hsl(var(--warning)); }
+.circuit-pdf-official > div { flex: 1 1 200px; min-width: 0; }
+.circuit-pdf-official strong { margin-right: 8px; color: hsl(var(--warning)); font-size: 13px; }
+.circuit-pdf-official > div > span { color: hsl(var(--foreground)); font-size: 13px; overflow-wrap: anywhere; }
+.circuit-pdf-official small { display: block; margin-top: 3px; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
+.circuit-pdf-official > button { flex: none; min-height: 36px; padding-inline: 10px; font-size: 13px; }
+.circuit-pdf-official .circuit-pdf-ai { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
 
 .circuit-pdf-versions { position: relative; min-width: 0; flex: 0 1 260px; }
 .circuit-pdf-versions > .circuit-pdf-version-button { display: flex; width: 100%; justify-content: flex-start; gap: 8px; }
@@ -28,6 +36,10 @@
 .circuit-pdf-version-edit input { height: 34px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding: 0 8px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 13px; color-scheme: dark; }
 .circuit-pdf-version-edit > label:nth-child(2) input { width: 150px; }
 .circuit-pdf-version-edit > button { width: 36px; height: 34px; margin-left: auto; padding: 0; }
+.circuit-pdf-version-edit > .circuit-pdf-pin-official { width: auto; gap: 5px; padding-inline: 8px; color: hsl(var(--warning)); }
+.circuit-pdf-official-confirm { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: 6px; color: hsl(var(--warning)); font-size: 12px; }
+.circuit-pdf-official-confirm > button { min-height: 36px; font-size: 12px; }
+.circuit-pdf-archived-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; padding: 10px 12px; color: hsl(var(--muted-foreground)); font-size: 13px; }
 .circuit-pdf-remove-confirm { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: 6px; color: hsl(var(--muted-foreground)); font-size: 12px; }
 .circuit-pdf-remove-confirm > button { height: 32px; font-size: 12px; }
 
@@ -43,6 +55,8 @@
 .circuit-pdf-pager > span { padding-inline: 4px 2px; color: hsl(var(--muted-foreground)); }
 .circuit-pdf-zoom > span { min-width: 44px; color: hsl(var(--muted-foreground)); text-align: center; }
 .circuit-pdf-offset > span { padding-right: 2px; color: hsl(var(--muted-foreground)); }
+.circuit-pdf-offset > label { display: flex; align-items: center; gap: 5px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-pdf-offset input { width: 56px; height: 36px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding-inline: 4px; font-size: 14px; text-align: center; }
 .circuit-pdf-page-changes { display: flex; flex: 0 1 auto; min-width: 0; max-width: 40%; align-items: center; gap: 4px; overflow-x: auto; color: hsl(var(--muted-foreground)); font-size: 12px; scrollbar-width: none; }
 .circuit-pdf-page-changes > button { flex: none; height: 28px !important; border: 1px solid hsl(var(--warning) / .5); border-radius: 5px; padding: 0 7px !important; background: hsl(var(--warning) / .1); color: hsl(var(--foreground)); font-size: 12px !important; font-variant-numeric: tabular-nums; }
 .circuit-pdf-finish { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
@@ -52,7 +66,8 @@
 
 /* One cell per page: filled = gone through on this PDF, outlined = on an earlier PDF, amber dot = a change is recorded there. */
 .circuit-pdf-overview { display: flex; flex: none; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--background)); }
-.circuit-pdf-strip { display: flex; flex: 1; min-width: 0; gap: 1px; overflow-x: auto; padding: 8px 2px; scrollbar-width: thin; }
+.circuit-pdf-strip { display: flex; flex: 1; min-width: 0; gap: 1px; overflow-x: auto; padding: 8px 2px; scrollbar-width: thin; user-select: none; touch-action: pan-x; cursor: grab; }
+.circuit-pdf-strip[data-dragging="true"], .circuit-pdf-strip[data-dragging="true"] > button { cursor: grabbing; }
 .circuit-pdf-strip > button { position: relative; flex: none; width: 9px; height: 22px; border: 1px solid transparent; border-radius: 2px; padding: 0; background: hsl(var(--muted-foreground) / .22); cursor: pointer; }
 .circuit-pdf-strip > button[data-state="here"] { background: hsl(var(--primary) / .85); }
 .circuit-pdf-strip > button[data-state="older"] { border-color: hsl(var(--primary) / .8); background: hsl(var(--primary) / .18); }
@@ -71,6 +86,8 @@
 .circuit-pdf-page > figcaption { margin-bottom: 6px; color: hsl(var(--muted-foreground)); font-size: 12px; font-variant-numeric: tabular-nums; }
 .circuit-pdf-page[data-pane="compare"] > figcaption { color: hsl(var(--warning)); }
 .circuit-pdf-page[data-pane="active"] > figcaption { color: hsl(var(--primary)); }
+.circuit-pdf-unmatched > div { display: flex; min-height: 220px; flex-direction: column; justify-content: center; gap: 10px; border: 1px dashed hsl(var(--warning) / .4); border-radius: 8px; padding: 20px; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 20px; text-align: center; }
+.circuit-pdf-unmatched strong { color: hsl(var(--warning)); }
 .circuit-pdf-surface { position: relative; min-width: 120px; min-height: 120px; overflow: hidden; background: #ffffff; box-shadow: 0 1px 4px hsl(var(--background) / .8); touch-action: pan-x pan-y; user-select: none; }
 .circuit-pdf-stage[data-crop="true"] .circuit-pdf-surface { cursor: crosshair; touch-action: none; }
 .circuit-pdf-surface[data-rendering="true"] > canvas { opacity: .6; }
@@ -111,13 +128,19 @@
 @media (max-width: 1023px) {
   .circuit-pdf-panel { flex: 1; border-right: 0; }
   .circuit-pdf-panel .circuit-pdf-back { display: inline-flex; width: 44px; height: 44px; }
+  .circuit-pdf-official > button { min-height: 44px; }
   .circuit-pdf-empty-heading { display: flex; flex: none; align-items: center; gap: 4px; padding: 6px 12px; border-bottom: 1px solid hsl(var(--border)); font-size: 16px; }
   .circuit-pdf-toolbar { padding: 6px 12px; }
+  .circuit-pdf-toolbar { position: relative; }
+  .circuit-pdf-versions { position: static; }
+  .circuit-pdf-version-list { left: 12px; right: 12px; width: auto; max-height: min(40dvh, 400px); }
+  .circuit-pdf-version-list > header { flex-direction: column; align-items: flex-start; gap: 4px; }
   .circuit-pdf-row button { height: 44px; }
   .circuit-pdf-pager > button, .circuit-pdf-zoom > button, .circuit-pdf-offset > button { width: 44px; }
   .circuit-pdf-overview { flex-wrap: wrap; gap: 0 10px; padding-top: 6px; }
   .circuit-pdf-overview > .circuit-pdf-strip { flex-basis: 100%; order: 3; }
   .circuit-pdf-pager input { height: 44px; font-size: 16px; }
+  .circuit-pdf-offset input { height: 44px; font-size: 16px; }
   .circuit-pdf-panel .circuit-pdf-compare select { width: 150px; height: 44px; font-size: 14px; }
   /* Toolbar: versions and upload; then turning pages, zoom and framing; the comparison gets its own line. */
   .circuit-pdf-toolbar { gap: 4px; }

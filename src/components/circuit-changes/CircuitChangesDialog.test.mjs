@@ -43,6 +43,32 @@ test("only explicit close dismisses the workspace and still flushes a dirty draf
   } finally { act(() => root.unmount()); }
 });
 
+test("removal is explicit and reversible while preserving the item history", async () => {
+  const removed = item("removed", 2, "draft", "已移除的線路修改"), actions = [];
+  const { root, button } = mount({ removedItems: [removed], deleteItem: async id => actions.push(["remove", id]), restoreItem: async id => actions.push(["restore", id]) });
+  try {
+    act(() => root.root.findByProps({ "aria-label": "移除修改" }).props.onClick());
+    assert.ok(JSON.stringify(root.toJSON()).includes("已儲存的歷史與原圖保留"));
+    assert.deepEqual(actions, []);
+    await act(async () => button("確認移除").props.onClick());
+    assert.deepEqual(actions, [["remove", "one"]]);
+    act(() => root.root.findByProps({ className: "circuit-removed-trigger" }).props.onClick());
+    await act(async () => root.root.findByProps({ "aria-label": "還原修改 #002" }).props.onClick());
+    assert.deepEqual(actions.at(-1), ["restore", "removed"]);
+  } finally { act(() => root.unmount()); }
+});
+
+test("a remotely removed item keeps its draft visible but cannot be edited or submitted", () => {
+  const saved = { ...item("one", 1, "draft", "保留我的草稿"), removedAt: "2026-11-09T05:00:00Z" };
+  const { root, text } = mount({ selectedItem: saved, selectedItemId: saved.id, draft: saved.content, dirty: true, conflict: true, removedItems: [saved] });
+  try {
+    assert.equal(root.root.findByProps({ "aria-label": "修改標題" }).props.disabled, true);
+    assert.ok(text().includes("請先還原項目後再儲存"));
+    assert.equal(root.root.findAll(node => node.type === "stub" && node.props.children === "送出 Review").length, 0);
+    assert.equal(root.root.findAll(node => node.type === "stub" && node.props.children === "儲存我的修訂")[0].props.disabled, true);
+  } finally { act(() => root.unmount()); }
+});
+
 test("filters stay visible, reversible and scoped to their URL keys", async () => {
   const { root, window, calls } = mount({}, "?workspace=material-requests&project=A&circuitStatus=draft");
   try {
