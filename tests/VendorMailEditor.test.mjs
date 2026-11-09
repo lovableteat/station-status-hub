@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 const require = createRequire(import.meta.url);
-const { JSDOM } = createRequire(path.resolve('../qa-tools/package.json'))('jsdom');
+const { JSDOM } = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa-tools', 'package.json'))('jsdom');
 const { React, create, act, loader } = require('./support/renderHarness.cjs');
 
 function fixture(value = '<p>開頭</p><p>{{料件清單}}</p><p>簽名</p>') {
