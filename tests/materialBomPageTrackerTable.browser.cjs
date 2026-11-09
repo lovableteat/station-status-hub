@@ -59,10 +59,33 @@ async function run(browser, origin, width) {
   try {
     await page.goto(origin + '/?qaMainRows&qaPages'); await page.getByTestId('material-table-card').waitFor();
     const tracker = await openTracker(page, width);
-    assert.deepEqual(await tracker.getByRole('columnheader').allTextContents(), ['頁碼', '狀態', '目前頁', '頁面標題', '備註']);
+    assert.deepEqual(await tracker.getByRole('columnheader').allTextContents(), ['頁碼', '狀態', '頁面標題', '備註']);
     const original = await page.evaluate(() => structuredClone(window.__pdfAiFixture.tracker));
     await assertFrame(page, tracker, 884);
     await page.screenshot({ path: path.join(evidence, `initial-${width}.png`) });
+    // Opened on what is saved: the page map shows every page's status, the page that work reached is marked, nothing is unsaved.
+    const mapCell = number => tracker.locator(`[data-map-page="${number}"]`);
+    assert.deepEqual(await tracker.locator('[data-map-page]').evaluateAll(cells => cells.map(cell => cell.dataset.status)), original.pages.map(page => page.status));
+    assert.equal(await mapCell(original.currentPage).getAttribute('data-current'), 'true');
+    assert.ok((await tracker.locator('.bom-tracker-save-state').innerText()).startsWith('已儲存'));
+    assert.equal(await tracker.getByRole('button', { name: '儲存頁數進度', exact: true }).isDisabled(), true);
+    assert.ok((await tracker.getByTestId('bom-page-tracker-progress').innerText()).includes(`${original.pages.filter(page => page.status !== 'pending').length} / ${original.totalPages} 頁`));
+    // Filter bar: directly above the table, the active condition as a removable chip, and no match keeps the column headers.
+    const filterBox = await tracker.locator('.bom-tracker-filter').boundingBox(), scrollBox = await tracker.getByTestId('bom-page-tracker-scroll').boundingBox();
+    assert.ok(filterBox && scrollBox && filterBox.y + filterBox.height <= scrollBox.y + 1 && scrollBox.y - (filterBox.y + filterBox.height) <= 16, 'the filter bar sits directly above the page table');
+    await tracker.getByRole('group', { name: '篩選狀態', exact: true }).getByRole('button', { name: /^已完成但缺料/ }).tap();
+    assert.equal(await tracker.getByTestId('bom-page-tracker-row').count(), original.pages.filter(page => page.status === 'done_missing').length);
+    await tracker.getByLabel('搜尋頁面', { exact: true }).fill('沒有這個標題');
+    assert.equal(await tracker.getByTestId('bom-page-tracker-row').count(), 0);
+    assert.ok(await tracker.getByText('目前篩選條件沒有符合的頁面', { exact: true }).isVisible());
+    assert.equal(await tracker.getByRole('columnheader').count(), 4);
+    const chips = tracker.getByTestId('bom-page-tracker-filters');
+    assert.equal(await chips.getByRole('button', { name: /^移除篩選：/ }).count(), 2);
+    await chips.getByRole('button', { name: '移除篩選：搜尋：沒有這個標題', exact: true }).tap();
+    assert.equal(await chips.getByRole('button', { name: /^移除篩選：/ }).count(), 1);
+    await chips.getByRole('button', { name: '全部清除', exact: true }).tap(); await chips.waitFor({ state: 'hidden' });
+    assert.equal(await tracker.getByTestId('bom-page-tracker-row').count(), original.totalPages);
+    assert.deepEqual(await page.evaluate(() => window.__pdfAiFixture.tracker), original, 'looking and filtering writes nothing');
 
     await tracker.getByLabel('總頁數', { exact: true }).fill('500');
     await tracker.getByLabel('第 500 頁標題', { exact: true }).waitFor({ state: 'attached' });
@@ -75,7 +98,20 @@ async function run(browser, origin, width) {
     const ai = page.getByTestId('bom-page-pdf-ai'); await ai.waitFor();
     await ai.getByRole('button', { name: '關閉 PDF AI', exact: true }).tap(); await ai.waitFor({ state: 'hidden' });
     assert.equal(await title500.inputValue(), 'QA 第500頁標題，取消後不得保存');
-    await tracker.getByRole('button', { name: '關閉', exact: true }).tap(); await tracker.waitFor({ state: 'hidden' });
+    // Closing with unsaved changes asks first, whichever way the close is requested; going back keeps the draft.
+    assert.ok((await tracker.locator('.bom-tracker-save-state').innerText()).includes('有尚未儲存的修改'));
+    await tracker.getByRole('button', { name: '關閉', exact: true }).tap();
+    await tracker.getByText('要儲存這些修改嗎？').waitFor();
+    await tracker.getByRole('button', { name: '繼續編輯', exact: true }).tap();
+    assert.equal(await title500.inputValue(), 'QA 第500頁標題，取消後不得保存');
+    await page.keyboard.press('Escape');
+    await tracker.getByText('要儲存這些修改嗎？').waitFor();
+    assert.ok(await tracker.isVisible(), 'Escape must not throw unsaved page progress away');
+    for (const name of ['不儲存，直接關閉', '繼續編輯', '儲存並關閉']) {
+      const box = await tracker.getByRole('button', { name, exact: true }).boundingBox();
+      assert.ok(box && box.y >= 0 && box.y + box.height <= 885 && box.x >= 0 && box.x + box.width <= width + 1, `${name} outside viewport: ${JSON.stringify(box)}`);
+    }
+    await tracker.getByRole('button', { name: '不儲存，直接關閉', exact: true }).tap(); await tracker.waitFor({ state: 'hidden' });
     assert.deepEqual(await page.evaluate(() => window.__pdfAiFixture.tracker), original, 'Closing tracker retains saved state');
 
     await openTracker(page, width); assert.equal(await tracker.getByLabel('總頁數', { exact: true }).inputValue(), '4');
@@ -110,6 +146,14 @@ async function run(browser, origin, width) {
       return { width, height: 500, result: 'passed', titleHeader, noteHeader, checks: ['500th title and note fields fit beside frozen page', 'both column headers remain visible after focus', 'short viewport footer and cancel work'] };
     }
 
+    // A phone keeps the table on screen and opens the page map and batch tool on request; wider layouts always show them.
+    const tools = tracker.getByRole('button', { name: '頁面總覽與批次設定', exact: true });
+    if (width < 768) {
+      assert.equal(await tracker.locator('.bom-tracker-map').isVisible(), false);
+      assert.equal(await tools.getAttribute('aria-expanded'), 'false'); await tools.tap();
+      assert.equal(await tools.getAttribute('aria-expanded'), 'true');
+    } else assert.equal(await tools.isVisible(), false);
+    assert.ok(await tracker.locator('.bom-tracker-map').isVisible());
     await tracker.getByLabel('起始頁', { exact: true }).fill('1'); await tracker.getByLabel('結束頁', { exact: true }).fill('3');
     const batch = tracker.locator('[data-testid="bom-page-tracker-batch"]');
     await batch.getByRole('button', { name: '已完成但缺料', exact: true }).tap();
@@ -117,6 +161,19 @@ async function run(browser, origin, width) {
     assert.equal(await tracker.getByLabel('第 1 頁標題', { exact: true }).inputValue(), original.pages[0].title);
     assert.equal(await tracker.getByLabel('第 1 頁備註', { exact: true }).inputValue(), original.pages[0].note);
     for (const number of [1, 2, 3]) assert.equal(await tracker.getByRole('group', { name: `第 ${number} 頁狀態`, exact: true }).getByRole('button', { name: '已完成但缺料', exact: true }).getAttribute('aria-pressed'), 'true');
+    // The page map follows: the three pages show as missing, and picking a range on it fills the batch tool.
+    const mapNow = number => tracker.locator(`[data-map-page="${number}"]`);
+    for (const number of [1, 2, 3]) assert.equal(await mapNow(number).getAttribute('data-status'), 'done_missing');
+    await mapNow(1).scrollIntoViewIfNeeded();
+    await mapNow(5).click(); await mapNow(9).click({ modifiers: ['Shift'] });
+    assert.equal(await tracker.getByLabel('起始頁', { exact: true }).inputValue(), '5'); assert.equal(await tracker.getByLabel('結束頁', { exact: true }).inputValue(), '9');
+    assert.deepEqual(await tracker.locator('[data-map-page][aria-pressed="true"]').evaluateAll(cells => cells.map(cell => cell.dataset.mapPage)), ['5', '6', '7', '8', '9']);
+    await batch.getByRole('button', { name: '已完成', exact: true }).tap();
+    await page.waitForFunction(() => [5, 6, 7, 8, 9].every(number => document.querySelector(`[data-map-page="${number}"]`).dataset.status === 'done'));
+    assert.equal(await tracker.getByLabel('目前做到第幾頁', { exact: true }).inputValue(), '500', 'a batch below the page already reached does not move it back');
+    await batch.getByRole('button', { name: '待處理', exact: true }).tap();
+    await page.waitForFunction(() => [5, 6, 7, 8, 9].every(number => document.querySelector(`[data-map-page="${number}"]`).dataset.status === 'pending'));
+    await tracker.getByLabel('起始頁', { exact: true }).fill('1'); await tracker.getByLabel('結束頁', { exact: true }).fill('3');
     const secondRow = tracker.getByLabel('第 2 頁標題', { exact: true }).locator('xpath=ancestor::tr');
     await secondRow.getByRole('button', { name: '設為目前頁', exact: true }).tap();
     assert.equal(await tracker.getByLabel('目前做到第幾頁', { exact: true }).inputValue(), '2');
@@ -139,7 +196,7 @@ async function run(browser, origin, width) {
     await title500.scrollIntoViewIfNeeded(); await page.screenshot({ path: path.join(evidence, `saved-last-page-${width}.png`) });
     await tracker.getByRole('button', { name: '關閉', exact: true }).tap();
     assert.deepEqual(errors, []);
-    return { width, result: 'passed', rowHeight: finalRow.metrics.height, shortTable: shortScroll, checks: ['five visible column headers', '500 aligned equal-height rows', 'sticky table header and internal scroll', 'title and note edits', 'batch status retains text', 'PDF AI opens and returns with draft', 'cancel does not persist', 'save/reopen retains all 500 pages', 'short viewport last-row edit and visible footer'] };
+    return { width, result: 'passed', rowHeight: finalRow.metrics.height, shortTable: shortScroll, checks: ['four labelled column headers', 'page map mirrors statuses and selects batch ranges', ...(width < 768 ? ['page map and batch tool open from one toggle on a phone'] : []), 'filter bar with chips and a structured empty result', 'closing with unsaved changes asks first', '500 aligned equal-height rows', 'sticky table header and internal scroll', 'title and note edits', 'batch status retains text', 'PDF AI opens and returns with draft', 'cancel does not persist', 'save/reopen retains all 500 pages', 'short viewport last-row edit and visible footer'] };
   } catch (error) { await page.screenshot({ path: path.join(evidence, `failure-${width}.png`) }).catch(() => {}); throw error; }
   finally { await context.close(); }
 }

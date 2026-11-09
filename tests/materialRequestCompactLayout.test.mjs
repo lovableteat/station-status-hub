@@ -12,6 +12,7 @@ const uploadDialog = (await readFile(new URL("../src/components/material-request
 const settingsDialog = await readFile(new URL("../src/components/material-requests/MaterialTableSettingsDialog.tsx", import.meta.url), "utf8");
 const styles = (await readFile(new URL("../src/index.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const pageTrackerStyles = (await readFile(new URL("../src/components/material-requests/bomPageTracker.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const pageTrackerDialog = (await readFile(new URL("../src/components/material-requests/BomPageTrackerDialog.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const transpiled = ts.transpileModule(presentationSource, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText.replace('"./materialTrackingStatus.ts"', JSON.stringify(new URL("../src/components/material-requests/materialTrackingStatus.ts", import.meta.url).href));
@@ -151,7 +152,7 @@ test("duplicate controls were merged: one clear, one page-progress entry, delete
 test("dialogs and popovers use the page theme tokens instead of their own fixed colours", () => {
   const dialogBlocks = [
     slice("function CompactHoverValue(", "function MaterialFieldLabel("),
-    slice("function BomPageTrackerDialog(", "function MaterialRecordDialog("),
+    pageTrackerDialog,
     slice("function MaterialRecordDialog(", "type MaterialColumnVisibility"),
     settingsDialog,
     slice("function MaterialExportDialog(", "export function MaterialRequestPage() {"),
@@ -160,10 +161,13 @@ test("dialogs and popovers use the page theme tokens instead of their own fixed 
   assert.doesNotMatch(dialogBlocks, /#0[0-9a-f]{5}|bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d|bg-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);
   assert.match(dialogBlocks, /workspace-dialog-section/);
   assert.match(source, /const CHIP_TONES = \{/);
-  const pageTracker = slice("function BomPageTrackerDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
+  // The page progress dialog lives in its own file; the page only renders it.
+  assert.match(source, /^import \{ BomPageTrackerDialog \} from "\.\/BomPageTrackerDialog";$/m);
+  assert.doesNotMatch(source, /function BomPageTrackerDialog\(/);
+  const pageTracker = pageTrackerDialog;
   // The page list is a table painted by bomPageTracker.css, so its theme contract is checked in that stylesheet:
-  // the page loads it, the dialog names its classes, and every colour in it comes from a theme variable.
-  assert.match(source, /^import "\.\/bomPageTracker\.css";$/m);
+  // the dialog loads it and names its classes, and every colour in it comes from a theme variable.
+  assert.match(pageTracker, /^import "\.\/bomPageTracker\.css";$/m);
   assert.match(pageTracker, /<div className="bom-tracker-table-scroll[" ][\s\S]{0,200}?<table className="bom-tracker-table[" ]/);
   assert.match(pageTrackerStyles, /\.bom-tracker-table-scroll \{[^}]*border: 1px solid hsl\(var\(--border\)\)/);
   assert.match(pageTrackerStyles, /\.bom-tracker-table tbody tr \{[^}]*--bom-page-row: var\(--[a-z-]+\);/);
