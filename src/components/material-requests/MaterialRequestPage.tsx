@@ -28,6 +28,7 @@ import {
   Copy,
   Download,
   Eye,
+  EyeOff,
   Factory,
   FileArchive,
   FileCode2,
@@ -64,6 +65,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import {
   Dialog,
   DialogContent,
@@ -1674,6 +1676,7 @@ function ExcelFilterPopover({
 
 function ResizableHeader({
   children,
+  columnLabel,
   width,
   minWidth,
   maxWidth,
@@ -1681,8 +1684,11 @@ function ResizableHeader({
   onResize,
   className,
   sortDirection,
+  onHide,
+  onOpenColumnSettings,
 }: {
   children: ReactNode;
+  columnLabel: string;
   width: number;
   minWidth: number;
   maxWidth: number;
@@ -1690,10 +1696,13 @@ function ResizableHeader({
   onResize: (width: number) => void;
   className?: string;
   sortDirection?: "asc" | "desc";
+  onHide?: () => void;
+  onOpenColumnSettings: () => void;
 }) {
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = { startX: event.clientX, startWidth: width };
@@ -1713,23 +1722,37 @@ function ResizableHeader({
   };
 
   return (
-    <th
-      aria-sort={sortDirection ? sortDirection === "asc" ? "ascending" : "descending" : undefined}
-      className={cn("relative border-r border-blue-300/20 px-2 py-2", className)}
-      style={{ width, minWidth, maxWidth: width }}
-    >
-      {children}
-      {resizable && <button
-        type="button"
-        aria-label="拖曳調整欄寬"
-        title="拖曳調整欄寬"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={stopDragging}
-        onPointerCancel={stopDragging}
-        className="absolute inset-y-0 right-0 z-30 w-2 touch-none cursor-col-resize border-r-2 border-transparent hover:border-cyan-300 active:border-cyan-200"
-      />}
-    </th>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <th
+          scope="col"
+          tabIndex={0}
+          aria-sort={sortDirection ? sortDirection === "asc" ? "ascending" : "descending" : undefined}
+          className={cn("relative border-r border-blue-300/20 px-2 py-2", className)}
+          style={{ width, minWidth, maxWidth: width }}
+        >
+          {children}
+          {resizable && <button
+            type="button"
+            aria-label="拖曳調整欄寬"
+            title="拖曳調整欄寬"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={stopDragging}
+            onPointerCancel={stopDragging}
+            className="absolute inset-y-0 right-0 z-30 w-2 touch-none cursor-col-resize border-r-2 border-transparent hover:border-cyan-300 active:border-cyan-200"
+          />}
+        </th>
+      </ContextMenuTrigger>
+      <ContextMenuContent aria-label={`${columnLabel} 欄位操作`} className="w-56">
+        <ContextMenuLabel className="truncate text-primary">{columnLabel}</ContextMenuLabel>
+        <ContextMenuItem disabled={!onHide} onSelect={onHide}>
+          <EyeOff className="mr-2 h-4 w-4" aria-hidden="true" />隱藏此欄位{!onHide && <span className="ml-auto text-xs">固定欄位</span>}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={onOpenColumnSettings}><Columns3 className="mr-2 h-4 w-4" aria-hidden="true" />欄位設定</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -6357,11 +6380,14 @@ export function MaterialRequestPage() {
                 {MATERIAL_TABLE_COLUMNS.map((column, columnIndex) => columnVisibility[column.key] && (
                   <ResizableHeader
                     key={column.key}
+                    columnLabel={column.label}
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
                     maxWidth={MAX_COLUMN_WIDTHS[columnIndex]}
                     sortDirection={columnSort && columnSort.key === MATERIAL_COLUMN_FILTER_KEYS[column.key] ? columnSort.direction : undefined}
                     onResize={(width) => resizeColumn(columnIndex, width)}
+                    onHide={column.locked ? undefined : () => setHiddenColumns(current => normalizeHiddenMaterialColumns([...current, column.key]))}
+                    onOpenColumnSettings={() => setTableSettingsOpen(true)}
                   >
                     <span
                       data-testid={column.key === "actions" ? "material-data-update-header" : undefined}
