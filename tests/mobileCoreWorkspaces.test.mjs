@@ -70,9 +70,11 @@ test("AI query workspace uses the available mobile height and keeps every compos
   assert.match(consoleSource, /"grid h-full min-h-0 w-full items-stretch gap-2 lg:gap-4"/);
   assert.doesNotMatch(consoleSource, /lg:h-\[calc\(100dvh-164px\)\]/);
   assert.match(consoleSource, /mobileSidebarOpen/);
-  assert.match(consoleSource, /關閉資料查詢選單/);
+  // Phones open the history as a sheet that closes from its own button or the overlay; desktop keeps the inline panel.
+  assert.match(consoleSource, /const HistorySurface = compactChat \? DialogContent : "aside";/);
+  assert.match(consoleSource, /open: mobileSidebarOpen, onOpenChange: setMobileSidebarOpen/);
+  assert.match(consoleSource, /aria-label="關閉最近對話"/);
   assert.match(consoleSource, /最近對話/);
-  assert.match(consoleSource, /fixed inset-x-3[\s\S]*lg:static/);
   assert.match(consoleSource, /data-mobile-ai-model/);
   assert.match(consoleSource, /<MobileToolsSheet[\s\S]*testId="mobile-ai-tools"/);
   assert.match(consoleSource, />AI 問答<\/h1>/);

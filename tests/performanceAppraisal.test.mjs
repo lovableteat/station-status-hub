@@ -123,7 +123,7 @@ test("performance CSV exports headers, status labels, and escaped values", () =>
 });
 
 test("performance workspace exposes RD2 workflows and persistent record filters", async () => {
-  const [source, flowGuide, editor] = await Promise.all([
+  const [source, flowGuide, editor, reviewDetail] = await Promise.all([
     readFile(
       new URL(
         "../src/components/performance/PerformanceAppraisalPage.tsx",
@@ -141,6 +141,13 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
     readFile(
       new URL(
         "../src/components/performance/AssessmentEditor.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../src/components/performance/ReviewDetail.tsx",
         import.meta.url,
       ),
       "utf8",
@@ -185,7 +192,9 @@ test("performance workspace exposes RD2 workflows and persistent record filters"
   assert.match(source, /rd2-self-complete-state/);
   assert.match(flowGuide, /canManage = false/);
   assert.match(flowGuide, /主管分數維持隱藏，退回說明與附件會顯示給員工補充/);
-  assert.match(source, /manager\.attachments/);
+  // The completed-review view lives in the shared ReviewDetail that the record dialog renders.
+  assert.match(source, /<ReviewDetail\s+review=\{detail\}/);
+  assert.match(reviewDetail, /manager\.attachments/);
   assert.match(editor, /主管整體回覆與工作指示/);
   assert.match(source, /選擇匯出人員/);
   assert.match(source, /exportSelection/);

@@ -87,7 +87,7 @@ test("stale cached sessions use the same login page before private providers mou
   );
   assert.match(
     context,
-    /runSessionBootstrapWithDeadline\(\s*\(\) => userFromSession\(session\)/,
+    /runSessionBootstrapWithDeadline\(\s*\(\) => userFromSession\(session, hasSessionVersion\)/,
   );
   assert.match(
     context,

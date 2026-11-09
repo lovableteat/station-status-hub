@@ -14,12 +14,16 @@ test("submitted forms stop showing the unsent draft warning", async () => {
 });
 
 test("completed review details distinguish category summaries from per-entry replies", async () => {
-  const [page, feedback] = await Promise.all([
+  const [page, detail, feedback] = await Promise.all([
     readSource("src/components/performance/PerformanceAppraisalPage.tsx"),
+    readSource("src/components/performance/ReviewDetail.tsx"),
     readSource("src/components/performance/AssessmentEntryFeedback.tsx"),
   ]);
+  // The completed-review view lives in the shared ReviewDetail that the record dialog renders.
+  assert.match(page, /<ReviewDetail\s+review=\{detail\}/);
   assert.doesNotMatch(page, /尚無此類評語/);
-  assert.match(page, /逐項回覆已列在各筆實績下方/);
+  assert.doesNotMatch(detail, /尚無此類評語/);
+  assert.match(detail, /逐項回覆已列在各筆實績下方/);
   assert.match(feedback, /historyOnly && !history\.length/);
   assert.match(feedback, /manager=\{savedManager \|\| manager\} historyOnly showFeedback/);
   assert.match(feedback, /historyOnly \? latestReturn\?\.feedback/);

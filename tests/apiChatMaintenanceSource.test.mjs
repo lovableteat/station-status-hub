@@ -44,7 +44,7 @@ test("maintenance source explains the difference from normal AI chat", async () 
 test("hidden maintenance context is never added to the visible user message", async () => {
   const source = await readSource("src/components/api-management/ApiChatConsole.tsx");
 
-  assert.match(source, /buildProviderMessages\(history, target\.provider, ephemeralSystemContext\)/);
+  assert.match(source, /buildProviderMessages\(history, target\.provider, ephemeralSystemContext[,)]/);
   assert.match(source, /providerMessages\.push\(\{ role: "system", text: ephemeralSystemContext\.trim\(\) \}\)/);
   assert.doesNotMatch(source, /createMessage\("user",\s*buildMaintenanceContext/);
 });
