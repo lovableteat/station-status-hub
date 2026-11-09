@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { uploadCircuitImages } from "./files";
 import { actOnCircuitChangeItem, CircuitChangeConflictError, createCircuitChangeSet, getCircuitChangeEvent, getCircuitChangeItem, listCircuitChangeEvents, listCircuitChangeItems, listCircuitChangeSets, saveCircuitChangeItem, subscribeCircuitChanges } from "./storage";
-import { emptyCircuitChangeContent, type CircuitChangeContent, type CircuitChangeContext, type CircuitChangeEvent, type CircuitChangeItem, type CircuitChangeSet, type CircuitChangesModel, type CircuitImageSide, type CircuitUploadFailure } from "./types";
+import { defaultCircuitChangeSet, emptyCircuitChangeContent, isUnsavedCircuitChange, type CircuitChangeContent, type CircuitChangeContext, type CircuitChangeEvent, type CircuitChangeItem, type CircuitChangeSet, type CircuitChangesModel, type CircuitImageSide, type CircuitUploadFailure } from "./types";
 
 const message = (error: unknown) => error instanceof Error ? error.message : "線路修改操作失敗，請重試。";
 const summary = (item: CircuitChangeItem): CircuitChangeItem => ({ ...item, imageCount: item.content.images.length, content: { ...item.content, images: [] } });
+// Key order differs between what this page builds and what the database returns, so content is compared with its keys sorted.
+const stable = (value: unknown): string => JSON.stringify(value, (_key, entry) => entry && typeof entry === "object" && !Array.isArray(entry)
+  ? Object.fromEntries(Object.entries(entry as Record<string, unknown>).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)) : entry);
 
 export function useCircuitChanges({ open, context, canEdit, userId, userName }: {
   open: boolean; context: CircuitChangeContext; canEdit: boolean; userId: string; userName: string;
@@ -19,6 +22,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState("");
   const [saveError, setSaveError] = useState("");
@@ -33,13 +37,18 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   const scopeRef = useRef(scope); scopeRef.current = scope;
   const editAccess = useRef(canEdit); editAccess.current = canEdit;
   const selection = useRef({ setId: "", itemId: "" });
+  // Bumped whenever the user picks or creates a batch and whenever a write of our own lands, so a list that was read
+  // before that moment cannot put the old batch back or drop the change that was just saved.
+  const selectionEpoch = useRef(0);
   const current = useRef<CircuitChangeItem | null>(null);
   const draftRef = useRef<CircuitChangeContent | null>(null);
+  const itemsRef = useRef<CircuitChangeItem[]>([]);
   const draftCacheKey = useRef("");
   const remote = useRef<CircuitChangeItem | null>(null);
   const localVersion = useRef(0);
   const saveInFlight = useRef<Promise<void> | null>(null);
-  const syncing = useRef("");
+  const refreshRun = useRef<{ scope: string; promise: Promise<void> } | null>(null);
+  const creatingSet = useRef<Promise<string> | null>(null);
   const fingerprint = useRef("");
   const uploadSide = useRef<CircuitImageSide>("after");
   const uploadFailuresRef = useRef<CircuitUploadFailure[]>([]);
@@ -58,6 +67,10 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     try { localStorage.setItem(draftCacheKey.current, JSON.stringify({ revision: current.current.revision, content: draftRef.current })); }
     catch { setSaveError("瀏覽器無法保留離線草稿，請保持此視窗開啟並重試儲存。"); }
   };
+  const putItems = (next: CircuitChangeItem[]) => { itemsRef.current = next; setItems(next); };
+  const upsertItem = (next: CircuitChangeItem) => putItems(itemsRef.current.some(row => row.id === next.id)
+    ? itemsRef.current.map(row => row.id === next.id ? summary(next) : row) : [...itemsRef.current, summary(next)]);
+  const clearUploadNotes = () => { uploadFailuresRef.current = []; setUploadFailures([]); setUploadWarnings([]); };
   function install(next: CircuitChangeItem, restore = false) {
     let nextDraft = next.content;
     let restoredConflict = false;
@@ -70,15 +83,34 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
       } catch { /* Ignore unreadable local cache; server data stays authoritative. */ }
     }
     current.current = next; remote.current = next; draftRef.current = nextDraft;
-    draftCacheKey.current = cacheKey(next.id);
+    // A change that was never saved has no row to restore a cached draft onto.
+    draftCacheKey.current = isUnsavedCircuitChange(next) ? "" : cacheKey(next.id);
     selection.current.itemId = next.id;
     setSelectedItemId(next.id); setSelectedItem(next); setDraft(nextDraft); setConflict(restoredConflict); setSaveError("");
     localVersion.current += 1; setEditVersion(localVersion.current);
   }
+  function clearSelection() {
+    current.current = null; remote.current = null; draftRef.current = null; draftCacheKey.current = ""; selection.current.itemId = "";
+    setSelectedItemId(""); setSelectedItem(null); setDraft(null); setEvents([]); setConflict(false);
+  }
+  // A new change lives only on screen until the user types or adds an image; the first save creates its row and its number.
+  function blankItem(): CircuitChangeItem {
+    const now = new Date().toISOString();
+    return { id: crypto.randomUUID(), setId: selection.current.setId, number: Math.max(0, ...itemsRef.current.map(row => row.number)) + 1,
+      content: emptyCircuitChangeContent(userName), status: "draft", revision: 0, createdAt: now, updatedAt: now, createdBy: userId, updatedBy: userId };
+  }
+  // With nothing recorded yet an editor lands on a form that is ready to fill in; a viewer sees an honest empty state instead.
+  function offerBlank() {
+    if (isUnsavedCircuitChange(current.current)) return;
+    if (editAccess.current) { install(blankItem()); setEvents([]); } else clearSelection();
+  }
   async function loadSelected(id: string, captured: string, restore = false) {
     const next = await getCircuitChangeItem(id);
     assertScope(captured);
+    // A save that is still on its way would make this read look like somebody else's edit.
+    if (saveInFlight.current) { await saveInFlight.current.catch(() => {}); assertScope(captured); }
     if (selection.current.itemId && selection.current.itemId !== id) return;
+    if (current.current?.id === id && next.revision < current.current.revision) return;
     if (isDirty() && current.current?.id === id && next.revision !== current.current.revision) {
       remote.current = next; setConflict(true);
     } else if (!isDirty() || current.current?.id !== id) install(next, restore);
@@ -86,67 +118,116 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     assertScope(captured);
     if (selection.current.itemId === id) setEvents(history);
   }
-  async function refresh(force = false) {
-    if (!open || !userId || syncing.current === scope) return;
-    syncing.current = scope;
-    const captured = scope;
+  async function runRefresh(force: boolean, captured: string) {
+    const epoch = selectionEpoch.current;
     try {
       const nextSets = await listCircuitChangeSets(context.seriesId);
       assertScope(captured);
+      // A batch was picked or created while this pass was reading; the pass queued behind it has the current answer.
+      if (selectionEpoch.current !== epoch) return;
       setSets(nextSets); setError("");
       const setId = nextSets.some(row => row.id === selection.current.setId) ? selection.current.setId : nextSets[0]?.id || "";
       selection.current.setId = setId; setSelectedSetId(setId);
-      if (!setId) { setItems([]); return; }
+      if (!setId) { putItems([]); fingerprint.current = ""; if (!isDirty()) offerBlank(); return; }
       const nextFingerprint = `${setId}:${nextSets.find(row => row.id === setId)?.updatedAt}`;
       if (!force && fingerprint.current === nextFingerprint) return;
       const nextItems = await listCircuitChangeItems(setId);
       assertScope(captured);
-      if (selection.current.setId !== setId) return;
-      fingerprint.current = nextFingerprint; setItems(nextItems);
+      if (selectionEpoch.current !== epoch || selection.current.setId !== setId) return;
+      // Changes are never deleted, so a list without the saved change on screen is older than that change: wait for a newer one.
+      const shown = current.current;
+      if (shown && !isUnsavedCircuitChange(shown) && shown.setId === setId && !nextItems.some(row => row.id === shown.id)) return;
+      fingerprint.current = nextFingerprint; putItems(nextItems);
+      // The unsaved change stays on screen; it is not in the list yet, so nothing here may select another row over it.
+      if (isUnsavedCircuitChange(current.current)) return;
       const id = nextItems.some(row => row.id === selection.current.itemId) ? selection.current.itemId : nextItems[0]?.id || "";
-      if (!id) {
-        if (!isDirty()) { current.current = null; draftRef.current = null; selection.current.itemId = ""; setSelectedItemId(""); setSelectedItem(null); setDraft(null); setEvents([]); }
-        return;
-      }
+      if (!id) { if (!isDirty()) offerBlank(); return; }
       const meta = nextItems.find(row => row.id === id)!;
       if (force || current.current?.id !== id || current.current.revision !== meta.revision) {
         selection.current.itemId = id; await loadSelected(id, captured, current.current?.id !== id);
       }
     } catch (failure) { if (scopeRef.current === captured) setError(message(failure)); }
-    finally { if (syncing.current === captured) syncing.current = ""; if (scopeRef.current === captured) setLoading(false); }
+    finally { if (scopeRef.current === captured) setLoading(false); }
+  }
+  // One pass at a time. A background poll is simply skipped while another pass runs, but a pass the user asked for
+  // (pick a batch, create one, reload) waits for the running one and then reads again, so its result is never dropped.
+  async function refresh(force = false): Promise<void> {
+    if (!open || !userId) return;
+    const captured = scope;
+    for (let running = refreshRun.current; running && running.scope === captured; running = refreshRun.current) {
+      if (!force) return;
+      await running.promise;
+      if (scopeRef.current !== captured) return;
+      if (refreshRun.current === running) refreshRun.current = null;
+    }
+    const promise = runRefresh(force, captured);
+    const run = { scope: captured, promise };
+    refreshRun.current = run;
+    try { await promise; } finally { if (refreshRun.current === run) refreshRun.current = null; }
   }
   function updateDraft(patch: Partial<CircuitChangeContent>) {
-    if (!canEdit || !draftRef.current) return;
+    // While another change is loading the form still shows the previous one; typing must not land on it.
+    if (!canEdit || !draftRef.current || !current.current || selection.current.itemId !== current.current.id) return;
     draftRef.current = { ...draftRef.current, ...patch };
     localVersion.current += 1; setEditVersion(localVersion.current); setDraft(draftRef.current); setSaveError("");
   }
-  async function saveDraft() {
+  // The first save of a board without any batch creates one named after the version on screen.
+  function ensureSet(captured: string): Promise<string> {
+    if (selection.current.setId) return Promise.resolve(selection.current.setId);
+    if (!creatingSet.current) {
+      const naming = defaultCircuitChangeSet(context.versionLabel);
+      const promise = createCircuitChangeSet(context, naming.title, naming.fromLabel, naming.toLabel).then(next => {
+        assertScope(captured, true);
+        if (!selection.current.setId) {
+          selectionEpoch.current += 1; selection.current.setId = next.id; fingerprint.current = "";
+          setSelectedSetId(next.id); setSets(rows => [next, ...rows.filter(row => row.id !== next.id)]);
+        }
+        return selection.current.setId;
+      });
+      creatingSet.current = promise;
+      promise.catch(() => {}).then(() => { if (creatingSet.current === promise) creatingSet.current = null; });
+    }
+    return creatingSet.current;
+  }
+  // `create` writes an unsaved change even when it is still empty: its row has to exist before images can be stored under it.
+  async function saveDraft(create = false) {
     const captured = scope;
     assertScope(captured, true);
     if (saveInFlight.current) await saveInFlight.current;
     assertScope(captured, true);
-    if (!isDirty()) return;
+    const unsaved = isUnsavedCircuitChange(current.current);
+    if (!isDirty() && !(create && unsaved)) return;
     if (conflict) throw new CircuitChangeConflictError();
     const target = current.current, value = draftRef.current, version = localVersion.current;
     if (!target || !value) return;
     const promise = (async () => {
       setSaving(true); setSaveError(""); cacheDraft();
-      try {
-        const next = await saveCircuitChangeItem(target.setId, target.id, target.revision, value);
-        assertScope(captured, true);
-        current.current = next; setSelectedItem(next); setItems(rows => rows.map(row => row.id === next.id ? summary(next) : row));
+      const adopt = (next: CircuitChangeItem) => {
+        selectionEpoch.current += 1;
+        current.current = next; setSelectedItem(next); upsertItem(next);
+        if (unsaved) { remote.current = next; draftCacheKey.current = cacheKey(next.id); }
         if (version === localVersion.current) { draftRef.current = next.content; setDraft(next.content); clearCache(next.id); }
+      };
+      try {
+        const setId = unsaved ? await ensureSet(captured) : target.setId;
+        assertScope(captured, true);
+        const next = await saveCircuitChangeItem(setId, target.id, target.revision, value);
+        assertScope(captured, true);
+        adopt(next);
         const history = await listCircuitChangeEvents(next.id);
         assertScope(captured);
         if (selection.current.itemId === next.id) setEvents(history);
       } catch (failure) {
         if (scopeRef.current === captured) {
-          setSaveError(message(failure)); cacheDraft();
           if (failure instanceof CircuitChangeConflictError) {
-            setConflict(true);
             const latest = await getCircuitChangeItem(target.id).catch(() => null);
-            if (scopeRef.current === captured && selection.current.itemId === target.id) remote.current = latest;
+            if (scopeRef.current === captured && selection.current.itemId === target.id) {
+              // The earlier request did reach the server and only its answer was lost: nothing differs, so nothing is in conflict.
+              if (latest && stable(latest.content) === stable(value)) { adopt(latest); remote.current = latest; return; }
+              remote.current = latest; setConflict(true);
+            }
           }
+          setSaveError(message(failure)); cacheDraft();
         }
         throw failure;
       } finally { if (scopeRef.current === captured) setSaving(false); }
@@ -164,45 +245,57 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   async function selectItem(id: string) {
     if (id === selection.current.itemId) return;
     await finishDraft();
-    selection.current.itemId = id; setSelectedItemId(id); setLoading(true); setUploadFailures([]); uploadFailuresRef.current = [];
-    try { await loadSelected(id, scope, true); } finally { setLoading(false); }
+    const captured = scope;
+    selection.current.itemId = id; setSelectedItemId(id); setSwitching(true); clearUploadNotes();
+    try { await loadSelected(id, captured, true); }
+    catch (failure) {
+      // The change could not be read: stay on the one that is still on screen instead of pointing at a row that never opened.
+      if (scopeRef.current === captured && selection.current.itemId === id) { selection.current.itemId = current.current?.id || ""; setSelectedItemId(selection.current.itemId); }
+      throw failure;
+    } finally { if (scopeRef.current === captured) setSwitching(false); }
   }
   async function selectSet(id: string) {
     if (id === selection.current.setId) return;
     await finishDraft();
-    selection.current = { setId: id, itemId: "" }; current.current = null; draftRef.current = null;
-    setSelectedSetId(id); setSelectedItemId(""); setSelectedItem(null); setDraft(null); setEvents([]); fingerprint.current = "";
+    selectionEpoch.current += 1;
+    selection.current = { setId: id, itemId: "" }; clearSelection(); putItems([]); clearUploadNotes();
+    setSelectedSetId(id); fingerprint.current = ""; setLoading(true);
     await refresh(true);
   }
   async function createSet(title: string, fromLabel: string, toLabel: string) {
-    await finishDraft(); assertScope(scope, true);
+    assertScope(scope, true);
+    // A first save that is already on its way has picked its batch; let it land before deciding what moves.
+    if (saveInFlight.current) await saveInFlight.current.catch(() => {});
+    // A change that was never saved belongs to no batch yet, so it moves into the one being created instead of forcing a default batch first.
+    const carried = isUnsavedCircuitChange(current.current) ? current.current : null;
+    if (!carried) await finishDraft();
     const captured = scope, next = await createCircuitChangeSet(context, title, fromLabel, toLabel);
     assertScope(captured, true);
-    selection.current = { setId: next.id, itemId: "" }; current.current = null; draftRef.current = null;
-    setSelectedSetId(next.id); setSelectedItemId(""); setSelectedItem(null); setDraft(null); setEvents([]); fingerprint.current = "";
+    selectionEpoch.current += 1;
+    selection.current = { setId: next.id, itemId: carried && current.current?.id === carried.id ? carried.id : "" };
+    if (!selection.current.itemId) clearSelection();
+    putItems([]); fingerprint.current = "";
+    setSelectedSetId(next.id); setSets(rows => [next, ...rows.filter(row => row.id !== next.id)]);
     await refresh(true);
   }
-  async function newItem(ignoreUploads = false) {
-    await finishDraft(ignoreUploads); assertScope(scope, true);
-    if (!selection.current.setId) throw new Error("請先建立或選取修改批次。");
-    const captured = scope;
-    const next = await saveCircuitChangeItem(selection.current.setId, crypto.randomUUID(), 0, emptyCircuitChangeContent(userName));
-    assertScope(captured, true);
-    install(next); setItems(rows => [...rows, summary(next)]);
-    const history = await listCircuitChangeEvents(next.id); assertScope(captured); setEvents(history);
-    return next;
+  async function startItem() {
+    await finishDraft(); assertScope(scope, true);
+    if (isUnsavedCircuitChange(current.current)) return;
+    install(blankItem()); setEvents([]); clearUploadNotes();
   }
   async function review(action: Parameters<CircuitChangesModel["review"]>[0], note = "") {
     await finishDraft(); assertScope(scope, true);
     if (!current.current) throw new Error("請先選取修改項目。");
+    if (isUnsavedCircuitChange(current.current)) throw new Error("請先填寫修改內容。");
     const captured = scope, target = current.current, version = localVersion.current;
     setSaving(true);
     try {
       const next = await actOnCircuitChangeItem(target.id, target.revision, action, note);
       assertScope(captured, true);
+      selectionEpoch.current += 1;
       if (version === localVersion.current) install(next);
       else { current.current = next; remote.current = next; setSelectedItem(next); }
-      setItems(rows => rows.map(row => row.id === next.id ? summary(next) : row));
+      upsertItem(next);
       const history = await listCircuitChangeEvents(next.id); assertScope(captured); setEvents(history);
     } catch (failure) {
       if (scopeRef.current === captured) { setSaveError(message(failure)); if (failure instanceof CircuitChangeConflictError) setConflict(true); }
@@ -210,10 +303,22 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     } finally { if (scopeRef.current === captured) setSaving(false); }
   }
   async function performUpload(files: File[], side: CircuitImageSide, releaseReservation: () => void) {
-    assertScope(scope, true);
-    if (!current.current) await newItem(true);
-    const target = current.current!;
     const captured = scope;
+    assertScope(captured, true);
+    if (!current.current) { install(blankItem()); setEvents([]); }
+    if (isUnsavedCircuitChange(current.current)) {
+      try { await saveDraft(true); }
+      catch (failure) {
+        // Nothing was uploaded yet; keep the files so "retry" can pick them up once the change itself can be saved.
+        if (scopeRef.current === captured) {
+          releaseReservation();
+          uploadFailuresRef.current = [...uploadFailuresRef.current, ...files.map(file => ({ file, error: message(failure), side }))];
+          setUploadFailures(uploadFailuresRef.current);
+        }
+        throw failure;
+      }
+    }
+    const target = current.current!;
     uploadSide.current = side; setUploadProgress({ completed: 0, total: files.length });
     try {
       const result = await uploadCircuitImages({ setId: target.setId, itemId: target.id, actorId: userId, files, side,
@@ -237,7 +342,8 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     const releaseReservation = () => { if (!released && scopeRef.current === captured) { reservedUploads.current -= files.length; released = true; } };
     const queued = uploadQueue.current.catch(() => {}).then(async () => {
       assertScope(captured, true);
-      if (selection.current.setId !== setId || (itemId && selection.current.itemId !== itemId)) throw new Error("已切換修改項目，已停止舊的圖片批次。");
+      // A board without a batch gets one from the first batch of images, so only an existing batch can have "changed".
+      if ((setId && selection.current.setId !== setId) || (itemId && selection.current.itemId !== itemId)) throw new Error("已切換修改項目，已停止舊的圖片批次。");
       await performUpload(files, side, releaseReservation);
     });
     uploadQueue.current = queued;
@@ -245,7 +351,8 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     finally { if (scopeRef.current === captured) { releaseReservation(); pendingUploads.current -= files.length; if (pendingUploads.current === 0) setUploading(false); } }
   }
   async function retryUploads() {
-    const failed = uploadFailuresRef.current;
+    // A file that was refused for what it is (not an image, too large) would only fail again.
+    const failed = uploadFailuresRef.current.filter(failure => !failure.permanent);
     assertScope(scope, true);
     if ((draftRef.current?.images.length || 0) + reservedUploads.current + failed.length > 200) throw new Error("圖片總數超過200張，失敗項目仍保留；請先調整目前圖片。");
     uploadFailuresRef.current = []; setUploadFailures([]);
@@ -268,9 +375,10 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
       // This explicit choice keeps the user's content while adopting the latest CAS token.
       const saved = await saveCircuitChangeItem(next.setId, next.id, next.revision, value);
       assertScope(captured, true);
+      selectionEpoch.current += 1;
       current.current = saved; remote.current = saved; setSelectedItem(saved); setConflict(false); setSaveError("");
       if (version === localVersion.current) { draftRef.current = saved.content; setDraft(saved.content); clearCache(saved.id); }
-      setItems(rows => rows.map(row => row.id === saved.id ? summary(saved) : row));
+      upsertItem(saved);
       const history = await listCircuitChangeEvents(saved.id); assertScope(captured); setEvents(history);
     } catch (failure) {
       if (scopeRef.current === captured) { setSaveError(message(failure)); if (failure instanceof CircuitChangeConflictError) setConflict(true); }
@@ -284,11 +392,12 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   const actions = useRef({ refresh, saveDraft, cacheDraft }); actions.current = { refresh, saveDraft, cacheDraft };
   useEffect(() => {
     actions.current.cacheDraft();
-    selection.current = { setId: "", itemId: "" }; current.current = null; draftRef.current = null;
+    selection.current = { setId: "", itemId: "" }; current.current = null; draftRef.current = null; itemsRef.current = [];
     draftCacheKey.current = "";
-    remote.current = null; fingerprint.current = ""; syncing.current = ""; saveInFlight.current = null;
+    remote.current = null; fingerprint.current = ""; refreshRun.current = null; saveInFlight.current = null; creatingSet.current = null;
     setSets([]); setItems([]); setSelectedSetId(""); setSelectedItemId(""); setSelectedItem(null); setDraft(null); setEvents([]);
-    setError(""); setSaveError(""); setConflict(false); setSaving(false); setUploading(false); setUploadFailures([]); uploadFailuresRef.current = [];
+    setError(""); setSaveError(""); setConflict(false); setSaving(false); setUploading(false); setSwitching(false);
+    setUploadFailures([]); uploadFailuresRef.current = []; setUploadWarnings([]);
     uploadQueue.current = Promise.resolve(); pendingUploads.current = 0; reservedUploads.current = 0;
     if (!open || !userId) return;
     setLoading(true); void actions.current.refresh(true);
@@ -314,8 +423,8 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     window.addEventListener("beforeunload", beforeLeave);
     return () => { actions.current.cacheDraft(); scopeRef.current += ":unmounted"; window.removeEventListener("beforeunload", beforeLeave); };
   }, []);
-  return { sets, selectedSetId, items, selectedItemId, selectedItem, draft, events, loading, saving, uploading, dirty, conflict,
-    error, saveError, uploadProgress, uploadFailures, uploadWarnings, selectSet, selectItem, createSet, createItem: async () => { await newItem(); }, updateDraft, saveDraft, review, addImages,
-    retryUploads, reload: () => refresh(true), adoptRemote, saveMyRevision,
-    loadEvent: getCircuitChangeEvent };
+  return { sets, selectedSetId, items, selectedItemId, selectedItem, draft, events, loading, saving, uploading, switching, dirty, conflict,
+    error, saveError, uploadProgress, uploadFailures, uploadWarnings, selectSet, selectItem, createSet, createItem: startItem, updateDraft,
+    saveDraft: () => saveDraft(), review, addImages, retryUploads, dismissUploadFailures: clearUploadNotes,
+    reload: () => refresh(true), adoptRemote, saveMyRevision, loadEvent: getCircuitChangeEvent };
 }

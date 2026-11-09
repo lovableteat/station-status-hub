@@ -203,3 +203,197 @@ test("review completion cannot replace text typed while its request is pending",
     assert.equal(view.model.saving, false);
   } finally { view.unmount(); }
 });
+
+// A second fixture whose batches and changes start empty and are created through the hook, the way a first-time user does it.
+async function openBoard({ sets = [], records = [], canEdit = true } = {}) {
+  const window = browser();
+  const calls = { sets: 0, createSet: [], saves: [], uploads: [], reads: [] };
+  const gates = { sets: null, items: null, item: null };
+  class Conflict extends Error { constructor() { super("remote revision changed"); } }
+  let saveResult, uploadResult, latest, root;
+  const stamp = () => String(calls.saves.length + calls.createSet.length);
+  const storage = {
+    CircuitChangeConflictError: Conflict,
+    listCircuitChangeSets: async () => { calls.sets++; const gate = gates.sets; gates.sets = null; return gate ? gate.promise : clone(sets); },
+    createCircuitChangeSet: async (context, title, fromLabel, toLabel) => {
+      const next = { id: `00000000-0000-4000-8000-00000000000${sets.length + 1}`, seriesId: context.seriesId, workspaceId: context.workspaceId, projectId: null, title, fromLabel, toLabel, createdAt: `2026-11-0${9 - sets.length}`, updatedAt: stamp(), createdBy: "qa-A" };
+      calls.createSet.push({ title, fromLabel, toLabel }); sets.unshift(next); return clone(next);
+    },
+    listCircuitChangeItems: async setId => {
+      const gate = gates.items; gates.items = null; if (gate) return gate.promise;
+      return records.filter(row => row.setId === setId).map(row => ({ ...clone(row), imageCount: row.content.images.length, content: { ...clone(row.content), images: [] } }));
+    },
+    getCircuitChangeItem: async id => { calls.reads.push(id); const gate = gates.item; gates.item = null; if (gate) await gate.promise; return clone(records.find(row => row.id === id)); },
+    listCircuitChangeEvents: async () => [], getCircuitChangeEvent: async () => { throw new Error("No history fixture"); },
+    subscribeCircuitChanges: () => () => {},
+    actOnCircuitChangeItem: async () => { throw new Error("Not used"); },
+    saveCircuitChangeItem: async (setId, id, revision, content) => {
+      const args = { setId, id, revision, content: clone(content) }; calls.saves.push(args);
+      if (saveResult) return saveResult(args);
+      const old = records.find(row => row.id === id);
+      const next = { id, setId, number: old?.number || records.filter(row => row.setId === setId).length + 1, content: clone(content), status: "draft", revision: revision + 1, createdAt: "2026-11-09T00:00:00Z", updatedAt: `rev-${revision + 1}`, createdBy: "qa-A", updatedBy: "qa-A" };
+      if (old) records[records.indexOf(old)] = next; else records.push(next);
+      const set = sets.find(row => row.id === setId); if (set) set.updatedAt = stamp();
+      return clone(next);
+    },
+  };
+  const load = loader({ window, mocks: { "./storage": storage, "./files": { uploadCircuitImages: async args => { calls.uploads.push(args); return uploadResult ? uploadResult(args) : { images: [], failures: [] }; } } }, globals: { Error, localStorage: window.localStorage } });
+  const { useCircuitChanges } = load("src/components/circuit-changes/useCircuitChanges.ts");
+  const props = { open: true, context: { seriesId: "A", workspaceId: "bom-A", workspaceName: "QA board", versionLabel: "V1" }, canEdit, userId: "qa-A", userName: "QA" };
+  function Probe(value) { latest = useCircuitChanges(value); return null; }
+  const settle = (delay = 0) => act(async () => { await new Promise(resolve => setTimeout(resolve, delay)); });
+  await act(async () => { root = create(React.createElement(Probe, props)); });
+  await settle();
+  return { get model() { return latest; }, window, sets, records, calls, gates, Conflict, settle, setSave: fn => { saveResult = fn; }, setUpload: fn => { uploadResult = fn; }, unmount: () => act(() => root.unmount()) };
+}
+const change = (id, setId, number, title) => ({ id, setId, number, content: { title, reason: "", description: "", refs: "", net: "", page: "", owner: "QA", images: [] }, status: "draft", revision: 1, createdAt: "2026-11-09T00:00:00Z", updatedAt: "rev-1", createdBy: "qa-A", updatedBy: "qa-A" });
+const batch = (id, title) => ({ id, seriesId: "A", workspaceId: "bom-A", projectId: null, title, fromLabel: "V1", toLabel: "V2", createdAt: "2026-11-01", updatedAt: "0", createdBy: "qa-A" });
+const OLD_SET = "00000000-0000-4000-8000-0000000000aa";
+
+test("a board with nothing recorded opens on a ready form and writes nothing until the first input", async () => {
+  const view = await openBoard();
+  try {
+    assert.equal(view.model.selectedItem.revision, 0, "the form is there without pressing anything");
+    assert.equal(view.model.selectedItem.content.owner, "QA");
+    assert.equal(view.model.dirty, false); assert.equal(view.model.sets.length, 0);
+    await act(async () => view.model.createItem());
+    await act(async () => view.model.createItem());
+    assert.equal(view.calls.createSet.length + view.calls.saves.length, 0, "opening or pressing 新增修改 on an empty form leaves no record behind");
+    const blank = view.model.selectedItem.id;
+    act(() => view.model.updateDraft({ title: "R2301 改 4.7K" }));
+    await act(async () => view.model.saveDraft());
+    assert.equal(view.calls.createSet.length, 1);
+    assert.equal(view.calls.createSet[0].title, "V1 → V2 線路修改"); assert.equal(view.calls.createSet[0].fromLabel, "V1"); assert.equal(view.calls.createSet[0].toLabel, "V2");
+    assert.equal(view.calls.saves.length, 1); assert.equal(view.calls.saves[0].revision, 0); assert.equal(view.calls.saves[0].id, blank);
+    assert.equal(view.calls.saves[0].setId, view.sets[0].id, "the change is written into the batch that was just created");
+    assert.equal(view.model.selectedItem.revision, 1); assert.equal(view.model.selectedItem.number, 1);
+    assert.equal(view.model.selectedSetId, view.sets[0].id); assert.equal(view.model.sets.length, 1);
+    assert.equal(view.model.items.length, 1); assert.equal(view.model.dirty, false);
+    // The next blank form is discarded when the user walks away from it untouched.
+    await act(async () => view.model.createItem());
+    assert.equal(view.model.selectedItem.revision, 0); assert.equal(view.model.selectedItem.number, 2);
+    await act(async () => view.model.selectItem(blank));
+    assert.equal(view.model.selectedItem.id, blank); assert.equal(view.calls.saves.length, 1); assert.equal(view.records.length, 1);
+  } finally { view.unmount(); }
+});
+
+test("a background read keeps the unsaved form on screen, and a viewer is not given one", async () => {
+  const view = await openBoard({ sets: [batch(OLD_SET, "Rev B")], records: [change("item-1", OLD_SET, 1, "First")] });
+  try {
+    assert.equal(view.model.selectedItem.id, "item-1");
+    await act(async () => view.model.createItem());
+    const blank = view.model.selectedItem.id;
+    view.sets[0].updatedAt = "someone else saved";
+    await act(async () => view.model.reload());
+    assert.equal(view.model.selectedItem.id, blank, "the list refresh must not pull the user back to the first row");
+    assert.equal(view.model.selectedItem.revision, 0);
+  } finally { view.unmount(); }
+  const viewer = await openBoard({ canEdit: false });
+  try { assert.equal(viewer.model.selectedItem, null); assert.equal(viewer.model.draft, null); } finally { viewer.unmount(); }
+});
+
+test("typing while another change is loading cannot land on the one still on screen", async () => {
+  const view = await openBoard({ sets: [batch(OLD_SET, "Rev B")], records: [change("item-1", OLD_SET, 1, "First"), change("item-2", OLD_SET, 2, "Second")] });
+  try {
+    const gate = deferred();
+    view.gates.item = gate;
+    let switching;
+    await act(async () => { switching = view.model.selectItem("item-2"); await Promise.resolve(); });
+    assert.equal(view.model.switching, true); assert.equal(view.model.selectedItem.id, "item-1");
+    act(() => view.model.updateDraft({ title: "typed too early" }));
+    assert.equal(view.model.draft.title, "First"); assert.equal(view.model.dirty, false);
+    await act(async () => { gate.resolve(); await switching; });
+    assert.equal(view.model.switching, false); assert.equal(view.model.selectedItem.id, "item-2"); assert.equal(view.model.draft.title, "Second");
+    assert.equal(view.calls.saves.length, 0, "nothing was written to the previous change");
+  } finally { view.unmount(); }
+});
+
+test("a batch created while a background read is in flight stays selected", async () => {
+  const view = await openBoard({ sets: [batch(OLD_SET, "Rev B")], records: [change("item-1", OLD_SET, 1, "First")] });
+  try {
+    const stale = deferred(), before = clone(view.sets);
+    view.gates.sets = stale;
+    view.window.dispatchEvent(new Event("focus"));
+    await view.settle(260);
+    assert.equal(view.gates.sets, null, "the background read is on its way");
+    let creating;
+    await act(async () => { creating = view.model.createSet("第二次調整", "V2", "V3"); await Promise.resolve(); });
+    await act(async () => { stale.resolve(before); await creating; });
+    assert.equal(view.sets[0].title, "第二次調整");
+    assert.equal(view.model.selectedSetId, view.sets[0].id, "the answer that predates the new batch must not put the old batch back");
+    assert.equal(view.model.sets.length, 2); assert.equal(view.model.items.length, 0);
+    assert.equal(view.model.selectedItem.revision, 0, "the new batch opens on a form ready to fill in");
+  } finally { view.unmount(); }
+});
+
+test("pictures added to an unsaved change create it first, in the batch it ends up in", async () => {
+  const view = await openBoard();
+  try {
+    const blank = view.model.selectedItem.id;
+    view.setUpload(args => ({ images: args.files.map(file => ({ id: file.name, name: file.name, side: args.side })), failures: [] }));
+    await act(async () => view.model.addImages([{ name: "before.png" }], "before"));
+    assert.equal(view.calls.createSet.length, 1);
+    assert.equal(view.calls.saves[0].revision, 0); assert.equal(view.calls.saves[0].content.images.length, 0, "the row exists before anything is stored under it");
+    assert.equal(view.calls.uploads[0].itemId, blank); assert.equal(view.calls.uploads[0].setId, view.sets[0].id);
+    assert.equal(view.calls.saves[1].revision, 1); assert.equal(view.calls.saves[1].content.images[0].id, "before.png");
+    assert.equal(view.model.draft.images.length, 1); assert.equal(view.model.uploading, false); assert.equal(view.model.dirty, false);
+    await act(async () => view.model.addImages([{ name: "after.png" }], "after"));
+    assert.equal(view.model.draft.images.length, 2); assert.equal(view.calls.createSet.length, 1);
+  } finally { view.unmount(); }
+});
+
+test("two pastes into an empty board both arrive, although the batch only exists after the first", async () => {
+  const view = await openBoard();
+  try {
+    view.setUpload(args => ({ images: args.files.map(file => ({ id: file.name, name: file.name, side: args.side })), failures: [] }));
+    await act(async () => { await Promise.all([view.model.addImages([{ name: "one.png" }], "before"), view.model.addImages([{ name: "two.png" }], "after")]); });
+    assert.equal(view.calls.createSet.length, 1);
+    assert.equal(view.model.draft.images.map(image => image.id).join(), "one.png,two.png");
+    assert.equal(view.model.uploading, false); assert.equal(view.model.saveError, "");
+  } finally { view.unmount(); }
+});
+
+test("a refused file is not retried, and a save whose answer was lost is not reported as a conflict", async () => {
+  const view = await openBoard({ sets: [batch(OLD_SET, "Rev B")], records: [change("item-1", OLD_SET, 1, "First")] });
+  try {
+    view.setUpload(args => ({ images: [], failures: args.files.map(file => ({ file, error: file.name.endsWith(".pdf") ? "不是可用的圖片" : "network", ...(file.name.endsWith(".pdf") ? { permanent: true } : {}) })) }));
+    await act(async () => view.model.addImages([{ name: "a.pdf" }, { name: "b.png" }], "after"));
+    assert.equal(view.model.uploadFailures.length, 2);
+    view.setUpload(args => ({ images: args.files.map(file => ({ id: file.name, name: file.name, side: args.side })), failures: [] }));
+    await act(async () => view.model.retryUploads());
+    assert.equal(view.calls.uploads.at(-1).files.map(file => file.name).join(), "b.png");
+    assert.equal(view.model.uploadFailures.length, 0);
+    // The write reached the server but its answer did not: the retry is refused as stale although nobody else edited.
+    act(() => view.model.updateDraft({ reason: "Keep this reason" }));
+    view.setSave(async args => { view.records[0] = { ...view.records[0], revision: args.revision + 1, content: Object.fromEntries(Object.entries(args.content).reverse()) }; throw new view.Conflict(); });
+    await act(async () => view.model.saveDraft());
+    assert.equal(view.model.conflict, false); assert.equal(view.model.saveError, "");
+    assert.equal(view.model.selectedItem.revision, view.records[0].revision); assert.equal(view.model.dirty, false);
+    assert.equal(view.model.draft.reason, "Keep this reason");
+  } finally { view.unmount(); }
+});
+
+test("a list that was read before the first save landed cannot blank the form or drop the new change", async () => {
+  const view = await openBoard();
+  try {
+    const held = deferred(), stale = deferred();
+    view.setSave(args => held.promise.then(() => { view.setSave(null); const next = { id: args.id, setId: args.setId, number: 1, content: clone(args.content), status: "draft", revision: 1, createdAt: "2026-11-09T00:00:00Z", updatedAt: "rev-1", createdBy: "qa-A", updatedBy: "qa-A" }; view.records.push(next); return clone(next); }));
+    act(() => view.model.updateDraft({ title: "第一項" }));
+    let saving;
+    await act(async () => { saving = view.model.saveDraft(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    assert.equal(view.calls.createSet.length, 1); assert.equal(view.calls.saves.length, 1, "the batch exists and the change is on its way");
+    // A background read starts now: it sees the new batch, and its list of changes is read before the change is stored.
+    view.gates.items = stale;
+    view.window.dispatchEvent(new Event("focus"));
+    await view.settle(260);
+    assert.equal(view.gates.items, null, "the list read is waiting");
+    await act(async () => { held.resolve(); await saving; });
+    assert.equal(view.model.selectedItem.revision, 1); assert.equal(view.model.items.length, 1);
+    await act(async () => { stale.resolve([]); await new Promise(resolve => setTimeout(resolve, 0)); });
+    assert.equal(view.model.selectedItem.revision, 1, "the saved change stays on screen");
+    assert.equal(view.model.draft.title, "第一項");
+    assert.equal(view.model.items.length, 1, "and stays in the list");
+    await act(async () => view.model.reload());
+    assert.equal(view.model.items.length, 1); assert.equal(view.model.selectedItem.id, view.records[0].id);
+  } finally { view.unmount(); }
+});

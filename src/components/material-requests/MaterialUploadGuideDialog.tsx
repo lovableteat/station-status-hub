@@ -98,8 +98,8 @@ export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpe
             <aside className="material-guide-note"><strong>原進度會保留</strong><p>辨識只協助填標題，原完成狀態與備註保留；空白辨識不蓋舊標題，較短 PDF 保留後面既有頁面。特殊掃描或沒有可辨識 Title 的圖面，請先檢查截圖與結果。</p></aside>
           </>}
           {chapter === "circuit" && <>
-            <p className="material-guide-lead">用「線路修改」取代分散的 Excel、文字與截圖。每次改版建一個批次，每一處改動各建一項，方便工程師更新與主管逐項 Review。</p>
-            <ol className="material-guide-steps"><li><strong>建立改版批次</strong><p>按「開始新增修改」或「新增批次」，填批次名稱與前後版次，例如 V1 → V2。</p></li><li><strong>新增修改與大量貼圖</strong><p>按「新增修改」，填標題、原因、說明與 Ref／Net／頁碼。選「修改前／修改後／補充圖」，再貼上、多選或拖入圖片；每項最多 200 張、每張 50 MB，加入時會追加，不需壓縮。</p></li><li><strong>標示位置並保存</strong><p>點圖放大，用「位置標記」或「框選」補上說明，原圖保留。停打約 0.8 秒會自動儲存，也可按「儲存修改」；失敗圖片可重試。</p></li><li><strong>逐項送出 Review</strong><p>按「送出 Review」。有料號申請編輯權限的人皆可「確認」或填寫原因後「退回補充」。修改已確認內容會保留原紀錄，建立需要重新 Review 的修訂。</p></li><li><strong>查看歷史與匯出</strong><p>「歷史」可回查操作者、時間、意見及舊修訂。「匯出 Change List」匯出目前篩選的全部項目、Review 歷史及標註預覽；要匯出整批，先清除篩選。</p></li></ol>
+            <p className="material-guide-lead">用「線路修改」取代分散的 Excel、文字與截圖。打開就能直接記錄，每一處改動各一項，方便工程師更新與主管逐項 Review。</p>
+            <ol className="material-guide-steps"><li><strong>直接開始記錄</strong><p>打開「線路修改」就是可以填寫的表單：填標題、Ref／Net／頁碼、原因與說明，輸入後自動建立並儲存；下一項按左上的「新增修改」。還沒輸入內容的新修改不會留下紀錄。沒有批次時會自動建立，例如「V1 → V2 線路修改」；要自訂名稱與版次，先按「新增批次」。</p></li><li><strong>貼上修改前後的圖</strong><p>截圖後按 Ctrl+V，圖會加到標示「貼上會加到這裡」的那一格；點另一格切換，或把檔案直接拖到要放的那一格，也可多選上傳。每項最多 200 張、每張 50 MB，加入時會追加，不需壓縮；移除的圖片可立即復原。</p></li><li><strong>標示位置並保存</strong><p>點圖放大，用「位置標記」或「框選」連續標出改動並補上說明，原圖保留；放錯格可在放大視窗改「圖片用途」。停打約 0.8 秒會自動儲存，也可按「儲存修改」；失敗圖片可重試。</p></li><li><strong>逐項送出 Review</strong><p>標題加上修改說明（或修改後圖片）齊全後，按「送出 Review」。有料號申請編輯權限的人皆可「確認」或填寫原因後「退回補充」，退回原因會顯示在該項目最上方。修改已確認內容會保留原紀錄，建立需要重新 Review 的修訂。</p></li><li><strong>查看歷史與匯出</strong><p>「歷史」可回查操作者、時間、意見及舊修訂。「匯出 Change List」匯出目前篩選的全部項目、Review 歷史及標註預覽；要匯出整批，先清除篩選。</p></li></ol>
             <p className="material-guide-note">Excel 圖片是可攜式標註預覽；原圖與舊修訂留在網站，可另行下載原圖。Change List 不等同整個改版批次的原檔離線封存。</p>
           </>}
           {chapter === "roles" && <>
