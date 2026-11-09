@@ -1,16 +1,20 @@
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, toast } from "sonner"
+import { useIsCompactLayout } from "@/hooks/use-mobile"
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+  // Phones and tablets place toasts above the dock (index.css), so the list is anchored at the bottom there.
+  // A top-anchored list given a bottom offset stretches across the page and swallows every tap while a toast shows.
+  const compact = useIsCompactLayout()
 
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
-      className="toaster group !right-5 !top-[calc(env(safe-area-inset-top)+5rem)] max-sm:!left-2 max-sm:!right-2 max-sm:!w-auto max-sm:!top-[max(6px,env(safe-area-inset-top))]"
-      position="top-right"
+      className="toaster group lg:!right-5 lg:!top-[calc(env(safe-area-inset-top)+5rem)]"
+      position={compact ? "bottom-right" : "top-right"}
       offset={20}
       toastOptions={{
         classNames: {

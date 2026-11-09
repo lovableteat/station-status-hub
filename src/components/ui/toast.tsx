@@ -14,8 +14,10 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     data-ui="toast-viewport"
+    // The desktop placement starts at lg: up to 1023px index.css puts the viewport above the dock, and a top offset
+    // surviving there would stretch it into an invisible column that swallows taps while a toast shows.
     className={cn(
-      "fixed left-2 right-auto top-[max(6px,env(safe-area-inset-top))] z-[100] flex max-h-[calc(100dvh-1rem)] w-[min(250px,calc(100%-7.5rem))] flex-col p-0 sm:left-auto sm:right-0 sm:top-[calc(env(safe-area-inset-top)+5rem)] sm:max-h-[calc(100dvh-5.5rem)] sm:w-full sm:max-w-[420px] sm:p-4",
+      "fixed left-2 right-auto top-[max(6px,env(safe-area-inset-top))] z-[100] flex max-h-[calc(100dvh-1rem)] w-[min(250px,calc(100%-7.5rem))] flex-col p-0 lg:left-auto lg:right-0 lg:top-[calc(env(safe-area-inset-top)+5rem)] lg:max-h-[calc(100dvh-5.5rem)] lg:w-full lg:max-w-[420px] lg:p-4",
       className
     )}
     {...props}

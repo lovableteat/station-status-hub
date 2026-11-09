@@ -2523,12 +2523,18 @@ body {
 
 /* ===== Mobile shell: feedback placement and shared phone components (2026-11-04) ===== */
 @media (max-width: 1023px) {
-  /* Toasts sit above the dock instead of over the header; the AI page adds its composer height. */
+  /* Toasts sit above the dock instead of over the header; the AI page adds its composer height.
+     sonner is anchored at the bottom on these widths (ui/sonner.tsx). Never give the toaster a top and a bottom offset
+     together: it stretches into an invisible layer that blocks the page. */
   [data-ui='toast-viewport'] { top: auto; bottom: calc(var(--mobile-shell-bottom) + 12px); left: 16px; right: 16px; width: auto; max-height: 50dvh; }
   [data-sonner-toaster] { top: auto !important; bottom: calc(var(--mobile-shell-bottom) + 12px) !important; left: 16px !important; right: 16px !important; width: auto !important; }
   [data-sonner-toaster] [data-sonner-toast] { width: 100% !important; }
   body:has([data-ai-chat-shell]) [data-ui='toast-viewport'] { bottom: calc(var(--mobile-shell-bottom) + 72px); }
   body:has([data-ai-chat-shell]) [data-sonner-toaster] { bottom: calc(var(--mobile-shell-bottom) + 72px) !important; }
+  /* Queued attachments make the composer taller and the keyboard lifts it; toasts follow it instead of covering it. */
+  body:has([data-ai-composer-attachments]) :is([data-ui='toast-viewport'], [data-sonner-toaster]) { bottom: calc(var(--mobile-shell-bottom) + 132px) !important; }
+  body:has([data-ai-chat-keyboard]) :is([data-ui='toast-viewport'], [data-sonner-toaster]) { bottom: calc(var(--ai-dialog-visible-bottom, 0px) + 72px) !important; }
+  body:has([data-ai-chat-keyboard]):has([data-ai-composer-attachments]) :is([data-ui='toast-viewport'], [data-sonner-toaster]) { bottom: calc(var(--ai-dialog-visible-bottom, 0px) + 132px) !important; }
 
   [data-ui="drawer"][data-mobile-more-sheet="true"] {
     width: min(100%, 35rem);
