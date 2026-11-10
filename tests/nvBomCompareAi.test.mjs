@@ -59,8 +59,13 @@ test("every NV choice sends its own model with the original key id through mappi
   const service = load({ transport: async call => {
     calls.push(call);
     const body = JSON.parse(call.init.body), input = requestInput(call);
-    if (call.provider === "gemini") assert.ok(call.url.includes(`/models/${call.model}:generateContent`));
-    else assert.equal(body.model, call.model);
+    if (call.provider === "gemini") {
+      assert.ok(call.url.includes(`/models/${call.model}:generateContent`));
+      assert.equal(body.generationConfig?.responseMimeType, "application/json", "Gemini mapping and review both require JSON mode");
+    } else {
+      assert.equal(body.model, call.model);
+      assert.equal(body.generationConfig, undefined, "Gemini options must not leak into other provider formats");
+    }
     return response(call.provider, input.items ? { items: input.items.map(item => ({ id: item.id, action: `核對 ${item.kind}`, note: "來源列核對" })) } : { before: mapping, after: mapping, warnings: [] });
   } });
   const models = await service.loadNvBomModels();
@@ -79,4 +84,22 @@ test("every NV choice sends its own model with the original key id through mappi
     assert.ok(result.diff.changes.every(item => item.advice && item.aiNote));
     assert.equal(result.diff.changes.find(item => item.kind === "added").after.partNumber, "003");
   }
+});
+
+test("malformed Gemini review remains an explicit failure and retains the computed difference table", async () => {
+  const calls = [], partial = [];
+  const service = load({ transport: async call => {
+    calls.push(call);
+    if (!requestInput(call).items) return response("gemini", { before: mapping, after: mapping, warnings: [] });
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "I reviewed the changes, but this response is not JSON." }] }, finishReason: "STOP" }] }), { status: 200 });
+  } });
+  const model = (await service.loadNvBomModels()).find(item => item.record.permissions.metadata.model === "gemini-3.5-flash-lite");
+  assert.ok(model);
+  await assert.rejects(service.runNvBomComparison({ before, after, model, signal: new AbortController().signal, onProgress() {}, onResult: value => partial.push(value) }), /AI 沒有回傳可讀取的完整結果/);
+  assert.equal(calls.length, 2);
+  for (const call of calls) assert.equal(JSON.parse(call.init.body).generationConfig?.responseMimeType, "application/json");
+  assert.equal(partial.length, 1, "the comparison table is published before review, without claiming completion");
+  assert.equal(partial[0].modelId, model.id); assert.equal(partial[0].reviewed, 0);
+  assert.deepEqual(Array.from(partial[0].diff.changes, item => item.kind).sort(), ["added", "changed", "removed"]);
+  assert.ok(partial[0].diff.changes.every(item => !item.advice && !item.aiNote));
 });
