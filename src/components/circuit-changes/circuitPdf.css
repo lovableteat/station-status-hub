@@ -14,6 +14,10 @@
 .circuit-pdf-ink-status { display: flex; flex: none; min-height: 32px; align-items: center; gap: 4px; color: hsl(var(--muted-foreground)); font-size: 12px; white-space: nowrap; }
 .circuit-pdf-panel .circuit-pdf-back { display: none; flex: none; width: 40px; padding: 0; }
 .circuit-pdf-row .circuit-pdf-compare-official[aria-pressed="true"] { border-color: hsl(var(--primary) / .5); background: hsl(var(--primary) / .1); color: hsl(var(--primary)); }
+.circuit-pdf-link-bar { display: flex; flex: none; align-items: center; gap: 8px; padding: 4px 12px; border-bottom: 1px solid hsl(var(--border)); }
+.circuit-pdf-link-bar > span { color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
+.circuit-pdf-link-bar > .circuit-pdf-link-toggle { flex: none; height: 30px; padding-inline: 10px; gap: 5px; font-size: 13px; }
+.circuit-pdf-link-toggle[aria-pressed="true"] { border-color: hsl(var(--primary) / .4); background: hsl(var(--primary) / .12); color: hsl(var(--primary)); }
 .circuit-pdf-page-warning { color: hsl(var(--warning)); font-size: 12px; }
 
 .circuit-pdf-versions { min-width: 0; flex: 0 1 220px; }
@@ -124,12 +128,21 @@
 .circuit-pdf-pages { display: flex; width: max-content; min-width: 100%; align-items: flex-start; justify-content: center; gap: 12px; }
 .circuit-pdf-pages[data-stacked="true"] { flex-direction: column; align-items: center; gap: 16px; }
 .circuit-pdf-page { flex: none; margin: 0; }
+.circuit-pdf-stage[data-compare="true"] { overflow: hidden; }
+.circuit-pdf-pages[data-compare="true"] { display: grid; width: 100%; height: 100%; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+.circuit-pdf-pages[data-compare="true"][data-stacked="true"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.circuit-pdf-pages[data-compare="true"] > .circuit-pdf-page { display: flex; min-width: 0; min-height: 0; flex-direction: column; }
+.circuit-pdf-pages[data-compare="true"] .circuit-pdf-viewport { flex: 1; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scroll-behavior: auto; scrollbar-width: thin; border: 1px solid hsl(var(--border)); background: hsl(var(--background)); }
+.circuit-pdf-viewport:focus-visible { outline: 2px solid hsl(var(--primary) / .6); outline-offset: -2px; }
+.circuit-pdf-stage:not([data-crop="true"]) .circuit-pdf-surface { cursor: grab; }
+.circuit-pdf-stage:not([data-crop="true"]) .circuit-pdf-surface:active { cursor: grabbing; }
+.circuit-pdf-pages[data-compare="true"] .circuit-pdf-unmatched > div { flex: 1; min-height: 0; overflow: auto; }
 .circuit-pdf-page > figcaption { margin-bottom: 6px; color: hsl(var(--muted-foreground)); font-size: 12px; font-variant-numeric: tabular-nums; }
 .circuit-pdf-page[data-pane="compare"] > figcaption { color: hsl(var(--warning)); }
 .circuit-pdf-page[data-pane="active"] > figcaption { color: hsl(var(--primary)); }
 .circuit-pdf-unmatched > div { display: flex; min-height: 220px; flex-direction: column; justify-content: center; gap: 10px; border: 1px dashed hsl(var(--warning) / .4); border-radius: 8px; padding: 20px; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 20px; text-align: center; }
 .circuit-pdf-unmatched strong { color: hsl(var(--warning)); }
-.circuit-pdf-surface { position: relative; min-width: 120px; min-height: 120px; overflow: hidden; background: #ffffff; box-shadow: 0 1px 4px hsl(var(--background) / .8); touch-action: pan-x pan-y; user-select: none; }
+.circuit-pdf-surface { position: relative; min-width: 120px; min-height: 120px; overflow: hidden; background: #ffffff; box-shadow: 0 1px 4px hsl(var(--background) / .8); touch-action: pan-x pan-y; user-select: none; transition-property: none; }
 .circuit-pdf-stage[data-crop="true"] .circuit-pdf-surface { cursor: crosshair; touch-action: none; }
 .circuit-pdf-surface[data-rendering="true"] > canvas { opacity: .6; }
 .circuit-pdf-surface > canvas { display: block; }
@@ -165,6 +178,7 @@
 @media (max-width: 1023px) {
   .circuit-pdf-panel { flex: 1; border-right: 0; }
   .circuit-pdf-panel .circuit-pdf-back { display: inline-flex; width: 44px; height: 44px; }
+  .circuit-pdf-link-bar > .circuit-pdf-link-toggle { height: 44px; }
   .circuit-pdf-empty-heading { display: flex; flex: none; align-items: center; gap: 4px; padding: 6px 12px; border-bottom: 1px solid hsl(var(--border)); font-size: 16px; }
   .circuit-pdf-toolbar { padding: 4px 8px; }
   .circuit-pdf-row { gap: 6px; }

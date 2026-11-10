@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Crop, Eraser, FileUp, Hand, Minus, MoveHorizontal, Pencil, PenLine, Plus, RotateCcw, ShieldCheck, Trash2, Undo2, Upload, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Crop, Eraser, FileUp, Hand, Link2, Minus, MoveHorizontal, Pencil, PenLine, Plus, RotateCcw, ShieldCheck, Trash2, Undo2, Unlink, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   circuitPdfCaption, circuitPdfImageName, circuitPdfPageState, circuitPdfProgress, circuitPdfVersionLabel, normalizeCropRect,
@@ -12,6 +12,7 @@ import type { CircuitPdfModel } from "./useCircuitPdfs";
 import type { CircuitPdfInkModel } from "./useCircuitPdfInk";
 import type { CircuitPdfInkStroke } from "./circuitPdfInk";
 import { CircuitPdfInkLayer, type CircuitPdfTool } from "./CircuitPdfInkLayer";
+import { useLinkedPdfViews } from "./useLinkedPdfViews";
 import "./circuitPdf.css";
 
 export interface CircuitPdfCapture { side: CircuitImageSide; file: File; source: CircuitImageSource; caption: string; page: number }
@@ -24,8 +25,7 @@ const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5, 3, 4];
 const isPdf = (file: File) => /\.pdf$/i.test(file.name) || /pdf/i.test(file.type);
 const carriesFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
 const finePointer = () => window.matchMedia?.("(pointer: fine)").matches ?? true;
-// Two sheets side by side only when each still gets a readable width; otherwise 修改前 sits above 修改後 at full width,
-// so scrolling sideways shows the same area of both dates.
+// Narrow layouts keep both independently scrollable sheets visible, one above the other.
 const SIDE_BY_SIDE_MIN = 900;
 
 /**
@@ -41,7 +41,6 @@ export function CircuitPdfPanel({ pdfs, ink, canEdit, captureBlocked, targetLabe
   const { active, compare, official, documents, registry, page } = pdfs;
   const [zoom, setZoom] = useState<number | "fit">("fit");
   const [fitScale, setFitScale] = useState(1);
-  const [pageWidth, setPageWidth] = useState(1190);
   const [tool, setTool] = useState<CircuitPdfTool>(() => finePointer() ? "crop" : "pan");
   const [inkPane, setInkPane] = useState<Pane>("active");
   const cropMode = tool === "crop";
@@ -59,9 +58,14 @@ export function CircuitPdfPanel({ pdfs, ink, canEdit, captureBlocked, targetLabe
   const [pageInput, setPageInput] = useState(String(page));
   const [dropping, setDropping] = useState(false);
   const [stacked, setStacked] = useState(true);
+  const sizing = useRef({ stacked, fitScale });
+  sizing.current = { stacked, fitScale };
   const fileInput = useRef<HTMLInputElement>(null);
   const localInput = useRef<HTMLInputElement>(null);
   const stage = useRef<HTMLDivElement>(null);
+  const activeViewport = useRef<HTMLDivElement>(null);
+  const compareViewport = useRef<HTMLDivElement>(null);
+  const linkedViews = useLinkedPdfViews({ activeViewport, compareViewport, resetKey: `${active?.id}:${page}:${compare?.id}:${pdfs.comparePage}` });
   const versions = useRef<HTMLDivElement>(null);
   const versionClose = useRef<HTMLButtonElement>(null);
   const scale = zoom === "fit" ? fitScale : zoom;
@@ -113,15 +117,29 @@ export function CircuitPdfPanel({ pdfs, ink, canEdit, captureBlocked, targetLabe
       const size = await circuitPdfPageSize(pdf, Math.min(page, pdf.numPages)).catch(() => null);
       if (!current || !size) return;
       const sideBySide = Boolean(compare) && element.clientWidth >= SIDE_BY_SIDE_MIN;
-      setPageWidth(size.width);
-      setStacked(!sideBySide);
       const panes = sideBySide ? 2 : 1, available = (element.clientWidth - 24 - (panes - 1) * 12) / panes;
-      setFitScale(Math.max(0.1, Math.min(4, available / size.width)));
+      const nextScale = Math.max(0.1, Math.min(4, available / size.width));
+      if (sizing.current.stacked !== !sideBySide || sizing.current.fitScale !== nextScale) {
+        linkedViews.beforeResize();
+        setStacked(!sideBySide);
+        setFitScale(nextScale);
+      }
     };
     const observer = new ResizeObserver(entries => { const next = Math.round(entries[0].contentRect.width); if (next !== width) { width = next; void measure(); } });
     observer.observe(element);
     return () => { current = false; observer.disconnect(); };
-  }, [pdfs.activePdf, active, compare, page]);
+  }, [pdfs.activePdf, active?.id, compare?.id, page]);
+  const layoutKey = `${stacked}:${fitScale}`;
+  const previousLayout = useRef(layoutKey);
+  useLayoutEffect(() => {
+    const changed = previousLayout.current !== layoutKey;
+    previousLayout.current = layoutKey;
+    // At a fixed zoom, resizing the panes does not redraw the PDF or change its canvas size.
+    if (changed && zoom !== "fit") {
+      linkedViews.afterResize("active");
+      linkedViews.afterResize("compare");
+    }
+  }, [layoutKey, zoom, linkedViews.afterResize]);
   // Ctrl + wheel zooms the page instead of the browser.
   useEffect(() => {
     const element = stage.current;
@@ -129,11 +147,17 @@ export function CircuitPdfPanel({ pdfs, ink, canEdit, captureBlocked, targetLabe
     const wheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
-      setZoom(current => step(current === "fit" ? fitScale : current, event.deltaY < 0 ? 1 : -1));
+      changeZoom(step(scale, event.deltaY < 0 ? 1 : -1));
     };
     element.addEventListener("wheel", wheel, { passive: false });
     return () => element.removeEventListener("wheel", wheel);
-  }, [fitScale]);
+  }, [fitScale, zoom]);
+
+  function changeZoom(value: number | "fit") {
+    const nextScale = value === "fit" ? fitScale : value;
+    if (nextScale !== scale) linkedViews.beforeResize();
+    setZoom(value);
+  }
 
   function step(value: number, direction: 1 | -1) {
     const index = ZOOM_STEPS.findIndex(entry => entry >= value - 0.001);
@@ -290,10 +314,10 @@ export function CircuitPdfPanel({ pdfs, ink, canEdit, captureBlocked, targetLabe
           <Button type="button" variant="ghost" aria-label="下一頁" title="下一頁（→）" disabled={page >= active.pages} onClick={() => pdfs.goTo(page + 1)}><ChevronRight aria-hidden="true" /></Button>
         </div></div>
         <div className="circuit-pdf-tool-group" data-group="zoom"><div className="circuit-pdf-zoom" role="group" aria-label="縮放">
-          <Button type="button" variant="ghost" aria-label="縮小" onClick={() => setZoom(step(scale, -1))}><Minus aria-hidden="true" /></Button>
+          <Button type="button" variant="ghost" aria-label="縮小" onClick={() => changeZoom(step(scale, -1))}><Minus aria-hidden="true" /></Button>
           <span aria-live="polite">{Math.round(scale * 100)}%</span>
-          <Button type="button" variant="ghost" aria-label="放大" onClick={() => setZoom(step(scale, 1))}><Plus aria-hidden="true" /></Button>
-          <Button type="button" variant={zoom === "fit" ? "secondary" : "ghost"} aria-label="符合寬度" title="符合寬度" aria-pressed={zoom === "fit"} onClick={() => setZoom("fit")}><MoveHorizontal aria-hidden="true" /></Button>
+          <Button type="button" variant="ghost" aria-label="放大" onClick={() => changeZoom(step(scale, 1))}><Plus aria-hidden="true" /></Button>
+          <Button type="button" variant={zoom === "fit" ? "secondary" : "ghost"} aria-label="符合寬度" title="符合寬度" aria-pressed={zoom === "fit"} onClick={() => changeZoom("fit")}><MoveHorizontal aria-hidden="true" /></Button>
         </div></div></>}
         {compareChoices.length > 0 && <div className="circuit-pdf-tool-group" data-group="compare">
           {official && active?.id !== official.id && <Button type="button" variant="outline" className="circuit-pdf-compare-official" aria-label="對照官方基準" title="開啟／關閉官方基準對照" aria-pressed={compare?.id === official.id} onClick={() => compare?.id === official.id ? pdfs.setCompare("") : pdfs.compareOfficial()}><ShieldCheck aria-hidden="true" /></Button>}
@@ -330,20 +354,29 @@ export function CircuitPdfPanel({ pdfs, ink, canEdit, captureBlocked, targetLabe
       {finish("circuit-pdf-finish circuit-pdf-finish-toolbar")}
     </div>}
     {message && !versionsOpen && <p className="circuit-pdf-message" role="alert"><span>{message}</span><Button type="button" variant="ghost" aria-label="關閉訊息" onClick={() => { setFailure(""); pdfs.clearError(); }}><X aria-hidden="true" /></Button></p>}
-    <div ref={stage} className="circuit-pdf-stage" tabIndex={0} aria-label={active ? `${circuitPdfVersionLabel(active)} 第 ${page} 頁` : "PDF 頁面"} data-crop={cropMode}>
+    {compare && <div className="circuit-pdf-link-bar">
+      <Button type="button" variant="outline" className="circuit-pdf-link-toggle" aria-label="連動檢視" aria-pressed={linkedViews.linked} disabled={!compareReady}
+        title={linkedViews.linked ? "移動任一圖面，另一邊跟隨。需要重新對齊時，先關閉連動。" : "各自移到對應位置，再開啟連動，即可保留目前對齊位置。"} onClick={linkedViews.toggleLinked}>
+        {linkedViews.linked ? <Link2 aria-hidden="true" /> : <Unlink aria-hidden="true" />}<span>{linkedViews.linked ? "連動中" : "各自移動"}</span>
+      </Button>
+      <span>{linkedViews.linked ? "捲動同步，按住空白鍵拖曳可移動圖面" : "各自對齊後，再開啟連動"}</span>
+    </div>}
+    <div ref={stage} className="circuit-pdf-stage" tabIndex={0} aria-label={active ? `${circuitPdfVersionLabel(active)} 第 ${page} 頁` : "PDF 頁面"} data-crop={cropMode} data-compare={Boolean(compare)}>
       {pdfs.openError ? <div className="circuit-pdf-open-error" role="alert"><p>{pdfs.openError}</p>
         {pdfs.needsLocalFile ? <Button type="button" onClick={() => localInput.current?.click()}>選擇檔案開啟</Button> : <Button type="button" variant="outline" onClick={() => void pdfs.reload()}>重試</Button>}
       </div>
         : !pdfs.activePdf || !active ? <p className="circuit-pdf-loading">{pdfs.opening ? "正在開啟 PDF…" : "選擇一個版本"}</p>
-        : <div className="circuit-pdf-pages" data-stacked={Boolean(compare) && stacked}>
+        : <div className="circuit-pdf-pages" data-compare={Boolean(compare)} data-stacked={Boolean(compare) && stacked}>
           {compare && (pdfs.comparePage ? <PdfPage key={`compare:${compare.id}`} pane="compare" pdf={pdfs.comparePdf} row={compare} page={pdfs.comparePage} scale={scale} heading={`${compare.id === official?.id ? "官方基準" : "自選對照"} · ${circuitPdfVersionLabel(compare)} 第 ${pdfs.comparePage} 頁`}
             tool={canEdit && ink && !ink.loading ? tool : cropMode ? "crop" : "pan"} strokes={ink?.pages[`${compare.id}:${pdfs.comparePage}`] || []}
             onAddInk={points => ink?.add(compare.id, pdfs.comparePage, points)} onRemoveInk={id => ink?.remove(compare.id, pdfs.comparePage, id)} onInkTarget={() => setInkPane("compare")}
-            crops={crops.filter(crop => crop.documentId === compare.id && crop.page === pdfs.comparePage)} selection={selection} cropMode={cropMode} onSelection={setSelection} stage={stage} /> : <figure className="circuit-pdf-page circuit-pdf-unmatched" data-pane="compare" style={{ width: pageWidth * scale }}><figcaption>官方基準 · 尚未對應頁面</figcaption><div role="status"><strong>官方基準沒有對應的第 {page + pdfs.compareOffset} 頁</strong><span>請在「官方對應頁」輸入 1–{compare.pages}，再比對或加入修改前截圖。</span></div></figure>)}
+            crops={crops.filter(crop => crop.documentId === compare.id && crop.page === pdfs.comparePage)} selection={selection} cropMode={cropMode} onSelection={setSelection}
+            stage={compareViewport} viewportRef={compareViewport} onScroll={linkedViews.onCompareScroll} onResize={() => linkedViews.afterResize("compare")} /> : <figure className="circuit-pdf-page circuit-pdf-unmatched" data-pane="compare"><figcaption>官方基準 · 尚未對應頁面</figcaption><div role="status"><strong>官方基準沒有對應的第 {page + pdfs.compareOffset} 頁</strong><span>請在「官方對應頁」輸入 1–{compare.pages}，再比對或加入修改前截圖。</span></div></figure>)}
           <PdfPage key={`active:${active!.id}`} pane="active" pdf={pdfs.activePdf} row={active!} page={page} scale={scale} heading={compare ? `工作版本 · ${circuitPdfVersionLabel(active!)} 第 ${page} 頁` : ""}
             tool={canEdit && ink && !ink.loading ? tool : cropMode ? "crop" : "pan"} strokes={ink?.pages[`${active.id}:${page}`] || []}
             onAddInk={points => ink?.add(active.id, page, points)} onRemoveInk={id => ink?.remove(active.id, page, id)} onInkTarget={() => setInkPane("active")}
-            crops={crops.filter(crop => crop.documentId === active!.id && crop.page === page)} selection={selection} cropMode={cropMode} onSelection={setSelection} stage={stage} />
+            crops={crops.filter(crop => crop.documentId === active!.id && crop.page === page)} selection={selection} cropMode={cropMode} onSelection={setSelection}
+            stage={compare ? activeViewport : stage} viewportRef={activeViewport} onScroll={linkedViews.onActiveScroll} onResize={() => linkedViews.afterResize("active")} />
         </div>}
     </div>
     {active && !selection && !captured && finish("circuit-pdf-finish circuit-pdf-finish-bar")}
@@ -433,10 +466,11 @@ const PageStrip = memo(function PageStrip({ registry, documentId, pages, current
   </div>;
 });
 
-function PdfPage({ pane, pdf, row, page, scale, heading, crops, selection, cropMode, tool, strokes, onAddInk, onRemoveInk, onInkTarget, onSelection, stage }: {
+function PdfPage({ pane, pdf, row, page, scale, heading, crops, selection, cropMode, tool, strokes, onAddInk, onRemoveInk, onInkTarget, onSelection, stage, viewportRef, onScroll, onResize }: {
   pane: Pane; pdf: PDFDocumentProxy | null; row: CircuitPdfDocument; page: number; scale: number; heading: string; crops: CircuitPdfCrop[];
   tool: CircuitPdfTool; strokes: CircuitPdfInkStroke[]; onAddInk: (points: CircuitPdfInkStroke["points"]) => void; onRemoveInk: (id: string) => void; onInkTarget: () => void;
   selection: Selection | null; cropMode: boolean; onSelection: (value: Selection | null) => void; stage: RefObject<HTMLDivElement>;
+  viewportRef: RefObject<HTMLDivElement>; onScroll: () => void; onResize: () => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const surface = useRef<HTMLDivElement>(null);
@@ -445,6 +479,10 @@ function PdfPage({ pane, pdf, row, page, scale, heading, crops, selection, cropM
   const [error, setError] = useState("");
   const drag = useRef<{ start: { x: number; y: number }; pan?: { left: number; top: number; x: number; y: number } } | null>(null);
   const space = useRef(false);
+  const resizeCallback = useRef(onResize);
+  resizeCallback.current = onResize;
+  useLayoutEffect(() => { resizeCallback.current(); }, [size]);
+  useLayoutEffect(() => { viewportRef.current?.scrollTo({ left: 0, top: 0 }); }, [pdf, page, viewportRef]);
   useEffect(() => {
     const down = (event: KeyboardEvent) => { if (event.code === "Space" && !(event.target as HTMLElement).closest("input,textarea,select,button")) space.current = true; };
     const up = (event: KeyboardEvent) => { if (event.code === "Space") space.current = false; };
@@ -469,6 +507,7 @@ function PdfPage({ pane, pdf, row, page, scale, heading, crops, selection, cropM
   const shown = selection;
   return <figure className="circuit-pdf-page" data-pane={pane}>
     {heading && <figcaption>{heading}</figcaption>}
+    <div ref={viewportRef} className="circuit-pdf-viewport" role="region" aria-label={pane === "compare" ? "對照版本圖面" : "工作版本圖面"} tabIndex={0} onScroll={onScroll}>
     <div ref={surface} className="circuit-pdf-surface" data-rendering={rendering} style={size ? { width: size.width, height: size.height } : undefined}
       onPointerDown={event => {
         if (event.button === 1 || space.current || !cropMode) {
@@ -495,13 +534,14 @@ function PdfPage({ pane, pdf, row, page, scale, heading, crops, selection, cropM
         const rect = normalizeCropRect(current.start, point(event));
         onSelection(rect ? { pane, rect } : null);
       }}
-      onPointerCancel={() => { drag.current = null; }}>
+      onPointerCancel={() => { drag.current = null; }} onLostPointerCapture={() => { drag.current = null; }}>
       <canvas ref={canvas} aria-label={`${row.name} 第 ${page} 頁`} role="img" />
       {size && !rendering && !error && <CircuitPdfInkLayer key={`${row.id}:${page}:${tool}`} strokes={strokes} width={size.width} height={size.height} tool={tool} space={space}
         label={`${row.name} 第 ${page} 頁`} onAdd={onAddInk} onRemove={onRemoveInk} onTarget={onInkTarget} />}
       {crops.map(crop => <span key={crop.id} className="circuit-pdf-crop" data-side={crop.side} style={box(crop.rect)}><span>{SHORT_SIDE[crop.side]}</span></span>)}
       {shown && <span className="circuit-pdf-selection" data-mirror={shown.pane !== pane} style={box(shown.rect)} />}
       {error && <p className="circuit-pdf-page-error" role="alert">{error}</p>}
+    </div>
     </div>
   </figure>;
 }
