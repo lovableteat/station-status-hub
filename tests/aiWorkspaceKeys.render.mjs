@@ -6,7 +6,7 @@ const require = createRequire(import.meta.url);
 const { React, act, create, child, deferred, browser, database, loader, flush } = require('./support/renderHarness.cjs');
 const key = id => ({ id, key_name: id, api_key: `fixture-${id}`, permissions: { metadata: { provider: 'gemini', model: 'gemini-2.5-flash', baseUrl: 'https://fixture.invalid' } }, is_active: true });
 
-async function fixture(read) {
+async function fixture(read, discover = async () => new Response(JSON.stringify({ data: [] }))) {
   let owner = 'account-a';
   const projects = { activeProjectId: null, allProjects: [] };
   const db = database(query => query.table === 'api_keys' ? read(owner) : { data: [], error: null });
@@ -14,12 +14,14 @@ async function fixture(read) {
     '@/integrations/supabase/client': { supabase: db },
     '@/components/auth/UserContext': { useUser: () => ({ user: { userId: owner } }) },
     '@/components/test-projects/TestProjectProvider': { useTestProject: () => projects },
+    '@/hooks/usePermissions': { usePermissions: () => ({ canViewModule: () => true }) },
     './ApiChatConsole': { ApiChatConsole: child },
+    './aiProviderTransport': { fetchAiProvider: discover },
   } });
   const { ApiChatWorkspacePage } = load('src/components/api-management/ApiChatWorkspacePage.tsx');
   let root;
   await act(async () => { root = create(React.createElement(ApiChatWorkspacePage)); }); await flush();
-  return { db, root, keys: () => Array.from(root.root.find(node => node.type === 'stub' && node.props.availableApiKeys).props.availableApiKeys, item => item.id), account: async id => { owner = id; await act(async () => root.update(React.createElement(ApiChatWorkspacePage))); await flush(); }, unmount: () => act(async () => root.unmount()) };
+  return { db, root, keys: () => Array.from(root.root.find(node => node.type === 'stub' && node.props.availableApiKeys).props.availableApiKeys, item => item.id), targets: () => Array.from(root.root.find(node => node.type === 'stub' && node.props.availableApiKeyTargets).props.availableApiKeyTargets, item => ({ keyId: item.keyId, model: item.model })), account: async id => { owner = id; await act(async () => root.update(React.createElement(ApiChatWorkspacePage))); await flush(); }, unmount: () => act(async () => root.unmount()) };
 }
 
 test('account API key loads cannot apply a late previous-account list', async () => {
@@ -29,6 +31,18 @@ test('account API key loads cannot apply a late previous-account list', async ()
     await f.account('account-b');
     await act(async () => old.resolve({ data: [key('a-key')], error: null })); await flush();
     assert.deepEqual(f.keys(), ['b-key']);
+  } finally { await f.unmount(); }
+});
+
+test('a late previous-account model discovery cannot restore its key or synthetic upgrade', async () => {
+  const old = deferred();
+  const f = await fixture(owner => ({ data: [{ ...key(owner), permissions: { metadata: { provider: 'openai', model: 'gpt-5.4', baseUrl: 'https://api.openai.com/v1' } } }], error: null }),
+    async (_provider, _url, _init, apiKeyId) => apiKeyId === 'account-a' ? old.promise : new Response(JSON.stringify({ data: [{ id: 'gpt-5.4' }] })));
+  try {
+    await f.account('account-b');
+    await act(async () => old.resolve(new Response(JSON.stringify({ data: [{ id: 'gpt-5.4' }, { id: 'gpt-6.1-sol' }] })))); await flush();
+    assert.deepEqual(f.keys(), ['account-b']);
+    assert.deepEqual(f.targets(), [{ keyId: 'account-b', model: 'gpt-5.4' }]);
   } finally { await f.unmount(); }
 });
 

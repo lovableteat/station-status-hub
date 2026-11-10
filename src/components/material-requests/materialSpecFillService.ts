@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { withReadDeadline } from "@/lib/readDeadline";
-import { buildApiKeyModelTargets, buildApiKeyPermissions, normalizeApiKeyPermissions, type ApiKeyRecord } from "../api-management/apiKeyHelpers";
+import { buildApiKeyPermissions, normalizeApiKeyPermissions, type ApiKeyRecord } from "../api-management/apiKeyHelpers";
+import { loadApiKeyModelTargets } from "../api-management/apiKeyModelTargets";
 import { GEMINI_FREE_MODEL_PROFILES, buildProviderChatRequest, parseProviderChatResponse, redactSensitiveText, resolveAiProviderPreset, type ProviderChatMessage } from "../api-management/aiProviderCatalog";
 import { trackedProviderFetch } from "../api-management/aiUsageTelemetry";
 import { classifyAiFailure } from "../api-management/aiRequestRecovery";
@@ -19,17 +20,17 @@ export interface SpecFillInput { id: string; name: string; blob: Blob }
 export async function loadSpecFillModels({ imagesOnly = false }: { imagesOnly?: boolean } = {}): Promise<SpecFillModel[]> {
   const { data, error } = await withReadDeadline(signal => supabase.from("api_keys").select("*").eq("is_active", true).order("created_at", { ascending: false }).abortSignal(signal), 15000);
   if (error) throw new Error("無法讀取已設定的 AI 服務，請確認帳號權限或稍後重試。");
-  return (data ?? []).filter(record => record.is_active && (!record.expires_at || Date.parse(record.expires_at) > Date.now())).flatMap(record => {
+  return (await Promise.all((data ?? []).filter(record => record.is_active && (!record.expires_at || Date.parse(record.expires_at) > Date.now())).map(async record => {
     const { metadata, read, write } = normalizeApiKeyPermissions(record.permissions);
     if (!read || !metadata.provider.trim() || !metadata.model.trim() || !metadata.baseUrl.trim()) return [];
     // PDF tools send rendered images; native SPEC documents retain their PDF protocol restriction.
     if (!imagesOnly && resolveAiProviderPreset(metadata.provider).id === "openai-compatible") return [];
-    if (imagesOnly) return buildApiKeyModelTargets([record], [metadata.model, ...GEMINI_FREE_MODEL_PROFILES.map(item => item.id)]).map(target => ({
+    if (imagesOnly) return (await loadApiKeyModelTargets([record], [metadata.model, ...GEMINI_FREE_MODEL_PROFILES.map(item => item.id)])).map(target => ({
       id: target.model === metadata.model ? record.id : target.id, label: `${record.key_name} · ${target.model}`,
       record: target.model === metadata.model ? record : { ...record, permissions: buildApiKeyPermissions({ read, write, metadata: { ...metadata, model: target.model } }, record.permissions) },
     }));
     return [{ id: record.id, label: `${record.key_name} · ${metadata.model}`, record }];
-  });
+  }))).flat();
 }
 
 export async function downloadSpecForFill(document: MaterialSpecDocument, signal: AbortSignal): Promise<Blob> {

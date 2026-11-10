@@ -11,11 +11,12 @@ import { ApiChatConsole } from "./ApiChatConsole";
 import { GEMINI_FREE_MODEL_PROFILES } from "./aiProviderCatalog";
 import {
   ApiKeyRecord,
-  buildApiKeyModelTargets,
+  type ApiKeyModelTarget,
   normalizeApiKeyPermissions,
   OPENAI_ON_DEMAND_MODEL,
   OPENAI_STANDARD_CHAT_MODEL,
 } from "./apiKeyHelpers";
+import { loadApiKeyModelTargets } from "./apiKeyModelTargets";
 
 function looksLikeImageModel(model?: string | null) {
   return /image|nano banana/i.test(model ?? "");
@@ -52,12 +53,14 @@ export function ApiChatWorkspacePage() {
   const { canViewModule } = usePermissions();
   const { activeProjectId, allProjects } = useTestProject();
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
+  const [apiKeyTargets, setApiKeyTargets] = useState<ApiKeyModelTarget[]>([]);
   const [selectedApiKeyTargetId, setSelectedApiKeyTargetId] = useState<null | string>(null);
 
   useEffect(() => {
     let mounted = true;
     let loadVersion = 0;
     setApiKeys([]);
+    setApiKeyTargets([]);
     setSelectedApiKeyTargetId(null);
     const loadApiKeys = async () => {
       const version = ++loadVersion;
@@ -80,10 +83,17 @@ export function ApiChatWorkspacePage() {
           );
         });
 
-        setApiKeys(sortAvailableApiKeys(availableKeys));
+        const sortedKeys = sortAvailableApiKeys(availableKeys);
+        const targets = await loadApiKeyModelTargets(sortedKeys, GEMINI_FREE_MODEL_PROFILES.map(profile => profile.id));
+        if (!mounted || version !== loadVersion) return;
+        setApiKeys(sortedKeys);
+        setApiKeyTargets(targets);
       } catch (error) {
         console.error("Failed to load API chat keys:", error);
-        if (mounted && version === loadVersion) setApiKeys([]);
+        if (mounted && version === loadVersion) {
+          setApiKeys([]);
+          setApiKeyTargets([]);
+        }
       }
     };
 
@@ -105,15 +115,6 @@ export function ApiChatWorkspacePage() {
       void supabase.removeChannel(channel);
     };
   }, [user?.userId]);
-
-  const apiKeyTargets = useMemo(
-    () =>
-      buildApiKeyModelTargets(
-        apiKeys,
-        GEMINI_FREE_MODEL_PROFILES.map((profile) => profile.id),
-      ),
-    [apiKeys],
-  );
 
   const defaultTarget = apiKeyTargets.find(target =>
     target.model === OPENAI_STANDARD_CHAT_MODEL

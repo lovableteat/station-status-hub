@@ -258,3 +258,47 @@ test('an explicitly selected Sol entitlement rejection stops after one real requ
     assert.equal(requests.length,1,'refilling never sends or charges another request');
   }finally{await act(async()=>f.root.unmount());}
 });
+
+test('desktop Sol rejection returns to the parent-selected GPT-5.4 and refills without resending',async()=>{
+  const key={...record,key_name:'Test OpenAI',permissions:{metadata:{provider:'openai',model:'gpt-5.4',baseUrl:'https://api.openai.com/v1'}}};
+  const openaiTargets=['gpt-5.4','gpt-6.1-sol'].map(model=>target(model,key));
+  const requests=[], errors=[];
+  const fetch=async(url,init)=>{
+    const body=JSON.parse(init.body);requests.push(body);
+    return body.model==='gpt-6.1-sol'
+      ? new Response(JSON.stringify({error:{code:'model_not_found',message:'Project `proj_private` does not have access to model `gpt-6.1-sol`'}}),{status:403})
+      : new Response(JSON.stringify({choices:[{message:{content:'GPT-5.4 recovered answer'}}]}),{status:200});
+  };
+  const win=browser();win.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}});
+  const f=await fixture(fetch,openaiTargets,win,{props:{selectedApiKey:key,selectedModel:'gpt-6.1-sol',selectedApiKeyTargetId:openaiTargets[1].id},mocks:{
+    './aiProviderTransport':{fetchAiProvider:(_provider,url,init)=>fetch(url,init)},
+    'sonner':{toast:{success(){},error:message=>errors.push(message),info(){}}},
+  }});
+  const Console=f.root.root.type, initialProps=f.root.root.props;
+  function Parent(){
+    const [selected,setSelected]=React.useState(openaiTargets[1].id);
+    return React.createElement(Console,{...initialProps,selectedApiKeyTargetId:selected,selectedModel:openaiTargets.find(item=>item.id===selected).model,onSelectApiKeyTarget:setSelected});
+  }
+  try{
+    await act(async()=>f.root.update(React.createElement(Parent)));await flush();
+    await f.draft('1*1');await act(async()=>f.send().props.onClick());await flush();
+    assert.deepEqual(requests.map(request=>request.model),['gpt-6.1-sol']);
+    assert.equal(f.root.root.findByType(Console).props.selectedModel,'gpt-5.4');
+    assert.equal(f.root.root.findAll(node=>typeof node.type==='function'&&node.type.name==='ConnectionBanner').length,0,'desktop keeps one inline error rather than a stale Sol banner');
+    assert.deepEqual(errors,[],'ordinary query failure is not repeated in a toast');
+    assert.match(text(f.root),/gpt-6.1-sol.*尚未開通/);
+    assert.match(text(f.root),/重新提問會使用上方目前選擇的模型/);
+    const reuse=f.root.root.find(node=>node.type==='stub'&&node.props['aria-label']==='重填這個問題');
+    assert.match(text(f.root),/重填問題/);
+    await act(async()=>reuse.props.onClick());
+    assert.equal(f.root.root.find(node=>node.props['aria-label']==='輸入查詢內容').props.value,'1*1');
+    assert.equal(requests.length,1,'refill never sends a new provider request');
+    await f.draft('保留我修改後的問題');
+    assert.equal(f.root.root.find(node=>node.type==='stub'&&node.props['aria-label']==='重填這個問題').props.disabled,true);
+    await f.draft('1*1');await act(async()=>f.send().props.onClick());await flush();
+    assert.deepEqual(requests.map(request=>request.model),['gpt-6.1-sol','gpt-5.4']);
+    assert.doesNotMatch(JSON.stringify(requests[1].messages),/API 呼叫失敗|尚未開通|單次使用已/);
+    assert.match(text(f.root),/GPT-5.4 recovered answer/);
+    assert.equal(f.root.root.findAll(node=>typeof node.type==='function'&&node.type.name==='ConnectionBanner').length,0);
+  }finally{await act(async()=>f.root.unmount());}
+});

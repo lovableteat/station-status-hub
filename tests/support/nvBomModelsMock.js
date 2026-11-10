@@ -9,7 +9,7 @@ export const records = [
   key('expired','Expired','gemini','qa-expired','https://generativelanguage.googleapis.com/v1beta',{expires_at:'2000-01-01T00:00:00Z'}),
   key('denied','Denied','anthropic','qa-denied','https://api.anthropic.com/v1',{permissions:{read:false,metadata:{provider:'anthropic',model:'qa-denied',baseUrl:'https://api.anthropic.com/v1'}}}),
 ];
-export const qa = window.__nvQA = {requests:[],telemetry:[],reads:[]};
+export const qa = window.__nvQA = {requests:[],telemetry:[],reads:[],discoveries:[]};
 const mapping = {headerRow:1,partNumber:1,mpn:2,manufacturer:3,description:4,qty:5,refs:6};
 const modelKey = model => model.startsWith('gpt-') ? records[0].id : model.startsWith('gemini-') ? records[1].id : model==='qa-claude' ? records[2].id : records[3].id;
 function userInput(body) {
@@ -29,5 +29,5 @@ const resolved = result => ({abortSignal(){return Promise.resolve(result)},then(
 export const supabase = {
   from(table) { qa.reads.push(table);if(table!=='api_keys')throw new Error('Unexpected production table access');const result=resolved({data:records,error:null});for(const method of ['select','eq','order'])result[method]=()=>result;return result; },
   rpc(name,args) { qa.telemetry.push({name,...args});if(!['start_ai_model_usage_attempt','finish_ai_model_usage_attempt'].includes(name))throw new Error('Unexpected database write');return resolved({data:null,error:name==='start_ai_model_usage_attempt'&&args.p_api_key_id!==modelKey(args.p_model)?new Error('Credential identity changed'):null}); },
-  functions:{async invoke(name,{body}) { if(name!=='openai-proxy'||body.operation!=='chat')throw new Error('Unexpected proxy operation');if(body.apiKeyId!==records[0].id)throw new Error('Proxy credential identity changed');const result=await providerReply('openai',body.request.model,body.request,'https://api.openai.com/v1/chat/completions',body.apiKeyId);return {data:result.payload,error:result.status===200?null:new Error('QA 403'),response:new Response(result.status===200?null:JSON.stringify(result.payload),{status:result.status,headers:{'Content-Type':'application/json'}})};}},
+  functions:{async invoke(name,{body}) { if(name!=='openai-proxy'||!['models','chat'].includes(body.operation))throw new Error('Unexpected proxy operation');if(body.apiKeyId!==records[0].id)throw new Error('Proxy credential identity changed');if(body.operation==='models'){qa.discoveries.push(body);return {data:{data:['gpt-5.4','gpt-6.1-sol'].map(id=>({id}))},error:null,response:new Response(null,{status:200})};}const result=await providerReply('openai',body.request.model,body.request,'https://api.openai.com/v1/chat/completions',body.apiKeyId);return {data:result.payload,error:result.status===200?null:new Error('QA 403'),response:new Response(result.status===200?null:JSON.stringify(result.payload),{status:result.status,headers:{'Content-Type':'application/json'}})};}},
 };

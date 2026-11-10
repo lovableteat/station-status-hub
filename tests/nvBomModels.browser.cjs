@@ -12,6 +12,7 @@ async function run(browser,origin,width){
  const page=await context.newPage(),errors=[],report={width,checks:[]};page.setDefaultTimeout(20000);page.on('pageerror',error=>errors.push(error.message));
  try{
   await page.goto(origin);await page.waitForFunction(()=>document.querySelectorAll('.nv-bom-models input').length===7);
+  assert.deepEqual(await page.evaluate(()=>window.__nvQA.discoveries.map(call=>({operation:call.operation,apiKeyId:call.apiKeyId,rawCredentialPresent:!!call.apiKey}))),[{operation:'models',apiKeyId:keyIds[0],rawCredentialPresent:false}]);
   const models=page.getByRole('group',{name:'BOM 比對 AI 服務',exact:true});
   const labels=await models.locator('label').allTextContents();for(const model of expected)assert.ok(labels.some(label=>label.endsWith(model)),model+' is missing');
   assert.match(await page.locator('.nv-bom-model-heading strong').innerText(),/7/);

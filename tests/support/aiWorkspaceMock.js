@@ -58,6 +58,7 @@ function query(run) {
 export const supabase = {
   functions: { async invoke(name, {body}) {
     if (!new URLSearchParams(location.search).has('qaModelError') || name !== 'openai-proxy') throw new Error('Only isolated OpenAI proxy requests are allowed');
+    if (body.operation === 'models') return {data:{data:[{id:'gpt-5.4'},{id:'gpt-6.1-sol'}]},error:null,response:new Response(null,{status:200})};
     const request = body.request;
     window.__aiModelErrorQA.requests.push(structuredClone(request));
     await new Promise(resolve => setTimeout(resolve,100));
