@@ -109,7 +109,7 @@ export async function runCircuitPdfAiReview({ official, working, model, userName
   signal.throwIfAborted();
   const request = buildProviderChatRequest({ provider: metadata.provider, baseUrl: metadata.baseUrl, apiKey: model.record.api_key, model: metadata.model, messages });
   if (Array.isArray(request.body?.messages)) for (const message of request.body.messages as Array<{ content?: Array<{ type?: string; image_url?: { detail?: string } }> }>) for (const part of Array.isArray(message.content) ? message.content : []) if (part.type === "image_url" && part.image_url) part.image_url.detail = "high";
-  const response = await trackedProviderFetch({ apiKeyId: model.id, provider: metadata.provider, model: metadata.model, source: "ai-chat", attemptNumber: 1, url: request.url,
+  const response = await trackedProviderFetch({ apiKeyId: model.record.id, provider: metadata.provider, model: metadata.model, source: "ai-chat", attemptNumber: 1, url: request.url,
     init: { method: request.method, headers: request.headers, body: JSON.stringify(request.body), signal }, timeoutMs: 120000 });
   const payload = await response.json(); signal.throwIfAborted();
   if (!response.ok) throw classifyAiFailure(response.status, payload, response.headers.get("Retry-After"));

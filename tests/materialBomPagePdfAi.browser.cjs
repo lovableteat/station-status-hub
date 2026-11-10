@@ -217,6 +217,51 @@ async function runActualPreview(browser, origin, state, filePath) {
     return{file:path.basename(filePath),physicalPages:count,crops,providerCalls:state.calls.length-before,savedWrites:0,elapsedMs:Date.now()-started};
   }catch(error){await page.screenshot({path:path.join(evidence,'failure-actual-preview.png')}).catch(()=>{});throw error;}finally{await context.close();}
 }
+async function runModelChoices(browser, origin, width, state, pdf) {
+  const context=await browser.newContext({viewport:{width,height:884},isMobile:width<1024,hasTouch:true,reducedMotion:'reduce',locale:'zh-TW'});
+  await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(30000);
+  try {
+    state.mode='ok';state.expectedTitles=[titles[0]];
+    await page.goto(origin+'/?qaMainRows&qaPages&qaAllModels');await page.getByTestId('material-table-card').waitFor();
+    const tracker=await openTracker(page,width),original=await page.evaluate(()=>structuredClone(window.__pdfAiFixture.tracker));
+    const ai=await openAi(tracker,page),choices=ai.getByRole('combobox',{name:'PDF AI 服務',exact:true});
+    const options=await choices.locator('option').evaluateAll(items=>items.map(item=>({value:item.value,label:item.textContent})));
+    assert.equal(options.length,7);assert.equal(new Set(options.map(item=>item.value)).size,options.length);
+    assert.ok(options.some(item=>item.label.includes('gemini-3.8-flash')));
+    assert.ok((await ai.locator('.bom-pdf-model').innerText()).includes('7 個選項'));
+    assert.equal(await ai.locator('.bom-pdf-model > div > svg').isVisible(),true);
+    await choosePdf(ai,pdf,'synthetic-one-page-model-check.pdf',1);
+    const cases=[['pdf-qa-model','openai','gpt-5.4','pdf-qa-model'],['pdf-qa-model::gpt-6.1-sol','openai','gpt-6.1-sol','pdf-qa-model'],
+      ['pdf-qa-gemini','gemini','gemini-2.5-flash','pdf-qa-gemini'],['pdf-qa-anthropic','anthropic','fixture-claude','pdf-qa-anthropic'],
+      ['pdf-qa-openai-compatible','openai-compatible','fixture-custom-vision','pdf-qa-openai-compatible']];
+    const requests=[];
+    for(const [id,provider,model,keyId]of cases){
+      await choices.selectOption(id);assert.equal(await choices.inputValue(),id);const before=state.calls.length;
+      await ai.getByRole('button',{name:'辨識全部頁面',exact:true}).tap();
+      await ai.getByRole('button',{name:'辨識全部頁面',exact:true}).waitFor();
+      await ai.getByRole('button',{name:'套用 1 頁',exact:true}).waitFor();
+      assert.equal(await ai.getByLabel('PDF 第 1 頁標題',{exact:true}).inputValue(),titles[0]);
+      assert.equal(state.calls.length,before+1);const request=state.calls.at(-1);
+      assert.equal(request.provider,provider);assert.equal(request.model,model);assert.equal(request.keyId,keyId);assert.deepEqual(request.pages,[1]);requests.push(request);
+      const usage=await page.evaluate(()=>window.__pdfAiFixture.usage.filter(item=>item.name==='start_ai_model_usage_attempt').at(-1));
+      assert.equal(usage.args.p_api_key_id,keyId);assert.equal(usage.args.p_model,model);
+      assert.deepEqual(await page.evaluate(()=>window.__pdfAiFixture.tracker),original);
+    }
+    await showPane(ai,'截圖預覽');
+    await page.screenshot({path:path.join(evidence,`all-models-${width}.png`)});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+    const frame=await ai.boundingBox();assert.ok(frame.y>=0&&frame.y+frame.height<=885);
+    await ai.getByRole('button',{name:'套用 1 頁',exact:true}).tap();await ai.waitFor({state:'hidden'});
+    assert.equal(await tracker.getByLabel('總頁數',{exact:true}).inputValue(),'4');
+    assert.equal(await tracker.getByRole('textbox',{name:'第 1 頁標題',exact:true}).inputValue(),titles[0]);
+    assert.equal(await tracker.getByRole('textbox',{name:'第 4 頁標題',exact:true}).inputValue(),original.pages[3].title);
+    assert.deepEqual(await page.evaluate(()=>window.__pdfAiFixture.tracker),original);
+    await tracker.getByRole('button',{name:'關閉',exact:true}).tap();await tracker.getByRole('button',{name:'不儲存，直接關閉',exact:true}).tap();await tracker.waitFor({state:'hidden'});
+    assert.deepEqual(await page.evaluate(()=>window.__pdfAiFixture.tracker),original);assert.equal(await page.evaluate(()=>window.__pdfAiFixture.saves),0);assert.deepEqual(errors,[]);
+    return{width,result:'passed',options,requests,checks:['all configured providers and extra chat models visible','visible count and dropdown arrow','real file chooser and one-page PDF render','OpenAI/Gemini/Claude/custom image requests','selected extra model retains original key identity','parsed result applies only to draft; close returns without saved changes','dialog fits viewport']};
+  }catch(error){await page.screenshot({path:path.join(evidence,`failure-models-${width}.png`)}).catch(()=>{});throw error;}finally{await context.close();}
+}
 (async () => {
   const { createServer } = await import('vite'), mock = path.resolve('tests/support/materialBomPagePdfAiMock.js');
   const state = { mode: 'ok', expectedTitles: titles, calls: [] }, timers = new Set(), report = { result: 'running', checks: [] }; let server, browser;
@@ -226,30 +271,35 @@ async function runActualPreview(browser, origin, state, filePath) {
       { find: /^\.\/(materialBomStorage|useMaterialBomPresence|materialRequestAudit)$/, replacement: mock }, { find: '@', replacement: path.resolve('src') },
     ] }, worker: { format: 'es' }, optimizeDeps: { entries: ['tests/support/materialWorkspaceFixture.jsx'], include: ['react/jsx-dev-runtime', 'pdfjs-dist'] }, server: { host: '127.0.0.1', port: 0, fs: { allow: [process.cwd(), evidence, fs.realpathSync('node_modules')] } }, plugins: [{
       name: 'pdf-ai-test-transport', enforce: 'pre', resolveId(source, importer) { if (source === './aiProviderTransport' && importer?.replaceAll('\\', '/').endsWith('/api-management/aiUsageTelemetry.ts')) return '\0pdf-ai-test-transport'; },
-      load(id) { if (id === '\0pdf-ai-test-transport') return 'export const fetchAiProvider = async (_provider,_url,init) => fetch("/__qa/provider",init);'; },
+      load(id) { if (id === '\0pdf-ai-test-transport') return 'export const fetchAiProvider = async (provider,url,init,keyId) => fetch("/__qa/provider",{...init,headers:{...init.headers,"x-qa-provider":provider,"x-qa-upstream":url,"x-qa-key-id":keyId||""}});'; },
       configureServer(vite) { vite.middlewares.use(async (req, res, next) => {
         if (req.url?.split('?')[0] === '/') { res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/tests/support/materialWorkspaceFixture.jsx"></script></html>'); return; }
         if (req.url !== '/__qa/provider') return next();
         let raw = ''; for await (const chunk of req) raw += chunk; const payload = JSON.parse(raw);
-        const pages = payload.messages.filter(message => message.role === 'user').map(message => {
-          const text = message.content.find(part => part.type === 'text').text; assert.ok(!text.includes('UPPER LEFT')); assert.ok(!text.includes('NEARBY SCHEMATIC'));
+        const provider=req.headers['x-qa-provider'],keyId=req.headers['x-qa-key-id'],model=payload.model||String(req.headers['x-qa-upstream']).match(/\/models\/([^:]+):generateContent/)[1];
+        const pages = (payload.contents||payload.messages).filter(message => message.role === 'user').map(message => {
+          const parts=message.parts||message.content;
+          const text = parts.find(part => part.text).text; assert.ok(!text.includes('UPPER LEFT')); assert.ok(!text.includes('NEARBY SCHEMATIC'));
           const pageNumber = Number(text.match(/實際 PDF 頁碼：(\d+)/)[1]), title = state.expectedTitles[pageNumber - 1]; assert.ok(title && text.includes(title), text);
-          assert.match(message.content.find(part => part.type === 'image_url').image_url.url, /^data:image\/(?:png|jpeg);base64,/);
+          if(provider==='gemini'){const image=parts.find(part=>part.inlineData).inlineData;assert.match(image.mimeType,/^image\/(?:png|jpeg)$/);assert.ok(image.data.length>1000)}
+          else if(provider==='anthropic'){const image=parts.find(part=>part.type==='image').source;assert.equal(image.type,'base64');assert.match(image.media_type,/^image\/(?:png|jpeg)$/);assert.ok(image.data.length>1000)}
+          else{const image=parts.find(part=>part.type==='image_url').image_url;assert.match(image.url,/^data:image\/(?:png|jpeg);base64,/);assert.equal(image.detail,'high')}
           return { pageNumber, title };
         });
-        state.calls.push({ pages: pages.map(row => row.pageNumber), mode: state.mode }); const mode = state.mode;
-        const respond = () => { if (res.destroyed) return; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ pages: mode === 'partial' ? pages.slice(0, -1) : pages }) } }] })); };
+        state.calls.push({provider,model,keyId,pages: pages.map(row => row.pageNumber), mode: state.mode }); const mode = state.mode;
+        const respond = () => { if (res.destroyed) return;const text=JSON.stringify({pages:mode==='partial'?pages.slice(0,-1):pages});res.setHeader('Content-Type','application/json');res.end(JSON.stringify(provider==='gemini'?{candidates:[{finishReason:'STOP',content:{parts:[{text}]}}]}:provider==='anthropic'?{stop_reason:'end_turn',content:[{type:'text',text}]}:{choices:[{finish_reason:'stop',message:{content:text}}]})); };
         if (mode === 'delay') { const timer = setTimeout(() => { timers.delete(timer); respond(); }, 5000); timers.add(timer); } else respond();
       }); },
     }] });
     await server.listen(); const origin = 'http://127.0.0.1:' + server.httpServer.address().port; browser = await chromium.launch({ channel: 'chrome' });
     const pdf = makePdf(titles), full = makePdf(longTitles); fs.writeFileSync(path.join(evidence, 'synthetic-tiny-titleblock.pdf'), pdf); fs.writeFileSync(path.join(evidence, 'synthetic-full-500-pages.pdf'), full);
-    if(process.env.PDF_AI_ACTUAL_FILE) report.actualPreview=await runActualPreview(browser,origin,state,process.env.PDF_AI_ACTUAL_FILE);
+    if(process.env.PDF_AI_MODELS_ONLY){for(const width of[1543,390])report.checks.push(await runModelChoices(browser,origin,width,state,makePdf([titles[0]])));}
+    else if(process.env.PDF_AI_ACTUAL_FILE) report.actualPreview=await runActualPreview(browser,origin,state,process.env.PDF_AI_ACTUAL_FILE);
     else {
       for (const [width, height] of [[1440, 884], [780, 825], [390, 884], [536, 884]]) report.checks.push(await runRegular(browser, origin, width, height, state, pdf));
       if(!process.env.PDF_AI_SKIP_500) report.full500 = await run500(browser, origin, state, full); else report.full500Skipped='layout-only confirmation; complete500-page result retained in prior browser-report';
     } report.result = 'passed'; report.providerRequests = state.calls;
-    console.log(process.env.PDF_AI_ACTUAL_FILE?'Actual user PDF preview-only flow passed without provider calls':process.env.PDF_AI_SKIP_500?'PDF AI layout-only confirmation passed at1440/780/390/536':'PDF AI layout, file selection, crop and complete500-page browser flows passed');
+    console.log(process.env.PDF_AI_MODELS_ONLY?'PDF AI model choices and four provider image requests passed at1543/390':process.env.PDF_AI_ACTUAL_FILE?'Actual user PDF preview-only flow passed without provider calls':process.env.PDF_AI_SKIP_500?'PDF AI layout-only confirmation passed at1440/780/390/536':'PDF AI layout, file selection, crop and complete500-page browser flows passed');
   } catch (error) { report.result = 'failed'; report.error = error.stack; throw error; }
   finally { report.providerRequests=state.calls; fs.writeFileSync(path.join(evidence, 'browser-report.json'), JSON.stringify(report, null, 2)); for (const timer of timers) clearTimeout(timer); if (browser) await browser.close(); if (server) await server.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

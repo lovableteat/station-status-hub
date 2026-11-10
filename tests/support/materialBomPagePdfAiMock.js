@@ -8,7 +8,7 @@ const initialTracker = { totalPages:4, currentPage:3, updatedAt:'2026-11-09T00:0
   {pageNumber:3,title:'原標題 RESET',status:'pending',note:'第3頁原備註'},
   {pageNumber:4,title:'第4頁必須保留',status:'done',note:'短PDF不能移除這一頁'},
 ] };
-window.__pdfAiFixture = { tracker:structuredClone(initialTracker), saves:0 };
+window.__pdfAiFixture = { tracker:structuredClone(initialTracker), saves:0, usage:[] };
 const decorate = result => ({...result,workspaces:result.workspaces.map(workspace => workspace.id===workspaceId ? {...workspace,pageTracker:structuredClone(window.__pdfAiFixture.tracker)} : workspace)});
 export const loadBomWorkspacesDetailed = async (preferredId,options={}) => decorate(await base.loadBomWorkspacesDetailed(preferredId,{...options,onPreview:options.onPreview ? value=>options.onPreview(decorate(value)) : undefined}));
 export const loadPageTrackerMap = async () => new Map([[workspaceId,structuredClone(window.__pdfAiFixture.tracker)]]);
@@ -17,8 +17,12 @@ export const saveBomWorkspacePageTracker = async (id,tracker) => {
   await base.saveBomWorkspacePageTracker(id,tracker);
 };
 const model = {id:'pdf-qa-model',key_name:'QA Vision',api_key:'qa-no-real-api-key',is_active:true,expires_at:null,permissions:{read:true,write:false,metadata:{provider:'openai',model:'fixture-vision',baseUrl:location.origin+'/__qa',editable:false}},created_at:'2026-11-09T00:00:00Z'};
+const configuredModels = new URLSearchParams(location.search).has('qaAllModels') ? [
+  {...model,permissions:{...model.permissions,metadata:{...model.permissions.metadata,model:'gpt-5.4',baseUrl:'https://api.openai.com/v1'}}},
+  ...[['gemini','gemini-2.5-flash'],['anthropic','fixture-claude'],['openai-compatible','fixture-custom-vision']].map(([provider,name])=>({...model,id:'pdf-qa-'+provider,key_name:'QA '+provider,permissions:{...model.permissions,metadata:{...model.permissions.metadata,provider,model:name}}})),
+] : [model,{...model,id:'pdf-qa-model-2',key_name:'QA Vision 2',permissions:{...model.permissions,metadata:{...model.permissions.metadata,model:'fixture-vision-2'}}}];
 const query = data => ({select(){return this},eq(){return this},order(){return this},abortSignal(){return this},then(resolve,reject){return Promise.resolve({data,error:null}).then(resolve,reject)}});
 export const supabase = {...base.supabase,
-  from(table){return table==='api_keys' ? query([model,{...model,id:'pdf-qa-model-2',key_name:'QA Vision 2',permissions:{...model.permissions,metadata:{...model.permissions.metadata,model:'fixture-vision-2'}}}]) : base.supabase.from(table)},
-  rpc(name,args){return ['start_ai_model_usage_attempt','finish_ai_model_usage_attempt'].includes(name) ? query(null) : base.supabase.rpc(name,args)},
+  from(table){return table==='api_keys' ? query(configuredModels) : base.supabase.from(table)},
+  rpc(name,args){if(['start_ai_model_usage_attempt','finish_ai_model_usage_attempt'].includes(name)){window.__pdfAiFixture.usage.push({name,args});return query(null)}return base.supabase.rpc(name,args)},
 };
