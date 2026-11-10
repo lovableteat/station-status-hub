@@ -31,13 +31,13 @@ async function versionFlow(page,width,report){
  if(baselineOnly){await page.screenshot({path:path.join(evidence,'before-versions-'+width+'.png')});return;}
  await frame(page,center,width);
  if(width>=1024){assert.ok(rows.every(row=>row.height>=44&&row.height<=50),JSON.stringify(rows));
- const upload=await list.getByRole('button',{name:/上傳 BOM/}).boundingBox(),find=await search.boundingBox();assert.ok(Math.abs(upload.y-find.y)<=1,'Upload and search share a row');report.uploadSearch={upload,find};}
+ const upload=await list.getByRole('button',{name:'匯入 BOM 檔案',exact:true}).boundingBox(),find=await search.boundingBox();assert.ok(Math.abs(upload.y-find.y)<=1,'Upload and search share a row');report.uploadSearch={upload,find};}
  const group=list.locator('.bom-project-heading').filter({hasText:'Vera CPU'});await group.click();assert.equal(await group.getAttribute('aria-expanded'),'false');await group.press('Enter');assert.equal(await group.getAttribute('aria-expanded'),'true');
  await search.fill('找不到的系列');await center.getByText('找不到符合條件的 BOM 系列',{exact:true}).waitFor();await search.fill('');
- await list.getByRole('button',{name:/上傳 BOM/}).click();assert.ok(await page.evaluate(()=>window.__bomUiFixture.calls.some(c=>c.name==='uploadNew')));
+ await list.getByRole('button',{name:'匯入 BOM 檔案',exact:true}).click();assert.ok(await page.evaluate(()=>window.__bomUiFixture.calls.some(c=>c.name==='uploadNew')));
  await list.getByRole('button',{name:/超長系列名稱/}).click();await detail.waitFor();if(width<1024){await detail.getByRole('button',{name:'返回清單',exact:true}).click();await list.waitFor();}
  await list.getByRole('button',{name:/Vera_CPU_Rack_E1\.S/}).first().click();await detail.waitFor();
- await detail.getByRole('button',{name:'上傳新版本',exact:true}).click();assert.ok(await page.evaluate(()=>window.__bomUiFixture.calls.some(c=>c.name==='uploadVersion')));
+ await detail.getByRole('button',{name:'上傳此系列新版',exact:true}).click();assert.ok(await page.evaluate(()=>window.__bomUiFixture.calls.some(c=>c.name==='uploadVersion')));
  await detail.getByRole('button',{name:'修改系列名稱',exact:true}).click();await detail.getByRole('textbox',{name:'系列名稱',exact:true}).fill('QA 單行版本管理');await detail.getByRole('button',{name:'儲存名稱',exact:true}).click();await detail.getByRole('heading',{name:'QA 單行版本管理',exact:true}).waitFor();
  const table=detail.getByTestId('bom-version-table'),row=table.locator('tr[data-version-id]').first();
  const cells=await row.locator('td').evaluateAll(cells=>cells.map(cell=>({text:cell.innerText,whiteSpace:getComputedStyle(cell).whiteSpace,height:cell.getBoundingClientRect().height,children:[...cell.children].map(n=>({top:n.getBoundingClientRect().top,bottom:n.getBoundingClientRect().bottom,height:n.getBoundingClientRect().height,display:getComputedStyle(n).display}))})));

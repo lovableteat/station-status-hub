@@ -5,6 +5,7 @@ const path = require('node:path');
 const {createRequire} = require('node:module');
 const {chromium} = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa-tools','package.json'))('playwright');
 const evidence = path.resolve(process.env.BOM_VERSION_UI_EVIDENCE_DIR || '../bom-version-ui-evidence');
+const contextOnly = Boolean(process.env.BOM_VERSION_CONTEXT_ONLY);
 const calls = page => page.evaluate(()=>window.__bomUiFixture.calls);
 async function assertFrame(page, center, width, height) {
   await page.waitForFunction(({width,height})=>{const box=document.querySelector('[data-testid="bom-version-center"]')?.getBoundingClientRect();return box&&box.width>=width-36&&box.height>=height-40&&box.x>=-1&&box.y>=-1;},{width,height});
@@ -15,6 +16,45 @@ async function assertFrame(page, center, width, height) {
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   assert.ok(await center.evaluate(el=>el.scrollWidth<=el.clientWidth+1), 'the dialog must not scroll horizontally; only the version table may');
 }
+async function contextActions(page, center, width, origin) {
+  const list=center.getByTestId('bom-series-list'), detail=center.getByTestId('bom-series-detail');
+  assert.match(await center.locator('.bom-version-project').innerText(), /所選 BOM 專案：Vera CPU/);
+  assert.match(await center.locator('.bom-version-workspace').innerText(), /工作區專案：Carlo-Next-\(GB300\)/);
+  assert.equal(await center.locator('.bom-version-header').getByRole('button',{name:'NV 原始 BOM 比對',exact:true}).count(),0,'NV is no longer in the normal title row');
+  await list.getByRole('button',{name:'匯入 BOM 檔案',exact:true}).click();
+  assert.ok((await calls(page)).some(call=>call.name==='uploadNew'));
+  await list.getByRole('button',{name:/Vera_CPU_Rack_CPU_Module_超長系列名稱/}).click(); await detail.waitFor();
+  const compare=detail.getByRole('button',{name:'比對版本',exact:true}), nv=center.getByTestId('bom-nv-compare-entry');
+  assert.equal(await compare.isEnabled(),false,'The single-version series cannot compare stored versions');
+  assert.equal(await nv.isEnabled(),true,'NV file comparison remains available for a single-version series');
+  const pair={compare:await compare.boundingBox(),nv:await nv.boundingBox()};
+  assert.ok(Math.abs(pair.compare.y-pair.nv.y)<=1 && pair.nv.x>=pair.compare.x+pair.compare.width-1 && pair.nv.x-pair.compare.x-pair.compare.width<=16,JSON.stringify(pair));
+  await detail.getByRole('button',{name:'上傳此系列新版',exact:true}).click();
+  assert.ok((await calls(page)).some(call=>call.name==='uploadVersion'&&call.args[0]==='module'));
+  await nv.click(); await center.getByRole('heading',{name:'NV 原始 BOM 比對',exact:true}).waitFor();
+  await center.getByRole('button',{name:'返回版本管理',exact:true}).waitFor();
+  assert.ok(await center.getByLabel('選擇舊版 NV BOM',{exact:true}).count());
+  assert.ok(await center.getByLabel('選擇新版 NV BOM',{exact:true}).count());
+  await assertFrame(page,center,width,884); await page.screenshot({path:path.join(evidence,`nv-open-${width}.png`)});
+  await center.getByRole('button',{name:'返回版本管理',exact:true}).click(); await detail.waitFor();
+  assert.match(await detail.getByRole('heading',{level:3}).innerText(),/Vera_CPU_Rack_CPU_Module/);
+  assert.equal(await list.getByRole('button',{name:/Vera_CPU_Rack_CPU_Module_超長系列名稱/,includeHidden:true}).getAttribute('aria-current'),'true');
+  await page.screenshot({path:path.join(evidence,`context-${width}.png`)});
+  await page.goto(origin+'/?qaUnassigned=1');await center.waitFor();
+  await center.getByTestId('bom-series-list').getByRole('button',{name:/Vera_CPU_TPM_交付格式/}).click();await detail.waitFor();
+  assert.equal((await center.locator('.bom-version-project').innerText()).trim(),'所選 BOM 專案：未指定專案');
+  assert.match(await center.locator('.bom-version-workspace').innerText(),/工作區專案：Carlo-Next/);
+  await assertFrame(page,center,width,884);await page.screenshot({path:path.join(evidence,`unassigned-${width}.png`)});
+  await page.goto(origin+'/?qaEmpty=1');await center.waitFor();
+  assert.equal(await center.locator('.bom-version-project').count(),0,'No selected BOM project is invented for an empty list');
+  assert.match(await center.locator('.bom-version-workspace').innerText(),/工作區專案：Carlo-Next/);
+  assert.equal(await center.getByTestId('bom-nv-compare-entry').isEnabled(),true);
+  await center.getByTestId('bom-nv-compare-entry').click();await center.getByRole('button',{name:'返回版本管理',exact:true}).waitFor();
+  await center.getByRole('button',{name:'返回版本管理',exact:true}).click();
+  await center.getByRole('heading',{name:'BOM 版本管理',exact:true}).waitFor();await assertFrame(page,center,width,884);
+  await page.screenshot({path:path.join(evidence,`empty-${width}.png`)});
+  return {width,result:'passed',pair,checks:['workspace and selected BOM project distinguished','generic import callback unchanged','selected-series version upload callback unchanged','NV beside version comparison','NV enabled when one-version comparison disabled','real NV panel and return preserve selected series','unassigned project fallback','empty series still opens NV','dialog bounds']};
+}
 async function run(browser, origin, width) {
   const context = await browser.newContext({viewport:{width,height:884},isMobile:width<1024,hasTouch:true,reducedMotion:'reduce',locale:'zh-TW'});
   const page = await context.newPage(), errors=[]; page.on('pageerror',error=>errors.push(error.message)); page.setDefaultTimeout(15000);
@@ -22,11 +62,12 @@ async function run(browser, origin, width) {
   try {
     await page.goto(origin); const center=page.getByTestId('bom-version-center'); await center.waitFor();
     await assertFrame(page,center,width,884);
+    if(contextOnly){const result=await contextActions(page,center,width,origin);assert.deepEqual(errors,[]);return result;}
     const list = center.getByTestId('bom-series-list'), search = list.getByRole('textbox',{name:'搜尋 BOM 系列',exact:true});
     assert.ok(await search.isVisible());
     const active = list.getByRole('button',{name:/Vera_CPU_Rack_E1\.S/}).first();
     const other = list.getByRole('button',{name:/Vera_CPU_Baseboard/}).first();
-    assert.match(await center.locator('.bom-version-project').innerText(), /目前專案：Carlo-Next-\(GB300\)/);
+    assert.match(await center.locator('.bom-version-project').innerText(), /所選 BOM 專案：Vera CPU/);
     const projectGroup = list.locator('.bom-project-heading').filter({hasText:'Vera CPU'});
     await projectGroup.tap();
     assert.equal(await projectGroup.getAttribute('aria-expanded'),'false');
@@ -46,15 +87,15 @@ async function run(browser, origin, width) {
     const archive = center.getByTestId('bom-archive-section').getByRole('button',{name:/已封存/}).first();
     await archive.tap(); await list.getByRole('button',{name:/已封存_工程驗證板/}).waitFor();
     await archive.tap(); assert.equal(await list.getByRole('button',{name:/已封存_工程驗證板/}).count(),0);
-    await list.getByRole('button',{name:/上傳 BOM/}).tap(); assert.ok((await calls(page)).some(call=>call.name==='uploadNew'));
+    await list.getByRole('button',{name:'匯入 BOM 檔案',exact:true}).tap(); assert.ok((await calls(page)).some(call=>call.name==='uploadNew'));
     await list.locator('.bom-series-groups').evaluate(el=>el.scrollTop=0); await page.screenshot({path:path.join(evidence,`series-${width}.png`)});
     await list.getByRole('button',{name:/超長系列名稱/}).tap();
     const detail=center.getByTestId('bom-series-detail'); await detail.waitFor();
     assert.ok((await detail.getByRole('heading',{level:3}).innerText()).includes('超長系列名稱'));
     if(width<1024) { await detail.getByRole('button',{name:'返回清單',exact:true}).tap(); await list.waitFor(); }
     await active.tap(); await detail.waitFor();
-    await detail.getByText('系列所屬專案',{exact:true}).waitFor();
-    await detail.getByRole('button',{name:'上傳新版本',exact:true}).tap(); assert.ok((await calls(page)).some(call=>call.name==='uploadVersion'&&call.args[0]==='rack'));
+    await detail.getByText('此 BOM 所屬專案',{exact:true}).waitFor();
+    await detail.getByRole('button',{name:'上傳此系列新版',exact:true}).tap(); assert.ok((await calls(page)).some(call=>call.name==='uploadVersion'&&call.args[0]==='rack'));
     await detail.getByRole('button',{name:'修改系列名稱',exact:true}).tap(); await detail.getByRole('textbox',{name:'系列名稱',exact:true}).fill('暫存取消名稱');
     await detail.getByRole('button',{name:'取消',exact:true}).tap(); assert.equal((await calls(page)).some(call=>call.name==='rename'),false);
     await detail.getByRole('button',{name:'修改系列名稱',exact:true}).tap(); await detail.getByRole('textbox',{name:'系列名稱',exact:true}).fill('QA 已更新系列名稱');
@@ -75,7 +116,7 @@ async function run(browser, origin, width) {
     const table=detail.getByTestId('bom-version-table'); await table.evaluate(el=>el.parentElement.scrollLeft=0);
     await assertFrame(page,center,width,884); await page.screenshot({path:path.join(evidence,`detail-${width}.png`)});
     await page.setViewportSize({width,height:500}); await page.waitForFunction(()=>{const box=document.querySelector('[data-testid="bom-version-center"]').getBoundingClientRect();return box.height<=innerHeight&&box.y>=0;}); await assertFrame(page,center,width,500);
-    await detail.getByRole('button',{name:'上傳新版本',exact:true}).scrollIntoViewIfNeeded(); await detail.getByRole('button',{name:'上傳新版本',exact:true}).tap();
+    await detail.getByRole('button',{name:'上傳此系列新版',exact:true}).scrollIntoViewIfNeeded(); await detail.getByRole('button',{name:'上傳此系列新版',exact:true}).tap();
     if(width<1024) {
       const tableSize=await detail.locator('.bom-version-table-scroll').evaluate(el=>({height:el.clientHeight,basis:getComputedStyle(el).flexBasis}));
       assert.ok(tableSize.height>=180,JSON.stringify(tableSize)); assert.equal(tableSize.basis,'200px');
@@ -99,10 +140,10 @@ async function run(browser, origin, width) {
   fs.mkdirSync(evidence,{recursive:true}); const {createServer}=await import('vite'); let server,browser;
   const report={result:'running',checks:[]};
   try {
-    server=await createServer({configFile:false,root:process.cwd(),cacheDir:path.join(evidence,'.vite'),resolve:{alias:{'@':path.resolve('src')}},optimizeDeps:{entries:['tests/support/bomVersionUiFixture.jsx'],include:['react/jsx-dev-runtime']},server:{host:'127.0.0.1',port:0},plugins:[{name:'bom-ui-local-fixture',configureServer(vite){vite.middlewares.use((req,res,next)=>{if(req.url?.split('?')[0]!=='/')return next();res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/tests/support/bomVersionUiFixture.jsx"></script></html>');});}}]});
+    server=await createServer({configFile:false,root:process.cwd(),cacheDir:path.join(evidence,'.vite'),resolve:{alias:{'@':path.resolve('src')}},optimizeDeps:{entries:['tests/support/bomVersionUiFixture.jsx'],include:['react/jsx-dev-runtime']},server:{host:'127.0.0.1',port:0},plugins:[{name:'nv-models-local-fixture',enforce:'pre',resolveId(source,importer){if(source==='./nvBomCompareAi'&&importer?.replaceAll('\\','/').endsWith('/NvBomComparePanel.tsx'))return '\0qa-nv-models';},load(id){if(id==='\0qa-nv-models')return 'export async function loadNvBomModels(){return []} export async function runNvBomComparison(){throw new Error("QA does not call AI")}';}},{name:'bom-ui-local-fixture',configureServer(vite){vite.middlewares.use((req,res,next)=>{if(req.url?.split('?')[0]!=='/')return next();res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/tests/support/bomVersionUiFixture.jsx"></script></html>');});}}]});
     await server.listen(); const origin='http://127.0.0.1:'+server.httpServer.address().port; browser=await chromium.launch({channel:'chrome'});
-    for(const width of [1440,1180,390,536]) report.checks.push(await run(browser,origin,width));
-    report.result='passed'; console.log('BOM version UI verified at1440/1180/390/536 with isolated callbacks');
+    for(const width of (process.env.BOM_VERSION_UI_WIDTHS || (contextOnly?'1543,1280,390':'1440,1180,390,536')).split(',').map(Number)) report.checks.push(await run(browser,origin,width));
+    report.result='passed'; console.log(JSON.stringify({result:report.result,checks:report.checks},null,2));
   } catch(error) { report.result='failed';report.error=error.stack;throw error; }
   finally {fs.writeFileSync(path.join(evidence,'browser-report.json'),JSON.stringify(report,null,2));if(browser)await browser.close();if(server)await server.close();}
 })().catch(error=>{console.error(error);process.exitCode=1});

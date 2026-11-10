@@ -135,7 +135,12 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const archivedSeries = useMemo(() => seriesList.filter((series) => Boolean(series.archive)), [seriesList]);
   const selectedSeries = seriesList.find((series) => series.id === selectedSeriesId) ?? activeSeries?.series ?? liveSeries[0] ?? null;
   const totalVersions = seriesList.reduce((sum, series) => sum + series.versions.length, 0);
-  const description = `目前專案：${activeProjectName ?? "未選擇"} · ${seriesList.length} 個系列 · ${totalVersions} 個版本${archivedSeries.length > 0 ? ` · 已封存 ${archivedSeries.length} 個` : ""} · 使用中：${activeSeries ? `${activeSeries.series.name} ${activeSeries.version.displayNumber}` : "未選擇"}`;
+  const selectedProjectName = selectedSeries?.project
+    ? projectNames.get(selectedSeries.project.projectId) || selectedSeries.project.projectName || "未指定專案"
+    : "未指定專案";
+  const description = mode === "nv" ? "選擇兩份 NV 原始 BOM 與要使用的 AI，查看新增、刪除與變更。"
+    : `工作區專案：${activeProjectName ?? "未選擇"} · 所選 BOM 專案：${selectedProjectName} · 全部 ${seriesList.length} 個系列 · ${totalVersions} 個版本${archivedSeries.length > 0 ? ` · 已封存 ${archivedSeries.length} 個` : ""} · 使用中：${activeSeries ? `${activeSeries.series.name} ${activeSeries.version.displayNumber}` : "未選擇"}`;
+  const nvCompareButton = <Button type="button" variant="outline" size="sm" data-testid="bom-nv-compare-entry" onClick={() => { setNvVisited(true); setMode("nv"); }} title="另選兩份 NV 原始 Excel 比對，不受此系列版本數限制" className="bom-nv-compare-entry h-9 gap-2 border-primary/40 text-primary"><GitCompareArrows aria-hidden="true" className="h-4 w-4" />NV 原始 BOM 比對</Button>;
 
   useEffect(() => {
     if (!open) return;
@@ -286,7 +291,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
           <div className="bom-series-summary-meta"><span className="bom-current-version">目前版本 {selectedSeries.current.displayNumber}</span><span>{selectedSeries.versions.length} 個版本</span><span>{selectedSeries.recordCount.toLocaleString()} 筆</span></div>
         </div>
         <div className="bom-series-project">
-        <Label htmlFor={`${projectGroupId}-assignment`}>系列所屬專案</Label>
+        <Label htmlFor={`${projectGroupId}-assignment`}>此 BOM 所屬專案</Label>
         <Select value={selectedSeries.project?.projectId ?? UNASSIGNED_VALUE} disabled={!canEdit || !ready || pending} onValueChange={(value) => void runAction(() => onAssignProject(selectedSeries, value === UNASSIGNED_VALUE ? null : value), "專案歸屬已更新")}>
           <SelectTrigger id={`${projectGroupId}-assignment`} aria-label={`${selectedSeries.name} 所屬專案`} className="h-9 w-[12rem] text-sm"><SelectValue placeholder="指定專案" /></SelectTrigger>
           <SelectContent>
@@ -298,12 +303,15 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
       </div>
 
       <div className="bom-series-actions flex flex-wrap items-center gap-1.5">
-        <Button type="button" size="sm" disabled={!canEdit || !ready || busy} onClick={() => onUploadVersion(selectedSeries)} className="h-9"><Upload className="mr-1.5 h-4 w-4" />上傳新版本</Button>
+        <Button type="button" size="sm" disabled={!canEdit || !ready || busy} onClick={() => onUploadVersion(selectedSeries)} title={`將新版 Excel 加入「${selectedSeries.name}」，保留既有版本與追蹤`} className="h-9"><Upload className="mr-1.5 h-4 w-4" />上傳此系列新版</Button>
+        <div className="bom-version-compare-actions" role="group" aria-label="BOM 比對工具">
         <Button type="button" variant="outline" size="sm" disabled={selectedSeries.versions.length < 2} title={selectedSeries.versions.length < 2 ? "需要兩個以上版本才能比對" : "比對目前版本與前一版"} onClick={() => {
           const current = selectedSeries.current;
           const previous = [...selectedSeries.versions].reverse().find((item) => item !== current && item.version.versionNumber <= current.version.versionNumber) ?? selectedSeries.versions.find((item) => item !== current)!;
           openDiff(selectedSeries, previous, current);
         }} className="h-9"><GitCompareArrows className="mr-1.5 h-4 w-4" />比對版本</Button>
+        {nvCompareButton}
+        </div>
         <div className="ml-auto flex items-center gap-1">
           <Button type="button" variant="ghost" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onSetArchived(selectedSeries, !selectedSeries.archive)} title={selectedSeries.archive ? "回到清單" : "整個系列移到封存區，資料保留"} className="h-9 text-sm">{selectedSeries.archive ? "解除封存" : "封存系列"}</Button>
           <Button type="button" variant="ghost" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onDeleteSeries(selectedSeries)} className="h-9 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">刪除系列</Button>
@@ -391,9 +399,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="bom-version-center" className="bom-version-center flex flex-col overflow-hidden">
         <DialogHeader className="bom-version-header">
-          <div className="flex flex-wrap items-center gap-3"><DialogTitle className="text-xl">{mode === "nv" ? "NV 原始 BOM 比對" : "BOM 版本管理"}</DialogTitle>{mode !== "nv" && <Button type="button" variant="outline" size="sm" onClick={() => { setNvVisited(true); setMode("nv"); }} className="h-10 gap-2 border-primary/40 text-primary"><GitCompareArrows aria-hidden="true" className="h-4 w-4" />NV 原始 BOM 比對</Button>}</div>
+          <div className="flex flex-wrap items-center gap-3"><DialogTitle className="text-xl">{mode === "nv" ? "NV 原始 BOM 比對" : "BOM 版本管理"}</DialogTitle>{mode !== "nv" && !selectedSeries && nvCompareButton}</div>
           <DialogDescription className="sr-only">{description}</DialogDescription>
-          <div className="bom-version-overview"><span className="bom-version-project" title={`目前專案：${activeProjectName ?? "未選擇"}`}><Layers3 aria-hidden="true" />目前專案：{activeProjectName ?? "未選擇"}</span><span>{seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>
+          <div className="bom-version-overview">{mode !== "nv" && selectedSeries && <span className="bom-version-project" title={`「${selectedSeries.name}」所屬專案：${selectedProjectName}`}><Layers3 aria-hidden="true" />所選 BOM 專案：{selectedProjectName}</span>}<span className="bom-version-workspace" title="目前工作區的導覽專案，不會改變所選 BOM 的專案歸屬">工作區專案：{activeProjectName ?? "未選擇"}</span><span>全部 {seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>
         </DialogHeader>
         {/* Action feedback lives above both modes so an export started from the diff view is acknowledged there too. */}
         {feedback && <p role="status" data-testid="bom-version-feedback" className={cn("rounded-lg border px-3 py-1.5 text-xs", feedback.tone === "ok" ? "border-success/35 bg-success/10 text-success" : "border-destructive/35 bg-destructive/10 text-destructive")}>{feedback.text}</p>}
@@ -417,13 +425,13 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         ) : (
           <div className="bom-version-columns grid min-h-0 min-w-0 flex-1">
             <aside data-testid="bom-series-list" className={cn("bom-series-sidebar flex min-h-0 min-w-0 flex-col", compact && mobilePane === "detail" && "hidden")}>
-              <div className="bom-series-tools">
-              {canEdit && <Button type="button" variant="outline" size="sm" disabled={!ready || busy} onClick={onUploadNew} title="上傳新系列或新版本" className="bom-upload-entry h-9 justify-start"><Upload className="mr-1.5 h-4 w-4" />上傳 BOM</Button>}
+              <div className="bom-series-tools-wrap"><div className="bom-series-tools">
+              {canEdit && <Button type="button" variant="outline" size="sm" disabled={!ready || busy} onClick={onUploadNew} title="先選擇 Excel，再確認建立新系列或加入既有系列；不會立即儲存" className="bom-upload-entry h-9 justify-start"><Upload className="mr-1.5 h-4 w-4" />匯入 BOM 檔案</Button>}
               <div className="bom-series-search relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋專案、系列或版本" title="搜尋系列、專案、來源檔或版本說明" aria-label="搜尋 BOM 系列" className="h-10 rounded-xl pl-9 text-sm lg:h-9" />
               </div>
-              </div>
+              </div>{canEdit && <p className="bom-series-upload-hint">選檔後可建立系列或加入既有系列。</p>}</div>
               {query && <div className="bom-series-filter-chips"><button type="button" aria-label="清除 BOM 系列搜尋" onClick={() => setQuery("")}><span>搜尋：{query}</span><X aria-hidden="true" /></button><Button type="button" variant="ghost" onClick={() => setQuery("")}>全部清除</Button></div>}
               <div className="bom-series-groups min-h-0 flex-1 overflow-y-auto">
                 {groups.length === 0 ? (
@@ -434,7 +442,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
                     <h4><button type="button" data-active-project={group.isActive} className="bom-project-heading flex items-center gap-2" aria-label={`${expanded ? "收合" : "展開"}專案：${group.label}`} aria-expanded={expanded} aria-controls={`${projectGroupId}-${group.key}`} onClick={() => setCollapsedProjects(current => expanded ? [...current, group.key] : current.filter(key => key !== group.key))}>
                       <Layers3 className="h-3.5 w-3.5 flex-none text-muted-foreground" aria-hidden="true" />
                       <span className="bom-project-name min-w-0 truncate text-sm font-bold text-foreground" title={group.label}>{group.label}</span>
-                      {group.isActive && <span className={cn(CHIP, "flex-none", CHIP_TONE.success)}>目前專案</span>}
+                      {group.isActive && <span className={cn(CHIP, "flex-none", CHIP_TONE.success)}>工作區專案</span>}
                       <span className="bom-project-count flex-none text-muted-foreground">{group.workspaces.length} 個系列</span>
                       <ChevronDown aria-hidden="true" className="bom-project-chevron h-4 w-4 flex-none" />
                     </button></h4>
