@@ -137,7 +137,7 @@ function formatDate(value?: string | null) {
   }).format(date);
 }
 
-export function ProjectScopeBar() {
+export function ProjectScopeBar({ faultMode = false }: { faultMode?: boolean }) {
   const {
     activeProject,
     activeProjectId,
@@ -154,7 +154,9 @@ export function ProjectScopeBar() {
     updateProject,
   } = useTestProject();
   const { canEditModule } = usePermissions();
-  const canCreateSystems = canEditModule("test-tracker");
+  const canCreateSystems = !faultMode && canEditModule("test-tracker");
+  const canManageProjects = !faultMode || canEditModule('issues');
+  const selectableProjects = faultMode ? allProjects : projects;
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -201,7 +203,7 @@ export function ProjectScopeBar() {
     setEditingProjectId(null);
     setForm({
       ...EMPTY_FORM,
-      cloneFromProjectId: activeProjectId ?? EMPTY_TEMPLATE_VALUE,
+      cloneFromProjectId: faultMode ? EMPTY_TEMPLATE_VALUE : activeProjectId ?? EMPTY_TEMPLATE_VALUE,
     });
   };
 
@@ -228,6 +230,7 @@ export function ProjectScopeBar() {
   };
 
   const handleSave = async () => {
+    if (!canManageProjects) return;
     if (!form.name.trim()) return;
     if (
       form.plannedStartDate &&
@@ -270,6 +273,7 @@ export function ProjectScopeBar() {
     setIsSaving(false);
     if (!savedProject) return;
     setShowForm(false);
+    if (faultMode) setIsOpen(false);
     resetForm();
   };
 
@@ -291,7 +295,7 @@ export function ProjectScopeBar() {
       className="maintenance-project-bar relative z-10 grid min-h-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-border bg-card p-2 lg:sticky lg:top-[72px] lg:flex lg:gap-3 lg:px-3"
     >
       <Select
-        disabled={isLoadingProjects || projects.length === 0}
+        disabled={isLoadingProjects || selectableProjects.length === 0}
         value={activeProjectId ?? ""}
         onValueChange={setActiveProjectId}
       >
@@ -303,7 +307,7 @@ export function ProjectScopeBar() {
           </div>
         </SelectTrigger>
         <SelectContent>
-          {projects.map((project) => (
+          {selectableProjects.map((project) => (
             <SelectItem key={project.id} value={project.id}>
               <span className="font-medium">{project.name}</span>
               <span className="ml-2 text-xs text-muted-foreground">
@@ -350,7 +354,7 @@ export function ProjectScopeBar() {
           />
         )}
 
-        {activeProject && (
+        {activeProject && canManageProjects && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -393,10 +397,10 @@ export function ProjectScopeBar() {
               <div>
                 <SheetTitle className="text-xl text-[#f3f8fc]">專案中心</SheetTitle>
                 <SheetDescription className="mt-1 text-[#a9c0d1]">
-                  建立、複製與管理各專案生命週期。
+                  {faultMode ? '建立專案即可報修，負責人與日期都可稍後補充。' : '建立、複製與管理各專案生命週期。'}
                 </SheetDescription>
               </div>
-              <Button className="h-9 rounded-lg" onClick={openCreateForm}>
+              <Button className="h-9 rounded-lg" disabled={!canManageProjects} onClick={openCreateForm}>
                 <Plus className="mr-2 h-4 w-4" />
                 新增專案
               </Button>
@@ -413,7 +417,7 @@ export function ProjectScopeBar() {
                   <p className="mt-1 text-sm text-[#a9c0d1]">
                     {editingProjectId
                       ? "更新名稱、負責人、日期與目前狀態。"
-                      : "可建立空白專案或複製既有專案的發布流程與資產。"}
+                      : faultMode ? "填寫專案名稱即可開始，其他資料都可稍後補充。" : "可建立空白專案或複製既有專案的發布流程與資產。"}
                   </p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
@@ -442,7 +446,7 @@ export function ProjectScopeBar() {
                     placeholder="客戶、版本、批次或交付範圍"
                   />
                 </div>
-                {!editingProjectId && (
+                {!editingProjectId && !faultMode && (
                   <div className="space-y-2 sm:col-span-2">
                     <Label>建立方式</Label>
                     <Select
@@ -461,6 +465,9 @@ export function ProjectScopeBar() {
                     </Select>
                   </div>
                 )}
+                <details open={!faultMode || undefined} className="sm:col-span-2">
+                  <summary className="cursor-pointer text-sm text-muted-foreground">其他設定（選填）</summary>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>專案狀態</Label>
                   <Select
@@ -520,6 +527,8 @@ export function ProjectScopeBar() {
                   />
                   <p className="text-xs text-[#8fb0c5]">完成日期不得早於開始日期。</p>
                 </div>
+                  </div>
+                </details>
               </div>
 
               {formError && (
@@ -638,7 +647,7 @@ export function ProjectScopeBar() {
                             type="button"
                             className="min-w-0 flex-1 text-left"
                             onClick={() => {
-                              if (status !== "archived") {
+                              if (status !== "archived" || faultMode) {
                                 setActiveProjectId(project.id);
                                 setIsOpen(false);
                               }
@@ -662,20 +671,20 @@ export function ProjectScopeBar() {
                           </button>
                           <div className="flex shrink-0 gap-1">
                             {status !== "archived" && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditForm(project)}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canManageProjects} onClick={() => openEditForm(project)}>
                                 <Pencil className="h-3.5 w-3.5" />
                                 <span className="sr-only">編輯 {project.name}</span>
                               </Button>
                             )}
                             {status === "archived" ? (
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => restoreProject(project.id)}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!canManageProjects} onClick={() => restoreProject(project.id)}>
                                 <RotateCcw className="h-3.5 w-3.5" />
                                 <span className="sr-only">還原 {project.name}</span>
                               </Button>
                             ) : (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-[#a9c0d1] hover:text-amber-100">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-[#a9c0d1] hover:text-amber-100" disabled={!canManageProjects}>
                                     <Archive className="h-3.5 w-3.5" />
                                     <span className="sr-only">封存 {project.name}</span>
                                   </Button>

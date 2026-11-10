@@ -30,11 +30,10 @@ interface SidebarProps {
 const SIDEBAR_STORAGE_KEY = "maintenance-workspace:sidebar-collapsed:v1";
 
 const navigationItems = [
+  { id: "issues", label: "故障清單", icon: AlertTriangle },
   { id: "dashboard", label: "問題儀表板", icon: Gauge },
-  { id: "test-tracker", label: "L10 測試追蹤", icon: ListChecks },
-  { id: "flow-info", label: "L10 流程設定", icon: FileSliders },
-  { id: "issues", label: "問題追蹤", icon: AlertTriangle },
   { id: "tools", label: "工具與資產", icon: Wrench },
+  { id: "test-tracker", label: "舊測試紀錄", icon: ListChecks },
 ];
 
 export function Sidebar({

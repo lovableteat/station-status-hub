@@ -59,11 +59,11 @@ const DeploymentPlanningCenter = React.lazy(() =>
   }))
 );
 const Dashboard = React.lazy(() =>
-  import("@/components/dashboard/Dashboard").then((module) => ({ default: module.Dashboard }))
+  import("@/components/maintenance/MaintenanceDashboard").then((module) => ({ default: module.MaintenanceDashboard }))
 );
 const IssueTracker = React.lazy(() =>
-  import("@/components/issues/IssueTracker").then((module) => ({
-    default: module.IssueTracker,
+  import("@/components/maintenance/MaintenanceWorkspace").then((module) => ({
+    default: module.MaintenanceWorkspace,
   }))
 );
 const loadMaterialRequestPage = () => import("@/components/material-requests/MaterialRequestPage");
@@ -83,11 +83,11 @@ const PerformanceAppraisalPage = React.lazy(() =>
   }))
 );
 const FlowInfo = React.lazy(() =>
-  import("@/components/test-tracker/FlowInfo").then((module) => ({ default: module.FlowInfo }))
+  import("@/components/maintenance/MaintenanceHistory").then((module) => ({ default: module.MaintenanceHistory }))
 );
 const TestTracker = React.lazy(() =>
-  import("@/components/test-tracker/TestTracker").then((module) => ({
-    default: module.TestTracker,
+  import("@/components/maintenance/MaintenanceHistory").then((module) => ({
+    default: module.MaintenanceHistory,
   }))
 );
 const TestPlanWorkspace = React.lazy(() =>
@@ -126,11 +126,10 @@ const stationModuleItems: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
+  { id: "issues", label: "故障清單", icon: AlertTriangle },
   { id: "dashboard", label: "問題儀表板", icon: LayoutDashboard },
-  { id: "test-tracker", label: "L10 測試追蹤", icon: ClipboardList },
-  { id: "flow-info", label: "L10 流程設定", icon: FileText },
-  { id: "issues", label: "問題追蹤", icon: AlertTriangle },
-  { id: "tools", label: "工具管理", icon: Wrench },
+  { id: "tools", label: "工具與資產", icon: Wrench },
+  { id: "test-tracker", label: "舊測試紀錄", icon: ClipboardList },
 ];
 
 const moduleWorkspaceMap: Record<string, WorkspaceId> = {
@@ -178,6 +177,11 @@ const MODULE_QUERY_KEYS = [
   "issuePriority",
   "issueOwner",
   "issueFollowUp",
+  "faultQuery",
+  "faultStatus",
+  "faultOwner",
+  "faultCategory",
+  "faultMachine",
   "librarySearch",
   "librarySigned",
   "openIssue",
@@ -266,7 +270,7 @@ function getInitialWorkspace(): WorkspaceId | null {
 
 function getInitialStationModule(): StationModuleId {
   if (typeof window === "undefined") {
-    return "dashboard";
+    return "issues";
   }
 
   const value = new URLSearchParams(window.location.search).get("module");
@@ -282,7 +286,7 @@ function getInitialStationModule(): StationModuleId {
 
   if (value === "monitor") return "test-tracker";
 
-  return "dashboard";
+  return "issues";
 }
 
 function getInitialAdminModule(): AdminModuleId {
@@ -333,7 +337,7 @@ const Index = () => {
       {
         id: "station-status" as const,
         label: "維修中心",
-        description: "追蹤機台問題、處理狀態與負責人，集中管理測試紀錄、實際工時與工具資產。",
+        description: "快速報修、共同處理與交接，集中查看故障歷史、反覆問題與工具資產。",
         icon: LayoutDashboard,
         visible: stationModuleItems.some((item) => canViewModule(item.id)),
       },
@@ -701,7 +705,7 @@ const Index = () => {
         return (
           <div className="maintenance-workspace relative min-h-0 lg:h-full lg:overflow-hidden">
             <div className="flex min-h-0 flex-1 flex-col gap-2 px-2 pb-2 pt-2 sm:px-3 sm:pb-3 sm:pt-3 lg:h-full lg:gap-3">
-              <div className="shrink-0"><ProjectScopeBar /></div>
+              <div className="shrink-0"><ProjectScopeBar faultMode /></div>
 
               <div className={cn("relative flex min-h-[560px] flex-1 gap-3 lg:min-h-0", isCompactLayout && "min-h-0 flex-col gap-2")}>
                 <Sidebar

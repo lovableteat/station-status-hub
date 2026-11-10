@@ -3847,6 +3847,12 @@ type BaseDatabase = {
       }
     }
     Functions: {
+      maintenance_workspace: { Args: { p_project_id: string }; Returns: Json }
+      maintenance_thread: { Args: { p_issue_id: string }; Returns: Json }
+      maintenance_create_fault: { Args: { p_issue_id: string; p_project_id: string; p_asset_identifier: string; p_title: string; p_system_id?: string }; Returns: Json }
+      maintenance_update_fault: { Args: { p_issue_id: string; p_expected_updated_at: string; p_changes: Json }; Returns: Json }
+      maintenance_add_note: { Args: { p_issue_id: string; p_message_id: string; p_body: string }; Returns: Json }
+      maintenance_add_attachment: { Args: { p_issue_id: string; p_message_id: string; p_file: Json }; Returns: Json }
       comparison_feedback_is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean

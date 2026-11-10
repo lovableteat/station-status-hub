@@ -484,7 +484,7 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
         setSaving(false);
         return;
       }
-      if (activeProjectId && assignmentsReady) {
+      if (activeProjectId && assignmentsReady && !activeProject?.is_archived) {
         await supabase.from("test_project_tool_assignments").insert({
           is_required: toolDraft.is_required,
           pinned_version: toolDraft.version.trim() || null,
@@ -502,6 +502,10 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
   };
 
   const toggleAssignment = async (asset: Asset) => {
+    if (activeProject?.is_archived) {
+      toast({ title: '封存專案只能查閱', description: '請切換使用中專案後調整資產套用。' });
+      return;
+    }
     if (!activeProjectId) {
       toast({ title: "請先選擇專案", variant: "destructive" });
       return;
@@ -808,8 +812,8 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
         isOpen={uploadOpen}
         onClose={() => setUploadOpen(false)}
         onUploadSuccess={() => setRefreshKey((value) => value + 1)}
-        projectId={activeProjectId}
-        canAssignToProject={assignmentsReady}
+        projectId={activeProject?.is_archived ? null : activeProjectId}
+        canAssignToProject={assignmentsReady && !activeProject?.is_archived}
         workspaceKey={workspaceKey}
       />
     </div>
