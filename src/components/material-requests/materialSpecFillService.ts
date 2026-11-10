@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { withReadDeadline } from "@/lib/readDeadline";
-import { normalizeApiKeyPermissions, type ApiKeyRecord } from "../api-management/apiKeyHelpers";
-import { buildProviderChatRequest, parseProviderChatResponse, redactSensitiveText, resolveAiProviderPreset, type ProviderChatMessage } from "../api-management/aiProviderCatalog";
+import { buildApiKeyModelTargets, buildApiKeyPermissions, normalizeApiKeyPermissions, type ApiKeyRecord } from "../api-management/apiKeyHelpers";
+import { GEMINI_FREE_MODEL_PROFILES, buildProviderChatRequest, parseProviderChatResponse, redactSensitiveText, resolveAiProviderPreset, type ProviderChatMessage } from "../api-management/aiProviderCatalog";
 import { trackedProviderFetch } from "../api-management/aiUsageTelemetry";
 import { classifyAiFailure } from "../api-management/aiRequestRecovery";
 import type { MaterialSpecDocument, MaterialWorkbookRecord } from "./materialRequestUtils";
@@ -16,14 +16,18 @@ export const SPEC_FILL_MAX_PHOTOS = 20;
 export interface SpecFillModel { id: string; label: string; record: ApiKeyRecord }
 export interface SpecFillInput { id: string; name: string; blob: Blob }
 
-export async function loadSpecFillModels(): Promise<SpecFillModel[]> {
+export async function loadSpecFillModels({ imagesOnly = false }: { imagesOnly?: boolean } = {}): Promise<SpecFillModel[]> {
   const { data, error } = await withReadDeadline(signal => supabase.from("api_keys").select("*").eq("is_active", true).order("created_at", { ascending: false }).abortSignal(signal), 15000);
   if (error) throw new Error("無法讀取已設定的 AI 服務，請確認帳號權限或稍後重試。");
   return (data ?? []).filter(record => record.is_active && (!record.expires_at || Date.parse(record.expires_at) > Date.now())).flatMap(record => {
-    const { metadata, read } = normalizeApiKeyPermissions(record.permissions);
+    const { metadata, read, write } = normalizeApiKeyPermissions(record.permissions);
     if (!read || !metadata.provider.trim() || !metadata.model.trim() || !metadata.baseUrl.trim()) return [];
-    // Custom compatible endpoints have no verified vision/document contract.
-    if (resolveAiProviderPreset(metadata.provider).id === "openai-compatible") return [];
+    // PDF tools send rendered images; native SPEC documents retain their PDF protocol restriction.
+    if (!imagesOnly && resolveAiProviderPreset(metadata.provider).id === "openai-compatible") return [];
+    if (imagesOnly) return buildApiKeyModelTargets([record], [metadata.model, ...GEMINI_FREE_MODEL_PROFILES.map(item => item.id)]).map(target => ({
+      id: target.model === metadata.model ? record.id : target.id, label: `${record.key_name} · ${target.model}`,
+      record: target.model === metadata.model ? record : { ...record, permissions: buildApiKeyPermissions({ read, write, metadata: { ...metadata, model: target.model } }, record.permissions) },
+    }));
     return [{ id: record.id, label: `${record.key_name} · ${metadata.model}`, record }];
   });
 }
@@ -155,7 +159,7 @@ async function runSpecFillRequest({ part, photos, sources, model, note, signal, 
     for (const message of outgoing) if (Array.isArray(message.content)) for (const part of message.content)
       if (part.type === "image_url" && part.image_url) part.image_url.detail = "high";
   }
-  const response = await trackedProviderFetch({ apiKeyId: model.id, provider: metadata.provider, model: metadata.model, source: "ai-chat", attemptNumber: 1, url: request.url, init: { method: request.method, headers: request.headers, body: JSON.stringify(request.body), signal }, timeoutMs: precision === "high" ? 120000 : 90000 });
+  const response = await trackedProviderFetch({ apiKeyId: model.record.id, provider: metadata.provider, model: metadata.model, source: "ai-chat", attemptNumber: 1, url: request.url, init: { method: request.method, headers: request.headers, body: JSON.stringify(request.body), signal }, timeoutMs: precision === "high" ? 120000 : 90000 });
   signal.throwIfAborted();
   let payload: unknown;
   try { payload = await response.json(); } catch { throw new Error("AI 服務回應無法讀取，請稍後重試。"); }

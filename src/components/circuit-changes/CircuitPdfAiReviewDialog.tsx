@@ -73,7 +73,7 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
   useEffect(() => {
     if (!open || disabled) { request.current?.abort(); return; }
     let present = true; setLoadingModels(true);
-    void loadSpecFillModels().then(items => { if (present) { setModels(items); setModelId(previous => items.some(item => item.id === previous) ? previous : items[0]?.id ?? ""); } })
+    void loadSpecFillModels({ imagesOnly: true }).then(items => { if (present) { setModels(items); setModelId(previous => items.some(item => item.id === previous) ? previous : items[0]?.id ?? ""); } })
       .catch(failure => { if (present) setError(failure instanceof Error ? failure.message : "無法讀取 AI 服務。"); }).finally(() => { if (present) setLoadingModels(false); });
     return () => { present = false; request.current?.abort(); };
   }, [open, disabled]);

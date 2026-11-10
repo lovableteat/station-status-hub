@@ -104,7 +104,7 @@ async function identifyTitles(model: SpecFillModel, pages: Array<{ pageNumber: n
   if (Array.isArray(request.body?.messages)) for (const message of request.body.messages as Array<{ content?: Array<{ type?: string; image_url?: { detail?: string } }> }>) {
     if (Array.isArray(message.content)) for (const part of message.content) if (part.type === "image_url" && part.image_url) part.image_url.detail = "high";
   }
-  const response = await trackedProviderFetch({ apiKeyId: model.id, provider: metadata.provider, model: metadata.model, source: "ai-chat", attemptNumber: 1,
+  const response = await trackedProviderFetch({ apiKeyId: model.record.id, provider: metadata.provider, model: metadata.model, source: "ai-chat", attemptNumber: 1,
     url: request.url, init: { method: request.method, headers: request.headers, body: JSON.stringify(request.body), signal }, timeoutMs: 120000 });
   const payload = await response.json();
   if (!response.ok) throw classifyAiFailure(response.status, payload, response.headers.get("Retry-After"));

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { ChevronLeft, ChevronRight, FileSearch, Loader2, Minus, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, FileSearch, Loader2, Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -41,7 +41,7 @@ export function BomPagePdfAiDialog({ open, onOpenChange, onApply, maxPages }: {
     if (file && !totalPages) void inspect(file);
     let current = true;
     setLoadingModels(true); setError("");
-    void import("./materialSpecFillService").then(module => module.loadSpecFillModels()).then(items => {
+    void import("./materialSpecFillService").then(module => module.loadSpecFillModels({ imagesOnly: true })).then(items => {
       if (current) { setModels(items); setModelId(previous => items.some(item => item.id === previous) ? previous : items[0]?.id ?? ""); }
     }).catch(reason => { if (current) setError(reason instanceof Error ? reason.message : "無法載入 AI 服務。"); })
       .finally(() => { if (current) setLoadingModels(false); });
@@ -110,7 +110,7 @@ export function BomPagePdfAiDialog({ open, onOpenChange, onApply, maxPages }: {
       <header className="bom-pdf-header"><div><DialogTitle><FileSearch aria-hidden="true" />PDF AI</DialogTitle><DialogDescription>先預覽標題截圖，再辨識與核對。原有完成狀態、備註與既有頁面會保留。</DialogDescription></div><Button type="button" variant="ghost" aria-label="關閉 PDF AI" onClick={() => close(false)}><X aria-hidden="true" /></Button></header>
       <div className="bom-pdf-controls">
         <div className="bom-pdf-file"><span>PDF 檔案 · 最多 {maxPages} 頁／50 MB</span><input ref={fileInput} type="file" accept=".pdf,application/pdf" disabled={busy} aria-label="選擇標題辨識 PDF" className="sr-only" onChange={event => { chooseFile(event.target.files?.[0] ?? null); event.target.value = ""; }} /><div><Button type="button" variant="outline" disabled={busy} onClick={() => fileInput.current?.click()}>{file ? "更換 PDF" : "選擇 PDF"}</Button><div data-testid="bom-pdf-selected-file"><strong title={file?.name}>{file?.name || "尚未選擇 PDF"}</strong><small>{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB${totalPages ? ` · 實際 ${totalPages} 頁` : preparing ? " · 讀取頁數與截圖中…" : ""}` : "選取後立即顯示頁數與標題截圖"}</small></div></div></div>
-        <label className="bom-pdf-model"><span>AI 服務</span><select aria-label="PDF AI 服務" value={modelId} disabled={busy || loadingModels} onChange={event => setModelId(event.target.value)}>{!models.length && <option value="">{loadingModels ? "載入中…" : "沒有可用的 AI 服務"}</option>}{models.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+        <label className="bom-pdf-model"><span>AI 服務{models.length > 0 && ` · ${models.length} 個選項`}</span><div><select aria-label="PDF AI 服務" value={modelId} disabled={busy || loadingModels} onChange={event => setModelId(event.target.value)}>{!models.length && <option value="">{loadingModels ? "載入中…" : "沒有可用的 AI 服務"}</option>}{models.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><ChevronDown aria-hidden="true" /></div></label>
         <Button type="button" className="bom-pdf-recognize" disabled={!file || !model || busy || preparing || loadingModels || !totalPages} onClick={() => void run()}>{busy ? <><Loader2 className="animate-spin" aria-hidden="true" />辨識中</> : "辨識全部頁面"}</Button>
       </div>
       {busy && <div className="bom-pdf-progress" role="status"><span>已辨識 {progress.done} / {progress.total} 頁 · 每批 8 頁</span><Button type="button" variant="outline" onClick={() => { active.current?.abort(); active.current = null; setBusy(false); setError("已取消，未套用任何資料。"); }}>取消辨識</Button></div>}

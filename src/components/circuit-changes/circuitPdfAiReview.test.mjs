@@ -53,13 +53,13 @@ function adapter(payloadFactory=()=>({choices:[{finish_reason:'stop',message:{co
     '../api-management/aiRequestRecovery':{classifyAiFailure:()=>new Error('provider failed')},
   }})('src/components/circuit-changes/circuitPdfAiReview.ts');
   const pdf={numPages:3000,getPage:async page=>({getViewport:({scale})=>({width:1000*scale,height:700*scale}),render:options=>{renders.push({page,width:options.canvas.width,height:options.canvas.height});return{promise:Promise.resolve(),cancel(){}};},getTextContent:async()=>({items:[{str:'PCIE_RX_P',transform:[1,0,0,1,10,20]}]})})};
-  const input={official:{id:'official',name:'官方.pdf',page:2,pdf},working:{id:'working',name:'工作.pdf',page:3,pdf},model:{id:'model-id',label:'QA GPT',record:{api_key:'qa-test-secret',is_active:true}},userName:'RD 工程師',signal:new AbortController().signal};
+  const input={official:{id:'official',name:'官方.pdf',page:2,pdf},working:{id:'working',name:'工作.pdf',page:3,pdf},model:{id:'model-key::gpt-5.4',label:'QA GPT',record:{id:'model-key',api_key:'qa-test-secret',is_active:true}},userName:'RD 工程師',signal:new AbortController().signal};
   return {k,input,sent,renders};
 }
 
 test('real provider adapter sends both full-page images at high detail and coordinate text with usage tracking',async()=>{
   const {k,input,sent,renders}=adapter(), result=await k.runCircuitPdfAiReview(input);
-  assert.equal(sent.length,1);assert.equal(sent[0].apiKeyId,'model-id');assert.equal(sent[0].source,'ai-chat');
+  assert.equal(sent.length,1);assert.equal(sent[0].apiKeyId,'model-key');assert.equal(sent[0].source,'ai-chat');
   const body=JSON.parse(sent[0].init.body), images=body.messages.flatMap(message=>message.content).filter(part=>part.type==='image_url');
   assert.equal(images.length,2);assert.ok(images.every(image=>image.image_url.detail==='high'));
   assert.match(JSON.stringify(body),/官方.pdf/);assert.match(JSON.stringify(body),/工作.pdf/);assert.match(JSON.stringify(body),/PCIE_RX_P/);assert.match(JSON.stringify(body),/不得.*核准/);
