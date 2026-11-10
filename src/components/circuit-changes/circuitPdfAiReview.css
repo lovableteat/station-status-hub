@@ -15,6 +15,31 @@
 .circuit-pdf-ai-toolbar label { display: grid; flex: 1; min-width: 180px; gap: 5px; color: hsl(var(--muted-foreground)); font-size: 12px; }
 .circuit-pdf-ai-toolbar select { width: 100%; min-width: 0; height: 42px; border: 1px solid hsl(var(--border)); border-radius: 7px; padding-inline: 10px; color: hsl(var(--foreground)); font-size: 14px; }
 .circuit-pdf-ai-toolbar > button { min-height: 42px; gap: 7px; }
+.circuit-pdf-ai-batch-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-pdf-ai-batch-hint > p { flex: 1; min-width: 200px; }
+.circuit-pdf-ai-batch-hint > label { display: flex; align-items: center; gap: 8px; }
+.circuit-pdf-ai-batch-hint select { max-width: 220px; min-height: 36px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding: 5px 8px; color: hsl(var(--foreground)); }
+.circuit-pdf-ai-batch { margin-bottom: 18px; border: 1px solid hsl(var(--primary) / .3); border-radius: 8px; padding: 12px; }
+.circuit-pdf-ai-batch > header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.circuit-pdf-ai-batch > header > div { flex: 1; min-width: 180px; }
+.circuit-pdf-ai-batch h3 { font-weight: 600; }
+.circuit-pdf-ai-batch header p, .circuit-pdf-ai-batch-note { color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-pdf-ai-batch header button { min-height: 40px; font-size: 12px; }
+.circuit-pdf-ai-batch progress { display: block; width: 100%; height: 5px; margin-block: 12px; appearance: none; border: 0; border-radius: 3px; overflow: hidden; background: hsl(var(--secondary)); accent-color: hsl(var(--primary)); }
+.circuit-pdf-ai-batch progress::-webkit-progress-bar { background: hsl(var(--secondary)); }
+.circuit-pdf-ai-batch progress::-webkit-progress-value { background: hsl(var(--primary)); }
+.circuit-pdf-ai-batch-pages { display: grid; grid-template-columns: repeat(auto-fill,minmax(145px,1fr)); gap: 6px; max-height: 180px; overflow: auto; overscroll-behavior: contain; }
+.circuit-pdf-ai-batch-pages button { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 50px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding: 6px 9px; text-align: left; font-size: 13px; }
+.circuit-pdf-ai-batch-pages button[aria-pressed="true"] { border-color: hsl(var(--primary)); background: hsl(var(--primary) / .1); }
+.circuit-pdf-ai-batch-pages button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
+.circuit-pdf-ai-batch-pages button:disabled { cursor: default; }
+.circuit-pdf-ai-batch-pages button[data-status="unmatched"] { border-style: dashed; color: hsl(var(--muted-foreground)); }
+.circuit-pdf-ai-batch-pages small { display: block; color: hsl(var(--muted-foreground)); font-size: 11px; }
+.circuit-pdf-ai-batch-pages strong { font-size: 11px; font-weight: 500; color: hsl(var(--muted-foreground)); }
+.circuit-pdf-ai-batch-pages [data-status="complete"] strong { color: hsl(var(--primary)); }
+.circuit-pdf-ai-batch-pages [data-status="failed"] strong, .circuit-pdf-ai-batch-pages [data-status="unsaved"] strong { color: hsl(var(--destructive)); }
+.circuit-pdf-ai-batch-pages [data-status="analysing"] strong, .circuit-pdf-ai-batch-pages [data-status="saving"] strong { color: hsl(var(--warning)); }
+.circuit-pdf-ai-batch-note { margin-top: 9px; }
 .circuit-pdf-ai-body { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; padding: 18px 24px 24px; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
 .circuit-pdf-ai-limits { margin-bottom: 16px; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 22px; }
 .circuit-pdf-ai-message { margin-block: 12px; border: 1px solid hsl(var(--primary) / .25); border-radius: 7px; padding: 10px 12px; background: hsl(var(--primary) / .05); font-size: 13px; }
@@ -74,6 +99,9 @@
   .circuit-pdf-ai-toolbar label { flex-basis: 100%; }
   .circuit-pdf-ai-toolbar select { height: 44px; font-size: 16px; }
   .circuit-pdf-ai-toolbar > button { min-height: 44px; }
+  .circuit-pdf-ai-batch-hint select { min-height: 44px; font-size: 16px; }
+  .circuit-pdf-ai-batch-pages { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .circuit-pdf-ai-batch header button { min-height: 44px; }
   .circuit-pdf-ai-body { padding: 14px; }
   .circuit-pdf-ai-empty { padding: 28px 0; }
   .circuit-pdf-ai-checks, .circuit-pdf-ai-evidence { grid-template-columns: minmax(0,1fr); }

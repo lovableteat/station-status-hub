@@ -4,7 +4,7 @@ import test from "node:test";
 
 const { React, create, act, loader, deferred } = createRequire(import.meta.url)("./support/renderHarness.cjs");
 const key = "v1:official:working:2:3";
-const report = (id = "existing") => ({ id, key, summary: "本頁初審", findings: [] });
+const report = (id = "existing", page = 3) => ({ id, key: `v1:official:working:${page - 1}:${page}`, officialVersionId: "official", workingVersionId: "working", officialPage: page - 1, workingPage: page, createdAt: "2026-11-10T00:00:00Z", summary: "本頁初審", findings: [] });
 const pdfs = () => ({ official: { id: "official", name: "官方.pdf" }, officialPdf: { numPages: 500 }, officialPage: 2,
   active: { id: "working", name: "工作.pdf" }, activePdf: { numPages: 500 }, page: 3 });
 
@@ -141,6 +141,61 @@ test("read-only sessions display loaded reports with generation and manual saves
     assert.equal(view.review.disabled, true);
     assert.equal(view.review.savedReport.id, "existing");
     await assert.rejects(view.review.onSave(report()), /權限已變更/);
+    assert.equal(view.saves.length, 0);
+  } finally { view.unmount(); }
+});
+
+test("all-pages saves retain each mapped page and its revision without replacing the initial page", async () => {
+  const first = report(), view = await mount({ rows: [{ report: first, revision: 7 }] });
+  try {
+    assert.equal(view.review.allPages.officialOffset, -1);
+    const other = report("page-four", 4);
+    await act(async () => view.review.allPages.onSave(other));
+    assert.equal(view.saves[0].expectedRevision, 0);
+    assert.equal(view.review.savedReport.id, first.id);
+    await act(async () => view.review.allPages.onSave({ ...other, summary: "第四頁人工判讀" }));
+    assert.equal(view.saves[1].expectedRevision, 1);
+    assert.equal(view.review.previousReports.find(row => row.id === other.id).summary, "第四頁人工判讀");
+    await assert.rejects(view.review.onSave(other), /版本、頁碼或權限/);
+    await assert.rejects(view.review.allPages.onSave({ ...other, key: "v1:official:working:4:4", officialPage: 4 }), /版本、頁碼或權限/);
+    assert.equal(view.saves.length, 2);
+  } finally { view.unmount(); }
+});
+
+test("selecting a batch result loads that page's own prior history and uses its stored revision", async () => {
+  const view = await mount();
+  try {
+    const other = report("page-four", 4);
+    view.setLoad(async () => [{ report: other, revision: 9 }]);
+    await act(async () => view.review.allPages.onLoadPage(4));
+    assert.equal(view.loads.at(-1).targetKey, other.key);
+    await act(async () => view.review.allPages.onSave(other));
+    assert.equal(view.saves[0].expectedRevision, 9);
+    assert.equal(view.review.savedReport, undefined);
+    await act(async () => view.review.allPages.onLoadPage(4));
+    assert.equal(view.loads.length, 2);
+  } finally { view.unmount(); }
+});
+
+test("all-pages remains available when the current working page has no official counterpart", async () => {
+  const inputs = pdfs();
+  const view = await mount({ pdfs: { ...inputs, officialPage: 0, page: 5, officialPdf: { numPages: 3 }, activePdf: { numPages: 5 }, compare: inputs.official, compareOffset: 1 } });
+  try {
+    assert.ok(view.review);
+    assert.equal(view.review.allPages.officialOffset, 1);
+    assert.equal(view.loads.length, 0);
+    await act(async () => view.review.allPages.onSave({ ...report("first", 1), key: "v1:official:working:2:1", officialPage: 2 }));
+    assert.equal(view.saves.length, 1);
+  } finally { view.unmount(); }
+});
+
+test("all-pages callbacks cannot load or save after a version/account/permission change", async () => {
+  const view = await mount();
+  try {
+    const old = view.review.allPages;
+    await view.update({ userId: "user-B" });
+    await assert.rejects(old.onSave(report("late", 4)), /權限已變更/);
+    await assert.rejects(old.onLoadPage(4), /權限已變更/);
     assert.equal(view.saves.length, 0);
   } finally { view.unmount(); }
 });
