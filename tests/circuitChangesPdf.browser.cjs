@@ -325,6 +325,7 @@ async function eventually(check, message, timeout = 8000) {
     // --- Phone: the PDF is a pane of its own, framing and finishing are within thumb reach.
     const phone = await createPage(browser, origin, 'A', 390, 844); sessions.push(phone);
     const q = phone.page;
+    await q.waitForFunction(()=>{const list=document.querySelector('[data-testid="circuit-changes-dialog"] .circuit-item-list');return list&&list.getAttribute('aria-busy')!=='true';});await q.waitForTimeout(300);
     await dialog(q).getByRole('button', {name:'看圖面', exact:true}).filter({visible:true}).first().tap();
     // This browser has no copy of the 51 MB PDF last opened on the laptop, so it offers the file picker; the phone switches to 11/09.
     await panel(q).getByRole('button', {name:'選擇 PDF 版本', exact:true}).tap();

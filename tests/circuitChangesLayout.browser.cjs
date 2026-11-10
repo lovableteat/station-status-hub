@@ -169,7 +169,7 @@ async function geometry(page, dialog, width, height) {
         await dialog.locator('.circuit-returned').waitFor();
         assert.ok((await dialog.locator('.circuit-returned').innerText()).includes('請補上修改後的接線位置'));
         if (width < 1024) {
-          const back = dialog.getByRole('button', { name: '返回修改清單', exact: true });
+          const back = dialog.getByRole('button', { name: '返回問題清單', exact: true });
           const bounds = await back.boundingBox(); assert.ok(bounds.width >= 44 && bounds.height >= 44);
           await back.tap(); await dialog.getByTestId('circuit-change-item').first().tap();
           await dialog.locator('.circuit-returned').waitFor();
