@@ -1,4 +1,4 @@
-export type AiFailureKind = 'busy' | 'minute-quota' | 'daily-quota' | 'billing' | 'timeout' | 'network' | 'auth' | 'invalid' | 'tracking';
+export type AiFailureKind = 'busy' | 'minute-quota' | 'daily-quota' | 'billing' | 'timeout' | 'network' | 'auth' | 'model-access' | 'invalid' | 'tracking';
 export class AiRequestFailure extends Error {
     constructor(message: string, public kind: AiFailureKind, public retryAfterMs = 0, public status?: number) {
         super(message);
@@ -10,6 +10,16 @@ function record(value: unknown): Record<string, unknown> {
 }
 export function classifyAiFailure(status: number, payload: unknown, retryAfter: string | null = null, now = Date.now()) {
     const error = record(record(payload).error);
+    // A valid key can access GPT-5.4 while its project has no Sol entitlement.
+    // Keep this separate from invalid credentials: signing in again cannot grant model access.
+    if ([403, 404].includes(status) && error.code === 'model_not_found') {
+        const modelName = typeof error.message === 'string'
+            ? error.message.match(/model\s+[`'"]([a-z0-9._-]{1,100})[`'"]/i)?.[1] : undefined;
+        const label = modelName ? `「${modelName}」` : '此模型';
+        const reason = status === 403 ? `目前 API Key 所屬專案尚未開通${label}。`
+            : `目前 API 專案無法使用${label}，請確認模型名稱及使用權限。`;
+        return new AiRequestFailure(`${reason}請在 OpenAI 平台確認模型權限，或到「API 管理」改用已開通的 Key。`, 'model-access', 0, status);
+    }
     const details = Array.isArray(error.details) ? error.details : [];
     let retryAfterMs = retryAfter ? Math.max(0, Number(retryAfter) * 1000 || Date.parse(retryAfter) - now || 0) : 0;
     for (const detail of details) {
@@ -30,6 +40,7 @@ export function classifyAiFailure(status: number, payload: unknown, retryAfter: 
         billing: 'AI 帳務額度不足或未開通此模型，請至 API 管理檢查，系統已停止重送。',
         timeout: '模型回應逾時，正在嘗試其他可用模型。',
         network: 'AI 連線暫時中斷。', auth: 'AI 金鑰無效、已失效或沒有使用權限，請至 API 管理檢查。',
+        'model-access': '目前 API 專案沒有此模型的使用權限，請在 OpenAI 平台開通或更換已開通的 Key。',
         invalid: 'AI 請求內容或模型設定無法使用，請檢查附件與模型設定。', tracking: '無法確認本系統用量紀錄，請重新登入或稍後重試。',
     };
     return new AiRequestFailure(messages[kind], kind, retryAfterMs, status);
@@ -87,9 +98,10 @@ export async function requestAiWithRecovery<T extends {
     random?: () => number;
 }) {
     const started = now();
-    const budget = longRequest ? 120_000 : hasAttachments ? 90000 : 75000;
-    const attemptTimeout = longRequest ? 110_000 : hasAttachments ? 45000 : 25000;
     const candidates = targets.filter(target => target.cooldownUntil <= now()).slice(0, 3);
+    const needsLongResponse = longRequest || candidates[0]?.model === 'gpt-6.1-sol';
+    const budget = needsLongResponse ? 120_000 : hasAttachments ? 90000 : 75000;
+    const attemptTimeout = needsLongResponse ? 110_000 : hasAttachments ? 45000 : 25000;
     if (!candidates.length) {
         const earliest = Math.min(...targets.map(target => target.cooldownUntil));
         throw new AiRequestFailure(Number.isFinite(earliest)
@@ -113,7 +125,7 @@ export async function requestAiWithRecovery<T extends {
                 failure = error instanceof AiRequestFailure ? error : new AiRequestFailure('AI 連線中斷，請檢查網路後再試。', 'network');
                 const until = cooldownForFailure(failure, now());
                 onFailure(target, failure, until);
-                if (['auth', 'invalid', 'tracking', 'billing'].includes(failure.kind))
+                if (['auth', 'model-access', 'invalid', 'tracking', 'billing'].includes(failure.kind))
                     throw failure;
                 if (index < candidates.length - 1)
                     break;

@@ -55,7 +55,7 @@ test('provider RetryInfo and Retry-After determine the earliest permitted retry'
 });
 
 test('authentication, invalid content, billing and failed usage gate stop immediately', async () => {
-  for (const kind of ['auth', 'invalid', 'billing', 'tracking']) {
+  for (const kind of ['auth', 'model-access', 'invalid', 'billing', 'tracking']) {
     let calls = 0;
     await assert.rejects(requestAiWithRecovery({ targets, execute: async () => { calls++; throw new AiRequestFailure(kind, kind); } }), error => error.kind === kind);
     assert.equal(calls, 1);
@@ -64,6 +64,30 @@ test('authentication, invalid content, billing and failed usage gate stop immedi
   assert.equal(classifyAiFailure(402, {}).kind, 'billing');
   assert.equal(classifyAiFailure(429, { error: { message: 'billing credits exhausted' } }).kind, 'billing');
   assert.equal(classifyAiFailure(429, { error: { details: [{ quotaId: 'GenerateRequestsPerDay' }] } }).kind, 'daily-quota');
+});
+
+test('Sol entitlement rejection explains model access without treating the working key as invalid', async () => {
+  const payload = { error: {
+    message: 'Project `proj_private` does not have access to model `gpt-6.1-sol`',
+    type: 'invalid_request_error', code: 'model_not_found',
+  } };
+  const failure = classifyAiFailure(403, payload);
+  assert.equal(failure.kind, 'model-access');
+  assert.equal(failure.status, 403);
+  assert.match(failure.message, /尚未開通「gpt-6\.1-sol」/);
+  assert.match(failure.message, /OpenAI 平台/);
+  assert.doesNotMatch(failure.message, /金鑰無效|重新登入|proj_private/);
+  let calls = 0;
+  await assert.rejects(requestAiWithRecovery({ targets, execute: async () => {
+    calls++;
+    throw failure;
+  } }), error => error === failure);
+  assert.equal(calls, 1, 'must not substitute another model after a model permission rejection');
+  const missing = classifyAiFailure(404, { error: { code: 'model_not_found', message: 'Unknown model' } });
+  assert.equal(missing.kind, 'model-access');
+  assert.match(missing.message, /模型名稱及使用權限/);
+  assert.equal(classifyAiFailure(401, payload).kind, 'auth');
+  assert.equal(classifyAiFailure(403, { error: { message: 'API Key 無效' } }).kind, 'auth');
 });
 
 test('daily limits are not immediately retried and Pacific reset respects daylight saving', async () => {
@@ -84,4 +108,56 @@ test('stalled models have one overall budget and no more than three attempts', a
   await assert.rejects(requestAiWithRecovery({ targets, hasAttachments: true, now: () => time, execute: async (_target, _attempt, timeout) => { deadlines.push(timeout); time += timeout; throw new AiRequestFailure('timeout', 'timeout'); } }), /已停止等待/);
   assert.deepEqual(deadlines, [45_000, 45_000]);
   assert.equal(time, 90_000);
+});
+
+test('selected GPT-6.1 Sol has time to reason with or without attachments', async () => {
+  const sol = { id: 'openai::gpt-6.1-sol', model: 'gpt-6.1-sol', cooldownUntil: 0 };
+  for (const hasAttachments of [false, true]) {
+    let time = 0;
+    const reply = await requestAiWithRecovery({
+      targets: [sol], hasAttachments, now: () => time,
+      execute: async (target, attempt, timeout) => {
+        assert.equal(target, sol);
+        assert.equal(attempt, 1);
+        assert.equal(timeout, 110_000);
+        time += 60_000;
+        return 'reasoned answer';
+      },
+    });
+    assert.equal(reply.target, sol);
+    assert.equal(reply.result, 'reasoned answer');
+    assert.equal(reply.durationMs, 60_000);
+  }
+});
+
+test('GPT-6.1 Sol retries stay within 120 seconds and keep the selected model', async () => {
+  const sol = { id: 'openai::gpt-6.1-sol', model: 'gpt-6.1-sol', cooldownUntil: 0 };
+  let time = 0;
+  const deadlines = [];
+  await assert.rejects(requestAiWithRecovery({
+    targets: [sol], now: () => time, random: () => 0,
+    pause: async ms => { time += ms; },
+    execute: async (target, attempt, timeout) => {
+      assert.equal(target, sol);
+      deadlines.push(timeout);
+      time += timeout;
+      throw new AiRequestFailure('network interrupted', 'network');
+    },
+  }), /已停止重送/);
+  assert.deepEqual(deadlines, [110_000, 9_000]);
+  assert.equal(time, 120_000);
+});
+
+test('non-Sol OpenAI models retain ordinary text and attachment deadlines', async () => {
+  for (const model of ['gpt-5.4', 'gpt-6.1-astra', 'gpt-6.1-sol-custom']) {
+    for (const hasAttachments of [false, true]) {
+      await requestAiWithRecovery({
+        targets: [{ id: `openai::${model}`, model, cooldownUntil: 0 }], hasAttachments,
+        execute: async (_target, _attempt, timeout) => {
+          assert.equal(timeout, hasAttachments ? 45_000 : 25_000);
+          return 'answer';
+        },
+      });
+    }
+  }
 });
