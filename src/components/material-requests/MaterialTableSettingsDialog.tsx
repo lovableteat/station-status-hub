@@ -94,8 +94,8 @@ export function MaterialTableSettingsDialog({ open, onOpenChange, workspaceName,
               <p className="text-sm text-muted-foreground">顯示 <strong className="tabular-nums text-foreground">{MATERIAL_TABLE_COLUMNS.length - hidden.length} / {MATERIAL_TABLE_COLUMNS.length}</strong> 欄</p>
               <div className="flex gap-1"><Button type="button" variant="ghost" size="sm" disabled={saving || hidden.length === 0} onClick={() => setHidden([])}>全部顯示</Button><Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => setResetWidths(value => !value)} aria-pressed={resetWidths}><RotateCcw className="mr-1 h-3.5 w-3.5" />{resetWidths ? "已選重設欄寬" : "重設欄寬"}</Button></div>
             </div>
-            <fieldset disabled={saving} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {MATERIAL_TABLE_COLUMNS.map(column => <label key={column.key} className={cn("flex min-h-11 items-center gap-3 rounded-lg border px-3 py-2.5 text-sm", hidden.includes(column.key) ? "border-border text-muted-foreground" : "border-primary/25 bg-primary/5 text-foreground", column.locked ? "cursor-default" : "cursor-pointer hover:border-primary/60")}>
+            <fieldset disabled={saving} className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+              {MATERIAL_TABLE_COLUMNS.map(column => <label key={column.key} className={cn("flex min-h-11 items-center gap-2.5 rounded-md border px-3 py-2 text-sm sm:min-h-9 sm:py-1.5", hidden.includes(column.key) ? "border-border text-muted-foreground" : "border-primary/25 bg-primary/5 text-foreground", column.locked ? "cursor-default" : "cursor-pointer hover:border-primary/60")}>
                 <Checkbox checked={!hidden.includes(column.key)} disabled={column.locked} onCheckedChange={() => setHidden(current => current.includes(column.key) ? current.filter(key => key !== column.key) : [...current, column.key])} />
                 <span className="min-w-0 flex-1 break-words">{column.label}</span>{column.locked && <span className="shrink-0 text-xs text-muted-foreground">固定</span>}
               </label>)}

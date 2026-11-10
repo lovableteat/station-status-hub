@@ -590,7 +590,7 @@ function MaterialIdentityHover({
           >
             {name || "未命名料件"}
           </span>
-          <CircleHelp className="mt-0.5 h-3.5 w-3.5 flex-none text-muted-foreground opacity-60 transition-opacity group-hover/identity:opacity-100" />
+          <CircleHelp className="material-help-icon mt-0.5 h-3.5 w-3.5 flex-none text-muted-foreground opacity-60 transition-opacity group-hover/identity:opacity-100" />
         </button>
       </HoverCardTrigger>
       <HoverCardContent
@@ -1686,9 +1686,11 @@ function ResizableHeader({
   sortDirection,
   onHide,
   onOpenColumnSettings,
+  columnKey,
 }: {
   children: ReactNode;
   columnLabel: string;
+  columnKey?: string;
   width: number;
   minWidth: number;
   maxWidth: number;
@@ -1728,6 +1730,7 @@ function ResizableHeader({
           scope="col"
           tabIndex={0}
           aria-sort={sortDirection ? sortDirection === "asc" ? "ascending" : "descending" : undefined}
+          data-material-column={columnKey}
           className={cn("relative border-r border-blue-300/20 px-2 py-2", className)}
           style={{ width, minWidth, maxWidth: width }}
         >
@@ -1761,7 +1764,7 @@ export function VirtualAlternativeValue({ value, onCopy }: { value: string; onCo
   return (
     <button type="button" onClick={() => onCopy(value)} aria-label={`複製虛擬料號：${value}`} title={`複製虛擬料號：${value}`} className="group flex w-full min-w-0 items-center gap-1.5 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <span className="min-w-0 truncate font-mono text-[13px] font-semibold leading-5 text-primary">{value}</span>
-      <Copy className="h-3.5 w-3.5 flex-none text-primary opacity-60 group-hover:opacity-100" aria-hidden="true" />
+      <Copy className="material-copy-icon h-3.5 w-3.5 flex-none text-primary opacity-60 group-hover:opacity-100" aria-hidden="true" />
     </button>
   );
 }
@@ -1799,11 +1802,11 @@ function TrackingHistoryCell({
     <div data-testid="tracking-history-cell" className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch gap-1.5">
       <Button type="button" variant="outline" data-testid="material-status-button" onClick={() => onOpen(record)}
         aria-label={`${record.manufacturerPartNumber || record.name}，${statusLabel}，查看追蹤紀錄（${historyCount} 筆）`}
-        title={tooltip} className={cn("h-10 min-h-[40px] min-w-0 rounded-md px-2 text-xs font-semibold", materialTrackingStatusTone(workflowStatus))}>
+        title={tooltip} className={cn("h-9 min-h-[36px] min-w-0 rounded-md px-2 text-xs font-semibold", materialTrackingStatusTone(workflowStatus))}>
         <span className="truncate">{statusLabel}</span>
       </Button>
       <Button type="button" data-testid="material-edit-button" onClick={() => (onEdit ?? onOpen)(record)}
-        aria-label={`編輯料件 ${record.manufacturerPartNumber || record.name}`} className="h-10 min-h-[40px] rounded-md px-2.5 text-xs font-semibold">
+        aria-label={`編輯料件 ${record.manufacturerPartNumber || record.name}`} className="material-row-edit h-9 min-h-[36px] rounded-md px-2.5 text-xs font-semibold">
         <Pencil aria-hidden="true" className="size-3.5" />編輯
       </Button>
     </div>
@@ -1857,13 +1860,13 @@ function TrackingHistoryCell({
 
 function PhaseOutStatus({ record }: { record: MaterialRecord }) {
   const value = getMaterialSourceValue(record.phaseOutStatus);
-  return <span data-testid="material-phase-out-status" className="block truncate text-xs font-semibold leading-5 text-foreground" title={`phase out（零件狀態）：${value}`}>{value}</span>;
+  return <span data-testid="material-phase-out-status" className={cn("block truncate leading-5", value === "未提供" ? "text-[13px] text-muted-foreground/70" : "text-xs font-semibold text-foreground")} title={`phase out（零件狀態）：${value}`}>{value}</span>;
 }
 
 function MaterialSourceText({ value, label, mono = false, chip = false }: { value: string | number | null | undefined; label: string; mono?: boolean; chip?: boolean }) {
   const text = getMaterialSourceValue(value == null ? "" : String(value));
   const missing = text === "未提供";
-  if (chip && !missing) {
+  if (chip && !missing && !/^approved$/i.test(text)) {
     return <span className={cn(CHIP_BASE, CHIP_TONES.neutral)} title={`${label}：${text}`}>{text}</span>;
   }
   return (
@@ -2267,7 +2270,8 @@ export function PendingMaterialsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="pending-materials-dialog" className="flex max-h-[94vh] w-[min(96vw,1760px)] max-w-[min(96vw,1760px)] flex-col gap-3 overflow-hidden p-5 text-base sm:p-7">
-        <DialogHeader>
+        <div className="pending-materials-head">
+        <DialogHeader className="min-w-0 flex-1">
           <DialogTitle className="text-xl">待處理料</DialogTitle>
           <DialogDescription className="truncate" title={description}>{description}</DialogDescription>
         </DialogHeader>
@@ -2278,6 +2282,7 @@ export function PendingMaterialsDialog({
           <Button type="button" variant="outline" data-testid="pending-export-button" disabled={exporting || !exportRows.length} onClick={() => void exportVisible()} className="pending-action--export h-10 px-4 text-sm"><Download className="mr-1.5 h-4 w-4" />{exporting ? "匯出中…" : `匯出表格（${exportRows.length}）`}</Button>
           <Button type="button" data-testid="pending-mail-button" disabled={mailGroups.length === 0} onClick={() => setMailOpen(true)} className="pending-action--mail h-10 px-4 text-sm font-bold" title="把未完成的待處理料依廠商整理成信件內容並匯出 HTML"><FileCode2 className="mr-1.5 h-4 w-4" />信件生成</Button>
           <Button type="button" data-testid="pending-suppliers-button" variant="outline" onClick={() => setDirectoryOpen(true)} className="pending-action--suppliers h-10 px-4 text-sm"><Factory className="mr-1.5 h-4 w-4" />供應商聯絡資料</Button>
+        </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[16rem] flex-1">
@@ -2304,7 +2309,7 @@ export function PendingMaterialsDialog({
             含缺料號的替代廠商 <span className="text-xs font-normal">勾選後 <strong className="font-mono">{vendorApplications.length.toLocaleString()}</strong> 筆</span>
           </Button>
         </div>
-        <p id="pending-alternates-help" className="text-xs leading-5 text-muted-foreground">例：同一位號 A 廠已有料號、B 廠還沒有；勾選後也會列出 B 廠。數字是整份 BOM 的勾選後總筆數（分類／搜尋前），不是新增筆數。</p>
+        <p id="pending-alternates-help" className="sr-only">例：同一位號 A 廠已有料號、B 廠還沒有；勾選後也會列出 B 廠。數字是整份 BOM 的勾選後總筆數（分類／搜尋前），不是新增筆數。</p>
         {(exportError || ownerDirectory.error) && <p role="alert" className="text-sm text-destructive">{exportError || ownerDirectory.error}</p>}
         <PendingMailDialog groups={mailGroups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
         <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
@@ -2359,7 +2364,7 @@ export function PendingMaterialsDialog({
                   <Button type="button" variant="ghost" size="icon" data-testid="pending-mark-toggle" disabled={!marksReady} aria-pressed={marked} aria-label={`${marked ? '取消特別標記' : '特別標記'} ${group.displayRef}`} title="個人標記只對目前帳號可見" onClick={() => onToggleMarked(group.key)} className={cn("pending-row-mark relative h-9 w-8", marked ? "bg-warning/15 text-warning hover:text-warning" : "text-muted-foreground hover:text-warning")}><Star className={cn("h-4 w-4", marked && "fill-current")} aria-hidden="true" />{stale && <span className="material-blink absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}</Button>
                   <span className="pending-row-reference min-w-0 truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
                   <PendingCategoryPicker group={group} record={record} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
-                  <span className="pending-row-name min-w-0 text-base text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
+                  <span className="pending-row-name min-w-0 text-sm text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
                   <div className="pending-row-mpn min-w-0 font-mono text-sm text-foreground/85">
                     {record.manufacturerPartNumber?.trim() ? <button type="button" data-testid="pending-mpn-copy" className="group/mpn flex min-h-9 w-full min-w-0 items-center gap-1 rounded px-0.5 text-left hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`複製廠商料號 ${record.manufacturerPartNumber}`} title={`複製完整廠商料號：${record.manufacturerPartNumber}`} onClick={() => onCopy(record.manufacturerPartNumber)}>
                       <span className="min-w-0 select-text truncate">{record.manufacturerPartNumber}</span><Copy className="h-3 w-3 shrink-0 text-primary opacity-70 group-hover/mpn:opacity-100" aria-hidden="true" />
@@ -2570,8 +2575,10 @@ export function MaterialRecordDialog({
               <span className="min-w-0 select-text break-all font-mono text-sm font-semibold text-foreground">{form.manufacturerPartNumber?.trim() ? form.manufacturerPartNumber : "尚未填寫"}</span>
             </div>
           </div>
-          <DialogDescription className={activeTab === "tracking" ? "sr-only" : undefined}>
-            依 CE Excel 順序排列全部 15 個欄位；<span className="text-destructive">*</span> 為必填。
+          <DialogDescription>
+            {activeTab === "tracking"
+              ? "選好本次狀態再儲存，才會新增一筆追蹤紀錄；舊紀錄保留在右邊。"
+              : <>依 CE Excel 順序排列全部 15 個欄位；<span className="text-destructive">*</span> 為必填。</>}
           </DialogDescription>
         </DialogHeader>
 
@@ -3045,17 +3052,17 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
         )}
       >
         <td className={MATERIAL_CELL_CLASS} onClick={stopRowToggle}>
-          <label className="mx-auto flex min-h-11 w-11 cursor-pointer items-center justify-center">
-            <Checkbox aria-label={`個人標記 ${group.displayRef}`} checked={marked} disabled={markDisabled} onCheckedChange={() => actions.toggleMarked(group.key)} className="h-5 w-5" />
+          <label className="mx-auto flex min-h-9 w-9 cursor-pointer items-center justify-center">
+            <Checkbox aria-label={`個人標記 ${group.displayRef}`} checked={marked} disabled={markDisabled} onCheckedChange={() => actions.toggleMarked(group.key)} className="material-mark-checkbox h-[18px] w-[18px]" />
           </label>
         </td>
         {columns.item && (
-          <td data-material-cell="item" aria-label={isAlternateRow ? `主料 ${itemValue} 的替代料` : undefined} className={cn(MATERIAL_CELL_CLASS, "text-center font-mono text-[13px] font-black text-slate-100")}>
+          <td data-material-cell="item" aria-label={isAlternateRow ? `主料 ${itemValue} 的替代料` : undefined} className={cn(MATERIAL_CELL_CLASS, "text-center font-mono text-[13px] font-semibold text-slate-100")}>
             {!isAlternateRow && itemValue}
           </td>
         )}
         {columns.name && (
-          <td data-material-cell="name" className="relative overflow-hidden border-r border-blue-400/10 px-2 py-1.5">
+          <td data-material-cell="name" className="material-sticky-name relative overflow-hidden border-r border-blue-400/10 px-2 py-1.5">
             <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-[var(--material-row-accent)]" />
             <div className="flex items-center gap-1.5 pl-1">
               <button
@@ -3074,10 +3081,10 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                     ? expanded
                       ? "border-blue-300/40 bg-blue-400/20 text-blue-200"
                       : "border-blue-400/20 bg-blue-400/10 text-blue-300"
-                    : "border-slate-600/30 bg-slate-700/20 text-slate-600",
+                    : "border-transparent bg-transparent text-transparent",
                 )}
               >
-                {hasAlternatives ? expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" /> : <span className="text-xs">—</span>}
+                {hasAlternatives ? expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" /> : null}
               </button>
               <div className="min-w-0 flex-1">
                 <MaterialIdentityHover
@@ -3108,7 +3115,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
               values={groupRefValues.length > 0 ? groupRefValues : groupRefDes}
               maxItems={1}
               onCopy={groupRefDes !== "-" ? () => actions.copy(groupRefDes) : undefined}
-              previewClassName="font-mono text-[13px] font-black leading-5 text-sky-200 group-hover:text-sky-100"
+              previewClassName="font-mono text-[13px] font-semibold leading-5 text-sky-200 group-hover:text-sky-100"
             />
           </td>
         )}
@@ -3124,10 +3131,10 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                 className="group flex w-full min-w-0 items-center gap-1.5 text-left"
                 title={primaryMpn ? `複製 MPN：${primaryMpn}` : "尚未填 MPN"}
               >
-                <span className={cn("min-w-0 truncate font-mono text-[13px] font-black leading-5", primaryMpn ? valueClassName : "text-amber-300")}>
+                <span className={cn("min-w-0 truncate font-mono text-[13px] font-semibold leading-5", primaryMpn ? valueClassName : "text-amber-300")}>
                   {primaryMpn || "未填 MPN"}
                 </span>
-                {primaryMpn && <Copy className={cn("h-3.5 w-3.5 flex-none opacity-60 group-hover:opacity-100", iconClassName)} />}
+                {primaryMpn && <Copy className={cn("material-copy-icon h-3.5 w-3.5 flex-none opacity-60 group-hover:opacity-100", iconClassName)} />}
               </button>
             ) : (
               <span className="text-xs font-semibold text-amber-300">尚未建立首選資料</span>
@@ -3163,8 +3170,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
                 className="group flex w-full min-w-0 items-center gap-1.5 text-left"
                 title={`複製實體料號：${primaryAlternative.partNumber}`}
               >
-                <span className={cn("min-w-0 truncate font-mono text-[13px] font-black leading-5", valueClassName)}>{primaryAlternative.partNumber}</span>
-                <Copy className={cn("h-3.5 w-3.5 flex-none opacity-60 group-hover:opacity-100", iconClassName)} />
+                <span className={cn("min-w-0 truncate font-mono text-[13px] font-semibold leading-5", valueClassName)}>{primaryAlternative.partNumber}</span>
+                <Copy className={cn("material-copy-icon h-3.5 w-3.5 flex-none opacity-60 group-hover:opacity-100", iconClassName)} />
               </button>
             ) : (
               <span className={cn("text-xs font-semibold leading-5", isMeManufacturedRecord(statusRecord) ? 'text-primary' : 'text-amber-300')}>{isMeManufacturedRecord(statusRecord) ? ME_APPLICATION_EXEMPTION_LABEL : '實體料號未提供'}</span>
@@ -3323,7 +3330,7 @@ function CompactAlternativeRows({
               <td className={MATERIAL_CELL_CLASS} aria-label={`主料 ${itemValue} 的替代料 ${index + 1}`} />
             )}
             {columns.name && (
-              <td className={MATERIAL_CELL_CLASS}>
+              <td className={cn(MATERIAL_CELL_CLASS, "material-sticky-name")}>
                 <div className="flex min-w-0 items-center gap-2 pl-4">
                   <span
                     className={cn("flex h-6 min-w-6 flex-none items-center justify-center rounded-md px-1 font-mono text-[11px] font-black", preferred ? "text-slate-950" : "text-slate-100")}
@@ -3358,7 +3365,7 @@ function CompactAlternativeRows({
                   values={refValues.length > 0 ? refValues : groupRefDes}
                   maxItems={1}
                   onCopy={groupRefDes !== "-" ? () => onCopy(groupRefDes) : undefined}
-                  previewClassName="font-mono text-[13px] font-black leading-5 text-sky-200 group-hover:text-sky-100"
+                  previewClassName="font-mono text-[13px] font-semibold leading-5 text-sky-200 group-hover:text-sky-100"
                 />
               </td>
             )}
@@ -3368,7 +3375,7 @@ function CompactAlternativeRows({
                   <button type="button" onClick={() => onCopy(record.manufacturerPartNumber)} className="group flex w-full min-w-0 flex-col text-left" title={`複製 MPN：${record.manufacturerPartNumber}`}>
                     <span className="flex min-w-0 items-center gap-1.5">
                       <span className="min-w-0 truncate font-mono text-[13px] font-black leading-5 text-blue-200 group-hover:text-blue-100">{record.manufacturerPartNumber}</span>
-                      <Copy className="h-3.5 w-3.5 flex-none text-blue-400 opacity-60 group-hover:opacity-100" />
+                      <Copy className="material-copy-icon h-3.5 w-3.5 flex-none text-blue-400 opacity-60 group-hover:opacity-100" />
                     </span>
                     {record.manufacturerPartNumberAlt && <span className="truncate font-mono text-xs leading-4 text-slate-500" title={`舊檔第二 MPN：${record.manufacturerPartNumberAlt}`}>舊檔第二 MPN：{record.manufacturerPartNumberAlt}</span>}
                   </button>
@@ -3393,7 +3400,7 @@ function CompactAlternativeRows({
                 {record.partNumber ? (
                   <button type="button" onClick={() => onCopy(record.partNumber)} className="group flex w-full min-w-0 items-center gap-1.5 text-left" title={`複製實體料號：${record.partNumber}`}>
                     <span className="min-w-0 truncate font-mono text-[13px] font-black leading-5 text-cyan-200">{record.partNumber}</span>
-                    <Copy className="h-3.5 w-3.5 flex-none text-cyan-300 opacity-60 group-hover:opacity-100" />
+                    <Copy className="material-copy-icon h-3.5 w-3.5 flex-none text-cyan-300 opacity-60 group-hover:opacity-100" />
                   </button>
                 ) : (
                   <span className={cn("text-xs font-bold leading-5", isMeManufacturedRecord(record) ? 'text-primary' : 'text-amber-300')}>{isMeManufacturedRecord(record) ? ME_APPLICATION_EXEMPTION_LABEL : '實體料號未提供'}</span>
@@ -5469,7 +5476,7 @@ export function MaterialRequestPage() {
     });
 
     if (!rows.length) {
-      toast({ title: "沒有可匯出的資料", description: "請調整搜尋或篩選條件後再試。", variant: "destructive" });
+      toast({ title: "沒有可匯出的資料", description: "請調整搜尋或篩選條件後再試。" });
       return null;
     }
 
@@ -5740,7 +5747,7 @@ export function MaterialRequestPage() {
   const activeFilterControls = activeFilterChips.length > 0 && (
     <div data-testid="material-active-filters" className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
       {activeFilterChips.map(chip => <button key={chip.key} type="button" onClick={() => removeFilterChip(chip.key)} aria-label={`移除篩選：${chip.label}`} className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-foreground lg:min-h-8"><span className="max-w-[20rem] truncate">{chip.label}</span><X className="h-3 w-3 shrink-0" /></button>)}
-      <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="min-h-11 text-destructive lg:min-h-8">全部清除</Button>
+      <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="min-h-11 text-muted-foreground hover:text-foreground lg:min-h-8">全部清除</Button>
     </div>
   );
   return (
@@ -6049,19 +6056,19 @@ export function MaterialRequestPage() {
           </div>
 
           <div data-material-zone="actions" className="ml-auto flex flex-wrap items-center gap-1.5">
-            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={openPendingDialog} className={cn("h-9 border-destructive/60 bg-destructive px-3 text-sm font-black text-destructive-foreground hover:bg-destructive/85 hover:text-destructive-foreground", pendingApplicationCount > 0 && "material-attention")}>
+            <Button type="button" variant="outline" size="sm" data-testid="pending-materials-button" onClick={openPendingDialog} className={cn("h-9 border-destructive/60 bg-destructive px-3 text-sm font-bold text-destructive-foreground hover:bg-destructive/85 hover:text-destructive-foreground", pendingApplicationCount > 0 && "material-attention")}>
               <TriangleAlert className="mr-1 h-3.5 w-3.5" />待處理料 <strong className="ml-1">{pendingApplicationCount.toLocaleString()}</strong>
             </Button>
-            <Button type="button" variant="outline" size="sm" data-testid="discouraged-export-button" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} title="查看依專案解除不建議使用料的申請 SOP、預覽並匯出 PLM 申請清單" className="h-9 border-warning/60 bg-warning px-3 text-sm font-black text-warning-foreground hover:bg-warning/85 hover:text-warning-foreground disabled:cursor-wait disabled:opacity-60">
+            <Button type="button" variant="outline" size="sm" data-testid="discouraged-export-button" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading} title="查看依專案解除不建議使用料的申請 SOP、預覽並匯出 PLM 申請清單" className="h-9 border-warning/60 bg-warning px-3 text-sm font-bold text-warning-foreground hover:bg-warning/85 hover:text-warning-foreground disabled:cursor-wait disabled:opacity-60">
               <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />{isExportingDiscouraged ? "匯出中…" : "不建議料匯出"} <strong className="ml-1">{discouragedMaterialCount.toLocaleString()}</strong>
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border-success/60 bg-success px-3 text-sm font-black text-success-foreground hover:bg-success/85 hover:text-success-foreground disabled:cursor-not-allowed disabled:opacity-50">
+            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border-success/60 bg-success px-3 text-sm font-bold text-success-foreground hover:bg-success/85 hover:text-success-foreground disabled:cursor-not-allowed disabled:opacity-50">
               <Upload className="mr-1 h-3.5 w-3.5" />{isImporting ? "讀取中..." : "上傳 BOM"}
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-info/60 bg-info px-3 text-sm font-black text-info-foreground hover:bg-info/85 hover:text-info-foreground disabled:cursor-wait disabled:opacity-60">
+            <Button type="button" variant="outline" size="sm" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-info/60 bg-info px-3 text-sm font-bold text-info-foreground hover:bg-info/85 hover:text-info-foreground disabled:cursor-wait disabled:opacity-60">
               <Download className="mr-1 h-3.5 w-3.5" />匯出報表
             </Button>
-            <Button type="button" size="sm" onClick={() => openCreate()} disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border border-primary/60 bg-primary px-3.5 text-sm font-black text-primary-foreground hover:bg-primary/85 hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">
+            <Button type="button" size="sm" onClick={() => openCreate()} disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border border-primary/60 bg-primary px-3.5 text-sm font-bold text-primary-foreground hover:bg-primary/85 hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">
               <Plus className="mr-1 h-3.5 w-3.5" />新增料件
             </Button>
             <Button type="button" variant="outline" size="sm" data-testid="rlc-priority-button" onClick={() => setRlcPriorityOpen(true)} className="material-action-highlight h-9 border-primary/40 bg-primary/10 px-3 text-sm font-bold text-primary">RLC 優先順序</Button>
@@ -6243,6 +6250,7 @@ export function MaterialRequestPage() {
                 <RotateCcw className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-cyan-300" aria-label="搜尋中" />
               )}
             </div>
+            {activeFilterControls}
             {searchColumnControl}
             <div data-material-zone="summary-filters" className="flex items-center gap-1">
               <button type="button" onClick={clearFilters} aria-pressed={availability === "all" && !showMarkedOnly} className={cn("inline-flex h-9 items-center rounded-lg border px-2.5 text-xs font-black transition-colors", availability === "all" ? "border-sky-300/34 bg-sky-400/18 text-sky-50" : "border-slate-500/28 bg-slate-900/42 text-slate-200 hover:border-sky-300/20 hover:bg-sky-400/10 hover:text-sky-100")}>主料 <strong className="ml-1">{displayGroups.length.toLocaleString()}</strong></button>
@@ -6259,13 +6267,12 @@ export function MaterialRequestPage() {
             {tableSettingsControl}
             <Button type="button" variant="outline" size="sm" data-testid="material-export-visible" className="material-action-highlight h-9 gap-1.5 px-2.5 text-xs" disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} onClick={() => void exportVisibleColumns()} title="依目前顯示欄位與順序匯出所有符合篩選的廠商明細，不受分頁限制；狀態欄匯出文字"><Download className="h-3.5 w-3.5" />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}</Button>
             <Button type="button" variant="outline" size="sm" data-testid="material-personal-marks-filter" className="material-personal-marks-button h-9 gap-1.5 px-2.5 text-xs" aria-label={`我的標記（${markedGroupCount}）`} aria-pressed={showMarkedOnly} disabled={!personalMarks.ready} onClick={() => setShowMarkedOnly(value => !value)} title="只顯示目前帳號勾選的料件，其他使用者看不到這些標記"><Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />我的標記 <span className="material-mark-count">{markedGroupCount}</span></Button>
-            <span className="ml-auto text-xs text-slate-400">
+            <span className="material-toolbar-count">
               {isPreviewDataset
                 ? <>先顯示 <strong className="text-cyan-200">{visibleGroupRows.length.toLocaleString()}</strong> 個主料，完整清單同步中</>
                 : <>顯示 <strong className="text-cyan-200">{filteredGroups.length.toLocaleString()}</strong> / {displayGroups.length.toLocaleString()} 個主料 · {dataset.stats.totalRecords.toLocaleString()} 筆廠商明細</>}
             </span>
           </div>
-          {activeFilterControls}
         </div>
         {personalMarks.error && <div role="alert" className="flex items-center gap-2 px-2 py-1 text-xs text-amber-200">{personalMarks.error}<Button type="button" variant="outline" size="sm" onClick={personalMarks.reload} disabled={personalMarks.pendingKeys.size > 0}>重試個人標記</Button></div>}
 
@@ -6380,6 +6387,7 @@ export function MaterialRequestPage() {
                 {MATERIAL_TABLE_COLUMNS.map((column, columnIndex) => columnVisibility[column.key] && (
                   <ResizableHeader
                     key={column.key}
+                    columnKey={column.key}
                     columnLabel={column.label}
                     width={columnWidths[columnIndex]}
                     minWidth={MIN_COLUMN_WIDTHS[columnIndex]}
@@ -6407,7 +6415,7 @@ export function MaterialRequestPage() {
                   const filterKey = MATERIAL_COLUMN_FILTER_KEYS[column.key];
                   if (filterKey) {
                     return (
-                      <th key={column.key} className="border-r border-white/20 p-1.5">
+                      <th key={column.key} data-material-column={column.key} className="border-r border-white/20 p-1.5">
                         <ExcelFilterPopover
                           filterKey={filterKey}
                           getOptions={getColumnFilterOptions}
@@ -6462,7 +6470,7 @@ export function MaterialRequestPage() {
             {visibleGroupRows.length === 0 && (
               <tbody>
                 <tr>
-                  <td colSpan={visibleColumnCount} className="px-6 py-8 text-center text-sm font-bold text-slate-300">目前篩選條件沒有符合的料件</td>
+                  <td colSpan={visibleColumnCount} className="p-0"><div className="material-table-empty px-6 py-8 text-center text-sm font-bold text-slate-300">目前篩選條件沒有符合的料件</div></td>
                 </tr>
               </tbody>
             )}
@@ -6471,7 +6479,7 @@ export function MaterialRequestPage() {
 
         </div>}
         <div data-testid="material-pagination" className="flex flex-wrap items-center justify-between gap-2 border-t border-blue-400/15 bg-[#101d33] px-3 py-2 lg:py-1.5 lg:pr-28">
-          <div className="flex items-center gap-2 text-xs text-slate-400"><span>每頁</span><Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}><SelectTrigger aria-label="每頁筆數" className="h-11 w-20 border-blue-400/20 bg-[#0b1527] text-xs text-slate-200 lg:h-8"><SelectValue /></SelectTrigger><SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">{PAGE_SIZE_OPTIONS.map((size) => <SelectItem key={size} value={String(size)}>{size} 列</SelectItem>)}</SelectContent></Select><span>第 {page} / {totalPages} 頁</span></div>
+          <div className="flex items-center gap-2 text-xs text-slate-400"><span>每頁</span><Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}><SelectTrigger aria-label="每頁筆數" className="h-11 w-24 border-blue-400/20 bg-[#0b1527] text-xs text-slate-200 lg:h-8"><SelectValue /></SelectTrigger><SelectContent className="border-blue-400/25 bg-[#101a2d] text-slate-100">{PAGE_SIZE_OPTIONS.map((size) => <SelectItem key={size} value={String(size)}>{size} 列</SelectItem>)}</SelectContent></Select><span>第 {page} / {totalPages} 頁</span></div>
           <div className="flex items-center gap-1.5"><Button type="button" variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="h-11 border-blue-400/20 bg-[#0b1527] px-2.5 text-xs text-slate-300 lg:h-8"><ChevronLeft className="mr-1 h-3.5 w-3.5" />上一頁</Button><Button type="button" variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="h-11 border-blue-400/20 bg-[#0b1527] px-2.5 text-xs text-slate-300 lg:h-8">下一頁<ChevronRight className="ml-1 h-3.5 w-3.5" /></Button></div>
         </div>
       </section>
