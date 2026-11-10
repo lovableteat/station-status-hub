@@ -462,3 +462,39 @@
 @media (min-width: 1024px) { .circuit-workspace[data-pdf-open="true"] .circuit-history-word { display: none; } }
 
 @media (max-width: 1023px) { .circuit-changes-dialog .circuit-mobile-pdf { width: 44px; height: 44px; padding: 0; color: hsl(var(--primary)); } }
+
+/* Colour pass (2026-11-10, colour-palette skill: 60-30-10). The drawing stage and empty areas are the canvas (L0);
+   the header, the two side columns and the PDF toolbars are one neutral step up (L1) with hairlines; teal is kept for
+   the active tab, the selected row, the current tool and each area's one finishing action (看完，下一頁 / 回報改善 /
+   AI 比對新舊版 / 確認結案). Everything else is neutral. */
+.circuit-changes-dialog { --circuit-l1: hsl(var(--card)); --circuit-hairline: hsl(var(--foreground) / .1); }
+.circuit-header, .circuit-list-panel, .circuit-detail, .circuit-detail-footer, .circuit-list-rail { background: var(--circuit-l1); }
+.circuit-header { border-bottom-color: var(--circuit-hairline); box-shadow: inset 0 -1px 0 hsl(var(--foreground) / .02); }
+.circuit-list-panel { border-right-color: var(--circuit-hairline); }
+.circuit-detail-footer { border-top-color: var(--circuit-hairline); }
+.circuit-workspace[data-pdf-open="true"] .circuit-detail { border-left: 1px solid var(--circuit-hairline); }
+.circuit-item, .circuit-list-heading { border-color: var(--circuit-hairline); }
+
+/* Neutral controls: create, panel toggles and the two filters while they filter nothing. */
+.circuit-changes-dialog .circuit-new-item, .circuit-changes-dialog .circuit-panel-toggle { border: 1px solid hsl(var(--border)); background: hsl(var(--secondary)); color: hsl(var(--foreground)); box-shadow: inset 0 1px 0 hsl(0 0% 100% / .04); }
+.circuit-changes-dialog .circuit-new-item:hover:not(:disabled), .circuit-changes-dialog .circuit-panel-toggle:hover:not(:disabled) { border-color: hsl(var(--foreground) / .28); background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+.circuit-changes-dialog .circuit-new-item > svg, .circuit-changes-dialog .circuit-rail-new > svg { color: hsl(var(--primary)); }
+.circuit-changes-dialog .circuit-panel-toggle > svg { color: hsl(var(--muted-foreground)); }
+.circuit-changes-dialog .circuit-filter-bar .circuit-filter-select > svg { color: hsl(var(--muted-foreground)); }
+.circuit-changes-dialog .circuit-filter-bar .circuit-filter-select select { border-color: hsl(var(--border)); background: hsl(var(--secondary)) !important; color: hsl(var(--foreground)); -webkit-text-fill-color: currentColor; }
+.circuit-changes-dialog .circuit-filter-bar :is(.circuit-filter-owner[data-active="true"], .circuit-filter-select[data-status]:not([data-status="all"])) > svg { color: hsl(var(--primary)); }
+.circuit-changes-dialog .circuit-filter-bar :is(.circuit-filter-owner[data-active="true"], .circuit-filter-select[data-status]:not([data-status="all"])) select { border-color: hsl(var(--primary) / .55); background: hsl(var(--primary) / .1) !important; }
+
+/* Quieter state marks. */
+.circuit-image-column[data-active="true"] { border-color: hsl(var(--primary) / .35); }
+.circuit-changes-dialog :is(.circuit-submit, .circuit-pdf-ai-run):disabled { border: 1px solid hsl(var(--border)); background: hsl(var(--secondary)); color: hsl(var(--muted-foreground)); opacity: 1; }
+
+/* Collapsed rails: every button is the same labelled square. */
+.circuit-list-rail { gap: 10px; padding: 12px 8px; }
+.circuit-changes-dialog .circuit-list-rail > button { width: 64px; height: 56px; min-height: 56px; flex-direction: column; gap: 4px; padding: 6px 2px; border-radius: 8px; font-size: 12px; font-weight: 500; line-height: 16px; white-space: nowrap; }
+.circuit-changes-dialog .circuit-list-rail > button > svg { width: 18px; height: 18px; }
+.circuit-changes-dialog .circuit-search > svg { color: hsl(var(--muted-foreground)); }
+.circuit-changes-dialog .circuit-search input { border-color: hsl(var(--border)); background: hsl(var(--secondary)) !important; }
+.circuit-changes-dialog .circuit-search input:focus-visible { border-color: hsl(var(--primary) / .6); }
+/* Beside the drawing the heading keeps 編號, 狀態 and the buttons on one line; 修訂 · 操作者 stays in the hover text and 紀錄. */
+@container circuit-detail (max-width: 520px) { .circuit-detail-heading > div:first-of-type > span[data-revision] { display: none; } }

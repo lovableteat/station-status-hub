@@ -100,7 +100,8 @@ async function managerFits(page, label) {
     await dialog(page).getByTestId('circuit-official-versions').getByText('還沒有設定', { exact: true }).waitFor();
     await dialog(page).getByRole('tab', { name: /^AI 比對/ }).click();
     await panel(page).waitFor();
-    assert.equal(await panel(page).getByTestId('circuit-pdf-ai-bar').count(), 0, 'with no PDF yet AI 比對 offers the upload first');
+    await panel(page).getByRole('region', { name: 'AI 比對怎麼用', exact: true }).waitFor();
+    assert.equal(await panel(page).getByRole('button', { name: '設定官方版本', exact: true }).count(), 1, 'with no PDF yet AI 比對 explains its steps and offers the missing one');
     await dialog(page).getByRole('tab', { name: /^線路 Review/ }).click();
     report.checks.push('官方版本 has its own page that says when none is set; AI 比對 waits for a PDF');
     await panel(page).locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(files[0]); await rendered(page);
@@ -189,17 +190,26 @@ async function managerFits(page, label) {
     assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), 'Official_20261101.pdf 第 6 頁');
     report.checks.push('official comparison supports an explicitly matched page offset');
 
-    const strip = panel(page).locator('.circuit-pdf-strip'), before = await strip.evaluate(node => node.scrollLeft), box = await strip.boundingBox();
-    const currentPage = await panel(page).getByLabel('目前頁碼', { exact: true }).inputValue();
-    await page.mouse.move(box.x + box.width * .8, box.y + 10); await page.mouse.down();
-    await page.mouse.move(box.x + box.width * .2, box.y + 10, { steps: 10 }); await page.mouse.up();
-    assert.ok(await strip.evaluate(node => node.scrollLeft) > before + 20, 'Mouse dragging must pan the overview strip');
-    assert.equal(await panel(page).getByLabel('目前頁碼', { exact: true }).inputValue(), currentPage, 'A drag must not also navigate to a clicked page');
-    await strip.locator('[data-strip-page="100"]').click();
-    await page.waitForFunction(() => document.querySelector('input[aria-label="目前頁碼"]').value === '100');
-    await strip.locator('[data-strip-page="101"]').press('Enter');
-    await page.waitForFunction(() => document.querySelector('input[aria-label="目前頁碼"]').value === '101');
-    report.checks.push('mouse drag pans without page jumps; ordinary click and keyboard navigation still work');
+    // The overview is a slider: drag the white marker, read the label, release to open that page.
+    const strip = panel(page).locator('.circuit-pdf-strip'), box = await strip.boundingBox();
+    assert.ok(await strip.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'All 500 pages fit the row; nothing to scroll');
+    const marker = await strip.locator('[data-current]').boundingBox();
+    await page.mouse.move(marker.x + marker.width / 2, marker.y + marker.height / 2); await page.mouse.down();
+    await page.mouse.move(box.x + box.width * .6, box.y + box.height / 2, { steps: 10 });
+    const scrubbed = /第 (\d+) 頁/.exec(await strip.locator('.circuit-pdf-strip-label').innerText())[1];
+    await page.mouse.up();
+    await page.waitForFunction(value => document.querySelector('input[aria-label="目前頁碼"]').value === value, scrubbed);
+    assert.ok(Number(scrubbed) > 250, 'Dragging the marker moves through the pages: ' + scrubbed);
+    // 500 pages are ~1px each: hovering shows which page a click opens, and the click opens exactly that page.
+    await page.mouse.move(box.x + box.width * .2, box.y + box.height / 2);
+    const hovered = /第 (\d+) 頁/.exec(await strip.locator('.circuit-pdf-strip-label').innerText())[1];
+    await page.mouse.click(box.x + box.width * .2, box.y + box.height / 2);
+    await page.waitForFunction(value => document.querySelector('input[aria-label="目前頁碼"]').value === value, hovered);
+    await strip.focus(); await page.keyboard.press('ArrowRight');
+    await page.waitForFunction(value => document.querySelector('input[aria-label="目前頁碼"]').value === String(Number(value) + 1), hovered);
+    await page.keyboard.press('Home');
+    await page.waitForFunction(() => document.querySelector('input[aria-label="目前頁碼"]').value === '1');
+    report.checks.push('dragging the page marker opens the page its label shows; click and arrow keys still work');
     for (const width of [1440, 1280, 1173]) {
       await page.setViewportSize({ width, height: 884 });
       await headerFits(page, width);
@@ -207,7 +217,7 @@ async function managerFits(page, label) {
     }
     await page.setViewportSize({ width: 1440, height: 884 });
     report.checks.push('task tabs, 匯出, 更多 and close stay on one row at 1440/1280/1173');
-    await strip.locator('[data-strip-page="500"]').click(); await rendered(page);
+    await strip.focus(); await page.keyboard.press('End'); await rendered(page);
     assert.equal(await panel(page).getByLabel('目前頁碼', { exact: true }).inputValue(), '500');
     await panel(page).getByLabel('官方對應頁', { exact: true }).fill('500'); await rendered(page);
     assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), 'Official_20261101.pdf 第 500 頁');
