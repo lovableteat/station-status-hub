@@ -27,7 +27,7 @@ function mount(overrides = {}, search = "?workspace=material-requests&project=A"
   const update = patch => act(() => root.update(React.createElement(CircuitChangesDialog, { ...all, model: { ...model, ...patch } })));
   return { root, model, props: all, calls, window, text, button, pane, update, origins };
 }
-test("header baseline opens the PDF manager and AI keeps the existing enablement and callback", () => {
+test("header baseline opens the PDF manager and all-page AI remains available from an unmatched page", () => {
   let aiCalls = 0;
   const pdfs = { documents: [], official: { id: "official", name: "Official.pdf" }, active: { id: "working" }, officialPdf: {}, activePdf: {}, officialPage: 1, opening: false };
   const view = mount({}, undefined, { pdfs, onAiReview: () => aiCalls++ });
@@ -51,7 +51,9 @@ test("header baseline opens the PDF manager and AI keeps the existing enablement
     act(() => byLabel("AI 逐頁初審").props.onClick());
     assert.equal(aiCalls, 1);
     pdfs.officialPage = 0; view.update({});
-    assert.equal(byLabel("AI 逐頁初審").props.disabled, true);
+    assert.equal(byLabel("AI 逐頁初審").props.disabled, false);
+    act(() => byLabel("AI 逐頁初審").props.onClick());
+    assert.equal(aiCalls, 2);
     assert.match(byLabel("AI 逐頁初審").props.title, /官方對應頁/);
     pdfs.official = null; view.update({});
     assert.equal(byLabel("AI 逐頁初審").props.disabled, true);
