@@ -54,7 +54,7 @@ test("the four tasks: 線路 Review reads one drawing, AI 比對 compares with t
     act(() => props.onAiReview());
     assert.equal(aiCalls, 1);
     act(() => props.onSetupOfficial());
-    assert.deepEqual(calls.splice(0), [["task", "official"]]);
+    assert.deepEqual(calls.splice(0), [["setCompare", ""], ["task", "official"]], "only AI 比對 compares two drawings");
     act(() => tab(view, "review").props.onClick());
     assert.deepEqual(calls.splice(0), [["setCompare", ""], ["task", "review"]], "back in 線路 Review the drawing is shown alone");
   } finally { act(() => view.root.unmount()); }
@@ -81,9 +81,8 @@ test("collapsing the detail preserves mounted content and Review notes without s
   const view = mount();
   try {
     const detail = view.root.root.findByProps({ "data-testid": "circuit-change-detail" });
-    const note = view.root.root.findByProps({ "aria-label": "主管意見或退回原因" });
     const title = view.root.root.findByProps({ "aria-label": "標題" });
-    act(() => note.props.onChange({ target: { value: "請核對 VCC 接線，尚未送出。" } }));
+    assert.equal(view.root.root.findAllByProps({ "aria-label": "主管意見或退回原因" }).length, 0, "確認結案 / 退回重改 are in 改善追蹤, not beside the drawing");
     for (let cycle = 0; cycle < 2; cycle++) {
       assert.match(textOf(view.root.root.findByProps({ "aria-label": "收合修改內容" })), /收合/);
       act(() => view.root.root.findByProps({ "aria-label": "收合修改內容" }).props.onClick());
@@ -94,8 +93,6 @@ test("collapsing the detail preserves mounted content and Review notes without s
       act(() => view.root.root.findByProps({ "aria-label": "展開修改內容" }).props.onClick());
       assert.equal(detail.props.hidden, false);
       assert.equal(view.root.root.findByProps({ "data-testid": "circuit-change-detail" }), detail);
-      assert.equal(view.root.root.findByProps({ "aria-label": "主管意見或退回原因" }), note);
-      assert.equal(note.props.value, "請核對 VCC 接線，尚未送出。");
       assert.equal(title.props.value, "修改降壓線路");
       assert.equal(JSON.parse(view.window.localStorage.getItem("circuit-changes-layout:v1")).detail, true);
     }
@@ -200,7 +197,7 @@ test("the filters sit directly above the list, and creating a change shows its r
   } finally { act(() => root.unmount()); }
 });
 test("review validates return reason, retains per-item action and opens immutable history", async () => {
-  const { root, calls, button, text } = mount();
+  const { root, calls, button, text } = mount({}, undefined, { task: "track" });
   try {
     // The reason box sits with the decision buttons, not at the far end of the form.
     const bar = root.root.findByProps({ className: "circuit-review-bar" });
@@ -211,42 +208,44 @@ test("review validates return reason, retains per-item action and opens immutabl
     act(() => root.root.findByProps({ "aria-label": "主管意見或退回原因" }).props.onChange({ target: { value: "請補修改後圖" } }));
     await act(async () => { button("退回重改").props.onClick(); });
     assert.deepEqual(calls.find(call => call[0] === "review"), ["review", "request_changes", "請補修改後圖"]);
-    act(() => root.root.findAll(node => node.type === "stub" && node.props["aria-pressed"] === false && Array.isArray(node.props.children) && node.props["aria-label"]?.startsWith("追蹤紀錄 "))[0].props.onClick());
+    // 改善追蹤 opens with the record showing; an old revision shows its problem as text and its fields locked.
+    const toggle = root.root.findAll(node => node.type === "stub" && Array.isArray(node.props.children) && node.props["aria-label"]?.startsWith("追蹤紀錄 "))[0];
+    if (toggle.props["aria-pressed"] === false) act(() => toggle.props.onClick());
     await act(async () => { button("查看此修訂").props.onClick(); });
-    assert.equal(root.root.findByProps({ "aria-label": "標題" }).props.value, "歷史線路內容");
-    assert.equal(root.root.findByProps({ "aria-label": "標題" }).props.disabled, true);
+    assert.ok(textOf(root.root.findByProps({ className: "circuit-problem-read" })).includes("歷史線路內容"));
+    assert.equal(root.root.findByProps({ "aria-label": "改善說明" }).props.disabled, true);
     assert.equal(calls.filter(call => call[0] === "draft").length, 0);
   } finally { act(() => root.unmount()); }
 });
 test("a returned change shows its reason first and cannot be sent until the required content is there", async () => {
   const returned = item("one", 1, "needs_changes", "", { description: "" });
   const events = [{ id: "back", itemId: "one", setId: "set", type: "request_changes", actorId: "b", actorName: "審查主管", revision: 3, note: "請補量測波形", createdAt: returned.updatedAt }];
-  const { root, calls, button, text } = mount({ items: [returned], selectedItem: returned, draft: returned.content, events });
+  const { root, calls, button, text } = mount({ items: [returned], selectedItem: returned, draft: returned.content, events }, undefined, { task: "track" });
   try {
     const reason = root.root.findByProps({ className: "circuit-returned" });
     assert.ok(textOf(reason).includes("請補量測波形") && textOf(reason).includes("審查主管"));
-    assert.ok(text().includes("回報改善前還缺：") && text().includes("標題") && text().includes("改善說明或修改後圖片"));
+    assert.ok(text().includes("回報改善前還缺：") && text().includes("標題") && text().includes("改善說明或改好後截圖"));
     assert.equal(button("回報改善").props.disabled, true);
     await act(async () => { button("回報改善").props.onClick(); });
     assert.equal(calls.filter(call => call[0] === "review").length, 0, "an incomplete change never reaches the server");
   } finally { act(() => root.unmount()); }
 });
 test("a pasted screenshot goes to the marked pane, pasted cell text stays text, and a failed close keeps the draft", async () => {
-  const { root, calls, pane, text, button } = mount({ dirty: true, saveDraft: async () => { throw new Error("儲存失敗，草稿保留"); } });
+  const { root, calls, pane, text, button } = mount({ dirty: true, saveDraft: async () => { throw new Error("儲存失敗，草稿保留"); } }, undefined, { task: "review" });
   try {
     assert.equal(button("不儲存，直接關閉"), undefined);
     const files = Array.from({ length: 12 }, (_, id) => ({ name: "image.png", type: "image/png", id })); let prevented = false;
     const dialog = root.root.findByProps({ "data-testid": "circuit-changes-dialog" });
-    assert.equal(pane("before").props["data-active"], true, "a change without a before picture takes the first paste as before");
+    assert.equal(pane("before").props["data-active"], true, "線路 Review pastes into 問題截圖");
     await act(async () => { dialog.props.onPaste({ clipboardData: { files }, preventDefault() { prevented = true; } }); });
     assert.ok(prevented);
     const upload = calls.find(call => call[0] === "images"); assert.equal(upload[1].length, 12); assert.equal(upload[2], "before");
     // Clicking the other pane moves the target, and the tag that says so moves with it.
-    act(() => pane("after").props.onPointerDown());
-    assert.equal(pane("after").props["data-active"], true);
-    assert.ok(textOf(pane("after")).includes("貼上會加到這裡") && !textOf(pane("before")).includes("貼上會加到這裡"));
+    act(() => pane("reference").props.onPointerDown());
+    assert.equal(pane("reference").props["data-active"], true);
+    assert.ok(textOf(pane("reference")).includes("貼上會加到這裡") && !textOf(pane("before")).includes("貼上會加到這裡"));
     await act(async () => { dialog.props.onPaste({ clipboardData: { files: files.slice(0, 1) }, preventDefault() {} }); });
-    assert.equal(calls.filter(call => call[0] === "images")[1][2], "after");
+    assert.equal(calls.filter(call => call[0] === "images")[1][2], "reference");
     // Excel puts a picture of the copied cells beside their text; in a text field the text must win.
     let hijacked = false; const before = calls.filter(call => call[0] === "images").length;
     await act(async () => { dialog.props.onPaste({ target: { closest: selector => selector.includes("textarea") ? {} : null }, clipboardData: { files: files.slice(0, 1), getData: () => "R2301 10K -> 4.7K" }, preventDefault() { hijacked = true; } }); });
@@ -261,15 +260,15 @@ test("a pasted screenshot goes to the marked pane, pasted cell text stays text, 
 });
 test("a file dropped on a pane is added to that pane, and a removed picture can be put back where it was", async () => {
   const withImages = item("one", 1, "draft", "含圖片", { images: [picture("b1", "before"), picture("a1", "after"), picture("a2", "after")] });
-  const { root, calls, pane, update } = mount({ items: [withImages], selectedItem: withImages, draft: withImages.content });
+  const { root, calls, pane, update } = mount({ items: [withImages], selectedItem: withImages, draft: withImages.content }, undefined, { task: "track" });
   try {
-    assert.equal(pane("after").props["data-active"], true, "with a before picture present the next paste belongs to after");
+    assert.equal(pane("after").props["data-active"], true, "改善追蹤 pastes into 改好後截圖");
     const file = { name: "drop.png", type: "image/png" }; let stopped = false;
     const drag = { dataTransfer: { types: ["Files"], files: [file] }, preventDefault() {}, stopPropagation() { stopped = true; } };
-    await act(async () => { pane("before").props.onDrop(drag); });
+    await act(async () => { pane("reference").props.onDrop(drag); });
     assert.ok(stopped, "the dialog-wide drop handler must not add the same file a second time");
     const dropped = calls.find(call => call[0] === "images");
-    assert.equal(dropped[1].length, 1); assert.equal(dropped[1][0], file); assert.equal(dropped[2], "before", "not the pane that happened to be the paste target");
+    assert.equal(dropped[1].length, 1); assert.equal(dropped[1][0], file); assert.equal(dropped[2], "reference", "not the pane that happened to be the paste target");
     assert.equal(pane("before").props["data-image-count"], 1); assert.equal(pane("after").props["data-image-count"], 2);
     act(() => root.root.findByProps({ "aria-label": "移除圖片 a1.png" }).props.onClick());
     const removal = calls.find(call => call[0] === "draft")[1];
@@ -287,7 +286,7 @@ test("with nothing recorded an editor gets the form straight away and a viewer g
   try {
     assert.equal(editor.root.root.findAllByProps({ "data-testid": "circuit-change-item" }).length, 0);
     assert.equal(editor.root.root.findAllByProps({ "aria-label": "標題" }, { deep: false }).length, 1, "the form is there on first open");
-    assert.equal(editor.pane("before").findAllByProps({ "aria-label": "加入修改前圖片" }).length, 1, "and so is a visible place to add pictures");
+    assert.equal(editor.pane("before").findAllByProps({ "aria-label": "加入問題截圖" }).length, 1, "and so is a visible place to add pictures");
     assert.equal(editor.root.root.findAllByProps({ "data-testid": "circuit-change-unsaved" }).length, 0, "the blank form is the new change; the list has no placeholder row");
     assert.ok(editor.text().includes("還沒有問題；在右邊填寫就會建立第一項"));
     assert.ok(editor.text().includes("V1 → V2 線路修改"), "the header names the list the first problem will go into");
@@ -311,7 +310,7 @@ test("a change that waits for review or is approved is locked until the user cho
     await act(async () => { view.root.root.findByProps({ "data-testid": "circuit-changes-dialog" }).props.onPaste({ clipboardData: { files: [{ name: "a.png", type: "image/png" }] }, preventDefault() {} }); });
     assert.equal(view.calls.filter(call => call[0] === "images").length, 0);
     assert.ok(view.text().includes("內容已鎖定"));
-    assert.equal(view.root.root.findAllByProps({ className: "circuit-review-bar" }).length, 1, "reviewing itself stays available");
+    assert.equal(view.root.root.findAllByProps({ className: "circuit-review-bar" }).length, 0, "確認結案 / 退回重改 are in 改善追蹤");
     act(() => view.button("修改內容").props.onClick());
     assert.equal(titleField().props.disabled, false);
     assert.equal(view.root.root.findAllByProps({ className: "circuit-locked" }).length, 0);
@@ -320,7 +319,7 @@ test("a change that waits for review or is approved is locked until the user cho
     assert.equal(view.calls.filter(call => call[0] === "draft").length, 1);
   } finally { act(() => view.root.unmount()); }
   const approved = item("one", 1, "approved", "已確認的修改");
-  const done = mount({ items: [approved], selectedItem: approved, draft: approved.content });
+  const done = mount({ items: [approved], selectedItem: approved, draft: approved.content }, undefined, { task: "track" });
   try {
     assert.ok(textOf(done.root.root.findByProps({ className: "circuit-locked" })).includes("已結案"));
     assert.equal(done.root.root.findByProps({ "aria-label": "改善說明" }).props.disabled, true);
@@ -328,24 +327,23 @@ test("a change that waits for review or is approved is locked until the user cho
     assert.equal(done.root.root.findByProps({ "aria-label": "改善說明" }).props.disabled, false);
     assert.ok(done.text().includes("需要重新確認"));
   } finally { act(() => done.root.unmount()); }
-});
-test("once the before picture is in, the next paste belongs to after", async () => {
-  const draft = item("one", 1, "draft", "只有文字");
-  let view;
-  view = mount({ items: [draft], selectedItem: draft, draft: draft.content, addImages: async (files, side) => {
-    view.calls.push(["images", files, side]);
-    view.update({ items: [draft], selectedItem: draft, draft: { ...draft.content, images: [picture("b1", side)] } });
-  } });
+  const waiting = mount({}, undefined, { task: "track" });
   try {
-    const dialog = view.root.root.findByProps({ "data-testid": "circuit-changes-dialog" });
-    assert.equal(view.pane("before").props["data-active"], true);
-    await act(async () => { dialog.props.onPaste({ clipboardData: { files: [{ name: "before.png", type: "image/png" }] }, preventDefault() {} }); });
-    assert.equal(view.pane("before").props["data-image-count"], 1);
-    assert.equal(view.pane("after").props["data-active"], true, "the tag moves to 修改後 without a click");
-    assert.ok(textOf(view.pane("after")).includes("貼上會加到這裡"));
-    await act(async () => { dialog.props.onPaste({ clipboardData: { files: [{ name: "after.png", type: "image/png" }] }, preventDefault() {} }); });
-    assert.equal(view.calls.filter(call => call[0] === "images")[1][2], "after");
-  } finally { act(() => view.root.unmount()); }
+    assert.equal(waiting.root.root.findAllByProps({ className: "circuit-review-bar" }).length, 1, "in 改善追蹤 the reviewer decides while the content stays locked");
+  } finally { act(() => waiting.root.unmount()); }
+});
+test("a paste goes to the picture the task is about: 問題截圖 in 線路 Review, 改好後截圖 in 改善追蹤", async () => {
+  const draft = item("one", 1, "draft", "只有文字");
+  for (const [task, side] of [["review", "before"], ["track", "after"]]) {
+    const view = mount({ items: [draft], selectedItem: draft, draft: draft.content }, undefined, { task });
+    try {
+      const dialog = view.root.root.findByProps({ "data-testid": "circuit-changes-dialog" });
+      assert.equal(view.pane(side).props["data-active"], true, task);
+      assert.ok(textOf(view.pane(side)).includes("貼上會加到這裡"));
+      await act(async () => { dialog.props.onPaste({ clipboardData: { files: [{ name: "shot.png", type: "image/png" }] }, preventDefault() {} }); });
+      assert.equal(view.calls.filter(call => call[0] === "images")[0][2], side);
+    } finally { act(() => view.root.unmount()); }
+  }
 });
 test("a framed PDF area goes into the change on screen: its source is kept, sides stay apart, and an empty 頁碼 is filled", async () => {
   const draft = item("two", 2, "draft", "調整 LED 阻值", { page: "" });
@@ -411,7 +409,7 @@ test("a picture framed on a PDF opens its page; a picture from a removed version
   const framed = { ...picture("framed", "after"), source: { kind: "pdf", documentId: "v9", name: "v9.pdf", date: "2026-11-09", label: "", page: 7, rect: { x: 0, y: 0, width: 1, height: 1 } } };
   const gone = { ...picture("gone", "before"), source: { ...framed.source, documentId: "gone", date: "2026-11-01" } };
   const draft = item("two", 2, "draft", "調整 LED 阻值", { images: [gone, framed] });
-  const view = mount({ selectedItemId: "two", selectedItem: draft, draft: draft.content });
+  const view = mount({ selectedItemId: "two", selectedItem: draft, draft: draft.content }, undefined, { task: "track" });
   try {
     const button = label => view.root.root.findAll(node => node.props["aria-label"] === label && typeof node.props.onClick === "function")[0];
     await act(async () => { button("到 PDF 第 7 頁（2026-11-09）").props.onClick(); });

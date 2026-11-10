@@ -122,7 +122,7 @@ async function managerFits(page, label) {
     assert.match(await panel(page).locator('.circuit-pdf-baseline-section').innerText(), /Official_20261101\.pdf/);
     assert.equal(await panel(page).getByRole('button', { name: '刪除 PDF：Official_20261101.pdf', exact: true }).count(), 0, 'The official original cannot be deleted');
     const manager = panel(page).getByRole('group', { name: 'PDF 版本（依圖面日期）' });
-    await manager.getByText('目前沒有工作版本', { exact: true }).waitFor();
+    await manager.getByText('沒有其他 PDF', { exact: true }).waitFor();
     assert.equal(await manager.locator('.circuit-pdf-baseline-section input').count(), 0, 'A fixed baseline is a readable summary, not disabled input fields');
     assert.equal(await manager.locator('.circuit-pdf-working-section li').count(), 0, 'The official baseline must not be duplicated among working versions');
     await managerFits(page, 'desktop empty working versions');
@@ -141,7 +141,7 @@ async function managerFits(page, label) {
     for (const file of files.slice(1)) {
       if (file === files[1]) {
         const chooser = page.waitForEvent('filechooser');
-        await panel(page).getByRole('button', { name: '上傳新 PDF', exact: true }).click();
+        await panel(page).getByRole('button', { name: '上傳 PDF', exact: true }).click();
         await (await chooser).setFiles(file);
       } else await panel(page).locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(file);
       await rendered(page);
@@ -175,10 +175,9 @@ async function managerFits(page, label) {
     report.checks.push('manager separates baseline and working versions; metadata editing is explicit and persists across closing/reopening');
 
     await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
-    await panel(page).getByRole('button', { name: '開啟 11/08 版 Working_20261108.pdf', exact: true }).click(); await rendered(page);
-    await panel(page).getByRole('button', { name: '刪除這份 PDF', exact: true }).click();
+    await panel(page).getByRole('button', { name: '刪除 PDF：Working_20261108.pdf', exact: true }).click();
     await panel(page).getByRole('button', { name: '確認刪除 Working_20261108.pdf', exact: true }).click();
-    await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
+    if (!(await manager.isVisible())) await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
     await eventually(() => registry().documents.find(row => row.name === 'Working_20261108.pdf')?.removedAt, 'Archiving must persist without deleting the original');
     assert.equal(fixture.state.pdfs.size, 3);
     await panel(page).getByRole('button', { name: /已刪除的 PDF/ }).click();
@@ -262,20 +261,19 @@ async function managerFits(page, label) {
     await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
     await manager.getByRole('button', { name: '關閉 PDF 版本管理', exact: true }).click();
     for (const name of ['Working_20261108.pdf', 'Working_20261109.pdf']) {
-      await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
-      await manager.getByRole('button', { name: new RegExp('^開啟 .* ' + name.replace('.', '[.]') + '$') }).click(); await rendered(page);
+      if (!(await manager.isVisible())) await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
       const confirmBar = panel(page).getByRole('group', { name: '確認刪除 PDF' });
-      await panel(page).getByRole('button', { name: '刪除這份 PDF', exact: true }).click();
+      await manager.getByRole('button', { name: '刪除 PDF：' + name, exact: true }).click();
       if (name === 'Working_20261108.pdf') {
         await confirmBar.getByRole('button', { name: '取消', exact: true }).click();
         assert.ok(!registry().documents.find(row => row.name === name).removedAt, 'Cancel must leave the PDF available');
-        await panel(page).getByRole('button', { name: '刪除這份 PDF', exact: true }).click();
+        await manager.getByRole('button', { name: '刪除 PDF：' + name, exact: true }).click();
       }
       await confirmBar.getByRole('button', { name: '確認刪除 ' + name, exact: true }).click();
       await eventually(() => registry().documents.find(row => row.name === name)?.removedAt, 'Deleting the work version keeps its original for restoration');
     }
-    await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
-    await manager.getByText('目前沒有工作版本', { exact: true }).waitFor();
+    if (!(await manager.isVisible())) await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
+    await manager.getByText('沒有其他 PDF', { exact: true }).waitFor();
     await manager.getByRole('button', { name: /已刪除的 PDF/ }).click();
     assert.equal(await manager.getByRole('button', { name: /^還原 PDF：/ }).count(), 2);
     await managerFits(page, 'desktop official-only with deleted working versions');
@@ -321,7 +319,7 @@ async function managerFits(page, label) {
     const recovery = await open(390);
     await panel(recovery.page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
     const recoveryManager = panel(recovery.page).getByRole('group', { name: 'PDF 版本（依圖面日期）' });
-    await recoveryManager.getByText('目前沒有工作版本', { exact: true }).waitFor();
+    await recoveryManager.getByText('沒有其他 PDF', { exact: true }).waitFor();
     await recoveryManager.getByRole('button', { name: /已刪除的 PDF/ }).click();
     await managerFits(recovery.page, 'phone all-archived recovery');
     await recovery.page.screenshot({ path: path.join(evidence, 'manager-all-archived-390.png') });
@@ -339,7 +337,7 @@ async function managerFits(page, label) {
     assert.ok(await dialog(recovery.page).isVisible());
     const mobileFile = path.join(evidence, 'Mobile_Working_20261110.pdf'); fs.copyFileSync(files[2], mobileFile);
     const mobileChooser = recovery.page.waitForEvent('filechooser');
-    await panel(recovery.page).getByRole('button', { name: '上傳新 PDF', exact: true }).click();
+    await panel(recovery.page).getByRole('button', { name: '上傳 PDF', exact: true }).click();
     await (await mobileChooser).setFiles(mobileFile);
     await eventually(() => registry().documents.some(row => row.name === 'Mobile_Working_20261110.pdf'), 'Phone new-work button opens a file chooser and uploads its PDF');
     await rendered(recovery.page);

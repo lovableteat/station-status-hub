@@ -8,11 +8,11 @@ export const CIRCUIT_CHANGE_STATUS_LABELS: Record<CircuitChangeStatus, string> =
 };
 /** The four jobs of the 線路修改 window, in the order people do them. */
 export type CircuitTask = "review" | "ai" | "track" | "official";
-export const CIRCUIT_TASKS: Array<{ key: CircuitTask; label: string; hint: string }> = [
-  { key: "review", label: "線路 Review", hint: "看線路圖、框選並標記問題" },
-  { key: "ai", label: "AI 比對", hint: "官方版本與新版並排，AI 找出新舊差異，逐項確認並保存" },
-  { key: "track", label: "改善追蹤", hint: "畫線路的人回報改善，主管確認結案；每一步都有紀錄" },
-  { key: "official", label: "官方版本", hint: "記錄目前的官方版本與每次更換" },
+export const CIRCUIT_TASKS: Array<{ key: CircuitTask; label: string; short: string; hint: string }> = [
+  { key: "review", label: "線路 Review", short: "看圖、標記問題", hint: "看線路圖、框選並標記問題" },
+  { key: "ai", label: "AI 比對", short: "新舊版差在哪", hint: "官方版本與新版並排，AI 找出新舊差異，逐項確認並保存" },
+  { key: "track", label: "改善追蹤", short: "回報改善、確認結案", hint: "畫線路的人回報改善，主管確認結案；每一步都有紀錄" },
+  { key: "official", label: "官方版本", short: "換了就記錄", hint: "記錄目前的官方版本與每次更換" },
 ];
 const TASK_KEY = "circuit-changes-task:v1";
 export function readCircuitTask(): CircuitTask {
@@ -21,7 +21,7 @@ export function readCircuitTask(): CircuitTask {
 }
 export function writeCircuitTask(task: CircuitTask) { try { window.localStorage.setItem(TASK_KEY, task); } catch { /* the choice is a convenience */ } }
 export type CircuitImageSide = "before" | "after" | "reference";
-export const CIRCUIT_IMAGE_SIDE_LABELS: Record<CircuitImageSide, string> = { before: "修改前", after: "修改後", reference: "補充圖" };
+export const CIRCUIT_IMAGE_SIDE_LABELS: Record<CircuitImageSide, string> = { before: "問題截圖", after: "改好後截圖", reference: "補充圖" };
 export interface CircuitImageMark {
   id: string; kind: "pin" | "box"; x: number; y: number; width?: number; height?: number; text: string;
 }
@@ -80,7 +80,7 @@ export function circuitChangeMissingForReview(content: CircuitChangeContent | nu
   if (!content) return ["修改內容"];
   const missing: string[] = [];
   if (!content.title.trim()) missing.push("標題");
-  if (!content.description.trim() && !content.images.some(image => image.side === "after")) missing.push("改善說明或修改後圖片");
+  if (!content.description.trim() && !content.images.some(image => image.side === "after")) missing.push("改善說明或改好後截圖");
   return missing;
 }
 /** `permanent` marks a file that can never be accepted (wrong type, empty, too large), so retrying it is pointless. */

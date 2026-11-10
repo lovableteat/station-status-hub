@@ -49,11 +49,12 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       await dialog.waitFor();
       // 1. The form and a place for pictures are on screen straight away; none of this has written anything.
       const title=dialog.getByRole('textbox',{name:'標題',exact:true}); await title.waitFor();
-      const addBefore=dialog.getByRole('button',{name:'加入修改前圖片',exact:true});
+      const tab=async name=>{await dialog.getByRole('tab',{name:new RegExp('^'+name)}).tap();await page.waitForFunction(label=>document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.includes(label),name);};
+      const addBefore=dialog.getByRole('button',{name:'加入問題截圖',exact:true});
       await addBefore.scrollIntoViewIfNeeded();
       const target=await addBefore.boundingBox();
       assert.ok(await addBefore.isVisible() && target && target.height>=100 && target.width>=Math.min(width,320)-80, 'the picture target is a large, visible area');
-      if(!phone) assert.ok(await dialog.getByRole('button',{name:'加入修改後圖片',exact:true}).isVisible(), 'before and after sit side by side');
+      assert.equal(await dialog.getByRole('button',{name:'加入改好後截圖',exact:true}).count(), 0, '線路 Review only marks the problem; the fix picture is in 改善追蹤');
       assert.ok((await dialog.locator('.circuit-image-column[data-side="before"]').innerText()).includes('貼上會加到這裡'));
       assert.equal((await addBefore.innerText()).includes('Ctrl+V'), !phone, 'a phone is not told to press Ctrl+V or drag');
       assert.equal(await dialog.getByRole('button',{name:/新增改版清單|新增問題/}).filter({visible:true}).count(), phone ? 0 : 1, 'one button per action: 新增問題 here, 新增改版清單 in the 更多 menu');
@@ -101,8 +102,8 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       assert.equal(created.sets.length,1); assert.equal(created.items.length,1);
       assert.equal(created.sets[0].title, ownBatch ? 'QA 自訂批次 ' + width : 'V2 → V3 線路修改');
       assert.equal(created.items[0].setId, created.sets[0].id); assert.equal(created.items[0].number,1);
-      assert.ok((await dialog.locator('.circuit-next-step').innerText()).includes('第 2 步'), 'what is still missing before review is spelled out');
-      assert.equal(await dialog.getByRole('button',{name:'回報改善',exact:true}).isDisabled(), true);
+      assert.ok((await dialog.locator('.circuit-next-step').innerText()).includes('改善追蹤'), 'the next step points to 改善追蹤');
+      assert.equal(await dialog.getByRole('button',{name:'回報改善',exact:true}).count(), 0, '線路 Review has no 回報改善');
       // 5. The guide keeps the draft, and its last section and button stay reachable on a short screen.
       await dialog.getByRole('button',{name:'更多',exact:true}).tap();await dialog.page().getByRole('menuitem',{name:'使用說明',exact:true}).tap(); await guide.waitFor();
       if(phone) await page.setViewportSize({width,height:500});
@@ -125,32 +126,36 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
         assert.ok(footer && footer.y+footer.height<=501);
         await page.setViewportSize({width,height:884});
       }
-      // 6. Once the description is there the change can be sent, and nothing overflows sideways.
+      // 6. In 改善追蹤, once the description is there the change can be sent, and nothing overflows sideways.
+      await tab('改善追蹤');
+      assert.equal(await dialog.getByRole('button',{name:'回報改善',exact:true}).isDisabled(), true);
       await dialog.getByRole('textbox',{name:'改善說明',exact:true}).fill('上拉電阻改為 4.7K');
       await page.waitForFunction(()=>document.querySelector('.circuit-detail-footer [role="status"]')?.textContent==='已儲存');
       assert.equal(await dialog.getByRole('button',{name:'回報改善',exact:true}).isEnabled(), true);
       assert.equal((await state(origin)).items.length,1);
-      // 7. Pictures: two pasted screenshots become before and after without choosing anything; a phone picks files into the open tab.
+      // 7. Pictures go where the task says: a paste in 改善追蹤 is the 改好後截圖, in 線路 Review the 問題截圖; a phone picks a file into 問題截圖.
       const paneCount=(side,count)=>page.waitForFunction(({side,count})=>document.querySelector(`.circuit-image-column[data-side="${side}"]`)?.dataset.imageCount===String(count),{side,count});
       const shot=()=>page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;const c=canvas.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,320,180);c.fillStyle='#111';c.fillRect(40,60,120,40);return canvas.toDataURL('image/png').split(',')[1];});
       if(phone) {
+        await tab('線路 Review');
         const chooser=page.waitForEvent('filechooser');
-        await dialog.getByRole('button',{name:'加入修改前圖片',exact:true}).tap();
+        await dialog.getByRole('button',{name:'加入問題截圖',exact:true}).tap();
         await (await chooser).setFiles([{name:'phone-before.png',mimeType:'image/png',buffer:Buffer.from(await shot(),'base64')}]);
         await paneCount('before',1);
-        assert.equal(await dialog.locator('.circuit-image-columns').getAttribute('data-mobile-side'),'before','the tab stays on the picture that was just added');
+        assert.ok(await dialog.locator('.circuit-form-step .circuit-image-column[data-side="before"]').isVisible(),'the picture stays in 問題截圖 inside step 1');
         assert.ok(await dialog.getByRole('button',{name:'放大圖片 phone-before.png',exact:true}).isVisible());
       } else {
         const paste=async name=>page.evaluate(({base64,name})=>{
           const data=new DataTransfer();data.items.add(new File([Uint8Array.from(atob(base64),char=>char.charCodeAt(0))],name,{type:'image/png'}));
           document.querySelector('[data-testid="circuit-changes-dialog"]').dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
         },{base64:await shot(),name});
-        await paste('before-shot.png'); await paneCount('before',1);
         await page.waitForFunction(()=>document.querySelector('.circuit-image-column[data-side="after"]')?.dataset.active==='true');
         await paste('after-shot.png'); await paneCount('after',1);
+        await tab('線路 Review');
+        await paste('before-shot.png'); await paneCount('before',1);
       }
       await page.waitForFunction(()=>document.querySelector('.circuit-detail-footer [role="status"]')?.textContent==='已儲存');
-      assert.deepEqual((await state(origin)).items[0].content.images.map(image=>[image.name,image.side]), phone ? [['phone-before.png','before']] : [['before-shot.png','before'],['after-shot.png','after']]);
+      assert.deepEqual((await state(origin)).items[0].content.images.map(image=>[image.name,image.side]), phone ? [['phone-before.png','before']] : [['after-shot.png','after'],['before-shot.png','before']]);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),width);
       await page.screenshot({path:path.join(evidence,`first-item-${width}.png`)});
       if(phone) { await dialog.getByRole('button',{name:'返回問題清單',exact:true}).tap(); await dialog.getByTestId('circuit-change-item').waitFor(); }

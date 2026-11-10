@@ -35,8 +35,8 @@ test("the batch created with the first change is named after the version on scre
 
 test("what is still missing before review matches the server rule, and field limits match the server validator", () => {
   const content = { title: "", reason: "", description: "", refs: "", net: "", page: "", owner: "", images: [] };
-  assert.equal(circuitChangeMissingForReview(content).join(), "標題,改善說明或修改後圖片");
-  assert.equal(circuitChangeMissingForReview({ ...content, title: " R1 ", images: [{ side: "before" }] }).join(), "改善說明或修改後圖片");
+  assert.equal(circuitChangeMissingForReview(content).join(), "標題,改善說明或改好後截圖");
+  assert.equal(circuitChangeMissingForReview({ ...content, title: " R1 ", images: [{ side: "before" }] }).join(), "改善說明或改好後截圖");
   assert.equal(circuitChangeMissingForReview({ ...content, title: "R1", images: [{ side: "after" }] }).length, 0);
   assert.equal(circuitChangeMissingForReview({ ...content, title: "R1", description: "改值" }).length, 0);
   assert.equal(isUnsavedCircuitChange({ revision: 0 }), true); assert.equal(isUnsavedCircuitChange({ revision: 1 }), false); assert.equal(isUnsavedCircuitChange(null), false);

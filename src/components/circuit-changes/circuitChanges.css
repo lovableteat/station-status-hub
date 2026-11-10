@@ -573,3 +573,98 @@
 .circuit-changes-dialog .circuit-save-button:disabled { border-color: transparent; background: transparent; box-shadow: none; color: hsl(var(--muted-foreground)); opacity: 1; }
 .circuit-changes-dialog .circuit-save-button:disabled > svg { color: hsl(var(--primary)); }
 .circuit-footer-row { gap: 10px; }
+
+/* Clarity round (2026-11-11).
+   Task tabs: the user found them too quiet inside the title bar. They are a full-width row under the title now, one
+   tile per job, numbered in the order the work happens; the current tile is solid teal so it is obvious where you are. */
+.circuit-changes-dialog > .circuit-tasks { display: grid; flex: none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0 8px 8px; border: 0; border-radius: 0; background: transparent; }
+.circuit-changes-dialog .circuit-task { display: flex; min-width: 0; height: 54px; align-items: center; gap: 10px; padding: 0 14px; border: 1px solid hsl(var(--primary) / .45); border-radius: 10px; background: hsl(var(--primary) / .07); color: hsl(var(--foreground)); font-size: 15px; font-weight: 600; text-align: left; white-space: nowrap; cursor: pointer; }
+.circuit-changes-dialog .circuit-task:hover { border-color: hsl(var(--primary) / .8); background: hsl(var(--primary) / .15); }
+.circuit-changes-dialog .circuit-task:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+.circuit-task-number { display: inline-grid; flex: none; width: 26px; height: 26px; place-items: center; border: 1.5px solid hsl(var(--primary)); border-radius: 999px; color: hsl(var(--primary)); font-size: 13px; font-weight: 700; }
+.circuit-changes-dialog .circuit-task > svg { display: block; flex: none; width: 18px; height: 18px; color: hsl(var(--primary)); }
+.circuit-task-text { display: flex; min-width: 0; flex-direction: column; gap: 2px; line-height: 1.2; }
+.circuit-task-label, .circuit-task-short { overflow: hidden; text-overflow: ellipsis; }
+.circuit-task-short { color: hsl(var(--muted-foreground)); font-size: 12px; font-style: normal; font-weight: 400; }
+.circuit-changes-dialog .circuit-task > small { margin-left: auto; min-width: 24px; height: 24px; border-radius: 12px; background: hsl(var(--warning) / .18); font-size: 12px; }
+.circuit-changes-dialog .circuit-task[aria-selected="true"] { border-color: hsl(var(--primary)); background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); box-shadow: none; }
+.circuit-changes-dialog .circuit-task[aria-selected="true"] > svg { color: hsl(var(--primary-foreground)); }
+.circuit-changes-dialog .circuit-task[aria-selected="true"] .circuit-task-short { color: hsl(var(--primary-foreground) / .78); }
+.circuit-changes-dialog .circuit-task[aria-selected="true"] .circuit-task-number { border-color: hsl(var(--primary-foreground)); background: hsl(var(--primary-foreground)); color: hsl(var(--primary)); }
+.circuit-changes-dialog .circuit-task[aria-selected="true"] > small { background: hsl(var(--primary-foreground)); color: hsl(var(--warning)); }
+@media (max-width: 1023px) {
+  .circuit-changes-dialog > .circuit-tasks { gap: 4px; padding: 0 8px 8px; }
+  .circuit-changes-dialog .circuit-task { height: 46px; justify-content: center; gap: 4px; padding: 0 4px; font-size: 13px; }
+  .circuit-changes-dialog .circuit-task > svg, .circuit-changes-dialog .circuit-task-number, .circuit-changes-dialog .circuit-task-short { display: none; }
+  .circuit-changes-dialog .circuit-task > small { margin-left: 0; min-width: 20px; height: 20px; }
+}
+
+/* 已移除的問題: a labelled amber row at the foot of the list instead of a grey icon beside 新增問題. */
+.circuit-changes-dialog .circuit-list-panel > .circuit-removed-trigger { display: flex; flex: none; width: auto; height: 44px; align-items: center; gap: 8px; margin: 8px 12px 12px; padding: 0 6px 0 12px; border: 1px solid hsl(var(--warning) / .55); border-radius: 8px; background: hsl(var(--warning) / .1); color: hsl(var(--warning)); font-size: 14px; font-weight: 500; }
+.circuit-changes-dialog .circuit-list-panel > .circuit-removed-trigger:hover { border-color: hsl(var(--warning)); background: hsl(var(--warning) / .18); color: hsl(var(--warning)); }
+.circuit-changes-dialog .circuit-list-panel > .circuit-removed-trigger > svg { width: 18px; height: 18px; color: hsl(var(--warning)); }
+.circuit-changes-dialog .circuit-list-panel > .circuit-removed-trigger > b { margin-left: auto; padding: 4px 12px; border-radius: 6px; background: hsl(var(--warning)); color: hsl(var(--background)); font-size: 13px; font-weight: 600; }
+@media (max-width: 1023px) { .circuit-changes-dialog .circuit-list-panel > .circuit-removed-trigger { margin: 8px 16px 12px; } }
+
+/* Each picture box is one field of its step (問題截圖 in ①, 改好後截圖 in ②), not a second card that repeats the step. */
+.circuit-form-step .circuit-image-section { margin-top: 0; }
+.circuit-form-step .circuit-image-columns { display: block; margin-top: 0; }
+.circuit-form-step .circuit-image-column { gap: 6px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.circuit-form-step .circuit-image-column > header { min-height: 24px; }
+.circuit-form-step .circuit-image-column h4 { font-size: 13px; font-weight: 500; }
+.circuit-form-step .circuit-image-column > header > button { height: 32px; }
+.circuit-form-step .circuit-image-empty { height: auto; min-height: 104px; flex-direction: row; gap: 10px; padding: 12px 16px; }
+.circuit-form-step .circuit-image-empty > svg { width: 22px; height: 22px; }
+.circuit-form-step .circuit-image-column[data-active="true"] .circuit-image-empty { border-color: hsl(var(--primary) / .8); }
+.circuit-form-step .circuit-image-column[data-dropping="true"] { background: transparent; }
+.circuit-form-step .circuit-image-column[data-dropping="true"] .circuit-image-empty { border-color: hsl(var(--primary)); background: hsl(var(--primary) / .12); }
+.circuit-form-step .circuit-image-stage { height: clamp(180px, 30vh, 420px); }
+.circuit-detail-scroll > .circuit-image-section[data-view="reference"] { margin-top: 12px; }
+.circuit-image-status > :first-child { margin-top: 0; }
+.circuit-image-status { margin-bottom: 12px; }
+.circuit-field-mark { margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: hsl(var(--warning) / .16); color: hsl(var(--warning)); font-size: 11px; font-style: normal; font-weight: 600; vertical-align: 1px; }
+@media (max-width: 1023px) {
+  /* The pictures are inside the steps now, so the steps keep their own box and 補充圖 follows them. */
+  .circuit-detail-scroll > .circuit-form-steps { display: grid; order: 0; }
+  .circuit-detail-scroll > .circuit-form-steps > .circuit-form-step:last-child { margin-top: 0; }
+  .circuit-detail-scroll > .circuit-image-section[data-view="reference"] { order: 2; }
+  .circuit-form-step .circuit-image-empty { min-height: 104px; height: auto; }
+}
+
+/* 負責人 holds a name, so it gets the room; 頁碼 is a short number. */
+.circuit-form-step .circuit-location-fields { grid-template-columns: 1fr 1fr .6fr 1.3fr; }
+@media (max-width: 1023px) { .circuit-form-step .circuit-location-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container circuit-detail (max-width: 520px) { .circuit-form-step .circuit-location-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* User-first round (2026-11-11): each tab shows only its own job.
+   AI 比對 is the two drawings alone, edge to edge. */
+.circuit-changes-dialog .circuit-workspace[data-task="ai"] { grid-template-columns: minmax(0, 1fr); }
+/* 改善追蹤: the problem (read) beside its 改善結果 when there is room. */
+@container circuit-detail (min-width: 900px) { .circuit-form-steps[data-task="track"] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.circuit-form-steps[data-task="track"] { display: grid; gap: 12px; }
+.circuit-form-step-title > .circuit-problem-edit { height: 32px; gap: 6px; margin-left: auto; padding-inline: 10px; color: hsl(var(--primary)); font-size: 13px; font-weight: 500; }
+.circuit-problem-read { display: grid; gap: 6px; min-width: 0; }
+.circuit-problem-read > strong { font-size: 16px; font-weight: 600; line-height: 24px; overflow-wrap: anywhere; }
+.circuit-problem-read > span { color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 20px; }
+.circuit-problem-read > p { font-size: 14px; line-height: 22px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.circuit-problem-read > .circuit-image-section { margin-top: 4px; }
+.circuit-track-pdf { justify-self: start; height: 40px; gap: 8px; border-color: hsl(var(--primary) / .4); background: hsl(var(--primary) / .08); color: hsl(var(--primary)); }
+.circuit-track-pdf[aria-pressed="true"] { border-color: hsl(var(--primary)); }
+/* The remove button says what it removes, so it is not mistaken for deleting the PDF. */
+.circuit-changes-dialog .circuit-detail-heading .circuit-remove-item { width: auto; gap: 6px; padding-inline: 10px; color: hsl(var(--muted-foreground)); font-size: 13px; }
+.circuit-changes-dialog .circuit-detail-heading .circuit-remove-item:hover:not(:disabled) { color: hsl(var(--destructive)); }
+/* One page row: 上一頁 · page number · the strip · 看完，下一頁. */
+.circuit-pdf-overview > .circuit-pdf-pager { flex: none; }
+/* PDF rows: delete sits beside 編輯資訊; its confirmation opens under the row. */
+.circuit-pdf-version-actions { flex-wrap: wrap; }
+.circuit-pdf-version-actions > .circuit-pdf-version-delete { gap: 6px; color: hsl(var(--muted-foreground)); }
+.circuit-pdf-version-actions > .circuit-pdf-version-delete:hover, .circuit-pdf-version-actions > .circuit-pdf-version-delete[aria-expanded="true"] { color: hsl(var(--destructive)); }
+.circuit-pdf-version-actions > .circuit-pdf-confirm { flex: 1 0 100%; position: static; margin: 4px 0 0; }
+@media (min-width: 1024px) {
+  .circuit-pdf-row:not(:has(> .circuit-pdf-tool-group[data-group="compare"])) > .circuit-pdf-tool-group[data-group="zoom"] { margin-inline-start: auto; }
+}
+
+/* A card never grows past its column: a long thumbnail strip scrolls inside the card instead of covering the card beside it. */
+.circuit-form-step, .circuit-form-step .circuit-content-fields, .circuit-form-step .circuit-image-section { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.circuit-form-step .circuit-image-strip { max-width: 100%; overflow-x: auto; }
+.circuit-problem-read .circuit-image-stage { height: clamp(140px, 22vh, 260px); }
