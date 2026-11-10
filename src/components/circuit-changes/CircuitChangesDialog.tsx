@@ -361,8 +361,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   const problemDone = Boolean(content?.title.trim());
   const fixDone = Boolean(content && (content.description.trim() || content.images.some(image => image.side === "after")));
   const nextStep = snapshot ? "" : !canEdit ? "檢視權限：可查看與匯出" : reviewing ? "改善沒問題就按「確認結案」；還要改的話先寫意見再退回重改。"
-    : item?.status === "approved" && !model.dirty ? "這個問題已結案。" : !problemDone ? "第 1 步：先寫標題，問題就會自動存起來"
-    : !fixDone ? "第 2 步：改好後寫改善說明或加修改後的圖，再按「回報改善」" : "可以按「回報改善」交給主管確認";
+    : item?.status === "approved" && !model.dirty ? "這個問題已結案。" : !problemDone ? "第 1 步：寫標題（會自動存）"
+    : !fixDone ? "第 2 步：寫改善說明或加改好後的圖" : "可以回報改善了";
   const viewportStyle = viewport ? { "--circuit-viewport-height": `${viewport.height}px`, "--circuit-viewport-top": `${viewport.top}px` } as CSSProperties : undefined;
   const field = (key: CircuitChangeTextField, label: string, multiline = false, placeholder = "") => <label className={`circuit-field circuit-field-${key}`} key={key}><span>{label}</span>{multiline
     ? <Textarea aria-label={label} value={content?.[key] || ""} disabled={readOnly} maxLength={CIRCUIT_CHANGE_FIELD_LIMITS[key]} placeholder={readOnly ? "" : placeholder} onChange={event => update({ [key]: event.target.value })} />
@@ -464,11 +464,12 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                 </div>
                 <div className="circuit-item-navigation">
                   {!wide && (task === "review" || task === "ai") && <Button type="button" variant="ghost" className="circuit-mobile-pdf" aria-label="看圖面" title="打開 PDF 圖面，逐頁看、框選問題" onClick={() => setMobilePdf(true)}><FileText aria-hidden="true" /></Button>}
+                  {filtered.length > 1 && <>
                   <Button type="button" variant="ghost" aria-label="上一個問題" title="上一個問題" disabled={!canPrevious || busy} onClick={() => selectItem(filtered[selectedIndex - 1].id)}><ChevronLeft aria-hidden="true" /></Button>
-                  <Button type="button" variant="ghost" aria-label="下一個問題" title="下一個問題" disabled={!canNext || busy} onClick={() => selectItem(filtered[selectedIndex < 0 ? 0 : selectedIndex + 1].id)}><ChevronRight aria-hidden="true" /></Button>
+                  <Button type="button" variant="ghost" aria-label="下一個問題" title="下一個問題" disabled={!canNext || busy} onClick={() => selectItem(filtered[selectedIndex < 0 ? 0 : selectedIndex + 1].id)}><ChevronRight aria-hidden="true" /></Button></>}
                   {!unsaved && <Button title="顯示或收起這個問題的追蹤紀錄：每次儲存、回報改善、確認結案與退回" type="button" variant={historyOpen ? "secondary" : "ghost"} aria-pressed={historyOpen} aria-label={`追蹤紀錄 ${model.events.length}`} onClick={() => setHistoryOpen(value => !value)}><span className="circuit-history-word">追蹤</span>紀錄 {model.events.length}</Button>}
                   {canEdit && !snapshot && !unsaved && <Button type="button" variant="ghost" className="circuit-remove-item" aria-label="移除問題" title="移出清單，保留追蹤紀錄與原圖，之後可還原" disabled={busy || remotelyRemoved} onClick={() => { setNotice(""); setRemoveTarget(item); }}><Trash2 aria-hidden="true" /></Button>}
-                  {wide && pdfOpen && <Button type="button" variant="outline" className="circuit-detail-collapse circuit-panel-toggle" aria-label="收合修改內容" title="收合問題內容，讓 PDF 更寬" aria-expanded={true} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightClose aria-hidden="true" /><span>收合內容</span></Button>}
+                  {wide && pdfOpen && <Button type="button" variant="outline" className="circuit-detail-collapse circuit-panel-toggle" aria-label="收合修改內容" title="收合問題內容，讓 PDF 更寬" aria-expanded={true} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightClose aria-hidden="true" /><span>收合</span></Button>}
                 </div>
               </header>
               <div ref={detailScroll} className="circuit-detail-scroll">
@@ -480,7 +481,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                 {!readOnly && item.status === "approved" && <p className="circuit-revision-note">更新已結案的內容會保留原紀錄，並需要重新確認。</p>}
                 <div className="circuit-form-steps">
                   <section className="circuit-form-step" data-state={problemDone ? "done" : "current"} aria-label="第 1 步 標記問題">
-                    <h3 className="circuit-form-step-title"><b aria-hidden="true">{problemDone ? <Check /> : 1}</b><span>標記問題</span><small>檢查的人填；寫好標題就會自動存</small></h3>
+                    <h3 className="circuit-form-step-title" title="檢查線路的人填：寫好標題就會自動存起來"><b aria-hidden="true">{problemDone ? <Check /> : 1}</b><span>標記問題</span><small>檢查的人填</small></h3>
                     <div className="circuit-content-fields">
                       {field("title", "標題", false, "例如：R2301 阻值錯誤")}
                       <div className="circuit-location-fields">{field("refs", "Ref", false, "R2301、U2…")}{field("net", "Net", false, "電源或訊號名稱")}{field("page", "頁碼", false, "原理圖頁碼")}{field("owner", "負責人", false, "畫線路的人")}</div>
@@ -488,8 +489,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                     </div>
                   </section>
                   <section className="circuit-form-step" data-state={fixDone ? "done" : problemDone ? "current" : "waiting"} aria-label="第 2 步 回報改善">
-                    <h3 className="circuit-form-step-title"><b aria-hidden="true">{fixDone ? <Check /> : 2}</b><span>回報改善</span><small>畫線路的人改好後填，再按下方「回報改善」</small></h3>
-                    <div className="circuit-content-fields">{field("description", "改善說明", true, "改了什麼：元件、數值、接法。")}</div>
+                    <h3 className="circuit-form-step-title" title="畫線路的人改好後填，再按下方「回報改善」交給主管確認"><b aria-hidden="true">{fixDone ? <Check /> : 2}</b><span>回報改善</span><small>{problemDone ? "畫線路的人填" : "寫好標題後再填"}</small></h3>
+                    {problemDone && <div className="circuit-content-fields">{field("description", "改善說明", true, "改了什麼：元件、數值、接法。")}</div>}
                   </section>
                 </div>
                 <CircuitChangeImages key={`${item.id}:${snapshot ? snapshot.revision : "live"}`} images={images} urls={urls} side={side} dragSide={dragSide} readOnly={readOnly} busy={busy}

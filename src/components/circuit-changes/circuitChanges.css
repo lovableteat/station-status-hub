@@ -560,3 +560,16 @@
   .circuit-detail-scroll > .circuit-form-steps > .circuit-form-step:last-child { order: 2; margin-top: 14px; }
   .circuit-form-step { padding: 12px; }
 }
+
+/* Visual audit (2026-11-11): the heading stays on one line beside the drawing, step titles never break inside a word,
+   and the save state reads as a status (not a dead button) while there is nothing to save. */
+.circuit-workspace[data-pdf-open="true"] .circuit-detail-heading { flex-wrap: nowrap; gap: 4px; }
+.circuit-workspace[data-pdf-open="true"] .circuit-detail-heading > div:first-of-type { flex: 1 1 auto; flex-basis: auto; }
+.circuit-detail-heading .circuit-item-navigation { flex: none; gap: 2px; }
+.circuit-detail-heading .circuit-item-navigation > button { padding-inline: 8px; }
+.circuit-detail-heading .circuit-detail-collapse { min-width: 0; padding-inline: 10px; }
+.circuit-form-step-title > span { flex: none; white-space: nowrap; }
+.circuit-form-step-title { cursor: default; }
+.circuit-changes-dialog .circuit-save-button:disabled { border-color: transparent; background: transparent; box-shadow: none; color: hsl(var(--muted-foreground)); opacity: 1; }
+.circuit-changes-dialog .circuit-save-button:disabled > svg { color: hsl(var(--primary)); }
+.circuit-footer-row { gap: 10px; }

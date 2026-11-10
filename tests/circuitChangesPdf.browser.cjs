@@ -190,7 +190,7 @@ async function eventually(check, message, timeout = 8000) {
     await panel(p).getByRole('button', {name:'對照頁往前一頁', exact:true}).click();
     assert.equal(await panel(p).locator('.circuit-pdf-offset > span').innerText(), '第 4 頁');
     await dialog(p).getByRole('button', {name:'新增問題', exact:true}).click();
-    await dialog(p).getByText('檢查的人填；寫好標題就會自動存', {exact:true}).waitFor();
+    await dialog(p).getByText('寫好標題後再填', {exact:true}).waitFor();
     await panel(p).getByRole('button', {name:'下一頁', exact:true}).click(); await onPage(p, 5); await rendered(p);
     assert.equal(await panel(p).locator('figure[data-pane="compare"] figcaption').innerText(), '自選對照 · 11/07 版 第1天 第 5 頁');
     await frame(p, 0);

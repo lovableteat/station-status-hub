@@ -106,7 +106,7 @@ async function geometry(page, dialog, width, height) {
           const scrollTop = await scroll.evaluate(node => { node.scrollTop = Math.min(140, node.scrollHeight - node.clientHeight); return node.scrollTop; });
           const originalListCollapsed = await dialog.locator('.circuit-workspace').getAttribute('data-list-collapsed') === 'true';
           for (let cycle = 0; cycle < 2; cycle++) {
-            await panelControl(dialog.getByRole('button', { name: '收合修改內容', exact: true }), '收合內容', true);
+            await panelControl(dialog.getByRole('button', { name: '收合修改內容', exact: true }), '收合', true);
             await dialog.getByRole('button', { name: '收合修改內容', exact: true }).click();
             await detail.waitFor({ state: 'hidden' });
             const expand = dialog.getByRole('button', { name: '展開修改內容', exact: true });
