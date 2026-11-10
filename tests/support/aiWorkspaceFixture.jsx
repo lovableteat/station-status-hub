@@ -13,6 +13,8 @@ import { fixtureState, mobileReply, setFixtureAccount } from './aiWorkspaceMock'
 import '../../src/index.css';
 
 // The provider is isolated below the real chat/recovery/telemetry code.
+const modelErrorQa = new URLSearchParams(location.search).has('qaModelError');
+if (modelErrorQa) window.__aiModelErrorQA = { requests: [], writes: fixtureState.writes, failAttachmentUpload: false };
 const localFetch=window.fetch.bind(window);
 window.fetch = async (url,init) => {
   const href=typeof url==='string'?url:url instanceof URL?url.href:url.url;
@@ -47,7 +49,7 @@ function Fixture() {
   const params = new URLSearchParams(location.search);
   const mobilePreview = params.has('mobile');
   const moreLayout = params.has('qaMoreLayout');
-  const modelTargets = params.has('qaMixedModels') ? [...targets, ...referenceTargets] : params.has('qaReference') ? referenceTargets : targets;
+  const modelTargets = params.has('qaMixedModels') ? [...targets, ...referenceTargets] : params.has('qaReference') || modelErrorQa ? referenceTargets : targets;
   const [targetId, setTargetId] = useState(modelTargets[0].id);
   const [revision, setRevision] = useState(0);
   const [workspaceVisible, setWorkspaceVisible] = useState(true);
@@ -75,7 +77,7 @@ function Fixture() {
     </nav>
     <main data-mobile-workspace-main={mobilePreview ? 'true' : undefined} className="min-h-0 flex-1"><div data-ai-chat-workspace="viewport-fit" className="h-full min-h-0 w-full min-w-0 px-1 py-1 sm:px-3 sm:py-3 lg:px-5 lg:py-4">{workspaceVisible ? <ApiChatConsole mode="chat-only" selectedApiKey={selected.record} selectedModel={selected.model} selectedApiKeyTargetId={targetId} onSelectApiKeyTarget={setTargetId} availableApiKeys={[selected.record]} availableApiKeyTargets={modelTargets} maintenanceProjects={maintenanceProjects} currentMaintenanceProjectId={maintenanceProjects[0].id} materialSpecsAllowed /> : <p>已離開隔離 AI 工作區；返回可確認待儲存草稿。</p>}</div></main>
     <div data-chat-dock="detached" className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-40 w-auto sm:w-[min(480px,calc(100vw-1rem))] lg:bottom-4 lg:right-4"><DirectMessageLauncher unreadCount={3} onOpen={() => setMessengerOpens(value => value + 1)} /></div>
-    {mobilePreview && <MobileWorkspaceDock activeItem={dockWorkspace} availableItems={moreLayout ? [...workspaces, ...moreWorkspaces] : workspaces} onSelect={setDockWorkspace} platformActions={dockWorkspace === 'ai-chat' ? accountActions : undefined} />}
+    {mobilePreview && <MobileWorkspaceDock activeItem={dockWorkspace} availableItems={moreLayout ? [...workspaces, ...moreWorkspaces] : workspaces} onSelect={value => { setDockWorkspace(value); if (modelErrorQa) setWorkspaceVisible(value === 'ai-chat'); }} platformActions={dockWorkspace === 'ai-chat' ? accountActions : undefined} />}
     <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
       <DialogContent>
         <DialogTitle>測試帳號設定</DialogTitle>

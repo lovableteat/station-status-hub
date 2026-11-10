@@ -634,14 +634,25 @@ function extractGeminiResponse(result: unknown) {
 function ConnectionBanner({
   result,
   onDismiss,
+  compact = false,
 }: {
   result: ChatConnectionState;
   onDismiss: () => void;
+  compact?: boolean;
 }) {
   const isSuccess = result.status === "success";
 
+  if (compact) return (
+    <div data-ai-connection-banner role={isSuccess ? "status" : "alert"} className="mx-3 mb-2 flex shrink-0 items-start gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground">
+      {isSuccess ? <CheckCircle2 aria-hidden="true" className="mt-3 h-4 w-4 shrink-0 text-primary" /> : <AlertTriangle aria-hidden="true" className="mt-3 h-4 w-4 shrink-0 text-warning" />}
+      <div className="min-w-0 flex-1 py-2"><p className="font-semibold">{result.title}</p><p className="mt-1 break-words leading-5 text-muted-foreground">{result.message}</p></div>
+      <Button type="button" variant="ghost" size="icon" aria-label="關閉查詢狀態" onClick={onDismiss} className="h-11 w-11 shrink-0"><X className="h-4 w-4" /></Button>
+    </div>
+  );
+
   return (
     <div
+      data-ai-connection-banner
       className={cn(
         "rounded-[24px] border px-5 py-4 shadow-[0_24px_50px_rgba(2,8,23,0.22)] transition-all duration-200",
         isSuccess
@@ -927,10 +938,10 @@ function MessageCard({ message, materialSpecsAllowed, compact, priorQuestion, ca
               )}
             ><Copy className="h-4 w-4" /></Button>}
             {priorQuestion && <Button
-              type="button" variant="ghost" className="h-11 w-11 shrink-0 p-0" aria-label="重填這個問題"
-              title={canReuseQuestion ? "重填這個問題" : "輸入列可用且沒有草稿時才能重填"}
+              type="button" variant="ghost" className={cn("h-11 shrink-0", message.state === "error" ? "gap-2 px-3 text-primary" : "w-11 p-0")} aria-label="重填這個問題"
+              title={canReuseQuestion ? "將問題帶回輸入框，再按送出使用目前選擇的模型" : "輸入列可用且沒有草稿時才能重填"}
               disabled={!canReuseQuestion} onClick={() => onReuseQuestion(priorQuestion)}
-            ><RotateCcw className="h-4 w-4" /></Button>}
+            ><RotateCcw className="h-4 w-4" />{message.state === "error" && "重填問題"}</Button>}
             <span className="ml-auto whitespace-nowrap text-xs tabular-nums">{formatMessageTime(message.createdAt)}</span>
           </div>
         )}
@@ -1883,7 +1894,8 @@ export function ApiChatConsole({
       if (requestGenerationRef.current === requestGeneration) {
         const message = error instanceof Error ? error.message : '對話附件讀取失敗，請重試。';
         setConnectionState({status:'error',title:'對話資料準備失敗',message,endpoint:requestUrl,provider,model,durationMs:0});
-        toast.error(message); sendInFlight.current = false; setLoading(false); setRequestProgress('');
+        if (!compactChat) toast.error(message);
+        sendInFlight.current = false; setLoading(false); setRequestProgress('');
       }
       return;
     }
@@ -1988,6 +2000,9 @@ export function ApiChatConsole({
     } catch (error) {
       if (requestGenerationRef.current !== requestGeneration) return;
       const errorMessage = error instanceof Error ? error.message : "資料查詢失敗";
+      const queryError = compactChat && model === OPENAI_ON_DEMAND_MODEL && error instanceof AiRequestFailure && error.kind === "model-access"
+        ? `${model}：此 API Key 尚未開通模型權限。\n\n本次單次使用已結束。重新提問會使用上方目前選擇的模型。`
+        : `API 呼叫失敗：${errorMessage}`;
       if (retrievingMaintenance) {
         setMaintenanceRetrievalError(errorMessage);
         setMaintenanceResultCount(null);
@@ -2000,11 +2015,12 @@ export function ApiChatConsole({
             ? `料號 SPEC 檢索失敗：${errorMessage}。系統已停止查詢，沒有改用無來源回答。`
             : retrievingMaintenance
             ? `維修資料檢索失敗：${errorMessage}。系統已停止 AI 查詢，沒有改用無來源回答。`
-            : `API 呼叫失敗：${errorMessage}`,
+            : queryError,
           "error",
         ), materialSpecs },
       ]);
-      toast.error(retrievingMaintenance ? "維修資料檢索失敗" : "資料查詢失敗");
+      if (compactChat) setConnectionState(null);
+      else toast.error(retrievingMaintenance ? "維修資料檢索失敗" : "資料查詢失敗");
     } finally {
       if (requestGenerationRef.current === requestGeneration) {
         if (specReadController.current === specController) specReadController.current = null;
@@ -3226,7 +3242,7 @@ export function ApiChatConsole({
 
       <div className={cn("flex min-h-0 flex-col", isChatOnly ? "flex-1 gap-0" : "flex-1 mt-4 gap-4")}>
         {connectionState ? (
-          <ConnectionBanner result={connectionState} onDismiss={() => setConnectionState(null)} />
+          <ConnectionBanner result={connectionState} compact={compactChat} onDismiss={() => setConnectionState(null)} />
         ) : null}
 
         <div
