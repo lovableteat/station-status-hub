@@ -228,23 +228,30 @@ export function CircuitPdfPanel({ mode = "review", onAiReview, onSetupOfficial, 
   </>;
   const message = failure || pdfs.error;
   const aiReady = Boolean(official && pdfs.officialPdf && active && active.id !== official.id && pdfs.activePdf && !pdfs.opening);
-  const aiBar = mode === "ai" ? <div className="circuit-pdf-ai-bar" role="group" aria-label="AI 比對新舊版" data-testid="circuit-pdf-ai-bar">
-    <span className="circuit-pdf-ai-side" data-side="old"><small>舊版</small>{official
-      ? <strong title={official.name}><ShieldCheck aria-hidden="true" />官方版本 · {circuitPdfVersionLabel(official)}</strong>
-      : <strong>還沒有官方版本</strong>}</span>
-    <ArrowRight aria-hidden="true" className="circuit-pdf-ai-arrow" />
-    <label className="circuit-pdf-ai-side" data-side="new"><small>新版</small>
-      <select title="選要跟官方版本比對的新版 PDF" aria-label="選擇新版 PDF" value={active && active.id !== official?.id ? active.id : ""} disabled={!workingVersions.length} onChange={event => { if (event.target.value) pdfs.select(event.target.value); }}>
-        <option value="" disabled>{workingVersions.length ? "選擇新版" : "還沒有新版 PDF"}</option>
-        {workingVersions.map(row => <option key={row.id} value={row.id}>{circuitPdfVersionLabel(row)} · {row.name}</option>)}
-      </select></label>
-    {!official ? <Button title="到「官方版本」選一份 PDF 當比對的舊版" type="button" variant="outline" onClick={onSetupOfficial}><ShieldCheck aria-hidden="true" />設定官方版本</Button>
-      : !workingVersions.length ? canEdit && <Button title="上傳要跟官方版本比對的新版 PDF" type="button" variant="outline" disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Upload aria-hidden="true" />{pdfs.uploading ? "上傳中…" : "上傳新版 PDF"}</Button>
-      : <Button type="button" className="circuit-pdf-ai-run" disabled={!aiReady || !onAiReview} title={aiReady ? "逐頁比對官方版本與新版，列出差異讓你確認" : "PDF 開啟後即可比對"} onClick={onAiReview}><Sparkles aria-hidden="true" />AI 比對新舊版</Button>}
+  // 1 官方版本 → 2 新版 → 3 AI 比對 → 4 逐項確認. The step that is missing decides the one action on screen.
+  const aiStep = !official ? 1 : !workingVersions.length ? 2 : 3;
+  const aiState = (step: number) => step < aiStep ? "done" : step === aiStep ? "current" : "waiting";
+  const aiAction = !official
+    ? <Button type="button" title="到「官方版本」選一份 PDF 當比對的舊版" onClick={onSetupOfficial}><ShieldCheck aria-hidden="true" />設定官方版本</Button>
+    : !workingVersions.length ? (canEdit ? <Button type="button" title="上傳要跟官方版本比對的新版 PDF（也可以把 PDF 拖進來）" disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Upload aria-hidden="true" />{pdfs.uploading ? "上傳中…" : "上傳新版 PDF"}</Button> : null)
+    : <Button type="button" className="circuit-pdf-ai-run" disabled={!aiReady || !onAiReview} title={aiReady ? "逐頁比對官方版本與新版，列出差異讓你確認" : "PDF 開啟後即可比對"} onClick={onAiReview}><Sparkles aria-hidden="true" />AI 比對新舊版</Button>;
+  const aiBar = mode === "ai" ? <div className="circuit-pdf-ai-bar" role="group" aria-label="AI 比對步驟" data-testid="circuit-pdf-ai-bar" data-step={aiStep}>
+    <ol className="circuit-pdf-ai-steps">
+      <li data-state={aiState(1)} data-side="old"><b aria-hidden="true">{aiStep > 1 ? <Check /> : 1}</b><span><small>舊版</small>{official
+        ? <strong title={official.name}>官方版本 · {circuitPdfVersionLabel(official)}</strong> : <strong>設定官方版本</strong>}</span></li>
+      <li data-state={aiState(2)} data-side="new"><b aria-hidden="true">{aiStep > 2 ? <Check /> : 2}</b><span><small>新版</small>{workingVersions.length
+        ? <select title="選要跟官方版本比對的新版 PDF" aria-label="選擇新版 PDF" value={active && active.id !== official?.id ? active.id : ""} onChange={event => { if (event.target.value) pdfs.select(event.target.value); }}>
+          <option value="" disabled>選擇新版</option>
+          {workingVersions.map(row => <option key={row.id} value={row.id}>{circuitPdfVersionLabel(row)} · {row.name}</option>)}
+        </select> : <strong>上傳新版 PDF</strong>}</span></li>
+      <li data-state={aiState(3)}><b aria-hidden="true">3</b><span><small>比對</small><strong>AI 比對新舊版</strong></span></li>
+      <li data-state="waiting"><b aria-hidden="true">4</b><span><small>確認</small><strong>逐項確認差異</strong></span></li>
+    </ol>
+    {aiStep === 3 && aiAction}
   </div> : null;
   const back = <Button title="回到問題內容" type="button" variant="ghost" className="circuit-pdf-back" aria-label="返回修改內容" onClick={onBack}><ArrowLeft aria-hidden="true" /></Button>;
 
-  if (!documents.length && !archived.length && !versionsOpen) {
+  if (!documents.length && !archived.length && !versionsOpen && mode !== "ai") {
     return <section className="circuit-pdf-panel" aria-label="PDF 圖面" data-testid="circuit-pdf-panel" data-dropping={dropping}
       onDragOver={event => { if (carriesFiles(event) && canEdit) { event.preventDefault(); event.stopPropagation(); setDropping(true); } }}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false); }} onDrop={drop}>
@@ -269,6 +276,26 @@ export function CircuitPdfPanel({ mode = "review", onAiReview, onSetupOfficial, 
     <label className="circuit-pdf-checked"><input type="checkbox" title="勾選表示這一頁已經看完" aria-label="本頁看過" checked={pageState !== "none"} onChange={event => pdfs.setChecked(page, event.target.checked)} /><span>{pageState === "older" ? "舊版看過" : "本頁看過"}</span></label>
     <Button type="button" onClick={finishPage} title="標記本頁看過並翻到下一頁"><Check aria-hidden="true" />{page < active.pages ? "看完，下一頁" : "看完本頁"}</Button>
   </div> : null;
+  if (mode === "ai" && aiStep < 3) {
+    return <section className="circuit-pdf-panel" aria-label="PDF 圖面" data-testid="circuit-pdf-panel" data-dropping={dropping}
+      onDragOver={event => { if (carriesFiles(event) && canEdit) { event.preventDefault(); event.stopPropagation(); setDropping(true); } }}
+      onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false); }} onDrop={drop}>
+      {hiddenInputs}
+      {aiBar}
+      {message && <p className="circuit-pdf-message" role="alert"><span>{message}</span><Button type="button" variant="ghost" aria-label="關閉訊息" title="關閉這則訊息" onClick={() => { setFailure(""); pdfs.clearError(); }}><X aria-hidden="true" /></Button></p>}
+      <div className="circuit-pdf-ai-guide" role="region" aria-label="AI 比對怎麼用">
+        <h3>AI 比對要兩份 PDF</h3>
+        <p>左邊放官方版本（舊版），右邊放現在畫好的新版。AI 會逐頁找出兩份不一樣的地方，你再一項一項確認，結果會存下來可以回查。</p>
+        <ol>
+          <li data-state={aiState(1)}><b aria-hidden="true">{aiStep > 1 ? <Check /> : 1}</b><div><strong>官方版本</strong><span>{official ? `已設定：${official.name}（${circuitPdfVersionLabel(official)}）` : "還沒有。到「官方版本」選一份原廠或已發行的 PDF。"}</span></div></li>
+          <li data-state={aiState(2)}><b aria-hidden="true">2</b><div><strong>新版 PDF</strong><span>還沒有。上傳現在畫好的線路圖 PDF，也可以直接把檔案拖進這裡。</span></div></li>
+          <li data-state="waiting"><b aria-hidden="true">3</b><div><strong>按「AI 比對新舊版」</strong><span>兩份會並排、同步捲動，AI 逐頁列出差異。</span></div></li>
+          <li data-state="waiting"><b aria-hidden="true">4</b><div><strong>逐項確認</strong><span>每一項選「已確認」或「不採用」並儲存；要改的地方框選加到問題。</span></div></li>
+        </ol>
+        {aiAction ? <div className="circuit-pdf-ai-guide-action">{aiAction}</div> : <p className="circuit-pdf-ai-guide-note">目前是檢視權限，請有編輯權限的同仁上傳新版 PDF。</p>}
+      </div>
+    </section>;
+  }
   return <section className="circuit-pdf-panel" aria-label="PDF 圖面" data-testid="circuit-pdf-panel" data-dropping={dropping} data-compare={Boolean(compare)}
     onDragOver={event => { if (carriesFiles(event) && canEdit) { event.preventDefault(); event.stopPropagation(); setDropping(true); } }}
     onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false); }} onDrop={drop}
@@ -455,31 +482,39 @@ const PageStrip = memo(function PageStrip({ registry, documentId, pages, current
   pageChanges: Map<number, Array<{ id: string; number: number }>>; onPage: (page: number) => void;
 }) {
   const strip = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ x: number; left: number; moved: boolean } | null>(null);
-  const suppressClick = useRef(false);
-  const [dragging, setDragging] = useState(false);
-  useEffect(() => { strip.current?.querySelector<HTMLElement>(`[data-strip-page="${current}"]`)?.scrollIntoView({ block: "nearest", inline: "center" }); }, [current]);
-  useEffect(() => {
-    const element = strip.current;
-    if (!element) return;
-    const wheel = (event: WheelEvent) => { if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) { element.scrollLeft += event.deltaY; event.preventDefault(); } };
-    element.addEventListener("wheel", wheel, { passive: false });
-    return () => element.removeEventListener("wheel", wheel);
-  }, []);
+  const dragging = useRef(false);
+  const [scrub, setScrub] = useState<number | null>(null);
+  const [hover, setHover] = useState<number | null>(null);
   const cells = useMemo(() => Array.from({ length: pages }, (_, index) => {
     const page = index + 1, state = circuitPdfPageState(registry, documentId, page), changes = pageChanges.get(page) || [];
     return { page, state, changes };
   }), [registry, documentId, pages, pageChanges]);
-  return <div className="circuit-pdf-strip" ref={strip} role="group" aria-label="頁面總覽：點一格跳到該頁" title="拖曳左右移動；點頁格跳頁" data-dragging={dragging}
-    onPointerDown={event => { if (event.pointerType !== "mouse" || event.button !== 0) return; suppressClick.current = false; drag.current = { x: event.clientX, left: event.currentTarget.scrollLeft, moved: false }; }}
-    onPointerMove={event => { const current = drag.current; if (!current) return; const offset = event.clientX - current.x; if (!current.moved && Math.abs(offset) < 5) return; if (!current.moved) { current.moved = true; setDragging(true); event.currentTarget.setPointerCapture(event.pointerId); } suppressClick.current = true; event.currentTarget.scrollLeft = current.left - offset; event.preventDefault(); }}
-    onPointerUp={event => { drag.current = null; setDragging(false); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}
-    onPointerCancel={() => { drag.current = null; suppressClick.current = false; setDragging(false); }}
-    onClickCapture={event => { if (suppressClick.current) { suppressClick.current = false; event.preventDefault(); event.stopPropagation(); } }}>
-    {cells.map(cell => <button type="button" key={cell.page} data-strip-page={cell.page} data-state={cell.state} data-changes={cell.changes.length > 0} aria-current={cell.page === current ? "page" : undefined}
-      aria-label={`第 ${cell.page} 頁，${STATE_LABEL[cell.state]}${cell.changes.length ? `，修改 ${cell.changes.map(change => `#${change.number}`).join("、")}` : ""}`}
-      title={`第 ${cell.page} 頁 · ${STATE_LABEL[cell.state]}${cell.changes.length ? ` · 修改 ${cell.changes.map(change => `#${change.number}`).join("、")}` : ""}`}
-      onClick={() => onPage(cell.page)}>{cell.page % 10 === 0 ? <span>{cell.page}</span> : null}</button>)}
+  // The page under the pointer, read from the cells themselves so the marker, the label and the result always agree.
+  const pageAt = (x: number) => {
+    const nodes = strip.current?.querySelectorAll<HTMLElement>("[data-strip-page]");
+    if (!nodes?.length) return current;
+    for (const node of nodes) if (x < node.getBoundingClientRect().right) return Number(node.dataset.stripPage);
+    return pages;
+  };
+  const shown = scrub ?? current, labelled = scrub ?? hover;
+  const move = (target: number) => { const page = Math.min(pages, Math.max(1, target)); if (page !== current) onPage(page); };
+  return <div ref={strip} className="circuit-pdf-strip" role="slider" tabIndex={0} aria-label="頁面總覽" aria-orientation="horizontal"
+    aria-valuemin={1} aria-valuemax={pages} aria-valuenow={current} aria-valuetext={`第 ${current} 頁，共 ${pages} 頁`}
+    title="拖曳白色標記或點一格跳頁；也可以按方向鍵換頁" data-dense={pages > 120} data-dragging={scrub !== null}
+    onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.focus({ preventScroll: true }); event.currentTarget.setPointerCapture(event.pointerId); dragging.current = true; setHover(null); setScrub(pageAt(event.clientX)); }}
+    onPointerMove={event => { const page = pageAt(event.clientX); if (dragging.current) setScrub(page); else if (event.pointerType === "mouse") setHover(page); }}
+    onPointerUp={event => { if (!dragging.current) return; dragging.current = false; const page = pageAt(event.clientX); setScrub(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); move(page); }}
+    onPointerCancel={() => { dragging.current = false; setScrub(null); }}
+    onPointerLeave={() => { if (!dragging.current) setHover(null); }}
+    onKeyDown={event => {
+      const target = event.key === "ArrowRight" || event.key === "ArrowUp" ? current + 1 : event.key === "ArrowLeft" || event.key === "ArrowDown" ? current - 1
+        : event.key === "PageDown" ? current + 10 : event.key === "PageUp" ? current - 10 : event.key === "Home" ? 1 : event.key === "End" ? pages : 0;
+      if (!target) return;
+      event.preventDefault(); event.stopPropagation(); move(target);
+    }}>
+    {cells.map(cell => <span key={cell.page} data-strip-page={cell.page} data-state={cell.state} data-changes={cell.changes.length > 0} data-current={cell.page === shown || undefined}>
+      {cell.page === labelled && <span className="circuit-pdf-strip-label" aria-hidden="true">第 {cell.page} 頁 · {STATE_LABEL[cell.state]}{cell.changes.length ? ` · 問題 ${cell.changes.map(change => `#${String(change.number).padStart(3, "0")}`).join("、")}` : ""}</span>}
+    </span>)}
   </div>;
 });
 

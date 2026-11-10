@@ -57,8 +57,9 @@ const evidence = path.resolve(process.env.CIRCUIT_CONTROLS_EVIDENCE_DIR || '../c
         assert.equal(await dialog.getByTestId('circuit-change-item').count(), 1);
         assert.equal(await dialog.getByTestId('circuit-active-filters').getByRole('button').count(), 4);
         const colors = await dialog.locator('.circuit-filter-select').evaluateAll(nodes => nodes.map(node => ({ status: node.dataset.status, active: node.dataset.active, text: getComputedStyle(node.querySelector('select')).color, background: getComputedStyle(node.querySelector('select')).backgroundColor, icon: getComputedStyle(node.querySelector('svg')).color })));
-        assert.notEqual(colors[0].text, colors[1].text, 'status and owner controls have distinct semantic colors');
-        assert.ok(colors.every(color => color.background !== 'rgba(0, 0, 0, 0)' && color.icon === color.text));
+        // Colour pass (2026-11-10): a filter that filters something is tinted with the one accent and its icon turns teal.
+        assert.ok(colors.every(color => color.background !== 'rgba(0, 0, 0, 0)' && color.icon !== color.text), JSON.stringify(colors));
+        assert.equal(colors[0].icon, colors[1].icon, 'both active filters use the same accent');
         await page.screenshot({ path: path.join(evidence, 'filters-' + width + '.png') });
         if (width >= 1024) { await dialog.getByRole('button', { name: '收合修改清單', exact: true }).tap(); await dialog.getByRole('button', { name: '展開修改清單', exact: true }).tap(); assert.equal(await owner.inputValue(), ownerValue); }
         await dialog.getByRole('button', { name: '移除篩選：狀態：待改善', exact: true }).tap(); assert.equal(await dialog.getByRole('combobox', { name: '篩選修改狀態', exact: true }).inputValue(), 'all');

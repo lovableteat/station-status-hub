@@ -118,7 +118,7 @@ async function eventually(check, message, timeout = 8000) {
     await panel(p).locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(older);
     await rendered(p);
     assert.equal(await versionLabel(p), '11/08 版');
-    assert.equal(await panel(p).locator('.circuit-pdf-strip > button').count(), 12);
+    assert.equal(await panel(p).locator('.circuit-pdf-strip > [data-strip-page]').count(), 12);
     assert.match(await panel(p).locator('.circuit-pdf-progress').innerText(), /已看 0 \/ 12 頁/);
     assert.equal(await pageNumber(p), '1');
     let registry = await registryOf(origin);
@@ -136,7 +136,7 @@ async function eventually(check, message, timeout = 8000) {
     await panel(p).getByLabel('目前頁碼', {exact:true}).fill('5'); await panel(p).getByLabel('目前頁碼', {exact:true}).press('Enter'); await onPage(p, 5);
     await panel(p).getByRole('button', {name:'下一頁', exact:true}).click(); await onPage(p, 6);
     await panel(p).getByRole('button', {name:'上一頁', exact:true}).click(); await onPage(p, 5);
-    await panel(p).getByRole('button', {name:/^第 3 頁，/}).click(); await onPage(p, 3);
+    await panel(p).locator('.circuit-pdf-strip > [data-strip-page="3"]').click(); await onPage(p, 3);
     await panel(p).locator('.circuit-pdf-stage').focus(); await p.keyboard.press('ArrowRight'); await onPage(p, 4);
     await rendered(p);
     check('zoom in, out and back to fit width; page number, previous, next, overview cell and arrow key');

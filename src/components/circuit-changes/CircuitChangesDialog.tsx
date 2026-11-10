@@ -411,7 +411,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           <aside id="circuit-change-list" className="circuit-list-panel" aria-label="修改項目">
             {listCollapsed ? <div className="circuit-list-rail">
               <Button type="button" variant="outline" className="circuit-panel-toggle" aria-label="展開修改清單" title="展開問題清單" aria-expanded={false} aria-controls="circuit-change-list" onClick={() => changeLayout({ list: "open" })}><PanelLeftOpen aria-hidden="true" /><span>展開清單</span></Button>
-              {canEdit && <Button type="button" aria-label="新增問題" title="新增問題" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" /></Button>}
+              {canEdit && <Button type="button" variant="outline" className="circuit-panel-toggle circuit-rail-new" aria-label="新增問題" title="記錄一個新問題" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" /><span>新增問題</span></Button>}
               <span title={`共 ${model.items.length} 個問題`}>{model.items.length}<small>項</small></span>
             </div> : <>
             {model.sets.length > 1 && <label className="circuit-set-picker" title="每次改版各有一份問題清單"><span>改版清單</span>
@@ -419,7 +419,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                 {model.sets.map(set => <option key={set.id} value={set.id}>{circuitSetLabel(set)}</option>)}
               </select>
             </label>}
-            {(canEdit || (!wide && (task === "review" || task === "ai"))) && <div className="circuit-new-item-row">{canEdit && <Button type="button" className="circuit-new-item" title="每個問題記成一項" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" />新增問題</Button>}
+            {(canEdit || (!wide && (task === "review" || task === "ai"))) && <div className="circuit-new-item-row">{canEdit && <Button type="button" variant="outline" className="circuit-new-item" title="每個問題記成一項" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" />新增問題</Button>}
               {canEdit && (model.removedItems?.length ?? 0) > 0 && <Button type="button" variant="outline" className="circuit-removed-trigger" aria-label={`已移除的問題（${model.removedItems.length}）`} title={`已移除的問題 ${model.removedItems.length} 項，可還原`} onClick={() => { setNotice(""); setRemovedOpen(true); }}><ArchiveRestore aria-hidden="true" /><span>{model.removedItems.length}</span></Button>}
               {!wide && (task === "review" || task === "ai") && <Button type="button" variant="outline" className="circuit-list-collapse circuit-mobile-pdf-list" aria-label="看圖面" title="打開 PDF 圖面，逐頁看、框選問題" onClick={() => setMobilePdf(true)}><FileText aria-hidden="true" /></Button>}
               {wide && pdfOpen && <Button type="button" variant="outline" className="circuit-list-collapse circuit-panel-toggle" aria-label="收合修改清單" title="收合清單，讓 PDF 更寬" aria-expanded={true} aria-controls="circuit-change-list" onClick={() => changeLayout({ list: "collapsed" })}><PanelLeftClose aria-hidden="true" /><span>收合清單</span></Button>}</div>}
@@ -458,7 +458,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                 <Button type="button" variant="ghost" className="circuit-mobile-back" aria-label="返回問題清單" onClick={() => setMobileDetail(false)}><ArrowLeft aria-hidden="true" /></Button>
                 <div>
                   <strong>{unsaved ? "新問題" : number(item.number)}<span className="circuit-list-status" data-status={item.status}>{unsaved ? "尚未儲存" : CIRCUIT_CHANGE_STATUS_LABELS[item.status]}</span></strong>
-                  <span title={unsaved ? undefined : `修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""} · ${dateTime(item.updatedAt)}`}>{unsaved ? "填寫後自動建立" : `修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""}`}</span>
+                  <span data-revision={unsaved ? undefined : true} title={unsaved ? undefined : `修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""} · ${dateTime(item.updatedAt)}`}>{unsaved ? "填寫後自動建立" : `修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""}`}</span>
                 </div>
                 <div className="circuit-item-navigation">
                   {!wide && (task === "review" || task === "ai") && <Button type="button" variant="ghost" className="circuit-mobile-pdf" aria-label="看圖面" title="打開 PDF 圖面，逐頁看、框選問題" onClick={() => setMobilePdf(true)}><FileText aria-hidden="true" /></Button>}
@@ -511,7 +511,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                   {nextStep && <span className="circuit-next-step" title={nextStep}>{nextStep}</span>}
                   {!snapshot && canEdit && !reviewing && <div>
                     <Button type="button" variant="outline" className="circuit-save-button" aria-label="儲存修改" title={model.dirty ? "立即儲存目前的修改" : `${saveLabel}；停止輸入後會自動儲存`} data-state={model.saving ? "saving" : model.dirty ? "dirty" : model.saveError ? "failed" : "saved"} disabled={busy || !model.dirty || remotelyRemoved} onClick={() => void run(() => model.saveDraft())}>{model.saving ? "儲存中…" : model.dirty ? (model.saveError ? "重新儲存" : "儲存修改") : <><Check aria-hidden="true" />{unsaved ? "自動儲存" : "已儲存"}</>}</Button>
-                    {canSubmit && <Button type="button" disabled={busy || model.conflict || missing.length > 0} title={missing.length ? `回報改善前還缺：${missing.join("、")}` : "交給主管確認"} onClick={() => act("submit")}>回報改善</Button>}
+                    {canSubmit && <Button type="button" className="circuit-submit" disabled={busy || model.conflict || missing.length > 0} title={missing.length ? `回報改善前還缺：${missing.join("、")}` : "交給主管確認"} onClick={() => act("submit")}>回報改善</Button>}
                   </div>}
                 </div>
               </footer>
