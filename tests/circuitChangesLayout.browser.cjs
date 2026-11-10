@@ -89,11 +89,11 @@ async function geometry(page, dialog, width, height) {
         if (width < 1024) await page.getByRole('button', { name: '排序與工具', exact: true }).tap();
         await page.getByTestId('material-circuit-changes').filter({ visible: true }).tap();
         const dialog = page.getByTestId('circuit-changes-dialog'); await dialog.waitFor();
-        if (width === 1920) await compareDrawings(page, dialog);
+        const task = async name => { await dialog.getByRole('tab', { name: new RegExp('^' + name) }).tap(); await page.waitForFunction(label => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.includes(label), name); };
+        if (width === 1920) { await compareDrawings(page, dialog); await task('線路 Review'); }
         await dialog.getByRole('textbox', { name: '標題', exact: true }).fill('QA 窄欄 Review ' + width);
-        await dialog.getByRole('textbox', { name: '改善說明', exact: true }).fill('把 R2301 改為 4.7K，保留原本 Net 名稱。');
-        await dialog.getByRole('button', { name: '回報改善', exact: true }).tap();
-        const note = dialog.getByRole('textbox', { name: '主管意見或退回原因', exact: true }); await note.waitFor();
+        // Beside the drawing the form is 標記問題; its 問題說明 is what collapsing must keep.
+        const note = dialog.getByRole('textbox', { name: '問題說明', exact: true });
         await note.fill('請補上修改後的接線位置，並核對訊號名稱。'.repeat(8));
         let collapse;
         if (width >= 1024) {
@@ -148,8 +148,9 @@ async function geometry(page, dialog, width, height) {
             assert.equal(await detail.isVisible(), false, 'The saved desktop collapse survives a full reload');
             await page.setViewportSize({ width: 390, height: 884 });
             await page.waitForFunction(() => !document.querySelector('[data-testid="circuit-change-detail"]').hidden);
-            // The window remembers AI 比對, which opens on the comparison on a phone; its back arrow shows the list.
+            // The window remembers 線路 Review; on a phone it opens on the form, and the drawing only on request.
             if (await dialog.getByTestId('circuit-pdf-panel').isVisible()) await dialog.getByRole('button', { name: '返回修改內容', exact: true }).tap();
+            if (!(await dialog.getByTestId('circuit-change-item').first().isVisible())) await dialog.getByRole('button', { name: '返回問題清單', exact: true }).tap();
             await dialog.getByTestId('circuit-change-item').first().tap();
             await detail.waitFor({ state: 'visible' });
             assert.equal(await dialog.getByRole('button', { name: '收合修改內容', exact: true }).count(), 0);
@@ -161,6 +162,12 @@ async function geometry(page, dialog, width, height) {
         } else {
           assert.equal(await dialog.getByRole('button', { name: '收合修改內容', exact: true }).count(), 0, 'Phone keeps its existing single-pane flow');
         }
+        // 改善追蹤: the fix is written and sent, then the reviewer writes a long note beside 確認結案 / 退回重改.
+        await task('改善追蹤');
+        await dialog.getByRole('textbox', { name: '改善說明', exact: true }).fill('把 R2301 改為 4.7K，保留原本 Net 名稱。');
+        await dialog.getByRole('button', { name: '回報改善', exact: true }).tap();
+        const reviewNote = dialog.getByRole('textbox', { name: '主管意見或退回原因', exact: true }); await reviewNote.waitFor();
+        await reviewNote.fill('請補上修改後的接線位置，並核對訊號名稱。'.repeat(8));
         const normal = await geometry(page, dialog, width, 884);
         await page.screenshot({ path: path.join(evidence, `review-${width}.png`) });
         await page.setViewportSize({ width, height: 500 });

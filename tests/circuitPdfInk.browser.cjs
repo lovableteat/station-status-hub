@@ -116,12 +116,13 @@ async function managerFits(page) {
       await page.getByTestId('material-circuit-changes').filter({visible:true}).click();await dialog(page).waitFor();
       if(width<1024){await page.waitForFunction(()=>{const list=document.querySelector('[data-testid="circuit-changes-dialog"] .circuit-item-list');return list&&list.getAttribute('aria-busy')!=='true';});await page.waitForTimeout(300);await dialog(page).getByRole('button',{name:'看圖面',exact:true}).filter({visible:true}).first().click();}
       const official=fixture.state.pdfOfficials.get('series:qa')?.documentId;
-      if(official){await rendered(page);await panel(page).getByRole('combobox',{name:'對照較早的 PDF 版本',exact:true}).selectOption(official);}
+      // The two drawings sit side by side only in AI 比對; narrower screens stay in 線路 Review with one drawing.
+      if(official&&width>=1440){await dialog(page).getByRole('tab',{name:/^AI 比對/}).click();await page.waitForFunction(()=>document.querySelectorAll('.circuit-pdf-surface').length===2);await rendered(page);}
     };
     const open=async(width,account='A')=>{const context=await browser.newContext({viewport:{width,height:884},hasTouch:width<1024,isMobile:width<1024,reducedMotion:'reduce',locale:'zh-TW',timezoneId:'Asia/Taipei'});contexts.push(context);await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(25000);await reopen(page,width,account);return{page,errors,context};};
     const desktop=await open(1543),p=desktop.page;
     for(const [index,file] of files.entries()){
-      if(index){const chooser=p.waitForEvent('filechooser');await panel(p).getByRole('button',{name:'上傳新 PDF',exact:true}).click();await(await chooser).setFiles(file);}
+      if(index){const chooser=p.waitForEvent('filechooser');await panel(p).getByRole('button',{name:'上傳 PDF',exact:true}).click();await(await chooser).setFiles(file);}
       else await panel(p).locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(file);
       await rendered(p);
       if(!index){
@@ -133,13 +134,14 @@ async function managerFits(page) {
         await dialog(p).getByRole('tab', { name: /^線路 Review/ }).click();
         await eventually(()=>fixture.state.pdfOfficials.size===1,'Official pointer saves');await rendered(p);}
     }
-    await panel(p).getByRole('combobox',{name:'對照較早的 PDF 版本',exact:true}).selectOption(fixture.state.pdfOfficials.get('series:qa').documentId);
-    await p.waitForFunction(()=>document.querySelectorAll('.circuit-pdf-surface').length===2);await rendered(p);
+    await dialog(p).getByRole('tab',{name:/^AI 比對/}).click();await p.waitForFunction(()=>document.querySelectorAll('.circuit-pdf-surface').length===2);await rendered(p);
     const registry=fixture.state.pdfRegistries.get('series:qa'),officialId=fixture.state.pdfOfficials.get('series:qa').documentId,workingId=registry.documents.find(row=>row.name==='Working_20261110.pdf').id;
-    report.geometry.push({width:1543,...await toolbarFits(p,1543)});await managerFits(p);
+    report.geometry.push({width:1543,...await toolbarFits(p,1543)});
+    await dialog(p).getByRole('tab',{name:/^線路 Review/}).click();await rendered(p);await managerFits(p);
     const hints=await dialog(p).getByRole('textbox',{name:'標題',exact:true}).evaluate(node=>({hint:getComputedStyle(node,'::placeholder').color,value:getComputedStyle(node).color}));
     assert.notEqual(hints.hint,hints.value);const tone=color=>{const n=color.match(/[0-9.]+/g).map(Number);return (n[0]+n[1]+n[2])/3*(n.length>3?n[3]:1);};assert.ok(tone(hints.hint)<tone(hints.value),'placeholders are lighter (dimmer) than typed text: '+JSON.stringify(hints));report.placeholder=hints;
     await dialog(p).getByRole('textbox',{name:'標題',exact:true}).fill('電源訊號調整');await eventually(()=>fixture.state.items.size===1,'The entered title still saves');
+    await dialog(p).getByRole('tab',{name:/^AI 比對/}).click();await p.waitForFunction(()=>document.querySelectorAll('.circuit-pdf-surface').length===2);await rendered(p);
     check('1543px one-row compact toolbar, dim hints, version manager visible and upload button opens a real picker');
 
     const writes=fixture.state.inkWrites;
@@ -166,7 +168,13 @@ async function managerFits(page) {
     const removed=strokeRows(fixture,workingId).find(row=>row.id===stroke.id);assert.ok(removed.removedAt);assert.equal(removed.removedByName,'QA 目前使用者');
     await draw(p,'active');await eventually(()=>activeRows(fixture,workingId).length===1,'Replacement stroke saves');check('Undo removes last visible stroke; eraser removes clicked stroke with persistent audit metadata');
 
-    await frame(p);await panel(p).getByRole('button',{name:'前後同區域加入',exact:true}).click();
+    // Framing happens in 線路 Review: once on the working drawing, once on the official one; both keep their pen strokes.
+    await dialog(p).getByRole('tab',{name:/^線路 Review/}).click();await rendered(p);
+    await frame(p);await panel(p).getByRole('button',{name:'加到問題截圖',exact:true}).click();
+    await eventually(()=>[...fixture.state.items.values()][0]?.content.images.length===1,'The working capture saves');
+    await panel(p).getByRole('button',{name:'選擇 PDF 版本',exact:true}).click();
+    await panel(p).getByRole('button',{name:/^開啟 .* Official_20261101[.]pdf$/}).click();await rendered(p);await gotoPage(p,1);
+    await frame(p);await panel(p).getByRole('button',{name:'加到問題截圖',exact:true}).click();
     await eventually(()=>[...fixture.state.items.values()][0]?.content.images.length===2,'Both captured change images save');
     const item=[...fixture.state.items.values()][0];
     for(const image of item.content.images){const file=fixture.state.files.get(image.path);assert.ok(file);const pixels=await redPixels(p,file.bytes);assert.ok(pixels.red>100,`${image.side} crop must contain red pen pixels: ${JSON.stringify(pixels)}`);report[image.side+'Capture']=pixels;}

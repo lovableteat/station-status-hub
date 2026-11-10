@@ -25,13 +25,12 @@ async function createPage(browser, origin, account, width = 1440, height = 960) 
   await page.getByTestId('material-circuit-changes').filter({visible:true}).click();
   await dialog(page).waitFor();
   await page.getByRole('heading', {name:'線路修改', exact:true}).waitFor();
-  // This test covers the list, review and export: the 改善追蹤 task, which shows them without the drawing.
-  // tests/circuitChangesPdf.browser.cjs covers the PDF layout of 線路 Review.
-  if (width >= 1024) {
-    await dialog(page).getByRole('tab', {name:/^改善追蹤/}).click();
-    await page.getByTestId('circuit-pdf-panel').waitFor({state:'hidden'});
-  }
+  // Problems are marked in 線路 Review (the default task) and fixed / reviewed in 改善追蹤 (see task() below).
   return {context,page,errors,navigations};
+}
+async function task(page, name) {
+  await dialog(page).getByRole('tab', {name:new RegExp('^' + name)}).click();
+  await page.waitForFunction(label => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.includes(label), name);
 }
 async function saved(page) {
   await page.waitForFunction(() => document.querySelector('.circuit-detail-footer [role="status"]')?.textContent === '已儲存');
@@ -46,7 +45,7 @@ async function imageCount(page, expected) {
 }
 async function upload(page, side, files) {
   const promise = page.waitForEvent('filechooser');
-  await page.getByRole('button', {name:`加入${side}圖片`, exact:true}).click();
+  await page.getByRole('button', {name:`加入${side}`, exact:true}).click();
   await (await promise).setFiles(files);
 }
 async function checkMobileGeometry(page) {
@@ -88,8 +87,9 @@ async function checkMobileGeometry(page) {
     const a = await createPage(browser,origin,'A'); sessions.push(a);
     // Nothing recorded yet: the form and both picture targets are there on open, and looking at them writes nothing.
     await a.page.getByRole('textbox',{name:'標題',exact:true}).waitFor();
-    assert.ok(await a.page.getByRole('button',{name:'加入修改前圖片',exact:true}).isVisible());
-    assert.ok(await a.page.getByRole('button',{name:'加入修改後圖片',exact:true}).isVisible());
+    assert.ok(await a.page.getByRole('button',{name:'加入問題截圖',exact:true}).isVisible());
+    assert.equal(await a.page.getByRole('button',{name:'加入改好後截圖',exact:true}).count(),0,'線路 Review only marks the problem; 改好後截圖 belongs to 改善追蹤');
+    assert.equal(await a.page.getByRole('button',{name:'回報改善',exact:true}).count(),0,'線路 Review has no 回報改善');
     await dialog(a.page).getByRole('button',{name:'新增問題',exact:true}).click();
     await dialog(a.page).getByRole('button',{name:'新增問題',exact:true}).click();
     let serverState=await stateOf(origin);
@@ -104,7 +104,6 @@ async function checkMobileGeometry(page) {
     await a.page.getByRole('textbox',{name:'標題',exact:true}).fill('QA R2301 阻值與接法調整');
     await a.page.getByRole('textbox',{name:'Ref',exact:true}).fill('R2301, U2');
     await a.page.getByRole('textbox',{name:'問題說明',exact:true}).fill('Review 要求調整上拉與電源接法');
-    await a.page.getByRole('textbox',{name:'改善說明',exact:true}).fill('R2301 改為 4.7K，保留修改前後圖與逐項確認紀錄');
     await saved(a.page);
     report.checks.push('create batch, stable item number, fields auto-save');
     const pngData = await a.page.evaluate(() => {
@@ -114,13 +113,17 @@ async function checkMobileGeometry(page) {
     });
     const png=Buffer.from(pngData,'base64');fs.writeFileSync(path.join(evidence,'qa-circuit.png'),png);
     const image = name => ({name,mimeType:'image/png',buffer:png});
-    await upload(a.page,'修改前',Array.from({length:12},()=>image('same.png')));
+    await upload(a.page,'問題截圖',Array.from({length:12},()=>image('same.png')));
     await imageCount(a.page,12);await saved(a.page);
     serverState=await stateOf(origin);const firstId=serverState.items[0].id;
     assert.equal(serverState.sets.length,1,'the change went into the batch the user created, not into a second default one');assert.equal(serverState.items.length,1);
     assert.equal(new Set(serverState.items[0].content.images.map(file=>file.path)).size,12,'same filenames must append with unique paths');
     assert.equal(serverState.items[0].content.images.filter(file=>file.side==='before').length,12);
-    await upload(a.page,'修改後',[image('fail-once.png')]);
+    // The fix is written in 改善追蹤; the problem stays readable there.
+    await task(a.page,'改善追蹤');
+    assert.equal(await a.page.getByRole('textbox',{name:'標題',exact:true}).count(),0,'改善追蹤 shows the problem as text until 修改問題 is pressed');
+    await a.page.getByRole('textbox',{name:'改善說明',exact:true}).fill('R2301 改為 4.7K，保留修改前後圖與逐項確認紀錄');await saved(a.page);
+    await upload(a.page,'改好後截圖',[image('fail-once.png')]);
     await a.page.getByRole('button',{name:'重試失敗圖片',exact:true}).waitFor();
     await imageCount(a.page,12);
     await a.page.getByRole('button',{name:'重試失敗圖片',exact:true}).click();
@@ -163,6 +166,7 @@ async function checkMobileGeometry(page) {
     const b=await createPage(browser,origin,'B');sessions.push(b);
     await b.page.getByRole('textbox',{name:'標題',exact:true}).waitFor();
     assert.equal(await b.page.getByRole('textbox',{name:'標題',exact:true}).inputValue(),'QA R2301 阻值與接法調整');
+    await task(b.page,'改善追蹤');
     const aNav=a.navigations.length,bNav=b.navigations.length;
     await a.page.getByRole('button',{name:'回報改善',exact:true}).click();await status(a.page,'in_review');await status(b.page,'in_review');
     await b.page.getByRole('textbox',{name:'主管意見或退回原因',exact:true}).fill('請補修改後接法及上拉阻值的依據');
@@ -171,8 +175,9 @@ async function checkMobileGeometry(page) {
     await a.page.getByRole('button',{name:'回報改善',exact:true}).click();await status(b.page,'in_review');
     await b.page.getByRole('button',{name:'確認結案',exact:true}).click();await status(b.page,'approved');await status(a.page,'approved');
     // An approved change is locked; editing it is a deliberate step and starts a new revision that needs review again.
-    assert.equal(await a.page.getByRole('textbox',{name:'標題',exact:true}).isDisabled(),true);
+    assert.equal(await a.page.getByRole('textbox',{name:'改善說明',exact:true}).isDisabled(),true);
     await a.page.getByRole('button',{name:'修改內容',exact:true}).click();
+    await a.page.getByRole('button',{name:'修改問題',exact:true}).click();
     await a.page.getByRole('textbox',{name:'標題',exact:true}).fill('QA R2301 新修訂需要再次 Review');await saved(a.page);await status(a.page,'draft');await status(b.page,'draft');
     assert.equal(a.navigations.length,aNav);assert.equal(b.navigations.length,bNav);
     report.checks.push('two-editor shared review: submit, return with reason, revise, resubmit, approve; editing approved content resets draft without navigation');
@@ -195,8 +200,11 @@ async function checkMobileGeometry(page) {
     await a.page.getByRole('button',{name:'下載原圖 same.png',exact:true}).first().click();
     const original=await originalPromise;await original.saveAs(path.join(evidence,'downloaded-original.png'));
     assert.ok(fs.readFileSync(path.join(evidence,'downloaded-original.png')).equals(png));
+    assert.equal(await dialog(a.page).getByRole('button',{name:'新增問題',exact:true}).count(),0,'new problems are marked in 線路 Review');
+    await task(a.page,'線路 Review');
     await dialog(a.page).getByRole('button',{name:'新增問題',exact:true}).click();
-    await a.page.getByRole('textbox',{name:'標題',exact:true}).fill('QA 第二項修改也必須匯出');
+    await a.page.getByRole('textbox',{name:'標題',exact:true}).fill('QA 第二項修改也必須匯出');await saved(a.page);
+    await task(a.page,'改善追蹤');
     await a.page.getByRole('textbox',{name:'改善說明',exact:true}).fill('Change List 不能只匯出選中的一項');await saved(a.page);
     await a.page.getByRole('textbox',{name:'搜尋線路修改',exact:true}).fill('第二項');
     await a.page.getByTestId('circuit-active-filters').waitFor();assert.equal(await a.page.getByTestId('circuit-change-item').count(),1);
@@ -221,7 +229,7 @@ async function checkMobileGeometry(page) {
       const geometry=await checkMobileGeometry(mobile.page);
       assert.equal(geometry.width,geometry.pageWidth);assert.ok(geometry.panel.w<=width);assert.ok(geometry.footer.bottom<=geometry.height+1);assert.ok(geometry.buttons.every(box=>box.h>=40));report.mobile.push(geometry);
       await mobile.page.screenshot({path:path.join(evidence,`mobile-${width}.png`)});
-      if(width===390){await mobile.page.setViewportSize({width:390,height:500});await mobile.page.getByRole('textbox',{name:'改善說明',exact:true}).focus();const short=await checkMobileGeometry(mobile.page);assert.ok(short.footer.bottom<=501);report.shortViewport=short;await mobile.page.setViewportSize({width:390,height:884});}
+      if(width===390){await mobile.page.setViewportSize({width:390,height:500});await task(mobile.page,'改善追蹤');await mobile.page.getByRole('textbox',{name:'改善說明',exact:true}).focus();const short=await checkMobileGeometry(mobile.page);assert.ok(short.footer.bottom<=501);report.shortViewport=short;await mobile.page.setViewportSize({width:390,height:884});}
       await mobile.page.getByRole('button',{name:'關閉線路修改',exact:true}).tap();await dialog(mobile.page).waitFor({state:'hidden'});
     }
     const viewer=await createPage(browser,origin,'view',390,884);sessions.push(viewer);

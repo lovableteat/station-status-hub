@@ -307,3 +307,36 @@
 .circuit-pdf-ai-guide li[data-state="current"] > div > strong { color: hsl(var(--warning)); }
 .circuit-pdf-ai-steps > li > .circuit-pdf-ai-run { height: 34px; gap: 6px; }
 @media (min-width: 1024px) and (max-width: 1439px) { .circuit-pdf-ai-steps > li > span > small { display: none; } .circuit-pdf-ai-steps > li > span > select { width: 200px; } .circuit-pdf-ai-steps { gap: 6px 12px; } }
+
+/* Toolbar clarity (2026-11-11): the drawing tools are one segmented control with words (移動・框選・畫筆) and the
+   current tool in solid teal; the file actions stay at the left with the version, pages and zoom move to the right. */
+.circuit-pdf-panel { container: circuit-pdf / inline-size; }
+.circuit-pdf-tool-text { display: none; }
+.circuit-pdf-row > .circuit-pdf-tool-group[data-group="draw"] { gap: 2px; padding: 2px; border: 1px solid hsl(var(--primary) / .35); border-radius: 8px; background: hsl(var(--background)); }
+.circuit-pdf-row > .circuit-pdf-tool-group[data-group="draw"] + .circuit-pdf-tool-group { border-inline-start: 0; }
+.circuit-pdf-tool-group[data-group="draw"] > button { height: 30px; border-radius: 6px; color: hsl(var(--foreground)); }
+.circuit-pdf-tool-group[data-group="draw"] > button > svg { color: hsl(var(--primary)); }
+.circuit-pdf-tool-group[data-group="draw"] > button[aria-pressed="true"] { border-color: hsl(var(--primary)); background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.circuit-pdf-tool-group[data-group="draw"] > button[aria-pressed="true"] > svg { color: hsl(var(--primary-foreground)); }
+.circuit-pdf-tool-group[data-group="files"] > button:has(> .circuit-pdf-tool-text) { border-color: hsl(var(--primary) / .4); background: hsl(var(--primary) / .08); color: hsl(var(--primary)); }
+@container circuit-pdf (min-width: 860px) {
+  .circuit-pdf-tool-text { display: inline; }
+  .circuit-pdf-tool-group > button:has(> .circuit-pdf-tool-text) { width: auto; padding-inline: 9px; }
+}
+@media (min-width: 1024px) {
+  .circuit-pdf-row > .circuit-pdf-tool-group[data-group="compare"] { order: 1; margin-inline-start: auto; }
+  .circuit-pdf-row > .circuit-pdf-tool-group[data-group="navigation"] { order: 2; }
+  .circuit-pdf-row > .circuit-pdf-tool-group[data-group="zoom"] { order: 3; }
+  .circuit-pdf-row:not(:has(> .circuit-pdf-tool-group[data-group="compare"])) > .circuit-pdf-tool-group[data-group="navigation"] { margin-inline-start: auto; }
+}
+@media (max-width: 1023px) { .circuit-pdf-tool-group[data-group="draw"] > button { height: 40px; } }
+
+/* AI 比對: the link toggle sits in the toolbar row instead of taking a row of its own. */
+.circuit-pdf-tool-group[data-group="link"] > button { width: auto; gap: 6px; padding-inline: 10px; }
+.circuit-pdf-tool-group[data-group="link"] > button[aria-pressed="true"] { border-color: hsl(var(--primary) / .5); color: hsl(var(--primary)); }
+@media (max-width: 1023px) { .circuit-pdf-tool-group[data-group="link"] > button { height: 44px; } }
+
+/* The segmented drawing tools keep the toolbar button height (32px) and line up with the buttons beside them. */
+.circuit-pdf-row > .circuit-pdf-tool-group[data-group="draw"] { padding: 1px; }
+.circuit-pdf-tool-group[data-group="draw"] > button { height: 32px; }
+@media (max-width: 1023px) { .circuit-pdf-tool-group[data-group="draw"] > button { height: 44px; } }
