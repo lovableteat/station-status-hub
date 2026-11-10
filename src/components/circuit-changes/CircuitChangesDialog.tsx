@@ -372,15 +372,15 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
         </header>
         {(notice || model.error || model.saveError) && <div className="circuit-message" role="alert"><span>{notice || model.saveError || model.error}</span><div>{closeBlocked && <Button type="button" variant="ghost" title={unsaved ? "這項新修改還沒有建立，關閉後不會保留" : "未儲存的草稿會留在這台電腦，下次開啟這一項時帶回"} onClick={leave}>不儲存，直接關閉</Button>}<Button type="button" variant="ghost" onClick={() => void run(() => model.reload())}>重新載入</Button></div></div>}
         <div className="circuit-workspace" data-pdf-open={pdfOpen} data-list-collapsed={listCollapsed} data-detail-collapsed={detailCollapsed}>
-          <aside className="circuit-list-panel" aria-label="修改項目">
+          <aside id="circuit-change-list" className="circuit-list-panel" aria-label="修改項目">
             {listCollapsed ? <div className="circuit-list-rail">
-              <Button type="button" variant="ghost" aria-label="展開修改清單" title="展開修改清單" onClick={() => changeLayout({ list: "open" })}><PanelLeftOpen aria-hidden="true" /></Button>
+              <Button type="button" variant="outline" className="circuit-panel-toggle" aria-label="展開修改清單" title="展開修改清單" aria-expanded={false} aria-controls="circuit-change-list" onClick={() => changeLayout({ list: "open" })}><PanelLeftOpen aria-hidden="true" /><span>展開清單</span></Button>
               {canEdit && <Button type="button" aria-label="新增修改" title="新增修改" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" /></Button>}
               <span title={`共 ${model.items.length} 項修改`}>{model.items.length}<small>項</small></span>
             </div> : <>
             {canEdit && <div className="circuit-new-item-row"><Button type="button" className="circuit-new-item" title="每一處修改記成一項" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" />新增修改</Button>
               {(model.removedItems?.length ?? 0) > 0 && <Button type="button" variant="outline" className="circuit-removed-trigger" aria-label={`已移除的修改（${model.removedItems.length}）`} title={`已移除的修改 ${model.removedItems.length} 項，可還原`} onClick={() => { setNotice(""); setRemovedOpen(true); }}><ArchiveRestore aria-hidden="true" /><span>{model.removedItems.length}</span></Button>}
-              {wide && pdfOpen && <Button type="button" variant="outline" className="circuit-list-collapse" aria-label="收合修改清單" title="收合清單，讓 PDF 更寬" onClick={() => changeLayout({ list: "collapsed" })}><PanelLeftClose aria-hidden="true" /></Button>}</div>}
+              {wide && pdfOpen && <Button type="button" variant="outline" className="circuit-list-collapse circuit-panel-toggle" aria-label="收合修改清單" title="收合清單，讓 PDF 更寬" aria-expanded={true} aria-controls="circuit-change-list" onClick={() => changeLayout({ list: "collapsed" })}><PanelLeftClose aria-hidden="true" /><span>收合清單</span></Button>}</div>}
             <div className="circuit-filter-bar" role="group" aria-label="線路修改篩選">
               <label className="circuit-search"><Search aria-hidden="true" /><Input aria-label="搜尋線路修改" placeholder="搜尋編號、標題、Ref 或 Net" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} /></label>
               <label className="circuit-filter-select" data-status={filters.status}><Filter aria-hidden="true" /><span className="sr-only">狀態</span><select aria-label="篩選修改狀態" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value }))}>
@@ -412,7 +412,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           <section ref={detailPanel} id="circuit-change-detail" className="circuit-detail" hidden={detailCollapsed} aria-label="線路修改內容" data-testid="circuit-change-detail" aria-busy={model.switching}>
             {content && item ? <>
               <header className="circuit-detail-heading">
-                {wide && pdfOpen && <Button type="button" variant="ghost" className="circuit-detail-collapse" aria-label="收合修改內容" title="收合修改內容，讓 PDF 更寬" aria-expanded={true} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightClose aria-hidden="true" /></Button>}
+                {wide && pdfOpen && <Button type="button" variant="outline" className="circuit-detail-collapse circuit-panel-toggle" aria-label="收合修改內容" title="收合修改內容，讓 PDF 更寬" aria-expanded={true} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightClose aria-hidden="true" /><span>收合內容</span></Button>}
                 <Button type="button" variant="ghost" className="circuit-mobile-back" aria-label="返回修改清單" onClick={() => setMobileDetail(false)}><ArrowLeft aria-hidden="true" /></Button>
                 <div>
                   <strong>{unsaved ? "新修改" : number(item.number)}<span className="circuit-list-status" data-status={item.status}>{unsaved ? "尚未儲存" : CIRCUIT_CHANGE_STATUS_LABELS[item.status]}</span></strong>
@@ -473,13 +473,13 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                 </div>
               </footer>
             </> : <div className="circuit-detail-empty">
-              {wide && pdfOpen && <Button type="button" variant="ghost" aria-label="收合修改內容" aria-expanded={true} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightClose aria-hidden="true" />收合修改內容</Button>}
+              {wide && pdfOpen && <Button type="button" variant="outline" className="circuit-panel-toggle" aria-label="收合修改內容" aria-expanded={true} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightClose aria-hidden="true" /><span>收合內容</span></Button>}
               <h3>{model.loading ? "正在載入線路修改…" : model.items.length ? "從左側選一項修改" : "這塊板子還沒有線路修改紀錄"}</h3>
               {!model.loading && !model.items.length && <p>{canEdit ? "按「新增修改」開始記錄。" : "你目前是檢視權限；有編輯權限的同仁記錄後，這裡會列出每一項修改的前後圖與 Review 狀態。"}</p>}
               {!model.loading && canEdit && <Button type="button" disabled={busy} onClick={newItem}><Plus aria-hidden="true" />新增修改</Button>}
             </div>}
           </section>
-          {detailCollapsed && <aside className="circuit-list-rail circuit-detail-rail" aria-label="修改內容已收合"><Button type="button" variant="ghost" aria-label="展開修改內容" title="展開修改內容" aria-expanded={false} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightOpen aria-hidden="true" /></Button><span aria-hidden="true">修改內容</span></aside>}
+          {detailCollapsed && <aside className="circuit-list-rail circuit-detail-rail" aria-label="修改內容已收合"><Button type="button" variant="outline" className="circuit-panel-toggle" aria-label="展開修改內容" title="展開修改內容" aria-expanded={false} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightOpen aria-hidden="true" /><span>展開內容</span></Button></aside>}
         </div>
       </DialogContent>
     </Dialog>
