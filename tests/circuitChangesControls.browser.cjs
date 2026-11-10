@@ -56,6 +56,8 @@ const evidence = path.resolve(process.env.CIRCUIT_CONTROLS_EVIDENCE_DIR || '../c
         const ownerValue = await owner.locator('option').nth(1).getAttribute('value'); await owner.selectOption(ownerValue);
         assert.equal(await dialog.getByTestId('circuit-change-item').count(), 1);
         assert.equal(await dialog.getByTestId('circuit-active-filters').getByRole('button').count(), 4);
+        // Colours change through a near-zero transition; read them once the frame has settled.
+        await page.waitForFunction(() => { const icons = [...document.querySelectorAll('.circuit-filter-select > svg')].map(node => getComputedStyle(node).color); return icons.length === 2 && icons[0] === icons[1]; }, undefined, { timeout: 3000 }).catch(() => {});
         const colors = await dialog.locator('.circuit-filter-select').evaluateAll(nodes => nodes.map(node => ({ status: node.dataset.status, active: node.dataset.active, text: getComputedStyle(node.querySelector('select')).color, background: getComputedStyle(node.querySelector('select')).backgroundColor, icon: getComputedStyle(node.querySelector('svg')).color })));
         // Colour pass (2026-11-10): a filter that filters something is tinted with the one accent and its icon turns teal.
         assert.ok(colors.every(color => color.background !== 'rgba(0, 0, 0, 0)' && color.icon !== color.text), JSON.stringify(colors));

@@ -80,6 +80,8 @@ export function CircuitPdfPanel({ mode = "review", onAiReview, onSetupOfficial, 
   const inkRow = inkPane === "compare" && compareReady ? compare : active;
   const inkPage = inkPane === "compare" && compareReady ? pdfs.comparePage : page;
   const targetInk = inkRow ? ink?.pages[`${inkRow.id}:${inkPage}`] || [] : [];
+  // Strokes on the page on screen (either side); the eraser only shows when there is something to erase.
+  const pageInk = (active ? ink?.pages[`${active.id}:${page}`]?.length || 0 : 0) + (compare && compareReady ? ink?.pages[`${compare.id}:${pdfs.comparePage}`]?.length || 0 : 0);
   const loadInk = ink?.load;
   const activeInkId = active?.id, compareInkId = compare?.id;
   useEffect(() => {
@@ -348,9 +350,9 @@ export function CircuitPdfPanel({ mode = "review", onAiReview, onSetupOfficial, 
         {active && <><div className="circuit-pdf-tool-group" data-group="draw" role="group" aria-label="標註工具">
           <Button type="button" variant="ghost" aria-label="移動" title="移動圖面；也可按住空白鍵拖曳" aria-pressed={tool === "pan"} onClick={() => chooseTool("pan")}><Hand aria-hidden="true" /></Button>
           <Button type="button" variant="ghost" className="circuit-pdf-crop-toggle" aria-label="框選" title="框選區域，加入修改前後截圖" aria-pressed={cropMode} onClick={() => chooseTool("crop")}><Crop aria-hidden="true" /></Button>
-          <Button type="button" variant="ghost" aria-label="畫筆" title="畫筆：直接在圖面畫線，放開後自動儲存" aria-pressed={tool === "pen"} disabled={!canEdit || !ink || ink.loading || !pdfs.activePdf || pdfs.opening} onClick={() => chooseTool("pen")}><PenLine aria-hidden="true" /></Button>
-          <Button type="button" variant="ghost" aria-label="橡皮擦" title="點選筆跡即可擦除；不會更動 PDF 原圖" aria-pressed={tool === "erase"} disabled={!canEdit || !ink || ink.loading || !pdfs.activePdf || pdfs.opening} onClick={() => chooseTool("erase")}><Eraser aria-hidden="true" /></Button>
-          <Button type="button" variant="ghost" aria-label="撤回最後一筆畫筆" title="撤回最後操作圖面上的最後一筆畫筆" disabled={!canEdit || !ink || !targetInk.length} onClick={() => { if (inkRow) ink?.undo(inkRow.id, inkPage); }}><Undo2 aria-hidden="true" /></Button>
+          {canEdit && ink && <Button type="button" variant="ghost" aria-label="畫筆" title="畫筆：直接在圖面畫線，放開後自動儲存" aria-pressed={tool === "pen"} disabled={!canEdit || !ink || ink.loading || !pdfs.activePdf || pdfs.opening} onClick={() => chooseTool("pen")}><PenLine aria-hidden="true" /></Button>}
+          {canEdit && ink && pageInk > 0 && <Button type="button" variant="ghost" aria-label="橡皮擦" title="點選筆跡即可擦除；不會更動 PDF 原圖" aria-pressed={tool === "erase"} disabled={!canEdit || !ink || ink.loading || !pdfs.activePdf || pdfs.opening} onClick={() => chooseTool("erase")}><Eraser aria-hidden="true" /></Button>}
+          {canEdit && ink && targetInk.length > 0 && <Button type="button" variant="ghost" aria-label="撤回最後一筆畫筆" title="撤回最後操作圖面上的最後一筆畫筆" disabled={!canEdit || !ink || !targetInk.length} onClick={() => { if (inkRow) ink?.undo(inkRow.id, inkPage); }}><Undo2 aria-hidden="true" /></Button>}
         </div>
         <div className="circuit-pdf-tool-group" data-group="navigation"><div className="circuit-pdf-pager" role="group" aria-label="翻頁">
           <Button type="button" variant="ghost" aria-label="上一頁" title="上一頁（←）" disabled={page <= 1} onClick={() => pdfs.goTo(page - 1)}><ChevronLeft aria-hidden="true" /></Button>
@@ -376,7 +378,7 @@ export function CircuitPdfPanel({ mode = "review", onAiReview, onSetupOfficial, 
           </div>}
           {official && !pdfs.officialPage && <small className="circuit-pdf-page-warning" role="status">請輸入官方對應頁</small>}
         </div>}
-        {ink && active && <span className="circuit-pdf-ink-status" role="status" title="筆跡依版本與頁碼自動儲存，截圖時會一併加入">
+        {ink && active && (targetInk.length > 0 || ink.error || ink.loading || ink.saving) && <span className="circuit-pdf-ink-status" role="status" title="筆跡依版本與頁碼自動儲存，截圖時會一併加入">
           {ink.error ? "標註未儲存" : ink.loading ? "載入標註…" : ink.saving ? "儲存標註…" : `${targetInk.length} 筆標註`}
         </span>}
       </div>

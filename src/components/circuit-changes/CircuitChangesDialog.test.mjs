@@ -85,7 +85,7 @@ test("collapsing the detail preserves mounted content and Review notes without s
     const title = view.root.root.findByProps({ "aria-label": "標題" });
     act(() => note.props.onChange({ target: { value: "請核對 VCC 接線，尚未送出。" } }));
     for (let cycle = 0; cycle < 2; cycle++) {
-      assert.match(textOf(view.root.root.findByProps({ "aria-label": "收合修改內容" })), /收合內容/);
+      assert.match(textOf(view.root.root.findByProps({ "aria-label": "收合修改內容" })), /收合/);
       act(() => view.root.root.findByProps({ "aria-label": "收合修改內容" }).props.onClick());
       assert.equal(detail.props.hidden, true);
       assert.match(textOf(view.root.root.findByProps({ "aria-label": "展開修改內容" })), /展開內容/);

@@ -185,7 +185,7 @@ async function managerFits(page) {
     await eventually(()=>activeRows(fixture,workingId).length===2,'Retry persists outbox');await eventually(async()=>!(await pendingCount()),'Saved outbox clears');check('Failed save retains a local outbox across reload; explicit retry persists and clears it');
 
     const viewer=await open(1173,'view');await rendered(viewer.page);await gotoPage(viewer.page,1);
-    assert.equal(await strokeCount(viewer.page),2);for(const name of ['畫筆','橡皮擦','撤回最後一筆畫筆'])assert.equal(await panel(viewer.page).getByRole('button',{name,exact:true}).isEnabled(),false,name+' must be readonly');
+    assert.equal(await strokeCount(viewer.page),2);for(const name of ['畫筆','橡皮擦','撤回最後一筆畫筆'])assert.equal(await panel(viewer.page).getByRole('button',{name,exact:true}).count(),0,name+' is not offered to a viewer');
     const beforeViewWrites=fixture.state.inkWrites;await tool(viewer.page,'框選');await tool(viewer.page,'移動');assert.equal(fixture.state.inkWrites,beforeViewWrites);
     report.geometry.push({width:1173,...await toolbarFits(viewer.page,1173)});await managerFits(viewer.page);await viewer.page.screenshot({path:path.join(evidence,'compact-1173-readonly.png')});check('1173px readonly account sees saved ink and can navigate without gaining edit controls');
 
