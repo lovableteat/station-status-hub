@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/reports/2026-08-08-pcb-sync-import-ui-completion.md`；程式參考基準：`132ca9064730806176707c906c4514d030561409`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/reports/2026-08-08-pcb-sync-import-ui-completion.md`；程式參考基準：`c69ef460c101a9e1085ab24e7b4d19bb83b07bd7`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # PCB Designer 同步、匯入與介面修正完成報告
 
