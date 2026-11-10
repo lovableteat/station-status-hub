@@ -4,10 +4,13 @@
 .bom-version-overview { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; color: hsl(var(--muted-foreground)); font-size: 13px; line-height: 24px; }
 .bom-version-project { display: inline-flex; max-width: 100%; min-width: 0; align-items: center; gap: 7px; overflow: hidden; border-radius: 6px; padding: 3px 9px; background: hsl(205 80% 60% / .12); color: hsl(205 85% 80%); font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .bom-version-project svg { flex: none; width: 16px; height: 16px; }
+.bom-version-workspace { color: hsl(var(--muted-foreground)); font-size: 13px; }
 .bom-version-overview .bom-version-archived { color: hsl(38 80% 72%); }
 .bom-version-columns { grid-template-columns: 320px minmax(0, 1fr); gap: 24px; }
 .bom-series-sidebar { gap: 12px; border-right: 1px solid hsl(var(--border)); padding-right: 20px; }
+.bom-series-tools-wrap { display: grid; flex: none; min-width: 0; gap: 4px; }
 .bom-series-tools { display: flex; flex: none; align-items: center; gap: 8px; }
+.bom-series-upload-hint { margin: 0; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
 .bom-series-search { flex: 1; min-width: 0; }
 .bom-series-sidebar input { height: 44px; font-size: 14px; }
 .bom-series-sidebar .bom-upload-entry { flex: none; min-height: 44px; padding-inline: 10px; border-color: hsl(var(--primary) / .3); background: hsl(var(--primary) / .07); color: hsl(var(--primary)); font-size: 13px; }
@@ -46,7 +49,9 @@
 .bom-series-project > label { color: hsl(var(--muted-foreground)); font-size: 12px; }
 .bom-current-version { border-radius: 5px; padding: 0 7px; background: hsl(var(--primary) / .1); color: hsl(var(--primary)); }
 .bom-series-actions { gap: 10px; padding-block: 2px 8px; }
-.bom-series-actions > button { min-height: 40px; padding-inline: 12px; font-size: 13px; }
+.bom-series-actions > button, .bom-version-compare-actions > button { min-height: 40px; padding-inline: 12px; font-size: 13px; }
+.bom-version-compare-actions { display: flex; flex: none; align-items: center; gap: 6px; }
+.bom-version-compare-actions > .bom-nv-compare-entry { border-color: hsl(var(--platform-violet) / .4); background: hsl(var(--platform-violet) / .08); color: hsl(var(--platform-violet)); }
 .bom-version-table-scroll table { min-width: 1100px; }
 .bom-version-table-scroll table th { padding: 10px; font-size: 12px; white-space: nowrap; }
 .bom-version-table-scroll table td { padding: 8px 10px; font-size: 13px; line-height: 20px; vertical-align: middle; }
@@ -91,6 +96,7 @@
   .bom-series-summary-meta { gap: 4px 12px; margin-top: 6px; }
   .bom-series-actions { gap: 6px; }
   .bom-series-actions button { min-height: 44px; }
+  .bom-version-header .bom-nv-compare-entry { min-height: 44px; }
   .bom-version-footnote { max-height: 72px; overflow-y: auto; }
   .bom-version-center [data-testid="bom-series-detail"] { overflow-y: auto; }
   .bom-version-center .bom-version-table-scroll { flex: 1 0 200px; }
