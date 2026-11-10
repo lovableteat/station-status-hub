@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-29-material-workspace-usability.md`；程式參考基準：`ec966b51cf3c23498cdf0b7ae0bc84befff6ab9d`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-29-material-workspace-usability.md`；程式參考基準：`d749e1bbbe536e75901441a542e6e85eafcbdff6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 料號工作區操作與填單
 
