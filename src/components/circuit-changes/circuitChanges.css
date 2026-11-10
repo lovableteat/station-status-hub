@@ -1,6 +1,6 @@
 /* 線路修改: one header row, the list with its filters on the left, the selected change on the right.
    Form text is 14px and controls are 40px tall (44px on touch layouts); 12-13px is kept for metadata. */
-.workspace-dialog-surface.circuit-changes-dialog[data-ui="dialog"] { display: flex; flex-direction: column; top: calc(var(--circuit-viewport-top, 0px) + var(--circuit-viewport-height, 100dvh) / 2); width: calc(100vw - 24px); max-width: none; height: calc(var(--circuit-viewport-height, 100dvh) - 24px); max-height: calc(var(--circuit-viewport-height, 100dvh) - 24px); gap: 0; overflow: hidden; padding: 0; border-radius: 12px; background: hsl(var(--background)); font-family: system-ui, sans-serif; font-size: 14px; }
+.workspace-dialog-surface.circuit-changes-dialog[data-ui="dialog"] { display: flex; flex-direction: column; top: calc(var(--circuit-viewport-top, 0px) + var(--circuit-viewport-height, 100dvh) / 2); width: calc(100vw - 34px); max-width: none; height: calc(var(--circuit-viewport-height, 100dvh) - 34px); max-height: calc(var(--circuit-viewport-height, 100dvh) - 34px); gap: 0; overflow: hidden; padding: 0; border-radius: 12px; background: hsl(var(--background)); font-family: system-ui, sans-serif; font-size: 14px; }
 .circuit-changes-dialog :is(button,input,select,textarea) { min-width: 0; }
 .circuit-changes-dialog button { touch-action: manipulation; }
 .circuit-changes-dialog button > svg { flex: none; width: 16px; height: 16px; }

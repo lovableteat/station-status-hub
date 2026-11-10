@@ -653,50 +653,40 @@ function ConnectionBanner({
   return (
     <div
       data-ai-connection-banner
+      role={isSuccess ? "status" : "alert"}
       className={cn(
-        "rounded-[24px] border px-5 py-4 shadow-[0_24px_50px_rgba(2,8,23,0.22)] transition-all duration-200",
+        "shrink-0 rounded-xl border px-3 py-2 text-foreground",
         isSuccess
-          ? "border-emerald-300/45 bg-[linear-gradient(135deg,rgba(21,128,61,0.9),rgba(5,46,22,0.9))] text-emerald-50"
-          : "border-rose-300/45 bg-[linear-gradient(135deg,rgba(190,24,93,0.88),rgba(76,5,25,0.92))] text-rose-50"
+          ? "border-emerald-300/30 bg-emerald-500/5"
+          : "border-rose-300/30 bg-rose-500/5"
       )}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 gap-3">
-          <div
-            className={cn(
-              "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border",
-              isSuccess
-                ? "border-white/12 bg-emerald-950/25"
-                : "border-white/12 bg-rose-950/25"
-            )}
-          >
-            {isSuccess ? (
-              <CheckCircle2 className="h-4.5 w-4.5" />
-            ) : (
-              <AlertTriangle className="h-4.5 w-4.5" />
-            )}
+      <div className="flex min-w-0 items-start gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+          {isSuccess ? <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-primary" /> : <AlertTriangle aria-hidden="true" className="h-4 w-4 text-warning" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+            <p className="shrink-0 text-sm font-semibold leading-5">{result.title}</p>
+            <p className="min-w-0 flex-1 text-sm leading-5 [overflow-wrap:anywhere]">{result.message}</p>
           </div>
-
-          <div className="min-w-0">
-            <p className="text-base font-black md:text-lg">{result.title}</p>
-            <p className="mt-1 text-sm font-medium leading-6 opacity-95">{result.message}</p>
-            <div className="mt-3 grid gap-2 text-xs leading-6 opacity-95 md:grid-cols-2">
-              <p className="break-all">端點：{result.endpoint}</p>
-              <p>Provider：{result.provider}</p>
-              <p>Model：{result.model}</p>
-              <p>耗時：{result.durationMs} ms</p>
-            </div>
+          <div className="mt-1 grid min-w-0 grid-cols-2 gap-x-3 text-xs leading-4 text-muted-foreground sm:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto]">
+            <p className="truncate" title={result.endpoint}>端點：{result.endpoint}</p>
+            <p className="truncate" title={result.provider}>Provider：{result.provider}</p>
+            <p className="truncate" title={result.model}>Model：{result.model}</p>
+            <p className="whitespace-nowrap">耗時：{result.durationMs} ms</p>
           </div>
         </div>
-
         <Button
           type="button"
           variant="ghost"
           size="icon"
+          aria-label="關閉查詢狀態"
+          title="關閉查詢狀態"
           onClick={onDismiss}
-          className="h-9 w-9 shrink-0 rounded-2xl border border-white/12 bg-black/15 text-current transition-all duration-200 hover:bg-black/25 active:scale-[0.98]"
+          className="h-11 w-11 shrink-0 p-0 text-muted-foreground hover:text-foreground sm:h-8 sm:w-8"
         >
-          <Trash2 className="h-4 w-4" />
+          <X className="h-4 w-4" />
         </Button>
       </div>
     </div>

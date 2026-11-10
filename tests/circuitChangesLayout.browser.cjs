@@ -45,8 +45,8 @@ async function geometry(page, dialog, width, height) {
     return { frame: rect(node), overflow: node.scrollWidth - node.clientWidth, panel: rect(node.querySelector('.circuit-detail')), note: rect(review.querySelector('textarea')), actions: rect(review.lastElementChild), footer: rect(node.querySelector('.circuit-detail-footer')), buttons: [...review.querySelectorAll('button')].map(rect) };
   });
   assert.ok(values.frame.left >= -1 && values.frame.top >= -1 && values.frame.right <= width + 1 && values.frame.bottom <= height + 1, JSON.stringify(values));
-  // Desktop uses the viewport with a 12px gutter, including wide or zoomed-out windows; phones keep the full screen.
-  if (width >= 1024) assert.ok(Math.abs(values.frame.width - (width - 24)) <= 2 && values.frame.top >= 10 && values.frame.bottom <= height - 10, 'The workspace fills the viewport with a small gutter: ' + JSON.stringify(values.frame));
+  // Desktop leaves a 17px gutter; phones keep the full screen.
+  if (width >= 1024) assert.ok(Math.abs(values.frame.width - (width - 34)) <= 2 && Math.abs(values.frame.height - (height - 34)) <= 2 && values.frame.top >= 15 && values.frame.bottom <= height - 15, 'The workspace leaves a small gutter: ' + JSON.stringify(values.frame));
   else assert.ok(values.frame.width >= width - 2, 'On a phone the workspace uses the whole width');
   assert.ok(values.overflow <= 1, 'The dialog must not stretch horizontally');
   assert.ok(values.note.width >= Math.min(280, values.panel.width - 36), 'Review comments must retain a usable full line');
