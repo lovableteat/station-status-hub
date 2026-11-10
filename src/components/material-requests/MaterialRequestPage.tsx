@@ -1438,6 +1438,7 @@ function ExcelFilterPopover({
   getOptions,
   label,
   triggerLabel,
+  optionRowHeight = FILTER_OPTION_ROW_HEIGHT,
   selectedValues,
   onSelectedValuesChange,
   activeSort,
@@ -1447,6 +1448,7 @@ function ExcelFilterPopover({
   getOptions: (key: ColumnFilterKey) => ExcelFilterOption[];
   label: string;
   triggerLabel?: string;
+  optionRowHeight?: number;
   selectedValues: ColumnFilterSelection;
   onSelectedValuesChange: (values: ColumnFilterSelection) => void;
   activeSort: MaterialColumnSort<ColumnFilterKey> | null;
@@ -1511,8 +1513,8 @@ function ExcelFilterPopover({
     setScrollTop(0);
   }, [deferredSearchValue, sortDirection]);
 
-  const virtualStartIndex = Math.max(0, Math.floor(scrollTop / FILTER_OPTION_ROW_HEIGHT) - FILTER_OPTION_OVERSCAN);
-  const virtualEndIndex = Math.min(filteredOptions.length, Math.ceil((scrollTop + FILTER_OPTION_LIST_HEIGHT) / FILTER_OPTION_ROW_HEIGHT) + FILTER_OPTION_OVERSCAN);
+  const virtualStartIndex = Math.max(0, Math.floor(scrollTop / optionRowHeight) - FILTER_OPTION_OVERSCAN);
+  const virtualEndIndex = Math.min(filteredOptions.length, Math.ceil((scrollTop + FILTER_OPTION_LIST_HEIGHT) / optionRowHeight) + FILTER_OPTION_OVERSCAN);
   const visibleOptionSlice = filteredOptions.slice(virtualStartIndex, virtualEndIndex);
 
   const commitSelection = () => {
@@ -1619,11 +1621,11 @@ function ExcelFilterPopover({
               </div>
 
               {filteredOptions.length > 0 ? (
-                <div className="min-h-0 overflow-y-auto" style={{ height: Math.min(filteredOptions.length * FILTER_OPTION_ROW_HEIGHT, FILTER_OPTION_LIST_HEIGHT) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
-                  <div className="relative" style={{ height: filteredOptions.length * FILTER_OPTION_ROW_HEIGHT }}>
+                <div className="min-h-0 overflow-y-auto" style={{ height: Math.min(filteredOptions.length * optionRowHeight, FILTER_OPTION_LIST_HEIGHT) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+                  <div className="relative" style={{ height: filteredOptions.length * optionRowHeight }}>
                     {visibleOptionSlice.map((option, index) => {
                       const checked = selectedSet.has(option.value);
-                      const offsetY = (virtualStartIndex + index) * FILTER_OPTION_ROW_HEIGHT;
+                      const offsetY = (virtualStartIndex + index) * optionRowHeight;
 
                       return (
                         <label
@@ -1632,7 +1634,7 @@ function ExcelFilterPopover({
                             "absolute left-0 right-0 flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] hover:bg-accent",
                             checked ? "text-foreground" : "text-muted-foreground",
                           )}
-                          style={{ top: offsetY, height: FILTER_OPTION_ROW_HEIGHT }}
+                          style={{ top: offsetY, height: optionRowHeight }}
                         >
                           <Checkbox aria-label={option.label} className="h-5 w-5 rounded-[3px]" checked={checked} onCheckedChange={(value) => toggleValue(option.value, value === true)} />
                           {filterKey === "trackingStatus" && <span
@@ -5732,6 +5734,7 @@ export function MaterialRequestPage() {
 
   const selectedMobileFilter = columnFilters[mobileFilterColumn];
   const mobileFilterValueLabel = selectedMobileFilter === null ? "全部" : selectedMobileFilter.length === 1 ? selectedMobileFilter[0] : selectedMobileFilter.length ? `已選 ${selectedMobileFilter.length} 項` : "全不選";
+  const mobileStatusLabel = columnFilters.trackingStatus === null ? "全部" : columnFilters.trackingStatus.length === 1 ? columnFilters.trackingStatus[0] : `已選 ${columnFilters.trackingStatus.length} 項`;
   const searchColumnControl = (
     <Select value={searchColumn} onValueChange={value => { setSearchColumn(value as ColumnFilterKey | "all"); setPage(1); setExpandedKey(null); }}>
       <SelectTrigger aria-label="搜尋篩選工具" className="h-11 w-40 shrink-0 text-sm [&>span]:truncate lg:h-9 lg:text-xs"><SelectValue>{searchColumn === "all" ? "搜尋篩選工具" : COLUMN_FILTER_LABELS[searchColumn]}</SelectValue></SelectTrigger>
@@ -5912,27 +5915,20 @@ export function MaterialRequestPage() {
                 {collaborationStatusMeta.label}
               </span>}
             </div>
-            <MaterialMobileBomPicker groups={bomSeriesGroups} value={activeBomId} onValueChange={switchActiveBom} historicalVersion={isHistoricalVersion && activeVersionInfo ? { name: activeSeriesName, version: activeVersionInfo.version } : undefined}>
-                <span className="flex min-w-0 items-center gap-1">
-                  {activeWorkspaceProjectLabel && <span className="min-w-0 truncate text-cyan-200/70">{activeWorkspaceProjectLabel} /</span>}
-                  <span className="min-w-0 truncate">{activeSeriesName}{isHistoricalVersion && activeVersionInfo ? ` · ${activeVersionInfo.version.displayNumber}（歷史）` : ""}</span>
-                  <span className="shrink-0">· {seriesList.length} BOM</span>
-                </span>
-            </MaterialMobileBomPicker>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="material-mobile-title-actions flex shrink-0 items-center gap-1.5">
             <Button
               type="button"
               onClick={() => openCreate()}
               disabled={!canEdit || !isCollaborativeReady || !isFullDatasetLoaded}
               aria-label="新增料號"
               variant="ghost"
-              className="material-mobile-add h-11 w-11 rounded-xl p-0"
+              className="material-mobile-add h-11 gap-1.5 rounded-lg px-3"
             >
-              <Plus className="h-5 w-5" />
+              <Plus className="h-4 w-4" />新增
             </Button>
             <Drawer open={mobileToolsOpen} onOpenChange={setMobileToolsOpen} shouldScaleBackground={false}>
-              <DrawerTrigger asChild><Button type="button" variant="ghost" className="h-11 w-11 rounded-xl p-0" aria-label="排序與工具"><MoreHorizontal className="h-5 w-5" /></Button></DrawerTrigger>
+              <DrawerTrigger asChild><Button type="button" variant="outline" className="h-11 gap-1.5 rounded-lg px-3" aria-label="排序與工具"><MoreHorizontal className="h-4 w-4" />工具</Button></DrawerTrigger>
               <DrawerContent data-testid="material-mobile-tools" className="material-mobile-tools-sheet" onCloseAutoFocus={event => { if (bomManagerOpen || circuitChangesOpen || pendingDialogOpen || exportDialogOpen || nonPvlDialogOpen || pageTrackerDialogOpen || rlcPriorityOpen || guideOpen || tableSettingsOpen) event.preventDefault(); }}>
                 <DrawerHeader className="material-mobile-tools-heading">
                   <div><DrawerTitle>排序與工具</DrawerTitle><DrawerDescription>{activeSeriesName}</DrawerDescription></div>
@@ -5968,6 +5964,16 @@ export function MaterialRequestPage() {
                 </div>
               </DrawerContent>
             </Drawer>
+          </div>
+          <div className="material-mobile-bom-control">
+            <MaterialMobileBomPicker groups={bomSeriesGroups} value={activeBomId} onValueChange={switchActiveBom} historicalVersion={isHistoricalVersion && activeVersionInfo ? { name: activeSeriesName, version: activeVersionInfo.version } : undefined}>
+              <span className="flex min-w-0 items-center gap-2">
+                <Layers3 aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
+                {activeWorkspaceProjectLabel && <span className="material-mobile-bom-project truncate">{activeWorkspaceProjectLabel} /</span>}
+                <span className="min-w-0 truncate" title={activeSeriesName}>{activeSeriesName}{isHistoricalVersion && activeVersionInfo ? ` · ${activeVersionInfo.version.displayNumber}（歷史）` : ""}</span>
+              </span>
+              <span className="material-mobile-bom-count">{seriesList.length} BOM</span>
+            </MaterialMobileBomPicker>
           </div>
         </div>
 
@@ -6017,12 +6023,14 @@ export function MaterialRequestPage() {
           </div>
 
           <div data-testid="material-mobile-column-filters" role="group" aria-label="料件欄位篩選" className="material-mobile-column-filters">
-            <ExcelFilterPopover filterKey="trackingStatus" getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS.trackingStatus} triggerLabel="狀態" selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, trackingStatus: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
+            <ExcelFilterPopover filterKey="trackingStatus" getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS.trackingStatus} triggerLabel={`進度：${mobileStatusLabel}`} optionRowHeight={44} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, trackingStatus: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
+            <div className="material-mobile-field-filter" role="group" aria-label="欄位與篩選值">
             <Select value={mobileFilterColumn} onValueChange={value => setMobileFilterColumn(value as ColumnFilterKey)}>
               <SelectTrigger aria-label="篩選欄位" className="h-11 min-w-0 text-xs [&>span]:truncate"><SelectValue>{mobileFilterColumn === "manufacturer" ? "廠商" : COLUMN_FILTER_LABELS[mobileFilterColumn]}</SelectValue></SelectTrigger>
               <SelectContent>{FILTER_KEYS.filter(key => key !== "trackingStatus").map(key => <SelectItem key={key} value={key}>{COLUMN_FILTER_LABELS[key]}</SelectItem>)}</SelectContent>
             </Select>
-            <ExcelFilterPopover filterKey={mobileFilterColumn} getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS[mobileFilterColumn]} triggerLabel={mobileFilterValueLabel} selectedValues={selectedMobileFilter} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, [mobileFilterColumn]: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
+            <ExcelFilterPopover filterKey={mobileFilterColumn} getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS[mobileFilterColumn]} triggerLabel={mobileFilterValueLabel} optionRowHeight={44} selectedValues={selectedMobileFilter} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, [mobileFilterColumn]: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
+            </div>
             {tableSettingsControl}
           </div>
           {activeFilterControls}
@@ -6296,6 +6304,8 @@ export function MaterialRequestPage() {
                 physicalNumber={mainRecord.partNumber ?? ""}
                 showVirtual={columnVisibility.virtual}
                 showPhysical={columnVisibility.physical}
+                manufacturer={mainRecord.manufacturer || ""}
+                showManufacturer={columnVisibility.manufacturer}
                 status={getTrackingStatusDisplayLabel(getTrackingWorkflowStatus(mainRecord))}
                 statusTone={materialTrackingStatusPresentation(getTrackingWorkflowStatus(mainRecord)).text}
                 marked={isMarked}

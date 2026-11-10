@@ -72,7 +72,7 @@ async function run(browser, width) {
     assert.equal(await page.locator('.material-mobile-empty > p').innerText(), '目前篩選條件沒有符合的料件');
     const chips = page.getByTestId('material-active-filters').filter({ visible:true });
     geometry.chipHeights = await chips.locator('button').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().height));
-    assert.ok(geometry.chipHeights.every(height => height === 32), JSON.stringify(geometry.chipHeights));
+    assert.ok(geometry.chipHeights.every(height => height === 44), JSON.stringify(geometry.chipHeights));
     if (width === 536) await page.screenshot({ path:path.join(evidence, 'empty-536.png') });
     await chips.getByRole('button', { name:/^移除篩選：狀態/ }).tap();
     assert.equal(await chips.getByRole('button', { name:/^移除篩選/ }).count(), 1);

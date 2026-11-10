@@ -7,6 +7,8 @@ export interface MaterialMobileListRowProps {
   physicalNumber: string;
   showVirtual: boolean;
   showPhysical: boolean;
+  manufacturer: string;
+  showManufacturer: boolean;
   status: string;
   statusTone: string;
   marked: boolean;
@@ -19,7 +21,7 @@ export interface MaterialMobileListRowProps {
 }
 
 export function MaterialMobileListRow({
-  virtualNumber, physicalNumber, showVirtual, showPhysical, status, statusTone,
+  virtualNumber, physicalNumber, showVirtual, showPhysical, manufacturer, showManufacturer, status, statusTone,
   marked, markDisabled, name, onToggleMarked, onOpen, onTracking, recordId,
 }: MaterialMobileListRowProps) {
   return (
@@ -35,11 +37,12 @@ export function MaterialMobileListRow({
         <Star aria-hidden="true" />
       </button>
       <div className="material-mobile-list-identity">
-        <button type="button" className="material-mobile-list-open" data-testid="material-mobile-row-open" onClick={onOpen} aria-label={`查看料件詳情，${name}，虛擬料號${virtualNumber || "未提供"}，實體料號${physicalNumber || "未提供"}`}>
+        <button type="button" className={cn("material-mobile-list-open", showManufacturer && "has-manufacturer")} data-testid="material-mobile-row-open" onClick={onOpen} aria-label={`查看料件詳情，${name}，虛擬料號${virtualNumber || "未提供"}，實體料號${physicalNumber || "未提供"}${showManufacturer ? `，廠商${manufacturer || "未指定"}` : ""}`}>
           {showVirtual && <span className="material-mobile-list-number is-virtual"><span className="material-mobile-list-number-label">虛擬</span><span className={cn("material-mobile-list-number-value", !virtualNumber && "is-empty")} title={virtualNumber || "未提供"}>{virtualNumber || "未提供"}</span></span>}
           {showPhysical && <span className="material-mobile-list-number is-physical"><span className="material-mobile-list-number-label">實體</span><span className={cn("material-mobile-list-number-value", !physicalNumber && "is-empty")} title={physicalNumber || "未提供"}>{physicalNumber || "未提供"}</span></span>}
           {!showVirtual && !showPhysical && <span className="material-mobile-list-fallback">料件詳情</span>}
           <span className="material-mobile-list-name" title={name}>{name}</span>
+          {showManufacturer && <span className="material-mobile-list-manufacturer" title={`廠商：${manufacturer || "未指定"}`}><span className="material-mobile-list-manufacturer-label">廠商</span><span className="material-mobile-list-manufacturer-value">{manufacturer || "未指定廠商"}</span></span>}
         </button>
       </div>
       <button type="button" className={cn("material-mobile-list-status", statusTone)} data-testid="material-mobile-row-tracking" onClick={onTracking} aria-label={`更新進度：${status}`} title={status}>
