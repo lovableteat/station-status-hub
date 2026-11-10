@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, Download, FileArchive, GitCompareArrows, Layers3, Pencil, Search, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import type { MaterialWorkbookRecord } from "./materialRequestUtils";
 import "./bomVersionCenter.css";
 
 const UNASSIGNED_VALUE = "__unassigned__";
+const NvBomCompare = lazy(() => import("./NvBomComparePanel"));
 export const BOM_SERIES_EMPTY_TEXT = "找不到符合條件的 BOM 系列";
 
 function UploadTimestamp({ value }: { value: string }) {
@@ -114,7 +115,8 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
-  const [mode, setMode] = useState<"series" | "diff">("series");
+  const [mode, setMode] = useState<"series" | "diff" | "nv">("series");
+  const [nvVisited, setNvVisited] = useState(false);
   const [diffPair, setDiffPair] = useState<{ before: string; after: string } | null>(null);
   const [diffResult, setDiffResult] = useState<BomDiffResult | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
@@ -389,14 +391,15 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="bom-version-center" className="bom-version-center flex flex-col overflow-hidden">
         <DialogHeader className="bom-version-header">
-          <DialogTitle className="text-xl">BOM 版本管理</DialogTitle>
+          <div className="flex flex-wrap items-center gap-3"><DialogTitle className="text-xl">{mode === "nv" ? "NV 原始 BOM 比對" : "BOM 版本管理"}</DialogTitle>{mode !== "nv" && <Button type="button" variant="outline" size="sm" onClick={() => { setNvVisited(true); setMode("nv"); }} className="h-10 gap-2 border-primary/40 text-primary"><GitCompareArrows aria-hidden="true" className="h-4 w-4" />NV 原始 BOM 比對</Button>}</div>
           <DialogDescription className="sr-only">{description}</DialogDescription>
           <div className="bom-version-overview"><span className="bom-version-project" title={`目前專案：${activeProjectName ?? "未選擇"}`}><Layers3 aria-hidden="true" />目前專案：{activeProjectName ?? "未選擇"}</span><span>{seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>
         </DialogHeader>
         {/* Action feedback lives above both modes so an export started from the diff view is acknowledged there too. */}
         {feedback && <p role="status" data-testid="bom-version-feedback" className={cn("rounded-lg border px-3 py-1.5 text-xs", feedback.tone === "ok" ? "border-success/35 bg-success/10 text-success" : "border-destructive/35 bg-destructive/10 text-destructive")}>{feedback.text}</p>}
 
-        {mode === "diff" && diffSeries && diffBefore && diffAfter ? (
+        {nvVisited && <Suspense fallback={mode === "nv" ? <p role="status">正在開啟 NV 原始 BOM 比對…</p> : null}><NvBomCompare active={open && mode === "nv"} onBack={() => setMode("series")} /></Suspense>}
+        {mode === "nv" ? null : mode === "diff" && diffSeries && diffBefore && diffAfter ? (
           <BomDiffView
             series={diffSeries}
             before={diffBefore}
