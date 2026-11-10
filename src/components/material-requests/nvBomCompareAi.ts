@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { withReadDeadline } from "@/lib/readDeadline";
-import { normalizeApiKeyPermissions, type ApiKeyRecord } from "../api-management/apiKeyHelpers";
-import { buildProviderChatRequest, parseProviderChatResponse, redactSensitiveText } from "../api-management/aiProviderCatalog";
+import { buildApiKeyModelTargets, buildApiKeyPermissions, normalizeApiKeyPermissions, type ApiKeyRecord } from "../api-management/apiKeyHelpers";
+import { GEMINI_FREE_MODEL_PROFILES, buildProviderChatRequest, parseProviderChatResponse, redactSensitiveText } from "../api-management/aiProviderCatalog";
 import { trackedProviderFetch } from "../api-management/aiUsageTelemetry";
 import { classifyAiFailure } from "../api-management/aiRequestRecovery";
 import { compareNvBomSheets, validateNvBomMapping, type NvBomDiff, type NvBomMapping, type NvBomSheet } from "./nvBomCompare";
@@ -15,10 +15,14 @@ export async function loadNvBomModels(): Promise<NvBomModel[]> {
   const { data, error } = await withReadDeadline(signal => supabase.from("api_keys").select("*").eq("is_active", true).order("created_at", { ascending: false }).abortSignal(signal), 15_000);
   if (error) throw new Error("無法讀取可用的 AI 服務，請稍後重試。");
   return (data ?? []).flatMap(record => {
-    const { read, metadata } = normalizeApiKeyPermissions(record.permissions);
+    const { read, write, metadata } = normalizeApiKeyPermissions(record.permissions);
     if (!read || !record.is_active || record.expires_at && !(Date.parse(record.expires_at) > Date.now()) || !metadata.model.trim() || !metadata.provider.trim() || !metadata.baseUrl.trim()) return [];
     // Workbook cells are sent as text, so configured text-compatible models can be used too.
-    return [{ id: record.id, label: `${record.key_name} · ${metadata.model}`, record }];
+    return buildApiKeyModelTargets([record], [metadata.model, ...GEMINI_FREE_MODEL_PROFILES.map(item => item.id)]).map(target => ({
+      id: target.model === metadata.model.trim() ? record.id : target.id,
+      label: `${record.key_name} · ${target.model}`,
+      record: target.model === metadata.model ? record : { ...record, permissions: buildApiKeyPermissions({ read, write, metadata: { ...metadata, model: target.model } }, record.permissions) },
+    }));
   });
 }
 
@@ -28,7 +32,7 @@ async function ask(model: NvBomModel, instruction: string, input: unknown, signa
   if (!read || !model.record.is_active || model.record.expires_at && !(Date.parse(model.record.expires_at) > Date.now())) throw new Error("這項 AI 服務已停用、到期或沒有使用權限。");
   const request = buildProviderChatRequest({ provider: metadata.provider, baseUrl: metadata.baseUrl, apiKey: model.record.api_key, model: metadata.model,
     messages: [{ role: "system", text: instruction }, { role: "user", text: JSON.stringify(input) }] });
-  const response = await trackedProviderFetch({ apiKeyId: model.id, provider: metadata.provider, model: metadata.model, source: "ai-chat", attemptNumber: 1,
+  const response = await trackedProviderFetch({ apiKeyId: model.record.id, provider: metadata.provider, model: metadata.model, source: "ai-chat", attemptNumber: 1,
     url: request.url, init: { method: request.method, headers: request.headers, body: JSON.stringify(request.body), signal }, timeoutMs: 120_000 });
   const payload = await response.json(); signal.throwIfAborted();
   if (!response.ok) {
