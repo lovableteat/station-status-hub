@@ -38,20 +38,23 @@
 .circuit-workspace { --circuit-list-width: 340px; --circuit-detail-width: minmax(380px, 440px); display: grid; flex: 1; grid-template-columns: var(--circuit-list-width) minmax(0, 1fr); min-height: 0; }
 /* With the PDF open: list | PDF page | form. The list folds to a rail so the page gets the width. */
 .circuit-workspace[data-pdf-open="true"] { grid-template-columns: var(--circuit-list-width) minmax(0, 1fr) var(--circuit-detail-width); }
-.circuit-workspace[data-list-collapsed="true"] { --circuit-list-width: 56px; }
-.circuit-workspace[data-detail-collapsed="true"] { --circuit-detail-width: 56px; }
+.circuit-workspace[data-list-collapsed="true"] { --circuit-list-width: 72px; }
+.circuit-workspace[data-detail-collapsed="true"] { --circuit-detail-width: 72px; }
 .circuit-workspace[data-pdf-open="true"] .circuit-detail { container: circuit-detail / inline-size; }
-.circuit-workspace[data-pdf-open="true"] .circuit-detail-heading { gap: 6px; }
-.circuit-detail-rail > span { writing-mode: vertical-rl; letter-spacing: 2px; }
+.circuit-workspace[data-pdf-open="true"] .circuit-detail-heading { flex-wrap: wrap; gap: 6px; }
+.circuit-workspace[data-pdf-open="true"] .circuit-detail-heading > div:first-of-type { flex-basis: 110px; }
 .circuit-list-rail { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 0; }
 .circuit-list-rail > button { width: 40px; height: 40px; padding: 0; }
-.circuit-list-rail > button:first-child { color: hsl(var(--primary)); background: hsl(var(--primary) / .1); }
 .circuit-list-rail > span { display: flex; flex-direction: column; align-items: center; color: hsl(var(--muted-foreground)); font-size: 14px; font-variant-numeric: tabular-nums; line-height: 18px; }
 .circuit-list-rail > span > small { font-size: 11px; }
 .circuit-new-item-row { display: flex; flex: none; gap: 6px; margin: 12px 12px 0; }
 .circuit-new-item-row > :is(.circuit-list-collapse, .circuit-removed-trigger) { flex: none; width: 44px; height: 44px; padding: 0; border-color: hsl(var(--border)); background: hsl(var(--secondary) / .35); color: hsl(var(--muted-foreground)); }
 .circuit-new-item-row > .circuit-removed-trigger { width: auto; gap: 4px; padding-inline: 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .circuit-new-item-row > :is(.circuit-list-collapse, .circuit-removed-trigger):hover { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+.circuit-changes-dialog .circuit-panel-toggle { flex: none; width: auto; min-height: 40px; gap: 6px; padding: 0 10px; border-color: hsl(var(--primary) / .4); background: hsl(var(--primary) / .08); color: hsl(var(--foreground)); font-size: 13px; line-height: 20px; white-space: nowrap; }
+.circuit-changes-dialog .circuit-panel-toggle > svg { color: hsl(var(--primary)); }
+.circuit-changes-dialog .circuit-panel-toggle:hover { border-color: hsl(var(--primary) / .7); background: hsl(var(--primary) / .16); }
+.circuit-list-rail > .circuit-panel-toggle { width: 64px; height: 60px; flex-direction: column; gap: 4px; padding: 6px 4px; }
 
 /* List: create, then the filters directly above the results they narrow. */
 .circuit-list-panel { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid hsl(var(--border)); }
@@ -96,7 +99,6 @@
 /* Detail */
 .circuit-detail { display: flex; min-width: 0; min-height: 0; flex-direction: column; }
 .circuit-detail[hidden] { display: none; }
-.circuit-detail-collapse { flex: none; width: 32px; height: 40px; padding: 0; }
 .circuit-detail[aria-busy="true"] > :is(.circuit-detail-scroll, .circuit-detail-footer) { opacity: .55; pointer-events: none; }
 .circuit-detail-heading { display: flex; flex: none; min-height: 56px; align-items: center; gap: 10px; padding: 8px 20px; border-bottom: 1px solid hsl(var(--border)); }
 .circuit-detail-heading > div:first-of-type { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 12px; }

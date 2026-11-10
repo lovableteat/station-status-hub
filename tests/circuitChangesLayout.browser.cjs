@@ -8,6 +8,15 @@ const { chromium } = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../
 const { createCircuitChangesServer } = require('./support/circuitChangesServer.cjs');
 const evidence = path.resolve(process.env.CIRCUIT_LAYOUT_EVIDENCE_DIR || '../circuit-layout-evidence');
 
+async function panelControl(button, label, expanded) {
+  assert.equal((await button.innerText()).trim(), label);
+  assert.equal(await button.getAttribute('aria-expanded'), String(expanded));
+  assert.ok(await button.locator('span').isVisible(), label + ' must be visible');
+  const bounds = await button.boundingBox();
+  assert.ok(bounds.width >= 60 && bounds.height >= 40, JSON.stringify({ label, bounds }));
+  assert.ok(await button.evaluate(node => node.scrollWidth <= node.clientWidth + 1), label + ' must fit');
+}
+
 async function compareDrawings(page, dialog) {
   const panel = dialog.getByTestId('circuit-pdf-panel');
   const rendered = () => page.waitForFunction(() => { const pages = [...document.querySelectorAll('.circuit-pdf-surface')]; return pages.length > 0 && pages.every(node => node.dataset.rendering === 'false'); });
@@ -68,7 +77,7 @@ async function geometry(page, dialog, width, height) {
     await server.listen();
     const origin = 'http://127.0.0.1:' + server.httpServer.address().port;
     browser = await chromium.launch({ channel: 'chrome' });
-    for (const width of [2400, 1920, 1543, 1173, 390]) {
+    for (const width of (process.env.CIRCUIT_LAYOUT_WIDTHS || '2400,1920,1543,1173,390').split(',').map(Number)) {
       await fetch(origin + '/__circuit/control', { method: 'POST', body: JSON.stringify({ action: 'reset' }) });
       const context = await browser.newContext({ viewport: { width, height: 884 }, hasTouch: true, isMobile: width < 1024, reducedMotion: 'reduce', locale: 'zh-TW' });
       await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
@@ -96,18 +105,24 @@ async function geometry(page, dialog, width, height) {
           const scrollTop = await scroll.evaluate(node => { node.scrollTop = Math.min(140, node.scrollHeight - node.clientHeight); return node.scrollTop; });
           const originalListCollapsed = await dialog.locator('.circuit-workspace').getAttribute('data-list-collapsed') === 'true';
           for (let cycle = 0; cycle < 2; cycle++) {
+            await panelControl(dialog.getByRole('button', { name: '收合修改內容', exact: true }), '收合內容', true);
             await dialog.getByRole('button', { name: '收合修改內容', exact: true }).click();
             await detail.waitFor({ state: 'hidden' });
             const expand = dialog.getByRole('button', { name: '展開修改內容', exact: true });
             await expand.waitFor();
+            await panelControl(expand, '展開內容', false);
             await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '展開修改內容');
             assert.equal(await expand.getAttribute('aria-expanded'), 'false');
             assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('circuit-changes-layout:v1')).detail), false);
             const wider = await pdf.evaluate(node => node.getBoundingClientRect().width);
             assert.ok(wider > beforeWidth + 250, `The PDF should gain the form width: ${beforeWidth} -> ${wider}`);
-            assert.ok(Math.abs(await dialog.locator('.circuit-detail-rail').evaluate(node => node.getBoundingClientRect().width) - 56) <= 1);
+            assert.ok(Math.abs(await dialog.locator('.circuit-detail-rail').evaluate(node => node.getBoundingClientRect().width) - 72) <= 1);
             if (cycle === 0) {
-              const switchList = async collapsed => dialog.getByRole('button', { name: collapsed ? '展開修改清單' : '收合修改清單', exact: true }).click();
+              const switchList = async collapsed => {
+                const control = dialog.getByRole('button', { name: collapsed ? '展開修改清單' : '收合修改清單', exact: true });
+                await panelControl(control, collapsed ? '展開清單' : '收合清單', !collapsed);
+                await control.click();
+              };
               await switchList(originalListCollapsed);
               assert.equal(await dialog.locator('.circuit-workspace').getAttribute('data-detail-collapsed'), 'true');
               assert.ok((await pdf.evaluate(node => node.getBoundingClientRect().width)) > 300);
@@ -152,6 +167,12 @@ async function geometry(page, dialog, width, height) {
         await dialog.getByRole('button', { name: '退回補充', exact: true }).tap();
         await dialog.locator('.circuit-returned').waitFor();
         assert.ok((await dialog.locator('.circuit-returned').innerText()).includes('請補上修改後的接線位置'));
+        if (width < 1024) {
+          const back = dialog.getByRole('button', { name: '返回修改清單', exact: true });
+          const bounds = await back.boundingBox(); assert.ok(bounds.width >= 44 && bounds.height >= 44);
+          await back.tap(); await dialog.getByTestId('circuit-change-item').first().tap();
+          await dialog.locator('.circuit-returned').waitFor();
+        }
         await dialog.getByRole('button', { name: '關閉線路修改', exact: true }).tap(); await dialog.waitFor({ state: 'hidden' });
         assert.deepEqual(errors, []);
         report.checks.push({ width, result: 'passed', collapse, normal, short });

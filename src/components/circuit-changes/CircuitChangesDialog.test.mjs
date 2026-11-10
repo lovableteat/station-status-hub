@@ -69,8 +69,10 @@ test("collapsing the detail preserves mounted content and Review notes without s
     const title = view.root.root.findByProps({ "aria-label": "修改標題" });
     act(() => note.props.onChange({ target: { value: "請核對 VCC 接線，尚未送出。" } }));
     for (let cycle = 0; cycle < 2; cycle++) {
+      assert.match(textOf(view.root.root.findByProps({ "aria-label": "收合修改內容" })), /收合內容/);
       act(() => view.root.root.findByProps({ "aria-label": "收合修改內容" }).props.onClick());
       assert.equal(detail.props.hidden, true);
+      assert.match(textOf(view.root.root.findByProps({ "aria-label": "展開修改內容" })), /展開內容/);
       assert.equal(view.root.root.findByProps({ "aria-label": "展開修改內容" }).props["aria-expanded"], false);
       assert.equal(JSON.parse(view.window.localStorage.getItem("circuit-changes-layout:v1")).detail, false);
       act(() => view.root.root.findByProps({ "aria-label": "展開修改內容" }).props.onClick());
@@ -91,6 +93,25 @@ test("collapsing the detail preserves mounted content and Review notes without s
     await act(async () => view.root.root.findByProps({ "aria-label": "下一項修改" }).props.onClick());
     assert.equal(detail.props.hidden, false, "selecting a modification opens its content");
     assert.ok(view.calls.some(call => call[0] === "select" && call[1] === "two"));
+  } finally { act(() => view.root.unmount()); }
+});
+
+test("list panel controls visibly name their action and expose the controlled region", () => {
+  const view = mount();
+  try {
+    let control = view.root.root.findByProps({ "aria-label": "收合修改清單" });
+    assert.match(textOf(control), /收合清單/);
+    assert.equal(control.props["aria-expanded"], true);
+    assert.equal(control.props["aria-controls"], "circuit-change-list");
+    act(() => control.props.onClick());
+    control = view.root.root.findByProps({ "aria-label": "展開修改清單" });
+    assert.match(textOf(control), /展開清單/);
+    assert.equal(control.props["aria-expanded"], false);
+    assert.equal(control.props["aria-controls"], "circuit-change-list");
+    assert.ok(view.root.root.findByProps({ id: "circuit-change-list" }));
+    act(() => control.props.onClick());
+    assert.match(textOf(view.root.root.findByProps({ "aria-label": "收合修改清單" })), /收合清單/);
+    assert.equal(view.calls.some(call => ["save", "review", "draft"].includes(call[0])), false);
   } finally { act(() => view.root.unmount()); }
 });
 
