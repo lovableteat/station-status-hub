@@ -2,6 +2,14 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [ main ]
+  # "Run workflow" on GitHub redeploys main by hand. Ticking rehearse_retry makes the first deploy
+  # attempt fail on purpose so the retry steps below run for real; the site still ends up deployed.
+  workflow_dispatch:
+    inputs:
+      rehearse_retry:
+        description: Make the first deploy attempt fail on purpose to rehearse the automatic retry
+        type: boolean
+        default: false
 permissions:
   contents: read
   pages: write
@@ -40,8 +48,30 @@ jobs:
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deploy_3.outputs.page_url || steps.deploy_2.outputs.page_url || steps.deploy_1.outputs.page_url }}
     steps:
+      # GitHub Pages sometimes stalls in "syncing_files" or answers "Deployment failed, try again
+      # later" for a few minutes although the build is fine. On 2026-11-10 two attempts in a row
+      # failed between 10:05 and 10:18 Taipei time, and a re-run later succeeded in 28 seconds.
+      # So try up to three times with waits in between; the job fails only when all three failed.
       - name: Deploy to GitHub Pages
-        id: deployment
+        id: deploy_1
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: ${{ inputs.rehearse_retry && 'rehearsal-missing-artifact' || 'github-pages' }}
+      - name: Wait 2 minutes before the second attempt
+        if: steps.deploy_1.outcome == 'failure'
+        run: sleep 120
+      - name: Deploy to GitHub Pages (second attempt)
+        id: deploy_2
+        if: steps.deploy_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - name: Wait 5 minutes before the last attempt
+        if: steps.deploy_1.outcome == 'failure' && steps.deploy_2.outcome == 'failure'
+        run: sleep 300
+      - name: Deploy to GitHub Pages (last attempt)
+        id: deploy_3
+        if: steps.deploy_1.outcome == 'failure' && steps.deploy_2.outcome == 'failure'
         uses: actions/deploy-pages@v4

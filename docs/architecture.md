@@ -312,7 +312,7 @@ RWD 的目標是「工作現場拿起手機就能完成工作」，不是只讓�
 1. 使用 Node 20 安裝依賴。
 2. 注入 GitHub Actions secrets 的 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` 與 realtime flag。
 3. 執行 production build。
-4. 將 `dist` 發布到 GitHub Pages。
+4. 將 `dist` 發布到 GitHub Pages。同一時間只跑一個部署（`concurrency: pages`），後到的推送排隊等前一個完成；GitHub Pages 端回「Deployment failed, try again later」或卡在 syncing_files 逾時，會等 2 分鐘、5 分鐘再自動重試，三次都失敗才判定失敗。GitHub 上的「Run workflow」可手動重新部署 main，勾選 `rehearse_retry` 會讓第一次故意失敗來演練重試，網站最後仍會部署完成。
 
 同一次推送也會觸發 `.github/workflows/audit-on-main.yml`，以隔離的假資料執行 `node --test tests/audit*.integration.cjs`（權限、帳號切換、即時事件與草稿保護等稽核整合測試）。它與部署並行、不擋部署；失敗時該 commit 會標紅並通知推送者，應盡快修正。這些測試不在 `npm test` 內，改名頁面函式或更換對話框關閉按鈕時要一併檢查。完整的 PR 回歸（含型別、單元、PostgreSQL、瀏覽器測試）仍在 `audit-regression.yml`。
 
