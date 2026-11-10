@@ -164,7 +164,7 @@ export function MainWorkspaceHeader({
                 type="button"
                 title="開啟帳號選單"
                 aria-label="開啟帳號選單"
-                className="flex h-11 w-[140px] shrink-0 items-center gap-2 rounded-xl border border-border bg-card px-3 text-left text-foreground transition-colors hover:bg-accent max-sm:w-11 max-sm:justify-center max-sm:px-0"
+                className="flex h-11 w-[140px] shrink-0 items-center gap-2 rounded-xl border border-border bg-card px-3 text-left text-foreground transition-colors hover:bg-accent max-lg:w-11 max-lg:justify-center max-lg:px-0"
               >
                 <span className="relative shrink-0">
                   <UserAvatar
@@ -174,13 +174,13 @@ export function MainWorkspaceHeader({
                     fallbackClassName="bg-accent text-xs text-primary sm:text-sm"
                   />
                 </span>
-                <div className="hidden min-w-0 sm:block">
+                <div className="hidden min-w-0 lg:block">
                   <div className="truncate text-sm font-semibold text-foreground">
                     {userName ?? "Operator"}
                   </div>
                   {userRoleLabel && userRoleLabel !== userName ? <div className="truncate text-xs text-muted-foreground">{userRoleLabel}</div> : null}
                 </div>
-                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground max-sm:hidden" />
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground max-lg:hidden" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
