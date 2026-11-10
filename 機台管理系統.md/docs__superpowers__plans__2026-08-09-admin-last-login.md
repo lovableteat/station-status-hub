@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-09-admin-last-login.md`；程式參考基準：`34a7376f641213083ffd8227afb4300e62489428`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-09-admin-last-login.md`；程式參考基準：`e06ca307b0336604caee783321f5ab96d29173d8`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Admin Last Login Implementation Plan
 
