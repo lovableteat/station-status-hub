@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-03-dashboard-attention-panel.md`；程式參考基準：`489211380272ea8bbc74ddcb3dc853c26c6a71bc`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-03-dashboard-attention-panel.md`；程式參考基準：`01764f8d770b7debb37950d8a7496566e57206e2`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Dashboard Supervisor Attention Panel Implementation Plan
 
